@@ -1,5 +1,5 @@
 /**
- * The Trading Post MCP server (Streamable HTTP, stateless, JSON answers). One address for
+ * The Merlin MCP server (Streamable HTTP, stateless, JSON answers). One address for
  * Claude, ChatGPT, Claude Code and Cursor: <origin>/api/mcp.
  *
  * POST   JSON-RPC (initialize, tools/list, tools/call, ping, notifications). Needs a bearer token
@@ -41,7 +41,7 @@ function unauthorized(req: NextRequest, why: "missing" | "invalid" | "expired") 
     why === "missing"
       ? `Bearer resource_metadata="${meta}", scope="${SCOPE}"`
       : `Bearer error="invalid_token", error_description="${why === "expired" ? "The access token expired" : "The access token is not valid"}", resource_metadata="${meta}", scope="${SCOPE}"`;
-  return rpcError(401, why === "missing" ? "Sign in to Trading Post to use this connector." : "Your Trading Post sign-in ran out. Connect again.", { "www-authenticate": challenge });
+  return rpcError(401, why === "missing" ? "Sign in to Merlin to use this connector." : "Your Merlin sign-in ran out. Connect again.", { "www-authenticate": challenge });
 }
 
 async function authed(req: NextRequest) {
@@ -57,7 +57,7 @@ async function authed(req: NextRequest) {
 async function handle(req: NextRequest): Promise<Response> {
   try {
     if (limited(`mcp-ip:${clientIp(req)}`, 600, 60_000)) return rpcError(429, "That's a lot in one minute. Give it a moment, then try again.", { "retry-after": "30" });
-    if (!originAllowed(req)) return rpcError(403, "This origin isn't allowed to call Trading Post.");
+    if (!originAllowed(req)) return rpcError(403, "This origin isn't allowed to call Merlin.");
     const who = await authed(req);
     if ("fail" in who) return who.fail!;
     if (req.method !== "POST") return rpcError(405, "Send JSON-RPC requests with POST.", { allow: "POST, OPTIONS" });

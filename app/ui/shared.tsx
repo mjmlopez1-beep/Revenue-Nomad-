@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Shared client pieces for Trading Post: the API client, toasts, company logos,
+ * Shared client pieces for Merlin: the API client, toasts, company logos,
  * the locked cell and the add pill, value formatting and a small icon set.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -102,7 +102,7 @@ export async function fetchView(): Promise<ViewResult> {
   const wait = Number(r.headers.get("Retry-After"));
   return {
     view: null,
-    error: (j && typeof j.error === "string" && j.error) || "Trading Post did not load. Check your connection and try again.",
+    error: (j && typeof j.error === "string" && j.error) || "Merlin did not load. Check your connection and try again.",
     status: r.status,
     retryAfter: Number.isFinite(wait) && wait > 0 ? wait : null,
   };
@@ -115,7 +115,7 @@ export async function post<T = Record<string, unknown>>(body: unknown): Promise<
     const j = await r.json().catch(() => ({}));
     return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
   } catch {
-    return { error: "We couldn't reach Trading Post. Check your connection and try again." } as T & { error: string };
+    return { error: "We couldn't reach Merlin. Check your connection and try again." } as T & { error: string };
   }
 }
 
@@ -427,10 +427,24 @@ export function AddPill({ onAdd, label = "Add", earn = true, what }: { onAdd: ()
 
 /* ---------- brand ---------- */
 
-export function Brand({ dark }: { dark?: boolean }) {
+/**
+ * The Merlin logo. "wordmark" is Merlin with its swoosh (nav and top bars), "lockup" adds REVENUE
+ * NOMAD under it (footer), "mark" is the square M icon (the tightest phone bar). `dark` is the
+ * treatment for pine: white letters, the orange dot and lime swoosh kept. `size` is the CSS height.
+ */
+const BRAND_RATIO = { wordmark: 307 / 96, lockup: 677 / 240, mark: 1 } as const;
+export function Brand({ dark, size = 28, kind = "wordmark", className }: { dark?: boolean; size?: number; kind?: keyof typeof BRAND_RATIO; className?: string }) {
+  const src = kind === "mark" ? "/brand/merlin-icon-512.png" : `/brand/merlin-${kind}${dark ? "-on-dark" : ""}.png`;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={dark ? "/brand/logo-on-dark.png" : "/brand/logo.png"} alt="Revenue Nomad" width={170} height={19} style={{ height: 19, width: "auto", display: "block" }} />
+    <img
+      className={className}
+      src={src}
+      alt={kind === "lockup" ? "Merlin by Revenue Nomad" : "Merlin"}
+      width={Math.round(size * BRAND_RATIO[kind])}
+      height={size}
+      style={{ height: size, width: "auto", display: "block" }}
+    />
   );
 }
 

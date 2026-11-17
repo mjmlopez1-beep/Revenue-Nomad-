@@ -114,7 +114,7 @@ function Skeleton({ member, children }: { member?: boolean; children?: React.Rea
             ))}
           </div>
           <div className="sk-main">
-            <span className="sr-only">Opening Trading Post</span>
+            <span className="sr-only">Opening Merlin</span>
             <span className="sk-line" style={{ display: "block", width: 280, maxWidth: "70%", height: 16 }} aria-hidden />
             <div className="sk-frame" aria-hidden>
               {bars(12, "sk-row")}
@@ -126,7 +126,7 @@ function Skeleton({ member, children }: { member?: boolean; children?: React.Rea
         </div>
       ) : (
         <div className="sk-hero">
-          <span className="sr-only">Opening Trading Post</span>
+          <span className="sr-only">Opening Merlin</span>
           <span className="sk-line" style={{ width: "80%" }} aria-hidden />
           <span className="sk-line" style={{ width: "60%" }} aria-hidden />
           <span className="sk-line" style={{ width: "40%", height: 12 }} aria-hidden />
@@ -167,7 +167,7 @@ const FULL_REFRESH = new Set(["add", "addPerson", "profile", "adminRemoveMember"
 const MESSAGE_NOTE = "Sign in to read your message.";
 const MESSAGE_LINK_USED = "That link was already used, or it's more than 7 days old. Sign in to read your message.";
 
-const NETWORK = "We couldn't reach Trading Post. Check your connection and try again.";
+const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
 
 /**
  * The new view, with every company that did not change keeping its old object (and the list

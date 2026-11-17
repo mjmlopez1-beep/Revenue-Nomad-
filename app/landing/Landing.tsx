@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Trading Post landing page (signed out). In order: the warm intro and what it costs (hero, with
+ * Merlin landing page (signed out). In order: the warm intro and what it costs (hero, with
  * the join form), "Try it" with the visitor's own function (real counts and sample rows from
  * GET /api/table?preview=1), the numbers, what you can do with it (a tabbed showcase of real
  * screenshots, Showcase.tsx), how it works (credits, with the free and locked fields folded
@@ -181,15 +181,15 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   ];
 
   const joinHint = "Add something you know and you earn a credit. Spend a credit to see something another member added, like who held a seat.";
-  const supportHref = support ? mailto(support, "Trading Post question") : null;
+  const supportHref = support ? mailto(support, "Merlin question") : null;
 
   return (
     <div className="lp">
       <header className="lp-nav">
         <div className="lp-wrap lp-nav-in">
-          <a href="#top" className="lp-nav-brand" aria-label="Trading Post by Revenue Nomad">
-            <Brand dark />
-            <span className="lp-nav-product">Trading Post</span>
+          <a href="#top" className="lp-nav-brand" aria-label="Merlin by Revenue Nomad">
+            <Brand dark size={30} />
+            <span className="lp-nav-product">by Revenue Nomad</span>
           </a>
           <nav className="lp-nav-links" aria-label="Sections">
             <a href="#try">Try it</a>
@@ -265,7 +265,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         <TryIt onJoin={toJoin} primary={!formInView} ctaRef={tryCta} onExample={setExample} />
 
         {/* ---------- proof ---------- */}
-        <section className="lp-proof" aria-label="Trading Post in numbers" aria-busy={!s}>
+        <section className="lp-proof" aria-label="Merlin in numbers" aria-busy={!s}>
           <div className="lp-wrap">
             <dl className="lp-proof-grid">
               {proof.map(([n, label]) => (
@@ -417,8 +417,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
       <footer className="lp-foot">
         <div className="lp-wrap lp-foot-in">
           <div className="lp-foot-brand">
-            <Brand />
-            <span>Trading Post is a free pilot from Revenue Nomad, the network of {NETWORK} fractionals.</span>
+            <Brand kind="lockup" size={64} />
+            <span>Merlin is a free pilot from Revenue Nomad, the network of {NETWORK} fractionals.</span>
           </div>
           <div className="lp-foot-links">
             {support && supportHref ? (

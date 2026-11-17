@@ -19,7 +19,7 @@ import "./integrations.css";
 
 const WEBHOOK_EXAMPLE = JSON.stringify(
   {
-    source: "Trading Post",
+    source: "Merlin",
     event: "message",
     count: 1,
     title: "Ana sent you a message about your seat at Acme",
@@ -42,7 +42,7 @@ async function call(body: Record<string, unknown>): Promise<Answer> {
     const j = (await r.json().catch(() => ({}))) as Answer;
     return r.ok ? j : { error: j.error || "That didn't go through. Try again." };
   } catch {
-    return { error: "We couldn't reach Trading Post. Check your connection and try again." };
+    return { error: "We couldn't reach Merlin. Check your connection and try again." };
   }
 }
 
@@ -314,14 +314,14 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                 />
               ) : (
                 <>
-                  <p className="cr-note">It takes about two minutes. You make a small app in your own Slack, so the alerts go to the channel or DM you pick, and nobody at Trading Post can read your Slack.</p>
+                  <p className="cr-note">It takes about two minutes. You make a small app in your own Slack, so the alerts go to the channel or DM you pick, and nobody at Revenue Nomad can read your Slack.</p>
                   <ol className="uc-steps in-steps">
                     <li>
                       Open{" "}
                       <a href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer" className="in-link">
                         api.slack.com/apps
                       </a>{" "}
-                      and pick Create New App, then From scratch. Name it Trading Post alerts, pick your workspace and pick Create App.
+                      and pick Create New App, then From scratch. Name it Merlin alerts, pick your workspace and pick Create App.
                     </li>
                     <li>In the app&apos;s menu, open Incoming Webhooks and turn Activate Incoming Webhooks on.</li>
                     <li>Pick Add New Webhook. Choose the channel for alerts, or your own name for a DM, then pick Allow.</li>
@@ -423,7 +423,7 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                   </div>
                   <div>
                     <dt className="mono">url</dt>
-                    <dd>The exact place in Trading Post. It opens for whoever is signed in, so it&apos;s safe to share.</dd>
+                    <dd>The exact place in Merlin. It opens for whoever is signed in, so it&apos;s safe to share.</dd>
                   </div>
                   <div>
                     <dt className="mono">sentAt</dt>

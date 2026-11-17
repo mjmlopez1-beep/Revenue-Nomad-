@@ -236,7 +236,7 @@ async function main() {
   const infoIn = await call("GET", `/api/oauth/authorize?info=1&r=${reqId}`, { cookie: A.token });
   check("signed in, it shows the member's first name", infoIn.json?.signedIn === true && infoIn.json.firstName === A.name.split(" ")[0]);
   const page = await call("GET", `/oauth/consent?r=${reqId}`);
-  check("the consent page itself loads", page.status === 200 && page.text.includes("Trading Post"));
+  check("the consent page itself loads", page.status === 200 && page.text.includes("Merlin"));
   const cross = await call("POST", "/api/oauth/authorize", { cookie: A.token, headers: { origin: "https://evil.example.com" }, body: { r: reqId, allow: true } });
   check("an answer from another site is refused", cross.status === 403);
   const signedOut = await call("POST", "/api/oauth/authorize", { headers: { origin: BASE }, body: { r: reqId, allow: true } });
@@ -346,7 +346,7 @@ async function main() {
   aAccess = at;
   const init = await rpc(at, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "qa", version: "1" } });
   const ir = init.json?.result ?? {};
-  check("initialize answers with the protocol version asked for (2025-06-18)", ir.protocolVersion === "2025-06-18" && ir.serverInfo?.name === "trading-post" && !!ir.capabilities?.tools, ir.protocolVersion);
+  check("initialize answers with the protocol version asked for (2025-06-18)", ir.protocolVersion === "2025-06-18" && ir.serverInfo?.name === "merlin" && !!ir.capabilities?.tools, ir.protocolVersion);
   check("initialize carries instructions on how to use the table", /Never spend a credit without asking/.test(ir.instructions ?? ""));
   const init2 = await rpc(at, "initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "qa", version: "1" } });
   check("and 2025-11-25 too", init2.json?.result?.protocolVersion === "2025-11-25");
@@ -587,7 +587,7 @@ async function main() {
   const fromApp = both.out?.saved_searches?.find((x) => x.name === "Marketing at Software companies");
   check(
     "a view saved in the app shows in the connector's saved searches, with its criteria and weekly email",
-    appSave.status === 200 && both.out?.saved_searches?.length === 2 && fromApp?.saved_in === "the Trading Post app" && fromApp.weekly_email === false && fromApp.criteria?.function === "Marketing" && !("place" in (fromApp.criteria ?? {})),
+    appSave.status === 200 && both.out?.saved_searches?.length === 2 && fromApp?.saved_in === "the Merlin app" && fromApp.weekly_email === false && fromApp.criteria?.function === "Marketing" && !("place" in (fromApp.criteria ?? {})),
     both.out ?? both.text,
   );
   const appViews = (await A.view()).me.savedViews ?? [];
@@ -660,7 +660,7 @@ async function main() {
     await first.finishAuth(sdkCode);
     const c2c = new McpClient({ name: "qa-sdk", version: "1.0.0" });
     await c2c.connect(new StreamableHTTPClientTransport(new URL(MCP), { authProvider: provider }));
-    check("SDK client: after sign-in it completes the handshake", !!c2c.getServerVersion()?.name && c2c.getServerVersion().name === "trading-post");
+    check("SDK client: after sign-in it completes the handshake", !!c2c.getServerVersion()?.name && c2c.getServerVersion().name === "merlin");
     const tl = await c2c.listTools();
     check("SDK client: it lists the tools", tl.tools.length === 11, tl.tools.length);
     const res = await c2c.callTool({ name: "search_companies", arguments: { hiring_now: true, limit: 3 } });

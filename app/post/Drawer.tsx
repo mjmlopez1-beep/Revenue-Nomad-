@@ -932,7 +932,7 @@ function safeHref(build: () => string): string | null {
 
 /**
  * After the seat holder is unlocked: how to reach them. A member who has signed in gets a
- * message inside Trading Post ("Message Ana", the warm path). "Ask for an intro" goes to the team
+ * message inside Merlin ("Message Ana", the warm path). "Ask for an intro" goes to the team
  * inbox when there is one; "Find them on LinkedIn" always works.
  */
 function Reach({ name, member, seat, engagementId, seatName }: { name: string; member: boolean; seat: string; engagementId: string; seatName: string | null }) {
@@ -943,7 +943,7 @@ function Reach({ name, member, seat, engagementId, seatName }: { name: string; m
     ? safeHref(
         () =>
           `mailto:${to}?cc=${encodeURIComponent(ui.me.email)}&subject=${encodeURIComponent(`Intro to ${name} at ${env.company}`)}&body=${encodeURIComponent(
-            `Hi,\n\nCould you introduce me (${ui.me.name}) to ${name}${member ? ", a Trading Post member" : ""}? They held ${seat} at ${env.company} and I'd like to hear how it went.\n\nThanks`,
+            `Hi,\n\nCould you introduce me (${ui.me.name}) to ${name}${member ? ", a Merlin member" : ""}? They held ${seat} at ${env.company} and I'd like to hear how it went.\n\nThanks`,
           )}`,
       )
     : null;
@@ -1009,7 +1009,7 @@ function ClaimRole({ id }: { id: string }) {
 }
 
 /**
- * A seat Revenue Nomad found that nobody holds on Trading Post yet. Its fractional claims it:
+ * A seat Revenue Nomad found that nobody holds on Merlin yet. Its fractional claims it:
  * their name goes on it (behind the usual lock) and it moves to Your seats.
  */
 /** "Fractional CMO at Acme, Mar 2025 to now": what an unclaimed seat says, for the member to check before claiming it. */
@@ -1079,7 +1079,7 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
     );
   return (
     <div className="tp-claim">
-      <span className="tp-small muted">Not on Trading Post yet.</span>
+      <span className="tp-small muted">Not on Merlin yet.</span>
       <button ref={btn} type="button" className="btn btn-sm" onClick={check}>
         Is this your seat? Claim it
       </button>

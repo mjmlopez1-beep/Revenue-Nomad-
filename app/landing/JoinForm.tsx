@@ -143,7 +143,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
               aria-describedby={codeErr ? `${id}-code-err` : undefined}
             />
             <button type="submit" className="btn btn-primary btn-lg lp-join-btn" disabled={busy} aria-busy={busy}>
-              {busy ? "Opening" : "Open Trading Post"}
+              {busy ? "Opening" : "Open Merlin"}
             </button>
           </div>
           {codeErr && (
@@ -193,7 +193,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
             maxLength={80}
           />
           <button type="submit" className="btn btn-primary btn-lg lp-join-btn" disabled={busy} aria-busy={busy}>
-            {busy ? (emailOn ? "Sending your link" : "Opening") : emailOn ? "Email me my link" : "Open Trading Post"}
+            {busy ? (emailOn ? "Sending your link" : "Opening") : emailOn ? "Email me my link" : "Open Merlin"}
           </button>
         </div>
         {err}

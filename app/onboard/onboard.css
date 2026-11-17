@@ -1,5 +1,5 @@
 /*
- * Trading Post first-run onboarding. Classes are prefixed ob-.
+ * Merlin first-run onboarding. Classes are prefixed ob-.
  * One centered card on the off-white page, the same width on every step. Pine for selection
  * and for the one button that moves on. No volt and no ember here, except the ember dot on a
  * suggested company with an open role.
@@ -42,10 +42,10 @@
 .ob-product {
   padding-left: 12px;
   border-left: 1px solid var(--line-strong);
-  font-size: 14px;
+  font-size: 13.5px;
   line-height: 20px;
-  font-weight: 700;
-  color: var(--ink);
+  font-weight: 500;
+  color: var(--muted);
   white-space: nowrap;
 }
 .ob-credits {
@@ -725,10 +725,7 @@
     gap: 2px;
   }
   .ob-product {
-    padding-left: 0;
-    border-left: 0;
-    font-size: 13px;
-    line-height: 16px;
+    display: none;
   }
   .ob-main {
     padding: 0;

@@ -1,6 +1,6 @@
 /**
  * Messages between members. After a member unlocks who held a seat (or it was free to see),
- * they can write to that seat holder inside Trading Post, as long as the seat holder is a
+ * they can write to that seat holder inside Merlin, as long as the seat holder is a
  * member who has signed in. The conversation is about that seat. Replies are open inside it.
  *
  * Limits: 5 new conversations per member in any 24 hours, 30 open at once, 2,000 characters a
@@ -117,7 +117,7 @@ export async function unreadFor(token: string | null): Promise<number | null> {
 /* ---------- the email ---------- */
 
 /**
- * "Ana sent you a message on Trading Post about your seat at Acme": the first 200 characters
+ * "Ana sent you a message on Merlin about your seat at Acme": the first 200 characters
  * and a link. Never either member's email address. `holder`: the reader held the seat.
  */
 export function messageEmail(o: { from: string; company: string; holder: boolean; text: string; link: string }) {
@@ -127,17 +127,17 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
   const flat = oneLine(o.text);
   const snippet = [...flat].length > 200 ? `${[...flat].slice(0, 200).join("").trimEnd()}…` : flat;
   const link = oneLine(o.link);
-  const subject = `${first} sent you a message on Trading Post about ${about}`;
-  const why = "You get at most one of these an hour for each conversation. Turn them off in Your credits on Trading Post.";
-  const noReply = "Replies to this email don't reach them. Reply on Trading Post.";
-  const from = "Trading Post is a free pilot from Revenue Nomad.";
+  const subject = `${first} sent you a message on Merlin about ${about}`;
+  const why = "You get at most one of these an hour for each conversation. Turn them off in Your credits on Merlin.";
+  const noReply = "Replies to this email don't reach them. Reply on Merlin.";
+  const from = "Merlin is a free pilot from Revenue Nomad.";
   const note = footerNote();
   const text = [
     `${first} sent you a message about ${about}.`,
     "",
     snippet,
     "",
-    `Read it and reply on Trading Post with this link. It signs you in once and works for 7 days.`,
+    `Read it and reply on Merlin with this link. It signs you in once and works for 7 days.`,
     link,
     "",
     noReply,
@@ -190,7 +190,7 @@ export async function performMessage(token: string | null, a: MessageAction, ori
       if (sentToday() >= MESSAGE_LIMITS.sentPerDay) throw new ActionError("That's 60 messages today, which is the limit. Send more tomorrow.");
       const side = sideOf(c, me.id)!;
       const otherId = side === "a" ? c.b : c.a;
-      if (!idx.byId.has(otherId)) throw new ActionError("This member isn't on Trading Post anymore.");
+      if (!idx.byId.has(otherId)) throw new ActionError("This member isn't on Merlin anymore.");
       if ((s.blocks?.[me.id] ?? []).includes(otherId)) throw new ActionError(`You blocked ${first(otherId)}. Unblock them to write again.`);
       if (c.blockedBy && c.blockedBy !== me.id) throw new ActionError(NOT_TAKING);
       if (c.status === "closed") {
@@ -224,13 +224,13 @@ export async function performMessage(token: string | null, a: MessageAction, ori
         case "message.start": {
           const engId = [...g.engagements.keys()].find((id) => T.pubId(id) === String(a.engagementId ?? ""));
           const e = engId ? g.engagements.get(engId) : undefined;
-          if (!e) throw new ActionError("That seat isn't on Trading Post anymore.");
+          if (!e) throw new ActionError("That seat isn't on Merlin anymore.");
           const holder = T.seatHolder(s, idx, e.id, T.valueOf(e, s, "operator"));
-          if (!holder) throw new ActionError("Nobody on Trading Post is linked to this seat, so there's no one to write to here.");
+          if (!holder) throw new ActionError("Nobody on Merlin is linked to this seat, so there's no one to write to here.");
           if (holder.id === me.id) throw new ActionError("That's your own seat.");
           if (T.cellOf(s, me, e, "engagement", "operator", idx).s !== "value") throw new ActionError("Unlock who held this seat first. Then you can write to them.");
           const name = T.firstName(holder.name);
-          if (!T.signedIn(s, idx, holder.id)) throw new ActionError(`${name} hasn't signed in to Trading Post yet, so a message here wouldn't reach them. Try LinkedIn instead.`);
+          if (!T.signedIn(s, idx, holder.id)) throw new ActionError(`${name} hasn't signed in to Merlin yet, so a message here wouldn't reach them. Try LinkedIn instead.`);
           if ((s.blocks?.[holder.id] ?? []).includes(me.id)) throw new ActionError(NOT_TAKING);
           if ((s.blocks?.[me.id] ?? []).includes(holder.id)) throw new ActionError(`You blocked ${name}. Unblock them in Messages to write again.`);
           // One conversation per pair and seat: writing again goes into the one there is.

@@ -82,7 +82,7 @@ function parseCsv(text) {
 
 /* ---------- mappings ---------- */
 
-/** The file's function labels, as Trading Post's functions. */
+/** The file's function labels, as Merlin's functions. */
 const FUNCTION_MAP = {
   Marketing: "Marketing", Growth: "Growth", Sales: "Sales", "Revenue Leadership": "Sales", "Sales Leadership": "Sales",
   Partnerships: "Partnerships", "Customer Success": "Customer Success", "AI GTM": "AI GTM", "Revenue Operations": "RevOps", RevOps: "RevOps",

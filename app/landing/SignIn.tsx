@@ -2,7 +2,7 @@
 
 /**
  * Sign-in panel. With an email provider on, it leads with a one-time link by email (and the
- * 6-digit code from that email, for opening Trading Post on another device); pasting a personal
+ * 6-digit code from that email, for opening Merlin on another device); pasting a personal
  * link or the code at the end of it is the second way in. Without email, pasting is the only way.
  * A dialog on desktop, a bottom sheet on phones. It always says where to get a lost link:
  * the support address when the server sends one, otherwise the member who invited them.
@@ -72,7 +72,7 @@ function useBackCloses(open: boolean, onClose: () => void) {
 
 /** Where a member without their link gets a new one. Shown in the panel at all times. */
 function LostLink({ support, emailOn }: { support: string | null; emailOn: boolean }) {
-  const href = support ? mailto(support, "Trading Post sign-in link") : null;
+  const href = support ? mailto(support, "Merlin sign-in link") : null;
   if (support)
     return (
       <p className="lp-dialog-help">
@@ -101,7 +101,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
   const [mail, setMail] = useState("");
   const [mailState, setMailState] = useState<"idle" | "busy" | "sent">("idle");
   const [mailErr, setMailErr] = useState<string | null>(null);
-  /** The 6-digit code from the sign-in email, for opening Trading Post on another device. */
+  /** The 6-digit code from the sign-in email, for opening Merlin on another device. */
   const [digits, setDigits] = useState("");
   const [digitsErr, setDigitsErr] = useState<string | null>(null);
   const [digitsBusy, setDigitsBusy] = useState(false);
@@ -233,7 +233,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
           (mailState === "sent" ? (
             <form onSubmit={signInWithCode} noValidate className="lp-dialog-form">
               <p className="lp-dialog-ok" role="status">
-                If that email is on Trading Post, a link is on its way. It works once, for 20 minutes. Check spam if it doesn&apos;t show up.
+                If that email is on Merlin, a link is on its way. It works once, for 20 minutes. Check spam if it doesn&apos;t show up.
               </p>
               <label className="lp-field-label" htmlFor={`${id}-digits`}>
                 On another device? Type the 6-digit code from the email

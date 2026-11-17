@@ -107,9 +107,9 @@ async function rules() {
 
   console.log("\nThe email");
   const e = si.oneTimeEmail("Sal Starter", "https://post.example.com/?k=oABC", "042917", "signin");
-  check("the sign-in email has the link and the code", e.subject === "Your Trading Post sign-in link" && e.text.includes("https://post.example.com/?k=oABC") && e.html.includes("042917") && e.text.includes("20 minutes"));
+  check("the sign-in email has the link and the code", e.subject === "Your Merlin sign-in link" && e.text.includes("https://post.example.com/?k=oABC") && e.html.includes("042917") && e.text.includes("20 minutes"));
   const ej = si.oneTimeEmail("Jo Joiner", "https://post.example.com/?k=oABC", "042917", "join");
-  check("the join email is worded for joining", ej.subject === "Finish joining Trading Post" && ej.html.includes("Open Trading Post"));
+  check("the join email is worded for joining", ej.subject === "Finish joining Merlin" && ej.html.includes("Open Merlin"));
   check("no em dashes or semicolons in either", ![e.text, ej.text].some((x) => /—|;/.test(x)));
   Date.now = realNow;
 }
@@ -189,7 +189,7 @@ async function emailOn() {
   const mailUrl = `http://127.0.0.1:${catcher.address().port}/emails`;
   const dataDir = path.join(scratch, "on");
   mkdirSync(dataDir);
-  const srv = startServer(dataDir, { RESEND_API_KEY: "test-key", RN_EMAIL_FROM: "Trading Post <post@example.com>", RN_EMAIL_API_URL: mailUrl, RN_PUBLIC_URL: BASE, RN_EMAIL_REPLY_TO: "hello@example.org" });
+  const srv = startServer(dataDir, { RESEND_API_KEY: "test-key", RN_EMAIL_FROM: "Merlin <post@example.com>", RN_EMAIL_API_URL: mailUrl, RN_PUBLIC_URL: BASE, RN_EMAIL_REPLY_TO: "hello@example.org" });
   try {
     if (!(await up())) return check("the email-on server starts", false, srv.log().slice(-600));
     console.log("\nEmail me a sign-in link (email on)");
@@ -197,7 +197,7 @@ async function emailOn() {
     check("the view says email is on", v0?.email === true);
     const member = await call({ emailLink: "sal.starter@example.com" });
     const nobody = await call({ emailLink: "not-a-member@example.com" });
-    check("the answer is the same for a member and for an address nobody has", member.status === 200 && member.text === nobody.text && member.json?.message === "If that email is on Trading Post, a link is on its way.", [member.text, nobody.text]);
+    check("the answer is the same for a member and for an address nobody has", member.status === 200 && member.text === nobody.text && member.json?.message === "If that email is on Merlin, a link is on its way.", [member.text, nobody.text]);
     const mail = await mailFor("sal.starter@example.com");
     await wait(200);
     check("only the member gets an email", !!mail && !outbox.some((m) => m.to === "not-a-member@example.com"));
@@ -261,8 +261,8 @@ async function emailOn() {
     check("joining with a member's email answers the same", existing.status === 200 && existing.text === join.text && !existing.cookie, existing.json);
     const jmail = await mailFor("jo.joiner@example.com");
     const hmail = await mailFor("hana.holder@example.com");
-    check("the new member gets a link to finish joining", jmail?.subject === "Finish joining Trading Post" && !!linkIn(jmail));
-    check("the member gets a sign-in link instead", hmail?.subject === "Your Trading Post sign-in link" && !!linkIn(hmail));
+    check("the new member gets a link to finish joining", jmail?.subject === "Finish joining Merlin" && !!linkIn(jmail));
+    check("the member gets a sign-in link instead", hmail?.subject === "Your Merlin sign-in link" && !!linkIn(hmail));
     const state = () => JSON.parse(readFileSync(path.join(dataDir, "intel.json"), "utf8"));
     check("the new account is not proven before the link is used", state().members.find((m) => m.email === "jo.joiner@example.com")?.proven !== true);
     check("the state keeps no raw link token", !readFileSync(path.join(dataDir, "intel.json"), "utf8").includes(linkIn(hmail)));
@@ -281,7 +281,7 @@ async function emailOn() {
     check("signed out, there is nothing to rotate", (await call({ rotateLink: true })).status === 401);
     const me = await call({ emailMe: true }, { token: rot.cookie });
     const meMail = await mailFor("jo.joiner@example.com", 2);
-    check("Send me a new sign-in link emails the member", me.status === 200 && me.json?.sent === true && meMail?.subject === "Your Trading Post sign-in link", me.json);
+    check("Send me a new sign-in link emails the member", me.status === 200 && me.json?.sent === true && meMail?.subject === "Your Merlin sign-in link", me.json);
     check("signed out, nothing is sent", (await call({ emailMe: true })).status === 401);
 
     console.log("\nMessages over HTTP");
@@ -300,7 +300,7 @@ async function emailOn() {
     check("no email address in the answer", !/@example\.com/.test(start.text));
     const note = await mailFor("hana.holder@example.com", 2);
     check("the message email replies to the support address, not the sender", note?.replyTo === "hello@example.org");
-    check("the seat holder gets one email about it", note?.subject === "Jo sent you a message on Trading Post about your seat at Acme Robotics" && !/@example\.com/.test(note.text + note.html), note?.subject);
+    check("the seat holder gets one email about it", note?.subject === "Jo sent you a message on Merlin about your seat at Acme Robotics" && !/@example\.com/.test(note.text + note.html), note?.subject);
     const hl = await call(undefined, { method: "GET", q: "?messages=1", token: "tok-hana-000001" });
     check("and sees it in her list, with no email address in it", hl.json?.conversations?.length === 1 && hl.json.unread === 1 && !/@example\.com/.test(hl.text));
   } finally {

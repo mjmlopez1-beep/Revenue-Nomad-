@@ -45,7 +45,7 @@ export function ConnectedApps({ onHowTo }: { onHowTo?: () => void }) {
         toast(`Disconnected ${app.name}. It can't use your account any more.`);
       } else toast(j.error || "That didn't go through. Try again.", true);
     } catch {
-      toast("We couldn't reach Trading Post. Check your connection and try again.", true);
+      toast("We couldn't reach Merlin. Check your connection and try again.", true);
     }
     setBusy(null);
     setAsking(null);

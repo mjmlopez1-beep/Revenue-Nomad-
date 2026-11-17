@@ -89,7 +89,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
         ? `You have ${plural(credits, "credit")} left.${seatsLine ? "" : " Add a fact you know and you earn another."}`
         : `You have ${credits} credits to spend.`;
   const cta = "See this week's roles";
-  const why = "You get this once a week because you're a Trading Post member.";
+  const why = "You get this once a week because you're a Merlin member.";
   const listTitle = "New roles by function";
   const restLabel = "Other functions";
 

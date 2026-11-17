@@ -32,7 +32,7 @@ export const GET = guarded(async (req: NextRequest) => {
 
 export const POST = guarded(async (req: NextRequest) => {
   const origin = req.headers.get("origin");
-  if (origin && origin !== publicOrigin(req) && origin !== req.nextUrl.origin) return fail("That didn't come from Trading Post.", 403);
+  if (origin && origin !== publicOrigin(req) && origin !== req.nextUrl.origin) return fail("That didn't come from Merlin.", 403);
   const token = req.cookies.get(COOKIE)?.value ?? null;
   if (!token) return fail(SIGNED_OUT, 401);
   const raw = await req.text();

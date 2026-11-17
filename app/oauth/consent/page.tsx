@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Consent from "./Consent";
 
 export const metadata: Metadata = {
-  title: "Connect an app · Trading Post",
+  title: "Connect an app · Merlin",
   robots: { index: false, follow: false },
 };
 

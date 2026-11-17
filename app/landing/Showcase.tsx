@@ -29,9 +29,9 @@ export function slides(intro: boolean): Slide[] {
       key: "seat",
       tab: "Who held the seat",
       title: "The fractional who held the seat",
-      body: `Open a company and see every seat on file. Unlock who held one for 1 credit, then message them inside Trading Post${intro ? " or ask us for a warm intro" : ""}, and hear how it went before your first call.`,
+      body: `Open a company and see every seat on file. Unlock who held one for 1 credit, then message them inside Merlin${intro ? " or ask us for a warm intro" : ""}, and hear how it went before your first call.`,
       cost: { label: "1 credit", kind: "locked" },
-      img: { src: "/landing/seat.webp", w: 1440, h: 900, alt: "A company's record in Trading Post with its fractional seats, the seat holder behind a lock" },
+      img: { src: "/landing/seat.webp", w: 1440, h: 900, alt: "A company's record in Merlin with its fractional seats, the seat holder behind a lock" },
     },
     {
       key: "hiring",
@@ -39,7 +39,7 @@ export function slides(intro: boolean): Slide[] {
       title: "Open fractional roles, dated",
       body: "Fractional, interim and contract roles across functions. We check every week and date each one, so a new role stands apart from one that has sat for months. The title is free, and 1 credit shows the company with its job posting.",
       cost: { label: "1 credit shows the company", kind: "locked" },
-      img: { src: "/landing/hiring.webp", w: 1440, h: 900, alt: "The Hiring now list in Trading Post with open roles and the day each was posted" },
+      img: { src: "/landing/hiring.webp", w: 1440, h: 900, alt: "The Hiring now list in Merlin with open roles and the day each was posted" },
     },
     {
       key: "next",
@@ -63,15 +63,15 @@ export function slides(intro: boolean): Slide[] {
       title: "What the seat pays",
       body: "Median monthly and hourly rates by function and client revenue, from Revenue Nomad's Rate Index and the rates members share. A number shows only once enough people are in it.",
       cost: { label: "Free", kind: "free" },
-      img: { src: "/landing/rates.webp", w: 1440, h: 900, alt: "Rate benchmarks in Trading Post: median monthly and hourly rates by function and client revenue" },
+      img: { src: "/landing/rates.webp", w: 1440, h: 900, alt: "Rate benchmarks in Merlin: median monthly and hourly rates by function and client revenue" },
     },
     {
       key: "connect",
       tab: "Slack and Claude",
-      title: "Alerts in Slack, and Trading Post in Claude",
+      title: "Alerts in Slack, and Merlin in Claude",
       body: "Get a post in Slack, or any tool by webhook, when a new open role fits you, when someone writes to you or when someone unlocks your seat. Connect Claude and ask which companies fit you best.",
       cost: { label: "Free", kind: "free" },
-      img: { src: "/landing/connect.webp", w: 1440, h: 900, alt: "The Integrations page in Trading Post with Slack alerts and the Claude connector" },
+      img: { src: "/landing/connect.webp", w: 1440, h: 900, alt: "The Integrations page in Merlin with Slack alerts and the Claude connector" },
     },
     {
       key: "views",
@@ -79,7 +79,7 @@ export function slides(intro: boolean): Slide[] {
       title: "Saved views and the weekly email",
       body: "Save a search as a view and open it again in one tap. Each week we email you the new open roles that match it.",
       cost: { label: "Free", kind: "free" },
-      img: { src: "/landing/views.webp", w: 1440, h: 900, alt: "Saving a view in Trading Post with the weekly email switched on" },
+      img: { src: "/landing/views.webp", w: 1440, h: 900, alt: "Saving a view in Merlin with the weekly email switched on" },
     },
     {
       key: "earn",

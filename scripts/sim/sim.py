@@ -1,5 +1,5 @@
 """
-Trading Post: agent-based Monte Carlo of the give-to-get economy.
+Merlin: agent-based Monte Carlo of the give-to-get economy.
 
 400 fractionals log in on day 0 and are then simulated for 100 days, many times over.
 Each run draws a fresh population from the calibration (survey + seed table), fresh

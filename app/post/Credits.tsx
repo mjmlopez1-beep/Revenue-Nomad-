@@ -32,7 +32,7 @@ export function useCopy() {
 }
 
 /** What a shared invite says, before the link. */
-export const INVITE_TEXT = `Join me on Trading Post. We both get ${REFERRAL_BONUS} credits when you add your first fact to a company or a seat.`;
+export const INVITE_TEXT = `Join me on Merlin. We both get ${REFERRAL_BONUS} credits when you add your first fact to a company or a seat.`;
 /** The phone's share sheet exists (phones and some tablets). Copying is the fallback everywhere else. */
 export const canShare = () => typeof navigator !== "undefined" && typeof navigator.share === "function";
 
@@ -45,7 +45,7 @@ export function useShareInvite() {
   return async (link: string) => {
     if (canShare()) {
       try {
-        await navigator.share({ title: "Trading Post", text: INVITE_TEXT, url: link });
+        await navigator.share({ title: "Merlin", text: INVITE_TEXT, url: link });
         return;
       } catch (e) {
         // Closing the sheet is a choice, not a failure.
@@ -268,8 +268,8 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
   const invite = inviteLink(me.inviteCode);
   const signin = signInLink(me.token);
-  const mail = `mailto:${encodeURIComponent(me.email)}?subject=${encodeURIComponent("My Trading Post sign-in link")}&body=${encodeURIComponent(
-    `Open this link to sign in to Trading Post on any device. Keep it to yourself.\n\n${signin}`,
+  const mail = `mailto:${encodeURIComponent(me.email)}?subject=${encodeURIComponent("My Merlin sign-in link")}&body=${encodeURIComponent(
+    `Open this link to sign in to Merlin on any device. Keep it to yourself.\n\n${signin}`,
   )}`;
   const starter = view.stats.starter;
   const paid = me.invitesPaid ?? 0;

@@ -1,6 +1,6 @@
 /**
  * Fractional firms, agencies, talent marketplaces, staffing firms and placeholders like
- * "Contractor" (lib/firms.ts) are not clients, so they are not on Trading Post at all.
+ * "Contractor" (lib/firms.ts) are not clients, so they are not on Merlin at all.
  *
  *  - cleanSeed: drops them, with their seats and people, from the private seed (and tidies the
  *    seed's labels and places). Run by scripts/clean-intel-seed.mts, add-seat-scan.mjs and the

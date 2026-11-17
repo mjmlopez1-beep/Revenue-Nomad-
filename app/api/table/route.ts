@@ -48,7 +48,7 @@ const SLOW = "That's a lot in one minute. Give it a moment, then try again.";
 const SIGNED_OUT = "You're signed out. Sign in again to add, confirm or unlock.";
 const SIGNED_OUT_READ = "You're signed out. Sign in again to see your messages.";
 /** The same answer whether or not the email belongs to a member, so nobody can test which emails are members. */
-const LINK_ON_ITS_WAY = "If that email is on Trading Post, a link is on its way.";
+const LINK_ON_ITS_WAY = "If that email is on Merlin, a link is on its way.";
 const LINK_USED = "That sign-in link has expired or was already used. A link works once, for 20 minutes. Ask for a new one in Sign in.";
 const CODE_FAILED = "That code didn't work. A code works once, for 20 minutes, and stops after 5 wrong tries. Ask for a new email if you need one.";
 /** The key an email is counted under for the per-address limits (case and spaces don't make a new one). */
@@ -137,7 +137,7 @@ async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
  * GET              the table as the signed-in member sees it (signed out: counts only).
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
- * GET ?preview=1&fn=F&ind=I&country=C   the landing page's "Try it" and example record: counts, sample rows with their companies, never
+ * GET ?preview=1&fn=F&ind=I&country=C&view=all|hiring|notyet   the landing page's "Try it" and example record: counts, sample rows with their companies, never
  *                  a person, email, phone, posting link or rate (lib/preview.ts). 400 on a value not on its list.
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
@@ -147,7 +147,7 @@ async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
  *                  Anyone else gets their own view, as without it.
  *
  * See also POST /api/table/scan (the weekly scan, for a cron), GET /api/table/unsubscribe and
- * GET /api/health. Every handler answers 503 while Trading Post cannot serve (lib/apiGuard.ts).
+ * GET /api/health. Every handler answers 503 while Merlin cannot serve (lib/apiGuard.ts).
  */
 export const GET = guarded(async (req: NextRequest) => {
   const ip = clientIp(req);
@@ -181,7 +181,7 @@ export const GET = guarded(async (req: NextRequest) => {
     if (limited(`preview:${ip}`, 60, 60_000)) return err(SLOW, 429);
     const q = req.nextUrl.searchParams;
     try {
-      const a = await preview({ fn: q.get("fn"), industry: q.get("ind"), country: q.get("country") });
+      const a = await preview({ fn: q.get("fn"), industry: q.get("ind"), country: q.get("country"), view: q.get("view") });
       return NextResponse.json(a, { headers: { "cache-control": "public, max-age=120" } });
     } catch (e) {
       if (e instanceof PreviewError) return err(e.message, 400);
@@ -191,7 +191,7 @@ export const GET = guarded(async (req: NextRequest) => {
   if (req.nextUrl.searchParams.get("export")) {
     if (!isAdmin(await memberForToken(token))) return err("Only admins can download the export.", 403);
     return sendJson(req, await exportState(), {
-      "content-disposition": `attachment; filename="trading-post-${new Date().toISOString().slice(0, 10)}.json"`,
+      "content-disposition": `attachment; filename="merlin-${new Date().toISOString().slice(0, 10)}.json"`,
     });
   }
   // Neither holds the page up: the visit is noted (at most once per 6 hours per member), and a
@@ -301,7 +301,7 @@ export const POST = guarded(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, sent: true, message: LINK_ON_ITS_WAY });
   }
 
-  // Signed in: email myself a one-time link (to open Trading Post on another device).
+  // Signed in: email myself a one-time link (to open Merlin on another device).
   if (body.emailMe === true) {
     const me = await memberForToken(req.cookies.get(COOKIE)?.value ?? null);
     if (!me) return err(SIGNED_OUT, 401);

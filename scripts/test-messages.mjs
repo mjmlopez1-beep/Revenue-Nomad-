@@ -56,7 +56,7 @@ Object.assign(process.env, {
   RN_PUBLIC_URL: "https://post.example.com",
   RN_LOGO_LOOKUP: "off",
   RESEND_API_KEY: "test-key",
-  RN_EMAIL_FROM: "Trading Post <post@example.com>",
+  RN_EMAIL_FROM: "Merlin <post@example.com>",
   RN_EMAIL_REPLY_TO: "hello@example.org",
 });
 for (const k of ["RN_EMAIL_API_URL", "RN_DIGEST", "RN_DIGEST_ALL", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT"]) delete process.env[k];
@@ -120,7 +120,7 @@ async function main() {
   check("a seat holder who never signed in can't be messaged", un.ok && !nora.ok && /hasn't signed in/.test(nora.error), nora);
   await act(SAL, { type: "unlock", entity: "engagement", id: pub("e_acme_zed"), field: "operator" });
   const zed = await act(SAL, { type: "message.start", engagementId: pub("e_acme_zed"), text: "Hi Zed" });
-  check("a seat holder who is not a member can't be messaged", !zed.ok && /Nobody on Trading Post is linked/.test(zed.error), zed);
+  check("a seat holder who is not a member can't be messaged", !zed.ok && /Nobody on Merlin is linked/.test(zed.error), zed);
   const gone = await act(SAL, { type: "message.start", engagementId: "nope", text: "Hi" });
   check("a seat that isn't there is refused", !gone.ok, gone);
 
@@ -168,12 +168,12 @@ async function main() {
   const toHana = outbox.filter((m) => m.to === "hana.holder@example.com");
   check("Hana got one email for Sal's two messages in the same hour", toHana.length === 1, toHana.map((m) => m.subject));
   const m0 = toHana[0];
-  check("its subject names the sender and the seat", m0?.subject === "Sal sent you a message on Trading Post about your seat at Acme Robotics", m0?.subject);
+  check("its subject names the sender and the seat", m0?.subject === "Sal sent you a message on Merlin about your seat at Acme Robotics", m0?.subject);
   check("it quotes the first 200 characters", !!m0 && m0.text.includes(opener.slice(0, 120)) && !m0.text.includes(opener.slice(0, 260)) && m0.text.includes("…"), m0?.text.slice(0, 300));
   // The button carries a one-time sign-in link that opens the conversation.
   const once = m0?.text.match(/https:\/\/post\.example\.com\/\?k=(o[A-Za-z0-9_-]{32})&p=messages&m=([^\s]+)/);
   check("it links to the conversation with a one-time sign-in link", !!once && once[2] === encodeURIComponent(convId) && m0.html.includes("Read and reply") && m0.html.includes(`?k=${once[1]}&amp;p=messages`), m0?.text.slice(-500));
-  check("the footer says replies to the email don't reach them", !!m0 && m0.text.includes("Replies to this email don't reach them. Reply on Trading Post.") && m0.html.includes("Replies to this email don&#39;t reach them") || m0?.html.includes("Replies to this email don't reach them"));
+  check("the footer says replies to the email don't reach them", !!m0 && m0.text.includes("Replies to this email don't reach them. Reply on Merlin.") && m0.html.includes("Replies to this email don&#39;t reach them") || m0?.html.includes("Replies to this email don't reach them"));
   check("the text version says link, not button", !!m0 && /link/.test(m0.text) && !/button/i.test(m0.text), m0?.text);
   {
     const si = await import("../lib/signin");
@@ -190,7 +190,7 @@ async function main() {
   check("replies go to the support address, never a member's", !!m0 && m0.replyTo === "hello@example.org" && outbox.every((m) => m.replyTo === "hello@example.org"), m0?.replyTo);
   check("it never shows an email address", !!m0 && !EMAILS.some((e) => (m0.subject + m0.text + m0.html).includes(e)));
   const toSal = outbox.filter((m) => m.to === "sal.starter@example.com");
-  check("Sal got one for Hana's reply, about the seat", toSal.length === 1 && toSal[0].subject === "Hana sent you a message on Trading Post about the seat at Acme Robotics", toSal.map((m) => m.subject));
+  check("Sal got one for Hana's reply, about the seat", toSal.length === 1 && toSal[0].subject === "Hana sent you a message on Merlin about the seat at Acme Robotics", toSal.map((m) => m.subject));
   skew += 61 * 60 * 1000;
   await act(SAL, { type: "message.send", conversationId: convId, text: "An hour later" });
   await settle();

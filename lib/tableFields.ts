@@ -1,5 +1,5 @@
 /**
- * Field definitions for Trading Post. Shared by server and client (no Node imports).
+ * Field definitions for Merlin. Shared by server and client (no Node imports).
  *
  * Three linked records: a company, the fractional engagements at that company, and
  * the people there (decision makers at the company, or people tied to one engagement:
@@ -19,7 +19,7 @@ export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrO
 
 /**
  * Revenue Nomad's standard industry list (the platform's list, its 110 active industries in its
- * own order). Every industry value on Trading Post is one of these: lib/industryMap.ts maps
+ * own order). Every industry value on Merlin is one of these: lib/industryMap.ts maps
  * anything else (an older tag, a LinkedIn, Clay or Crunchbase industry) onto it, or leaves it
  * empty. RN_INDUSTRY_SLUGS keeps the platform's slug for each, for a sync with the platform.
  */
@@ -324,7 +324,7 @@ export const GROUPS: GroupDef[] = [
         kind: "text",
         gated: true,
         placeholder: "First and last name",
-        hint: "The person's first and last name, like Jane Smith. If they've signed in to Trading Post, pick them from the list.",
+        hint: "The person's first and last name, like Jane Smith. If they've signed in to Merlin, pick them from the list.",
         say: "the seat holder",
       },
       { key: "start", label: "Start month", short: "Start", kind: "month", gated: false, hint: "The month the work started.", say: "the start month" },
@@ -393,7 +393,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   "Demand scan": "Job posting",
   "Member added": "Added by a member",
   Clay: "Revenue Nomad research",
-  // Current fractional seats Revenue Nomad found. Nobody holds one on Trading Post until its fractional claims it.
+  // Current fractional seats Revenue Nomad found. Nobody holds one on Merlin until its fractional claims it.
   "Seat scan": "Revenue Nomad research",
 };
 

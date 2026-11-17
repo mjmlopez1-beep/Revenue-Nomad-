@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   try {
     return json(await tokenRequest(fields, req.headers.get("authorization"), mcpUrl(req), publicOrigin(req)));
   } catch (e) {
-    if (e instanceof OAuthFail) return oauthError(e.code, e.message, e.status, e.status === 401 ? { "www-authenticate": 'Basic realm="Trading Post"' } : {});
+    if (e instanceof OAuthFail) return oauthError(e.code, e.message, e.status, e.status === 401 ? { "www-authenticate": 'Basic realm="Merlin"' } : {});
     const r = notNow(e);
     if (r) return r;
     throw e;

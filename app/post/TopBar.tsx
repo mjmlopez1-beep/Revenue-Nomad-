@@ -214,7 +214,7 @@ const KEYS: [string, string][] = [
 export function HelpSheet({ me, contact, emailOn, starter, onClose }: { me: Me; contact?: Contact; emailOn?: boolean; starter?: number; onClose: () => void }) {
   const toast = useToast();
   const support = contact?.support?.trim() || null;
-  const write = support ? mailto(support, "Trading Post feedback") : null;
+  const write = support ? mailto(support, "Merlin feedback") : null;
   const copy = async () => {
     const ok = await copyText(signInLink(me.token));
     toast(ok ? "Sign-in link copied. It signs in as you, so keep it to yourself." : "That didn't copy. Open Your credits and copy the link from there.", !ok);
@@ -272,7 +272,7 @@ export function HelpSheet({ me, contact, emailOn, starter, onClose }: { me: Me; 
           {write && (
             <div>
               <a className="btn btn-sm btn-pine" href={write}>
-                Email the Trading Post team
+                Email the Merlin team
               </a>
             </div>
           )}
@@ -552,11 +552,9 @@ export function TopBar({
           </>
         ) : (
           <>
-            <button type="button" className="tp-brand tp-brand-phone" onClick={onHome} aria-label="Trading Post home">
-              <span className="tp-mark">
-                <Brand dark />
-              </span>
-              <span className="tp-wordmark">Trading Post</span>
+            <button type="button" className="tp-brand tp-brand-phone" onClick={onHome} aria-label="Merlin home">
+              <Brand dark size={24} className="tp-brand-wm" />
+              <Brand dark size={30} kind="mark" className="tp-brand-mark" />
             </button>
             {listSwitch}
             <div className="tp-top-right">
@@ -580,12 +578,10 @@ export function TopBar({
   }
   return (
     <header className="tp-top">
-      <button type="button" className="tp-brand" onClick={onHome} aria-label="Trading Post home">
+      <button type="button" className="tp-brand" onClick={onHome} aria-label="Merlin home">
         <span className="tp-brand-logo">
-          <Brand dark />
+          <Brand dark size={28} />
         </span>
-        <span className="tp-brand-div" aria-hidden />
-        <span className="tp-wordmark">Trading Post</span>
       </button>
       <div className="tp-top-mid">{search}</div>
       <div className="tp-top-right">

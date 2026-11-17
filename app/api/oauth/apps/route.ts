@@ -21,7 +21,7 @@ export const GET = guarded(async (req: NextRequest) => {
 
 export const POST = guarded(async (req: NextRequest) => {
   const origin = req.headers.get("origin");
-  if (origin && origin !== publicOrigin(req) && origin !== req.nextUrl.origin) return NextResponse.json({ error: "That didn't come from Trading Post." }, { status: 403, headers: noStore });
+  if (origin && origin !== publicOrigin(req) && origin !== req.nextUrl.origin) return NextResponse.json({ error: "That didn't come from Merlin." }, { status: 403, headers: noStore });
   const me = await memberForToken(req.cookies.get("rn_table")?.value);
   if (!me) return NextResponse.json({ error: SIGNED_OUT }, { status: 401, headers: noStore });
   const body = (await req.json().catch(() => null)) as { revoke?: unknown } | null;

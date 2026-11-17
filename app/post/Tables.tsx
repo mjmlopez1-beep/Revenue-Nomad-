@@ -129,8 +129,8 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
   // A seat Revenue Nomad found: its holder isn't a member yet, so there is no name to add or unlock. They claim it in the record.
   if (e.claimable)
     return (
-      <span className="tp-notyet" title="The seat holder isn't on Trading Post yet. If it's your seat, claim it in the record.">
-        Not on Trading Post yet
+      <span className="tp-notyet" title="The seat holder isn't on Merlin yet. If it's your seat, claim it in the record.">
+        Not on Merlin yet
       </span>
     );
   if (isOpenRole(e) && e.cells.operator?.s === "empty")

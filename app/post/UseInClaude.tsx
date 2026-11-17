@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * "Use it in Claude": how a member connects Trading Post to Claude, ChatGPT, Claude Code or
+ * "Use it in Claude": how a member connects Merlin to Claude, ChatGPT, Claude Code or
  * Cursor. One address (this site's /api/mcp), sign-in in the browser, no key. Page key `claude`.
  */
 import { IconChevron } from "../ui/shared";
@@ -33,7 +33,7 @@ function Code({ text, label, block = false }: { text: string; label: string; blo
 export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: () => void; onCredits: () => void; embedded?: boolean }) {
   const copy = useCopy();
   const address = `${typeof window === "undefined" ? "" : window.location.origin}/api/mcp`;
-  const cursorJson = JSON.stringify({ mcpServers: { "trading-post": { url: address } } }, null, 2);
+  const cursorJson = JSON.stringify({ mcpServers: { "merlin": { url: address } } }, null, 2);
   return (
     <div className={embedded ? "uc-page uc-embedded" : "tp-page uc-page"}>
       {!embedded && (
@@ -45,7 +45,7 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
         </>
       )}
       <p className="uc-lead">
-        Connect Trading Post to Claude and ask the table in your own words. It searches as you, sees what you&apos;ve unlocked, and can add what you know. It asks before it
+        Connect Merlin to Claude and ask the table in your own words. It searches as you, sees what you&apos;ve unlocked, and can add what you know. It asks before it
         spends a credit.
       </p>
 
@@ -53,7 +53,7 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
         <h2 className="tp-card-h" id="uc-addr-h">
           Your connector address
         </h2>
-        <p className="cr-note">The same address works in every app. You sign in to Trading Post once in your browser, so there&apos;s no key to paste.</p>
+        <p className="cr-note">The same address works in every app. You sign in to Merlin once in your browser, so there&apos;s no key to paste.</p>
         <div className="uc-addr-row">
           <input className="input mono uc-addr" readOnly value={address} aria-label="Connector address" onFocus={(e) => e.currentTarget.select()} />
           <button type="button" className="btn btn-pine" onClick={() => void copy(address, "Address copied. Paste it into your app.")}>
@@ -71,10 +71,10 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
           <ol className="uc-steps">
             <li>Open Settings, then Connectors.</li>
             <li>Pick Add custom connector.</li>
-            <li>Name it Trading Post and paste the address.</li>
-            <li>Pick Connect, sign in to Trading Post and allow it.</li>
+            <li>Name it Merlin and paste the address.</li>
+            <li>Pick Connect, sign in to Merlin and allow it.</li>
           </ol>
-          <p className="uc-tip">In a chat, turn Trading Post on from the tools menu if Claude doesn&apos;t use it on its own.</p>
+          <p className="uc-tip">In a chat, turn Merlin on from the tools menu if Claude doesn&apos;t use it on its own.</p>
         </section>
 
         <section className="tp-card uc-app" aria-labelledby="uc-chatgpt">
@@ -85,8 +85,8 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
           <ol className="uc-steps">
             <li>Open Settings, then Apps and connectors.</li>
             <li>Under Advanced settings, turn on Developer mode.</li>
-            <li>Pick Create, name it Trading Post and paste the address. Choose OAuth for sign-in.</li>
-            <li>Sign in to Trading Post and allow it.</li>
+            <li>Pick Create, name it Merlin and paste the address. Choose OAuth for sign-in.</li>
+            <li>Sign in to Merlin and allow it.</li>
           </ol>
         </section>
 
@@ -98,9 +98,9 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
           <ol className="uc-steps">
             <li>Run this command.</li>
           </ol>
-          <Code text={`claude mcp add --transport http trading-post ${address}`} label="Command" />
+          <Code text={`claude mcp add --transport http merlin ${address}`} label="Command" />
           <ol className="uc-steps" start={2}>
-            <li>In Claude Code, type /mcp, pick trading-post and sign in.</li>
+            <li>In Claude Code, type /mcp, pick merlin and sign in.</li>
           </ol>
         </section>
 
@@ -114,7 +114,7 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
           </ol>
           <Code text={cursorJson} label="Settings" block />
           <ol className="uc-steps" start={2}>
-            <li>Pick Connect next to trading-post and sign in.</li>
+            <li>Pick Connect next to merlin and sign in.</li>
           </ol>
         </section>
       </div>
@@ -139,7 +139,7 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
           Every unlock asks you first
         </h2>
         <p className="cr-note">
-          Before it spends a credit, the app tells you what it costs and what you&apos;ll see, and waits for your yes. It only sees what you can see in Trading Post, and it never sees
+          Before it spends a credit, the app tells you what it costs and what you&apos;ll see, and waits for your yes. It only sees what you can see in Merlin, and it never sees
           your sign-in link. You can disconnect it any time in{" "}
           <button type="button" className="ca-link" onClick={onCredits}>
             Your credits

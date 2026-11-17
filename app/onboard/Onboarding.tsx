@@ -2,14 +2,14 @@
 
 /**
  * First run, about a minute. One calm card:
- *   1. What Trading Post is and what a credit buys, then who they are: their function, the title
+ *   1. What Merlin is and what a credit buys, then who they are: their function, the title
  *      they go by when they message, and what they are looking for. A member with seats on file
  *      hears where those came from and who can see their name, since most of them arrive by
  *      personal link and skip the landing page.
  *   2. Who they hunt: their Ideal Fractional Profile, the companies they want as clients (industries,
  *      size, revenue, where). Every part optional.
  *   3. Find your seats: they type past and current clients, and claim the seats we found there
- *      ("Not on Trading Post yet", with the "Is this you?" check), or add one we don't have.
+ *      ("Not on Merlin yet", with the "Is this you?" check), or add one we don't have.
  *   4. Follow companies (type-ahead plus 6 suggestions that fit their clients and function, never
  *      a fractional firm and never a company where they held a seat). Optional.
  *   5. Keep your sign-in link (only for members who joined here while email sign-in is off).
@@ -387,8 +387,8 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     <div className="ob">
       <header className="ob-top">
         <span className="ob-brand">
-          <Brand />
-          <span className="ob-product">Trading Post</span>
+          <Brand size={28} />
+          <span className="ob-product">by Revenue Nomad</span>
         </span>
         <span className="ob-credits num" title="Your balance">
           <span className="ob-coin" aria-hidden>
@@ -498,7 +498,7 @@ function StepQuestions({
         Welcome, {first}
       </h1>
       <p className="ob-sub">
-        Trading Post is where fractional leaders share which companies hired fractionals, for which seat, who held it and what it paid.
+        Merlin is where fractional leaders share which companies hired fractionals, for which seat, who held it and what it paid.
         {seats
           ? ` ${
               published === seats
@@ -686,7 +686,7 @@ function ClaimRow({ e, company, act }: { e: EngagementRec; company: string; act:
     <li className="ob-seat">
       <span className="ob-seat-id">
         <span className="ob-seat-line">{seatLine(e)}</span>
-        <span className="ob-seat-meta">Not on Trading Post yet</span>
+        <span className="ob-seat-meta">Not on Merlin yet</span>
         {err && (
           <span className="ob-seat-err" role="alert">
             {err}
@@ -840,7 +840,7 @@ function StepSeats({
                 <CompanyLogo name={c.name} domain={c.iconDomain} />
                 <span className="ob-result-id">
                   <span className="ob-result-name">{c.name}</span>
-                  <span className="ob-result-meta">{metaOf(c) || "On Trading Post"}</span>
+                  <span className="ob-result-meta">{metaOf(c) || "On Merlin"}</span>
                 </span>
               </li>
             ))}
@@ -1091,7 +1091,7 @@ function StepFollow({
                     {c.name}
                   </span>
                   <span className="ob-co-meta" title={meta || undefined}>
-                    {meta || "New on Trading Post"}
+                    {meta || "New on Merlin"}
                   </span>
                 </div>
               </div>
@@ -1184,8 +1184,8 @@ function StepLink({
     setKept(true);
     setTimeout(() => setCopied(false), 2400);
   };
-  const mailMe = `mailto:${encodeURIComponent(email)}?subject=Trading%20Post%20sign-in%20link&body=${encodeURIComponent(link)}`;
-  const supportHref = support ? mailto(support, "Trading Post sign-in link") : null;
+  const mailMe = `mailto:${encodeURIComponent(email)}?subject=Merlin%20sign-in%20link&body=${encodeURIComponent(link)}`;
+  const supportHref = support ? mailto(support, "Merlin sign-in link") : null;
 
   return (
     <div>

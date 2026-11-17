@@ -1,5 +1,5 @@
 /**
- * Checks of what keeps Trading Post standing: a damaged state file, a missing seed, the health
+ * Checks of what keeps Merlin standing: a damaged state file, a missing seed, the health
  * check, the cap on table views, oversized and signed-out requests, what members can type, one
  * company one record, security headers and the weekly email's unsubscribe headers.
  *
@@ -335,14 +335,14 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     await add("Zeta Notes", { website: "zeta.notion.site" });
     eq("two Google Sites pages and two Notion sites are four companies", (await count()) - n0, 6);
     const again = await add("Alpha Widgets Group", { website: "https://www.linkedin.com/company/Alpha-Widgets?trk=x" });
-    check("the same LinkedIn page in another case still finds its company", again.ok && /Alpha Widgets is already on Trading Post/.test(again.v.message) && (await count()) - n0 === 6, again.ok ? again.v.message : String(again.e));
+    check("the same LinkedIn page in another case still finds its company", again.ok && /Alpha Widgets is already on Merlin/.test(again.v.message) && (await count()) - n0 === 6, again.ok ? again.v.message : String(again.e));
 
     const n1 = await count();
     await add("काम");
     const kam = await add("कम");
     await add("กิน");
     await add("กัน");
-    check("Hindi and Thai names that differ only in a vowel sign are four records", kam.ok && !/already on Trading Post/.test(kam.v.message) && (await count()) - n1 === 4, kam.ok ? kam.v.message : String(kam.e));
+    check("Hindi and Thai names that differ only in a vowel sign are four records", kam.ok && !/already on Merlin/.test(kam.v.message) && (await count()) - n1 === 4, kam.ok ? kam.v.message : String(kam.e));
     await add("Société Marquée");
     await add("Societe Marquee");
     eq("an accented and an unaccented Latin spelling are still one record", (await count()) - n1, 5);
@@ -624,7 +624,7 @@ console.log("\nThe cap on table views");
 }
 
 /* ---------- 503, never an empty table (lib/apiGuard.ts) ---------- */
-console.log("\nThe answer when Trading Post cannot serve");
+console.log("\nThe answer when Merlin cannot serve");
 {
   const G = await attempt(() => import("../lib/apiGuard" as string) as Promise<typeof import("../lib/apiGuard")>);
   if (!G.ok) check("lib/apiGuard.ts exists", false, String(G.e).slice(0, 200));
@@ -748,7 +748,7 @@ child("add", freshDir("add"));
 
 /* ---------- the weekly email ---------- */
 console.log("\nThe weekly email");
-child("digest", freshDir("digest"), { RESEND_API_KEY: "test-key", RN_EMAIL_FROM: "Trading Post <post@example.com>", RN_PUBLIC_URL: "https://post.example.com" });
+child("digest", freshDir("digest"), { RESEND_API_KEY: "test-key", RN_EMAIL_FROM: "Merlin <post@example.com>", RN_PUBLIC_URL: "https://post.example.com" });
 
 /* =====================================================================================
  * Over HTTP, against servers started here.
@@ -906,7 +906,7 @@ else {
       const ok = many.filter((r, i) => r.status === 200 && r.me === `fm${i + 10}`).length;
       const busy = many.filter((r) => r.status === 503);
       check(`${BIG - 10} members loading at once: some are served and the rest are told to come back (${ok} served, ${busy.length} told)`, ok >= 4 && busy.length >= 1 && ok + busy.length === many.length, many.filter((r) => r.status !== 200 && r.status !== 503).slice(0, 5));
-      check("the 503 carries Retry-After and a plain message", busy.length > 0 && busy.every((r) => r.retryAfter === "2" && /"error":"Trading Post is busy/.test(r.error)), busy[0]);
+      check("the 503 carries Retry-After and a plain message", busy.length > 0 && busy.every((r) => r.retryAfter === "2" && /"error":"Merlin is busy/.test(r.error)), busy[0]);
       const afterBurst = await call("GET", "/api/table", { token: "fixtok-3" });
       eq("and the server is still up afterwards", [afterBurst.status, afterBurst.json?.companies?.length], [200, 1800]);
     } catch (e) {

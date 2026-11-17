@@ -1,5 +1,5 @@
 /**
- * Trading Post: a give-to-get intel table for fractional GTM work.
+ * Merlin: a give-to-get intel table for fractional GTM work.
  *
  * Three linked records:
  *   company 1→n engagements (fractional seats at that company)
@@ -316,7 +316,7 @@ async function readJson<T>(file: string): Promise<T | null> {
 }
 
 /**
- * Trading Post cannot serve right now: the state file is damaged and no backup could be read
+ * Merlin cannot serve right now: the state file is damaged and no backup could be read
  * ("state"), or RN_REQUIRE_SEED=1 and the member seed did not load ("seed"). Every route answers
  * 503 (lib/apiGuard.ts) and nothing is written while it stands. The message is for the log.
  */
@@ -450,7 +450,7 @@ export const stateVersion = () => commits;
 function isState(x: unknown): x is Partial<State> {
   if (!x || typeof x !== "object" || Array.isArray(x)) return false;
   const o = x as Record<string, unknown>;
-  // Every state Trading Post has written holds a ledger and the values. A file without them ("{}",
+  // Every state Merlin has written holds a ledger and the values. A file without them ("{}",
   // or another app's JSON put back by mistake) is not ours, and booting it would start an empty table.
   if (!Array.isArray(o.ledger) || !o.values || typeof o.values !== "object" || Array.isArray(o.values)) return false;
   for (const k of ["companies", "engagements", "contacts", "members", "ledger"]) if (o[k] !== undefined && !Array.isArray(o[k])) return false;
@@ -469,7 +469,7 @@ async function readState(file: string): Promise<StateRead> {
   }
   try {
     const x: unknown = JSON.parse(text);
-    return isState(x) ? { kind: "ok", state: x } : { kind: "damaged", why: "does not hold a Trading Post state" };
+    return isState(x) ? { kind: "ok", state: x } : { kind: "damaged", why: "does not hold a Merlin state" };
   } catch {
     return { kind: "damaged", why: `is not valid JSON (${text.length} characters, it may be cut short)` };
   }
@@ -526,7 +526,7 @@ async function readStateOrRecover(): Promise<Partial<State>> {
   }
   throw new Unavailable(
     "state",
-    `${what}, and no backup could be read. Nothing was changed. Trading Post answers 503 and writes nothing until a good intel.json is put back ` +
+    `${what}, and no backup could be read. Nothing was changed. Merlin answers 503 and writes nothing until a good intel.json is put back ` +
       `(to start empty on purpose, remove the damaged file and the backups folder).`,
   );
 }
@@ -1398,7 +1398,7 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (!f.gated || mine || free || paid) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
     if (key === "operator" && idx) {
-      // "Member" only for someone on Trading Post now: a seed member we invited who never signed in is just a name.
+      // "Member" only for someone on Merlin now: a seed member we invited who never signed in is just a name.
       const m = seatHolder(s, idx, node!.id, v);
       if (m && (m.id === me?.id || signedIn(s, idx, m.id))) out.member = { title: m.title ?? "", you: !!me && m.id === me.id };
       if (mine && entity === "engagement" && (node as EngNode).source === SEAT_SCAN) out.claimed = true;
@@ -1497,7 +1497,7 @@ const keyOfCompany = (name: string) => {
   return k;
 };
 
-/** For the add form: is a company with this website (or name) already on Trading Post? */
+/** For the add form: is a company with this website (or name) already on Merlin? */
 export async function existingCompany(domain: string | null, name: string | null) {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const g = graph(seed, s);
@@ -1888,7 +1888,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       if (myAdds.has(e.id) || ePeopleNodes.some((p) => myAdds.has(p.id))) mine = true;
       return {
         id: pubId(e.id), source: e.source, verified: e.verified, cells, people: ePeople, updatedAt: eu, yours,
-        // A seat from the seat scan with nobody on it: its holder is not on Trading Post yet, and they can claim it.
+        // A seat from the seat scan with nobody on it: its holder is not on Merlin yet, and they can claim it.
         ...(e.source === SEAT_SCAN && !op ? { claimable: true } : {}),
         ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null, ...roleTimes(track) } : {}),
       };
@@ -2751,7 +2751,7 @@ export async function perform(
       const wanted = String(raw);
       if (wanted === "me") return me;
       const m = memberIndex(seed, s).all.find((x) => pubId(x.id) === wanted);
-      if (!m) throw new ActionError("That member isn't on Trading Post. Type the seat holder's first and last name instead.");
+      if (!m) throw new ActionError("That member isn't on Merlin. Type the seat holder's first and last name instead.");
       return m;
     };
     let capped = false;
@@ -3242,10 +3242,10 @@ export async function perform(
             : engNew
               ? `Added a seat at ${companyName}`
               : savedSome
-                ? `${companyName} was already on Trading Post, so we added what you know to it`
+                ? `${companyName} was already on Merlin, so we added what you know to it`
                 : seatOnFile
                   ? `That seat at ${companyName} is already on file. ${NOTHING_NEW.slice(0, -1)}`
-                  : `${companyName} is already on Trading Post. ${NOTHING_NEW.slice(0, -1)}`;
+                  : `${companyName} is already on Merlin. ${NOTHING_NEW.slice(0, -1)}`;
           const skipped =
             kept && !(nothing && seatOnFile) ? (kept > 1 ? ` ${kept} facts were already there, so we left them as they were.` : " 1 fact was already there, so we left it as it was.") : "";
           const leftOut = picksLeftOut

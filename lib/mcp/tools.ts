@@ -107,9 +107,9 @@ function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
   const lockedFor = (field: string) => (open && ["posting", "rate"].includes(field) ? (i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE) : LOCKED);
   const facts = readAll(e.cells, SEAT_KEYS, lockedFor);
   const holder = e.cells.operator;
-  if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Trading Post${holder.member.title ? `, ${holder.member.title}` : ""})`;
+  if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Merlin${holder.member.title ? `, ${holder.member.title}` : ""})`;
   // A seat Revenue Nomad found: no name is on file, and its fractional can claim it.
-  if (e.claimable) facts.seat_holder = "Not on Trading Post yet";
+  if (e.claimable) facts.seat_holder = "Not on Merlin yet";
   if (open && facts.rate) (facts.posted_rate = facts.rate), delete facts.rate;
   if (open && facts.hours) (facts.posted_hours = facts.hours), delete facts.hours;
   const intro = mv.view.contact?.intro;
@@ -422,8 +422,8 @@ export async function rateBenchmarks(ctx: Ctx, a: { function?: string; revenue?:
 /* ---------- account ---------- */
 
 function emailNote(mv: MemberView): string {
-  if (!digestEnabled()) return "Email isn't set up on Trading Post yet, so alerts don't arrive by email. Ask what's new any time: list_open_roles with since_days 7 shows this week's open roles.";
-  if (!mv.view.me!.digest) return "Your weekly email is off, so new matches won't be emailed. Turn it on in Your credits on Trading Post.";
+  if (!digestEnabled()) return "Email isn't set up on Merlin yet, so alerts don't arrive by email. Ask what's new any time: list_open_roles with since_days 7 shows this week's open roles.";
+  if (!mv.view.me!.digest) return "Your weekly email is off, so new matches won't be emailed. Turn it on in Your credits on Merlin.";
   return "New matches come in your weekly email after each scan.";
 }
 
@@ -437,7 +437,7 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     ...(me.function ? { function: me.function } : {}),
     // The companies they want as clients. Empty parts mean any.
     ideal_fractional_profile: icpEmpty(me.icp)
-      ? "Not set. The member sets it in Your profile on Trading Post."
+      ? "Not set. The member sets it in Your profile on Merlin."
       : { industries: me.icp!.industries, employees: me.icp!.employees, revenue: me.icp!.revenue, countries: me.icp!.countries, summary: icpLabel(me.icp) },
     credits: me.credits,
     ...(me.owed ? { owed: me.owed } : {}),
@@ -721,7 +721,7 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
       name,
       criteria,
       saved: dayOfIso(createdAt),
-      ...(place !== undefined ? { saved_in: "the Trading Post app" } : {}),
+      ...(place !== undefined ? { saved_in: "the Merlin app" } : {}),
       weekly_email: email !== false,
       open_now: all.roles.length,
       new_this_week: week,

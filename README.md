@@ -14,9 +14,9 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
-## Trading Post — the product
+## Merlin — the product
 
-The site *is* Trading Post: `/` is the landing page, the login and the app (old `/table?k=` links redirect). Jigsaw for the fractional GTM community: every row is a fractional engagement — the company, the seat, and the people involved — and members **give** (add what's missing, verify what's right) to **get** (spend credits to unlock 🔒 fields).
+The site *is* Merlin: `/` is the landing page, the login and the app (old `/table?k=` links redirect). Jigsaw for the fractional GTM community: every row is a fractional engagement — the company, the seat, and the people involved — and members **give** (add what's missing, verify what's right) to **get** (spend credits to unlock 🔒 fields).
 
 - **Fill an empty field → +1 credit (up to 25 per rolling 24 hours). Unlock a 🔒 field someone else filled → 1 credit.** Starting balance: `RN_STARTER_CREDITS` (default 25, also set in `render.yaml` and the Dockerfile). When the starter balance goes down, anyone it would leave below 0 is lifted to 0 once, so nobody starts in debt. Invite bonuses (+10 each) and confirmation bonuses (+1) count toward the same 25; any part that doesn't fit is held and paid automatically as the rolling window frees room. New accounts can unlock 25 facts in their first 24 hours, then 100 a day.
 - **Verify** any value you can see (once per person). Values show their confirmation count (✓n) even while locked. The count is members only: values from Revenue Nomad's own records or the scan carry no count and say where they came from (`Cell.from`: `records` or `posting`).
@@ -54,7 +54,7 @@ node scripts/seal-intel-seed.mjs     # encrypts it to data/intel-seed.enc (key i
 
 Member data never goes into git in the clear (this repo is public): `data/intel-seed.json`, `data/intel-member-links.csv`, `data/intel-seed.key` and runtime state are git-ignored. Hosts get the AES-256-GCM encrypted `data/intel-seed.enc` with the code and open it with `RN_INTEL_SEED_KEY` (the contents of `data/intel-seed.key`). Use persistent storage for `RN_DATA_DIR` (Railway volume / Render disk / Docker volume). With no seed, the page runs on labeled demo data (`/?k=demo`), unless `RN_REQUIRE_SEED=1` is set, as it is in the Docker image: then a seed that does not open means 503 on every route.
 
-The job-board crawler and prospect engine remain back-end services only (`/api/crawl`, `/api/jobs`, `/api/prospects`) — future scheduled enrichment for Trading Post, not part of the UI.
+The job-board crawler and prospect engine remain back-end services only (`/api/crawl`, `/api/jobs`, `/api/prospects`) — future scheduled enrichment for Merlin, not part of the UI.
 
 ## Launch / Deploy
 
@@ -100,7 +100,7 @@ See `.env.example`:
 
 - `RN_GREENHOUSE_BOARDS` — comma-separated Greenhouse board tokens to watch specific companies
 - `RN_DATA_DIR` — where the JSON job database lives (defaults to `./data`)
-- `RN_STARTER_CREDITS` (default 25), `RN_ADMIN_EMAILS`: Trading Post credits and admins
+- `RN_STARTER_CREDITS` (default 25), `RN_ADMIN_EMAILS`: Merlin credits and admins
 - `RN_INTEL_SEED_KEY` (opens `data/intel-seed.enc`), `RN_REQUIRE_SEED=1` (never run on the sample data: 503 everywhere and a failing health check if the seed does not open; set in the Dockerfile), `RN_ID_SECRET` (signs public ids and unsubscribe links: set it to the seed key's current value once and keep it)
 - `RN_SUPPORT_EMAIL`, `RN_INTRO_EMAIL`: where members write for help and for an intro (`View.contact`, read at run time, never at build time)
 - `RN_CLIENT_IP_HEADER` or `RN_TRUSTED_PROXY_HOPS`: which address the rate limits and the invite rule read. Check once with `RN_LOG_IP_HEADERS=1` (logs the candidate headers of the first 20 requests), then remove it

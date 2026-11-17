@@ -1,5 +1,5 @@
 /*
- * Trading Post app (signed in). Uses the tokens in app/globals.css.
+ * Merlin app (signed in). Uses the tokens in app/globals.css.
  * Pine navigates and spends, volt earns and adds, ember only for urgency.
  * No shadows except overlays (drawer, popovers, sheets, modal).
  */
@@ -268,20 +268,7 @@
   flex: none;
 }
 .tp-brand-logo img {
-  height: 17px !important;
   max-width: none;
-}
-.tp-brand-div {
-  width: 1px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.25);
-}
-.tp-wordmark {
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: -0.015em;
-  white-space: nowrap;
-  line-height: 20px;
 }
 .tp-top-mid {
   flex: 1;
@@ -4730,30 +4717,28 @@ button.tp-fsheet-row:disabled {
   min-width: 0;
   overflow: hidden;
 }
-.tp-top-phone .tp-wordmark {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.tp-brand-phone img {
+  max-width: none;
+  flex: none;
 }
+/* The logo sets display inline (Brand), so the swap needs !important. */
+.tp-brand-phone .tp-brand-mark {
+  display: none !important;
+}
+/* Under 400px the wordmark gives way to the square M so the actions always fit. */
 @media (max-width: 399px) {
-  .tp-top-phone .tp-wordmark {
-    display: none;
+  .tp-brand-phone .tp-brand-wm {
+    display: none !important;
+  }
+  .tp-brand-phone .tp-brand-mark {
+    display: block !important;
+    border-radius: 7px;
   }
 }
 @media (max-width: 340px) {
   .tp-top-phone .tp-credits-l {
     display: none;
   }
-}
-.tp-mark {
-  display: block;
-  width: 18px;
-  overflow: hidden;
-  flex: none;
-}
-.tp-mark img {
-  max-width: none;
-  height: 20px !important;
 }
 .tp-search-phone {
   flex: 1 1 0;
@@ -4870,7 +4855,7 @@ button.tp-fsheet-row:disabled {
   line-height: 20px;
   white-space: nowrap;
 }
-/* The mark keeps its 18px beside it, so it is never cut. */
+/* The logo keeps its width beside it, so it is never cut. */
 .tp-top-phone .tp-brand {
   flex: none;
 }
@@ -5541,15 +5526,8 @@ button.tp-fsheet-row:disabled {
   .tp-drawer {
     width: 400px;
   }
-  .tp-brand-logo {
-    width: 16px;
-    overflow: hidden;
-  }
   .tp-brand {
     gap: 8px;
-  }
-  .tp-brand-div {
-    display: none;
   }
 }
 @media (max-width: 1199px) {

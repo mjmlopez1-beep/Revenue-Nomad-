@@ -1,11 +1,11 @@
 /**
- * Email: the sender, the look every Trading Post email shares, and the sign-in email.
+ * Email: the sender, the look every Merlin email shares, and the sign-in email.
  * Uses Resend's HTTP API when RESEND_API_KEY is set. Without it, emailEnabled() is false and
  * the app falls back to instant join with a personal sign-in link (fine for a pilot, not for
  * a public launch).
  *
  * RESEND_API_KEY   API key from resend.com
- * RN_EMAIL_FROM    e.g. "Trading Post <post@revenuenomad.com>" (domain verified in Resend)
+ * RN_EMAIL_FROM    e.g. "Merlin <post@revenuenomad.com>" (domain verified in Resend)
  * RN_PUBLIC_URL    e.g. "https://post.revenuenomad.com" (used to build links)
  * RN_EMAIL_FOOTER  optional line for the footer, such as the sender's postal address
  * RN_EMAIL_REPLY_TO optional, e.g. "hello@revenuenomad.com": sent as Resend's reply_to, so a reply reaches
@@ -111,7 +111,7 @@ export function mailShell(o: { title: string; preheader: string; body: string; f
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${MAIL.page}" style="background:${MAIL.page}">
 <tr><td align="center" style="padding:24px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#FFFFFF;border:1px solid ${MAIL.line};border-radius:10px;border-collapse:separate">
-<tr><td bgcolor="${MAIL.pine}" style="padding:16px 24px;border-radius:9px 9px 0 0;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:#FFFFFF">Trading Post</td></tr>
+<tr><td bgcolor="${MAIL.pine}" style="padding:16px 24px;border-radius:9px 9px 0 0;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:#FFFFFF">Merlin<span style="font-weight:500;font-size:13px;letter-spacing:0;color:#C9D9D1">&nbsp;&nbsp;by Revenue Nomad</span></td></tr>
 <tr><td style="padding:32px 24px 32px">
 ${o.body}
 </td></tr>
@@ -131,16 +131,16 @@ ${footer}
 export function signInEmail(name: string, link: string) {
   const first = oneLine(name).split(" ")[0].slice(0, 40) || "there";
   const url = oneLine(link);
-  const lead = "It opens Trading Post and keeps you signed in on this device.";
+  const lead = "It opens Merlin and keeps you signed in on this device.";
   const keep = "Keep this link to yourself. It works like a password.";
   const why = "You got this because someone asked for a sign-in link with this email address. If it wasn't you, ignore this email.";
-  const from = "Trading Post is a free pilot from Revenue Nomad.";
+  const from = "Merlin is a free pilot from Revenue Nomad.";
   const note = footerNote();
 
   const text = [
     `Hi ${first},`,
     "",
-    `Here's your sign-in link for Trading Post. ${lead}`,
+    `Here's your sign-in link for Merlin. ${lead}`,
     "",
     url,
     "",
@@ -156,12 +156,12 @@ export function signInEmail(name: string, link: string) {
     mailP(`Hi ${escHtml(first)},`),
     mailH("Here&#39;s your sign-in link"),
     mailP(escHtml(lead), "margin-bottom:24px;"),
-    mailButton(url, "Sign in to Trading Post", "margin:0 0 24px"),
+    mailButton(url, "Sign in to Merlin", "margin:0 0 24px"),
     `<p style="margin:0 0 4px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">If the button doesn&#39;t work, paste this link into your browser.</p>`,
     `<p style="margin:0 0 16px;font-family:${MAIL.mono};font-size:13px;line-height:20px;word-break:break-all"><a href="${escHtml(url)}" style="color:${MAIL.pine};text-decoration:underline">${escHtml(url)}</a></p>`,
     `<p style="margin:0;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">${escHtml(keep)}</p>`,
   ].join("\n");
 
-  const html = mailShell({ title: "Your Trading Post sign-in link", preheader: lead, body, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
-  return { subject: "Your Trading Post sign-in link", text, html };
+  const html = mailShell({ title: "Your Merlin sign-in link", preheader: lead, body, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
+  return { subject: "Your Merlin sign-in link", text, html };
 }

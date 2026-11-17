@@ -15,7 +15,7 @@ export function useStable<T extends (...args: any[]) => any>(fn: T): T {
   return useCallback(((...args: Parameters<T>) => ref.current(...args)) as T, []);
 }
 
-/** Live media query (client only; Trading Post renders after the first fetch). */
+/** Live media query (client only; Merlin renders after the first fetch). */
 export function useMedia(query: string): boolean {
   const subscribe = useCallback(
     (cb: () => void) => {

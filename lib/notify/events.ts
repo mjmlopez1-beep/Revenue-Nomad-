@@ -6,7 +6,7 @@
  *   afterUnlock  another member unlocked who held their seat, or facts on it
  * Each one only reads; lib/notify/index.ts does the sending and the batching.
  *
- * Everything an alert says is what that member can see in Trading Post: a hidden company stays
+ * Everything an alert says is what that member can see in Merlin: a hidden company stays
  * hidden, a locked role title stays locked (roles are described by their free facts), and the
  * member who unlocked something is described by function and title only.
  */

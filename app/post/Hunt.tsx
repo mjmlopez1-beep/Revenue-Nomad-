@@ -353,7 +353,7 @@ export function SaveViewSheet({ defaultName, emailOn, onSave, onClose }: { defau
         </button>
         <p className="hunt-note">
           {emailOn
-            ? "The weekly email lists the open roles that came in matching this view. Claude sees this view too, if you use Trading Post there."
+            ? "The weekly email lists the open roles that came in matching this view. Claude sees this view too, if you use Merlin there."
             : "Email isn't switched on for the pilot yet. Your view is saved, and the weekly email starts once it is. Claude sees this view too."}
         </p>
       </form>

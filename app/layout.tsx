@@ -4,11 +4,34 @@ import "@fontsource-variable/schibsted-grotesk/wght.css";
 import "@fontsource-variable/red-hat-mono/wght.css";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Trading Post · Companies that hire fractional leaders",
-  description:
-    "See which companies hire fractional sales, marketing and RevOps leaders, who held each seat, what it paid and which roles are open now. Add what you know to see more. A free pilot from Revenue Nomad.",
-};
+const TITLE = "Merlin · Companies that hire fractional leaders";
+const DESCRIPTION =
+  "See which companies hire fractional sales, marketing and RevOps leaders, who held each seat, what it paid and which roles are open now. Add what you know to see more. A free pilot from Revenue Nomad.";
+
+/** Link previews need absolute image URLs: the public address when it is set. */
+function base(): URL | undefined {
+  try {
+    return process.env.RN_PUBLIC_URL ? new URL(process.env.RN_PUBLIC_URL) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Read per request where the page is dynamic, so the public address set at run time is used. */
+export const generateMetadata = (): Metadata => ({
+  metadataBase: base(),
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: "Merlin",
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "Merlin by Revenue Nomad",
+    type: "website",
+    images: [{ url: "/brand/merlin-og.png", width: 1200, height: 630, alt: "Merlin by Revenue Nomad" }],
+  },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/brand/merlin-og.png"] },
+});
 
 /**
  * viewport-fit=cover lets the safe-area padding in the CSS take effect (a phone on its side keeps

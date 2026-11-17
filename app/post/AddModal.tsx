@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * "Add what you know": find a company (type-ahead over Trading Post, or paste a website to
+ * "Add what you know": find a company (type-ahead over Merlin, or paste a website to
  * look it up), add it if it is new, then add a seat, a person, or the company details that
  * are missing. The form says what earns a credit before the member types, each answered
  * field shows its "+1", and the last screen says what the server saved and what to do next.
@@ -768,7 +768,7 @@ interface Done extends Sent {
 /** The server's first sentence repeats the heading ("Added a seat at Acme."), so the panel leaves it out. */
 const restOf = (message: string, company: string) => {
   const n = company.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const head = new RegExp(`^(Added (a seat at |.*? at )?${n}\\.|${n} was already on Trading Post, so we added what you know to it\\.|That seat (at ${n} )?is already on file\\.)\\s*`);
+  const head = new RegExp(`^(Added (a seat at |.*? at )?${n}\\.|${n} was already on Merlin, so we added what you know to it\\.|That seat (at ${n} )?is already on file\\.)\\s*`);
   return message.replace(head, "").trim();
 };
 

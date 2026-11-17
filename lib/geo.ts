@@ -143,7 +143,7 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
 };
 
 /**
- * Countries for a filter or a pick list, the most common on Trading Post first (by companies
+ * Countries for a filter or a pick list, the most common on Merlin first (by companies
  * with an HQ on file, November 2026), then the rest by name.
  */
 export const COUNTRIES_FIRST: string[] = (() => {

@@ -3,7 +3,7 @@
  * or interim executives, or a freelance or fractional talent marketplace or network,
  * and placeholders that name no client at all ("Contractor", "Independent", "Freelance").
  * A fractional lists one as where they work, but it did not hire them: it is not a client, so it
- * is not on Trading Post. The seed cleanup drops them, the weekly scan never adds one, Add refuses
+ * is not on Merlin. The seed cleanup drops them, the weekly scan never adds one, Add refuses
  * one, and a running table removes any it holds (lib/firmRemoval.ts).
  *
  * Shared by server and client (no Node imports). Admins extend it here:

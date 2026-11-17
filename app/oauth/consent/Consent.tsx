@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * "Allow Claude to use your Trading Post account?" The page an app's sign-in opens
+ * "Allow Claude to use your Merlin account?" The page an app's sign-in opens
  * (/api/oauth/authorize sends the browser here). Signed out, it asks for the member's sign-in
  * link or code (and offers the emailed link when email is on), then comes back to the question.
  * Allow or Don't allow sends the browser back to the app.
  */
 import { useCallback, useEffect, useState } from "react";
+import { Brand } from "../../ui/shared";
 import "./consent.css";
 
 interface Info {
@@ -22,10 +23,10 @@ interface Info {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 
 const STOPPED: Record<string, { h: string; p: string }> = {
-  client: { h: "We don't know this app", p: "The app that sent you here isn't registered with Trading Post. Go back to it and connect Trading Post again." },
+  client: { h: "We don't know this app", p: "The app that sent you here isn't registered with Merlin. Go back to it and connect Merlin again." },
   redirect: { h: "We stopped this sign-in", p: "The app asked to send you back somewhere it never registered, so we stopped here. Go back to the app and connect again." },
   busy: { h: "That's a lot of tries", p: "Wait a minute, then go back to the app and connect again." },
-  expired: { h: "This sign-in ran out of time", p: "Requests last 30 minutes. Go back to the app and connect Trading Post again." },
+  expired: { h: "This sign-in ran out of time", p: "Requests last 30 minutes. Go back to the app and connect Merlin again." },
 };
 
 async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data: Record<string, unknown> }> {
@@ -33,17 +34,15 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
     const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     return { ok: r.ok, data: await r.json().catch(() => ({})) };
   } catch {
-    return { ok: false, data: { error: "We couldn't reach Trading Post. Check your connection and try again." } };
+    return { ok: false, data: { error: "We couldn't reach Merlin. Check your connection and try again." } };
   }
 }
 
 function Mark() {
   return (
     <div className="cs-brand">
-      <span className="cs-mark" aria-hidden>
-        TP
-      </span>
-      <span>Trading Post</span>
+      <Brand size={32} />
+      <span className="cs-by">by Revenue Nomad</span>
     </div>
   );
 }
@@ -65,7 +64,7 @@ export default function Consent() {
       if (!j.ok) setStop("expired");
       setInfo(j);
     } catch {
-      setErr("We couldn't reach Trading Post. Check your connection, then reload this page.");
+      setErr("We couldn't reach Merlin. Check your connection, then reload this page.");
     }
   }, []);
 
@@ -147,7 +146,7 @@ export default function Consent() {
   const app = info?.app || "This app";
   const lost = info?.support ? (
     <>
-      Lost your link? Write to <a href={`mailto:${info.support}?subject=${encodeURIComponent("My Trading Post sign-in link")}`}>{info.support}</a> and we&apos;ll send a new one.
+      Lost your link? Write to <a href={`mailto:${info.support}?subject=${encodeURIComponent("My Merlin sign-in link")}`}>{info.support}</a> and we&apos;ll send a new one.
     </>
   ) : (
     "Lost your link? Ask the member who invited you to send it again."
@@ -161,7 +160,7 @@ export default function Consent() {
         <h1 className="cs-h">{s.h}</h1>
         <p className="cs-lead">{s.p}</p>
         <a className="btn cs-wide" href="/">
-          Go to Trading Post
+          Go to Merlin
         </a>
       </>
     );
@@ -214,14 +213,14 @@ export default function Consent() {
           ))}
         <p className="cs-small">{lost}</p>
         <p className="cs-small">
-          New to Trading Post? <a href="/">Join on the home page</a>, then connect again.
+          New to Merlin? <a href="/">Join on the home page</a>, then connect again.
         </p>
       </>
     );
   } else {
     body = (
       <>
-        <h1 className="cs-h">Allow {app} to use your Trading Post account?</h1>
+        <h1 className="cs-h">Allow {app} to use your Merlin account?</h1>
         <p className="cs-lead">It can search the table, see what you&apos;ve unlocked, and unlock or add facts when you ask. Every unlock asks you first.</p>
         <ul className="cs-list">
           <li>Search companies, seats, open roles and rate benchmarks as you see them</li>

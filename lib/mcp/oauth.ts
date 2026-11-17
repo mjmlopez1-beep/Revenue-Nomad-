@@ -1,5 +1,5 @@
 /**
- * OAuth 2.1 for the Claude connector: Trading Post is both the authorization server and the
+ * OAuth 2.1 for the Claude connector: Merlin is both the authorization server and the
  * protected resource (/api/mcp). What MCP clients (Claude, ChatGPT, Claude Code, Cursor) expect:
  *
  *  - Clients register themselves (RFC 7591, /api/oauth/register), or name a Client ID Metadata
@@ -278,7 +278,7 @@ export async function startAuthorization(
 ): Promise<{ ok: AuthRequest } | { page: string } | { redirect: string }> {
   const clientId = q.get("client_id") ?? "";
   const client = await findClient(clientId);
-  if (!client) return { page: "We don't know the app that sent you here. Go back to it and connect Trading Post again." };
+  if (!client) return { page: "We don't know the app that sent you here. Go back to it and connect Merlin again." };
   const redirectUri = q.get("redirect_uri") ?? (client.redirectUris.length === 1 ? client.redirectUris[0] : "");
   if (!redirectUri || !redirectMatches(client.redirectUris, redirectUri))
     return { page: "The app sent a return address it didn't register, so we stopped here. Go back to the app and connect again." };
@@ -435,7 +435,7 @@ export async function tokenRequest(fields: Record<string, string>, authHeader: s
     const g = c.grants.find((x) => x.refresh.hash === presented);
     if (g) {
       if (g.clientId !== client.id) return { fail: "That refresh token belongs to another app." };
-      if (Date.parse(g.refresh.exp) <= t) return { fail: "That refresh token has expired. Connect Trading Post again." };
+      if (Date.parse(g.refresh.exp) <= t) return { fail: "That refresh token has expired. Connect Merlin again." };
       g.spent = [...(g.spent ?? []).filter((x) => t - Date.parse(x.at) < REFRESH_TTL), { hash: g.refresh.hash, at: new Date(t).toISOString() }].slice(-20);
       return { t: issue(g), scope: g.scope };
     }
@@ -446,7 +446,7 @@ export async function tokenRequest(fields: Record<string, string>, authHeader: s
       if (t - when > REUSE_GRACE) c.grants = c.grants.filter((x) => x !== reused);
       return { fail: "That refresh token was already used." };
     }
-    return { fail: "That refresh token isn't valid. Connect Trading Post again." };
+    return { fail: "That refresh token isn't valid. Connect Merlin again." };
   });
   if (out.fail) throw new OAuthFail("invalid_grant", out.fail);
   return answer(out.t!, out.scope!);

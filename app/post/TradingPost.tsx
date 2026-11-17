@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Trading Post, signed in. The shared record of fractional GTM work: who hired, for which
+ * Merlin, signed in. The shared record of fractional GTM work: who hired, for which
  * seat, who held it, at what rate.
  *
  *   top bar     search, credits, earn meter, "Add what you know", account menu
@@ -1020,7 +1020,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // The tab's title says where the member is.
   const docTitle = page !== "table" ? PAGE_TITLE[page] : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : TYPE_TITLE[recordType];
   useEffect(() => {
-    document.title = `${docTitle} · Trading Post`;
+    document.title = `${docTitle} · Merlin`;
   }, [docTitle]);
 
   /** An admin's "See it as a member": a cookie the server reads (only for admins), then the table again. */
@@ -1830,7 +1830,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               { label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
               { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
-              // With email on: a one-time link by email, to open Trading Post on another device.
+              // With email on: a one-time link by email, to open Merlin on another device.
               ...(view.email ? [{ label: "Send me a new sign-in link", onClick: () => void emailMeLink(toast) }] : []),
               // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
               ...(me.admin || me.asMember ? [{ label: "See it as a member", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),

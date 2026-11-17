@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * End-to-end checks of the Trading Post server against a running server.
+ * End-to-end checks of the Merlin server against a running server.
  *
  *   BASE=http://localhost:3000 node scripts/test-server.mjs
  *
@@ -358,19 +358,19 @@ section("ids", async () => {
   check("a new seat with no seat holder, or with someone else as its holder, is refused", noHolder.json?.error === SELF_ONLY && forOther.json?.error === SELF_ONLY, [noHolder.json, forOther.json]);
   const add = await m.act({ type: "add", company: co.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: m.name, function: "Enablement", type: "Advisory", start: "2024-03" } });
   check("add engagement returns a public id", add.status === 200 && /^e_[A-Za-z0-9_-]{12}$/.test(add.json?.id ?? ""), add.json);
-  check("adding a seat says what happened and what it earned", /^(Added a seat at .+|.+ was already on Trading Post, so we added what you know to it)\. You earned 4 credits\.$/.test(add.json?.message ?? ""), add.json?.message);
+  check("adding a seat says what happened and what it earned", /^(Added a seat at .+|.+ was already on Merlin, so we added what you know to it)\. You earned 4 credits\.$/.test(add.json?.message ?? ""), add.json?.message);
   const eid = add.json?.id;
   const addP = await m.act({ type: "addPerson", companyId: co.id, engagementId: eid, person: { name: "Quinn Qa", title: "CEO" } });
   check("add person on that engagement", addP.status === 200 && /^p_[A-Za-z0-9_-]{12}$/.test(addP.json?.id ?? ""), addP.json);
   check("adding a person names them and says what it earned", /^Added Quinn Qa at .+\. You earned 2 credits\.$/.test(addP.json?.message ?? ""), addP.json?.message);
   const into = await m.act({ type: "add", company: co.name, engagementId: eid, engagementFields: { hours: "12" } });
   check("add details into the engagement by id", into.status === 200 && into.json?.id === eid, into.json);
-  check("details added to a company that is already there say so", /^.+ was already on Trading Post, so we added what you know to it\. You earned 1 credit\.$/.test(into.json?.message ?? ""), into.json?.message);
+  check("details added to a company that is already there say so", /^.+ was already on Merlin, so we added what you know to it\. You earned 1 credit\.$/.test(into.json?.message ?? ""), into.json?.message);
   const same = await m.act({ type: "add", company: co.name, engagementId: eid, engagementFields: { hours: "20" } });
   // DESK-11: an Add that saves nothing says so, instead of "Seat added".
   check("a fact that is already there is left alone, and the answer says nothing new was added", same.status === 200 && /^That seat at .+ is already on file\. Nothing new was added\.$/.test(same.json?.message ?? ""), same.json?.message);
   const coOnly = await m.act({ type: "add", company: co.name });
-  check("an Add of a company that is already there, with nothing else, says nothing new was added", coOnly.status === 200 && /^.+ is already on Trading Post\. Nothing new was added\.$/.test(coOnly.json?.message ?? ""), coOnly.json?.message);
+  check("an Add of a company that is already there, with nothing else, says nothing new was added", coOnly.status === 200 && /^.+ is already on Merlin\. Nothing new was added\.$/.test(coOnly.json?.message ?? ""), coOnly.json?.message);
   const v2 = await m.view();
   const c2 = v2.companies.find((c) => c.id === co.id);
   const e2 = c2?.engagements.find((e) => e.id === eid);

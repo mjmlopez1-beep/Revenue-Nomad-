@@ -4,7 +4,9 @@
  * show real companies (name, domain, logo, industry, size, revenue, country), role titles and
  * dates, and never a person: no seat holder, hiring contact or member name, no email, no phone,
  * no person's LinkedIn, no job posting link and no rate, for every function, industry and
- * country it offers. No public id either. Run against a throwaway server on a FRESH data dir:
+ * country it offers. No public id either. Each answer names at most 10 companies: the rows after
+ * the 10th carry no company at all (`company: null`, `blur: true`) and no company's name in their
+ * title, so the page can only blur a made-up one. Run against a throwaway server on a FRESH data dir:
  *
  *   BASE=http://localhost:4600 node scripts/test-preview.mjs
  *
@@ -98,6 +100,8 @@ async function main() {
 
   /** Companies with an open role: named only while open-role companies are shown. */
   const names = new Set();
+  /** Every company's name: none may show on a row past the 10th. */
+  const everyName = new Set();
   const hosts = new Set();
   const ids = new Set();
   const people = new Set();
@@ -108,6 +112,8 @@ async function main() {
   };
   const isOpen = (e) => (e.opened ? !e.closed : e.cells?.status?.v === "Open role");
   for (const c of companies) {
+    const nm = String(c.name ?? "").trim().toLowerCase();
+    if (nm.length >= 4) everyName.add(nm);
     if ((c.engagements ?? []).some(isOpen)) {
       addName(c.name);
       for (const v of [c.iconDomain, c.cells?.website?.v]) if (v && host(v).includes(".")) hosts.add(host(v));
@@ -136,13 +142,30 @@ async function main() {
   /** What a preview field may hold in its free fields: the words these lists use are not company names. */
   const words = (s) => String(s ?? "").toLowerCase();
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const nameRes = [...names].map((n) => [n, new RegExp(`(^|[^\\p{L}\\p{N}])${esc(n)}($|[^\\p{L}\\p{N}])`, "iu")]);
+  const wordRe = (n) => new RegExp(`(^|[^\\p{L}\\p{N}])${esc(n)}($|[^\\p{L}\\p{N}])`, "iu");
+  const nameRes = [...names].map((n) => [n, wordRe(n)]);
+  // Every company name as its words, so a title is checked by its word runs, not thousands of regexes.
+  const wordsOf = (v) => String(v).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const everyKey = new Set([...everyName].map((n) => wordsOf(n).join(" ")).filter(Boolean));
+  const namesIn = (t) => {
+    const w = wordsOf(t);
+    const hits = [];
+    for (let i = 0; i < w.length; i++) for (let j = i + 1; j <= Math.min(w.length, i + 8); j++) if (everyKey.has(w.slice(i, j).join(" "))) hits.push(w.slice(i, j).join(" "));
+    // The words these lists use (functions, industries, countries, title words) are not taken as a company's name.
+    const ok = new Set([...allowed].map((x) => wordsOf(x).join(" ")));
+    return hits.filter((h) => !ok.has(h));
+  };
 
-  const ROW_KEYS = new Set(["seed", "kind", "company", "title", "function", "when", "industry", "employees", "revenue", "country", "holder"]);
+  const ROW_KEYS = new Set(["seed", "kind", "company", "blur", "title", "function", "when", "industry", "employees", "revenue", "country", "holder"]);
+  const NAMED_MAX = 10;
+  const ROWS_MAX = 25;
   const CO_KEYS = new Set(["name", "domain", "logo"]);
   const EX_KEYS = { top: new Set(["company", "open", "seat"]), company: new Set(["name", "domain", "logo", "industry", "employees", "revenue", "country"]), open: new Set(["title", "function", "when"]), seat: new Set(["function", "start", "rnMember"]) };
-  const TOP_KEYS = new Set(["fn", "industry", "country", "counts", "rows", "example", "openRoleCompanies", "options"]);
+  const TOP_KEYS = new Set(["fn", "view", "total", "industry", "country", "counts", "rows", "example", "openRoleCompanies", "options"]);
   let namedRows = 0;
+  let namedSlots = 0;
+  let blurRows = 0;
+  let notYetRows = 0;
   let openRows = 0;
   let answers = 0;
   let rowsSeen = 0;
@@ -154,7 +177,11 @@ async function main() {
     answers++;
     if (!a || typeof a !== "object") return shape.push(`${label}: not JSON`);
     for (const k of Object.keys(a)) if (!TOP_KEYS.has(k)) shape.push(`${label}: key ${k}`);
-    if (!Array.isArray(a.rows) || a.rows.length > 6) shape.push(`${label}: ${a.rows?.length} rows`);
+    if (!Array.isArray(a.rows) || a.rows.length > ROWS_MAX) shape.push(`${label}: ${a.rows?.length} rows`);
+    if (!["all", "hiring", "notyet"].includes(a.view)) shape.push(`${label}: view ${a.view}`);
+    if (!Number.isInteger(a.total) || a.total < (a.rows?.length ?? 0)) shape.push(`${label}: total ${a.total}`);
+    const named = (a.rows ?? []).filter((r) => r.company).length;
+    if (named > NAMED_MAX) shape.push(`${label}: ${named} named companies`);
     const low = text.toLowerCase();
     for (const id of ids) if (text.includes(`"${id}"`)) leaks.push(`${label}: a public id`);
     for (const p of people) if (low.includes(p)) leaks.push(`${label}: a person, member or contact detail`);
@@ -173,8 +200,20 @@ async function main() {
       if (typeof ex.company?.name !== "string" || !ex.company.name || typeof ex.seat?.rnMember !== "boolean") shape.push(`${label}: example shape`);
       if (LOCKED && ex.open) shape.push(`${label}: example has an open role while open-role companies are kept back`);
     }
-    for (const r of a.rows ?? []) {
+    (a.rows ?? []).forEach((r, n) => {
       rowsSeen++;
+      if (n >= NAMED_MAX) {
+        // Past the 10th row: nothing that names the company, not even in the title.
+        blurRows++;
+        if (r.company !== null || r.blur !== true) shape.push(`${label}: row ${n + 1} carries its company (${JSON.stringify(r.company)}) or is not blur`);
+        for (const k of ["name", "domain", "logo"]) if (k in r) shape.push(`${label}: row ${n + 1} has ${k}`);
+        const t = String(r.title ?? "").toLowerCase();
+        if (namesIn(t).length) leaks.push(`${label}: a company name on row ${n + 1}`);
+        if (/\b[a-z0-9-]+\.(com|io|co|ai|net|org|app|dev)\b/i.test(t)) leaks.push(`${label}: a domain on row ${n + 1}`);
+      } else {
+        namedSlots++;
+        if (r.blur !== undefined) shape.push(`${label}: row ${n + 1} is blur within the first ${NAMED_MAX}`);
+      }
       for (const k of Object.keys(r)) if (!ROW_KEYS.has(k)) shape.push(`${label}: row key ${k}`);
       if (typeof r.seed !== "string" || ids.has(r.seed)) shape.push(`${label}: seed is not opaque`);
       if (r.company) {
@@ -183,18 +222,20 @@ async function main() {
         if (typeof r.company.name !== "string" || !r.company.name) shape.push(`${label}: a company with no name`);
         for (const d of [r.company.domain, r.company.logo]) if (d !== null && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(d))) shape.push(`${label}: a domain that is not a bare domain`);
       }
+      if (a.view !== (r.kind === "notyet" ? "notyet" : a.view === "hiring" ? "hiring" : "all") || (a.view === "hiring" && r.kind !== "open")) shape.push(`${label}: a ${r.kind} row in the ${a.view} tab`);
+      if (r.kind === "notyet") notYetRows++;
       if (r.kind === "open") {
         openRows++;
-        if (LOCKED ? r.company !== null : !r.company) shape.push(`${label}: open-role row company ${JSON.stringify(r.company)}`);
-      } else if (!r.company && !LOCKED) shape.push(`${label}: a past seat with no company`);
-    }
+        if (!r.blur && (LOCKED ? r.company !== null : !r.company)) shape.push(`${label}: open-role row company ${JSON.stringify(r.company)}`);
+      } else if (!r.company && !r.blur && !LOCKED) shape.push(`${label}: a ${r.kind} row with no company`);
+    });
   };
 
   const first = await preview({ fn: "Sales" });
   check("the preview answers for Sales", first.status === 200 && first.json?.counts && Array.isArray(first.json.rows), first.text.slice(0, 200));
   const opts = first.json?.options ?? { functions: [], industries: [], countries: [] };
   for (const x of [...opts.functions, ...opts.industries, ...opts.countries]) allowed.add(x.toLowerCase());
-  for (const w of ["fractional", "interim", "sales", "marketing", "head", "lead", "leader", "vp", "chief", "officer", "director", "seat", "role"]) allowed.add(w);
+  for (const w of ["fractional", "interim", "sales", "marketing", "head", "lead", "leader", "vp", "chief", "officer", "director", "seat", "role", "hired", "more", "other functions"]) allowed.add(w);
   check("it offers every function but Other, and industries and countries", opts.functions.length >= 15 && !opts.functions.includes("Other") && opts.industries.length > 0 && opts.countries.length > 0, JSON.stringify(opts).slice(0, 200));
   inspect("Sales", first.json, first.text);
 
@@ -214,15 +255,15 @@ async function main() {
   const ex = first.json?.example;
   check("the example record is a real company with a seat holder on file, nobody named", ex === null || (typeof ex?.company?.name === "string" && typeof ex.seat?.function === "string" && !("holder" in ex.seat) && !("name" in ex.seat)), JSON.stringify(ex)?.slice(0, 200));
 
-  // Every function alone, with each country, and with each industry.
+  // Every function alone, with each country, and with each industry, and each function's other two tabs.
   for (const fn of opts.functions) {
-    const qs = [{ fn }, ...opts.countries.map((country) => ({ fn, country })), ...opts.industries.map((ind) => ({ fn, ind }))];
+    const qs = [{ fn }, { fn, view: "hiring" }, { fn, view: "notyet" }, ...opts.countries.map((country) => ({ fn, country })), ...opts.industries.map((ind) => ({ fn, ind }))];
     for (let i = 0; i < qs.length; i += 16) {
       const batch = qs.slice(i, i + 16);
       const rs = await Promise.all(batch.map((q) => preview(q)));
       rs.forEach((r, n) => {
         const q = batch[n];
-        const label = `${q.fn}/${q.country ?? q.ind ?? "any"}`;
+        const label = `${q.fn}/${q.country ?? q.ind ?? "any"}${q.view ? `/${q.view}` : ""}`;
         if (r.status !== 200) return shape.push(`${label}: status ${r.status}`);
         if (r.json.fn !== q.fn) shape.push(`${label}: answered for ${r.json.fn}`);
         inspect(label, r.json, r.text);
@@ -232,7 +273,20 @@ async function main() {
   check(`no person, email, phone, LinkedIn, posting, rate or id in any of ${answers} answers (${rowsSeen} rows)${LOCKED ? ", and no open-role company" : ""}`, leaks.length === 0, `${leaks.length} found, first ${leaks.slice(0, 3).join("; ")}`);
   check("every answer has only the fields the preview promises", shape.length === 0, shape.slice(0, 5).join("; "));
   check("the answers covered rows of both kinds", rowsSeen > 0 && openRows > 0 && rowsSeen > openRows, `${rowsSeen} rows, ${openRows} open`);
-  check(LOCKED ? "past seats name their company" : "rows name their company", namedRows > 0 && (LOCKED || namedRows === rowsSeen), `${namedRows} of ${rowsSeen}`);
+  check(LOCKED ? "past seats in the first 10 name their company" : "the first 10 rows of every answer name their company", namedRows > 0 && (LOCKED || namedRows === namedSlots), `${namedRows} of ${namedSlots}`);
+  check("answers go past 10 rows, and those rows are blurred with no company", blurRows > 0, `${blurRows} blurred rows`);
+  check("the No fractional yet tab has rows", notYetRows > 0, notYetRows);
+
+  // The three tabs for Sales: the total holds together with the counts, and a tab not on the list is refused.
+  const [tAll, tHiring, tNot] = await Promise.all(["all", "hiring", "notyet"].map((view) => preview({ fn: "Sales", view })));
+  check(
+    "the tabs answer with their own rows and totals",
+    tAll.json?.view === "all" && tHiring.json?.view === "hiring" && tNot.json?.view === "notyet" && tHiring.json.total === tHiring.json.counts.hiring && tNot.json.total === tNot.json.counts.notYet && tAll.json.total >= tHiring.json.total,
+    [tAll, tHiring, tNot].map((t) => `${t.json?.view} ${t.json?.total}`).join(", "),
+  );
+  check("a long tab sends 10 named rows, then blurred ones", (tAll.json?.total ?? 0) <= NAMED_MAX || ((tAll.json?.rows ?? []).filter((r) => r.company || !r.blur).length === NAMED_MAX && tAll.json.rows.length === Math.min(ROWS_MAX, tAll.json.total)), `${tAll.json?.total} total, ${tAll.json?.rows?.length} rows`);
+  const badView = await preview({ fn: "Sales", view: "everything" });
+  check("a tab not on the list is refused", badView.status === 400 && !badView.json?.rows, badView.status);
 
   // Counts hang together.
   const c = first.json?.counts ?? {};

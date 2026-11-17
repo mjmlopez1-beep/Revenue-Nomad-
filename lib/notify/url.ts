@@ -152,7 +152,7 @@ export async function postJson(url: string, kind: DestKind, body: unknown): Prom
     else if (u.hostname !== SLACK_HOST) return { ok: false, status: 0, error: "not_slack" };
     const r = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json", "user-agent": "TradingPost-Alerts/1.0" },
+      headers: { "content-type": "application/json", "user-agent": "Merlin-Alerts/1.0" },
       body: JSON.stringify(body),
       redirect: "manual",
       signal: AbortSignal.timeout(POST_TIMEOUT_MS),

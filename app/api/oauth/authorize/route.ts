@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   try {
     // The answer comes from our own consent page only. The cookie is SameSite=Lax as well.
     const origin = req.headers.get("origin");
-    if (origin !== publicOrigin(req) && origin !== req.nextUrl.origin) return NextResponse.json({ error: "That didn't come from Trading Post." }, { status: 403, headers: noStore });
+    if (origin !== publicOrigin(req) && origin !== req.nextUrl.origin) return NextResponse.json({ error: "That didn't come from Merlin." }, { status: 403, headers: noStore });
     const text = await readText(req, 4096);
     let body: { r?: unknown; allow?: unknown } = {};
     try {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     const allow = body.allow === true;
     if (allow && !me) return NextResponse.json({ error: "You're signed out. Sign in, then try again." }, { status: 401, headers: noStore });
     const redirect = decide(String(body.r ?? ""), me?.id ?? null, allow, publicOrigin(req));
-    if (!redirect) return NextResponse.json({ error: "This request ran out of time. Go back to the app and connect Trading Post again." }, { status: 410, headers: noStore });
+    if (!redirect) return NextResponse.json({ error: "This request ran out of time. Go back to the app and connect Merlin again." }, { status: 410, headers: noStore });
     return NextResponse.json({ redirect }, { headers: noStore });
   } catch (e) {
     const r = notNow(e);

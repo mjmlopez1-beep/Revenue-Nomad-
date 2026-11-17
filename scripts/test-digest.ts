@@ -38,7 +38,7 @@ Object.assign(process.env, {
   RN_PUBLIC_URL: BASE,
   RN_LOGO_LOOKUP: "off",
   RESEND_API_KEY: "test-key",
-  RN_EMAIL_FROM: "Trading Post <post@example.com>",
+  RN_EMAIL_FROM: "Merlin <post@example.com>",
   RN_DIGEST_ALL: "1",
 });
 delete process.env.RN_DIGEST;

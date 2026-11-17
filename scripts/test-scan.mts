@@ -504,8 +504,8 @@ check("has one button to the app", (d.html.match(/See this week&#39;s roles/g) ?
 check("text has the app link", d.text.includes("See this week's roles\nhttps://table-pilot.up.railway.app/?k=abc123&tab=roles"));
 check("unsubscribe link is in the text", d.text.includes(base.unsubscribeUrl));
 check("unsubscribe link is in the HTML", d.html.includes('href="https://table-pilot.up.railway.app/api/table?unsubscribe=tok_123&amp;m=1"') && />Unsubscribe<\/a>/.test(d.html));
-check("says why they got it", d.text.includes("because you're a Trading Post member") && d.html.includes("because you&#39;re a Trading Post member"));
-check("header says Trading Post on pine", /bgcolor="#073F2F"[^>]*>Trading Post</.test(d.html));
+check("says why they got it", d.text.includes("because you're a Merlin member") && d.html.includes("because you&#39;re a Merlin member"));
+check("header says Merlin on pine", /bgcolor="#073F2F"[^>]*>Merlin</.test(d.html));
 check("button is volt with pine text", /bgcolor="#2EE59D"[^>]*><a [^>]*color:#073F2F/.test(d.html));
 eq("ember is used once, on the count", (d.html.match(/#FF5A1F/gi) ?? []).length, 1);
 check("max width is 560px", d.html.includes("max-width:560px"));
@@ -526,7 +526,9 @@ check("HTML is escaped: links cannot break out of the attribute", !/href="[^"]*"
 check("footer line from RN_EMAIL_FOOTER is in the text", hostile.text.includes('Revenue Nomad <b>LLC</b>, 1 Main St & "Suite" 2'));
 check("a link that is not a web link is left out", !digest({ appUrl: "javascript:alert(1)" }).html.includes("javascript:"));
 delete process.env.RN_EMAIL_FOOTER;
-check("no footer line when RN_EMAIL_FOOTER is not set", !digest().html.includes("Revenue Nomad"));
+// The header says "by Revenue Nomad"; the footer (after the rule) must not carry the footer line.
+const footOf = (html: string) => html.slice(html.lastIndexOf("border-top:1px solid"));
+check("no footer line when RN_EMAIL_FOOTER is not set", footOf(digest().html).length > 0 && !footOf(digest().html).includes("Revenue Nomad"));
 
 const sparse = [
   digest(),
@@ -551,12 +553,12 @@ check("never names a company", !/Acme|Northwind|Kestrel/.test(sparse.map((r) => 
 console.log("\nSign-in email");
 
 const si = signInEmail("Maya Okafor", "https://table-pilot.up.railway.app/?k=abc123&x=<1>");
-eq("subject", si.subject, "Your Trading Post sign-in link");
+eq("subject", si.subject, "Your Merlin sign-in link");
 check("greets by first name", si.text.startsWith("Hi Maya,") && si.html.includes("Hi Maya,"));
 check("an empty name still gets a greeting", signInEmail("", "https://example.com/?k=a").text.startsWith("Hi there,"));
 check("text carries the link on its own line", si.text.split("\n").includes("https://table-pilot.up.railway.app/?k=abc123&x=<1>"));
-check("same frame as the weekly email", /bgcolor="#073F2F"[^>]*>Trading Post</.test(si.html) && si.html.includes("max-width:560px"));
-check("one volt button with pine text, to the link", (si.html.match(/bgcolor="#2EE59D"/g) ?? []).length === 1 && /bgcolor="#2EE59D"[^>]*><a href="https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;"[^>]*color:#073F2F[^>]*>Sign in to Trading Post</.test(si.html), si.html.match(/<a [^>]*>/g));
+check("same frame as the weekly email", /bgcolor="#073F2F"[^>]*>Merlin</.test(si.html) && si.html.includes("max-width:560px"));
+check("one volt button with pine text, to the link", (si.html.match(/bgcolor="#2EE59D"/g) ?? []).length === 1 && /bgcolor="#2EE59D"[^>]*><a href="https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;"[^>]*color:#073F2F[^>]*>Sign in to Merlin</.test(si.html), si.html.match(/<a [^>]*>/g));
 check("no ember in the sign-in email", !/#FF5A1F/i.test(si.html));
 check("the link is also shown as text, in mono", /font-family:ui-monospace[^>]*><a [^>]*>https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;<\/a>/.test(si.html));
 check("tables and inline styles only, system fonts", !/<style|<link|<script|class=|googleapis|@font-face|Schibsted|Figtree/i.test(si.html) && si.html.includes('role="presentation"'));

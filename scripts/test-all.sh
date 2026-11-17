@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run every Trading Post check: types, then each suite.
+# Run every Merlin check: types, then each suite.
 #
 #   npm run build && npm run test:all        (PORT=4600 by default)
 #

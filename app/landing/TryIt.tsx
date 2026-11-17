@@ -2,17 +2,20 @@
 
 /**
  * "Try it" on the landing page: the visitor picks their function, and optionally an industry
- * real numbers from the table and a few sample rows. The rows come from
- * GET /api/table?preview=1 (lib/preview.ts): real companies with their logo and domain, role
- * titles and dates, never a person, a posting link or a rate. While lib/preview.ts keeps
- * open-role companies back, those rows say the company unlocks with 1 credit. Nothing is blurred.
+ * and a country, and gets real numbers from the table and a small working table in the app's
+ * style, with three tabs (all, hiring now, no fractional in this function yet). The rows come
+ * from GET /api/table?preview=1 (lib/preview.ts): the first 10 name their company with its logo
+ * and domain; the rest come without one (`blur`) and show the app's blurred made-up name
+ * (lockedLook, from the row's opaque seed), so the server never sends who they are. A bar under
+ * the table says how many more there are. Never a person, a posting link or a rate. While
+ * lib/preview.ts keeps open-role companies back, those rows say the company unlocks with 1 credit.
  * The same answer carries the hero's example record, handed up with `onExample`.
  *
  * The section is up before any answer arrives: the counts are quiet bars until they land.
  * The picked function is kept in localStorage (tp_try_fn) so onboarding starts with it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CompanyLogo, IconLock, Num } from "../ui/shared";
+import { CompanyLogo, IconLock, LockedName, LockedSite, Num } from "../ui/shared";
 import { GTM_FUNCTIONS } from "@/lib/tableFields";
 
 /** Read by app/onboard/Onboarding.tsx. */
@@ -27,8 +30,10 @@ export interface PreviewCompany {
 }
 interface PreviewRow {
   seed: string;
-  kind: "open" | "hired";
+  kind: "open" | "hired" | "notyet";
   company: PreviewCompany | null;
+  /** Past the first 10: no company sent, the page blurs a made-up name from `seed`. */
+  blur?: boolean;
   title: string;
   function: string;
   when: string | null;
@@ -43,8 +48,11 @@ export interface PreviewExample {
   open: { title: string; function: string; when: string | null } | null;
   seat: { function: string; start: string | null; rnMember: boolean };
 }
+type View = "all" | "hiring" | "notyet";
 interface PreviewAnswer {
   fn: string;
+  view?: View;
+  total?: number;
   industry: string | null;
   country: string | null;
   counts: { hired: number; notYet: number; hiring: number; holders: number; repeat: number; anyHire: number };
@@ -96,6 +104,54 @@ function startedOn(month: string | null): string | null {
   return y && m ? `Started ${MONTHS[m - 1]} ${y}` : null;
 }
 
+const VIEWS: View[] = ["all", "hiring", "notyet"];
+const viewLabel = (v: View, fn: string) => (v === "all" ? "All" : v === "hiring" ? "Hiring now" : `No fractional ${fn} yet`);
+
+/** The quiet line under a row's title. */
+function happening(r: PreviewRow, fn: string): string {
+  if (r.kind === "open") return `Open role · ${postedAgo(r.when)}`;
+  if (r.kind === "notyet") return [`No fractional ${fn} yet`, r.when ? startedOn(r.when)?.replace("Started", "Latest hire") : null].filter(Boolean).join(" · ");
+  return [startedOn(r.when), r.holder ? "Seat holder on file" : null].filter(Boolean).join(" · ") || "Fractional hire on file";
+}
+
+/** The company cell: logo, name and domain, a blurred made-up one past the first 10, or "unlocks with 1 credit" for a kept-back open role. */
+function CompanyCell({ r }: { r: PreviewRow }) {
+  if (r.blur)
+    return (
+      <span className="lp-tt-cobox">
+        <CompanyLogo name="" domain={null} hidden seed={r.seed} />
+        <span className="lp-tt-cotext">
+          <span className="lp-tt-name">
+            <LockedName seed={r.seed} />
+          </span>
+          <LockedSite seed={r.seed} className="lp-tt-dom" />
+        </span>
+      </span>
+    );
+  if (!r.company)
+    return (
+      <span className="lp-tt-cobox">
+        <span className="logo lp-try-logo-kept" aria-hidden>
+          <IconLock size={13} />
+        </span>
+        <span className="lp-tt-cotext">
+          <span className="lp-tt-name lp-try-name-kept">Unlocks with 1 credit</span>
+        </span>
+      </span>
+    );
+  return (
+    <span className="lp-tt-cobox">
+      <CompanyLogo name={r.company.name} domain={r.company.logo} />
+      <span className="lp-tt-cotext">
+        <span className="lp-tt-name" title={r.company.name}>
+          {r.company.name}
+        </span>
+        {r.company.domain ? <span className="lp-tt-dom mono">{r.company.domain}</span> : null}
+      </span>
+    </span>
+  );
+}
+
 function readFn(): string {
   try {
     return localStorage.getItem(TRY_FN_KEY) || DEFAULT_FN;
@@ -119,6 +175,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
   const [fn, setFn] = useState(DEFAULT_FN);
   const [industry, setIndustry] = useState("");
   const [country, setCountry] = useState("");
+  const [view, setView] = useState<View>("all");
   const [answer, setAnswer] = useState<PreviewAnswer | null>(null);
   const [busy, setBusy] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -131,7 +188,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
     setReady(true);
   }, []);
 
-  const load = useCallback((f: string, ind: string, ctry: string) => {
+  const load = useCallback((f: string, ind: string, ctry: string, v: View) => {
     ctl.current?.abort();
     const c = new AbortController();
     ctl.current = c;
@@ -139,6 +196,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
     const q = new URLSearchParams({ preview: "1", fn: f });
     if (ind) q.set("ind", ind);
     if (ctry) q.set("country", ctry);
+    if (v !== "all") q.set("view", v);
     fetch(`/api/table?${q}`, { signal: c.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((a: PreviewAnswer) => {
@@ -158,8 +216,8 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
   }, []);
 
   useEffect(() => {
-    if (ready) load(fn, industry, country);
-  }, [ready, fn, industry, country, load]);
+    if (ready) load(fn, industry, country, view);
+  }, [ready, fn, industry, country, view, load]);
   useEffect(() => () => ctl.current?.abort(), []);
 
   const pickFn = (f: string) => {
@@ -176,7 +234,8 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
   const noun = seatNoun(fn);
   const c = answer && answer.fn === fn ? answer.counts : null;
   const rows = answer && answer.fn === fn ? answer.rows : [];
-  const openRows = rows.filter((r) => r.kind === "open").length;
+  const named = rows.filter((r) => !r.blur).length;
+  const moreN = answer && answer.fn === fn && answer.view === view ? Math.max(0, (answer.total ?? rows.length) - named) : 0;
 
   return (
     <section className="lp-try" id="try" aria-labelledby="try-h">
@@ -265,66 +324,102 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                   </p>
                 ) : null}
 
-                {c && rows.length === 0 ? (
-                  <p className="lp-try-empty">Nothing on file for that mix yet. Try any industry or any country.</p>
+                <div className="lp-tt-tabs" role="tablist" aria-label="Which companies">
+                  {VIEWS.map((v) => {
+                    const n = v === "hiring" ? c?.hiring : v === "notyet" ? c?.notYet : null;
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        role="tab"
+                        aria-selected={v === view}
+                        className={`lp-tt-tab${v === view ? " is-on" : ""}`}
+                        onClick={() => setView(v)}
+                      >
+                        {viewLabel(v, fn)}
+                        {n != null ? <span className="lp-tt-tab-n num">{fmt(n)}</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {c && answer?.view === view && rows.length === 0 ? (
+                  <p className="lp-try-empty">{view === "hiring" ? `No open ${fn} roles on file for that mix right now. Try All, or any industry or country.` : "Nothing on file for that mix yet. Try any industry or any country."}</p>
                 ) : (
-                  <ul className="lp-try-rows" aria-label={openRows ? `Open ${fn} roles and past seats` : `Companies with a past ${fn} seat`}>
-                    {(rows.length ? rows : Array.from({ length: 4 }, () => null)).map((r, n) =>
-                      r ? (
-                        <li key={`${r.seed}-${n}`} className="lp-try-row">
-                          {r.company ? (
-                            <CompanyLogo name={r.company.name} domain={r.company.logo} />
+                  <div className="lp-tt-scroll" role="region" aria-label={`${viewLabel(view, fn)}: companies`} tabIndex={0}>
+                    <table className="lp-tt">
+                      <thead>
+                        <tr>
+                          <th scope="col" className="lp-tt-co">
+                            Company
+                          </th>
+                          <th scope="col">What&apos;s happening</th>
+                          <th scope="col">Industry</th>
+                          <th scope="col">Size</th>
+                          <th scope="col">Revenue</th>
+                          <th scope="col">Country</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(rows.length && answer?.view === view ? rows : Array.from({ length: 6 }, () => null)).map((r, n) =>
+                          r ? (
+                            <tr key={`${r.seed}-${n}`} className={r.blur ? "is-blur" : undefined}>
+                              <td className="lp-tt-co">
+                                <CompanyCell r={r} />
+                              </td>
+                              <td className="lp-tt-what">
+                                <span className="lp-tt-title" title={r.title}>
+                                  {r.title}
+                                </span>
+                                <span className="lp-tt-sub">{happening(r, fn)}</span>
+                              </td>
+                              <td className="lp-tt-ind" title={r.industry ?? undefined}>
+                                {r.industry ?? <span className="lp-tt-none">Not on file</span>}
+                              </td>
+                              <td className="num">{r.employees ? `${r.employees}` : <span className="lp-tt-none">Not on file</span>}</td>
+                              <td className="num">{r.revenue ?? <span className="lp-tt-none">Not on file</span>}</td>
+                              <td>{r.country ?? <span className="lp-tt-none">Not on file</span>}</td>
+                            </tr>
                           ) : (
-                            <span className="logo lp-try-logo-kept" aria-hidden>
-                              <IconLock size={13} />
-                            </span>
-                          )}
-                          <div className="lp-try-co">
-                            {r.company ? (
-                              <span className="lp-try-name" title={r.company.name}>
-                                {r.company.name}
-                              </span>
-                            ) : (
-                              <span className="lp-try-name lp-try-name-kept">Company unlocks with 1 credit</span>
-                            )}
-                            <span className="lp-try-meta">
-                              {r.company?.domain ? <span className="mono lp-try-domain">{r.company.domain}</span> : null}
-                              {r.company?.domain ? " · " : ""}
-                              {[r.industry, r.employees && `${r.employees} people`, r.revenue, r.country].filter(Boolean).join(" · ") || "No company details yet"}
-                            </span>
-                          </div>
-                          <div className="lp-try-role">
-                            <span className="lp-try-title">{r.title}</span>
-                            <span className="lp-try-when">
-                              {r.kind === "open" ? (
-                                <>
-                                  <span className="lp-try-tag">Open role</span> {postedAgo(r.when)}
-                                </>
-                              ) : (
-                                <>
-                                  <span className="lp-try-tag lp-try-tag-quiet">Past seat</span> {[startedOn(r.when), r.holder ? "Seat holder on file" : null].filter(Boolean).join(" · ") || "Fractional hire on file"}
-                                </>
-                              )}
-                            </span>
-                          </div>
-                        </li>
-                      ) : (
-                        <li key={`sk-${n}`} className="lp-try-row lp-try-row-skel" aria-hidden>
-                          <span className="lp-try-skel-logo" />
-                          <span className="lp-try-skel-line" />
-                          <span className="lp-try-skel-line lp-try-skel-short" />
-                        </li>
-                      ),
-                    )}
-                  </ul>
+                            <tr key={`sk-${n}`} className="lp-tt-skel" aria-hidden>
+                              <td className="lp-tt-co">
+                                <span className="lp-try-skel-logo" />
+                                <span className="lp-try-skel-line" />
+                              </td>
+                              <td>
+                                <span className="lp-try-skel-line" />
+                              </td>
+                              <td>
+                                <span className="lp-try-skel-line lp-try-skel-short" />
+                              </td>
+                              <td>
+                                <span className="lp-try-skel-line lp-try-skel-short" />
+                              </td>
+                              <td>
+                                <span className="lp-try-skel-line lp-try-skel-short" />
+                              </td>
+                              <td>
+                                <span className="lp-try-skel-line lp-try-skel-short" />
+                              </td>
+                            </tr>
+                          ),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </>
             )}
           </div>
 
           <div className="lp-try-foot" ref={ctaRef}>
+            {moreN > 0 ? (
+              <p className="lp-tt-more">
+                <strong className="num">{fmt(moreN)}</strong> more {moreN === 1 ? "company" : "companies"} after these {named}. Join free to see them all.
+              </p>
+            ) : null}
             <button type="button" className={`btn btn-lg lp-try-cta${primary ? " btn-primary" : " btn-pine"}`} onClick={onJoin}>
-              {answer?.openRoleCompanies === false ? "Join free to see these companies" : "Join free to see who held these seats"}
+              {moreN > 0 ? "Join free to see them all" : answer?.openRoleCompanies === false ? "Join free to see these companies" : "Join free to see who held these seats"}
             </button>
             <p className="lp-try-note">
               {answer?.openRoleCompanies === false

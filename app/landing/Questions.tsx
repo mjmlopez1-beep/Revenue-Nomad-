@@ -19,7 +19,7 @@ export function faqItems(starter: number, intro = false): [string, string][] {
   return [
     [
       "How do I reach the fractional who held a seat?",
-      `Unlock who held the seat for 1 credit. If they are a member, message them inside Trading Post. If not, find them on LinkedIn${intro ? " or ask us for an intro" : ""}. Most seat holders are Revenue Nomad members.`,
+      `Unlock who held the seat for 1 credit. If they are a member, message them inside Merlin. If not, find them on LinkedIn${intro ? " or ask us for an intro" : ""}. Most seat holders are Revenue Nomad members.`,
     ],
     [
       "What is an Ideal Fractional Profile?",
@@ -79,7 +79,7 @@ export interface QuestionsProps {
 
 /** The questions as a list of open-and-close rows. */
 export function Questions({ starter, support, intro = false }: QuestionsProps) {
-  const href = support ? mailto(support, "Trading Post question") : null;
+  const href = support ? mailto(support, "Merlin question") : null;
   return (
     <div className="lp-faq">
       {faqItems(starter, intro).map(([q, a]) => (

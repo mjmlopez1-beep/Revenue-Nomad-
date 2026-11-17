@@ -1,5 +1,5 @@
 /**
- * Client-side read model for the Trading Post app: per-company derived info, rows for the
+ * Client-side read model for the Merlin app: per-company derived info, rows for the
  * three record types, filters (with facet counts), views and sorting. Pure functions only.
  *
  * Locked fields are never filtered by value, only by availability: "known" means the cell is

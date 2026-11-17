@@ -1,6 +1,12 @@
 /**
  * "Try it" on the landing page: what a signed-out visitor sees for one function, and optionally
- * one industry and one country. Counts, a few sample rows, and one example record for the hero.
+ * one industry and one country. Counts, a small table of rows, and one example record for the hero.
+ *
+ * The table: up to PREVIEW_ROWS rows for one tab (all, hiring now, no fractional in this function
+ * yet). Only the first PREVIEW_NAMED rows carry their company. The rest come with `company: null`
+ * and `blur: true`, and the page draws a blurred made-up name from the row's opaque seed. Their
+ * titles are scrubbed of the company the way kept-back open roles are, so nothing past row
+ * PREVIEW_NAMED names a company. `total` says how many rows the tab has in all.
  *
  * What leaves here is a closed list of fields (PreviewRow, PreviewExample): company facts
  * (name, domain, logo domain, industry, size, revenue band, country), role titles, functions and
@@ -41,8 +47,13 @@ export function showsOpenRoleCompanies(): boolean {
   return PREVIEW_SHOWS_OPEN_ROLE_COMPANIES;
 }
 
-/** The most sample rows one answer carries. */
-export const PREVIEW_ROWS = 6;
+/** The most rows one answer carries. */
+export const PREVIEW_ROWS = 25;
+/** Rows that name their company; the rest are blurred on the page and carry no company. */
+export const PREVIEW_NAMED = 10;
+/** The tabs over the table: everything in this function, open roles only, or companies with no fractional in it yet. */
+export const PREVIEW_VIEWS = ["all", "hiring", "notyet"] as const;
+export type PreviewView = (typeof PREVIEW_VIEWS)[number];
 /** A country or an industry shows in the pickers once this many companies are on file there. */
 const OPTION_MIN = 3;
 /** How long one answer is reused (the source is rebuilt at least hourly on its own). */
@@ -64,14 +75,22 @@ export interface PreviewCompanyOut {
 export interface PreviewRow {
   /** Opaque and stable per company (an HMAC of the internal id). A key for the page, nothing more. */
   seed: string;
-  /** "open": an open role now. "hired": a seat in this function that a fractional held. */
-  kind: "open" | "hired";
-  /** Null only for an open role while PREVIEW_SHOWS_OPEN_ROLE_COMPANIES is off. */
+  /**
+   * "open": an open role now. "hired": a seat in this function that a fractional held.
+   * "notyet": a company that hired fractionals in other functions and none in this one.
+   */
+  kind: "open" | "hired" | "notyet";
+  /** Null for a row past PREVIEW_NAMED (`blur`), and for an open role while PREVIEW_SHOWS_OPEN_ROLE_COMPANIES is off. */
   company: PreviewCompanyOut | null;
-  /** The open role's title, or "Fractional <function> seat" for a past seat (a past seat's own title is a locked fact). */
+  /** A row past PREVIEW_NAMED: the page blurs a made-up name from `seed`. Never the company. */
+  blur?: boolean;
+  /**
+   * The open role's title, "Fractional <function> seat" for a past seat (a past seat's own title
+   * is a locked fact), or "Hired fractional <functions>" for a company with none in this function yet.
+   */
   title: string;
   function: string;
-  /** Open role: the ISO day it was posted (or first seen). Past seat: its start month (YYYY-MM), when known. */
+  /** Open role: the ISO day it was posted (or first seen). Past seat: its start month (YYYY-MM), when known. Not yet: its latest seat's start month. */
   when: string | null;
   industry: string | null;
   employees: string | null;
@@ -91,6 +110,10 @@ export interface PreviewExample {
 
 export interface PreviewAnswer {
   fn: string;
+  /** The tab the rows are for. */
+  view: PreviewView;
+  /** Rows the tab has in all (the answer carries the first PREVIEW_ROWS). */
+  total: number;
   industry: string | null;
   country: string | null;
   counts: {
@@ -107,6 +130,7 @@ export interface PreviewAnswer {
     /** Companies that hired any fractional. */
     anyHire: number;
   };
+  /** The first PREVIEW_NAMED name their company, the rest are `blur` rows. */
   rows: PreviewRow[];
   /** The hero's example record, the same for every function. Null when nothing on file fits. */
   example: PreviewExample | null;
@@ -244,12 +268,13 @@ function pick(raw: string | null | undefined, list: readonly string[], what: str
 }
 
 /** The preview for one function (and optionally one industry and one country). Throws PreviewError on a value not on its list. */
-export async function preview(q: { fn?: string | null; industry?: string | null; country?: string | null }): Promise<PreviewAnswer> {
+export async function preview(q: { fn?: string | null; industry?: string | null; country?: string | null; view?: string | null }): Promise<PreviewAnswer> {
   const src = await sourceNow();
   const fn = pick(q.fn, PREVIEW_FUNCTIONS, "a function") ?? "Sales";
   const industry = pick(q.industry, src.options.industries, "an industry");
   const country = pick(q.country, src.options.countries, "a country");
-  const key = `${fn}|${industry ?? ""}|${country ?? ""}`;
+  const view = (pick(q.view, PREVIEW_VIEWS, "a tab") ?? "all") as PreviewView;
+  const key = `${fn}|${industry ?? ""}|${country ?? ""}|${view}`;
   const hit = answers.get(key);
   if (hit && Date.now() - hit.at < ANSWER_FRESH) return hit.a;
 
@@ -261,8 +286,9 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
   });
 
   const counts = { hired: 0, notYet: 0, hiring: 0, holders: 0, repeat: 0, anyHire: 0 };
-  const open: { row: PreviewRow; at: string }[] = [];
+  const open: { row: PreviewRow; at: string; p: PreviewCompany; raw: string | null }[] = [];
   const past: { row: PreviewRow; at: string; rich: number }[] = [];
+  const notYet: { row: PreviewRow; at: string; rich: number }[] = [];
   for (const { i, p } of inScope) {
     const { hired, hiring } = i.fnState;
     const openHere = i.engs.filter((e) => isOpenRole(e) && fnOf(e) === fn);
@@ -271,7 +297,8 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     if (hired.includes(fn)) counts.hired++;
     if (hired.includes(fn) && held.length) counts.holders++;
     if (hired.length) counts.anyHire++;
-    if (hired.length && !hired.includes(fn) && !hiring.includes(fn) && !openHere.length) counts.notYet++;
+    const none = hired.length > 0 && !hired.includes(fn) && !hiring.includes(fn) && !openHere.length;
+    if (none) counts.notYet++;
     if (openHere.length) counts.hiring++;
     if (repeatHirer(i)) counts.repeat++;
     // A company with any open role is hidden in the app, so it is kept back here too while the flag is off.
@@ -285,13 +312,25 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       revenue: shown(i.c.cells.revenue),
       country: countryOfInfo(i),
     };
+    const rich0 = (base.company?.logo ? 3 : 0) + Number(!!base.industry) + Number(!!base.employees) + Number(!!base.country);
+    if (none) {
+      if (view !== "notyet") continue;
+      const others = hired.filter((f) => f !== "Other");
+      const list = others.length ? (others.length > 2 ? `${others.slice(0, 2).join(", ")} and more` : others.join(" and ")) : "other functions";
+      const last = i.engs.filter(isHire).map((e) => shown(e.cells.start) ?? "").sort().pop() || null;
+      notYet.push({ row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, when: monthOf(last) }, at: last ?? "", rich: rich0 + Math.min(others.length, 3) });
+      continue;
+    }
+    if (view === "notyet") continue;
     // One row per company: its newest open role in this function, else its latest seat in it.
     const role = newestOpen(openHere);
     if (role) {
       const when = role.posted ?? role.opened ?? null;
-      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, src.open), when }, at: when ?? "" });
+      const raw = role.cells.role?.s === "value" && !role.cells.role.system ? role.cells.role.v : null;
+      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, src.open), when }, at: when ?? "", p, raw });
       continue;
     }
+    if (view === "hiring") continue;
     const seat = held[0] ?? seats[0];
     if (seat) {
       const start = shown(seat.cells.start);
@@ -303,9 +342,16 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
   }
   open.sort((a, b) => b.at.localeCompare(a.at));
   past.sort((a, b) => b.rich - a.rich || b.at.localeCompare(a.at));
-  const rows = [...open, ...past].slice(0, PREVIEW_ROWS).map((x) => x.row);
+  notYet.sort((a, b) => b.rich - a.rich || b.at.localeCompare(a.at));
+  const all: { row: PreviewRow; p?: PreviewCompany; raw?: string | null }[] = view === "notyet" ? notYet : [...open, ...past];
+  const rows = all.slice(0, PREVIEW_ROWS).map((x, n): PreviewRow => {
+    if (n < PREVIEW_NAMED) return x.row;
+    // Past the named rows: no company, and an open role's title loses any trace of it.
+    const title = x.row.kind === "open" && x.p && x.raw ? safeTitle(x.raw, x.p, fn) : x.row.title;
+    return { ...x.row, company: null, blur: true, title };
+  });
 
-  const a: PreviewAnswer = { fn, industry, country, counts, rows, example: src.example, openRoleCompanies: src.open, options: src.options };
+  const a: PreviewAnswer = { fn, view, total: all.length, industry, country, counts, rows, example: src.example, openRoleCompanies: src.open, options: src.options };
   if (answers.size >= ANSWER_MAX) answers.clear();
   answers.set(key, { at: Date.now(), a });
   return a;

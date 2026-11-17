@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Checks of the places where Trading Post's rules meet each other, against a running server:
+ * Checks of the places where Merlin's rules meet each other, against a running server:
  * the one-credit company unlock against the first-day limit and the scan's refunds, a refund
  * against a balance that is owed, a member's claim to a seat against the weekly scan, removed
  * rates against the benchmarks, and the invite bonus against a rate that moves onto a record.

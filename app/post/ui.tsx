@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * App-wide context for the Trading Post app and the fact cell: one component that renders
+ * App-wide context for the Merlin app and the fact cell: one component that renders
  * any fact in its three states (value, locked, empty) plus "Under review", the inline editor
  * that opens from an empty cell, and the overlays they open (popovers, menus, phone sheets).
  *
@@ -1105,10 +1105,10 @@ export function FieldInput({
   );
 }
 
-/** "Member" after a seat holder who is on Trading Post (or "You"). Quiet text, not a chip. */
+/** "Member" after a seat holder who is on Merlin (or "You"). Quiet text, not a chip. */
 export function MemberBadge({ m }: { m: { title: string; you?: boolean } }) {
   return (
-    <span className="tp-member-badge" title={m.you ? "This is you" : `On Trading Post${m.title ? ` · ${m.title}` : ""}`}>
+    <span className="tp-member-badge" title={m.you ? "This is you" : `On Merlin${m.title ? ` · ${m.title}` : ""}`}>
       {m.you ? "You" : "Member"}
     </span>
   );
@@ -1150,7 +1150,7 @@ function useMemberSearch(q: string, off: boolean): { hits: MemberHit[]; done: bo
 }
 
 /**
- * Who held the seat: a first and last name, matched against Trading Post members as you type.
+ * Who held the seat: a first and last name, matched against Merlin members as you type.
  * Picking a member links the seat to that person (`memberId`); typing again unlinks it.
  * A combobox: the arrow keys move through the list and the highlighted name is read out.
  */
@@ -1238,7 +1238,7 @@ export function SeatHolderInput({
           </span>
           <span className="tp-seat-who">
             <b>{linked.you ? "You" : linked.name}</b>
-            <span>On Trading Post{linked.title ? ` · ${linked.title}` : ""}</span>
+            <span>On Merlin{linked.title ? ` · ${linked.title}` : ""}</span>
           </span>
           <button type="button" className="tp-seat-x" aria-label="Unlink this member" title="Unlink this member" onClick={() => onChange(value, null)}>
             <IconX size={14} />
@@ -1247,9 +1247,9 @@ export function SeatHolderInput({
       ) : open ? (
         <div className="tp-seat-list">
           <div className="tp-seat-cap" aria-hidden>
-            Members on Trading Post
+            Members on Merlin
           </div>
-          <div id={lid} role="listbox" aria-label="Members on Trading Post">
+          <div id={lid} role="listbox" aria-label="Members on Merlin">
             {hits.map((m, i) => (
               <button
                 key={m.id}

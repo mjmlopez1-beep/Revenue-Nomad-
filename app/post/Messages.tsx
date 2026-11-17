@@ -106,7 +106,7 @@ function useConversations() {
       setList(j.conversations ?? []);
       if (typeof j.unread === "number") tellUnread(j.unread);
     } catch {
-      setFailed("We couldn't reach Trading Post. Check your connection and try again.");
+      setFailed("We couldn't reach Merlin. Check your connection and try again.");
     }
   }, []);
   useEffect(() => {

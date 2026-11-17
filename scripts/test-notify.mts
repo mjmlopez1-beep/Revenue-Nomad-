@@ -223,7 +223,7 @@ async function main() {
   const blocks = (welcome?.body.blocks ?? []) as { type: string; elements?: { type: string; url?: string; text?: { text: string } }[] }[];
   check("the test is Block Kit with a fallback text", typeof welcome?.body.text === "string" && blocks[0]?.type === "section", welcome?.body);
   const button = blocks.find((b) => b.type === "actions")?.elements?.[0];
-  check("it has an Open in Trading Post button", button?.type === "button" && button.text?.text === "Open in Trading Post" && /^https:\/\/post\.example\.com\//.test(button.url ?? ""), button);
+  check("it has an Open in Merlin button", button?.type === "button" && button.text?.text === "Open in Merlin" && /^https:\/\/post\.example\.com\//.test(button.url ?? ""), button);
   check("alert copy has no em dashes", !textOf(welcome!).includes("—"));
   const v1 = con.ok ? con.v.view : null;
   check("all three alerts are on after connecting", !!v1 && v1.alerts.roles && v1.alerts.message && v1.alerts.seat, v1);
@@ -305,7 +305,7 @@ async function main() {
   const batch = to(SLACK).map(textOf);
   check("after 15 minutes each waiting kind goes out as one post", flushed === 2 && batch.length === 2, { flushed, batch });
   const mBatch = batch.find((x) => /new messages/.test(x)) ?? "";
-  check("the message batch has a count", /2 new messages on Trading Post/.test(mBatch), mBatch);
+  check("the message batch has a count", /2 new messages on Merlin/.test(mBatch), mBatch);
   check("the message batch names the sender and company", /Sal, about Acme Robotics/.test(mBatch), mBatch);
   const sBatch = batch.find((x) => /engaged your seats/.test(x)) ?? "";
   check("the seat batch has a count and the facts", /2 times/.test(sBatch) && /unlocked the rate on your seat at Acme Robotics/.test(sBatch) && /how the seat was sourced/.test(sBatch), sBatch);
@@ -386,7 +386,7 @@ async function main() {
   const hk = await tryIt(() => n.connect(HANA, "webhook", HOOK));
   check("a public webhook connects after a test post", hk.ok && to(HOOK).length === 1, hk);
   const hb = to(HOOK)[0]?.body ?? {};
-  check("the webhook gets the documented JSON", hb.source === "Trading Post" && hb.event === "test" && hb.count === 1 && typeof hb.title === "string" && Array.isArray(hb.lines) && typeof hb.url === "string" && typeof hb.sentAt === "string", hb);
+  check("the webhook gets the documented JSON", hb.source === "Merlin" && hb.event === "test" && hb.count === 1 && typeof hb.title === "string" && Array.isArray(hb.lines) && typeof hb.url === "string" && typeof hb.sentAt === "string", hb);
   const privHook = await tryIt(() => n.connect(HANA, "webhook", "https://rebind.tools.example/x"));
   check("a webhook on a private network can't be connected", !privHook.ok && /private network/.test(privHook.error), privHook);
   clear();

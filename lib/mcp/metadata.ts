@@ -8,7 +8,7 @@ export function resourceMetadata(req: Request) {
     authorization_servers: [origin],
     scopes_supported: [SCOPE],
     bearer_methods_supported: ["header"],
-    resource_name: "Trading Post",
+    resource_name: "Merlin",
     resource_documentation: `${origin}/?p=claude`,
   };
 }

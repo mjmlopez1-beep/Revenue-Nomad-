@@ -1,5 +1,5 @@
 /*
- * Trading Post landing page, join and sign-in. Classes are prefixed lp-.
+ * Merlin landing page, join and sign-in. Classes are prefixed lp-.
  * Pine bands for the nav, hero and closing call to action; white and off-white between.
  *
  * Type (Schibsted Grotesk), on the scale at the top of globals.css: display 44/48 fluid down
@@ -131,13 +131,13 @@ html:has(.lp) {
   border-radius: 4px;
 }
 .lp-nav-product {
-  padding-left: 12px;
+  padding: 2px 0 0 12px;
   border-left: 1px solid rgba(255, 255, 255, 0.24);
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 500;
+  font-size: 13.5px;
   line-height: 20px;
   white-space: nowrap;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.78);
 }
 .lp-nav-links {
   display: flex;
@@ -1112,7 +1112,7 @@ html:has(.lp) {
     flex: none;
   }
   .lp-nav-brand img {
-    height: 15px !important;
+    height: 26px !important;
     width: auto !important;
     max-width: none;
     flex: none;
@@ -1253,9 +1253,8 @@ html:has(.lp) {
 }
 @media (max-width: 380px) {
   /* Too narrow for the whole logo beside Sign in and the button: the mark alone, as in the app's top bar, never a squashed logo. */
-  .lp-nav-brand {
-    width: 16px;
-    overflow: hidden;
+  .lp-nav-brand img {
+    height: 22px !important;
   }
   .lp-nav-signin,
   .lp-nav-get.btn {
@@ -1303,7 +1302,7 @@ html:has(.lp) {
   line-height: 20px;
   color: var(--on-pine-quiet);
 }
-/* A seat holder who is on Trading Post. Outline means attribute. */
+/* A seat holder who is on Merlin. Outline means attribute. */
 .lp-member.chip {
   height: 22px;
   padding: 0 6px;
@@ -1455,73 +1454,6 @@ html:has(.lp) {
   line-height: 24px;
   color: var(--muted);
 }
-.lp-try-rows {
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  overflow: hidden;
-}
-.lp-try-row {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 0.9fr) minmax(0, 1.4fr);
-  gap: 12px 16px;
-  align-items: center;
-  padding: 12px 16px;
-  min-height: 64px;
-}
-.lp-try-row + .lp-try-row {
-  border-top: 1px solid var(--line);
-}
-.lp-try-row .logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-}
-.lp-try-co,
-.lp-try-role {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.lp-try-name {
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lp-try-meta,
-.lp-try-when {
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-try-title {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* What a row is: an open role reads in ink, a past seat stays quiet. Ember stays with the hero. */
-.lp-try-tag {
-  display: inline-block;
-  margin-right: 4px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lp-try-tag-quiet {
-  color: var(--pine);
-}
-.lp-try-row-skel {
-  grid-template-columns: 32px minmax(0, 0.9fr) minmax(0, 1.4fr);
-}
 .lp-try-skel-logo {
   width: 32px;
   height: 32px;
@@ -1537,7 +1469,10 @@ html:has(.lp) {
   width: 70%;
 }
 .lp-try-foot {
-  margin-top: 24px;
+  margin-top: 16px;
+  padding: 20px;
+  border-radius: var(--r-card);
+  background: var(--bg);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1548,6 +1483,217 @@ html:has(.lp) {
   font-size: 14px;
   line-height: 20px;
   color: var(--muted);
+}
+
+/* ---------- try it: the table (styled like the app's companies table) ---------- */
+.lp-tt-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.lp-tt-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-bottom: -1px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.lp-tt-tab:hover {
+  color: var(--pine);
+}
+.lp-tt-tab.is-on {
+  color: var(--ink);
+  border-bottom-color: var(--pine);
+}
+.lp-tt-tab-n {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--body-ink);
+  text-align: center;
+}
+.lp-tt-tab.is-on .lp-tt-tab-n {
+  background: var(--pine);
+  color: #fff;
+}
+.lp-tt-scroll {
+  margin-top: 16px;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.lp-tt-scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.lp-tt {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+.lp-tt th {
+  height: 36px;
+  padding: 0 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+}
+.lp-tt td {
+  height: 56px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.lp-tt tbody tr:last-child td {
+  border-bottom: 0;
+}
+.lp-tt .num {
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) {
+  .lp-tt tbody tr:hover td {
+    background: var(--row-hover);
+  }
+}
+/* The company column stays put while the rest scrolls under it on a narrow screen. */
+.lp-tt .lp-tt-co {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 220px;
+  max-width: 220px;
+  border-right: 1px solid var(--line);
+}
+.lp-tt th.lp-tt-co {
+  z-index: 2;
+}
+.lp-tt-cobox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.lp-tt-cobox .logo {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.lp-tt-cotext {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lp-tt-name {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-tt-dom {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-tt-what {
+  max-width: 280px;
+}
+.lp-tt-ind {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-tt-dom.locked-site {
+  text-overflow: clip;
+}
+.lp-tt-title,
+.lp-tt-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-tt-title {
+  font-weight: 600;
+}
+.lp-tt-sub {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.lp-tt-none {
+  color: var(--faint, var(--muted));
+}
+/* Past the first 10 rows: the company is blurred (made-up letters), the free facts stay. */
+.lp-tt tr.is-blur .lp-tt-title,
+.lp-tt tr.is-blur td:not(.lp-tt-co) {
+  color: var(--body-ink);
+}
+.lp-tt-skel td .lp-try-skel-line {
+  display: block;
+  width: 120px;
+}
+.lp-tt-skel td.lp-tt-co {
+  display: table-cell;
+}
+.lp-tt-skel .lp-tt-co .lp-try-skel-logo {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+.lp-tt-skel .lp-tt-co .lp-try-skel-line {
+  display: inline-block;
+  width: 130px;
+  vertical-align: middle;
+}
+.lp-try-foot .lp-tt-more {
+  flex: 1 1 100%;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--ink);
+}
+.lp-tt-more strong {
+  font-weight: 800;
 }
 
 /* ---------- what you can do: the showcase (Showcase.tsx) ---------- */
@@ -1644,18 +1790,16 @@ html:has(.lp) {
     min-height: 44px;
     font-size: 16px;
   }
-  .lp-try-row {
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 4px 12px;
-    align-items: start;
-    padding: 12px;
+  .lp-tt-tab {
+    min-height: 44px;
   }
-  .lp-try-role {
-    grid-column: 2;
+  .lp-tt th.lp-tt-co,
+  .lp-tt td.lp-tt-co {
+    min-width: 168px;
+    max-width: 168px;
   }
-  .lp-try-title,
-  .lp-try-when {
-    white-space: normal;
+  .lp-tt-what {
+    min-width: 220px;
   }
   .lp-try-cta.btn-lg {
     width: 100%;
@@ -1671,11 +1815,7 @@ html:has(.lp) {
   }
 }
 
-/* ---------- try it: real companies on the rows ---------- */
-.lp-try-domain {
-  font-size: 12.5px;
-  color: var(--muted);
-}
+/* ---------- try it: a kept-back open role ---------- */
 /* An open role's company kept back (lib/preview.ts PREVIEW_SHOWS_OPEN_ROLE_COMPANIES off): plain words, never a blur. */
 .lp-try-logo-kept {
   display: inline-grid;
@@ -1683,11 +1823,6 @@ html:has(.lp) {
   background: var(--surface-2);
   color: var(--muted);
   border-color: transparent;
-}
-.lp-try-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .lp-try-name-kept {
   font-weight: 600;

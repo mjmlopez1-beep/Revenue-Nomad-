@@ -2,7 +2,7 @@
  * Sign-in by email: one-time links and codes, and "Sign out on other devices".
  *
  * With email on, Sign in can email a link that signs the member in once and expires after 20
- * minutes, with a 6-digit code in the same email for opening Trading Post on another device.
+ * minutes, with a 6-digit code in the same email for opening Merlin on another device.
  * Joining sends the same kind of link to finish joining, and using it proves the address
  * (State.members[].proven, see trustOf in lib/table.ts). The personal link (?k= with the
  * member's own token) keeps working as before.
@@ -147,14 +147,14 @@ export function oneTimeEmail(name: string, link: string, code: string, purpose: 
   const url = oneLine(link);
   const digits = String(code).replace(/\D/g, "").slice(0, 6);
   const join = purpose === "join";
-  const subject = join ? "Finish joining Trading Post" : "Your Trading Post sign-in link";
-  const head = join ? "Finish joining Trading Post" : "Here's your sign-in link";
+  const subject = join ? "Finish joining Merlin" : "Your Merlin sign-in link";
+  const head = join ? "Finish joining Merlin" : "Here's your sign-in link";
   const lead = "The button works once, for the next 20 minutes.";
   const codeLine = "On another device? Type this code in the sign-in box instead.";
   const why = join
-    ? "You got this because someone joined Trading Post with this email address. If it wasn't you, ignore this email and nothing happens."
-    : "You got this because someone asked to sign in to Trading Post with this email address. If it wasn't you, ignore this email. Nobody gets in without the link or the code.";
-  const from = "Trading Post is a free pilot from Revenue Nomad.";
+    ? "You got this because someone joined Merlin with this email address. If it wasn't you, ignore this email and nothing happens."
+    : "You got this because someone asked to sign in to Merlin with this email address. If it wasn't you, ignore this email. Nobody gets in without the link or the code.";
+  const from = "Merlin is a free pilot from Revenue Nomad.";
   const note = footerNote();
   const text = [
     `Hi ${first},`,
@@ -176,7 +176,7 @@ export function oneTimeEmail(name: string, link: string, code: string, purpose: 
     mailP(`Hi ${escHtml(first)},`),
     mailH(escHtml(head)),
     mailP(escHtml(lead), "margin-bottom:24px;"),
-    mailButton(url, join ? "Open Trading Post" : "Sign in to Trading Post", "margin:0 0 24px"),
+    mailButton(url, join ? "Open Merlin" : "Sign in to Merlin", "margin:0 0 24px"),
     `<p style="margin:0 0 8px;${small}">${escHtml(codeLine)}</p>`,
     `<p style="margin:0 0 24px;font-family:${MAIL.font};font-size:28px;line-height:36px;font-weight:800;letter-spacing:0.12em;font-variant-numeric:tabular-nums;color:${MAIL.ink}">${escHtml(digits)}</p>`,
     `<p style="margin:0 0 4px;${small}">If the button doesn&#39;t work, paste this link into your browser.</p>`,

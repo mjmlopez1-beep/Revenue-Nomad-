@@ -1,5 +1,5 @@
 /**
- * The read model Trading Post's API returns, and the actions it accepts.
+ * The read model Merlin's API returns, and the actions it accepts.
  * Shared by server (lib/table.ts) and client (no Node imports).
  */
 import type { Entity } from "./tableFields";
@@ -37,9 +37,9 @@ export type Cell =
       /** Seat holder only: the viewer claimed this seat from the seat scan (claimSeat), so it reads "You claimed this". */
       claimed?: boolean;
       /**
-       * Seat holder only: the name belongs to a Trading Post member who has signed in (their
+       * Seat holder only: the name belongs to a Merlin member who has signed in (their
        * title; `you` when it's the viewer). Left out for a member who never signed in, the same
-       * test the seat holder picker uses, so "Member" always means someone on Trading Post now.
+       * test the seat holder picker uses, so "Member" always means someone on Merlin now.
        */
       member?: { title: string; you?: boolean };
     }
@@ -71,8 +71,8 @@ export interface EngagementRec {
   yours: boolean;
   /**
    * A seat Revenue Nomad found (source "Seat scan") that nobody holds yet: its fractional is not
-   * on Trading Post yet. The seat holder cell is empty and is never added to ("Not on Trading
-   * Post yet"). A member who held it claims it ("claimSeat"). Left out on every other seat.
+   * on Merlin yet. The seat holder cell is empty and is never added to ("Not on Merlin
+   * yet"). A member who held it claims it ("claimSeat"). Left out on every other seat.
    */
   claimable?: boolean;
   /**
@@ -159,7 +159,7 @@ export interface CompanyRec {
   /** The viewer added something here. */
   mine: boolean;
   /**
-   * The viewer created this company (added it to Trading Post). Its pick lists earn without the
+   * The viewer created this company (added it to Merlin). Its pick lists earn without the
    * daily limit of 5 (Me.sellEarnLeft), as on a company where they hold a seat. Left out otherwise.
    */
   added?: boolean;

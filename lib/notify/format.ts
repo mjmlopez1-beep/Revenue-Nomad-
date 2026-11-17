@@ -4,7 +4,7 @@
  * Pure functions, no Node imports.
  *
  * Every alert is a short headline, one to three lines and one link to the exact place in
- * Trading Post (the role, the conversation, the seat). Never an email address, and never the
+ * Merlin (the role, the conversation, the seat). Never an email address, and never the
  * name of a member who only unlocked something: their function and title only.
  */
 import type { AlertItem, AlertKind, DestKind } from "./types";
@@ -14,7 +14,7 @@ export interface Alert {
   count: number;
   headline: string;
   lines: string[];
-  /** Absolute link into Trading Post, or "" when the app's address isn't known. */
+  /** Absolute link into Merlin, or "" when the app's address isn't known. */
   url: string;
 }
 
@@ -77,7 +77,7 @@ export function alertFor(items: AlertItem[], base: string): Alert | null {
     const lines = latest.map((m) => `${m.from}, about ${m.company}. “${cut(m.snippet, 80)}”`);
     if (ms.length > 3) lines[2] = `${lines[2]} And ${plural(ms.length - 2, "more message")}.`;
     const convs = new Set(ms.map((m) => m.conversationId));
-    return { kind, count: ms.length, headline: `${plural(ms.length, "new message")} on Trading Post`, lines, url: convs.size === 1 ? links.thread(base, ms[0].conversationId) : links.messages(base) };
+    return { kind, count: ms.length, headline: `${plural(ms.length, "new message")} on Merlin`, lines, url: convs.size === 1 ? links.thread(base, ms[0].conversationId) : links.messages(base) };
   }
   if (kind === "seat") {
     const ss = items as Extract<AlertItem, { kind: "seat" }>[];
@@ -85,7 +85,7 @@ export function alertFor(items: AlertItem[], base: string): Alert | null {
       const s = ss[0];
       const lines =
         s.what === "message"
-          ? ["Reply in Trading Post. It could be a chance to partner."]
+          ? ["Reply in Merlin. It could be a chance to partner."]
           : [`They may want to talk, or partner.${s.actor.function && s.actor.function !== "Other" ? ` They work in ${s.actor.function}.` : ""}`];
       return { kind, count: 1, headline: seatLine(s), lines, url: s.conversationId ? links.thread(base, s.conversationId) : links.company(base, s.companyId) };
     }
@@ -123,7 +123,7 @@ export function testAlert(base: string): Alert {
   return {
     kind: "test",
     count: 1,
-    headline: "Trading Post alerts are connected",
+    headline: "Merlin alerts are connected",
     lines: ["You'll get a post here for new open roles in your function, new messages and when someone engages your seat."],
     url: links.integrations(base),
   };
@@ -135,7 +135,7 @@ export function testAlert(base: string): Alert {
 const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const httpUrl = (u: string) => (/^https?:\/\/[^\s<>|]+$/i.test(u) ? u : "");
 
-/** Block Kit for an incoming webhook: the headline in bold, the lines, and an "Open in Trading Post" button. */
+/** Block Kit for an incoming webhook: the headline in bold, the lines, and an "Open in Merlin" button. */
 export function slackBody(a: Alert) {
   const url = httpUrl(a.url);
   const text = [`*${esc(a.headline)}*`, ...a.lines.map(esc)].join("\n");
@@ -145,8 +145,8 @@ export function slackBody(a: Alert) {
     unfurl_media: false,
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: text.slice(0, 2900) } },
-      ...(url ? [{ type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open in Trading Post" }, url, style: "primary", action_id: "open" }] }] : []),
-      { type: "context", elements: [{ type: "mrkdwn", text: "Trading Post alerts. Change them in Integrations." }] },
+      ...(url ? [{ type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open in Merlin" }, url, style: "primary", action_id: "open" }] }] : []),
+      { type: "context", elements: [{ type: "mrkdwn", text: "Merlin alerts. Change them in Integrations." }] },
     ],
   };
 }
@@ -158,7 +158,7 @@ export function workflowBody(a: Alert) {
 
 /** The JSON a generic webhook gets. Documented on the Integrations page. */
 export function webhookBody(a: Alert, sentAt: string) {
-  return { source: "Trading Post", event: a.kind, count: a.count, title: a.headline, lines: a.lines, url: httpUrl(a.url), sentAt };
+  return { source: "Merlin", event: a.kind, count: a.count, title: a.headline, lines: a.lines, url: httpUrl(a.url), sentAt };
 }
 
 export function bodyFor(kind: DestKind, a: Alert, sentAt: string): unknown {

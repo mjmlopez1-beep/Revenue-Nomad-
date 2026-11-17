@@ -1,5 +1,5 @@
 /**
- * The Trading Post MCP server: one per request (stateless Streamable HTTP), acting as one member.
+ * The Merlin MCP server: one per request (stateless Streamable HTTP), acting as one member.
  * Tool descriptions are written for the model: they say what the table holds and how to use it
  * well (warm paths, what "fractional friendly" means, and that every unlock asks first).
  *
@@ -23,7 +23,7 @@ const fn = z.string().describe(`A function: ${list(FUNCTIONS)}`);
 const many = (what: string, xs: readonly string[]) => z.array(z.string()).describe(`${what}, any of: ${list(xs)}`);
 const company = z.string().describe("The company's id (from search_companies or list_open_roles). A visible company's exact name or domain also works.");
 
-export const INSTRUCTIONS = `Trading Post is a give-to-get table of companies that hire fractional leaders (sales, marketing, RevOps, customer success, finance, technology and more), run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. You act as the signed-in member.
+export const INSTRUCTIONS = `Merlin is a give-to-get table of companies that hire fractional leaders (sales, marketing, RevOps, customer success, finance, technology and more), run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. You act as the signed-in member.
 
 How the table works
 - Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts (company basics, a seat's function, type, status, start, why they hired) are always visible.
@@ -64,14 +64,14 @@ const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
 export function makeServer(ctx: T.Ctx): McpServer {
-  const server = new McpServer({ name: "trading-post", title: "Trading Post", version: "1.0.0", websiteUrl: ctx.origin }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "merlin", title: "Merlin", version: "1.0.0", websiteUrl: ctx.origin }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
     "search_companies",
     {
       title: "Search companies",
       description:
-        "Find companies on Trading Post, ranked like the table (best fit first: past fractional hires, functions hired, recent seats, open roles). Returns each company's id, free facts, fit, functions hired and how many facts are locked. Use it for prospecting: no_function_yet finds companies that hired fractionals in other functions but not this one yet, a common next hire. fractional_friendly keeps companies with past fractional hires or an open role. repeat_hirer keeps companies with 2 or more fractional hires, or hires in 2 or more functions. hiring_now keeps companies with an open fractional role (often locked). Follow up with get_company.",
+        "Find companies on Merlin, ranked like the table (best fit first: past fractional hires, functions hired, recent seats, open roles). Returns each company's id, free facts, fit, functions hired and how many facts are locked. Use it for prospecting: no_function_yet finds companies that hired fractionals in other functions but not this one yet, a common next hire. fractional_friendly keeps companies with past fractional hires or an open role. repeat_hirer keeps companies with 2 or more fractional hires, or hires in 2 or more functions. hiring_now keeps companies with an open fractional role (often locked). Follow up with get_company.",
       inputSchema: {
         query: z.string().optional().describe("Words to match in company names, domains, functions, industries and facts the member can see. Locked facts are not searchable."),
         function: fn.optional().describe(`Any seat in this function on file (hired, open or mentioned): ${list(FUNCTIONS)}`),
