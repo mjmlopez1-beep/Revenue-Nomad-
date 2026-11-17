@@ -179,7 +179,7 @@ const factWhat = (t: FactRef) => {
 };
 
 /** Where a fact nobody added by hand came from (Cell.from), when no member has confirmed it yet. */
-export const FROM_SAY: Record<string, string> = { records: "From Revenue Nomad records", posting: "From the job posting" };
+export const FROM_SAY: Record<string, string> = { records: "From Revenue Nomad records", posting: "From the job posting", website: "From the company website" };
 
 /**
  * Company pick lists that earn a credit for only 5 answers a day (Me.sellEarnLeft): industry,

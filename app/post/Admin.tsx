@@ -225,6 +225,70 @@ function Scan({ a, lastOkAt, refresh }: { a: AdminStats; lastOkAt: string | null
   );
 }
 
+/**
+ * About texts from company websites (lib/about): the run under way or the last one, what is on
+ * file, and a button to start a run (only with RN_ABOUT=1 on the server). While a run goes on the
+ * view is read again every few seconds.
+ */
+function AboutFill({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
+  const ui = useUi();
+  const [busy, setBusy] = useState(false);
+  const x = a.about!;
+  const running = x.running || busy;
+  const live = useRef(refresh);
+  live.current = refresh;
+  useEffect(() => {
+    if (!x.running) return;
+    const t = setInterval(() => void live.current(), 5000);
+    return () => clearInterval(t);
+  }, [x.running]);
+  const start = async () => {
+    if (busy) return;
+    setBusy(true);
+    const r = await ui.act({ type: "aboutNow" }, { quiet: true });
+    if (r.ok) await sleep(1500);
+    await refresh();
+    setBusy(false);
+  };
+  const r = x.run;
+  return (
+    <Card
+      title="About texts from company websites"
+      span={3}
+      action={
+        <button type="button" className="btn btn-sm btn-pine" disabled={running || !x.enabled} onClick={() => void start()}>
+          {running ? "Filling" : "Fill About texts from websites"}
+        </button>
+      }
+    >
+      <Rows
+        items={[
+          ["Companies with an About", `${n0(x.withAbout)} of ${n0(x.companies)}`],
+          [x.running ? "This run" : "Last run", r ? `${n0(r.done)} of ${n0(r.total)} done` : "Not yet"],
+          ["Filled", n0(r?.filled ?? 0)],
+          ["Skipped", n0(r?.skipped ?? 0)],
+          ["Failed", n0(r?.failed ?? 0)],
+          [x.running ? "Started" : "Finished", r ? stamp(x.running ? r.startedAt : r.endedAt, "Stopped before the end") : "Not yet"],
+          ["Never tried yet", n0(x.waiting)],
+        ]}
+      />
+      {x.reasons.length > 0 && (
+        <>
+          <h3 className="tp-pm-h3">Why some were skipped</h3>
+          <Rows items={x.reasons.map((q) => [q.why[0].toUpperCase() + q.why.slice(1), n0(q.n)] as [string, string])} />
+        </>
+      )}
+      <p className="tp-small muted tp-pm-foot" role="status">
+        {!x.enabled
+          ? "Off. It starts once RN_ABOUT=1 is set on the server, and then also runs after each weekly scan."
+          : running
+            ? "Reading company websites, four at a time. This page updates as it goes."
+            : "Reads the homepage of each company with no About yet. Nobody earns credits for these texts."}
+      </p>
+    </Card>
+  );
+}
+
 type RecentAdd = NonNullable<AdminStats["recentAdds"]>[number];
 
 /** The remove-everything step: a question first, focus on the safe answer, Esc to back out. */
@@ -569,6 +633,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
         {a.seatClaims && <RoleClaims rows={a.seatClaims.map((c) => ({ ...c, closed: false }))} seats />}
 
         <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
+        {a.about && <AboutFill a={a} refresh={refresh} />}
 
         <Card title="Weekly email">
           <Rows
