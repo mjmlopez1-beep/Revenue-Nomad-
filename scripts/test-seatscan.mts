@@ -7,9 +7,11 @@
  * No private data: a made-up seed and a made-up seats CSV in a scratch folder, removed at the end.
  * Every person in the CSV has a made-up name, and none of those names may show up anywhere.
  *
- *  1. The script: rows kept and dropped (the fractional's own firm), companies matched by website
- *     or name and never overwritten, the mappings, no name or profile data in the seed, and a
- *     second run that changes nothing.
+ *  1. The script: rows kept and dropped (the fractional's own firm, a firm by its About text,
+ *     full-time, a search for work, a seat already on file), companies matched by LinkedIn page,
+ *     website, the company a website names, or name, and never overwritten, the mappings, seats
+ *     keyed by an HMAC of seat_id (a first-batch seat keeps its id), no name, profile data or
+ *     About text in the seed, and a second run that changes nothing.
  *  2. In process: the client's view of the table (packView/unpackView gives back the same view),
  *     the MCP tools (get_company says nobody holds the seat, add_my_seat with claim claims it),
  *     and the weekly scan's functions staying GTM-only.
@@ -21,6 +23,7 @@
  *     can remove a claim, and Pilot metrics lists the claims.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { createHmac } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -44,17 +47,31 @@ const seed = {
   members: [{ id: "sm1", name: "Fixture Seedmember", email: "seedmember@example.com", title: "Fractional CMO", token: "seatscan-seed-token-1" }],
   companies: [
     { id: "c_northwindlabs", fields: { name: "Northwind Labs", website: "northwind.example.com", industry: "Health Care", employees: "51–200" } },
+    // Matched by its LinkedIn page alone (the file names it differently, with no website).
+    { id: "c_quarry", fields: { name: "Quarry Systems", linkedin: "linkedin.com/company/99001" } },
+    // No website on file: a row whose website is mangofixture.com goes here (the company the domain names).
+    { id: "c_mango", fields: { name: "Mangofixture" } },
+    // A seat the first batch added, under the id it gave seats then.
+    { id: "c_harbor", fields: { name: "Harbor Legacy Works", website: "harborlegacy.example.com" } },
   ],
   engagements: [
     { id: "e_northwind_pub", companyId: "c_northwindlabs", fields: { source: "Published engagement", operator: "Fixture Seedmember", role: "Fractional CMO", function: "Marketing", type: "Fractional", status: "Active", start: "2025-01" }, verified: false },
+    { id: "e_ss_fxlegacy1", companyId: "c_harbor", fields: { source: "Seat scan", role: "Fractional COO", type: "Fractional", status: "Active", end: "Ongoing", start: "2024-04", function: "Operations" }, verified: false },
   ],
   contacts: [],
 };
 writeFileSync(seedPath, JSON.stringify(seed));
 
 /** Made-up people. None of these may reach the seed, a view, an action result or the export. */
-const PEOPLE = ["Zelda Quartermaine", "Orrin Featherstone", "Pella Vantongeren", "Quill Abernathy-Moss", "Rhea Ostrowski", "Sable Underhill", "Tobin Marchetti", "Yorick Halloran", "Wren Castellanos", "Ilse Brandvold"];
-const HEAD = "seat_id,person_name,person_sales_nav_id,seat_title,company_name,company_sales_nav_id,company_linkedin_url,function,role_category,is_gtm,role_type,start_month_est,end_month,is_current,tenure_months,person_location,country,source,source_query,captured_on,company_website,company_industry,company_employee_range,company_employee_count,company_rn_revenue_bucket";
+const PEOPLE = [
+  "Zelda Quartermaine", "Orrin Featherstone", "Pella Vantongeren", "Quill Abernathy-Moss", "Rhea Ostrowski", "Sable Underhill", "Tobin Marchetti", "Yorick Halloran", "Wren Castellanos", "Ilse Brandvold",
+  "Ximena Pettigrew", "Ulric Danforth", "Odalys Kerrigan", "Barnaby Wexford", "Cosima Rutledge", "Dashiell Ormsby", "Elspeth Vandermeer",
+  "Fenwick Aldous", "Galatea Moorcroft",
+];
+const HEAD = "seat_id,person_name,person_sales_nav_id,seat_title,company_name,company_sales_nav_id,company_linkedin_url,function,role_category,is_gtm,role_type,start_month_est,end_month,is_current,tenure_months,person_location,country,source,source_query,captured_on,company_website,company_industry,company_employee_range,company_employee_count,company_rn_revenue_bucket,company_about,company_likely_fractional_provider";
+/** A made-up seed key: the script keys seats by an HMAC of seat_id under it. */
+const TEST_KEY = Buffer.alloc(32, 7).toString("base64");
+const seatIdOf = (sid: string) => `e_ss_${createHmac("sha256", Buffer.from(TEST_KEY, "base64")).update(`seat-scan:${sid}`).digest("hex").slice(0, 20)}`;
 const row = (o: Record<string, string>) =>
   HEAD.split(",").map((k) => {
     const v = o[k] ?? "";
@@ -76,6 +93,18 @@ const rows = [
   { ...base, seat_id: "fx-hhh888", person_name: PEOPLE[7], person_sales_nav_id: "NAVPERSON0008", seat_title: "Fractional CMO", company_name: "Self-employed", function: "Marketing", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-01" },
   { ...base, seat_id: "fx-iii999", person_name: `${PEOPLE[8]}, MBA`, person_sales_nav_id: "NAVPERSON0009", seat_title: "Fractional CMO", company_name: "Castellanos Growth Partners", function: "Growth", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-01" },
   { ...base, seat_id: "fx-jjj000", person_name: PEOPLE[9], person_sales_nav_id: "NAVPERSON0010", seat_title: "Fractional CMO", company_name: "Stealth Startup", function: "Marketing", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-01" },
+  // Kept: the first batch's seat (its id stays), a company matched by LinkedIn page, one by the company its website names.
+  { ...base, seat_id: "fx-legacy1", person_name: PEOPLE[10], person_sales_nav_id: "NAVPERSON0011", seat_title: "Fractional COO", company_name: "Harbor Legacy Works", function: "Operations", role_category: "Non-GTM", is_gtm: "FALSE", start_month_est: "2024-04", company_website: "harborlegacy.example.com" },
+  { ...base, seat_id: "fx-kkk111", person_name: PEOPLE[11], person_sales_nav_id: "NAVPERSON0012", seat_title: "Fractional CRO", company_name: "Quarry Systems Group Holdings", company_linkedin_url: "https://www.linkedin.com/company/99001/", function: "Sales", role_category: "Sales Leadership", is_gtm: "TRUE", start_month_est: "2025-08" },
+  { ...base, seat_id: "fx-lll222", person_name: PEOPLE[12], person_sales_nav_id: "NAVPERSON0013", seat_title: "Fractional Head of Growth", company_name: "Langtree", function: "Growth", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-09", company_website: "https://mangofixture.com" },
+  // Dropped: the same seat as one on file (company, title, start), a firm by its About text, full-time, a search for work.
+  { ...base, seat_id: "fx-mmm333", person_name: PEOPLE[13], person_sales_nav_id: "NAVPERSON0014", seat_title: "Fractional CMO", company_name: "Northwind Labs", function: "Marketing", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-01", company_website: "northwind.example.com" },
+  { ...base, seat_id: "fx-nnn444", person_name: PEOPLE[14], person_sales_nav_id: "NAVPERSON0015", seat_title: "Fractional CMO", company_name: "Brightpath Partners", function: "Marketing", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-02", company_about: "Brightpath provides fractional CMOs to growing startups.", company_likely_fractional_provider: "TRUE" },
+  { ...base, seat_id: "fx-ooo555", person_name: PEOPLE[15], person_sales_nav_id: "NAVPERSON0016", seat_title: "Chief Business Officer (Full-Time <- Fractional)", company_name: "Tallow Works", function: "Executive", role_category: "Non-GTM", is_gtm: "FALSE", start_month_est: "2024-02" },
+  { ...base, seat_id: "fx-ppp666", person_name: PEOPLE[16], person_sales_nav_id: "NAVPERSON0017", seat_title: "Growth Leader | Available for Fractional CMO roles", company_name: "Juniper Fields", function: "Marketing", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2024-02" },
+  // Outside GTM and below Director: dropped (the CFO, CTO, Head of People and COO rows above stay).
+  { ...base, seat_id: "fx-qqq777", person_name: PEOPLE[17], person_sales_nav_id: "NAVPERSON0018", seat_title: "Fractional Bookkeeper", company_name: "Larkspur Dental", function: "Finance", role_category: "Non-GTM", is_gtm: "FALSE", start_month_est: "2025-05" },
+  { ...base, seat_id: "fx-rrr888", person_name: PEOPLE[18], person_sales_nav_id: "NAVPERSON0019", seat_title: "Fractional Executive Assistant to the CEO", company_name: "Larkspur Dental", function: "Operations", role_category: "Non-GTM", is_gtm: "FALSE", start_month_est: "2025-05" },
 ];
 writeFileSync(csvPath, [HEAD, ...rows.map(row)].join("\n") + "\n");
 
@@ -86,24 +115,37 @@ const leaks = (text: string) => FORBIDDEN.filter((x) => text.includes(x));
 /* ---------- 1. the script ---------- */
 
 console.log("\nThe script");
-const runScript = () => spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-seat-scan.mjs"), csvPath, "--seed", seedPath, "--no-seal"], { cwd: ROOT, encoding: "utf8" });
+const runScript = () => spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-seat-scan.mjs"), csvPath, "--seed", seedPath, "--no-seal"], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });
 const first = runScript();
 check("the script runs", first.status === 0, first.stderr);
 const line = (out: string, re: RegExp) => out.match(re)?.[1];
-check("10 rows read, 6 kept", line(first.stdout, /rows read: (\d+)/) === "10" && line(first.stdout, /kept: (\d+)/) === "6", first.stdout);
+check("19 rows read, 9 kept", line(first.stdout, /rows read: (\d+)/) === "19" && line(first.stdout, /kept: (\d+)/) === "9", first.stdout);
 check("drops the one-person company", line(first.stdout, /dropped \(one-person company\): (\d+)/) === "1", first.stdout);
 check("drops stand-in names (self-employed, stealth)", line(first.stdout, /dropped \(stand-in name[^)]*\)\): (\d+)/) === "2", first.stdout);
 check("drops a company named after the person (credentials after the name aside)", line(first.stdout, /dropped \(company named after the person\): (\d+)/) === "1", first.stdout);
-check("1 company matched, 4 created", line(first.stdout, /companies matched: (\d+)/) === "1" && line(first.stdout, /companies created: (\d+)/) === "4", first.stdout);
-check("6 seats added", line(first.stdout, /seats added: (\d+)/) === "6", first.stdout);
-check("prints no name", !leaks(first.stdout + first.stderr).length, leaks(first.stdout));
+check("4 companies matched (LinkedIn page, website, the company its website names, a seat on file), 4 created", line(first.stdout, /companies matched: (\d+)/) === "4" && line(first.stdout, /companies created: (\d+)/) === "4" && /LinkedIn page 1/.test(first.stdout) && /the company its website names 1/.test(first.stdout), first.stdout);
+check("8 seats added, the first batch's seat unchanged under its own id", line(first.stdout, /seats added: (\d+)/) === "8" && line(first.stdout, /unchanged: (\d+)/) === "1" && /\(1 keep the first batch's id\)/.test(first.stdout), first.stdout);
+check("drops a seat already on file (same company, title and start)", line(first.stdout, /dropped \(same company, title and start as a seat on file\): (\d+)/) === "1", first.stdout);
+check("drops a fractional firm by its About text", line(first.stdout, /dropped \(fractional firm, agency or marketplace[^)]*\)\): (\d+)/) === "1" && /Brightpath Partners/.test(first.stdout), first.stdout);
+check("drops a full-time seat and a search for work", line(first.stdout, /dropped \(not fractional work \(title says full-time\)\): (\d+)/) === "1" && line(first.stdout, /dropped \(not a seat \(title is a search for work\)\): (\d+)/) === "1", first.stdout);
+// The seat holders' countries are printed as counts (never stored); nothing else from the file about a person is printed.
+check("prints no name", !leaks(first.stdout + first.stderr).filter((x) => x !== "Fixtureland").length, leaks(first.stdout));
+check("countries are printed as counts only", /countries \(counted, never stored\), top 10: Fixtureland 19$/m.test(first.stdout), first.stdout);
+check("outside GTM, a title below Director is dropped (an assistant to the CEO too); GTM keeps every level", line(first.stdout, /dropped \(outside GTM and below Director\): (\d+)/) === "2" && /top 15 titles: .*Fractional Bookkeeper 1/.test(first.stdout), first.stdout);
 const after1 = readFileSync(seedPath, "utf8");
 check("the seed holds no name, profile id, location or query from the file", !leaks(after1).length, leaks(after1));
 const s1 = JSON.parse(after1);
 const scanSeats = s1.engagements.filter((e: { fields: Record<string, string> }) => e.fields.source === "Seat scan");
 check("no seat-scan seat has a seat holder or a private flag", scanSeats.every((e: { fields: Record<string, string> }) => !("operator" in e.fields) && !("privateHolder" in e)));
 check("each seat is Fractional, Active, Ongoing", scanSeats.every((e: { fields: Record<string, string> }) => e.fields.type === "Fractional" && e.fields.status === "Active" && e.fields.end === "Ongoing"));
-const fnOf = (sid: string) => scanSeats.find((e: { id: string }) => e.id === `e_ss_${sid.replace(/[^A-Za-z0-9]/g, "")}`)?.fields;
+const fnOf = (sid: string) => scanSeats.find((e: { id: string }) => e.id === seatIdOf(sid))?.fields;
+const seatOf = (id: string) => scanSeats.find((e: { id: string }) => e.id === id);
+check("new seats are keyed by an HMAC of seat_id, never by the seat_id itself", scanSeats.filter((e: { id: string }) => e.id !== "e_ss_fxlegacy1").every((e: { id: string }) => /^e_ss_[0-9a-f]{20}$/.test(e.id)) && !/fx-?(aaa|bbb|ccc|kkk|lll)/.test(after1));
+check("the first batch's seat keeps its id and is not added twice", seatOf("e_ss_fxlegacy1")?.companyId === "c_harbor" && !seatOf(seatIdOf("fx-legacy1")) && s1.engagements.filter((e: { companyId: string }) => e.companyId === "c_harbor").length === 1);
+check("a company matched by its LinkedIn page alone keeps its name", seatOf(seatIdOf("fx-kkk111"))?.companyId === "c_quarry" && !s1.companies.some((c: { fields: Record<string, string> }) => /Holdings/.test(c.fields.name)));
+check("a seat goes to the company its website names (and that company gets the website)", seatOf(seatIdOf("fx-lll222"))?.companyId === "c_mango" && s1.companies.find((c: { id: string }) => c.id === "c_mango")?.fields.website === "mangofixture.com" && !s1.companies.some((c: { fields: Record<string, string> }) => c.fields.name === "Langtree"));
+check("no seat for the duplicate, the firm, the full-time seat or the search for work", !seatOf(seatIdOf("fx-mmm333")) && !seatOf(seatIdOf("fx-nnn444")) && !seatOf(seatIdOf("fx-ooo555")) && !seatOf(seatIdOf("fx-ppp666")) && !s1.companies.some((c: { fields: Record<string, string> }) => ["Brightpath Partners", "Tallow Works", "Juniper Fields", "Larkspur Dental"].includes(c.fields.name)));
+check("the About text is read, not stored", !after1.includes("growing startups"));
 check("functions map (Revenue Leadership -> Sales, People/HR -> People, Revenue Operations -> RevOps)",
   fnOf("fx-ccc333")?.function === "Sales" && fnOf("fx-ddd444")?.function === "People" && fnOf("fx-eee555")?.function === "RevOps" && fnOf("fx-bbb222")?.function === "Finance" && fnOf("fx-fff666")?.function === "Technology");
 check("role and start come from the row; no start when the row has none", fnOf("fx-aaa111")?.role === "Fractional VP Marketing" && fnOf("fx-aaa111")?.start === "2025-06" && !fnOf("fx-fff666")?.start);
@@ -111,7 +153,7 @@ const co = (name: string) => s1.companies.find((c: { fields: Record<string, stri
 const nw = co("Northwind Labs");
 check("an existing company matched by website keeps its own values", nw?.fields.industry === "Health Care" && nw?.fields.employees === "51–200" && nw?.fields.website === "northwind.example.com", nw?.fields);
 check("an existing company gets only what it lacked", nw?.fields.linkedin === "linkedin.com/company/northwind-fixture" && nw?.fields.revenue === "$5M–$20M", nw?.fields);
-check("the Northwind seat is at Northwind", fnOf("fx-aaa111") && scanSeats.find((e: { id: string }) => e.id === "e_ss_fxaaa111")?.companyId === "c_northwindlabs");
+check("the Northwind seat is at Northwind", fnOf("fx-aaa111") && seatOf(seatIdOf("fx-aaa111"))?.companyId === "c_northwindlabs");
 const bf = co("Bluefin Analytics");
 check("a new company: website host, LinkedIn, industry (Software Development at an analytics company is Data & Analytics), employees and revenue mapped", bf?.fields.website === "bluefin.example.com" && bf?.fields.linkedin === "linkedin.com/company/bluefin-fixture" && bf?.fields.industry === "Data & Analytics" && bf?.fields.employees === "11–50" && bf?.fields.revenue === "$1M–$5M", bf?.fields);
 check("two seats at one company (matched by name, Inc. aside)", scanSeats.filter((e: { companyId: string }) => e.companyId === bf?.id).length === 2);

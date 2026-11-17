@@ -28,7 +28,7 @@ export const FIRM_NAMES: string[] = [
   "WorkGenius", "WorkGenius Group", "Remotebase", "The CFO Centre", "CFO Centre", "Fractional Jobs", "The Fractional CMO", "CMOx",
   "Interim Executive", "Officer as a Service", "Graphite Financial", "Pocketbook Agency", "Growth Collective", "Contra", "Malt", "Comatch",
   "Hatchworks", "Kalungi", "Ampleo",
-  "We Are The Board", "Glencoco", "Head of AI",
+  "We Are The Board", "Glencoco", "Head of AI", "Paro.ai",
 ];
 
 /** Never a firm, whatever the rules say. Add a client here when the rules flag it by mistake. */
