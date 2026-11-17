@@ -15,8 +15,11 @@
  * whether they are a Revenue Nomad member. A role title with a link or an address in it is
  * replaced by a plain "Fractional <function> role".
  *
- * PREVIEW_SHOWS_OPEN_ROLE_COMPANIES decides whether a company with an open role is named here.
- * In the app such a company is hidden until a member unlocks it.
+ * A company with an open role is hidden in the app until a member unlocks it (1 credit). Here at
+ * most PREVIEW_OPEN_NAMED of them are named in one answer, rows and example record together: the
+ * example's company when it has an open role, then the companies behind the newest open roles in
+ * the picked function, industry and country. Every other open-role company comes without its
+ * name ("Company unlocks with 1 credit"), and its role title is scrubbed of the company.
  *
  * Answers are kept in memory for a few minutes per (function, industry, country), and rebuilt
  * when the signed-out build changes (lib/table.ts previewCompanies).
@@ -28,23 +31,19 @@ import { countryName, countryOf, deriveAll, isFirm, isHire, isOpenRole, known, r
 import type { EngagementRec } from "./tableTypes";
 
 /**
- * Signed-out visitors see the companies behind open roles: name, domain and logo, on the
- * landing page's Try it rows and its example record. Flip this to false to lock them again on
- * the homepage: open-role rows then come without a company ("Company unlocks with 1 credit"),
- * their titles lose the company's name and site, and the example record is a company with no
- * open role. The app itself keeps hiding these companies from members until they unlock one.
+ * The most companies with an open role that one answer names (name, domain and logo), counting
+ * the example record. The rest come without a company, the way the app hides them.
  */
-export const PREVIEW_SHOWS_OPEN_ROLE_COMPANIES = true;
+export const PREVIEW_OPEN_NAMED = 3;
 
 /**
- * The flag as this server runs it. RN_PREVIEW_OPEN_ROLE_COMPANIES=0 or 1 overrides it only on a
- * test server (RN_SCAN_TEST=1, as scripts/test-all.sh starts them), so both ways can be tested.
+ * The cap as this server runs it. RN_PREVIEW_OPEN_ROLE_COMPANIES=0 names none, and only on a test
+ * server (RN_SCAN_TEST=1, as scripts/test-all.sh starts them), so both ways can be tested.
  * Production never reads it.
  */
-export function showsOpenRoleCompanies(): boolean {
-  const o = process.env.RN_PREVIEW_OPEN_ROLE_COMPANIES;
-  if (process.env.RN_SCAN_TEST === "1" && (o === "0" || o === "1")) return o === "1";
-  return PREVIEW_SHOWS_OPEN_ROLE_COMPANIES;
+export function openRoleNamedCap(): number {
+  if (process.env.RN_SCAN_TEST === "1" && process.env.RN_PREVIEW_OPEN_ROLE_COMPANIES === "0") return 0;
+  return PREVIEW_OPEN_NAMED;
 }
 
 /** The most rows one answer carries. */
@@ -76,17 +75,19 @@ export interface PreviewRow {
   /** Opaque and stable per company (an HMAC of the internal id). A key for the page, nothing more. */
   seed: string;
   /**
-   * "open": an open role now. "hired": a seat in this function that a fractional held.
+   * "open": an open role now. "hired": a seat in this function that a fractional held (or, where
+   * the company has no fractional hire in it, any seat in it on file, as the app's Function filter counts).
    * "notyet": a company that hired fractionals in other functions and none in this one.
    */
   kind: "open" | "hired" | "notyet";
-  /** Null for a row past PREVIEW_NAMED (`blur`), and for an open role while PREVIEW_SHOWS_OPEN_ROLE_COMPANIES is off. */
+  /** Null for a row past PREVIEW_NAMED (`blur`), and for a company with an open role past the PREVIEW_OPEN_NAMED named ones. */
   company: PreviewCompanyOut | null;
   /** A row past PREVIEW_NAMED: the page blurs a made-up name from `seed`. Never the company. */
   blur?: boolean;
   /**
-   * The open role's title, "Fractional <function> seat" for a past seat (a past seat's own title
-   * is a locked fact), or "Hired fractional <functions>" for a company with none in this function yet.
+   * The open role's title, "Fractional <function> seat" for a past fractional seat ("<function> seat"
+   * for another seat on file; a past seat's own title is a locked fact), or "Hired fractional
+   * <functions>" for a company with none in this function yet.
    */
   title: string;
   function: string;
@@ -123,8 +124,13 @@ export interface PreviewAnswer {
     notYet: number;
     /** Companies with an open role in this function now. */
     hiring: number;
-    /** Of `hired`, the companies where the fractional who held a seat in this function is on file. */
+    /**
+     * Companies with a seat in this function whose holder is on file: the app's Function filter
+     * with "Seat holder on file", counted by company.
+     */
     holders: number;
+    /** Rows the All tab has: the companies the app's Function filter finds for this function (an open role, a fractional hire or another seat in it). */
+    all: number;
     /** Companies with 2 or more fractional hires, or hires in 2 or more functions. */
     repeat: number;
     /** Companies that hired any fractional. */
@@ -134,7 +140,7 @@ export interface PreviewAnswer {
   rows: PreviewRow[];
   /** The hero's example record, the same for every function. Null when nothing on file fits. */
   example: PreviewExample | null;
-  /** PREVIEW_SHOWS_OPEN_ROLE_COMPANIES as this server runs it. */
+  /** Some companies with an open role may be named (PREVIEW_OPEN_NAMED as this server runs it is above 0). */
   openRoleCompanies: boolean;
   /** What the pickers offer (industries and countries with enough companies on file). */
   options: { functions: string[]; industries: string[]; countries: string[] };
@@ -147,7 +153,9 @@ interface Source {
   infos: { i: CoInfo; p: PreviewCompany }[];
   options: PreviewAnswer["options"];
   example: PreviewExample | null;
-  open: boolean;
+  /** The example's company has an open role: its seed, which takes one of the named open-role slots. */
+  exampleOpenSeed: string | null;
+  cap: number;
 }
 let source: Source | null = null;
 const answers = new Map<string, { at: number; a: PreviewAnswer }>();
@@ -201,8 +209,8 @@ function roleTitle(role: EngagementRec, p: PreviewCompany, fn: string, open: boo
  * holder is on file (a Revenue Nomad member first), and, while open-role companies are shown, an
  * open role in another function. The best known (biggest, most seats) of those.
  */
-function pickExample(infos: Source["infos"], open: boolean): PreviewExample | null {
-  let best: { score: number; x: PreviewExample } | null = null;
+function pickExample(infos: Source["infos"], open: boolean): { x: PreviewExample; seed: string | null } | null {
+  let best: { score: number; x: PreviewExample; seed: string | null } | null = null;
   for (const { i, p } of infos) {
     if (!i.domain || !shown(i.c.cells.industry)) continue;
     const roles = i.engs.filter(isOpenRole);
@@ -231,15 +239,16 @@ function pickExample(infos: Source["infos"], open: boolean): PreviewExample | nu
         open: role && roleFn && roleT ? { title: roleT, function: roleFn, when: role.posted ?? role.opened ?? null } : null,
         seat: { function: fnOf(seat)!, start: monthOf(shown(seat.cells.start)), rnMember: p.rnHolders.has(seat.id) },
       },
+      seed: roles.length ? p.seed : null,
     };
   }
-  return best?.x ?? null;
+  return best ? { x: best.x, seed: best.seed } : null;
 }
 
 async function sourceNow(): Promise<Source> {
   const { list, version } = await previewCompanies();
-  const open = showsOpenRoleCompanies();
-  if (source && source.version === version && source.open === open) return source;
+  const cap = openRoleNamedCap();
+  if (source && source.version === version && source.cap === cap) return source;
   const clients = list.filter((p) => !isFirm(p.rec));
   const infos = deriveAll(clients.map((p) => p.rec)).map((i, n) => ({ i, p: clients[n] }));
   const ind = new Map<string, number>();
@@ -253,7 +262,8 @@ async function sourceNow(): Promise<Source> {
   const groups = INDUSTRY_GROUPS.filter((g) => g.values.some((v) => (ind.get(v) ?? 0) > 0)).map((g) => g.label);
   const industries = [...groups, ...RN_INDUSTRIES.filter((x) => (ind.get(x) ?? 0) >= OPTION_MIN)];
   const countries = [...ctry.entries()].filter(([, n]) => n >= OPTION_MIN).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([c]) => c);
-  source = { version, infos, options: { functions: PREVIEW_FUNCTIONS, industries, countries }, example: pickExample(infos, open), open };
+  const ex = pickExample(infos, cap > 0);
+  source = { version, infos, options: { functions: PREVIEW_FUNCTIONS, industries, countries }, example: ex?.x ?? null, exampleOpenSeed: ex?.seed ?? null, cap };
   answers.clear();
   return source;
 }
@@ -285,7 +295,22 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     return true;
   });
 
-  const counts = { hired: 0, notYet: 0, hiring: 0, holders: 0, repeat: 0, anyHire: 0 };
+  const counts = { hired: 0, notYet: 0, hiring: 0, holders: 0, all: 0, repeat: 0, anyHire: 0 };
+
+  // The companies with an open role this answer names: the example's, then those behind the
+  // newest open roles in this function and scope, up to the cap. The same on every tab.
+  const namedOpen = new Set<string>();
+  if (src.cap > 0 && src.exampleOpenSeed) namedOpen.add(src.exampleOpenSeed);
+  const newest = inScope
+    .map(({ i, p }) => ({ seed: p.seed, role: newestOpen(i.engs.filter((e) => isOpenRole(e) && fnOf(e) === fn)) }))
+    .filter((x) => x.role)
+    .map((x) => ({ seed: x.seed, at: x.role.posted ?? x.role.opened ?? "" }))
+    .sort((a, b) => b.at.localeCompare(a.at));
+  for (const x of newest) {
+    if (namedOpen.size >= src.cap) break;
+    namedOpen.add(x.seed);
+  }
+
   const open: { row: PreviewRow; at: string; p: PreviewCompany; raw: string | null }[] = [];
   const past: { row: PreviewRow; at: string; rich: number }[] = [];
   const notYet: { row: PreviewRow; at: string; rich: number }[] = [];
@@ -295,14 +320,15 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     const seats = i.engs.filter((e) => isHire(e) && fnOf(e) === fn);
     const held = seats.filter((e) => known(e.cells.operator));
     if (hired.includes(fn)) counts.hired++;
-    if (hired.includes(fn) && held.length) counts.holders++;
+    // Counted the way the app's Function filter and "Seat holder on file" count a company: any seat in this function.
+    if (i.engs.some((e) => fnOf(e) === fn && known(e.cells.operator))) counts.holders++;
     if (hired.length) counts.anyHire++;
     const none = hired.length > 0 && !hired.includes(fn) && !hiring.includes(fn) && !openHere.length;
     if (none) counts.notYet++;
     if (openHere.length) counts.hiring++;
     if (repeatHirer(i)) counts.repeat++;
-    // A company with any open role is hidden in the app, so it is kept back here too while the flag is off.
-    const named = src.open || !i.engs.some(isOpenRole);
+    // A company with any open role is hidden in the app: named here only when it is one of the few above.
+    const named = !i.engs.some(isOpenRole) || namedOpen.has(p.seed);
     const base = {
       seed: p.seed,
       function: fn,
@@ -321,27 +347,37 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       notYet.push({ row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, when: monthOf(last) }, at: last ?? "", rich: rich0 + Math.min(others.length, 3) });
       continue;
     }
-    if (view === "notyet") continue;
     // One row per company: its newest open role in this function, else its latest seat in it.
     const role = newestOpen(openHere);
     if (role) {
+      counts.all++;
+      if (view === "notyet") continue;
       const when = role.posted ?? role.opened ?? null;
       const raw = role.cells.role?.s === "value" && !role.cells.role.system ? role.cells.role.v : null;
-      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, src.open), when }, at: when ?? "", p, raw });
+      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, named), when }, at: when ?? "", p, raw });
       continue;
     }
-    if (view === "hiring") continue;
-    const seat = held[0] ?? seats[0];
-    if (seat) {
-      const start = shown(seat.cells.start);
-      const row: PreviewRow = { ...base, kind: "hired", title: `Fractional ${fn} seat`, when: monthOf(start), holder: known(seat.cells.operator) };
-      // The rows that say the most first: a named company with a logo, a seat holder on file, then industry, size and country filled in.
-      const rich = (row.company?.logo ? 3 : 0) + (row.holder ? 4 : 0) + Number(!!row.industry) + Number(!!row.employees) + Number(!!row.country) + Number(!!row.when);
-      past.push({ row, at: start ?? "", rich });
-    }
+    // Every other company the app's Function filter finds for this function: its fractional seat
+    // here (one with its holder on file first), else any seat in it, such as one from a member's story.
+    if (!i.fns.includes(fn)) continue;
+    const anyHere = i.engs.filter((e) => !isOpenRole(e) && fnOf(e) === fn);
+    const seat = held[0] ?? seats[0] ?? anyHere.find((e) => known(e.cells.operator)) ?? anyHere[0] ?? null;
+    counts.all++;
+    if (view !== "all") continue;
+    const start = seat ? shown(seat.cells.start) : null;
+    const row: PreviewRow = {
+      ...base,
+      kind: "hired",
+      title: !seat || isHire(seat) ? `Fractional ${fn} seat` : `${fn} seat`,
+      when: monthOf(start),
+      holder: !!seat && known(seat.cells.operator),
+    };
+    const rich = (row.company?.logo ? 3 : 0) + (row.holder ? 4 : 0) + Number(!!row.industry) + Number(!!row.employees) + Number(!!row.country);
+    past.push({ row, at: start ?? "", rich });
   }
   open.sort((a, b) => b.at.localeCompare(a.at));
-  past.sort((a, b) => b.rich - a.rich || b.at.localeCompare(a.at));
+  // Newest seat first and undated ones last, so the dates run down the table in one order; then the rows that say the most.
+  past.sort((a, b) => b.at.localeCompare(a.at) || b.rich - a.rich);
   notYet.sort((a, b) => b.rich - a.rich || b.at.localeCompare(a.at));
   const all: { row: PreviewRow; p?: PreviewCompany; raw?: string | null }[] = view === "notyet" ? notYet : [...open, ...past];
   const rows = all.slice(0, PREVIEW_ROWS).map((x, n): PreviewRow => {
@@ -351,7 +387,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     return { ...x.row, company: null, blur: true, title };
   });
 
-  const a: PreviewAnswer = { fn, view, total: all.length, industry, country, counts, rows, example: src.example, openRoleCompanies: src.open, options: src.options };
+  const a: PreviewAnswer = { fn, view, total: all.length, industry, country, counts, rows, example: src.example, openRoleCompanies: src.cap > 0, options: src.options };
   if (answers.size >= ANSWER_MAX) answers.clear();
   answers.set(key, { at: Date.now(), a });
   return a;

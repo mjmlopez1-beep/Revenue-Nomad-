@@ -58,9 +58,14 @@ const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[];
       entity: "company",
       label: "The company",
       freeFirst: ["Name"],
-      note: "While a company has an open role, its name, website and LinkedIn are locked. One credit shows the company, the job posting and the posted rate together. When the role closes, everyone sees the company again.",
+      note: "While a company has an open role, its name, website and LinkedIn are locked. One credit shows the company and its job posting, and the posted rate when there is one. When the role closes, everyone sees the company again. Try it on this page names a few hiring companies as a sample.",
     },
-    { entity: "engagement", label: "The seat", freeLast: ["Open and closed dates"] },
+    {
+      entity: "engagement",
+      label: "The seat",
+      freeLast: ["Title of an open role", "Open and closed dates"],
+      note: "An open role's title is free while it is open. The role on a past seat costs 1 credit.",
+    },
     { entity: "contact", label: "A hiring contact" },
   ] as { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; note?: string }[]
 ).map((row) => {
@@ -69,7 +74,8 @@ const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[];
     entity: row.entity,
     label: row.label,
     free: [...(row.freeFirst ?? []), ...fields.filter((f) => !f.gated).map((f) => f.label), ...(row.freeLast ?? [])],
-    locked: fields.filter((f) => f.gated).map((f) => f.label),
+    // An open role's title is free (above), so the locked one is a past seat's.
+    locked: fields.filter((f) => f.gated).map((f) => (row.entity === "engagement" && f.key === "role" ? "Role of a past seat" : f.label)),
     note: row.note,
   };
 });
@@ -240,7 +246,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                   <p>
                     {inviter} invited you. Add one fact to a company or a seat and you both get <span className="num">{REFERRAL_BONUS}</span> credits.
                   </p>
-                  <p className="lp-invited-small">Invites from the same network earn no bonus.</p>
+                  <p className="lp-invited-small">The bonus doesn&apos;t apply when you join from the same internet connection as {inviter}.</p>
                 </div>
               ) : null}
               <p className="lp-hero-free num">Free pilot. {starter} credits to start.</p>
@@ -256,7 +262,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
               <p className="lp-hero-by">Built by Revenue Nomad, the network of {NETWORK} fractionals.</p>
             </div>
             <div className="lp-hero-visual">
-              <HeroRecord example={example} intro={!!intro} />
+              <HeroRecord example={example} intro={!!intro} onJoin={toJoin} />
             </div>
           </div>
         </section>

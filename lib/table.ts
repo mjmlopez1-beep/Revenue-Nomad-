@@ -1718,7 +1718,7 @@ let anonBuild: { s: State; seed: Seed; p: Promise<View> } | null = null;
 /**
  * One company for the landing page's "Try it" preview (lib/preview.ts): the record as a
  * signed-out visitor's build has it. `name` and `site` scrub role titles when the preview keeps
- * an open role's company back (PREVIEW_SHOWS_OPEN_ROLE_COMPANIES off). `seed` is an opaque HMAC
+ * an open role's company back (past its PREVIEW_OPEN_NAMED named ones). `seed` is an opaque HMAC
  * of the internal id (not the public id), a stable key for the page. `rnHolders`: public ids of
  * the seats whose holder is a Revenue Nomad member (a seed member), never who they are.
  */

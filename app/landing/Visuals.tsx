@@ -1,7 +1,9 @@
 "use client";
 
 /**
- * Product visuals for the landing page, drawn in HTML and CSS. Nothing in here is clickable.
+ * Product visuals for the landing page, drawn in HTML and CSS. In the hero's record, the controls a
+ * member would use (Unlock, Message the seat holder, Find them on LinkedIn) are real buttons that
+ * take the visitor to the join form (`onJoin`). The small "how credits work" demos are pictures.
  *
  * The hero's record is a real company from the table (lib/preview.ts PreviewExample): its free
  * facts, an open role when it has one, and a past seat whose holder is on file. It never names
@@ -25,14 +27,20 @@ function Locked({ w = 72 }: { w?: number }) {
   );
 }
 
-/** The same locked fact as it looks under the pointer: one tap, one credit. */
-function Unlock() {
-  return (
+/** The same locked fact as it looks under the pointer: one tap, one credit. With `onJoin`, a button that takes the visitor to the join form. */
+function Unlock({ onJoin, what }: { onJoin?: () => void; what?: string }) {
+  const label = (
     <span className="lock-cta lock-cta-static">
       <IconLock size={12} />
       <span>Unlock</span>
       <span className="lock-cost num">· 1 credit</span>
     </span>
+  );
+  if (!onJoin) return label;
+  return (
+    <button type="button" className="lp-rec-btn" onClick={onJoin} aria-label={`Join free to unlock ${what ?? "this"} for 1 credit`}>
+      {label}
+    </button>
   );
 }
 
@@ -79,14 +87,18 @@ const dayLabel = (d: string | null) => {
   return m && n ? `${MONTHS[m - 1]} ${n}` : null;
 };
 
-/** What a member can do once they unlock the seat holder, drawn like the record's buttons. Not clickable. */
-function ReachOut({ intro }: { intro: boolean }) {
+/** What a member can do once they unlock the seat holder. Each button takes the visitor to the join form. */
+function ReachOut({ intro, onJoin }: { intro: boolean; onJoin?: () => void }) {
   return (
     <div className="lp-reach-wrap">
-      <span className="lp-reach-k">What members can do</span>
+      <span className="lp-reach-k">Once you join</span>
       <div className="lp-reach">
-        <span className="lp-fake-btn lp-fake-btn-pine">Message the seat holder</span>
-        <span className="lp-fake-btn">{intro ? "Ask for an intro" : "Find them on LinkedIn"}</span>
+        <button type="button" className="lp-fake-btn lp-fake-btn-pine" onClick={onJoin}>
+          Message the seat holder
+        </button>
+        <button type="button" className="lp-fake-btn" onClick={onJoin}>
+          {intro ? "Ask for an intro" : "Find them on LinkedIn"}
+        </button>
       </div>
     </div>
   );
@@ -119,8 +131,9 @@ function RecordLoading() {
  * its open role when it has one (title free, posting behind a credit), and a past seat whose
  * holder is on file, with what a member can do next. It carries the page's one "Hiring now"
  * chip when the company is hiring. `example` undefined: still loading. Null: nothing fits.
+ * `onJoin`: what the record's buttons do (the page's join form).
  */
-export function HeroRecord({ example, intro = true }: { example: PreviewExample | null | undefined; intro?: boolean }) {
+export function HeroRecord({ example, intro = true, onJoin }: { example: PreviewExample | null | undefined; intro?: boolean; onJoin?: () => void }) {
   if (example === null) return null;
   if (!example)
     return (
@@ -133,7 +146,7 @@ export function HeroRecord({ example, intro = true }: { example: PreviewExample 
   const started = monthLabel(seat.start);
   return (
     <figure className="lp-visual">
-      <div className="lp-rec" aria-hidden>
+      <div className="lp-rec">
         <div className="lp-rec-head">
           <CompanyLogo name={co.name} domain={co.logo} size="lg" />
           <div className="lp-rec-id">
@@ -158,7 +171,7 @@ export function HeroRecord({ example, intro = true }: { example: PreviewExample 
                 <span className="lp-val lp-val-wrap">{open.title}</span>
               </Row>
               <Row k="Job posting">
-                <Unlock />
+                <Unlock onJoin={onJoin} what="the job posting" />
               </Row>
             </dl>
           </div>
@@ -175,13 +188,13 @@ export function HeroRecord({ example, intro = true }: { example: PreviewExample 
               {seat.rnMember ? <span className="chip lp-member">Revenue Nomad member</span> : null}
             </Row>
             <Row k="Name">
-              <Unlock />
+              <Unlock onJoin={onJoin} what="who held the seat" />
             </Row>
             <Row k="Rate">
               <Locked w={84} />
             </Row>
           </dl>
-          <ReachOut intro={intro} />
+          <ReachOut intro={intro} onJoin={onJoin} />
         </div>
       </div>
       <figcaption className="lp-visual-cap">

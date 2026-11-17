@@ -7,15 +7,17 @@
  * from GET /api/table?preview=1 (lib/preview.ts): the first 10 name their company with its logo
  * and domain; the rest come without one (`blur`) and show the app's blurred made-up name
  * (lockedLook, from the row's opaque seed), so the server never sends who they are. A bar under
- * the table says how many more there are. Never a person, a posting link or a rate. While
- * lib/preview.ts keeps open-role companies back, those rows say the company unlocks with 1 credit.
+ * the table says how many more there are. Never a person, a posting link or a rate. A company
+ * with an open role is hidden in the app until a member spends a credit, so the answer names at
+ * most 3 of them (lib/preview.ts PREVIEW_OPEN_NAMED). The other rows for them keep the role's
+ * title and say the company unlocks with 1 credit. A tap on a row goes to the join form.
  * The same answer carries the hero's example record, handed up with `onExample`.
  *
  * The section is up before any answer arrives: the counts are quiet bars until they land.
  * The picked function is kept in localStorage (tp_try_fn) so onboarding starts with it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CompanyLogo, IconLock, LockedName, LockedSite, Num } from "../ui/shared";
+import { CompanyLogo, IconLock, LockedSite, Num, lockedLook } from "../ui/shared";
 import { GTM_FUNCTIONS } from "@/lib/tableFields";
 
 /** Read by app/onboard/Onboarding.tsx. */
@@ -44,7 +46,12 @@ interface PreviewRow {
   holder?: boolean;
 }
 export interface PreviewExample {
-  company: PreviewCompany & { industry: string | null; employees: string | null; revenue: string | null; country: string | null };
+  company: PreviewCompany & {
+    industry: string | null;
+    employees: string | null;
+    revenue: string | null;
+    country: string | null;
+  };
   open: { title: string; function: string; when: string | null } | null;
   seat: { function: string; start: string | null; rnMember: boolean };
 }
@@ -55,7 +62,15 @@ interface PreviewAnswer {
   total?: number;
   industry: string | null;
   country: string | null;
-  counts: { hired: number; notYet: number; hiring: number; holders: number; repeat: number; anyHire: number };
+  counts: {
+    hired: number;
+    notYet: number;
+    hiring: number;
+    holders: number;
+    all?: number;
+    repeat: number;
+    anyHire: number;
+  };
   rows: PreviewRow[];
   example?: PreviewExample | null;
   openRoleCompanies?: boolean;
@@ -105,16 +120,17 @@ function startedOn(month: string | null): string | null {
 }
 
 const VIEWS: View[] = ["all", "hiring", "notyet"];
-const viewLabel = (v: View, fn: string) => (v === "all" ? "All" : v === "hiring" ? "Hiring now" : `No fractional ${fn} yet`);
+const viewLabel = (v: View, fn: string) => (v === "all" ? "All" : v === "hiring" ? "Hiring now" : `No fractional ${seatNoun(fn)} yet`);
 
 /** The quiet line under a row's title. */
 function happening(r: PreviewRow, fn: string): string {
   if (r.kind === "open") return `Open role · ${postedAgo(r.when)}`;
-  if (r.kind === "notyet") return [`No fractional ${fn} yet`, r.when ? startedOn(r.when)?.replace("Started", "Latest hire") : null].filter(Boolean).join(" · ");
+  if (r.kind === "notyet")
+    return [`No fractional ${seatNoun(fn)} yet`, r.when ? startedOn(r.when)?.replace("Started", "Latest hire") : null].filter(Boolean).join(" · ");
   return [startedOn(r.when), r.holder ? "Seat holder on file" : null].filter(Boolean).join(" · ") || "Fractional hire on file";
 }
 
-/** The company cell: logo, name and domain, a blurred made-up one past the first 10, or "unlocks with 1 credit" for a kept-back open role. */
+/** The company cell: logo, name and domain, a blurred made-up one past the first 10, or "unlocks with 1 credit" for a company with an open role kept back. */
 function CompanyCell({ r }: { r: PreviewRow }) {
   if (r.blur)
     return (
@@ -122,7 +138,12 @@ function CompanyCell({ r }: { r: PreviewRow }) {
         <CompanyLogo name="" domain={null} hidden seed={r.seed} />
         <span className="lp-tt-cotext">
           <span className="lp-tt-name">
-            <LockedName seed={r.seed} />
+            <span className="locked-name">
+              <span className="locked-blur" aria-hidden>
+                {lockedLook(r.seed).name}
+              </span>
+              <span className="sr-only">Company shown after you join</span>
+            </span>
           </span>
           <LockedSite seed={r.seed} className="lp-tt-dom" />
         </span>
@@ -135,7 +156,7 @@ function CompanyCell({ r }: { r: PreviewRow }) {
           <IconLock size={13} />
         </span>
         <span className="lp-tt-cotext">
-          <span className="lp-tt-name lp-try-name-kept">Unlocks with 1 credit</span>
+          <span className="lp-tt-name lp-try-name-kept">Company unlocks with 1 credit</span>
         </span>
       </span>
     );
@@ -181,6 +202,8 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
   const [failed, setFailed] = useState(false);
   const ctl = useRef<AbortController | null>(null);
   const [ready, setReady] = useState(false);
+  /** The table is scrolled to its right edge: no fade there. */
+  const [atEnd, setAtEnd] = useState(false);
 
   // The function picked on an earlier visit, once the page is in the browser.
   useEffect(() => {
@@ -234,8 +257,37 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
   const noun = seatNoun(fn);
   const c = answer && answer.fn === fn ? answer.counts : null;
   const rows = answer && answer.fn === fn ? answer.rows : [];
-  const named = rows.filter((r) => !r.blur).length;
-  const moreN = answer && answer.fn === fn && answer.view === view ? Math.max(0, (answer.total ?? rows.length) - named) : 0;
+  const here = answer && answer.fn === fn && answer.view === view;
+  const total = here ? (answer.total ?? rows.length) : 0;
+  const moreN = here ? Math.max(0, total - rows.length) : 0;
+  const scoped = !!(industry || country);
+  // "customer success" in running text, but RevOps and AI GTM keep their capitals.
+  const fnLow = /^[A-Z][a-z]+( [A-Z][a-z]+)*$/.test(fn) ? fn.toLowerCase() : fn;
+  /** What to say when the tab has no rows: widen the filters only when one is set. */
+  const emptyText = () => {
+    if (scoped)
+      return view === "hiring"
+        ? `No open ${fnLow} roles on file for that mix right now. Try All, or any industry or country.`
+        : "Nothing on file for that mix yet. Try any industry or any country.";
+    if (view === "hiring")
+      return `No open ${fnLow} roles on file right now. We check every week. Try All to see the companies that hired a fractional ${noun}.`;
+    if (view === "notyet") return `Every company on file that hires fractionals has hired a fractional ${noun} already.`;
+    return c && c.notYet > 0
+      ? `No fractional ${noun} seats on file yet. ${fmt(c.notYet)} companies hire fractionals in other functions, so they are good places to start. Join, add a seat you held and earn credits.`
+      : `No fractional ${noun} seats on file yet. Join, add a seat you held and earn credits.`;
+  };
+  const ctaText =
+    moreN > 0
+      ? "Join free to see them all"
+      : here && rows.length === 0
+        ? view === "all" && !scoped && c?.notYet
+          ? "Join free to see these companies"
+          : "Join free to see the whole table"
+        : view === "hiring"
+          ? "Join free to see who is hiring"
+          : view === "all" && c && c.holders > 0
+            ? "Join free to see who held these seats"
+            : "Join free to see these companies";
 
   return (
     <section className="lp-try" id="try" aria-labelledby="try-h">
@@ -308,9 +360,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                     <dd className="num">{c ? fmt(c.hired) : <span className="lp-skel" aria-label="Loading" />}</dd>
                   </div>
                   <div className="lp-try-count">
-                    <dt>
-                      hire fractionals but have no fractional {noun} yet
-                    </dt>
+                    <dt>hire fractionals but have no fractional {noun} yet</dt>
                     <dd className="num">{c ? fmt(c.notYet) : <span className="lp-skel" aria-label="Loading" />}</dd>
                   </div>
                   <div className="lp-try-count">
@@ -320,13 +370,14 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                 </dl>
                 {c && c.holders > 0 ? (
                   <p className="lp-try-holders">
-                    At <Num>{fmt(c.holders)}</Num> of these companies, the fractional who held the seat is on file. Unlock them and ask for an intro.
+                    At <Num>{fmt(c.holders)}</Num> {c.holders === 1 ? "company" : "companies"}, the person who held {/^[AEIOU]/.test(fn) ? "an" : "a"} {fn} seat
+                    is on file. Unlock who it is and ask how it went.
                   </p>
                 ) : null}
 
                 <div className="lp-tt-tabs" role="tablist" aria-label="Which companies">
                   {VIEWS.map((v) => {
-                    const n = v === "hiring" ? c?.hiring : v === "notyet" ? c?.notYet : null;
+                    const n = v === "hiring" ? c?.hiring : v === "notyet" ? c?.notYet : (c?.all ?? null);
                     return (
                       <button
                         key={v}
@@ -344,69 +395,87 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                 </div>
 
                 {c && answer?.view === view && rows.length === 0 ? (
-                  <p className="lp-try-empty">{view === "hiring" ? `No open ${fn} roles on file for that mix right now. Try All, or any industry or country.` : "Nothing on file for that mix yet. Try any industry or any country."}</p>
+                  <p className="lp-try-empty">{emptyText()}</p>
                 ) : (
-                  <div className="lp-tt-scroll" role="region" aria-label={`${viewLabel(view, fn)}: companies`} tabIndex={0}>
-                    <table className="lp-tt">
-                      <thead>
-                        <tr>
-                          <th scope="col" className="lp-tt-co">
-                            Company
-                          </th>
-                          <th scope="col">What&apos;s happening</th>
-                          <th scope="col">Industry</th>
-                          <th scope="col">Size</th>
-                          <th scope="col">Revenue</th>
-                          <th scope="col">Country</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(rows.length && answer?.view === view ? rows : Array.from({ length: 6 }, () => null)).map((r, n) =>
-                          r ? (
-                            <tr key={`${r.seed}-${n}`} className={r.blur ? "is-blur" : undefined}>
-                              <td className="lp-tt-co">
-                                <CompanyCell r={r} />
-                              </td>
-                              <td className="lp-tt-what">
-                                <span className="lp-tt-title" title={r.title}>
-                                  {r.title}
-                                </span>
-                                <span className="lp-tt-sub">{happening(r, fn)}</span>
-                              </td>
-                              <td className="lp-tt-ind" title={r.industry ?? undefined}>
-                                {r.industry ?? <span className="lp-tt-none">Not on file</span>}
-                              </td>
-                              <td className="num">{r.employees ? `${r.employees}` : <span className="lp-tt-none">Not on file</span>}</td>
-                              <td className="num">{r.revenue ?? <span className="lp-tt-none">Not on file</span>}</td>
-                              <td>{r.country ?? <span className="lp-tt-none">Not on file</span>}</td>
+                  <>
+                    <p className="lp-tt-swipe" aria-hidden>
+                      Swipe the table for industry, size and country.
+                    </p>
+                    <div className={`lp-tt-frame${atEnd ? " is-end" : ""}`}>
+                      <div
+                        className="lp-tt-scroll"
+                        role="region"
+                        aria-label={`${viewLabel(view, fn)}: companies`}
+                        tabIndex={0}
+                        onScroll={(e) => {
+                          const el = e.currentTarget;
+                          setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
+                        }}
+                      >
+                        <table className="lp-tt">
+                          <thead>
+                            <tr>
+                              <th scope="col" className="lp-tt-co">
+                                Company
+                              </th>
+                              <th scope="col" className="lp-tt-what">
+                                What&apos;s happening
+                              </th>
+                              <th scope="col">Industry</th>
+                              <th scope="col">Size</th>
+                              <th scope="col">Revenue</th>
+                              <th scope="col">Country</th>
                             </tr>
-                          ) : (
-                            <tr key={`sk-${n}`} className="lp-tt-skel" aria-hidden>
-                              <td className="lp-tt-co">
-                                <span className="lp-try-skel-logo" />
-                                <span className="lp-try-skel-line" />
-                              </td>
-                              <td>
-                                <span className="lp-try-skel-line" />
-                              </td>
-                              <td>
-                                <span className="lp-try-skel-line lp-try-skel-short" />
-                              </td>
-                              <td>
-                                <span className="lp-try-skel-line lp-try-skel-short" />
-                              </td>
-                              <td>
-                                <span className="lp-try-skel-line lp-try-skel-short" />
-                              </td>
-                              <td>
-                                <span className="lp-try-skel-line lp-try-skel-short" />
-                              </td>
-                            </tr>
-                          ),
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                          </thead>
+                          <tbody>
+                            {(rows.length && answer?.view === view ? rows : Array.from({ length: 6 }, () => null)).map((r, n) =>
+                              r ? (
+                                <tr key={`${r.seed}-${n}`} className={`lp-tt-go${r.blur ? " is-blur" : ""}`} onClick={onJoin}>
+                                  <td className="lp-tt-co">
+                                    <CompanyCell r={r} />
+                                  </td>
+                                  <td className="lp-tt-what">
+                                    <span className="lp-tt-title" title={r.title}>
+                                      {r.title}
+                                    </span>
+                                    <span className="lp-tt-sub">{happening(r, fn)}</span>
+                                  </td>
+                                  <td className="lp-tt-ind" title={r.industry ?? undefined}>
+                                    {r.industry ?? <span className="lp-tt-none">Not on file</span>}
+                                  </td>
+                                  <td className="num">{r.employees ? `${r.employees}` : <span className="lp-tt-none">Not on file</span>}</td>
+                                  <td className="num">{r.revenue ?? <span className="lp-tt-none">Not on file</span>}</td>
+                                  <td>{r.country ?? <span className="lp-tt-none">Not on file</span>}</td>
+                                </tr>
+                              ) : (
+                                <tr key={`sk-${n}`} className="lp-tt-skel" aria-hidden>
+                                  <td className="lp-tt-co">
+                                    <span className="lp-try-skel-logo" />
+                                    <span className="lp-try-skel-line" />
+                                  </td>
+                                  <td>
+                                    <span className="lp-try-skel-line" />
+                                  </td>
+                                  <td>
+                                    <span className="lp-try-skel-line lp-try-skel-short" />
+                                  </td>
+                                  <td>
+                                    <span className="lp-try-skel-line lp-try-skel-short" />
+                                  </td>
+                                  <td>
+                                    <span className="lp-try-skel-line lp-try-skel-short" />
+                                  </td>
+                                  <td>
+                                    <span className="lp-try-skel-line lp-try-skel-short" />
+                                  </td>
+                                </tr>
+                              ),
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
                 )}
               </>
             )}
@@ -415,16 +484,17 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
           <div className="lp-try-foot" ref={ctaRef}>
             {moreN > 0 ? (
               <p className="lp-tt-more">
-                <strong className="num">{fmt(moreN)}</strong> more {moreN === 1 ? "company" : "companies"} after these {named}. Join free to see them all.
+                These are <span className="num">{fmt(rows.length)}</span> of <strong className="num">{fmt(total)}</strong> companies. Join free to see the other{" "}
+                <span className="num">{fmt(moreN)}</span>.
               </p>
             ) : null}
             <button type="button" className={`btn btn-lg lp-try-cta${primary ? " btn-primary" : " btn-pine"}`} onClick={onJoin}>
-              {moreN > 0 ? "Join free to see them all" : answer?.openRoleCompanies === false ? "Join free to see these companies" : "Join free to see who held these seats"}
+              {ctaText}
             </button>
             <p className="lp-try-note">
               {answer?.openRoleCompanies === false
-                ? "One credit shows a company with an open role, its job posting and the posted rate. Another shows who held a seat."
-                : "One credit shows who held a seat. Another shows an open role's job posting and posted rate."}
+                ? "An open role's title is free. Inside Merlin, 1 credit shows the company behind it and its job posting. Another shows who held a seat."
+                : "An open role's title is free. Here we name a few of the companies hiring. Inside Merlin, 1 credit shows the company behind an open role and its job posting. Another shows who held a seat."}
             </p>
           </div>
         </div>

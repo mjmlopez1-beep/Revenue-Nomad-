@@ -27,7 +27,15 @@ export function faqItems(starter: number, intro = false): [string, string][] {
     ],
     [
       "Which functions does it cover?",
-      "Sales, marketing, RevOps, customer success, partnerships, growth, product marketing, enablement and AI GTM, plus finance, technology, operations, people, product and legal seats where we have them. We check for open roles every week.",
+      "Sales, marketing, RevOps, customer success, partnerships, growth, product marketing, enablement and AI GTM, plus executive, finance, technology, operations, people, product and legal seats where we have them. We check for open roles every week.",
+    ],
+    [
+      "What does an open role cost?",
+      "Its title is free. While the role is open, the company behind it is hidden. One credit shows the company and its job posting, and the posted rate when there is one. When the role closes, everyone sees the company again. Try it on the homepage names a few hiring companies as a sample.",
+    ],
+    [
+      "How do I get alerts for new roles?",
+      "Each week we email you the new open roles in your function. Save a view with the weekly email on and you also get the new roles that match it. For a post the moment a role fits you, connect Slack or any tool by webhook in Integrations.",
     ],
     [
       "Where does all of this come from?",
@@ -59,7 +67,7 @@ export function faqItems(starter: number, intro = false): [string, string][] {
     ],
     [
       "How do invites work?",
-      `Invite a fractional you trust with your invite link. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat. A rate shared only for the benchmarks doesn't count, and invites from the same network earn no bonus.`,
+      `Invite a fractional you trust with your invite link. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat. A rate shared only for the benchmarks doesn't count, and there is no bonus when you both join from the same internet connection.`,
     ],
     [
       "What does it cost?",

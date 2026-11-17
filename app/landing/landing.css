@@ -35,12 +35,10 @@
 .lp a {
   text-decoration: none;
 }
-/* A section link lands with the heading a little under the sticky nav (the section has its own top padding). */
-.lp-sec {
-  scroll-margin-top: 32px;
-}
+/* One offset for every section link: the sticky nav (64px and its 1px edge) and 24px of air. No section sets its own. */
 html:has(.lp) {
   scroll-behavior: smooth;
+  scroll-padding-top: calc(65px + 24px);
 }
 /* Focus: 2px volt with offset everywhere. On white a pine edge sits under it so the ring reads. */
 .lp :focus-visible {
@@ -1310,7 +1308,7 @@ html:has(.lp) {
   color: var(--pine);
   border-color: var(--pine-20, rgba(7, 63, 47, 0.2));
 }
-/* The two ways to reach a seat holder, drawn like buttons (not clickable). */
+/* The two ways to reach a seat holder. Real buttons: each takes the visitor to the join form. */
 .lp-reach {
   display: flex;
   flex-wrap: wrap;
@@ -1335,6 +1333,48 @@ html:has(.lp) {
   border-color: var(--pine);
   color: #fff;
 }
+button.lp-fake-btn {
+  font-family: inherit;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+@media (hover: hover) {
+  button.lp-fake-btn:hover {
+    border-color: var(--pine);
+  }
+  button.lp-fake-btn-pine:hover {
+    background: var(--pine-hover);
+  }
+}
+/* The record's Unlock: the app's label, as a button that goes to the join form. */
+.lp-rec-btn {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--r-chip);
+}
+/* A 44px target on a touch screen without making the label bigger. */
+.lp-rec-btn::after {
+  content: "";
+  position: absolute;
+  inset: -9px -4px;
+}
+@media (hover: hover) {
+  .lp-rec-btn:hover .lock-cta {
+    background: var(--pine-hover);
+  }
+}
+@media (pointer: coarse), (max-width: 640px) {
+  button.lp-fake-btn {
+    height: 44px;
+  }
+}
 
 /* ---------- try it ---------- */
 /* It hangs off the hero: the pine runs on behind the top of the card. */
@@ -1342,7 +1382,6 @@ html:has(.lp) {
   position: relative;
   padding: 0 0 64px;
   background: linear-gradient(to bottom, var(--pine) 0, var(--pine) 48px, var(--bg) 48px);
-  scroll-margin-top: 16px;
 }
 .lp-try-card {
   position: relative;
@@ -1373,9 +1412,12 @@ html:has(.lp) {
   font-family: inherit;
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
-.lp-try-chip.chip:not(.chip-on):hover {
-  border-color: var(--pine);
-  color: var(--pine);
+/* Hover only where there is a pointer, so a tap on a phone leaves no half-selected chip behind. */
+@media (hover: hover) {
+  .lp-try-chip.chip:not(.chip-on):hover {
+    border-color: var(--pine);
+    color: var(--pine);
+  }
 }
 .lp-try-more.is-on .select {
   background-color: var(--pine);
@@ -1697,9 +1739,6 @@ html:has(.lp) {
 }
 
 /* ---------- what you can do: the showcase (Showcase.tsx) ---------- */
-#uses {
-  scroll-margin-top: 0;
-}
 .lp-cost-earn.chip {
   border-color: transparent;
   background: var(--volt-soft);
@@ -1816,7 +1855,7 @@ html:has(.lp) {
 }
 
 /* ---------- try it: a kept-back open role ---------- */
-/* An open role's company kept back (lib/preview.ts PREVIEW_SHOWS_OPEN_ROLE_COMPANIES off): plain words, never a blur. */
+/* A company with an open role kept back (lib/preview.ts names only PREVIEW_OPEN_NAMED of them): plain words, never a blur. */
 .lp-try-logo-kept {
   display: inline-grid;
   place-items: center;
@@ -1824,9 +1863,120 @@ html:has(.lp) {
   color: var(--muted);
   border-color: transparent;
 }
-.lp-try-name-kept {
+.lp-try-name-kept.lp-tt-name {
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 600;
   color: var(--muted);
+  white-space: normal;
+}
+/* A row is one tap to the join form. */
+.lp-tt tbody tr.lp-tt-go {
+  cursor: pointer;
+}
+/* On a phone the table scrolls sideways: a fade at the right edge and a line above say so. */
+.lp-tt-frame {
+  position: relative;
+}
+.lp-tt-frame::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 20px;
+  border-radius: 0 var(--r-card) var(--r-card) 0;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0), var(--surface));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.lp-tt-swipe {
+  display: none;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .lp-tt-frame:not(.is-end)::after {
+    opacity: 1;
+  }
+  .lp-tt-swipe {
+    display: block;
+  }
+  .lp-tt-swipe + .lp-tt-scroll {
+    margin-top: 8px;
+  }
+  /* The tabs stay on one row and scroll, each at least 44px wide. */
+  .lp-tt-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .lp-tt-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .lp-tt-tab {
+    flex: none;
+    min-width: 44px;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}
+/* A small phone: a narrow company column (names wrap to two lines) so the role and its date read without a swipe. */
+@media (max-width: 480px) {
+  .lp-tt {
+    min-width: 0;
+  }
+  .lp-tt th.lp-tt-co,
+  .lp-tt td.lp-tt-co {
+    min-width: 124px;
+    max-width: 124px;
+    width: 124px;
+    padding-left: 10px;
+    padding-right: 8px;
+  }
+  .lp-tt-cobox {
+    gap: 8px;
+  }
+  .lp-tt-cobox .logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+  }
+  .lp-tt-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .lp-tt-dom {
+    display: none;
+  }
+  /* The rest of the screen, so the first swipe shows industry. */
+  .lp-tt td.lp-tt-what,
+  .lp-tt th.lp-tt-what {
+    width: calc(100vw - 172px);
+    min-width: calc(100vw - 172px);
+    max-width: 260px;
+  }
+  .lp-tt-title,
+  .lp-tt-sub {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .lp-tt td:not(.lp-tt-co):not(.lp-tt-what) {
+    white-space: nowrap;
+  }
+}
+@media (max-width: 360px) {
+  .lp-try-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ---------- hero record: a real company ---------- */
@@ -1939,9 +2089,22 @@ html:has(.lp) {
     transform: scaleX(1);
   }
 }
+/* Under the slides: which one is showing, and Pause or Play. It stays, so a paused showcase can run again. */
+.lp-show-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+.lp-show-at {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
 .lp-show-pause {
   flex: none;
-  align-self: flex-start;
+  min-width: 64px;
   min-height: 44px;
   padding: 0 12px;
   border: 0;
@@ -2027,6 +2190,8 @@ html:has(.lp) {
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
     align-items: start;
+    /* Slides share the tallest one's height: keep the picture right under its copy. */
+    align-content: start;
     padding: 24px;
   }
 }
@@ -2039,7 +2204,8 @@ html:has(.lp) {
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
-    padding: 0 16px;
+    margin: 0;
+    padding: 4px 16px;
     scroll-padding: 0 16px;
   }
   .lp-show-tabs::-webkit-scrollbar {
@@ -2047,9 +2213,6 @@ html:has(.lp) {
   }
   .lp-show-tab {
     flex: none;
-  }
-  .lp-show-pause {
-    display: none;
   }
   .lp-show-slide {
     padding: 20px 16px;
