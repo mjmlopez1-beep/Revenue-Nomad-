@@ -602,3 +602,27 @@
     transition: none;
   }
 }
+
+/* Rate benchmarks: functions with no figure yet, as one line under the table (Benchmarks.tsx). */
+.tp-bm-later {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--muted);
+}
+.tp-bm-later-h {
+  font-weight: 600;
+  color: var(--ink);
+}
+.tp-bm-later-go {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

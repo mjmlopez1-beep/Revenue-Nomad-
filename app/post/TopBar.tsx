@@ -29,7 +29,7 @@ export const lostLinkText = (support: string | null | undefined, emailOn: boolea
     ? `If you lose it, email ${support} and we'll send it again.`
     : emailOn
       ? "If you lose it, ask for a new one by email on the sign-in screen."
-      : "If you lose it, ask the member who invited you to send your link again.";
+      : "Without it there is no way back in yet, so keep it somewhere safe, like your notes or password manager.";
 
 /**
  * The balance. At 3 or fewer it turns ember, unless `quiet`: the next-move card is on the page
@@ -388,7 +388,7 @@ export function AvatarMenu({
       <div className="tp-menu-me" role="presentation">
         <div className="tp-menu-name">{me.name}</div>
         <div className="muted tp-small num">
-          {me.function ? `${me.function} · ` : ""}
+          {me.title && me.title !== "Member" ? `${me.title} · ` : me.function ? `${me.function} · ` : ""}
           {plural(me.added, "fact")} added
         </div>
       </div>
@@ -454,6 +454,37 @@ export function AvatarMenu({
   );
 }
 
+/** A speech bubble, for Messages. */
+const IconChat = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4 5h16v11H9l-5 4z" />
+  </svg>
+);
+
+/**
+ * Messages, in the bar itself, with the unread count, so a member who was written to sees it at
+ * once. On a phone it shows only while something is unread (the menu has Messages too).
+ */
+function MessagesBtn({ unread, onClick, here }: { unread: number; onClick: () => void; here?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={`tp-iconbtn tp-has-badge tp-msgbtn${unread ? " on" : ""}`}
+      aria-label={unread ? `Messages, ${unread} unread` : "Messages"}
+      aria-current={here ? "page" : undefined}
+      title={unread ? `${unread} unread ${unread === 1 ? "conversation" : "conversations"}` : "Messages"}
+      onClick={onClick}
+    >
+      <IconChat />
+      {unread > 0 && (
+        <span className="tp-badge tp-badge-dot num" aria-hidden>
+          {unread}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function TopBar({
   me,
   query,
@@ -473,6 +504,8 @@ export function TopBar({
   listSwitch,
   searchInList,
   unread = 0,
+  onMessages,
+  onMessagesPage,
 }: {
   me: Me;
   query: string;
@@ -496,9 +529,14 @@ export function TopBar({
   listSwitch?: ReactNode;
   /** Phones, on the table: the search is a field at the top of the list, so the bar has no search of its own. */
   searchInList?: boolean;
-  /** Conversations with something unread: a badge on the avatar (the menu button on phones). */
+  /** Conversations with something unread: the count on the Messages button (or on the avatar, without one). */
   unread?: number;
+  /** Open Messages. With it the bar has its own Messages button. */
+  onMessages?: () => void;
+  /** The Messages page is open. */
+  onMessagesPage?: boolean;
 }) {
+  const msgBtn = !!onMessages;
   const [searchOpen, setSearchOpen] = useState(false);
   const hosts = (
     <>
@@ -564,10 +602,11 @@ export function TopBar({
                 </button>
               )}
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
+              {msgBtn && unread > 0 && <MessagesBtn unread={unread} onClick={onMessages!} here={onMessagesPage} />}
               {/* The main action on a phone is the labeled "Add what you know" at the foot of the list, in thumb reach. Pages reach it from the menu. */}
               <button ref={menuRef} type="button" className="tp-iconbtn tp-has-badge" aria-label={unread ? `Menu, ${unread} unread` : "Menu"} aria-haspopup="menu" aria-expanded={false} onClick={onMenu}>
                 <IconMenu />
-                {unread > 0 && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
+                {unread > 0 && !msgBtn && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
               </button>
             </div>
           </>
@@ -592,18 +631,19 @@ export function TopBar({
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>
         </button>
+        {msgBtn && <MessagesBtn unread={unread} onClick={onMessages!} here={onMessagesPage} />}
         <button
           ref={menuRef}
           type="button"
           className="tp-avatar tp-has-badge"
-          aria-label={unread ? `Your account, ${unread} unread` : "Your account"}
+          aria-label={unread && !msgBtn ? `Your account, ${unread} unread` : "Your account"}
           aria-haspopup="menu"
           aria-expanded={false}
           title="Your account"
           onClick={onMenu}
         >
           {initials(me.name)}
-          {unread > 0 && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
+          {unread > 0 && !msgBtn && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
         </button>
       </div>
       {hosts}

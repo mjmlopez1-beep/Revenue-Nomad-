@@ -36,7 +36,7 @@ const CAP = { m: "Per month", h: "Per hour" } as const;
 /** What a figure below its floor still needs, in people. */
 function needText(s: RateStat): string {
   const more = Math.max(1, s.min - s.n);
-  if (s.indexed) return `${more} more to reach the ${s.min} our survey promised`;
+  if (s.indexed) return `Shows at ${s.min} rates · ${s.n} so far`;
   return s.n === 0 ? `Needs rates from ${s.min} people` : `Needs rates from ${more} more ${more === 1 ? "person" : "people"}`;
 }
 
@@ -300,8 +300,14 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
   const rangeN = b.rangeN ?? 10;
   const mine = ui.me.function;
   // Every function the server sends, the member's own first.
-  const rows: BenchmarkRow[] = b.rows.filter((r) => r.revenue === band).sort((x, y) => (x.function === mine ? -1 : y.function === mine ? 1 : 0));
+  const all: BenchmarkRow[] = b.rows.filter((r) => r.revenue === band).sort((x, y) => (x.function === mine ? -1 : y.function === mine ? 1 : 0));
+  // A function with no figure either way is one name in a line under the table, not two rows of
+  // empty bars (17 of them ran about 2,000px on a phone). The member's own function keeps its row.
+  const figure = (r: BenchmarkRow) => r.monthly.median !== undefined || r.hourly.median !== undefined;
+  const rows = all.filter((r) => figure(r) || r.function === mine);
+  const later = all.filter((r) => !rows.includes(r));
   const stats = rows.flatMap((r) => [r.monthly, r.hourly]);
+  const toShare = () => document.getElementById("tp-bm-share")?.scrollIntoView({ behavior: "smooth", block: "start" });
   // Notes that apply to what is on screen.
   const indexShown = stats.some((s) => s.indexed && s.median !== undefined);
   const withoutYours = stats.some((s) => s.withoutYours);
@@ -329,6 +335,7 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
           ))}
         </div>
       </div>
+      {rows.length > 0 && (
       <div className="tp-bm">
         <table className="bm-table" aria-label={`Rate benchmarks, ${band === "All" ? "all client revenue" : `client revenue ${band}`}`}>
           <colgroup>
@@ -385,17 +392,34 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
           </tbody>
         </table>
       </div>
+      )}
+      {later.length > 0 && (
+        <p className="tp-bm-later">
+          <span className="tp-bm-later-h">{rows.length ? "No figure yet:" : "No figures yet at this revenue:"}</span>{" "}
+          {later
+            .map((r) => {
+              const n = Math.max(r.monthly.n, r.hourly.n);
+              const min = Math.min(r.monthly.min, r.hourly.min);
+              return n ? `${r.function} (${n} of ${min})` : r.function;
+            })
+            .join(", ")}
+          .{" "}
+          <button type="button" className="tp-bm-later-go" onClick={toShare}>
+            Share a rate to start one
+          </button>
+        </p>
+      )}
       <div className="tp-bm-note">
         <p>
           A group shows a median once {b.minN} different people have a rate in it, and the range at {rangeN}. The middle half is where the middle half of them fall. Amounts are rounded to the
           nearest $250 a month or $5 an hour, and to the nearest $1,000 or $25 while fewer than {rangeN} people are in a figure.
         </p>
-        {indexShown && <p>Figures marked Rate Index include our survey and contract data. The survey promised groups of 20, so those show at 20.</p>}
+        {indexShown && <p>Figures marked Rate Index include our survey and contract data. They show once 20 people are in them.</p>}
         <p>Where we know the hours, an hourly rate also counts in the monthly figures (the rate times the hours a month), and a monthly retainer counts in the hourly ones.</p>
         {withoutYours && <p>Your rate is left out of what you see here, so nothing you share can move a number you read. Other members see it in the figure.</p>}
       </div>
 
-      <section className="tp-card tp-bm-sharecard">
+      <section className="tp-card tp-bm-sharecard" id="tp-bm-share">
         <ShareRate refresh={refresh} />
         <MyRates rates={ui.me.benchRates} view={view} />
       </section>

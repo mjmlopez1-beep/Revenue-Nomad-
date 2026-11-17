@@ -150,6 +150,17 @@
   min-width: 0;
   font-size: 13.5px;
 }
+/* A refused URL: said under the field, kept until the URL changes. */
+.in-input.bad {
+  border-color: var(--red);
+}
+.in-err {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--red);
+}
 .in-hint {
   margin: 8px 0 0;
   font-size: 13.5px;

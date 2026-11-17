@@ -109,10 +109,16 @@ const record = (d: StoredDest, r: PostResult, now: string) => {
 };
 
 /** Words for a URL the service refused when it was pasted. */
-function refusedWords(field: Field, r: PostResult): string {
+export function refusedWords(field: Field, r: PostResult): string {
+  // A network failure is not the URL's fault: say so, and don't send them back to copy it.
+  if (r.error === "timeout" || r.error === "unreachable")
+    return field === "slack"
+      ? "We couldn't reach Slack right now, so nothing was saved. Try again in a minute."
+      : "We couldn't reach that address right now, so nothing was saved. Check the URL, or try again in a minute.";
+  if (field === "slack" && r.gone) return "Slack says this webhook doesn't exist, so nothing was saved. Copy the webhook URL again from Incoming Webhooks.";
   const why = problemWords(r.error, field === "slack" ? "slack" : "webhook");
   return field === "slack"
-    ? `Slack didn't take the test message, so nothing was saved. ${why ?? ""} Copy the webhook URL again from Incoming Webhooks.`.replace(/\s+/g, " ").trim()
+    ? `Slack didn't take the test message, so nothing was saved. ${why ?? ""}`.replace(/\s+/g, " ").trim()
     : `That webhook didn't take the test message, so nothing was saved. ${why ?? ""}`.replace(/\s+/g, " ").trim();
 }
 

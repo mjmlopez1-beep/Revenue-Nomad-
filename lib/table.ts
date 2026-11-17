@@ -2757,6 +2757,10 @@ export async function perform(
     let capped = false;
     /** A claim on an open role was saved, and the role stays open (the account does not count yet, see trustOf). */
     let claimKept = false;
+    /** This change is the member saying they took an open role ("I took this role"). */
+    let claimed = false;
+    /** The inviter's first name, when this change paid them their invite bonus too. */
+    let inviterPaid: string | null = null;
     /** Cells a fill changed besides its own (a filled open role's status). */
     const alsoChanged: { entity: Entity; node: Node; field: string }[] = [];
     /** A fill saved for no credit because it was a "How they sell" answer past the ones that earn today. */
@@ -2807,7 +2811,11 @@ export async function perform(
       for (const l of s.ledger) if (l.memberId === inviter && l.reason === "referral" && l.delta > 0) note(l.ref, l.at);
       for (const h of s.held) if (h.memberId === inviter && h.reason === "referral") note(h.ref, h.at);
       const recent = [...firstPaid.values()].filter((t) => nowMs - t < 30 * DAY).length;
-      if (recent < REFERRAL_LIMIT) grant(s, inviter, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
+      if (recent < REFERRAL_LIMIT) {
+        grant(s, inviter, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
+        const who = s.members.find((m) => m.id === inviter) ?? seed.members.find((m) => m.id === inviter);
+        if (who) inviterPaid = firstName(who.name);
+      }
       return grant(s, me.id, REFERRAL_BONUS, "referral", `${inviter}.referral`, now);
     };
     /**
@@ -2905,6 +2913,7 @@ export async function perform(
       if (claimsRole && (s.roleClaims ?? []).some((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY))
         throw new ActionError("You marked an open role as yours in the last 24 hours. You can do that once a day.");
       const fillsRole = claimsRole && trusted(me.id);
+      if (claimsRole) claimed = true;
       if (claimsRole && !fillsRole) claimKept = true;
       s.values[k] = {
         value: value!,
@@ -2956,10 +2965,10 @@ export async function perform(
       return ` No credit ${some ? "for the rest" : "this time"}, because you've earned today's ${EARN_CAP}.`;
     };
     const credits = (n: number) => (n ? ` You earned ${n} credit${n > 1 ? "s" : ""}.` : "");
-    const bonusNote = (n: number) => (n ? ` Your invite bonus added ${n} more.` : "");
+    const bonusNote = (n: number) => (n ? ` Your invite bonus added ${n} more.${inviterPaid ? ` ${inviterPaid} got ${REFERRAL_BONUS} too.` : ""}` : "");
     /** Said when a claim on an open role was saved and the role stays open (claimKept). */
     const claimNote = () =>
-      claimKept ? " Others still see the role as open until its posting comes down. Once two members confirm a fact you added, a claim like this closes the role at once." : "";
+      claimKept ? " Others still see the role as open until your claim is confirmed." : "";
 
     const run = (): ActionResult => {
       switch (a?.type) {
@@ -2977,7 +2986,7 @@ export async function perform(
           if (a.entity === "engagement" && f.key === "role" && !hadFunction && valueOf(node, s, "function")) cells.push(changed(a.entity, node, "function"));
           for (const c of alsoChanged) cells.push(changed(c.entity, c.node, c.field));
           return {
-            message: `${wasMine ? "Updated" : "Added"} ${say(a.entity, f.key)}.${credits(earned)}${bonusNote(bonus)}${capNote()}${claimNote()}`,
+            message: `${claimed ? "Claimed. It's on Your seats." : `${wasMine ? "Updated" : "Added"} ${say(a.entity, f.key)}.`}${credits(earned)}${bonusNote(bonus)}${capNote()}${claimNote()}`,
             id: outId(a.entity, node.id),
             capped,
             cells,

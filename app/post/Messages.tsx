@@ -94,6 +94,64 @@ type Act = { type: string; [k: string]: unknown };
 type ActAnswer = { message?: string; conversation?: ConversationRec; unread?: number; error?: string };
 const send = (action: Act) => post<ActAnswer>({ action });
 
+/**
+ * The viewer's conversations, kept for a short while so a record can say "Open conversation"
+ * instead of offering a second opener. The Messages page refreshes it whenever it loads.
+ */
+let known: { at: number; list: ConversationRec[] } | null = null;
+let loading: Promise<ConversationRec[] | null> | null = null;
+const KNOWN_FRESH = 30_000;
+const KNOWN_EVENT = "tp-conversations";
+function remember(list: ConversationRec[]) {
+  known = { at: Date.now(), list };
+  window.dispatchEvent(new CustomEvent(KNOWN_EVENT));
+}
+function rememberOne(c: ConversationRec) {
+  remember([c, ...(known?.list ?? []).filter((x) => x.id !== c.id)]);
+}
+async function loadKnown(): Promise<ConversationRec[] | null> {
+  if (known && Date.now() - known.at < KNOWN_FRESH) return known.list;
+  loading ??= (async () => {
+    try {
+      const r = await fetch("/api/table?messages=1", { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) return null;
+      remember(j.conversations ?? []);
+      return known!.list;
+    } catch {
+      return null;
+    } finally {
+      loading = null;
+    }
+  })();
+  return loading;
+}
+
+/** The conversation about this seat, if the viewer has one (null while unknown or when there is none). */
+function useConversationAbout(engagementId: string): ConversationRec | null {
+  const pick = () => known?.list.find((c) => c.about.engagementId === engagementId) ?? null;
+  const [c, setC] = useState<ConversationRec | null>(pick);
+  useEffect(() => {
+    let live = true;
+    const on = () => live && setC(pick());
+    window.addEventListener(KNOWN_EVENT, on);
+    void loadKnown().then(on);
+    return () => {
+      live = false;
+      window.removeEventListener(KNOWN_EVENT, on);
+    };
+  }, [engagementId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return c;
+}
+
+/** A conversation the Messages page should open first (from "Open conversation" on a record). */
+let openNext: string | null = null;
+/** Open Messages at one conversation. */
+export function openConversation(openPage: (p: "messages") => void, id: string) {
+  openNext = id;
+  openPage("messages");
+}
+
 function useConversations() {
   const [list, setList] = useState<ConversationRec[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -104,6 +162,7 @@ function useConversations() {
       if (!r.ok) return setFailed(j?.error || "Messages didn't load. Try again.");
       setFailed(null);
       setList(j.conversations ?? []);
+      remember(j.conversations ?? []);
       if (typeof j.unread === "number") tellUnread(j.unread);
     } catch {
       setFailed("We couldn't reach Merlin. Check your connection and try again.");
@@ -117,6 +176,7 @@ function useConversations() {
   }, [load]);
   /** Put one conversation's new state in the list (the answer to an action). */
   const put = useCallback((c: ConversationRec) => {
+    rememberOne(c);
     setList((l) => {
       const rest = (l ?? []).filter((x) => x.id !== c.id);
       return [c, ...rest].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -129,6 +189,11 @@ function useConversations() {
 
 /** The conversation id in the address bar (?m=), from a message email's link. Read once, when the page opens. */
 function readM(): string | null {
+  if (openNext) {
+    const id = openNext;
+    openNext = null;
+    return id;
+  }
   try {
     return new URLSearchParams(window.location.search).get("m");
   } catch {
@@ -354,14 +419,11 @@ function Thread({
           <h2 className="ms-head-name" id={`${id}-h`}>
             {c.with.name}
           </h2>
+          {c.with.title && <p className="ms-head-sub">{c.with.title}</p>}
+          {/* The company is the seat being talked about, not where this person works. */}
           <p className="ms-head-sub">
-            {[c.with.title, c.about.company === HIDDEN_COMPANY ? "" : c.about.company].filter(Boolean).join(" · ")}
-            {c.about.company === HIDDEN_COMPANY && (
-              <>
-                {c.with.title ? " · " : ""}
-                <LockedName seed={c.about.companyId} />
-              </>
-            )}
+            {c.started ? "About their " : "About your "}
+            {c.about.seat ? `${c.about.seat} ` : ""}seat at {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company || "a company"}
             {c.about.company && (
               <>
                 {" · "}
@@ -373,8 +435,13 @@ function Thread({
           </p>
         </div>
         <div className="ms-head-acts">
-          {c.status === "open" && !c.blocked && (
-            <button type="button" className="btn btn-sm" disabled={!!busy} aria-busy={busy === "close"} onClick={() => void run("close", { type: "message.close", conversationId: c.id }, (r) => r.message && toast(r.message))}>
+          {/* Not now is the answer to an intro, so only the member who was written to has it. */}
+          {c.status === "open" && !c.blocked && !c.started && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              title={`Close this for now. ${c.with.first} sees that you're not taking intros right now. Write again any time to reopen it.`}
+              disabled={!!busy} aria-busy={busy === "close"} onClick={() => void run("close", { type: "message.close", conversationId: c.id }, (r) => r.message && toast(r.message))}>
               Not now
             </button>
           )}
@@ -477,12 +544,41 @@ function Thread({
 
 /**
  * "Message Ana" under a seat holder the member unlocked who is a member who has signed in.
- * Opens the compose sheet with an opener they can change.
+ * Opens the compose sheet with an opener they can change. Once a conversation about this seat
+ * exists it becomes "Open conversation" (with the unread count when they replied), never a
+ * second opener.
  */
 export function MessageButton({ engagementId, name, company, seat }: { engagementId: string; name: string; company: string; seat: string | null }) {
+  const ui = useUi();
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const first = firstOf(name);
+  const conv = useConversationAbout(engagementId);
+  if (conv) {
+    const last = conv.messages[conv.messages.length - 1];
+    const state = conv.blocked
+      ? `You blocked ${first}.`
+      : conv.status === "closed" && conv.closedBy === "them"
+        ? `${first} isn't taking intros right now.`
+        : conv.unread
+          ? `${first} replied.`
+          : last && !last.mine
+            ? `${first} wrote to you.`
+            : `You wrote to ${first}.`;
+    return (
+      <>
+        <button type="button" className="btn btn-sm btn-pine tp-has-badge ms-rec-open" onClick={() => openConversation(ui.openPage, conv.id)}>
+          Open conversation
+          {conv.unread > 0 && (
+            <span className="tp-badge tp-badge-dot num" aria-label={`${conv.unread} unread`}>
+              {conv.unread}
+            </span>
+          )}
+        </button>
+        <span className="ms-rec-state">{state}</span>
+      </>
+    );
+  }
   return (
     <>
       <button ref={btn} type="button" className="btn btn-sm btn-pine" onClick={() => setOpen(true)}>
@@ -510,8 +606,10 @@ function Compose({ engagementId, name, company, seat, onClose, restore }: { enga
     const r = await send({ type: "message.start", engagementId, text: text.trim() });
     setBusy(false);
     if (r.error) return setErr(r.error);
+    const c = r.conversation;
+    if (c) rememberOne(c);
     onClose();
-    toast(r.message || "Sent.", false, { action: { label: "Open Messages", onClick: () => ui.openPage("messages") } });
+    toast(r.message || "Sent.", false, { action: { label: "Open conversation", onClick: () => (c ? openConversation(ui.openPage, c.id) : ui.openPage("messages")) } });
   };
   return (
     <Sheet

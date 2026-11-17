@@ -1508,6 +1508,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           listSwitch={typeSwitch}
           searchInList={phone && page === "table"}
           unread={unread}
+          onMessages={() => (setEditor(null), setDrawer(null), setPage("messages"))}
+          onMessagesPage={page === "messages"}
         />
         {me.asMember && (
           <div className="tp-asmember" role="status">

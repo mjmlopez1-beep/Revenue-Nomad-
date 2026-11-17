@@ -279,7 +279,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
   const share = phone && canShare();
   const rules: [string, "plus" | "minus" | "flat", string][] = [
     [String(starter), "flat", `You start with ${starter} credits.`],
-    ["+1", "plus", "You add a fact that's missing. On a seat you held that's the role, the rate or the hours. On any company it's facts like the HQ or size, or a hiring contact."],
+    ["+1", "plus", "You add a fact that's missing. Every answer on a seat you held earns 1, and so do company facts like the HQ or size, or a hiring contact."],
     ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on. A locked company comes with its open role for 1 credit."],
     ["+1", "plus", "Two other members confirm a fact you added."],
     [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company or a seat. They get ${REFERRAL_BONUS} too.`],
@@ -367,7 +367,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
   const inviteCard = (
     <LinkCard
       title="Invite a fractional"
-      note={`Send this link to a fractional you'd vouch for. You both get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat. Up to ${REFERRAL_LIMIT} invite bonuses every 30 days. Bonuses count toward the ${EARN_CAP} you can earn a day and wait if you are over.${
+      note={`Send this link to a fractional you'd vouch for. You both get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat. Up to ${REFERRAL_LIMIT} invite bonuses every 30 days. Bonuses count toward the ${EARN_CAP} you can earn a day and wait if you are over. Someone who joins from your own network (the same internet connection) earns no bonus.${
         me.invited ? ` ${plural(me.invited, "person has", "people have")} joined from your link so far${paid ? `, and ${paid} of them added a first fact` : ""}.` : ""
       }`}
       link={invite}

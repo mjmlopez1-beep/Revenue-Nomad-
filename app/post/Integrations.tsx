@@ -141,16 +141,76 @@ function Connected({ d, label, onTest, onRemove, busy }: { d: DestView; label: s
   );
 }
 
-/** Paste a URL and connect it. */
-function ConnectForm({ id, label, placeholder, button, busy, onConnect, hint }: { id: string; label: string; placeholder: string; button: string; busy: boolean; onConnect: (url: string) => Promise<boolean>; hint?: ReactNode }) {
+/** Tools people name instead of pasting their webhook, and where that tool's URL starts. */
+const TOOL_HOOKS: Record<string, [string, string]> = {
+  zapier: ["Zapier", "https://hooks.zapier.com/"],
+  make: ["Make", "https://hook."],
+  slack: ["Slack", "https://hooks.slack.com/"],
+  n8n: ["n8n", "https://"],
+};
+
+/**
+ * What's wrong with a pasted URL before the server sees it, in the app's words (the browser's
+ * own "Please enter a URL" bubble is off). Null when it looks like a URL worth trying.
+ */
+export function pasteProblem(raw: string, field: "slack" | "webhook"): string | null {
+  const t = raw.trim();
+  const start = field === "slack" ? "https://hooks.slack.com/" : "https://";
+  const from = field === "slack" ? "Slack" : "your tool";
+  if (!t) return `Paste the webhook URL from ${from}. It starts with ${start}.`;
+  if (/^https?:\/\//i.test(t)) return null;
+  const tool = TOOL_HOOKS[t.toLowerCase()];
+  if (tool && (field === "webhook" || tool[0] === "Slack")) return `That's the name of the tool. Paste the webhook URL ${tool[0]} gives you. It starts with ${tool[1]}${tool[1].endsWith("/") ? "" : "…"}`;
+  return `That isn't a webhook URL. Paste the whole URL from ${from}. It starts with ${start}.`;
+}
+
+/** Paste a URL and connect it. A problem shows under the field and stays until the URL changes. */
+function ConnectForm({
+  id,
+  label,
+  placeholder,
+  button,
+  busy,
+  onConnect,
+  hint,
+  field,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  button: string;
+  busy: boolean;
+  /** Resolves to the server's error, or null once it connected. */
+  onConnect: (url: string) => Promise<string | null>;
+  hint?: ReactNode;
+  field: "slack" | "webhook";
+}) {
   const [url, setUrl] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const describedBy = [err ? `${id}-err` : null, hint ? `${id}-hint` : null].filter(Boolean).join(" ") || undefined;
   return (
     <form
       className="in-form"
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
-        if (!url.trim() || busy) return;
-        void onConnect(url.trim()).then((ok) => ok && setUrl(""));
+        if (busy) return;
+        const bad = pasteProblem(url, field);
+        if (bad) {
+          setErr(bad);
+          input.current?.focus();
+          return;
+        }
+        void onConnect(url.trim()).then((problem) => {
+          if (problem) {
+            setErr(problem);
+            input.current?.focus();
+          } else {
+            setErr(null);
+            setUrl("");
+          }
+        });
       }}
     >
       <label className="in-label" htmlFor={id}>
@@ -158,21 +218,31 @@ function ConnectForm({ id, label, placeholder, button, busy, onConnect, hint }: 
       </label>
       <div className="in-row">
         <input
+          ref={input}
           id={id}
-          className="input mono in-input"
+          className={`input mono in-input${err ? " bad" : ""}`}
           type="url"
           inputMode="url"
           autoComplete="off"
           spellCheck={false}
           placeholder={placeholder}
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          aria-describedby={hint ? `${id}-hint` : undefined}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            if (err) setErr(null);
+          }}
+          aria-invalid={!!err}
+          aria-describedby={describedBy}
         />
-        <button type="submit" className="btn btn-pine" aria-busy={busy} disabled={busy || !url.trim()}>
+        <button type="submit" className="btn btn-pine" aria-busy={busy} disabled={busy}>
           {busy ? "Checking" : button}
         </button>
       </div>
+      {err && (
+        <p className="in-err" id={`${id}-err`} role="alert">
+          {err}
+        </p>
+      )}
       {hint && (
         <p className="in-hint" id={`${id}-hint`}>
           {hint}
@@ -235,6 +305,16 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
     if (r.error) toast(r.error, true);
     else if (r.message && r.message !== "Saved.") toast(r.message);
     return !r.error;
+  };
+  /** Connecting: a refusal goes under the field (ConnectForm), not in a toast that covers it. */
+  const connect = async (key: string, body: Record<string, unknown>): Promise<string | null> => {
+    setBusy(key);
+    const r = await call(body);
+    setBusy(null);
+    if (r.view) setView(r.view);
+    if (r.error) return r.error;
+    if (r.message && r.message !== "Saved.") toast(r.message);
+    return null;
   };
   const setAlert = (k: AlertKind, on: boolean) => {
     if (!view) return;
@@ -334,7 +414,8 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                     placeholder="https://hooks.slack.com/services/…"
                     button="Connect Slack"
                     busy={busy === "slack:connect"}
-                    onConnect={(url) => run("slack:connect", { op: "connect", field: "slack", url })}
+                    field="slack"
+                    onConnect={(url) => connect("slack:connect", { op: "connect", field: "slack", url })}
                     hint="Workflow Builder webhooks work too. They start with https://hooks.slack.com/workflows/."
                   />
                   <p className="uc-tip in-alt">
@@ -395,7 +476,8 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                     placeholder="https://hooks.zapier.com/hooks/catch/…"
                     button="Connect webhook"
                     busy={busy === "webhook:connect"}
-                    onConnect={(url) => run("webhook:connect", { op: "connect", field: "webhook", url })}
+                    field="webhook"
+                    onConnect={(url) => connect("webhook:connect", { op: "connect", field: "webhook", url })}
                     hint="It has to start with https://. We send a test post first."
                   />
                 </>

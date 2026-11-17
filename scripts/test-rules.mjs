@@ -300,7 +300,7 @@ section("role", async () => {
   const nClaim = await N.act({ type: "add", company: coName, engagementId: eid, operatorMemberId: "me", engagementFields: { operator: "Nia Newcomer" } });
   check(
     "a new account's claim is saved and says the role stays open for others",
-    nClaim.status === 200 && /You earned 1 credit\. Others still see the role as open until its posting comes down\./.test(nClaim.json?.message ?? ""),
+    nClaim.status === 200 && /You earned 1 credit\. Others still see the role as open until your claim is confirmed\.$/.test(nClaim.json?.message ?? ""),
     nClaim.json,
   );
   check("the role stays open and the company hidden for everyone (ECON-2)", isOpen(await look(B)), await look(B));
@@ -326,6 +326,7 @@ section("role", async () => {
   // Picking yourself fills the role.
   const claim = await name(A, "whatever is typed", "me");
   check("picking yourself as seat holder fills the role", claim.status === 200 && claim.json?.cells?.find((c) => c.field === "status")?.cell?.v === "Active", claim.json);
+  check("the claim's toast is short and says where the seat went", /^Claimed\. It's on Your seats\./.test(claim.json?.message ?? "") && !/Others still see/.test(claim.json?.message ?? ""), claim.json?.message);
   const a1 = await look(A);
   check("the seat is theirs, and the role is closed for everyone", a1.yours === true && isClosed(await look(B)), [a1, await look(B)]);
   check("the Active status a claim sets is not marked as coming from the posting", (await look(B)).from === undefined, (await look(B)).from);
