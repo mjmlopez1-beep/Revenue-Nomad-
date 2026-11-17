@@ -28,9 +28,9 @@ export const generateMetadata = (): Metadata => ({
     description: DESCRIPTION,
     siteName: "Merlin by Revenue Nomad",
     type: "website",
-    images: [{ url: "/brand/merlin-og.png", width: 1200, height: 630, alt: "Merlin by Revenue Nomad" }],
+    images: [{ url: "/brand/merlin-og-banner.png", width: 1200, height: 630, alt: "Merlin by Revenue Nomad" }],
   },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/brand/merlin-og.png"] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/brand/merlin-og-banner.png"] },
 });
 
 /**

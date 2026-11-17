@@ -388,6 +388,20 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
 
       <main className="ob-main">
         <div className="ob-card" ref={cardRef}>
+          {/* The welcome step opens on the mountain banner (scripts/make-banner.py makes the images). */}
+          {shown === 1 ? (
+            <img
+              className="ob-banner"
+              src="/brand/merlin-banner-onboarding.webp"
+              srcSet="/brand/merlin-banner-onboarding-1000.webp 1000w, /brand/merlin-banner-onboarding.webp 2000w"
+              sizes="(max-width: 640px) 100vw, 720px"
+              width={2000}
+              height={470}
+              alt=""
+              decoding="async"
+              fetchPriority="high"
+            />
+          ) : null}
           <div className="ob-progress">
             <div className="ob-dots" role="img" aria-label={`Step ${shown} of ${total}`}>
               {Array.from({ length: total }, (_, i) => (

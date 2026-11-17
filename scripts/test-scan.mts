@@ -505,7 +505,23 @@ check("text has the app link", d.text.includes("See this week's roles\nhttps://t
 check("unsubscribe link is in the text", d.text.includes(base.unsubscribeUrl));
 check("unsubscribe link is in the HTML", d.html.includes('href="https://table-pilot.up.railway.app/api/table?unsubscribe=tok_123&amp;m=1"') && />Unsubscribe<\/a>/.test(d.html));
 check("says why they got it", d.text.includes("because you're a Merlin member") && d.html.includes("because you&#39;re a Merlin member"));
-check("header says Merlin on pine", /bgcolor="#073F2F"[^>]*>Merlin</.test(d.html));
+// The header: the banner image from the site the email links to, on pine, with the name as its alt text.
+const BANNER = /<td bgcolor="#073F2F" style="padding:0;[^"]*background-color:#073F2F[^"]*"><img src="([^"]+)" width="560" height="128" alt="Merlin by Revenue Nomad" style="display:block;[^"]*"><\/td>/;
+check("header is the banner on pine, from the app's own site", d.html.match(BANNER)?.[1] === "https://table-pilot.up.railway.app/brand/merlin-banner-email.png", d.html.match(/<img [^>]*>/)?.[0]);
+check("one image, in the header", (d.html.match(/<img /g) ?? []).length === 1);
+check("the text part has no header", d.text.startsWith("Hi "));
+{
+  // With no link and no RN_PUBLIC_URL there is nowhere to load the banner from: the name in text, on pine.
+  const was = process.env.RN_PUBLIC_URL;
+  delete process.env.RN_PUBLIC_URL;
+  const bare = renderDigest({ ...base, appUrl: "", unsubscribeUrl: "" } as DigestData);
+  check("no site to load the banner from: the pine bar with the name in text", /bgcolor="#073F2F"[^>]*>Merlin</.test(bare.html) && !bare.html.includes("<img"));
+  process.env.RN_PUBLIC_URL = "https://merlin.example.com/";
+  const viaEnv = renderDigest({ ...base, appUrl: "", unsubscribeUrl: "" } as DigestData);
+  check("no link in the email: the banner comes from RN_PUBLIC_URL", viaEnv.html.match(BANNER)?.[1] === "https://merlin.example.com/brand/merlin-banner-email.png", viaEnv.html.match(/<img [^>]*>/)?.[0]);
+  if (was === undefined) delete process.env.RN_PUBLIC_URL;
+  else process.env.RN_PUBLIC_URL = was;
+}
 check("button is volt with pine text", /bgcolor="#2EE59D"[^>]*><a [^>]*color:#073F2F/.test(d.html));
 eq("ember is used once, on the count", (d.html.match(/#FF5A1F/gi) ?? []).length, 1);
 check("max width is 560px", d.html.includes("max-width:560px"));
@@ -520,7 +536,10 @@ const hostile = digest({
   appUrl: 'https://example.com/?a=1&b="2"><script>',
   unsubscribeUrl: "https://example.com/u?t=<tok>&x='1'",
 });
-check("HTML is escaped: no raw tags from data", !/<script|<img|<i>|<b>/i.test(hostile.html), hostile.html.match(/<(script|img|i|b)[ >][^\n]{0,60}/i)?.[0]);
+// The banner is the one image the frame adds; its address is only the link's origin.
+check("the banner comes from the link's site only", hostile.html.match(BANNER)?.[1] === "https://example.com/brand/merlin-banner-email.png", hostile.html.match(/<img [^>]*>/)?.[0]);
+const hostileBody = hostile.html.replace(BANNER, "");
+check("HTML is escaped: no raw tags from data", !/<script|<img|<i>|<b>/i.test(hostileBody), hostileBody.match(/<(script|img|i|b)[ >][^\n]{0,60}/i)?.[0]);
 check("HTML is escaped: name, function, footer", hostile.html.includes("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;") && hostile.html.includes("Sales &amp; &quot;Ops&quot; &lt;i&gt;") && hostile.html.includes("Revenue Nomad &lt;b&gt;LLC&lt;/b&gt;, 1 Main St &amp; &quot;Suite&quot; 2"));
 check("HTML is escaped: links cannot break out of the attribute", !/href="[^"]*"[^ >]/.test(hostile.html) && hostile.html.includes("&lt;tok&gt;&amp;x=&#39;1&#39;"), hostile.html.match(/href="[^"]*"[^ >][^\n]{0,40}/)?.[0]);
 check("footer line from RN_EMAIL_FOOTER is in the text", hostile.text.includes('Revenue Nomad <b>LLC</b>, 1 Main St & "Suite" 2'));
@@ -557,7 +576,7 @@ eq("subject", si.subject, "Your Merlin sign-in link");
 check("greets by first name", si.text.startsWith("Hi Maya,") && si.html.includes("Hi Maya,"));
 check("an empty name still gets a greeting", signInEmail("", "https://example.com/?k=a").text.startsWith("Hi there,"));
 check("text carries the link on its own line", si.text.split("\n").includes("https://table-pilot.up.railway.app/?k=abc123&x=<1>"));
-check("same frame as the weekly email", /bgcolor="#073F2F"[^>]*>Merlin</.test(si.html) && si.html.includes("max-width:560px"));
+check("same frame as the weekly email: the banner header", si.html.match(BANNER)?.[1] === "https://table-pilot.up.railway.app/brand/merlin-banner-email.png" && si.html.includes("max-width:560px"), si.html.match(/<img [^>]*>/)?.[0]);
 check("one volt button with pine text, to the link", (si.html.match(/bgcolor="#2EE59D"/g) ?? []).length === 1 && /bgcolor="#2EE59D"[^>]*><a href="https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;"[^>]*color:#073F2F[^>]*>Sign in to Merlin</.test(si.html), si.html.match(/<a [^>]*>/g));
 check("no ember in the sign-in email", !/#FF5A1F/i.test(si.html));
 check("the link is also shown as text, in mono", /font-family:ui-monospace[^>]*><a [^>]*>https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;<\/a>/.test(si.html));
