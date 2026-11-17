@@ -17,21 +17,6 @@ import "./connect.css";
 import "./pages.css";
 import "./integrations.css";
 
-/** The Slack app manifest a member pastes into "Create New App, From a manifest". It only asks to post to the channel they pick. */
-const MANIFEST = `display_information:
-  name: Trading Post alerts
-  description: Alerts from Trading Post for new open roles, messages and your seats.
-  background_color: "#073f2f"
-oauth_config:
-  scopes:
-    bot:
-      - incoming-webhook
-settings:
-  org_deploy_enabled: false
-  socket_mode_enabled: false
-  token_rotation_enabled: false
-`;
-
 const WEBHOOK_EXAMPLE = JSON.stringify(
   {
     source: "Trading Post",
@@ -336,23 +321,11 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                       <a href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer" className="in-link">
                         api.slack.com/apps
                       </a>{" "}
-                      and pick Create New App, then From a manifest.
+                      and pick Create New App, then From scratch. Name it Trading Post alerts, pick your workspace and pick Create App.
                     </li>
-                    <li>
-                      Pick your workspace. Paste our manifest, pick Next, then Create.
-                      <div className="in-manifest">
-                        <button type="button" className="btn btn-sm" onClick={() => void copy(MANIFEST, "Manifest copied. Paste it into Slack.")}>
-                          Copy the manifest
-                        </button>
-                        <details className="in-details">
-                          <summary>See what it asks for</summary>
-                          <pre className="uc-code uc-block mono">{MANIFEST}</pre>
-                          <p className="in-hint">Only permission to post in the one channel you pick. It can&apos;t read anything in your Slack.</p>
-                        </details>
-                      </div>
-                    </li>
-                    <li>Pick Install to Workspace. Choose the channel for alerts, or your own name for a DM, then pick Allow.</li>
-                    <li>Open Incoming Webhooks in the app&apos;s menu and copy the Webhook URL.</li>
+                    <li>In the app&apos;s menu, open Incoming Webhooks and turn Activate Incoming Webhooks on.</li>
+                    <li>Pick Add New Webhook. Choose the channel for alerts, or your own name for a DM, then pick Allow.</li>
+                    <li>Copy the Webhook URL it shows. The app can only post to that one channel. It can&apos;t read anything in your Slack.</li>
                     <li>Paste it below and pick Connect Slack. We send a test message first.</li>
                   </ol>
                   <ConnectForm
