@@ -85,12 +85,14 @@ export interface PreviewRow {
   /** A row past PREVIEW_NAMED: the page blurs a made-up name from `seed`. Never the company. */
   blur?: boolean;
   /**
-   * The open role's title, "Fractional <function> seat" for a past fractional seat ("<function> seat"
-   * for another seat on file; a past seat's own title is a locked fact), or "Hired fractional
-   * <functions>" for a company with none in this function yet.
+   * The open role's title, "<function> seat" for a past seat (a past seat's own title is a locked
+   * fact; its type of work is in `type`), or "Hired fractional <functions>" for a company with
+   * none in this function yet.
    */
   title: string;
   function: string;
+  /** The type of work (Fractional, Interim, Advisory, Project, Full-time…), a free fact. Null when not on file or for a "notyet" row. */
+  type: string | null;
   /** Open role: the ISO day it was posted (or first seen). Past seat: its start month (YYYY-MM), when known. Not yet: its latest seat's start month. */
   when: string | null;
   industry: string | null;
@@ -344,7 +346,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       const others = hired.filter((f) => f !== "Other");
       const list = others.length ? (others.length > 2 ? `${others.slice(0, 2).join(", ")} and more` : others.join(" and ")) : "other functions";
       const last = i.engs.filter(isHire).map((e) => shown(e.cells.start) ?? "").sort().pop() || null;
-      notYet.push({ row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, when: monthOf(last) }, at: last ?? "", rich: rich0 + Math.min(others.length, 3) });
+      notYet.push({ row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, type: null, when: monthOf(last) }, at: last ?? "", rich: rich0 + Math.min(others.length, 3) });
       continue;
     }
     // One row per company: its newest open role in this function, else its latest seat in it.
@@ -354,7 +356,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       if (view === "notyet") continue;
       const when = role.posted ?? role.opened ?? null;
       const raw = role.cells.role?.s === "value" && !role.cells.role.system ? role.cells.role.v : null;
-      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, named), when }, at: when ?? "", p, raw });
+      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, named), type: shown(role.cells.type) ?? null, when }, at: when ?? "", p, raw });
       continue;
     }
     // Every other company the app's Function filter finds for this function: its fractional seat
@@ -368,7 +370,8 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     const row: PreviewRow = {
       ...base,
       kind: "hired",
-      title: !seat || isHire(seat) ? `Fractional ${fn} seat` : `${fn} seat`,
+      title: `${fn} seat`,
+      type: seat ? shown(seat.cells.type) ?? null : null,
       when: monthOf(start),
       holder: !!seat && known(seat.cells.operator),
     };

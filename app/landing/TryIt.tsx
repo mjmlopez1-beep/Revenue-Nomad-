@@ -38,6 +38,8 @@ interface PreviewRow {
   blur?: boolean;
   title: string;
   function: string;
+  /** Type of work (Fractional, Interim, Advisory, Project…), or null when not on file. */
+  type: string | null;
   when: string | null;
   industry: string | null;
   employees: string | null;
@@ -421,6 +423,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                               <th scope="col" className="lp-tt-what">
                                 What&apos;s happening
                               </th>
+                              <th scope="col">Type</th>
                               <th scope="col">Industry</th>
                               <th scope="col">Size</th>
                               <th scope="col">Revenue</th>
@@ -440,6 +443,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                                     </span>
                                     <span className="lp-tt-sub">{happening(r, fn)}</span>
                                   </td>
+                                  <td>{r.type ?? <span className="lp-tt-none">{r.kind === "notyet" ? "—" : "Not on file"}</span>}</td>
                                   <td className="lp-tt-ind" title={r.industry ?? undefined}>
                                     {r.industry ?? <span className="lp-tt-none">Not on file</span>}
                                   </td>

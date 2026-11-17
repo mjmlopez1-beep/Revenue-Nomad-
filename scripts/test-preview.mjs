@@ -162,7 +162,7 @@ async function main() {
     return hits.filter((h) => !ok.has(h));
   };
 
-  const ROW_KEYS = new Set(["seed", "kind", "company", "blur", "title", "function", "when", "industry", "employees", "revenue", "country", "holder"]);
+  const ROW_KEYS = new Set(["seed", "kind", "company", "blur", "title", "function", "type", "when", "industry", "employees", "revenue", "country", "holder"]);
   const NAMED_MAX = 10;
   /** Companies with an open role one answer may name, rows and example together. */
   const OPEN_NAMED_MAX = LOCKED ? 0 : 3;
