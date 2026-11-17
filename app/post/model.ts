@@ -9,8 +9,9 @@ import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } fr
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
-  REFERRAL_BONUS,
+  REFERRAL_BONUS, INDUSTRY_GROUPS,
 } from "@/lib/tableFields";
+import { normalizeHq } from "@/lib/geo";
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "repeat" | "hiring" | "following" | "unlocked" | "needs";
@@ -887,13 +888,21 @@ export const clearedFilters = (f: Filters): Filters => ({ ...EMPTY_FILTERS, icp:
 export function activeChips(f: Filters): { id: string; label: string; clear: (f: Filters) => Filters }[] {
   const out: { id: string; label: string; clear: (f: Filters) => Filters }[] = [];
   for (const k of TOGGLES) if (f[k]) out.push({ id: k, label: TOGGLE_LABEL[k], clear: (x) => ({ ...x, [k]: false }) });
+  // A whole industry group picked reads as one chip ("Industry Software (all)") that clears all of it.
+  const grouped = new Set<string>();
+  for (const g of INDUSTRY_GROUPS)
+    if (g.values.every((v) => f.industry.includes(v))) {
+      g.values.forEach((v) => grouped.add(v));
+      out.push({ id: `industry:${g.label}`, label: `${LIST_LABEL.industry} ${g.label}`, clear: (x) => ({ ...x, industry: x.industry.filter((y) => !g.values.includes(y)) }) });
+    }
   for (const k of LISTS)
     for (const v of f[k])
-      out.push({
-        id: `${k}:${v}`,
-        label: k === "roleState" ? (v === "Closed" ? "Role closed" : "Role open now") : `${LIST_LABEL[k]} ${k === "source" ? SOURCE_LABEL[v] ?? v : v}`,
-        clear: (x) => ({ ...x, [k]: x[k].filter((y) => y !== v) }),
-      });
+      if (!(k === "industry" && grouped.has(v)))
+        out.push({
+          id: `${k}:${v}`,
+          label: k === "roleState" ? (v === "Closed" ? "Role closed" : "Role open now") : `${LIST_LABEL[k]} ${k === "source" ? SOURCE_LABEL[v] ?? v : v}`,
+          clear: (x) => ({ ...x, [k]: x[k].filter((y) => y !== v) }),
+        });
   if (f.fitMin) out.push({ id: "fit", label: `Fit ${f.fitMin}+`, clear: (x) => ({ ...x, fitMin: 0 }) });
   return out;
 }
@@ -939,12 +948,15 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean, ctx: SortCtx = 
   // name, and the row must not move while its record is open (only the Name sort reads names).
   const byKey = (a: Row, b: Row) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   // Best fit, worked out once per company for this sort.
+  // Confirmed matches of the ideal client first, maybes (a part not on file) after, then the rest. Best fit inside each.
   const fitMemo = new Map<CoInfo, number>();
   const me = ctx.me;
+  const TIER: Record<IcpMatch, number> = { match: 2000, maybe: 1000, no: 0 };
   const best = (r: Row) => {
     let v = fitMemo.get(r.i);
     if (v === undefined) {
-      v = me ? bestFit(r.i, me).score : 0;
+      const b = me ? bestFit(r.i, me) : null;
+      v = b ? b.score + (b.match ? TIER[b.match] : 0) : 0;
       fitMemo.set(r.i, v);
     }
     return v;
@@ -976,8 +988,9 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean, ctx: SortCtx = 
 /* ---------- who the member hunts: ideal client, firms, countries, best fit ---------- */
 
 /**
- * The company fields the data clean adds (country, US state, fractional firm). Read through
- * these so the app works before the records carry them.
+ * The company fields the data clean adds (CompanyRec.country and .region, lib/geo.ts). `firm` is
+ * a guard only: fractional firms are removed from the data (lib/firmRemoval.ts), so no record
+ * carries it today, and a record that ever did would stay out of the lists.
  */
 type CoPlace = { country?: string | null; region?: string | null; firm?: boolean };
 /** A fractional firm, agency or marketplace: not a client. Never suggested, and out of the lists unless asked for. */
@@ -988,30 +1001,27 @@ export const countryKey = (v: string) => {
   const k = v.trim().toLowerCase().replace(/\./g, "");
   return k === "us" || k === "usa" || k === "united states of america" ? "united states" : k === "uk" ? "united kingdom" : k;
 };
-const titleCase = (v: string) => v.replace(/\b[a-z]/g, (x) => x.toUpperCase());
 /** The country as the app spells it: "United States" for every spelling of it. */
 export const countryName = (v: string) => (countryKey(v) === "united states" ? "United States" : countryKey(v) === "united kingdom" ? "United Kingdom" : v.trim());
 /** Short, for the pill: "US", "UK", else the name. */
 export const countryShort = (v: string) => (countryKey(v) === "united states" ? "US" : countryKey(v) === "united kingdom" ? "UK" : countryName(v));
-const US_NAMES = new Set(Object.values(US_STATES));
-/** Countries an HQ line may end with, read as the company's country until the records carry one. */
-const HQ_COUNTRIES = new Set([
-  "united kingdom", "canada", "germany", "france", "india", "australia", "israel", "netherlands", "ireland", "spain", "sweden", "singapore",
-  "switzerland", "brazil", "mexico", "denmark", "norway", "finland", "belgium", "italy", "portugal", "poland", "new zealand", "south africa", "japan",
-]);
 
-/** Where a company is, from its record, else read off its HQ ("Austin, TX" is the United States, Texas). */
+/**
+ * Where a company is. The server sends CompanyRec.country and .region (null when the HQ names no
+ * place), and those are the answer. Only a record without the fields (an older server, a test
+ * fixture) reads the HQ itself, the same way the server does (lib/geo.ts normalizeHq).
+ */
 function placeOf(c: CompanyRec): { country: string | null; region: string | null } {
   const x = c as CoPlace;
-  const hq = shown(c.cells.hq);
+  const hasCountry = x.country !== undefined;
+  const hasRegion = x.region !== undefined;
   let country = x.country ? countryName(x.country) : null;
   let region = x.region ?? null;
-  if ((!country || !region) && hq) {
-    const parts = hq.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
-    const last = parts[parts.length - 1] ?? "";
-    const state = parts.map((p) => (p.length === 2 && Object.prototype.hasOwnProperty.call(US_STATES, p) ? US_STATES[p] : US_NAMES.has(p) ? p : null)).find(Boolean) ?? null;
-    if (!country) country = state || countryKey(last) === "united states" ? "United States" : HQ_COUNTRIES.has(countryKey(last)) ? countryName(titleCase(countryKey(last))) : null;
-    if (!region && state && (!country || countryKey(country) === "united states")) region = titleCase(state);
+  if (!hasCountry || !hasRegion) {
+    const hq = shown(c.cells.hq);
+    const g = hq ? normalizeHq(hq) : null;
+    if (!hasCountry) country = g?.country ? countryName(g.country) : null;
+    if (!hasRegion) region = g?.region ?? null;
   }
   return { country, region };
 }
@@ -1048,15 +1058,47 @@ export function icpParts(icp: Icp, c: CompanyRec) {
 }
 
 /**
- * The ideal client as a filter. Industry, size and revenue must be on file and match. Country
- * matches when it is on file and matches, or when the record doesn't say (most records have no
- * country yet, and a filter that drops them would hide most of the table).
+ * The ideal client as a filter (the owner's call): only a known value that conflicts leaves a
+ * company out. One whose industry, size, revenue or country isn't on file is a maybe and stays,
+ * after the confirmed matches in "Best fit for you" (icpMatch), with a line on what isn't on file.
  */
 export function icpTest(icp: Icp): (c: CompanyRec) => boolean {
   return (c) => {
     const p = icpParts(icp, c);
-    return p.industry !== false && p.industry !== null && p.employees !== false && p.employees !== null && p.revenue !== false && p.revenue !== null && p.country !== false;
+    return p.industry !== false && p.employees !== false && p.revenue !== false && p.country !== false;
   };
+}
+
+/** How a company stands against the ideal client: every part it asks for on file and matching, some part not on file, or a known part that conflicts. */
+export type IcpMatch = "match" | "maybe" | "no";
+export function icpMatch(icp: Icp | null | undefined, c: CompanyRec): IcpMatch | null {
+  if (icpEmpty(icp)) return null;
+  const v = Object.values(icpParts(icp!, c)).filter((x) => x !== undefined);
+  return v.includes(false) ? "no" : v.includes(null) ? "maybe" : "match";
+}
+
+const UNKNOWN_WORD = { industry: "industry", employees: "size", revenue: "revenue", country: "country" } as const;
+/** What a maybe is missing, as one line: "Size not on file", "Size and revenue not on file". Null when nothing the ideal client asks for is missing. */
+export function icpUnknown(icp: Icp | null | undefined, c: CompanyRec): string | null {
+  if (icpEmpty(icp)) return null;
+  const p = icpParts(icp!, c);
+  if (Object.values(p).includes(false)) return null;
+  const miss = (Object.keys(UNKNOWN_WORD) as (keyof typeof UNKNOWN_WORD)[]).filter((k) => p[k] === null).map((k) => UNKNOWN_WORD[k]);
+  if (!miss.length) return null;
+  const words = miss.length === 1 ? miss[0] : `${miss.slice(0, -1).join(", ")} and ${miss[miss.length - 1]}`;
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)} not on file`;
+}
+
+/** Picked industries for a label: the whole Software group reads "Software (all)". */
+export function industryWords(list: string[]): string[] {
+  let out = [...list];
+  for (const g of INDUSTRY_GROUPS)
+    if (g.values.every((v) => out.includes(v))) {
+      const at = Math.min(...g.values.map((v) => out.indexOf(v)));
+      out = out.filter((v) => !g.values.includes(v));
+      out.splice(Math.min(at, out.length), 0, g.label);
+    }
+  return out;
 }
 
 /** Bands in their list's order, runs joined: ["11–50", "51–200"] reads "11–200", ["$20M–$50M", "$50M+"] reads "$20M+". */
@@ -1090,7 +1132,7 @@ export function bandRange(list: string[], picked: string[]): string {
 export function icpLabel(icp: Icp | null | undefined): string {
   if (!icp) return "";
   return [
-    icp.industries.join(", "),
+    industryWords(icp.industries).join(", "),
     bandRange(RN_EMPLOYEES, icp.employees),
     bandRange(RN_REVENUE, icp.revenue),
     icp.countries.map(countryShort).join(", "),
@@ -1148,9 +1190,10 @@ export function rolesThisWeek(infos: CoInfo[], fn: string | null, keep: (i: CoIn
  * is the one line under the name: "Software · 51–200 · $5M–$20M · hired Sales in 2025 · no
  * Marketing seat".
  */
-export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: number; reason: string } {
+export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: number; reason: string; match: IcpMatch | null } {
   const c = i.c;
-  if (isFirm(c)) return { score: -100, reason: "A fractional firm" };
+  if (isFirm(c)) return { score: -100, reason: "A fractional firm", match: "no" };
+  const match = icpMatch(me.icp, c);
   const fn = namedFn(me.function);
   const icp = me.icp;
   let score = 0;
@@ -1186,7 +1229,10 @@ export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: n
     score += 4;
     bits.push(`no ${fn} seat`);
   } else if (fn && hired.includes(fn)) score -= 1;
-  return { score, reason: bits.join(" · ") };
+  // A maybe says what isn't on file, so the member sees why it sits under the confirmed matches.
+  const unknown = match === "maybe" ? icpUnknown(me.icp, c) : null;
+  if (unknown) bits.push(unknown);
+  return { score, reason: bits.join(" · "), match };
 }
 
 /* ---------- facts to add ---------- */
@@ -1324,8 +1370,9 @@ export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string 
   const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
   const roles = tab === "hiring" || type === "engagements" || fns.length > 0;
   const subject = fns.length ? `${fns.join(" or ")} ${tab === "hiring" ? "roles" : "seats"}` : tab === "hiring" ? "Open roles" : type === "people" ? "People" : roles ? "Seats" : "Companies";
-  const ind = f.industry.length ? `${f.industry.join(" or ")} companies` : "";
-  const head = ind ? (subject === "Companies" ? `${f.industry.join(" or ")} companies` : `${subject} at ${ind}`) : subject;
+  const inds = industryWords(f.industry).map((x) => x.replace(" (all)", ""));
+  const ind = inds.length ? `${inds.join(" or ")} companies` : "";
+  const head = ind ? (subject === "Companies" ? ind : `${subject} at ${ind}`) : subject;
   const tabWord = tab === "repeat" ? "repeat hirers" : tab === "following" ? "companies you follow" : "";
   const parts = [
     tabWord && !ind && subject === "Companies" ? tabWord.charAt(0).toUpperCase() + tabWord.slice(1) : tabWord ? `${head} among ${tabWord}` : head,

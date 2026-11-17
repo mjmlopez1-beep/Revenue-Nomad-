@@ -138,7 +138,11 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null, icp: I
     const me = { icp, function: fn };
     const fits = icpTest(icp!);
     const infos = deriveAll(companies);
-    const score = new Map(infos.map((i) => [i.c.id, bestFit(i, me).score]));
+    // Confirmed matches of their clients before maybes (a part not on file), then best fit.
+    const score = new Map(infos.map((i) => {
+      const b = bestFit(i, me);
+      return [i.c.id, b.score + (b.match === "match" ? 2000 : b.match === "maybe" ? 1000 : 0)];
+    }));
     const pool = companies.filter(fits);
     const ranked = (pool.length >= SUGGESTIONS ? pool : companies).sort(
       (a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0) || b.friendly.score - a.friendly.score || a.name.localeCompare(b.name),

@@ -13,7 +13,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
-  bandRange, bestFit, countryOf, criteriaOf, icpLabel, openSince, regionOf, splitByFn, viewName, withIcpSpelled,
+  bandRange, bestFit, countryOf, criteriaOf, icpLabel, icpMatch, icpTest, icpUnknown, industryWords, openSince, regionOf, splitByFn, viewName, withIcpSpelled, activeChips,
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 
@@ -484,22 +484,25 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
     return Object.assign(c, extra);
   };
   const hire = (fn: string, start: string) => eng({ function: val(fn), type: val("Fractional"), start: val(start), operator: LOCKED }, { source: "Published engagement" });
-  const fit = withCells(co("Fit Co", [hire("Sales", "2025-03")]), { industry: "Software", employees: "51–200", revenue: "$5M–$20M", hq: "Austin, TX" });
+  const fit = withCells(co("Fit Co", [hire("Sales", "2025-03")]), { industry: "SaaS", employees: "51–200", revenue: "$5M–$20M", hq: "Austin, TX" });
   fit.friendly = { ...fit.friendly, fractional: 1, functions: ["Sales"], recent: 1 };
-  const owned = withCells(co("Has Marketing", [hire("Marketing", "2024-01")]), { industry: "Software", employees: "51–200", revenue: "$5M–$20M" });
+  const owned = withCells(co("Has Marketing", [hire("Marketing", "2024-01")]), { industry: "SaaS", employees: "51–200", revenue: "$5M–$20M" });
   owned.friendly = { ...owned.friendly, fractional: 1, functions: ["Marketing"] };
   const wrong = withCells(co("Retail Co", [hire("Sales", "2025-01")]), { industry: "Retail", employees: "51–200", revenue: "$5M–$20M" });
   wrong.friendly = { ...wrong.friendly, fractional: 1, functions: ["Sales"] };
-  const merged = withCells(co("Old Name Co", []), { industry: "software", employees: "11–50", revenue: "$5M–$20M", hq: "London, United Kingdom" });
-  const firm = withCells(co("Firm Co", []), { industry: "Software", employees: "11–50", revenue: "$5M–$20M" }, { firm: true });
-  const abroad = withCells(co("Berlin Co", []), { industry: "Software", employees: "11–50", revenue: "$5M–$20M" }, { country: "Germany", region: "Berlin" });
-  const all = deriveAll([fit, owned, wrong, merged, firm, abroad]);
-  const icp = { industries: ["Software"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"], countries: [] as string[] };
+  const merged = withCells(co("Old Name Co", []), { industry: "saas", employees: "11–50", revenue: "$5M–$20M", hq: "London, United Kingdom" });
+  const firm = withCells(co("Firm Co", []), { industry: "SaaS", employees: "11–50", revenue: "$5M–$20M" }, { firm: true });
+  const abroad = withCells(co("Berlin Co", []), { industry: "SaaS", employees: "11–50", revenue: "$5M–$20M" }, { country: "Germany", region: "Berlin" });
+  // No size on file, a recent hire in another function and no Marketing seat: a strong company, but a maybe.
+  const maybe = withCells(co("Maybe Co", [hire("Sales", "2026-02"), hire("RevOps", "2026-01")]), { industry: "SaaS", revenue: "$5M–$20M" }, { country: "United States", region: "Texas" });
+  maybe.friendly = { ...maybe.friendly, fractional: 2, functions: ["Sales", "RevOps"], recent: 2 };
+  const all = deriveAll([fit, owned, wrong, merged, firm, abroad, maybe]);
+  const icp = { industries: ["SaaS"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"], countries: [] as string[] };
   const mkt = { function: "Marketing", goal: null, icp } as unknown as Me;
   const names = (f: Partial<typeof EMPTY_FILTERS>, who: Me = mkt) => applyFilters(rowsFor("companies", all), { ...EMPTY_FILTERS, ...f }, "all", "", who).rows.map((r) => r.i.c.name);
 
   const on = names({ icp: true });
-  check("ideal client: matching industry, size and revenue only", on.includes("Fit Co") && on.includes("Has Marketing") && !on.includes("Retail Co"), on);
+  check("ideal client: matching industry, size and revenue, and maybes, never a known conflict", on.includes("Fit Co") && on.includes("Has Marketing") && on.includes("Maybe Co") && !on.includes("Retail Co"), on);
   check("ideal client: industries match case aside", on.includes("Old Name Co"), on);
   check("ideal client off: everyone", names({}).includes("Retail Co"));
   const facets = applyFilters(rowsFor("companies", all), { ...EMPTY_FILTERS, icp: true }, "all", "", mkt).facets;
@@ -511,12 +514,12 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
 
   check(
     "country filter reads the record, else the HQ",
-    names({ country: ["United States"] }).join() === "Fit Co" && names({ country: ["Germany"] }).join() === "Berlin Co" && names({ country: ["United Kingdom"] }).join() === "Old Name Co",
+    names({ country: ["United States"] }).join() === "Fit Co,Maybe Co" && names({ country: ["Germany"] }).join() === "Berlin Co" && names({ country: ["United Kingdom"] }).join() === "Old Name Co",
     names({ country: ["United States"] }),
   );
-  check("region filter under a country", names({ country: ["United States"], region: ["Texas"] }).join() === "Fit Co" && names({ region: ["Berlin"] }).join() === "Berlin Co");
+  check("region filter under a country", names({ country: ["United States"], region: ["Texas"] }).join() === "Fit Co,Maybe Co" && names({ region: ["Berlin"] }).join() === "Berlin Co");
   const cf = applyFilters(rowsFor("companies", all), { ...EMPTY_FILTERS, country: ["United States"] }, "all", "", mkt).facets.lists;
-  check("country counts, and regions only under the picked country", cf.country["United States"] === 1 && cf.country.Germany === 1 && cf.region.Texas === 1 && !cf.region.Berlin, cf);
+  check("country counts, and regions only under the picked country", cf.country["United States"] === 2 && cf.country.Germany === 1 && cf.region.Texas === 2 && !cf.region.Berlin, cf);
   check("countryOf and regionOf from an HQ", countryOf(fit) === "United States" && regionOf(fit) === "Texas" && countryOf(abroad) === "Germany");
 
   const order = sortRows(rowsFor("companies", all), "best", false, "", { me: mkt }).map((r) => r.i.c.name);
@@ -525,12 +528,32 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
     order[0] === "Fit Co" && order.indexOf("Has Marketing") > 0 && order.indexOf("Retail Co") > order.indexOf("Has Marketing") && order[order.length - 1] === "Firm Co",
     order,
   );
+  check(
+    "best fit: confirmed matches first, maybes after, known conflicts last",
+    order.indexOf("Maybe Co") > order.indexOf("Has Marketing") && order.indexOf("Maybe Co") < order.indexOf("Retail Co") && order.indexOf("Fit Co") < order.indexOf("Maybe Co"),
+    order,
+  );
+  const mwhy = bestFit(all[6], mkt);
+  check("a maybe says what isn't on file", mwhy.match === "maybe" && /· Size not on file$/.test(mwhy.reason), mwhy);
+  check("a confirmed match says nothing is missing", bestFit(all[0], mkt).match === "match" && !/not on file/.test(bestFit(all[0], mkt).reason));
+  const bare = withCells(co("Bare Co", []), {}, { country: null, region: null });
+  const usIcp = { ...icp, countries: ["United States"] };
+  check("nothing on file: a maybe that names every part", icpMatch(usIcp, bare) === "maybe" && icpUnknown(usIcp, bare) === "Industry, size, revenue and country not on file" && icpTest(usIcp)(bare), icpUnknown(usIcp, bare));
+  check("a known conflict is out whatever else is missing", icpMatch(usIcp, abroad) === "no" && !icpTest(usIcp)(abroad) && icpUnknown(usIcp, abroad) === null);
+  check("the server's country wins over the HQ", countryOf(withCells(co("Field Co", []), { hq: "Austin, TX" }, { country: null, region: null })) === null);
   const why = bestFit(all[0], mkt).reason;
-  check("best fit reason reads like the spec", why === "Software · 51–200 · $5M–$20M · hired Sales in 2025 · no Marketing seat", why);
+  check("best fit reason reads like the spec", why === "SaaS · 51–200 · $5M–$20M · hired Sales in 2025 · no Marketing seat", why);
   check("Best fit without a member sorts like fit", sortRows(rowsFor("companies", all), "best").length === all.length);
 
-  check("pill label joins bands", icpLabel({ ...icp, countries: ["United States"] }) === "Software · 11–200 · $5M–$20M · US", icpLabel({ ...icp, countries: ["United States"] }));
+  check("pill label joins bands", icpLabel({ ...icp, countries: ["United States"] }) === "SaaS · 11–200 · $5M–$20M · US", icpLabel({ ...icp, countries: ["United States"] }));
   check("band ranges", bandRange(RN_REVENUE, ["$20M–$50M", "$50M+"]) === "$20M+" && bandRange(RN_REVENUE, ["Under $1M", "$1M–$5M"]) === "Under $5M" && bandRange(RN_EMPLOYEES, ["1–10", "201–500"]) === "1–10, 201–500");
+
+  const sw = ["SaaS", "Enterprise Software", "SMB Software", "Developer Tools"];
+  check("Software (all) reads as one in the pill", icpLabel({ ...icp, industries: [...sw, "Fintech"] }) === "Software (all), Fintech · 11–200 · $5M–$20M", icpLabel({ ...icp, industries: [...sw, "Fintech"] }));
+  check("part of the group stays as picked", industryWords(["SaaS", "Developer Tools"]).join() === "SaaS,Developer Tools");
+  const swChips = activeChips({ ...EMPTY_FILTERS, industry: [...sw, "Fintech"] }).map((c) => c.label);
+  check("Software (all) is one filter chip that clears all four", swChips.join() === "Industry Software (all),Industry Fintech" && activeChips({ ...EMPTY_FILTERS, industry: sw })[0].clear({ ...EMPTY_FILTERS, industry: [...sw, "Fintech"] }).industry.join() === "Fintech", swChips);
+  check("a view of Software (all) is named Software", viewName({ ...EMPTY_FILTERS, industry: sw }, "all", "companies") === "Software companies");
 
   // Hiring now: the member's function first, then the newest open role.
   const open = (fn: string, opened: string, posted?: string) => eng({ function: val(fn), status: val("Open role", { system: true }), role: LOCKED }, { opened, closed: null, posted: posted ?? null });
@@ -543,10 +566,10 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
 
   // Saved views.
   const spelled = withIcpSpelled({ ...EMPTY_FILTERS, icp: true, fn: ["Marketing"] }, icp);
-  check("a saved view writes the ideal client out", !spelled.icp && spelled.industry.join() === "Software" && spelled.employees.length === 2);
-  const vn = viewName({ ...EMPTY_FILTERS, fn: ["Marketing"], industry: ["Software"], revenue: ["$5M–$20M"] }, "hiring", "engagements");
-  check("a view's name comes from its filters", vn === "Marketing roles at Software companies, $5M–$20M", vn);
-  check("a view's email criteria", JSON.stringify(criteriaOf(spelled, null)) === JSON.stringify({ function: "Marketing", industry: ["Software"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"] }), criteriaOf(spelled, null));
+  check("a saved view writes the ideal client out", !spelled.icp && spelled.industry.join() === "SaaS" && spelled.employees.length === 2);
+  const vn = viewName({ ...EMPTY_FILTERS, fn: ["Marketing"], industry: ["SaaS"], revenue: ["$5M–$20M"] }, "hiring", "engagements");
+  check("a view's name comes from its filters", vn === "Marketing roles at SaaS companies, $5M–$20M", vn);
+  check("a view's email criteria", JSON.stringify(criteriaOf(spelled, null)) === JSON.stringify({ function: "Marketing", industry: ["SaaS"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"] }), criteriaOf(spelled, null));
 
   // The owner's changes: no Needs facts view, and old links to it open All.
   check("Needs facts is gone and old links open All", !TABS.some((t) => (t.key as string) === "needs") && tabOf("needs") === "all");

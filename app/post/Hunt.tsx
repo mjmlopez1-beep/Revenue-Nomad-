@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import type { CompanyRec, Icp, SavedViewRec } from "@/lib/tableTypes";
-import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
+import { INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
 import { IconCheck, IconSearch, IconX } from "../ui/shared";
 import { countryKey, countryName, countryOf, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { Sheet } from "./ui";
@@ -76,6 +76,19 @@ export function IcpFields({
   const q = indQ.trim().toLowerCase();
   const found = q ? industries.filter((x) => x.name.toLowerCase().includes(q) && !value.industries.includes(x.name)).slice(0, 12).map((x) => x.name) : [];
   const shownInd = q ? [...value.industries, ...found] : [...new Set([...industries.slice(0, 12).map((x) => x.name), ...value.industries])];
+  // "Software (all)" first: one tap picks SaaS, Enterprise Software, SMB Software and Developer Tools (stored as the four).
+  const groups = INDUSTRY_GROUPS.filter((g) => !q || g.label.toLowerCase().includes(q) || g.values.some((v) => v.toLowerCase().includes(q)));
+  const groupOf = (o: string) => groups.find((g) => g.label === o);
+  const indOn = (o: string) => {
+    const g = groupOf(o);
+    return g ? g.values.every((v) => value.industries.includes(v)) : value.industries.includes(o);
+  };
+  const indToggle = (o: string) => {
+    const g = groupOf(o);
+    if (!g) return onChange({ ...value, industries: flip(value.industries, o) });
+    const on = indOn(o);
+    onChange({ ...value, industries: on ? value.industries.filter((v) => !g.values.includes(v)) : [...new Set([...value.industries, ...g.values])] });
+  };
   const others = countries.filter((c) => countryKey(c.name) !== "united states").slice(0, 6).map((c) => c.name);
   const usOnly = value.countries.length === 1 && countryKey(value.countries[0]) === "united states";
   const anywhere = value.countries.length === 0;
@@ -83,7 +96,7 @@ export function IcpFields({
     <div className="hunt-fields">
       <fieldset className="hunt-q">
         <legend className={headingClass}>Industries</legend>
-        <Chips name="Industries" options={shownInd} on={(o) => value.industries.includes(o)} toggle={(o) => onChange({ ...value, industries: flip(value.industries, o) })} />
+        <Chips name="Industries" options={[...groups.map((g) => g.label), ...shownInd]} on={indOn} toggle={indToggle} />
         {industries.length > 12 && (
           <label className="tp-fsearch hunt-isearch">
             <IconSearch size={13} />

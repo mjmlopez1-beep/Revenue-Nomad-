@@ -6,7 +6,7 @@
  * (State.connector.alerts, lib/mcp/alerts.ts), so the app and the connector list the same views
  * and the weekly email (lib/table.ts digestList) matches both the same way.
  */
-import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, stripInvisible } from "./tableFields";
+import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, standardIndustries, stripInvisible } from "./tableFields";
 import type { Icp, SavedViewCriteria, SavedViewRec } from "./tableTypes";
 import { ALERT_MAX, cleanCriteria, describeAlert, pickFrom, type SavedSearch } from "./mcp/alerts";
 
@@ -27,7 +27,8 @@ export function cleanIcp(raw: unknown): Icp | null {
   const pick = (v: unknown, list: readonly string[]) =>
     [...new Set((Array.isArray(v) ? v : []).slice(0, 40).map((x) => pickFrom(list, x)).filter((x): x is string => !!x))];
   return {
-    industries: pick(r.industries, RN_INDUSTRIES),
+    // "Software" (an older label) reads as every Software industry, like a saved answer does on load.
+    industries: standardIndustries((Array.isArray(r.industries) ? r.industries : []).slice(0, 40)).filter((x) => RN_INDUSTRIES.includes(x)),
     employees: pick(r.employees, RN_EMPLOYEES),
     revenue: pick(r.revenue, RN_REVENUE),
     countries: textList(r.countries, 12, 60),

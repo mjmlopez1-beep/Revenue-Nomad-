@@ -55,7 +55,7 @@ import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViews } from "./Hunt"
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
-import { REFERRAL_BONUS } from "@/lib/tableFields";
+import { REFERRAL_BONUS, standardIndustries, standardList } from "@/lib/tableFields";
 import "./post.css";
 
 export interface TradingPostProps {
@@ -130,7 +130,9 @@ function decodeFilters(s: string): Filters {
       if (Number.isFinite(n)) f[k] = n;
     } else if (Array.isArray(d)) f[k] = rest.split("|").filter(Boolean).slice(0, 50);
   }
-  return f as unknown as Filters;
+  // A link or saved view from before the 110 industries: old labels take today's ("Software" is every Software industry).
+  const x = f as unknown as Filters;
+  return { ...x, industry: standardIndustries(x.industry), employees: standardList("employees", x.employees), revenue: standardList("revenue", x.revenue) };
 }
 
 /**

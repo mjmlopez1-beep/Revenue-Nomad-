@@ -11,6 +11,7 @@ import {
   EMPTY_FILTERS, FIT_STEPS, LIST_OPTIONS, TOGGLE_LABEL, activeCount, clearedFilters, countryKey, namedFn, notMineLabel, placeWords, type Facets, type Filters, type ListKey, type ToggleKey,
 } from "./model";
 import { useOpenPage } from "./Tables";
+import { INDUSTRY_GROUPS } from "@/lib/tableFields";
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -105,6 +106,10 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
   const withData = opts.filter((o) => (counts[o] ?? 0) > 0 || f.industry.includes(o));
   // Only industries with companies on file here (the standard list is long), most first.
   const list = all || q ? withData : withData.slice(0, 8);
+  // "Software (all)" picks SaaS, Enterprise Software, SMB Software and Developer Tools in one tap (stored as the four).
+  const groups = INDUSTRY_GROUPS.map((g) => ({ ...g, n: g.values.reduce((t, v) => t + (counts[v] ?? 0), 0), on: g.values.every((v) => f.industry.includes(v)) })).filter(
+    (g) => (g.n > 0 || g.on) && (!q || g.label.toLowerCase().includes(q.toLowerCase()) || g.values.some((v) => v.toLowerCase().includes(q.toLowerCase()))),
+  );
   return (
     <div className="tp-fblock">
       <div className="tp-flabel">Industry</div>
@@ -113,6 +118,23 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
         <input className="tp-bare" placeholder="Search industries" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search industries" />
       </label>
       <div className="tp-flist">
+        {groups.map((g) => (
+          <button
+            key={g.label}
+            type="button"
+            role="checkbox"
+            aria-checked={g.on}
+            className={`tp-ftoggle tp-ftoggle-sm tp-fgroupopt${g.on ? " on" : ""}`}
+            title={g.values.join(", ")}
+            onClick={() => setF({ ...f, industry: g.on ? f.industry.filter((x) => !g.values.includes(x)) : [...new Set([...f.industry, ...g.values])] })}
+          >
+            <span className="tp-check" aria-hidden>
+              {g.on && <IconCheck size={11} />}
+            </span>
+            <span className="tp-ftoggle-l">{g.label}</span>
+            <span className="tp-cnt num">{g.n}</span>
+          </button>
+        ))}
         {list.map((o) => {
           const on = f.industry.includes(o);
           const n = counts[o] ?? 0;

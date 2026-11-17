@@ -62,7 +62,7 @@ import { removeScreenedOut } from "./scan/remove";
 import { companyKey, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, siteKey, type Entity,
+  stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -563,9 +563,19 @@ export async function loadState(): Promise<State> {
     // Saved searches and benchmark-only rates too: an alert for "SaaS" companies matches Software ones.
     for (const list of Object.values(s.connector?.alerts ?? {}))
       for (const a of list) {
-        if (a.industry) a.industry = [...new Set(a.industry.map((x) => currentValue("industry", x)))];
+        // An old "Software" reads as every Software industry (INDUSTRY_GROUPS).
+        if (a.industry) {
+          const std = standardIndustries(a.industry);
+          a.industry = std.length ? std : [...new Set(a.industry.map((x) => currentValue("industry", x)))];
+        }
         if (a.revenue) a.revenue = [...new Set(a.revenue.map((x) => currentValue("revenue", x)))];
+        if (a.employees) a.employees = [...new Set(a.employees.map((x) => currentValue("employees", x)))];
       }
+    // Ideal clients saved under an older label ("Software", "< $1M") take the standard value. One nothing maps drops out.
+    for (const p of Object.values(s.profiles)) {
+      if (!p.icp) continue;
+      p.icp = { ...p.icp, industries: standardIndustries(p.icp.industries), employees: standardList("employees", p.icp.employees), revenue: standardList("revenue", p.icp.revenue) };
+    }
     for (const b of s.benchRates ?? []) if (b.revenue) b.revenue = currentValue("revenue", b.revenue);
     for (const l of s.ledger) {
       if (l.delta !== 0 || (l.reason !== "referral" && l.reason !== "confirm")) continue;

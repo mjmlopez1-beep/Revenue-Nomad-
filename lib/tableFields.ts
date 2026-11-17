@@ -172,6 +172,35 @@ export const LEGACY_VALUES: Record<string, Record<string, string>> = { revenue: 
  */
 export const currentValue = (field: string, v: string): string => (STANDARD_FIELDS.has(field) ? toStandard(field, v) ?? v : v);
 
+/**
+ * Industries picked together with one tap (the industry filter and the ideal client picker).
+ * Stored as their values, never as the group's name.
+ */
+export const INDUSTRY_GROUPS: { label: string; values: string[] }[] = [{ label: "Software (all)", values: ["SaaS", "Enterprise Software", "SMB Software", "Developer Tools"] }];
+/** Old labels that meant a whole group ("Software" before the 110 industries) open as the group. */
+const GROUP_OF_OLD: Record<string, string[]> = { software: INDUSTRY_GROUPS[0].values, "software (all)": INDUSTRY_GROUPS[0].values };
+/**
+ * A list of picked industries as standard values: an old label becomes its standard value
+ * (lib/industryMap.ts toStandard), "Software" becomes every Software industry, and one nothing
+ * maps drops out. For ideal clients and saved views kept under older labels.
+ */
+export function standardIndustries(list: readonly unknown[] | undefined): string[] {
+  const out: string[] = [];
+  for (const raw of list ?? []) {
+    const k = String(raw ?? "").trim().toLowerCase();
+    const group = Object.prototype.hasOwnProperty.call(GROUP_OF_OLD, k) ? GROUP_OF_OLD[k] : null;
+    if (group) out.push(...group);
+    else {
+      const v = toStandard("industry", raw);
+      if (v) out.push(v);
+    }
+  }
+  return [...new Set(out)];
+}
+/** Standard values of employees or revenue, ones nothing maps dropped. */
+export const standardList = (field: "employees" | "revenue", list: readonly unknown[] | undefined): string[] =>
+  [...new Set((list ?? []).map((x) => toStandard(field, x)).filter((x): x is string => !!x))];
+
 /* Revenue Nomad's standard pick lists (same as the platform's buyer profile), so the data lines up. */
 export const RN_DEAL_SIZES = ["Under $15K", "$15K–$50K", "$50K–$150K", "$150K+"];
 export const RN_SALES_CYCLES = ["Under 5 days", "5–30 days", "30–90 days", "3–6 months", "6–12 months", "12+ months"];
