@@ -4,9 +4,11 @@
  * Integrations: alerts in Slack (and other tools by webhook), and the Claude connector.
  * Page key `integrations`; the old `?p=claude` opens it at the Claude section.
  *
- * Slack connects with an incoming webhook the member makes in their own workspace, so there is
- * no Slack app to review. The URL is checked and sent a test message before it's saved, and the
- * page only ever gets it back masked. Reads and writes /api/integrations.
+ * Slack connects with "Add to Slack" (Revenue Nomad's Merlin Alerts app, incoming-webhook scope
+ * only, /api/integrations/slack/start) when the server has SLACK_CLIENT_ID and
+ * SLACK_CLIENT_SECRET, or with an incoming webhook the member makes in their own workspace and
+ * pastes. Either way the URL is sent a test message before it's saved, and the page only ever
+ * gets it back masked. Reads and writes /api/integrations.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconChevron, useToast } from "../ui/shared";
@@ -36,6 +38,22 @@ const day = (iso: string) =>
 
 type Answer = { message?: string; view?: IntegrationsView; error?: string };
 
+/**
+ * ?slack=connected|denied|failed from the "Add to Slack" callback. Read when this file loads,
+ * before the page rewrites its address, and shown once.
+ */
+type SlackNotice = "connected" | "denied" | "failed";
+let slackNotice: SlackNotice | null = (() => {
+  if (typeof window === "undefined") return null;
+  const v = new URLSearchParams(window.location.search).get("slack");
+  return v === "connected" || v === "denied" || v === "failed" ? v : null;
+})();
+const NOTICE_WORDS: Record<SlackNotice, string> = {
+  connected: "Slack is connected. We sent a test message to the channel you picked.",
+  denied: "Nothing was connected. You picked Cancel in Slack. Try again whenever you like.",
+  failed: "We couldn't connect Slack, so nothing was saved. Try Add to Slack again, or connect a webhook URL yourself.",
+};
+
 async function call(body: Record<string, unknown>): Promise<Answer> {
   try {
     const r = await fetch("/api/integrations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -53,6 +71,17 @@ function SlackMark() {
       <path fill="#36C5F0" d="M8.83 5.04a2.52 2.52 0 1 1 2.52-2.52v2.52H8.83Zm0 1.27a2.52 2.52 0 1 1 0 5.04H2.52a2.52 2.52 0 1 1 0-5.04h6.31Z" />
       <path fill="#2EB67D" d="M18.96 8.83a2.52 2.52 0 1 1 2.52 2.52h-2.52V8.83Zm-1.27 0a2.52 2.52 0 1 1-5.04 0V2.52a2.52 2.52 0 1 1 5.04 0v6.31Z" />
       <path fill="#ECB22E" d="M15.17 18.96a2.52 2.52 0 1 1-2.52 2.52v-2.52h2.52Zm0-1.27a2.52 2.52 0 1 1 0-5.04h6.31a2.52 2.52 0 1 1 0 5.04h-6.31Z" />
+    </svg>
+  );
+}
+/** A plain four-color mark for the "Add to Slack" button, drawn here (Slack's own assets aren't hotlinked). */
+function SlackGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden focusable="false" className="in-addslack-g">
+      <rect x="2" y="8" width="7" height="3.2" rx="1.6" fill="#36C5F0" />
+      <rect x="8.8" y="2" width="3.2" height="7" rx="1.6" fill="#2EB67D" />
+      <rect x="11" y="8.8" width="7" height="3.2" rx="1.6" fill="#ECB22E" />
+      <rect x="8" y="11" width="3.2" height="7" rx="1.6" fill="#E01E5A" />
     </svg>
   );
 }
@@ -107,6 +136,17 @@ function Connected({ d, label, onTest, onRemove, busy }: { d: DestView; label: s
           {d.masked}
         </code>
       </div>
+      {d.channel && (
+        <p className="in-conn-where">
+          Posting to <strong>{d.channel}</strong>
+          {d.team ? (
+            <>
+              {" "}
+              in <strong>{d.team}</strong>
+            </>
+          ) : null}
+        </p>
+      )}
       <p className="in-conn-meta">
         {label} since {day(d.addedAt)}
         {d.lastOkAt ? `. Last post went through ${day(d.lastOkAt)}.` : "."}
@@ -252,6 +292,17 @@ function ConnectForm({
   );
 }
 
+/** The paste-a-webhook steps: open when there's no "Add to Slack", folded under it when there is. */
+function ManualSlack({ open, children }: { open: boolean; children: ReactNode }) {
+  if (open) return <>{children}</>;
+  return (
+    <details className="in-details in-manual">
+      <summary>Or connect a webhook URL yourself</summary>
+      {children}
+    </details>
+  );
+}
+
 const ALERTS: { key: AlertKind; title: (fn: string | null, saved: number) => string; desc: (fn: string | null, saved: number) => string }[] = [
   {
     key: "roles",
@@ -277,6 +328,20 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
   const [busy, setBusy] = useState<string | null>(null);
   const claudeRef = useRef<HTMLElement>(null);
   const slackRef = useRef<HTMLElement>(null);
+  const [notice, setNotice] = useState<SlackNotice | null>(null);
+  // The "Add to Slack" answer: shown once, and taken off the address so a reload doesn't show it again.
+  useEffect(() => {
+    if (!slackNotice) return;
+    setNotice(slackNotice);
+    slackNotice = null;
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.has("slack")) {
+        u.searchParams.delete("slack");
+        window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -365,6 +430,14 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
         <h2 className="in-h" id="in-slack-h">
           Alerts in Slack
         </h2>
+        {notice && (
+          <div className={`in-notice${notice === "connected" ? " ok" : ""}`} role="status">
+            <p>{NOTICE_WORDS[notice]}</p>
+            <button type="button" className="btn btn-ghost in-notice-x" onClick={() => setNotice(null)} aria-label="Dismiss">
+              OK
+            </button>
+          </div>
+        )}
         {failed ? (
           <p className="in-problem">We couldn&apos;t load your alerts. Refresh the page to try again.</p>
         ) : !view ? (
@@ -387,13 +460,23 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
               {slack ? (
                 <Connected
                   d={slack}
-                  label={slack.kind === "workflow" ? "Posting to a Slack workflow" : "Posting to Slack"}
+                  label={slack.kind === "workflow" ? "Posting to a Slack workflow" : slack.channel ? "Connected" : "Posting to Slack"}
                   busy={busy?.startsWith("slack:") ? busy.slice(6) : null}
                   onTest={() => void run("slack:test", { op: "test", field: "slack" })}
                   onRemove={() => void run("slack:remove", { op: "remove", field: "slack" })}
                 />
               ) : (
                 <>
+                  {view.slackApp && (
+                    <div className="in-addslack-wrap">
+                      <a className="btn btn-pine in-addslack" href="/api/integrations/slack/start">
+                        <SlackGlyph />
+                        Add to Slack
+                      </a>
+                      <p className="in-hint">Slack asks which channel Merlin can post to. That&apos;s all it can do.</p>
+                    </div>
+                  )}
+                  <ManualSlack open={!view.slackApp}>
                   <p className="cr-note">It takes about three minutes. You make a small app in your own Slack, so the alerts go to the channel or DM you pick, and nobody at Revenue Nomad can read your Slack.</p>
                   <ol className="uc-steps in-steps">
                     <li>
@@ -427,6 +510,7 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                     If your workspace has Slack&apos;s Incoming WebHooks app, there&apos;s a shorter way. In Slack, open Apps, find Incoming WebHooks and pick Add to Slack. Pick a channel
                     or your DM, then copy the webhook URL and paste it above.
                   </p>
+                  </ManualSlack>
                 </>
               )}
             </section>
