@@ -12,6 +12,7 @@ import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, t
 import { functionOf } from "../tableFields";
 import { alertFor, bodyFor, testAlert, type Alert } from "./format";
 import { integrationsAllowed } from "./plan";
+import { exchangeCode, slackAppConfigured, takeState, type SlackHook } from "./slackApp";
 import { checkSlackUrl, checkWebhookUrl, maskUrl, postJson, problemWords, UrlProblem, type PostResult } from "./url";
 import {
   ALERT_KINDS, BATCH_WINDOW_MS, DEFAULT_ALERTS, emptyIntegrations, type AlertItem, type AlertKind, type DestView, type IntegrationsState, type IntegrationsView,
@@ -52,6 +53,9 @@ function destView(d: StoredDest | undefined): DestView | null {
     lastOkAt: d.lastOkAt ?? null,
     problem: d.failures ? problemWords(d.lastError, d.kind) : null,
     broken: !!d.broken,
+    channel: d.channel ?? null,
+    team: d.team ?? null,
+    viaApp: !!d.viaApp,
   };
 }
 
@@ -59,6 +63,7 @@ function viewOf(s: State, m: Member): IntegrationsView {
   const mine = s.integrations?.members[m.id];
   return {
     allowed: integrationsAllowed(m.id),
+    slackApp: slackAppConfigured(),
     function: functionFor(s, m),
     savedViews: (s.connector?.alerts?.[m.id] ?? []).length,
     slack: destView(mine?.slack),
@@ -136,21 +141,72 @@ export async function connect(token: string | null, field: Field, raw: unknown):
     if (e instanceof UrlProblem) throw new ActionError(e.message);
     throw e;
   }
+  const view = await saveTested(token, field, dest, testAlert(baseOf(s)));
+  const where = field === "slack" ? (dest.kind === "workflow" ? "your Slack workflow" : "Slack") : "your webhook";
+  return { message: `Connected. We sent a test message to ${where}.`, view };
+}
+
+/** Post the test message to a checked URL and, once it went through, save it in the field. */
+async function saveTested(
+  token: string | null,
+  field: Field,
+  dest: { url: string; kind: StoredDest["kind"] },
+  test: Alert,
+  extra: Pick<StoredDest, "channel" | "team" | "viaApp"> = {},
+): Promise<IntegrationsView> {
   const now = new Date().toISOString();
-  const r = await post(dest.kind, dest.url, testAlert(baseOf(s)), now);
+  const r = await post(dest.kind, dest.url, test, now);
   if (!r.ok) throw new ActionError(refusedWords(field, r));
-  const view = await T.mutate((d, seed) => {
+  return T.mutate((d, seed) => {
     const who = memberByToken(seed, token, d);
     if (!who) throw new ActionError(SIGNED_OUT);
     const st = integ(d);
     const mine = (st.members[who.id] ??= blank());
-    mine[field] = { kind: dest.kind, url: dest.url, addedAt: now, lastOkAt: now, failures: 0 };
+    mine[field] = { kind: dest.kind, url: dest.url, addedAt: now, lastOkAt: now, failures: 0, ...extra };
     st.stats.connects++;
     st.stats.sent.test = (st.stats.sent.test ?? 0) + 1;
     return viewOf(d, who);
   });
-  const where = field === "slack" ? (dest.kind === "workflow" ? "your Slack workflow" : "Slack") : "your webhook";
-  return { message: `Connected. We sent a test message to ${where}.`, view };
+}
+
+export type SlackAppOutcome = "connected" | "denied" | "failed";
+
+/**
+ * GET /api/integrations/slack/callback, after the member answered Slack's "Add to Slack" page.
+ * The state must check out (lib/notify/slackApp.ts takeState) before anything else happens. The
+ * webhook Slack hands back goes through the same check and test message as a pasted one.
+ * Nothing secret is logged or returned: only one of three words.
+ */
+export async function finishSlackApp(
+  token: string | null,
+  q: { state: string | null; code: string | null; error: string | null },
+  cookieState: string | null,
+  origin: string,
+): Promise<SlackAppOutcome> {
+  if (!slackAppConfigured()) return "failed";
+  const who = await takeState(q.state, cookieState, token);
+  if (!who) return "failed";
+  if (q.error) return q.error === "access_denied" ? "denied" : "failed";
+  if (!integrationsAllowed(who.memberId)) return "failed";
+  const hook: SlackHook | null = await exchangeCode(String(q.code ?? ""), origin);
+  if (!hook) return "failed";
+  let dest: { url: string; kind: StoredDest["kind"] };
+  try {
+    dest = checkSlackUrl(hook.url);
+  } catch {
+    console.error("Add to Slack: Slack's webhook wasn't a hooks.slack.com URL");
+    return "failed";
+  }
+  if (dest.kind !== "slack") return "failed";
+  const s = await loadState();
+  const test: Alert = { ...testAlert(baseOf(s)), headline: hook.channel ? `Merlin is connected to ${hook.channel}` : "Merlin is connected" };
+  try {
+    await saveTested(token, "slack", dest, test, { channel: hook.channel ?? undefined, team: hook.team ?? undefined, viaApp: true });
+  } catch (e) {
+    if (e instanceof ActionError) return "failed";
+    throw e;
+  }
+  return "connected";
 }
 
 /** "Send a test": a short message to the URL on file. */
@@ -191,9 +247,11 @@ export async function setAlerts(token: string | null, patch: Partial<Record<Aler
 /** Remove a URL. With nothing left connected, waiting alerts are dropped too. */
 export async function removeDest(token: string | null, field: Field): Promise<{ message: string; view: IntegrationsView }> {
   const { m } = await me(token);
+  let viaApp = false;
   const view = await T.mutate((d) => {
     const st = integ(d);
     const mine = st.members[m.id];
+    viaApp = !!mine?.[field]?.viaApp;
     if (mine?.[field]) {
       delete mine[field];
       st.stats.removes++;
@@ -201,7 +259,13 @@ export async function removeDest(token: string | null, field: Field): Promise<{ 
     }
     return viewOf(d, m);
   });
-  return { message: field === "slack" ? "Removed. Slack won't get any more alerts." : "Removed. That webhook won't get any more alerts.", view };
+  const words =
+    field !== "slack"
+      ? "Removed. That webhook won't get any more alerts."
+      : viaApp
+        ? "Removed. Slack won't get any more alerts. You can also remove Merlin Alerts from your Slack's apps."
+        : "Removed. Slack won't get any more alerts.";
+  return { message: words, view };
 }
 
 /* ---------- sending ---------- */

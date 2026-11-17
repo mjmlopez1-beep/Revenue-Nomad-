@@ -311,3 +311,67 @@
     gap: 0;
   }
 }
+
+/* "Add to Slack" (Revenue Nomad's Merlin Alerts app), with the paste steps folded under it. */
+.in-addslack-wrap {
+  margin-top: 4px;
+}
+.btn.in-addslack {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 18px 0 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.in-addslack-g {
+  flex: none;
+  padding: 3px;
+  box-sizing: content-box;
+  border-radius: 6px;
+  background: #fff;
+}
+.tp-card > .in-details.in-manual {
+  margin-top: 16px;
+}
+.in-manual[open] > summary {
+  margin-bottom: 4px;
+}
+.in-conn-where {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.in-conn-where strong {
+  font-weight: 700;
+}
+/* The answer from Slack after "Add to Slack": shown once at the top of the section. */
+.in-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 4px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--ember);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.in-notice.ok {
+  border-left-color: var(--volt);
+  background: var(--volt-soft);
+}
+.in-notice p {
+  margin: 0;
+}
+.btn.in-notice-x {
+  flex: none;
+  min-height: 36px;
+}

@@ -32,6 +32,10 @@ export interface StoredDest {
   lastErrorAt?: string;
   /** The service said the URL is gone (Slack's no_service, a 404 or 410), or it failed 5 times in a row. Nothing more is sent to it. */
   broken?: boolean;
+  /** Connected with "Add to Slack": the channel ("#alerts") and workspace names Slack gave, for the page. */
+  channel?: string;
+  team?: string;
+  viaApp?: boolean;
 }
 
 /** One event waiting for its batch, kept until the window opens again. */
@@ -93,12 +97,18 @@ export interface DestView {
   /** Plain words for what went wrong last, when the last try failed. */
   problem: string | null;
   broken: boolean;
+  /** "#alerts" and the workspace, when connected with "Add to Slack". */
+  channel: string | null;
+  team: string | null;
+  viaApp: boolean;
 }
 
 /** GET /api/integrations. */
 export interface IntegrationsView {
   /** False once integrations are limited to a paid plan and this member isn't on it. */
   allowed: boolean;
+  /** "Add to Slack" is set up on this server (SLACK_CLIENT_ID and SLACK_CLIENT_SECRET). */
+  slackApp: boolean;
   /** The member's function, for "New open roles in Marketing". */
   function: string | null;
   /** Saved views and alerts the member has (lib/mcp/alerts.ts). */

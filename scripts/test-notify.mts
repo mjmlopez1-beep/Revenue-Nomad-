@@ -7,6 +7,8 @@
  * to Slack or a webhook is caught here, and names are resolved by a stand-in, so nothing leaves
  * the machine. The clock moves forward where a rule is about time (the 15 minute batches).
  * Each alert is set off through the real code path: applyScan, perform (unlock) and a message.
+ * "Add to Slack" (lib/notify/slackApp.ts) runs against a mock Slack API (RN_SLACK_API_TEST, read on
+ * test servers only), through the same fetch stand-in.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -67,7 +69,14 @@ const answers = new Map<string, () => Response | Promise<Response>>();
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input);
-  outbox.push({ url, body: JSON.parse(String(init?.body ?? "{}")), init: init ?? {} });
+  const raw = String(init?.body ?? "{}");
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    body = Object.fromEntries(new URLSearchParams(raw)); // a form (Slack's oauth.v2.access)
+  }
+  outbox.push({ url, body, init: init ?? {} });
   const a = answers.get(url);
   return a ? a() : new Response("ok", { status: 200 });
 }) as typeof fetch;
@@ -467,6 +476,144 @@ async function main() {
   check("no title falls back to the function", fmt.actorWords({ function: "RevOps", title: null }) === "a fractional RevOps leader");
   check("'an' before a vowel", fmt.actorWords({ function: null, title: "Interim CMO" }) === "an Interim CMO");
   check("the 140-character snippet", [...fmt.snippetOf("x".repeat(300))].length === 141);
+
+  /* ---------- Add to Slack (Merlin Alerts, OAuth v2) ---------- */
+  console.log("\nAdd to Slack");
+  const app = await import("../lib/notify/slackApp");
+  const MOCK = "https://slack.mock.example";
+  const EXCHANGE = `${MOCK}/api/oauth.v2.access`;
+  const CLIENT_SECRET = "csecret-test-9f8e7d6c5b4a";
+  const BOT_TOKEN = "xoxb-bot-token-must-not-stay";
+  const APP_HOOK = "https://hooks.slack.com/services/" + "T0009APP/B0009APP/appappappappappappAPPX";
+  const CODE = "code-good-1234567890";
+  const appSecrets = [CLIENT_SECRET, BOT_TOKEN, APP_HOOK, "appappappappappappAPPX", CODE];
+  const appLeaks = (x: unknown) => {
+    const s = typeof x === "string" ? x : JSON.stringify(x);
+    return appSecrets.filter((k) => s.includes(k));
+  };
+  const logged: string[] = [];
+  const realError = console.error;
+  const realLog = console.log;
+  console.error = (...a: unknown[]) => (logged.push(a.map(String).join(" ")), realError(...a));
+  const ORIGIN = "https://post.example.com";
+  delete process.env.SLACK_CLIENT_ID;
+  delete process.env.SLACK_CLIENT_SECRET;
+  delete process.env.SLACK_REDIRECT_URL;
+  process.env.RN_SLACK_API_TEST = MOCK;
+
+  check("without SLACK_CLIENT_ID and SECRET the view says no Add to Slack button", (await n.integrationsView(HANA))?.slackApp === false);
+  check("and Start doesn't start", (await app.startSlackApp(HANA, ORIGIN)).ok === false);
+  process.env.SLACK_CLIENT_ID = "1234.5678";
+  check("an id without a secret still shows no button", (await n.integrationsView(HANA))?.slackApp === false);
+  process.env.SLACK_CLIENT_SECRET = CLIENT_SECRET;
+  const appView = await n.integrationsView(HANA);
+  check("with both, the view says Add to Slack", appView?.slackApp === true && appView.slack === null, appView);
+  check("the view never carries the client secret", appLeaks(appView).length === 0);
+
+  const out = await app.startSlackApp("tok-nobody", ORIGIN);
+  check("Start for someone signed out refuses", !out.ok && out.why === "signed_out", out);
+  const s1 = await app.startSlackApp(HANA, "https://ignored.example");
+  const u1 = s1.ok ? new URL(s1.url) : null;
+  check(
+    "Start sends the browser to Slack's authorize page with the incoming-webhook scope",
+    !!u1 && u1.origin === MOCK && u1.pathname === "/oauth/v2/authorize" && u1.searchParams.get("client_id") === "1234.5678" && u1.searchParams.get("scope") === "incoming-webhook",
+    s1,
+  );
+  check("the redirect URI is RN_PUBLIC_URL + the callback path", u1?.searchParams.get("redirect_uri") === "https://post.example.com/api/integrations/slack/callback", u1?.searchParams.get("redirect_uri"));
+  check("with a random state of 43 characters, the same one as for the cookie", !!s1.ok && s1.state.length === 43 && u1?.searchParams.get("state") === s1.state);
+  check("the authorize URL has no secret in it", appLeaks(s1).length === 0);
+  const s1b = await app.startSlackApp(HANA, ORIGIN);
+  check("each Start makes a new state", s1b.ok && s1.ok && s1b.state !== s1.state);
+  process.env.SLACK_REDIRECT_URL = "https://table.example.org/api/integrations/slack/callback";
+  const s2 = await app.startSlackApp(HANA, ORIGIN);
+  check("SLACK_REDIRECT_URL wins when it's set", s2.ok && new URL(s2.url).searchParams.get("redirect_uri") === process.env.SLACK_REDIRECT_URL);
+  delete process.env.SLACK_REDIRECT_URL;
+
+  const good = { ok: true, access_token: BOT_TOKEN, token_type: "bot", scope: "incoming-webhook", team: { id: "T0009APP", name: "Acme Co" }, incoming_webhook: { channel: "#merlin-alerts", channel_id: "C0009", configuration_url: "https://acme.slack.com/services/B0009APP", url: APP_HOOK } };
+  answers.set(EXCHANGE, () => new Response(JSON.stringify(good), { status: 200, headers: { "content-type": "application/json" } }));
+  const fin = (token: string, state: string | null, cookie: string | null, extra: { code?: string | null; error?: string | null } = {}) =>
+    n.finishSlackApp(token, { state, code: extra.code === undefined ? CODE : extra.code, error: extra.error ?? null }, cookie, ORIGIN);
+  const exchanges = () => outbox.filter((x) => x.url === EXCHANGE).length;
+
+  clear();
+  check("a made-up state is refused", (await fin(HANA, "made-up-state", "made-up-state")) === "failed");
+  check("no state at all is refused", (await fin(HANA, null, null)) === "failed");
+  const sA = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("a state without the browser's cookie is refused", (await fin(HANA, sA.state, null)) === "failed");
+  check("and it's used up by that try", (await fin(HANA, sA.state, sA.state)) === "failed");
+  const sB = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("a cookie that doesn't match is refused", (await fin(HANA, sB.state, sA.state)) === "failed");
+  const sC = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("a callback for a different member is refused", (await fin(MO, sC.state, sC.state)) === "failed");
+  const sC2 = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("a callback with nobody signed in is refused", (await fin("tok-nobody", sC2.state, sC2.state)) === "failed");
+  const sD = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  skew += 11 * MIN;
+  check("a state older than 10 minutes is refused", (await fin(HANA, sD.state, sD.state)) === "failed");
+  check("none of these swapped a code with Slack", exchanges() === 0, exchanges());
+
+  const sE = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("Cancel in Slack (error=access_denied) comes back as denied", (await fin(HANA, sE.state, sE.state, { code: null, error: "access_denied" })) === "denied");
+  check("and nothing is saved or swapped", (await n.integrationsView(HANA))?.slack === null && exchanges() === 0);
+
+  answers.set(EXCHANGE, () => new Response(JSON.stringify({ ok: false, error: "invalid_code" }), { status: 200 }));
+  const sF = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("a code Slack refuses is failed", (await fin(HANA, sF.state, sF.state)) === "failed" && (await n.integrationsView(HANA))?.slack === null);
+  answers.set(EXCHANGE, () => new Response(JSON.stringify({ ...good, incoming_webhook: { ...good.incoming_webhook, url: "https://evil.example/services/x" } }), { status: 200 }));
+  const sG = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("a webhook that isn't on hooks.slack.com is not saved", (await fin(HANA, sG.state, sG.state)) === "failed" && !outbox.some((x) => x.url.startsWith("https://evil.example")));
+  answers.set(EXCHANGE, () => new Response(JSON.stringify(good), { status: 200 }));
+  answers.set(APP_HOOK, () => new Response("no_service", { status: 404 }));
+  const sH = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  check("when the test message doesn't go through, nothing is saved", (await fin(HANA, sH.state, sH.state)) === "failed" && (await n.integrationsView(HANA))?.slack === null);
+  answers.delete(APP_HOOK);
+
+  clear();
+  const sI = (await app.startSlackApp(HANA, ORIGIN)) as { ok: true; state: string; url: string };
+  const resA = await fin(HANA, sI.state, sI.state);
+  check("a good code connects", resA === "connected", resA);
+  const ex = outbox.find((x) => x.url === EXCHANGE);
+  check(
+    "the code is swapped by POST form with the client id, secret, code and redirect URI",
+    !!ex &&
+      ex.init.method === "POST" &&
+      String((ex.init.headers as Record<string, string>)["content-type"]).startsWith("application/x-www-form-urlencoded") &&
+      ex.body.client_id === "1234.5678" &&
+      ex.body.client_secret === CLIENT_SECRET &&
+      ex.body.code === CODE &&
+      ex.body.redirect_uri === "https://post.example.com/api/integrations/slack/callback",
+    ex?.body && { ...ex.body, client_secret: "…" },
+  );
+  const hello = to(APP_HOOK);
+  check("the test message says which channel", hello.length === 1 && textOf(hello[0]).includes("Merlin is connected to #merlin-alerts"), hello.map(textOf));
+  const vA = await n.integrationsView(HANA);
+  check("the page gets the channel and workspace", vA?.slack?.channel === "#merlin-alerts" && vA.slack.team === "Acme Co" && vA.slack.viaApp === true && vA.slack.kind === "slack", vA?.slack);
+  check("and the webhook only masked", vA?.slack?.masked === "hooks.slack.com/…/APPX" && appLeaks(vA).length === 0, vA?.slack);
+  const stA = await t.loadState();
+  check("the stored webhook is the one Slack gave", stA.integrations?.members.mem_hana?.slack?.url === APP_HOOK);
+  check("the bot token and the code are never stored", !JSON.stringify(stA).includes(BOT_TOKEN) && !JSON.stringify(stA).includes(CODE));
+  check("the state can't be used again", (await fin(HANA, sI.state, sI.state)) === "failed");
+  check("nothing secret was logged", appLeaks(logged.join("\n")).length === 0, appLeaks(logged.join("\n")));
+
+  // Alerts go to the webhook from Slack like to a pasted one.
+  clear();
+  skew += 16 * MIN;
+  const sentT = await n.sendTest(HANA, "slack");
+  check("Send a test works on it", /Sent/.test(sentT.message) && to(APP_HOOK).length === 1);
+  const rmA = await n.removeDest(HANA, "slack");
+  check("Remove forgets it and mentions Merlin Alerts in Slack's apps", rmA.view.slack === null && /Merlin Alerts/.test(rmA.message), rmA.message);
+  check("and the URL is gone from the state", !JSON.stringify(await t.loadState()).includes(APP_HOOK));
+
+  process.env.RN_SCAN_TEST = "0";
+  check("the mock Slack address is read only on a test server", app.slackApiBase() === "https://slack.com");
+  process.env.RN_SCAN_TEST = "1";
+  delete process.env.SLACK_CLIENT_SECRET;
+  const sJ = await app.startSlackApp(HANA, ORIGIN);
+  check("with the secret gone, Start and the callback do nothing", !sJ.ok && (await fin(HANA, "x", "x")) === "failed");
+  delete process.env.SLACK_CLIENT_ID;
+  delete process.env.RN_SLACK_API_TEST;
+  console.error = realError;
+  void realLog;
 }
 
 main()
