@@ -186,7 +186,7 @@ const engOf = (view, id) => {
 };
 const companyNamed = (view, name) => view.companies.find((c) => c.name === name) ?? null;
 /** A valid value for the free company facts a test fills. */
-const SAMPLE = { hq: "Austin, TX", industry: "SaaS", employees: "11–50", revenue: "$1M–$5M" };
+const SAMPLE = { hq: "Austin, TX", industry: "Software", employees: "11–50", revenue: "$1M–$5M" };
 const claimed = new Set();
 /** A fill of a free, empty company fact nobody in this run has picked yet (earns the credit that lets a member report free facts). */
 function freeFill(view) {
@@ -727,7 +727,7 @@ section("admin", async () => {
   const K = await member("Kit Keen");
   const coName = `Qa Junk Co ${RUN}`;
   const add = await J.act({
-    type: "add", company: coName, companyFields: { industry: "SaaS", hq: "Austin, TX" }, operatorMemberId: "me",
+    type: "add", company: coName, companyFields: { industry: "Software", hq: "Austin, TX" }, operatorMemberId: "me",
     engagementFields: { operator: J.name, function: "Sales", type: "Fractional", role: "Fractional VP Sales", pricing: "Monthly retainer", rate: "$9k/mo" },
     people: [{ name: "Pat Junk", title: "CEO" }],
   });
@@ -776,7 +776,7 @@ section("admin", async () => {
   const L = await member("Lou Litter");
   const N = await member("Ned Neighbor");
   const shared = `Qa Shared Co ${RUN}`;
-  await L.act({ type: "add", company: shared, companyFields: { industry: "SaaS" } });
+  await L.act({ type: "add", company: shared, companyFields: { industry: "Software" } });
   const sc = companyNamed(await N.view(), shared);
   await N.act({ type: "fill", entity: "company", id: sc.id, field: "hq", value: "Boise, ID" });
   await adm.act({ type: "adminRemoveMember", memberId: await adm.pick("Lou Litter") });
@@ -1198,7 +1198,7 @@ section("wire", async () => {
   const A = await member("Abe Adder");
   const B = await member("Bea Bystander");
   const coName = `Qa Added Co ${RUN}`;
-  const made = await A.act({ type: "add", company: coName, companyFields: { industry: "SaaS" } });
+  const made = await A.act({ type: "add", company: coName, companyFields: { industry: "Software" } });
   const mine = companyNamed(await A.view(), coName);
   const theirs = companyNamed(await B.view(), coName);
   check("a company the member created is marked added for them", made.status === 200 && mine?.added === true, { status: made.status, added: mine?.added });

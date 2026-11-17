@@ -60,6 +60,8 @@ export interface ScanApplyResult {
   closed: number;
   reopened: number;
   companiesAdded: number;
+  /** Roles left out because the company posting them is a fractional firm, agency or marketplace (lib/firms.ts), not a client. */
+  firms?: number;
   /** New roles left for a later run because this one had already opened its limit. */
   overCap?: number;
   /** Unlocks paid back: on a role that had closed (made after it was last seen listed), and every one on a removed role. */

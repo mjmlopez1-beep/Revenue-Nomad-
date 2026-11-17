@@ -217,7 +217,7 @@ const findCell = (view, entity, id, field) => {
 const SAMPLE = {
   "company.hq": "Austin, TX",
   "company.linkedin": "linkedin.com/company/qa-test",
-  "company.industry": "SaaS",
+  "company.industry": "Software",
   "company.employees": "11–50",
   "company.revenue": "$1M–$5M",
   "engagement.type": "Fractional",

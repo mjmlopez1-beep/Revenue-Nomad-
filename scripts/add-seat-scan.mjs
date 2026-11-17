@@ -34,6 +34,8 @@ if (!process.env.RN_SEAT_SCAN_TSX) {
 }
 const { companyKey, textKey } = await import("../lib/scan/clean.ts");
 const { siteKey, FUNCTIONS, RN_INDUSTRIES, RN_REVENUE } = await import("../lib/tableFields.ts");
+// Fractional firms, agencies and marketplaces are not clients (lib/firms.ts): never added, and the cleanup drops any the seed has.
+const { companyFirm, cleanSeed } = await import("../lib/firmRemoval.ts");
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -90,9 +92,9 @@ const INDUSTRY_RULES = [
   [/health, wellness|fitness|wellness/, "Wellness & Fitness"],
   [/hospital|health ?care|medical|pharma|biotech|life science|mental health|dental|veterinary/, "Health Care"],
   [/bank|financial|insurance|capital market|investment|venture capital|credit|fintech|funds/, "Financial Services"],
-  [/accounting/, "Finance"],
+  [/accounting/, "Financial Services"],
   [/computer hardware|networking|semiconductor|telecommunications equipment|electronics manufacturing|wireless|appliances/, "Hardware & Networking"],
-  [/software|it services|information technology|technology, information|internet|computer and network security|data infrastructure|it system/, "Software & IT Services"],
+  [/software|it services|information technology|technology, information|internet|computer and network security|data infrastructure|it system/, "Software"],
   [/retail|e-commerce|online and mail order/, "Retail"],
   [/consumer|food|beverage|cosmetic|personal care|apparel|luxury|furniture|sporting goods|tobacco|wine/, "Consumer Goods"],
   [/construction|building|civil engineering|contractors/, "Construction"],
@@ -113,13 +115,13 @@ const INDUSTRY_RULES = [
   [/public safety|law enforcement|security and investigations/, "Public Safety"],
   [/arts|museums|fine art|performing/, "Arts"],
 ];
-/** A LinkedIn industry as one of RN_INDUSTRIES, or null when no rule is sure. "Software Development" is Software (there is no description to tell SaaS apart). */
+/** A LinkedIn industry as one of RN_INDUSTRIES, or null when no rule is sure. Software, SaaS and IT services are all Software. */
 function rnIndustry(raw) {
   const s = String(raw ?? "").toLowerCase();
   if (!s) return null;
   for (const [re, tag] of INDUSTRY_RULES) {
     if (!re.test(s)) continue;
-    const out = tag === "Software & IT Services" && s.includes("software development") ? "Software" : tag;
+    const out = tag;
     return RN_INDUSTRIES.includes(out) ? out : null;
   }
   return null;
@@ -227,6 +229,10 @@ for (const r of rows) {
     drop(why);
     continue;
   }
+  if (companyFirm(company)) {
+    drop("fractional firm, agency or marketplace (lib/firms.ts)");
+    continue;
+  }
   const fn = FUNCTION_MAP[String(r.function ?? "").trim()] ?? FUNCTION_MAP[String(r.role_category ?? "").trim()] ?? null;
   if (fn && !FUNCTIONS.includes(fn)) throw new Error(`function ${fn} is not in FUNCTIONS`);
 
@@ -282,6 +288,8 @@ for (const r of rows) {
   } else unchanged++;
 }
 
+// Labels, places, and firms the file only shows as one together (several fractionals at one small company).
+const cleaned = cleanSeed(seed);
 seed.companies.sort((a, b) => (a.fields.name ?? "").toLowerCase().localeCompare((b.fields.name ?? "").toLowerCase()));
 writeFileSync(seedPath, JSON.stringify(seed, null, 1));
 
@@ -293,5 +301,6 @@ console.log(`companies matched: ${matched.size} (${filledOnExisting} empty field
 console.log(`companies created: ${created.size}`);
 console.log(`seats added: ${added}, updated: ${updated}, unchanged: ${unchanged}`);
 console.log(`by function: ${Object.entries(fnCount).sort((a, b) => b[1] - a[1]).map(([f, n]) => `${f} ${n}`).join(", ")}`);
+console.log(`firms the cleanup removed: ${cleaned.removed.companies} companies, ${cleaned.removed.seats} seats (${cleaned.kept.length} kept for admin review)`);
 console.log(`seed now: ${seed.companies.length} companies, ${seed.engagements.length} seats`);
 if (!noSeal && seedPath === "data/intel-seed.json") execFileSync(process.execPath, ["scripts/seal-intel-seed.mjs"], { stdio: "inherit" });

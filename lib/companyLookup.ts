@@ -112,7 +112,7 @@ function guardedLookup(hostname: string, options: LookupOptions, cb: LookupCb): 
 
 /** Keyword → Revenue Nomad industry tag. First match wins, most specific first. */
 const INDUSTRY_RULES: [RegExp, string][] = [
-  [/\bsaas\b|software[- ]as[- ]a[- ]service/i, "SaaS"],
+  [/\bsaas\b|software[- ]as[- ]a[- ]service/i, "Software"],
   [/\b(fintech|payments?|banking|lending|insurance|insurtech|wealth|accounting software)\b/i, "Financial Services"],
   [/\b(health ?care|healthtech|clinical|patient|medical|hospital|pharma|biotech|life sciences)\b/i, "Health Care"],
   [/\b(wellness|fitness|nutrition|supplements?)\b/i, "Wellness & Fitness"],
@@ -131,7 +131,7 @@ const INDUSTRY_RULES: [RegExp, string][] = [
   [/\b(travel|hospitality|hotels?|recreation|tourism)\b/i, "Recreation & Travel"],
   [/\b(networking|hardware|devices?|iot|data center)\b/i, "Hardware & Networking"],
   [/\b(consulting|staffing|recruiting|outsourc|professional services|agency)\w*/i, "Corporate Services"],
-  [/\b(software|platform|cloud|api|ai\b|developer|app)\b/i, "Software & IT Services"],
+  [/\b(software|platform|cloud|api|ai\b|developer|app)\b/i, "Software"],
 ];
 
 export function suggestIndustry(text: string): string | null {

@@ -7,7 +7,8 @@
  * industry, size, revenue and HQ), never by a locked one, so a match never gives away a
  * locked value or a hidden company.
  */
-import { FUNCTIONS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "../tableFields";
+import { FUNCTIONS, LEGACY_VALUES, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, currentValue } from "../tableFields";
+import { inPlace, placeFilter } from "../geo";
 
 export interface SavedSearch {
   id: string;
@@ -34,19 +35,30 @@ export interface RoleFacts {
   hq: string | null;
   /** Fractional hires on file at the company (Friendly.fractional). */
   pastHires: number;
+  /** The country and region the HQ names (CompanyRec.country, .region), when known. */
+  country?: string | null;
+  region?: string | null;
 }
 
 /** Saved searches a member can keep. */
 export const ALERT_MAX = 20;
 
-/** Dashes, case and spacing aside: "$5m-$20m" is "$5M–$20M", "saas" is "SaaS". */
+/** Dashes, case and spacing aside: "$5m-$20m" is "$5M–$20M", "software" is "Software". */
 const squash = (v: string) => v.toLowerCase().replace(/[‐-―−-]/g, "-").replace(/\s+/g, "").replace(/,/g, "");
 
 /** The list's own spelling of what was typed, or null when it isn't on the list. */
 export function pickFrom(list: readonly string[], raw: unknown): string | null {
   const want = squash(String(raw ?? ""));
   if (!want) return null;
-  return list.find((x) => squash(x) === want) ?? null;
+  const hit = list.find((x) => squash(x) === want);
+  if (hit) return hit;
+  // An older label ("SaaS", "< $1M") reads as the current one, when that one is on this list.
+  for (const field of ["industry", "revenue"]) {
+    const now = currentValue(field, String(raw ?? "").trim());
+    if (list.includes(now)) return now;
+    for (const [old, cur] of Object.entries(LEGACY_VALUES[field] ?? {})) if (squash(old) === want && list.includes(cur)) return cur;
+  }
+  return null;
 }
 
 const US: Record<string, string> = {
@@ -77,6 +89,9 @@ export function alertMatches(a: SavedSearch, r: RoleFacts): boolean {
   if (a.revenue?.length && !(r.revenue && a.revenue.includes(r.revenue))) return false;
   if (a.fractionalFriendly && r.pastHires < 1) return false;
   if (a.hq) {
+    // A country or a region ("United States", "UK", "Texas") matches every HQ in it, however that HQ was typed.
+    const place = placeFilter(a.hq);
+    if (place && (r.country || r.region)) return inPlace({ country: r.country ?? null, region: r.region ?? null }, place);
     const want = placeWords(a.hq);
     const have = new Set(placeWords(r.hq ?? ""));
     if (!want.length || !want.every((w) => have.has(w))) return false;

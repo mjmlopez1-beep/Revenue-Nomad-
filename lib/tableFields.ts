@@ -15,18 +15,36 @@
 export type Entity = "company" | "engagement" | "contact";
 export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrOngoing" | "number" | "choice";
 
-/** Revenue Nomad standard industry tags (the Talent Signup form's list). */
+/**
+ * Revenue Nomad standard industry tags: one list, no two tags for the same thing. "SaaS",
+ * "Software & IT Services" and "Web Development Service" are all Software now (the data could
+ * not tell them apart), and "Finance" is Financial Services. See LEGACY_VALUES.
+ */
 export const RN_INDUSTRIES = [
   "Agriculture", "Arts", "Construction", "Consumer Goods", "Corporate Services", "Design", "Education",
-  "Energy & Mining", "Entertainment", "Finance", "Financial Services", "Hardware & Networking", "Health Care",
+  "Energy & Mining", "Entertainment", "Financial Services", "Hardware & Networking", "Health Care",
   "Legal", "Manufacturing", "Media & Communications", "Nonprofit", "Public Administration", "Public Safety",
-  "Real Estate", "Recreation & Travel", "Retail", "SaaS", "Software", "Software & IT Services",
-  "Transportation & Logistics", "Web Development Service", "Wellness & Fitness",
+  "Real Estate", "Recreation & Travel", "Retail", "Software", "Transportation & Logistics", "Wellness & Fitness",
 ];
 /** Revenue Nomad standard revenue stage buckets. */
 export const RN_REVENUE = ["Pre-revenue", "Under $1M", "$1M–$5M", "$5M–$20M", "$20M–$50M", "$50M+"];
-/** Values stored under an older label, mapped to the current one when data loads. */
-export const LEGACY_VALUES: Record<string, Record<string, string>> = { revenue: { "< $1M": "Under $1M" } };
+/**
+ * Values stored under an older label, mapped to the current one when data loads (the seed, the
+ * state, saved searches) and when a filter or a tool is given one. Keyed by field.
+ */
+export const LEGACY_VALUES: Record<string, Record<string, string>> = {
+  revenue: { "< $1M": "Under $1M", "<$1M": "Under $1M", "Less than $1M": "Under $1M" },
+  industry: {
+    SaaS: "Software",
+    "Software & IT Services": "Software",
+    "IT Services": "Software",
+    "Web Development Service": "Software",
+    Finance: "Financial Services",
+  },
+};
+/** A stored value under its current label ("SaaS" -> "Software", "< $1M" -> "Under $1M"); anything else as it was. */
+export const currentValue = (field: string, v: string): string =>
+  (Object.prototype.hasOwnProperty.call(LEGACY_VALUES, field) && Object.prototype.hasOwnProperty.call(LEGACY_VALUES[field], v) ? LEGACY_VALUES[field][v] : v);
 
 /* Revenue Nomad's standard pick lists (same as the platform's buyer profile), so the data lines up. */
 export const RN_DEAL_SIZES = ["Under $15K", "$15K–$50K", "$50K–$150K", "$150K+"];
@@ -396,14 +414,22 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     }
     case "number":
       return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use a whole number from 1 to 80." };
-    case "choice":
-      return f.options?.includes(v) ? { value: v } : { error: "Pick one from the list." };
+    case "choice": {
+      // An older label ("SaaS", "< $1M") is saved under the current one.
+      const now = currentValue(f.key, v);
+      return f.options?.includes(now) ? { value: now } : { error: "Pick one from the list." };
+    }
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
       // Two letters is a title ("GM", "AE", "VP"), and so is one Han, Kana or Hangul character (営業).
       if (f.key === "role" && (v.match(/\p{L}/gu) ?? []).length < 2 && !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(v))
         return { error: "Use the seat's title, like Fractional VP Sales." };
+      // An HQ keeps the way it was typed, without a space before a comma ("Venice , CA" is "Venice, CA").
+      if (f.key === "hq") {
+        const hq = v.replace(/\s+,/g, ",").replace(/,(?=\S)/g, ", ");
+        return hq.length >= 2 ? { value: hq } : { error: "That's too short. Use at least 2 characters." };
+      }
       return v.length >= 2 ? { value: v } : { error: "That's too short. Use at least 2 characters." };
   }
 }

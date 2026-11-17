@@ -62,8 +62,10 @@ import { removeScreenedOut } from "./scan/remove";
 import { companyKey, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, siteKey, type Entity,
+  stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, currentValue, siteKey, type Entity,
 } from "./tableFields";
+import { normalizeHq, type Geo } from "./geo";
+import { companyFirm, memberHoldsSeat, purgeFirms, seedFirmIds, type FirmReview, type RemovedFirms } from "./firmRemoval";
 import type {
   Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
   ScanSummary, View,
@@ -86,7 +88,7 @@ export interface Member {
   title: string;
   token: string;
 }
-interface SeedCompany {
+export interface SeedCompany {
   id: string;
   fields: Record<string, string>;
 }
@@ -116,6 +118,10 @@ export interface Seed {
    */
   rateIndex?: { fn: string; hourly: number; hours: number | null; revenue: string | null }[];
   demo?: boolean;
+  /** Fractional firms the seed cleanup dropped (lib/firmRemoval.ts): what a running table still holds about them is removed on load. */
+  removedFirms?: RemovedFirms;
+  /** Firms the cleanup kept because a member published a seat or a story there, for an admin to review. */
+  firmReview?: FirmReview[];
 }
 
 interface Added {
@@ -136,6 +142,8 @@ export interface FieldValue {
   kept?: string[];
   /** Seat holder only: the member this name was linked to when it was added. */
   memberId?: string;
+  /** Company HQ only: the country and region it was read as when it was added (lib/geo.ts). The value stays as typed. */
+  geo?: Geo;
 }
 export interface LedgerEntry {
   memberId: string;
@@ -275,6 +283,8 @@ export interface State extends MessagingState {
   flags: { starterFloor?: number };
   /** The Claude connector: connected apps (token hashes only) and saved searches. See lib/mcp. */
   connector?: ConnectorState;
+  /** Fractional firms kept because a member holds a seat there (lib/firmRemoval.ts), for an admin to review. */
+  firmReview?: FirmReview[];
 }
 
 /* ---------- storage ---------- */
@@ -390,9 +400,11 @@ export async function loadSeed(): Promise<Seed> {
       );
   }
   const out = seed ?? DEMO_SEED;
+  // Values under an older label ("SaaS", "Finance", "< $1M") take the current one, wherever they are.
   for (const r of [...out.companies, ...out.engagements]) {
-    for (const [k, map] of Object.entries(LEGACY_VALUES)) if (r.fields[k] && map[r.fields[k]]) r.fields[k] = map[r.fields[k]];
+    for (const k of Object.keys(LEGACY_VALUES)) if (r.fields[k]) r.fields[k] = currentValue(k, r.fields[k]);
   }
+  for (const x of out.rateIndex ?? []) if (x.revenue) x.revenue = currentValue("revenue", x.revenue);
   seedCache = { seed: out, at: Date.now() };
   return seedCache.seed;
 }
@@ -524,10 +536,14 @@ export async function loadState(): Promise<State> {
     // paid as the member's daily room opens.
     s.held ??= [];
     // Values saved under an older label (e.g. revenue "< $1M") take the current one.
-    for (const [k, v] of Object.entries(s.values)) {
-      const map = LEGACY_VALUES[k.slice(k.lastIndexOf(".") + 1)];
-      if (map?.[v.value]) v.value = map[v.value];
-    }
+    for (const [k, v] of Object.entries(s.values)) v.value = currentValue(k.slice(k.lastIndexOf(".") + 1), v.value);
+    // Saved searches and benchmark-only rates too: an alert for "SaaS" companies matches Software ones.
+    for (const list of Object.values(s.connector?.alerts ?? {}))
+      for (const a of list) {
+        if (a.industry) a.industry = [...new Set(a.industry.map((x) => currentValue("industry", x)))];
+        if (a.revenue) a.revenue = [...new Set(a.revenue.map((x) => currentValue("revenue", x)))];
+      }
+    for (const b of s.benchRates ?? []) if (b.revenue) b.revenue = currentValue("revenue", b.revenue);
     for (const l of s.ledger) {
       if (l.delta !== 0 || (l.reason !== "referral" && l.reason !== "confirm")) continue;
       if (!s.held.some((h) => h.memberId === l.memberId && h.ref === l.ref && h.reason === l.reason))
@@ -543,6 +559,16 @@ export async function loadState(): Promise<State> {
         if (STARTER_CREDITS + sum < 0) s.ledger.push({ memberId, delta: -(STARTER_CREDITS + sum), reason: "adjust", ref: "starter.floor", at });
     }
     s.flags.starterFloor = STARTER_CREDITS;
+    // Fractional firms, agencies and marketplaces are not clients: what the state holds about one goes (lib/firmRemoval.ts).
+    try {
+      const seed = await loadSeed();
+      const p = purgeFirms(seed, s, new Date().toISOString());
+      if (p.companies || p.seats || p.people || p.facts || p.refunds || p.reviewed)
+        console.log(`Fractional firms removed on load: ${p.companies} companies, ${p.seats} seats, ${p.people} people, ${p.facts} facts, ${p.refunds} unlocks refunded, ${p.reviewed} kept for admin review.`);
+    } catch (e) {
+      if (e instanceof Unavailable) throw e;
+      console.error(`Fractional firm cleanup skipped: ${e instanceof Error ? e.message : String(e)}`);
+    }
     stateCache = s;
     stateDown = null;
     return s;
@@ -716,6 +742,8 @@ async function flush(): Promise<void> {
 interface Node {
   id: string;
   seedFields: Record<string, string>;
+  /** Fields in seedFields that came from Revenue Nomad research rather than this record (see researchFill). Shown as "research". */
+  research?: Set<string>;
 }
 type CompanyNode = Node & { name: string };
 type EngNode = Node & { companyId: string; verified: boolean; source: string };
@@ -728,17 +756,27 @@ interface Graph {
 
 function graph(seed: Seed, s: State): Graph {
   const g: Graph = { companies: new Map(), engagements: new Map(), contacts: new Map() };
-  for (const c of seed.companies) g.companies.set(c.id, { id: c.id, seedFields: c.fields, name: c.fields.name ?? "" });
-  for (const c of s.companies) if (!g.companies.has(c.id)) g.companies.set(c.id, { id: c.id, seedFields: { name: c.name }, name: c.name });
+  // A firm in the seed (an admin added its name after the seed was built) is left out, unless a member holds a seat there.
+  const firms = seedFirmIds(seed);
+  const out = new Set<string>();
+  for (const [id, f] of firms) if (!memberHoldsSeat(s, [...f.engagements, ...s.engagements.filter((e) => e.companyId === id).map((e) => e.id)])) out.add(id);
+  for (const c of seed.companies) if (!out.has(c.id)) g.companies.set(c.id, { id: c.id, seedFields: c.fields, name: c.fields.name ?? "" });
+  for (const c of s.companies) {
+    if (g.companies.has(c.id)) continue;
+    const node: CompanyNode = { id: c.id, seedFields: { name: c.name }, name: c.name };
+    if (c.by === "scan") researchFill(seed, s, node);
+    g.companies.set(c.id, node);
+  }
   for (const e of seed.engagements)
-    g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added" });
+    if (!out.has(e.companyId))
+      g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added" });
   for (const e of s.engagements)
-    if (!g.engagements.has(e.id))
+    if (!g.engagements.has(e.id) && !out.has(e.companyId))
       g.engagements.set(e.id, { id: e.id, seedFields: e.source ? { source: e.source } : {}, companyId: e.companyId, verified: false, source: e.source ?? "Member added" });
   const companyOfEng = (eid: string | null | undefined) => (eid ? g.engagements.get(eid)?.companyId : undefined);
   for (const p of seed.contacts ?? []) {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
-    if (companyId) g.contacts.set(p.id, { id: p.id, seedFields: p.fields, companyId, engagementId: p.engagementId ?? null, source: p.source ?? "Demand scan" });
+    if (companyId && !out.has(companyId)) g.contacts.set(p.id, { id: p.id, seedFields: p.fields, companyId, engagementId: p.engagementId ?? null, source: p.source ?? "Demand scan" });
   }
   for (const p of s.contacts) {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
@@ -746,6 +784,82 @@ function graph(seed: Seed, s: State): Graph {
   }
   return g;
 }
+
+/* ---------- company facts from research: firmographics and place ---------- */
+
+/**
+ * The free facts a company the weekly scan added can take from Revenue Nomad's own records:
+ * what it does, how big it is, its revenue and where it is. Never its name, website, LinkedIn
+ * or About, which would give a locked company away.
+ */
+export const RESEARCH_FIELDS = ["industry", "employees", "revenue", "hq"] as const;
+/** The seed's companies by website and by name key, built once per seed. */
+const researchIndex = new WeakMap<Seed, { bySite: Map<string, SeedCompany>; byName: Map<string, SeedCompany> }>();
+function researchOf(seed: Seed) {
+  let ix = researchIndex.get(seed);
+  if (!ix) {
+    ix = { bySite: new Map(), byName: new Map() };
+    for (const c of seed.companies) {
+      if (!RESEARCH_FIELDS.some((f) => c.fields[f])) continue;
+      const site = siteKey(c.fields.website);
+      if (site && !ix.bySite.has(site)) ix.bySite.set(site, c);
+      const nk = keyOfCompany(c.fields.name ?? "");
+      if (nk && !ix.byName.has(nk)) ix.byName.set(nk, c);
+    }
+    researchIndex.set(seed, ix);
+  }
+  return ix;
+}
+/**
+ * A company the weekly scan added starts with a name and maybe a website. When Revenue Nomad's
+ * records have the same company (same website, else the same name), its industry, size,
+ * revenue and HQ fill the gaps, as free facts from "Revenue Nomad research" (Cell.from
+ * "research"). They show while the company is locked: they are what a member decides on.
+ * Anything a member or the scan wrote stays ahead of them. Returns the fields filled.
+ */
+function researchFill(seed: Seed, s: State, node: CompanyNode): string[] {
+  const ix = researchOf(seed);
+  const site = siteKey(s.values[fkey(node.id, "website")]?.value);
+  const match = (site && ix.bySite.get(site)) || ix.byName.get(keyOfCompany(node.name));
+  if (!match || match.id === node.id) return [];
+  const filled: string[] = [];
+  for (const f of RESEARCH_FIELDS) {
+    const v = match.fields[f];
+    if (!v || node.seedFields[f]) continue;
+    node.seedFields[f] = v;
+    filled.push(f);
+  }
+  if (filled.includes("hq") && match.fields.country) {
+    node.seedFields.country = match.fields.country;
+    if (match.fields.region) node.seedFields.region = match.fields.region;
+  }
+  if (filled.length) node.research = new Set(filled);
+  return filled;
+}
+
+const geoCache = new Map<string, Geo>();
+const NOWHERE: Geo = { country: null, region: null };
+/**
+ * Where a company is: the country and region its HQ names (lib/geo.ts), whichever way the HQ
+ * was typed. Read from what was stored with the HQ when there is one (a member's fill, the
+ * seed's cleanup), else from the HQ text itself.
+ */
+function geoOf(c: Node | undefined, s: State): Geo {
+  const v = valueOf(c, s, "hq");
+  if (!v || v.status !== "live") return NOWHERE;
+  if (v.geo) return v.geo;
+  if (v.by === "seed" && c!.seedFields.country && c!.seedFields.hq === v.value) return { country: c!.seedFields.country, region: c!.seedFields.region || null };
+  let geo = geoCache.get(v.value);
+  if (!geo) {
+    geo = normalizeHq(v.value);
+    if (geoCache.size > 20_000) geoCache.clear();
+    geoCache.set(v.value, geo);
+  }
+  return geo;
+}
+
+/** Firms kept on the table only because a member holds a seat there, waiting for an admin (lib/firmRemoval.ts). */
+const firmsInReview = (seed: Seed, s: State) => new Set([...(seed.firmReview ?? []), ...(s.firmReview ?? [])].map((r) => r.companyId));
 
 /* ---------- helpers ---------- */
 
@@ -1243,7 +1357,7 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   const ver = vers.length;
   // (The "Active" a member's claim puts on an open role is written as the scan's, but no posting said it.)
   const fromScan = v.by === "scan" && !(key === "status" && v.value === "Active");
-  const from = v.by === "seed" ? ({ from: "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
+  const from = v.by === "seed" ? ({ from: node!.research?.has(key) ? "research" : "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
   const paid = !!me && !mine && !!f.gated && (s.unlocks[k] ?? []).includes(me.id);
   if (!f.gated || mine || free || paid) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
@@ -1367,6 +1481,8 @@ export async function existingCompany(domain: string | null, name: string | null
  * as theirs (claimSeat), and from then on it is their seat like any other.
  */
 const SEAT_SCAN = "Seat scan";
+/** What a member hears when they Add a fractional firm, agency or marketplace (lib/firms.ts). */
+export const FIRM_REFUSED = "That looks like a fractional firm or marketplace, not a client. Add the company you worked for.";
 /** Seat-scan seats a member can claim in any rolling 24 hours. */
 const SEAT_CLAIM_DAILY_MAX = 3;
 /** Unclaimed seats a member can check ("Is this you?") in any rolling 24 hours. Kept in memory: a restart resets it. */
@@ -1512,7 +1628,7 @@ function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me
  * scores like an open role). A seat a member added counts as fractional unless its type says
  * otherwise.
  */
-function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, engs: EngNode[], operators: Set<string>): Friendly {
+function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, engs: EngNode[], operators: Set<string>, firm = false): Friendly {
   let fractional = 0;
   let open = 0;
   let recent = 0;
@@ -1548,6 +1664,8 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
     Math.min(40, fractional * 20) + Math.min(20, functions.size * 10) + (fractional >= 2 ? 15 : 0) + (recent ? 15 : 0) + (open || postings ? 30 : 0) + (stories && !fractional && !open && !postings ? 5 : 0),
   );
   const tier = score >= 60 ? "High" : score >= 30 ? "Medium" : score > 0 ? "Low" : null;
+  // A fractional firm kept for admin review (a member holds a seat there, see lib/firmRemoval.ts) is not a client: no score, no hires.
+  if (firm) return { score: 0, tier: null, fractional: 0, open, functions: [], hiring: [...hiring], operators: operators.size, recent: 0 };
   return { score, tier, fractional, open, functions: [...functions], hiring: [...hiring], operators: operators.size, recent };
 }
 
@@ -1639,6 +1757,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   );
 
   const companies: CompanyRec[] = [];
+  const reviewFirms = firmsInReview(seed, s);
   const hiddenIds = new Set<string>();
   /** Companies the viewer created (the same test as exemptPick in perform). */
   const addedByMe = new Set(me ? s.companies.filter((x) => x.by === me.id).map((x) => x.id) : []);
@@ -1711,6 +1830,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     const cells: Record<string, Cell> = {};
     for (const f of COMPANY_F) cells[f.key] = cell(c, "company", f.key);
     count(cells, COMPANY_F);
+    // The place the viewer can see: none while the viewer's own report hides the HQ from them.
+    const geo = cells.hq?.s === "value" ? geoOf(c, s) : NOWHERE;
     // Same rule as identityHidden(), from what this loop already knows (that one scans every value).
     const hidden =
       !!me &&
@@ -1745,7 +1866,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       hidden,
       iconDomain: hidden ? null : icons[c.id] ?? null,
       cells,
-      friendly: friendliness(g, s, tracks, c.id, engs, operators),
+      friendly: friendliness(g, s, tracks, c.id, engs, operators, reviewFirms.has(c.id)),
+      country: geo.country,
+      region: geo.region,
       engagements: engRecs,
       people: coPeople,
       following: following.has(c.id),
@@ -2107,6 +2230,9 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
           standing: !!op && op.status === "live" && op.by === c.memberId && op.memberId === c.memberId,
         };
       }),
+    firmReview: [...(seed.firmReview ?? []), ...(s.firmReview ?? [])]
+      .filter((r, i, all) => g.companies.has(r.companyId) && all.findIndex((x) => x.companyId === r.companyId) === i)
+      .map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: r.reason, at: r.at })),
     walls: { members: walled.size, hits },
     pro: { interested: Object.values(s.profiles).filter((p) => p.proInterest).length, views, byWhere },
     topUnlocked: top("unlock"),
@@ -2689,7 +2815,15 @@ export async function perform(token: string | null, a: Action, origin?: string, 
         throw new ActionError("You marked an open role as yours in the last 24 hours. You can do that once a day.");
       const fillsRole = claimsRole && trusted(me.id);
       if (claimsRole && !fillsRole) claimKept = true;
-      s.values[k] = { value: value!, by: me.id, at: now, status: "live", ...(linked ? { memberId: linked.id } : {}) };
+      s.values[k] = {
+        value: value!,
+        by: me.id,
+        at: now,
+        status: "live",
+        ...(linked ? { memberId: linked.id } : {}),
+        // An HQ is kept as typed ("Austin, TX") with the place it names stored beside it.
+        ...(entity === "company" && key === "hq" ? { geo: normalizeHq(value) } : {}),
+      };
       if (scanClaim) {
         s.seatClaims = [...(s.seatClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: node.id, at: now }];
         return 0; // a claim earns nothing by itself; the facts added after it earn as usual
@@ -2901,6 +3035,7 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           if (name.length < 2) throw new ActionError("What's the company called?");
           if (!keyOfCompany(name)) throw new ActionError("That doesn't read as a company name. Type the name the company goes by.");
           if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase() || name.toLowerCase() === "hidden company") throw new ActionError("That's our placeholder for a company you haven't unlocked. Type the real name.");
+          if (companyFirm(name)) throw new ActionError(FIRM_REFUSED);
           // Validate everything up front so a bad field never leaves a half-made record.
           const pick = (entity: Entity, raw: Record<string, string> | undefined) =>
             Object.entries(raw ?? {})
@@ -3668,6 +3803,11 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
       // A board's link to a host many companies share (a LinkedIn page) names no company by its host.
       const domain = siteKey(raw.domain) === hostOf(raw.domain) ? hostOf(raw.domain) : null;
       let co = (domain ? byHost.get(domain) : undefined) ?? byName.get(coKey);
+      // A fractional firm, agency or marketplace posting a role is not a client (lib/firms.ts): the scan leaves it out.
+      if (companyFirm(company)) {
+        res.firms = (res.firms ?? 0) + 1;
+        continue;
+      }
 
       // The same posting: by its key, by its link, or the same title on a followed role at that company.
       let k = roles[key] ? key : url ? keyOfUrl.get(urlKey(url)) : undefined;
@@ -3991,7 +4131,8 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         employees: live(c, s, "employees"),
         revenue: live(c, s, "revenue"),
         hq: live(c, s, "hq"),
-        pastHires: friendliness(g, s, tracks, e.companyId, engs, new Set()).fractional,
+        pastHires: friendliness(g, s, tracks, e.companyId, engs, new Set(), firmsInReview(seed, s).has(e.companyId)).fractional,
+        ...geoOf(c, s),
       },
     };
   });

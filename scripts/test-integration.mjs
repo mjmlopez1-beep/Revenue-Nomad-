@@ -206,7 +206,7 @@ const engOf = (view, id) => {
   return null;
 };
 const companyNamed = (view, name) => view.companies.find((c) => c.name === name) ?? null;
-const PLAIN = { hq: "Austin, TX", industry: "SaaS", employees: "11–50", revenue: "$1M–$5M" };
+const PLAIN = { hq: "Austin, TX", industry: "Software", employees: "11–50", revenue: "$1M–$5M" };
 const claimed = new Set();
 /** A fill of an empty free company fact nobody in this run has picked yet. Hidden companies and test companies are left out. */
 function pickEmpty(view) {
@@ -291,7 +291,7 @@ section("bundle", async () => {
 
   // A member who already sees the company (they added a fact there) pays once for the open role's posting and rate (LOGIC-2), here through the rate's lock.
   const N = await member("Ned Twocredits");
-  const fact = await N.act({ type: "add", company: co, companyFields: { industry: "SaaS" } });
+  const fact = await N.act({ type: "add", company: co, companyFields: { industry: "Software" } });
   const two = await N.act({ type: "unlockMany", items: [{ entity: "engagement", id: eid, field: "rate" }, { entity: "engagement", id: eid, field: "posting" }] });
   check("a member who already sees the company pays 1 for the posting and the rate together", fact.status === 200 && two.status === 200 && two.json?.me?.credits === STARTER + 1 - 1 && two.json?.message === "Unlocked the posting and the posted rate for 1 credit.", two.json?.me ?? two.json);
 

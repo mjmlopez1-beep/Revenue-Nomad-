@@ -147,7 +147,7 @@ async function seedSignIn(m, ipAddr) {
 /* ---------- view helpers ---------- */
 
 const SELL = { businessModel: "B2B", motion: "Inside sales", dealSize: "$15K–$50K", salesCycle: "30–90 days" };
-const PLAIN = { hq: "Austin, TX", industry: "SaaS", employees: "11–50", revenue: "$1M–$5M", linkedin: "linkedin.com/company/qa-credits" };
+const PLAIN = { hq: "Austin, TX", industry: "Software", employees: "11–50", revenue: "$1M–$5M", linkedin: "linkedin.com/company/qa-credits" };
 /** Company facts typed in, not picked from a list: the pick-list limits don't apply to them. */
 const TYPED = { hq: PLAIN.hq, linkedin: PLAIN.linkedin };
 /** A company's other pick lists, which share the How they sell limits. */
