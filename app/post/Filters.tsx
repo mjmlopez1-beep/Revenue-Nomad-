@@ -51,7 +51,7 @@ function ListBlock({ k, title, f, setF, counts, label }: { k: ListKey; title: st
   return (
     <div className="tp-fblock">
       <div className="tp-flabel">{title}</div>
-      <ChipSet k={k} f={f} setF={setF} counts={counts} options={LIST_OPTIONS[k as Exclude<ListKey, "hq">]} label={label} />
+      <ChipSet k={k} f={f} setF={setF} counts={counts} options={LIST_OPTIONS[k as keyof typeof LIST_OPTIONS]} label={label} />
     </div>
   );
 }

@@ -72,6 +72,8 @@ import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult }
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
 import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
+import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
+import type { Icp } from "./tableTypes";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -165,6 +167,8 @@ interface Profile {
   messageEmailOff?: boolean;
   /** Asked to hear about Pro. */
   proInterest?: boolean;
+  /** Who they hunt: their ideal client (lib/hunt.ts). */
+  icp?: Icp | null;
 }
 /** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
 interface RoleTrack {
@@ -1889,6 +1893,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       unread: unreadCount(s, me.id),
       messageEmail: !prof.messageEmailOff,
       proInterest: !!prof.proInterest,
+      // Who they hunt, and their saved views (one list with the connector's saved searches).
+      icp: prof.icp ?? null,
+      savedViews: savedViewsOut(s.connector?.alerts?.[me.id]),
       // Only the viewer's own. Nobody else's private rate ever leaves the server.
       benchRates: s.benchRates
         .filter((b) => b.by === me.id)
@@ -3074,9 +3081,28 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           }
           if (a.goal !== undefined) p.goal = String(a.goal).slice(0, 40) || undefined;
           if (a.title !== undefined) p.title = stripInvisible(a.title).trim().slice(0, 80) || undefined;
+          if (a.icp !== undefined) {
+            try {
+              p.icp = cleanIcp(a.icp);
+            } catch (e) {
+              throw e instanceof HuntError ? new ActionError(e.message) : e;
+            }
+          }
           p.onboarded = true;
           s.profiles[me.id] = p;
           return { message: "Saved." };
+        }
+        case "savedView": {
+          // Save this view: the same list as the connector's saved searches (lib/hunt.ts).
+          s.connector ??= emptyConnector();
+          s.connector.alerts ??= {};
+          try {
+            const r = savedViewAction(s.connector.alerts[me.id] ?? [], a, () => `al_${randomBytes(6).toString("base64url")}`, now);
+            s.connector.alerts[me.id] = r.list;
+            return { message: r.message, ...(r.id ? { id: r.id } : {}) };
+          } catch (e) {
+            throw e instanceof HuntError ? new ActionError(e.message) : e;
+          }
         }
         case "report": {
           // One report hides the fact for the reporter; a second member's report hides it for
@@ -3992,11 +4018,15 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         revenue: live(c, s, "revenue"),
         hq: live(c, s, "hq"),
         pastHires: friendliness(g, s, tracks, e.companyId, engs, new Set()).fractional,
+        // The company's country once the records carry one (a saved view can ask for countries).
+        country: (c as { country?: string | null } | undefined)?.country ?? null,
       },
     };
   });
   const alertCounts = (m: Member) =>
     (alertsOf[m.id] ?? [])
+      // A saved view whose weekly email the member turned off stays saved, out of the email.
+      .filter((a) => a.email !== false)
       .map((a) => ({
         name: a.name,
         n: roleFacts.filter(({ e, facts }) =>

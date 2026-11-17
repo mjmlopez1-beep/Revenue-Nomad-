@@ -21,7 +21,19 @@ export interface SavedSearch {
   hq?: string;
   /** Only companies with past fractional hires on file. */
   fractionalFriendly?: boolean;
+  /** Any of these functions (a view saved in the app can name several). `function` is the one-function form. */
+  functions?: string[];
+  /** Countries (CompanyRec.country). A company with no country on file still matches. */
+  country?: string[];
   createdAt: string;
+  /**
+   * A view saved in the app ("Save this view"): the table's place as its address query (view,
+   * list, sort, search and filters), so the app opens it as saved. Left out on a search saved
+   * through the connector, which the app opens from its criteria.
+   */
+  place?: string;
+  /** "Email me new matches each week". Left out means on (the connector's saved searches always were). */
+  email?: boolean;
 }
 
 /** The free facts of one open role that an alert reads. */
@@ -34,6 +46,8 @@ export interface RoleFacts {
   hq: string | null;
   /** Fractional hires on file at the company (Friendly.fractional). */
   pastHires: number;
+  /** The company's country, when on file (CompanyRec.country). */
+  country?: string | null;
 }
 
 /** Saved searches a member can keep. */
@@ -72,6 +86,8 @@ export function placeWords(v: string): string[] {
 /** Whether an open role matches a saved search. */
 export function alertMatches(a: SavedSearch, r: RoleFacts): boolean {
   if (a.function && r.function !== a.function) return false;
+  if (a.functions?.length && !(r.function && a.functions.includes(r.function))) return false;
+  if (a.country?.length && r.country && !a.country.some((c) => sameCountry(c, r.country!))) return false;
   if (a.industry?.length && !(r.industry && a.industry.includes(r.industry))) return false;
   if (a.employees?.length && !(r.employees && a.employees.includes(r.employees))) return false;
   if (a.revenue?.length && !(r.revenue && a.revenue.includes(r.revenue))) return false;
@@ -84,11 +100,24 @@ export function alertMatches(a: SavedSearch, r: RoleFacts): boolean {
   return true;
 }
 
+/** "US", "USA" and "United States" are one country, case aside. */
+export const countryKey = (v: string) => {
+  const k = v.trim().toLowerCase().replace(/\./g, "");
+  return k === "us" || k === "usa" || k === "united states of america" ? "united states" : k === "uk" ? "united kingdom" : k;
+};
+export const sameCountry = (a: string, b: string) => countryKey(a) === countryKey(b);
+
 /** A readable name for what an alert looks for: "Fractional Marketing roles at SaaS companies, $5M–$20M". */
 export function describeAlert(a: Omit<SavedSearch, "id" | "name" | "createdAt">): string {
-  const what = `${a.function ? `Fractional ${a.function}` : "Fractional"} roles`;
+  const fns = a.function ? [a.function] : a.functions ?? [];
+  const what = `${fns.length ? `Fractional ${fns.join(" or ")}` : "Fractional"} roles`;
   const where = [a.industry?.length ? `${a.industry.join(" or ")} companies` : "", a.fractionalFriendly ? "that hired fractionals before" : ""].filter(Boolean).join(" ");
-  const size = [a.revenue?.length ? a.revenue.join(" or ") : "", a.employees?.length ? `${a.employees.join(" or ")} employees` : "", a.hq ? `in ${a.hq}` : ""].filter(Boolean);
+  const size = [
+    a.revenue?.length ? a.revenue.join(" or ") : "",
+    a.employees?.length ? `${a.employees.join(" or ")} employees` : "",
+    a.hq ? `in ${a.hq}` : "",
+    a.country?.length ? `in ${a.country.join(" or ")}` : "",
+  ].filter(Boolean);
   return [`${what}${where ? ` at ${where}` : ""}`, ...size].join(", ");
 }
 
@@ -100,6 +129,8 @@ export function cleanCriteria(raw: {
   revenue?: unknown;
   hq?: unknown;
   fractional_friendly?: unknown;
+  functions?: unknown;
+  country?: unknown;
 }): { criteria: Omit<SavedSearch, "id" | "name" | "createdAt">; problems: string[] } {
   const problems: string[] = [];
   const list = (key: string, values: unknown, options: readonly string[]) => {
@@ -121,6 +152,12 @@ export function cleanCriteria(raw: {
   const industry = list("industry", raw.industry, RN_INDUSTRIES);
   const employees = list("employees", raw.employees, RN_EMPLOYEES);
   const revenue = list("revenue", raw.revenue, RN_REVENUE);
+  const functions = list("function", raw.functions, FUNCTIONS);
+  // Countries are free text from the company records: cleaned, never matched against a list.
+  const country = (Array.isArray(raw.country) ? raw.country : [])
+    .map((v) => String(v ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 60))
+    .filter(Boolean)
+    .slice(0, 12);
   return {
     criteria: {
       ...(fn ? { function: fn } : {}),
@@ -129,6 +166,8 @@ export function cleanCriteria(raw: {
       ...(revenue ? { revenue } : {}),
       ...(hq ? { hq } : {}),
       ...(raw.fractional_friendly === true ? { fractionalFriendly: true } : {}),
+      ...(functions && !fn ? (functions.length === 1 ? { function: functions[0] } : { functions }) : {}),
+      ...(country.length ? { country: [...new Set(country)] } : {}),
     },
     problems,
   };
