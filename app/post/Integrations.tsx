@@ -401,10 +401,10 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                       <a href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer" className="in-link">
                         api.slack.com/apps
                       </a>{" "}
-                      and pick Create New App, then From scratch. Name it Merlin alerts, pick your workspace and pick Create App.
+                      and pick Create New App, then Pick features (under From scratch) and Continue. Name it Merlin alerts, pick your workspace and create it. If it asks which features, tick Incoming Webhooks.
                     </li>
                     <li>In the app&apos;s menu, open Incoming Webhooks and turn Activate Incoming Webhooks on.</li>
-                    <li>Pick Add New Webhook. Choose the channel for alerts, or your own name for a DM, then pick Allow.</li>
+                    <li>Scroll down and pick Add New Webhook to Workspace. Choose the channel for alerts, or your own name for a DM, then pick Allow.</li>
                     <li>Copy the Webhook URL it shows. The app can only post to that one channel. It can&apos;t read anything in your Slack.</li>
                     <li>Paste it below and pick Connect Slack. We send a test message first.</li>
                   </ol>
