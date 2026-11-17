@@ -51,7 +51,7 @@ import { MyCredits, inviteLink, signInLink, useCopy, useShareInvite } from "./Cr
 import { Integrations } from "./Integrations";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
-import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViews } from "./Hunt";
+import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViews, type ProfileEdit } from "./Hunt";
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
@@ -1390,11 +1390,12 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       onToggle={() => setEff({ ...eff, icp: !eff.icp })}
     />
   );
-  const saveIcp = async (v: Icp) => {
-    const r = await act({ type: "profile", icp: v }, { quiet: true });
+  const saveIcp = async ({ title, fn, icp: v }: ProfileEdit) => {
+    const r = await act({ type: "profile", icp: v, title, function: fn ?? "" }, { quiet: true });
     if (!r.ok) return false;
     setFilters((f) => ({ ...f, icp: !icpEmpty(v) }));
     if (!icpEmpty(v) && !sortPicked) setSort(null);
+    toast("Profile saved. The table now follows it.");
     return true;
   };
   const views = me.savedViews ?? [];
@@ -1781,7 +1782,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           />
         )}
         {addOpts && <AddModal infos={infos} opts={addOpts} onClose={() => setAddOpts(null)} />}
-        {icpOpen && <IcpSheet icp={me.icp} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
+        {icpOpen && <IcpSheet icp={me.icp} title={me.title} fn={me.function} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
         {saveOpen && (
           <SaveViewSheet key={herePlace} defaultName={viewName(spelled, tab, recordType, fnOnly ? hireFn : null)} emailOn={view.email} onSave={saveView} onClose={() => setSaveOpen(false)} />
         )}
@@ -1826,6 +1827,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
               { label: "Integrations", hint: "Slack, Claude", current: page === "integrations", onClick: () => (setDrawer(null), setPage("integrations")) },
               ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
+              { label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
               { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
               // With email on: a one-time link by email, to open Trading Post on another device.

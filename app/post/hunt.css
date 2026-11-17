@@ -294,3 +294,24 @@
     font-size: 16px;
   }
 }
+
+/* "Your profile": the Your clients part under title and function. */
+.hunt-sub {
+  margin: 22px 0 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.1));
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.hunt-sub .hunt-lead {
+  margin: 0;
+}
+#hunt-title {
+  width: 100%;
+  max-width: 420px;
+}
+.hunt-q-title {
+  display: grid;
+  gap: 8px;
+}

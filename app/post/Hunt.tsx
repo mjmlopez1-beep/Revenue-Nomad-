@@ -8,7 +8,7 @@
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import type { CompanyRec, Icp, SavedViewRec } from "@/lib/tableTypes";
-import { INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
+import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
 import { IconCheck, IconSearch, IconX } from "../ui/shared";
 import { countryKey, countryName, countryOf, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { Sheet } from "./ui";
@@ -201,15 +201,42 @@ export function IcpPill({ icp, on, everyone, shownN, onToggle, onEdit }: { icp: 
   );
 }
 
-/** The ideal client in a sheet (a dialog on wider screens). Saving narrows the table to it. */
-export function IcpSheet({ icp, companies, onSave, onClose }: { icp: Icp | null | undefined; companies: CompanyRec[]; onSave: (v: Icp) => Promise<boolean>; onClose: () => void }) {
+/** What a member tells us about themselves: title, function and ideal client. */
+export interface ProfileEdit {
+  title: string;
+  fn: string | null;
+  icp: Icp;
+}
+
+/**
+ * "Your profile" in a sheet (a dialog on wider screens): title, function and ideal client.
+ * The function decides what the table points out and leads with; the ideal client narrows it.
+ * Opened from the account menu and from the "Your clients" pill.
+ */
+export function IcpSheet({
+  icp,
+  title,
+  fn,
+  companies,
+  onSave,
+  onClose,
+}: {
+  icp: Icp | null | undefined;
+  title: string;
+  fn: string | null;
+  companies: CompanyRec[];
+  onSave: (v: ProfileEdit) => Promise<boolean>;
+  onClose: () => void;
+}) {
   const [v, setV] = useState<Icp>(icp ?? EMPTY_ICP);
+  const [t, setT] = useState(title);
+  const [f, setF] = useState<string | null>(fn && FUNCTIONS.includes(fn) ? fn : null);
   const [busy, setBusy] = useState(false);
   const industries = useMemo(() => industriesByCount(companies), [companies]);
   const countries = useMemo(() => countriesByCount(companies), [companies]);
   const save = async () => {
     setBusy(true);
-    const ok = await onSave(v);
+    const ok = await onSave({ title: t.trim(), fn: f, icp: v });
     setBusy(false);
     if (ok) onClose();
   };
@@ -217,22 +244,45 @@ export function IcpSheet({ icp, companies, onSave, onClose }: { icp: Icp | null 
     <Sheet
       dialog
       className="hunt-sheet"
-      title="Your clients"
+      title="Your profile"
       onClose={onClose}
       footer={
         <div className="tp-sheet-actions">
-          {!icpEmpty(v) && (
-            <button type="button" className="btn" onClick={() => setV(EMPTY_ICP)}>
-              Clear all
-            </button>
-          )}
           <button type="button" className="btn btn-pine btn-lg tp-grow" disabled={busy} aria-busy={busy} onClick={save}>
-            {busy ? "Saving" : icpEmpty(v) ? "Show everyone" : "Show these clients"}
+            {busy ? "Saving" : "Save"}
           </button>
         </div>
       }
     >
-      <p className="hunt-lead">The table leads with companies like these. Pick as many as fit. Leave a part empty for any.</p>
+      <div className="hunt-fields">
+        <div className="hunt-q hunt-q-title">
+          <label className="hunt-h" htmlFor="hunt-title">
+            Your title
+          </label>
+          <input id="hunt-title" className="input" value={t} maxLength={80} placeholder="Fractional VP Sales" onChange={(e) => setT(e.target.value)} />
+        </div>
+        <fieldset className="hunt-q">
+          <legend className="hunt-h">Your function</legend>
+          <div className="hunt-chips" role="radiogroup" aria-label="Your function">
+            {FUNCTIONS.map((o) => (
+              <button key={o} type="button" role="radio" aria-checked={f === o} className={`chip hunt-chip${f === o ? " chip-on" : ""}`} onClick={() => setF(f === o ? null : o)}>
+                {f === o && <IconCheck size={11} />}
+                {o}
+              </button>
+            ))}
+          </div>
+          <p className="hunt-lead">We point out open roles in your function and companies that haven&apos;t hired it yet.</p>
+        </fieldset>
+      </div>
+      <div className="hunt-sub">
+        <div className="hunt-h">Your clients</div>
+        <p className="hunt-lead">The table leads with companies like these. Pick as many as fit. Leave a part empty for any.</p>
+        {!icpEmpty(v) && (
+          <button type="button" className="btn btn-sm" onClick={() => setV(EMPTY_ICP)}>
+            Clear your clients
+          </button>
+        )}
+      </div>
       <IcpFields value={v} onChange={setV} industries={industries} countries={countries} />
     </Sheet>
   );
