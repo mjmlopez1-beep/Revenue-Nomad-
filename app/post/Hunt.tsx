@@ -86,6 +86,8 @@ export function IcpFields({
   };
   const indToggle = (o: string) => {
     const g = groupOf(o);
+    // A pick ends the search (as Enter does), so no "no match" line is left under the chip just picked.
+    if (q && !indOn(o)) setIndQ("");
     if (!g) return onChange({ ...value, industries: flip(value.industries, o) });
     const on = indOn(o);
     onChange({ ...value, industries: on ? value.industries.filter((v) => !g.values.includes(v)) : [...new Set([...value.industries, ...g.values])] });
@@ -120,7 +122,7 @@ export function IcpFields({
             />
           </label>
         )}
-        {q && !found.length && <p className="hunt-note">No industry on the list matches {indQ.trim()}.</p>}
+        {q && !found.length && !groups.length && !industries.some((x) => x.name.toLowerCase().includes(q)) && <p className="hunt-note">No industry on the list matches {indQ.trim()}.</p>}
       </fieldset>
       <fieldset className="hunt-q">
         <legend className={headingClass}>Company size</legend>

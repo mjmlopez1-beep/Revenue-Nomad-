@@ -1467,7 +1467,8 @@ export async function joinMember(
     const referrer = code ? seed.members.find((m) => inviteCode(m.id) === code) ?? s.members.find((m) => inviteCode(m.id) === code) : undefined;
     const sameNetwork = !!referrer && networksOf(s, referrer.id).has(ipHash);
     const m = {
-      id: newId("j", name), name, email, title: "Member", token: randomBytes(12).toString("base64url"), at: new Date().toISOString(), ipHash,
+      // No title until they give one: "Member" is only a display fallback, never a stored title.
+      id: newId("j", name), name, email, title: "", token: randomBytes(12).toString("base64url"), at: new Date().toISOString(), ipHash,
       ...(referrer && !sameNetwork ? { referredBy: referrer.id } : {}),
       // With email on, the one-time link to finish joining goes only to this address: using it
       // proves the address and sets `proven` (lib/signin.ts, see trustOf).
@@ -2067,7 +2068,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       id: me.id,
       name: me.name,
       email: me.email,
-      title: prof.title || me.title,
+      // Accounts that joined before titles started empty were stored as "Member": that is no title.
+      title: prof.title || (me.title === "Member" ? "" : me.title),
       function: prof.function ?? functionOf(me.title),
       goal: prof.goal ?? null,
       onboarded: !!prof.onboarded,

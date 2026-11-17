@@ -987,3 +987,194 @@
     height: 44px;
   }
 }
+
+/* ---------- step 1: the title sits under its label, like every other question ---------- */
+.ob-q > label.ob-h {
+  display: block;
+  margin-bottom: 12px;
+}
+.ob-title-input.input {
+  min-height: 48px;
+  font-size: 16px;
+}
+/* One tap fills an empty title with what fractionals in their function go by. */
+.ob-title-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ob-title-pick {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 18px;
+  border: 1px dashed var(--line-strong);
+  background: var(--surface);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ob-title-pick:hover {
+  border-color: var(--pine);
+  color: var(--pine);
+}
+
+/* ---------- credits earned on the way: "+4" beside the balance for a moment ---------- */
+.ob-credits {
+  position: relative;
+}
+.ob-credits-bump {
+  margin-left: -2px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--volt);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  animation: ob-bump 0.4s ease-out;
+}
+@keyframes ob-bump {
+  from {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ---------- Find your seats: the other seats on file there ---------- */
+.ob-seats-other {
+  width: 100%;
+  margin: 0;
+}
+.ob-seat-other .ob-seat-line {
+  font-weight: 500;
+}
+.ob-seat-added {
+  align-items: flex-start;
+}
+.ob-seat-added svg {
+  flex: none;
+  margin-top: 4px;
+}
+.ob-seat-form .ob-chip {
+  padding: 0 16px;
+}
+.ob-seat-form .input {
+  min-height: 44px;
+}
+
+/* ---------- the last step: fill in your seats, the weekly email, Slack ---------- */
+.ob-next-text {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.ob-fill.btn {
+  min-height: 40px;
+  background: var(--surface);
+}
+.ob-alerts {
+  margin-top: 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.ob-alerts-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+.ob-alerts-opt input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--pine);
+}
+.ob-alerts-text {
+  display: grid;
+}
+.ob-alerts-label {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ob-alerts-hint {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ob-alerts-slack {
+  margin: 8px 0 0 32px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ob-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+.ob-linkbtn:disabled {
+  opacity: 0.6;
+}
+
+/* ---------- sign-in link: ways to keep it, and the check before leaving without it ---------- */
+.ob-keep-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 24px;
+}
+.ob-keep-ways .ob-linkbtn.ob-mailme {
+  font-size: 14px;
+}
+.ob-leave {
+  margin-top: 24px;
+  padding: 12px 16px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--ember);
+  border-left-width: 6px;
+  background: var(--surface);
+  display: grid;
+  gap: 12px;
+}
+.ob-leave p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+.ob-leave-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .ob-leave-acts .btn,
+  .ob-fill.btn {
+    min-height: 44px;
+  }
+  .ob-alerts-slack {
+    margin-left: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-credits-bump {
+    animation: none;
+  }
+}

@@ -15,16 +15,18 @@
  *   5. Keep your sign-in link (only for members who joined here while email sign-in is off).
  * Each step is a history entry and the answers are kept for the tab, so back steps back and a
  * reload comes back to the same step. Finishing sends the follows, then the profile last
- * (which marks the member onboarded). The last button names where the member lands: their
- * seats when a seat on file carries their name (Root opens the app there), otherwise the table.
+ * (which marks the member onboarded). The last button opens the table their answers built; a
+ * member with seats on file under their name also gets "Fill in your seats" (Root opens the app
+ * there). The last step also offers the weekly email of new matches (a saved view) and Slack.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./onboard.css";
 import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconSearch, IconStar, IconX, fmtMonth, post, useToast, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
 import { GOALS, type ActionResult, type CompanyRec, type EngagementRec, type Icp } from "@/lib/tableTypes";
-import { bestFit, deriveAll, icpEmpty, icpTest, isFirm } from "@/app/post/model";
+import { icpEmpty, isFirm } from "@/app/post/model";
 import { EMPTY_ICP, IcpFields, countriesByCount, industriesByCount } from "@/app/post/Hunt";
+import { alertView, isMine, metaOf, named, realTitle, seatFns, seatLine as lineOf, seatState, seatsAt, suggest, titlesFor, type Goal } from "./suggest";
 import { contactOf, mailto } from "../landing/contact";
 
 export interface OnboardingProps {
@@ -38,11 +40,6 @@ export interface OnboardingProps {
    */
   onSkip?: () => void;
 }
-
-type Goal = (typeof GOALS)[number]["key"];
-
-/** Functions that read naturally in "no Sales seat yet". The catch-alls do not. */
-const named = (fn: string | null) => (fn && fn !== "Other" && fn !== "Executive" ? fn : null);
 
 /**
  * What the table opens on because of each answer (the app reads the stored key: its first tab
@@ -103,95 +100,6 @@ function entryStep(): number {
   return Number.isInteger(n) && n >= 1 ? n : 0;
 }
 
-/**
- * One line about a company that works for sparse and rich records: industry, size, and the
- * seats on file with how recent they are ("1 recent seat", "3 seats, 2 recent", "2 past seats").
- */
-function metaOf(c: CompanyRec): string {
-  const parts = [val(c.cells.industry), val(c.cells.employees)].filter(Boolean) as string[];
-  const n = c.engagements.length;
-  const f = c.friendly;
-  if (n === 1) parts.push(f.recent > 0 ? "1 recent seat" : f.fractional > 0 ? "1 past seat" : "1 seat");
-  else if (n > 1) parts.push(f.recent > 0 ? `${n} seats, ${Math.min(n, f.recent)} recent` : f.fractional > 0 ? `${n} past seats` : `${n} seats`);
-  return parts.join(" · ");
-}
-
-/** The member held a seat here (the seat on file carries their name). */
-const isMine = (c: CompanyRec) => c.engagements.some((e) => e.yours);
-/**
- * Every function on file at a company: the ones it hired fractionally, then the ones with an
- * open role and no hire yet (friendly.hiring). "Hired in other functions" reads hires alone.
- */
-const fnsOf = (c: CompanyRec) => [...c.friendly.functions, ...(c.friendly.hiring ?? []).filter((f) => !c.friendly.functions.includes(f))];
-
-const SUGGESTIONS = 6;
-
-/**
- * How strong the evidence is that a company hires fractionals, for sorting: an open role
- * now, a fractional seat that started recently, or one on file from before.
- */
-function fitRank(c: CompanyRec): number {
-  const f = c.friendly;
-  return f.open > 0 ? 3 : f.recent > 0 ? 2 : f.fractional > 0 ? 1 : 0;
-}
-
-/**
- * Six suggestions. The companies where the member held a seat come first (they know those),
- * then companies that match what the member came for.
- */
-function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null, icp: Icp | null = null, clients: string[] = []): { title: string; list: CompanyRec[] } {
-  // Hidden companies (an open role, not yet unlocked) have no name to follow by. Fractional firms
-  // are not clients, and the member's own clients are their seats, not companies to follow.
-  const theirs = new Set(clients);
-  const companies = all.filter((c) => !c.hidden && !isFirm(c) && !isMine(c) && !theirs.has(c.id));
-  if (!icpEmpty(icp)) {
-    // Their Ideal Fractional Profile first: the companies that match, ranked by best fit for their function.
-    const me = { icp, function: fn };
-    const fits = icpTest(icp!);
-    const infos = deriveAll(companies);
-    // Confirmed matches of their profile before maybes (a part not on file), then best fit.
-    const score = new Map(infos.map((i) => {
-      const b = bestFit(i, me);
-      return [i.c.id, b.score + (b.match === "match" ? 2000 : b.match === "maybe" ? 1000 : 0)];
-    }));
-    const pool = companies.filter(fits);
-    const ranked = (pool.length >= SUGGESTIONS ? pool : companies).sort(
-      (a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0) || b.friendly.score - a.friendly.score || a.name.localeCompare(b.name),
-    );
-    return { title: named(fn) ? `Fit your Ideal Fractional Profile, with no fractional ${fn} yet` : "Fit your Ideal Fractional Profile", list: ranked.slice(0, SUGGESTIONS) };
-  }
-  const own: CompanyRec[] = [];
-  const rank = new Map(companies.map((c) => [c.id, fitRank(c)]));
-  // Many companies tie on score, so recent evidence breaks the tie before name order does.
-  const byScore = (a: CompanyRec, b: CompanyRec) =>
-    b.friendly.score - a.friendly.score ||
-    (rank.get(b.id) ?? 0) - (rank.get(a.id) ?? 0) ||
-    b.engagements.length - a.engagements.length ||
-    Number(!!b.iconDomain) - Number(!!a.iconDomain) ||
-    a.name.localeCompare(b.name);
-  const fnBonus = (c: CompanyRec) => (fn && fnsOf(c).includes(fn) ? 1 : 0);
-  /** Companies with no functions on file say little; keep them only to fill the six. */
-  const withFunctions = (list: CompanyRec[]) => {
-    const kept = list.filter((c) => fnsOf(c).length > 0);
-    return kept.length >= SUGGESTIONS ? kept : list;
-  };
-  let pool = companies.filter((c) => !isMine(c));
-  let title = "Companies that hire fractionals";
-  if (goal === "adjacent") {
-    const adj = pool.filter((c) => c.friendly.functions.length && (!fn || !c.friendly.functions.includes(fn)));
-    pool = (adj.length >= SUGGESTIONS ? adj : pool).sort((a, b) => b.friendly.functions.length - a.friendly.functions.length || byScore(a, b));
-    title = named(fn) ? `No fractional ${fn} on file yet` : "Hired fractionals in other functions";
-  } else if (goal === "intro") {
-    pool = withFunctions(pool).sort((a, b) => b.friendly.operators - a.friendly.operators || byScore(a, b));
-    title = "A member held a seat here";
-  } else {
-    pool = withFunctions(pool).sort((a, b) => fnBonus(b) - fnBonus(a) || byScore(a, b));
-    if (pool[0] && fn && named(fn) && pool[0].friendly.functions.includes(fn)) title = `Hired a fractional in ${fn}`;
-  }
-  if (own.length) title = own.length >= SUGGESTIONS ? "Where you held a seat" : "Where you held a seat, then more";
-  return { title, list: [...own, ...pool].slice(0, SUGGESTIONS) };
-}
-
 function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; name: string }) {
   return (
     <button
@@ -209,22 +117,67 @@ function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; na
 }
 
 /**
- * For a member with seats on file under their name: what is waiting and why it is worth doing
- * first. Shown on the follow step above the list (and on the link step), so it is the first
- * thing they read there. Nothing for everyone else (they go to the table).
+ * For a member with seats on file under their name: what is waiting and why it is worth doing,
+ * with "Fill in your seats" (the main button opens the table). Shown on the last step above the
+ * list, so it is the first thing they read there. Nothing for everyone else.
  */
-function SeatsNext({ n }: { n: number }) {
+function SeatsNext({ n, busy, onFill }: { n: number; busy?: boolean; onFill?: () => void }) {
   if (!n) return null;
   return (
-    <p className="ob-next-up">
+    <div className="ob-next-up">
       <span className="ob-next-icon" aria-hidden>
         <IconBriefcase size={16} />
       </span>
-      <span>
-        <strong>{n === 1 ? "1 seat on file carries your name." : `${n} seats on file carry your name.`}</strong> You see everything on{" "}
-        {n === 1 ? "it" : "them"} free, and each answer you add there earns a credit.
+      <span className="ob-next-text">
+        <span>
+          <strong>{n === 1 ? "1 seat on file carries your name." : `${n} seats on file carry your name.`}</strong> You see everything on{" "}
+          {n === 1 ? "it" : "them"} free, and each answer you add there earns a credit.
+        </span>
+        {onFill ? (
+          <button type="button" className="btn ob-fill" disabled={busy} onClick={onFill}>
+            Fill in your {n === 1 ? "seat" : "seats"}
+          </button>
+        ) : null}
       </span>
-    </p>
+    </div>
+  );
+}
+
+/**
+ * The weekly email of new matches, offered on the last step: a saved view (the one Save this
+ * view makes) of open roles in their function that fit their profile. Slack is a link away.
+ */
+function AlertsOpt({
+  on, setOn, fn, icp, emailOn, busy, onSlack,
+}: {
+  on: boolean;
+  setOn: (v: boolean) => void;
+  fn: string | null;
+  icp: Icp;
+  /** The weekly email can go out (email is set up). Otherwise the view is still saved. */
+  emailOn: boolean;
+  busy: boolean;
+  onSlack: () => void;
+}) {
+  const what = `${named(fn) ? `${fn} roles` : "fractional roles"}${icpEmpty(icp) ? "" : " that fit your profile"}`;
+  return (
+    <div className="ob-alerts">
+      <label className="ob-alerts-opt">
+        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
+        <span className="ob-alerts-text">
+          <span className="ob-alerts-label">{emailOn ? `Email me new ${what} each week` : `Save new ${what} as a view`}</span>
+          <span className="ob-alerts-hint">
+            {emailOn ? "Only when something is new. Turn it off any time under Saved views." : "It sits under Saved views in the filters, so new ones are a click away."}
+          </span>
+        </span>
+      </label>
+      <p className="ob-alerts-slack">
+        Rather get them in Slack?{" "}
+        <button type="button" className="ob-linkbtn" disabled={busy} onClick={onSlack}>
+          Set it up in Integrations
+        </button>
+      </p>
+    </div>
   );
 }
 
@@ -246,7 +199,8 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     const goal = ((GOALS.find((g) => g.key === saved.goal) ?? GOALS.find((g) => g.key === me.goal))?.key as Goal | undefined) ?? null;
     const follows = Array.isArray(saved.follows) ? saved.follows.filter((id) => known.has(id)) : view.companies.filter((c) => c.following).map((c) => c.id);
     const want = entryStep() || saved.step || 1;
-    const title = typeof saved.title === "string" ? saved.title : me.title || "";
+    // No title yet means an empty field with the placeholder showing, never a stored "Member".
+    const title = typeof saved.title === "string" ? saved.title : realTitle(me.title);
     const icp = saved.icp ?? me.icp ?? EMPTY_ICP;
     const clients = Array.isArray(saved.clients) ? saved.clients.slice(0, 20) : [];
     return { fn, goal, follows, title, icp, clients, step: fn && goal ? Math.min(Math.max(1, want), total) : 1 };
@@ -270,7 +224,20 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     () => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours && (e.source === "Published engagement" || e.source === "Member success story")).length, 0),
     [view.companies],
   );
-  const lastLabel = mySeats ? `Fill in your ${mySeats === 1 ? "seat" : "seats"}` : "Open the table";
+  // The weekly email of new matches, offered on the last step (on unless they untick it).
+  const [alerts, setAlerts] = useState(true);
+  const emailOn = !!view.scan?.digest;
+  // Credits earned on the way (a seat added on Find your seats): "+4" beside the balance for a moment.
+  const [bump, setBump] = useState(0);
+  const prevCredits = useRef(me.credits);
+  useEffect(() => {
+    const d = me.credits - prevCredits.current;
+    prevCredits.current = me.credits;
+    if (d <= 0) return;
+    setBump(d);
+    const t = setTimeout(() => setBump(0), 2400);
+    return () => clearTimeout(t);
+  }, [me.credits]);
   // Step 2 and 3 need both answers. If they are missing (storage was cleared), ask again.
   const shown = step > 1 && (!fn || !goal) ? 1 : step;
 
@@ -355,15 +322,27 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
    * Finish with what is answered so far. `skip`: "Skip to the table", from any step. The profile
    * action marks the member onboarded either way, so a reload never brings them back here.
    */
-  const finish = async (skip = false) => {
+  const finish = async (skip = false, to: "table" | "seats" | "integrations" = "table") => {
     if (busy) return;
     setBusy(true);
-    if (skip) onSkip?.();
+    // The app opens on the table their answers built, unless they asked for their seats.
+    if (skip || to !== "seats") onSkip?.();
     await sendFollows();
+    // The weekly email of new matches, as a saved view (only from the last step, never on a skip).
+    if (!skip && alerts) {
+      const v = alertView(fn, icpEmpty(icp) ? null : icp);
+      const r = await post({ action: { type: "savedView", op: "save", name: v.name, place: v.place, criteria: v.criteria, email: true } });
+      if (r.error) toast(r.error, true);
+    }
     await rewind();
     window.scrollTo(0, 0);
+    if (to === "integrations") {
+      try {
+        window.history.replaceState(window.history.state, "", `${window.location.pathname}?p=integrations`);
+      } catch {}
+    }
     const r = await act(
-      { type: "profile", function: fn ?? undefined, goal: goal ?? undefined, ...(title.trim() !== (me.title || "") ? { title: title.trim() } : {}), icp: icpEmpty(icp) ? null : icp },
+      { type: "profile", function: fn ?? undefined, goal: goal ?? undefined, ...(title.trim() !== realTitle(me.title) ? { title: title.trim() } : {}), icp: icpEmpty(icp) ? null : icp },
       { quiet: true },
     );
     if (!r.ok) {
@@ -376,12 +355,14 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   };
 
   const afterFollow = async () => {
-    if (!linkStep) return finish();
+    if (!linkStep) return finish(false, "table");
     setBusy(true);
     await sendFollows();
     setBusy(false);
     forward(5);
   };
+
+  const alertsOpt = <AlertsOpt on={alerts} setOn={setAlerts} fn={fn} icp={icp} emailOn={emailOn} busy={busy} onSlack={() => finish(false, "integrations")} />;
 
   return (
     <div className="ob">
@@ -397,6 +378,11 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
           <span>
             <strong>{me.credits}</strong> credits
           </span>
+          {bump > 0 ? (
+            <span className="ob-credits-bump" aria-hidden>
+              +{bump}
+            </span>
+          ) : null}
         </span>
       </header>
 
@@ -411,9 +397,12 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
             <span className="ob-step num" aria-hidden>
               Step {shown} of {total}
             </span>
-            <button type="button" className="ob-skip" onClick={() => finish(true)} disabled={busy}>
-              Skip to the table
-            </button>
+            {/* Not on the sign-in link step: leaving there without the link is the one thing to avoid. */}
+            {shown === 5 ? null : (
+              <button type="button" className="ob-skip" onClick={() => finish(true)} disabled={busy}>
+                Skip to the table
+              </button>
+            )}
           </div>
 
           {shown === 1 ? (
@@ -433,7 +422,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
           ) : shown === 2 ? (
             <StepClients companies={view.companies} icp={icp} setIcp={setIcp} onBack={back} onNext={() => forward(3)} />
           ) : shown === 3 ? (
-            <StepSeats companies={view.companies} fn={fn} title={title} name={me.name} clients={clients} setClients={setClients} act={act} onBack={back} onNext={() => forward(4)} />
+            <StepSeats companies={view.companies} fn={fn} title={title} name={me.name} credits={me.credits} clients={clients} setClients={setClients} act={act} onBack={back} onNext={() => forward(4)} />
           ) : shown === 4 ? (
             <StepFollow
               companies={view.companies}
@@ -445,8 +434,9 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               follows={follows}
               toggle={toggle}
               busy={busy}
-              nextLabel={linkStep ? "Get my sign-in link" : lastLabel}
-              handoff={linkStep ? null : <SeatsNext n={mySeats} />}
+              nextLabel={linkStep ? "Get my sign-in link" : "Open my table"}
+              handoff={linkStep ? null : <SeatsNext n={mySeats} busy={busy} onFill={() => finish(false, "seats")} />}
+              alerts={linkStep ? null : alertsOpt}
               onBack={back}
               onNext={afterFollow}
             />
@@ -455,10 +445,12 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               token={me.token}
               email={me.email}
               support={support}
+              emailOn={view.email}
               busy={busy}
-              nextLabel={lastLabel}
-              handoff={<SeatsNext n={mySeats} />}
-              onDone={() => finish()}
+              nextLabel="Open my table"
+              seats={mySeats}
+              alerts={alertsOpt}
+              onDone={(to) => finish(false, to)}
             />
           )}
         </div>
@@ -550,10 +542,19 @@ function StepQuestions({
           className="input ob-title-input"
           value={title}
           maxLength={80}
-          placeholder={fn && named(fn) ? `Fractional VP ${fn}` : "Fractional VP Sales"}
+          placeholder={titlesFor(fn)[0] ?? "Fractional VP Sales"}
           onChange={(e) => setTitle(e.target.value)}
           autoComplete="organization-title"
         />
+        {!title.trim() && titlesFor(fn).length ? (
+          <div className="ob-title-picks" aria-label="Titles to pick from">
+            {titlesFor(fn).map((t) => (
+              <button key={t} type="button" className="ob-title-pick" onClick={() => setTitle(t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <p className="ob-hint">Members see it when you message them.</p>
       </div>
 
@@ -620,18 +621,20 @@ function StepClients({ companies, icp, setIcp, onBack, onNext }: { companies: Co
 
 /* ---------- step 3: find your seats (optional) ---------- */
 
-/** A seat we found that nobody claimed yet, in the member's function first. */
-const unclaimed = (c: CompanyRec, fn: string | null) =>
-  c.engagements
-    .filter((e) => e.claimable || e.yours)
-    .sort((a, b) => Number(val(b.cells.function) === fn) - Number(val(a.cells.function) === fn));
+const seatLine = (e: EngagementRec) => lineOf(e, fmtMonth);
 
-function seatLine(e: EngagementRec): string {
-  const what = val(e.cells.role) || val(e.cells.function) || "A fractional seat";
-  const start = val(e.cells.start);
-  const end = val(e.cells.end);
-  const when = start ? (end && end !== "Ongoing" ? `${fmtMonth(start)} to ${fmtMonth(end)}` : `from ${fmtMonth(start)}`) : "";
-  return [what, when].filter(Boolean).join(", ");
+/** A seat on file there that the member can't claim here: its function, its line, where it stands. */
+function OtherSeat({ e }: { e: EngagementRec }) {
+  const f = val(e.cells.function);
+  const line = seatLine(e);
+  return (
+    <li className="ob-seat ob-seat-other">
+      <span className="ob-seat-id">
+        <span className="ob-seat-line">{f && !line.startsWith(f) ? `${f} · ${line}` : line}</span>
+        <span className="ob-seat-meta">{seatState(e)}</span>
+      </span>
+    </li>
+  );
 }
 
 /** One unclaimed seat: "Claim it", then "Is this you?" with what the seat says, then the claim. */
@@ -701,18 +704,25 @@ function ClaimRow({ e, company, act }: { e: EngagementRec; company: string; act:
 }
 
 /** "Add a seat you held" at a client we have no seat for: their title and whether it's ongoing, one tap. */
-function AddSeat({ company, fn, title, name, act }: { company: string; fn: string | null; title: string; name: string; act: OnboardingProps["act"] }) {
+/** What the card says once a seat was added: what it earned (the balance moved by), and where to go on. */
+function SeatAdded({ earned }: { earned: number }) {
+  return (
+    <p className="ob-seat-ok ob-seat-added" role="status">
+      <IconCheck size={13} />
+      <span>
+        {earned > 0
+          ? `Added your seat, +${earned} ${earned === 1 ? "credit" : "credits"} for the ${earned === 1 ? "fact" : "facts"} on it. Fill in the rest on Your seats.`
+          : "Added your seat. Fill in the rest on Your seats."}
+      </span>
+    </p>
+  );
+}
+
+function AddSeat({ company, fn, title, name, act, onAdded }: { company: string; fn: string | null; title: string; name: string; act: OnboardingProps["act"]; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState(title);
   const [status, setStatus] = useState<"Active" | "Ended">("Active");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  if (done)
-    return (
-      <p className="ob-seat-ok ob-seat-added">
-        <IconCheck size={13} /> Added your seat. Fill in the rest on Your seats.
-      </p>
-    );
   if (!open)
     return (
       <button type="button" className="btn ob-seat-add" onClick={() => setOpen(true)}>
@@ -724,7 +734,7 @@ function AddSeat({ company, fn, title, name, act }: { company: string; fn: strin
     const fields: Record<string, string> = { status, ...(fn ? { function: fn } : {}), ...(role.trim() ? { role: role.trim() } : {}), operator: name.trim() };
     const r = await act({ type: "add", company, newEngagement: true, engagementFields: fields, operatorMemberId: "me" }, { quiet: true });
     setBusy(false);
-    if (r.ok) setDone(true);
+    if (r.ok) onAdded();
   };
   return (
     <div className="ob-seat-form">
@@ -747,12 +757,14 @@ function AddSeat({ company, fn, title, name, act }: { company: string; fn: strin
 }
 
 function StepSeats({
-  companies, fn, title, name, clients, setClients, act, onBack, onNext,
+  companies, fn, title, name, credits, clients, setClients, act, onBack, onNext,
 }: {
   companies: CompanyRec[];
   fn: string | null;
   title: string;
   name: string;
+  /** The balance now, so a seat added here can say what it earned. */
+  credits: number;
   clients: string[];
   setClients: (f: (c: string[]) => string[]) => void;
   act: OnboardingProps["act"];
@@ -761,6 +773,8 @@ function StepSeats({
 }) {
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
+  // Seats added here, by client: the balance before each, so the card says what the seat earned.
+  const [added, setAdded] = useState<Record<string, number>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const byId = useMemo(() => new Map(companies.map((c) => [c.id, c])), [companies]);
   const results = useMemo(() => {
@@ -786,7 +800,11 @@ function StepSeats({
   // A name we don't have: kept as typed, so they can add the seat they held there.
   const typed = q.trim();
   const addTyped = () => typed && pick(`name:${typed.slice(0, 80)}`);
-  const claimedN = clients.reduce((n, id) => n + (byId.get(id)?.engagements.filter((e) => e.yours).length ?? 0), 0);
+  // "Use “Hone”" only when no company on file is called exactly that.
+  const exact = !!typed && results.some((c) => c.name.trim().toLowerCase() === typed.toLowerCase());
+  // Seats that are theirs: claimed or added at a company on file, plus seats added at a name we didn't have.
+  const claimedN =
+    clients.reduce((n, id) => n + (byId.get(id)?.engagements.filter((e) => e.yours).length ?? 0), 0) + Object.keys(added).filter((id) => id.startsWith("name:")).length;
   return (
     <div>
       <h1 className="ob-title" tabIndex={-1} data-step-h>
@@ -844,12 +862,14 @@ function StepSeats({
                 </span>
               </li>
             ))}
-            <li role="option" aria-selected={false} className="ob-result" onMouseDown={(e) => e.preventDefault()} onClick={addTyped}>
-              <span className="ob-result-id">
-                <span className="ob-result-name">Use &ldquo;{typed}&rdquo;</span>
-                <span className="ob-result-meta">Not on file yet. You can add the seat you held there.</span>
-              </span>
-            </li>
+            {exact ? null : (
+              <li role="option" aria-selected={false} className="ob-result" onMouseDown={(e) => e.preventDefault()} onClick={addTyped}>
+                <span className="ob-result-id">
+                  <span className="ob-result-name">Use &ldquo;{typed}&rdquo;</span>
+                  <span className="ob-result-meta">Not on file yet. You can add the seat you held there.</span>
+                </span>
+              </li>
+            )}
           </ul>
         ) : null}
       </div>
@@ -859,9 +879,8 @@ function StepSeats({
           {clients.map((id) => {
             const c = id.startsWith("name:") ? null : byId.get(id);
             const label = c ? c.name : id.slice(5);
-            const seats = c ? unclaimed(c, fn) : [];
-            const inFn = fn ? seats.filter((e) => e.yours || val(e.cells.function) === fn) : seats;
-            const list = (inFn.length ? inFn : seats).slice(0, 3);
+            const { claim: list, others, note } = seatsAt(c, fn);
+            const before = added[id];
             return (
               <li key={id} className="ob-client">
                 <div className="ob-client-top">
@@ -878,12 +897,21 @@ function StepSeats({
                     ))}
                   </ul>
                 )}
-                {!list.some((e) => e.yours) && (
+                {before !== undefined ? (
+                  <SeatAdded earned={credits - before} />
+                ) : !list.some((e) => e.yours) ? (
                   <div className="ob-client-add">
-                    {!list.length && <p className="ob-hint ob-hint-flush">We don&apos;t have a seat on file there yet.</p>}
-                    <AddSeat company={label} fn={fn} title={title} name={name} act={act} />
+                    {note && <p className="ob-hint ob-hint-flush">{note}</p>}
+                    {others.length > 0 && (
+                      <ul className="ob-seats ob-seats-other" aria-label={`Seats on file at ${label}`}>
+                        {others.map((e) => (
+                          <OtherSeat key={e.id} e={e} />
+                        ))}
+                      </ul>
+                    )}
+                    <AddSeat company={label} fn={fn} title={title} name={name} act={act} onAdded={() => setAdded((a) => ({ ...a, [id]: credits }))} />
                   </div>
-                )}
+                ) : null}
               </li>
             );
           })}
@@ -909,7 +937,7 @@ function StepSeats({
 /* ---------- step 4: follow companies (optional) ---------- */
 
 function StepFollow({
-  companies, byId, fn, icp, clients, goal, follows, toggle, busy, nextLabel, handoff, onBack, onNext,
+  companies, byId, fn, icp, clients, goal, follows, toggle, busy, nextLabel, handoff, alerts, onBack, onNext,
 }: {
   companies: CompanyRec[];
   byId: Map<string, CompanyRec>;
@@ -924,6 +952,8 @@ function StepFollow({
   nextLabel: string;
   /** For a member with seats on file: where they go next. Shown first, above the list. */
   handoff: ReactNode;
+  /** The weekly email offer, when this is the last step. */
+  alerts: ReactNode;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -1081,7 +1111,8 @@ function StepFollow({
           const on = follows.includes(c.id);
           const meta = metaOf(c);
           const mine = isMine(c);
-          const fns = fnsOf(c);
+          // The functions its rows show in the table: hires, open roles, then every other seat's function.
+          const fns = seatFns(c);
           return (
             <li key={c.id} className={`ob-co${on ? " ob-co-on" : ""}`}>
               <div className="ob-co-top">
@@ -1106,7 +1137,7 @@ function StepFollow({
                       </span>
                     ))
                   ) : mine ? null : (
-                    <span className="ob-co-none">No functions on file yet</span>
+                    <span className="ob-co-none">{c.engagements.length ? "Function not on file" : "No seats on file yet"}</span>
                   )}
                   {fns.length > (mine ? 1 : 2) ? <span className="ob-co-more num">+{fns.length - (mine ? 1 : 2)}</span> : null}
                   {/* An open role: a row repeats, so the dot is the only ember it carries. */}
@@ -1123,6 +1154,8 @@ function StepFollow({
           );
         })}
       </ul>
+
+      {alerts}
 
       <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">
@@ -1143,23 +1176,38 @@ function StepFollow({
 /* ---------- step 5: keep your sign-in link ---------- */
 
 function StepLink({
-  token, email, support, busy, nextLabel, handoff, onDone,
+  token, email, support, emailOn, seats, busy, nextLabel, alerts, onDone,
 }: {
   token: string;
   email: string;
   /** Where a member asks for a new link (View.contact.support), or null. */
   support: string | null;
+  /** Email sign-in is on: a lost link is never the end, a new one comes by email. */
+  emailOn: boolean;
+  /** Seats on file under their name ("Fill in your seats"). */
+  seats: number;
   busy: boolean;
   nextLabel: string;
-  handoff: ReactNode;
-  onDone: () => void;
+  alerts: ReactNode;
+  onDone: (to: "table" | "seats") => void;
 }) {
   const [link, setLink] = useState("");
   const [copied, setCopied] = useState(false);
-  // Copy (or email it) first: until then, saving the link is the main action and moving on is not.
+  // Copied, emailed or shared: until then, saving the link is the main action and moving on asks first.
   const [kept, setKept] = useState(false);
+  // Where they tried to go without saving the link: the check before leaving shows.
+  const [leaving, setLeaving] = useState<"table" | "seats" | null>(null);
+  const [canShare, setCanShare] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const askRef = useRef<HTMLDivElement>(null);
   useEffect(() => setLink(`${window.location.origin}/?k=${token}`), [token]);
+  useEffect(() => setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function"), []);
+  useEffect(() => {
+    if (!leaving) return;
+    // On a phone the main button sits in the sticky footer, far below: bring the check into view.
+    askRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    askRef.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+  }, [leaving]);
 
   /** Select the link text, so it can be copied by hand if the clipboard is blocked. */
   const selectLink = () => {
@@ -1184,15 +1232,28 @@ function StepLink({
     setKept(true);
     setTimeout(() => setCopied(false), 2400);
   };
+  /** Phones: the share sheet, so the link can go to Notes, Messages or a password manager. */
+  const share = async () => {
+    try {
+      await navigator.share({ title: "Merlin sign-in link", text: "My Merlin sign-in link", url: link });
+      setKept(true);
+    } catch {}
+  };
   const mailMe = `mailto:${encodeURIComponent(email)}?subject=Merlin%20sign-in%20link&body=${encodeURIComponent(link)}`;
   const supportHref = support ? mailto(support, "Merlin sign-in link") : null;
+  /** Leave for the app, but not without the link unless they say so (email sign-in on: no need). */
+  const leave = (to: "table" | "seats") => (kept || emailOn ? onDone(to) : setLeaving(to));
 
   return (
     <div>
       <h1 className="ob-title" tabIndex={-1} data-step-h>
         Keep your sign-in link
       </h1>
-      <p className="ob-sub">This link is how you sign in. There is no password, so save it where you&apos;ll find it again.</p>
+      <p className="ob-sub">
+        {emailOn
+          ? "This link signs you straight in. Save it for next time. If you lose it, you can always get a new one by email."
+          : "This link is how you sign in. There is no password, so save it where you'll find it again."}
+      </p>
 
       <div className="ob-linkbox">
         <div ref={boxRef} className="ob-linkbox-text mono" aria-label="Your sign-in link" tabIndex={0} onFocus={selectLink}>
@@ -1203,36 +1264,70 @@ function StepLink({
           {copied ? "Copied" : "Copy link"}
         </button>
       </div>
-      <a className="ob-mailme" href={mailMe} onClick={() => setKept(true)}>
-        Email it to myself
-      </a>
-      <p className="ob-hint ob-hint-flush">Anyone with this link can sign in as you. Keep it to yourself.</p>
-      <p className="ob-hint">
-        {support ? (
-          <>
-            If you lose it, email{" "}
-            {supportHref ? (
-              <a className="mono ob-help-link" href={supportHref}>
-                {support}
-              </a>
-            ) : (
-              <span className="mono">{support}</span>
-            )}{" "}
-            and we&apos;ll send you a new one.
-          </>
-        ) : (
-          "Without it there is no way back in, so save it before you go on."
-        )}
+      <p className="ob-keep-ways">
+        <a className="ob-mailme" href={mailMe} onClick={() => setKept(true)}>
+          Email it to myself
+        </a>
+        {canShare ? (
+          <button type="button" className="ob-linkbtn ob-mailme" onClick={share}>
+            Share it to Notes or Messages
+          </button>
+        ) : null}
       </p>
+      <p className="ob-hint ob-hint-flush">Anyone with this link can sign in as you. Keep it to yourself.</p>
+      {emailOn ? null : (
+        <p className="ob-hint">
+          {support ? (
+            <>
+              Without it you can&apos;t sign back in on your own. If you lose it, email{" "}
+              {supportHref ? (
+                <a className="mono ob-help-link" href={supportHref}>
+                  {support}
+                </a>
+              ) : (
+                <span className="mono">{support}</span>
+              )}{" "}
+              and we&apos;ll send you a new one.
+            </>
+          ) : (
+            "Without it there is no way back in, so save it before you go on."
+          )}
+        </p>
+      )}
 
-      {handoff}
+      {leaving ? (
+        <div className="ob-leave" role="alertdialog" aria-labelledby="ob-leave-h" ref={askRef}>
+          <p id="ob-leave-h">
+            <strong>You haven&apos;t saved your link.</strong> {support ? "Without it, signing back in means emailing us for a new one." : "Without it you can't sign back in."}
+          </p>
+          <span className="ob-leave-acts">
+            <button
+              type="button"
+              className="btn btn-pine"
+              disabled={busy}
+              onClick={async () => {
+                await copy();
+                onDone(leaving);
+              }}
+            >
+              Copy link and go on
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => onDone(leaving)}>
+              Go on without it
+            </button>
+          </span>
+        </div>
+      ) : null}
+
+      <SeatsNext n={seats} busy={busy} onFill={() => leave("seats")} />
+      {alerts}
 
       <div className="ob-grow" />
       <div className="ob-foot">
         <span className="ob-foot-note" aria-live="polite">
-          {kept ? "" : "Copy your link first"}
+          {kept || emailOn ? "" : "Save your link first"}
         </span>
-        <button type="button" className={`btn btn-lg ob-next${kept ? " btn-pine" : ""}`} onClick={onDone} disabled={busy} aria-busy={busy}>
+        <button type="button" className={`btn btn-lg ob-next${kept || emailOn ? " btn-pine" : ""}`} onClick={() => leave("table")} disabled={busy} aria-busy={busy}>
           {busy ? "Opening" : nextLabel}
         </button>
       </div>
