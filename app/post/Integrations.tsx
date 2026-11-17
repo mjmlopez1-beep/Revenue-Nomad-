@@ -394,18 +394,23 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                 />
               ) : (
                 <>
-                  <p className="cr-note">It takes about two minutes. You make a small app in your own Slack, so the alerts go to the channel or DM you pick, and nobody at Revenue Nomad can read your Slack.</p>
+                  <p className="cr-note">It takes about three minutes. You make a small app in your own Slack, so the alerts go to the channel or DM you pick, and nobody at Revenue Nomad can read your Slack.</p>
                   <ol className="uc-steps in-steps">
                     <li>
                       Open{" "}
                       <a href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer" className="in-link">
                         api.slack.com/apps
                       </a>{" "}
-                      and pick Create New App, then Pick features (under From scratch) and Continue. Name it Merlin alerts, pick your workspace and create it. If it asks which features, tick Incoming Webhooks.
+                      and pick Create New App. Under From scratch, pick Pick features (not Paste a manifest), then Continue.
                     </li>
-                    <li>In the app&apos;s menu, open Incoming Webhooks and turn Activate Incoming Webhooks on.</li>
-                    <li>Scroll down and pick Add New Webhook to Workspace. Choose the channel for alerts, or your own name for a DM, then pick Allow.</li>
-                    <li>Copy the Webhook URL it shows. The app can only post to that one channel. It can&apos;t read anything in your Slack.</li>
+                    <li>Name it Merlin alerts and pick your workspace.</li>
+                    <li>
+                      On &quot;What it can do in Slack?&quot;, search for <span className="mono">incoming-webhook</span> and add it. That&apos;s the only scope it needs. Pick Continue.
+                    </li>
+                    <li>On &quot;What it can respond to in Slack?&quot;, add nothing and pick Continue. Then create and install it.</li>
+                    <li>Ignore the agent prompt and credentials Slack shows next. Pick Go to App Settings, then Incoming Webhooks in the left menu, and check it&apos;s On.</li>
+                    <li>At the bottom, pick Add New Webhook to Workspace. Choose the channel for alerts, or your own name for a DM, then pick Allow.</li>
+                    <li>Copy the new URL under Webhook URLs (it starts with https://hooks.slack.com/services/). The app can only post to that one channel, and it can&apos;t read anything in your Slack. Keep the URL private: anyone with it can post there.</li>
                     <li>Paste it below and pick Connect Slack. We send a test message first.</li>
                   </ol>
                   <ConnectForm
