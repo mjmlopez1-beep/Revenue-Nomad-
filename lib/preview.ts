@@ -27,6 +27,7 @@
 import { previewCompanies, type PreviewCompany } from "./table";
 import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES } from "./tableFields";
 import { titleWithout } from "./scan/clean";
+import { keepsNonGtm } from "./seniority";
 import { countryName, countryOf, deriveAll, isFirm, isHire, isOpenRole, known, repeatHirer, shown, type CoInfo } from "@/app/post/model";
 import type { EngagementRec } from "./tableTypes";
 
@@ -247,11 +248,18 @@ function pickExample(infos: Source["infos"], open: boolean): { x: PreviewExample
   return best ? { x: best.x, seed: best.seed } : null;
 }
 
+/** The company without its open roles that fail the seniority bar: outside GTM and below Director. */
+function withoutOffBar(p: PreviewCompany): PreviewCompany {
+  const offBar = (e: EngagementRec) => isOpenRole(e) && !keepsNonGtm(e.cells.role?.s === "value" && !e.cells.role.system ? e.cells.role.v : null, fnOf(e));
+  return p.rec.engagements.some(offBar) ? { ...p, rec: { ...p.rec, engagements: p.rec.engagements.filter((e) => !offBar(e)) } } : p;
+}
+
 async function sourceNow(): Promise<Source> {
   const { list, version } = await previewCompanies();
   const cap = openRoleNamedCap();
   if (source && source.version === version && source.cap === cap) return source;
-  const clients = list.filter((p) => !isFirm(p.rec));
+  // An open role outside GTM and below Director never shows here (lib/seniority.ts), even before a scan takes it off the table.
+  const clients = list.filter((p) => !isFirm(p.rec)).map((p) => withoutOffBar(p));
   const infos = deriveAll(clients.map((p) => p.rec)).map((i, n) => ({ i, p: clients[n] }));
   const ind = new Map<string, number>();
   const ctry = new Map<string, number>();

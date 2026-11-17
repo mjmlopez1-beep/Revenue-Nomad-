@@ -68,6 +68,7 @@ RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 # Onboarding: suggestions and their heading, Find your seats cards, a new member's title, the weekly email offered at the end.
 serve onboard npx tsx scripts/test-onboard.mts
 run scan npx tsx scripts/test-scan.mts
+run seniority npx tsx scripts/test-seniority.mts
 run digest npx tsx scripts/test-digest.ts
 run messages npx tsx scripts/test-messages.mjs
 # Alerts in Slack and webhooks (lib/notify), with fetch and name lookups replaced: nothing leaves the machine.

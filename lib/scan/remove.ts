@@ -7,6 +7,10 @@
  * its hidden company when it was the only open role there. A company the scan added that holds
  * nothing else goes too.
  *
+ * The same pass takes off open roles the scan added that fail the seniority bar (lib/seniority.ts):
+ * outside GTM and below Director, such as a "School Staffing Coordinator" an earlier screen let
+ * in. Their unlocks are paid back the same way (the ledger says "a role we took off the list").
+ *
  * Only seats the scan itself added are touched. Roles from our records (the seed), open roles a
  * member added that the scan took over, and a role a member has taken as their own seat stay.
  * Called by applyScan in lib/table.ts, inside its write.
@@ -26,13 +30,25 @@ interface Ctx {
   seedCompanies: Set<string>;
   /** The engagement is an open role now (applyScan's own test). Never called for a removed one. */
   isOpen: (engagementId: string) => boolean;
+  /** The role fails the seniority bar: outside GTM and below Director (keepsNonGtm on its live title and function). */
+  offBar?: (engagementId: string) => boolean;
   now: string;
 }
 
 const ownedBy = (k: string, ids: Set<string>) => ids.has(k.slice(0, k.lastIndexOf(".")));
 
-/** Remove scan-added roles that `screenedOut` lists. Returns the engagement ids removed and the unlocks paid back. */
-export function removeScreenedOut(s: State, screenedOut: unknown, ctx: Ctx): { removed: Set<string>; refunded: number } {
+/** A member took the seat as their own (the same claim that closes a role). They keep it. */
+const takenByMember = (s: State, engagementId: string) => {
+  const op = s.values[`${engagementId}.operator`];
+  return !!(op && op.status !== "removed" && op.memberId && op.memberId === op.by && !(s.notMine[op.memberId] ?? []).includes(engagementId));
+};
+
+/**
+ * Remove scan-added roles that `screenedOut` lists, and open scan-added roles that fail the
+ * seniority bar (`ctx.offBar`). Returns the engagement ids removed, how many of them for the bar,
+ * and the unlocks paid back.
+ */
+export function removeScreenedOut(s: State, screenedOut: unknown, ctx: Ctx): { removed: Set<string>; belowBar: number; refunded: number } {
   const roles = s.scan.roles;
   const removed = new Set<string>();
   const list = (Array.isArray(screenedOut) ? screenedOut : []).slice(0, 10_000) as Partial<ScanScreenedOut>[];
@@ -44,12 +60,21 @@ export function removeScreenedOut(s: State, screenedOut: unknown, ctx: Ctx): { r
     if (!k || !roles[k] || ctx.seen.has(k)) continue; // listed somewhere else as fractional work this run
     const r = roles[k];
     if (r.source === "seed" || !addedByScan.has(r.engagementId)) continue;
-    // A member who took the seat as their own keeps it (the same claim that closes a role).
-    const op = s.values[`${r.engagementId}.operator`];
-    if (op && op.status !== "removed" && op.memberId && op.memberId === op.by && !(s.notMine[op.memberId] ?? []).includes(r.engagementId)) continue;
+    if (takenByMember(s, r.engagementId)) continue; // a member who took the seat as their own keeps it
     removed.add(r.engagementId);
   }
-  if (!removed.size) return { removed, refunded: 0 };
+  // Open roles the scan added that fail the seniority bar, listed this run or not.
+  const offBar = new Set<string>();
+  if (ctx.offBar) {
+    for (const r of Object.values(roles)) {
+      const id = r.engagementId;
+      if (removed.has(id) || r.closedAt || r.source === "seed" || !addedByScan.has(id) || takenByMember(s, id)) continue;
+      if (!ctx.isOpen(id) || !ctx.offBar(id)) continue;
+      removed.add(id);
+      offBar.add(id);
+    }
+  }
+  if (!removed.size) return { removed, belowBar: 0, refunded: 0 };
 
   // The followed tracks go first, so no open-role test below counts them.
   for (const [k, r] of Object.entries(roles)) if (removed.has(r.engagementId)) delete roles[k];
@@ -60,12 +85,16 @@ export function removeScreenedOut(s: State, screenedOut: unknown, ctx: Ctx): { r
   const refundIds = new Set(removed);
   const identity = new Set<string>();
   for (const co of companies) if (!engsOf(co).some(ctx.isOpen)) identity.add(`${co}.identity`);
+  // The ledger's reason: "offbar" for a role the seniority bar took off, and for its company when every role removed there was one.
+  const offBarCo = new Set([...companies].filter((co) => [...removed].every((id) => ctx.engagementCompany.get(id)?.companyId !== co || offBar.has(id))));
+  const whyOf = (ref: string): "offbar" | "removed" =>
+    ownedBy(ref, offBar) || (identity.has(ref) && offBarCo.has(ref.slice(0, ref.lastIndexOf(".")))) ? "offbar" : "removed";
 
   let refunded = 0;
   for (const l of [...s.ledger]) {
     if (l.reason !== "unlock" || l.delta >= 0 || !(ownedBy(l.ref, refundIds) || identity.has(l.ref))) continue;
     if (s.ledger.some((x) => x.reason === "refund" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at)) continue; // already paid back
-    s.ledger.push({ memberId: l.memberId, delta: -l.delta, reason: "refund", ref: l.ref, at: ctx.now, why: "removed" });
+    s.ledger.push({ memberId: l.memberId, delta: -l.delta, reason: "refund", ref: l.ref, at: ctx.now, why: whyOf(l.ref) });
     refunded++;
   }
   for (const k of identity) delete s.unlocks[k];
@@ -95,5 +124,5 @@ export function removeScreenedOut(s: State, screenedOut: unknown, ctx: Ctx): { r
     for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const k of Object.keys(bag)) if (ownedBy(k, gone)) delete bag[k];
     for (const [m, ids] of Object.entries(s.follows)) if (ids.some((id) => gone.has(id))) s.follows[m] = ids.filter((id) => !gone.has(id));
   }
-  return { removed, refunded };
+  return { removed, belowBar: offBar.size, refunded };
 }

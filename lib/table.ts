@@ -59,6 +59,7 @@ import { emailEnabled, sendEmail } from "./email";
 import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
+import { keepsNonGtm } from "./seniority";
 import { companyKey, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
@@ -160,10 +161,11 @@ export interface LedgerEntry {
   /**
    * closed (refunds): the scan found the role had closed, and this unlock was made after its
    * posting was last seen. removed (refunds): the scan took the role off the table, a full-time
-   * job an older screen had let in (lib/scan/remove.ts). retract (reversals): the member took
-   * back a fact they had added.
+   * job an older screen had let in (lib/scan/remove.ts). offbar (refunds): the scan took the role
+   * off the table because it is outside GTM and below Director (lib/seniority.ts). retract
+   * (reversals): the member took back a fact they had added.
    */
-  why?: "closed" | "removed" | "retract";
+  why?: "closed" | "removed" | "offbar" | "retract";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -1605,6 +1607,16 @@ function isOpenRole(e: EngNode, s: State, tracks: Tracks): boolean {
  * An open role that hides its company: one the scan follows, or one from our records. A member
  * who marks a seat Open role shows it as an open role, and hides nothing until a scan lists it.
  */
+/**
+ * An open role the scan added that fails the seniority bar (lib/seniority.ts): outside GTM and
+ * below Director. The next scan takes it off the table (lib/scan/remove.ts, the same test); until
+ * then the view leaves it out. Roles from our records and a seat a member took stay.
+ */
+function offBarRole(e: EngNode, s: State, tracks: Tracks, byScan: boolean): boolean {
+  const t = tracks.get(e.id);
+  if (!byScan || !t || t.source === "seed" || t.closedAt || selfHeld(s, e.id)) return false;
+  return !keepsNonGtm(live(e, s, "role"), live(e, s, "function"));
+}
 function hidesCompany(e: EngNode, s: State, tracks: Tracks): boolean {
   if (!isOpenRole(e, s, tracks)) return false;
   return tracks.has(e.id) || isSystem(valueOf(e, s, "status")?.by ?? "seed");
@@ -1856,7 +1868,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       count(cells, PERSON_F);
       return { id: pubId(p.id), engagementId: p.engagementId ? pubId(p.engagementId) : null, source: p.source, cells };
     };
-    const engs = engsByCompany.get(c.id) ?? [];
+    // An open role below the seniority bar is left out until the next scan removes it (offBarRole).
+    const engs = (engsByCompany.get(c.id) ?? []).filter((e) => !offBarRole(e, s, tracks, madeBy.get(e.id) === "scan"));
     const people = peopleByCompany.get(c.id) ?? [];
     peopleCount += people.length;
     const operators = new Set<string>();
@@ -2052,8 +2065,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         continue;
       }
       // A credit back for an unlock on a role that had already closed (applyScan).
-      if (l.reason === "refund" && (l.why === "closed" || l.why === "removed")) {
-        ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
+      if (l.reason === "refund" && (l.why === "closed" || l.why === "removed" || l.why === "offbar")) {
+        ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : l.why === "offbar" ? OFFBAR_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
       // A fact the member took back (retract): "Took back the HQ", then "at Acme".
@@ -2148,6 +2161,8 @@ const BENCH_LABEL = "Private rate";
 const CLOSED_REFUND = "Refund for a role that had closed";
 /** A role the scan took off the table: a full-time job an older screen had let in (lib/scan/remove.ts). */
 const REMOVED_REFUND = "Refund for a full-time job we took off the list";
+/** A role the scan took off the table because it is outside GTM and below Director (lib/seniority.ts). */
+const OFFBAR_REFUND = "Refund for a role we took off the list";
 const fieldLabel = (entity: Entity, field: string) =>
   entity === "company" && field === "identity" ? HIDDEN_COMPANY : fieldDef(entity, field)?.label ?? field;
 /** The same for a row in the credit history. A person's fields say so: "Person email", not "Email". */
@@ -4005,7 +4020,12 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
         continue;
       }
 
-      // New to us. Only these are capped: the newest come first, the rest wait for a later run.
+      // New to us. Outside GTM, only Director and above (lib/seniority.ts): a role below that is left out.
+      if (!keepsNonGtm(title, typeof raw.function === "string" ? raw.function : null)) {
+        res.belowBar = (res.belowBar ?? 0) + 1;
+        continue;
+      }
+      // Only new roles are capped: the newest come first, the rest wait for a later run.
       if (res.opened >= maxNew) {
         overCap++;
         continue;
@@ -4059,13 +4079,18 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
 
     // A role the scan added that a board still lists but the screen now leaves out (not fractional
     // work) is taken off the table, not closed, and its unlocks are paid back (lib/scan/remove.ts).
-    const { removed, refunded: refundedOnRemove } = removeScreenedOut(s, found?.screenedOut, {
+    // So is an open role the scan added that is outside GTM and below Director (the seniority bar).
+    const { removed, belowBar, refunded: refundedOnRemove } = removeScreenedOut(s, found?.screenedOut, {
       seen,
       keyOfUrl: (u) => keyOfUrl.get(urlKey(cleanValue(def("posting"), u.trim()).value ?? "")),
       engagementCompany: g.engagements,
       contactCompany: g.contacts,
       seedCompanies: new Set(seed.companies.map((c) => c.id)),
       isOpen: (id) => !!g.engagements.get(id) && openNow(g.engagements.get(id)!),
+      offBar: (id) => {
+        const e = g.engagements.get(id);
+        return !!e && !keepsNonGtm(live(e, s, "role"), live(e, s, "function"));
+      },
       now,
     });
     refunded += refundedOnRemove;
@@ -4165,7 +4190,7 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
     s.scan.lastRunAt = now;
     s.scan.lastOkAt = clean.size ? now : okBefore;
     s.scan.sources = sources;
-    return { ...res, overCap, refunded, removed: removed.size };
+    return { ...res, overCap, refunded, removed: removed.size, removedBelowBar: belowBar };
   });
 }
 
@@ -4197,7 +4222,7 @@ export function runScan(origin?: string, from: { collect?: () => ReturnType<type
       const failed = found.sources.filter((x) => x.error).length;
       console.log(
         `scan: ${found.all.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
-          `closed ${result.closed}, reopened ${result.reopened}, removed ${result.removed ?? 0}, companies added ${result.companiesAdded}, left for a later run ${result.overCap ?? 0}, ` +
+          `closed ${result.closed}, reopened ${result.reopened}, removed ${result.removed ?? 0} (${result.removedBelowBar ?? 0} below Director outside GTM), left out below Director ${result.belowBar ?? 0}, companies added ${result.companiesAdded}, left for a later run ${result.overCap ?? 0}, ` +
           `unlocks paid back ${result.refunded ?? 0}, emails ${digests}, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
       );
       return { result, sources: found.sources, digests };

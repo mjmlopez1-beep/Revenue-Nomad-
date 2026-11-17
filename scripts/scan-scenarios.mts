@@ -3,7 +3,7 @@
  * scripts/test-scan.mts starts each scenario in its own process, because the server module
  * keeps its state in memory and every scenario needs a fresh table. To run one by hand:
  *
- *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone|notfractional>
+ *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone|notfractional|seniority>
  *
  * It runs on a made-up seed in a temporary data folder. No network, and nothing from the real
  * seed. Prints PASS and FAIL lines, then "##RESULT <passed> <failed>".
@@ -471,7 +471,85 @@ async function notfractional() {
   eq("a scan result with no screened-out list removes nothing", none.removed, 0);
 }
 
-const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone, notfractional };
+/**
+ * The seniority bar (lib/seniority.ts): outside GTM, only Director and above. A table an earlier
+ * screen filled: a scan-added staffing coordinator (its company unlocked by Sal), a bookkeeper
+ * seat Mo took as her own, a fractional CFO, a GTM role, and an office coordinator a member added
+ * by hand. The next scan takes off the coordinator alone, and new roles below the bar never open.
+ */
+async function seniority() {
+  const now = REAL_NOW;
+  const at = iso(now - 5 * DAY);
+  const v = (value: string, by = "scan", extra: object = {}) => ({ value, by, at, status: "live", ...extra });
+  const track = (engagementId: string, companyId: string) => ({ engagementId, companyId, firstSeen: at, lastSeen: at, closedAt: null, url: `https://jobs.example.com/${engagementId}`, source: "board", postedAt: null });
+  const rows: [string, string, string, string, string][] = [
+    // company id, company name, engagement id, title, function
+    ["c_staff", "Brightpath Schools", "e_staff", "School Staffing Coordinator (Contract)", "Customer Success"],
+    ["c_books", "Ledgerly", "e_books", "Contract Bookkeeper", "Other"],
+    ["c_cfo", "Numbro", "e_cfo", "Fractional CFO", "Executive"],
+    ["c_sales", "Keepco", "e_sales", "Fractional Account Executive", "Sales"],
+  ];
+  const state = {
+    companies: [...rows.map(([id, name]) => ({ id, name, by: "scan", at })), { id: "c_office", name: "Officeworks Ltd", by: "m1", at }],
+    engagements: [...rows.map(([, , id, , ]) => ({ id, companyId: rows.find((r) => r[2] === id)![0], by: "scan", at, source: "Demand scan" })), { id: "e_office", companyId: "c_office", by: "m1", at, source: "Member added" }],
+    contacts: [],
+    values: {
+      ...Object.fromEntries(rows.flatMap(([, , id, title, fn]) => [[`${id}.role`, v(title)], [`${id}.function`, v(fn)], [`${id}.status`, v("Open role")], [`${id}.type`, v("Project")]])),
+      "e_books.operator": v("Mo Marketing", "m2", { memberId: "m2" }),
+      "e_office.role": v("Office Coordinator", "m1"),
+      "e_office.function": v("Operations", "m1"),
+      "e_office.status": v("Open role", "m1"),
+    },
+    unlocks: { "c_staff.identity": ["m1"] },
+    ledger: [{ memberId: "m1", delta: -1, reason: "unlock", ref: "c_staff.identity", at }],
+    scan: { lastRunAt: at, sources: [], roles: Object.fromEntries(rows.map(([co, , id]) => [`key:${id}`, track(id, co)])) },
+  };
+  writeFileSync(path.join(dir, "intel.json"), JSON.stringify(state));
+
+  const v0 = await admin();
+  eq("before any scan the view already leaves out the coordinator, and keeps the rest", [!!roleOf(v0, "Brightpath Schools"), !!roleOf(v0, "Ledgerly"), !!roleOf(v0, "Numbro"), !!roleOf(v0, "Keepco")], [false, true, true, true]);
+  eq("Sal paid one credit for the Brightpath company", await credits("tok-sal"), 24);
+  const { preview } = await import("../lib/preview");
+  const ops = await preview({ fn: "Operations", view: "all" });
+  check("the landing preview never shows an open role below the bar, even one a member added", !ops.rows.some((r) => r.kind === "open"), ops.rows);
+  const cs = await preview({ fn: "Customer Success", view: "all" });
+  check("  nor the scan's coordinator", !cs.rows.some((r) => /coordinator/i.test(r.title)), cs.rows);
+  const ex = await preview({ fn: "Executive", view: "all" });
+  check("  and it keeps the fractional CFO", ex.rows.some((r) => r.kind === "open"), ex.rows);
+
+  // Run scan now: no board is read (RN_SCAN_TEST), and the removal pass still runs over what is on file.
+  const run = await t.runScan(undefined, { now: iso(now) });
+  eq("the scan removes the coordinator alone, for the seniority bar", [run.result.removed, run.result.removedBelowBar, run.result.closed], [1, 1, 0]);
+  const v1 = await admin();
+  eq("the company the scan added for it is gone", companyOf(v1, "Brightpath Schools"), undefined);
+  eq("the seat Mo took, the CFO and the GTM role stay", [!!roleOf(v1, "Ledgerly"), !!roleOf(v1, "Numbro"), !!roleOf(v1, "Keepco")], [true, true, true]);
+  check("the open role a member added stays on the table", !!companyOf(v1, "Officeworks Ltd")?.engagements.length);
+  const seedRole = roleOf(v1, "Seedrole Systems");
+  eq("the role from our records is still there", !!seedRole, true);
+  eq("Sal has his credit back", await credits("tok-sal"), 25);
+  check("his ledger says why", (await t.buildView("tok-sal")).ledger.some((l) => l.reason === "Refund for a role we took off the list" && l.delta === 1), (await t.buildView("tok-sal")).ledger);
+  const again = await t.runScan(undefined, { now: iso(now + HOUR) });
+  eq("the next scan removes nothing and pays nothing twice", [again.result.removed, again.result.refunded, await credits("tok-sal")], [0, 0, 25]);
+
+  // New roles below the bar never open. Every other one does.
+  const fresh = [
+    sr("Newschool District", "School Staffing Coordinator (Contract)", { function: "Customer Success" }),
+    sr("Codeworks", "Contract Software Engineer"),
+    sr("Pixel Studio", "Art Director (freelance)"),
+    sr("Cfoco", "Fractional CFO"),
+    sr("Peoplefirst", "Interim Head of People"),
+    sr("Countwell", "Fractional Controller"),
+    sr("Aeco", "Fractional Account Executive", { function: "Sales" }),
+    sr("Staffco", "Chief of Staff (fractional)"),
+  ];
+  const r = await scan(fresh, [{ source: "board", fetched: 20, matched: 8 }], now + 2 * HOUR);
+  eq("of eight new roles, the three below the bar are left out", [r.opened, r.belowBar], [5, 3]);
+  const v2 = await admin();
+  eq("  and the five above it open", ["Cfoco", "Peoplefirst", "Countwell", "Aeco", "Staffco"].map((n) => !!roleOf(v2, n)), [true, true, true, true, true]);
+  eq("  with no company added for the three", ["Newschool District", "Codeworks", "Pixel Studio"].map((n) => !!companyOf(v2, n)), [false, false, false]);
+}
+
+const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone, notfractional, seniority };
 const name = process.argv[2] ?? "";
 try {
   if (!SCENARIOS[name]) throw new Error(`unknown scenario "${name}". One of: ${Object.keys(SCENARIOS).join(", ")}`);
