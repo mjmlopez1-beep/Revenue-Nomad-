@@ -9,7 +9,7 @@ import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } fr
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
-  REFERRAL_BONUS, INDUSTRY_GROUPS,
+  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
 
@@ -1089,17 +1089,7 @@ export function icpUnknown(icp: Icp | null | undefined, c: CompanyRec): string |
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} not on file`;
 }
 
-/** Picked industries for a label: the whole Software group reads "Software (all)". */
-export function industryWords(list: string[]): string[] {
-  let out = [...list];
-  for (const g of INDUSTRY_GROUPS)
-    if (g.values.every((v) => out.includes(v))) {
-      const at = Math.min(...g.values.map((v) => out.indexOf(v)));
-      out = out.filter((v) => !g.values.includes(v));
-      out.splice(Math.min(at, out.length), 0, g.label);
-    }
-  return out;
-}
+export { industryWords } from "@/lib/tableFields";
 
 /** Bands in their list's order, runs joined: ["11–50", "51–200"] reads "11–200", ["$20M–$50M", "$50M+"] reads "$20M+". */
 export function bandRange(list: string[], picked: string[]): string {

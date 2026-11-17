@@ -7,7 +7,7 @@
  * industry, size, revenue and HQ), never by a locked one, so a match never gives away a
  * locked value or a hidden company.
  */
-import { FUNCTIONS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "../tableFields";
+import { FUNCTIONS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, industryWords, standardIndustries } from "../tableFields";
 import { toStandard } from "../industryMap";
 import { inPlace, placeFilter } from "../geo";
 
@@ -122,7 +122,8 @@ export const sameCountry = (a: string, b: string) => countryKey(a) === countryKe
 export function describeAlert(a: Omit<SavedSearch, "id" | "name" | "createdAt">): string {
   const fns = a.function ? [a.function] : a.functions ?? [];
   const what = `${fns.length ? `Fractional ${fns.join(" or ")}` : "Fractional"} roles`;
-  const where = [a.industry?.length ? `${a.industry.join(" or ")} companies` : "", a.fractionalFriendly ? "that hired fractionals before" : ""].filter(Boolean).join(" ");
+  const inds = industryWords(a.industry ?? []).map((x) => x.replace(" (all)", ""));
+  const where = [inds.length ? `${inds.join(" or ")} companies` : "", a.fractionalFriendly ? "that hired fractionals before" : ""].filter(Boolean).join(" ");
   const size = [
     a.revenue?.length ? a.revenue.join(" or ") : "",
     a.employees?.length ? `${a.employees.join(" or ")} employees` : "",
@@ -160,7 +161,9 @@ export function cleanCriteria(raw: {
     if (!fn) problems.push(`function "${String(raw.function).slice(0, 40)}" isn't one of: ${FUNCTIONS.join(", ")}`);
   }
   const hq = typeof raw.hq === "string" && raw.hq.trim() ? raw.hq.trim().slice(0, 60) : undefined;
-  const industry = list("industry", raw.industry, RN_INDUSTRIES);
+  // "Software" (the old label) reads as every Software industry, as an ideal client does.
+  const rawInd = Array.isArray(raw.industry) ? raw.industry : raw.industry === undefined || raw.industry === null || raw.industry === "" ? [] : [raw.industry];
+  const industry = list("industry", rawInd.flatMap((v) => (/^\s*software(\s*\(all\))?\s*$/i.test(String(v ?? "")) ? standardIndustries([v]) : [v])), RN_INDUSTRIES);
   const employees = list("employees", raw.employees, RN_EMPLOYEES);
   const revenue = list("revenue", raw.revenue, RN_REVENUE);
   const functions = list("function", raw.functions, FUNCTIONS);

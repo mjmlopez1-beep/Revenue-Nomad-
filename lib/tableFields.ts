@@ -197,6 +197,17 @@ export function standardIndustries(list: readonly unknown[] | undefined): string
   }
   return [...new Set(out)];
 }
+/** Picked industries for a label: the whole Software group reads "Software (all)". */
+export function industryWords(list: string[]): string[] {
+  let out = [...list];
+  for (const g of INDUSTRY_GROUPS)
+    if (g.values.every((v) => out.includes(v))) {
+      const at = Math.min(...g.values.map((v) => out.indexOf(v)));
+      out = out.filter((v) => !g.values.includes(v));
+      out.splice(Math.min(at, out.length), 0, g.label);
+    }
+  return out;
+}
 /** Standard values of employees or revenue, ones nothing maps dropped. */
 export const standardList = (field: "employees" | "revenue", list: readonly unknown[] | undefined): string[] =>
   [...new Set((list ?? []).map((x) => toStandard(field, x)).filter((x): x is string => !!x))];

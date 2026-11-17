@@ -262,7 +262,7 @@ check("facts about a firm the seed dropped go", !s.values["c_dropped.industry"])
 check("a firm where a member holds a seat stays, listed for review", s.companies.some((c) => c.id === "c_heldfirm") && s.firmReview?.some((r) => r.companyId === "c_heldfirm") === true);
 check("a stored value outside the list takes its standard value on load", s.values["c_austin.industry"]?.value === "SaaS", s.values["c_austin.industry"]);
 const alert = s.connector?.alerts.m3?.[0];
-check("saved searches take standard values on load", alert?.industry?.join() === "SaaS" && alert?.revenue?.join() === "Under $1M", alert);
+check("saved searches take standard values on load (the old Software reads as Software (all))", alert?.industry?.join() === "SaaS,Enterprise Software,SMB Software,Developer Tools" && alert?.revenue?.join() === "Under $1M", alert);
 const again = FR.purgeFirms(await T.loadSeed(), structuredClone(s), new Date().toISOString());
 check("purging again removes nothing and pays nothing", again.companies === 0 && again.refunds === 0 && again.facts === 0, again);
 

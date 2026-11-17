@@ -1251,8 +1251,8 @@ section("hunt", async () => {
   const v1 = (await H.view()).me;
   check("profile takes a title and an ideal client", p.status === 200 && v1.title === "Fractional VP Marketing", p.json ?? v1.title);
   check(
-    "the ideal client keeps list values in their list's spelling and drops the rest",
-    JSON.stringify(v1.icp) === JSON.stringify({ industries: ["Software"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"], countries: ["United States", "bx/b"] }),
+    "the ideal client keeps list values in their list's spelling, reads the old Software as Software (all), and drops the rest",
+    JSON.stringify(v1.icp) === JSON.stringify({ industries: ["SaaS", "Enterprise Software", "SMB Software", "Developer Tools"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"], countries: ["United States", "bx/b"] }),
     v1.icp,
   );
   const bad = await H.act({ type: "profile", icp: "everyone" });
@@ -1265,7 +1265,7 @@ section("hunt", async () => {
   const place = "v=hiring&t=seats&f=fn:Marketing~industry:Software";
   const s1 = await H.act({ type: "savedView", op: "save", name: "", place, criteria: { function: "Marketing", industry: ["software"], revenue: ["$5M–$20M"] } });
   const vs = (await H.view()).me.savedViews;
-  check("save keeps a view with a name made from its criteria, and the weekly email on", s1.status === 200 && vs.length === 1 && vs[0].name === "Fractional Marketing roles at Software companies, $5M–$20M" && vs[0].email === true && vs[0].place === place, vs);
+  check("save keeps a view with a name made from its criteria, and the weekly email on", s1.status === 200 && vs.length === 1 && vs[0].name === "Fractional Marketing roles at Software companies, $5M–$20M" && vs[0].criteria.industry.length === 4 && vs[0].email === true && vs[0].place === place, vs);
   check("the save says the weekly email has it", /weekly email/.test(s1.json?.message ?? "") && typeof s1.json?.id === "string", s1.json);
   const s2 = await H.act({ type: "savedView", op: "save", name: "Sales or RevOps <b>roles</b>", place: "v=all", criteria: { functions: ["Sales", "RevOps"], country: ["United States"] }, email: false });
   const vs2 = (await H.view()).me.savedViews;
