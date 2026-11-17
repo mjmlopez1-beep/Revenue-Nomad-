@@ -32,7 +32,7 @@ import type { Me } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
-  notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, rolesThisWeek, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit,
+  notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, rolesThisWeek, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
@@ -1345,7 +1345,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
   const scan = view.scan;
   // Hiring now leads with the member's function: how many came in this week there and elsewhere, and one tap for every function.
-  const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => !isFirm(i.c)) : null;
+  // Counted inside the "Your clients" pill while it is on, so the line agrees with the list under it.
+  const weekFit = eff.icp && !icpEmpty(me.icp) ? icpTest(me.icp!) : null;
+  const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => !isFirm(i.c) && (!weekFit || weekFit(i.c))) : null;
   const fnLine = hireFn && fnSplit && !qt && (fnSplit.mine.length > 0 || allFns) && (
     <p className="tp-scanline hunt-fnline">
       <span>

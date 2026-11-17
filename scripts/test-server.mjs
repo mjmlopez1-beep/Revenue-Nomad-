@@ -1220,7 +1220,7 @@ section("settings", async () => {
 
 section("hunt", async () => {
   // Who they are and who they hunt: the title and the ideal client on the profile, back in Me.
-  const H = await member("Hana Hunter", ip(150));
+  const H = await member("Hana Hunter", ip(170));
   const v0 = (await H.view()).me;
   check("a new member has no ideal client and no saved views", v0.icp === null && Array.isArray(v0.savedViews) && v0.savedViews.length === 0, { icp: v0.icp, views: v0.savedViews });
   const p = await H.act({
@@ -1256,7 +1256,7 @@ section("hunt", async () => {
   check("and back on", on.status === 200 && (await H.view()).me.savedViews[0].email === true && /each week/.test(on.json?.message ?? ""), on.json);
   const badList = await H.act({ type: "savedView", op: "save", place: "v=all", criteria: { revenue: ["a lot"] } });
   check("a view with a value off our lists is refused", badList.status === 400, badList.json);
-  const other = await member("Otto Other", ip(151));
+  const other = await member("Otto Other", ip(171));
   const steal = await other.act({ type: "savedView", op: "delete", id: vs[0].id });
   check("another member can't remove someone's view", steal.status === 400 && (await H.view()).me.savedViews.length === 2, steal.json);
   check("and doesn't see it", (await other.view()).me.savedViews.length === 0);

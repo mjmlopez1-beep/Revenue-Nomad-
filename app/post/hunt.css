@@ -239,3 +239,8 @@
     white-space: normal;
   }
 }
+
+/* Phones: the list's children carry their own 16px gutter. */
+.tp-main-phone > .hunt-pill {
+  margin: 12px 16px;
+}
