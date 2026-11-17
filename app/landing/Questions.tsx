@@ -34,6 +34,10 @@ export function faqItems(starter: number, intro = false): [string, string][] {
       "Its title is free. While the role is open, the company behind it is hidden. One credit shows the company and its job posting, and the posted rate when there is one. When the role closes, everyone sees the company again. Try it on the homepage names a few hiring companies as a sample.",
     ],
     [
+      "What does a hiring contact cost?",
+      "A person's name and title are one unlock. One credit shows both. Their LinkedIn, email and phone are 1 credit each. How they relate to the seat, like Decision maker, is free.",
+    ],
+    [
       "How do I get alerts for new roles?",
       "Each week we email you the new open roles in your function. Save a view with the weekly email on and you also get the new roles that match it. For a post the moment a role fits you, connect Slack or any tool by webhook in Integrations.",
     ],

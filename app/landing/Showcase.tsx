@@ -105,7 +105,7 @@ export function slides(intro: boolean): Slide[] {
 /** Every feature without a slide of its own, so the section still names them all. */
 export const MORE_FEATURES = [
   "Search companies, seats and people, including what a company does",
-  "Hiring contacts, with titles free and a name, LinkedIn, email or phone for 1 credit each",
+  "Hiring contacts, with a name and title together for 1 credit, and a LinkedIn, email or phone for 1 credit each",
   "Messages with other members",
   "Follow a company",
   "Invite a fractional you trust",

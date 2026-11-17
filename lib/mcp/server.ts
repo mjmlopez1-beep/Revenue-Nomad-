@@ -28,6 +28,7 @@ export const INSTRUCTIONS = `Merlin is a give-to-get table of companies that hir
 How the table works
 - Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts (company basics, a seat's function, type, status, start, why they hired) are always visible.
 - A company with an open role is a "Locked company" until the member unlocks it for 1 credit, which also opens the posting and posted rate of its open roles. An open role's title is free to see. Its posting and posted rate are one purchase.
+- A person's name and title are locked together: 1 credit opens both, whichever one you unlock. Their LinkedIn, email and phone are 1 credit each. A relationship (like Decision maker) is free.
 - Never spend a credit without asking. Call unlock without confirm first, tell the member what it costs and what it opens, and call it again with confirm true only after they say yes.
 
 Using it well

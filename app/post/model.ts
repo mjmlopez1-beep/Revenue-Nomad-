@@ -9,7 +9,7 @@ import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } fr
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
-  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords,
+  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
 
@@ -125,11 +125,23 @@ export function engagementsNewest(c: CompanyRec): EngagementRec[] {
   });
 }
 
+/**
+ * Locked facts on one record, one entry per purchase. A person's name and title are one purchase,
+ * so only the first of them still locked is in the list.
+ */
 export function lockedOf(entity: Entity, id: string, cells: Record<string, Cell>): FactRef[] {
+  const lead = entity === "contact" ? personLead(cells) : null;
   return Object.entries(cells)
-    .filter(([, c]) => c.s === "locked")
+    .filter(([field, c]) => c.s === "locked" && !(entity === "contact" && PERSON_BUNDLE.includes(field) && field !== lead))
     .map(([field]) => ({ entity, id, field }));
 }
+
+/** The one lock that spends for a person's name and title: the first of the two still locked. */
+export const personLead = (cells: Record<string, Cell>) => PERSON_BUNDLE.find((f) => cells[f]?.s === "locked") ?? null;
+/** Both a person's name and title are locked: one lock opens the two, so its label says "name and title". */
+export const personBothLocked = (cells: Record<string, Cell>) => PERSON_BUNDLE.every((f) => cells[f]?.s === "locked");
+/** What the lock on a person's name or title says it opens: "name and title" while both are locked. */
+export const personNoun = (cells: Record<string, Cell>, field: string) => (PERSON_BUNDLE.includes(field) && personBothLocked(cells) ? "name and title" : undefined);
 
 /**
  * An open role for the purpose of buying it: its role, its posting and its posted rate are one
@@ -159,6 +171,18 @@ export function coverOf(i: CoInfo, e: EngagementRec | null | undefined, field: s
     return "Open the record to unlock this.";
   }
   if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field) && bundleLead(e) !== field) return "Comes with this open role. One credit opens the job posting and the posted rate.";
+  return null;
+}
+
+/**
+ * Why a person's locked fact in a list row or card is not its own paying control, or null when it
+ * is: the rules of coverOf, and a person's title comes with their name (one credit opens both),
+ * so while both are locked only the name's lock spends and the title is a quiet lock.
+ */
+export function personCoverOf(i: CoInfo, e: EngagementRec | null | undefined, p: PersonRec, field: string): string | null {
+  const base = coverOf(i, e, field);
+  if (base) return base;
+  if (PERSON_BUNDLE.includes(field) && p.cells[field]?.s === "locked" && personLead(p.cells) !== field) return "Comes with the name. One credit opens the name and the title.";
   return null;
 }
 
@@ -240,7 +264,7 @@ function infoOf(c: CompanyRec): CoInfo {
     ...engLocked,
     ...c.people.flatMap((p) => lockedOf("contact", p.id, p.cells)),
   ];
-  const personGated = ["name", "email", "phone", "linkedin"];
+  const personGated = ["name", "title", "email", "phone", "linkedin"];
   const unlockedByMe =
     !!c.unlocked || engs.some(engUnlocked) || people.some(({ p }) => personGated.some((g) => p.cells[g] && isUnlocked(p.cells[g])));
   // A locked company has no name to search (the server sends a placeholder).

@@ -9,7 +9,7 @@
 import { randomBytes } from "crypto";
 import { ActionError, connectorState, digestEnabled, inviteCode, perform, updateConnector, type Member } from "../table";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
-import { FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
+import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
   EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
   type CoInfo, type FactRef, type Filters,
@@ -33,6 +33,8 @@ export class ToolProblem extends Error {}
 export const LOCKED = "locked, 1 credit to unlock";
 const LOCKED_ROLE = "locked, 1 credit opens this open role's job posting and posted rate together";
 const LOCKED_WITH_COMPANY = "locked with the company, 1 credit unlocks the company and this";
+/** A person's name and title are one purchase (PERSON_BUNDLE). */
+const LOCKED_PERSON = "locked, 1 credit opens this person's name and title together";
 const REVIEW = "under review";
 
 /** Output keys (what a model reads and sends back) and the field each one is. */
@@ -99,7 +101,7 @@ function companySummary(i: CoInfo): ToolOut {
 const dayOfIso = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : undefined);
 
 function personOut(p: PersonRec, seatId?: string | null): ToolOut {
-  return { id: p.id, ...(seatId ? { seat_id: seatId } : {}), ...readAll(p.cells, PERSON_KEYS) };
+  return { id: p.id, ...(seatId ? { seat_id: seatId } : {}), ...readAll(p.cells, PERSON_KEYS, (f) => (PERSON_BUNDLE.includes(f) ? LOCKED_PERSON : LOCKED)) };
 }
 
 function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
@@ -488,7 +490,9 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
   if (all) return { items: lockedOf("contact", p.id, p.cells), what: "everything locked about this person", id: p.id };
   const field = fieldFrom(PERSON_KEYS, fieldRaw);
   if (!field) throw new ToolProblem(`On a person, field is "everything" or one of: ${Object.keys(PERSON_KEYS).join(", ")}`);
-  return { items: p.cells[field]?.s === "locked" ? [{ entity: "contact", id: p.id, field }] : [], what: `the person's ${field}`, id: p.id };
+  // The name and the title are one purchase: either one asks for both.
+  const bundle = PERSON_BUNDLE.includes(field);
+  return { items: p.cells[field]?.s === "locked" ? [{ entity: "contact", id: p.id, field }] : [], what: bundle ? "the person's name and title" : `the person's ${field}`, id: p.id };
 }
 
 /** One record, read fresh after a change, to show what the member can now see. */

@@ -19,7 +19,7 @@ import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import type { Cell, EngagementRec, Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconLock, IconStar, LockedName, LockedSite, fmtMonth } from "../ui/shared";
 import {
-  COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
+  COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, personCoverOf, personNoun, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
 } from "./model";
 import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
@@ -194,6 +194,7 @@ export function RowFact({
   cover,
   own,
   at,
+  noun,
 }: {
   t: FactRef;
   cell: Cell | undefined;
@@ -204,6 +205,8 @@ export function RowFact({
   own?: boolean;
   /** The company's name, for the button names where the row does not show it next to them (phone cards). */
   at?: string;
+  /** Where one lock opens more than this fact, what it opens ("name and title"). */
+  noun?: string;
 }) {
   const ui = useCellUi();
   const ref = useRef<HTMLSpanElement>(null);
@@ -218,7 +221,7 @@ export function RowFact({
       </span>
     );
   }
-  return <FactCell t={t} cell={cell} render={render} addLabel={addLabel} at={at} />;
+  return <FactCell t={t} cell={cell} render={render} addLabel={addLabel} at={at} noun={noun} />;
 }
 
 /** The tooltip on a locked company's name. */
@@ -340,15 +343,23 @@ function PeopleCell({ i }: { i: CoInfo }) {
     return <AddPill label="Add a person" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "person" })} />;
   }
   const dm = i.people.find(({ p }) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Decision maker") ?? i.people[0];
-  const title = dm.p.cells.title?.s === "value" ? dm.p.cells.title.v : "Title not on file";
+  const tc = dm.p.cells.title;
+  const title = tc?.s === "value" ? tc.v : "Title not on file";
   const more = i.people.length - 1;
   return (
     <span className="tp-stack">
-      <span className="tp-ppl-t" title={title}>
-        {title}
-      </span>
+      {/* A locked title comes with the name (one credit opens both): a quiet lock over the name's. */}
+      {tc?.s === "locked" ? (
+        <span className="tp-ppl-t">
+          <RowFact t={{ entity: "contact", id: dm.p.id, field: "title" }} cell={tc} cover={personCoverOf(i, dm.e, dm.p, "title")} />
+        </span>
+      ) : (
+        <span className="tp-ppl-t" title={title}>
+          {title}
+        </span>
+      )}
       <span className="tp-ppl-who">
-        <RowFact t={{ entity: "contact", id: dm.p.id, field: "name" }} cell={dm.p.cells.name} cover={coverOf(i, dm.e, "name")} />
+        <RowFact t={{ entity: "contact", id: dm.p.id, field: "name" }} cell={dm.p.cells.name} cover={personCoverOf(i, dm.e, dm.p, "name")} noun={personNoun(dm.p.cells, "name")} />
         {more > 0 && <span className="tp-stack-sub num">+{more} more</span>}
       </span>
     </span>
@@ -497,7 +508,8 @@ const EngRow = memo(function EngRow({ r, mine, sel, onOpen, hiring }: { r: Row; 
 const PersonRow = memo(function PersonRow({ r, sel, onOpen }: { r: Row; sel: boolean; onOpen: (r: Row) => void }) {
   const p = r.p!;
   const i = r.i;
-  const cellOf = (f: string) => <RowFact t={{ entity: "contact", id: p.id, field: f }} cell={p.cells[f]} cover={coverOf(i, r.e, f)} />;
+  // A person's name and title are one purchase: while both are locked the name's lock spends and the title's is quiet.
+  const cellOf = (f: string) => <RowFact t={{ entity: "contact", id: p.id, field: f }} cell={p.cells[f]} cover={personCoverOf(i, r.e, p, f)} noun={personNoun(p.cells, f)} />;
   return (
     <tr {...rowProps(r, sel, onOpen)}>
       <td className="tp-sticky">

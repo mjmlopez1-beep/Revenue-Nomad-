@@ -393,8 +393,11 @@ let focusNext: { k: string; box: Element | null; until: number } | null = null;
  * opens the inline editor. reported: "Under review".
  * After an unlock or a save, keyboard focus lands on the value it revealed (tabIndex -1).
  */
-/** `at`: the company's name, for the lock's and the add button's names where the row does not say it (phone cards). */
-export function FactCell({ t, cell, render, addLabel = "Add", at }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string; at?: string }) {
+/**
+ * `at`: the company's name, for the lock's and the add button's names where the row does not say it (phone cards).
+ * `noun`: where one lock opens more than this fact, what it opens ("name and title", see personNoun).
+ */
+export function FactCell({ t, cell, render, addLabel = "Add", at, noun }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string; at?: string; noun?: string }) {
   const ui = useCellUi();
   const ref = useRef<HTMLSpanElement>(null);
   const refocus = useRef(false);
@@ -455,8 +458,11 @@ export function FactCell({ t, cell, render, addLabel = "Add", at }: { t: FactRef
             }}
             ver={cell.ver}
             from={cell.from}
-            what={at ? `${factWhat(t)} at ${at}` : factWhat(t)}
-            noun={t.field === "identity" ? "company" : undefined}
+            what={(() => {
+              const w = noun === "name and title" ? "this person's name and title" : factWhat(t);
+              return at ? `${w} at ${at}` : w;
+            })()}
+            noun={t.field === "identity" ? "company" : noun}
             busy={flags.busy}
             later={later}
             broke={credits <= 0}

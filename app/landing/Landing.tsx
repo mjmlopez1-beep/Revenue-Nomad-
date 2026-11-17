@@ -66,7 +66,7 @@ const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[];
       freeLast: ["Title of an open role", "Open and closed dates"],
       note: "An open role's title is free while it is open. The role on a past seat costs 1 credit.",
     },
-    { entity: "contact", label: "A hiring contact" },
+    { entity: "contact", label: "A hiring contact", note: "A person's name and title are one unlock. One credit shows both." },
   ] as { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; note?: string }[]
 ).map((row) => {
   const fields = (GROUPS.find((g) => g.entity === row.entity)?.fields ?? []).filter((f) => !f.identity && !f.system);

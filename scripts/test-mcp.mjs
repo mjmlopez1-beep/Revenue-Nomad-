@@ -368,6 +368,8 @@ async function main() {
   const coName = `Qa Mcp Co ${RUN}`;
   const personName = "Pia Hiddenfield";
   const personEmail = `pia-${RUN}@qa-mcp.example.com`;
+  // A person's title is locked with their name (one credit opens both), so it must never show before A pays.
+  const personTitle = `Chief Qa Officer ${RUN}`;
   const bRate = "$12,345/mo";
   const addB = await B.act({
     type: "add",
@@ -376,7 +378,7 @@ async function main() {
     newEngagement: true,
     engagementFields: { operator: B.name, function: "Sales", role: "Fractional VP Sales", type: "Fractional", status: "Ended", start: "2024-01", end: "2024-09", pricing: "Monthly retainer", rate: bRate },
     operatorMemberId: "me",
-    people: [{ name: personName, title: "CEO", relationship: "Hiring for the seat", email: personEmail }],
+    people: [{ name: personName, title: personTitle, relationship: "Hiring for the seat", email: personEmail }],
   });
   check("setup: B adds a company, B's seat and a person", addB.status === 200, addB.json);
   secretWords.add(personName);
@@ -394,7 +396,7 @@ async function main() {
   /* A's view in the app: the ground truth of what A may see */
   const av0 = await A.view();
   const aJson0 = JSON.stringify(av0);
-  const forbidden = new Set([personName, personEmail, bRate, hiddenName, hiddenSite, "$9,876/mo", A.token, B.token]);
+  const forbidden = new Set([personName, personTitle, personEmail, bRate, hiddenName, hiddenSite, "$9,876/mo", A.token, B.token]);
   const seedWords = [];
   if (seedFile) {
     const words = [
@@ -456,7 +458,11 @@ async function main() {
   const gSeat = g1.out?.seats?.[0];
   check("get_company shows the seat with free facts and locked ones marked", gSeat?.function === "Sales" && gSeat.type === "Fractional" && gSeat.start === "2024-01" && gSeat.seat_holder === "locked, 1 credit to unlock" && gSeat.rate === "locked, 1 credit to unlock", gSeat);
   const gPerson = gSeat?.people?.[0];
-  check("the person's title and relationship show, their name and email are locked", gPerson?.title === "CEO" && gPerson.relationship === "Hiring for the seat" && gPerson.name === "locked, 1 credit to unlock" && gPerson.email === "locked, 1 credit to unlock", gPerson);
+  check(
+    "the person's relationship shows, their name and title are locked together, their email on its own",
+    gPerson?.relationship === "Hiring for the seat" && gPerson.name === "locked, 1 credit opens this person's name and title together" && gPerson.title === gPerson.name && gPerson.email === "locked, 1 credit to unlock",
+    gPerson,
+  );
   check("warm paths name the seat holder and the exec who hired for the seat", (g1.out?.warm_paths ?? []).some((w) => /held the Sales seat/.test(w.who)) && (g1.out?.warm_paths ?? []).some((w) => /hiring for the seat/.test(w.who)), g1.out?.warm_paths);
   check("it says what unlocking everything costs and what A could add", typeof g1.out?.locked === "object" && g1.out.locked.purchases >= 3 && Array.isArray(g1.out.you_can_add) && g1.out.you_can_add.includes("hq"), g1.out?.locked);
   const gByName = await tool(at, "get_company", { company: coName });
@@ -515,7 +521,11 @@ async function main() {
   const pv = await tool(at, "unlock", { entity: "person", id: gPerson?.id, field: "name" });
   const mid = (await A.view()).me.credits;
   check("unlock without confirm says the cost and spends nothing", pv.out?.confirmed === false && pv.out.would_spend === 1 && /Ask the member/.test(pv.out.next) && mid === before, { out: pv.out, before, mid });
-  check("and it shows no value", !pv.text.includes(personName));
+  check("and it shows no value", !pv.text.includes(personName) && !pv.text.includes(personTitle) && pv.out?.would_open === "the person's name and title");
+  const pvT = await tool(at, "unlock", { entity: "person", id: gPerson?.id, field: "title" });
+  check("asking for the title prices the same one purchase", pvT.out?.would_spend === 1 && pvT.out.would_open === "the person's name and title" && (await A.view()).me.credits === before, pvT.out);
+  const pvP = await tool(at, "unlock", { entity: "person", id: gPerson?.id, field: "everything" });
+  check("everything about the person costs 2: the name and title, and the email", pvP.out?.would_spend === 2 && (await A.view()).me.credits === before, pvP.out);
   const pvAll = await tool(at, "unlock", { entity: "company", id: coRow?.id, field: "everything" });
   check("unlock everything without confirm prices every purchase and spends nothing", pvAll.out?.would_spend >= 3 && (await A.view()).me.credits === before, pvAll.out);
   const done = await tool(at, "unlock", { entity: "person", id: gPerson?.id, field: "name", confirm: true });
@@ -523,6 +533,9 @@ async function main() {
   const appCell = av1.companies.find((c) => c.id === coRow.id)?.engagements[0]?.people?.find((x) => x.id === gPerson.id)?.cells.name;
   check("unlock with confirm spends 1 credit", done.out?.confirmed === true && av1.me.credits === before - 1 && done.out.credits_left === before - 1, { before, after: av1.me.credits, out: done.out?.message });
   check("and returns the value the app now shows", done.out?.person?.name === personName && appCell?.s === "value" && appCell.v === personName, done.out?.person);
+  check("the title came with the name", done.out?.person?.title === personTitle && /name and title for 1 credit/.test(done.out?.message ?? ""), done.out?.message);
+  const twiceT = await tool(at, "unlock", { entity: "person", id: gPerson.id, field: "title", confirm: true });
+  check("the title is then free: unlocking it spends nothing", twiceT.out?.spent === 0 && (await A.view()).me.credits === before - 1, twiceT.out);
   check("the email stays locked", done.out?.person?.email === "locked, 1 credit to unlock");
   const twice = await tool(at, "unlock", { entity: "person", id: gPerson.id, field: "name", confirm: true });
   check("unlocking what is already visible spends nothing", twice.out?.spent === 0 && (await A.view()).me.credits === before - 1, twice.out);

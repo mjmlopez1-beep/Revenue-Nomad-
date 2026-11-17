@@ -22,9 +22,9 @@
 import { MessageButton } from "./Messages";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
-import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
+import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
-import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
+import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, personBothLocked, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, storyTag, storyTitle } from "./Tables";
@@ -479,17 +479,25 @@ function FieldRow({
 }
 
 /** How the one row for an open role's locked role, posting and rate names its parts. */
-const GROUP_LABEL: Record<string, [string, string]> = { role: ["Role", "the role"], posting: ["posting", "the job posting"], rate: ["rate", "the posted rate"] };
+const GROUP_LABEL: Record<string, [string, string]> = {
+  role: ["Role", "the role"],
+  posting: ["posting", "the job posting"],
+  rate: ["rate", "the posted rate"],
+  name: ["name", "the name"],
+  title: ["title", "the title"],
+};
 
 /**
  * An open role's role, posting and rate are one purchase: one row, one lock, one price. The
  * server opens all of them for the 1 credit (and the company with them while it is hidden).
+ * A person's name and title are one purchase too ("Unlock name and title · 1 credit").
  * `fields` are the ones still locked, in order.
  */
-function OpenRoleLock({ id, hidden, fields }: { id: string; hidden: boolean; fields: string[] }) {
+function OpenRoleLock({ entity = "engagement", id, hidden, fields }: { entity?: Entity; id: string; hidden: boolean; fields: string[] }) {
   const ui = useUi();
   const lead = fields[0];
-  const t = { entity: "engagement" as const, id, field: lead };
+  const t = { entity, id, field: lead };
+  const person = entity === "contact";
   const ref = useRef<HTMLSpanElement>(null);
   const [zero, setZero] = useState(false);
   const busy = fields.some((f) => ui.busy.has(cellKey(id, f)));
@@ -501,11 +509,12 @@ function OpenRoleLock({ id, hidden, fields }: { id: string; hidden: boolean; fie
       <span className="tp-frow-v">
         <span className="tp-cell" data-cell={cellKey(id, lead)} ref={ref}>
           <LockPill
-            what={listOf(hidden ? ["the company", ...names] : names)}
+            what={person ? "this person's name and title" : listOf(hidden ? ["the company", ...names] : names)}
+            noun={person ? "name and title" : undefined}
             busy={busy}
             onUnlock={() => {
               if (ui.me.credits > 0) return ui.unlock(t);
-              sendSignal("wall", "role");
+              sendSignal("wall", person ? lead : "role");
               setZero(true);
             }}
           />
@@ -550,7 +559,7 @@ function FieldList({
   render?: Record<string, (v: string) => ReactNode>;
   notes?: Record<string, ReactNode>;
   after?: Record<string, ReactNode>;
-  /** Fields that unlock together (an open role's role, posting and rate): one row while two or more are locked. */
+  /** Fields that unlock together (an open role's role, posting and rate, a person's name and title): one row while two or more are locked. */
   pair?: string[];
   own?: boolean;
   listed?: boolean;
@@ -578,7 +587,7 @@ function FieldList({
           {present.map((f) => (
             <Fragment key={f}>
               {paired && f === group[0] ? (
-                <OpenRoleLock id={id} hidden={ui.isHidden(id)} fields={group} />
+                <OpenRoleLock entity={entity} id={id} hidden={ui.isHidden(id)} fields={group} />
               ) : (
                 <FieldRow
                   t={{ entity, id, field: f }}
@@ -626,7 +635,8 @@ const NOUN: Record<string, [string, string]> = {
   "engagement.sourced": ["source of hire", "sources of hire"],
   "engagement.rate": ["rate", "rates"],
   "engagement.posting": ["job posting", "job postings"],
-  "contact.name": ["name", "names"],
+  "contact.name": ["name and title", "names and titles"],
+  "contact.title": ["title", "titles"],
   "contact.email": ["email", "emails"],
   "contact.phone": ["phone number", "phone numbers"],
   "contact.linkedin": ["LinkedIn profile", "LinkedIn profiles"],
@@ -796,6 +806,8 @@ function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
 /* ---------- people ---------- */
 
 const PERSON_FIELDS = ["title", "relationship", "name", "email", "linkedin", "phone"];
+/** While a person's name and title are both locked they are one row ("Name and title"), at the top where the title goes. */
+const personFields = (p: PersonRec) => (personBothLocked(p.cells) ? ["name", "title", "relationship", "email", "linkedin", "phone"] : PERSON_FIELDS);
 const personRender: Record<string, (v: string) => ReactNode> = {
   title: (v) => <span className="tp-person-title">{v}</span>,
   relationship: (v) => <span className="chip tp-fn">{v}</span>,
@@ -805,7 +817,7 @@ const personRender: Record<string, (v: string) => ReactNode> = {
 function PersonCard({ p, inSeat }: { p: PersonRec; inSeat?: boolean }) {
   return (
     <div className={`tp-person${inSeat ? "" : " tp-person-box"}`} id={`tp-d-${p.id}`}>
-      <FieldList entity="contact" id={p.id} cells={p.cells} fields={PERSON_FIELDS} render={personRender} />
+      <FieldList entity="contact" id={p.id} cells={p.cells} fields={personFields(p)} render={personRender} pair={PERSON_BUNDLE} />
     </div>
   );
 }
