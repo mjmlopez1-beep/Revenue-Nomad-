@@ -128,7 +128,6 @@
   font-size: 12px;
   line-height: 16px;
   color: var(--muted);
-  font-style: italic;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
