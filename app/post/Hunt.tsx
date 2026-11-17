@@ -9,7 +9,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import type { CompanyRec, Icp, SavedViewRec } from "@/lib/tableTypes";
 import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
-import { IconCheck, IconX } from "../ui/shared";
+import { IconCheck, IconSearch, IconX } from "../ui/shared";
 import { countryKey, countryName, countryOf, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { Sheet } from "./ui";
 import "./hunt.css";
@@ -71,9 +71,11 @@ export function IcpFields({
   /** The class of each part's heading (onboarding uses its own). */
   headingClass?: string;
 }) {
-  const [allInd, setAllInd] = useState(false);
-  // The most common ten, plus any picked further down the list.
-  const shownInd = allInd ? industries.map((x) => x.name) : [...new Set([...industries.slice(0, 10).map((x) => x.name), ...value.industries])];
+  const [indQ, setIndQ] = useState("");
+  // The standard list is long (RN_INDUSTRIES): the most common 12 as chips, the ones picked, and a search for the rest.
+  const q = indQ.trim().toLowerCase();
+  const found = q ? industries.filter((x) => x.name.toLowerCase().includes(q) && !value.industries.includes(x.name)).slice(0, 12).map((x) => x.name) : [];
+  const shownInd = q ? [...value.industries, ...found] : [...new Set([...industries.slice(0, 12).map((x) => x.name), ...value.industries])];
   const others = countries.filter((c) => countryKey(c.name) !== "united states").slice(0, 6).map((c) => c.name);
   const usOnly = value.countries.length === 1 && countryKey(value.countries[0]) === "united states";
   const anywhere = value.countries.length === 0;
@@ -82,11 +84,29 @@ export function IcpFields({
       <fieldset className="hunt-q">
         <legend className={headingClass}>Industries</legend>
         <Chips name="Industries" options={shownInd} on={(o) => value.industries.includes(o)} toggle={(o) => onChange({ ...value, industries: flip(value.industries, o) })} />
-        {industries.length > 10 && (
-          <button type="button" className="hunt-more" onClick={() => setAllInd(!allInd)}>
-            {allInd ? "Show fewer" : `Show all ${industries.length} industries`}
-          </button>
+        {industries.length > 12 && (
+          <label className="tp-fsearch hunt-isearch">
+            <IconSearch size={13} />
+            <input
+              className="tp-bare"
+              type="search"
+              placeholder={`Search all ${industries.length} industries`}
+              aria-label={`Search all ${industries.length} industries`}
+              value={indQ}
+              onChange={(e) => setIndQ(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter picks the first match, so a typed industry is one key away.
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (found[0]) onChange({ ...value, industries: [...value.industries, found[0]] });
+                  setIndQ("");
+                }
+              }}
+              enterKeyHint="done"
+            />
+          </label>
         )}
+        {q && !found.length && <p className="hunt-note">No industry on the list matches {indQ.trim()}.</p>}
       </fieldset>
       <fieldset className="hunt-q">
         <legend className={headingClass}>Company size</legend>

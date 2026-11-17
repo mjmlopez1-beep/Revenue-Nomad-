@@ -490,7 +490,7 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   owned.friendly = { ...owned.friendly, fractional: 1, functions: ["Marketing"] };
   const wrong = withCells(co("Retail Co", [hire("Sales", "2025-01")]), { industry: "Retail", employees: "51–200", revenue: "$5M–$20M" });
   wrong.friendly = { ...wrong.friendly, fractional: 1, functions: ["Sales"] };
-  const merged = withCells(co("Old Name Co", []), { industry: "Software & IT Services", employees: "11–50", revenue: "$5M–$20M", hq: "London, United Kingdom" });
+  const merged = withCells(co("Old Name Co", []), { industry: "software", employees: "11–50", revenue: "$5M–$20M", hq: "London, United Kingdom" });
   const firm = withCells(co("Firm Co", []), { industry: "Software", employees: "11–50", revenue: "$5M–$20M" }, { firm: true });
   const abroad = withCells(co("Berlin Co", []), { industry: "Software", employees: "11–50", revenue: "$5M–$20M" }, { country: "Germany", region: "Berlin" });
   const all = deriveAll([fit, owned, wrong, merged, firm, abroad]);
@@ -500,7 +500,7 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
 
   const on = names({ icp: true });
   check("ideal client: matching industry, size and revenue only", on.includes("Fit Co") && on.includes("Has Marketing") && !on.includes("Retail Co"), on);
-  check("ideal client: an industry saved under its old name still matches", on.includes("Old Name Co"), on);
+  check("ideal client: industries match case aside", on.includes("Old Name Co"), on);
   check("ideal client off: everyone", names({}).includes("Retail Co"));
   const facets = applyFilters(rowsFor("companies", all), { ...EMPTY_FILTERS, icp: true }, "all", "", mkt).facets;
   check("Show everyone counts the rows without the ideal client", facets.everyone === names({}).length, facets.everyone);

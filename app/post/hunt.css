@@ -244,3 +244,42 @@
 .tp-main-phone > .hunt-pill {
   margin: 12px 16px;
 }
+
+/* Search all industries (the standard list is long). Styled here so onboarding has it too. */
+.hunt-isearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  max-width: 360px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-input);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  color: var(--muted);
+}
+.hunt-isearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+}
+.hunt-isearch:focus-within {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+@media (max-width: 767px) {
+  .hunt-isearch {
+    height: 44px;
+    max-width: none;
+    font-size: 16px;
+  }
+  .hunt-isearch input {
+    font-size: 16px;
+  }
+}

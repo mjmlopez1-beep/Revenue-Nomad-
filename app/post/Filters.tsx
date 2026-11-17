@@ -103,7 +103,8 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
     .filter((o) => o.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b));
   const withData = opts.filter((o) => (counts[o] ?? 0) > 0 || f.industry.includes(o));
-  const list = all || q ? opts : withData.slice(0, 8);
+  // Only industries with companies on file here (the standard list is long), most first.
+  const list = all || q ? withData : withData.slice(0, 8);
   return (
     <div className="tp-fblock">
       <div className="tp-flabel">Industry</div>
@@ -137,9 +138,9 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
           <p className="tp-fnote">{hasIndustry ? "None of these companies has an industry on file." : "No company has an industry on file yet. Add one and you can filter by it."}</p>
         )}
       </div>
-      {!q && (
+      {!q && withData.length > 8 && (
         <button type="button" className="tp-flink" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all ${LIST_OPTIONS.industry.length} industries`}
+          {all ? "Show fewer" : `Show all ${withData.length} industries`}
         </button>
       )}
     </div>

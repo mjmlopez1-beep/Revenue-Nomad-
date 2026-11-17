@@ -1027,9 +1027,8 @@ const placeFor = (c: CompanyRec) => {
 export const countryOf = (c: CompanyRec): string | null => placeFor(c).country;
 export const regionOf = (c: CompanyRec): string | null => placeFor(c).region;
 
-/** Industries that are one since the data clean merged them. An answer saved under the old name still matches. */
-const INDUSTRY_SAME: Record<string, string> = { saas: "software", "software & it services": "software", finance: "financial services" };
-const industryKey = (v: string) => INDUSTRY_SAME[v.toLowerCase()] ?? v.toLowerCase();
+// Industries match by name, case aside (the standard list names each one once).
+const industryKey = (v: string) => v.trim().toLowerCase();
 
 export const icpEmpty = (icp: Icp | null | undefined) => !icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
 
