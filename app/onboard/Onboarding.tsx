@@ -86,6 +86,16 @@ function writeSaved(s: Saved | null) {
     else sessionStorage.removeItem(SAVE_KEY);
   } catch {}
 }
+/** The function a visitor picked in "Try it" on the landing page (localStorage, see app/landing/TryIt.tsx), or null. */
+const TRY_FN_KEY = "tp_try_fn";
+function triedFn(): string | null {
+  try {
+    const v = localStorage.getItem(TRY_FN_KEY);
+    return v && FUNCTIONS.includes(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 /** The step this history entry holds, or 0 when it holds none. */
 function entryStep(): number {
   const n = Number(window.history.state?.ob);
@@ -230,7 +240,8 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   const [init] = useState(() => {
     const saved = readSaved(me.id);
     const known = new Set(view.companies.map((c) => c.id));
-    const fn = (saved.fn && FUNCTIONS.includes(saved.fn) ? saved.fn : null) ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
+    // A function picked on the landing page's "Try it" comes before one guessed from the title.
+    const fn = (saved.fn && FUNCTIONS.includes(saved.fn) ? saved.fn : null) ?? triedFn() ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
     const goal = ((GOALS.find((g) => g.key === saved.goal) ?? GOALS.find((g) => g.key === me.goal))?.key as Goal | undefined) ?? null;
     const follows = Array.isArray(saved.follows) ? saved.follows.filter((id) => known.has(id)) : view.companies.filter((c) => c.following).map((c) => c.id);
     const want = entryStep() || saved.step || 1;

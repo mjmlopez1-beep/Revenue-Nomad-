@@ -15,8 +15,16 @@ const DAY_ONE_UNLOCKS = 25;
 const DAILY_UNLOCKS = 100;
 
 /** The questions and answers, with the starter balance the server actually gives. */
-export function faqItems(starter: number): [string, string][] {
+export function faqItems(starter: number, intro = false): [string, string][] {
   return [
+    [
+      "How do I reach the fractional who held a seat?",
+      `Unlock who held the seat for 1 credit. If they are a member, message them inside Trading Post. If not, find them on LinkedIn${intro ? " or ask us for an intro" : ""}. Most seat holders are Revenue Nomad members.`,
+    ],
+    [
+      "Which functions does it cover?",
+      "Sales, marketing, RevOps, customer success, partnerships, growth, product marketing, enablement and AI GTM, plus finance, technology, operations, people, product and legal seats where we have them. We check for open roles every week.",
+    ],
     [
       "Where does all of this come from?",
       "From fractional work members published on Revenue Nomad, member success stories, our own research into current fractional seats and a weekly check for open fractional GTM roles. Members add the rest, one fact at a time.",
@@ -61,14 +69,16 @@ export interface QuestionsProps {
   starter: number;
   /** View.contact.support. When set, a last line says where to send anything else. */
   support?: string | null;
+  /** View.contact.intro is set: we make intros, so the answers can say so. */
+  intro?: boolean;
 }
 
 /** The questions as a list of open-and-close rows. */
-export function Questions({ starter, support }: QuestionsProps) {
+export function Questions({ starter, support, intro = false }: QuestionsProps) {
   const href = support ? mailto(support, "Trading Post question") : null;
   return (
     <div className="lp-faq">
-      {faqItems(starter).map(([q, a]) => (
+      {faqItems(starter, intro).map(([q, a]) => (
         <details key={q} className="lp-qa">
           <summary>
             <span>{q}</span>

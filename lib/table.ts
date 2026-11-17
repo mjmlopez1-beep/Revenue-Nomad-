@@ -1715,6 +1715,38 @@ let statsCache: { s: State; seed: Seed; stats: View["stats"]; at: number } | nul
 const STATS_FRESH = 60 * 60 * 1000;
 let anonBuild: { s: State; seed: Seed; p: Promise<View> } | null = null;
 
+/**
+ * One company for the landing page's "Try it" preview (lib/preview.ts): the record as a
+ * signed-out visitor's build has it, with what the preview needs to keep the company out of
+ * what it sends. `name` and `site` are only for scrubbing role titles and never leave the server.
+ * `seed` is an opaque HMAC of the internal id (not the public id), for the blurred made-up name.
+ */
+export interface PreviewCompany {
+  rec: CompanyRec;
+  name: string;
+  site: string | null;
+  seed: string;
+}
+/** The companies of the latest signed-out build, kept with the state and seed they came from. */
+let anonCompanies: { s: State; seed: Seed; list: PreviewCompany[]; at: number } | null = null;
+const previewSeed = (id: string) => createHmac("sha256", ID_KEY).update(`landing-preview:${id}`).digest("base64url").slice(0, 14);
+
+/**
+ * The companies the landing preview reads, from the signed-out build (rebuilt when the state or
+ * the seed changed, or hourly, the same as the signed-out counts). Server side only.
+ */
+export async function previewCompanies(): Promise<{ list: PreviewCompany[]; version: object }> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const fresh = () => !!anonCompanies && anonCompanies.s === s && anonCompanies.seed === seed && Date.now() - anonCompanies.at < STATS_FRESH;
+  if (!fresh()) {
+    // Drop the cached counts so buildView rebuilds (sharing a build already under way).
+    if (statsCache && statsCache.s === s && statsCache.seed === seed) statsCache = null;
+    await buildView(null);
+  }
+  const hit = anonCompanies;
+  return hit ? { list: hit.list, version: hit } : { list: [], version: {} };
+}
+
 /** One address from the environment, or null when it is not set or is not an email address. */
 const addressIn = (raw: string | undefined) => {
   const v = String(raw ?? "").trim();
@@ -1798,6 +1830,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   /** Companies the viewer created (the same test as exemptPick in perform). */
   const addedByMe = new Set(me ? s.companies.filter((x) => x.by === me.id).map((x) => x.id) : []);
   let peopleCount = 0;
+  /** Signed out: every company with its name and site, for the landing preview (never sent). */
+  const forPreview: PreviewCompany[] | null = me ? null : [];
   for (const c of g.companies.values()) {
     const facts = { known: 0, locked: 0, missing: 0 };
     /** `addable`: an empty fact here is one the viewer can add (a seat's facts are its holder's alone). */
@@ -1896,7 +1930,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         facts.known++;
       }
     }
-    companies.push({
+    const rec: CompanyRec = {
       id: pubId(c.id),
       name: hidden ? HIDDEN_COMPANY : c.name,
       hidden,
@@ -1914,7 +1948,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       // Paid to see it while it was hidden (Unlock company, or its open role's title or posting: one purchase, recorded on the company).
       ...(me && (s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) ? { unlocked: true } : {}),
       ...(addedByMe.has(c.id) ? { added: true } : {}),
-    });
+    };
+    companies.push(rec);
+    if (forPreview) forPreview.push({ rec, name: c.name, site: live(c, s, "website") ?? icons[c.id] ?? null, seed: previewSeed(c.id) });
   }
   companies.sort((a, b) => b.friendly.score - a.friendly.score || a.name.localeCompare(b.name));
 
@@ -2075,6 +2111,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   const scanAll = scanSummary(g, s, tracks, nowMs, meRec?.function ?? null);
   stats.openedWeek = scanAll.opened7;
   statsCache = { s, seed, stats, at: nowMs };
+  if (forPreview) anonCompanies = { s, seed, list: forPreview, at: nowMs };
   const scan = me ? scanAll : null;
   return {
     demo: !!seed.demo,

@@ -63,14 +63,24 @@ function Row({ k, children }: { k: string; children: ReactNode }) {
 /**
  * Hero visual: one company record as a member first meets it. It has an open role, so the
  * company is locked, as it is in the app: a blurred made-up name, site and logo. The role title
- * is free, and one unlock shows the company, the posting and the posted rate. A seat a member held shows the three states side by side: a fact someone unlocked
- * (who held the seat, confirmed by 3), a locked one (the rate) and a missing one (hours).
+ * is free. Under it, a past seat with who held it (unlocked, confirmed by 3) and the two ways
+ * to reach them: a message inside Trading Post, or an intro from us when the intro address is set.
  * It carries the page's one "Hiring now" chip.
  */
 /** Any fixed id, so the example card shows the same made-up name on every visit. */
 const EXAMPLE_SEED = "lp-example-record";
 
-export function HeroRecord() {
+/** The two ways to reach a seat holder, drawn like the record's buttons. Not clickable. */
+function ReachOut({ intro }: { intro: boolean }) {
+  return (
+    <div className="lp-reach">
+      <span className="lp-fake-btn lp-fake-btn-pine">Message Dana</span>
+      {intro ? <span className="lp-fake-btn">Ask for an intro</span> : <span className="lp-fake-btn">LinkedIn</span>}
+    </div>
+  );
+}
+
+export function HeroRecord({ intro = true }: { intro?: boolean }) {
   return (
     <figure className="lp-visual">
       <div className="lp-rec" aria-hidden>
@@ -82,7 +92,7 @@ export function HeroRecord() {
             </div>
             <LockedSite seed={EXAMPLE_SEED} className="lp-rec-site" />
             <div className="lp-rec-meta num">
-              Software · 51–200 people<span className="lp-rec-meta-x"> · $5M–$20M</span>
+              SaaS · 51–200 people<span className="lp-rec-meta-x"> · $5M–$20M</span>
             </div>
           </div>
           <span className="chip chip-ember lp-hiring">Hiring now</span>
@@ -115,14 +125,13 @@ export function HeroRecord() {
             <Row k="Seat holder">
               <Confirmed n={3} />
               <span className="lp-val">Dana Whitfield</span>
+              <span className="chip lp-member">Member</span>
             </Row>
             <Row k="Rate">
               <Locked w={84} />
             </Row>
-            <Row k="Hours a week">
-              <Add />
-            </Row>
           </dl>
+          <ReachOut intro={intro} />
         </div>
 
         <div className="lp-rec-sec">
@@ -139,10 +148,32 @@ export function HeroRecord() {
         </div>
       </div>
       <figcaption className="lp-visual-cap">
-        An example record. You see an open role for free. The company stays locked until you unlock it, and that 1 credit shows the company,
-        the posting and the posted rate.
+        An example record. The open role is free to see. Dana held the Sales seat here, so you can ask her how it went before you pitch for the RevOps role.
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * The feature card's picture: a seat holder someone unlocked, and the first message to them.
+ * Made up, like every visual here.
+ */
+export function IntroVisual({ intro = true }: { intro?: boolean }) {
+  return (
+    <div className="lp-intro" aria-hidden>
+      <div className="lp-intro-who">
+        <span className="lp-intro-av">DW</span>
+        <div className="lp-intro-id">
+          <span className="lp-intro-name">Dana Whitfield</span>
+          <span className="lp-intro-meta num">Held the Sales seat · Mar 2024 to Aug 2025</span>
+        </div>
+        <span className="chip lp-member">Member</span>
+      </div>
+      <p className="lp-intro-msg">
+        Hi Dana, I&apos;m talking to them about their open RevOps role. You held the Sales seat there. How did the engagement go, and who made the call?
+      </p>
+      <ReachOut intro={intro} />
+    </div>
   );
 }
 
