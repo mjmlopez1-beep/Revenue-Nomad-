@@ -648,7 +648,7 @@ function ClaimRow({ e, company, act }: { e: EngagementRec; company: string; act:
   };
   if (ask) {
     const what = ask.role || ask.function || "A fractional seat";
-    const when = ask.start ? (ask.end ? `${fmtMonth(ask.start)} to ${fmtMonth(ask.end)}` : `from ${fmtMonth(ask.start)}`) : "";
+    const when = ask.start ? (ask.end && ask.end !== "Ongoing" ? `${fmtMonth(ask.start)} to ${fmtMonth(ask.end)}` : `from ${fmtMonth(ask.start)}`) : "";
     return (
       <li className="ob-seat ob-seat-ask" role="group" aria-label="Claim this seat">
         <p>

@@ -1339,8 +1339,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </div>
   );
 
-  const filterPanel = (head?: React.ReactNode) => (
-    <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} top={savedViews} />
+  const filterPanel = (head?: React.ReactNode, top: React.ReactNode = savedViews) => (
+    <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} top={top} />
   );
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
   const scan = view.scan;
@@ -1741,6 +1741,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               </div>
             }
           >
+            {/* Saved views first: one tap opens one. */}
+            {savedViews}
             {/* Sort and what to list sit here on phones, reachable from the sticky row at any scroll. */}
             <section className="tp-fgroup tp-psort">
               <h3 className="tp-fgroup-h">List</h3>
@@ -1758,7 +1760,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 ))}
               </div>
             </section>
-            {filterPanel(null)}
+            {filterPanel(null, null)}
           </Sheet>
         )}
 
