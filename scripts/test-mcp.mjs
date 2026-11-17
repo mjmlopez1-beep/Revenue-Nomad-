@@ -581,6 +581,17 @@ async function main() {
   check("a saved search needs something to look for", empty.isError);
   const del = await tool(at, "alerts", { action: "delete", id: sv.out?.saved_search?.id });
   check("alerts delete removes one", /Deleted/.test(del.out?.message ?? "") && (await tool(at, "alerts", { action: "list" })).out?.saved_searches?.length === 1);
+  // One list: a view saved in the app is one of the connector's saved searches, and the other way round.
+  const appSave = await A.act({ type: "savedView", op: "save", name: "Marketing at Software companies", place: "v=hiring&t=seats&f=fn:Marketing", criteria: { function: "Marketing", industry: ["Software"] }, email: false });
+  const both = await tool(at, "alerts", { action: "list" });
+  const fromApp = both.out?.saved_searches?.find((x) => x.name === "Marketing at Software companies");
+  check(
+    "a view saved in the app shows in the connector's saved searches, with its criteria and weekly email",
+    appSave.status === 200 && both.out?.saved_searches?.length === 2 && fromApp?.saved_in === "the Trading Post app" && fromApp.weekly_email === false && fromApp.criteria?.function === "Marketing" && !("place" in (fromApp.criteria ?? {})),
+    both.out ?? both.text,
+  );
+  const appViews = (await A.view()).me.savedViews ?? [];
+  check("a search saved in Claude shows in the app's saved views", appViews.length === 2 && appViews.some((v) => v.name === "CMO roles" && v.place === null && v.email === true), appViews);
   const ba = await connect(B, { name: "B's Claude" });
   const bList = await tool(ba.access_token, "alerts", { action: "list" });
   check("saved searches are each member's own", bList.out?.saved_searches?.length === 0);

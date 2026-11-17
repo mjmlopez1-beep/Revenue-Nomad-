@@ -237,6 +237,49 @@ export interface Me {
   unread?: number;
   /** An email when a member messages them (on unless they turned it off). Sent only while email is on. */
   messageEmail?: boolean;
+  /** Who they hunt (onboarding, and the "Your clients" pill over the table). Null until they say. */
+  icp?: Icp | null;
+  /**
+   * Their saved views and saved searches, newest last. One list with the Claude connector's
+   * alerts (lib/mcp/alerts.ts): a view saved in the app shows there, and one saved there shows here.
+   */
+  savedViews?: SavedViewRec[];
+}
+
+/**
+ * A member's ideal client. Each list is "any of these", and an empty list means any. Values are
+ * the pick lists' spelling (RN_INDUSTRIES, RN_EMPLOYEES, RN_REVENUE); countries as the company
+ * records spell them ("United States"). An empty `countries` is "Anywhere".
+ */
+export interface Icp {
+  industries: string[];
+  employees: string[];
+  revenue: string[];
+  countries: string[];
+}
+
+/** What a saved view matches in the weekly email: open roles by their free facts only. */
+export interface SavedViewCriteria {
+  function?: string;
+  functions?: string[];
+  industry?: string[];
+  employees?: string[];
+  revenue?: string[];
+  hq?: string;
+  country?: string[];
+  fractionalFriendly?: boolean;
+}
+
+/** One saved view (Save this view) or saved search (the connector's alerts). */
+export interface SavedViewRec {
+  id: string;
+  name: string;
+  /** The table's place as an address query ("v=hiring&f=fn:Sales"), or null for a search saved in Claude. */
+  place: string | null;
+  criteria: SavedViewCriteria;
+  /** Email me new matches each week. */
+  email: boolean;
+  createdAt: string;
 }
 
 /* ---------- messages between members ---------- */
@@ -542,7 +585,13 @@ export type Action =
   | { type: "addPerson"; companyId: string; engagementId?: string | null; person: Record<string, string> }
   | { type: "follow"; companyId: string; on: boolean }
   /** Onboarding answers. */
-  | { type: "profile"; function?: string; goal?: string; title?: string }
+  | { type: "profile"; function?: string; goal?: string; title?: string; icp?: Icp | null }
+  /**
+   * Saved views, in the same store as the connector's alerts. save: `place` and `criteria` from
+   * the table, `name` (else one made from the criteria), `email` (on unless false). delete: `id`.
+   * email: turn the weekly email for `id` on or off (`on`). At most 20.
+   */
+  | { type: "savedView"; op: "save" | "delete" | "email"; id?: string; name?: string; place?: string; criteria?: SavedViewCriteria; email?: boolean; on?: boolean }
   | { type: "report"; entity: Entity; id: string; field: string }
   /** Confirm a value you can see is correct (one confirmation per member per value). */
   | { type: "verify"; entity: Entity; id: string; field: string }

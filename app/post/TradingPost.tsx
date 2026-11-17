@@ -32,7 +32,7 @@ import type { Me } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
-  notMineLabel, rowsFor, seatsMissing, shown, sortRows,
+  notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, rolesThisWeek, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
@@ -51,6 +51,8 @@ import { MyCredits, inviteLink, signInLink, useCopy, useShareInvite } from "./Cr
 import { UseInClaude } from "./UseInClaude";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
+import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViews } from "./Hunt";
+import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
@@ -144,39 +146,56 @@ function defaultsFor(me: Me) {
     t: (me.goal === "intro" || me.goal === "roles" ? "engagements" : "companies") as RecordType,
     // The goal key "friendly" is stored on profiles, so it stays. It opens on Repeat hirers now.
     v: (me.goal === "friendly" ? "repeat" : me.goal === "roles" ? "hiring" : "all") as Tab,
-    // Open roles read best newest first.
-    s: (me.goal === "roles" ? "newest" : "fit") as SortKey,
-    f: { ...EMPTY_FILTERS, notMine: me.goal === "adjacent" && !!me.function, fractionalNamed: me.goal === "intro" } as Filters,
+    // With an ideal client on file, the best fit for them comes first. Open roles read best newest first.
+    s: (!icpEmpty(me.icp) ? "best" : me.goal === "roles" ? "newest" : "fit") as SortKey,
+    // The table opens on their ideal client (the "Your clients" pill).
+    f: { ...EMPTY_FILTERS, notMine: me.goal === "adjacent" && !!me.function, fractionalNamed: me.goal === "intro", icp: !icpEmpty(me.icp) } as Filters,
   };
 }
+/** The sort a view opens on until the member picks one: Hiring now reads newest first (their function first). */
+const sortDefault = (me: Me, v: Tab): SortKey => (v === "hiring" ? "newest" : defaultsFor(me).s);
 
-/** The place in the address bar now (read on mount and on Back and Forward). */
-function readPlace(me: Me) {
+/** A place as an address query: the URL's own (read on mount and on Back and Forward), or a saved view's. */
+function readPlace(me: Me, from?: string) {
   const d = defaultsFor(me);
-  const q = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
+  const q = new URLSearchParams(from ?? (typeof window === "undefined" ? "" : window.location.search));
   const t = (Object.keys(TYPE_PARAM) as RecordType[]).find((k) => TYPE_PARAM[k] === q.get("t")) ?? d.t;
   // An old link's v=friendly opens Repeat hirers, the tab that replaced it.
   const v = tabOf(q.get("v")) ?? d.v;
-  const s = SORTS.find((x) => x.key === q.get("s"))?.key ?? d.s;
+  // Null: the member hasn't picked a sort, so the view's own default applies.
+  const s = SORTS.find((x) => x.key === q.get("s"))?.key ?? null;
   const f = q.has("f") ? decodeFilters(q.get("f") === "-" ? "" : q.get("f")!) : d.f;
   const p = PAGES.find((x) => x === q.get("p")) ?? null;
-  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p };
+  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1" };
 }
 
 /** The address for a place, leaving out what the member's defaults already say. */
-function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey; f: Filters; q: string; c: string | null; p: Page }): string {
+function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean }): string {
   const d = defaultsFor(me);
   const q = new URLSearchParams();
   if (x.v !== d.v) q.set("v", x.v);
   if (x.t !== d.t) q.set("t", TYPE_PARAM[x.t]);
-  if (x.s !== d.s) q.set("s", x.s);
+  if (x.s && x.s !== sortDefault(me, x.v)) q.set("s", x.s);
   if (x.q.trim()) q.set("q", x.q.trim());
   const f = encodeFilters(x.f);
   if (f !== encodeFilters(d.f)) q.set("f", f || "-");
+  if (x.all && x.v === "hiring") q.set("af", "1");
   if (x.p === "table" && x.c) q.set("c", x.c);
   if (x.p !== "table") q.set("p", x.p);
   const s = q.toString();
   return `${typeof window === "undefined" ? "/" : window.location.pathname}${s ? `?${s}` : ""}`;
+}
+
+/** A place written out in full (a saved view): it must open the same whatever the member's defaults are later. */
+function absolutePlace(x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; all?: boolean }): string {
+  const q = new URLSearchParams();
+  q.set("v", x.v);
+  q.set("t", TYPE_PARAM[x.t]);
+  if (x.s) q.set("s", x.s);
+  if (x.q.trim()) q.set("q", x.q.trim());
+  q.set("f", encodeFilters(x.f) || "-");
+  if (x.all && x.v === "hiring") q.set("af", "1");
+  return q.toString();
 }
 
 /** How deep in this app's own history entries we are (0 is the table). */
@@ -200,10 +219,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [recordType, setRecordType] = useState<RecordType>(place0.t);
   const [tabPicked, setTabPicked] = useState<Tab>(place0.v);
   const [filters, setFilters] = useState<Filters>(place0.f);
-  const [sortPicked, setSort] = useState<SortKey>(place0.s);
-  // The sort in use: one this list can't use (Most seats, carried over to People) reads as Best fit.
-  const sort = sortFor(recordType, sortPicked);
-  const sortList = sortsFor(recordType);
+  const [sortPicked, setSort] = useState<SortKey | null>(place0.s);
+  /** Hiring now: every function's open roles, not only the member's. */
+  const [allFns, setAllFns] = useState(place0.all);
+  const sortList = sortsFor(recordType).filter((s) => s.key !== "best" || !!me.function || !icpEmpty(me.icp));
   const [query, setQuery] = useState(place0.q);
   // The input stays instant; the list behind it renders when the main thread is free.
   const q = useDeferredValue(query);
@@ -219,6 +238,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   }, [searching]);
   const tab: Tab = searching ? searchTab ?? "all" : tabPicked;
   const setTab = useCallback((t: Tab) => (searching ? setSearchTab(t) : setTabPicked(t)), [searching]);
+  // The sort in use: the member's pick, else the view's default. One this list can't use (Most seats, carried over to People) reads as Most fractional-friendly.
+  const sort = sortFor(recordType, sortPicked ?? sortDefault(me, tab));
+  /** Hiring now leads with the member's function (theirs only, until "Show all functions"). */
+  const hireFn = tab === "hiring" ? namedFn(me.function) : null;
   const [limit, setLimit] = useState(PAGE);
   const [page, setPage] = useState<Page>(() => (start === "seats" ? "seats" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? "table"));
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
@@ -246,6 +269,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [checkOff, hideCheck] = useStoredFlag("tp_check_off");
   const [sinceOff, setSinceOff] = useState(false);
   const [keysOff, setKeysOff] = useState(() => store.get("tp_keys_off") === "1");
+  /** The "Your clients" sheet and the "Save this view" sheet. */
+  const [icpOpen, setIcpOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const creditsRef = useRef<HTMLButtonElement>(null);
@@ -277,6 +303,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     !!me.proInterest,
     me.owed ?? 0,
     (me.benchRates ?? []).map((b) => b.engagementId ?? "").join(","),
+    JSON.stringify(me.icp ?? null),
   ].join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const cellMe = useMemo(() => me, [cellKeyOfMe]);
@@ -357,14 +384,20 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     return out;
   }, [q, recordType, filtered, infos, eff, tab, cellMe]);
   // Name matches come first while searching (decision 13).
-  const sortedLive = useMemo(() => sortRows(filtered, sort, tab === "needs", q), [filtered, sort, tab, q]);
+  // Hiring now: the member's function first. Until "Show all functions", only theirs (when they have any open).
+  const fnSplit = useMemo(() => (hireFn ? splitByFn(filtered, hireFn) : null), [filtered, hireFn]);
+  const fnOnly = !!fnSplit && !allFns && fnSplit.mine.length > 0 && !q.trim();
+  const sortedLive = useMemo(
+    () => sortRows(fnOnly ? fnSplit!.mine : filtered, sort, tab === "needs", q, { me: cellMe, fnFirst: hireFn }),
+    [filtered, fnOnly, fnSplit, sort, tab, q, cellMe, hireFn],
+  );
   /*
    * While a record is open, the rows keep the order they had when it opened: unlocking a hidden
    * company renames it, and "1 of 7" must not turn into "3 of 7" under the member. A new sort,
    * view, search or filter takes a fresh order. Closing the record lets the rows settle.
    */
   const fKey = encodeFilters(filters);
-  const listKey = `${recordType}|${tab}|${sort}|${q}|${fKey}`;
+  const listKey = `${recordType}|${tab}|${sort}|${q}|${fKey}|${fnOnly}`;
   const frozen = useRef<{ key: string; at: Map<string, number> } | null>(null);
   if (!drawer) frozen.current = null;
   else if (!frozen.current || frozen.current.key !== listKey) frozen.current = { key: listKey, at: new Map(sortedLive.map((r, k) => [r.key, k])) };
@@ -722,7 +755,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const navOpen = page !== "table" || !!drawer;
   const overlayOpen = layout !== "desktop" && !!(editor || pop || sortOpen || addOpts || sideOverlay);
   const depth = (navOpen ? 1 : 0) + (overlayOpen ? 1 : 0);
-  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sort, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page });
+  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns });
   const urlRef = useRef(url);
   urlRef.current = url;
   const depthRef = useRef(depth);
@@ -769,7 +802,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   useEffect(() => {
     if (linked) {
       try {
-        window.history.replaceState({ ...window.history.state, tpd: 0 }, "", placeUrl(me, { t: recordType, v: tabPicked, s: sort, f: filters, q: query, c: null, p: "table" }));
+        window.history.replaceState({ ...window.history.state, tpd: 0 }, "", placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: null, p: "table", all: allFns }));
       } catch {}
     }
     // A link to a company opens its record (the landing page showed for anyone signed out). Find its row for "3 of 72".
@@ -1000,13 +1033,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setQuery("");
   };
   const clearAll = () => {
-    setFilters(EMPTY_FILTERS);
+    setFilters(clearedFilters(filters));
     setTab("all");
     setQuery("");
   };
   /** Keep the search, drop the view and the filters that narrow it. */
   const searchAll = () => {
-    setFilters(EMPTY_FILTERS);
+    setFilters(clearedFilters(filters));
     setTab("all");
   };
 
@@ -1072,7 +1105,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setQuery("");
     setRecordType("engagements");
     setTab("hiring");
-    setSort("newest");
+    setSort(null);
+    setAllFns(false);
     setFilters({ ...EMPTY_FILTERS, fn: me.function ? [me.function] : [] });
   };
 
@@ -1270,7 +1304,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       tab={tab}
       noun={noun[1]}
       filtered={nFilters > 0}
-      onClearFilters={() => setFilters(EMPTY_FILTERS)}
+      onClearFilters={() => setFilters(clearedFilters(filters))}
       onClearSearch={() => {
         setQuery("");
         searchRef.current?.focus();
@@ -1305,16 +1339,120 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </div>
   );
 
-  const filterPanel = (head?: React.ReactNode) => (
-    <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} />
+  const filterPanel = (head?: React.ReactNode, top: React.ReactNode = savedViews) => (
+    <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} top={top} />
   );
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
   const scan = view.scan;
-  const scanLine = tab === "hiring" && scan && (
-    <p className="tp-scanline">
-      We check job boards for open fractional roles every week.{" "}
-      {scan.lastOkAt ? `Last scan ${fmtStamp(scan.lastOkAt)}.` : scan.lastRunAt ? "The last scan could not read the job boards." : "The first check runs this week."}
+  // Hiring now leads with the member's function: how many came in this week there and elsewhere, and one tap for every function.
+  // Counted inside the "Your clients" pill while it is on, so the line agrees with the list under it.
+  const weekFit = eff.icp && !icpEmpty(me.icp) ? icpTest(me.icp!) : null;
+  const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => !isFirm(i.c) && (!weekFit || weekFit(i.c))) : null;
+  const fnLine = hireFn && fnSplit && !qt && (fnSplit.mine.length > 0 || allFns) && (
+    <p className="tp-scanline hunt-fnline">
+      <span>
+        <b className="num">{plural(week!.mine, `${hireFn} role`)}</b> this week · <span className="num">{week!.others}</span> in other functions
+      </span>
+      {fnOnly ? (
+        <button type="button" className="tp-flink" onClick={() => setAllFns(true)}>
+          Show all functions
+        </button>
+      ) : (
+        <button type="button" className="tp-flink" onClick={() => setAllFns(false)}>
+          Only {hireFn}
+        </button>
+      )}
     </p>
+  );
+  const scanLine = tab === "hiring" && scan && (
+    <>
+      {fnLine}
+      <p className="tp-scanline">
+        We check job boards for open fractional roles every week.{" "}
+        {scan.lastOkAt ? `Last scan ${fmtStamp(scan.lastOkAt)}.` : scan.lastRunAt ? "The last scan could not read the job boards." : "The first check runs this week."}
+      </p>
+    </>
+  );
+  /* ----- who the member hunts: the "Your clients" pill and saved views ----- */
+  const icpOn = eff.icp && !icpEmpty(me.icp);
+  const pill = page === "table" && !qt && (
+    <IcpPill
+      icp={me.icp}
+      on={icpOn}
+      everyone={facets.everyone}
+      shownN={sorted.length}
+      onEdit={() => setIcpOpen(true)}
+      onToggle={() => setEff({ ...eff, icp: !eff.icp })}
+    />
+  );
+  const saveIcp = async (v: Icp) => {
+    const r = await act({ type: "profile", icp: v }, { quiet: true });
+    if (!r.ok) return false;
+    setFilters((f) => ({ ...f, icp: !icpEmpty(v) }));
+    if (!icpEmpty(v) && !sortPicked) setSort(null);
+    return true;
+  };
+  const views = me.savedViews ?? [];
+  // The view on screen, written out the way a saved view keeps it.
+  const spelled = withIcpSpelled(eff, me.icp);
+  const herePlace = absolutePlace({ t: recordType, v: tab, s: sortPicked, f: spelled, q, all: allFns });
+  const currentView = views.find((v) => v.place === herePlace)?.id ?? null;
+  const openView = (v: SavedViewRec) => {
+    const c = v.criteria;
+    // A search saved in Claude has no place: open its open roles from what it looks for.
+    const x = v.place
+      ? readPlace(me, v.place)
+      : {
+          t: "engagements" as RecordType,
+          v: "hiring" as Tab,
+          s: null,
+          q: "",
+          all: true,
+          f: {
+            ...EMPTY_FILTERS,
+            fn: c.functions ?? (c.function ? [c.function] : []),
+            industry: c.industry ?? [],
+            employees: c.employees ?? [],
+            revenue: c.revenue ?? [],
+            country: c.country ?? [],
+            hq: c.hq ? [c.hq] : [],
+          } as Filters,
+        };
+    setPage("table");
+    setDrawer(null);
+    setPop(null);
+    setSideOverlay(false);
+    setRecordType(x.t);
+    setSearchTab(null);
+    setTabPicked(x.v);
+    setSort(x.s);
+    setFilters(x.f);
+    setQuery(x.q);
+    setAllFns(x.all);
+  };
+  const saveView = async (name: string, email: boolean) => {
+    const r = await act({ type: "savedView", op: "save", name, email, place: herePlace, criteria: criteriaOf(spelled, fnOnly ? hireFn : null) });
+    return r.ok;
+  };
+  // "Best fit for you": the one line on why, worked out once per company while that sort is on.
+  const fitWhy = useMemo(() => {
+    if (sort !== "best") return null;
+    const memo = new WeakMap<CoInfo, string>();
+    return (i: CoInfo) => {
+      let w = memo.get(i);
+      if (w === undefined) memo.set(i, (w = bestFit(i, cellMe).reason));
+      return w;
+    };
+  }, [sort, cellMe]);
+  const savedViews = (
+    <SavedViews
+      views={views}
+      current={currentView}
+      onOpen={openView}
+      onSave={() => setSaveOpen(true)}
+      onEmail={(v, on) => void act({ type: "savedView", op: "email", id: v.id, on })}
+      onRemove={(v) => void act({ type: "savedView", op: "delete", id: v.id })}
+    />
   );
   // Following counts companies. On the seats or people list, say how many rows that is ("5 seats at 1 company").
   const followCos = tab === "following" && recordType !== "companies" ? new Set(sorted.map((r) => r.i.c.id)).size : 0;
@@ -1335,6 +1473,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   return (
     <UiCtx.Provider value={ui}>
       <CellUiCtx.Provider value={cellUi}>
+      <FitWhyCtx.Provider value={fitWhy}>
       <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}`}>
         {page === "table" && (
           <a href="#tp-results" className="tp-skip" onClick={skip}>
@@ -1411,6 +1550,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               One sticky row: what to list (Companies, Seats or People, a menu), Filters (sort lives in its sheet) and the views,
               each with its count. The record type sits here, not in a row of its own, so the first card starts higher (decision 16).
             */}
+            {pill}
             <div className="tp-pchips">
               <button type="button" className={`chip tp-pchip tp-pfilter${nFilters ? " chip-on" : ""}`} onClick={() => setSideOverlay(true)} aria-label={`Sort and filter${nFilters ? `, ${plural(nFilters, "filter")} on` : ""}`}>
                 <IconFilter size={13} /> Filters{nFilters ? ` (${nFilters})` : ""}
@@ -1478,7 +1618,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                   <div className="tp-filters-head">
                     <span className="tp-filters-title">Filters</span>
                     {nFilters > 0 && (
-                      <button type="button" className="tp-flink" onClick={() => setFilters(EMPTY_FILTERS)}>
+                      <button type="button" className="tp-flink" onClick={() => setFilters(clearedFilters(filters))}>
                         Clear all
                       </button>
                     )}
@@ -1503,6 +1643,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 )}
                 {recordSwitch}
               </div>
+              {pill}
               <div className="tp-toolbar">
                 {tabs}
                 <span className="tp-toolbar-sp" />
@@ -1515,6 +1656,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                     </>
                   )}
                 </span>
+                <button type="button" className="tp-sortbtn tp-savebtn" onClick={() => setSaveOpen(true)} aria-pressed={!!currentView}>
+                  {currentView ? "Saved view" : "Save this view"}
+                </button>
                 {sortMenu}
               </div>
               {chips.length > 0 && (
@@ -1524,7 +1668,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                       {chipLabel(c)} <IconX size={11} />
                     </button>
                   ))}
-                  <button type="button" className="tp-flink" onClick={() => setFilters(EMPTY_FILTERS)}>
+                  <button type="button" className="tp-flink" onClick={() => setFilters(clearedFilters(filters))}>
                     Clear all
                   </button>
                 </div>
@@ -1565,7 +1709,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 <div className="tp-filters-head">
                   <span className="tp-filters-title">Filters</span>
                   {nFilters > 0 && (
-                    <button type="button" className="tp-flink" onClick={() => setFilters(EMPTY_FILTERS)}>
+                    <button type="button" className="tp-flink" onClick={() => setFilters(clearedFilters(filters))}>
                       Clear all
                     </button>
                   )}
@@ -1587,7 +1731,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             footer={
               <div className="tp-sheet-actions">
                 {nFilters > 0 && (
-                  <button type="button" className="btn" onClick={() => setFilters(EMPTY_FILTERS)}>
+                  <button type="button" className="btn" onClick={() => setFilters(clearedFilters(filters))}>
                     Clear all
                   </button>
                 )}
@@ -1597,6 +1741,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               </div>
             }
           >
+            {/* Saved views first: one tap opens one. */}
+            {savedViews}
             {/* Sort and what to list sit here on phones, reachable from the sticky row at any scroll. */}
             <section className="tp-fgroup tp-psort">
               <h3 className="tp-fgroup-h">List</h3>
@@ -1614,7 +1760,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 ))}
               </div>
             </section>
-            {filterPanel(null)}
+            {filterPanel(null, null)}
           </Sheet>
         )}
 
@@ -1630,6 +1776,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           />
         )}
         {addOpts && <AddModal infos={infos} opts={addOpts} onClose={() => setAddOpts(null)} />}
+        {icpOpen && <IcpSheet icp={me.icp} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
+        {saveOpen && (
+          <SaveViewSheet key={herePlace} defaultName={viewName(spelled, tab, recordType, fnOnly ? hireFn : null)} emailOn={view.email} onSave={saveView} onClose={() => setSaveOpen(false)} />
+        )}
         {editor && (
           <FactEditor
             key={`${editor.t.id}.${editor.t.field}`}
@@ -1663,6 +1813,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               // The way back to the table from any page. Marked while the member is on it.
               { label: "The table", current: page === "table", onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
+              // Saved views, newest first: one tap opens each (the filters list them all and manage them).
+              ...[...views].reverse().slice(0, 5).map((v) => ({ label: v.name, hint: v.email ? "Weekly email" : undefined, current: page === "table" && currentView === v.id, onClick: () => openView(v) })),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
               { label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
               { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
@@ -1694,6 +1846,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           />
         )}
       </div>
+      </FitWhyCtx.Provider>
       </CellUiCtx.Provider>
     </UiCtx.Provider>
   );

@@ -1,13 +1,17 @@
 "use client";
 
 /**
- * First run, under 30 seconds. One calm card:
- *   1. What Trading Post is and what a credit buys, then two questions, one tap each (seat,
- *      what they are looking for). A member with seats on file hears where those came from and
- *      who can see their name, since most of them arrive by personal link and skip the landing page.
- *   2. Follow companies (type-ahead plus 6 suggestions, the member's own seat companies first).
- *      Optional: the main button works with none followed.
- *   3. Keep your sign-in link (only for members who joined here while email sign-in is off).
+ * First run, about a minute. One calm card:
+ *   1. What Trading Post is and what a credit buys, then who they are: their function, the title
+ *      they go by when they message, and what they are looking for. A member with seats on file
+ *      hears where those came from and who can see their name, since most of them arrive by
+ *      personal link and skip the landing page.
+ *   2. Who they hunt: their ideal client (industries, size, revenue, where). Every part optional.
+ *   3. Find your seats: they type past and current clients, and claim the seats we found there
+ *      ("Not on Trading Post yet", with the "Is this you?" check), or add one we don't have.
+ *   4. Follow companies (type-ahead plus 6 suggestions that fit their clients and function, never
+ *      a fractional firm and never a company where they held a seat). Optional.
+ *   5. Keep your sign-in link (only for members who joined here while email sign-in is off).
  * Each step is a history entry and the answers are kept for the tab, so back steps back and a
  * reload comes back to the same step. Finishing sends the follows, then the profile last
  * (which marks the member onboarded). The last button names where the member lands: their
@@ -15,9 +19,11 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./onboard.css";
-import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconSearch, IconStar, IconX, post, useToast, val, type Act, type View } from "../ui/shared";
+import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconSearch, IconStar, IconX, fmtMonth, post, useToast, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
-import { GOALS, type CompanyRec } from "@/lib/tableTypes";
+import { GOALS, type ActionResult, type CompanyRec, type EngagementRec, type Icp } from "@/lib/tableTypes";
+import { bestFit, deriveAll, icpEmpty, icpTest, isFirm } from "@/app/post/model";
+import { EMPTY_ICP, IcpFields, countriesByCount, industriesByCount } from "@/app/post/Hunt";
 import { contactOf, mailto } from "../landing/contact";
 
 export interface OnboardingProps {
@@ -61,6 +67,10 @@ interface Saved {
   fn: string | null;
   goal: Goal | null;
   follows: string[];
+  title?: string;
+  icp?: Icp;
+  /** Clients typed on Find your seats: a company id, or a name we don't have. */
+  clients?: string[];
 }
 function readSaved(id: string): Partial<Saved> {
   try {
@@ -118,10 +128,24 @@ function fitRank(c: CompanyRec): number {
  * Six suggestions. The companies where the member held a seat come first (they know those),
  * then companies that match what the member came for.
  */
-function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { title: string; list: CompanyRec[] } {
-  // Hidden companies (an open role, not yet unlocked) have no name to follow by.
-  const companies = all.filter((c) => !c.hidden);
-  const own = companies.filter(isMine);
+function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null, icp: Icp | null = null, clients: string[] = []): { title: string; list: CompanyRec[] } {
+  // Hidden companies (an open role, not yet unlocked) have no name to follow by. Fractional firms
+  // are not clients, and the member's own clients are their seats, not companies to follow.
+  const theirs = new Set(clients);
+  const companies = all.filter((c) => !c.hidden && !isFirm(c) && !isMine(c) && !theirs.has(c.id));
+  if (!icpEmpty(icp)) {
+    // Their clients first: the companies that match, ranked by best fit for their function.
+    const me = { icp, function: fn };
+    const fits = icpTest(icp!);
+    const infos = deriveAll(companies);
+    const score = new Map(infos.map((i) => [i.c.id, bestFit(i, me).score]));
+    const pool = companies.filter(fits);
+    const ranked = (pool.length >= SUGGESTIONS ? pool : companies).sort(
+      (a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0) || b.friendly.score - a.friendly.score || a.name.localeCompare(b.name),
+    );
+    return { title: named(fn) ? `Like your clients, with no fractional ${fn} yet` : "Like your clients", list: ranked.slice(0, SUGGESTIONS) };
+  }
+  const own: CompanyRec[] = [];
   const rank = new Map(companies.map((c) => [c.id, fitRank(c)]));
   // Many companies tie on score, so recent evidence breaks the tie before name order does.
   const byScore = (a: CompanyRec, b: CompanyRec) =>
@@ -141,7 +165,7 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { tit
   if (goal === "adjacent") {
     const adj = pool.filter((c) => c.friendly.functions.length && (!fn || !c.friendly.functions.includes(fn)));
     pool = (adj.length >= SUGGESTIONS ? adj : pool).sort((a, b) => b.friendly.functions.length - a.friendly.functions.length || byScore(a, b));
-    title = named(fn) ? `No ${fn} seat on file yet` : "Hired fractionals in other functions";
+    title = named(fn) ? `No fractional ${fn} on file yet` : "Hired fractionals in other functions";
   } else if (goal === "intro") {
     pool = withFunctions(pool).sort((a, b) => b.friendly.operators - a.friendly.operators || byScore(a, b));
     title = "A member held a seat here";
@@ -194,7 +218,8 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   const toast = useToast();
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
   const linkStep = me.id.startsWith("j_") && !view.email;
-  const total = linkStep ? 3 : 2;
+  // 1 who you are, 2 your clients, 3 find your seats, 4 follow, 5 keep your link.
+  const total = linkStep ? 5 : 4;
   const { support } = contactOf(view);
 
   // Answers kept from earlier in this tab (a reload), else what the server already knows.
@@ -205,12 +230,18 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     const goal = ((GOALS.find((g) => g.key === saved.goal) ?? GOALS.find((g) => g.key === me.goal))?.key as Goal | undefined) ?? null;
     const follows = Array.isArray(saved.follows) ? saved.follows.filter((id) => known.has(id)) : view.companies.filter((c) => c.following).map((c) => c.id);
     const want = entryStep() || saved.step || 1;
-    return { fn, goal, follows, step: fn && goal ? Math.min(Math.max(1, want), total) : 1 };
+    const title = typeof saved.title === "string" ? saved.title : me.title || "";
+    const icp = saved.icp ?? me.icp ?? EMPTY_ICP;
+    const clients = Array.isArray(saved.clients) ? saved.clients.slice(0, 20) : [];
+    return { fn, goal, follows, title, icp, clients, step: fn && goal ? Math.min(Math.max(1, want), total) : 1 };
   });
   const [step, setStep] = useState(init.step);
   const [fn, setFn] = useState<string | null>(init.fn);
   const [goal, setGoal] = useState<Goal | null>(init.goal);
   const [follows, setFollows] = useState<string[]>(init.follows);
+  const [title, setTitle] = useState(init.title);
+  const [icp, setIcp] = useState<Icp>(init.icp);
+  const [clients, setClients] = useState<string[]>(init.clients);
   const [busy, setBusy] = useState(false);
   // What the server has been told, so going back and forth sends only the changes.
   const sent = useRef(new Set(view.companies.filter((c) => c.following).map((c) => c.id)));
@@ -248,7 +279,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     return () => window.removeEventListener("popstate", onPop);
   }, [init.step, total]);
 
-  useEffect(() => writeSaved({ id: me.id, step, fn, goal, follows }), [me.id, step, fn, goal, follows]);
+  useEffect(() => writeSaved({ id: me.id, step, fn, goal, follows, title, icp, clients }), [me.id, step, fn, goal, follows, title, icp, clients]);
 
   // New step: start at the top of the card, and move focus to its heading for screen readers.
   useEffect(() => {
@@ -315,7 +346,10 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     await sendFollows();
     await rewind();
     window.scrollTo(0, 0);
-    const r = await act({ type: "profile", function: fn ?? undefined, goal: goal ?? undefined }, { quiet: true });
+    const r = await act(
+      { type: "profile", function: fn ?? undefined, goal: goal ?? undefined, ...(title.trim() !== (me.title || "") ? { title: title.trim() } : {}), icp: icpEmpty(icp) ? null : icp },
+      { quiet: true },
+    );
     if (!r.ok) {
       setBusy(false);
       if (step > 1 && entryStep() !== step) window.history.pushState({ ob: step }, "");
@@ -330,7 +364,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     setBusy(true);
     await sendFollows();
     setBusy(false);
-    forward(3);
+    forward(5);
   };
 
   return (
@@ -374,15 +408,23 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               credits={me.credits}
               fn={fn}
               setFn={setFn}
+              title={title}
+              setTitle={setTitle}
               goal={goal}
               setGoal={setGoal}
               onNext={() => forward(2)}
             />
           ) : shown === 2 ? (
+            <StepClients companies={view.companies} icp={icp} setIcp={setIcp} onBack={back} onNext={() => forward(3)} />
+          ) : shown === 3 ? (
+            <StepSeats companies={view.companies} fn={fn} title={title} name={me.name} clients={clients} setClients={setClients} act={act} onBack={back} onNext={() => forward(4)} />
+          ) : shown === 4 ? (
             <StepFollow
               companies={view.companies}
               byId={byId}
               fn={fn}
+              icp={icp}
+              clients={clients}
               goal={goal}
               follows={follows}
               toggle={toggle}
@@ -412,7 +454,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
 /* ---------- step 1: what this is, then two questions ---------- */
 
 function StepQuestions({
-  first, seats, published, credits, fn, setFn, goal, setGoal, onNext,
+  first, seats, published, credits, fn, setFn, title, setTitle, goal, setGoal, onNext,
 }: {
   first: string;
   /** Seats on file that carry the member's name. */
@@ -422,6 +464,8 @@ function StepQuestions({
   credits: number;
   fn: string | null;
   setFn: (f: string) => void;
+  title: string;
+  setTitle: (t: string) => void;
   goal: Goal | null;
   setGoal: (g: Goal) => void;
   onNext: () => void;
@@ -481,6 +525,22 @@ function StepQuestions({
         <p className="ob-hint">We use it to point out open roles in your function and companies that have not hired it yet.</p>
       </fieldset>
 
+      <div className="ob-q">
+        <label className="ob-h" htmlFor="ob-title">
+          Your title
+        </label>
+        <input
+          id="ob-title"
+          className="input ob-title-input"
+          value={title}
+          maxLength={80}
+          placeholder={fn && named(fn) ? `Fractional VP ${fn}` : "Fractional VP Sales"}
+          onChange={(e) => setTitle(e.target.value)}
+          autoComplete="organization-title"
+        />
+        <p className="ob-hint">Members see it when you message them.</p>
+      </div>
+
       <fieldset className="ob-q">
         <legend className="ob-h">What are you looking for first?</legend>
         <div className="ob-goals" role="radiogroup" aria-label="What you are looking for first">
@@ -507,21 +567,339 @@ function StepQuestions({
           {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your function" : "Two answers decide what you see first"}
         </span>
         <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!ready}>
-          Show companies to follow
+          Pick your clients
         </button>
       </div>
     </form>
   );
 }
 
-/* ---------- step 2: follow companies (optional) ---------- */
+/* ---------- step 2: who your clients are (optional) ---------- */
+
+function StepClients({ companies, icp, setIcp, onBack, onNext }: { companies: CompanyRec[]; icp: Icp; setIcp: (v: Icp) => void; onBack: () => void; onNext: () => void }) {
+  const industries = useMemo(() => industriesByCount(companies), [companies]);
+  const countries = useMemo(() => countriesByCount(companies), [companies]);
+  return (
+    <div>
+      <h1 className="ob-title" tabIndex={-1} data-step-h>
+        Who are your clients?
+      </h1>
+      <p className="ob-sub">The table opens on companies like these, and the best fits for your function come first. Pick as many as fit, or skip it.</p>
+      <IcpFields value={icp} onChange={setIcp} industries={industries} countries={countries} headingClass="ob-h" />
+      <div className="ob-grow" />
+      <div className="ob-foot ob-foot-follow">
+        <button type="button" className="ob-back" onClick={onBack}>
+          Back
+        </button>
+        <span className="ob-foot-note" aria-live="polite">
+          {icpEmpty(icp) ? "You can skip this and pick later" : ""}
+        </span>
+        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onNext}>
+          Find your seats
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- step 3: find your seats (optional) ---------- */
+
+/** A seat we found that nobody claimed yet, in the member's function first. */
+const unclaimed = (c: CompanyRec, fn: string | null) =>
+  c.engagements
+    .filter((e) => e.claimable || e.yours)
+    .sort((a, b) => Number(val(b.cells.function) === fn) - Number(val(a.cells.function) === fn));
+
+function seatLine(e: EngagementRec): string {
+  const what = val(e.cells.role) || val(e.cells.function) || "A fractional seat";
+  const start = val(e.cells.start);
+  const end = val(e.cells.end);
+  const when = start ? (end && end !== "Ongoing" ? `${fmtMonth(start)} to ${fmtMonth(end)}` : `from ${fmtMonth(start)}`) : "";
+  return [what, when].filter(Boolean).join(", ");
+}
+
+/** One unclaimed seat: "Claim it", then "Is this you?" with what the seat says, then the claim. */
+function ClaimRow({ e, company, act }: { e: EngagementRec; company: string; act: OnboardingProps["act"] }) {
+  const [ask, setAsk] = useState<NonNullable<ActionResult["claim"]> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (e.yours)
+    return (
+      <li className="ob-seat ob-seat-done">
+        <span className="ob-seat-line">{seatLine(e)}</span>
+        <span className="ob-seat-ok">
+          <IconCheck size={13} /> Your seat
+        </span>
+      </li>
+    );
+  const check = async () => {
+    setErr(null);
+    setBusy(true);
+    const r = await post<ActionResult>({ action: { type: "claimSeat", engagementId: e.id, preview: true } });
+    setBusy(false);
+    if (r.error || !r.claim) setErr(r.error || "We couldn't load this seat. Try again.");
+    else setAsk(r.claim);
+  };
+  const claim = async () => {
+    setBusy(true);
+    await act({ type: "claimSeat", engagementId: e.id });
+    setBusy(false);
+    setAsk(null);
+  };
+  if (ask) {
+    const what = ask.role || ask.function || "A fractional seat";
+    const when = ask.start ? (ask.end && ask.end !== "Ongoing" ? `${fmtMonth(ask.start)} to ${fmtMonth(ask.end)}` : `from ${fmtMonth(ask.start)}`) : "";
+    return (
+      <li className="ob-seat ob-seat-ask" role="group" aria-label="Claim this seat">
+        <p>
+          <b>Is this you?</b> {what} at {company}
+          {when ? `, ${when}` : ""}. Other members will see your name on it, behind a 1 credit lock.
+        </p>
+        <span className="ob-seat-acts">
+          <button type="button" className="btn btn-pine" disabled={busy} aria-busy={busy} onClick={claim}>
+            {busy ? "Saving" : "Yes, it's my seat"}
+          </button>
+          <button type="button" className="btn" onClick={() => setAsk(null)}>
+            Not me
+          </button>
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li className="ob-seat">
+      <span className="ob-seat-id">
+        <span className="ob-seat-line">{seatLine(e)}</span>
+        <span className="ob-seat-meta">Not on Trading Post yet</span>
+        {err && (
+          <span className="ob-seat-err" role="alert">
+            {err}
+          </span>
+        )}
+      </span>
+      <button type="button" className="btn btn-pine ob-seat-btn" disabled={busy} onClick={check}>
+        Claim it
+      </button>
+    </li>
+  );
+}
+
+/** "Add a seat you held" at a client we have no seat for: their title and whether it's ongoing, one tap. */
+function AddSeat({ company, fn, title, name, act }: { company: string; fn: string | null; title: string; name: string; act: OnboardingProps["act"] }) {
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState(title);
+  const [status, setStatus] = useState<"Active" | "Ended">("Active");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  if (done)
+    return (
+      <p className="ob-seat-ok ob-seat-added">
+        <IconCheck size={13} /> Added your seat. Fill in the rest on Your seats.
+      </p>
+    );
+  if (!open)
+    return (
+      <button type="button" className="btn ob-seat-add" onClick={() => setOpen(true)}>
+        Add a seat you held
+      </button>
+    );
+  const add = async () => {
+    setBusy(true);
+    const fields: Record<string, string> = { status, ...(fn ? { function: fn } : {}), ...(role.trim() ? { role: role.trim() } : {}), operator: name.trim() };
+    const r = await act({ type: "add", company, newEngagement: true, engagementFields: fields, operatorMemberId: "me" }, { quiet: true });
+    setBusy(false);
+    if (r.ok) setDone(true);
+  };
+  return (
+    <div className="ob-seat-form">
+      <label className="ob-seat-label" htmlFor={`ob-role-${company}`}>
+        Your title there
+      </label>
+      <input id={`ob-role-${company}`} className="input" value={role} maxLength={80} onChange={(e) => setRole(e.target.value)} placeholder={fn ? `Fractional VP ${fn}` : "Fractional VP Sales"} />
+      <div className="ob-chips" role="radiogroup" aria-label="Still in the seat?">
+        {(["Active", "Ended"] as const).map((s) => (
+          <button key={s} type="button" role="radio" aria-checked={status === s} className={`ob-chip${status === s ? " ob-chip-on" : ""}`} onClick={() => setStatus(s)}>
+            {s === "Active" ? "I'm still there" : "It ended"}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="btn btn-pine" disabled={busy || (!fn && !role.trim())} aria-busy={busy} onClick={add}>
+        {busy ? "Adding" : "Add this seat"}
+      </button>
+    </div>
+  );
+}
+
+function StepSeats({
+  companies, fn, title, name, clients, setClients, act, onBack, onNext,
+}: {
+  companies: CompanyRec[];
+  fn: string | null;
+  title: string;
+  name: string;
+  clients: string[];
+  setClients: (f: (c: string[]) => string[]) => void;
+  act: OnboardingProps["act"];
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const byId = useMemo(() => new Map(companies.map((c) => [c.id, c])), [companies]);
+  const results = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return [];
+    const starts: CompanyRec[] = [];
+    const has: CompanyRec[] = [];
+    for (const c of companies) {
+      if (c.hidden || isFirm(c) || clients.includes(c.id)) continue;
+      const n = c.name.toLowerCase();
+      if (n.startsWith(t)) starts.push(c);
+      else if (n.includes(t)) has.push(c);
+      if (starts.length >= 6) break;
+    }
+    return [...starts, ...has].slice(0, 6);
+  }, [q, companies, clients]);
+  useEffect(() => setHi(0), [q]);
+  const pick = (id: string) => {
+    setClients((c) => (c.includes(id) ? c : [...c, id].slice(-20)));
+    setQ("");
+    inputRef.current?.focus();
+  };
+  // A name we don't have: kept as typed, so they can add the seat they held there.
+  const typed = q.trim();
+  const addTyped = () => typed && pick(`name:${typed.slice(0, 80)}`);
+  const claimedN = clients.reduce((n, id) => n + (byId.get(id)?.engagements.filter((e) => e.yours).length ?? 0), 0);
+  return (
+    <div>
+      <h1 className="ob-title" tabIndex={-1} data-step-h>
+        Find your seats
+      </h1>
+      <p className="ob-sub">
+        Type the clients you work with now or worked with before. We list the seats we found there in your function. Claim yours and you see everything on it free, and each answer you add earns a credit.
+      </p>
+      <div className="ob-search">
+        <span className="ob-search-icon" aria-hidden>
+          <IconSearch size={16} />
+        </span>
+        <input
+          ref={inputRef}
+          className="input ob-search-input"
+          placeholder="A client you worked with"
+          aria-label="A client you worked with"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown" && results.length) {
+              e.preventDefault();
+              setHi((h) => (h + 1) % results.length);
+            } else if (e.key === "ArrowUp" && results.length) {
+              e.preventDefault();
+              setHi((h) => (h - 1 + results.length) % results.length);
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              if (results[hi]) pick(results[hi].id);
+              else addTyped();
+            }
+          }}
+          role="combobox"
+          aria-expanded={!!typed}
+          aria-controls="ob-client-results"
+          aria-autocomplete="list"
+          autoComplete="off"
+        />
+        {typed ? (
+          <ul className="ob-results" id="ob-client-results" role="listbox">
+            {results.map((c, i) => (
+              <li
+                key={c.id}
+                role="option"
+                aria-selected={i === hi}
+                className={`ob-result${i === hi ? " ob-result-hi" : ""}`}
+                onMouseEnter={() => setHi(i)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(c.id)}
+              >
+                <CompanyLogo name={c.name} domain={c.iconDomain} />
+                <span className="ob-result-id">
+                  <span className="ob-result-name">{c.name}</span>
+                  <span className="ob-result-meta">{metaOf(c) || "On Trading Post"}</span>
+                </span>
+              </li>
+            ))}
+            <li role="option" aria-selected={false} className="ob-result" onMouseDown={(e) => e.preventDefault()} onClick={addTyped}>
+              <span className="ob-result-id">
+                <span className="ob-result-name">Use &ldquo;{typed}&rdquo;</span>
+                <span className="ob-result-meta">Not on file yet. You can add the seat you held there.</span>
+              </span>
+            </li>
+          </ul>
+        ) : null}
+      </div>
+
+      {clients.length > 0 && (
+        <ul className="ob-clients">
+          {clients.map((id) => {
+            const c = id.startsWith("name:") ? null : byId.get(id);
+            const label = c ? c.name : id.slice(5);
+            const seats = c ? unclaimed(c, fn) : [];
+            const inFn = fn ? seats.filter((e) => e.yours || val(e.cells.function) === fn) : seats;
+            const list = (inFn.length ? inFn : seats).slice(0, 3);
+            return (
+              <li key={id} className="ob-client">
+                <div className="ob-client-top">
+                  {c ? <CompanyLogo name={c.name} domain={c.iconDomain} /> : null}
+                  <span className="ob-client-name">{label}</span>
+                  <button type="button" className="ob-client-x" aria-label={`Take ${label} off the list`} onClick={() => setClients((x) => x.filter((y) => y !== id))}>
+                    <IconX size={12} />
+                  </button>
+                </div>
+                {list.length > 0 && (
+                  <ul className="ob-seats">
+                    {list.map((e) => (
+                      <ClaimRow key={e.id} e={e} company={label} act={act} />
+                    ))}
+                  </ul>
+                )}
+                {!list.some((e) => e.yours) && (
+                  <div className="ob-client-add">
+                    {!list.length && <p className="ob-hint ob-hint-flush">We don&apos;t have a seat on file there yet.</p>}
+                    <AddSeat company={label} fn={fn} title={title} name={name} act={act} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="ob-grow" />
+      <div className="ob-foot ob-foot-follow">
+        <button type="button" className="ob-back" onClick={onBack}>
+          Back
+        </button>
+        <span className="ob-foot-note num" aria-live="polite">
+          {claimedN ? `${claimedN} ${claimedN === 1 ? "seat is" : "seats are"} yours` : "You can skip this and add seats later"}
+        </span>
+        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onNext}>
+          Show companies to follow
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- step 4: follow companies (optional) ---------- */
 
 function StepFollow({
-  companies, byId, fn, goal, follows, toggle, busy, nextLabel, handoff, onBack, onNext,
+  companies, byId, fn, icp, clients, goal, follows, toggle, busy, nextLabel, handoff, onBack, onNext,
 }: {
   companies: CompanyRec[];
   byId: Map<string, CompanyRec>;
   fn: string | null;
+  icp: Icp;
+  clients: string[];
   goal: Goal | null;
   follows: string[];
   toggle: (id: string) => void;
@@ -539,7 +917,7 @@ function StepFollow({
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   // Suggestions are picked once, from the answers, so cards don't jump around as you follow.
-  const [sugg] = useState(() => suggest(companies, goal, fn));
+  const [sugg] = useState(() => suggest(companies, goal, fn, icp, clients));
 
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -746,7 +1124,7 @@ function StepFollow({
   );
 }
 
-/* ---------- step 3: keep your sign-in link ---------- */
+/* ---------- step 5: keep your sign-in link ---------- */
 
 function StepLink({
   token, email, support, busy, nextLabel, handoff, onDone,

@@ -23,6 +23,7 @@ import {
 } from "./model";
 import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
+import { useFitWhy } from "./Hunt";
 
 /**
  * How fractional friendly a company is, as a plain label. Hover for the reason and the score.
@@ -116,8 +117,8 @@ const storyWhy = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "from a postin
 export function NoSeatYet({ fn }: { fn: string }) {
   const named = namedFn(fn);
   return (
-    <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other functions. ${named ? `No ${named} seat` : "No seat in your function"} is on file yet.`}>
-      {named ? `No ${named} seat yet` : "No seat in your function yet"}
+    <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other functions. ${named ? `No fractional ${named} seat` : "No fractional seat in your function"} is on file yet.`}>
+      {named ? `No fractional ${named} yet` : "No fractional in your function yet"}
     </span>
   );
 }
@@ -234,7 +235,8 @@ export const LOCKED_TIP = "This company is hiring a fractional now. Unlock it to
  */
 export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare?: boolean }) {
   const ui = useCellUi();
-  const teaser = !bare && <span className="tp-co-dom">{i.teaser || "Hiring a fractional now"}</span>;
+  const why = useFitWhy(i);
+  const teaser = !bare && <span className="tp-co-dom" title={why ?? undefined}>{i.teaser || "Hiring a fractional now"}</span>;
   if (big)
     return (
       <span className="tp-co tp-co-hidden big">
@@ -270,12 +272,13 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
  * table says it beside its Hiring now chip instead (Fit), so it passes false.
  */
 function CompanyName({ i, following, tagged = true }: { i: CoInfo; following?: boolean; tagged?: boolean }) {
+  const why = useFitWhy(i);
   if (i.c.hidden) return <HiddenCompany i={i} />;
   return (
     <span className="tp-co">
       <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />
       <span className="tp-co-text">
-        <span className="tp-co-name" title={i.c.name}>
+        <span className="tp-co-name" title={why ? `${i.c.name}. ${why}` : i.c.name}>
           <span className="tp-co-name-t">{i.c.name}</span>
           {following && (
             <span className="tp-co-star" title="You follow this company">

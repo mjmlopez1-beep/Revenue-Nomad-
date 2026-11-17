@@ -5,7 +5,7 @@
  * Locked fields are never filtered by value, only by availability: "known" means the cell is
  * locked (someone added it) or visible.
  */
-import type { Cell, CompanyRec, EngagementRec, Friendly, Me, PersonRec } from "@/lib/tableTypes";
+import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } from "@/lib/tableTypes";
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
@@ -14,7 +14,7 @@ import {
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "repeat" | "hiring" | "following" | "unlocked" | "needs";
-export type SortKey = "fit" | "newest" | "name" | "engagements" | "start" | "employees" | "revenue" | "fn" | "title" | "hq";
+export type SortKey = "best" | "fit" | "newest" | "name" | "engagements" | "start" | "employees" | "revenue" | "fn" | "title" | "hq";
 
 /** `hint` is the tab's one line of explanation (its tooltip). */
 export const TABS: { key: Tab; label: string; hint?: string }[] = [
@@ -23,9 +23,9 @@ export const TABS: { key: Tab; label: string; hint?: string }[] = [
   { key: "hiring", label: "Hiring now" },
   { key: "following", label: "Following" },
   { key: "unlocked", label: "Unlocked" },
-  { key: "needs", label: "Needs facts" },
 ];
 export const SORTS: { key: SortKey; label: string }[] = [
+  { key: "best", label: "Best fit for you" },
   { key: "fit", label: "Most fractional-friendly" },
   { key: "newest", label: "Recently updated" },
   { key: "name", label: "Company name" },
@@ -39,9 +39,9 @@ export const SORTS: { key: SortKey; label: string }[] = [
 ];
 /** The sorts that mean something for each list: a seat sorts by its own start and function, a person by their title. */
 const SORTS_BY_TYPE: Record<RecordType, SortKey[]> = {
-  companies: ["fit", "newest", "name", "engagements", "start", "employees", "revenue", "hq"],
-  engagements: ["fit", "newest", "name", "start", "fn", "employees", "revenue"],
-  people: ["fit", "newest", "name", "title", "hq"],
+  companies: ["best", "fit", "newest", "name", "engagements", "start", "employees", "revenue", "hq"],
+  engagements: ["best", "fit", "newest", "name", "start", "fn", "employees", "revenue"],
+  people: ["best", "fit", "newest", "name", "title", "hq"],
 };
 export const sortsFor = (t: RecordType) => SORTS.filter((s) => SORTS_BY_TYPE[t].includes(s.key));
 /** A sort the list can't use (Most seats, carried over to People) reads as Best fit there. */
@@ -356,6 +356,11 @@ export interface Filters {
   fractionalNamed: boolean;
   emailKnown: boolean;
   relationship: string[];
+  /** Countries (CompanyRec.country), and US states or regions under them. */
+  country: string[];
+  region: string[];
+  /** Narrow to the member's ideal client (Me.icp). The "Your clients" pill, not a chip. */
+  icp: boolean;
 }
 
 export const EMPTY_FILTERS: Filters = {
@@ -381,6 +386,9 @@ export const EMPTY_FILTERS: Filters = {
   fractionalNamed: false,
   emailKnown: false,
   relationship: [],
+  country: [],
+  region: [],
+  icp: false,
 };
 
 export type ToggleKey = "rateKnown" | "contactKnown" | "notMine" | "statusKnown" | "fractionalNamed" | "emailKnown";
@@ -399,17 +407,21 @@ export type ListKey =
   | "pricing"
   | "roleState"
   | "source"
-  | "relationship";
+  | "relationship"
+  | "country"
+  | "region";
+/** Lists whose options come from the records (HQ, country, region), not from a pick list. */
+type OpenList = "hq" | "country" | "region";
 
 /** A function a label can name: "Executive" and "Other" are catch-alls, so a sentence says "your function" instead. */
 export const namedFn = (fn: string | null) => (fn && fn !== "Other" && fn !== "Executive" ? fn : null);
-/** The "No Sales seat yet" filter as the member reads it, in the sidebar and on its chip. */
-export const notMineLabel = (fn: string | null) => (namedFn(fn) ? `No ${fn} seat yet` : "No seat in your function yet");
+/** The "No fractional Sales yet" filter as the member reads it, in the sidebar and on its chip. */
+export const notMineLabel = (fn: string | null) => (namedFn(fn) ? `No fractional ${fn} yet` : "No fractional in your function yet");
 
 export const TOGGLE_LABEL: Record<ToggleKey, string> = {
   rateKnown: "Rate on file",
   contactKnown: "Hiring contact on file",
-  notMine: "No seat in your function yet",
+  notMine: "No fractional in your function yet",
   statusKnown: "Status on file",
   fractionalNamed: "Seat holder on file",
   emailKnown: "Email on file",
@@ -430,6 +442,8 @@ export const LIST_LABEL: Record<ListKey, string> = {
   type: "Type",
   source: "Source",
   relationship: "Relationship",
+  country: "Country",
+  region: "Region",
 };
 export const FIT_STEPS = [0, 20, 40, 60, 80];
 /** Followed roles by where they stand: the posting is still up, or it came down. */
@@ -443,7 +457,7 @@ export const dayOf = (iso: string) => {
 /** Days between the first day a posting was seen and the day it came down (at least 1). */
 export const daysListed = (opened: string, closed: string) => Math.max(1, Math.round((dayOf(closed).getTime() - dayOf(opened).getTime()) / 86_400_000));
 
-export const LIST_OPTIONS: Record<Exclude<ListKey, "hq">, string[]> = {
+export const LIST_OPTIONS: Record<Exclude<ListKey, OpenList>, string[]> = {
   industry: RN_INDUSTRIES,
   employees: RN_EMPLOYEES,
   revenue: RN_REVENUE,
@@ -491,8 +505,8 @@ const engsOf = (r: Row) => (r.e ? [r.e] : r.p ? [] : r.i.engs);
 const peopleOf = (r: Row) => (r.p ? [r.p] : r.e ? r.e.people : r.i.people.map((x) => x.p));
 const personKnown = (p: PersonRec) => ["name", "email", "phone", "linkedin"].some((f) => known(p.cells[f]));
 
-/** An old address's tab key to today's: "friendly" was the tab Repeat hirers replaced. */
-export const tabOf = (v: string | null): Tab | null => (v === "friendly" ? "repeat" : TABS.find((x) => x.key === v)?.key ?? null);
+/** An old address's tab key to today's: "friendly" was the tab Repeat hirers replaced, and "needs" (Needs facts, gone) opens All. */
+export const tabOf = (v: string | null): Tab | null => (v === "friendly" ? "repeat" : v === "needs" ? "all" : TABS.find((x) => x.key === v)?.key ?? null);
 
 /**
  * A repeat hirer: 2 or more fractional hires on file, or fractional hires in 2 or more
@@ -672,6 +686,17 @@ export function optionTest(key: ListKey, opt: string): Test {
     }
     case "relationship":
       return (r) => peopleOf(r).some((p) => shown(p.cells.relationship) === opt);
+    case "country": {
+      const k = countryKey(opt);
+      return (r) => {
+        const c = countryOf(r.i.c);
+        return !!c && countryKey(c) === k;
+      };
+    }
+    case "region": {
+      const k = opt.toLowerCase();
+      return (r) => regionOf(r.i.c)?.toLowerCase() === k;
+    }
   }
 }
 
@@ -728,11 +753,19 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
 }
 
 const TOGGLES: ToggleKey[] = ["rateKnown", "contactKnown", "notMine", "statusKnown", "fractionalNamed", "emailKnown"];
-const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "businessModel", "motion", "dealSize", "salesCycle", "fn", "type", "reason", "pricing", "roleState", "source", "relationship"];
+const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "country", "region", "businessModel", "motion", "dealSize", "salesCycle", "fn", "type", "reason", "pricing", "roleState", "source", "relationship"];
 
 function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   const out: Clause[] = [];
   if (tab !== "all") out.push({ group: "tab", test: (r) => tabTest(tab, r) });
+  // A fractional firm (agency, marketplace) is not a client: a guard, should a record ever carry firm.
+  out.push({ group: "firms", test: (r) => !isFirm(r.i.c) });
+  // The member's ideal client, while the "Your clients" pill is on.
+  const icp = f.icp ? me.icp : null;
+  if (icp && !icpEmpty(icp)) {
+    const t = icpTest(icp);
+    out.push({ group: "icp", test: (r) => t(r.i.c) });
+  }
   const st = searchTest(q);
   if (st) out.push({ group: "search", test: st });
   for (const k of TOGGLES) if (f[k]) out.push({ group: k, test: toggleTest(k, me) });
@@ -769,6 +802,8 @@ export interface Facets {
   lists: Record<ListKey, Record<string, number>>;
   fit: Record<number, number>;
   tabs: Record<Tab, number>;
+  /** Rows the other filters let through with the ideal client lifted ("Show everyone"). */
+  everyone: number;
 }
 
 /** Filtered rows plus counts for every filter option (each group counted with its own selection lifted). */
@@ -797,21 +832,24 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
   for (const k of LISTS) {
     const base = rows.filter((r) => pass(r, cs, k));
     const counts: Record<string, number> = {};
-    if (k === "hq") {
+    if (k === "hq" || k === "country" || k === "region") {
+      // Region counts only under the countries picked (a state means something inside its country).
+      const inCountry = k === "region" && f.country.length ? f.country.map((c) => optionTest("country", c)) : null;
       for (const r of base) {
-        const v = shown(r.i.c.cells.hq);
+        if (inCountry && !inCountry.some((t) => t(r))) continue;
+        const v = k === "hq" ? shown(r.i.c.cells.hq) : k === "country" ? countryOf(r.i.c) : regionOf(r.i.c);
         if (v) counts[v] = (counts[v] ?? 0) + 1;
       }
     } else if (BY_VALUE.has(k)) {
       // Each row once: every option it has counts one (the same as optionTest per option).
-      const n = new Map<string, number>(LIST_OPTIONS[k as Exclude<ListKey, "hq">].map((o) => [o, 0]));
+      const n = new Map<string, number>(LIST_OPTIONS[k as keyof typeof LIST_OPTIONS].map((o) => [o, 0]));
       for (const r of base) {
         const vs = valuesOf(k, r)!;
         for (const v of vs.length === 1 ? vs : new Set(vs)) if (v !== null && n.has(v)) n.set(v, n.get(v)! + 1);
       }
       for (const [o, c] of n) counts[o] = c;
     } else {
-      for (const opt of LIST_OPTIONS[k]) {
+      for (const opt of LIST_OPTIONS[k as keyof typeof LIST_OPTIONS]) {
         const t = optionTest(k, opt);
         let n = 0;
         for (const r of base) if (t(r)) n++;
@@ -829,7 +867,9 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
   for (const t of TABS)
     tabs[t.key] =
       t.key === "all" ? tabBase.length : t.key === "following" ? new Set(tabBase.filter((r) => tabTest(t.key, r)).map((r) => r.i.c.id)).size : tabBase.filter((r) => tabTest(t.key, r)).length;
-  return { rows: result, facets: { toggles, lists, fit, tabs } };
+  let everyone = 0;
+  for (const r of rows) if (pass(r, cs, "icp")) everyone++;
+  return { rows: result, facets: { toggles, lists, fit, tabs, everyone } };
 }
 
 export function activeCount(f: Filters): number {
@@ -839,6 +879,9 @@ export function activeCount(f: Filters): number {
   if (f.fitMin) n++;
   return n;
 }
+
+/** No filters, keeping the "Your clients" pill as it is (Clear all clears filters, not who the member hunts). */
+export const clearedFilters = (f: Filters): Filters => ({ ...EMPTY_FILTERS, icp: f.icp });
 
 /** Removable chips for the active filters. */
 export function activeChips(f: Filters): { id: string; label: string; clear: (f: Filters) => Filters }[] {
@@ -861,11 +904,17 @@ export function activeChips(f: Filters): { id: string; label: string; clear: (f:
  * Sort rows. With needsFirst, the rows missing the most facts come first (the Needs facts view).
  * With a search query, rows whose company name or domain matches come first.
  */
-export function sortRows(rows: Row[], sort: SortKey, needsFirst = false, q = ""): Row[] {
-  const sorted = sortBy(rows, sort, needsFirst);
+export interface SortCtx {
+  /** Who is looking: "Best fit for you" reads their ideal client and function. Without it, Best fit sorts as Most fractional-friendly. */
+  me?: Pick<Me, "icp" | "function"> | null;
+  /** Hiring now: open roles in this function first, and Recently updated reads as newest open role. */
+  fnFirst?: string | null;
+}
+export function sortRows(rows: Row[], sort: SortKey, needsFirst = false, q = "", ctx: SortCtx = {}): Row[] {
+  const sorted = sortBy(rows, sort, needsFirst, ctx);
   return q.trim() ? rankByQuery(sorted, q) : sorted;
 }
-function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean): Row[] {
+function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean, ctx: SortCtx = {}): Row[] {
   const byName = (a: Row, b: Row) => a.i.c.name.localeCompare(b.i.c.name);
   const score = (r: Row) => r.i.c.friendly.score;
   const updated = (r: Row) => (r.p ? r.i.c.updatedAt : r.e ? r.e.updatedAt ?? r.i.c.updatedAt : r.i.c.updatedAt) ?? "";
@@ -889,7 +938,19 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean): Row[] {
   // The last tie breaks on the row's own id, never its name: unlocking a hidden company changes its
   // name, and the row must not move while its record is open (only the Name sort reads names).
   const byKey = (a: Row, b: Row) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  // Best fit, worked out once per company for this sort.
+  const fitMemo = new Map<CoInfo, number>();
+  const me = ctx.me;
+  const best = (r: Row) => {
+    let v = fitMemo.get(r.i);
+    if (v === undefined) {
+      v = me ? bestFit(r.i, me).score : 0;
+      fitMemo.set(r.i, v);
+    }
+    return v;
+  };
   const cmp: Record<SortKey, (a: Row, b: Row) => number> = {
+    best: (a, b) => best(b) - best(a) || score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byKey(a, b),
     fit: (a, b) => score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byKey(a, b),
     newest: (a, b) => updated(b).localeCompare(updated(a)) || start(b).localeCompare(start(a)) || score(b) - score(a) || byKey(a, b),
     name: (a, b) => byName(a, b) || start(b).localeCompare(start(a)) || byKey(a, b),
@@ -901,8 +962,231 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean): Row[] {
     title: (a, b) => byTitle(a, b) || score(b) - score(a) || byKey(a, b),
     hq: (a, b) => byHq(a, b) || score(b) - score(a) || byKey(a, b),
   };
-  const by = cmp[sort];
+  let by = cmp[sort];
+  const fn = ctx.fnFirst;
+  if (fn) {
+    // Hiring now: the member's function first, then the newest open role (posted day when the board gives one, else first seen).
+    const mine = (r: Row) => (rowOpenFns(r).includes(fn) ? 1 : 0);
+    const then = sort === "newest" ? (a: Row, b: Row) => openedOn(b).localeCompare(openedOn(a)) || cmp.newest(a, b) : cmp[sort];
+    by = (a, b) => mine(b) - mine(a) || then(a, b);
+  }
   return [...rows].sort(needsFirst ? (a, b) => b.i.c.facts.missing - a.i.c.facts.missing || by(a, b) : by);
+}
+
+/* ---------- who the member hunts: ideal client, firms, countries, best fit ---------- */
+
+/**
+ * The company fields the data clean adds (country, US state, fractional firm). Read through
+ * these so the app works before the records carry them.
+ */
+type CoPlace = { country?: string | null; region?: string | null; firm?: boolean };
+/** A fractional firm, agency or marketplace: not a client. Never suggested, and out of the lists unless asked for. */
+export const isFirm = (c: CompanyRec) => !!(c as CoPlace).firm;
+
+/** "US", "USA" and "United States" are one country. */
+export const countryKey = (v: string) => {
+  const k = v.trim().toLowerCase().replace(/\./g, "");
+  return k === "us" || k === "usa" || k === "united states of america" ? "united states" : k === "uk" ? "united kingdom" : k;
+};
+const titleCase = (v: string) => v.replace(/\b[a-z]/g, (x) => x.toUpperCase());
+/** The country as the app spells it: "United States" for every spelling of it. */
+export const countryName = (v: string) => (countryKey(v) === "united states" ? "United States" : countryKey(v) === "united kingdom" ? "United Kingdom" : v.trim());
+/** Short, for the pill: "US", "UK", else the name. */
+export const countryShort = (v: string) => (countryKey(v) === "united states" ? "US" : countryKey(v) === "united kingdom" ? "UK" : countryName(v));
+const US_NAMES = new Set(Object.values(US_STATES));
+/** Countries an HQ line may end with, read as the company's country until the records carry one. */
+const HQ_COUNTRIES = new Set([
+  "united kingdom", "canada", "germany", "france", "india", "australia", "israel", "netherlands", "ireland", "spain", "sweden", "singapore",
+  "switzerland", "brazil", "mexico", "denmark", "norway", "finland", "belgium", "italy", "portugal", "poland", "new zealand", "south africa", "japan",
+]);
+
+/** Where a company is, from its record, else read off its HQ ("Austin, TX" is the United States, Texas). */
+function placeOf(c: CompanyRec): { country: string | null; region: string | null } {
+  const x = c as CoPlace;
+  const hq = shown(c.cells.hq);
+  let country = x.country ? countryName(x.country) : null;
+  let region = x.region ?? null;
+  if ((!country || !region) && hq) {
+    const parts = hq.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
+    const last = parts[parts.length - 1] ?? "";
+    const state = parts.map((p) => (p.length === 2 && Object.prototype.hasOwnProperty.call(US_STATES, p) ? US_STATES[p] : US_NAMES.has(p) ? p : null)).find(Boolean) ?? null;
+    if (!country) country = state || countryKey(last) === "united states" ? "United States" : HQ_COUNTRIES.has(countryKey(last)) ? countryName(titleCase(countryKey(last))) : null;
+    if (!region && state && (!country || countryKey(country) === "united states")) region = titleCase(state);
+  }
+  return { country, region };
+}
+const placeMemo = new WeakMap<CompanyRec, { country: string | null; region: string | null }>();
+const placeFor = (c: CompanyRec) => {
+  let p = placeMemo.get(c);
+  if (!p) {
+    p = placeOf(c);
+    placeMemo.set(c, p);
+  }
+  return p;
+};
+export const countryOf = (c: CompanyRec): string | null => placeFor(c).country;
+export const regionOf = (c: CompanyRec): string | null => placeFor(c).region;
+
+// Industries match by name, case aside (the standard list names each one once).
+const industryKey = (v: string) => v.trim().toLowerCase();
+
+export const icpEmpty = (icp: Icp | null | undefined) => !icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
+
+/** Which parts of the ideal client a company matches: true, false, or null when its record doesn't say. */
+export function icpParts(icp: Icp, c: CompanyRec) {
+  const ind = shown(c.cells.industry);
+  const emp = shown(c.cells.employees);
+  const rev = shown(c.cells.revenue);
+  const ctry = countryOf(c);
+  const inds = new Set(icp.industries.map(industryKey));
+  return {
+    industry: icp.industries.length ? (ind ? inds.has(industryKey(ind)) : null) : undefined,
+    employees: icp.employees.length ? (emp ? icp.employees.includes(emp) : null) : undefined,
+    revenue: icp.revenue.length ? (rev ? icp.revenue.includes(rev) : null) : undefined,
+    country: icp.countries.length ? (ctry ? icp.countries.some((x) => countryKey(x) === countryKey(ctry)) : null) : undefined,
+  };
+}
+
+/**
+ * The ideal client as a filter. Industry, size and revenue must be on file and match. Country
+ * matches when it is on file and matches, or when the record doesn't say (most records have no
+ * country yet, and a filter that drops them would hide most of the table).
+ */
+export function icpTest(icp: Icp): (c: CompanyRec) => boolean {
+  return (c) => {
+    const p = icpParts(icp, c);
+    return p.industry !== false && p.industry !== null && p.employees !== false && p.employees !== null && p.revenue !== false && p.revenue !== null && p.country !== false;
+  };
+}
+
+/** Bands in their list's order, runs joined: ["11–50", "51–200"] reads "11–200", ["$20M–$50M", "$50M+"] reads "$20M+". */
+export function bandRange(list: string[], picked: string[]): string {
+  const at = picked.map((v) => list.indexOf(v)).filter((n) => n >= 0).sort((a, b) => a - b);
+  const ends = (v: string): [string | null, string | null] | null => {
+    const u = v.match(/^Under (.+)$/);
+    if (u) return [null, u[1]];
+    const plus = v.match(/^(.+)\+$/);
+    if (plus) return [plus[1], null];
+    const two = v.split("–");
+    return two.length === 2 ? [two[0], two[1]] : null;
+  };
+  const runs: number[][] = [];
+  for (const n of at) {
+    const run = runs[runs.length - 1];
+    if (run && run[run.length - 1] === n - 1 && ends(list[n]) && ends(list[run[0]])) run.push(n);
+    else runs.push([n]);
+  }
+  return runs
+    .map((run) => {
+      if (run.length === 1) return list[run[0]];
+      const lo = ends(list[run[0]])![0];
+      const hi = ends(list[run[run.length - 1]])![1];
+      return lo === null ? `Under ${hi}` : hi === null ? `${lo}+` : `${lo}–${hi}`;
+    })
+    .join(", ");
+}
+
+/** "Software · 11–200 · $5M–$20M · US", the pill over the table. Empty when the member named nothing. */
+export function icpLabel(icp: Icp | null | undefined): string {
+  if (!icp) return "";
+  return [
+    icp.industries.join(", "),
+    bandRange(RN_EMPLOYEES, icp.employees),
+    bandRange(RN_REVENUE, icp.revenue),
+    icp.countries.map(countryShort).join(", "),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The functions of a row's open roles: the seat's own, or every open role at the company. */
+function rowOpenFns(r: Row): string[] {
+  const engs = r.e ? [r.e] : r.i.engs;
+  return engs.filter(isOpenRole).map((e) => shown(e.cells.function)).filter((x): x is string => !!x);
+}
+/** When a row's newest open role opened: the day the board says it was posted, else the day we first saw it. */
+function openedOn(r: Row): string {
+  let best = "";
+  for (const e of r.e ? [r.e] : r.i.engs) {
+    if (!isOpenRole(e)) continue;
+    const d = e.posted ?? e.opened ?? "";
+    if (d > best) best = d;
+  }
+  return best;
+}
+/** The day to show on an open role ("Open since Nov 6"): posted when the board says, else first seen. */
+export const openSince = (e: EngagementRec): string | null => e.posted ?? e.opened ?? null;
+
+/** Hiring now, split by the member's function: theirs, then the rest. */
+export function splitByFn(rows: Row[], fn: string | null): { mine: Row[]; others: Row[] } {
+  if (!fn) return { mine: rows, others: [] };
+  const mine: Row[] = [];
+  const others: Row[] = [];
+  for (const r of rows) (rowOpenFns(r).includes(fn) ? mine : others).push(r);
+  return { mine, others };
+}
+
+/** Open roles first seen in the last 7 days, in the member's function and in the others. */
+export function rolesThisWeek(infos: CoInfo[], fn: string | null, keep: (i: CoInfo) => boolean = () => true): { mine: number; others: number } {
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  let mine = 0;
+  let others = 0;
+  for (const i of infos) {
+    if (!keep(i)) continue;
+    for (const e of i.engs) {
+      if (!isOpenRole(e) || !e.opened || e.opened < since) continue;
+      if (fn && shown(e.cells.function) === fn) mine++;
+      else others++;
+    }
+  }
+  return { mine, others };
+}
+
+/**
+ * "Best fit for you": a company that matches the member's ideal client and has a gap in their
+ * function (no seat in it yet, fractionals hired in others, hires lately) ranks first. `reason`
+ * is the one line under the name: "Software · 51–200 · $5M–$20M · hired Sales in 2025 · no
+ * Marketing seat".
+ */
+export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: number; reason: string } {
+  const c = i.c;
+  if (isFirm(c)) return { score: -100, reason: "A fractional firm" };
+  const fn = namedFn(me.function);
+  const icp = me.icp;
+  let score = 0;
+  const bits: string[] = [];
+  if (icp) {
+    const p = icpParts(icp, c);
+    // A part that clearly doesn't match counts twice what a match does: the ideal client leads the order.
+    const weigh = (m: boolean | null | undefined, w: number) => (m === true ? w : m === false ? -2 * w : 0);
+    score += weigh(p.industry, 3) + weigh(p.employees, 2) + weigh(p.revenue, 2) + weigh(p.country, 1);
+  }
+  // What the company is, from its free facts (a hidden company shows these too).
+  for (const f of ["industry", "employees", "revenue"]) {
+    const v = shown(c.cells[f]);
+    if (v) bits.push(v);
+  }
+  const { hired, hiring } = i.fnState;
+  // The latest fractional hire in another function, by its start year.
+  let lastOther: { fn: string; year: string } | null = null;
+  for (const e of i.engs) {
+    const f = shown(e.cells.function);
+    if (!f || f === me.function || !isHire(e)) continue;
+    const y = (shown(e.cells.start) ?? "").slice(0, 4);
+    if (!lastOther || y > lastOther.year) lastOther = { fn: f, year: y };
+  }
+  const others = hired.filter((f) => f !== me.function);
+  score += Math.min(3, others.length);
+  if (i.c.friendly.recent > 0) score += 2;
+  if (lastOther) bits.push(lastOther.year ? `hired ${lastOther.fn} in ${lastOther.year}` : `hired ${lastOther.fn}`);
+  if (fn && hiring.includes(fn)) {
+    score += 5;
+    bits.push(`hiring ${fn} now`);
+  } else if (fn && !hired.includes(fn) && others.length) {
+    score += 4;
+    bits.push(`no ${fn} seat`);
+  } else if (fn && hired.includes(fn)) score -= 1;
+  return { score, reason: bits.join(" · ") };
 }
 
 /* ---------- facts to add ---------- */
@@ -1011,4 +1295,45 @@ export function checkSteps(
       ? { label: "Fill in your seats", hint: o.earn >= left ? `${left} left, 1 credit each` : o.earn > 0 ? `${left} left, earns up to ${o.earn}` : `${left} left to fill` }
       : null;
   return { steps, nudge };
+}
+
+/* ---------- saved views ---------- */
+
+/** The filters with the ideal client written out (a saved view keeps what it showed, whatever the member's clients are later). */
+export function withIcpSpelled(f: Filters, icp: Icp | null | undefined): Filters {
+  if (!f.icp || icpEmpty(icp)) return { ...f, icp: false };
+  const add = (a: string[], b: string[]) => [...new Set([...a, ...b])];
+  return { ...f, icp: false, industry: add(f.industry, icp!.industries), employees: add(f.employees, icp!.employees), revenue: add(f.revenue, icp!.revenue), country: add(f.country, icp!.countries.map(countryName)) };
+}
+
+/** What a saved view matches in the weekly email (open roles, by free facts). */
+export function criteriaOf(f: Filters, hireFn: string | null) {
+  const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
+  return {
+    ...(fns.length === 1 ? { function: fns[0] } : fns.length ? { functions: fns } : {}),
+    ...(f.industry.length ? { industry: f.industry } : {}),
+    ...(f.employees.length ? { employees: f.employees } : {}),
+    ...(f.revenue.length ? { revenue: f.revenue } : {}),
+    ...(f.country.length ? { country: f.country } : {}),
+    ...(f.hq.length === 1 ? { hq: f.hq[0] } : {}),
+  };
+}
+
+/** A name for a view from what it shows: "Marketing roles at Software companies, $5M–$20M". */
+export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string | null = null): string {
+  const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
+  const roles = tab === "hiring" || type === "engagements" || fns.length > 0;
+  const subject = fns.length ? `${fns.join(" or ")} ${tab === "hiring" ? "roles" : "seats"}` : tab === "hiring" ? "Open roles" : type === "people" ? "People" : roles ? "Seats" : "Companies";
+  const ind = f.industry.length ? `${f.industry.join(" or ")} companies` : "";
+  const head = ind ? (subject === "Companies" ? `${f.industry.join(" or ")} companies` : `${subject} at ${ind}`) : subject;
+  const tabWord = tab === "repeat" ? "repeat hirers" : tab === "following" ? "companies you follow" : "";
+  const parts = [
+    tabWord && !ind && subject === "Companies" ? tabWord.charAt(0).toUpperCase() + tabWord.slice(1) : tabWord ? `${head} among ${tabWord}` : head,
+    bandRange(RN_REVENUE, f.revenue),
+    f.employees.length ? `${bandRange(RN_EMPLOYEES, f.employees)} employees` : "",
+    f.country.length ? `in ${f.country.map(countryShort).join(" or ")}` : "",
+    f.region.length ? f.region.join(" or ") : "",
+    f.hq.length ? `in ${f.hq.join(" or ")}` : "",
+  ].filter(Boolean);
+  return parts.join(", ").slice(0, 100);
 }

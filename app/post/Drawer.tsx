@@ -1570,7 +1570,7 @@ export function Drawer({
                 ))}
                 {gap && <NoSeatYet fn={mine} />}
               </div>
-              {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No ${mineNamed} seat` : "No seat in your function"} is on file yet.</p>}
+              {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No fractional ${mineNamed} seat` : "No fractional seat in your function"} is on file yet.</p>}
               {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked story come from member stories or a posting that came down. No seat is on file for them yet.</p>}
             </section>
           )}

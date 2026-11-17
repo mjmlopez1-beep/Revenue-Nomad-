@@ -841,3 +841,152 @@
     animation: none;
   }
 }
+
+/* ---------- who you are, your clients, find your seats ---------- */
+.ob-title-input {
+  width: 100%;
+  max-width: 420px;
+}
+.ob .hunt-fields {
+  margin-top: 8px;
+}
+.ob-clients {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.ob-client {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  padding: 12px 16px;
+  min-width: 0;
+}
+.ob-client-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ob-client-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ob-client-x {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ob-client-x:hover {
+  background: var(--surface-2);
+}
+.ob-seats {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+}
+.ob-seat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.ob-seat-id {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: grid;
+}
+.ob-seat-line {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ob-seat-meta {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ob-seat-err {
+  font-size: 13.5px;
+  color: var(--red);
+}
+.ob-seat-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+.ob-seat-done .ob-seat-line {
+  flex: 1;
+}
+.ob-seat-ask {
+  display: grid;
+  gap: 8px;
+}
+.ob-seat-ask p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+.ob-seat-acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ob-client-add {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.ob-seat-add {
+  border-style: dashed;
+}
+.ob-seat-form {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+.ob-seat-label {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.ob-seat-added {
+  margin: 0;
+}
+@media (max-width: 767px) {
+  .ob-seat-btn,
+  .ob-seat-acts .btn,
+  .ob-seat-add,
+  .ob-seat-form .btn {
+    min-height: 44px;
+  }
+  .ob-client-x {
+    width: 44px;
+    height: 44px;
+  }
+}

@@ -6,10 +6,9 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
-import { SOURCE_LABEL } from "@/lib/tableFields";
 import { IconCheck, IconChevron, IconSearch, IconX } from "../ui/shared";
 import {
-  EMPTY_FILTERS, FIT_STEPS, LIST_OPTIONS, TOGGLE_LABEL, activeCount, namedFn, notMineLabel, placeWords, type Facets, type Filters, type ListKey, type ToggleKey,
+  EMPTY_FILTERS, FIT_STEPS, LIST_OPTIONS, TOGGLE_LABEL, activeCount, clearedFilters, countryKey, namedFn, notMineLabel, placeWords, type Facets, type Filters, type ListKey, type ToggleKey,
 } from "./model";
 import { useOpenPage } from "./Tables";
 
@@ -51,7 +50,7 @@ function ListBlock({ k, title, f, setF, counts, label }: { k: ListKey; title: st
   return (
     <div className="tp-fblock">
       <div className="tp-flabel">{title}</div>
-      <ChipSet k={k} f={f} setF={setF} counts={counts} options={LIST_OPTIONS[k as Exclude<ListKey, "hq">]} label={label} />
+      <ChipSet k={k} f={f} setF={setF} counts={counts} options={LIST_OPTIONS[k as keyof typeof LIST_OPTIONS]} label={label} />
     </div>
   );
 }
@@ -104,7 +103,8 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
     .filter((o) => o.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b));
   const withData = opts.filter((o) => (counts[o] ?? 0) > 0 || f.industry.includes(o));
-  const list = all || q ? opts : withData.slice(0, 8);
+  // Only industries with companies on file here (the standard list is long), most first.
+  const list = all || q ? withData : withData.slice(0, 8);
   return (
     <div className="tp-fblock">
       <div className="tp-flabel">Industry</div>
@@ -138,9 +138,9 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
           <p className="tp-fnote">{hasIndustry ? "None of these companies has an industry on file." : "No company has an industry on file yet. Add one and you can filter by it."}</p>
         )}
       </div>
-      {!q && (
+      {!q && withData.length > 8 && (
         <button type="button" className="tp-flink" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all ${LIST_OPTIONS.industry.length} industries`}
+          {all ? "Show fewer" : `Show all ${withData.length} industries`}
         </button>
       )}
     </div>
@@ -224,6 +224,47 @@ function Hq({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void; count
   );
 }
 
+/**
+ * Country, most common first with the United States first of all, and the regions (US states)
+ * under it once a country is picked.
+ */
+function Country({ f, setF, counts, regions }: { f: Filters; setF: (f: Filters) => void; counts: Record<string, number>; regions: Record<string, number> }) {
+  const [all, setAll] = useState(false);
+  const us = (v: string) => countryKey(v) === "united states";
+  const opts = Object.entries(counts)
+    .sort((a, b) => Number(us(b[0])) - Number(us(a[0])) || b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([v]) => v);
+  for (const v of f.country) if (!opts.includes(v)) opts.push(v);
+  if (!opts.length) return null;
+  const list = all ? opts : opts.slice(0, 6);
+  const regionOpts = Object.entries(regions).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v]) => v);
+  for (const v of f.region) if (!regionOpts.includes(v)) regionOpts.push(v);
+  return (
+    <div className="tp-fblock">
+      <div className="tp-flabel">Country</div>
+      <ChipSet
+        k="country"
+        f={f}
+        // A region means something inside its country: taking the country off takes its regions off too.
+        setF={(nf) => setF(nf.country.length ? nf : { ...nf, region: [] })}
+        counts={counts}
+        options={list}
+      />
+      {opts.length > 6 && (
+        <button type="button" className="tp-flink" onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show all ${opts.length} countries`}
+        </button>
+      )}
+      {f.country.length > 0 && regionOpts.length > 0 && (
+        <>
+          <div className="tp-flabel">{f.country.length === 1 && us(f.country[0]) ? "State" : "Region"}</div>
+          <ChipSet k="region" f={f} setF={setF} counts={regions} options={regionOpts.slice(0, 24)} />
+        </>
+      )}
+    </div>
+  );
+}
+
 /** A group that starts folded (Seat, People): open while one of its filters is on. */
 function Fold({ title, on, children }: { title: string; on: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(on);
@@ -249,6 +290,7 @@ export function FilterPanel({
   head,
   hasIndustry = true,
   hasRoles = false,
+  top,
 }: {
   f: Filters;
   setF: (f: Filters) => void;
@@ -259,6 +301,8 @@ export function FilterPanel({
   hasIndustry?: boolean;
   /** Whether any role on file carries open and closed dates (the weekly scan follows it). */
   hasRoles?: boolean;
+  /** Above the groups: the saved views. */
+  top?: ReactNode;
 }) {
   const n = activeCount(f);
   const t = facets.toggles;
@@ -272,12 +316,13 @@ export function FilterPanel({
         <div className="tp-filters-head">
           <span className="tp-filters-title">Filters</span>
           {n > 0 && (
-            <button type="button" className="tp-flink" onClick={() => setF(EMPTY_FILTERS)}>
+            <button type="button" className="tp-flink" onClick={() => setF(clearedFilters(f))}>
               Clear all
             </button>
           )}
         </div>
       )}
+      {top}
       <Group title="Shortcuts">
         <Toggle k="rateKnown" f={f} setF={setF} n={t.rateKnown} />
         {openPage && (
@@ -292,7 +337,7 @@ export function FilterPanel({
         {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} label={notMineLabel(me.function)} />}
         {me.function && (
           <p className="tp-fnote">
-            Companies that hired fractionals in other functions and have no {namedFn(me.function) ? `${me.function} seat` : "seat in your function"} on file.
+            Companies that hired fractionals in other functions and have no {namedFn(me.function) ? `fractional ${me.function} seat` : "fractional seat in your function"} on file.
           </p>
         )}
       </Group>
@@ -308,6 +353,7 @@ export function FilterPanel({
         <Industry f={f} setF={setF} counts={l.industry} hasIndustry={hasIndustry} />
         <ListBlock k="employees" title="Employees" f={f} setF={setF} counts={l.employees} />
         <ListBlock k="revenue" title="Revenue" f={f} setF={setF} counts={l.revenue} />
+        <Country f={f} setF={setF} counts={l.country} regions={l.region} />
         <Hq f={f} setF={setF} counts={l.hq} />
         <ListBlock k="businessModel" title="Business model" f={f} setF={setF} counts={l.businessModel} />
         <ListBlock k="motion" title="Sales motion" f={f} setF={setF} counts={l.motion} />
@@ -336,7 +382,6 @@ export function FilterPanel({
         <Toggle k="statusKnown" f={f} setF={setF} n={t.statusKnown} />
         <ListBlock k="reason" title="Why they hired" f={f} setF={setF} counts={l.reason} />
         <ListBlock k="pricing" title="Pricing model" f={f} setF={setF} counts={l.pricing} />
-        <ListBlock k="source" title="Source" f={f} setF={setF} counts={l.source} label={(o) => SOURCE_LABEL[o] ?? o} />
       </Fold>
       <Fold title="People" on={f.fractionalNamed || f.emailKnown || f.relationship.length > 0}>
         <Toggle k="fractionalNamed" f={f} setF={setF} n={t.fractionalNamed} />

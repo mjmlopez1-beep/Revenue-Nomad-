@@ -16,6 +16,7 @@ import { coverOf, isOpenRole, isUnheldOpenRole, type Row, type Tab } from "./mod
 import { YourSeat, earnNote, useCellUi } from "./ui";
 import { Fit, FnChips, HeldBy, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
 import { RoleDate } from "./RoleDate";
+import { useFitWhy } from "./Hunt";
 
 /**
  * The card's title is a heading with a button in it, so a keyboard (a desktop at 200% zoom gets
@@ -23,6 +24,7 @@ import { RoleDate } from "./RoleDate";
  */
 function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (r: Row) => void }) {
   const i = r.i;
+  const why = useFitWhy(i);
   const open = (e: React.MouseEvent) => {
     e.stopPropagation();
     onOpen(r);
@@ -42,6 +44,7 @@ function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (
               </button>
             </h3>
             <LockedSite seed={i.c.id} className="tp-co-dom" />
+            {why && <span className="hunt-why">{why}</span>}
           </span>
         </span>
         {right}
@@ -64,6 +67,7 @@ function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (
           </button>
         </h3>
         {i.domain && <span className="tp-co-dom mono">{i.domain}</span>}
+        {why && <span className="hunt-why">{why}</span>}
         {/* A company card says it beside its Hiring now chip (Fit). Seat and person cards say it here. */}
         {!right && i.c.unlocked && i.c.friendly.open > 0 && <UnlockedTag />}
       </div>

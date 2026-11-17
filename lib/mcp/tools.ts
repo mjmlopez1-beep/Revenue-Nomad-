@@ -11,7 +11,7 @@ import { ActionError, connectorState, digestEnabled, inviteCode, perform, update
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
-  EMPTY_FILTERS, applyFilters, fitReason, fitTier, friendlyCo, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
+  EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
   type CoInfo, type FactRef, type Filters,
 } from "@/app/post/model";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
@@ -704,13 +704,24 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
   const mine = (await connectorState()).alerts[ctx.member.id] ?? [];
   const counts = (x: SavedSearch) => {
     const all = openRoles(mv, { function: x.function, industry: x.industry, employees: x.employees, revenue: x.revenue, hq: x.hq, fractional_friendly: x.fractionalFriendly });
+    // A view saved in the app can also name several functions or countries.
+    if (x.functions?.length || x.country?.length) all.roles = all.roles.filter(({ i, e }) => alertMatches(x, roleFacts(i, e)));
     const week = all.roles.filter((r) => r.at >= new Date(Date.now() - 7 * 86_400_000).toISOString()).length;
     return { all, week };
   };
   const show = (x: SavedSearch) => {
     const { all, week } = counts(x);
-    const { id, name, createdAt, ...criteria } = x;
-    return { id, name, criteria, saved: dayOfIso(createdAt), open_now: all.roles.length, new_this_week: week };
+    const { id, name, createdAt, place, email, ...criteria } = x;
+    return {
+      id,
+      name,
+      criteria,
+      saved: dayOfIso(createdAt),
+      ...(place !== undefined ? { saved_in: "the Trading Post app" } : {}),
+      weekly_email: email !== false,
+      open_now: all.roles.length,
+      new_this_week: week,
+    };
   };
   if (a.action === "list") return { saved_searches: mine.map(show), delivery: emailNote(mv) };
   if (a.action === "delete") {

@@ -1,0 +1,285 @@
+/* Who the member hunts: the ideal client chips, the "Your clients" pill, saved views. hunt- classes. */
+
+.hunt-fields {
+  display: grid;
+  gap: 20px;
+}
+.hunt-q {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.hunt-h {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 8px;
+  padding: 0;
+}
+.hunt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hunt-chip {
+  height: auto;
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 100%;
+}
+.hunt-chip:focus-visible,
+.hunt-pill-btn:focus-visible,
+.hunt-more:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+.hunt-more {
+  margin-top: 8px;
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.hunt-lead {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+
+/* The pill over the list: pine, one line, Edit and the toggle at its end. */
+.hunt-pill {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--r-card);
+  background: var(--pine);
+  color: #fff;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.hunt-pill-off {
+  background: var(--surface);
+  color: var(--body-ink);
+  border: 1px solid var(--line);
+}
+.hunt-pill-text {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.hunt-pill-k {
+  font-weight: 600;
+  opacity: 0.8;
+}
+.hunt-pill b {
+  font-weight: 700;
+}
+.hunt-pill-acts {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+.hunt-pill-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--r-btn);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--t);
+}
+.hunt-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.hunt-pill-off .hunt-pill-btn {
+  border-color: var(--line-strong);
+  color: var(--pine);
+}
+.hunt-pill-off .hunt-pill-btn:hover {
+  background: var(--pine-8);
+}
+.hunt-pill-edit {
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The reason under a company's name when the list is sorted by best fit. */
+.hunt-why {
+  display: block;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Hiring now: "3 Marketing roles this week · 6 in other functions". */
+.hunt-fnline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.hunt-fnline b {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Saved views. */
+.hunt-views-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.hunt-vchip {
+  max-width: 100%;
+}
+.hunt-vchip-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.hunt-vsave {
+  border-style: dashed;
+  color: var(--pine);
+}
+.hunt-vlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.hunt-vlist li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.hunt-vlist li:first-child {
+  border-top: 0;
+}
+.hunt-vname {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hunt-vfrom {
+  font-weight: 400;
+  color: var(--muted);
+}
+.hunt-vlist .tp-ftoggle {
+  width: auto;
+}
+.hunt-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+.hunt-input {
+  width: 100%;
+}
+.hunt-email {
+  margin-top: 14px;
+  width: 100%;
+}
+.hunt-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.hunt-sheet .tp-sheet-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media (hover: none) and (pointer: coarse), (max-width: 767px) {
+  .hunt-chip,
+  .hunt-pill-btn {
+    min-height: 44px;
+  }
+  .hunt-pill {
+    padding: 8px 8px 8px 12px;
+  }
+  .hunt-pill-acts {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .hunt-why {
+    white-space: normal;
+  }
+}
+
+/* Phones: the list's children carry their own 16px gutter. */
+.tp-main-phone > .hunt-pill {
+  margin: 12px 16px;
+}
+
+/* Search all industries (the standard list is long). Styled here so onboarding has it too. */
+.hunt-isearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  max-width: 360px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-input);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  color: var(--muted);
+}
+.hunt-isearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+}
+.hunt-isearch:focus-within {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+@media (max-width: 767px) {
+  .hunt-isearch {
+    height: 44px;
+    max-width: none;
+    font-size: 16px;
+  }
+  .hunt-isearch input {
+    font-size: 16px;
+  }
+}
