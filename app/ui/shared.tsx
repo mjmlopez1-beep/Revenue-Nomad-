@@ -432,7 +432,7 @@ export function AddPill({ onAdd, label = "Add", earn = true, what }: { onAdd: ()
  * NOMAD under it (footer), "mark" is the square M icon (the tightest phone bar). `dark` is the
  * treatment for pine: white letters, the orange dot and lime swoosh kept. `size` is the CSS height.
  */
-const BRAND_RATIO = { wordmark: 307 / 96, lockup: 677 / 240, mark: 1 } as const;
+const BRAND_RATIO = { wordmark: 478 / 120, lockup: 739 / 240, mark: 1 } as const;
 export function Brand({ dark, size = 28, kind = "wordmark", className }: { dark?: boolean; size?: number; kind?: keyof typeof BRAND_RATIO; className?: string }) {
   const src = kind === "mark" ? "/brand/merlin-icon-512.png" : `/brand/merlin-${kind}${dark ? "-on-dark" : ""}.png`;
   return (
