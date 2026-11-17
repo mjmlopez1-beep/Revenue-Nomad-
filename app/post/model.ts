@@ -1158,7 +1158,8 @@ export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: n
   const bits: string[] = [];
   if (icp) {
     const p = icpParts(icp, c);
-    const weigh = (m: boolean | null | undefined, w: number) => (m === true ? w : m === false ? -w : 0);
+    // A part that clearly doesn't match counts twice what a match does: the ideal client leads the order.
+    const weigh = (m: boolean | null | undefined, w: number) => (m === true ? w : m === false ? -2 * w : 0);
     score += weigh(p.industry, 3) + weigh(p.employees, 2) + weigh(p.revenue, 2) + weigh(p.country, 1);
   }
   // What the company is, from its free facts (a hidden company shows these too).

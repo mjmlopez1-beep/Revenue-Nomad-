@@ -24,7 +24,7 @@
  *   ID_SECRET      the server's RN_ID_SECRET, to build an unsubscribe link (default: the dev key)
  *   ONLY           comma-separated sections to run (default all): ssrf ids economy ip unlock
  *                  reports fields stats gzip result join seat hidden gtm benchmarks seats
- *                  benchrate pilot settings scan load
+ *                  benchrate pilot settings hunt scan load
  *   LOAD_OUT       write the load test's accounts and expected ledgers to this file
  *   CHECK_LEDGERS  re-check a LOAD_OUT file only (run it after restarting the server, to
  *                  check that what was written to disk survived)
@@ -1216,6 +1216,58 @@ section("settings", async () => {
   check("the page has no member data", !ok.text.includes(ev.me.email) && !ok.text.includes("Eli"));
   const adm = await admin();
   if (adm) check("admins see how many opted out", (await adm.view()).admin.digest.optedOut >= 1);
+});
+
+section("hunt", async () => {
+  // Who they are and who they hunt: the title and the ideal client on the profile, back in Me.
+  const H = await member("Hana Hunter", ip(150));
+  const v0 = (await H.view()).me;
+  check("a new member has no ideal client and no saved views", v0.icp === null && Array.isArray(v0.savedViews) && v0.savedViews.length === 0, { icp: v0.icp, views: v0.savedViews });
+  const p = await H.act({
+    type: "profile",
+    title: "  Fractional VP Marketing ",
+    icp: { industries: ["Software", "Not an industry"], employees: ["11–50", "51-200"], revenue: ["$5m-$20m"], countries: ["United States", " ", "<b>x</b>"] },
+  });
+  const v1 = (await H.view()).me;
+  check("profile takes a title and an ideal client", p.status === 200 && v1.title === "Fractional VP Marketing", p.json ?? v1.title);
+  check(
+    "the ideal client keeps list values in their list's spelling and drops the rest",
+    JSON.stringify(v1.icp) === JSON.stringify({ industries: ["Software"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"], countries: ["United States", "bx/b"] }),
+    v1.icp,
+  );
+  const bad = await H.act({ type: "profile", icp: "everyone" });
+  check("an ideal client that isn't lists is refused", bad.status === 400 && /Pick your clients/.test(bad.json?.error ?? ""), bad.json);
+  await H.act({ type: "profile", icp: null });
+  check("null clears the ideal client", (await H.view()).me.icp === null);
+  await H.act({ type: "profile", icp: { industries: ["Software"], employees: [], revenue: [], countries: [] } });
+
+  // Saved views: the same store as the connector's saved searches.
+  const place = "v=hiring&t=seats&f=fn:Marketing~industry:Software";
+  const s1 = await H.act({ type: "savedView", op: "save", name: "", place, criteria: { function: "Marketing", industry: ["software"], revenue: ["$5M–$20M"] } });
+  const vs = (await H.view()).me.savedViews;
+  check("save keeps a view with a name made from its criteria, and the weekly email on", s1.status === 200 && vs.length === 1 && vs[0].name === "Fractional Marketing roles at Software companies, $5M–$20M" && vs[0].email === true && vs[0].place === place, vs);
+  check("the save says the weekly email has it", /weekly email/.test(s1.json?.message ?? "") && typeof s1.json?.id === "string", s1.json);
+  const s2 = await H.act({ type: "savedView", op: "save", name: "Sales or RevOps <b>roles</b>", place: "v=all", criteria: { functions: ["Sales", "RevOps"], country: ["United States"] }, email: false });
+  const vs2 = (await H.view()).me.savedViews;
+  check("a view can name several functions and countries, keep the weekly email off, and its name is cleaned", s2.status === 200 && vs2.length === 2 && vs2[1].email === false && vs2[1].name === "Sales or RevOps broles/b" && JSON.stringify(vs2[1].criteria) === JSON.stringify({ functions: ["Sales", "RevOps"], country: ["United States"] }), vs2[1]);
+  const off = await H.act({ type: "savedView", op: "email", id: vs[0].id, on: false });
+  check("the weekly email turns off for one view", off.status === 200 && (await H.view()).me.savedViews[0].email === false, off.json);
+  const on = await H.act({ type: "savedView", op: "email", id: vs[0].id, on: true });
+  check("and back on", on.status === 200 && (await H.view()).me.savedViews[0].email === true && /each week/.test(on.json?.message ?? ""), on.json);
+  const badList = await H.act({ type: "savedView", op: "save", place: "v=all", criteria: { revenue: ["a lot"] } });
+  check("a view with a value off our lists is refused", badList.status === 400, badList.json);
+  const other = await member("Otto Other", ip(151));
+  const steal = await other.act({ type: "savedView", op: "delete", id: vs[0].id });
+  check("another member can't remove someone's view", steal.status === 400 && (await H.view()).me.savedViews.length === 2, steal.json);
+  check("and doesn't see it", (await other.view()).me.savedViews.length === 0);
+  const del = await H.act({ type: "savedView", op: "delete", id: vs2[1].id });
+  check("delete removes one", del.status === 200 && (await H.view()).me.savedViews.length === 1, del.json);
+  const again = await H.act({ type: "savedView", op: "delete", id: vs2[1].id });
+  check("deleting it twice says it's gone", again.status === 400 && /gone/.test(again.json?.error ?? ""), again.json);
+  for (let k = 0; k < 19; k++) await H.act({ type: "savedView", op: "save", name: `View ${k}`, place: "v=all", criteria: {} });
+  const full = await H.act({ type: "savedView", op: "save", name: "One more", place: "v=all", criteria: {} });
+  check("at most 20 saved views", full.status === 400 && /20 saved views/.test(full.json?.error ?? "") && (await H.view()).me.savedViews.length === 20, full.json);
+  check("onboarding stays done", (await H.view()).me.onboarded === true);
 });
 
 section("scan", async () => {

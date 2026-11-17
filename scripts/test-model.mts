@@ -8,11 +8,12 @@
  *   npx tsx scripts/test-model.mts      exits 1 on any failure
  */
 import type { Cell, CompanyRec, EngagementRec, Me, PersonRec } from "../lib/tableTypes";
-import { ALL_FIELDS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
+import { ALL_FIELDS, GROUPS, HIDDEN_COMPANY, RN_EMPLOYEES, RN_REVENUE } from "../lib/tableFields";
 import { ledgerLine, owedLine, unlockLimitLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
+  bandRange, bestFit, countryOf, criteriaOf, icpLabel, openSince, regionOf, splitByFn, viewName, withIcpSpelled,
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 
@@ -278,7 +279,7 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
     const h = deriveAll([hiringSales])[0];
     check("No Sales seat yet leaves out a company with an open Sales role", h.fnState.hiring.includes("Sales") && !notMine(h), h.fnState);
   }
-  check("a catch-all function is not named in labels", notMineLabel("Executive") === "No seat in your function yet" && notMineLabel("Sales") === "No Sales seat yet" && namedFn("Other") === null);
+  check("a catch-all function is not named in labels", notMineLabel("Executive") === "No fractional in your function yet" && notMineLabel("Sales") === "No fractional Sales yet" && namedFn("Other") === null);
 }
 
 /* ---------- HQ by place ---------- */
@@ -473,6 +474,83 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("a step done before stays done", n(sticky) === 2);
   const fresh = checkSteps({ ...base }, { seatsHeld: 2, seatsLeft: 8, earn: 8 });
   check("with seats and nothing added, step 2 starts on the seats and there is no nudge yet", fresh.steps[1].label === "Fill in your seats" && !fresh.steps[1].done && !fresh.nudge);
+}
+
+/* ---------- who the member hunts: ideal client, firms, country, best fit, saved views ---------- */
+
+{
+  const withCells = (c: CompanyRec, cells: Record<string, string>, extra: Record<string, unknown> = {}) => {
+    for (const [k, v] of Object.entries(cells)) c.cells[k] = val(v);
+    return Object.assign(c, extra);
+  };
+  const hire = (fn: string, start: string) => eng({ function: val(fn), type: val("Fractional"), start: val(start), operator: LOCKED }, { source: "Published engagement" });
+  const fit = withCells(co("Fit Co", [hire("Sales", "2025-03")]), { industry: "Software", employees: "51–200", revenue: "$5M–$20M", hq: "Austin, TX" });
+  fit.friendly = { ...fit.friendly, fractional: 1, functions: ["Sales"], recent: 1 };
+  const owned = withCells(co("Has Marketing", [hire("Marketing", "2024-01")]), { industry: "Software", employees: "51–200", revenue: "$5M–$20M" });
+  owned.friendly = { ...owned.friendly, fractional: 1, functions: ["Marketing"] };
+  const wrong = withCells(co("Retail Co", [hire("Sales", "2025-01")]), { industry: "Retail", employees: "51–200", revenue: "$5M–$20M" });
+  wrong.friendly = { ...wrong.friendly, fractional: 1, functions: ["Sales"] };
+  const merged = withCells(co("Old Name Co", []), { industry: "Software & IT Services", employees: "11–50", revenue: "$5M–$20M", hq: "London, United Kingdom" });
+  const firm = withCells(co("Firm Co", []), { industry: "Software", employees: "11–50", revenue: "$5M–$20M" }, { firm: true });
+  const abroad = withCells(co("Berlin Co", []), { industry: "Software", employees: "11–50", revenue: "$5M–$20M" }, { country: "Germany", region: "Berlin" });
+  const all = deriveAll([fit, owned, wrong, merged, firm, abroad]);
+  const icp = { industries: ["Software"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"], countries: [] as string[] };
+  const mkt = { function: "Marketing", goal: null, icp } as unknown as Me;
+  const names = (f: Partial<typeof EMPTY_FILTERS>, who: Me = mkt) => applyFilters(rowsFor("companies", all), { ...EMPTY_FILTERS, ...f }, "all", "", who).rows.map((r) => r.i.c.name);
+
+  const on = names({ icp: true });
+  check("ideal client: matching industry, size and revenue only", on.includes("Fit Co") && on.includes("Has Marketing") && !on.includes("Retail Co"), on);
+  check("ideal client: an industry saved under its old name still matches", on.includes("Old Name Co"), on);
+  check("ideal client off: everyone", names({}).includes("Retail Co"));
+  const facets = applyFilters(rowsFor("companies", all), { ...EMPTY_FILTERS, icp: true }, "all", "", mkt).facets;
+  check("Show everyone counts the rows without the ideal client", facets.everyone === names({}).length, facets.everyone);
+  const us = names({ icp: true }, { ...mkt, icp: { ...icp, countries: ["US"] } } as Me);
+  check("ideal client US only: US companies and ones with no country on file, not Germany or the UK", us.includes("Fit Co") && !us.includes("Berlin Co") && !us.includes("Old Name Co") && us.includes("Has Marketing"), us);
+
+  check("fractional firms never show", !names({}).includes("Firm Co") && !names({ icp: true }).includes("Firm Co"));
+
+  check(
+    "country filter reads the record, else the HQ",
+    names({ country: ["United States"] }).join() === "Fit Co" && names({ country: ["Germany"] }).join() === "Berlin Co" && names({ country: ["United Kingdom"] }).join() === "Old Name Co",
+    names({ country: ["United States"] }),
+  );
+  check("region filter under a country", names({ country: ["United States"], region: ["Texas"] }).join() === "Fit Co" && names({ region: ["Berlin"] }).join() === "Berlin Co");
+  const cf = applyFilters(rowsFor("companies", all), { ...EMPTY_FILTERS, country: ["United States"] }, "all", "", mkt).facets.lists;
+  check("country counts, and regions only under the picked country", cf.country["United States"] === 1 && cf.country.Germany === 1 && cf.region.Texas === 1 && !cf.region.Berlin, cf);
+  check("countryOf and regionOf from an HQ", countryOf(fit) === "United States" && regionOf(fit) === "Texas" && countryOf(abroad) === "Germany");
+
+  const order = sortRows(rowsFor("companies", all), "best", false, "", { me: mkt }).map((r) => r.i.c.name);
+  check(
+    "best fit: the ideal client with no Marketing seat and a recent hire comes first",
+    order[0] === "Fit Co" && order.indexOf("Has Marketing") > 0 && order.indexOf("Retail Co") > order.indexOf("Has Marketing") && order[order.length - 1] === "Firm Co",
+    order,
+  );
+  const why = bestFit(all[0], mkt).reason;
+  check("best fit reason reads like the spec", why === "Software · 51–200 · $5M–$20M · hired Sales in 2025 · no Marketing seat", why);
+  check("Best fit without a member sorts like fit", sortRows(rowsFor("companies", all), "best").length === all.length);
+
+  check("pill label joins bands", icpLabel({ ...icp, countries: ["United States"] }) === "Software · 11–200 · $5M–$20M · US", icpLabel({ ...icp, countries: ["United States"] }));
+  check("band ranges", bandRange(RN_REVENUE, ["$20M–$50M", "$50M+"]) === "$20M+" && bandRange(RN_REVENUE, ["Under $1M", "$1M–$5M"]) === "Under $5M" && bandRange(RN_EMPLOYEES, ["1–10", "201–500"]) === "1–10, 201–500");
+
+  // Hiring now: the member's function first, then the newest open role.
+  const open = (fn: string, opened: string, posted?: string) => eng({ function: val(fn), status: val("Open role", { system: true }), role: LOCKED }, { opened, closed: null, posted: posted ?? null });
+  const roles = deriveAll([co("A", [open("Sales", "2026-11-10")]), co("B", [open("Marketing", "2026-11-01")]), co("C", [open("Marketing", "2026-11-02", "2026-11-12")]), co("D", [open("Sales", "2026-11-14")])]);
+  const hr = sortRows(rowsFor("engagements", roles), "newest", false, "", { me: mkt, fnFirst: "Marketing" }).map((r) => r.i.c.name);
+  check("Hiring now: the member's function first, then newest by posted day, else first seen", hr.join("") === "CBDA", hr);
+  const split = splitByFn(rowsFor("engagements", roles), "Marketing");
+  check("Hiring now splits by function", split.mine.length === 2 && split.others.length === 2);
+  check("one date label: open since the posted day, else first seen", openSince(roles[2].engs[0]) === "2026-11-12" && openSince(roles[0].engs[0]) === "2026-11-10");
+
+  // Saved views.
+  const spelled = withIcpSpelled({ ...EMPTY_FILTERS, icp: true, fn: ["Marketing"] }, icp);
+  check("a saved view writes the ideal client out", !spelled.icp && spelled.industry.join() === "Software" && spelled.employees.length === 2);
+  const vn = viewName({ ...EMPTY_FILTERS, fn: ["Marketing"], industry: ["Software"], revenue: ["$5M–$20M"] }, "hiring", "engagements");
+  check("a view's name comes from its filters", vn === "Marketing roles at Software companies, $5M–$20M", vn);
+  check("a view's email criteria", JSON.stringify(criteriaOf(spelled, null)) === JSON.stringify({ function: "Marketing", industry: ["Software"], employees: ["11–50", "51–200"], revenue: ["$5M–$20M"] }), criteriaOf(spelled, null));
+
+  // The owner's changes: no Needs facts view, and old links to it open All.
+  check("Needs facts is gone and old links open All", !TABS.some((t) => (t.key as string) === "needs") && tabOf("needs") === "all");
+  check("Best fit for you is a sort, and Most fractional-friendly stays", SORTS[0].key === "best" && SORTS[0].label === "Best fit for you" && SORTS.some((s) => s.label === "Most fractional-friendly"));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
