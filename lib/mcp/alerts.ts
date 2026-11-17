@@ -7,7 +7,8 @@
  * industry, size, revenue and HQ), never by a locked one, so a match never gives away a
  * locked value or a hidden company.
  */
-import { FUNCTIONS, LEGACY_VALUES, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, currentValue } from "../tableFields";
+import { FUNCTIONS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "../tableFields";
+import { toStandard } from "../industryMap";
 import { inPlace, placeFilter } from "../geo";
 
 export interface SavedSearch {
@@ -43,7 +44,7 @@ export interface RoleFacts {
 /** Saved searches a member can keep. */
 export const ALERT_MAX = 20;
 
-/** Dashes, case and spacing aside: "$5m-$20m" is "$5M–$20M", "software" is "Software". */
+/** Dashes, case and spacing aside: "$5m-$20m" is "$5M–$20M", "saas" is "SaaS". */
 const squash = (v: string) => v.toLowerCase().replace(/[‐-―−-]/g, "-").replace(/\s+/g, "").replace(/,/g, "");
 
 /** The list's own spelling of what was typed, or null when it isn't on the list. */
@@ -52,13 +53,10 @@ export function pickFrom(list: readonly string[], raw: unknown): string | null {
   if (!want) return null;
   const hit = list.find((x) => squash(x) === want);
   if (hit) return hit;
-  // An older label ("SaaS", "< $1M") reads as the current one, when that one is on this list.
-  for (const field of ["industry", "revenue"]) {
-    const now = currentValue(field, String(raw ?? "").trim());
-    if (list.includes(now)) return now;
-    for (const [old, cur] of Object.entries(LEGACY_VALUES[field] ?? {})) if (squash(old) === want && list.includes(cur)) return cur;
-  }
-  return null;
+  // Industry, employees and revenue read as their closest standard value ("< $1M", "51-200", "Software Development").
+  const field = list === RN_INDUSTRIES ? "industry" : list === RN_REVENUE ? "revenue" : list === RN_EMPLOYEES ? "employees" : null;
+  const std = field ? toStandard(field, raw) : null;
+  return std && list.includes(std) ? std : null;
 }
 
 const US: Record<string, string> = {

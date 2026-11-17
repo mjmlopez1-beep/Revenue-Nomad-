@@ -763,7 +763,7 @@ const BIG = 300;
 const bigSeed = {
   builtAt: new Date(Date.now() - 20 * DAY).toISOString(),
   members: Array.from({ length: BIG }, (_, i) => ({ id: `fm${i}`, name: `Fixture Member${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + Math.floor(i / 26))}`, email: `fm${i}@example.com`, title: "Fractional VP Sales", token: `fixtok-${i}` })),
-  companies: Array.from({ length: 1800 }, (_, i) => ({ id: `c_fx${i}`, fields: { name: `Fixture Company ${i}`, website: `fixture${i}.example.com`, industry: "Software", employees: "11–50", revenue: "$1M–$5M", hq: "Austin, TX" } })),
+  companies: Array.from({ length: 1800 }, (_, i) => ({ id: `c_fx${i}`, fields: { name: `Fixture Company ${i}`, website: `fixture${i}.example.com`, industry: "SaaS", employees: "11–50", revenue: "$1M–$5M", hq: "Austin, TX" } })),
   engagements: Array.from({ length: 1800 }, (_, i) => ({
     id: `e_fx${i}`,
     companyId: `c_fx${i}`,

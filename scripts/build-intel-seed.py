@@ -423,9 +423,9 @@ INDUSTRY_RULES = [
     (r"health, wellness|fitness|wellness", "Wellness & Fitness"),
     (r"hospital|health ?care|medical|pharma|biotech|life science|mental health|dental|veterinary", "Health Care"),
     (r"bank|financial|insurance|capital market|investment|venture capital|credit|fintech|funds", "Financial Services"),
-    (r"accounting", "Financial Services"),
+    (r"accounting", "Finance"),
     (r"computer hardware|networking|semiconductor|telecommunications equipment|electronics manufacturing|wireless|appliances", "Hardware & Networking"),
-    (r"software|it services|information technology|technology, information|internet|computer and network security|data infrastructure|it system", "Software"),
+    (r"software|it services|information technology|technology, information|internet|computer and network security|data infrastructure|it system", "Software & IT Services"),
     (r"retail|e-commerce|online and mail order", "Retail"),
     (r"consumer|food|beverage|cosmetic|personal care|apparel|luxury|furniture|sporting goods|tobacco|wine", "Consumer Goods"),
     (r"construction|building|civil engineering|contractors", "Construction"),
@@ -454,7 +454,8 @@ def rn_industry(ind, desc):
         return None
     for pat, tag in INDUSTRY_RULES:
         if re.search(pat, s):
-            # Software, SaaS and IT services are one tag (lib/tableFields.ts RN_INDUSTRIES).
+            if tag == "Software & IT Services" and "software development" in s:
+                return "SaaS" if re.search(r"\bsaas\b|software[- ]as[- ]a[- ]service|subscription", desc or "", re.I) else "Software"
             return tag
     return None
 
@@ -611,6 +612,6 @@ print(f"clay: {clay_used} companies enriched; {merged_by_domain} merged as same-
 print(f"rate index: {len(old_rate_index or [])} points carried over" + ("" if old_rate_index else " (run scripts/add-rate-index.mjs to add them)"))
 print(f"wrote {SEED_PATH}")
 
-# Labels, places and fractional firms (lib/firmRemoval.ts): the same cleanup the app and the seat scan use.
+# Standard values, places and fractional firms (lib/firmRemoval.ts): the same cleanup the app and the seat scan use.
 import subprocess
 subprocess.run(["node", "--import", "tsx", "scripts/clean-intel-seed.mts", "--seed", SEED_PATH], check=True)

@@ -156,7 +156,7 @@ function factInfo(t: FactRef, cell: Cell, ui: Ui, own: boolean, listed: boolean,
   // A seat holder can also fix the function on their own seat, whoever set it (our records included).
   const ownFn = own && t.entity === "engagement" && t.field === "function";
   const canEdit = (!!v?.mine || (!!v && ownFn)) && !fixed;
-  const source = !v ? "" : v.from === "records" ? "From Revenue Nomad records" : v.from === "posting" ? "From the job posting" : v.mine ? (v.claimed ? "You claimed this" : "You added this") : "Added by a member";
+  const source = !v ? "" : v.from === "records" ? "From Revenue Nomad records" : v.from === "research" ? "Revenue Nomad research" : v.from === "posting" ? "From the job posting" : v.mine ? (v.claimed ? "You claimed this" : "You added this") : "Added by a member";
   const confirmHelp = v && !v.from ? "Two confirmations earn the member who added it a credit." : "It tells other members this still holds.";
   const back = gated && !own ? " You get the credit back if we remove it." : "";
   const reportHelp = own

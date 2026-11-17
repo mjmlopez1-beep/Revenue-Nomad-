@@ -1,6 +1,6 @@
 /**
  * Fractional firms: companies that are themselves a fractional firm, an agency of fractional
- * or interim executives, a talent marketplace or network, or a staffing or recruiting firm,
+ * or interim executives, or a freelance or fractional talent marketplace or network,
  * and placeholders that name no client at all ("Contractor", "Independent", "Freelance").
  * A fractional lists one as where they work, but it did not hire them: it is not a client, so it
  * is not on Trading Post. The seed cleanup drops them, the weekly scan never adds one, Add refuses
@@ -14,6 +14,12 @@
  * Names compare without case, accents, punctuation or a legal suffix ("FocusCFO®" is focuscfo).
  */
 
+/*
+ * Staffing and recruiting firms, and consulting firms, are clients (Revenue Nomad's industry list
+ * has Staffing & Recruiting and Consulting & Advisory): only firms whose business is placing
+ * fractional, interim or freelance talent are firms here.
+ */
+
 /** Known fractional firms, marketplaces and talent networks. */
 export const FIRM_NAMES: string[] = [
   "Toptal", "Catalant", "Chief Outsiders", "FocusCFO", "Freeman Clarke", "yorCMO", "salesQB", "Connectd", "GoFractional", "Go Fractional",
@@ -21,7 +27,7 @@ export const FIRM_NAMES: string[] = [
   "Expert360", "A.Team", "Braintrust", "Gun.io", "Turing", "10x Management", "Sales Xceleration", "Skaled", "Skaled Consulting", "Field Nation",
   "WorkGenius", "WorkGenius Group", "Remotebase", "The CFO Centre", "CFO Centre", "Fractional Jobs", "The Fractional CMO", "CMOx",
   "Interim Executive", "Officer as a Service", "Graphite Financial", "Pocketbook Agency", "Growth Collective", "Contra", "Malt", "Comatch",
-  "Hatchworks", "The Talent Community", "Velocity Talent", "Talent Nexus", "Basecamp Talent", "CSG Talent", "Kalungi", "Ampleo",
+  "Hatchworks", "Kalungi", "Ampleo",
   "We Are The Board", "Glencoco", "Head of AI",
 ];
 
@@ -61,8 +67,6 @@ const NAME_RULES: [RegExp, string][] = [
   [/[a-z]*(cmo|cfo)s?\b|\bcros?\b/, "CMO, CFO or CRO firm"],
   [/\b(cmo|cfo|cro|coo|cto|ceo|executive|officer|sales|marketing) as a service\b|\bas a service\b.*\b(executive|officer|cfo|cmo)\b/, "as a service"],
   [/\binterim (executive|executives|management|leadership|leaders)\b/, "interim executives"],
-  [/\b(recruitment|recruiting|recruiters?|staffing|headhunters?|headhunting|executive search)\b/, "recruiting or staffing"],
-  [/\btalent\b/, "talent firm"],
   [/\b(outsourced|part time) (cfo|cmo|cro|sales|marketing|executive|executives)\b/, "outsourced or part-time executives"],
 ];
 
@@ -74,8 +78,7 @@ const ABOUT_RULES: [RegExp, string][] = [
   [/\binterim (executive|executives|management|leaders|leadership|cfo|cmo|cro)\b/, "provides interim executives"],
   [/\b(network|marketplace|platform|community) of (pre vetted |vetted |top |elite |independent |senior )*(freelance|fractional|independent|interim|on demand|part time)/, "talent network or marketplace"],
   [/\b(talent|freelance|freelancer|expert|consultant) (marketplace|network|platform)\b/, "talent network or marketplace"],
-  [/\b(recruitment|staffing|recruiting|executive search) (company|firm|agency|partner|specialists?|consultancy)\b/, "recruiting or staffing firm"],
-  [/\bsource talent\b|\bprovide (freelance|contract|interim|fractional) /, "places talent"],
+  [/\bprovide (freelance|interim|fractional) (executives?|leaders?|cmos?|cfos?|marketers|talent)/, "places fractional or freelance talent"],
 ];
 
 /** Words that make a small company named after its seat holder read as their own practice. */

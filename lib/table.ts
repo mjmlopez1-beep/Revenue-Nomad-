@@ -62,9 +62,10 @@ import { removeScreenedOut } from "./scan/remove";
 import { companyKey, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, currentValue, siteKey, type Entity,
+  stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, siteKey, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
+import { STANDARD_FIELDS, toStandard } from "./industryMap";
 import { companyFirm, memberHoldsSeat, purgeFirms, seedFirmIds, type FirmReview, type RemovedFirms } from "./firmRemoval";
 import type {
   Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
@@ -400,9 +401,15 @@ export async function loadSeed(): Promise<Seed> {
       );
   }
   const out = seed ?? DEMO_SEED;
-  // Values under an older label ("SaaS", "Finance", "< $1M") take the current one, wherever they are.
+  // Industry, employees and revenue are always one of the standard values (lib/industryMap.ts): the
+  // closest one, or none when nothing fits ("< $1M" is Under $1M, "51-200" is 51–200).
   for (const r of [...out.companies, ...out.engagements]) {
-    for (const k of Object.keys(LEGACY_VALUES)) if (r.fields[k]) r.fields[k] = currentValue(k, r.fields[k]);
+    for (const k of STANDARD_FIELDS) {
+      if (!r.fields[k]) continue;
+      const v = toStandard(k, r.fields[k], `${r.fields.name ?? ""} ${r.fields.about ?? ""}`);
+      if (v) r.fields[k] = v;
+      else delete r.fields[k];
+    }
   }
   for (const x of out.rateIndex ?? []) if (x.revenue) x.revenue = currentValue("revenue", x.revenue);
   seedCache = { seed: out, at: Date.now() };
@@ -536,7 +543,19 @@ export async function loadState(): Promise<State> {
     // paid as the member's daily room opens.
     s.held ??= [];
     // Values saved under an older label (e.g. revenue "< $1M") take the current one.
-    for (const [k, v] of Object.entries(s.values)) v.value = currentValue(k.slice(k.lastIndexOf(".") + 1), v.value);
+    // Industry, employees and revenue saved under another spelling take the standard value. One nothing maps leaves the table (as if removed).
+    const seedNow = await loadSeed().catch(() => null);
+    const seedCo = new Map((seedNow?.companies ?? []).map((c) => [c.id, c.fields]));
+    const stateCo = new Map(s.companies.map((c) => [c.id, c.name]));
+    /** A company's own words (name and About), which pick between close industries. */
+    const wordsOf = (id: string) => `${seedCo.get(id)?.name ?? stateCo.get(id) ?? ""} ${seedCo.get(id)?.about ?? s.values[`${id}.about`]?.value ?? ""}`;
+    for (const [k, v] of Object.entries(s.values)) {
+      const field = k.slice(k.lastIndexOf(".") + 1);
+      if (!STANDARD_FIELDS.has(field)) continue;
+      const std = toStandard(field, v.value, field === "industry" ? wordsOf(k.slice(0, k.lastIndexOf("."))) : "");
+      if (std) v.value = std;
+      else v.status = "removed";
+    }
     // Saved searches and benchmark-only rates too: an alert for "SaaS" companies matches Software ones.
     for (const list of Object.values(s.connector?.alerts ?? {}))
       for (const a of list) {
@@ -3035,7 +3054,6 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           if (name.length < 2) throw new ActionError("What's the company called?");
           if (!keyOfCompany(name)) throw new ActionError("That doesn't read as a company name. Type the name the company goes by.");
           if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase() || name.toLowerCase() === "hidden company") throw new ActionError("That's our placeholder for a company you haven't unlocked. Type the real name.");
-          if (companyFirm(name)) throw new ActionError(FIRM_REFUSED);
           // Validate everything up front so a bad field never leaves a half-made record.
           const pick = (entity: Entity, raw: Record<string, string> | undefined) =>
             Object.entries(raw ?? {})
@@ -3063,6 +3081,8 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           let company: Node | undefined =
             (siteHost && [...g.companies.values()].find((c) => siteKey(live(c, s, "website")) === siteHost)) ||
             [...g.companies.values()].find((c) => keyOfCompany(c.name) === nameKey);
+          // A fractional firm, agency or marketplace is not a client (lib/firms.ts). One kept for an admin's review (a member holds a seat there) still takes facts.
+          if (companyFirm(company ? g.companies.get(company.id)?.name ?? name : name) && !(company && firmsInReview(seed, s).has(company.id))) throw new ActionError(FIRM_REFUSED);
           const isNew = !company;
           if (!company) {
             const id = newId("c", name);

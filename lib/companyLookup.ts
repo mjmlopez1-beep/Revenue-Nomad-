@@ -16,7 +16,7 @@ import { request } from "node:https";
 import { isIP } from "node:net";
 import type { Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
-import { RN_INDUSTRIES } from "./tableFields";
+import { industryOf } from "./industryMap";
 
 export interface LookupResult {
   domain: string;
@@ -112,7 +112,7 @@ function guardedLookup(hostname: string, options: LookupOptions, cb: LookupCb): 
 
 /** Keyword → Revenue Nomad industry tag. First match wins, most specific first. */
 const INDUSTRY_RULES: [RegExp, string][] = [
-  [/\bsaas\b|software[- ]as[- ]a[- ]service/i, "Software"],
+  [/\bsaas\b|software[- ]as[- ]a[- ]service/i, "SaaS"],
   [/\b(fintech|payments?|banking|lending|insurance|insurtech|wealth|accounting software)\b/i, "Financial Services"],
   [/\b(health ?care|healthtech|clinical|patient|medical|hospital|pharma|biotech|life sciences)\b/i, "Health Care"],
   [/\b(wellness|fitness|nutrition|supplements?)\b/i, "Wellness & Fitness"],
@@ -131,11 +131,12 @@ const INDUSTRY_RULES: [RegExp, string][] = [
   [/\b(travel|hospitality|hotels?|recreation|tourism)\b/i, "Recreation & Travel"],
   [/\b(networking|hardware|devices?|iot|data center)\b/i, "Hardware & Networking"],
   [/\b(consulting|staffing|recruiting|outsourc|professional services|agency)\w*/i, "Corporate Services"],
-  [/\b(software|platform|cloud|api|ai\b|developer|app)\b/i, "Software"],
+  [/\b(software|platform|cloud|api|ai\b|developer|app)\b/i, "Software & IT Services"],
 ];
 
 export function suggestIndustry(text: string): string | null {
-  for (const [re, tag] of INDUSTRY_RULES) if (re.test(text) && RN_INDUSTRIES.includes(tag)) return tag;
+  // Each rule names one of our earlier tags: the site's own words pick today's closest value (lib/industryMap.ts).
+  for (const [re, tag] of INDUSTRY_RULES) if (re.test(text)) return industryOf(tag, text, true);
   return null;
 }
 

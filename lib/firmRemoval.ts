@@ -15,7 +15,7 @@
  */
 import { firmReason, isNotFirm } from "./firms";
 import { normalizeHq } from "./geo";
-import { currentValue, LEGACY_VALUES } from "./tableFields";
+import { STANDARD_FIELDS, toStandard } from "./industryMap";
 import type { Seed, State } from "./table";
 
 export interface RemovedFirms {
@@ -39,7 +39,10 @@ const MEMBER_SOURCES = new Set(["Published engagement", "Member success story"])
 /* ---------- the seed ---------- */
 
 export interface CleanStats {
-  labels: number;
+  /** Values moved to their standard value, by field. */
+  remapped: Record<string, number>;
+  /** Values nothing maps (left empty), by field and value. */
+  unmapped: Record<string, Record<string, number>>;
   places: number;
   removed: { companies: number; seats: number; people: number; names: { name: string; reason: string }[]; reasons: Record<string, number> };
   kept: { name: string; reason: string }[];
@@ -51,14 +54,26 @@ export interface CleanStats {
  * `seed.firmReview`). Safe to run again.
  */
 export function cleanSeed(seed: Seed): CleanStats {
-  const stats: CleanStats = { labels: 0, places: 0, removed: { companies: 0, seats: 0, people: 0, names: [], reasons: {} }, kept: [] };
+  const stats: CleanStats = { remapped: {}, unmapped: {}, places: 0, removed: { companies: 0, seats: 0, people: 0, names: [], reasons: {} }, kept: [] };
+  // Industry, employees and revenue: the standard value, or nothing (lib/industryMap.ts).
+  const standard = (field: string, v: string, context = ""): string | null => {
+    // Our records hold the earlier 28 tags: the company's name and About pick the closest value today.
+    const std = toStandard(field, v, context, true);
+    if (std === v) return v;
+    if (std) stats.remapped[field] = (stats.remapped[field] ?? 0) + 1;
+    else ((stats.unmapped[field] ??= {})[v] = (stats.unmapped[field][v] ?? 0) + 1);
+    return std;
+  };
   for (const r of [...seed.companies, ...seed.engagements]) {
-    for (const k of Object.keys(LEGACY_VALUES)) {
+    for (const k of STANDARD_FIELDS) {
       const v = r.fields[k];
-      if (v && currentValue(k, v) !== v) (r.fields[k] = currentValue(k, v)), stats.labels++;
+      if (!v) continue;
+      const std = standard(k, v, `${r.fields.name ?? ""} ${r.fields.about ?? ""}`);
+      if (std) r.fields[k] = std;
+      else delete r.fields[k];
     }
   }
-  for (const x of seed.rateIndex ?? []) if (x.revenue && currentValue("revenue", x.revenue) !== x.revenue) (x.revenue = currentValue("revenue", x.revenue)), stats.labels++;
+  for (const x of seed.rateIndex ?? []) if (x.revenue) x.revenue = standard("revenue", x.revenue);
   for (const c of seed.companies) {
     delete c.fields.firm;
     const geo = normalizeHq(c.fields.hq);
