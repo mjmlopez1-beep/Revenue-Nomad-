@@ -1059,13 +1059,17 @@ export function icpParts(icp: Icp, c: CompanyRec) {
 
 /**
  * The ideal client as a filter (the owner's call): only a known value that conflicts leaves a
- * company out. One whose industry, size, revenue or country isn't on file is a maybe and stays,
+ * company out, and at least one of industry, size or revenue has to be on file and match. One whose industry, size, revenue or country isn't on file is a maybe and stays,
  * after the confirmed matches in "Best fit for you" (icpMatch), with a line on what isn't on file.
  */
 export function icpTest(icp: Icp): (c: CompanyRec) => boolean {
   return (c) => {
     const p = icpParts(icp, c);
-    return p.industry !== false && p.employees !== false && p.revenue !== false && p.country !== false;
+    if (p.industry === false || p.employees === false || p.revenue === false || p.country === false) return false;
+    // At least one of industry, size or revenue must be on file and match (when the ideal client
+    // asks for any of them), so a company we know nothing about doesn't show for every member.
+    const asked = [p.industry, p.employees, p.revenue].filter((x) => x !== undefined);
+    return asked.length === 0 || asked.includes(true);
   };
 }
 

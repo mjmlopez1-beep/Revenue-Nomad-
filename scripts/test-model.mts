@@ -538,7 +538,8 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("a confirmed match says nothing is missing", bestFit(all[0], mkt).match === "match" && !/not on file/.test(bestFit(all[0], mkt).reason));
   const bare = withCells(co("Bare Co", []), {}, { country: null, region: null });
   const usIcp = { ...icp, countries: ["United States"] };
-  check("nothing on file: a maybe that names every part", icpMatch(usIcp, bare) === "maybe" && icpUnknown(usIcp, bare) === "Industry, size, revenue and country not on file" && icpTest(usIcp)(bare), icpUnknown(usIcp, bare));
+  check("nothing on file: a maybe that names every part, left out of the clients view", icpMatch(usIcp, bare) === "maybe" && icpUnknown(usIcp, bare) === "Industry, size, revenue and country not on file" && !icpTest(usIcp)(bare), icpUnknown(usIcp, bare));
+  check("a maybe with one confirmed part stays in the clients view", icpTest(usIcp)(withCells(co("Half Co", []), { employees: icp.employees[0] }, { country: null, region: null })));
   check("a known conflict is out whatever else is missing", icpMatch(usIcp, abroad) === "no" && !icpTest(usIcp)(abroad) && icpUnknown(usIcp, abroad) === null);
   check("the server's country wins over the HQ", countryOf(withCells(co("Field Co", []), { hq: "Austin, TX" }, { country: null, region: null })) === null);
   const why = bestFit(all[0], mkt).reason;
