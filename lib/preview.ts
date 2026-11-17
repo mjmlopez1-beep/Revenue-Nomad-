@@ -214,7 +214,7 @@ function roleTitle(role: EngagementRec, p: PreviewCompany, fn: string, open: boo
 function pickExample(infos: Source["infos"], open: boolean): { x: PreviewExample; seed: string | null } | null {
   let best: { score: number; x: PreviewExample; seed: string | null } | null = null;
   for (const { i, p } of infos) {
-    if (!i.domain || !shown(i.c.cells.industry)) continue;
+    if (!i.domain || !shown(i.c.cells.industry) || !shown(i.c.cells.revenue)) continue;
     const roles = i.engs.filter(isOpenRole);
     if (roles.length && !open) continue;
     const seats = i.engs.filter((e) => isHire(e) && known(e.cells.operator) && fnOf(e));
@@ -382,7 +382,10 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
   // Newest seat first and undated ones last, so the dates run down the table in one order; then the rows that say the most.
   past.sort((a, b) => b.at.localeCompare(a.at) || b.rich - a.rich);
   notYet.sort((a, b) => b.rich - a.rich || b.at.localeCompare(a.at));
-  const all: { row: PreviewRow; p?: PreviewCompany; raw?: string | null }[] = view === "notyet" ? notYet : [...open, ...past];
+  // Only companies with their industry and revenue on file are listed (the owner's rule): a row
+  // with those blank tells a visitor too little. The counts above still cover every company.
+  const listed = (x: { row: PreviewRow }) => !!x.row.industry && !!x.row.revenue;
+  const all: { row: PreviewRow; p?: PreviewCompany; raw?: string | null }[] = (view === "notyet" ? notYet : [...open, ...past]).filter(listed);
   const rows = all.slice(0, PREVIEW_ROWS).map((x, n): PreviewRow => {
     if (n < PREVIEW_NAMED) return x.row;
     // Past the named rows: no company, and an open role's title loses any trace of it.

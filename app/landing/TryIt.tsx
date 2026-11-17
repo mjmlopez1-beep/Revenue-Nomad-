@@ -427,7 +427,6 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                               <th scope="col">Industry</th>
                               <th scope="col">Size</th>
                               <th scope="col">Revenue</th>
-                              <th scope="col">Country</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -449,7 +448,6 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                                   </td>
                                   <td className="num">{r.employees ? `${r.employees}` : <span className="lp-tt-none">Not on file</span>}</td>
                                   <td className="num">{r.revenue ?? <span className="lp-tt-none">Not on file</span>}</td>
-                                  <td>{r.country ?? <span className="lp-tt-none">Not on file</span>}</td>
                                 </tr>
                               ) : (
                                 <tr key={`sk-${n}`} className="lp-tt-skel" aria-hidden>

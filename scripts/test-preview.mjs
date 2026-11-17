@@ -103,6 +103,15 @@ async function main() {
   const companies = adminView?.companies ?? [];
   check("the admin's view lists companies by name (the list to look for)", companies.length > 0 && companies.some((c) => c.name === co), companies.length);
 
+  // The homepage lists only companies with their industry and revenue on file: give the test companies both.
+  for (const c of companies.filter((x) => /zephyrquill|quillfern/i.test(x.name ?? ""))) {
+    for (const [field, value] of [["industry", "SaaS"], ["revenue", "$5M-$20M"]]) {
+      if (c.cells?.[field]?.s === "value") continue;
+      const r = await call("POST", "/api/table", { token, body: { action: { type: "fill", entity: "company", id: c.id, field, value } } });
+      if (r.status !== 200) console.log("fill failed", field, r.text.slice(0, 160));
+    }
+  }
+
   /** Companies with an open role: named only while open-role companies are shown. */
   const names = new Set();
   /** Every company's name: none may show on a row past the 10th. */
@@ -306,11 +315,12 @@ async function main() {
   // The three tabs for Sales: the total holds together with the counts, and a tab not on the list is refused.
   const [tAll, tHiring, tNot] = await Promise.all(["all", "hiring", "notyet"].map((view) => preview({ fn: "Sales", view })));
   check(
-    "the tabs answer with their own rows and totals",
-    tAll.json?.view === "all" && tHiring.json?.view === "hiring" && tNot.json?.view === "notyet" && tHiring.json.total === tHiring.json.counts.hiring && tNot.json.total === tNot.json.counts.notYet && tAll.json.total >= tHiring.json.total && tAll.json.total === tAll.json.counts.all,
+    "the tabs answer with their own rows, and totals no bigger than the counts (only companies with industry and revenue are listed)",
+    tAll.json?.view === "all" && tHiring.json?.view === "hiring" && tNot.json?.view === "notyet" && tHiring.json.total <= tHiring.json.counts.hiring && tNot.json.total <= tNot.json.counts.notYet && tAll.json.total >= tHiring.json.total && tAll.json.total <= tAll.json.counts.all,
     [tAll, tHiring, tNot].map((t) => `${t.json?.view} ${t.json?.total}`).join(", "),
   );
   check("a long tab sends 10 named rows, then blurred ones", (tAll.json?.total ?? 0) <= NAMED_MAX || ((tAll.json?.rows ?? []).filter((r) => r.company || !r.blur).length === NAMED_MAX && tAll.json.rows.length === Math.min(ROWS_MAX, tAll.json.total)), `${tAll.json?.total} total, ${tAll.json?.rows?.length} rows`);
+  check("every listed row has its industry and revenue on file", [tAll, tHiring, tNot].every((x) => (x.json?.rows ?? []).every((r) => r.industry && r.revenue)));
   const badView = await preview({ fn: "Sales", view: "everything" });
   check("a tab not on the list is refused", badView.status === 400 && !badView.json?.rows, badView.status);
 
