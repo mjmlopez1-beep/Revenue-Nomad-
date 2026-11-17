@@ -11,7 +11,9 @@ const DESCRIPTION =
 /** Link previews need absolute image URLs: the public address when it is set. */
 function base(): URL | undefined {
   try {
-    return process.env.RN_PUBLIC_URL ? new URL(process.env.RN_PUBLIC_URL) : undefined;
+    // Link previews need an absolute image address. Without RN_PUBLIC_URL (the homepage is built
+    // ahead of time, so it must be there at build time) the pilot's own address is used.
+    return new URL(process.env.RN_PUBLIC_URL || "https://table-pilot.up.railway.app");
   } catch {
     return undefined;
   }
