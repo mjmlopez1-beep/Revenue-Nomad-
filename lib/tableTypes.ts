@@ -549,6 +549,8 @@ export interface AdminStats {
   benchmarks: { memberRates: number; privateRates: number; indexRates: number };
   /** Messages between members, counts only (admins never read conversations). */
   messages?: { started: number; replied3d: number; closed: number; blocked: number; reported: number };
+  /** Alerts in Slack and webhooks (lib/notify), counts only. */
+  integrations?: { slackConnected: number; webhookConnected: number; broken: number; sent: { roles: number; message: number; seat: number; test: number }; failed: number };
 }
 
 export type Action =

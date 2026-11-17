@@ -1,0 +1,302 @@
+/* Integrations (in-): alerts in Slack and other tools, and the Claude connector below them. */
+
+.in-picks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.tp-card.in-pick {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 14px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color var(--t);
+}
+.tp-card.in-pick:hover {
+  border-color: var(--pine);
+}
+.tp-card.in-pick:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+.in-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.in-mark-sm {
+  width: 32px;
+  height: 32px;
+}
+.in-mark-sm svg {
+  width: 18px;
+  height: 18px;
+}
+.in-mark-hook {
+  color: var(--pine);
+}
+.in-pick-t {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.in-pick-h {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.in-pick-d {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.in-section {
+  margin-top: 40px;
+  scroll-margin-top: 80px;
+}
+.in-h {
+  margin: 0 0 4px;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.in-card-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.in-card-h .tp-card-h {
+  margin: 0;
+}
+.in-steps {
+  margin-top: 16px;
+}
+.in-link {
+  color: var(--pine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.in-manifest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 8px 0 4px;
+}
+.in-details {
+  font-size: 14px;
+  line-height: 20px;
+}
+.in-details > summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 6px 0;
+  font-weight: 600;
+  color: var(--pine);
+}
+.in-details > summary:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.in-details[open] {
+  flex-basis: 100%;
+}
+.in-details pre {
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.tp-card > .in-details {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.in-form {
+  margin-top: 8px;
+}
+.in-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.in-row {
+  display: flex;
+  gap: 8px;
+}
+.in-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.in-hint {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.in-alt {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.in-secret {
+  margin-top: 12px;
+}
+
+.in-conn-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.in-masked {
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.in-conn-meta {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.in-problem {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--red);
+}
+.in-actions,
+.in-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.in-ask span {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.in-alerts {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.in-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.in-alert:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.in-alert-t {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 620px;
+}
+.in-alert-h {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.in-alert-d {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.in-fields {
+  margin: 8px 0 0;
+  display: grid;
+  gap: 6px;
+}
+.in-fields > div {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 12px;
+}
+.in-fields dt {
+  font-size: 13px;
+  color: var(--ink);
+}
+.in-fields dd {
+  margin: 0;
+  color: var(--body-ink);
+}
+
+/* The Claude connector inside this page: its own cards, no page frame. */
+.uc-embedded > .uc-lead {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+@media (max-width: 720px) {
+  .in-picks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tp-card.in-pick {
+    padding: 16px;
+  }
+  .in-section {
+    margin-top: 32px;
+  }
+  .in-row {
+    flex-direction: column;
+  }
+  .in-row .btn,
+  .in-actions .btn,
+  .in-ask .btn,
+  .in-manifest .btn {
+    min-height: 44px;
+  }
+  .in-row .btn {
+    width: 100%;
+  }
+  .in-input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .in-ask span {
+    flex-basis: 100%;
+  }
+  .in-alert {
+    align-items: flex-start;
+  }
+  .in-fields > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}

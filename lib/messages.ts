@@ -322,5 +322,10 @@ export async function performMessage(token: string | null, a: MessageAction, ori
     const n = out.notify;
     void sendEmail(n.to, n.subject, n.text, n.html).catch((e) => console.error("message email failed", e));
   }
+  // Alerts in Slack for the other side (lib/notify), when a message was written.
+  if (out.convId && (a.type === "message.start" || a.type === "message.send")) {
+    const id = out.convId;
+    void import("./notify/events").then((n) => n.afterMessage(id)).catch((e) => console.error("message alert failed", e));
+  }
   return { message: out.message, ...(out.convId ? { id: out.convId } : {}), ...(out.rec ? { conversation: out.rec } : {}), unread: out.unread };
 }
