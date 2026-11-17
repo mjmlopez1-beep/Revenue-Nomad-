@@ -10,7 +10,8 @@
  *    role itself is, with no full-time tell in the posting (workSignal in lib/crawler/score.ts).
  *    Remote, "trusted advisor", "consultative", part-time, days or hours a week, an hourly rate
  *    and "contract" about customers never count on their own.
- *  - GTM seats only: a fractional CFO or CTO posting is left out even when it mentions sales
+ *  - GTM seats only: a fractional CFO or CTO posting is left out even when it mentions sales,
+ *    and a title outside GTM below Director ("School Staffing Coordinator") is left out too
  *  - posted in the last 60 days (postings with no date are kept)
  *  - a real, named company, so no "Confidential", no "A Series B startup", no job boards and no
  *    recruiters posting for a client they do not name
@@ -27,6 +28,7 @@ import * as weworkremotely from "../crawler/sources/weworkremotely";
 import * as greenhouse from "../crawler/sources/greenhouse";
 import * as fractionaljobs from "./sources/fractionaljobs";
 import { cleanCompany, cleanTitle, companyDomain, isRealCompany, plain, roleKey } from "./clean";
+import { keepsNonGtm } from "../seniority";
 
 /** A raw posting, plus facts a board gives as fields of their own instead of in the text. */
 export interface ScanRawJob extends RawJob {
@@ -60,8 +62,10 @@ export const SOURCE_TIMEOUT_MS = 25_000;
 /**
  * bar: no GTM function anywhere in the posting. full-time: the work is not fractional, interim,
  * freelance or contract (see workSignal). not-gtm: the title names a seat outside GTM.
+ * seniority: outside GTM and below Director (lib/seniority.ts), such as a "Staffing Coordinator"
+ * whose posting mentions sales.
  */
-export type SkipReason = "discussion" | "bar" | "full-time" | "not-gtm" | "stale" | "company" | "title";
+export type SkipReason = "discussion" | "bar" | "full-time" | "not-gtm" | "seniority" | "stale" | "company" | "title";
 
 const DAY = 24 * 3600 * 1000;
 
@@ -232,6 +236,8 @@ export function screenJob(
   const tags = scoreJob(raw);
   if (!gtmByTitle(rawTitle) && tags.functions.length === 0) return { skip: "bar" };
   if (!gtmByTitle(rawTitle) && NON_GTM_TITLE.test(rawTitle)) return { skip: "not-gtm" };
+  // Outside GTM, only Director and above (lib/seniority.ts).
+  if (!keepsNonGtm(rawTitle, roleFunction(rawTitle, tags, raw.functionHint))) return { skip: "seniority" };
 
   const hours = roleHours(raw, tags);
   const rate = roleRate(raw, tags, text);

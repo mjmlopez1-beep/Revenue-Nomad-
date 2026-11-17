@@ -195,6 +195,22 @@ for (const title of ["Fractional CFO", "Fractional CTO", "Fractional COO", "Frac
 for (const [title, fn] of [["Fractional Sales Engineer", "Sales"], ["Fractional GTM Engineer", "AI GTM"], ["Fractional Marketing Operations Lead", "RevOps"], ["Fractional Product Marketing Manager", "Product Marketing"], ["Fractional CEO", "Executive"]]) {
   eq(`keeps a GTM seat with a technical or executive word in the title: ${title}`, screenJob(job({ title, description: salesy }), NOW).role?.function, fn);
 }
+// The seniority bar (lib/seniority.ts): outside GTM, only Director and above, whatever the body says.
+const staffing = "Help our school district with staffing, onboarding and support for new teachers. Work with the sales team on pipeline for our programs. 20 hrs/week.";
+for (const [title, want] of [
+  ["School Staffing Coordinator (Contract)", "seniority"],
+  ["Contract Software Engineer", "not-gtm"],
+  ["Art Director (freelance)", "not-gtm"],
+  ["Operations Coordinator (Contract)", "not-gtm"],
+  ["Program Coordinator (Contract)", "seniority"],
+  ["Fractional Office Associate", "seniority"],
+] as const) {
+  eq(`drops a role outside GTM below Director: ${title}`, screenJob(job({ title, description: staffing }), NOW).skip, want);
+}
+eq("drops it even with a GTM label from the board", screenJob(job({ title: "School Staffing Coordinator (Contract)", description: staffing, functionHint: "Customer Success" }), NOW).skip, "seniority");
+for (const title of ["Fractional Account Executive", "Freelance Marketing Coordinator", "Contract Customer Success Associate", "Fractional SDR"]) {
+  check(`keeps a GTM role at any seniority: ${title}`, !!screenJob(job({ title, description: salesy }), NOW).role);
+}
 eq("drops a discussion", screenJob(job({ kind: "discussion", title: "Ask HN: anyone hiring a fractional CMO?", company: "someuser" }), NOW).skip, "discussion");
 eq("drops a stale posting (75 days old)", screenJob(job({ postedAt: daysAgo(75) }), NOW).skip, "stale");
 check("keeps a posting 59 days old", !!screenJob(job({ postedAt: daysAgo(59) }), NOW).role);
@@ -581,6 +597,7 @@ const SCENARIOS: [string, string][] = [
   ["small", "A board that lists one role"],
   ["claimgone", "This isn't me on a role whose posting is long gone"],
   ["notfractional", "A full-time job an older screen let in, listed again"],
+  ["seniority", "Roles outside GTM below Director"],
 ];
 for (const [name, title] of SCENARIOS) {
   console.log(`\nStored scans: ${title}`);

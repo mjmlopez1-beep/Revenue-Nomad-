@@ -71,6 +71,10 @@ export interface ScanApplyResult {
    * current screen. They are taken off the table (not closed), and their unlocks paid back.
    */
   removed?: number;
+  /** Of `removed`, open roles taken off because they are outside GTM and below Director (lib/seniority.ts). */
+  removedBelowBar?: number;
+  /** New roles left out because they are outside GTM and below Director (lib/seniority.ts). */
+  belowBar?: number;
 }
 
 /** Everything one member's weekly email needs. No other member's data. */
