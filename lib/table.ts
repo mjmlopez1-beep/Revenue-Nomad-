@@ -1642,8 +1642,8 @@ const postingFree = (t: RoleTrack | undefined) => !!t?.closedAt && t.closedBy !=
  * because the name alone is enough to find the role. It stays visible to admins, to members
  * who unlocked it or added anything there, and to the member who held a seat there.
  */
-function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me: Member | null, companyId: string): boolean {
-  if (!me || isAdmin(me)) return false;
+function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me: Member | null, companyId: string, asMember = false): boolean {
+  if (!me || (isAdmin(me) && !asMember)) return false;
   const engs = [...g.engagements.values()].filter((e) => e.companyId === companyId);
   if (!engs.some((e) => hidesCompany(e, s, tracks))) return false;
   // Paid for an open role's title, posting or rate there already (say while the role was closed): the company came with it.
@@ -2542,7 +2542,12 @@ const SEAT_TAKEN = "Another member already claimed this seat. If it's yours, rep
  * nothing is kept. The answer says what it would do, and `spent` the credits it would take. A
  * refusal is thrown as it would be.
  */
-export async function perform(token: string | null, a: Action, origin?: string, opts: { dryRun?: boolean } = {}): Promise<ActionResult & { spent?: number }> {
+export async function perform(
+  token: string | null,
+  a: Action,
+  origin?: string,
+  opts: { dryRun?: boolean; asMember?: boolean } = {},
+): Promise<ActionResult & { spent?: number }> {
   if (a?.type === "scanNow") {
     if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
     if (!isAdmin(await memberForToken(token))) throw new ActionError("Only admins can start a scan.");
@@ -2580,7 +2585,8 @@ export async function perform(token: string | null, a: Action, origin?: string, 
     const idx0 = memberIndex(seed, s);
     const companyOf = (entity: Entity, id: string) =>
       entity === "company" ? id : entity === "engagement" ? g.engagements.get(id)?.companyId ?? "" : g.contacts.get(id)?.companyId ?? "";
-    const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, tracks(), me, companyId);
+    // An admin seeing the table as a member (asMember) unlocks by the same rule the page shows them.
+    const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, tracks(), me, companyId, !!opts.asMember);
     /** Accounts that count (trustOf), worked out once per action. */
     let trustNow: ((memberId: string) => boolean) | null = null;
     const trusted = (memberId: string) => (trustNow ??= trustOf(seed, s))(memberId);

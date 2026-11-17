@@ -1268,8 +1268,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           onClick={() => setTab(t.key)}
         >
           {t.label}
-          {/* All has no count: it is everything. The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}
-          {t.key !== "all" && (
+          {/* All has no count while nothing narrows it (then it is just the size of the database); with a filter or a search on, it shows how big that universe is. The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}
+          {(t.key !== "all" || nFilters > 0 || eff.icp || searching) && (
             <>
               {" "}
               <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{facets.tabs[t.key]}</span>

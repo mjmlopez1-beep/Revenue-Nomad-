@@ -348,7 +348,8 @@ export const POST = guarded(async (req: NextRequest) => {
     if (typeof action.goal === "string") action.goal = tidy(action.goal, 40);
   }
   try {
-    return NextResponse.json(await perform(token, action, origin(req)));
+    const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1";
+    return NextResponse.json(await perform(token, action, origin(req), { asMember }));
   } catch (e) {
     if (e instanceof ActionError) return err(e.message);
     throw e;

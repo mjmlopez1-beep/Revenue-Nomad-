@@ -102,6 +102,18 @@ function HiddenLine() {
 
 const shownCell = (c: { s: string } | undefined) => !!c && c.s !== "empty" && c.s !== "locked";
 
+/** A company's firmographics in one line (industry, size, revenue, HQ), so a member can tell whether it's worth opening. */
+function firmo(c: Row["i"]["c"]): string[] {
+  const emp = val(c.cells.employees);
+  const rev = val(c.cells.revenue);
+  return [val(c.cells.industry), emp && `${emp} employees`, rev && `${rev} revenue`, val(c.cells.hq)].filter(Boolean) as string[];
+}
+
+function FirmoLine({ c }: { c: Row["i"]["c"] }) {
+  const line = firmo(c);
+  return <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">No industry, size, revenue or HQ on file yet</span>}</div>;
+}
+
 const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean }) {
   const ui = useCellUi();
   const i = r.i;
@@ -110,8 +122,6 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
   const open = i.engs.find(isOpenRole) ?? null;
   // A hidden company is about its open role. Any other company leads with its latest seat.
   const e = c.hidden ? open ?? i.latest : i.latest;
-  const emp = val(c.cells.employees);
-  const line = [val(c.cells.industry), emp && `${emp} employees`, val(c.cells.hq)].filter(Boolean);
   const miss = c.facts.missing;
   const own = i.engs.find((x) => x.yours);
   // The free facts of the latest seat that tell it apart: its type and when it started.
@@ -125,7 +135,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       {/* The line under the header already gives a hidden company's industry, size and region. */}
       <Head r={r} right={<Fit i={i} />} onOpen={onOpen} />
-      <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">No industry, size or HQ on file yet</span>}</div>
+      <FirmoLine c={c} />
       {(i.fns.length > 0 || own) && (
         <div className="tp-pcard-fns">
           {own && <YourSeat id={own.id} />}
@@ -197,6 +207,7 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} onOpen={onOpen} />
+      <FirmoLine c={i.c} />
       <div className="tp-pcard-fns">
         {fn ? <span className={`chip tp-fn${fn === me.function ? " tp-fn-me" : ""}`}>{fn}</span> : <RowFact t={t("function")} at={at} cell={e.cells.function} addLabel="Function" />}
         {type ? <span className="chip tp-fn">{type}</span> : null}
@@ -248,6 +259,7 @@ const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r:
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} onOpen={onOpen} />
+      <FirmoLine c={i.c} />
       <div className="tp-pcard-fns">
         {title ? <span className="tp-pcard-title">{title}</span> : <RowFact t={t("title")} at={at} cell={p.cells.title} addLabel="Title" />}
         {rel ? <span className="chip tp-fn">{rel}</span> : <RowFact t={t("relationship")} at={at} cell={p.cells.relationship} addLabel="Relationship" />}
