@@ -27,7 +27,7 @@ export const INSTRUCTIONS = `Merlin is a give-to-get table of companies that hir
 
 How the table works
 - Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts (company basics, a seat's function, type, status, start, why they hired) are always visible.
-- A company with an open role is a "Locked company" until the member unlocks it for 1 credit, which also opens the posting and posted rate of its open roles. An open role's title is free to see. Its posting and posted rate are one purchase.
+- A company with an open role is a "Locked company" until the member unlocks it for 1 credit, which also opens the job posting of its open roles, with the posted rate and hours when the posting gave them. Before that only the role's title, function and listed date show, with the company's industry, size and HQ region. Each open role says whether a rate was posted ("No rate posted", or "on file"): never promise a rate that isn't there. At a company the member can see, an open role's posting, posted rate and hours are one purchase.
 - Never spend a credit without asking. Call unlock without confirm first, tell the member what it costs and what it opens, and call it again with confirm true only after they say yes.
 
 Using it well
@@ -36,7 +36,8 @@ Using it well
 - To find prospects for a member's function, look for companies that hired fractionals in other functions but not theirs yet (search_companies with no_function_yet), ranked by fit. A company that just hired a fractional VP Sales often needs marketing or RevOps next.
 - A member's Ideal Fractional Profile (IFP) is the companies they want as clients: industries, company size, revenue and countries. my_account returns it. Use it to fill search_companies filters when they ask what fits them.
 - To see what's new, use list_open_roles with since_days 7. Saved searches (alerts) put new matches in the weekly email.
-- Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name.`;
+- Each company and open role carries fit (Hiring now, Repeat hirer, Recent seat, Past seat, Posting closed, Full-time only, No seats) and fit_reason, one line saying why. Pass the reason on with the tier.
+- Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name, and never guess one from its industry, size or place.`;
 
 function text(out: unknown, isError = false): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(out) }], ...(isError ? { isError: true } : {}) };
@@ -118,7 +119,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "List open roles",
       description:
-        "Open fractional GTM roles from the weekly scan of job boards, newest first, with when each was first listed. Each shows its title. Most sit at a locked company: the company's industry, size and region show, and 1 credit opens the company with the posting and posted rate of its open roles. since_days 7 answers \"what's new this week\". Filter by function and by the company's industry, size, revenue, HQ, or past fractional hires.",
+        "Open fractional GTM roles from the weekly scan of job boards, newest first, with when each was first listed. Each shows its title, function and whether a rate was posted. Most sit at a locked company: the company's industry, size and region show (or say they are not on file yet), and 1 credit opens the company with the job posting of its open roles, and the posted rate and hours when the posting gave them. since_days 7 answers \"what's new this week\". Filter by function and by the company's industry, size, revenue, HQ, or past fractional hires.",
       inputSchema: {
         function: fn.optional(),
         since_days: z.number().int().optional().describe("Only roles first listed in the last N days (7 for this week)."),
@@ -166,7 +167,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Unlock",
       description:
-        'Spend credits to see locked facts. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it spends nothing and says what it would cost and open. Tell the member, and only if they say yes, call it again with the same arguments and confirm: true, which spends through the normal unlock and returns what is now visible. entity is "company", "seat" or "person". field is one field (for a seat: seat_holder, role, end, sourced, rate, posting. For a person: name, email, phone, linkedin. For a locked company: identity) or "everything" on a company, seat or person.',
+        'Spend credits to see locked facts. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it spends nothing and says what it would cost and open. Tell the member, and only if they say yes, call it again with the same arguments and confirm: true, which spends through the normal unlock and returns what is now visible. entity is "company", "seat" or "person". field is one field (for a seat: seat_holder, role, end, sourced, rate, posting, hours. For a person: name, email, phone, linkedin. For a locked company: identity, which opens its name and the job posting of its open roles, with the posted rate only when one was posted) or "everything" on a company, seat or person. Say what it opens from would_open, and mention a rate only when the role says one is on file.',
       inputSchema: {
         entity: z.enum(["company", "seat", "person"]),
         id: z.string().describe("The company, seat or person id."),

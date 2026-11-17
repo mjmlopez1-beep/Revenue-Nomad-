@@ -382,19 +382,27 @@ async function main() {
   secretWords.add(personName);
   const hiddenName = `Qa Hidden Mcp ${RUN}`;
   const hiddenSite = `qa-hidden-mcp-${RUN}.example.com`;
+  const norateName = `Qa Norate Mcp ${RUN}`;
+  const norateSite = `qa-norate-mcp-${RUN}.example.com`;
   const scan = await call("POST", "/api/table/scan", {
     headers: { "x-cron-secret": CRON_SECRET },
     body: {
-      roles: [{ key: `qamcp${RUN}:cmo`, company: hiddenName, domain: `https://${hiddenSite}/jobs`, title: "Fractional CMO", function: "Marketing", type: "Fractional", url: `https://jobs.example.com/qamcp/${RUN}`, source: `qa-mcp-board-${RUN}`, postedAt: null, rate: "$9,876/mo", hoursPerWeek: 15 }],
-      sources: [{ source: `qa-mcp-board-${RUN}`, fetched: 5, matched: 1 }],
+      roles: [
+        { key: `qamcp${RUN}:cmo`, company: hiddenName, domain: `https://${hiddenSite}/jobs`, title: "Fractional CMO", function: "Marketing", type: "Fractional", url: `https://jobs.example.com/qamcp/${RUN}`, source: `qa-mcp-board-${RUN}`, postedAt: null, rate: "$9,876/mo", hoursPerWeek: 15 },
+        // No rate and no hours on this one, and a posting link with no scheme.
+        { key: `qamcp${RUN}:revops`, company: norateName, domain: `${norateSite}`, title: "Fractional Head of RevOps", function: "RevOps", type: "Fractional", url: `jobs.example.com/qamcp-norate/${RUN}`, source: `qa-mcp-board-${RUN}`, postedAt: null },
+        // Placeholder names are not companies: the scan files nothing under them.
+        ...["Private Company", "Stealth Startup", "Confidential", "A Series B SaaS company"].map((company, n) => ({ key: `qamcp${RUN}:ph${n}`, company, title: "Fractional VP Sales", function: "Sales", type: "Fractional", url: `https://jobs.example.com/qamcp-ph/${RUN}/${n}`, source: `qa-mcp-board-${RUN}`, postedAt: null })),
+      ],
+      sources: [{ source: `qa-mcp-board-${RUN}`, fetched: 8, matched: 6 }],
     },
   });
-  check("setup: a scan posts an open role at a new company", scan.status === 200 && scan.json?.result?.opened === 1, scan.json);
+  check("setup: a scan posts two open roles at new companies, and none under a placeholder name", scan.status === 200 && scan.json?.result?.opened === 2, scan.json);
 
   /* A's view in the app: the ground truth of what A may see */
   const av0 = await A.view();
   const aJson0 = JSON.stringify(av0);
-  const forbidden = new Set([personName, personEmail, bRate, hiddenName, hiddenSite, "$9,876/mo", A.token, B.token]);
+  const forbidden = new Set([personName, personEmail, bRate, hiddenName, hiddenSite, norateName, norateSite, "$9,876/mo", `jobs.example.com/qamcp/${RUN}`, `qamcp-norate/${RUN}`, A.token, B.token]);
   const seedWords = [];
   if (seedFile) {
     const words = [
@@ -430,6 +438,8 @@ async function main() {
   check("search_companies returns companies with ids, fit and locked counts", s1.out?.total > 0 && s1.out.companies.every((c) => c.id && c.fit && typeof c.locked_facts === "number"), s1.out?.total);
   const scores = s1.out?.companies.map((c) => c.fit_score) ?? [];
   check("ranked best fit first, as the table", scores.every((v, i) => i === 0 || scores[i - 1] >= v), scores);
+  const TIERS = ["Hiring now", "Repeat hirer", "Recent seat", "Past seat", "Posting closed", "Full-time only", "No seats"];
+  check("every company's fit is one of the app's tiers, with a one-line reason", s1.out?.companies?.every((c) => TIERS.includes(c.fit) && typeof c.fit_reason === "string" && c.fit_reason.length > 10), s1.out?.companies?.[0]);
   const s2 = await tool(at, "search_companies", { query: coName, limit: 5 });
   const coRow = s2.out?.companies?.[0];
   check("search finds a company by name", coRow?.name === coName, s2.out);
@@ -466,8 +476,30 @@ async function main() {
   check("a hidden company's record keeps its name and website hidden", gh.out?.name === "Locked company" && gh.out.hidden === true && !("website" in gh.out && !/locked until/.test(gh.out.website)), { name: gh.out?.name, site: gh.out?.website });
 
   const lr = await tool(at, "list_open_roles", { since_days: 7, function: "Marketing" });
-  const ourRole = lr.out?.roles?.find((r) => r.posted_hours === "15" && r.company === "Locked company");
-  check("list_open_roles since 7 days lists this week's role at a locked company, its title free", !!ourRole && ourRole.company_hidden && ourRole.function === "Marketing" && ourRole.role === "Fractional CMO" && /locked with the company/.test(ourRole.posting) && ourRole.unlock?.call?.field === "identity", lr.out?.roles?.slice(0, 2));
+  // Our role: the newest Marketing role with a posted rate and hours on file (the seed's open roles were listed before this run).
+  const ourRole = lr.out?.roles?.find((r) => r.role === "Fractional CMO" && r.company === "Locked company" && /^on file/.test(r.posted_hours ?? ""));
+  const LOCKED_CO = "on file, unlocks with the company (1 credit)";
+  check("list_open_roles since 7 days lists this week's role at a locked company, its title free", !!ourRole && ourRole.company_hidden && ourRole.function === "Marketing" && ourRole.role === "Fractional CMO" && ourRole.posting === LOCKED_CO && ourRole.unlock?.call?.field === "identity", lr.out?.roles?.slice(0, 2));
+  check("before unlocking, the posted hours, rate and posting say only that they are on file", ourRole?.posted_hours === LOCKED_CO && ourRole.posted_rate === LOCKED_CO && ourRole.posting === LOCKED_CO, ourRole);
+  check("and the unlock says it opens the posted rate (one is on file)", /posted rate/.test(ourRole?.unlock?.cost ?? "") && !/No rate/.test(ourRole?.unlock?.cost ?? ""), ourRole?.unlock);
+  check("every open role carries its fit and a one-line reason", (lr.out?.roles ?? []).length > 0 && lr.out.roles.every((r) => r.company_fit && typeof r.fit_reason === "string" && r.fit_reason.length > 10), lr.out?.roles?.[0]);
+  check("an open role at a company with no past hire says why it ranks low", /open role alone ranks low until a past fractional hire is on file/.test(ourRole?.fit_reason ?? ""), ourRole?.fit_reason);
+  const lrRev = await tool(at, "list_open_roles", { since_days: 7, function: "RevOps" });
+  const noRate = lrRev.out?.roles?.find((r) => r.role === "Fractional Head of RevOps" && r.company === "Locked company");
+  check("a role with no rate says No rate posted before paying", noRate?.posted_rate === "No rate posted" && !("posted_hours" in noRate), noRate);
+  check("and its unlock never promises a rate", !!noRate && /No rate was posted/.test(noRate.unlock?.cost ?? "") && !/the posted rate/.test(noRate.unlock?.cost ?? ""), noRate?.unlock);
+  check("a locked company with nothing on file says so plainly", /not on file yet/.test(noRate?.not_on_file ?? ""), noRate?.not_on_file);
+  const nrCo = await tool(at, "get_company", { company: noRate?.company_id });
+  check("get_company on it: no rate promised, the seat says No rate posted, what isn't on file is named", /No rate was posted/.test(nrCo.out?.hidden_note ?? "") && nrCo.out?.seats?.[0]?.posted_rate === "No rate posted" && /not on file yet/.test(nrCo.out?.not_on_file ?? ""), { note: nrCo.out?.hidden_note, seat: nrCo.out?.seats?.[0] });
+  const nrPrice = await tool(at, "unlock", { entity: "company", id: noRate?.company_id, field: "identity" });
+  check("its unlock price check opens the posting and says no rate was posted", nrPrice.out?.would_spend === 1 && /job posting/.test(nrPrice.out.would_open) && /No rate was posted/.test(nrPrice.out.would_open) && !/the posted rate/.test(nrPrice.out.would_open), nrPrice.out);
+  const hrsPrice = await tool(at, "unlock", { entity: "seat", id: ourRole?.seat_id, field: "posted_hours" });
+  check("asking for a locked role's hours prices the company (one purchase)", hrsPrice.out?.would_spend === 1 && /company and its open roles/.test(hrsPrice.out.would_open ?? ""), hrsPrice.out ?? hrsPrice.text);
+  // Placeholder names are not companies: nowhere in search, open roles or the table.
+  const phSearch = await Promise.all(["Private Company", "Stealth Startup", "Confidential"].map((q) => tool(at, "search_companies", { query: q, limit: 25 })));
+  check("placeholder names find nothing in search", phSearch.every((r) => !r.isError && (r.out?.companies ?? []).every((c) => !/^(private company|stealth startup|confidential)$/i.test(c.name))), phSearch.map((r) => r.out?.total));
+  const allNames = JSON.stringify((await A.view()).companies.map((c) => c.name));
+  check("and the app's table has no placeholder company", !/"(Private Company|Stealth Startup|Confidential|A Series B SaaS company|Start- Up)"/.test(allNames));
   const lrAll = await tool(at, "list_open_roles", { limit: 40 });
   check("list_open_roles lists open roles newest first", lrAll.out?.total >= 1 && (lrAll.out.roles ?? []).every((r, i, xs) => i === 0 || (xs[i - 1].listed_since ?? "") >= (r.listed_since ?? "")), lrAll.out?.total);
 
@@ -503,11 +535,31 @@ async function main() {
     check(`a member reading ${uniq.length} company records and every open role sees no locked value or hidden name (${banned.size} values checked)`, uniq.length >= 20 && leaks.length === 0, leaks.length ? `${leaks.length} leaked` : uniq.length);
   }
 
+  /* an admin's connector answers as a member sees the table (the app's "See it as a member") */
+  {
+    const AD = await join("Ada Admin", { email: process.env.ADMIN_EMAIL || "admin-qa@example.com", headers: { "x-cron-secret": CRON_SECRET } });
+    secretWords.add(AD.name);
+    const adView = await AD.view();
+    const ac = await connect(AD, { name: "Admin Claude" });
+    const adRoles = await tool(ac.access_token, "list_open_roles", { since_days: 7, limit: 40 });
+    const adText = adRoles.text;
+    const adOur = adRoles.out?.roles?.find((r) => r.role === "Fractional CMO" && r.company === "Locked company" && /^on file/.test(r.posted_hours ?? ""));
+    check("setup: the admin sees the hidden company's name in the app (admin view)", adView?.me?.admin === true && JSON.stringify(adView.companies.map((c) => c.name)).includes(hiddenName));
+    check("an admin's list_open_roles hides the company, its site, rate, hours and posting until unlocked", !!adOur && ![hiddenName, hiddenSite, norateName, norateSite, "$9,876/mo", `qamcp/${RUN}`].some((w) => adText.includes(w)) && adOur.posted_hours === "on file, unlocks with the company (1 credit)", adOur ?? adRoles.text.slice(0, 300));
+    const adSearch = await tool(ac.access_token, "search_companies", { hiring_now: true, limit: 25 });
+    const adCo = await tool(ac.access_token, "get_company", { company: adOur?.company_id });
+    check("and its search and company record keep it locked too", ![hiddenName, hiddenSite].some((w) => adSearch.text.includes(w) || adCo.text.includes(w)) && adCo.out?.name === "Locked company", adCo.out?.name);
+    const adUnlock = await tool(ac.access_token, "unlock", { entity: "company", id: adOur?.company_id, field: "identity", confirm: true });
+    check("after the admin unlocks it through the connector, it is named with its hours and link", adUnlock.out?.company?.name === hiddenName && adUnlock.out.company.seats?.[0]?.posted_hours === "15" && adUnlock.out.company.seats[0].posting === `https://jobs.example.com/qamcp/${RUN}`, adUnlock.out?.message ?? adUnlock.text.slice(0, 200));
+  }
+
   /* gating: nothing A's tools returned so far carries a value locked or hidden for A */
   {
     const all = seenByA.join("\n");
     const leaks = [...forbidden].filter((w) => all.includes(w));
     check(`no locked value or hidden company appears in any tool result (${forbidden.size} values checked)`, leaks.length === 0, leaks.length ? `${leaks.length} leaked` : undefined);
+    check("no placeholder company (Private Company, Stealth Startup, Confidential) appears in any tool result", !/"(Private Company|Stealth Startup|Confidential|Start- Up|A Series B SaaS company)"/.test(all));
+    check("every website, LinkedIn and posting link in a tool result starts with https:// or http://", [...all.matchAll(/\\?"(website|linkedin|posting)\\?":\\?"([^"\\]*)/g)].every((m) => /^https?:\/\//.test(m[2]) || /^(on file|locked|No posting|under review)/.test(m[2])));
   }
 
   /* unlock: without confirm nothing is spent, with confirm 1 is, the same as the app */
@@ -534,6 +586,11 @@ async function main() {
   const appCo = av2.companies.find((c) => c.id === ourRole.company_id);
   check("with confirm the company's name comes back, as the app shows it", hd.out?.company?.name === hiddenName && appCo?.name === hiddenName && !appCo.hidden && av2.me.credits === before - 2, { tool: hd.out?.company?.name === hiddenName, app: appCo?.name === hiddenName, credits: av2.me.credits });
   check("and its open role came with it (role and posted rate visible)", hd.out?.company?.seats?.[0]?.role === "Fractional CMO" && hd.out.company.seats[0].posted_rate === "$9,876/mo", hd.out?.company?.seats?.[0]);
+  check("and the posted hours and the posting link, with https://", hd.out?.company?.seats?.[0]?.posted_hours === "15" && hd.out.company.seats[0].posting === `https://jobs.example.com/qamcp/${RUN}`, hd.out?.company?.seats?.[0]);
+  check("the company's website comes back as a full https:// link", hd.out?.company?.website === `https://${hiddenSite}`, hd.out?.company?.website);
+  const lrAfter = await tool(at, "list_open_roles", { since_days: 7, function: "Marketing" });
+  const ourAfter = lrAfter.out?.roles?.find((r) => r.company_id === ourRole.company_id);
+  check("list_open_roles now names the company and gives the hours, rate and link", ourAfter?.company === hiddenName && ourAfter.posted_hours === "15" && ourAfter.posted_rate === "$9,876/mo" && ourAfter.posting === `https://jobs.example.com/qamcp/${RUN}` && ourAfter.unlock === "nothing locked", ourAfter);
   const badField = await tool(at, "unlock", { entity: "seat", id: gSeat.id, field: "shoe_size" });
   check("an unknown field is an error that lists the fields", badField.isError && /seat_holder/.test(badField.text));
 
@@ -676,7 +733,7 @@ async function main() {
     const all = seenByA.join("\n");
     // What A's app shows now, after the unlocks: a title many seats share ("Fractional CMO") is A's to see once A paid for one of them.
     const aJsonNow = JSON.stringify(await A.view());
-    const leaks = [...forbidden].filter((w) => w !== personName && w !== hiddenName && w !== hiddenSite && w !== "$9,876/mo" && all.includes(w) && !aJsonNow.includes(w) && !sentByA.some((x) => x.includes(w)));
+    const leaks = [...forbidden].filter((w) => w !== personName && w !== hiddenName && w !== hiddenSite && w !== "$9,876/mo" && w !== `jobs.example.com/qamcp/${RUN}` && all.includes(w) && !aJsonNow.includes(w) && !sentByA.some((x) => x.includes(w)));
     check("still no leak after A's unlocks (only what A paid for shows)", leaks.length === 0, leaks.length ? `${leaks.length} leaked` : undefined);
   }
 }

@@ -17,6 +17,7 @@ import {
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
 import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
+import { publicBase, webLink } from "../links";
 
 export interface Ctx {
   member: Member;
@@ -31,9 +32,16 @@ export class ToolProblem extends Error {}
 /* ---------- how cells read ---------- */
 
 export const LOCKED = "locked, 1 credit to unlock";
-const LOCKED_ROLE = "locked, 1 credit opens this open role's job posting and posted rate together";
-const LOCKED_WITH_COMPANY = "locked with the company, 1 credit unlocks the company and this";
+/** An open role's posting, posted rate or posted hours: on file, and bought together (or with the company). */
+const LOCKED_ROLE = "on file, 1 credit opens it with the rest of this open role's job posting";
+const LOCKED_WITH_COMPANY = "on file, unlocks with the company (1 credit)";
+const NO_RATE = "No rate posted";
+const NO_POSTING = "No posting link on file";
 const REVIEW = "under review";
+/** What one credit opens on an open role (the app's OPEN_ROLE_BUNDLE): its posting, posted rate and posted hours. */
+const ROLE_BUNDLE = ["posting", "rate", "hours"];
+/** Fields whose values are web addresses: sent as full https:// links (the table stores them without a scheme). */
+const URL_FIELDS = new Set(["website", "linkedin", "posting"]);
 
 /** Output keys (what a model reads and sends back) and the field each one is. */
 const COMPANY_KEYS: Record<string, string> = {
@@ -49,10 +57,12 @@ const outKey = (keys: Record<string, string>, field: string) => Object.keys(keys
 /** A field from what a model sent: the output key ("seat_holder") or the field itself ("operator"). */
 const fieldFrom = (keys: Record<string, string>, raw: string) => keys[raw] ?? (Object.values(keys).includes(raw) ? raw : null);
 
-function read(c: Cell | undefined, locked = LOCKED): string | undefined {
+function read(c: Cell | undefined, locked = LOCKED, field?: string): string | undefined {
   if (!c || c.s === "empty") return undefined;
   if (c.s === "locked") return locked;
   if (c.s === "reported") return REVIEW;
+  // A link goes out whole ("https://acme.com/jobs/1"). A stored value that is no web address (javascript:) is not sent.
+  if (field && URL_FIELDS.has(field)) return webLink(c.v) ?? undefined;
   return c.v;
 }
 
@@ -60,7 +70,7 @@ function read(c: Cell | undefined, locked = LOCKED): string | undefined {
 function readAll(cells: Record<string, Cell>, keys: Record<string, string>, lockedFor: (field: string) => string = () => LOCKED): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, field] of Object.entries(keys)) {
-    const v = read(cells[field], lockedFor(field));
+    const v = read(cells[field], lockedFor(field), field);
     if (v !== undefined) out[k] = v;
   }
   return out;
@@ -72,16 +82,63 @@ const missingOf = (cells: Record<string, Cell>, keys: Record<string, string>, sk
 
 const fitOf = (i: CoInfo) => fitTier(i.c.friendly, i.engs.length, !!lastClosedPosting(i)).label;
 
+/** One line on why a company sits in its tier (the app's fitTier labels), so a model can say it plainly. */
+export function fitWhy(i: CoInfo): string {
+  const f = i.c.friendly;
+  const fns = f.functions.length;
+  switch (fitOf(i)) {
+    case "Hiring now":
+      return f.fractional
+        ? `Hiring now, with ${f.fractional} past fractional hire${f.fractional > 1 ? "s" : ""} on file, so it has worked with fractionals before.`
+        : "Hiring now, but an open role alone ranks low until a past fractional hire is on file.";
+    case "Repeat hirer":
+      return `Repeat hirer: ${f.fractional} fractional hire${f.fractional === 1 ? "" : "s"} on file${fns > 1 ? ` across ${fns} functions` : ""}.`;
+    case "Recent seat":
+      return "A fractional seat here started in the last two years.";
+    case "Past seat":
+      return "A past fractional seat is on file, none in the last two years.";
+    case "Posting closed":
+      return "A job posting here came down with nobody named in the seat. They went looking, but no hire is on file.";
+    case "Full-time only":
+      return "Only full-time or unconfirmed seats are on file, no fractional hire yet.";
+    default:
+      return "No seats on file yet.";
+  }
+}
+
+/** The free facts a locked company shows (industry, size, revenue, HQ region) that aren't on file, said plainly. */
+function notOnFile(i: CoInfo): string | undefined {
+  const c = i.c.cells;
+  const gone = (["industry", "employees", "revenue", "hq"] as const).filter((k) => !c[k] || c[k].s === "empty");
+  if (!gone.length) return undefined;
+  const words: Record<string, string> = { industry: "industry", employees: "size", revenue: "revenue", hq: "HQ" };
+  const parts = gone.map((k, n) => (n === 0 && k !== "hq" ? words[k].charAt(0).toUpperCase() + words[k].slice(1) : words[k]));
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
+  return `${list} not on file yet`;
+}
+
+/** What 1 credit opens at a locked company, from what its open roles have on file. Never promises a rate that isn't there. */
+function companyBundle(i: CoInfo): { what: string; rate: boolean } {
+  const open = i.engs.filter(isOpenRole);
+  const has = (f: string) => open.some((e) => !!e.cells[f] && e.cells[f].s !== "empty");
+  const parts = [has("posting") ? "the job posting" : null, has("rate") ? "the posted rate" : null, has("hours") ? "the posted hours" : null].filter((x): x is string => !!x);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
+  return { what: `its name, website and LinkedIn${list ? `, and ${list} of its open role${open.length > 1 ? "s" : ""}` : ""}${has("rate") ? "" : ". No rate was posted"}`, rate: has("rate") };
+}
+
 function companySummary(i: CoInfo): ToolOut {
   const c = i.c;
+  const missing = c.hidden ? notOnFile(i) : undefined;
   return {
     id: c.id,
     name: c.name,
-    ...(c.hidden ? { hidden: true, hidden_note: "Locked while it has an open role. Unlock the company for 1 credit to see its name, and the posting and posted rate of its open roles come with it." } : {}),
+    ...(c.hidden ? { hidden: true, hidden_note: `Locked while it has an open role. Unlock the company for 1 credit to see ${companyBundle(i).what}.` } : {}),
     ...readAll(c.cells, { industry: "industry", employees: "employees", revenue: "revenue", hq: "hq" }),
+    ...(missing ? { not_on_file: missing } : {}),
     ...(c.country ? { country: c.country } : {}),
     ...(c.region ? { region: c.region } : {}),
     fit: fitOf(i),
+    fit_reason: fitWhy(i),
     fit_score: c.friendly.score,
     why: fitReason(i),
     functions_hired: i.fnState.hired,
@@ -104,8 +161,10 @@ function personOut(p: PersonRec, seatId?: string | null): ToolOut {
 
 function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
   const open = isOpenRole(e);
-  const lockedFor = (field: string) => (open && ["posting", "rate"].includes(field) ? (i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE) : LOCKED);
+  const lockedFor = (field: string) => (open && ROLE_BUNDLE.includes(field) ? (i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE) : LOCKED);
   const facts = readAll(e.cells, SEAT_KEYS, lockedFor);
+  // Before anyone pays: say whether the posting gave a rate at all (never promise one that isn't there).
+  if (open && !e.yours && !facts.rate) facts.rate = NO_RATE;
   const holder = e.cells.operator;
   if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Merlin${holder.member.title ? `, ${holder.member.title}` : ""})`;
   // A seat Revenue Nomad found: no name is on file, and its fractional can claim it.
@@ -362,22 +421,32 @@ function openRoles(mv: MemberView, a: RoleArgs) {
 function roleOut(i: CoInfo, e: EngagementRec): ToolOut {
   const lockedRole = i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE;
   const facts = readAll(e.cells, { function: "function", role: "role", type: "type", status: "status", posted_rate: "rate", posted_hours: "hours", posting: "posting" }, (f) =>
-    ["posting", "rate"].includes(f) ? lockedRole : LOCKED,
+    ROLE_BUNDLE.includes(f) ? lockedRole : LOCKED,
   );
+  if (!facts.posted_rate) facts.posted_rate = NO_RATE;
+  if (!facts.posting) facts.posting = NO_POSTING;
+  const rate = e.cells.rate?.s === "locked" || e.cells.rate?.s === "value";
+  const missing = i.c.hidden ? notOnFile(i) : undefined;
+  const lead = ROLE_BUNDLE.find((f) => e.cells[f]?.s === "locked");
   return {
     seat_id: e.id,
     company_id: i.c.id,
     company: i.c.name,
-    ...(i.c.hidden ? { company_hidden: true, about_the_company: i.teaser || undefined } : {}),
+    ...(i.c.hidden ? { company_hidden: true, about_the_company: i.teaser || undefined, ...(missing ? { not_on_file: missing } : {}) } : {}),
     ...facts,
     ...(e.opened ? { listed_since: dayOfIso(e.openedAt ?? e.opened) } : {}),
     ...(e.posted ? { posted: e.posted } : {}),
     ...(e.unseen ? { note: "Not seen in the last scan of its job board, so it may have closed." } : {}),
     ...(i.c.friendly.fractional ? { past_fractional_hires: i.c.friendly.fractional } : {}),
+    company_fit: fitOf(i),
+    fit_reason: fitWhy(i),
     unlock: i.c.hidden
-      ? { cost: "1 credit opens the company and its open roles", call: { entity: "company", id: i.c.id, field: "identity" } }
-      : e.cells.posting?.s === "locked" || e.cells.rate?.s === "locked"
-        ? { cost: "1 credit opens the posting and the posted rate", call: { entity: "seat", id: e.id, field: e.cells.posting?.s === "locked" ? "posting" : "rate" } }
+      ? { cost: `1 credit opens the company: ${companyBundle(i).what}`, call: { entity: "company", id: i.c.id, field: "identity" } }
+      : lead
+        ? {
+            cost: `1 credit opens ${e.cells.posting?.s === "locked" ? "the job posting" : "what the posting gave"}${rate ? " and the posted rate" : ". No rate was posted"}`,
+            call: { entity: "seat", id: e.id, field: lead },
+          }
         : "nothing locked",
   };
 }
@@ -452,7 +521,8 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
     saved_searches: alerts.length,
     weekly_email: emailNote(mv),
-    invite_link: `${ctx.origin}/?ref=${inviteCode(ctx.member.id)}`,
+    // The app's public address (RN_PUBLIC_URL, once a custom domain is set), else the address the connector was reached on.
+    invite_link: `${publicBase() ?? ctx.origin}/?ref=${inviteCode(ctx.member.id)}`,
   };
 }
 
@@ -462,9 +532,9 @@ const ENTITY: Record<string, Entity> = { company: "company", seat: "engagement",
 
 function unlockItems(mv: MemberView, entityRaw: string, id: string, fieldRaw: string): { items: FactRef[]; what: string; target: { entity: Entity; id: string } } {
   const found = unlockFind(mv, entityRaw, id, fieldRaw);
-  return { ...found, target: { entity: ENTITY[entityRaw], id: found.id } };
+  return { ...found, target: { entity: found.entity ?? ENTITY[entityRaw], id: found.id } };
 }
-function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: string): { items: FactRef[]; what: string; id: string } {
+function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: string): { items: FactRef[]; what: string; id: string; entity?: Entity } {
   const entity = ENTITY[entityRaw];
   if (!entity) throw new ToolProblem('entity must be "company", "seat" or "person".');
   const all = fieldRaw === "everything" || fieldRaw === "all";
@@ -474,14 +544,18 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
     const field = ["identity", "name"].includes(fieldRaw) ? "identity" : fieldFrom(COMPANY_KEYS, fieldRaw);
     if (!field) throw new ToolProblem(`On a company, field is "everything", "identity" (a locked company's name) or one of: ${Object.keys(COMPANY_KEYS).join(", ")}`);
     if (field === "identity" || (i.c.hidden && ["website", "linkedin", "about"].includes(field)))
-      return { items: i.c.hidden ? [{ entity: "company", id: i.c.id, field: "identity" }] : [], what: "the company and its open roles", id: i.c.id };
+      return { items: i.c.hidden ? [{ entity: "company", id: i.c.id, field: "identity" }] : [], what: i.c.hidden ? `the company and its open roles: ${companyBundle(i).what}` : "the company and its open roles", id: i.c.id };
     return { items: i.c.cells[field]?.s === "locked" ? [{ entity: "company", id: i.c.id, field }] : [], what: `the ${outKey(COMPANY_KEYS, field)}`, id: i.c.id };
   }
   if (entity === "engagement") {
-    const { e } = seatInfo(mv, id);
+    const { e, i } = seatInfo(mv, id);
     if (all) return { items: lockedInEngagement(e), what: "everything locked on this seat", id: e.id };
-    const field = fieldFrom(SEAT_KEYS, fieldRaw);
+    // list_open_roles calls them posted_rate and posted_hours.
+    const field = fieldFrom(SEAT_KEYS, ({ posted_rate: "rate", posted_hours: "hours" } as Record<string, string>)[fieldRaw] ?? fieldRaw);
     if (!field) throw new ToolProblem(`On a seat, field is "everything" or one of: ${Object.keys(SEAT_KEYS).join(", ")}`);
+    // An open role at a locked company: its posting, rate and hours come with the company (one purchase).
+    if (i.c.hidden && isOpenRole(e) && ROLE_BUNDLE.includes(field))
+      return { items: [{ entity: "company", id: i.c.id, field: "identity" }], what: `the company and its open roles: ${companyBundle(i).what}`, id: i.c.id, entity: "company" };
     return { items: e.cells[field]?.s === "locked" ? [{ entity: "engagement", id: e.id, field }] : [], what: `the ${outKey(SEAT_KEYS, field)}`, id: e.id };
   }
   const { p } = personInfo(mv, id);
@@ -519,7 +593,7 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
   const more = items.length > capped.length ? ` This covers the first 60 of ${items.length}. Unlock again for the rest.` : "";
   try {
     if (!a.confirm) {
-      const r = await perform(ctx.member.token, action, ctx.origin, { dryRun: true });
+      const r = await perform(ctx.member.token, action, ctx.origin, { dryRun: true, asMember: true });
       const cost = r.spent ?? 0;
       return {
         confirmed: false,
@@ -530,7 +604,7 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
         next: "Ask the member if they want to spend this. Only if they say yes, call unlock again with the same arguments and confirm: true.",
       };
     }
-    const r = await perform(ctx.member.token, action, ctx.origin);
+    const r = await perform(ctx.member.token, action, ctx.origin, { asMember: true });
     const shownNow = await afterChange(ctx, target.entity, target.id);
     return { confirmed: true, message: r.message + more, credits_left: r.me?.credits, ...(r.me?.unlocksLeft != null ? { unlocks_left_today: r.me.unlocksLeft } : {}), ...shownNow };
   } catch (e) {
@@ -543,7 +617,8 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
 
 async function act(ctx: Ctx, action: Action) {
   try {
-    const r = await perform(ctx.member.token, action, ctx.origin);
+    // As a member sees it (an admin too, the same as the connector's view): a hidden company stays hidden.
+    const r = await perform(ctx.member.token, action, ctx.origin, { asMember: true });
     forgetView(ctx.member.id);
     return r;
   } catch (e) {

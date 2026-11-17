@@ -137,8 +137,11 @@ export function lockedOf(entity: Entity, id: string, cells: Record<string, Cell>
  * open until it closes.
  */
 export const isOpenRole = (e: EngagementRec) => (e.opened ? !e.closed : isOpenSeat(e));
-/** What one credit opens on an open role, together. Same list as BUNDLE_FIELDS in lib/table.ts. */
-export const OPEN_ROLE_BUNDLE = ["posting", "rate"];
+/**
+ * What one credit opens on an open role, together: BUNDLE_FIELDS in lib/table.ts, and the posted
+ * hours, which the server locks with them until they are bought (they are part of the posting).
+ */
+export const OPEN_ROLE_BUNDLE = ["posting", "rate", "hours"];
 /** The one lock that spends for an open role: the first of its role, posting and rate still locked. */
 export const bundleLead = (e: EngagementRec) => OPEN_ROLE_BUNDLE.find((f) => e.cells[f]?.s === "locked") ?? null;
 /** An open role nobody holds yet: it has no start, end, why hired or how sourced. */

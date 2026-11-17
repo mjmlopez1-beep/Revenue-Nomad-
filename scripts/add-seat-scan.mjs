@@ -54,7 +54,7 @@ if (!process.env.RN_SEAT_SCAN_TSX) {
   const r = spawnSync(process.execPath, ["--import", "tsx", ...process.argv.slice(1)], { stdio: "inherit", env: { ...process.env, RN_SEAT_SCAN_TSX: "1" } });
   process.exit(r.status ?? 1);
 }
-const { companyKey, textKey } = await import("../lib/scan/clean.ts");
+const { companyKey, isPlaceholderCompany, textKey } = await import("../lib/scan/clean.ts");
 const { siteKey, FUNCTIONS, GTM_FUNCTIONS } = await import("../lib/tableFields.ts");
 const { employeeBand, industryOf, revenueBand } = await import("../lib/industryMap.ts");
 // Fractional firms, agencies and marketplaces are not clients (lib/firms.ts): never added, and the cleanup drops any the seed has.
@@ -143,7 +143,7 @@ function ownFirm(r) {
   if (String(r.company_employee_range ?? "").trim() === "1") return "one-person company";
   const name = r.company_name;
   const key = textKey(name);
-  if (STAND_INS.has(key) || STAND_IN_START.test(name.trim())) return "stand-in name (self-employed, stealth, freelance, confidential)";
+  if (STAND_INS.has(key) || STAND_IN_START.test(name.trim()) || isPlaceholderCompany(name)) return "stand-in name (self-employed, stealth, freelance, confidential)";
   // "Jane Doe, MBA" or "Jane Doe (she/her)": the name before any credentials or note.
   const person = words(String(r.person_name ?? "").split(/[,(|]/)[0]);
   const surname = person[person.length - 1] ?? "";

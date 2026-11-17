@@ -8,6 +8,7 @@
  *
  * RN_EMAIL_FOOTER   optional line for the footer, such as the sender's postal address
  */
+import { webLink } from "./links";
 import type { DigestData } from "./scanTypes";
 import { MAIL, escHtml as esc, footerNote as footerLine, mailButton, mailP, mailShell, oneLine } from "./email";
 
@@ -16,8 +17,8 @@ const MAX_FUNCTIONS = 6;
 
 /** A whole number of things, never negative, never NaN. */
 const count = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : 0);
-/** Only web links go in an href. */
-const link = (u: unknown) => (/^https?:\/\/\S+$/i.test(oneLine(u)) ? oneLine(u) : "");
+/** Only web links go in an href (escaped where used). A scheme-less "merlin.example.com/x" gets https://; javascript: and data: never pass. */
+const link = (u: unknown) => (/^https?:\/\/\S+$/i.test(oneLine(u)) ? oneLine(u) : webLink(oneLine(u)) ?? "");
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
 export function renderDigest(d: DigestData): { subject: string; text: string; html: string } {

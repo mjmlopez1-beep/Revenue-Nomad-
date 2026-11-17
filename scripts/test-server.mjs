@@ -1336,7 +1336,7 @@ section("scan", async () => {
   const newCo = av?.companies.find((c) => c.name === coName);
   if (adm) {
     const e1 = newCo?.engagements[0];
-    check("the new company has the posting's website, rate and hours", newCo?.cells.website?.v === `qa-scan-${RUN}.example.com` && e1?.cells.hours?.v === "10" && e1.cells.rate?.s === "locked" && e1.cells.function?.v === "Sales" && e1.cells.type?.v === "Fractional", { site: newCo?.cells.website, cells: e1?.cells });
+    check("the new company has the posting's website, and its rate and hours locked together (one purchase)", newCo?.cells.website?.v === `qa-scan-${RUN}.example.com` && e1?.cells.hours?.s === "locked" && e1.cells.rate?.s === "locked" && e1.cells.function?.v === "Sales" && e1.cells.type?.v === "Fractional", { site: newCo?.cells.website, cells: e1?.cells });
     check("a company the scan added is hidden from members too", v1.companies.find((c) => c.id === newCo?.id)?.hidden === true);
     check("pilot metrics carry the scan's sources", av.admin.scan.sources.some((x) => x.source === board && x.fetched === 12 && x.matched === 2) && av.admin.scan.openNow === v1.scan.openNow, av.admin.scan);
   }

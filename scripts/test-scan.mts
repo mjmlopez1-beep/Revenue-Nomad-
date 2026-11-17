@@ -10,7 +10,8 @@ import { spawnSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { cleanCompany, cleanTitle, companyDomain, isRealCompany, roleKey, titleWithout } from "../lib/scan/clean";
+import { cleanCompany, cleanTitle, companyDomain, isPlaceholderCompany, isRealCompany, roleKey, titleWithout } from "../lib/scan/clean";
+import { webLink } from "../lib/links";
 import { collectOpenRoles, dedupeRoles, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
 import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
 import { renderDigest } from "../lib/digest";
@@ -336,6 +337,31 @@ for (const [raw, co, dom, want] of withouts) eq(`a free title never names its lo
 
 eq("key squeezes everything but letters and digits", roleKey("Acme & Sons", "Fractional VP, Sales (EMEA)"), "acmesons::fractionalvpsalesemea");
 check("a real company name passes", isRealCompany("A Place for Mom") && isRealCompany("Acme Robotics") && isRealCompany("Fieldstone Talent"));
+
+// Placeholder names: not companies, at import and on the table (lib/table.ts graph).
+const placeholders = ["Private Company", "Confidential", "Confidential Company", "Stealth", "Stealth Startup", "Stealth Mode", "Undisclosed", "Undisclosed Company", "Company", "N/A", "Self-employed", "Various", "Multiple", "Freelance", "Independent", "Hiring Company", "A fintech company", "An AI startup", "A Series B SaaS company", "Start- Up", "The Company"];
+for (const n of placeholders) check(`a placeholder name is not a company: "${n}"`, isPlaceholderCompany(n) && !isRealCompany(n));
+for (const n of ["A Place for Mom", "Acme Robotics", "1440", "Private Family Office", "Independent Bank", "Stealth Security Labs", "The Hatch Company", "Hawaii Coffee Company", "ABC & Company", "Unknown Worlds Entertainment"])
+  check(`a real name is not a placeholder: "${n}"`, !isPlaceholderCompany(n));
+
+// Links go out whole: https:// on a stored "acme.com/jobs/1", and nothing that isn't a web address.
+const links: [string, string | null][] = [
+  ["jobs.example.com/x/1", "https://jobs.example.com/x/1"],
+  ["acme.com", "https://acme.com"],
+  ["http://acme.com/a", "http://acme.com/a"],
+  ["https://acme.com/a?b=1", "https://acme.com/a?b=1"],
+  ["//acme.com/x", "https://acme.com/x"],
+  ["linkedin.com/company/acme", "https://linkedin.com/company/acme"],
+  ["javascript:alert(1)", null],
+  ["JavaScript:alert(1)", null],
+  [" java\tscript:alert(1)", null],
+  ["data:text/html,<b>x</b>", null],
+  ["mailto:a@acme.com", null],
+  ["https://user:pw@acme.com", null],
+  ["not a link", null],
+  ["acme", null],
+];
+for (const [raw, want] of links) eq(`a link goes out whole: ${JSON.stringify(raw)}`, webLink(raw), want);
 
 eq("domain: the board's own company link is trusted", companyDomain("Pebble", { companyUrl: "https://heypebble.example/" }), "heypebble.example");
 eq("domain: www is dropped", companyDomain("Northwind", { companyUrl: "https://www.northwind.example/" }), "northwind.example");
