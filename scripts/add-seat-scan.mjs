@@ -340,8 +340,8 @@ for (const r of rows) {
     continue;
   }
 
-  // Fractional firms, agencies and marketplaces are not clients (lib/firms.ts), by name or About text.
-  const firm = companyFirm(c?.fields.name ?? company, about || null) ?? (c ? companyFirm(company, about || null) : null);
+  // Fractional firms, agencies and marketplaces are not clients (lib/firms.ts), by name, website or About text.
+  const firm = companyFirm(c?.fields.name ?? company, about || null, c?.fields.website || site) ?? (c ? companyFirm(company, about || null, site) : null);
   if (firm) {
     drop("fractional firm, agency or marketplace (lib/firms.ts)");
     // One already on file goes in the cleanup below, with what the seed holds there.
