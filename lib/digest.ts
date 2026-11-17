@@ -167,6 +167,7 @@ ${alerts.map((a) => `<tr>${cell(esc(a.name), "left", false)}${cell(alertNew(a.n)
 
   const html = mailShell({
     title: subject,
+    link: appUrl || unsubscribeUrl,
     preheader: oneLine([lead, creditsLine].filter(Boolean).join(" ")),
     body,
     footer: [esc(why), unsubscribeUrl ? `<a href="${esc(unsubscribeUrl)}" style="color:${MAIL.muted};text-decoration:underline">Unsubscribe</a>` : "", footerNote ? esc(footerNote) : ""],

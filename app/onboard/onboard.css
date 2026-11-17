@@ -90,6 +90,17 @@
   border: 1px solid var(--line);
   background: var(--surface);
 }
+/* The welcome step's banner: the full width of the card, flush with its top, scaled (never cropped). */
+.ob-banner {
+  display: block;
+  width: calc(100% + 64px);
+  max-width: none;
+  height: auto;
+  aspect-ratio: 2000 / 470;
+  margin: -32px -32px 28px;
+  border-radius: calc(var(--r-card) - 1px) calc(var(--r-card) - 1px) 0 0;
+  background: var(--pine);
+}
 
 /* ---------- progress ---------- */
 .ob-progress {
@@ -741,6 +752,11 @@
     border-bottom: 0;
     min-height: calc(100vh - 56px);
     min-height: calc(100dvh - 56px);
+  }
+  .ob-banner {
+    width: calc(100% + 32px);
+    margin: -24px -16px 20px;
+    border-radius: 0;
   }
   /* The step fills the card and its footer goes to the bottom. */
   .ob-card > :last-child {

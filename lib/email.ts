@@ -50,7 +50,7 @@ export async function sendEmail(to: string, subject: string, text: string, html:
 /**
  * Mail clients don't load web fonts, so email is set in the reader's system face, with the
  * product's colors, spacing and weights. Tables and inline styles only: that is what survives
- * every client. Pine header, one volt button, and ember only on a number that is live.
+ * every client. Banner header on pine, one volt button, and ember only on a number that is live.
  */
 export const MAIL = {
   pine: "#073F2F",
@@ -88,11 +88,41 @@ export const mailButton = (href: string, label: string, style = "margin:8px 0 0"
 <td bgcolor="${MAIL.volt}" style="border-radius:8px"><a href="${escHtml(href)}" style="display:inline-block;padding:14px 24px;font-family:${MAIL.font};font-size:16px;line-height:20px;font-weight:700;color:${MAIL.pine};text-decoration:none;border-radius:8px">${escHtml(label)}</a></td>
 </tr></table>`;
 
+/** The site an email's links go to (http or https origin), or "" when there is none. */
+export function mailOrigin(...links: (string | undefined)[]): string {
+  for (const l of links) {
+    try {
+      const u = new URL(oneLine(l));
+      if (u.protocol === "https:" || u.protocol === "http:") return u.origin;
+    } catch {
+      /* not a link */
+    }
+  }
+  return "";
+}
+
+/** The banner every email opens with (public/brand, made by scripts/make-banner.py): 560 by 128, saved at 2x. */
+export const MAIL_BANNER = { path: "/brand/merlin-banner-email.png", width: 560, height: 128, alt: "Merlin by Revenue Nomad" } as const;
+
 /**
- * The frame: a white card on the page color with the pine header. `body` and each footer
- * line are HTML. `preheader` is the line mail apps show next to the subject.
+ * The header: the mountain banner, from the site the email links to (mail needs an absolute
+ * address). Pine behind it, so with images off it is still a pine bar with the alt text in white.
+ * With no site to load it from, the pine bar with the name in text.
  */
-export function mailShell(o: { title: string; preheader: string; body: string; footer: string[] }): string {
+function mailHeader(origin: string): string {
+  const top = "border-radius:9px 9px 0 0";
+  if (!origin)
+    return `<tr><td bgcolor="${MAIL.pine}" style="padding:16px 24px;${top};font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:#FFFFFF">Merlin<span style="font-weight:500;font-size:13px;letter-spacing:0;color:#C9D9D1">&nbsp;&nbsp;by Revenue Nomad</span></td></tr>`;
+  const b = MAIL_BANNER;
+  return `<tr><td bgcolor="${MAIL.pine}" style="padding:0;${top};background-color:${MAIL.pine};line-height:0;font-size:0"><img src="${escHtml(origin + b.path)}" width="${b.width}" height="${b.height}" alt="${escHtml(b.alt)}" style="display:block;width:100%;max-width:${b.width}px;height:auto;border:0;outline:none;text-decoration:none;${top};background-color:${MAIL.pine};font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;color:#FFFFFF"></td></tr>`;
+}
+
+/**
+ * The frame: a white card on the page color with the banner header. `body` and each footer
+ * line are HTML. `preheader` is the line mail apps show next to the subject. `link`: a link
+ * in the email, whose site serves the banner (RN_PUBLIC_URL when it has none).
+ */
+export function mailShell(o: { title: string; preheader: string; body: string; footer: string[]; link?: string }): string {
   const small = `font-family:${MAIL.font};font-size:12px;line-height:18px;color:${MAIL.muted}`;
   const footer = o.footer
     .filter(Boolean)
@@ -111,7 +141,7 @@ export function mailShell(o: { title: string; preheader: string; body: string; f
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${MAIL.page}" style="background:${MAIL.page}">
 <tr><td align="center" style="padding:24px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#FFFFFF;border:1px solid ${MAIL.line};border-radius:10px;border-collapse:separate">
-<tr><td bgcolor="${MAIL.pine}" style="padding:16px 24px;border-radius:9px 9px 0 0;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:#FFFFFF">Merlin<span style="font-weight:500;font-size:13px;letter-spacing:0;color:#C9D9D1">&nbsp;&nbsp;by Revenue Nomad</span></td></tr>
+${mailHeader(mailOrigin(o.link, process.env.RN_PUBLIC_URL))}
 <tr><td style="padding:32px 24px 32px">
 ${o.body}
 </td></tr>
@@ -162,6 +192,6 @@ export function signInEmail(name: string, link: string) {
     `<p style="margin:0;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">${escHtml(keep)}</p>`,
   ].join("\n");
 
-  const html = mailShell({ title: "Your Merlin sign-in link", preheader: lead, body, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: "Your Merlin sign-in link", preheader: lead, body, link: url, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
   return { subject: "Your Merlin sign-in link", text, html };
 }

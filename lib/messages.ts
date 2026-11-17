@@ -154,7 +154,7 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
     mailButton(link, "Read and reply", "margin:0 0 16px"),
     mailP(escHtml(noReply), `margin-bottom:0;font-size:14px;line-height:20px;color:${MAIL.muted};`),
   ].join("\n");
-  const html = mailShell({ title: subject, preheader: snippet.slice(0, 120), body, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: subject, preheader: snippet.slice(0, 120), body, link, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
 }
 
