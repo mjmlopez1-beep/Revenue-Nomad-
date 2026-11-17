@@ -1813,8 +1813,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               // The way back to the table from any page. Marked while the member is on it.
               { label: "The table", current: page === "table", onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
-              // Saved views, newest first: one tap opens each (the filters list them all).
-              ...[...views].reverse().slice(0, 5).map((v) => ({ label: v.name, hint: v.email ? "Saved view, weekly email" : "Saved view", current: page === "table" && currentView === v.id, onClick: () => openView(v) })),
+              // Saved views, newest first: one tap opens each (the filters list them all and manage them).
+              ...[...views].reverse().slice(0, 5).map((v) => ({ label: v.name, hint: v.email ? "Weekly email" : undefined, current: page === "table" && currentView === v.id, onClick: () => openView(v) })),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
               { label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
               { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
