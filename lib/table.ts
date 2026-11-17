@@ -1529,7 +1529,6 @@ const SEAT_CLAIM_DAILY_MAX = 3;
 const CLAIM_PREVIEW_DAILY_MAX = 40;
 const claimPreviews = new Map<string, number[]>();
 /** Sources whose seats are fractional work whatever their type. A "Member added" seat is too, while it has no type (see friendliness). */
-const SOURCE_FRACTIONAL = new Set(["Published engagement", "Demand scan", SEAT_SCAN]);
 
 /* ---------- open roles the weekly scan follows ---------- */
 
@@ -1689,8 +1688,9 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
       postings++;
       continue;
     }
-    const bySource = SOURCE_FRACTIONAL.has(e.source) || (e.source === "Member added" && !type);
-    if (bySource || (!!type && FRACTIONAL_TYPES.includes(type))) {
+    // Every seat counts the same whatever its source (a member's story, a published engagement, a
+    // seat seen on LinkedIn), unless its type says it wasn't fractional (a full-time hire).
+    if (!type || FRACTIONAL_TYPES.includes(type)) {
       fractional++;
       if (fn) functions.add(fn);
       const start = live(e, s, "start");

@@ -27,7 +27,7 @@ import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, I
 import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
-import { Fit, HiddenCompany, NoSeatYet, storyTitle } from "./Tables";
+import { Fit, HiddenCompany, NoSeatYet, storyTag, storyTitle } from "./Tables";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 
@@ -1272,12 +1272,11 @@ const UNLOCK_ROLE_RATE = "Unlock company, posting and rate · 1 credit";
  * fractional seats" and the Fit tier): a fractional hire, an open role, or neither (a member
  * story about a full-time hire, or a posting that came down with nobody named).
  */
-const FRACTIONAL_SOURCES = ["Published engagement", "Demand scan", "Seat scan"];
 function seatKind(e: EngagementRec): "hire" | "open" | "story" {
   if (openRole(e)) return "open";
   if (e.source === "Demand scan" && e.cells.operator?.s === "empty") return "story";
   const type = shown(e.cells.type);
-  if (FRACTIONAL_SOURCES.includes(e.source) || (e.source === "Member added" && !type) || (!!type && FRACTIONAL_TYPES.includes(type))) return "hire";
+  if (!type || FRACTIONAL_TYPES.includes(type)) return "hire";
   return "story";
 }
 /** "2 fractional seats and 2 from member stories, which aren't counted as fractional hires." */
@@ -1288,9 +1287,9 @@ function seatSplit(engs: EngagementRec[]): string {
   const story = n("story");
   if (story === engs.length)
     return story === 1
-      ? "This seat comes from a member story or a posting that came down. It isn't counted as a fractional hire."
-      : "These seats come from member stories or postings that came down. They aren't counted as fractional hires.";
-  const parts = [...(hires ? [plural(hires, "fractional seat")] : []), ...(open ? [plural(open, "open role")] : []), `${story} from member stories or old postings`];
+      ? "This seat was a full-time hire or a posting that came down with nobody named. It isn't counted as a fractional hire."
+      : "These seats were full-time hires or postings that came down with nobody named. They aren't counted as fractional hires.";
+  const parts = [...(hires ? [plural(hires, "fractional seat")] : []), ...(open ? [plural(open, "open role")] : []), `${story} full-time or closed ${story === 1 ? "posting" : "postings"}`];
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}. Those aren't counted as fractional hires.`;
 }
 /** An open role here has a posted rate behind the lock (a locked cell always has a value). The unlock names the rate only then. */
@@ -1608,13 +1607,13 @@ export function Drawer({
                 {storyFns.map((fn) => (
                   <span key={fn} className="chip tp-fn tp-fn-story" title={storyTitle(i, fn)}>
                     {fn}
-                    <span className="tp-fn-tag"> · story</span>
+                    <span className="tp-fn-tag"> · {storyTag(i, fn)}</span>
                   </span>
                 ))}
                 {gap && <NoSeatYet fn={mine} />}
               </div>
               {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No fractional ${mineNamed} seat` : "No fractional seat in your function"} is on file yet.</p>}
-              {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked story come from member stories or a posting that came down. Their seats are listed below but aren&apos;t counted as fractional hires.</p>}
+              {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked full-time or posting closed are a full-time hire, or a job posting that came down with nobody named. Their seats are listed below but aren&apos;t counted as fractional hires.</p>}
             </section>
           )}
           <section className="tp-dsec">

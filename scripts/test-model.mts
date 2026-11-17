@@ -260,7 +260,9 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
 /* ---------- functions: hired, hiring now, and stories ---------- */
 
 {
-  const story = eng({ function: val("Sales") }, { source: "Member success story" });
+  // A full-time hire is the one seat that isn't counted as fractional (a story with no type is).
+  const story = eng({ function: val("Sales"), type: val("Full-time") }, { source: "Member success story" });
+  const untypedStory = eng({ function: val("Product") }, { source: "Member success story" });
   const openMk = eng({ function: val("Marketing"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   const added = eng({ function: val("RevOps") }, { source: "Member added" });
   const closedPosting = eng({ function: val("Growth"), status: val("Closed", { system: true }) }, { opened: "2026-10-03", closed: "2026-10-20" });
@@ -270,7 +272,8 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   const i = deriveAll([c])[0];
   check("a member-added seat is a hire, whatever its type", i.fnState.hired.includes("RevOps"), i.fnState);
   check("an open role's function is hiring, not hired", i.fnState.hiring.join() === "Marketing" && !i.fnState.hired.includes("Marketing"), i.fnState);
-  check("a member story's function is a story", i.fnState.story.includes("Sales"), i.fnState);
+  check("a full-time seat's function is muted, not hired", i.fnState.story.includes("Sales") && !i.fnState.hired.includes("Sales"), i.fnState);
+  check("a member story with no type counts as a fractional hire, like any other source", deriveAll([co("Story Co", [untypedStory])])[0].fnState.hired.includes("Product"));
   const newServer = co("New Co", [story, openMk, added]);
   newServer.friendly = { ...newServer.friendly, functions: ["RevOps"], hiring: ["Marketing"] } as typeof newServer.friendly;
   const j = deriveAll([newServer])[0];
@@ -283,7 +286,7 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   noSales.friendly = { ...noSales.friendly, functions: ["RevOps"] };
   check("No Sales seat yet: hired other functions, none in Sales", notMine(deriveAll([noSales])[0]) && !notMine(deriveAll([co("Only open", [eng({ function: val("Marketing"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })])])[0]));
   // L39: a member story names Sales there, and the row shows a Sales chip, so it is not "No fractional Sales yet".
-  check("No Sales seat yet leaves out a company whose story names Sales", j.fnState.story.includes("Sales") && !notMine(j), j.fnState);
+  check("No Sales seat yet leaves out a company whose full-time seat names Sales", j.fnState.story.includes("Sales") && !notMine(j), j.fnState);
   {
     // A company hiring a Sales seat right now is not "No Sales seat yet".
     const hiringSales = co("Hiring sales", [eng({ function: val("Marketing"), status: val("Ended") }, { source: "Member added" }), eng({ function: val("Sales"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })]);
@@ -365,7 +368,7 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   const c = co("Gone Co", [gone]);
   c.friendly = { score: 30, tier: "Medium", fractional: 0, open: 0, functions: [], hiring: [], operators: 0, recent: 0 };
   const [i] = deriveAll([c]);
-  check("only a closed posting: the fit reads Posting closed, not Story only or Past seat", fitTier(c.friendly, 1, true).label === "Posting closed" && fitTier(c.friendly, 1).label === "Story only");
+  check("only a closed posting: the fit reads Posting closed, not Full-time only or Past seat", fitTier(c.friendly, 1, true).label === "Posting closed" && fitTier(c.friendly, 1).label === "Full-time only");
   check("its reason says when the posting came down", /^A job posting here came down on Oct 20\b/.test(fitReason(i)), fitReason(i));
 }
 

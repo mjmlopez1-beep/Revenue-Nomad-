@@ -191,14 +191,15 @@ const hostOf = (v: string) => v.replace(/^https?:\/\//i, "").replace(/^www\./i, 
 /** A seat's function, when the member can see it. */
 const fnOfSeat = (e: EngagementRec) => shown(e.cells.function);
 /**
- * A fractional hire on file: a seat a member published or added (whatever its type), or one of a
- * fractional type. Not an open role, and not a job posting that came down with nobody in the seat.
+ * A fractional hire on file: any seat, whatever its source (a member's story, a published
+ * engagement, a seat seen on LinkedIn), unless its type says it was full-time. Not an open role,
+ * and not a job posting that came down with nobody in the seat.
  */
 export const isHire = (e: EngagementRec) => {
   if (isOpenRole(e)) return false;
   if (e.source === "Demand scan" && !known(e.cells.operator)) return false;
   const type = shown(e.cells.type);
-  return e.source === "Member added" || e.source === "Published engagement" || (!!type && FRACTIONAL_TYPES.includes(type));
+  return !type || FRACTIONAL_TYPES.includes(type);
 };
 
 function infoOf(c: CompanyRec): CoInfo {
@@ -309,7 +310,7 @@ export function fitTier(f: Friendly, engs: number, closedPosting = false): { lab
   if (f.fractional) return { label: "Past seat", cls: "t-past" };
   // They went looking for a fractional, but nobody is on file in the seat: not a hire, and not a story.
   if (closedPosting) return { label: "Posting closed", cls: "t-past" };
-  if (engs > 0) return { label: "Story only", cls: "t-story" };
+  if (engs > 0) return { label: "Full-time only", cls: "t-story" };
   return { label: "No seats", cls: "t-none" };
 }
 

@@ -101,17 +101,19 @@ export function FnChips({ i, mine, max = 3, gap = true }: { i: CoInfo; mine: str
   );
 }
 
-/** Why a function is muted: only member stories mention it, or a posting for it came down with nobody named. */
+/** Why a function is muted: only a full-time hire is on file for it, or a posting for it came down with nobody named. */
 const postingOnly = (i: CoInfo, fn: string) => {
   const seats = i.engs.filter((e) => shown(e.cells.function) === fn);
   return seats.length > 0 && seats.every((e) => e.source === "Demand scan");
 };
 export function storyTitle(i: CoInfo, fn: string) {
   if (postingOnly(i, fn)) return `A ${fn} job posting came down. Nobody is on file in the seat.`;
-  return `A member story mentions ${fn}. No fractional ${fn} seat is on file yet.`;
+  return `A full-time ${fn} hire is on file. No fractional ${fn} seat is on file yet.`;
 }
+/** The chip's short tag: "posting closed" or "full-time". */
+export const storyTag = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "posting closed" : "full-time");
 /** The same, short, for a screen reader after the chip's name. */
-const storyWhy = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "from a posting that came down" : "from a member story");
+const storyWhy = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "from a posting that came down" : "a full-time hire");
 
 /** They hired fractionals in other functions, not the member's yet. Dashed, like anything missing. */
 export function NoSeatYet({ fn }: { fn: string }) {
