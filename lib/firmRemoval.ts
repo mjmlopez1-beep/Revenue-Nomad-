@@ -51,9 +51,10 @@ export interface CleanStats {
 /**
  * Tidy a seed in place: older labels take the current one, each HQ gets its country and region
  * fields, and firms go (a firm where a member published a seat or a story stays, listed in
- * `seed.firmReview`). Safe to run again.
+ * `seed.firmReview`). Safe to run again. `opts.about` gives About texts by company id that are
+ * read for the firm check and not stored (a seat scan's company descriptions).
  */
-export function cleanSeed(seed: Seed): CleanStats {
+export function cleanSeed(seed: Seed, opts: { about?: Map<string, string> } = {}): CleanStats {
   const stats: CleanStats = { remapped: {}, unmapped: {}, places: 0, removed: { companies: 0, seats: 0, people: 0, names: [], reasons: {} }, kept: [] };
   // Industry, employees and revenue: the standard value, or nothing (lib/industryMap.ts).
   const standard = (field: string, v: string, context = ""): string | null => {
@@ -96,7 +97,7 @@ export function cleanSeed(seed: Seed): CleanStats {
     const engs = engsAt.get(c.id) ?? [];
     const why = firmReason({
       name: c.fields.name ?? "",
-      about: c.fields.about,
+      about: c.fields.about || opts.about?.get(c.id),
       employees: c.fields.employees,
       holders: engs.map((e) => e.fields.operator).filter(Boolean),
       listedBy: engs.filter((e) => e.fields.source === SEAT_SCAN).length,
