@@ -363,6 +363,21 @@ const SOURCE_NAMES: Record<string, string[]> = {
   "Home Services": ["Home Services", "Home Improvement"],
   "Funeral Homes & Cemeteries": ["Death Care Services", "Funeral Services"],
   "Print, Signage & Promotional Products": ["Printing Services", "Printing", "Signage"],
+  "Pharma & Biotech x": ["Drug Discovery", "Genetics", "Biopharma"],
+  "Fleet & Vehicle Management": ["Fleet Management"],
+  "Pet Industry x": ["Pet"],
+  "SaaS x": ["CRM", "Sales Enablement", "Lead Generation", "Marketing Automation", "Collaboration", "Project Management", "Human Resources Software"],
+  "Deep Tech / AI x": ["MLOps", "Natural Language Processing", "Intelligent Systems", "Robotics Process Automation", "Predictive Analytics"],
+  "Hardware / IoT x": ["Wearables", "Sensor", "Sensors", "3D Printing", "Drones"],
+  "Payments & Fintech Infrastructure x": ["Point of Sale"],
+  "Media & Content": ["Video Streaming", "Video", "Content Creators"],
+  "Utilities (Electric, Gas, Water) x": ["Nuclear"],
+  "Cleaning, Security & Facilities Services x": ["Facility Management"],
+  "Environmental Services x": ["Environmental Engineering"],
+  "Maritime & Aviation Logistics x": ["Marine Technology"],
+  "Automotive x": ["Autonomous Vehicles", "Electric Vehicle", "Electric Vehicles"],
+  "Food & Beverage CPG x": ["Alternative Protein"],
+  "Creator Economy & Social x": ["Dating", "Social Network"],
 };
 
 /** Keywords for a name nothing above has: the first that matches names a family (an earlier tag) or a value. */
@@ -413,7 +428,9 @@ export function industryTable(): Map<string, string> {
   if (industryMap) return industryMap;
   const m = new Map<string, string>();
   for (const tag of RN_INDUSTRIES) m.set(key(tag), tag);
-  for (const [target, names] of Object.entries(SOURCE_NAMES)) {
+  for (const [entry, names] of Object.entries(SOURCE_NAMES)) {
+    // "Tag x": more names for a tag listed above (an object can't hold a key twice).
+    const target = entry.replace(/ x$/, "");
     const tag = target.startsWith("@") ? null : target;
     if (tag && !RN_INDUSTRIES.includes(tag)) throw new Error(`industryMap: ${tag} is not in RN_INDUSTRIES`);
     if (!tag && !FAMILIES[target.slice(1)]) throw new Error(`industryMap: no family ${target}`);
