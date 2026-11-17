@@ -72,6 +72,7 @@ import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult }
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
 import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
+import { integrationStats, type IntegrationsState } from "./notify/types";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -275,6 +276,8 @@ export interface State extends MessagingState {
   flags: { starterFloor?: number };
   /** The Claude connector: connected apps (token hashes only) and saved searches. See lib/mcp. */
   connector?: ConnectorState;
+  /** Alerts in Slack and webhooks: each member's URLs (secret) and switches. See lib/notify. */
+  integrations?: IntegrationsState;
 }
 
 /* ---------- storage ---------- */
@@ -1925,7 +1928,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     email: emailEnabled(),
     contact: contactInfo(),
     ...(me && scan ? { benchmarks: benchmarks(seed, g, s, me.id), scan } : {}),
-    ...(me && scan && admin ? { admin: { ...adminStats(seed, s, g, idx, nowMs, scan, entityOf), messages: messageStats(s) }, reportedMessages: reportedMessages(s, memberName) } : {}),
+    ...(me && scan && admin ? { admin: { ...adminStats(seed, s, g, idx, nowMs, scan, entityOf), messages: messageStats(s), integrations: integrationStats(s.integrations) }, reportedMessages: reportedMessages(s, memberName) } : {}),
   };
 }
 
@@ -3485,6 +3488,11 @@ export async function perform(token: string | null, a: Action, origin?: string, 
     throw e;
   });
   if (out.refused) throw new ActionError(out.refused);
+  // Alerts in Slack: another member unlocked who held a seat, or facts on it.
+  if (!opts.dryRun && (a?.type === "unlock" || a?.type === "unlockMany") && out.cells?.length) {
+    const cells = out.cells;
+    void import("./notify/events").then((n) => n.afterUnlock(token, cells)).catch((e) => console.error("unlock alerts failed", e));
+  }
   return out;
 }
 /** What a dry run would have done (perform with dryRun). Thrown so the change is dropped. */
@@ -3514,7 +3522,14 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   const { signins: _signins, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
-  return { ...rest, ...(conversations ? { conversations } : {}), ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)), benchRates };
+  // Webhook URLs are secrets (anyone with one can post to that Slack channel): they leave as "connected" only, with no alerts waiting.
+  const integrations = s.integrations && {
+    ...s.integrations,
+    members: Object.fromEntries(
+      Object.entries(s.integrations.members).map(([id, m]) => [id, { ...m, pending: {}, ...(m.slack ? { slack: { ...m.slack, url: "" } } : {}), ...(m.webhook ? { webhook: { ...m.webhook, url: "" } } : {}) }]),
+    ),
+  };
+  return { ...rest, ...(conversations ? { conversations } : {}), ...(integrations ? { integrations } : {}), ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)), benchRates };
 }
 
 /**
@@ -3523,6 +3538,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
  */
 export const tableInternals = {
   mutate, graph, memberIndex, seatHolder, signedIn, valueOf, live, cellOf, identityHidden, tracksOf, pubId, inboxKey, firstName, ID_KEY,
+  // Alerts (lib/notify/events.ts) match new open roles the way the weekly email does.
+  fnOf, hqRegion, isOpenRole, friendliness,
 };
 
 /* ---------- last seen ---------- */
@@ -3608,6 +3625,12 @@ const urlKey = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replac
  * `nowIso` is the scan's time (tests pass one to move the clock).
  */
 export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNew: number = MAX_ROLES): Promise<ScanApplyResult> {
+  const res = await storeScan(found, nowIso, maxNew);
+  // Alerts in Slack for the roles this scan opened (lib/notify, loaded here so the files don't import each other at start).
+  if (res.opened) void import("./notify/events").then((n) => n.afterScan(res.at)).catch((e) => console.error("scan alerts failed", e));
+  return res;
+}
+function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew: number): Promise<ScanApplyResult> {
   return mutate((s, seed): ScanApplyResult => {
     const now = iso(nowIso, new Date().toISOString());
     const nowMs = Date.parse(now);

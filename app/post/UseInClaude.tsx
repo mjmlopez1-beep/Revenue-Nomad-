@@ -29,16 +29,21 @@ function Code({ text, label, block = false }: { text: string; label: string; blo
   );
 }
 
-export function UseInClaude({ onBack, onCredits }: { onBack: () => void; onCredits: () => void }) {
+/** `embedded`: inside the Integrations page, which has its own back link and heading. */
+export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: () => void; onCredits: () => void; embedded?: boolean }) {
   const copy = useCopy();
   const address = `${typeof window === "undefined" ? "" : window.location.origin}/api/mcp`;
   const cursorJson = JSON.stringify({ mcpServers: { "trading-post": { url: address } } }, null, 2);
   return (
-    <div className="tp-page uc-page">
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Use it in Claude</h1>
+    <div className={embedded ? "uc-page uc-embedded" : "tp-page uc-page"}>
+      {!embedded && (
+        <>
+          <button type="button" className="tp-back" onClick={onBack}>
+            <IconChevron dir="left" /> Back to the table
+          </button>
+          <h1 className="tp-page-h">Use it in Claude</h1>
+        </>
+      )}
       <p className="uc-lead">
         Connect Trading Post to Claude and ask the table in your own words. It searches as you, sees what you&apos;ve unlocked, and can add what you know. It asks before it
         spends a credit.

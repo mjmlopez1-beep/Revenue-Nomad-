@@ -598,6 +598,22 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
             ]}
           />
         </Card>
+        {a.integrations && (
+          <Card title="Alerts in Slack">
+            <Rows
+              items={[
+                ["Members connected to Slack", n0(a.integrations.slackConnected)],
+                ["Members with a webhook", n0(a.integrations.webhookConnected)],
+                ["Role alerts sent", n0(a.integrations.sent.roles)],
+                ["Message alerts sent", n0(a.integrations.sent.message)],
+                ["Seat alerts sent", n0(a.integrations.sent.seat)],
+                ["Tests sent", n0(a.integrations.sent.test)],
+                ["Posts that failed", n0(a.integrations.failed)],
+                ["Connections that stopped", n0(a.integrations.broken)],
+              ]}
+            />
+          </Card>
+        )}
       </div>
     </div>
   );
