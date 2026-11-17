@@ -345,6 +345,10 @@ export function FilterPanel({
         </div>
       )}
       {top}
+      {/* The filter a fractional reaches for first: always open, at the top (C28). */}
+      <Group title="Function">
+        <ListBlock k="fn" title="Seat or open role in" f={f} setF={setF} counts={l.fn} />
+      </Group>
       <Group title="Shortcuts">
         <Toggle k="rateKnown" f={f} setF={setF} n={t.rateKnown} />
         {openPage && (
@@ -368,7 +372,7 @@ export function FilterPanel({
           <div className="tp-fblock">
             <ChipSet k="roleState" f={f} setF={setF} counts={l.roleState} options={LIST_OPTIONS.roleState} keepZero />
           </div>
-          <p className="tp-fnote">Open now means the job posting was listed at the last clean scan of its board. Closed roles stay on file with their dates.</p>
+          <p className="tp-fnote">Open now is every open role on file, the same list as Hiring now. Closed roles stay on file with their dates.</p>
         </Group>
       )}
       <Group title="Company">
@@ -396,10 +400,10 @@ export function FilterPanel({
               </button>
             ))}
           </div>
+          <p className="tp-fnote">How often a company hires fractionals, from 0 to 100: its fractional seats on file, how recent they are and how many functions.</p>
         </div>
       </Group>
-      <Fold title="Seat" on={f.fn.length + f.type.length + f.reason.length + f.pricing.length + f.source.length > 0 || f.statusKnown}>
-        <ListBlock k="fn" title="Function" f={f} setF={setF} counts={l.fn} />
+      <Fold title="Seat" on={f.type.length + f.reason.length + f.pricing.length + f.source.length > 0 || f.statusKnown}>
         <ListBlock k="type" title="Type" f={f} setF={setF} counts={l.type} />
         <Toggle k="statusKnown" f={f} setF={setF} n={t.statusKnown} />
         <ListBlock k="reason" title="Why they hired" f={f} setF={setF} counts={l.reason} />

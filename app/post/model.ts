@@ -253,6 +253,20 @@ function infoOf(c: CompanyRec): CoInfo {
   return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay, aboutHay: (c.cells.about?.s === "value" ? c.cells.about.v : "").toLowerCase() };
 }
 
+/**
+ * The seat a company card leads with, for this member. A locked company: its open role. Otherwise
+ * a seat in the member's own function (one with its holder on file first), then any seat with a
+ * holder on file, then the latest seat. So a card reads "Sales seat, held by [locked]" for a VP
+ * Sales rather than a nameless research seat in another function.
+ */
+export function cardSeat(i: CoInfo, fn: string | null): EngagementRec | null {
+  if (i.c.hidden) return i.engs.find(isOpenRole) ?? i.latest;
+  const holder = (e: EngagementRec) => !!e.yours || known(e.cells.operator);
+  const mineFn = namedFn(fn);
+  const mine = mineFn ? i.engs.filter((e) => fnOfSeat(e) === mineFn) : [];
+  return mine.find(holder) ?? mine[0] ?? i.engs.find(holder) ?? i.latest;
+}
+
 /** Derived info per company object. A patched view keeps unchanged companies, so their info (and rows) keep identity too. */
 const infoCache = new WeakMap<CompanyRec, CoInfo>();
 export function deriveAll(companies: CompanyRec[]): CoInfo[] {
@@ -449,7 +463,7 @@ export const LIST_LABEL: Record<ListKey, string> = {
 export const FIT_STEPS = [0, 20, 40, 60, 80];
 /** Followed roles by where they stand: the posting is still up, or it came down. */
 export const ROLE_STATES = ["Open now", "Closed"];
-export const hasRoleDates = (i: CoInfo) => i.engs.some((e) => !!e.opened);
+export const hasRoleDates = (i: CoInfo) => i.engs.some((e) => !!e.opened || isOpenRole(e));
 /** A YYYY-MM-DD day as a local date, so the day shown is the day stored. */
 export const dayOf = (iso: string) => {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
@@ -678,9 +692,10 @@ export function optionTest(key: ListKey, opt: string): Test {
     case "type":
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => shown(e.cells.type) === opt);
     case "roleState":
-      // Open now: the posting was listed at the last clean scan of its board. A role the last scan
-      // did not see is still open on file, but in neither chip.
-      return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => !!e.opened && (opt === "Closed" ? !!e.closed : !e.closed && !e.unseen));
+      // Open now is the Hiring now view's own test: one definition of open, so the chip and the
+      // view always agree. Closed: a role the scan followed came down.
+      if (opt === "Closed") return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => !!e.closed);
+      return (r) => tabTest("hiring", r);
     case "source": {
       const same = (src: string) => src === opt || (!!SOURCE_LABEL[src] && SOURCE_LABEL[src] === SOURCE_LABEL[opt]);
       return (r) => (r.p ? same(r.p.source) : engsOf(r).some((e) => same(e.source)));
@@ -741,8 +756,9 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
       // They hired fractionals in other functions, and none in the member's own.
       return (r) => {
         // A company with an open role in the member's function is hiring that seat now, so it is not "no seat yet".
-        const h = r.i.fnState.hired;
-        return !!me.function && h.length > 0 && !h.includes(me.function) && !r.i.fnState.hiring.includes(me.function);
+        // Nor is one where a member story or a closed posting names the function: its chip shows on the row.
+        const s = r.i.fnState;
+        return !!me.function && s.hired.length > 0 && !s.hired.includes(me.function) && !s.hiring.includes(me.function) && !s.story.includes(me.function);
       };
     case "statusKnown":
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => known(e.cells.status));
@@ -756,14 +772,19 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
 const TOGGLES: ToggleKey[] = ["rateKnown", "contactKnown", "notMine", "statusKnown", "fractionalNamed", "emailKnown"];
 const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "country", "region", "businessModel", "motion", "dealSize", "salesCycle", "fn", "type", "reason", "pricing", "roleState", "source", "relationship"];
 
+/** The member's own lists (what they follow, what they paid for): the Ideal Fractional Profile never narrows them. */
+export const ICP_FREE_TABS: Tab[] = ["following", "unlocked"];
+/** The Ideal Fractional Profile narrows this list: its pill is on, it names something, and the view is not one of the member's own lists. */
+export const icpApplies = (f: Pick<Filters, "icp">, tab: Tab, me: Pick<Me, "icp">) => f.icp && !icpEmpty(me.icp) && !ICP_FREE_TABS.includes(tab);
+
 function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   const out: Clause[] = [];
   if (tab !== "all") out.push({ group: "tab", test: (r) => tabTest(tab, r) });
   // A fractional firm (agency, marketplace) is not a client: a guard, should a record ever carry firm.
   out.push({ group: "firms", test: (r) => !isFirm(r.i.c) });
-  // The member's Ideal Fractional Profile, while its pill is on.
-  const icp = f.icp ? me.icp : null;
-  if (icp && !icpEmpty(icp)) {
+  // The member's Ideal Fractional Profile, while its pill is on (never on Following or Unlocked).
+  const icp = icpApplies(f, tab, me) ? me.icp : null;
+  if (icp) {
     const t = icpTest(icp);
     out.push({ group: "icp", test: (r) => t(r.i.c) });
   }
@@ -802,7 +823,10 @@ export interface Facets {
   toggles: Record<ToggleKey, number>;
   lists: Record<ListKey, Record<string, number>>;
   fit: Record<number, number>;
+  /** What each view lists with these filters. Following and Unlocked are counted without the Ideal Fractional Profile, like their lists. */
   tabs: Record<Tab, number>;
+  /** Hiring now rows with an open role in the member's own function: what Hiring now lists, alone, until "Show all functions". */
+  hiringMine: number;
   /** Rows the other filters let through with the ideal client lifted ("Show everyone"). */
   everyone: number;
 }
@@ -862,15 +886,22 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
   const fitBase = rows.filter((r) => pass(r, cs, "fitMin"));
   const fit: Record<number, number> = {};
   for (const s of FIT_STEPS) fit[s] = fitBase.filter((r) => r.i.c.friendly.score >= s).length;
-  const tabBase = rows.filter((r) => pass(r, cs, "tab"));
+  // Each view is counted the way its own list filters: the profile narrows every view but the member's own lists.
+  const withIcp = clauses({ ...f, icp: !!f.icp }, "all", q, me);
+  const noIcp = withIcp.filter((c) => c.group !== "icp");
+  const tabBase = rows.filter((r) => failsOf(r, withIcp) === null);
+  const ownBase = noIcp.length === withIcp.length ? tabBase : rows.filter((r) => failsOf(r, noIcp) === null);
   const tabs = {} as Record<Tab, number>;
   // Following counts companies on every list: following one company with five seats reads 1, not 5.
-  for (const t of TABS)
-    tabs[t.key] =
-      t.key === "all" ? tabBase.length : t.key === "following" ? new Set(tabBase.filter((r) => tabTest(t.key, r)).map((r) => r.i.c.id)).size : tabBase.filter((r) => tabTest(t.key, r)).length;
+  for (const t of TABS) {
+    const base = ICP_FREE_TABS.includes(t.key) ? ownBase : tabBase;
+    tabs[t.key] = t.key === "all" ? base.length : t.key === "following" ? new Set(base.filter((r) => tabTest(t.key, r)).map((r) => r.i.c.id)).size : base.filter((r) => tabTest(t.key, r)).length;
+  }
+  const mineFn = namedFn(me.function);
+  const hiringMine = mineFn ? tabBase.filter((r) => tabTest("hiring", r) && rowOpenFns(r).includes(mineFn)).length : 0;
   let everyone = 0;
   for (const r of rows) if (pass(r, cs, "icp")) everyone++;
-  return { rows: result, facets: { toggles, lists, fit, tabs, everyone } };
+  return { rows: result, facets: { toggles, lists, fit, tabs, hiringMine, everyone } };
 }
 
 export function activeCount(f: Filters): number {
@@ -961,8 +992,16 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean, ctx: SortCtx = 
     }
     return v;
   };
+  // A seat (and a person tied to one) in the member's own function leads, then a fractional or
+  // interim seat ahead of a full-time one. Company rows have no seat of their own: 0.
+  const myFn = me ? namedFn(me.function) : null;
+  const seatTier = (r: Row) => {
+    if (!r.e || !me) return 0;
+    const ty = shown(r.e.cells.type);
+    return (myFn && shown(r.e.cells.function) === myFn ? 2 : 0) + (ty && FRACTIONAL_TYPES.includes(ty) ? 1 : 0);
+  };
   const cmp: Record<SortKey, (a: Row, b: Row) => number> = {
-    best: (a, b) => best(b) - best(a) || score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byKey(a, b),
+    best: (a, b) => seatTier(b) - seatTier(a) || best(b) - best(a) || score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byKey(a, b),
     fit: (a, b) => score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byKey(a, b),
     newest: (a, b) => updated(b).localeCompare(updated(a)) || start(b).localeCompare(start(a)) || score(b) - score(a) || byKey(a, b),
     name: (a, b) => byName(a, b) || start(b).localeCompare(start(a)) || byKey(a, b),
@@ -1058,18 +1097,18 @@ export function icpParts(icp: Icp, c: CompanyRec) {
 }
 
 /**
- * The ideal client as a filter (the owner's call): only a known value that conflicts leaves a
- * company out, and at least one of industry, size or revenue has to be on file and match. One whose industry, size, revenue or country isn't on file is a maybe and stays,
- * after the confirmed matches in "Best fit for you" (icpMatch), with a line on what isn't on file.
+ * The ideal client as a filter (the owner's call): a known value that conflicts leaves a company
+ * out, and at least one part the profile asks for (industry, size, revenue or country) has to be
+ * on file and match. A company we know nothing the profile asks about is never a match, so a
+ * profile of "US only" doesn't let in every company whose country isn't on file. One with some
+ * part not on file is a maybe and stays, after the confirmed matches in "Best fit for you"
+ * (icpMatch), with a line on what isn't on file.
  */
 export function icpTest(icp: Icp): (c: CompanyRec) => boolean {
   return (c) => {
     const p = icpParts(icp, c);
     if (p.industry === false || p.employees === false || p.revenue === false || p.country === false) return false;
-    // At least one of industry, size or revenue must be on file and match (when the ideal client
-    // asks for any of them), so a company we know nothing about doesn't show for every member.
-    const asked = [p.industry, p.employees, p.revenue].filter((x) => x !== undefined);
-    return asked.length === 0 || asked.includes(true);
+    return [p.industry, p.employees, p.revenue, p.country].includes(true);
   };
 }
 
@@ -1162,15 +1201,27 @@ export function splitByFn(rows: Row[], fn: string | null): { mine: Row[]; others
   return { mine, others };
 }
 
-/** Open roles first seen in the last 7 days, in the member's function and in the others. */
+/**
+ * New this week, the way the server counts View.scan.mine7: an open role the last clean scan still
+ * listed, first seen in the last 7 days and, when the board gives a date, posted in the last 14.
+ */
+export function newThisWeek(e: EngagementRec, now = Date.now()): boolean {
+  if (!isOpenRole(e) || e.unseen) return false;
+  const first = Date.parse(e.openedAt ?? (e.opened ? `${e.opened}T00:00:00Z` : ""));
+  if (!Number.isFinite(first) || now - first >= 7 * 86_400_000) return false;
+  const posted = Date.parse(e.posted ? `${e.posted}T00:00:00Z` : "");
+  return !Number.isFinite(posted) || now - posted <= 14 * 86_400_000;
+}
+
+/** Open roles new this week (newThisWeek), in the member's function and in the others. `keep` narrows the companies (the Ideal Fractional Profile). */
 export function rolesThisWeek(infos: CoInfo[], fn: string | null, keep: (i: CoInfo) => boolean = () => true): { mine: number; others: number } {
-  const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const now = Date.now();
   let mine = 0;
   let others = 0;
   for (const i of infos) {
     if (!keep(i)) continue;
     for (const e of i.engs) {
-      if (!isOpenRole(e) || !e.opened || e.opened < since) continue;
+      if (!newThisWeek(e, now)) continue;
       if (fn && shown(e.cells.function) === fn) mine++;
       else others++;
     }
@@ -1280,14 +1331,19 @@ export function mySeats(infos: CoInfo[], me: Me): SeatInfo[] {
 /** Facts a member can still add across their seats. */
 export const seatsMissing = (seats: SeatInfo[]) => seats.reduce((n, s) => n + s.missing.length + s.coMissing.length, 0);
 
-/** Open roles in a function first seen in the last 7 days, and how many of their companies are still hidden. */
-export function newRolesFor(infos: CoInfo[], fn: string | null): { roles: number; hidden: number } {
+/**
+ * Open roles in a function new this week (newThisWeek), and how many of their companies are still
+ * hidden. `keep` narrows the companies the way the Hiring now list does (the Ideal Fractional
+ * Profile, no fractional firms), so the next-move card counts what "See open roles" shows.
+ */
+export function newRolesFor(infos: CoInfo[], fn: string | null, keep: (i: CoInfo) => boolean = () => true): { roles: number; hidden: number } {
   if (!fn) return { roles: 0, hidden: 0 };
-  const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const now = Date.now();
   let roles = 0;
   let hidden = 0;
   for (const i of infos) {
-    const n = i.engs.filter((e) => !!e.opened && !e.closed && e.opened >= since && shown(e.cells.function) === fn).length;
+    if (!keep(i)) continue;
+    const n = i.engs.filter((e) => newThisWeek(e, now) && shown(e.cells.function) === fn).length;
     if (!n) continue;
     roles += n;
     if (i.c.hidden) hidden++;
@@ -1299,7 +1355,8 @@ export function newRolesFor(infos: CoInfo[], fn: string | null): { roles: number
 /* ---------- Get started ---------- */
 
 export interface CheckStep {
-  key: "unlock" | "give" | "invite";
+  /** "seat" was "give" (any first fact) before step 2 asked for a seat: a new key, so an old tick in this browser doesn't carry over. */
+  key: "unlock" | "seat" | "invite";
   done: boolean;
   label: string;
   hint: string;
@@ -1307,29 +1364,29 @@ export interface CheckStep {
 
 /**
  * The three Get started steps and the "Fill in your seats" nudge. Step 1 ticks only once the
- * member paid to see who held a seat (or, looking for roles, a hidden company). Step 2 ticks on
- * their first fact, anywhere. A step in `stuck` (done before, in this browser) stays done.
+ * member paid to see who held a seat (or, looking for roles, a hidden company). Step 2 is "Add a
+ * seat you held" and ticks only when a seat is on file under their name (one they added or
+ * claimed, or one we matched to them): a company fact or a rate shared for the benchmarks never
+ * ticks it, and its label never changes. A step in `stuck` (done before, in this browser) stays
+ * done. Once step 2 is done and their seats still miss facts, the nudge takes step 2's place in
+ * the strip, so it never holds more than three items.
  */
 export function checkSteps(
   me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid">,
-  o: { seatsHeld: number; seatsLeft: number; earn: number; addLabel?: string; stuck?: Set<string> },
+  o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string> },
 ): { steps: CheckStep[]; nudge: { label: string; hint: string } | null } {
   const paid = me.invitesPaid ?? 0;
   const holders = me.holdersUnlocked ?? me.unlocked;
   const companies = me.companiesUnlocked ?? 0;
   const roles = me.goal === "roles";
-  const giveDone = me.added > 0;
   const left = o.seatsLeft;
   const raw: CheckStep[] = [
     { key: "unlock", done: roles ? holders + companies > 0 : holders > 0, label: roles ? "See who is hiring" : "See who held a seat", hint: "costs 1 credit" },
-    o.seatsHeld > 0 && !giveDone
-      ? { key: "give", done: false, label: "Fill in your seats", hint: o.earn > 0 ? "1 credit each" : `${left} left to fill` }
-      : { key: "give", done: giveDone, label: o.addLabel ?? "Add a fact", hint: "earns 1 credit" },
+    { key: "seat", done: o.seatsHeld > 0, label: "Add a seat you held", hint: "earns 1 credit" },
     // Done once an invitee's first fact paid the bonus, not when they merely joined.
     { key: "invite", done: paid > 0, label: me.invited > paid ? `Invite a fractional, ${me.invited} joined` : "Invite a fractional", hint: `${REFERRAL_BONUS} credits each` },
   ];
   const steps = raw.map((x) => ({ ...x, done: x.done || !!o.stuck?.has(x.key) }));
-  // Filling in their seats is its own nudge once step 2 is done: it never takes the step's place.
   const nudge =
     o.seatsHeld > 0 && left > 0 && steps[1].done
       ? { label: "Fill in your seats", hint: o.earn >= left ? `${left} left, 1 credit each` : o.earn > 0 ? `${left} left, earns up to ${o.earn}` : `${left} left to fill` }
@@ -1359,8 +1416,12 @@ export function criteriaOf(f: Filters, hireFn: string | null) {
   };
 }
 
-/** A name for a view from what it shows: "Marketing roles at Software companies, $5M–$20M". */
-export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string | null = null): string {
+/**
+ * A name for a view from what it shows: "Marketing roles at Software companies, $5M–$20M". The
+ * shortcuts that make the view say so too ("no fractional Marketing yet"). `myFn` names the
+ * member's function for that one.
+ */
+export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string | null = null, myFn: string | null = null): string {
   const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
   const roles = tab === "hiring" || type === "engagements" || fns.length > 0;
   const subject = fns.length ? `${fns.join(" or ")} ${tab === "hiring" ? "roles" : "seats"}` : tab === "hiring" ? "Open roles" : type === "people" ? "People" : roles ? "Seats" : "Companies";
@@ -1375,6 +1436,8 @@ export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string 
     f.country.length ? `in ${f.country.map(countryShort).join(" or ")}` : "",
     f.region.length ? f.region.join(" or ") : "",
     f.hq.length ? `in ${f.hq.join(" or ")}` : "",
+    f.notMine ? notMineLabel(myFn).replace(/^No/, "no") : "",
+    f.fractionalNamed ? "seat holder on file" : "",
   ].filter(Boolean);
   return parts.join(", ").slice(0, 100);
 }

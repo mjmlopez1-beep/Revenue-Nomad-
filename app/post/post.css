@@ -1428,6 +1428,8 @@ body:has(.tp-drawer) .pro-foot {
   margin: 0;
   padding: 0;
   display: flex;
+  /* Short of room, a step drops to a second line: it never runs under the next one (C15). */
+  flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
 }
@@ -6266,13 +6268,13 @@ div.tp-pcard-when {
   color: var(--faint);
 }
 
-/* Get started: "Fill in your seats" is a nudge beside the steps once step 2 is done, never a step that goes back to undone. */
+/* Get started: "Fill in your seats" takes the place of step 2 once it is done (a dashed nudge with the step's tick), never a step that goes back to undone. */
 .tp-check-nudge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 10px 0 8px;
   border: 1px dashed var(--line-strong);
   border-radius: var(--r-btn);
   background: none;
@@ -6284,12 +6286,39 @@ div.tp-pcard-when {
 .tp-check-nudge:hover {
   background: var(--surface-2);
 }
+.tp-check-nudge .tp-step-dot {
+  background: var(--volt);
+  border-color: var(--volt);
+  color: var(--pine);
+}
 .tp-check-card.vertical .tp-check-nudge {
   display: flex;
-  width: calc(100% - 16px);
+  width: 100%;
+  height: auto;
   min-height: 44px;
-  margin-top: 8px;
-  justify-content: space-between;
+  padding: 8px;
+  white-space: normal;
+  line-height: 18px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+@media (max-width: 1199px) {
+  .tp-check-card:not(.vertical) .tp-check-nudge {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 8px;
+    height: auto;
+    min-height: 44px;
+    padding: 4px 10px 4px 8px;
+  }
+  .tp-check-card:not(.vertical) .tp-check-nudge .tp-step-dot {
+    grid-row: span 2;
+    align-self: center;
+  }
+  .tp-check-card:not(.vertical) .tp-check-nudge .tp-step-h {
+    grid-column: 2;
+  }
 }
 
 /* A job posting or other web address: one line, cut with an ellipsis (the full address is the tooltip). */
@@ -6402,4 +6431,67 @@ div.tp-pcard-when {
 }
 .tp-top-phone .tp-brand-phone {
   min-width: 44px;
+}
+
+/*
+ * The table fits its frame at 1440 with the filters open (C41, L27): under 1590px of frame the
+ * lower-value columns step out (company Revenue, HQ and People; a seat's Hours a week), and under
+ * 1180px the widest columns narrow. Each stays in the record. Company keeps its sticky column.
+ */
+.tp-frame-box {
+  container-type: inline-size;
+}
+@container (max-width: 1590px) {
+  .tp-table .c-lo {
+    display: none;
+  }
+}
+@container (max-width: 1180px) {
+  .tp-table .w-co,
+  .tp-table td.tp-sticky {
+    min-width: 188px;
+    max-width: 188px;
+  }
+  .tp-table .w-seat {
+    min-width: 150px;
+  }
+  .tp-table .w-fns {
+    min-width: 136px;
+  }
+  .tp-table .w-ind {
+    min-width: 120px;
+  }
+  .tp-table .w-fn {
+    min-width: 84px;
+  }
+  .tp-table .w-post {
+    min-width: 116px;
+  }
+}
+
+/* Under a search: what the profile and filters keep out, and one tap to see it (C16, C46). */
+.tp-searchline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.tp-searchline b {
+  font-weight: 700;
+  color: var(--ink);
+}
+.tp-phone .tp-searchline {
+  padding: 8px 16px 0;
+}
+/* Phones: the active filters as chips too, an onboarding answer's filter included (C47). */
+.tp-phone .tp-chiprow {
+  padding: 8px 16px 0;
+}
+/* The list ends clear of the floating "Add what you know" button (L53). */
+.tp-phone .tp-presults {
+  padding-bottom: 72px;
+}
+.tp-pcard-fn {
+  font-weight: 600;
+  color: var(--ink);
 }

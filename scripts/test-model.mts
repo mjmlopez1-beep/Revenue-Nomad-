@@ -14,6 +14,7 @@ import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
   bandRange, bestFit, countryOf, criteriaOf, icpLabel, icpMatch, icpTest, icpUnknown, industryWords, openSince, regionOf, splitByFn, viewName, withIcpSpelled, activeChips,
+  cardSeat, newRolesFor, newThisWeek, rolesThisWeek,
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 
@@ -78,20 +79,26 @@ check("the filter's options are Open now and Closed", JSON.stringify(LIST_OPTION
 check("Open now: company rows", count("companies", ["Open now"]).rows.map((r) => r.i.c.name).join() === "Open Co");
 check("Closed: company rows", count("companies", ["Closed"]).rows.map((r) => r.i.c.name).join() === "Closed Co,Filled Co");
 check("both chips together: any dated role", count("companies", ["Open now", "Closed"]).rows.length === 3);
-check("Open now: engagement rows", count("engagements", ["Open now"]).rows.map((r) => r.e!.id).join() === openRole.id);
+check("Open now: engagement rows, a role a member marked open included", count("engagements", ["Open now"]).rows.map((r) => r.e!.id).sort().join() === [openRole.id, memberOpen.id].sort().join());
+// One definition of open (C43): the Open now chip lists exactly what the Hiring now view lists, on every list.
+for (const t of ["companies", "engagements", "people"] as const) {
+  const chip = count(t, ["Open now"]).rows.map((r) => r.key).sort().join();
+  const view = applyFilters(rowsFor(t, infos), EMPTY_FILTERS, "hiring", "", me);
+  check(`Open now and Hiring now list the same ${t}`, chip === view.rows.map((r) => r.key).sort().join() && count(t, []).facets.lists.roleState["Open now"] === view.rows.length, [chip, view.rows.length]);
+}
 check("Closed: engagement rows (not the undated seat at the same company)", count("engagements", ["Closed"]).rows.map((r) => r.e!.id).sort().join() === [closedRole.id, filledRole.id].sort().join());
 check("Open now: people rows at that company", count("people", ["Open now"]).rows.length === 1);
 check("Closed: people rows at those companies", count("people", ["Closed"]).rows.length === 2);
-check("a role a member marked open has no dates, so it is in neither", !count("companies", ["Open now", "Closed"]).rows.some((r) => r.i.c.name === "Member Open Co"));
+check("a role a member marked open is never Closed", !count("companies", ["Closed"]).rows.some((r) => r.i.c.name === "Member Open Co"));
 const facets = count("engagements", []).facets.lists.roleState;
-check("counts for each chip (engagements)", facets["Open now"] === 1 && facets.Closed === 2, facets);
+check("counts for each chip (engagements)", facets["Open now"] === 2 && facets.Closed === 2, facets);
 const coFacets = count("companies", ["Closed"]).facets.lists.roleState;
 check("a chip's own group is lifted when counting (companies)", coFacets["Open now"] === 1 && coFacets.Closed === 2, coFacets);
 const chips = activeChips({ ...EMPTY_FILTERS, roleState: ["Open now", "Closed"] });
 check("active chips read as plain words", chips.map((c) => c.label).join() === "Role open now,Role closed", chips.map((c) => c.label));
 check("removing a chip clears only that one", chips[0].clear({ ...EMPTY_FILTERS, roleState: ["Open now", "Closed"] }).roleState.join() === "Closed");
 check("active filters are counted", activeCount({ ...EMPTY_FILTERS, roleState: ["Closed"] }) === 1);
-check("hasRoleDates: only companies with a followed role", infos.filter(hasRoleDates).map((i) => i.c.name).join() === "Open Co,Closed Co,Filled Co");
+check("hasRoleDates: companies with a followed role or an open one", infos.filter(hasRoleDates).map((i) => i.c.name).join() === "Open Co,Closed Co,Filled Co,Member Open Co");
 
 /* ---------- open seats and dates ---------- */
 
@@ -196,14 +203,14 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   check("search ranks name matches first", ranked[0].i === a, ranked.map((r) => r.i.c.name));
 }
 
-/* ---------- Open now leaves out a role the last scan did not see ---------- */
+/* ---------- a role the last scan did not see is still open on file: in Open now, as in Hiring now ---------- */
 
 {
   const seen = eng({ status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   const unseen = eng({ status: val("Open role", { system: true }) }, { opened: "2026-10-03", closed: null, unseen: true });
   const i = deriveAll([co("Seen Co", [seen]), co("Unseen Co", [unseen])]);
   const open = applyFilters(rowsFor("engagements", i), { ...EMPTY_FILTERS, roleState: ["Open now"] }, "all", "", me).rows.map((r) => r.e!.id);
-  check("Open now: the role the last scan listed, not the unseen one", open.join() === seen.id, open);
+  check("Open now: every role open on file, the unseen one too (the Hiring now list)", open.sort().join() === [seen.id, unseen.id].sort().join(), open);
   check("an unseen role is still an open role (Hiring now)", tabTest("hiring", rowsFor("engagements", i).find((r) => r.e === unseen)!));
   check("days listed from the full times", listedDays(eng({}, { opened: "2026-11-03", closed: "2026-11-05", openedAt: "2026-11-03T23:00:00Z", closedAt: "2026-11-05T01:00:00Z" })) === 1);
 }
@@ -272,7 +279,11 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   const gap = (x: typeof i) => x.fnState.hired.length > 0 && !x.fns.includes("Sales");
   check("no 'No Sales yet' next to a Sales story", !gap(i) && !gap(j));
   const notMine = (x: typeof i) => toggleTest("notMine", me)({ key: x.c.id, i: x });
-  check("No Sales seat yet: hired other functions, none in Sales", notMine(j) && !notMine(deriveAll([co("Only open", [eng({ function: val("Marketing"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })])])[0]));
+  const noSales = co("No Sales Co", [added]);
+  noSales.friendly = { ...noSales.friendly, functions: ["RevOps"] };
+  check("No Sales seat yet: hired other functions, none in Sales", notMine(deriveAll([noSales])[0]) && !notMine(deriveAll([co("Only open", [eng({ function: val("Marketing"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })])])[0]));
+  // L39: a member story names Sales there, and the row shows a Sales chip, so it is not "No fractional Sales yet".
+  check("No Sales seat yet leaves out a company whose story names Sales", j.fnState.story.includes("Sales") && !notMine(j), j.fnState);
   {
     // A company hiring a Sales seat right now is not "No Sales seat yet".
     const hiringSales = co("Hiring sales", [eng({ function: val("Marketing"), status: val("Ended") }, { source: "Member added" }), eng({ function: val("Sales"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })]);
@@ -465,15 +476,18 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("unlocking a seat holder ticks it", holder.steps[0].done);
   const roles = checkSteps({ ...base, goal: "roles", unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0 });
   check("looking for roles, a hidden company ticks See who is hiring", roles.steps[0].done && roles.steps[0].label === "See who is hiring");
-  // 2 of 3, then a seat added: never back to 1 of 3.
-  const before = checkSteps({ ...base, added: 3, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0, addLabel: "Add a seat you held" });
+  // Step 2 is "Add a seat you held": only a seat ticks it, never a company fact or a rate shared for the benchmarks (C33, C42).
+  const facts = checkSteps({ ...base, added: 3, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0 });
+  check("facts and benchmark rates don't tick Add a seat you held", n(facts) === 1 && !facts.steps[1].done && facts.steps[1].label === "Add a seat you held", facts.steps[1]);
   const after = checkSteps({ ...base, added: 4, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 6, earn: 6 });
-  check("adding a seat keeps step 2 done (2 of 3 stays 2 of 3)", n(before) === 2 && n(after) === 2 && after.steps[1].done, [n(before), n(after), after.steps[1]]);
-  check("Fill in your seats is a separate nudge once step 2 is done", !!after.nudge && after.nudge.label === "Fill in your seats" && after.steps[1].label !== "Fill in your seats", after.nudge);
-  const sticky = checkSteps({ ...base }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stuck: new Set(["unlock", "give"]) });
+  check("a seat on file ticks step 2, and its label stays the same", n(after) === 2 && after.steps[1].done && after.steps[1].label === "Add a seat you held", after.steps[1]);
+  check("Fill in your seats is a nudge once step 2 is done (it takes step 2's place: three items, never four)", !!after.nudge && after.nudge.label === "Fill in your seats" && after.steps.length === 3, after.nudge);
+  const sticky = checkSteps({ ...base }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stuck: new Set(["unlock", "seat"]) });
   check("a step done before stays done", n(sticky) === 2);
-  const fresh = checkSteps({ ...base }, { seatsHeld: 2, seatsLeft: 8, earn: 8 });
-  check("with seats and nothing added, step 2 starts on the seats and there is no nudge yet", fresh.steps[1].label === "Fill in your seats" && !fresh.steps[1].done && !fresh.nudge);
+  const oldTick = checkSteps({ ...base }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stuck: new Set(["give"]) });
+  check("an old step 2 tick from any fact doesn't carry over", !oldTick.steps[1].done);
+  const filled = checkSteps({ ...base }, { seatsHeld: 2, seatsLeft: 0, earn: 8 });
+  check("seats on file with nothing left to fill: step 2 done, no nudge", filled.steps[1].done && !filled.nudge);
 }
 
 /* ---------- who the member hunts: ideal client, firms, country, best fit, saved views ---------- */
@@ -575,6 +589,78 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   // The owner's changes: no Needs facts view, and old links to it open All.
   check("Needs facts is gone and old links open All", !TABS.some((t) => (t.key as string) === "needs") && tabOf("needs") === "all");
   check("Best fit for you is a sort, and Most fractional-friendly stays", SORTS[0].key === "best" && SORTS[0].label === "Best fit for you" && SORTS.some((s) => s.label === "Most fractional-friendly"));
+}
+
+/* ---------- round 3 table fixes: the profile, own lists, Hiring now counts, card seats, best fit by function ---------- */
+
+{
+  const withCells = (c: CompanyRec, cells: Record<string, string>, extra: Record<string, unknown> = {}) => {
+    for (const [k, v] of Object.entries(cells)) c.cells[k] = val(v);
+    return Object.assign(c, extra);
+  };
+  // C17: "US only" with nothing else: a company whose country isn't on file is not a match.
+  const usOnly = { industries: [] as string[], employees: [] as string[], revenue: [] as string[], countries: ["United States"] };
+  const noCountry = withCells(co("Somewhere Co", []), { industry: "SaaS" }, { country: null, region: null });
+  const inUs = withCells(co("Austin Co", []), { industry: "SaaS" }, { country: "United States", region: "Texas" });
+  check("a country-only profile leaves out a company whose country isn't on file", !icpTest(usOnly)(noCountry) && icpTest(usOnly)(inUs));
+  const saasUs = { ...usOnly, industries: ["SaaS"] };
+  check("a confirmed industry with the country not on file stays, as a maybe", icpTest(saasUs)(noCountry) && icpMatch(saasUs, noCountry) === "maybe");
+
+  // C23, C35: Following and Unlocked are the member's own lists: the profile never narrows them, rows or counts.
+  const followed = withCells(co("Followed Retail", [eng({ function: val("Sales"), type: val("Fractional") }, { source: "Published engagement" })]), { industry: "Retail" }, { following: true });
+  const fitCo = withCells(co("Fit SaaS", []), { industry: "SaaS" }, { following: true });
+  const other = withCells(co("Other Retail", []), { industry: "Retail" });
+  const all = deriveAll([followed, fitCo, other]);
+  const who = { function: "Sales", goal: null, icp: { industries: ["SaaS"], employees: [], revenue: [], countries: [] } } as unknown as Me;
+  const f = { ...EMPTY_FILTERS, icp: true };
+  const following = applyFilters(rowsFor("companies", all), f, "following", "", who);
+  check("Following ignores the profile", following.rows.map((r) => r.i.c.name).sort().join() === "Fit SaaS,Followed Retail", following.rows.map((r) => r.i.c.name));
+  const onAll = applyFilters(rowsFor("companies", all), f, "all", "", who);
+  check("All keeps the profile, and the Following tab counts both follows", onAll.rows.map((r) => r.i.c.name).join() === "Fit SaaS" && onAll.facets.tabs.following === 2 && following.facets.tabs.following === 2, onAll.facets.tabs);
+  check("the All count on the Following tab still reads the profile", following.facets.tabs.all === 1, following.facets.tabs);
+
+  // C48: Hiring now lists the member's function alone; its count says so (hiringMine).
+  const open = (fn: string, extra: Partial<EngagementRec> = {}) => eng({ function: val(fn), status: val("Open role", { system: true }), role: LOCKED }, { opened: "2026-11-10", closed: null, ...extra });
+  const hiring = deriveAll([co("H1", [open("Sales")]), co("H2", [open("Marketing")]), co("H3", [open("Partnerships")])]);
+  const hf = applyFilters(rowsFor("engagements", hiring), EMPTY_FILTERS, "all", "", who).facets;
+  check("Hiring now counts every function, and the member's own apart", hf.tabs.hiring === 3 && hf.hiringMine === 1, [hf.tabs.hiring, hf.hiringMine]);
+  check("the Open now chip counts what Hiring now lists", hf.lists.roleState["Open now"] === hf.tabs.hiring);
+
+  // C25: new this week, counted the way the server counts View.scan.mine7.
+  const now = Date.now();
+  const day = (ago: number) => new Date(now - ago * 86_400_000).toISOString();
+  const fresh = open("Sales", { opened: day(2).slice(0, 10), openedAt: day(2) });
+  const old = open("Sales", { opened: day(10).slice(0, 10), openedAt: day(10) });
+  const repost = open("Sales", { opened: day(1).slice(0, 10), openedAt: day(1), posted: day(30).slice(0, 10) });
+  const unseen = open("Sales", { opened: day(1).slice(0, 10), openedAt: day(1), unseen: true });
+  check("new this week: first seen in 7 days, posted in 14, still listed", newThisWeek(fresh) && !newThisWeek(old) && !newThisWeek(repost) && !newThisWeek(unseen));
+  const wk = deriveAll([co("W1", [fresh, old]), withCells(co("W2", [open("Sales", { opened: day(1).slice(0, 10), openedAt: day(1) })]), { industry: "Retail" }), co("W3", [open("Marketing", { opened: day(1).slice(0, 10), openedAt: day(1) })])]);
+  wk[0].c.cells.industry = val("SaaS");
+  const fit = icpTest(who.icp!);
+  const card = newRolesFor(wk, "Sales", (i) => fit(i.c));
+  const week = rolesThisWeek(wk, "Sales", (i) => fit(i.c));
+  check("the next-move card counts inside the profile, like the Hiring now line under it", card.roles === 1 && week.mine === 1 && newRolesFor(wk, "Sales").roles === 2, [card, week]);
+
+  // C45: a phone card leads with a seat in the member's function, its holder on file first.
+  const research = eng({ function: val("AI GTM"), start: val("2026-05"), operator: EMPTY }, { source: "Seat scan", claimable: true } as Partial<EngagementRec>);
+  const salesNoName = eng({ function: val("Sales"), start: val("2024-01"), operator: EMPTY }, { source: "Published engagement" });
+  const salesNamed = eng({ function: val("Sales"), start: val("2022-01"), operator: LOCKED }, { source: "Published engagement" });
+  const revops = eng({ function: val("RevOps"), start: val("2023-01"), operator: LOCKED }, { source: "Published engagement" });
+  const ci = deriveAll([co("Card Co", [research, salesNoName, salesNamed, revops])])[0];
+  check("card seat: the member's function with a holder on file first", cardSeat(ci, "Sales") === salesNamed);
+  check("card seat: no seat in the function, a seat with a holder on file", cardSeat(ci, "Marketing") === revops);
+  check("card seat: no function, a holder on file before a nameless research seat", cardSeat(ci, null) === revops && ci.latest === research);
+
+  // C24: Best fit for you on seats leads with the member's function, fractional ahead of full-time.
+  const s1 = eng({ function: val("RevOps"), type: val("Fractional") }, { source: "Published engagement" });
+  const s2 = eng({ function: val("Sales"), type: val("Full-time") }, { source: "Published engagement" });
+  const s3 = eng({ function: val("Sales"), type: val("Fractional") }, { source: "Published engagement" });
+  const seats = deriveAll([co("S1", [s1]), co("S2", [s2]), co("S3", [s3])]);
+  const order = sortRows(rowsFor("engagements", seats), "best", false, "", { me: who }).map((r) => r.e!.id);
+  check("best fit on seats: the member's function first, fractional before full-time", order.join() === [s3.id, s2.id, s1.id].join(), order);
+
+  // L42: a view's name says the shortcut that makes it.
+  check("a view's name names its shortcuts", viewName({ ...EMPTY_FILTERS, notMine: true }, "all", "companies", null, "Marketing") === "Companies, no fractional Marketing yet");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

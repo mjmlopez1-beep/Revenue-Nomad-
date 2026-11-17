@@ -17,10 +17,10 @@ export function Checklist({
   seatsHeld,
   seatsLeft,
   onSeats,
-  addLabel,
 }: {
   me: Me;
   onUnlock: () => void;
+  /** Step 2, "Add a seat you held": the form for a seat they held. */
   onAdd: () => void;
   onInvite: () => void;
   onDismiss: () => void;
@@ -31,15 +31,14 @@ export function Checklist({
   seatsHeld?: number;
   seatsLeft?: number;
   onSeats?: () => void;
-  /** What step 2 does for a member with no seats ("Add a seat you held", or "Add a fact" when a company they know has a gap). */
-  addLabel?: string;
 }) {
   // A done step stays done in this browser, so the count never goes backwards (a refund, a removed fact).
   const doneKey = `tp_check_done_${me.id}`;
   const stuck = new Set((store.get(doneKey) ?? "").split(",").filter(Boolean));
-  const plan = checkSteps(me, { seatsHeld: onSeats ? seatsHeld ?? 0 : 0, seatsLeft: seatsLeft ?? 0, earn: seats ?? 0, addLabel, stuck });
-  const go: Record<CheckStep["key"], () => void> = { unlock: onUnlock, give: plan.steps[1].label === "Fill in your seats" && onSeats ? onSeats : onAdd, invite: onInvite };
+  const plan = checkSteps(me, { seatsHeld: onSeats ? seatsHeld ?? 0 : 0, seatsLeft: seatsLeft ?? 0, earn: seats ?? 0, stuck });
+  const go: Record<CheckStep["key"], () => void> = { unlock: onUnlock, seat: onAdd, invite: onInvite };
   const steps = plan.steps.map((x) => ({ ...x, go: go[x.key], open: x.key === "invite" }));
+  // "Fill in your seats" takes the place of the done step 2, so the strip never holds four items.
   const nudge = plan.nudge;
   const nowDone = steps.filter((x) => x.done).map((x) => x.key);
   if (nowDone.some((k) => !stuck.has(k))) store.set(doneKey, nowDone.join(","));
@@ -63,6 +62,15 @@ export function Checklist({
       <ol className="tp-steps">
         {steps.map((s, k) => (
           <li key={k}>
+            {k === 1 && nudge ? (
+              <button type="button" className="tp-check-nudge" onClick={onSeats} aria-label={`Step 2 is done. Next: ${nudge.label}, ${nudge.hint}`}>
+                <span className="tp-step-dot" aria-hidden>
+                  <IconCheck size={11} />
+                </span>
+                <span className="tp-step-l">{nudge.label}</span>
+                <span className="tp-step-h num">{nudge.hint}</span>
+              </button>
+            ) : (
             <button type="button" className={`tp-step${s.done ? " done" : ""}${k === next ? " next" : ""}`} onClick={s.go} disabled={s.done && !s.open}>
               <span className="tp-step-dot" aria-hidden>
                 {s.done ? <IconCheck size={11} /> : <span className="num">{k + 1}</span>}
@@ -79,15 +87,10 @@ export function Checklist({
               </span>
               <span className="tp-step-h num">{s.hint}</span>
             </button>
+            )}
           </li>
         ))}
       </ol>
-      {nudge && (
-        <button type="button" className="tp-check-nudge" onClick={onSeats}>
-          <span className="tp-step-l">{nudge.label}</span>
-          <span className="tp-step-h num">{nudge.hint}</span>
-        </button>
-      )}
       {!vertical && close}
     </section>
   );

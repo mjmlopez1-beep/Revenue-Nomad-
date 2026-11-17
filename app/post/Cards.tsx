@@ -12,7 +12,7 @@
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconLock, IconStar, LockedName, LockedSite, fmtMonth, val } from "../ui/shared";
-import { coverOf, isOpenRole, isUnheldOpenRole, type Row, type Tab } from "./model";
+import { cardSeat, coverOf, isOpenRole, isUnheldOpenRole, known, type Row, type Tab } from "./model";
 import { YourSeat, earnNote, useCellUi } from "./ui";
 import { Fit, FnChips, HeldBy, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
 import { RoleDate } from "./RoleDate";
@@ -89,12 +89,13 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
  * What a hidden company's card holds back, as plain text. Not a button: the card opens the
  * record, and the record's sticky bar has "Unlock company, posting and rate · 1 credit".
  */
-function HiddenLine() {
+function HiddenLine({ rate }: { rate: boolean }) {
+  // The rate only when the posting gave one: a card never promises a rate that isn't there (C49).
   return (
     <div className="tp-pcard-hidden">
       <IconLock />
       <span>
-        Company, posting and rate <span className="tp-pcard-hidden-cost">· 1 credit together</span>
+        {rate ? "Company, posting and rate" : "Company and posting"} <span className="tp-pcard-hidden-cost">· 1 credit together</span>
       </span>
     </div>
   );
@@ -119,18 +120,21 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
   const i = r.i;
   const c = i.c;
   const at = c.hidden ? "this company" : c.name;
-  const open = i.engs.find(isOpenRole) ?? null;
-  // A hidden company is about its open role. Any other company leads with its latest seat.
-  const e = c.hidden ? open ?? i.latest : i.latest;
+  // A hidden company is about its open role. Any other company leads with a seat in the member's
+  // function (one with its holder on file first), then a seat with a holder on file, then the latest (C45).
+  const e = cardSeat(i, me.function);
   const miss = c.facts.missing;
   const own = i.engs.find((x) => x.yours);
-  // The free facts of the latest seat that tell it apart: its type and when it started.
+  // What the seat is: its function first ("RevOps seat"), then its type and when it started.
+  const fn = e && val(e.cells.function);
   const type = e && val(e.cells.type);
   const start = e && !e.opened ? val(e.cells.start) : null;
-  const when = [type, start && `since ${fmtMonth(start)}`].filter(Boolean).join(" · ");
+  const when = [fn && `${fn} seat`, type, start && `since ${fmtMonth(start)}`].filter(Boolean).join(" · ");
   // One more row when it carries something: who held the seat (or that it's open), else the rate.
-  const held = e && (e.yours || e.claimable || (isOpenRole(e) && e.cells.operator?.s === "empty") || shownCell(e.cells.operator));
+  const held = e && (e.yours || e.claimable || (isOpenRole(e) && e.cells.operator?.s === "empty") || shownCell(e.cells.operator) || e.cells.operator?.s === "locked");
   const rate = e && !held && shownCell(e.cells.rate);
+  // The seat shown has no holder on file, but another seat here does: say so, so the card isn't read as "nobody on file".
+  const otherHolder = !c.hidden && !!e && !known(e.cells.operator) && !e.yours && i.engs.some((x) => x !== e && known(x.cells.operator));
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       {/* The line under the header already gives a hidden company's industry, size and region. */}
@@ -144,6 +148,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
       )}
       {e?.opened ? (
         <div className="tp-pcard-role">
+          {fn && <span className="tp-pcard-fn">{fn} · </span>}
           <RoleDate e={e} />
         </div>
       ) : (
@@ -156,7 +161,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
               <Fact label="Open role">{e.cells.role.v}</Fact>
             </div>
           )}
-          <HiddenLine />
+          <HiddenLine rate={!!e && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} />
         </>
       ) : (
         <div className="tp-pfacts">
@@ -183,6 +188,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
           )}
         </div>
       )}
+      {otherHolder && <div className="tp-pcard-when">Another seat here has its holder on file. Open the record to see it.</div>}
       {/* Facts at a hidden company can't be added until it is unlocked, so the card doesn't offer them. */}
       {showMiss && miss > 0 && !c.hidden && (
         <div className="tp-pcard-miss">
@@ -221,7 +227,7 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
               <Fact label="Open role">{e.cells.role.v}</Fact>
             </div>
           )}
-          <HiddenLine />
+          <HiddenLine rate={e.cells.rate?.s === "locked" || e.cells.rate?.s === "value"} />
           {e.cells.rate?.s === "value" && (
             <div className="tp-pfacts">
               <Fact label="Posted rate">
