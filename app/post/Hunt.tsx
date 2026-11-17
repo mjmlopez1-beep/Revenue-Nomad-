@@ -183,7 +183,26 @@ export function IfpName({ short = "IFP" }: { short?: string }) {
  * The pine pill over the list. On: "Your Ideal Fractional Profile Software · 11–200 · $5M–$20M · US",
  * with Edit and Show everyone. Off: the same profile, one tap to narrow again. None yet: a way to set it.
  */
-export function IcpPill({ icp, on, everyone, shownN, onToggle, onEdit }: { icp: Icp | null | undefined; on: boolean; everyone: number; shownN: number; onToggle: () => void; onEdit: () => void }) {
+export function IcpPill({
+  icp,
+  on,
+  everyone,
+  shownN,
+  split,
+  noun = ["company", "companies"],
+  onToggle,
+  onEdit,
+}: {
+  icp: Icp | null | undefined;
+  on: boolean;
+  everyone: number;
+  shownN: number;
+  /** While on: rows that match every part the profile asks for, and maybes (a part isn't on file). */
+  split?: { match: number; maybe: number } | null;
+  noun?: [string, string];
+  onToggle: () => void;
+  onEdit: () => void;
+}) {
   const label = icpLabel(icp);
   if (icpEmpty(icp))
     return (
@@ -200,13 +219,19 @@ export function IcpPill({ icp, on, everyone, shownN, onToggle, onEdit }: { icp: 
         {on ? (
           <>
             <span className="hunt-pill-k">
-              Your <IfpName />
+              Your <IfpName short="profile" />:
             </span>{" "}
             <b>{label}</b>
+            {split && split.maybe > 0 && (
+              <span className="hunt-pill-split">
+                {" "}
+                · <span className="num">{split.match}</span> confirmed, <span className="num">{split.maybe}</span> where a part isn&apos;t on file
+              </span>
+            )}
           </>
         ) : (
           <>
-            <span className="hunt-pill-k">Showing everyone.</span> Your <IfpName /> is <b>{label}</b>
+            <span className="hunt-pill-k">Showing everyone.</span> Your <IfpName short="profile" /> is <b>{label}</b>
           </>
         )}
       </span>
@@ -214,7 +239,7 @@ export function IcpPill({ icp, on, everyone, shownN, onToggle, onEdit }: { icp: 
         <button type="button" className="hunt-pill-btn hunt-pill-edit" onClick={onEdit}>
           Edit
         </button>
-        <button type="button" className="hunt-pill-btn" aria-pressed={!on} onClick={onToggle} title={on ? `${everyone} without your Ideal Fractional Profile` : `${shownN} shown`}>
+        <button type="button" className="hunt-pill-btn" aria-pressed={!on} onClick={onToggle} title={on ? `${everyone} ${everyone === 1 ? noun[0] : noun[1]} without your Ideal Fractional Profile` : `${shownN} ${shownN === 1 ? noun[0] : noun[1]} shown`}>
           {on ? "Show everyone" : "Show your matches"}
         </button>
       </span>
@@ -355,8 +380,8 @@ export function SaveViewSheet({ defaultName, emailOn, onSave, onClose }: { defau
         </button>
         <p className="hunt-note">
           {emailOn
-            ? "The weekly email lists the open roles that came in matching this view. Claude sees this view too, if you use Merlin there."
-            : "Email isn't switched on for the pilot yet. Your view is saved, and the weekly email starts once it is. Claude sees this view too."}
+            ? "The weekly email lists the open roles that came in matching this view. If you connect Merlin to Claude (Integrations), it can open this view too."
+            : "Email isn't switched on for the pilot yet. Your view is saved, and the weekly email starts once it is. If you connect Merlin to Claude (Integrations), it can open this view too."}
         </p>
       </form>
     </Sheet>

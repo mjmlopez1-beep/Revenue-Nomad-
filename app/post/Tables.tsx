@@ -392,14 +392,14 @@ const CompanyRow = memo(function CompanyRow({ r, mine, sel, onOpen, isNew, gap }
       </td>
       <td>{co("industry")}</td>
       <td className="num">{co("employees")}</td>
-      <td className="num">{co("revenue")}</td>
-      <td>{co("hq")}</td>
+      <td className="num c-lo">{co("revenue")}</td>
+      <td className="c-lo">{co("hq")}</td>
       <td>
         <Fit i={i} />
       </td>
       <td>{e ? <HeldBy e={e} cover={coverOf(i, e, "operator")} /> : <None />}</td>
       <td className="num">{e ? engCell(i, e, "rate") : <None />}</td>
-      <td>
+      <td className="c-lo">
         <PeopleCell i={i} />
       </td>
     </tr>
@@ -486,7 +486,7 @@ const EngRow = memo(function EngRow({ r, mine, sel, onOpen, hiring }: { r: Row; 
       <td>{engCell(i, e, "start")}</td>
       <td>{engCell(i, e, "end")}</td>
       <td className="num">{engCell(i, e, "rate")}</td>
-      <td className="num">{engCell(i, e, "hours")}</td>
+      <td className="num c-lo">{engCell(i, e, "hours")}</td>
       <td>{engCell(i, e, "posting")}</td>
     </tr>
   );
@@ -564,12 +564,12 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for. A dashed chip means none in your function is on file yet." },
     { label: "Industry", cls: "w-ind" },
     { label: "Employees", cls: "w-emp num", sort: "employees" },
-    { label: "Revenue", cls: "w-rev num", sort: "revenue" },
-    { label: "HQ", cls: "w-hq", sort: "hq" },
-    { label: "Fit", cls: "w-fit", tip: "How often this company hires fractionals. It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
+    { label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
+    { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
+    { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
     { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Their name costs 1 credit to see." },
     { label: "Rate", cls: "w-rate num", rates: true },
-    { label: "People", cls: "w-ppl", tip: "The decision maker on file" },
+    { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
   hiringCompanies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
@@ -594,7 +594,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Start", cls: "w-date", sort: "start" },
     { label: "End", cls: "w-date" },
     { label: "Rate", cls: "w-rate num", rates: true },
-    { label: "Hours a week", cls: "w-hrs num" },
+    { label: "Hours a week", cls: "w-hrs num c-lo" },
     { label: "Job posting", cls: "w-post" },
   ],
   hiringEngagements: [

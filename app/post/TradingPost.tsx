@@ -33,6 +33,7 @@ import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useT
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, rolesThisWeek, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
+  icpApplies, icpMatch, ICP_FREE_TABS,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
@@ -141,17 +142,29 @@ function decodeFilters(s: string): Filters {
  * and their counts ignore them, so Hiring now never reads 0 because of an answer given once.
  */
 const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
+/**
+ * An onboarding preset the member took off (its chip, its switch, Clear all) stays off on their
+ * next visit too: remembered in this browser, per member and goal.
+ */
+const presetOffKey = (me: Me) => `tp_preset_off_${me.id}_${me.goal ?? ""}`;
+const presetsOff = (me: Me) => new Set((store.get(presetOffKey(me)) ?? "").split(",").filter(Boolean));
 
 /** Where a member lands with nothing in the address bar: set by their onboarding answers. */
 function defaultsFor(me: Me) {
+  const off = presetsOff(me);
   return {
     t: (me.goal === "intro" || me.goal === "roles" ? "engagements" : "companies") as RecordType,
     // The goal key "friendly" is stored on profiles, so it stays. It opens on Repeat hirers now.
     v: (me.goal === "friendly" ? "repeat" : me.goal === "roles" ? "hiring" : "all") as Tab,
-    // With an ideal client on file, the best fit for them comes first. Open roles read best newest first.
-    s: (!icpEmpty(me.icp) ? "best" : me.goal === "roles" ? "newest" : "fit") as SortKey,
+    // With an ideal client or a function on file, the best fit for them comes first (seats in their own function lead). Open roles read best newest first.
+    s: (!icpEmpty(me.icp) || (namedFn(me.function) && me.goal !== "roles") ? "best" : me.goal === "roles" ? "newest" : "fit") as SortKey,
     // The table opens on their ideal client (the Ideal Fractional Profile pill).
-    f: { ...EMPTY_FILTERS, notMine: me.goal === "adjacent" && !!me.function, fractionalNamed: me.goal === "intro", icp: !icpEmpty(me.icp) } as Filters,
+    f: {
+      ...EMPTY_FILTERS,
+      notMine: me.goal === "adjacent" && !!me.function && !off.has("notMine"),
+      fractionalNamed: me.goal === "intro" && !off.has("fractionalNamed"),
+      icp: !icpEmpty(me.icp),
+    } as Filters,
   };
 }
 /** The sort a view opens on until the member picks one: Hiring now reads newest first (their function first). */
@@ -238,8 +251,16 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    */
   const searching = !!query.trim();
   const [searchTab, setSearchTab] = useState<Tab | null>(null);
+  /**
+   * "Show them" under a search: this search reads the whole table, the Ideal Fractional Profile and
+   * the filters lifted (they stay as they were, and come back when the search is cleared).
+   */
+  const [searchWide, setSearchWide] = useState(false);
   useEffect(() => {
-    if (!searching) setSearchTab(null);
+    if (!searching) {
+      setSearchTab(null);
+      setSearchWide(false);
+    }
   }, [searching]);
   const tab: Tab = searching ? searchTab ?? "all" : tabPicked;
   const setTab = useCallback((t: Tab) => (searching ? setSearchTab(t) : setTabPicked(t)), [searching]);
@@ -357,37 +378,77 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     () => (presetOn.length ? ({ ...filters, ...Object.fromEntries(presetOn.map((k) => [k, false])) } as Filters) : filters),
     [filters, presetOn],
   );
-  /** The filters that apply to this view. */
-  const eff = tab === "all" ? filters : unpreset;
+  /** The member's own filters, as they set them: a preset they take off here stays off on their next visit (presetsOff). */
+  const setMine = (nf: Filters) => {
+    const dropped = presetOn.filter((k) => !nf[k]);
+    if (dropped.length) store.set(presetOffKey(me), [...new Set([...presetsOff(me), ...dropped])].join(","));
+    setFilters(nf);
+  };
+  const wide = searching && searchWide;
+  /** The filters that apply to this view. A search widened with "Show them" reads everything. */
+  // The onboarding preset narrows All, but not the open roles: with Open now picked, All lists what Hiring now lists.
+  const presetHere = tab === "all" && !filters.roleState.includes("Open now");
+  const eff = useMemo(() => (wide ? EMPTY_FILTERS : presetHere ? filters : unpreset), [wide, presetHere, filters, unpreset]);
   // Filters read only the member's function from `me` (cellMe changes with it): a new balance doesn't recount the table.
   const { rows: filtered, facets: facets0 } = useMemo(() => applyFilters(allRows, eff, tab, q, cellMe), [allRows, eff, tab, q, cellMe]);
   // With the preset on, All counts with it and every other view without it.
-  const otherTabs = useMemo(
-    () => (presetOn.length ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, cellMe).facets.tabs : null),
-    [presetOn, allRows, tab, unpreset, filters, q, cellMe],
+  const otherFacets = useMemo(
+    () => (presetOn.length && !wide ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, cellMe).facets : null),
+    [presetOn, wide, allRows, tab, unpreset, filters, q, cellMe],
   );
-  const facets = useMemo(
-    () => (otherTabs ? { ...facets0, tabs: tab === "all" ? { ...otherTabs, all: facets0.tabs.all } : { ...facets0.tabs, all: otherTabs.all } } : facets0),
-    [facets0, otherTabs, tab],
-  );
+  const facets = useMemo(() => {
+    if (!otherFacets) return facets0;
+    const o = otherFacets.tabs;
+    return tab === "all"
+      ? {
+          ...facets0,
+          tabs: { ...o, all: facets0.tabs.all },
+          hiringMine: otherFacets.hiringMine,
+          // Open now counts what picking it lists (the preset steps aside for it), the Hiring now count.
+          lists: { ...facets0.lists, roleState: { ...facets0.lists.roleState, "Open now": otherFacets.lists.roleState["Open now"] } },
+        }
+      : { ...facets0, tabs: { ...facets0.tabs, all: o.all } };
+  }, [facets0, otherFacets, tab]);
   /** Filters changed from a view the preset doesn't narrow: the preset stays for All, unless the member set that filter here themselves. */
   const setEff = (nf: Filters) => {
-    if (tab === "all" || !presetOn.length) return setFilters(nf);
+    if (wide) {
+      // A filter picked during a widened search narrows it again: the member's own filters come back, with this one.
+      setSearchWide(false);
+      const merged = { ...filters } as Record<string, unknown>;
+      for (const k of Object.keys(EMPTY_FILTERS) as (keyof Filters)[]) {
+        const v = nf[k];
+        if (Array.isArray(v) ? v.length > 0 : !!v) merged[k] = v;
+      }
+      return setFilters(merged as unknown as Filters);
+    }
+    if (presetHere || !presetOn.length) return setMine(nf);
     const took = presetOn.filter((k) => nf[k]);
     if (took.length) setPreset((p) => p.filter((k) => !took.includes(k)));
     setFilters({ ...nf, ...Object.fromEntries(presetOn.filter((k) => !took.includes(k)).map((k) => [k, true])) } as Filters);
   };
+  /** Clear all: no filters (the profile pill stays as it is). */
+  const clearFilters = () => {
+    setSearchWide(false);
+    setMine(clearedFilters(filters));
+  };
   /**
-   * Universal search: while a search is typed, how many of each list (companies, seats, people)
-   * match it in this view, so one tap moves to the list that has results. Search reads only what
-   * the member can see, never a locked value (applyFilters).
+   * How many of each list (companies, seats, people) this view holds, with the same filters, the
+   * profile and the search: the list switch and the phone's list menu show these, so they always
+   * agree with the All count. While searching, one tap moves to the list that has matches.
+   * Search reads only what the member can see, never a locked value (applyFilters).
    */
-  const searchCounts = useMemo(() => {
-    if (!q.trim()) return null;
+  const typeCounts = useMemo(() => {
     const out = {} as Record<RecordType, number>;
     for (const t of RECORD_TYPES) out[t.key] = t.key === recordType ? filtered.length : applyFilters(rowsFor(t.key, infos), eff, tab, q, cellMe, true).rows.length;
     return out;
-  }, [q, recordType, filtered, infos, eff, tab, cellMe]);
+  }, [recordType, filtered, infos, eff, tab, q, cellMe]);
+  const searchCounts = q.trim() ? typeCounts : null;
+  /** While a search is narrowed by the profile or filters: the matches they keep out ("3 more outside your filters · Show them"). */
+  const narrowedBy = !wide && q.trim() ? { icp: icpApplies(eff, tab, me), filters: activeCount(eff) > 0 } : null;
+  const outside = useMemo(() => {
+    if (!narrowedBy || !(narrowedBy.icp || narrowedBy.filters)) return 0;
+    return Math.max(0, applyFilters(allRows, EMPTY_FILTERS, tab, q, cellMe, true).rows.length - filtered.length);
+  }, [narrowedBy?.icp, narrowedBy?.filters, allRows, tab, q, cellMe, filtered]); // eslint-disable-line react-hooks/exhaustive-deps
   // Name matches come first while searching (decision 13).
   // Hiring now: the member's function first. Until "Show all functions", only theirs (when they have any open).
   const fnSplit = useMemo(() => (hireFn ? splitByFn(filtered, hireFn) : null), [filtered, hireFn]);
@@ -1038,14 +1099,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setQuery("");
   };
   const clearAll = () => {
-    setFilters(clearedFilters(filters));
+    clearFilters();
     setTab("all");
     setQuery("");
   };
-  /** Keep the search, drop the view and the filters that narrow it. */
+  /** Keep the search, and read the whole table for it: the view, the profile and the filters lifted for this search only. */
   const searchAll = () => {
-    setFilters(clearedFilters(filters));
     setTab("all");
+    setSearchWide(true);
   };
 
   /* ----- pieces ----- */
@@ -1054,14 +1115,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       me={me}
       vertical={phone}
       onUnlock={() => showFact("locked")}
-      onAdd={() => showFact("empty")}
+      onAdd={() => openAdd({ mode: "engagement", mine: true })}
       onInvite={invite}
       onDismiss={hideCheck}
       seats={Math.min(seatStats.missing, earnRoom(me))}
       seatsHeld={seatStats.n}
       seatsLeft={seatStats.missing}
       onSeats={() => openSeats()}
-      addLabel={addTarget === "seat" ? "Add a seat you held" : "Add a fact"}
     />
   );
 
@@ -1089,9 +1149,16 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             : null;
   // The next-move card: the single most urgent thing. Never together with Get started, whose second step points at the seats instead.
   // The roles card has done its job once the member is looking at Hiring now.
-  const picked = guide === "check" ? null : pickMove(slotMe, seatStats, view.scan?.mine7 ?? 0, moveOff);
+  // New roles in the member's function this week, counted the way "See open roles" lists them: inside
+  // the Ideal Fractional Profile while its pill is on, never a fractional firm. The card's number and
+  // the Hiring now list it opens are one count (C25).
+  const rolesKeep = useMemo(() => {
+    const fit = filters.icp && !icpEmpty(me.icp) ? icpTest(me.icp!) : null;
+    return (i: CoInfo) => !isFirm(i.c) && (!fit || fit(i.c));
+  }, [filters.icp, me.icp]);
+  const newRoles = useMemo(() => newRolesFor(infos, namedFn(me.function), rolesKeep), [infos, me.function, rolesKeep]);
+  const picked = guide === "check" ? null : pickMove(slotMe, seatStats, newRoles.roles, moveOff);
   const move = picked === "roles" && tab === "hiring" ? null : picked;
-  const newRoles = move === "roles" ? newRolesFor(infos, me.function) : { roles: 0, hidden: 0 };
   /*
    * Ember: at most two kinds on a screen. Who keeps it, in order: the next-move card, the solid
    * Hiring chip in an open record, a low balance, the dot on an open role, the count on Hiring
@@ -1112,7 +1179,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setTab("hiring");
     setSort(null);
     setAllFns(false);
-    setFilters({ ...EMPTY_FILTERS, fn: me.function ? [me.function] : [] });
+    // Hiring now leads with the member's function on its own (no Function filter left behind for All),
+    // and the profile pill stays as it was, so the list matches the card's count.
+    setFilters({ ...EMPTY_FILTERS, icp: filters.icp });
   };
 
   // Credits running low or out. With the roles card up, it is a line inside the card, not a second banner.
@@ -1127,7 +1196,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             kind={move}
             me={me}
             seats={seatStats}
-            roles={{ n: view.scan?.mine7 ?? 0, hidden: newRoles.hidden }}
+            roles={{ n: newRoles.roles, hidden: newRoles.hidden }}
             onSeats={() => openSeats()}
             onRoles={seeOpenRoles}
             onDismiss={dismissMove}
@@ -1197,7 +1266,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </>
   );
 
-  // While searching, each list's count is its matches, so one tap moves to the list that has them.
+  // Each list's count is what it holds in this view (the same number as its All count). While searching, its matches, so one tap moves to the list that has them.
+  const typeTitle = (t: RecordType) =>
+    searchCounts
+      ? `${plural(searchCounts[t], TYPE_NOUN[t][0], TYPE_NOUN[t][1])} match ${q.trim()}`
+      : typeCounts[t] === totals[t]
+        ? `${plural(totals[t], TYPE_NOUN[t][0], TYPE_NOUN[t][1])} on file`
+        : `${typeCounts[t]} in this view, of ${totals[t]} on file`;
   const recordSwitch = (
     <div className={`tp-rtype${searchCounts ? " searching" : ""}`} role="group" aria-label={searchCounts ? "Matches in each list" : "What to list"}>
       {RECORD_TYPES.map((t) => (
@@ -1207,9 +1282,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           aria-pressed={recordType === t.key}
           className={`tp-rtype-b${recordType === t.key ? " on" : ""}${searchCounts && !searchCounts[t.key] ? " none" : ""}`}
           onClick={() => setRecordType(t.key)}
-          title={searchCounts ? `${plural(searchCounts[t.key], TYPE_NOUN[t.key][0], TYPE_NOUN[t.key][1])} match ${q.trim()}` : undefined}
+          title={typeTitle(t.key)}
         >
-          {t.label} <span className="num tp-cnt">{searchCounts ? searchCounts[t.key] : totals[t.key]}</span>
+          {t.label} <span className="num tp-cnt">{typeCounts[t.key]}</span>
         </button>
       ))}
     </div>
@@ -1258,6 +1333,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </label>
   );
 
+  /** What a view lists. Hiring now lists the member's own function alone (until "Show all functions"), so it counts that. */
+  const tabCount = (t: Tab) => (t === "hiring" && namedFn(me.function) && !allFns && !searching && facets.hiringMine > 0 ? facets.hiringMine : facets.tabs[t]);
   const viewButtons = TABS.map((t) => (
         <button
           key={t.key}
@@ -1268,13 +1345,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           onClick={() => setTab(t.key)}
         >
           {t.label}
-          {/* All has no count while nothing narrows it (then it is just the size of the database); with a filter or a search on, it shows how big that universe is. The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}
-          {(t.key !== "all" || nFilters > 0 || eff.icp || searching) && (
-            <>
-              {" "}
-              <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{facets.tabs[t.key]}</span>
-            </>
-          )}
+          {/* Every view shows what it lists, All too, so the count agrees with the list switch above it. The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}{" "}
+          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{tabCount(t.key)}</span>
         </button>
       ));
   // Phones: what to list (Companies, Seats or People, a short menu) is the list's title in the top bar, so it needs no row of its own (decision 16).
@@ -1309,7 +1381,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       tab={tab}
       noun={noun[1]}
       filtered={nFilters > 0}
-      onClearFilters={() => setFilters(clearedFilters(filters))}
+      onClearFilters={clearFilters}
       onClearSearch={() => {
         setQuery("");
         searchRef.current?.focus();
@@ -1351,8 +1423,21 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const scan = view.scan;
   // Hiring now leads with the member's function: how many came in this week there and elsewhere, and one tap for every function.
   // Counted inside the Ideal Fractional Profile pill while it is on, so the line agrees with the list under it.
-  const weekFit = eff.icp && !icpEmpty(me.icp) ? icpTest(me.icp!) : null;
+  const weekFit = icpApplies(eff, tab, me) ? icpTest(me.icp!) : null;
   const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => !isFirm(i.c) && (!weekFit || weekFit(i.c))) : null;
+  // None in their function here: say so, rather than list other functions as if they were theirs.
+  const noneMine = !!hireFn && !!fnSplit && !qt && fnSplit.mine.length === 0 && filtered.length > 0 && !allFns && (
+    <p className="tp-scanline hunt-fnline">
+      <span>
+        No open {hireFn} roles {weekFit ? "in your Ideal Fractional Profile " : ""}right now. These are in other functions.
+      </span>
+      {weekFit && (
+        <button type="button" className="tp-flink" onClick={() => setEff({ ...eff, icp: false })}>
+          Show everyone
+        </button>
+      )}
+    </p>
+  );
   const fnLine = hireFn && fnSplit && !qt && (fnSplit.mine.length > 0 || allFns) && (
     <p className="tp-scanline hunt-fnline">
       <span>
@@ -1372,23 +1457,61 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const scanLine = tab === "hiring" && scan && (
     <>
       {fnLine}
+      {noneMine}
       <p className="tp-scanline">
-        We check job boards for open fractional roles every week.{" "}
-        {scan.lastOkAt ? `Last scan ${fmtStamp(scan.lastOkAt)}.` : scan.lastRunAt ? "The last scan could not read the job boards." : "The first check runs this week."}
+        We check job boards for open fractional roles every week.
+        {/* "The first check runs this week" only while nothing is listed yet: roles members added show before any scan. */}
+        {scan.lastOkAt ? ` Last scan ${fmtStamp(scan.lastOkAt)}.` : scan.lastRunAt ? " The last scan could not read the job boards." : facets.tabs.hiring === 0 ? " The first check runs this week." : ""}
       </p>
     </>
   );
   /* ----- who the member hunts: the Ideal Fractional Profile pill and saved views ----- */
-  const icpOn = eff.icp && !icpEmpty(me.icp);
-  const pill = page === "table" && !qt && (
+  const icpOn = icpApplies(eff, tab, me);
+  // Confirmed matches and maybes (a part the profile asks for isn't on file), so the count says what it mixes (C17).
+  const icpSplit = useMemo(() => {
+    if (!icpOn) return null;
+    let match = 0;
+    for (const r of filtered) if (icpMatch(me.icp, r.i.c) === "match") match++;
+    return { match, maybe: filtered.length - match };
+  }, [icpOn, filtered, me.icp]);
+  /*
+   * The pill stays up while it narrows the list, a search included. It goes only where the profile
+   * doesn't apply: a search widened to everything, and the member's own lists (Following, Unlocked).
+   */
+  const pill = page === "table" && !wide && !ICP_FREE_TABS.includes(tab) && (
     <IcpPill
       icp={me.icp}
       on={icpOn}
       everyone={facets.everyone}
       shownN={sorted.length}
+      split={icpSplit}
+      noun={noun as [string, string]}
       onEdit={() => setIcpOpen(true)}
       onToggle={() => setEff({ ...eff, icp: !eff.icp })}
     />
+  );
+  /** Under a search: what the profile and filters keep out, one tap to see it; or, widened, the way back. */
+  const narrowWords = narrowedBy ? (narrowedBy.icp && narrowedBy.filters ? "your profile and filters" : narrowedBy.icp ? "your Ideal Fractional Profile" : "your filters") : "";
+  const searchLine = qt && page === "table" && (wide || outside > 0) && (
+    <p className="tp-scanline tp-searchline" role="status">
+      {wide ? (
+        <>
+          <span>Searching everything. Your profile and filters are off for this search.</span>
+          <button type="button" className="tp-flink" onClick={() => setSearchWide(false)}>
+            Use them again
+          </button>
+        </>
+      ) : (
+        <>
+          <span>
+            <b className="num">{outside}</b> more {outside === 1 ? "match" : "matches"} outside {narrowWords}.
+          </span>
+          <button type="button" className="tp-flink" onClick={() => setSearchWide(true)}>
+            Show {outside === 1 ? "it" : "them"}
+          </button>
+        </>
+      )}
+    </p>
   );
   const saveIcp = async ({ title, fn, icp: v }: ProfileEdit) => {
     const r = await act({ type: "profile", icp: v, title, function: fn ?? "" }, { quiet: true });
@@ -1399,9 +1522,15 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     return true;
   };
   const views = me.savedViews ?? [];
-  // The view on screen, written out the way a saved view keeps it.
+  /*
+   * The view on screen, the way a saved view keeps it: the filters as they are, with the Ideal
+   * Fractional Profile pill as a pill (icp), so reopening it matches the same companies the table
+   * showed (a profile written out as hard Industry, Employees and Country filters dropped every
+   * company whose country or size isn't on file: 34 became 0, C40). `spelled` names the view and
+   * gives the weekly email what to look for.
+   */
   const spelled = withIcpSpelled(eff, me.icp);
-  const herePlace = absolutePlace({ t: recordType, v: tab, s: sortPicked, f: spelled, q, all: allFns });
+  const herePlace = absolutePlace({ t: recordType, v: tab, s: sortPicked, f: wide ? filters : eff, q, all: allFns });
   const currentView = views.find((v) => v.place === herePlace)?.id ?? null;
   const openView = (v: SavedViewRec) => {
     const c = v.criteria;
@@ -1433,6 +1562,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setTabPicked(x.v);
     setSort(x.s);
     setFilters(x.f);
+    setSearchWide(false);
     setQuery(x.q);
     setAllFns(x.all);
   };
@@ -1459,6 +1589,32 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       onEmail={(v, on) => void act({ type: "savedView", op: "email", id: v.id, on })}
       onRemove={(v) => void act({ type: "savedView", op: "delete", id: v.id })}
     />
+  );
+  /*
+   * Every filter on, as a chip that takes it off, on phones too: an onboarding answer's filter
+   * ("No fractional Sales yet") is never only a number on the Filters button (C47).
+   */
+  const chipRow = chips.length > 0 && (
+    <div className="tp-chiprow" aria-label="Active filters">
+      {chips.map((c) => {
+        const fromGoal = presetOn.includes(c.id as ToggleKey);
+        return (
+          <button
+            key={c.id}
+            type="button"
+            className="chip tp-achip"
+            onClick={() => setEff(c.clear(eff))}
+            aria-label={`Remove the filter ${chipLabel(c)}`}
+            title={fromGoal ? "From your answer when you joined. Remove it and it stays off." : "Remove this filter"}
+          >
+            {chipLabel(c)} <IconX size={11} />
+          </button>
+        );
+      })}
+      <button type="button" className="tp-flink" onClick={clearFilters}>
+        Clear all
+      </button>
+    </div>
   );
   // Following counts companies. On the seats or people list, say how many rows that is ("5 seats at 1 company").
   const followCos = tab === "following" && recordType !== "companies" ? new Set(sorted.map((r) => r.i.c.id)).size : 0;
@@ -1563,6 +1719,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               </button>
               {tabs}
             </div>
+            {chipRow}
             {typeOpen && typeRef.current && (
               <Anchored anchor={typeRef.current} onClose={() => setTypeOpen(false)} width={240} className="tp-menu" label="What to list">
                 {RECORD_TYPES.map((t) => (
@@ -1575,7 +1732,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                     onClick={() => (setRecordType(t.key), setTypeOpen(false))}
                   >
                     <span>{t.label}</span>
-                    <span className="tp-menu-hint num">{totals[t.key]}</span>
+                    <span className="tp-menu-hint num" title={typeTitle(t.key)}>
+                      {typeCounts[t.key]}
+                    </span>
                   </button>
                 ))}
               </Anchored>
@@ -1599,6 +1758,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 )}
               </div>
             )}
+            {searchLine}
             <p className="sr-only" aria-live="polite" aria-atomic="true">
               {countText}
             </p>
@@ -1624,7 +1784,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                   <div className="tp-filters-head">
                     <span className="tp-filters-title">Filters</span>
                     {nFilters > 0 && (
-                      <button type="button" className="tp-flink" onClick={() => setFilters(clearedFilters(filters))}>
+                      <button type="button" className="tp-flink" onClick={clearFilters}>
                         Clear all
                       </button>
                     )}
@@ -1667,18 +1827,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 </button>
                 {sortMenu}
               </div>
-              {chips.length > 0 && (
-                <div className="tp-chiprow" aria-label="Active filters">
-                  {chips.map((c) => (
-                    <button key={c.id} type="button" className="chip tp-achip" onClick={() => setEff(c.clear(eff))} aria-label={`Remove the filter ${chipLabel(c)}`} title="Remove this filter">
-                      {chipLabel(c)} <IconX size={11} />
-                    </button>
-                  ))}
-                  <button type="button" className="tp-flink" onClick={() => setFilters(clearedFilters(filters))}>
-                    Clear all
-                  </button>
-                </div>
-              )}
+              {chipRow}
+              {searchLine}
               {scanLine}
               {followLine}
               <div className="tp-frame-box" ref={frameBoxRef}>
@@ -1715,7 +1865,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 <div className="tp-filters-head">
                   <span className="tp-filters-title">Filters</span>
                   {nFilters > 0 && (
-                    <button type="button" className="tp-flink" onClick={() => setFilters(clearedFilters(filters))}>
+                    <button type="button" className="tp-flink" onClick={clearFilters}>
                       Clear all
                     </button>
                   )}
@@ -1737,7 +1887,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             footer={
               <div className="tp-sheet-actions">
                 {nFilters > 0 && (
-                  <button type="button" className="btn" onClick={() => setFilters(clearedFilters(filters))}>
+                  <button type="button" className="btn" onClick={clearFilters}>
                     Clear all
                   </button>
                 )}
@@ -1784,7 +1934,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         {addOpts && <AddModal infos={infos} opts={addOpts} onClose={() => setAddOpts(null)} />}
         {icpOpen && <IcpSheet icp={me.icp} title={me.title} fn={me.function} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
         {saveOpen && (
-          <SaveViewSheet key={herePlace} defaultName={viewName(spelled, tab, recordType, fnOnly ? hireFn : null)} emailOn={view.email} onSave={saveView} onClose={() => setSaveOpen(false)} />
+          <SaveViewSheet key={herePlace} defaultName={viewName(spelled, tab, recordType, fnOnly ? hireFn : null, me.function)} emailOn={view.email} onSave={saveView} onClose={() => setSaveOpen(false)} />
         )}
         {editor && (
           <FactEditor

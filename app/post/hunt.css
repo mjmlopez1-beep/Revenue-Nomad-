@@ -195,13 +195,20 @@
 .hunt-vlist li:first-child {
   border-top: 0;
 }
+/* Manage: a view's name wraps to two lines before it is cut (L41). */
 .hunt-vname {
   font-size: 13px;
   font-weight: 600;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+/* The pill's count split ("25 match, 144 more where a part isn't on file"): quieter than the profile. */
+.hunt-pill-split {
+  opacity: 0.8;
 }
 .hunt-vfrom {
   font-weight: 400;
