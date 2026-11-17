@@ -55,7 +55,18 @@ const seed = {
   ],
   contacts: [],
   // A firm the seed cleanup dropped, which the running table still holds facts about.
-  removedFirms: { companies: [{ id: "c_dropped", name: "Agile Executives" }], engagements: [{ id: "e_dropped1", companyId: "c_dropped" }], contacts: [] },
+  removedFirms: {
+    companies: [
+      { id: "c_dropped", name: "Agile Executives" },
+      // A firm the seed dropped (with what it knew) where a member has since claimed a seat from the seat scan.
+      { id: "c_claimed", name: "Venture CPO", fields: { name: "Venture CPO", website: "venturecpo.example.com", industry: "Consulting & Advisory", hq: "Austin, TX" } },
+    ],
+    engagements: [
+      { id: "e_dropped1", companyId: "c_dropped" },
+      { id: "e_claimed1", companyId: "c_claimed", fields: { source: "Seat scan", role: "Fractional CPO", function: "Product", type: "Fractional", status: "Active" } },
+    ],
+    contacts: [],
+  },
 };
 const scanAt = daysAgo(2);
 const state = {
@@ -85,6 +96,7 @@ const state = {
     "e_heldfirm.operator": { value: "Gia Geo", by: "m1", at: daysAgo(5), status: "live", memberId: "m1" },
     "e_heldfirm.function": { value: "Marketing", by: "m1", at: daysAgo(5), status: "live" },
     "c_dropped.industry": { value: "Corporate Services", by: "m3", at: daysAgo(6), status: "live" },
+    "e_claimed1.operator": { value: "Gia Geo", by: "m1", at: daysAgo(1), status: "live", memberId: "m1" },
     "c_austin.industry": { value: "Software", by: "m3", at: daysAgo(6), status: "live" },
   },
   unlocks: { "e_memberfirm.rate": ["m3"], "e_dropped1.rate": ["m3"] },
@@ -103,6 +115,7 @@ const state = {
   benchRates: [],
   signals: [],
   notMine: {},
+  seatClaims: [{ memberId: "m1", engagementId: "e_claimed1", at: daysAgo(1) }],
   seen: {},
   scan: {
     lastRunAt: scanAt,
@@ -236,6 +249,16 @@ firm("Oracle", false, { listedBy: 4, employees: "1,001+" });
 firm("Small Co", true, { about: "We are a network of vetted fractional executives." });
 firm("Jane Doe Consulting", true, { holders: ["Jane Doe"], employees: "1–10" });
 check("NOT_FIRMS wins over the rules", firms.isNotFirm("RecruitBot") && firms.firmReason({ name: "RecruitBot" }) === null);
+// Fractional providers a source file flagged (November 2026): by name, by website for a common-word name, by the CXO rule and by About.
+for (const n of ["ExecHQ® - Bringing Expertise to the Table", "ExecHQ", "GigX", "Countsy", "Market Exec", "INNOV8EXECS", "Venture CPO", "TheAgileCPO", "Goodlawyer", "livingHR, Inc.", "HR-Reinforced", "Scaling Law Firms", "Altus CXO", "TechCXO Partners"]) firm(n, true);
+firm("Level", true, { website: "https://www.levelyourtalent.com/" });
+firm("Level", false, { website: "level.example.com" });
+firm("Rafiki", false);
+firm("SKYSHARE", false, { about: "Private aviation company offering fractional jet ownership and on-demand charter." });
+firm("EXO Edge", false);
+firm("Acme Security", true, { about: "Provides fractional CISO leadership and SOC 2 readiness." });
+firm("Acme Law", true, { about: "Florida law firm offering fractional general counsel services." });
+firm("Acme Homes", false, { about: "Fractional ownership of vacation homes." });
 
 // The seed cleanup on a copy.
 const copy = structuredClone(seed) as never as Parameters<typeof FR.cleanSeed>[0];
@@ -244,6 +267,7 @@ const st = FR.cleanSeed(copy);
 check("cleanSeed drops a firm and its seats", !copy.companies.some((c) => c.id === "c_yor") && !copy.engagements.some((e) => e.companyId === "c_yor") && st.removed.companies === 1 && st.removed.seats === 1, st.removed);
 check("cleanSeed keeps a firm where a member published a seat, for review", copy.companies.some((c) => c.id === "c_toptal") && copy.firmReview?.some((r) => r.companyId === "c_toptal") === true);
 check("cleanSeed records what it dropped", copy.removedFirms?.companies.some((c) => c.id === "c_yor") === true && copy.removedFirms?.engagements.some((e) => e.id === "e_yor1") === true);
+check("cleanSeed keeps the dropped firm's and seats' fields, so a held seat can come back", copy.removedFirms?.companies.find((c) => c.id === "c_yor")?.fields?.website === "yorcmo.example.com" && copy.removedFirms?.engagements.find((e) => e.id === "e_yor1")?.fields?.role === "Fractional CMO", copy.removedFirms);
 const austin = copy.companies.find((c) => c.id === "c_austin")!.fields;
 const ldn = copy.companies.find((c) => c.id === "c_ldn")!.fields;
 check("cleanSeed maps values to standard ones and stores the place", austin.revenue === "Under $1M" && austin.country === "United States" && austin.region === "Texas" && ldn.industry === "Pharma & Biotech" && copy.companies.find((c) => c.id === "c_tor")!.fields.employees === "51–200", { austin, ldn });
@@ -260,6 +284,17 @@ check("its unlocks are refunded once, and so are unlocks of a firm the seed drop
 check("follows of a removed firm go, others stay", s.follows.m3?.join() === "c_austin", s.follows);
 check("facts about a firm the seed dropped go", !s.values["c_dropped.industry"]);
 check("a firm where a member holds a seat stays, listed for review", s.companies.some((c) => c.id === "c_heldfirm") && s.firmReview?.some((r) => r.companyId === "c_heldfirm") === true);
+check(
+  "a firm the seed dropped where a member claimed a seat comes back with that seat, for review",
+  s.companies.some((c) => c.id === "c_claimed" && c.by === "review") &&
+    s.engagements.some((e) => e.id === "e_claimed1" && e.companyId === "c_claimed" && e.source === "Seat scan") &&
+    s.values["e_claimed1.role"]?.value === "Fractional CPO" &&
+    s.values["e_claimed1.operator"]?.by === "m1" &&
+    s.values["c_claimed.website"]?.value === "venturecpo.example.com" &&
+    s.firmReview?.some((r) => r.companyId === "c_claimed") === true &&
+    s.seatClaims?.some((c) => c.engagementId === "e_claimed1") === true,
+  { cos: s.companies, engs: s.engagements },
+);
 check("a stored value outside the list takes its standard value on load", s.values["c_austin.industry"]?.value === "SaaS", s.values["c_austin.industry"]);
 const alert = s.connector?.alerts.m3?.[0];
 check("saved searches take standard values on load (the old Software reads as Software (all))", alert?.industry?.join() === "SaaS,Enterprise Software,SMB Software,Developer Tools" && alert?.revenue?.join() === "Under $1M", alert);

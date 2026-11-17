@@ -10,6 +10,9 @@
  *    and people. Every paid unlock there is given back. The count is logged.
  *  - A firm where a member holds a seat (they picked themselves as its seat holder, or claimed
  *    it) is never removed this way: it stays and is listed for an admin to review (firmReview).
+ *    One the seed already dropped comes back on the state, with the seats the seed dropped and
+ *    what the seed knew about them (kept in `seed.removedFirms`), so the member's seat and claim
+ *    still have a home.
  *
  * The weekly scan never adds a firm and a member's Add of one is refused (lib/table.ts).
  */
@@ -19,9 +22,10 @@ import { STANDARD_FIELDS, toStandard } from "./industryMap";
 import type { Seed, State } from "./table";
 
 export interface RemovedFirms {
-  companies: { id: string; name: string }[];
-  /** Seats, with the company each was at. */
-  engagements: { id: string; companyId: string }[];
+  /** `fields`: what the seed knew, kept so a firm a member holds a seat at can come back (cleanups before November 2026 kept only the name). */
+  companies: { id: string; name: string; fields?: Record<string, string> }[];
+  /** Seats, with the company each was at (and, from November 2026, their fields). */
+  engagements: { id: string; companyId: string; fields?: Record<string, string>; verified?: boolean }[];
   contacts: string[];
 }
 /** A firm kept because a member holds a seat there, for an admin to look at. */
@@ -97,6 +101,7 @@ export function cleanSeed(seed: Seed, opts: { about?: Map<string, string> } = {}
     const engs = engsAt.get(c.id) ?? [];
     const why = firmReason({
       name: c.fields.name ?? "",
+      website: c.fields.website,
       about: c.fields.about || opts.about?.get(c.id),
       employees: c.fields.employees,
       holders: engs.map((e) => e.fields.operator).filter(Boolean),
@@ -115,8 +120,10 @@ export function cleanSeed(seed: Seed, opts: { about?: Map<string, string> } = {}
   const removed: RemovedFirms = seed.removedFirms ?? { companies: [], engagements: [], contacts: [] };
   const dropEngs = new Set(seed.engagements.filter((e) => drop.has(e.companyId)).map((e) => e.id));
   const dropPeople = (seed.contacts ?? []).filter((p) => (p.companyId && drop.has(p.companyId)) || (p.engagementId && dropEngs.has(p.engagementId)));
-  for (const c of seed.companies) if (drop.has(c.id)) removed.companies.push({ id: c.id, name: c.fields.name ?? "" });
-  removed.engagements.push(...seed.engagements.filter((e) => dropEngs.has(e.id)).map((e) => ({ id: e.id, companyId: e.companyId })));
+  for (const c of seed.companies) if (drop.has(c.id)) removed.companies.push({ id: c.id, name: c.fields.name ?? "", fields: c.fields });
+  removed.engagements.push(
+    ...seed.engagements.filter((e) => dropEngs.has(e.id)).map((e) => ({ id: e.id, companyId: e.companyId, fields: e.fields, ...(e.verified ? { verified: true } : {}) })),
+  );
   removed.contacts.push(...dropPeople.map((p) => p.id));
   stats.removed.companies = drop.size;
   stats.removed.seats = dropEngs.size;
@@ -148,6 +155,7 @@ export function seedFirmIds(seed: Seed): Map<string, { reason: string; engagemen
     if (engs.some((e) => MEMBER_SOURCES.has(e.fields.source) && e.fields.operator)) continue;
     const why = firmReason({
       name: c.fields.name ?? "",
+      website: c.fields.website,
       about: c.fields.about,
       employees: c.fields.employees,
       holders: engs.map((e) => e.fields.operator).filter(Boolean),
@@ -170,7 +178,30 @@ export function memberHoldsSeat(s: State, engagementIds: Iterable<string>): bool
 }
 
 /** Why a company named this (with what the state knows about it) is a firm, or null. For the weekly scan and for Add. */
-export const companyFirm = (name: string, about?: string | null) => (isNotFirm(name) ? null : firmReason({ name, about }));
+export const companyFirm = (name: string, about?: string | null, website?: string | null) => (isNotFirm(name) ? null : firmReason({ name, about, website }));
+
+/**
+ * Bring a firm the seed dropped back onto the state: the company (by "review"), each seat the
+ * seed dropped there, and what the seed knew about them as values from our records (by "seed",
+ * never over a value on the state). Safe to run again: what is there already stays as it is.
+ */
+function restoreDropped(seed: Seed, s: State, id: string, name: string, now: string) {
+  const put = (owner: string, fields: Record<string, string> | undefined, skip: string[]) => {
+    for (const [k, v] of Object.entries(fields ?? {}))
+      if (v && !skip.includes(k) && !s.values[`${owner}.${k}`])
+        s.values[`${owner}.${k}`] = { value: v, by: "seed", at: now, status: "live", ...(owner === id && k === "hq" ? { geo: normalizeHq(v) } : {}) };
+  };
+  if (!s.companies.some((x) => x.id === id)) {
+    s.companies.push({ id, name, by: "review", at: now });
+    put(id, seed.removedFirms?.companies.find((x) => x.id === id)?.fields, ["name", "country", "region"]);
+  }
+  for (const e of seed.removedFirms?.engagements ?? []) {
+    if (e.companyId !== id || s.engagements.some((x) => x.id === e.id) || seed.engagements.some((x) => x.id === e.id)) continue;
+    const source = e.fields?.source;
+    s.engagements.push({ id: e.id, companyId: id, by: "review", at: now, ...(source ? { source } : {}) });
+    put(e.id, e.fields, ["source"]);
+  }
+}
 
 export interface PurgeStats {
   companies: number;
@@ -210,6 +241,7 @@ export function purgeFirms(seed: Seed, s: State, now: string): PurgeStats {
       ? null
       : firmReason({
           name: c.name,
+          website: live(c.id, "website"),
           about: live(c.id, "about"),
           employees: live(c.id, "employees"),
           holders: engs.map((e) => live(e, "operator")).filter((x): x is string => !!x),
@@ -228,9 +260,8 @@ export function purgeFirms(seed: Seed, s: State, now: string): PurgeStats {
         review.push({ companyId: id, name: c.name, reason: c.reason, at: now });
         stats.reviewed++;
       }
-      // A firm the seed dropped comes back as an added company, so the member's seat still has a home.
-      if (!c.inSeed && !s.companies.some((x) => x.id === id) && !seed.companies.some((x) => x.id === id))
-        s.companies.push({ id, name: c.name, by: "review", at: now });
+      // A firm the seed dropped comes back as an added company, with its seats, so the member's seat and claim still have a home.
+      if (!c.inSeed && !seed.companies.some((x) => x.id === id)) restoreDropped(seed, s, id, c.name, now);
       continue;
     }
     drop.add(id);
