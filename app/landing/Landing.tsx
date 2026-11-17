@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * Trading Post landing page (signed out). In order: what it is and what it costs (hero, with
- * the join form), the numbers, what you can look up, how credits work, exactly which fields
- * are free and which cost a credit, questions, and the join form again.
+ * Trading Post landing page (signed out). In order: the warm intro and what it costs (hero, with
+ * the join form), "Try it" with the visitor's own function (real counts and sample rows from
+ * GET /api/table?preview=1), the numbers, what you can do with it, how it works (credits, with
+ * the free and locked fields folded away), questions, and the join form again.
  * One display heading. One volt button in view at a time: the join form's when a form is on
- * screen, the nav's when none is. The product visual is static HTML.
+ * screen, Try it's button when only that is, the nav's when none is. The visuals are static HTML.
  *
  * It renders before the view arrives (`view` null): everything but the counts is fixed copy,
  * so the page is up at once and the counts fill in when the view lands.
@@ -18,7 +19,8 @@ import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
 import { Questions } from "./Questions";
 import { contactOf, mailto, signInFailText } from "./contact";
-import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
+import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord, IntroVisual } from "./Visuals";
+import TryIt from "./TryIt";
 
 export interface LandingProps {
   /**
@@ -39,40 +41,72 @@ const STARTER_FALLBACK = 25;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-/** What a member comes here to look up, and what each one costs. */
-function lookups(intro: string | null): { title: string; body: string; cost: string | null }[] {
+/** Revenue Nomad's network, as the page says it. */
+const NETWORK = "500+";
+
+/** What a fractional can do with Trading Post, one card each, in the product's own words. */
+function uses(): { title: string; body: string; cost: string | null; earn?: boolean }[] {
   return [
     {
-      title: "Open fractional roles",
-      body: "We check for open fractional GTM roles every week and date each one, so you can tell a new role from one that has sat for months. You see the role for free. The company stays locked until you unlock it, and that one credit also shows the job posting and the posted rate.",
-      cost: "1 credit",
+      title: "Hiring now",
+      body: "Open fractional, interim and contract roles across functions. We check every week and date each one, so a new role stands apart from one that has sat for months. The role title is free.",
+      cost: "1 credit shows the company",
     },
     {
-      title: "Companies that hire fractionals",
-      body: "See which companies brought in a fractional, for which function and how recently the last seat started.",
+      title: "Repeat hirers",
+      body: "Companies that hire fractionals, with the function and start of every seat on file. Repeat hirers have 2 or more fractional hires.",
       cost: null,
     },
     {
-      title: "Companies yet to hire your function",
-      body: "A company that hired a fractional CMO and a RevOps lead may need sales next. One filter shows the ones that have not hired your function.",
+      title: "No fractional in your function yet",
+      body: "A company that hired a fractional CMO and a RevOps lead may need sales next. One filter shows the companies that hire fractionals but haven't hired yours.",
       cost: null,
     },
     {
-      title: "The fractional who held the seat",
-      body: intro
-        ? "Unlock who held the seat, then ask us for an intro or find them on LinkedIn, and hear how it went before your first call. Most seat holders are Revenue Nomad members."
-        : "Unlock who held the seat, then find them on LinkedIn and hear how it went before your first call. Most seat holders are Revenue Nomad members.",
-      cost: "1 credit",
-    },
-    {
-      title: "What the seat pays",
-      body: "See median monthly and hourly rates by function and client revenue. They start from Revenue Nomad's Rate Index and grow as members share rates. A number shows only once 5 people have a rate in the group, or 20 where survey data is included. It never says who they are.",
+      title: "Rate benchmarks",
+      body: "What the seat pays. Median monthly and hourly rates by function and client revenue, from Revenue Nomad's Rate Index and the rates members share.",
       cost: null,
     },
     {
       title: "Who does the hiring",
-      body: "See who makes the hiring call at each company. Titles are free. A name or a LinkedIn profile is 1 credit each, and so is an email or a phone number once a member adds one.",
+      body: "The hiring contacts at each company. Their titles are free. A name, a LinkedIn profile, an email or a phone number is 1 credit each.",
       cost: "1 credit each",
+    },
+    {
+      title: "Your clients and best fit",
+      body: "Set your ideal client by industry, size, revenue and country. Your clients shows the companies that fit, and Best fit for you puts the likeliest first.",
+      cost: null,
+    },
+    {
+      title: "Search everything",
+      body: "Search companies, seats and people, including what a company does. Type pharma and you get the pharma companies.",
+      cost: null,
+    },
+    {
+      title: "Saved views",
+      body: "Save a search as a view. Each week we email you what's new in it.",
+      cost: null,
+    },
+    {
+      title: "Alerts in Slack",
+      body: "From Integrations, get a post in Slack, or any tool by webhook, when a new open role fits your function or a saved view, when someone writes to you, or when someone unlocks your seat.",
+      cost: null,
+    },
+    {
+      title: "Use it from Claude",
+      body: "Connect Trading Post to Claude and ask it things. Which companies fit me best to prospect? What do fractional RevOps leads charge at $5M to $20M companies?",
+      cost: null,
+    },
+    {
+      title: "Messages",
+      body: "Write to other members inside Trading Post about a company, a seat or a rate. You get an email when someone writes back.",
+      cost: null,
+    },
+    {
+      title: "Your seats",
+      body: "Claim the seats you held. Everything on your own seat is free to you, and each thing you add that wasn't on file earns a credit.",
+      cost: "Earns credits",
+      earn: true,
     },
   ];
 }
@@ -132,22 +166,26 @@ function useInviter(): string | null {
   return inviter;
 }
 
-/** True while either join form is on screen. The nav button is the primary action only when neither is. */
-function useFormInView(...refs: React.RefObject<HTMLElement | null>[]): boolean {
-  const [inView, setInView] = useState(true);
+/** Which of these elements are on screen now, in the same order. Before the observer reports, all of them count as in view. */
+function useInView(...refs: React.RefObject<HTMLElement | null>[]): boolean[] {
+  const [seen, setSeen] = useState<boolean[]>(() => refs.map(() => true));
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
-    const seen = new Map<Element, boolean>();
+    const els = refs.map((r) => r.current);
+    const now = els.map(() => false);
     const io = new IntersectionObserver((entries) => {
-      for (const e of entries) seen.set(e.target, e.isIntersecting);
-      setInView([...seen.values()].some(Boolean));
+      for (const e of entries) {
+        const at = els.indexOf(e.target as HTMLElement);
+        if (at >= 0) now[at] = e.isIntersecting;
+      }
+      setSeen([...now]);
     });
-    for (const r of refs) if (r.current) io.observe(r.current);
+    for (const el of els) if (el) io.observe(el);
     return () => io.disconnect();
     // The refs are stable for the life of the page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return inView;
+  return seen;
 }
 
 /** A count, or a quiet bar the size of one while the view is on its way. */
@@ -176,7 +214,9 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   // Roles first seen in the last 7 days. A server that predates the count falls back to what is open now.
   const opened = s?.openedWeek ?? 0;
   const inviter = useInviter();
-  const formInView = useFormInView(heroForm, finalForm);
+  const tryCta = useRef<HTMLDivElement>(null);
+  const [heroIn, finalIn, tryIn] = useInView(heroForm, finalForm, tryCta);
+  const formInView = heroIn || finalIn;
 
   // A failed ?k= link that arrives after the page is up opens Sign in with the message too.
   useEffect(() => {
@@ -202,7 +242,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
     [s?.members, "members"],
   ];
 
-  const joinHint = "The pilot is free. A credit shows you one thing another member added, like who held a seat. Add something you know and you earn one back.";
+  const joinHint = "Add something you know and you earn a credit. Spend a credit to see something another member added, like who held a seat.";
   const supportHref = support ? mailto(support, "Trading Post question") : null;
 
   return (
@@ -214,16 +254,16 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             <span className="lp-nav-product">Trading Post</span>
           </a>
           <nav className="lp-nav-links" aria-label="Sections">
-            <a href="#inside">What you can look up</a>
-            <a href="#credits">How credits work</a>
-            <a href="#free">What&apos;s free</a>
+            <a href="#try">Try it</a>
+            <a href="#uses">What you can do</a>
+            <a href="#how">How it works</a>
             <a href="#faq">Questions</a>
           </nav>
           <div className="lp-nav-cta">
             <button type="button" className="lp-nav-signin" onClick={() => openSignIn()}>
               Sign in
             </button>
-            <button type="button" className={`btn num lp-nav-get${formInView ? "" : " btn-primary"}`} onClick={toJoin}>
+            <button type="button" className={`btn num lp-nav-get${formInView || tryIn ? "" : " btn-primary"}`} onClick={toJoin}>
               Get {starter} credits
             </button>
           </div>
@@ -252,10 +292,10 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
               ) : (
                 <p className="lp-live lp-live-quiet">A free pilot from Revenue Nomad</p>
               )}
-              <h1 className="lp-h1">See who hires fractionals and for which seat</h1>
+              <h1 className="lp-h1">Find your next client and the fractional who can introduce you</h1>
               <p className="lp-hero-sub">
-                Trading Post is the shared record of fractional work. It shows which companies hired a fractional, for which seat, who held it
-                and what it paid.
+                See which companies hire fractionals for your function and who held the seat before you. Ask them for a warm intro and hear how the
+                engagement went before your first call.
               </p>
               {inviter ? (
                 <div className="lp-invited">
@@ -265,21 +305,26 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                   <p className="lp-invited-small">Invites from the same network earn no bonus.</p>
                 </div>
               ) : null}
+              <p className="lp-hero-free num">Free pilot. {starter} credits to start.</p>
               <div className="lp-hero-form" ref={heroForm}>
                 <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" hint={joinHint} />
               </div>
               <p className="lp-hero-member">
                 Already a member?{" "}
                 <button type="button" className="lp-linkbtn" onClick={() => openSignIn()}>
-                  Sign in with your link
+                  Sign in
                 </button>
               </p>
+              <p className="lp-hero-by">Built by Revenue Nomad, the network of {NETWORK} fractionals.</p>
             </div>
             <div className="lp-hero-visual">
-              <HeroRecord />
+              <HeroRecord intro={!!intro} />
             </div>
           </div>
         </section>
+
+        {/* ---------- try it: the visitor's own function, real numbers ---------- */}
+        <TryIt onJoin={toJoin} primary={!formInView} ctaRef={tryCta} />
 
         {/* ---------- proof ---------- */}
         <section className="lp-proof" aria-label="Trading Post in numbers" aria-busy={!s}>
@@ -300,18 +345,36 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
           </div>
         </section>
 
-        {/* ---------- what you can look up ---------- */}
-        <section className="lp-sec lp-sec-tint" id="inside">
+        {/* ---------- what you can do ---------- */}
+        <section className="lp-sec lp-sec-tint" id="uses">
           <div className="lp-wrap">
             <div className="lp-sec-head">
-              <h2 className="lp-h2">What you can look up</h2>
+              <h2 className="lp-h2">What you can do with it</h2>
+              <p className="lp-lead">Everything here works in the pilot today.</p>
             </div>
+            <article className="lp-feature">
+              <div className="lp-feature-copy">
+                <h3>The fractional who held the seat</h3>
+                <p>
+                  Find a company you want, then see who held the seat there before you. Unlock them for 1 credit, message them inside Trading Post
+                  {intro ? " or ask us for a warm intro" : " or find them on LinkedIn"}, and hear how the engagement went before your first call.
+                </p>
+                <p className="lp-feature-small">Most seat holders are Revenue Nomad members.</p>
+                <span className="chip lp-cost lp-cost-locked lp-feature-cost">
+                  <IconLock size={12} />
+                  <span className="num">1 credit</span>
+                </span>
+              </div>
+              <IntroVisual intro={!!intro} />
+            </article>
             <ul className="lp-uses">
-              {lookups(intro).map((u) => (
+              {uses().map((u) => (
                 <li key={u.title} className="lp-use">
                   <h3>{u.title}</h3>
                   <p>{u.body}</p>
-                  {u.cost ? (
+                  {u.earn ? (
+                    <span className="chip lp-cost lp-cost-earn">{u.cost}</span>
+                  ) : u.cost ? (
                     <span className="chip lp-cost lp-cost-locked">
                       <IconLock size={12} />
                       <span className="num">{u.cost}</span>
@@ -325,14 +388,14 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
           </div>
         </section>
 
-        {/* ---------- how credits work ---------- */}
-        <section className="lp-sec" id="credits">
+        {/* ---------- how it works: credits, with the free and locked fields folded away ---------- */}
+        <section className="lp-sec" id="how">
           <div className="lp-wrap">
             <div className="lp-sec-head">
-              <h2 className="lp-h2">How credits work</h2>
+              <h2 className="lp-h2">How it works</h2>
               <p className="lp-lead">
-                You start with <span className="num">{starter}</span>. Add something you know and you earn a credit. Spend a credit to see something
-                another member added.
+                You start with <span className="num">{starter}</span> credits. Add something you know and you earn a credit. Spend a credit to see
+                something another member added.
               </p>
             </div>
             <ul className="lp-steps">
@@ -341,23 +404,23 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 <div className="lp-step-body">
                   <h3>Add what you know</h3>
                   <p>
-                    Add a seat you held, with its rate and hours a week, or something missing on a company, like its HQ or size. Each fact earns a credit, up to{" "}
-                    <span className="num">{EARN_CAP}</span> a day.
+                    Add a seat you held, with its rate and hours a week, or something missing on a company, like its HQ or size. Each one earns a credit, up
+                    to <span className="num">{EARN_CAP}</span> a day.
                   </p>
                 </div>
               </li>
               <li className="lp-step">
                 <DemoUnlock />
                 <div className="lp-step-body">
-                  <h3>Unlock what you need</h3>
-                  <p>One credit unlocks one fact, such as who held a seat or the rate. It stays unlocked for you.</p>
+                  <h3>Spend a credit to see one</h3>
+                  <p>One credit shows one thing, like who held a seat or what it paid. It stays open for you.</p>
                 </div>
               </li>
               <li className="lp-step">
                 <DemoConfirm />
                 <div className="lp-step-body">
                   <h3>Confirm or report</h3>
-                  <p>Confirm a fact you know is right. Report one that is wrong and we review it. If we remove something you unlocked, your credit comes back.</p>
+                  <p>Confirm what you know is right. Report what is wrong and we review it. If we remove something you unlocked, your credit comes back.</p>
                 </div>
               </li>
             </ul>
@@ -368,78 +431,76 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 or a seat.
               </span>
             </p>
-          </div>
-        </section>
 
-        {/* ---------- free vs locked ---------- */}
-        <section className="lp-sec lp-sec-tint" id="free">
-          <div className="lp-wrap">
-            <div className="lp-sec-head">
-              <h2 className="lp-h2">What&apos;s free and what costs a credit</h2>
-              <p className="lp-lead">Everything on a seat you held is free to you, and so are the rate benchmarks.</p>
-            </div>
-            <div className="lp-matrix" role="table" aria-label="Free and locked fields">
-              <div className="lp-mx-head" role="row">
-                <span role="columnheader" className="sr-only">
-                  Record
-                </span>
-                <span role="columnheader" className="lp-mx-col">
-                  Free to see
-                </span>
-                <span role="columnheader" className="lp-mx-col">
-                  <IconLock size={13} /> <span className="num">1 credit each</span>
-                </span>
-              </div>
-              {MATRIX.map((row) => (
-                <div key={row.entity} className="lp-mx-row" role="row">
-                  <h3 role="rowheader">{row.label}</h3>
-                  <div role="cell" className="lp-mx-cell">
-                    <span className="lp-mx-label">Free to see</span>
-                    <ul className="lp-chiprow">
-                      {row.free.map((x) => (
-                        <li key={x} className="chip">
-                          {x}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div role="cell" className="lp-mx-cell">
-                    <span className="lp-mx-label">
-                      <span className="num">{row.locked.length ? "1 credit each" : "1 credit"}</span>
+            <details className="lp-free" id="free">
+              <summary>
+                <span>What&apos;s free and what costs a credit</span>
+                <span className="lp-qa-icon" aria-hidden />
+              </summary>
+              <div className="lp-free-in">
+                <p className="lp-free-lead">Everything on a seat you held is free to you, and so are the rate benchmarks.</p>
+                <div className="lp-matrix" role="table" aria-label="Free and locked fields">
+                  <div className="lp-mx-head" role="row">
+                    <span role="columnheader" className="sr-only">
+                      Record
                     </span>
-                    {row.locked.length ? (
-                      <ul className="lp-chiprow">
-                        {row.locked.map((x) => (
-                          <li key={x} className="chip lp-chip-locked">
-                            <IconLock size={11} />
-                            {x}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {row.note ? <p className="lp-mx-note">{row.note}</p> : null}
+                    <span role="columnheader" className="lp-mx-col">
+                      Free to see
+                    </span>
+                    <span role="columnheader" className="lp-mx-col">
+                      <IconLock size={13} /> <span className="num">1 credit each</span>
+                    </span>
                   </div>
+                  {MATRIX.map((row) => (
+                    <div key={row.entity} className="lp-mx-row" role="row">
+                      <h3 role="rowheader">{row.label}</h3>
+                      <div role="cell" className="lp-mx-cell">
+                        <span className="lp-mx-label">Free to see</span>
+                        <ul className="lp-chiprow">
+                          {row.free.map((x) => (
+                            <li key={x} className="chip">
+                              {x}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div role="cell" className="lp-mx-cell">
+                        <span className="lp-mx-label">
+                          <span className="num">{row.locked.length ? "1 credit each" : "1 credit"}</span>
+                        </span>
+                        {row.locked.length ? (
+                          <ul className="lp-chiprow">
+                            {row.locked.map((x) => (
+                              <li key={x} className="chip lp-chip-locked">
+                                <IconLock size={11} />
+                                {x}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {row.note ? <p className="lp-mx-note">{row.note}</p> : null}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            </details>
           </div>
         </section>
 
         {/* ---------- FAQ ---------- */}
-        <section className="lp-sec" id="faq">
+        <section className="lp-sec lp-sec-tint" id="faq">
           <div className="lp-wrap lp-faq-wrap">
             <h2 className="lp-h2">Questions</h2>
-            <Questions starter={starter} support={support} />
+            <Questions starter={starter} support={support} intro={!!intro} />
           </div>
         </section>
 
         {/* ---------- final CTA ---------- */}
         <section className="lp-final">
           <div className="lp-wrap lp-final-in">
-            <h2 className="lp-h2">
-              Get <span className="num">{starter}</span> credits and look around
-            </h2>
-            <p className="lp-final-sub">It takes your email. The pilot is free.</p>
+            <h2 className="lp-h2">Find the companies that hire your function</h2>
+            <p className="lp-final-sub num">It takes your email. Free pilot. {starter} credits to start.</p>
             <div className="lp-final-form" ref={finalForm}>
               <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
             </div>
@@ -451,7 +512,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         <div className="lp-wrap lp-foot-in">
           <div className="lp-foot-brand">
             <Brand />
-            <span>Trading Post is a free pilot from Revenue Nomad.</span>
+            <span>Trading Post is a free pilot from Revenue Nomad, the network of {NETWORK} fractionals.</span>
           </div>
           <div className="lp-foot-links">
             {support && supportHref ? (

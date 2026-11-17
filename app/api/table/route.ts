@@ -13,6 +13,7 @@ import { packView } from "@/lib/viewWire";
 import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
+import { PreviewError, preview } from "@/lib/preview";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,8 @@ async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
  * GET              the table as the signed-in member sees it (signed out: counts only).
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
+ * GET ?preview=1&fn=F&ind=I&country=C   the landing page's "Try it": counts and sample rows from free
+ *                  facts only, never a company, person, posting or rate (lib/preview.ts). 400 on a value not on its list.
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?export=1    admins: download the runtime state (a backup).
@@ -172,6 +175,18 @@ export const GET = guarded(async (req: NextRequest) => {
   if (ref !== null) {
     if (limited(`ref:${ip}`, 30, 60_000)) return err(SLOW, 429);
     return NextResponse.json({ inviter: await inviterName(ref) }, { headers: { "cache-control": "no-store" } });
+  }
+  // "Try it" on the landing page: counts and sample rows from free facts only (lib/preview.ts).
+  if (req.nextUrl.searchParams.get("preview") !== null) {
+    if (limited(`preview:${ip}`, 60, 60_000)) return err(SLOW, 429);
+    const q = req.nextUrl.searchParams;
+    try {
+      const a = await preview({ fn: q.get("fn"), industry: q.get("ind"), country: q.get("country") });
+      return NextResponse.json(a, { headers: { "cache-control": "public, max-age=120" } });
+    } catch (e) {
+      if (e instanceof PreviewError) return err(e.message, 400);
+      throw e;
+    }
   }
   if (req.nextUrl.searchParams.get("export")) {
     if (!isAdmin(await memberForToken(token))) return err("Only admins can download the export.", 403);
