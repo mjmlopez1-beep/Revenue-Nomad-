@@ -1345,7 +1345,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
   const scan = view.scan;
   // Hiring now leads with the member's function: how many came in this week there and elsewhere, and one tap for every function.
-  const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => eff.firms || !isFirm(i.c)) : null;
+  const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => !isFirm(i.c)) : null;
   const fnLine = hireFn && fnSplit && !qt && (fnSplit.mine.length > 0 || allFns) && (
     <p className="tp-scanline hunt-fnline">
       <span>

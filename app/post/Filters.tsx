@@ -375,16 +375,6 @@ export function FilterPanel({
           </div>
         </div>
       </Group>
-      <Group title="Fractional firms">
-        <button type="button" role="checkbox" aria-checked={f.firms} className={`tp-ftoggle${f.firms ? " on" : ""}${!facets.firms && !f.firms ? " zero" : ""}`} onClick={() => setF({ ...f, firms: !f.firms })}>
-          <span className="tp-check" aria-hidden>
-            {f.firms && <IconCheck size={11} />}
-          </span>
-          <span className="tp-ftoggle-l">Include fractional firms</span>
-          <span className="tp-cnt num">{facets.firms}</span>
-        </button>
-        <p className="tp-fnote">Agencies and marketplaces that place fractionals. They aren&apos;t clients, so the table leaves them out unless you turn this on.</p>
-      </Group>
       <Fold title="Seat" on={f.fn.length + f.type.length + f.reason.length + f.pricing.length + f.source.length > 0 || f.statusKnown}>
         <ListBlock k="fn" title="Function" f={f} setF={setF} counts={l.fn} />
         <ListBlock k="type" title="Type" f={f} setF={setF} counts={l.type} />

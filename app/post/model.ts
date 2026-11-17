@@ -359,8 +359,6 @@ export interface Filters {
   /** Countries (CompanyRec.country), and US states or regions under them. */
   country: string[];
   region: string[];
-  /** Include fractional firms (agencies, marketplaces). Off: they are left out of every list. */
-  firms: boolean;
   /** Narrow to the member's ideal client (Me.icp). The "Your clients" pill, not a chip. */
   icp: boolean;
 }
@@ -390,7 +388,6 @@ export const EMPTY_FILTERS: Filters = {
   relationship: [],
   country: [],
   region: [],
-  firms: false,
   icp: false,
 };
 
@@ -761,8 +758,8 @@ const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "country", "
 function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   const out: Clause[] = [];
   if (tab !== "all") out.push({ group: "tab", test: (r) => tabTest(tab, r) });
-  // Fractional firms (agencies, marketplaces) are not clients: out of every list unless asked for.
-  if (!f.firms) out.push({ group: "firms", test: (r) => !isFirm(r.i.c) });
+  // A fractional firm (agency, marketplace) is not a client: a guard, should a record ever carry firm.
+  out.push({ group: "firms", test: (r) => !isFirm(r.i.c) });
   // The member's ideal client, while the "Your clients" pill is on.
   const icp = f.icp ? me.icp : null;
   if (icp && !icpEmpty(icp)) {
@@ -805,8 +802,6 @@ export interface Facets {
   lists: Record<ListKey, Record<string, number>>;
   fit: Record<number, number>;
   tabs: Record<Tab, number>;
-  /** Fractional firms the other filters let through (what "Include fractional firms" adds). */
-  firms: number;
   /** Rows the other filters let through with the ideal client lifted ("Show everyone"). */
   everyone: number;
 }
@@ -872,11 +867,9 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
   for (const t of TABS)
     tabs[t.key] =
       t.key === "all" ? tabBase.length : t.key === "following" ? new Set(tabBase.filter((r) => tabTest(t.key, r)).map((r) => r.i.c.id)).size : tabBase.filter((r) => tabTest(t.key, r)).length;
-  let firms = 0;
-  for (const r of rows) if (pass(r, cs, "firms") && isFirm(r.i.c)) firms++;
   let everyone = 0;
   for (const r of rows) if (pass(r, cs, "icp")) everyone++;
-  return { rows: result, facets: { toggles, lists, fit, tabs, firms, everyone } };
+  return { rows: result, facets: { toggles, lists, fit, tabs, everyone } };
 }
 
 export function activeCount(f: Filters): number {
@@ -884,7 +877,6 @@ export function activeCount(f: Filters): number {
   for (const k of TOGGLES) if (f[k]) n++;
   for (const k of LISTS) n += f[k].length;
   if (f.fitMin) n++;
-  if (f.firms) n++;
   return n;
 }
 
@@ -903,7 +895,6 @@ export function activeChips(f: Filters): { id: string; label: string; clear: (f:
         clear: (x) => ({ ...x, [k]: x[k].filter((y) => y !== v) }),
       });
   if (f.fitMin) out.push({ id: "fit", label: `Fit ${f.fitMin}+`, clear: (x) => ({ ...x, fitMin: 0 }) });
-  if (f.firms) out.push({ id: "firms", label: "Fractional firms included", clear: (x) => ({ ...x, firms: false }) });
   return out;
 }
 
