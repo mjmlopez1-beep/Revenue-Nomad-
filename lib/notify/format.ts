@@ -140,7 +140,7 @@ export function slackBody(a: Alert) {
   const url = httpUrl(a.url);
   const text = [`*${esc(a.headline)}*`, ...a.lines.map(esc)].join("\n");
   return {
-    text: `${a.headline}${a.lines.length ? `. ${a.lines[0]}` : ""}`.slice(0, 300),
+    text: `${a.headline}${a.lines.length ? `${/[.!?]$/.test(a.headline) ? "" : "."} ${a.lines[0]}` : ""}`.slice(0, 300),
     unfurl_links: false,
     unfurl_media: false,
     blocks: [

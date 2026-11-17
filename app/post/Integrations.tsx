@@ -233,10 +233,14 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
       live = false;
     };
   }, []);
-  // The old "Use it in Claude" link opens here at the Claude section.
+  // The old "Use it in Claude" link opens here at the Claude section, once the Slack part above it has its height.
+  const jumped = useRef(false);
+  const ready = view !== null || failed;
   useEffect(() => {
-    if (section === "claude") claudeRef.current?.scrollIntoView({ block: "start" });
-  }, [section]);
+    if (section !== "claude" || !ready || jumped.current) return;
+    jumped.current = true;
+    requestAnimationFrame(() => claudeRef.current?.scrollIntoView({ block: "start" }));
+  }, [section, ready]);
 
   const run = async (key: string, body: Record<string, unknown>) => {
     setBusy(key);

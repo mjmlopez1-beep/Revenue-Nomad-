@@ -64,6 +64,8 @@ RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 run scan npx tsx scripts/test-scan.mts
 run digest npx tsx scripts/test-digest.ts
 run messages npx tsx scripts/test-messages.mjs
+# Alerts in Slack and webhooks (lib/notify), with fetch and name lookups replaced: nothing leaves the machine.
+run notify npx tsx scripts/test-notify.mts
 run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
 run bench npx tsx scripts/test-bench.mjs
