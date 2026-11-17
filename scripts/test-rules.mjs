@@ -18,7 +18,7 @@
  *   STARTER        expected starter credits (default 25)
  *   CRON_SECRET    the server's RN_CRON_SECRET (default qa-cron)
  *   ONLY           comma-separated sections to run (default all): role hidden bundle status seat
- *                  report keep rate admin price twin repair dates retract company wire closed
+ *                  report keep rate admin price twin repair dates retract company wire closed person
  *   SUPPORT_EMAIL, INTRO_EMAIL   the server's RN_SUPPORT_EMAIL and RN_INTRO_EMAIL (default: not set)
  */
 import { readFileSync } from "node:fs";
@@ -1300,6 +1300,94 @@ section("closed", async () => {
   const took = await N.act({ type: "fill", entity: "engagement", id: ze.id, field: "operator", value: "x", memberId: "me" });
   const early = await N.act({ type: "fill", entity: "engagement", id: ze.id, field: "end", value: "2020-01" });
   check("an end before the role was first listed is refused, and says when that was", took.status === 200 && early.status === 400 && /^The end month can't be before [A-Z][a-z]{2} \d{4}, when the role was first listed\.$/.test(early.json?.error ?? ""), [took.json?.error, early.json]);
+});
+
+// A person's name and title are one purchase: locked until unlocked, 1 credit opens both, whichever is asked for.
+section("person", async () => {
+  const A = await member("Ada Adder");
+  const B = await member("Bo Buyer");
+  const C = await member("Cy Namer");
+  const D = await member("Di Everything");
+  const coName = `Qa Person Co ${RUN}`;
+  const TITLE = `Chief Qa Officer ${RUN}`;
+  const add = await A.act({
+    type: "add", company: coName, companyFields: { industry: "SaaS" },
+    people: [{ name: "Pia Person", title: TITLE, relationship: "Decision maker", email: "pia.person@example.com" }],
+  });
+  if (add.status !== 200) return fail("person: add a company with a person", add.json);
+  const pOf = (view) => companyNamed(view, coName)?.people[0] ?? null;
+  const ap = pOf(await A.view());
+  check("the member who added the person sees the name and the title", ap?.cells.name?.s === "value" && ap.cells.title?.s === "value" && ap.cells.title.v === TITLE, ap?.cells);
+  const bRaw = await call("GET", "/api/table", { token: B.token, ipAddr: B.ip });
+  const bp = pOf(bRaw.json);
+  check("for anyone else the title is locked, like the name (not blank)", bp?.cells.title?.s === "locked" && bp.cells.name?.s === "locked" && bp.cells.relationship?.s === "value" && bp.cells.email?.s === "locked", bp?.cells);
+  check("the server never sends a locked title", bRaw.status === 200 && !bRaw.text.includes(TITLE) && !bRaw.text.includes("Pia Person"));
+  const compact = await call("GET", "/api/table?compact=1", { token: B.token, ipAddr: B.ip });
+  check("nor in the compact view", compact.status === 200 && !compact.text.includes(TITLE));
+  const anon = await call("GET", "/api/table", { ipAddr: nextIp() });
+  check("nor signed out", !anon.text.includes(TITLE));
+
+  // Unlocking the title opens the name too, for 1 credit.
+  const b1 = await B.act({ type: "unlock", entity: "contact", id: bp.id, field: "title" });
+  const bAfter = await B.view();
+  const bp2 = pOf(bAfter);
+  check("unlocking the title says it opened the name and the title for 1 credit", b1.status === 200 && b1.json?.message === "Unlocked a person's name and title for 1 credit.", b1.json);
+  check("and returns both cells", ["name", "title"].every((f) => b1.json?.cells?.some((c) => c.entity === "contact" && c.field === f && c.cell.s === "value")), b1.json?.cells?.map((c) => [c.field, c.cell.s]));
+  check("the name and the title both show, paid, for 1 credit", bp2?.cells.title?.v === TITLE && bp2.cells.name?.v === "Pia Person" && bp2.cells.name.paid === true && bp2.cells.title.paid === true && bAfter.me.credits === STARTER - 1, { cells: bp2 && { name: bp2.cells.name.s, title: bp2.cells.title.s }, credits: bAfter.me.credits });
+  check("the email stays locked (1 credit of its own)", bp2?.cells.email?.s === "locked");
+  const b2 = await B.act({ type: "unlock", entity: "contact", id: bp.id, field: "name" });
+  check("holding the title, the name is free: asking for it spends nothing", b2.status === 400 && b2.json?.error === "Nothing here is locked, so no credit was spent." && (await B.view()).me.credits === STARTER - 1, b2.json);
+
+  // Unlocking the name opens the title too.
+  const c1 = await C.act({ type: "unlock", entity: "contact", id: bp.id, field: "name" });
+  const cp = pOf(await C.view());
+  check("unlocking the name opens the title too, for 1 credit", c1.status === 200 && c1.json?.message === "Unlocked a person's name and title for 1 credit." && cp?.cells.title?.v === TITLE && cp.cells.name?.s === "value" && (await C.view()).me.credits === STARTER - 1, c1.json);
+  const c2 = await C.act({ type: "unlock", entity: "contact", id: bp.id, field: "title" });
+  check("holding the name, the title is free", c2.status === 400 && (await C.view()).me.credits === STARTER - 1, c2.json);
+
+  // Unlock all on the record counts the name and title once.
+  const dv = await D.view();
+  const dp = pOf(dv);
+  const items = [{ entity: "contact", id: dp.id, field: "name" }, { entity: "contact", id: dp.id, field: "title" }, { entity: "contact", id: dp.id, field: "email" }];
+  const d1 = await D.act({ type: "unlockMany", items });
+  const dp2 = pOf(await D.view());
+  check("unlocking the name, the title and the email together costs 2 credits", d1.status === 200 && (await D.view()).me.credits === STARTER - 2 && dp2?.cells.name?.s === "value" && dp2.cells.title?.s === "value" && dp2.cells.email?.s === "value", { status: d1.status, msg: d1.json?.message, credits: (await D.view()).me.credits });
+  check("and says it opened 3 facts for 2 credits", d1.json?.message === "Unlocked 3 facts for 2 credits.", d1.json?.message);
+
+  // A title added later comes with a name already held.
+  const add2 = await A.act({ type: "addPerson", companyId: companyNamed(await A.view(), coName).id, person: { name: "Lee Later" } });
+  const lp = companyNamed(await B.view(), coName)?.people.find((p) => p.id !== bp.id);
+  if (add2.status !== 200 || !lp) return fail("person: add a second person", add2.json);
+  const l1 = await B.act({ type: "unlock", entity: "contact", id: lp.id, field: "name" });
+  check("a person with no title yet: unlocking the name opens the name", l1.status === 200 && l1.json?.message === "Unlocked a person's name for 1 credit." && (await B.view()).me.credits === STARTER - 2, l1.json);
+  const LATER = `Head of Later ${RUN}`;
+  const fillT = await A.act({ type: "fill", entity: "contact", id: lp.id, field: "title", value: LATER });
+  const lpB = companyNamed(await B.view(), coName)?.people.find((p) => p.id === lp.id);
+  const lpC = companyNamed(await C.view(), coName)?.people.find((p) => p.id === lp.id);
+  check("a title added later shows free to the member who holds the name", fillT.status === 200 && lpB?.cells.title?.v === LATER && (await B.view()).me.credits === STARTER - 2, lpB?.cells.title);
+  check("and stays locked for a member who doesn't", lpC?.cells.title?.s === "locked", lpC?.cells.title);
+
+  // Adding a title to someone else's person earns a credit, and does not open their name.
+  const E = await member("Ed Entitled");
+  const add3 = await A.act({ type: "addPerson", companyId: companyNamed(await A.view(), coName).id, person: { name: "Nia Notitle" } });
+  const np = companyNamed(await E.view(), coName)?.people.find((p) => p.cells.title?.s === "empty");
+  const e0 = (await E.view()).me.credits;
+  const eFill = await E.act({ type: "fill", entity: "contact", id: np?.id, field: "title", value: "CFO" });
+  const np2 = companyNamed(await E.view(), coName)?.people.find((p) => p.id === np?.id);
+  check("adding a title to another member's person earns 1 and leaves the name locked", add3.status === 200 && eFill.status === 200 && np2?.cells.title?.v === "CFO" && np2.cells.name?.s === "locked" && (await E.view()).me.credits === e0 + 1, { fill: eFill.json, name: np2?.cells.name?.s });
+  const eUn = await E.act({ type: "unlock", entity: "contact", id: np.id, field: "name" });
+  check("  and the name still costs 1", eUn.status === 200 && (await E.view()).me.credits === e0, eUn.json);
+
+  // Removal refunds each payer once per name and title, whichever half they paid for.
+  const adm = await admin();
+  if (!adm) return skip("person refunds", "no admin account (set ADMIN_TOKEN)");
+  const before = { B: (await B.view()).me.credits, C: (await C.view()).me.credits, D: (await D.view()).me.credits };
+  const rmName = await adm.act({ type: "adminRemove", entity: "contact", id: bp.id, field: "name" });
+  const mid = { B: (await B.view()).me.credits, C: (await C.view()).me.credits, D: (await D.view()).me.credits };
+  check("removing the name refunds those who paid for the name", rmName.status === 200 && mid.C === before.C + 1 && mid.D === before.D + 1 && mid.B === before.B, { before, mid });
+  const rmTitle = await adm.act({ type: "adminRemove", entity: "contact", id: bp.id, field: "title" });
+  const end = { B: (await B.view()).me.credits, C: (await C.view()).me.credits, D: (await D.view()).me.credits };
+  check("removing the title then refunds the one who paid for the title, and nobody twice", rmTitle.status === 200 && end.B === before.B + 1 && end.C === mid.C && end.D === mid.D, { before, mid, end });
 });
 
 /* ---------- run ---------- */

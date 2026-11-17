@@ -236,7 +236,7 @@ const SAMPLE = {
   "contact.phone": "+1 555 010 0000",
   "contact.linkedin": "linkedin.com/in/qa-person",
 };
-const FREE = new Set(["company.hq", "company.linkedin", "company.industry", "company.employees", "company.revenue", "engagement.type", "engagement.start", "engagement.revenue", "engagement.employees", "contact.title", "contact.relationship"]);
+const FREE = new Set(["company.hq", "company.linkedin", "company.industry", "company.employees", "company.revenue", "engagement.type", "engagement.start", "engagement.revenue", "engagement.employees", "contact.relationship"]);
 const claimed = new Set();
 /** n empty cells nobody in this run has picked yet. */
 /** A company's pick-list answers: only 5 earn a day, so the checks that count credits leave them out unless asked. */
@@ -264,9 +264,16 @@ function pickEmpty(view, n, { free = false, entity, picks = false } = {}) {
  */
 const pickLocked = (view, n) => {
   const out = [];
+  // A person's name and title are one purchase: only one of the two per person.
+  const persons = new Set();
   for (const x of cellsOf(view)) {
     if (out.length >= n) break;
-    if (x.cell.s === "locked" && x.entity !== "company" && !x.company.hidden) out.push({ entity: x.entity, id: x.id, field: x.field });
+    if (x.cell.s !== "locked" || x.entity === "company" || x.company.hidden) continue;
+    if (x.entity === "contact" && ["name", "title"].includes(x.field)) {
+      if (persons.has(x.id)) continue;
+      persons.add(x.id);
+    }
+    out.push({ entity: x.entity, id: x.id, field: x.field });
   }
   return out;
 };

@@ -231,7 +231,8 @@ function pickLocked(view, n, skipIds = new Set()) {
       if (!skipIds.has(e.id)) for (const [field, cell] of Object.entries(e.cells)) if (cell.s === "locked" && out.length < n) out.push({ entity: "engagement", id: e.id, field });
       people.push(...e.people);
     }
-    for (const p of people) for (const [field, cell] of Object.entries(p.cells)) if (cell.s === "locked" && out.length < n) out.push({ entity: "contact", id: p.id, field });
+    // A person's name and title are one purchase: the title is left out when the name is locked too.
+    for (const p of people) for (const [field, cell] of Object.entries(p.cells)) if (cell.s === "locked" && out.length < n && !(field === "title" && p.cells.name?.s === "locked")) out.push({ entity: "contact", id: p.id, field });
     if (out.length >= n) break;
   }
   if (out.length < n) throw new Error(`only ${out.length} locked facts`);

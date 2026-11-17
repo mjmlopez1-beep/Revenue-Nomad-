@@ -14,7 +14,7 @@ import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
   bandRange, bestFit, countryOf, criteriaOf, icpLabel, icpMatch, icpTest, icpUnknown, industryWords, openSince, regionOf, splitByFn, viewName, withIcpSpelled, activeChips,
-  cardSeat, newRolesFor, newThisWeek, rolesThisWeek,
+  cardSeat, newRolesFor, newThisWeek, rolesThisWeek, personCoverOf, personNoun,
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 
@@ -196,6 +196,22 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   check("searchWords keeps plain words", JSON.stringify(searchWords("  VP Sales ")) === JSON.stringify(["vp", "sales"]));
   const people = applyFilters(rowsFor("people", [i]), EMPTY_FILTERS, "all", "ceo", me).rows.length;
   check("a person search reads that person's title", people === 1);
+  {
+    // A person's name and title are one purchase: locked until unlocked, never searched while locked.
+    const locked = (): PersonRec => ({ id: `p${++n}`, engagementId: null, source: "Member added", cells: { name: LOCKED, title: LOCKED, relationship: val("Decision maker"), email: LOCKED, phone: EMPTY, linkedin: EMPTY } });
+    const lp = locked();
+    const lc = co("Quiet Co", [], [lp]);
+    const li = deriveAll([lc]);
+    check("a locked title is not searched", applyFilters(rowsFor("people", li), EMPTY_FILTERS, "all", "ceo", me).rows.length === 0 && applyFilters(rowsFor("companies", li), EMPTY_FILTERS, "all", "ceo", me).rows.length === 0);
+    check("a person's name and title are one entry in Unlock all, the email another", JSON.stringify(li[0].locked.map((t) => t.field)) === JSON.stringify(["name", "email"]), li[0].locked);
+    check("a locked name and title: the name's lock spends, the title's is quiet", personCoverOf(li[0], null, lp, "name") === null && /^Comes with the name/.test(personCoverOf(li[0], null, lp, "title") ?? ""), [personCoverOf(li[0], null, lp, "name"), personCoverOf(li[0], null, lp, "title")]);
+    check("the lock says it opens the name and the title", personNoun(lp.cells, "name") === "name and title" && personNoun(lp.cells, "email") === undefined);
+    const half: PersonRec = { ...locked(), cells: { ...locked().cells, name: val("Pia Person", { paid: true }), title: LOCKED } };
+    check("a title locked alone is its own lock", personCoverOf(deriveAll([co("Half Co", [], [half])])[0], null, half, "title") === null && personNoun(half.cells, "title") === undefined);
+    check("a seat's people count their name and title once too", JSON.stringify(lockedInEngagement({ ...eng({}), people: [locked()] }).filter((t) => t.entity === "contact").map((t) => t.field)) === JSON.stringify(["name", "email"]));
+    const sortI = deriveAll([co("Zed Known", [], [{ ...locked(), cells: { ...locked().cells, title: val("Advisor") } }]), co("Amp Locked", [], [locked()])]);
+    check("a locked title sorts as unknown (last)", sortRows(rowsFor("people", sortI), "title").map((r) => r.i.c.name).join() === "Zed Known,Amp Locked");
+  }
   // Ranking: rows whose company name matches come first.
   const a = deriveAll([co("Acme Sales Tools", [])])[0];
   const b = deriveAll([{ ...co("Zed Corp", []), cells: { ...co("x", []).cells, industry: val("Sales tools") } }])[0];

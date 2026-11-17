@@ -12,7 +12,7 @@
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconLock, IconStar, LockedName, LockedSite, fmtMonth, val } from "../ui/shared";
-import { cardSeat, coverOf, isOpenRole, isUnheldOpenRole, known, type Row, type Tab } from "./model";
+import { cardSeat, coverOf, isOpenRole, personCoverOf, personNoun, isUnheldOpenRole, known, type Row, type Tab } from "./model";
 import { YourSeat, earnNote, useCellUi } from "./ui";
 import { Fit, FnChips, HeldBy, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
 import { RoleDate } from "./RoleDate";
@@ -267,13 +267,13 @@ const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r:
       <Head r={r} onOpen={onOpen} />
       <FirmoLine c={i.c} />
       <div className="tp-pcard-fns">
-        {title ? <span className="tp-pcard-title">{title}</span> : <RowFact t={t("title")} at={at} cell={p.cells.title} addLabel="Title" />}
+        {title ? <span className="tp-pcard-title">{title}</span> : <RowFact t={t("title")} at={at} cell={p.cells.title} addLabel="Title" cover={personCoverOf(i, r.e, p, "title")} noun={personNoun(p.cells, "title")} />}
         {rel ? <span className="chip tp-fn">{rel}</span> : <RowFact t={t("relationship")} at={at} cell={p.cells.relationship} addLabel="Relationship" />}
       </div>
       {/* At a hidden company the name is a quiet lock: the card opens the record, which unlocks it. */}
       <div className="tp-pfacts">
         <Fact label="Name">
-          <RowFact t={t("name")} at={at} cell={p.cells.name} cover={coverOf(i, r.e, "name")} />
+          <RowFact t={t("name")} at={at} cell={p.cells.name} cover={personCoverOf(i, r.e, p, "name")} noun={personNoun(p.cells, "name")} />
         </Fact>
         {p.cells.email?.s !== "empty" && p.cells.email && (
           <Fact label="Email">

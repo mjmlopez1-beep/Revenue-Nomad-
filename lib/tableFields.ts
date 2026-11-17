@@ -9,7 +9,7 @@
  * Free fields describe the company and the shape of the work (function, type, status, start,
  * hours per week), so the free view is useful on its own. Locked fields are the intel
  * people trade for: the exact role, end date, who held the seat, rate, the
- * posting, and people's names and contact details. Adding a missing fact earns 1 credit (max
+ * posting, and people's names, titles and contact details (a name and title are one unlock). Adding a missing fact earns 1 credit (max
  * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
  */
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -370,7 +370,8 @@ export const GROUPS: GroupDef[] = [
     label: "Person",
     fields: [
       { key: "name", label: "Name", kind: "text", gated: true, placeholder: "Jane Smith", say: "a person's name" },
-      { key: "title", label: "Title", kind: "text", gated: false, placeholder: "CEO", say: "a person's title" },
+      // A person's title is locked with their name: one credit opens both (PERSON_BUNDLE in lib/table.ts).
+      { key: "title", label: "Title", kind: "text", gated: true, placeholder: "CEO", say: "a person's title" },
       { key: "relationship", label: "Relationship", kind: "choice", gated: false, options: RELATIONSHIPS, hint: "How this person relates to the seat or the company.", say: "a person's relationship" },
       { key: "email", label: "Email", kind: "email", gated: true, placeholder: "jane@acme.com", say: "a person's email" },
       { key: "phone", label: "Phone", kind: "phone", gated: true, placeholder: "+1 555 010 0000", say: "a person's phone number" },
@@ -378,6 +379,9 @@ export const GROUPS: GroupDef[] = [
     ],
   },
 ];
+
+/** A person's name and title: one unlock, 1 credit for both (holdsPersonPartner in lib/table.ts). The lead comes first. */
+export const PERSON_BUNDLE = ["name", "title"];
 
 export const ALL_FIELDS = GROUPS.flatMap((g) => g.fields.map((f) => ({ entity: g.entity, f, col: `${g.entity}.${f.key}` })));
 /** Fields a member can fill (identity and system fields are never filled). */
