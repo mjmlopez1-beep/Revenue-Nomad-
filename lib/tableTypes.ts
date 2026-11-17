@@ -30,8 +30,11 @@ export type Cell =
       ver: number;
       iv?: boolean;
       system?: boolean;
-      /** Where a fact came from when no member added it: our records, the job posting, or Revenue Nomad research (a company the weekly scan added, filled from our records). */
-      from?: "records" | "posting" | "research";
+      /**
+       * Where a fact came from when no member added it: our records, the job posting, Revenue Nomad research (a company the weekly scan
+       * added, filled from our records), or the company's own website (an About text read from its homepage, lib/about: "Company website").
+       */
+      from?: "records" | "posting" | "research" | "website";
       /** The viewer spent a credit to see this value (it counts in their Unlocked list). Free values never carry it. */
       paid?: boolean;
       /** Seat holder only: the viewer claimed this seat from the seat scan (claimSeat), so it reads "You claimed this". */
@@ -551,6 +554,22 @@ export interface AdminStats {
   messages?: { started: number; replied3d: number; closed: number; blocked: number; reported: number };
   /** Alerts in Slack and webhooks (lib/notify), counts only. */
   integrations?: { slackConnected: number; webhookConnected: number; broken: number; sent: { roles: number; message: number; seat: number; test: number }; failed: number };
+  /**
+   * About texts read from company websites (lib/about). `enabled`: RN_ABOUT=1. `run`: the run under
+   * way, else the last one (null before the first). `onFile`: each company's last try. `waiting`:
+   * companies with a website and no About that were never tried. `withAbout`: companies with an
+   * About from any source, out of `companies`. `reasons`: the most common reasons for a skip or failure.
+   */
+  about?: {
+    enabled: boolean;
+    running: boolean;
+    run: { startedAt: string; endedAt: string | null; total: number; done: number; filled: number; unchanged: number; skipped: number; failed: number } | null;
+    onFile: { filled: number; skipped: number; failed: number };
+    waiting: number;
+    withAbout: number;
+    companies: number;
+    reasons: { why: string; n: number }[];
+  };
 }
 
 export type Action =
@@ -651,7 +670,9 @@ export type Action =
   /** Admins: decide on a reported message. */
   | { type: "message.review"; reportId: string; decision: "keep" | "remove" }
   /** Admins: run the open-role scan now. */
-  | { type: "scanNow" };
+  | { type: "scanNow" }
+  /** Admins: fill About texts from company websites now (lib/about; only with RN_ABOUT=1). Runs in the background. */
+  | { type: "aboutNow" };
 
 /**
  * What POST { action } returns. `cells` are the cells the action changed, as the actor now

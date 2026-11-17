@@ -78,6 +78,7 @@ import { alertMatches } from "./mcp/alerts";
 import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
 import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
+import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -135,7 +136,7 @@ interface Added {
 }
 export interface FieldValue {
   value: string;
-  by: string; // member id, "seed", or "scan" (the weekly scan; treated like seed)
+  by: string; // member id, "seed", "scan" (the weekly scan; treated like seed), or "website" (an About text read from the company's site, lib/about; treated like seed)
   at: string;
   /** reported: hidden for everyone (two or more members reported it) until an admin reviews it. */
   status: "live" | "reported" | "removed";
@@ -293,6 +294,8 @@ export interface State extends MessagingState {
   firmReview?: FirmReview[];
   /** Alerts in Slack and webhooks: each member's URLs (secret) and switches. See lib/notify. */
   integrations?: IntegrationsState;
+  /** About texts read from company websites (lib/about): each company's last try, and the last run. The texts are values by "website". */
+  about?: AboutState;
 }
 
 /* ---------- storage ---------- */
@@ -1154,7 +1157,7 @@ function valueOf(node: Node | undefined, s: State, field: string): FieldValue | 
   return sv ? { value: sv, by: "seed", at: "", status: "live" } : null;
 }
 /** Values from our own records (the seed) or the weekly scan: nobody earned a credit for them. */
-const isSystem = (by: string) => by === "seed" || by === "scan";
+const isSystem = (by: string) => by === "seed" || by === "scan" || by === ABOUT_BY;
 const live = (node: Node | undefined, s: State, field: string) => {
   const v = valueOf(node, s, field);
   return v && v.status === "live" ? v.value : null;
@@ -1381,7 +1384,7 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   const f = fieldDef(entity, key)!;
   const v = valueOf(node, s, f.key);
   if (!v) return { s: "empty" };
-  if (f.system) return { s: "value", v: v.value, ver: 0, system: true };
+  if (f.system) return { s: "value", v: v.value, ver: 0, system: true, ...(v.by === ABOUT_BY ? { from: "website" as const } : {}) };
   const mine = !!me && v.by === me.id;
   const byMe = !!me && !!v.reporters?.includes(me.id);
   if (v.status === "reported") return { s: "reported", mine, ...(byMe ? { byMe } : {}) };
@@ -1996,7 +1999,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         label: f.label,
         value: v.value,
         companyId: pubId(companyIdOf(id)),
-        addedBy: v.by === "seed" ? "Revenue Nomad records" : v.by === "scan" ? "Weekly scan" : memberName(v.by),
+        addedBy: v.by === "seed" ? "Revenue Nomad records" : v.by === "scan" ? "Weekly scan" : v.by === ABOUT_BY ? ABOUT_SOURCE : memberName(v.by),
         reporters: (v.reporters ?? (v.reportedBy ? [v.reportedBy] : [])).map(memberName),
         reportedAt: lastReport.get(k) ?? null,
         hidden: v.status === "reported",
@@ -2329,6 +2332,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     digest: { enabled: digestOn(), lastSentAt: s.digest.lastSentAt, sent: s.digest.sent, optedOut: Object.values(s.profiles).filter((p) => p.digestOff).length },
     seats: { linkedMembers: linked.size, factsMissing },
     benchmarks: { memberRates, privateRates: s.benchRates.length, indexRates: seed.rateIndex?.length ?? 0 },
+    about: aboutStats(s, g, nowMs),
   };
 }
 
@@ -2602,6 +2606,15 @@ export async function perform(
     // In the background: a scan reads several job boards and can take a while.
     void runScan(origin).catch((e) => console.error("scan failed", e));
     return { message: "Scan started. It reads several job boards, so give it a few minutes." };
+  }
+  if (a?.type === "aboutNow") {
+    if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
+    if (!isAdmin(await memberForToken(token))) throw new ActionError("Only admins can start this.");
+    if (!aboutEnabled()) throw new ActionError("Filling About texts is off. Set RN_ABOUT=1 on the server to turn it on.");
+    const run = aboutProgress.run;
+    if (aboutProgress.running && run) return { message: `Already running: ${run.done} of ${run.total} companies done.` };
+    void import("./about/run").then((m) => m.runAbout()).catch((e) => console.error("about run failed", e));
+    return { message: "Started. It reads each company's website, four at a time, so it takes a while." };
   }
   // Messages between members live in lib/messages.ts (loaded here, so the two files don't import each other at start).
   if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
@@ -4179,6 +4192,8 @@ export function runScan(origin?: string, from: { collect?: () => ReturnType<type
       // Every role that passed the screen, not the capped list: a role still posted must be seen to stay open.
       const result = await applyScan({ roles: found.all, sources: found.sources, screenedOut: "screenedOut" in found ? found.screenedOut : [] }, from.now);
       const digests = await sendDigests(result.at, origin).catch((e) => (console.error("digest failed", e), 0));
+      // About texts for the companies without one, from their own websites (RN_ABOUT=1), in the background.
+      if (aboutEnabled()) void import("./about/run").then((m) => m.runAbout()).catch((e) => console.error("about run failed", e));
       const failed = found.sources.filter((x) => x.error).length;
       console.log(
         `scan: ${found.all.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
@@ -4389,3 +4404,114 @@ export async function memberById(id: string): Promise<Member | null> {
 }
 /** Whether the weekly email can go out at all (email set up and RN_DIGEST not 0). */
 export const digestEnabled = () => digestOn();
+
+/* ---------- About texts from company websites (lib/about) ---------- */
+
+/** Whether a company is due a read of its website, and why not. `cur` is its About value if any. */
+function aboutDue(s: State, node: CompanyNode, nowMs: number): { domain: string; prev: AboutStatus | null } | null {
+  const domain = siteKey(live(node, s, "website"));
+  // No website, or one on a shared host (a LinkedIn or job board page): nothing of the company's own to read.
+  if (!domain || domain.includes("/")) return null;
+  if (node.seedFields.about) return null;
+  const stored = s.values[fkey(node.id, "about")];
+  // An About from anyone else stays. One of ours an admin removed (or that is under review) is not put back.
+  if (stored && (stored.by !== ABOUT_BY || stored.status !== "live")) return null;
+  const prev = s.about?.companies[node.id] ?? null;
+  if (!prev) return { domain, prev };
+  const age = nowMs - Date.parse(prev.at);
+  if (!Number.isFinite(age)) return { domain, prev };
+  if (stored) return age >= REFRESH_DAYS * DAY ? { domain, prev } : null;
+  return prev.s === "filled" || age >= RETRY_DAYS * DAY ? { domain, prev } : null;
+}
+
+/** Companies whose website is due a read for an About text: never tried first, then the longest ago. */
+export async function aboutTargets(nowIso?: string): Promise<AboutTarget[]> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
+  const out: AboutTarget[] = [];
+  for (const node of graph(seed, s).companies.values()) {
+    const due = aboutDue(s, node, nowMs);
+    if (due) out.push({ companyId: node.id, name: node.name, domain: due.domain, prev: due.prev });
+  }
+  return out.sort((a, b) => Number(!!a.prev) - Number(!!b.prev) || (a.prev?.at ?? "").localeCompare(b.prev?.at ?? ""));
+}
+
+/** What saveAbout did with each outcome: wrote it, found the same text, kept an About someone else set since, or recorded a skip or failure. */
+export type AboutSaved = "filled" | "unchanged" | "kept" | "skipped" | "failed";
+
+/**
+ * Store a batch of website reads. A text goes in as a live system value by "website" (no credit
+ * to anyone, never a member's fact) only where the company still has no About, or has one of ours:
+ * an About from our records, a member or an admin is never replaced. A refresh replaces ours only
+ * when the site's text changed. Every company gets its status (filled, skipped or failed, with the
+ * reason and time) so a restart carries on where this stopped. `run` is the run so far.
+ */
+export function saveAbout(outcomes: AboutOutcome[], run: AboutRunSummary | null, nowIso?: string): Promise<AboutSaved[]> {
+  return mutate((s, seed) => {
+    const now = nowIso ?? new Date().toISOString();
+    const about = (s.about ??= { companies: {}, lastRun: null });
+    const g = graph(seed, s);
+    const out: AboutSaved[] = [];
+    for (const o of outcomes) {
+      const node = g.companies.get(o.companyId);
+      const prev = about.companies[o.companyId];
+      if (!node) {
+        out.push("kept");
+        continue;
+      }
+      const k = fkey(node.id, "about");
+      const stored = s.values[k];
+      const ours = !!stored && stored.by === ABOUT_BY && stored.status === "live";
+      if (o.s !== "filled" || !o.text) {
+        // A refresh that could not read the site keeps the text it has, and tries again after REFRESH_DAYS.
+        if (ours && prev?.s === "filled") about.companies[o.companyId] = { ...prev, at: now, why: o.why };
+        else about.companies[o.companyId] = { s: o.s === "filled" ? "skipped" : o.s, ...(o.why ? { why: o.why } : {}), at: now, ...(o.host ? { host: o.host } : {}) };
+        out.push(o.s === "failed" ? "failed" : "skipped");
+        continue;
+      }
+      if (node.seedFields.about || (stored && !ours)) {
+        about.companies[o.companyId] = { s: "skipped", why: "about already on file", at: now };
+        out.push("kept");
+        continue;
+      }
+      const status: AboutStatus = { s: "filled", at: now, ...(o.hash ? { hash: o.hash } : {}), ...(o.host ? { host: o.host } : {}) };
+      if (ours && (stored.value === o.text || (o.hash && prev?.hash === o.hash))) {
+        about.companies[o.companyId] = status;
+        out.push("unchanged");
+        continue;
+      }
+      s.values[k] = { value: o.text, by: ABOUT_BY, at: now, status: "live" };
+      about.companies[o.companyId] = status;
+      out.push("filled");
+    }
+    if (run) about.lastRun = { ...run };
+    return out;
+  });
+}
+
+/** Pilot metrics: the run under way (or the last one), and every company's status on file. */
+function aboutStats(s: State, g: Graph, nowMs: number): NonNullable<AdminStats["about"]> {
+  const onFile = { filled: 0, skipped: 0, failed: 0 };
+  const reasons = new Map<string, number>();
+  for (const [id, st] of Object.entries(s.about?.companies ?? {})) {
+    if (!g.companies.has(id)) continue;
+    onFile[st.s]++;
+    if (st.s !== "filled" && st.why) reasons.set(st.why, (reasons.get(st.why) ?? 0) + 1);
+  }
+  let waiting = 0;
+  let withAbout = 0;
+  for (const node of g.companies.values()) {
+    if (valueOf(node, s, "about")) withAbout++;
+    else if (!s.about?.companies[node.id] && aboutDue(s, node, nowMs)) waiting++;
+  }
+  return {
+    enabled: aboutEnabled(),
+    running: aboutProgress.running,
+    run: aboutProgress.run ?? s.about?.lastRun ?? null,
+    onFile,
+    waiting,
+    withAbout,
+    companies: g.companies.size,
+    reasons: [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([why, n]) => ({ why, n })),
+  };
+}

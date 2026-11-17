@@ -72,6 +72,8 @@ run digest npx tsx scripts/test-digest.ts
 run messages npx tsx scripts/test-messages.mjs
 # Alerts in Slack and webhooks (lib/notify), with fetch and name lookups replaced: nothing leaves the machine.
 run notify npx tsx scripts/test-notify.mts
+# About texts from company websites (lib/about): extraction, the fetch safety rules and storage, against a mock server on $PORT. Nothing leaves the machine.
+run about env ABOUT_PORT="$PORT" npx tsx scripts/test-about.mts
 run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
 # Clean company data: HQ country and region, standard industry, employees and revenue values, fractional firms removed, research firmographics, place filters.
