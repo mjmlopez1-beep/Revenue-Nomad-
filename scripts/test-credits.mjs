@@ -414,6 +414,7 @@ section("invites", async () => {
   check("5 different invitees pay the inviter in 30 days, and the 6th does not", JSON.stringify(paidAfter) === "[1,2,3,4,5,5]" && me6.invited === 6, paidAfter);
   check("all 5 bonuses are paid or held: 25 under today's cap, 25 waiting", me6.credits === STARTER + 25 && me6.held === 25 && me6.earned24h === 25, { credits: me6.credits, held: me6.held });
   check("the 6th invitee still gets their own bonus", /Your invite bonus added 10 more\./.test(last.json?.message ?? ""), last.json?.message);
+  check("the 6th invitee isn't told their inviter got 10 (they didn't)", !/got 10 too/.test(last.json?.message ?? ""), last.json?.message);
 
   // The inviter's own bonus for having been invited is not one of their 5.
   const J = await member("Jo Joined", { ref: code });
@@ -436,6 +437,7 @@ section("invites", async () => {
   const real = await N.act(fillAct(facts.pop()));
   const kme = (await K.view()).me;
   check("the first fact on a record pays it to both", /Your invite bonus added 10 more\./.test(real.json?.message ?? "") && real.json?.me?.credits === STARTER + 12 && kme.invitesPaid === 1 && kme.credits === STARTER + 10, { msg: real.json?.message, inviter: kme.credits });
+  check("the toast names the inviter who got the bonus too", /Your invite bonus added 10 more\. Kit got 10 too\./.test(real.json?.message ?? ""), real.json?.message);
 
   // ECON-8: same network, by any network the inviter has used, not only the one they joined from.
   const moved = nextIp();

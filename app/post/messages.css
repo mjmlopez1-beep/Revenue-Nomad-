@@ -485,3 +485,45 @@
   gap: 8px;
   width: 100%;
 }
+
+/* Messages in the top bar (TopBar.tsx): the count sits on the bubble. */
+.tp-msgbtn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+.tp-msgbtn[aria-current="page"] {
+  background: rgba(255, 255, 255, 0.16);
+}
+.tp-top-phone .tp-msgbtn {
+  width: 44px;
+  height: 44px;
+}
+
+/* A seat holder's record once a conversation about the seat exists (MessageButton). */
+.ms-rec-open .tp-badge-dot {
+  box-shadow: 0 0 0 2px var(--surface, #fff);
+}
+.ms-rec-state {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Under an unlocked seat holder (Drawer.tsx Reach): why there's no Message button. */
+.tp-reach-note {
+  flex-basis: 100%;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+/* A seat the member named themselves on, waiting for another member to confirm. */
+.tp-claim-wait {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--pine);
+}
+.tp-touchrows .tp-reach .tp-intro {
+  min-height: 44px;
+}

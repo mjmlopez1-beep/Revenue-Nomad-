@@ -207,9 +207,16 @@ async function main() {
   clear();
   answers.set(SLACK, () => new Response("no_service", { status: 404 }));
   const refused = await tryIt(() => n.connect(HANA, "slack", SLACK));
-  check("a URL Slack refuses is not saved", !refused.ok && /didn't take the test/.test(refused.error), refused);
+  check("a URL Slack refuses is not saved", !refused.ok && /nothing was saved/.test(refused.error), refused);
   check("Slack's refusal is explained in plain words", !refused.ok && /removed|Copy the webhook URL again/.test(refused.error), refused);
   check("nothing is connected after a refused URL", (await n.integrationsView(HANA))?.slack === null);
+  // Slack out of reach is not the URL's fault: no "copy it again".
+  answers.set(SLACK, () => Promise.reject(Object.assign(new Error("timed out"), { name: "TimeoutError" })));
+  const offline = await tryIt(() => n.connect(HANA, "slack", SLACK));
+  check("Slack out of reach says try again, not copy the URL again", !offline.ok && /couldn't reach Slack right now/.test(offline.error) && !/Copy the webhook URL again/.test(offline.error), offline);
+  answers.set(SLACK, () => new Response("invalid_payload", { status: 400 }));
+  const odd = await tryIt(() => n.connect(HANA, "slack", SLACK));
+  check("a Slack error that isn't about the URL doesn't blame the URL", !odd.ok && /didn't take the test/.test(odd.error) && !/Copy the webhook URL again/.test(odd.error), odd);
   answers.delete(SLACK);
   clear();
   const signedOut = await tryIt(() => n.connect("tok-nobody", "slack", SLACK));

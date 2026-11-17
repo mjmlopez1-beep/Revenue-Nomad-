@@ -22,7 +22,7 @@
 import { MessageButton } from "./Messages";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
-import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
+import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
@@ -931,14 +931,17 @@ function safeHref(build: () => string): string | null {
 }
 
 /**
- * After the seat holder is unlocked: how to reach them. A member who has signed in gets a
- * message inside Merlin ("Message Ana", the warm path). "Ask for an intro" goes to the team
- * inbox when there is one; "Find them on LinkedIn" always works.
+ * After the seat holder is unlocked: how to reach them. This is the promise of the unlock, so
+ * there is always a warm path. A member who has signed in gets a message inside Merlin ("Message
+ * Ana"). "Ask for an intro" writes to Revenue Nomad (the intro inbox, else the support address)
+ * whenever there is one. Without either address, a seat holder who isn't on Merlin yet is found
+ * on LinkedIn, and the record says why there is no Message button.
  */
 function Reach({ name, member, seat, engagementId, seatName }: { name: string; member: boolean; seat: string; engagementId: string; seatName: string | null }) {
   const ui = useUi();
   const env = useEnv();
-  const to = env.contact?.intro?.trim();
+  const to = (env.contact?.intro || env.contact?.support || "").trim();
+  const first = name.trim().split(/\s+/)[0] || name;
   const intro = to
     ? safeHref(
         () =>
@@ -951,18 +954,19 @@ function Reach({ name, member, seat, engagementId, seatName }: { name: string; m
   if (!intro && !li && !member) return null;
   return (
     <div className="tp-reach">
-      {/* Only members can be messaged. For anyone else, finding them on LinkedIn is the next step, and an intro is the fallback. */}
+      {/* Members get a message inside Merlin. Everyone gets an intro through Revenue Nomad when there is an address for it, and LinkedIn as the last resort. */}
       {member && <MessageButton engagementId={engagementId} name={name} company={env.company} seat={seatName} />}
-      {li && (
-        <a className={member ? "tp-intro" : "btn btn-sm btn-primary"} href={li} target="_blank" rel="noreferrer">
-          Find them on LinkedIn <IconExternal size={11} />
-        </a>
-      )}
-      {intro && !member && (
-        <a className="tp-intro" href={intro}>
+      {intro && (
+        <a className={member ? "btn btn-sm" : "btn btn-sm btn-pine"} href={intro} title={`Revenue Nomad introduces you to ${first}`}>
           Ask for an intro
         </a>
       )}
+      {li && (
+        <a className={member || intro ? "tp-intro" : "btn btn-sm btn-primary"} href={li} target="_blank" rel="noreferrer">
+          Find them on LinkedIn <IconExternal size={11} />
+        </a>
+      )}
+      {!member && <span className="tp-reach-note">{first} isn&apos;t on Merlin yet, so you can&apos;t message them here.</span>}
     </div>
   );
 }
@@ -987,7 +991,7 @@ function ClaimRole({ id }: { id: string }) {
   if (ask)
     return (
       <div className="tp-frow-ask tp-claim-ask" role="group" aria-label="I took this role">
-        <p>Mark this role as yours? Your name goes on the seat, and you can fill in the rest on Your seats. You can mark one open role a day.</p>
+        <p>Mark this role as yours? Your name goes on the seat, and it moves to Your seats. You can mark one open role a day.</p>
         <span className="tp-frow-ask-acts">
           <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy} aria-busy={busy} onClick={claim}>
             {busy ? "Saving" : "Yes, I took it"}
@@ -1141,6 +1145,10 @@ function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; co
         listed={open}
         fixed={open ? ["operator"] : []}
       />
+      {/* The member named themselves on this seat and nobody has confirmed it yet (see Your seats). */}
+      {!e.yours && opCell?.s === "value" && opCell.member?.you && (
+        <p className="tp-claim-wait">{open ? "Claimed by you. Others still see the role as open until your claim is confirmed." : "You're named on this seat. It opens for you once another member confirms it."}</p>
+      )}
       {vacant && !hidden && !e.yours && <ClaimRole id={e.id} />}
       {e.claimable && !hidden && !e.yours && <ClaimSeat id={e.id} seat={role ?? (shown(e.cells.function) ? `${shown(e.cells.function)}` : "fractional")} company={company} />}
       {toFill > 0 && (
@@ -1162,7 +1170,7 @@ function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; co
         !hidden && (
           <div className="tp-eng-foot">
             <button type="button" className="btn btn-sm btn-ghost tp-addlink" onClick={() => setAdding(true)}>
-              <IconPlus size={13} /> Add someone on this seat
+              <IconPlus size={13} /> {op ? "Add a contact on this seat" : "Add someone on this seat"}
             </button>
           </div>
         )
@@ -1215,7 +1223,7 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
  * Unlock a hidden company's open role for 1 credit: the record's one action until it is
  * unlocked. Pine, because it spends. At 0 credits it shows how to earn one instead (and counts the wall).
  */
-function UnlockCompany({ id, label, bar }: { id: string; label: string; bar?: boolean }) {
+function UnlockCompany({ id, rate, bar }: { id: string; rate: boolean; bar?: boolean }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
@@ -1223,6 +1231,8 @@ function UnlockCompany({ id, label, bar }: { id: string; label: string; bar?: bo
   const broke = ui.me.credits <= 0;
   // Today's unlocks are used up and credits are left: the button says when, and spends nothing.
   const later = !broke && ui.me.unlocksLeft === 0;
+  const label = rate ? UNLOCK_ROLE_RATE : UNLOCK_ROLE;
+  const included = rate ? "Posting and rate included" : "Job posting included";
   const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? "Earn a credit to unlock" : label;
   return (
     <>
@@ -1232,7 +1242,7 @@ function UnlockCompany({ id, label, bar }: { id: string; label: string; bar?: bo
         className={`btn btn-pine${bar ? " tp-uc-bar" : ""}`}
         disabled={busy || later}
         aria-busy={busy}
-        aria-label={busy || later || broke ? text : `${UNLOCK_ROLE_SAY}. Posting and rate included.`}
+        aria-label={busy || later || broke ? text : `${UNLOCK_ROLE_SAY}. ${included}.`}
         onClick={() => {
           if (ui.me.credits > 0) return ui.unlock({ entity: "company", id, field: "identity" });
           sendSignal("wall", "identity");
@@ -1243,7 +1253,7 @@ function UnlockCompany({ id, label, bar }: { id: string; label: string; bar?: bo
           // A phone's sticky bar: the price on one line, what comes with it on a small second line.
           <span className="tp-ua-two">
             <span>{UNLOCK_ROLE_SHORT}</span>
-            <span className="tp-ua-cost">Posting and rate included</span>
+            <span className="tp-ua-cost">{included}</span>
           </span>
         ) : (
           text
@@ -1255,7 +1265,36 @@ function UnlockCompany({ id, label, bar }: { id: string; label: string; bar?: bo
 }
 
 const COMPANY_ROWS = ["website", "linkedin", "industry", "employees", "revenue", "hq"];
-const UNLOCK_ROLE = "Unlock company, posting and rate · 1 credit";
+const UNLOCK_ROLE = "Unlock company and job posting · 1 credit";
+const UNLOCK_ROLE_RATE = "Unlock company, posting and rate · 1 credit";
+/**
+ * What a seat counts as, by the same rule as the server's friendliness() (the header's "N
+ * fractional seats" and the Fit tier): a fractional hire, an open role, or neither (a member
+ * story about a full-time hire, or a posting that came down with nobody named).
+ */
+const FRACTIONAL_SOURCES = ["Published engagement", "Demand scan", "Seat scan"];
+function seatKind(e: EngagementRec): "hire" | "open" | "story" {
+  if (openRole(e)) return "open";
+  if (e.source === "Demand scan" && e.cells.operator?.s === "empty") return "story";
+  const type = shown(e.cells.type);
+  if (FRACTIONAL_SOURCES.includes(e.source) || (e.source === "Member added" && !type) || (!!type && FRACTIONAL_TYPES.includes(type))) return "hire";
+  return "story";
+}
+/** "2 fractional seats and 2 from member stories, which aren't counted as fractional hires." */
+function seatSplit(engs: EngagementRec[]): string {
+  const n = (k: string) => engs.filter((e) => seatKind(e) === k).length;
+  const hires = n("hire");
+  const open = n("open");
+  const story = n("story");
+  if (story === engs.length)
+    return story === 1
+      ? "This seat comes from a member story or a posting that came down. It isn't counted as a fractional hire."
+      : "These seats come from member stories or postings that came down. They aren't counted as fractional hires.";
+  const parts = [...(hires ? [plural(hires, "fractional seat")] : []), ...(open ? [plural(open, "open role")] : []), `${story} from member stories or old postings`];
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}. Those aren't counted as fractional hires.`;
+}
+/** An open role here has a posted rate behind the lock (a locked cell always has a value). The unlock names the rate only then. */
+const hasPostedRate = (i: CoInfo) => i.engs.some((e) => openRole(e) && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value"));
 const UNLOCK_ROLE_SHORT = "Unlock company · 1 credit";
 const UNLOCK_ROLE_SAY = "Unlock company for 1 credit";
 
@@ -1385,11 +1424,14 @@ export function Drawer({
   const line = [val(c.cells.industry), emp && `${emp} employees`, rev && `${rev} revenue`, val(c.cells.hq)].filter(Boolean) as string[];
   // Functions hired fractionally, the member's own first; then the ones with an open role and no hire
   // yet ("Hiring now"); then the ones only member stories (or a posting that came down) mention, muted.
+  // Counted the way the header's "N fractional seats" is (the server's friendliness): only fractional hires.
   const fnCounts = new Map<string, number>();
   for (const e of i.engs) {
     const fn = shown(e.cells.function);
-    if (fn) fnCounts.set(fn, (fnCounts.get(fn) ?? 0) + 1);
+    if (fn && seatKind(e) === "hire") fnCounts.set(fn, (fnCounts.get(fn) ?? 0) + 1);
   }
+  const notHires = i.engs.filter((e) => seatKind(e) === "story").length;
+  const postedRate = hasPostedRate(i);
   const mine = ui.me.function;
   const hired = [...i.fnState.hired].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : (fnCounts.get(b) ?? 0) - (fnCounts.get(a) ?? 0)));
   const hiringFns = i.fnState.hiring;
@@ -1414,7 +1456,7 @@ export function Drawer({
   const actions = (
     <div className="tp-dactions">
       {c.hidden ? (
-        <UnlockCompany id={c.id} label={UNLOCK_ROLE} />
+        <UnlockCompany id={c.id} rate={postedRate} />
       ) : (
         <>
           {/* The top bar's "Add what you know" starts from a search. This one adds to the company on screen. */}
@@ -1525,7 +1567,7 @@ export function Drawer({
           </div>
           {c.hidden && (
             <p className="tp-hidden-note">
-              This company is hiring a fractional now, and its role is free to see. 1 credit shows the company, the posting and the posted rate. Contacts unlock separately. Once the role closes, everyone sees the company.
+              This company is hiring a fractional now, and its role is free to see. 1 credit shows the company and its job posting{postedRate ? ", with the posted rate" : ""}. Contacts unlock separately. Once the role closes, everyone sees the company.
             </p>
           )}
           {!phone && actions}
@@ -1571,13 +1613,14 @@ export function Drawer({
                 {gap && <NoSeatYet fn={mine} />}
               </div>
               {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No fractional ${mineNamed} seat` : "No fractional seat in your function"} is on file yet.</p>}
-              {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked story come from member stories or a posting that came down. No seat is on file for them yet.</p>}
+              {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked story come from member stories or a posting that came down. Their seats are listed below but aren&apos;t counted as fractional hires.</p>}
             </section>
           )}
           <section className="tp-dsec">
             <h3 className="tp-dsec-h">
               Seats <span className="num tp-cnt">{i.engs.length}</span>
             </h3>
+            {notHires > 0 && <p className="tp-dsec-note">{seatSplit(i.engs)}</p>}
             {i.engs.length === 0 && <p className="tp-dsec-note">No seats on file here yet. Add one you know and earn a credit for each fact.</p>}
             {i.engs.map((e) => (
               <EngagementCard key={e.id} e={e} companyId={c.id} company={c.hidden ? "this company" : c.name} focus={focus === e.id} />
@@ -1630,7 +1673,7 @@ export function Drawer({
             </span>
             {c.hidden ? (
               // One action while the name is hidden, as on desktop. The facts unlock after it.
-              <UnlockCompany id={c.id} label={UNLOCK_ROLE} bar />
+              <UnlockCompany id={c.id} rate={postedRate} bar />
             ) : (
               <>
                 {plan.items.length > 0 ? <UnlockAll plan={plan} bar /> : <span className="tp-rsheet-none">Nothing locked here</span>}

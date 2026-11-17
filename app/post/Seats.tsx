@@ -580,9 +580,9 @@ function SeatCard({
                 tappable && (
                   <p className="ys-known-hint">
                     {known.some((x) => x.act === "change") && known.some((x) => x.act === "report")
-                      ? "Tap an answer to change it, or one somebody else gave to report it."
+                      ? "Select an answer to change it, or one somebody else gave to report it."
                       : known.some((x) => x.act === "change")
-                        ? "Tap an answer to change it."
+                        ? "Select an answer to change it."
                         : "Tap anything here that's wrong to report it."}
                   </p>
                 )
@@ -861,7 +861,7 @@ export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focu
                 {left === 0
                   ? ""
                   : room
-                    ? `You can earn ${Math.min(room, left)} more ${Math.min(room, left) === 1 ? "credit" : "credits"} today`
+                    ? `${plural(left, "answer")} left · up to ${plural(Math.min(room, left), "credit")} today`
                     : `You've earned today's ${me.earnCap} credits. Answers still save, and you can earn again ${atTime(me.earnResetsAt)}.`}
               </span>
               <span className="ys-bar" aria-hidden>
