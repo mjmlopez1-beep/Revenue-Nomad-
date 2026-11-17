@@ -273,6 +273,8 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
  */
 function CompanyName({ i, following, tagged = true }: { i: CoInfo; following?: boolean; tagged?: boolean }) {
   const why = useFitWhy(i);
+  // Best fit for you: a maybe (part of the ideal client not on file) says so under the name, not only in the tooltip.
+  const unknown = why?.match(/(?:^|· )([^·]*not on file)$/)?.[1] ?? null;
   if (i.c.hidden) return <HiddenCompany i={i} />;
   return (
     <span className="tp-co">
@@ -292,6 +294,7 @@ function CompanyName({ i, following, tagged = true }: { i: CoInfo; following?: b
             {i.domain}
           </span>
         )}
+        {unknown && <span className="hunt-unknown">{unknown}</span>}
       </span>
     </span>
   );

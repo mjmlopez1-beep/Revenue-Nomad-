@@ -122,6 +122,18 @@
   text-underline-offset: 3px;
 }
 
+/* A maybe under "Your clients": what isn't on file, under the name in the desktop table. */
+.hunt-unknown {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* The reason under a company's name when the list is sorted by best fit. */
 .hunt-why {
   display: block;
