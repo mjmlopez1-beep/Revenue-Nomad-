@@ -497,6 +497,9 @@ async function seniority() {
       ...Object.fromEntries(rows.flatMap(([, , id, title, fn]) => [[`${id}.role`, v(title)], [`${id}.function`, v(fn)], [`${id}.status`, v("Open role")], [`${id}.type`, v("Project")]])),
       "e_books.operator": v("Mo Marketing", "m2", { memberId: "m2" }),
       "e_office.role": v("Office Coordinator", "m1"),
+      // The homepage lists a company only with its industry and revenue on file.
+      "c_cfo.industry": v("SaaS", "m1"),
+      "c_cfo.revenue": v("$5M–$20M", "m1"),
       "e_office.function": v("Operations", "m1"),
       "e_office.status": v("Open role", "m1"),
     },

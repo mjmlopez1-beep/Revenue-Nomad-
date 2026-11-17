@@ -28,7 +28,7 @@ import * as weworkremotely from "../crawler/sources/weworkremotely";
 import * as greenhouse from "../crawler/sources/greenhouse";
 import * as fractionaljobs from "./sources/fractionaljobs";
 import { cleanCompany, cleanTitle, companyDomain, isRealCompany, plain, roleKey } from "./clean";
-import { keepsNonGtm } from "../seniority";
+import { isDirectorPlus, keepsNonGtm } from "../seniority";
 
 /** A raw posting, plus facts a board gives as fields of their own instead of in the text. */
 export interface ScanRawJob extends RawJob {
@@ -234,8 +234,11 @@ export function screenJob(
 
   // And in a GTM function: the title names one, or the posting talks about one and the title is not a seat outside GTM.
   const tags = scoreJob(raw);
-  if (!gtmByTitle(rawTitle) && tags.functions.length === 0) return { skip: "bar" };
-  if (!gtmByTitle(rawTitle) && NON_GTM_TITLE.test(rawTitle)) return { skip: "not-gtm" };
+  // A Director-and-above seat outside GTM (Fractional CFO, Interim Head of People) is welcome too:
+  // the owner opened the table to every function at that level.
+  const senior = isDirectorPlus(rawTitle);
+  if (!gtmByTitle(rawTitle) && !senior && tags.functions.length === 0) return { skip: "bar" };
+  if (!gtmByTitle(rawTitle) && !senior && NON_GTM_TITLE.test(rawTitle)) return { skip: "not-gtm" };
   // Outside GTM, only Director and above (lib/seniority.ts).
   if (!keepsNonGtm(rawTitle, roleFunction(rawTitle, tags, raw.functionHint))) return { skip: "seniority" };
 

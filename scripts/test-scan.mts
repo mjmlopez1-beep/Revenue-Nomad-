@@ -189,9 +189,11 @@ check(
   !!screenJob(job({ title: "Head of Marketing", company: "Hooli", description: "This is a fractional role. You will lead marketing and demand gen for our go-to-market team." }), NOW).role
 );
 const salesy = "Work closely with our sales and marketing leaders on pipeline, revenue and go-to-market plans. 10 hrs/week.";
-for (const title of ["Fractional CFO", "Fractional CTO", "Fractional COO", "Fractional Head of People", "Fractional General Counsel", "Fractional Product Manager", "Fractional Head of Operations"]) {
-  eq(`drops a seat outside GTM even when the body talks about sales: ${title}`, screenJob(job({ title, description: salesy }), NOW).skip, "not-gtm");
+// Outside GTM, a Director-and-above seat is kept (the owner's rule); below Director it is dropped.
+for (const title of ["Fractional CFO", "Fractional CTO", "Fractional COO", "Fractional Head of People", "Fractional General Counsel", "Fractional Head of Operations"]) {
+  check(`keeps a Director-and-above seat outside GTM: ${title}`, !!screenJob(job({ title, description: salesy }), NOW).role);
 }
+check("drops a seat outside GTM below Director even when the body talks about sales: Fractional Product Manager", !!screenJob(job({ title: "Fractional Product Manager", description: salesy }), NOW).skip);
 for (const [title, fn] of [["Fractional Sales Engineer", "Sales"], ["Fractional GTM Engineer", "AI GTM"], ["Fractional Marketing Operations Lead", "RevOps"], ["Fractional Product Marketing Manager", "Product Marketing"], ["Fractional CEO", "Executive"]]) {
   eq(`keeps a GTM seat with a technical or executive word in the title: ${title}`, screenJob(job({ title, description: salesy }), NOW).role?.function, fn);
 }
@@ -429,11 +431,11 @@ eq("hours text: a range, one number, none", [hoursFromText("15 - 20 hrs"), hours
 eq("an empty or changed page gives no cards, not an error", parseFractionalJobs("<html><body><a href='/jobs/x'></a></body></html>").length, 0);
 
 const boardRoles = rolesFromRaw(parsed, NOW);
-eq("keeps the GTM roles at named companies", boardRoles.map((r) => `${r.company} | ${r.title}`), ["Kestrel Freight | Head of Marketing", "Pebble | Business Development Lead"]);
+eq("keeps the GTM roles at named companies", boardRoles.map((r) => `${r.company} | ${r.title}`), ["Kestrel Freight | Head of Marketing", "Tallybook | Controller", "Pebble | Business Development Lead"]);
 eq("  with the board's facts", [boardRoles[0]?.function, boardRoles[0]?.type, boardRoles[0]?.rate, boardRoles[0]?.hoursPerWeek, boardRoles[0]?.domain], ["Marketing", "Fractional", "$100–$125/hr", 13, "kestrelfreight.example"]);
-eq("  a company site that differs from the name is still taken from the board", [boardRoles[1]?.domain, boardRoles[1]?.rate, boardRoles[1]?.function], ["heypebble.example", "$6K–$9K/mo", "Partnerships"]);
+eq("  a company site that differs from the name is still taken from the board", [boardRoles[2]?.domain, boardRoles[2]?.rate, boardRoles[2]?.function], ["heypebble.example", "$6K–$9K/mo", "Partnerships"]);
 eq("  drops the unnamed company", screenJob(parsed[1], NOW).skip, "company");
-eq("  drops the finance seat", screenJob(parsed[2], NOW).skip, "bar");
+check("  keeps the Director-level finance seat (a Controller), as the owner asked", !!screenJob(parsed[2], NOW).role);
 eq("  drops the 40 hour a week seat", screenJob(parsed[3], NOW).skip, "full-time");
 
 /* ---------- collector: sources ---------- */
