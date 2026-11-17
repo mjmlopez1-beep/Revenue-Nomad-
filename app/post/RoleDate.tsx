@@ -2,8 +2,8 @@
 
 /**
  * Dates on a role the weekly scan follows, in the viewer's own time zone. While the posting is
- * listed: "Posted Oct 2" when the job board gives the day, else "Seen open since Nov 15" (the
- * day our scan first saw it). When the last clean scan of its board did not list it: "Not seen
+ * listed: "Open since Oct 2", from the day the job board says it was posted, else from the
+ * day our scan first saw it. When the last clean scan of its board did not list it: "Not seen
  * in the last scan". Once it comes down: "Role closed Dec 8 · listed 35 days". Shown wherever
  * that seat is shown (the company record, the tables, phone cards).
  *
@@ -43,7 +43,7 @@ export function RoleDate({ e }: { e: EngagementRec }) {
     return (
       <span className="tp-role-date open num" title={posted ? `Posted ${posted}. First seen on ${seenOn}.` : `First seen on ${seenOn}`}>
         <span className="live-dot" aria-hidden />
-        {posted ? `Posted ${posted}` : `Seen open since ${seenOn}`}
+        Open since {posted ?? seenOn}
       </span>
     );
   }

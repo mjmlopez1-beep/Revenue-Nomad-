@@ -23,7 +23,6 @@ export const TABS: { key: Tab; label: string; hint?: string }[] = [
   { key: "hiring", label: "Hiring now" },
   { key: "following", label: "Following" },
   { key: "unlocked", label: "Unlocked" },
-  { key: "needs", label: "Needs facts" },
 ];
 export const SORTS: { key: SortKey; label: string }[] = [
   { key: "best", label: "Best fit for you" },
@@ -419,13 +418,13 @@ type OpenList = "hq" | "country" | "region";
 
 /** A function a label can name: "Executive" and "Other" are catch-alls, so a sentence says "your function" instead. */
 export const namedFn = (fn: string | null) => (fn && fn !== "Other" && fn !== "Executive" ? fn : null);
-/** The "No Sales seat yet" filter as the member reads it, in the sidebar and on its chip. */
-export const notMineLabel = (fn: string | null) => (namedFn(fn) ? `No ${fn} seat yet` : "No seat in your function yet");
+/** The "No fractional Sales yet" filter as the member reads it, in the sidebar and on its chip. */
+export const notMineLabel = (fn: string | null) => (namedFn(fn) ? `No fractional ${fn} yet` : "No fractional in your function yet");
 
 export const TOGGLE_LABEL: Record<ToggleKey, string> = {
   rateKnown: "Rate on file",
   contactKnown: "Hiring contact on file",
-  notMine: "No seat in your function yet",
+  notMine: "No fractional in your function yet",
   statusKnown: "Status on file",
   fractionalNamed: "Seat holder on file",
   emailKnown: "Email on file",
@@ -509,8 +508,8 @@ const engsOf = (r: Row) => (r.e ? [r.e] : r.p ? [] : r.i.engs);
 const peopleOf = (r: Row) => (r.p ? [r.p] : r.e ? r.e.people : r.i.people.map((x) => x.p));
 const personKnown = (p: PersonRec) => ["name", "email", "phone", "linkedin"].some((f) => known(p.cells[f]));
 
-/** An old address's tab key to today's: "friendly" was the tab Repeat hirers replaced. */
-export const tabOf = (v: string | null): Tab | null => (v === "friendly" ? "repeat" : TABS.find((x) => x.key === v)?.key ?? null);
+/** An old address's tab key to today's: "friendly" was the tab Repeat hirers replaced, and "needs" (Needs facts, gone) opens All. */
+export const tabOf = (v: string | null): Tab | null => (v === "friendly" ? "repeat" : v === "needs" ? "all" : TABS.find((x) => x.key === v)?.key ?? null);
 
 /**
  * A repeat hirer: 2 or more fractional hires on file, or fractional hires in 2 or more
@@ -1305,4 +1304,45 @@ export function checkSteps(
       ? { label: "Fill in your seats", hint: o.earn >= left ? `${left} left, 1 credit each` : o.earn > 0 ? `${left} left, earns up to ${o.earn}` : `${left} left to fill` }
       : null;
   return { steps, nudge };
+}
+
+/* ---------- saved views ---------- */
+
+/** The filters with the ideal client written out (a saved view keeps what it showed, whatever the member's clients are later). */
+export function withIcpSpelled(f: Filters, icp: Icp | null | undefined): Filters {
+  if (!f.icp || icpEmpty(icp)) return { ...f, icp: false };
+  const add = (a: string[], b: string[]) => [...new Set([...a, ...b])];
+  return { ...f, icp: false, industry: add(f.industry, icp!.industries), employees: add(f.employees, icp!.employees), revenue: add(f.revenue, icp!.revenue), country: add(f.country, icp!.countries.map(countryName)) };
+}
+
+/** What a saved view matches in the weekly email (open roles, by free facts). */
+export function criteriaOf(f: Filters, hireFn: string | null) {
+  const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
+  return {
+    ...(fns.length === 1 ? { function: fns[0] } : fns.length ? { functions: fns } : {}),
+    ...(f.industry.length ? { industry: f.industry } : {}),
+    ...(f.employees.length ? { employees: f.employees } : {}),
+    ...(f.revenue.length ? { revenue: f.revenue } : {}),
+    ...(f.country.length ? { country: f.country } : {}),
+    ...(f.hq.length === 1 ? { hq: f.hq[0] } : {}),
+  };
+}
+
+/** A name for a view from what it shows: "Marketing roles at Software companies, $5M–$20M". */
+export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string | null = null): string {
+  const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
+  const roles = tab === "hiring" || type === "engagements" || fns.length > 0;
+  const subject = fns.length ? `${fns.join(" or ")} ${tab === "hiring" ? "roles" : "seats"}` : tab === "hiring" ? "Open roles" : type === "people" ? "People" : roles ? "Seats" : "Companies";
+  const ind = f.industry.length ? `${f.industry.join(" or ")} companies` : "";
+  const head = ind ? (subject === "Companies" ? `${f.industry.join(" or ")} companies` : `${subject} at ${ind}`) : subject;
+  const tabWord = tab === "repeat" ? "repeat hirers" : tab === "following" ? "companies you follow" : "";
+  const parts = [
+    tabWord && !ind && subject === "Companies" ? tabWord.charAt(0).toUpperCase() + tabWord.slice(1) : tabWord ? `${head} among ${tabWord}` : head,
+    bandRange(RN_REVENUE, f.revenue),
+    f.employees.length ? `${bandRange(RN_EMPLOYEES, f.employees)} employees` : "",
+    f.country.length ? `in ${f.country.map(countryShort).join(" or ")}` : "",
+    f.region.length ? f.region.join(" or ") : "",
+    f.hq.length ? `in ${f.hq.join(" or ")}` : "",
+  ].filter(Boolean);
+  return parts.join(", ").slice(0, 100);
 }
