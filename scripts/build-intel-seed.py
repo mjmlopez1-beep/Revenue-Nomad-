@@ -64,6 +64,27 @@ GENERIC = re.compile(
     r"^conducted\b|^\d+\s*[mbk]\b|"
     r"^(construction|fin|retail|supported|large|mid|seed|major)\s*tech\b|"
     r"\b(company|start)\b.*\b(multi|savills)\b|\ba vc start\b|^supported\b", re.I)
+# A stand-in for an unnamed company ("Private Company", "Stealth Mode", "N/A", "Self-employed"): the
+# same test as isPlaceholderCompany in lib/scan/clean.ts, which the app also applies at view time.
+PLACEHOLDER_WORDS = set((
+    "stealth mode confidential undisclosed private hidden anonymous unnamed unknown locked company companies startup startups client clients hiring employer "
+    "the a an our my co inc llc ltd firm business organization organisation n na various multiple self employed freelance freelancer independent "
+    "contractor consultant tbd tba none not disclosed specified provided name withheld"
+).split())
+PLACEHOLDER_END = re.compile(r"\b(startup|start-up|scaleup|scale-up|company|firm|agency|brand|platform|business|client|organi[sz]ation|nonprofit|non-profit|provider|manufacturer|retailer|consultancy|venture|employer)\.?$", re.I)
+
+
+def is_placeholder(name):
+    n = (name or "").strip()
+    squeezed = re.sub(r"[^\w]+", "", n.lower()).replace("_", "")
+    if len(squeezed) < 2 or squeezed in ("startup", "selfemployed", "companyname", "seelisting"):
+        return True
+    words = [w for w in re.split(r"[^\w]+", n.lower()) if w]
+    if words and len(words) <= 6 and all(w in PLACEHOLDER_WORDS for w in words):
+        return True
+    return bool(re.match(r"^an?\s+\S", n, re.I) and PLACEHOLDER_END.search(n))
+
+
 VERB = re.compile(
     r"\b(architected|executed|built|led|grew|scaled|increased|developed|created|"
     r"launched|helped|managed|drove|closed|achieved|delivered|generated|hired|"
@@ -84,7 +105,7 @@ def clean_company(raw):
         return None
     if len(s) < 2 or len(s) > 40 or len(s.split()) > 5:
         return None
-    if JUNK.match(s) or not re.search(r"[A-Za-z]", s):
+    if JUNK.match(s) or not re.search(r"[A-Za-z]", s) or is_placeholder(s):
         return None
     if s[0].islower() and "." not in s:  # sentence fragment, not a name (allow "thimble.io")
         return None
@@ -277,7 +298,7 @@ for r in signup_rows:
         x = extracted.get(sid) if args.stories else None
         if args.stories:
             name = SUFFIX.sub("", (x or {}).get("company") or "").strip(" ,.") or None
-            if name and (len(name) > 60 or JUNK.match(name) and len(name.split()) > 1):
+            if name and (len(name) > 60 or JUNK.match(name) and len(name.split()) > 1 or is_placeholder(name)):
                 name = None
         else:
             name = company_from_story(text)

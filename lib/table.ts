@@ -48,6 +48,7 @@
  *  - intel.json (runtime, on the data volume): everything members do. Written by a group
  *    commit (one write per batch of actions) and snapshotted daily (lib/backup.ts).
  */
+import { publicBase } from "./links";
 import { promises as fs } from "fs";
 import path from "path";
 import { gunzipSync } from "zlib";
@@ -60,7 +61,7 @@ import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
 import { keepsNonGtm } from "./seniority";
-import { companyKey, textKey, titleWithout } from "./scan/clean";
+import { companyKey, isPlaceholderCompany, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, type Entity,
@@ -795,15 +796,40 @@ interface Graph {
   contacts: Map<string, PersonNode>;
 }
 
+/** Placeholder company names (isPlaceholderCompany), remembered by name: the graph is built on every view and action. */
+const placeholderNames = new Map<string, boolean>();
+function placeholderName(name: string): boolean {
+  let v = placeholderNames.get(name);
+  if (v === undefined) {
+    v = isPlaceholderCompany(name);
+    if (placeholderNames.size > 50_000) placeholderNames.clear();
+    placeholderNames.set(name, v);
+  }
+  return v;
+}
+/** Companies with a placeholder name kept because a member holds a seat there, for an admin to review. */
+function placeholdersInReview(g: Graph): { companyId: string; name: string }[] {
+  return [...g.companies.values()].filter((c) => placeholderName(c.name)).map((c) => ({ companyId: c.id, name: c.name }));
+}
+
 function graph(seed: Seed, s: State): Graph {
   const g: Graph = { companies: new Map(), engagements: new Map(), contacts: new Map() };
   // A firm in the seed (an admin added its name after the seed was built) is left out, unless a member holds a seat there.
   const firms = seedFirmIds(seed);
   const out = new Set<string>();
   for (const [id, f] of firms) if (!memberHoldsSeat(s, [...f.engagements, ...s.engagements.filter((e) => e.companyId === id).map((e) => e.id)])) out.add(id);
+  // A placeholder name ("Private Company", "Stealth Startup", "N/A") is no company: left out, unless a member holds a seat there
+  // (then it stays, listed for an admin to review with the firms). Nothing about it is deleted.
+  const placeholderOut = (id: string, name: string) => {
+    if (!placeholderName(name)) return false;
+    const seats = [...seed.engagements.filter((e) => e.companyId === id), ...s.engagements.filter((e) => e.companyId === id)].map((e) => e.id);
+    return !memberHoldsSeat(s, seats);
+  };
+  for (const c of seed.companies) if (!out.has(c.id) && placeholderOut(c.id, c.fields.name ?? "")) out.add(c.id);
+  for (const c of s.companies) if (!out.has(c.id) && placeholderOut(c.id, c.name)) out.add(c.id);
   for (const c of seed.companies) if (!out.has(c.id)) g.companies.set(c.id, { id: c.id, seedFields: c.fields, name: c.fields.name ?? "" });
   for (const c of s.companies) {
-    if (g.companies.has(c.id)) continue;
+    if (g.companies.has(c.id) || out.has(c.id)) continue;
     const node: CompanyNode = { id: c.id, seedFields: { name: c.name }, name: c.name };
     if (c.by === "scan") researchFill(seed, s, node);
     g.companies.set(c.id, node);
@@ -821,7 +847,7 @@ function graph(seed: Seed, s: State): Graph {
   }
   for (const p of s.contacts) {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
-    if (companyId && !g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, companyId, engagementId: p.engagementId ?? null, source: "Member added" });
+    if (companyId && !out.has(companyId) && !g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, companyId, engagementId: p.engagementId ?? null, source: "Member added" });
   }
   return g;
 }
@@ -1946,6 +1972,17 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       !(s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) &&
       !addedByMe.has(c.id) &&
       !holdsSeat;
+    // An open role's posted hours are part of what its posting says: they show with the posting and
+    // the posted rate (one purchase, or Unlock company at a hidden company), never before.
+    engs.forEach((e, n) => {
+      const er = engRecs[n];
+      const h = er.cells.hours;
+      if (er.yours || h?.s !== "value" || !isOpenRole(e, s, tracks)) return;
+      if (!hidden && er.cells.posting?.s !== "locked" && er.cells.rate?.s !== "locked") return;
+      er.cells.hours = { s: "locked", ver: h.ver, ...(h.from && h.from !== "website" ? { from: h.from } : {}) };
+      facts.known--;
+      facts.locked++;
+    });
     if (hidden) {
       hiddenIds.add(c.id);
       // An open role's free title never names the locked company.
@@ -2352,7 +2389,9 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
       }),
     firmReview: [...(seed.firmReview ?? []), ...(s.firmReview ?? [])]
       .filter((r, i, all) => g.companies.has(r.companyId) && all.findIndex((x) => x.companyId === r.companyId) === i)
-      .map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: r.reason, at: r.at })),
+      .map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: r.reason, at: r.at }))
+      // A placeholder name kept only because a member holds a seat there (see graph).
+      .concat(placeholdersInReview(g).map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: "placeholder name", at: "" }))),
     walls: { members: walled.size, hits },
     pro: { interested: Object.values(s.profiles).filter((p) => p.proInterest).length, views, byWhere },
     topUnlocked: top("unlock"),
@@ -3076,7 +3115,21 @@ export async function perform(
               if (hiddenNow(node.id)) bundle(node);
               continue;
             }
-            const f = fieldOf(it.entity, it.field);
+            let itField = it.field;
+            // An open role's posted hours show with its posting and posted rate (lockedHours in fullView): asking for them buys that purchase.
+            if (it.entity === "engagement" && itField === "hours") {
+              const eng = g.engagements.get(node.id);
+              if (eng && isOpenRole(eng, s, tracks())) {
+                if (hiddenNow(eng.companyId)) {
+                  bundle(g.companies.get(eng.companyId)!);
+                  continue;
+                }
+                const lead = BUNDLE_FIELDS.find((x) => valueOf(eng, s, x)?.status === "live");
+                if (!lead) continue;
+                itField = lead;
+              }
+            }
+            const f = fieldOf(it.entity, itField);
             const k = fkey(node.id, f.key);
             const cur = valueOf(node, s, f.key);
             if (!cur || cur.status !== "live") continue;
@@ -4003,7 +4056,7 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
       // Compared by key. A name or a title with no letter or digit has an empty key, which would match every other one.
       const coKey = keyOfCompany(company);
       const titleKey = textKey(title);
-      if (company.length < 2 || title.length < 2 || !coKey || !titleKey || company.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) continue;
+      if (company.length < 2 || title.length < 2 || !coKey || !titleKey || company.toLowerCase() === HIDDEN_COMPANY.toLowerCase() || placeholderName(company)) continue;
       // A link too long to store whole loses its query string (tracking codes) rather than its end.
       const url = cleanValue(def("posting"), String(raw.url ?? "").trim()).value ?? "";
       const source = squeeze(raw.source, 60) || "scan";
@@ -4411,7 +4464,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
  */
 export async function sendDigests(nowIso?: string, origin?: string): Promise<number> {
   if (!digestOn() || digestRunning) return 0;
-  const base = (process.env.RN_PUBLIC_URL || origin || "").replace(/\/$/, "");
+  const base = (publicBase() || origin || "").replace(/\/$/, "");
   if (!base) {
     console.error("weekly email not sent: set RN_PUBLIC_URL so it can link back");
     return 0;

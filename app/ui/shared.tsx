@@ -7,6 +7,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Action, Cell, Me, PersonRec, View } from "@/lib/tableTypes";
 import { fieldDef, type Entity } from "@/lib/tableFields";
+import { webLink } from "@/lib/links";
 import { unpackView } from "@/lib/viewWire";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
@@ -226,7 +227,8 @@ export function fmtValue(entity: Entity, key: string, v: string): string {
 export function hrefFor(entity: Entity, key: string, v: string): string | null {
   const f = fieldDef(entity, key);
   if (!f) return null;
-  if (f.kind === "url") return /^https?:\/\//.test(v) ? v : `https://${v}`;
+  // https:// added to a stored "acme.com/jobs/1"; javascript:, data: and anything else that is not a web address is no link.
+  if (f.kind === "url") return webLink(v);
   if (f.kind === "email") return `mailto:${v}`;
   if (f.kind === "phone") return `tel:${v.replace(/[^\d+]/g, "")}`;
   return null;

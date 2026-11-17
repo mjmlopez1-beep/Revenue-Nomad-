@@ -11,6 +11,7 @@
  * Neither side's email or phone ever leaves the server here. With email on, the other side
  * gets one email per conversation per hour at most, unless they turned message emails off.
  */
+import { publicBase } from "./links";
 import { randomBytes } from "crypto";
 import { ActionError, isAdmin, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import { HIDDEN_COMPANY, functionOf } from "./tableFields";
@@ -163,7 +164,7 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
 type Outcome = { message: string; convId?: string; notify?: { to: string; subject: string; text: string; html: string } };
 
 export async function performMessage(token: string | null, a: MessageAction, origin?: string): Promise<ActionResult> {
-  const base = (process.env.RN_PUBLIC_URL?.replace(/\/$/, "") || origin || "").replace(/\/$/, "");
+  const base = (publicBase() || origin || "").replace(/\/$/, "");
   const out = await T.mutate((s, seed): Outcome & { rec?: ConversationRec; unread: number } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError(SIGNED_OUT);

@@ -8,6 +8,7 @@
  * at once. Events inside the window wait (in the state, so a restart keeps them) and go out
  * together, with a count, when the window opens again. A weekly scan is one event.
  */
+import { publicBase } from "../links";
 import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type State } from "../table";
 import { functionOf } from "../tableFields";
 import { alertFor, bodyFor, testAlert, type Alert } from "./format";
@@ -36,7 +37,7 @@ const blank = (): MemberIntegrations => ({ alerts: { ...DEFAULT_ALERTS }, lastSe
 
 /** The app's address for links: RN_PUBLIC_URL, else the one last seen by the API. */
 export const baseOf = (s: State | { integrations?: IntegrationsState }) =>
-  (process.env.RN_PUBLIC_URL || s.integrations?.origin || "").replace(/\/+$/, "");
+  (publicBase() || s.integrations?.origin || "").replace(/\/+$/, "");
 
 /** The member's function, as the weekly email works it out. */
 export const functionFor = (s: State, m: Member): string | null => {

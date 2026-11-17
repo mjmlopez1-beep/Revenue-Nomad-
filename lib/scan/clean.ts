@@ -118,6 +118,35 @@ const GENERIC_NOUN =
 const STAGE_LED =
   /^(?:series [a-f]\b|seed\b|pre-seed|early[- ]stage|growth[- ]stage|late[- ]stage|vc[- ]backed|pe[- ]backed|venture[- ]backed|bootstrapped|fast[- ]growing|high[- ]growth|leading|well[- ]funded|funded|b2b|b2c|saas|ai|fintech|healthtech)\b/i;
 
+/** Words that alone (all of a name's words) name no company: "Private Company", "Stealth Mode", "N/A", "Self-employed". */
+const PLACEHOLDER_WORDS = new Set(
+  (
+    "stealth mode confidential undisclosed private hidden anonymous unnamed unknown locked company companies startup startups client clients hiring employer " +
+    "the a an our my co inc llc ltd firm business organization organisation n na various multiple self employed freelance freelancer independent " +
+    "contractor consultant tbd tba none not disclosed specified provided name withheld"
+  ).split(" ")
+);
+/** "A fintech company", "A Series B SaaS startup": a description that ends in what it is. */
+const GENERIC_END =
+  /\b(?:startup|start-up|scaleup|scale-up|company|firm|agency|brand|platform|business|client|organi[sz]ation|nonprofit|non-profit|provider|manufacturer|retailer|consultancy|venture|employer)\.?$/i;
+
+/**
+ * A stand-in for a company that isn't named: "Private Company", "Confidential", "Stealth Startup",
+ * "Undisclosed", "Company", "N/A", "Self-employed", "Various", "Multiple", "Freelance",
+ * "Independent", "Hiring Company", "A B2B SaaS company". Such a record is not a real company: the
+ * table, search, the connector and the preview leave it out (see placeholderHidden in lib/table.ts).
+ */
+export function isPlaceholderCompany(name: unknown): boolean {
+  const n = plain(name);
+  const sq = squeeze(n);
+  if (sq.length < 2) return true;
+  if (NO_NAME.has(sq)) return true;
+  const words = n.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (words.length && words.length <= 6 && words.every((w) => PLACEHOLDER_WORDS.has(w))) return true;
+  if (/^an?\s+\S/i.test(n) && GENERIC_END.test(n)) return true;
+  return false;
+}
+
 /**
  * Whether a cleaned name is a real company the role can be filed under. Nameless stand-ins,
  * descriptions ("A B2B SaaS startup"), job boards, recruiters and thread handles are not.
@@ -127,7 +156,7 @@ export function isRealCompany(name: string, context: { text?: string; source?: s
   const sq = squeeze(name);
   if (sq.length < 2 || name.length > 60) return false;
   if (!/\p{L}/u.test(name)) return false;
-  if (NO_NAME.has(sq) || NO_NAME_WORD.test(name)) return false;
+  if (NO_NAME.has(sq) || NO_NAME_WORD.test(name) || isPlaceholderCompany(name)) return false;
   if (/^u\/|\br\/\w+|@|https?:/i.test(name)) return false; // a thread handle, an email or a link
   if (BOARDS.has(sq) || BOARD_WORD.test(name)) return false;
   if (context.source && sq === squeeze(context.source)) return false;

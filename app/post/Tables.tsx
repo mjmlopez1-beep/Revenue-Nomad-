@@ -241,7 +241,7 @@ export const LOCKED_TIP = "This company is hiring a fractional now. Unlock it to
 export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare?: boolean }) {
   const ui = useCellUi();
   const why = useFitWhy(i);
-  const teaser = !bare && <span className="tp-co-dom" title={why ?? undefined}>{i.teaser || "Hiring a fractional now"}</span>;
+  const teaser = !bare && <span className="tp-co-dom" title={why ?? undefined}>{i.teaser || "Industry, size and HQ not on file yet"}</span>;
   if (big)
     return (
       <span className="tp-co tp-co-hidden big">

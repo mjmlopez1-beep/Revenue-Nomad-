@@ -7,6 +7,7 @@
  * Merlin (the role, the conversation, the seat). Never an email address, and never the
  * name of a member who only unlocked something: their function and title only.
  */
+import { webLink } from "../links";
 import type { AlertItem, AlertKind, DestKind } from "./types";
 
 export interface Alert {
@@ -133,7 +134,7 @@ export function testAlert(base: string): Alert {
 
 /** Slack mrkdwn: &, < and > escaped, so nobody can @channel or hide a link in a message. */
 const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const httpUrl = (u: string) => (/^https?:\/\/[^\s<>|]+$/i.test(u) ? u : "");
+const httpUrl = (u: string) => (/^https?:\/\/[^\s<>|]+$/i.test(u) ? u : /[|]/.test(u) ? "" : webLink(u) ?? "");
 
 /** Block Kit for an incoming webhook: the headline in bold, the lines, and an "Open in Merlin" button. */
 export function slackBody(a: Alert) {
