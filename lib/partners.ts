@@ -123,7 +123,7 @@ export function notePitch(o: SeatWords & { icp?: Icp | null }): string {
  * seat's claim link with the member's invite code. Claiming the seat through it connects them on Merlin.
  */
 export function inviteNote(o: SeatWords & { icp?: Icp | null; link: string }): string {
-  return [notePitch(o), `Your seat is on Merlin, a free table of companies that hire fractional leaders. Claim it with this link and we're connected there.\n${o.link}`].join("\n\n");
+  return [notePitch(o), `Your seat is on Merlin, a data exchange for fractional operators. Claim it with this link and we're connected there.\n${o.link}`].join("\n\n");
 }
 
 /** The first message to a member listed in Referral partners ("Connect"), about no seat. */

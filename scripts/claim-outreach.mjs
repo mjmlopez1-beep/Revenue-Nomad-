@@ -141,8 +141,9 @@ for (const r of parseCsv(readFileSync(csvPath, "utf8"))) {
   const link = `${base}/claim/${claimToken(e.id)}`;
   const seat = role ? `your seat as ${role} at ${company}` : `your fractional seat at ${company}`;
   const message =
-    `Hi ${first}, ${seat} is on Merlin, a free table of companies that hire fractional leaders, from Revenue Nomad. ` +
-    `Claiming it is free and takes a minute. Once it's yours you can see who else held seats there and which roles are open now. ${link} ` +
+    `Hi ${first}, ${seat} is on Merlin, a data exchange for fractional operators from Revenue Nomad. ` +
+    "Operators share what they know about fractional work to earn credits, and see which companies hire fractionals, what they've paid and which roles are open now. " +
+    `Claiming your seat is free and takes a minute. ${link} ` +
     "Not you, or would you rather not be listed? The same link takes your name off.";
   lines.push([first, name, company, role, monthText(e.fields.start), link, lead ? `https://www.linkedin.com/sales/lead/${lead}` : "", message].map(csvCell).join(","));
   counts.written++;

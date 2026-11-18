@@ -1,6 +1,6 @@
 # Merlin by Revenue Nomad
 
-Merlin (formerly Trading Post) is a give-to-get table of companies that hire fractional leaders, run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. Members add what they know (+1 credit a fact) and spend credits to see what other members added (1 credit a fact). A weekly scan of job boards keeps the open roles current.
+Merlin (formerly Trading Post) is a data exchange for fractional operators, run by Revenue Nomad for its members: they share what they know about fractional work to earn credits, and see which companies hire fractionals, what they've paid and which roles are open now. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. Members add what they know (+1 credit a fact) and spend credits to see what other members added (1 credit a fact). A weekly scan of job boards keeps the open roles current.
 
 ## The product
 

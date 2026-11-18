@@ -22,7 +22,7 @@ export function joinedEmail(o: { first: string; both: boolean; bonus: number; li
   const subject = joinedHeadline(first);
   const lead = o.both ? `You both get ${o.bonus} credits when ${first} adds a first fact.` : `Thanks for bringing ${first} in.`;
   const why = "We tell you once for each fractional who joins from your invite. Turn these off with message emails in Your credits on Merlin.";
-  const from = "Merlin is a free pilot from Revenue Nomad.";
+  const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
   const note = footerNote();
   const link = oneLine(o.link);
   const text = [`${subject}.`, "", lead, "", "Open Merlin with this link. It signs you in once and works for 7 days.", link, "", "--", why, from, ...(note ? [note] : [])].join("\n");

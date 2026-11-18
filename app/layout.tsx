@@ -4,9 +4,9 @@ import "@fontsource-variable/schibsted-grotesk/wght.css";
 import "@fontsource-variable/red-hat-mono/wght.css";
 import "./globals.css";
 
-const TITLE = "Merlin · Companies that hire fractional leaders";
+const TITLE = "Merlin · The data exchange for fractional operators";
 const DESCRIPTION =
-  "See which companies hire fractional sales, marketing and RevOps leaders, who held each seat, what it paid and which roles are open now. Add what you know to see more. A free pilot from Revenue Nomad.";
+  "Merlin is a data exchange for fractional operators. Share what you know about fractional work to earn credits, and see which companies hire fractionals, what they've paid and which roles are open now. From Revenue Nomad.";
 
 /** Link previews need absolute image URLs: the public address when it is set. */
 function base(): URL | undefined {

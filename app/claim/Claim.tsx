@@ -333,7 +333,7 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
           </p>
         ) : (
           <p className="cl-p">
-            Merlin is a free table of companies that hire fractional leaders, run by Revenue Nomad. Claim your seat and it&apos;s yours there.{" "}
+            Merlin is a data exchange for fractional operators, run by Revenue Nomad. Claim your seat and it&apos;s yours there.{" "}
             {signedIn ? "Fill in what you know and each answer earns a credit." : `You start with ${starter} credits to see who held other seats, what clients paid and which roles are open now.`}
             {info.inviter
               ? signedIn

@@ -533,7 +533,8 @@ function StepQuestions({
         Welcome, {first}
       </h1>
       <p className="ob-sub">
-        Merlin is where fractional leaders share which companies hired fractionals, for which seat, who held it and what it paid.
+        Merlin is a data exchange for fractional operators. Share what you know about fractional work to earn credits, and see which companies hire
+        fractionals, what they&apos;ve paid and which roles are open now.
         {seats
           ? ` ${
               published === seats

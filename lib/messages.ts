@@ -139,7 +139,7 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
   const subject = `${first} sent you a message on Merlin about ${about}`;
   const why = "You get at most one of these an hour for each conversation. Turn them off in Your credits on Merlin.";
   const noReply = "Replies to this email don't reach them. Reply on Merlin.";
-  const from = "Merlin is a free pilot from Revenue Nomad.";
+  const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
   const note = footerNote();
   const text = [
     `${first} sent you a message about ${about}.`,
@@ -178,7 +178,7 @@ export function connectEmail(o: { partner: string; company: string; link: string
   const subject = `${first} claimed their seat at ${company} through your invite`;
   const lead = `You're connected as referral partners on Merlin. Your note is the first message in your conversation, so say hello.`;
   const why = "You get at most one of these an hour for each conversation. Turn them off in Your credits on Merlin.";
-  const from = "Merlin is a free pilot from Revenue Nomad.";
+  const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
   const note = footerNote();
   const link = oneLine(o.link);
   const text = [`${first} claimed their seat at ${company} through your invite.`, "", lead, "", "Open the conversation with this link. It signs you in once and works for 7 days.", link, "", "--", why, from, ...(note ? [note] : [])].join("\n");

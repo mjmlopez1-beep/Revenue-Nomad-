@@ -64,7 +64,7 @@ ${status === 200 ? CHECK : ""}<h1>${title}</h1>
 <p>${body}</p>
 <a class="btn" href="/">Open Merlin</a>
 </div>
-<p class="foot">Merlin is a free pilot from Revenue Nomad.</p>
+<p class="foot">Merlin is a data exchange for fractional operators, from Revenue Nomad.</p>
 </main>
 </body></html>`,
     { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },

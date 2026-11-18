@@ -1,5 +1,5 @@
 /**
- * Merlin: a give-to-get intel table for fractional GTM work.
+ * Merlin: a give-to-get data exchange for fractional operators.
  *
  * Three linked records:
  *   company 1→n engagements (fractional seats at that company)

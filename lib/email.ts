@@ -164,7 +164,7 @@ export function signInEmail(name: string, link: string) {
   const lead = "It opens Merlin and keeps you signed in on this device.";
   const keep = "Keep this link to yourself. It works like a password.";
   const why = "You got this because someone asked for a sign-in link with this email address. If it wasn't you, ignore this email.";
-  const from = "Merlin is a free pilot from Revenue Nomad.";
+  const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
   const note = footerNote();
 
   const text = [

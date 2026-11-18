@@ -204,12 +204,12 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                   </span>
                 </p>
               ) : (
-                <p className="lp-live lp-live-quiet">A free pilot from Revenue Nomad</p>
+                <p className="lp-live lp-live-quiet">The data exchange for fractional operators</p>
               )}
               <h1 className="lp-h1">Find your next client and the fractional who can introduce you</h1>
               <p className="lp-hero-sub">
-                See which companies hire fractionals for your function and who held the seat before you. Ask them for a warm intro and hear how the
-                engagement went before your first call.
+                Merlin is a data exchange for fractional operators. Share what you know about fractional work to earn credits, and see which companies
+                hire fractionals, what they&apos;ve paid, which roles are open now and who held the seat before you.
               </p>
               {inviter ? (
                 <div className="lp-invited">
@@ -394,7 +394,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         <div className="lp-wrap lp-foot-in">
           <div className="lp-foot-brand">
             <Brand kind="lockup" size={64} />
-            <span>Merlin is a free pilot from Revenue Nomad, the network of {NETWORK} fractionals.</span>
+            <span>Merlin is a data exchange for fractional operators, built by Revenue Nomad, the network of {NETWORK} fractionals.</span>
           </div>
           <div className="lp-foot-links">
             {support && supportHref ? (

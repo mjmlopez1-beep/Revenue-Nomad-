@@ -23,9 +23,9 @@ const fn = z.string().describe(`A function: ${list(FUNCTIONS)}`);
 const many = (what: string, xs: readonly string[]) => z.array(z.string()).describe(`${what}, any of: ${list(xs)}`);
 const company = z.string().describe("The company's id (from search_companies or list_open_roles). A visible company's exact name or domain also works.");
 
-export const INSTRUCTIONS = `Merlin is a give-to-get table of companies that hire fractional leaders (sales, marketing, RevOps, customer success, finance, technology and more), run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. You act as the signed-in member.
+export const INSTRUCTIONS = `Merlin is a data exchange for fractional operators, run by Revenue Nomad for its members. Members share what they know about fractional work to earn credits, and spend credits to see which companies hire fractionals (sales, marketing, RevOps, customer success, finance, technology and more), for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. You act as the signed-in member.
 
-How the table works
+How the exchange works
 - Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts are always visible: company basics, and a seat's function, type, status, start, why they hired, hours a week, and its end month while the seat is still going. Only a dated end on a seat that ended costs 1 credit.
 - A company with an open role is a "Locked company" until the member unlocks it for 1 credit, which also opens the job posting of its open roles, with the posted rate and hours when the posting gave them. Before that only the role's title, function and listed date show, with the company's industry, size and HQ region. Each open role says whether a rate was posted ("No rate posted", or "on file"): never promise a rate that isn't there. At a company the member can see, an open role's posting, posted rate and hours are one purchase.
 - At a locked company, its people and the fractionals who held its seats open only after the company. Unlock the company first, then them.

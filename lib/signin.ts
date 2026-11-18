@@ -154,7 +154,7 @@ export function oneTimeEmail(name: string, link: string, code: string, purpose: 
   const why = join
     ? "You got this because someone joined Merlin with this email address. If it wasn't you, ignore this email and nothing happens."
     : "You got this because someone asked to sign in to Merlin with this email address. If it wasn't you, ignore this email. Nobody gets in without the link or the code.";
-  const from = "Merlin is a free pilot from Revenue Nomad.";
+  const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
   const note = footerNote();
   const text = [
     `Hi ${first},`,
