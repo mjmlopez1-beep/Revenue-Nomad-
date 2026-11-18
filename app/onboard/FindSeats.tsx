@@ -4,7 +4,7 @@
  * Find your seats: the member types the clients they work with now or worked with before, and
  * claims the seats we found there ("Not on Merlin yet", after the "Is this you?" check), or adds
  * the one they held when we have none. Each answer they then add to a seat earns a credit, up to
- * about 12 a seat. Onboarding's step 3, and in the app the top of Your seats (and its empty
+ * about 12 a seat. Onboarding's step 5, and in the app the top of Your seats (and its empty
  * state), where the zero-credits wall and Get started step 2 send members.
  *
  * The parts that decide what a client card says (seatsAt, seatState, seatLine) are pure and live

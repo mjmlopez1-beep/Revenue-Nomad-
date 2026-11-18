@@ -78,9 +78,10 @@ import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
 import { companyFirm, memberHoldsSeat, purgeFirms, seedFirmIds, type FirmReview, type RemovedFirms } from "./firmRemoval";
 import type {
-  Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
+  Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, OnboardDraft, PersonRec,
   ScanSummary, View,
 } from "./tableTypes";
+import { BEFORE_MAX } from "./tableTypes";
 import type { DigestData, DigestHires, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
 import { followsHires } from "./hired";
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
@@ -205,6 +206,16 @@ interface Profile {
   proInterest?: boolean;
   /** Who they hunt: their ideal client (lib/hunt.ts). */
   icp?: Icp | null;
+  /**
+   * The fractional functions they say usually get hired before them (Me.before): up to
+   * BEFORE_MAX, [] for "Not sure", absent when never asked. Private to the member: anything
+   * shown to others reads it only as counts.
+   */
+  before?: string[];
+  /** The id of the saved view onboarding made, their first view (Me.firstView). */
+  firstView?: string;
+  /** Onboarding answers so far, while not onboarded (the onboardDraft action). The profile action drops it. */
+  draft?: OnboardDraft;
 }
 /** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
 interface RoleTrack {
@@ -2406,6 +2417,11 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       // Who they hunt, and their saved views (one list with the connector's saved searches).
       icp: prof.icp ?? null,
       savedViews: savedViewsOut(s.connector?.alerts?.[me.id]),
+      // Who usually gets hired before them (left out when never asked), their first view while it is
+      // saved, and onboarding's answers so far while they are still in it. Only ever their own.
+      ...(Array.isArray(prof.before) ? { before: [...prof.before] } : {}),
+      firstView: prof.firstView && (s.connector?.alerts?.[me.id] ?? []).some((x) => x.id === prof.firstView && x.place) ? prof.firstView : null,
+      draft: !prof.onboarded && prof.draft ? { ...prof.draft } : null,
       // Only the viewer's own. Nobody else's private rate ever leaves the server.
       benchRates: s.benchRates
         .filter((b) => b.by === me.id)
@@ -2852,6 +2868,56 @@ function benchmarks(seed: Seed, g: Graph, s: State, viewerId?: string): Benchmar
 /* ---------- actions ---------- */
 
 export class ActionError extends Error {}
+
+/* ---------- onboarding: "who gets hired before you", and the answers so far ---------- */
+
+/**
+ * "Which fractional usually gets hired before you?" from loose input: functions on the list, each
+ * once, in the order given, at most BEFORE_MAX. `[]` is "Not sure". `strict` (the profile action):
+ * anything but a list, or more than BEFORE_MAX, is refused with a message the member can act on.
+ */
+function cleanBefore(raw: unknown, { strict = false }: { strict?: boolean } = {}): string[] {
+  if (!Array.isArray(raw)) {
+    if (strict) throw new ActionError("Pick the functions from the list, or Not sure.");
+    return [];
+  }
+  const out = [...new Set(raw.slice(0, 40).map((x) => String(x ?? "").trim()).filter((x) => FUNCTIONS.includes(x)))];
+  if (strict && out.length > BEFORE_MAX) throw new ActionError(`Pick up to ${BEFORE_MAX} functions.`);
+  return out.slice(0, BEFORE_MAX);
+}
+
+/** A public id or a typed client name ("name:Acme"), as Find your seats keeps them: plain text, short. */
+const draftText = (raw: unknown, max: number) => tidy(String(raw ?? "").replace(/[\u0000-\u001f<>]/g, ""), max);
+
+/**
+ * Onboarding's answers so far, cleaned (OnboardDraft). Every part is optional: what is missing or
+ * not on its list comes back empty. Saved views are kept only when they are the member's own.
+ */
+function cleanDraft(raw: unknown, alerts: { id: string }[], now: string): OnboardDraft {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const step = Math.round(Number(r.step));
+  let icp: Icp | null = null;
+  try {
+    icp = r.icp && typeof r.icp === "object" ? cleanIcp(r.icp) : null;
+  } catch {
+    icp = null;
+  }
+  const own = new Set(alerts.map((x) => x.id));
+  const at = typeof r.at === "string" && Number.isFinite(Date.parse(r.at)) ? new Date(Date.parse(r.at)).toISOString() : now;
+  return {
+    step: Number.isFinite(step) ? Math.min(6, Math.max(1, step)) : 1,
+    function: typeof r.function === "string" && FUNCTIONS.includes(r.function) ? r.function : null,
+    title: draftText(r.title, 80),
+    icp,
+    before: Array.isArray(r.before) ? cleanBefore(r.before) : null,
+    roles: r.roles !== false,
+    email: r.email !== false,
+    clients: [...new Set((Array.isArray(r.clients) ? r.clients : []).slice(0, 20).map((x) => draftText(x, 90)).filter(Boolean))],
+    views: [...new Set((Array.isArray(r.views) ? r.views : []).map((x) => String(x ?? "")).filter((x) => own.has(x)))].slice(0, 2),
+    saved: typeof r.saved === "string" && r.saved ? r.saved.slice(0, 3000) : null,
+    at,
+  };
+}
 
 /** Signals one member can send in 24 hours. More are dropped without a word. */
 const SIGNAL_DAILY_MAX = 200;
@@ -3905,9 +3971,30 @@ export async function perform(
               throw e instanceof HuntError ? new ActionError(e.message) : e;
             }
           }
+          // "Which fractional usually gets hired before you?": up to BEFORE_MAX functions, [] for Not sure.
+          if (a.before !== undefined) p.before = cleanBefore(a.before, { strict: true });
+          // The first view: a saved view of this member's own, with a place in the table.
+          if (a.firstView !== undefined) {
+            if (a.firstView === null) delete p.firstView;
+            else {
+              const id = String(a.firstView);
+              if (!(s.connector?.alerts?.[me.id] ?? []).some((x) => x.id === id && x.place)) throw new ActionError("That saved view is gone already.");
+              p.firstView = id;
+            }
+          }
           p.onboarded = true;
+          delete p.draft;
           s.profiles[me.id] = p;
           return { message: "Saved." };
+        }
+        case "onboardDraft": {
+          // Onboarding's answers so far, so another tab or device picks up at the same step. Done is done.
+          const p = { ...(s.profiles[me.id] ?? {}) };
+          if (p.onboarded) return { message: "" };
+          if (a.draft === null) delete p.draft;
+          else p.draft = cleanDraft(a.draft, s.connector?.alerts?.[me.id] ?? [], now);
+          s.profiles[me.id] = p;
+          return { message: "" };
         }
         case "savedView": {
           // Save this view: the same list as the connector's saved searches (lib/hunt.ts).

@@ -32,9 +32,10 @@ import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useT
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cardSeat, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
-  icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, suggestHiredFn,
+  icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
+import { firstViewPlace } from "../onboard/place";
 import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, stepOneKind, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
 import { InvitePanel } from "./Invite";
@@ -175,9 +176,25 @@ const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
 const presetOffKey = (me: Me) => `tp_preset_off_${me.id}_${me.goal ?? ""}`;
 const presetsOff = (me: Me) => new Set((store.get(presetOffKey(me)) ?? "").split(",").filter(Boolean));
 
-/** Where a member lands with nothing in the address bar: set by their onboarding answers. */
+/**
+ * Where a member lands with nothing in the address bar: their first view (the saved view
+ * onboarding ended on) while it is saved, else what their onboarding answer (Me.goal) set. "No
+ * fractional <fn> yet" from either is the onboarding preset (PRESET_KEYS): it narrows All only,
+ * and once taken off it stays off.
+ */
 function defaultsFor(me: Me) {
   const off = presetsOff(me);
+  const first = firstViewPlace(me);
+  const home = first ? placeFilters(first) : null;
+  if (home?.t && home.v) {
+    const s = SORTS.find((x) => x.key === new URLSearchParams(first!).get("s"))?.key;
+    return {
+      t: home.t,
+      v: home.v,
+      s: (s ?? (hiredOn(home.f) ? "hired" : !icpEmpty(me.icp) || namedFn(me.function) ? "best" : "fit")) as SortKey,
+      f: { ...home.f, notMine: home.f.notMine && !off.has("notMine") } as Filters,
+    };
+  }
   return {
     t: (me.goal === "intro" || me.goal === "roles" ? "engagements" : "companies") as RecordType,
     // The goal key "friendly" is stored on profiles, so it stays. It opens on Repeat hirers now.
@@ -1360,7 +1377,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setFitOnly(false);
     const own = namedFn(me.function);
     const fit = filters.icp && !icpEmpty(me.icp) ? icpTest(me.icp!) : null;
-    const fn = suggestHiredFn(infos, me.function, (i) => !fit || fit(i.c), (me as { before?: unknown }).before);
+    const fn = suggestHiredFn(infos, me.function, (i) => !fit || fit(i.c), me.before);
     hiredSetNotMine.current = !!own && !filters.notMine;
     // "No fractional <fn> yet" is the member's own filter from here (an onboarding answer only narrowed All).
     setPreset((x) => x.filter((k) => k !== "notMine"));
@@ -1790,8 +1807,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       )}
     </p>
   );
-  const saveIcp = async ({ title, fn, icp: v }: ProfileEdit) => {
-    const r = await act({ type: "profile", icp: v, title, function: fn ?? "" }, { quiet: true });
+  const saveIcp = async ({ title, fn, icp: v, before }: ProfileEdit) => {
+    const r = await act({ type: "profile", icp: v, title, function: fn ?? "", ...(before ? { before } : {}) }, { quiet: true });
     if (!r.ok) return false;
     setFilters((f) => ({ ...f, icp: !icpEmpty(v) }));
     if (!icpEmpty(v) && !sortPicked) setSort(null);
@@ -2222,7 +2239,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             <InvitePanel fn={me.function} code={me.inviteCode} />
           </Sheet>
         )}
-        {icpOpen && <IcpSheet icp={me.icp} title={me.title} fn={me.function} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
+        {icpOpen && <IcpSheet icp={me.icp} title={me.title} fn={me.function} before={me.before} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
         {saveOpen && (
           <SaveViewSheet
             key={herePlace}

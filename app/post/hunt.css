@@ -341,3 +341,12 @@
     display: inline;
   }
 }
+
+/* "Which fractional usually gets hired before you?" in Your profile: Not sure is another kind of answer, and past 3 the rest read as full. */
+.hunt-chip-unsure {
+  border-style: dashed;
+}
+.hunt-chip-full {
+  color: var(--faint);
+  border-color: var(--line);
+}

@@ -1,57 +1,86 @@
 /**
- * Checks for onboarding (app/onboard): the Follow companies suggestions and the heading that
- * says how they were picked, what a client card on Find your seats says about the seats on file,
- * the title a new member starts with, and the saved view behind the weekly email offered at the
- * end. The pure parts run with no server. With BASE set (scripts/test-all.sh does), it also joins
- * a fresh account and checks the server side: no "Member" title, and the offered saved view saves.
+ * Checks for onboarding (app/onboard), which ends on the member's first saved view:
+ *   - the title a new member starts with, and what a client card on Find your seats says;
+ *   - "Which fractional usually gets hired before you?": the functions it offers, the suggested
+ *     order (our data where it says enough, else the usual ones), at most 3, Not sure;
+ *   - the first view: its filters and words, widening in order when it is short, never empty,
+ *     "Not sure" using the suggested functions, and its saved view reopening with the same rows;
+ *   - the open roles view beside it, picking up where the member left off, the goal a new member gets.
+ * The pure parts run with no server. With BASE set (scripts/test-all.sh does), it also joins fresh
+ * accounts and checks the server: the draft saved per step and read back in a new tab, `before`
+ * stored and editable, the first view saved and reopened on the real table, and a member from
+ * before (no `before`) left as they were.
  *
  *   npx tsx scripts/test-onboard.mts                       pure checks only
  *   BASE=http://localhost:4600 npx tsx scripts/test-onboard.mts
  */
-import type { Cell, CompanyRec, EngagementRec, Icp } from "../lib/tableTypes";
-import { alertView, metaOf, pillPlace, realTitle, seatFns, seatState, seatsAt, suggest, titlesFor } from "../app/onboard/suggest";
+import type { Cell, CompanyRec, EngagementRec, Icp, Me, View } from "../lib/tableTypes";
+import { alertView, metaOf, pillPlace, realTitle, seatState, seatsAt, titlesFor } from "../app/onboard/suggest";
+import { firstViewPlace } from "../app/onboard/place";
+import {
+  BEFORE_DEFAULTS, BEFORE_MAX, ENOUGH, FIRST_WINDOW, WIDER_WINDOW, beforeOptions, beforeOrder, firstView, firstViewLine, goalFor, guessLine, holdersLine, newerAnswers, openRolesCount,
+  resumeStep, toggleBefore, widenLine,
+} from "../app/onboard/firstView";
+import { applyFilters, deriveAll, hireOfRow, placeFilters, rowsFor, sortRows, type Row } from "../app/post/model";
+import { FUNCTIONS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
 
 let passed = 0;
 let failed = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
   if (ok) passed++;
   else failed++;
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || detail === undefined ? "" : `\n      got ${JSON.stringify(detail)}`}`);
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || detail === undefined ? "" : `\n      got ${JSON.stringify(detail)?.slice(0, 600)}`}`);
 }
 
 const v = (x: string): Cell => ({ s: "value", v: x, ver: 0 });
 const EMPTY: Cell = { s: "empty" };
 const LOCKED: Cell = { s: "locked", ver: 0 };
+const val = (c: Cell | undefined) => (c && c.s === "value" ? c.v : null);
+
+/** The month `k` months before this one, as a start ("2026-09"). */
+const now = new Date();
+const ym = (k: number) => {
+  const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
 
 let n = 0;
+const ENG_FIELDS = GROUPS.find((g) => g.entity === "engagement")!.fields.filter((f) => !f.system).map((f) => f.key);
 function seat(cells: Record<string, Cell>, extra: Partial<EngagementRec> = {}): EngagementRec {
-  return { id: `e${++n}`, verified: false, cells: { operator: EMPTY, ...cells }, people: [], updatedAt: null, yours: false, ...extra } as EngagementRec;
+  const all: Record<string, Cell> = Object.fromEntries(ENG_FIELDS.map((k) => [k, EMPTY]));
+  return { id: `e${++n}`, source: "Seat scan", verified: false, cells: { ...all, ...cells }, people: [], updatedAt: null, yours: false, ...extra } as EngagementRec;
 }
-function co(name: string, o: { industry?: string; employees?: string; functions?: string[]; hiring?: string[]; fractional?: number; operators?: number; score?: number; seats?: EngagementRec[] } = {}): CompanyRec {
-  const seats = o.seats ?? [];
+/** A fractional hire in `fn` that started `k` months ago (null: no start on file). */
+const hire = (fn: string, k: number | null, extra: Record<string, Cell> = {}) =>
+  seat({ function: v(fn), type: v("Fractional"), status: v("Active"), role: v(`Fractional ${fn} lead`), ...(k === null ? {} : { start: v(ym(k)) }), ...extra });
+function co(name: string, seats: EngagementRec[], o: { country?: string; industry?: string; employees?: string; hidden?: boolean; score?: number } = {}): CompanyRec {
+  const fns = [...new Set(seats.map((e) => val(e.cells.function)).filter((x): x is string => !!x))];
   return {
-    id: `c_${name.toLowerCase().replace(/\W+/g, "")}`,
-    name,
+    id: `c_${name.toLowerCase().replace(/\W+/g, "")}_${++n}`,
+    name: o.hidden ? HIDDEN_COMPANY : name,
     iconDomain: null,
-    cells: { industry: o.industry ? v(o.industry) : EMPTY, employees: o.employees ? v(o.employees) : EMPTY },
+    cells: { website: EMPTY, industry: o.industry ? v(o.industry) : EMPTY, employees: o.employees ? v(o.employees) : EMPTY, revenue: EMPTY, hq: EMPTY, linkedin: EMPTY, about: EMPTY },
+    country: o.country ?? null,
+    region: null,
     engagements: seats,
     people: [],
     following: false,
     facts: { known: 0, locked: 0, missing: 0 },
     updatedAt: null,
     mine: false,
-    friendly: {
-      score: o.score ?? 50,
-      tier: null,
-      fractional: o.fractional ?? (o.functions?.length ?? 0),
-      open: 0,
-      functions: o.functions ?? [],
-      operators: o.operators ?? 0,
-      recent: 0,
-      hiring: o.hiring ?? [],
-    },
+    ...(o.hidden ? { hidden: true } : {}),
+    friendly: { score: o.score ?? 50, tier: null, fractional: seats.length, open: 0, functions: fns, operators: 0, recent: 0, hiring: [] },
   } as unknown as CompanyRec;
 }
+const ME = { id: "m_test", name: "Olive Onboard", function: null, goal: null, icp: null, savedViews: [] } as unknown as Me;
+const US: Icp = { industries: [], employees: [], revenue: [], countries: ["United States"] };
+/** The rows a view lists, as the table lists them on opening its place: its filters, then the most recent hire first. */
+function reopen(place: string, infos: ReturnType<typeof deriveAll>, who: Me): Row[] {
+  const p = placeFilters(place);
+  const rows = applyFilters(rowsFor(p.t ?? "companies", infos), p.f, p.v ?? "all", p.q, who, true).rows;
+  return sortRows(rows, "hired", false, "", { me: who, hire: { fns: p.f.hiredFn, within: p.f.hiredWithin } });
+}
+const keys = (rows: Row[]) => rows.map((r) => r.key).join(",");
 
 /* ---------- title ---------- */
 
@@ -60,96 +89,162 @@ check("a real title is kept", realTitle("Fractional CRO") === "Fractional CRO");
 check("Sales gets title suggestions, the first one is the placeholder", titlesFor("Sales")[0] === "Fractional VP Sales" && titlesFor("Sales").length >= 2);
 check("no function, no suggestions", titlesFor(null).length === 0);
 
-/* ---------- Follow companies: suggestions and heading ---------- */
-
-const sales = (holder = false) => seat({ function: v("Sales"), operator: holder ? LOCKED : EMPTY });
-const mk = (fn: string) => seat({ function: v(fn) });
-const pool: CompanyRec[] = [
-  // Hired Sales and Marketing; a Sales seat holder is on file.
-  ...Array.from({ length: 7 }, (_, i) => co(`HasSales${i}`, { industry: "SaaS", functions: ["Sales", "Marketing"], seats: [sales(true), mk("Marketing")], score: 60 + i })),
-  // Hired Marketing only: no fractional Sales yet.
-  ...Array.from({ length: 7 }, (_, i) => co(`NoSales${i}`, { industry: i < 3 ? "Pharma & Biotech" : "SaaS", functions: ["Marketing"], seats: [mk("Marketing")], score: 40 + i })),
-  // A full-time Growth seat only: no fractional functions, but a seat with a function on file.
-  co("Blueshift", { industry: "SaaS", seats: [seat({ function: v("Growth"), type: v("Full-time") })], score: 99 }),
-  // Nothing on file at all.
-  co("Bare", { industry: "SaaS", score: 100 }),
-];
-
-const adj = suggest(pool, "adjacent", "Sales");
-check("adjacent: heading says no fractional Sales yet", adj.title === "With no fractional Sales yet", adj.title);
-check("adjacent: every suggestion really has no fractional Sales", adj.list.length === 6 && adj.list.every((c) => !c.friendly.functions.includes("Sales")), adj.list.map((c) => c.name));
-
-const intro = suggest(pool, "intro", "Sales");
-check("intro: heading names a Sales seat holder on file", intro.title === "With a Sales seat holder on file", intro.title);
-check("intro: every suggestion has a Sales seat with its holder on file", intro.list.length === 6 && intro.list.every((c) => c.name.startsWith("HasSales")), intro.list.map((c) => c.name));
-
-const icp: Icp = { industries: ["Pharma & Biotech", "SaaS"], employees: [], revenue: [], countries: [] };
-const introIcp = suggest(pool, "intro", "Sales", icp);
-check("intro with a profile: heading keeps both the profile and the goal", introIcp.title.startsWith("Fit your Ideal Fractional Profile, with a Sales seat holder on file"), introIcp.title);
-check("intro with a profile: the companies that fit both come first", introIcp.list.slice(0, 6).every((c) => c.name.startsWith("HasSales")), introIcp.list.map((c) => c.name));
-
-const adjIcp = suggest(pool, "adjacent", "Sales", icp);
-check("adjacent with a profile: each picked industry gets a turn", adjIcp.list.some((c) => c.cells.industry && (c.cells.industry as { v?: string }).v === "Pharma & Biotech") && adjIcp.list.some((c) => (c.cells.industry as { v?: string }).v === "SaaS"), adjIcp.list.map((c) => c.name));
-check("adjacent with a profile: no Sales hire in the list", adjIcp.list.every((c) => !c.friendly.functions.includes("Sales")), adjIcp.list.map((c) => c.name));
-
-const short = suggest([...pool.slice(0, 2), pool[14], pool[15]], "intro", "Sales");
-check("a short list is topped up and the heading says so", short.title === "With a Sales seat holder on file, then more" && short.list.length === 4, { t: short.title, n: short.list.length });
-check("companies with nothing on file only fill the end", short.list[short.list.length - 1].name === "Bare", short.list.map((c) => c.name));
-
-const roles = suggest(pool, "roles", "Sales");
-check("roles: heading matches a list built from Sales hires", roles.title === "That hired or are hiring a fractional in Sales" && roles.list.every((c) => c.friendly.functions.includes("Sales")), roles.title);
-
-check("a card shows the functions the table shows (a full-time Growth seat)", seatFns(pool[14]).join() === "Growth", seatFns(pool[14]));
-check("a company card's meta still counts its seats", metaOf(pool[14]).includes("1 seat"), metaOf(pool[14]));
-
 /* ---------- Find your seats: the client card ---------- */
 
 const revops = seat({ function: v("RevOps"), operator: LOCKED });
-const belFuse = co("Bel Fuse Inc.", { seats: [revops] });
+const belFuse = co("Bel Fuse Inc.", [revops]);
 const a = seatsAt(belFuse, "Sales");
 check("a seat in another function is listed, never 'no seat on file'", a.others.length === 1 && !/don't have a seat/.test(a.note ?? "") && /No Sales seat on file here yet/.test(a.note ?? "") && /RevOps/.test(a.note ?? ""), a);
-
-const hone = co("Hone", { seats: [seat({ function: v("Sales"), operator: LOCKED })] });
+const hone = co("Hone", [seat({ function: v("Sales"), operator: LOCKED })]);
 const h = seatsAt(hone, "Sales");
 check("a Sales seat under someone else says so", /1 Sales seat on file here is under someone else/.test(h.note ?? "") && h.others.length === 1, h.note);
 check("its state reads as held", seatState(h.others[0]) === "A seat holder is on file", seatState(h.others[0]));
-
-const scan = co("Scanned", { seats: [seat({ function: v("Sales") }, { claimable: true }), seat({ function: v("RevOps") }, { claimable: true })] });
+const scan = co("Scanned", [seat({ function: v("Sales") }, { claimable: true }), seat({ function: v("RevOps") }, { claimable: true })]);
 const sc = seatsAt(scan, "Sales");
 check("claimable seats in their function come to claim, with no note", sc.claim.length === 1 && val(sc.claim[0].cells.function) === "Sales" && sc.note === null, sc);
+check("nothing on file: the plain line", seatsAt(co("Empty", []), "Sales").note === "We don't have a seat on file there yet." && seatsAt(null, "Sales").note === "We don't have a seat on file there yet.");
+check("a company card's meta counts its seats", /\b1 (past )?seat\b/.test(metaOf(co("Blueshift", [seat({ function: v("Growth"), type: v("Full-time") })]))), metaOf(co("Blueshift", [seat({ function: v("Growth"), type: v("Full-time") })])));
 
-check("nothing on file: the plain line", seatsAt(co("Empty"), "Sales").note === "We don't have a seat on file there yet." && seatsAt(null, "Sales").note === "We don't have a seat on file there yet.");
+/* ---------- which fractional usually gets hired before you ---------- */
 
-function val(c: Cell | undefined) {
-  return c && c.s === "value" ? c.v : null;
-}
+console.log("\nWho usually gets hired before you");
+check("the owner's examples are the usual order", JSON.stringify(BEFORE_DEFAULTS.Sales) === '["Marketing","RevOps","Finance"]' && JSON.stringify(BEFORE_DEFAULTS.Marketing) === '["Sales","RevOps","Product Marketing"]' && JSON.stringify(BEFORE_DEFAULTS.Finance) === '["Sales","Operations","People"]' && JSON.stringify(BEFORE_DEFAULTS.RevOps) === '["Sales","Marketing","Customer Success"]');
+check("every function offers 3 suggestions, never its own or a catch-all", FUNCTIONS.every((f) => {
+  const o = beforeOrder([], f);
+  return o.suggested.length === BEFORE_MAX && !o.suggested.includes(f) && !o.suggested.some((x) => x === "Other" || x === "Executive");
+}), FUNCTIONS.map((f) => [f, beforeOrder([], f).suggested]));
+check("with no data, the suggested ones are the usual ones", JSON.stringify(beforeOrder([], "Sales").suggested) === '["Marketing","RevOps","Finance"]' && beforeOrder([], "Sales").fromData.length === 0);
+check("it offers every function but the member's own and Other (none of the above), each once, Executive last", (() => {
+  const o = beforeOrder([], "Sales");
+  return o.order.length === FUNCTIONS.length - 2 && new Set(o.order).size === o.order.length && !o.order.includes("Sales") && !o.order.includes("Other") && o.order.at(-1) === "Executive" && [...beforeOptions("Sales")].sort().join() === [...o.order].sort().join();
+})(), beforeOrder([], "Sales").order);
+check("a member in a catch-all function is offered every named function and Executive", beforeOrder([], "Other").order.length === FUNCTIONS.length - 1 && beforeOrder([], "Other").order.at(-1) === "Executive" && beforeOrder([], "Executive").order.length === FUNCTIONS.length - 2);
+check("the suggested ones come first in the order", beforeOrder([], "Finance").order.slice(0, 3).join() === beforeOrder([], "Finance").suggested.join());
+// Our data: at three companies a fractional Growth lead started before the fractional Sales lead.
+const growthFirst = [0, 1, 2].map((k) => co(`Growth First ${k}`, [hire("Growth", 20), hire("Sales", 4)]));
+const fromData = beforeOrder(deriveAll(growthFirst), "Sales");
+check("our data leads where it says enough: a function that started first at 3 companies", fromData.suggested[0] === "Growth" && fromData.fromData.join() === "Growth" && fromData.suggested.slice(1).join() === "Marketing,RevOps", fromData);
+const twoOnly = beforeOrder(deriveAll(growthFirst.slice(0, 2)), "Sales");
+check("at 2 companies it is chance: the usual order stays", twoOnly.suggested.join() === "Marketing,RevOps,Finance" && twoOnly.fromData.length === 0, twoOnly);
+check("a function found at the same companies leads the rest", twoOnly.order[3] === "Growth", twoOnly.order);
+const fullTime = [0, 1, 2].map((k) => co(`Full-time First ${k}`, [hire("Partnerships", 20, { type: v("Full-time") }), hire("Sales", 4)]));
+check("full-time seats don't count as hires before you", beforeOrder(deriveAll(fullTime), "Sales").fromData.length === 0);
+const later = [0, 1, 2].map((k) => co(`Growth Later ${k}`, [hire("Growth", 2), hire("Sales", 9)]));
+check("a function that came after doesn't count as before", beforeOrder(deriveAll(later), "Sales").fromData.length === 0);
+check("up to 3: a fourth tap changes nothing", toggleBefore(["Marketing", "RevOps", "Finance"], "People").join() === "Marketing,RevOps,Finance");
+check("a tap takes one off, and picks one from Not sure or nothing", toggleBefore(["Marketing", "RevOps"], "RevOps").join() === "Marketing" && toggleBefore([], "Sales").join() === "Sales" && toggleBefore(null, "Sales").join() === "Sales");
 
-/* ---------- the weekly email at the end ---------- */
+/* ---------- the first view ---------- */
 
+console.log("\nThe first view");
+// Six companies in the US that hired a fractional Marketing lead two months ago, with no fractional Sales yet.
+const plenty = Array.from({ length: 6 }, (_, k) => co(`Plenty ${k}`, [hire("Marketing", 2 + (k % 3))], { country: "United States" }));
+const fv1 = firstView(deriveAll(plenty), ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: ["Marketing", "RevOps", "Finance"] });
+check("enough companies: no widening", fv1.widened.length === 0 && fv1.rows.length === 6 && fv1.first === 6, fv1.widened);
+check("its filters: the functions picked, 12 months, no fractional Sales yet, the profile pill", fv1.f.hiredFn.join() === "Marketing" && fv1.f.hiredWithin === FIRST_WINDOW && fv1.f.notMine && fv1.f.icp && !fv1.f.industry.length && !fv1.f.country.length, fv1.f);
+check(
+  "its sentence, in the owner's words",
+  firstViewLine(fv1, "Sales") === "6 companies in your profile hired a fractional Marketing leader in the last 12 months and have no fractional Sales yet.",
+  firstViewLine(fv1, "Sales"),
+);
+check("one company reads as one", firstViewLine({ f: fv1.f, rows: fv1.rows.slice(0, 1) }, "Sales") === "1 company in your profile hired a fractional Marketing leader in the last 12 months and has no fractional Sales yet.");
+check("no widening, no line about it", widenLine(fv1, "Sales") === null);
+const place1 = new URLSearchParams(fv1.place);
+check("its place: All companies with the recently hired keys, the pill and no fractional Sales yet (not the profile spelled out)", place1.get("v") === "all" && place1.get("t") === "companies" && place1.get("f") === "hiredFn:Marketing~hiredWithin:12~notMine~icp" && !place1.has("s"), fv1.place);
+check("its name says what it follows", fv1.name === "Hired a fractional Marketing leader in the last 12 months, in my profile, no fractional Sales yet", fv1.name);
+check("its weekly email follows hires in those functions, with the profile spelled out", JSON.stringify(fv1.criteria.hiredFn) === '["Marketing"]' && fv1.criteria.hiredWithin === 12 && fv1.criteria.country?.[0] === "United States" && !fv1.criteria.function, fv1.criteria);
+const order1 = fv1.rows.map((r) => hireOfRow(r, fv1.f.hiredFn, fv1.f.hiredWithin)).map((e) => val(e?.cells.start));
+check("the most recent hire first", order1.every((m, k) => k === 0 || (order1[k - 1] ?? "") >= (m ?? "")), order1);
+
+// Short: two match, one more hired 18 months ago, two more have a fractional Sales already, one is outside the profile.
+const short = [
+  co("Match A", [hire("Marketing", 3)], { country: "United States" }),
+  co("Match B", [hire("Marketing", 4)], { country: "United States" }),
+  co("Eighteen Months", [hire("Marketing", 18)], { country: "United States" }),
+  co("Has Sales A", [hire("Marketing", 3), hire("Sales", 30)], { country: "United States" }),
+  co("Has Sales B", [hire("Marketing", 5), hire("Sales", 40)], { country: "United States" }),
+  co("Overseas", [hire("Marketing", 2)], { country: "United Kingdom" }),
+];
+const shortInfos = deriveAll(short);
+const fv2 = firstView(shortInfos, ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: [] });
+check("short: it looks back 24 months, then adds companies with a fractional Sales, and stops at 5", fv2.widened.join() === "window,notMine" && fv2.rows.length === 5 && fv2.first === 2 && fv2.f.hiredWithin === WIDER_WINDOW && !fv2.f.notMine && fv2.f.icp, { w: fv2.widened, n: fv2.rows.length });
+check("the profile stays while the view has enough without dropping it", !fv2.rows.some((r) => r.i.c.name === "Overseas"));
+check("one line says what it widened", widenLine(fv2, "Sales") === "Only 2 matched at first, so we looked back 24 months and added companies with a fractional Sales already.", widenLine(fv2, "Sales"));
+check("the sentence follows what it shows", firstViewLine(fv2, "Sales") === "5 companies in your profile hired a fractional Marketing leader in the last 24 months.", firstViewLine(fv2, "Sales"));
+// The profile goes last: only one company in it, four outside it.
+const outside = [co("In Profile", [hire("Marketing", 2)], { country: "United States" }), ...[0, 1, 2, 3].map((k) => co(`Abroad ${k}`, [hire("Marketing", 2)], { country: "Canada" }))];
+const fv3 = firstView(deriveAll(outside), ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: [] });
+check("a step that adds nothing is left out, and the profile goes last", fv3.widened.join() === "icp" && fv3.rows.length === 5 && fv3.f.hiredWithin === FIRST_WINDOW && fv3.f.notMine && !fv3.f.icp, { w: fv3.widened, f: fv3.f });
+check("its line and sentence say so", widenLine(fv3, "Sales") === "Only 1 matched at first, so we looked past your profile." && firstViewLine(fv3, "Sales").startsWith("5 companies hired"), [widenLine(fv3, "Sales"), firstViewLine(fv3, "Sales")]);
+// Never empty: the only hire is five years old, or in another function.
+const old = [co("Long Ago", [hire("Marketing", 60)], { country: "United States" })];
+const fv4 = firstView(deriveAll(old), ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: [] });
+check("never empty: with nothing in 24 months it looks back as far as our records go", fv4.rows.length === 1 && fv4.widened.join() === "anyTime" && fv4.f.hiredWithin === 0 && fv4.f.hiredFn.join() === "Marketing", { w: fv4.widened, n: fv4.rows.length });
+check("and says so", widenLine(fv4, "Sales") === "Nothing matched at first, so we looked back as far as our records go." && firstViewLine(fv4, "Sales").includes("at any time"), [widenLine(fv4, "Sales"), firstViewLine(fv4, "Sales")]);
+const otherFn = [co("Finance Only", [hire("Finance", 2)], { country: "United States" })];
+const fv5 = firstView(deriveAll(otherFn), ME, { fn: "Sales", icp: US, before: ["Product Marketing"], suggested: [] });
+check("never empty: with no hire in those functions at all, a hire in any function", fv5.rows.length === 1 && fv5.widened.includes("anyFn") && !fv5.f.hiredFn.length && fv5.f.hiredWithin > 0, { w: fv5.widened, f: fv5.f });
+check("a view of any function still follows hires (a window stays on)", new URLSearchParams(fv5.place).get("f")!.includes("hiredWithin"), fv5.place);
+// Not sure: the suggested functions stand in, and it says so.
+const fv6 = firstView(deriveAll(plenty), ME, { fn: "Sales", icp: US, before: [], suggested: ["Marketing", "RevOps", "Finance"] });
+check("Not sure uses the suggested functions", fv6.guessed && fv6.f.hiredFn.join() === "Marketing,RevOps,Finance" && fv6.rows.length === 6, fv6.f.hiredFn);
+check("and says so in one line", guessLine(fv6, "Sales") === "Not sure is fine. This starts with Marketing, RevOps and Finance, who often get hired before a fractional Sales leader.", guessLine(fv6, "Sales"));
+check("a picked answer has no such line", guessLine(fv1, "Sales") === null && !fv1.guessed);
+check("the sentence names the suggested functions", firstViewLine(fv6, "Sales").includes("a fractional Marketing, RevOps or Finance leader"), firstViewLine(fv6, "Sales"));
+// A catch-all function has no "no fractional <fn> yet" part.
+const fv7 = firstView(deriveAll(plenty), ME, { fn: "Other", icp: null, before: ["Marketing"], suggested: [] });
+check("a catch-all function or no profile: no gap part, no pill", !fv7.f.notMine && !fv7.f.icp && firstViewLine(fv7, "Other") === "6 companies hired a fractional Marketing leader in the last 12 months.", firstViewLine(fv7, "Other"));
+// The saved view reopens with the preview's rows, in the same order.
+const who2 = { ...ME, function: "Sales", icp: US } as Me;
+check("the saved view reopens with the preview's rows, in the same order", keys(reopen(fv2.place, shortInfos, who2)) === keys(fv2.rows) && fv2.rows.length === 5, [keys(reopen(fv2.place, shortInfos, who2)), keys(fv2.rows)]);
+check("so does a view that kept everything", keys(reopen(fv1.place, deriveAll(plenty), who2)) === keys(fv1.rows));
+// A locked company (an open Finance role) that hired a fractional Marketing lead: free facts only, so nothing in the view names it.
+const locked = co("Secret Freight", [seat({ function: v("Finance"), status: v("Open role"), role: v("Fractional CFO") }, { source: "Demand scan" }), hire("Marketing", 2, { role: LOCKED, operator: LOCKED })], { country: "United States", hidden: true });
+const fv8 = firstView(deriveAll([...plenty, locked]), ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: [] });
+check("a locked company's hire counts (its function and start are free facts)", fv8.rows.some((r) => r.i.c.id === locked.id) && fv8.rows.length === 7, fv8.rows.length);
+check("and nothing the view says or saves names it", !JSON.stringify([fv8.place, fv8.name, firstViewLine(fv8, "Sales"), fv8.criteria]).includes(HIDDEN_COMPANY));
+const lockedHire = hireOfRow(fv8.rows.find((r) => r.i.c.id === locked.id)!, ["Marketing"], 12);
+check("its seat holder is a lock, and so is the role that comes with them", !!lockedHire && lockedHire.cells.role?.s === "locked" && lockedHire.cells.operator?.s === "locked");
+check("it counts the companies whose seat holder is on file (behind a lock): the member's potential referral partners", fv8.holders === 1 && fv1.holders === 0, [fv8.holders, fv1.holders]);
+check("and says so in one line, or nothing at none", holdersLine(fv8) === "At 1 of them, the fractional who held that seat is on file, a potential referral partner." && holdersLine({ holders: 3, rows: fv1.rows }) === "At 3 of them, the fractional who held that seat is on file. Each is a potential referral partner." && holdersLine(fv1) === null && holdersLine({ holders: 2, rows: fv8.rows.slice(0, 2) })!.startsWith("At all 2"), holdersLine(fv8));
+
+/* ---------- the open roles view beside it ---------- */
+
+console.log("\nThe open roles view");
 const avIcp: Icp = { industries: ["SaaS"], employees: ["11–50"], revenue: [], countries: ["United States"] };
 const av = alertView("Sales", avIcp);
 const place = new URLSearchParams(av.place);
-check("the alert opens Hiring now on seats", place.get("v") === "hiring" && place.get("t") === "seats", av.place);
-check(
-  "the alert opens with the profile pill on and only the function as a hard filter, so a company with a part not on file stays in",
-  place.get("f") === "fn:Sales~icp",
-  place.get("f"),
-);
-check("the alert's criteria (the weekly email) spell the profile out", av.criteria.function === "Sales" && av.criteria.industry?.[0] === "SaaS" && av.criteria.employees?.[0] === "11–50" && av.criteria.country?.[0] === "United States", av.criteria);
-check("the alert's name names the function and the profile", /^Sales roles at SaaS companies/.test(av.name), av.name);
-check("no function: no function in the criteria", !alertView(null, null).criteria.function && new URLSearchParams(alertView(null, null).place).get("f") === "-");
+check("it opens Hiring now on seats", place.get("v") === "hiring" && place.get("t") === "seats", av.place);
+check("with the profile pill on and only the function as a hard filter", place.get("f") === "fn:Sales~icp", place.get("f"));
+check("its criteria (the weekly email) spell the profile out", av.criteria.function === "Sales" && av.criteria.industry?.[0] === "SaaS" && av.criteria.employees?.[0] === "11–50" && av.criteria.country?.[0] === "United States", av.criteria);
+check("its name names the function and the profile", /^Sales roles at SaaS companies/.test(av.name), av.name);
 check("no profile: the function alone, no pill", new URLSearchParams(alertView("Marketing", null).place).get("f") === "fn:Marketing");
-// The view onboarding saved before, with the profile spelled out as hard filters, takes the pill form.
 const oldPlace = new URLSearchParams({ v: "hiring", t: "seats", f: "industry:SaaS~employees:11–50~fn:Sales~country:United States" }).toString();
 check("an old onboarding view (the profile spelled out) moves to the pill form", pillPlace(oldPlace, "Sales", avIcp) === av.place, pillPlace(oldPlace, "Sales", avIcp));
-check("the pill form, another profile, or a view the member saved themselves stays as it is", pillPlace(av.place, "Sales", avIcp) === null && pillPlace(oldPlace, "Sales", { ...avIcp, employees: ["51–200"] }) === null && pillPlace(oldPlace, "Marketing", avIcp) === null && pillPlace("v=all&t=companies&f=industry:SaaS", "Sales", avIcp) === null && pillPlace(oldPlace, "Sales", null) === null);
+check("the pill form, another profile, or a view the member saved themselves stays as it is", pillPlace(av.place, "Sales", avIcp) === null && pillPlace(oldPlace, "Sales", { ...avIcp, employees: ["51–200"] }) === null && pillPlace(oldPlace, "Marketing", avIcp) === null && pillPlace("v=all&t=companies&f=industry:SaaS", "Sales", avIcp) === null);
+const openSales = co("Hiring Sales", [seat({ function: v("Sales"), status: v("Open role"), role: v("Fractional VP Sales") }, { source: "Demand scan", opened: ym(0) + "-02", closed: null })], { country: "United States" });
+check("it counts the open roles in the member's function that fit the profile", openRolesCount(deriveAll([openSales, ...plenty]), ME, "Sales", US) === 1 && openRolesCount(deriveAll([openSales]), ME, "Sales", { ...US, countries: ["Canada"] }) === 0 && openRolesCount(deriveAll([openSales]), ME, "Other", US) === 0);
 
-/* ---------- the server: a new member's title, and the saved view ---------- */
+/* ---------- picking up, the goal, the first place ---------- */
+
+console.log("\nPicking up where they left off");
+check("the newer copy of the answers wins: this tab's or the server's", newerAnswers({ at: "2026-11-18T10:00:00Z", step: 2 }, { at: "2026-11-18T09:00:00Z", step: 4 })?.step === 2 && newerAnswers({ at: "2026-11-18T08:00:00Z", step: 2 }, { at: "2026-11-18T09:00:00Z", step: 4 })?.step === 4);
+check("with one copy, that one", newerAnswers(null, { at: "x", step: 3 })?.step === 3 && newerAnswers({ at: "2026-11-18T08:00:00Z", step: 2 }, null)?.step === 2 && newerAnswers(null, null) === null);
+check("a copy with no time loses to one with a time", newerAnswers({ step: 2 }, { at: "2026-11-18T09:00:00Z", step: 4 })?.step === 4 && newerAnswers({ at: "2026-11-18T09:00:00Z", step: 2 }, { step: 4 })?.step === 2);
+check("it opens on the step it left, inside the flow", resumeStep(5, { fn: "Sales", before: ["Marketing"] }, 5) === 5 && resumeStep(9, { fn: "Sales", before: [] }, 6) === 6 && resumeStep(0, { fn: "Sales", before: null }, 5) === 1);
+check("never past an answer it needs: the function, then the before answer", resumeStep(4, { fn: null, before: ["Marketing"] }, 5) === 1 && resumeStep(5, { fn: "Sales", before: null }, 5) === 3 && resumeStep(3, { fn: "Sales", before: null }, 5) === 3);
+check("a new member's goal: no fractional in their function yet, or repeat hirers for a catch-all", goalFor("Sales") === "adjacent" && goalFor("Other") === "friendly" && goalFor("Executive") === "friendly" && goalFor(null) === "friendly");
+const views = [{ id: "al_1", place: "v=hiring&t=seats&f=fn:Sales" }, { id: "al_2", place: fv1.place }];
+check("the table opens on the first view while it is saved", firstViewPlace({ firstView: "al_2", savedViews: views }) === fv1.place);
+check("not once it is gone, nor for a member from before", firstViewPlace({ firstView: "al_9", savedViews: views }) === null && firstViewPlace({ firstView: null, savedViews: views }) === null && firstViewPlace({ savedViews: views }) === null);
+check("the first view's numbers stay as set", ENOUGH === 5 && FIRST_WINDOW === 12 && WIDER_WINDOW === 24 && BEFORE_MAX === 3);
+
+/* ---------- the server ---------- */
 
 const BASE = (process.env.BASE || "").replace(/\/$/, "");
 if (BASE) {
-  const ip = `10.77.${(Date.now() >> 8) & 255}.${Date.now() & 255}`;
-  const call = async (body?: unknown, token?: string) => {
+  console.log("\nThe server");
+  const call = async (body: unknown, token?: string, ip = "10.77.0.1") => {
     const r = await fetch(`${BASE}/api/table`, {
       method: body === undefined ? "GET" : "POST",
       headers: { "x-forwarded-for": ip, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(token ? { cookie: `rn_table=${token}` } : {}) },
@@ -162,24 +257,103 @@ if (BASE) {
     } catch {}
     return { r, json };
   };
-  const email = `qa+onboard-${Date.now().toString(36)}@example.com`;
-  const j = await call({ join: { name: "Olive Onboard", email } });
-  const token = (j.r.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean);
-  check("joins", !!token, j.r.status);
+  const stamp = Date.now().toString(36);
+  const join = async (name: string, ip: string) => {
+    const j = await call({ join: { name, email: `qa+onboard-${name.split(" ")[0].toLowerCase()}-${stamp}@example.com` } }, undefined, ip);
+    return (j.r.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean) ?? null;
+  };
+  const ipA = `10.77.${(Date.now() >> 8) & 255}.${Date.now() & 255}`;
+  const token = await join("Olive Onboard", ipA);
+  check("joins", !!token);
   if (token) {
-    const view = (await call(undefined, token)).json;
-    check("a new member has no title, never 'Member'", view?.me?.title === "", view?.me?.title);
-    const prof = await call({ action: { type: "profile", function: "Sales", goal: "intro", icp: { industries: ["SaaS"], employees: [], revenue: [], countries: [] } } }, token);
-    check("the onboarding answers save", prof.r.status === 200 && !prof.json?.error, prof.json?.error);
-    const after = (await call(undefined, token)).json;
-    check("the goal is stored as its key", after?.me?.goal === "intro" && after?.me?.function === "Sales", { goal: after?.me?.goal, fn: after?.me?.function });
-    check("leaving the title empty keeps it empty", after?.me?.title === "", after?.me?.title);
-    const alert = alertView("Sales", after?.me?.icp ?? null);
-    const sv = await call({ action: { type: "savedView", op: "save", name: alert.name, place: alert.place, criteria: alert.criteria, email: true } }, token);
-    check("the weekly email offer saves as a saved view", sv.r.status === 200 && !sv.json?.error, sv.json?.error);
-    const last = (await call(undefined, token)).json;
-    const saved = last?.me?.savedViews?.[0];
-    check("the saved view keeps its place, function and email", saved?.place === alert.place && saved?.criteria?.function === "Sales" && saved?.email === true, saved);
+    const act = (action: unknown) => call({ action }, token, ipA);
+    const view = async (): Promise<View> => (await call(undefined, token, ipA)).json;
+    const v0 = await view();
+    check("a new member has no title, never 'Member'", v0?.me?.title === "", v0?.me?.title);
+    check("a new member was never asked who comes before them, has no first view and no draft yet", v0?.me?.before === undefined && v0?.me?.firstView === null && v0?.me?.draft === null && v0?.me?.onboarded === false, { b: v0?.me?.before, f: v0?.me?.firstView, d: v0?.me?.draft });
+
+    // A draft after each step, cleaned: what isn't on its list comes back empty.
+    const junk = await act({
+      type: "onboardDraft",
+      draft: { step: 9, function: "Wizardry", title: "  Fractional   VP Sales ", icp: { industries: ["Nope"], countries: ["United States"] }, before: ["Marketing", "RevOps", "Finance", "People", "Marketing"], roles: false, clients: Array.from({ length: 25 }, (_, k) => `name:Client ${k}`), views: ["al_madeup"], at: "2026-01-02T03:04:05Z" },
+    });
+    check("a draft saves", junk.r.status === 200 && !junk.json?.error, junk.json?.error);
+    const d1 = (await view())?.me?.draft;
+    check(
+      "it is cleaned: the step inside the flow, no function off the list, the title tidied, at most 3 before, 20 clients, no view that isn't theirs",
+      d1?.step === 6 && d1?.function === null && d1?.title === "Fractional VP Sales" && d1?.icp?.industries.length === 0 && d1?.icp?.countries[0] === "United States" && d1?.before?.join() === "Marketing,RevOps,Finance" && d1?.roles === false && d1?.email === true && d1?.clients.length === 20 && d1?.views.length === 0 && d1?.at === "2026-01-02T03:04:05.000Z",
+      d1,
+    );
+    await act({ type: "onboardDraft", draft: { step: 3, function: "Sales", title: "Fractional VP Sales", icp: US, before: null, at: new Date().toISOString() } });
+    const other = await call(undefined, token, "10.77.250.250");
+    const d2 = other.json?.me?.draft;
+    check("a new tab or device picks up the draft where they left off", d2?.step === 3 && d2?.function === "Sales" && d2?.before === null && d2?.icp?.countries[0] === "United States" && other.json?.me?.onboarded === false, d2);
+    const big = await act({ type: "onboardDraft", draft: "not an object" });
+    check("a draft that isn't one still saves as an empty one, never a server error", big.r.status === 200, big.r.status);
+    await act({ type: "onboardDraft", draft: { step: 3, function: "Sales", title: "Fractional VP Sales", icp: US, before: null, at: new Date().toISOString() } });
+
+    // "before" is checked: a list of up to 3 functions (refused answers change nothing, and don't finish onboarding).
+    const four = await act({ type: "profile", function: "Sales", before: ["Marketing", "RevOps", "Finance", "People"] });
+    check("more than 3 before is refused with a plain message", four.r.status !== 200 && /up to 3/.test(four.json?.error ?? ""), four.json?.error);
+    const notList = await act({ type: "profile", function: "Sales", before: "Marketing" });
+    check("an answer that isn't a list is refused", notList.r.status !== 200 && /from the list/.test(notList.json?.error ?? ""), notList.json?.error);
+    const ghost = await act({ type: "profile", function: "Sales", firstView: "al_madeup" });
+    check("a first view that isn't one of theirs is refused", ghost.r.status !== 200 && /gone already/.test(ghost.json?.error ?? ""), ghost.json?.error);
+    const still = await view();
+    check("refused answers left them in onboarding, with their draft", still?.me?.onboarded === false && still?.me?.draft?.step === 3 && still?.me?.before === undefined, { o: still?.me?.onboarded, d: still?.me?.draft?.step });
+
+    // The first view on the real table, saved, then the profile that finishes onboarding.
+    const infos = deriveAll(still.companies);
+    const ord = beforeOrder(infos, "Sales");
+    check("on the real table every function but their own and Other is offered, with 3 suggested", ord.suggested.length === 3 && ord.order.length === FUNCTIONS.length - 2, ord.suggested);
+    const fv = firstView(infos, still.me!, { fn: "Sales", icp: US, before: ["Marketing", "Finance"], suggested: ord.suggested });
+    check("the first view on the real table is never empty", fv.rows.length > 0, { n: fv.rows.length, w: fv.widened });
+    const thin = firstView(infos, still.me!, { fn: "Sales", icp: US, before: ["Product Marketing"], suggested: ord.suggested });
+    check("a thin answer widens and is still never empty", thin.rows.length > 0 && thin.widened.length > 0, { n: thin.rows.length, w: thin.widened });
+    const unsure = firstView(infos, still.me!, { fn: "Sales", icp: US, before: [], suggested: ord.suggested });
+    check("Not sure on the real table uses the suggested functions", unsure.guessed && unsure.f.hiredFn.join() === ord.suggested.join() && unsure.rows.length > 0, unsure.f.hiredFn);
+    const sv = await act({ type: "savedView", op: "save", name: fv.name, place: fv.place, criteria: fv.criteria, email: true });
+    check("the first view saves", sv.r.status === 200 && typeof sv.json?.id === "string", sv.json?.error);
+    const done = await act({ type: "profile", function: "Sales", goal: goalFor("Sales"), title: "Fractional VP Sales", icp: US, before: ["Marketing", "Finance", "Marketing", "Wizardry"], firstView: sv.json?.id });
+    check("the onboarding answers save", done.r.status === 200 && !done.json?.error, done.json?.error);
+    check("its answer carries the member's answers, so the table opens on the first view at once", done.json?.me?.firstView === sv.json?.id && done.json?.me?.before?.join() === "Marketing,Finance" && done.json?.me?.savedViews?.some((x: { id: string }) => x.id === sv.json?.id), done.json?.me);
+    const after = await view();
+    check("before is stored: functions on the list, each once", JSON.stringify(after?.me?.before) === '["Marketing","Finance"]', after?.me?.before);
+    check("the goal is stored, the member is onboarded, and the draft is gone", after?.me?.goal === "adjacent" && after?.me?.onboarded === true && after?.me?.draft === null, { g: after?.me?.goal, o: after?.me?.onboarded, d: after?.me?.draft });
+    check("the first view is theirs, and the table opens on it", after?.me?.firstView === sv.json?.id && firstViewPlace(after!.me!) === fv.place, after?.me?.firstView);
+    const saved = after?.me?.savedViews?.find((x) => x.id === sv.json?.id);
+    check("the saved view keeps its place, and follows hires in the weekly email", saved?.place === fv.place && saved?.email === true && saved?.criteria?.hiredFn?.join() === "Marketing,Finance" && saved?.criteria?.hiredWithin === fv.f.hiredWithin, saved);
+    const again = reopen(saved!.place!, deriveAll(after.companies), after.me!);
+    check("the saved view reopens with the preview's rows, in the same order", keys(again) === keys(fv.rows), { again: again.length, preview: fv.rows.length });
+    const late = await act({ type: "onboardDraft", draft: { step: 2, function: "Marketing" } });
+    check("a draft after onboarding changes nothing", late.r.status === 200 && (await view())?.me?.draft === null);
+
+    // Your profile: before is editable, and left alone by a save that doesn't name it.
+    await act({ type: "profile", before: [] });
+    check("Not sure is stored as an empty list", JSON.stringify((await view())?.me?.before) === "[]");
+    await act({ type: "profile", before: ["RevOps"] });
+    await act({ type: "profile", icp: US, title: "Fractional VP Sales", function: "Sales" });
+    const kept = await view();
+    check("editable later, and a profile save without it keeps it", JSON.stringify(kept?.me?.before) === '["RevOps"]' && kept?.me?.firstView === sv.json?.id, kept?.me?.before);
+    await act({ type: "savedView", op: "delete", id: sv.json?.id });
+    check("once the first view is removed, the table no longer opens on it", (await view())?.me?.firstView === null);
+  }
+
+  // A member from before the question: their answers stay as they were.
+  const ipB = `10.78.${(Date.now() >> 8) & 255}.${Date.now() & 255}`;
+  const tokenB = await join("Bram Before", ipB);
+  if (tokenB) {
+    const prof = await call({ action: { type: "profile", function: "Sales", goal: "intro", icp: { industries: ["SaaS"], employees: [], revenue: [], countries: [] } } }, tokenB, ipB);
+    check("an old-style profile still saves", prof.r.status === 200 && !prof.json?.error, prof.json?.error);
+    const b = (await call(undefined, tokenB, ipB)).json;
+    check("a member from before keeps their goal and is never given a before answer or a first view", b?.me?.goal === "intro" && b?.me?.before === undefined && b?.me?.firstView === null && b?.me?.draft === null && b?.me?.onboarded === true, { g: b?.me?.goal, b: b?.me?.before });
+    check("another member's answers never reach their view", !JSON.stringify(b).includes('"before":'), "before found");
+    const alert = alertView("Sales", b?.me?.icp ?? null);
+    const sv2 = await call({ action: { type: "savedView", op: "save", name: alert.name, place: alert.place, criteria: alert.criteria, email: true } }, tokenB, ipB);
+    check("the open roles view saves as a saved view", sv2.r.status === 200 && !sv2.json?.error, sv2.json?.error);
+    const last = (await call(undefined, tokenB, ipB)).json;
+    const s2 = last?.me?.savedViews?.[0];
+    check("it keeps its place, function and email", s2?.place === alert.place && s2?.criteria?.function === "Sales" && s2?.email === true, s2);
   }
 }
 

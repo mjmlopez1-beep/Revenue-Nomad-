@@ -1,33 +1,41 @@
 "use client";
 
 /**
- * First run, about a minute. One calm card:
- *   1. What Merlin is and what a credit buys, then who they are: their function, the title
- *      they go by when they message, and what they are looking for. A member with seats on file
- *      hears where those came from and who can see their name, since most of them arrive by
- *      personal link and skip the landing page.
- *   2. Who they hunt: their Ideal Fractional Profile, the companies they want as clients (industries,
- *      size, revenue, where). Every part optional.
- *   3. Find your seats: they type past and current clients, and claim the seats we found there
- *      ("Not on Merlin yet", with the "Is this you?" check), or add one we don't have.
- *   4. Follow companies (type-ahead plus 6 suggestions that fit their clients and function, never
- *      a fractional firm and never a company where they held a seat). Optional.
- *   5. Keep your sign-in link (only for members who joined here while email sign-in is off).
- * Each step is a history entry and the answers are kept for the tab, so back steps back and a
- * reload comes back to the same step. Finishing sends the follows, then the profile last
- * (which marks the member onboarded). The last button opens the table their answers built; a
- * member with seats on file under their name also gets "Fill in your seats" (Root opens the app
- * there). The last step also offers the weekly email of new matches (a saved view) and Slack.
+ * First run, about two minutes, and it ends on the member's first saved view. One calm card, and
+ * the value comes before the ask:
+ *   1. What Merlin is and what a credit buys, then their function and the title they go by. A
+ *      member with seats on file hears where those came from and who can see their name, since
+ *      most of them arrive by personal link and skip the landing page.
+ *   2. Their Ideal Fractional Profile: the companies they want as clients (industries, size,
+ *      revenue, where). Every part optional.
+ *   3. "Which fractional usually gets hired before you?": up to 3 functions, suggested first
+ *      (firstView.ts beforeOrder), or "Not sure". Stored as Me.before.
+ *   4. Their first view: companies in their profile that hired a fractional in those functions in
+ *      the last 12 months and have no fractional in theirs yet (widened until it shows enough), the
+ *      top 3 rows, and one button, "Save this view", with the weekly email on. "Also show open
+ *      <function> roles" saves the open roles in their function as a second view.
+ *   5. Find your seats: they type past and current clients and claim the seats we found there, or
+ *      add one we don't have. Each answer they add earns a credit.
+ *   6. Keep your sign-in link (only for members who joined here while email sign-in is off).
+ * Each step is a history entry, so back steps back and forward steps forward. The answers are
+ * kept for the tab (a reload comes back to the same step) and on the server after each step (a
+ * new tab or another device picks up there too). Finishing sends the profile, which marks the
+ * member onboarded with their first view, and the table opens on that view. A member with seats
+ * on file under their name also gets "Fill in your seats" (Root opens the app there).
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./onboard.css";
-import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconSearch, IconStar, IconX, post, useToast, type Act, type View } from "../ui/shared";
+import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, post, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
-import { GOALS, type CompanyRec, type Icp } from "@/lib/tableTypes";
-import { icpEmpty } from "@/app/post/model";
+import type { CompanyRec, Icp, OnboardDraft } from "@/lib/tableTypes";
+import { countryOf, deriveAll, hireLine, hireOfRow, icpEmpty, type Filters, type Row } from "@/app/post/model";
 import { EMPTY_ICP, IcpFields, countriesByCount, industriesByCount } from "@/app/post/Hunt";
-import { alertView, isMine, metaOf, named, realTitle, seatFns, suggest, titlesFor, type Goal } from "./suggest";
+import { alertView, named, realTitle, titlesFor } from "./suggest";
 import { FindSeats, SEAT_YIELD, seatsFound } from "./FindSeats";
+import {
+  BEFORE_MAX, PREVIEW_ROWS, andList, beforeOrder, firstView, firstViewLine, goalFor, guessLine, holderOnFile, holdersLine, newerAnswers, openRolesCount, resumeStep, toggleBefore,
+  widenLine, type FirstView,
+} from "./firstView";
 import { ICP_SKIPPED } from "@/app/post/getStarted";
 import { contactOf, mailto } from "../landing/contact";
 
@@ -43,41 +51,18 @@ export interface OnboardingProps {
   onSkip?: () => void;
 }
 
-/**
- * What the table opens on because of each answer (the app reads the stored key: its first tab
- * and filters follow from it). The answers themselves are GOALS in lib/tableTypes.ts.
- */
-const GOAL_OPENS: Record<Goal, (fn: string | null) => string> = {
-  roles: () => "The table opens on the fractional roles that are open now. We check for new ones every week.",
-  friendly: () => "The table opens on repeat hirers, the companies that hired fractionals more than once.",
-  adjacent: (fn) =>
-    named(fn)
-      ? `The table opens on companies that hired fractionals in other functions and have no ${fn} seat on file.`
-      : "The table opens on companies that hired fractionals in other functions and have no seat in yours on file.",
-  intro: () => "The table opens on seats where the seat holder is on file.",
-};
+/* ---------- where the member is: history entry, tab storage and the server's draft ---------- */
 
-/* ---------- where the member is: history entry and tab storage ---------- */
-
-/** The tab keeps the answers, so a reload on step 2 still has the step 1 answers it needs. */
+/** The tab keeps the answers (sessionStorage), so a reload on step 4 still has the answers it needs. */
 const SAVE_KEY = "tp_ob";
-interface Saved {
-  id: string;
-  step: number;
-  fn: string | null;
-  goal: Goal | null;
-  follows: string[];
-  title?: string;
-  icp?: Icp;
-  /** Clients typed on Find your seats: a company id, or a name we don't have. */
-  clients?: string[];
-}
-function readSaved(id: string): Partial<Saved> {
+/** The answers as this tab keeps them: a draft (OnboardDraft) with the member's id. `fn` is how a tab from before kept the function. */
+type Saved = Partial<OnboardDraft> & { id: string; fn?: string | null };
+function readSaved(id: string): Saved | null {
   try {
     const s = JSON.parse(sessionStorage.getItem(SAVE_KEY) || "null");
-    return s && s.id === id ? s : {};
+    return s && s.id === id ? s : null;
   } catch {
-    return {};
+    return null;
   }
 }
 function writeSaved(s: Saved | null) {
@@ -101,21 +86,18 @@ function entryStep(): number {
   const n = Number(window.history.state?.ob);
   return Number.isInteger(n) && n >= 1 ? n : 0;
 }
-
-function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; name: string }) {
-  return (
-    <button
-      type="button"
-      className={`btn ob-follow${on ? " btn-pine" : ""}`}
-      onClick={onClick}
-      aria-pressed={on}
-      aria-label={on ? `Unfollow ${name}` : `Follow ${name}`}
-    >
-      {/* The same star as Follow in a company record. */}
-      <IconStar size={13} filled={on} />
-      {on ? "Following" : "Follow"}
-    </button>
-  );
+/** The first step this tab's history holds (a resumed flow starts past step 1, with no entries behind it). */
+function entryBase(): number {
+  const n = Number(window.history.state?.obBase);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+/** The table opens on the member's first view: the address keeps no other place (a company link stays). */
+function clearPlace() {
+  try {
+    const u = new URL(window.location.href);
+    for (const k of ["v", "t", "s", "f", "q", "af", "p"]) u.searchParams.delete(k);
+    window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+  } catch {}
 }
 
 /**
@@ -145,79 +127,62 @@ function SeatsNext({ n, busy, onFill }: { n: number; busy?: boolean; onFill?: ()
   );
 }
 
-/**
- * The weekly email of new matches, offered on the last step: a saved view (the one Save this
- * view makes) of open roles in their function that fit their profile. Slack is a link away.
- */
-function AlertsOpt({
-  on, setOn, fn, icp, emailOn, busy, onSlack,
-}: {
-  on: boolean;
-  setOn: (v: boolean) => void;
-  fn: string | null;
-  icp: Icp;
-  /** The weekly email can go out (email is set up). Otherwise the view is still saved. */
-  emailOn: boolean;
-  busy: boolean;
-  onSlack: () => void;
-}) {
-  const what = `${named(fn) ? `${fn} roles` : "fractional roles"}${icpEmpty(icp) ? "" : " that fit your profile"}`;
-  return (
-    <div className="ob-alerts">
-      <label className="ob-alerts-opt">
-        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
-        <span className="ob-alerts-text">
-          <span className="ob-alerts-label">{emailOn ? `Email me new ${what} each week` : `Save new ${what} as a view`}</span>
-          <span className="ob-alerts-hint">
-            {emailOn ? "Only when something is new. Turn it off any time under Saved views." : "It sits under Saved views in the filters, so new ones are a click away."}
-          </span>
-        </span>
-      </label>
-      <p className="ob-alerts-slack">
-        Rather get them in Slack?{" "}
-        <button type="button" className="ob-linkbtn" disabled={busy} onClick={onSlack}>
-          Set it up in Integrations
-        </button>
-      </p>
-    </div>
-  );
-}
+/** What the saved views of the first view step were saved as: a change of answer means saving again. */
+const signature = (fv: FirstView, roles: boolean, email: boolean, fn: string | null, icp: Icp) =>
+  JSON.stringify({ p: fv.place, n: fv.name, r: roles && named(fn) ? alertView(fn, icpEmpty(icp) ? null : icp).place : null, e: email });
 
 export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProps) {
   const me = view.me!;
-  const toast = useToast();
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
   const linkStep = me.id.startsWith("j_") && !view.email;
-  // 1 who you are, 2 your Ideal Fractional Profile, 3 find your seats, 4 follow, 5 keep your link.
-  const total = linkStep ? 5 : 4;
+  // 1 who you are, 2 your Ideal Fractional Profile, 3 who gets hired before you, 4 your first view, 5 find your seats, 6 keep your link.
+  const total = linkStep ? 6 : 5;
   const { support } = contactOf(view);
 
-  // Answers kept from earlier in this tab (a reload), else what the server already knows.
+  // Answers from this tab (a reload) or the server (another tab or device), whichever is newer, else what the server already knows.
   const [init] = useState(() => {
-    const saved = readSaved(me.id);
+    const tab = readSaved(me.id);
+    const server: Saved | null = me.draft ? { ...me.draft, id: me.id } : null;
+    const a: Saved = newerAnswers(tab, server) ?? { id: me.id };
     const known = new Set(view.companies.map((c) => c.id));
+    const saved = new Set((me.savedViews ?? []).map((v) => v.id));
     // A function picked on the landing page's "Try it" comes before one guessed from the title.
-    const fn = (saved.fn && FUNCTIONS.includes(saved.fn) ? saved.fn : null) ?? triedFn() ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
-    const goal = ((GOALS.find((g) => g.key === saved.goal) ?? GOALS.find((g) => g.key === me.goal))?.key as Goal | undefined) ?? null;
-    const follows = Array.isArray(saved.follows) ? saved.follows.filter((id) => known.has(id)) : view.companies.filter((c) => c.following).map((c) => c.id);
-    const want = entryStep() || saved.step || 1;
+    const picked = a.function ?? a.fn;
+    const fn = (picked && FUNCTIONS.includes(picked) ? picked : null) ?? triedFn() ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
     // No title yet means an empty field with the placeholder showing, never a stored "Member".
-    const title = typeof saved.title === "string" ? saved.title : realTitle(me.title);
-    const icp = saved.icp ?? me.icp ?? EMPTY_ICP;
-    const clients = Array.isArray(saved.clients) ? saved.clients.slice(0, 20) : [];
-    return { fn, goal, follows, title, icp, clients, step: fn && goal ? Math.min(Math.max(1, want), total) : 1 };
+    const title = typeof a.title === "string" ? a.title : realTitle(me.title);
+    const icp = a.icp ?? me.icp ?? EMPTY_ICP;
+    // Their own function can't come before them. An answer left with nothing once it is taken off is unanswered, not "Not sure".
+    const raw = Array.isArray(a.before) ? a.before : Array.isArray(me.before) ? me.before : null;
+    const kept = raw ? raw.filter((f) => FUNCTIONS.includes(f) && f !== fn).slice(0, BEFORE_MAX) : null;
+    const before = raw && raw.length && kept && !kept.length ? null : kept;
+    const clients = Array.isArray(a.clients) ? a.clients.filter((id) => id.startsWith("name:") || known.has(id)).slice(0, 20) : [];
+    const views = Array.isArray(a.views) ? a.views.filter((id) => saved.has(id)) : [];
+    const step = resumeStep(entryStep() || a.step || 1, { fn, before }, total);
+    return {
+      fn, title, icp, before, clients, views, step,
+      roles: a.roles !== false,
+      email: a.email !== false,
+      saved: views.length && typeof a.saved === "string" ? a.saved : null,
+    };
   });
   const [step, setStep] = useState(init.step);
   const [fn, setFn] = useState<string | null>(init.fn);
-  const [goal, setGoal] = useState<Goal | null>(init.goal);
-  const [follows, setFollows] = useState<string[]>(init.follows);
   const [title, setTitle] = useState(init.title);
   const [icp, setIcp] = useState<Icp>(init.icp);
+  const [before, setBefore] = useState<string[] | null>(init.before);
+  const [roles, setRoles] = useState(init.roles);
+  const [email, setEmail] = useState(init.email);
   const [clients, setClients] = useState<string[]>(init.clients);
+  /** The saved views the first view step made (the first view, then the open roles), and what they were saved as. */
+  const [views, setViews] = useState<string[]>(init.views);
+  const [saved, setSaved] = useState<string | null>(init.saved);
+  /** The first view was saved on this visit: Find your seats says so at its top. */
+  const [justSaved, setJustSaved] = useState(false);
   const [busy, setBusy] = useState(false);
-  // What the server has been told, so going back and forth sends only the changes.
-  const sent = useRef(new Set(view.companies.filter((c) => c.following).map((c) => c.id)));
   const rewinding = useRef(false);
+  /** The first step this tab's history holds. Back from it steps back in place rather than leaving the page. */
+  const base = useRef(1);
   const cardRef = useRef<HTMLDivElement>(null);
   // Seats on file that carry this member's name. When there are any, that is where they go next.
   const mySeats = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours).length, 0), [view.companies]);
@@ -226,8 +191,6 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     () => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours && (e.source === "Published engagement" || e.source === "Member success story")).length, 0),
     [view.companies],
   );
-  // The weekly email of new matches, offered on the last step (on unless they untick it).
-  const [alerts, setAlerts] = useState(true);
   const emailOn = !!view.scan?.digest;
   // Credits earned on the way (a seat added on Find your seats): "+4" beside the balance for a moment.
   const [bump, setBump] = useState(0);
@@ -240,8 +203,21 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     const t = setTimeout(() => setBump(0), 2400);
     return () => clearTimeout(t);
   }, [me.credits]);
-  // Step 2 and 3 need both answers. If they are missing (storage was cleared), ask again.
-  const shown = step > 1 && (!fn || !goal) ? 1 : step;
+
+  /* ----- the first view, from the answers ----- */
+  const infos = useMemo(() => deriveAll(view.companies), [view.companies]);
+  const order = useMemo(() => beforeOrder(infos, fn), [infos, fn]);
+  const fv = useMemo(() => (before === null ? null : firstView(infos, me, { fn, icp: icpEmpty(icp) ? null : icp, before, suggested: order.suggested })), [infos, me, fn, icp, before, order]);
+  // Open roles in their function that fit their profile now, for "Also show open <function> roles" (counted when the first view shows).
+  const openRoles = useMemo(() => (step === 4 ? openRolesCount(infos, me, fn, icpEmpty(icp) ? null : icp) : 0), [step, infos, me, fn, icp]);
+  const sig = fv ? signature(fv, roles, email, fn, icp) : null;
+  /** The views saved on the first view step still say what the answers say now. */
+  const savedNow = !!views.length && saved === sig;
+
+  // A step needs the answers before it. If they are missing (storage was cleared), ask again.
+  const shown = resumeStep(step, { fn, before }, total);
+
+  /* ----- history: back steps back, forward steps forward, a reload comes back to the step ----- */
 
   // Each step opens at its top, so the browser never brings back an old scroll. That matters most
   // when finishing takes history back to the first step's entry: the app must open at its top, not
@@ -252,19 +228,48 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     } catch {}
   }, []);
 
-  // This page's history entry holds the step: back steps back, forward steps forward, and a
-  // reload comes back to it.
   useEffect(() => {
-    if (entryStep() !== init.step) window.history.replaceState({ ob: init.step }, "");
+    // A reload keeps this tab's entries (and the first one they hold). A new tab that picks up at step 4 has none behind it.
+    const had = entryStep();
+    base.current = had ? Math.min(entryBase(), init.step) : init.step;
+    if (had !== init.step || entryBase() !== base.current) window.history.replaceState({ ob: init.step, obBase: base.current }, "");
     const onPop = () => {
       if (rewinding.current) return;
-      setStep(Math.min(Math.max(1, entryStep() || 1), total));
+      setStep(Math.min(Math.max(1, entryStep() || base.current), total));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [init.step, total]);
 
-  useEffect(() => writeSaved({ id: me.id, step, fn, goal, follows, title, icp, clients }), [me.id, step, fn, goal, follows, title, icp, clients]);
+  /** The answers as they are now, for the tab and for the server's draft. */
+  const answers = (atStep: number): Saved => ({
+    id: me.id,
+    step: atStep,
+    function: fn,
+    title,
+    icp: icpEmpty(icp) ? null : icp,
+    before,
+    roles,
+    email,
+    clients,
+    views,
+    saved,
+    at: new Date().toISOString(),
+  });
+  const latest = useRef(answers);
+  latest.current = answers;
+  useEffect(() => writeSaved(latest.current(step)), [me.id, step, fn, title, icp, before, roles, email, clients, views, saved]);
+
+  // Each new step goes to the server too, so a new tab or another device picks up here (the step it opened on is already there).
+  const opened = useRef(true);
+  useEffect(() => {
+    if (opened.current) {
+      opened.current = false;
+      return;
+    }
+    const { id: _id, ...draft } = latest.current(step);
+    void post({ action: { type: "onboardDraft", draft } });
+  }, [step]);
 
   // New step: start at the top of the card, and move focus to its heading for screen readers.
   useEffect(() => {
@@ -274,17 +279,22 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
 
   const forward = (n: number) => {
     setStep(n);
-    window.history.pushState({ ob: n }, "");
+    window.history.pushState({ ob: n, obBase: base.current }, "");
   };
   const back = () => {
-    if (step > 1 && entryStep() === step) window.history.back();
-    else setStep((s) => Math.max(1, s - 1));
+    if (step > base.current && entryStep() === step) window.history.back();
+    else {
+      const n = Math.max(1, step - 1);
+      base.current = Math.min(base.current, n);
+      setStep(n);
+      window.history.replaceState({ ob: n, obBase: base.current }, "");
+    }
   };
   /** Take the step entries back off history before the app opens, so back in the app never lands on a step. */
   const rewind = () =>
     new Promise<void>((done) => {
-      const n = entryStep();
-      if (n <= 1) return done();
+      const k = entryStep() - base.current;
+      if (k <= 0) return done();
       rewinding.current = true;
       const end = () => {
         window.removeEventListener("popstate", end);
@@ -294,62 +304,68 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
       };
       const t = setTimeout(end, 600);
       window.addEventListener("popstate", end);
-      window.history.go(-(n - 1));
+      window.history.go(-k);
     });
 
-  const byId = useMemo(() => new Map(view.companies.map((c) => [c.id, c])), [view.companies]);
-  const toggle = (id: string) => setFollows((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
+  /* ----- saving the first view ----- */
 
-  /** Send the follow changes at once, side by side. The profile action after them brings back the view. */
-  const sendFollows = async () => {
-    const want = new Set(follows);
-    const ops = [
-      ...[...want].filter((id) => !sent.current.has(id)).map((id) => ({ id, on: true })),
-      ...[...sent.current].filter((id) => !want.has(id)).map((id) => ({ id, on: false })),
-    ];
-    const errors = await Promise.all(
-      ops.map(async ({ id, on }) => {
-        const r = await post({ action: { type: "follow", companyId: id, on } });
-        if (r.error) return r.error;
-        if (on) sent.current.add(id);
-        else sent.current.delete(id);
-        return null;
-      }),
-    );
-    const err = errors.find(Boolean);
-    if (err) toast(err, true);
+  /**
+   * "Save this view": the first view (and the open roles in their function, when that's on), with
+   * the weekly email as ticked. Saved again after a change of answer, in place of the ones before.
+   */
+  const saveFirst = async () => {
+    if (!fv || busy) return;
+    if (savedNow) return forward(5);
+    setBusy(true);
+    for (const id of views) await act({ type: "savedView", op: "delete", id }, { quiet: true, silentError: true });
+    setViews([]);
+    setSaved(null);
+    const r = await act({ type: "savedView", op: "save", name: fv.name, place: fv.place, criteria: fv.criteria, email }, { quiet: true });
+    if (!r.ok || !r.id) {
+      setBusy(false);
+      return;
+    }
+    const ids = [r.id];
+    if (roles && named(fn)) {
+      const av = alertView(fn, icpEmpty(icp) ? null : icp);
+      const r2 = await act({ type: "savedView", op: "save", name: av.name, place: av.place, criteria: av.criteria, email }, { quiet: true });
+      if (r2.ok && r2.id) ids.push(r2.id);
+    }
+    setViews(ids);
+    setSaved(sig);
+    setJustSaved(true);
+    setBusy(false);
+    forward(5);
   };
 
   /**
    * Finish with what is answered so far. `skip`: "Skip to the table", from any step. The profile
    * action marks the member onboarded either way, so a reload never brings them back here.
    */
-  const finish = async (skip = false, to: "table" | "seats" | "integrations" = "table") => {
+  const finish = async (skip = false, to: "table" | "seats" = "table") => {
     if (busy) return;
     setBusy(true);
     // The app opens on the table their answers built, unless they asked for their seats.
     if (skip || to !== "seats") onSkip?.();
-    await sendFollows();
-    // The weekly email of new matches, as a saved view (only from the last step, never on a skip).
-    if (!skip && alerts) {
-      const v = alertView(fn, icpEmpty(icp) ? null : icp);
-      const r = await post({ action: { type: "savedView", op: "save", name: v.name, place: v.place, criteria: v.criteria, email: true } });
-      if (r.error) toast(r.error, true);
-    }
     await rewind();
     window.scrollTo(0, 0);
-    if (to === "integrations") {
-      try {
-        window.history.replaceState(window.history.state, "", `${window.location.pathname}?p=integrations`);
-      } catch {}
-    }
+    // With a first view saved, the table opens on it.
+    if (views[0]) clearPlace();
     const r = await act(
-      { type: "profile", function: fn ?? undefined, goal: goal ?? undefined, ...(title.trim() !== realTitle(me.title) ? { title: title.trim() } : {}), icp: icpEmpty(icp) ? null : icp },
+      {
+        type: "profile",
+        function: fn ?? undefined,
+        ...(fn ? { goal: goalFor(fn) } : {}),
+        ...(title.trim() !== realTitle(me.title) ? { title: title.trim() } : {}),
+        icp: icpEmpty(icp) ? null : icp,
+        ...(before !== null ? { before } : {}),
+        ...(views[0] ? { firstView: views[0] } : {}),
+      },
       { quiet: true },
     );
     if (!r.ok) {
       setBusy(false);
-      if (step > 1 && entryStep() !== step) window.history.pushState({ ob: step }, "");
+      if (step > base.current && entryStep() !== step) window.history.pushState({ ob: step, obBase: base.current }, "");
       return;
     }
     writeSaved(null);
@@ -361,15 +377,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     await onDone();
   };
 
-  const afterFollow = async () => {
-    if (!linkStep) return finish(false, "table");
-    setBusy(true);
-    await sendFollows();
-    setBusy(false);
-    forward(5);
-  };
-
-  const alertsOpt = <AlertsOpt on={alerts} setOn={setAlerts} fn={fn} icp={icp} emailOn={emailOn} busy={busy} onSlack={() => finish(false, "integrations")} />;
+  const afterSeats = () => (linkStep ? forward(6) : finish(false, "table"));
 
   return (
     <div className="ob">
@@ -419,7 +427,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               Step {shown} of {total}
             </span>
             {/* Not on the sign-in link step: leaving there without the link is the one thing to avoid. */}
-            {shown === 5 ? null : (
+            {shown === 6 ? null : (
               <button type="button" className="ob-skip" onClick={() => finish(true)} disabled={busy}>
                 Skip to the table
               </button>
@@ -433,46 +441,58 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               published={published}
               credits={me.credits}
               fn={fn}
-              setFn={setFn}
+              setFn={(f) => {
+                setFn(f);
+                // Their own function can't come before them. Taking off their only pick leaves the question unanswered, not "Not sure".
+                setBefore((b) => {
+                  if (!b || !b.includes(f)) return b;
+                  const rest = b.filter((x) => x !== f);
+                  return rest.length ? rest : null;
+                });
+              }}
               title={title}
               setTitle={setTitle}
-              goal={goal}
-              setGoal={setGoal}
               onNext={() => forward(2)}
             />
           ) : shown === 2 ? (
             <StepClients companies={view.companies} icp={icp} setIcp={setIcp} onBack={back} onNext={() => forward(3)} />
           ) : shown === 3 ? (
-            <StepSeats companies={view.companies} fn={fn} title={title} name={me.name} credits={me.credits} clients={clients} setClients={setClients} act={act} onBack={back} onNext={() => forward(4)} />
-          ) : shown === 4 ? (
-            <StepFollow
-              companies={view.companies}
-              byId={byId}
+            <StepBefore fn={fn} order={order.order} suggested={order.suggested} before={before} setBefore={setBefore} onBack={back} onNext={() => forward(4)} />
+          ) : shown === 4 && fv ? (
+            <StepFirstView
+              fv={fv}
               fn={fn}
               icp={icp}
-              clients={clients}
-              goal={goal}
-              follows={follows}
-              toggle={toggle}
+              openRoles={openRoles}
+              roles={roles}
+              setRoles={setRoles}
+              email={email}
+              setEmail={setEmail}
+              emailOn={emailOn}
+              savedNow={savedNow}
               busy={busy}
-              nextLabel={linkStep ? "Get my sign-in link" : "Open my table"}
-              handoff={linkStep ? null : <SeatsNext n={mySeats} busy={busy} onFill={() => finish(false, "seats")} />}
-              alerts={linkStep ? null : alertsOpt}
               onBack={back}
-              onNext={afterFollow}
+              onSave={saveFirst}
+            />
+          ) : shown === 5 ? (
+            <StepSeats
+              companies={view.companies}
+              fn={fn}
+              title={title}
+              name={me.name}
+              credits={me.credits}
+              clients={clients}
+              setClients={setClients}
+              act={act}
+              savedLine={justSaved && savedNow ? (email && emailOn ? "Your first view is saved. New ones come in your weekly email." : "Your first view is saved under Saved views.") : null}
+              handoff={linkStep ? null : <SeatsNext n={mySeats} busy={busy} onFill={() => finish(false, "seats")} />}
+              nextLabel={linkStep ? "Get my sign-in link" : "Open my table"}
+              busy={busy}
+              onBack={back}
+              onNext={afterSeats}
             />
           ) : (
-            <StepLink
-              token={me.token}
-              email={me.email}
-              support={support}
-              emailOn={view.email}
-              busy={busy}
-              nextLabel="Open my table"
-              seats={mySeats}
-              alerts={alertsOpt}
-              onDone={(to) => finish(false, to)}
-            />
+            <StepLink token={me.token} email={me.email} support={support} emailOn={view.email} busy={busy} nextLabel="Open my table" seats={mySeats} onDone={(to) => finish(false, to)} />
           )}
         </div>
       </main>
@@ -480,10 +500,10 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   );
 }
 
-/* ---------- step 1: what this is, then two questions ---------- */
+/* ---------- step 1: what this is, then who you are ---------- */
 
 function StepQuestions({
-  first, seats, published, credits, fn, setFn, title, setTitle, goal, setGoal, onNext,
+  first, seats, published, credits, fn, setFn, title, setTitle, onNext,
 }: {
   first: string;
   /** Seats on file that carry the member's name. */
@@ -495,16 +515,13 @@ function StepQuestions({
   setFn: (f: string) => void;
   title: string;
   setTitle: (t: string) => void;
-  goal: Goal | null;
-  setGoal: (g: Goal) => void;
   onNext: () => void;
 }) {
-  const ready = !!fn && !!goal;
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (ready) onNext();
+        if (fn) onNext();
       }}
     >
       <h1 className="ob-title" tabIndex={-1} data-step-h>
@@ -539,19 +556,12 @@ function StepQuestions({
         <legend className="ob-h">Which function do you work in?</legend>
         <div className="ob-chips" role="radiogroup" aria-label="Your function">
           {FUNCTIONS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="radio"
-              aria-checked={fn === f}
-              className={`ob-chip${fn === f ? " ob-chip-on" : ""}`}
-              onClick={() => setFn(f)}
-            >
+            <button key={f} type="button" role="radio" aria-checked={fn === f} className={`ob-chip${fn === f ? " ob-chip-on" : ""}`} onClick={() => setFn(f)}>
               {f}
             </button>
           ))}
         </div>
-        <p className="ob-hint">We use it to point out open roles in your function and companies that have not hired it yet.</p>
+        <p className="ob-hint">We use it to find companies that haven&apos;t hired a fractional in your function yet, and open roles in it.</p>
       </fieldset>
 
       <div className="ob-q">
@@ -579,32 +589,12 @@ function StepQuestions({
         <p className="ob-hint">Members see it when you message them.</p>
       </div>
 
-      <fieldset className="ob-q">
-        <legend className="ob-h">What are you looking for first?</legend>
-        <div className="ob-goals" role="radiogroup" aria-label="What you are looking for first">
-          {GOALS.map((g) => (
-            <button
-              key={g.key}
-              type="button"
-              role="radio"
-              aria-checked={goal === g.key}
-              className={`ob-goal${goal === g.key ? " ob-goal-on" : ""}`}
-              onClick={() => setGoal(g.key)}
-            >
-              <span className="ob-radio" aria-hidden />
-              {g.label}
-            </button>
-          ))}
-        </div>
-        <p className="ob-hint">{goal ? GOAL_OPENS[goal](fn) : "The table opens on what you pick. You can change it later with the filters."}</p>
-      </fieldset>
-
       <div className="ob-grow" />
       <div className="ob-foot">
         <span className="ob-foot-note" aria-live="polite">
-          {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your function" : "Two answers decide what you see first"}
+          {fn ? "" : "Pick your function"}
         </span>
-        <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!ready}>
+        <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!fn}>
           Next: your profile
         </button>
       </div>
@@ -622,7 +612,7 @@ function StepClients({ companies, icp, setIcp, onBack, onNext }: { companies: Co
       <h1 className="ob-title" tabIndex={-1} data-step-h>
         Your Ideal Fractional Profile
       </h1>
-      <p className="ob-sub">The companies you want as clients. The table opens on companies like these, and the best fits for your function come first. Pick as many as fit, or skip it.</p>
+      <p className="ob-sub">The companies you want as clients. Your first view shows companies like these. Pick as many as fit, or skip it.</p>
       <IcpFields value={icp} onChange={setIcp} industries={industries} countries={countries} headingClass="ob-h" />
       <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">
@@ -633,17 +623,224 @@ function StepClients({ companies, icp, setIcp, onBack, onNext }: { companies: Co
           {icpEmpty(icp) ? "You can skip this and pick later" : ""}
         </span>
         <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onNext}>
-          Find your seats
+          Next: who comes before you
         </button>
       </div>
     </div>
   );
 }
 
-/* ---------- step 3: find your seats (optional) ---------- */
+/* ---------- step 3: which fractional usually gets hired before you ---------- */
+
+function StepBefore({
+  fn, order, suggested, before, setBefore, onBack, onNext,
+}: {
+  fn: string | null;
+  /** Every function it offers, the suggested ones first (beforeOrder). */
+  order: string[];
+  suggested: string[];
+  /** The answer: null not yet, [] Not sure. */
+  before: string[] | null;
+  setBefore: (b: string[] | null) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  const nfn = named(fn);
+  const picked = before ?? [];
+  const unsure = before !== null && before.length === 0;
+  const full = picked.length >= BEFORE_MAX;
+  const chip = (f: string) => {
+    const on = picked.includes(f);
+    return (
+      <button
+        key={f}
+        type="button"
+        aria-pressed={on}
+        aria-disabled={!on && full}
+        className={`ob-chip${on ? " ob-chip-on" : ""}${!on && full ? " ob-chip-full" : ""}`}
+        onClick={() => setBefore(toggleBefore(before, f))}
+      >
+        {f}
+      </button>
+    );
+  };
+  const rest = order.filter((f) => !suggested.includes(f));
+  return (
+    <div>
+      <h1 className="ob-title" tabIndex={-1} data-step-h>
+        Which fractional usually gets hired before you?
+      </h1>
+      <p className="ob-sub">
+        Pick up to {BEFORE_MAX}. A company that just hired one of them often needs {nfn ? `a fractional ${nfn} leader` : "you"} next, and the fractional who held that seat is a natural referral partner.
+      </p>
+      <fieldset className="ob-q">
+        <legend className="ob-label">{nfn ? `Usually before ${nfn}` : "Hired most often"}</legend>
+        <div className="ob-chips" role="group" aria-label={nfn ? `Usually before ${nfn}` : "Hired most often"}>
+          {suggested.map(chip)}
+          <button type="button" aria-pressed={unsure} className={`ob-chip ob-chip-unsure${unsure ? " ob-chip-on" : ""}`} onClick={() => setBefore(unsure ? null : [])}>
+            Not sure
+          </button>
+        </div>
+      </fieldset>
+      <fieldset className="ob-q ob-q-tight">
+        <legend className="ob-label">Every other function</legend>
+        <div className="ob-chips" role="group" aria-label="Every other function">
+          {rest.map(chip)}
+        </div>
+      </fieldset>
+      <p className="ob-hint">You can change this later in Your profile.</p>
+      <div className="ob-grow" />
+      <div className="ob-foot ob-foot-follow">
+        <button type="button" className="ob-back" onClick={onBack}>
+          Back
+        </button>
+        <span className="ob-foot-note num" aria-live="polite">
+          {unsure ? `We'll start with ${andList(suggested)}` : picked.length ? (full ? `${BEFORE_MAX} picked, the most` : `${picked.length} of ${BEFORE_MAX} picked`) : `Pick up to ${BEFORE_MAX}, or Not sure`}
+        </span>
+        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={before === null} onClick={onNext}>
+          Show my first view
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- step 4: your first view ---------- */
+
+/** One row of the first view, free facts only: the company (or that it's hiring now), the hire, and that its seat holder is on file. */
+function FirstRow({ r, f }: { r: Row; f: Filters }) {
+  const c = r.i.c;
+  const e = hireOfRow(r, f.hiredFn, f.hiredWithin);
+  const hire = e ? hireLine(e) : null;
+  const emp = val(c.cells.employees);
+  const meta = [val(c.cells.industry), emp && `${emp} employees`, countryOf(c) ?? val(c.cells.hq)].filter(Boolean).join(" · ");
+  // Who held the seat: a lock, never a name. They are the member's potential referral partner.
+  const holder = holderOnFile(e);
+  return (
+    <li className="ob-fv-row">
+      <CompanyLogo name={c.hidden ? "" : c.name} domain={c.hidden ? null : c.iconDomain} hidden={c.hidden} seed={c.id} />
+      <div className="ob-fv-id">
+        <span className="ob-fv-name">{c.hidden ? "A company that's hiring now" : c.name}</span>
+        {meta ? <span className="ob-fv-meta">{meta}</span> : null}
+        {hire ? (
+          <span className="ob-fv-hire">
+            {hire.what}
+            {hire.when ? <span className="num"> · {hire.when}</span> : null}
+          </span>
+        ) : null}
+        {holder ? (
+          <span className="ob-fv-holder">
+            <span className="ob-fv-lock" aria-hidden>
+              <IconLock size={12} />
+            </span>
+            <span>Seat holder on file, a potential referral partner</span>
+          </span>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function StepFirstView({
+  fv, fn, icp, openRoles, roles, setRoles, email, setEmail, emailOn, savedNow, busy, onBack, onSave,
+}: {
+  fv: FirstView;
+  fn: string | null;
+  icp: Icp;
+  /** Open roles in their function that fit their profile now. */
+  openRoles: number;
+  roles: boolean;
+  setRoles: (v: boolean) => void;
+  email: boolean;
+  setEmail: (v: boolean) => void;
+  /** The weekly email can go out (email is set up). Otherwise the views are still saved. */
+  emailOn: boolean;
+  /** Saved already, as it is now: the button moves on. */
+  savedNow: boolean;
+  busy: boolean;
+  onBack: () => void;
+  onSave: () => void;
+}) {
+  const nfn = named(fn);
+  const notes = [widenLine(fv, fn), guessLine(fv, fn)].filter(Boolean) as string[];
+  const top = fv.rows.slice(0, PREVIEW_ROWS);
+  const more = fv.rows.length - top.length;
+  const partners = holdersLine(fv);
+  return (
+    <div>
+      <h1 className="ob-title" tabIndex={-1} data-step-h>
+        Your first view
+      </h1>
+      <p className="ob-fv-lead">{firstViewLine(fv, fn)}</p>
+      {notes.map((n) => (
+        <p key={n} className="ob-hint ob-fv-note">
+          {n}
+        </p>
+      ))}
+      {top.length ? (
+        <ul className="ob-fv-rows" aria-label="The first companies in your first view">
+          {top.map((r) => (
+            <FirstRow key={r.key} r={r} f={fv.f} />
+          ))}
+        </ul>
+      ) : null}
+      {more > 0 ? <p className="ob-fv-more num">And {more === 1 ? "1 more" : `${more.toLocaleString("en-US")} more`}, the most recent hire first.</p> : null}
+      {partners ? (
+        <p className="ob-fv-partners num">
+          <span className="ob-fv-lock" aria-hidden>
+            <IconLock size={12} />
+          </span>
+          <span>{partners}</span>
+        </p>
+      ) : null}
+
+      <div className="ob-alerts ob-fv-opts">
+        <label className="ob-alerts-opt">
+          <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />
+          <span className="ob-alerts-text">
+            <span className="ob-alerts-label">Email me new ones each week</span>
+            <span className="ob-alerts-hint">
+              {emailOn ? "Only when a company newly matches. Slack too, once you connect it in Integrations." : "Email starts once it's switched on for the pilot. Your view is saved either way."}
+            </span>
+          </span>
+        </label>
+        {nfn ? (
+          <button type="button" role="switch" aria-checked={roles} className={`ob-switch${roles ? " on" : ""}`} onClick={() => setRoles(!roles)}>
+            <span className="ob-switch-track" aria-hidden>
+              <span className="ob-switch-thumb" />
+            </span>
+            <span className="ob-alerts-text">
+              <span className="ob-alerts-label">Also show open {nfn} roles</span>
+              <span className="ob-alerts-hint num">
+                {openRoles > 0
+                  ? `${openRoles === 1 ? "1 is" : `${openRoles} are`} open${icpEmpty(icp) ? "" : " in your profile"} now. They get a view of their own.`
+                  : `None open${icpEmpty(icp) ? "" : " in your profile"} right now. They get a view of their own for when one opens.`}
+              </span>
+            </span>
+          </button>
+        ) : null}
+      </div>
+
+      <div className="ob-grow" />
+      <div className="ob-foot ob-foot-follow">
+        <button type="button" className="ob-back" onClick={onBack}>
+          Back
+        </button>
+        <span className="ob-foot-note" aria-live="polite">
+          {savedNow ? "Saved under Saved views" : ""}
+        </span>
+        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={busy} aria-busy={busy} onClick={onSave}>
+          {busy ? "Saving" : savedNow ? "Next: find your seats" : "Save this view"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- step 5: find your seats (optional) ---------- */
 
 function StepSeats({
-  companies, fn, title, name, credits, clients, setClients, act, onBack, onNext,
+  companies, fn, title, name, credits, clients, setClients, act, savedLine, handoff, nextLabel, busy, onBack, onNext,
 }: {
   companies: CompanyRec[];
   fn: string | null;
@@ -654,6 +851,12 @@ function StepSeats({
   clients: string[];
   setClients: (f: (c: string[]) => string[]) => void;
   act: OnboardingProps["act"];
+  /** The first view was just saved: one line at the top says so. */
+  savedLine: string | null;
+  /** For a member with seats on file: where they go next. */
+  handoff: ReactNode;
+  nextLabel: string;
+  busy: boolean;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -662,6 +865,12 @@ function StepSeats({
   const claimedN = seatsFound(companies, clients, added);
   return (
     <div>
+      {savedLine ? (
+        <p className="ob-seat-ok ob-fv-saved" role="status">
+          <IconCheck size={13} />
+          <span>{savedLine}</span>
+        </p>
+      ) : null}
       <h1 className="ob-title" tabIndex={-1} data-step-h>
         Find your seats
       </h1>
@@ -669,6 +878,7 @@ function StepSeats({
         Type the clients you work with now or worked with before. We list the seats we found there in your function. Claim yours and you see everything on it free, and each answer
         you add earns a credit, {SEAT_YIELD}.
       </p>
+      {handoff}
       <FindSeats companies={companies} fn={fn} title={title} name={name} credits={credits} clients={clients} setClients={setClients} act={act} added={added} setAdded={setAdded} />
 
       <div className="ob-grow" />
@@ -679,257 +889,18 @@ function StepSeats({
         <span className="ob-foot-note num" aria-live="polite">
           {claimedN ? `${claimedN} ${claimedN === 1 ? "seat is" : "seats are"} yours` : "You can skip this and add seats later"}
         </span>
-        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onNext}>
-          Show companies to follow
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- step 4: follow companies (optional) ---------- */
-
-function StepFollow({
-  companies, byId, fn, icp, clients, goal, follows, toggle, busy, nextLabel, handoff, alerts, onBack, onNext,
-}: {
-  companies: CompanyRec[];
-  byId: Map<string, CompanyRec>;
-  fn: string | null;
-  icp: Icp;
-  clients: string[];
-  goal: Goal | null;
-  follows: string[];
-  toggle: (id: string) => void;
-  busy: boolean;
-  /** What the main button does next (get the sign-in link, or open the app). */
-  nextLabel: string;
-  /** For a member with seats on file: where they go next. Shown first, above the list. */
-  handoff: ReactNode;
-  /** The weekly email offer, when this is the last step. */
-  alerts: ReactNode;
-  onBack: () => void;
-  onNext: () => void;
-}) {
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-  const [hi, setHi] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
-  // Suggestions are picked once, from the answers, so cards don't jump around as you follow.
-  const [sugg] = useState(() => suggest(companies, goal, fn, icp, clients));
-
-  const results = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return [];
-    const starts: CompanyRec[] = [];
-    const has: CompanyRec[] = [];
-    for (const c of companies) {
-      if (c.hidden) continue;
-      const n = c.name.toLowerCase();
-      if (n.startsWith(t)) starts.push(c);
-      else if (n.includes(t)) has.push(c);
-      if (starts.length >= 6) break;
-    }
-    return [...starts, ...has].slice(0, 6);
-  }, [q, companies]);
-
-  useEffect(() => setHi(0), [q]);
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, []);
-
-  const pick = (id: string) => {
-    toggle(id);
-    setQ("");
-    inputRef.current?.focus();
-  };
-
-  const extra = follows.filter((id) => !sugg.list.some((c) => c.id === id));
-  const showList = open && q.trim().length > 0;
-
-  return (
-    <div>
-      <h1 className="ob-title" tabIndex={-1} data-step-h>
-        {goal === "roles" ? "Follow companies you want to hear from" : "Follow companies you know"}
-      </h1>
-      <p className="ob-sub">
-        They get their own tab, and we point out what&apos;s new there each time you come back. Following costs nothing, and you can skip it.
-      </p>
-
-      {handoff}
-
-      <div className="ob-search" ref={boxRef}>
-        <span className="ob-search-icon" aria-hidden>
-          <IconSearch size={16} />
-        </span>
-        <input
-          ref={inputRef}
-          className="input ob-search-input"
-          placeholder={`Search ${companies.length.toLocaleString("en-US")} companies`}
-          aria-label="Search companies"
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={(e) => {
-            if (!results.length) return;
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setHi((h) => (h + 1) % results.length);
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setHi((h) => (h - 1 + results.length) % results.length);
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              pick(results[hi].id);
-            } else if (e.key === "Escape") setOpen(false);
-          }}
-          role="combobox"
-          aria-expanded={showList}
-          aria-controls="ob-results"
-          aria-autocomplete="list"
-          aria-activedescendant={showList && results[hi] ? `ob-r-${results[hi].id}` : undefined}
-          autoComplete="off"
-        />
-        {q ? (
-          <button type="button" className="ob-search-clear" aria-label="Clear search" onClick={() => (setQ(""), inputRef.current?.focus())}>
-            <IconX size={14} />
-          </button>
-        ) : null}
-        {showList ? (
-          <ul className="ob-results" id="ob-results" role="listbox">
-            {results.length ? (
-              results.map((c, i) => {
-                const on = follows.includes(c.id);
-                return (
-                  <li
-                    key={c.id}
-                    id={`ob-r-${c.id}`}
-                    role="option"
-                    aria-selected={i === hi}
-                    className={`ob-result${i === hi ? " ob-result-hi" : ""}`}
-                    onMouseEnter={() => setHi(i)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pick(c.id)}
-                  >
-                    <CompanyLogo name={c.name} domain={c.iconDomain} />
-                    <span className="ob-result-id">
-                      <span className="ob-result-name">{c.name}</span>
-                      <span className="ob-result-meta">{isMine(c) ? ["Your seat", metaOf(c)].filter(Boolean).join(" · ") : metaOf(c)}</span>
-                    </span>
-                    <span className={`ob-result-act${on ? " on" : ""}`}>
-                      <IconStar size={13} filled={on} />
-                      {on ? "Following" : "Follow"}
-                    </span>
-                  </li>
-                );
-              })
-            ) : (
-              <li className="ob-result-empty">Nothing called {q.trim()} is on file yet. You can add it once you&apos;re in.</li>
-            )}
-          </ul>
-        ) : null}
-      </div>
-
-      {extra.length ? (
-        <div className="ob-picked" aria-label="Also following">
-          {extra.map((id) => {
-            const c = byId.get(id);
-            if (!c) return null;
-            return (
-              <span key={id} className="ob-picked-chip">
-                <CompanyLogo name={c.name} domain={c.iconDomain} />
-                <span className="ob-picked-name">{c.name}</span>
-                <button type="button" aria-label={`Unfollow ${c.name}`} onClick={() => toggle(id)}>
-                  <IconX size={12} />
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div className="ob-sugg-head">
-        <h2>Suggested for you</h2>
-        <span className="ob-sugg-why">{sugg.title}</span>
-      </div>
-      <ul className="ob-sugg">
-        {sugg.list.map((c) => {
-          const on = follows.includes(c.id);
-          const meta = metaOf(c);
-          const mine = isMine(c);
-          // The functions its rows show in the table: hires, open roles, then every other seat's function.
-          const fns = seatFns(c);
-          return (
-            <li key={c.id} className={`ob-co${on ? " ob-co-on" : ""}`}>
-              <div className="ob-co-top">
-                <CompanyLogo name={c.name} domain={c.iconDomain} />
-                <div className="ob-co-id">
-                  <span className="ob-co-name" title={c.name}>
-                    {c.name}
-                  </span>
-                  <span className="ob-co-meta" title={meta || undefined}>
-                    {meta || "New on Merlin"}
-                  </span>
-                </div>
-              </div>
-              <div className="ob-co-bottom">
-                <span className="ob-co-fns">
-                  {/* An attribute, so an outline chip: the member held a seat here. */}
-                  {mine ? <span className="chip ob-your-seat">Your seat</span> : null}
-                  {fns.length ? (
-                    fns.slice(0, mine ? 1 : 2).map((f) => (
-                      <span key={f} className={`chip${f === fn ? " ob-chip-mine" : ""}`}>
-                        {f}
-                      </span>
-                    ))
-                  ) : mine ? null : (
-                    <span className="ob-co-none">{c.engagements.length ? "Function not on file" : "No seats on file yet"}</span>
-                  )}
-                  {fns.length > (mine ? 1 : 2) ? <span className="ob-co-more num">+{fns.length - (mine ? 1 : 2)}</span> : null}
-                  {/* An open role: a row repeats, so the dot is the only ember it carries. */}
-                  {c.friendly.open > 0 ? (
-                    <span className="ob-tier">
-                      <i className="live-dot" aria-hidden />
-                      Hiring now
-                    </span>
-                  ) : null}
-                </span>
-                <FollowBtn on={on} name={c.name} onClick={() => toggle(c.id)} />
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      {alerts}
-
-      <div className="ob-grow" />
-      <div className="ob-foot ob-foot-follow">
-        <button type="button" className="ob-back" onClick={onBack}>
-          Back
-        </button>
-        <span className="ob-foot-note num" aria-live="polite">
-          {follows.length ? `Following ${follows.length}` : "You can follow companies later too"}
-        </span>
         <button type="button" className="btn btn-pine btn-lg ob-next" disabled={busy} aria-busy={busy} onClick={onNext}>
-          {busy ? "Saving" : nextLabel}
+          {busy ? "Opening" : nextLabel}
         </button>
       </div>
     </div>
   );
 }
 
-/* ---------- step 5: keep your sign-in link ---------- */
+/* ---------- step 6: keep your sign-in link ---------- */
 
 function StepLink({
-  token, email, support, emailOn, seats, busy, nextLabel, alerts, onDone,
+  token, email, support, emailOn, seats, busy, nextLabel, onDone,
 }: {
   token: string;
   email: string;
@@ -941,7 +912,6 @@ function StepLink({
   seats: number;
   busy: boolean;
   nextLabel: string;
-  alerts: ReactNode;
   onDone: (to: "table" | "seats") => void;
 }) {
   const [link, setLink] = useState("");
@@ -1073,7 +1043,6 @@ function StepLink({
       ) : null}
 
       <SeatsNext n={seats} busy={busy} onFill={() => leave("seats")} />
-      {alerts}
 
       <div className="ob-grow" />
       <div className="ob-foot">
