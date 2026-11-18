@@ -17,7 +17,7 @@
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
-import { ActionError, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, type Member } from "../table";
+import { ActionError, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
@@ -331,9 +331,16 @@ export const purchases = (i: CoInfo) => {
   return bought.size;
 };
 
-function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? ""): ToolOut {
+/** The company's About cell with its text (the table carries a visible About without it, Cell.lazy), read from the state. */
+async function aboutOf(ctx: Ctx, i: CoInfo | undefined): Promise<Cell | undefined> {
+  if (!i || i.c.cells.about?.s !== "value" || !i.c.cells.about.lazy) return undefined;
+  return (await aboutCells(ctx.member.token, [i.c.id], { asMember: true }))?.about[i.c.id];
+}
+
+/** One company for get_company. `about`: its About cell with the text (aboutOf). */
+function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? "", about?: Cell): ToolOut {
   const c = i.c;
-  const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? "locked until you unlock the company (1 credit)" : LOCKED));
+  const facts = readAll(about ? { ...c.cells, about } : c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? "locked until you unlock the company (1 credit)" : LOCKED));
   return {
     ...companySummary(i),
     ...facts,
@@ -524,7 +531,8 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
 
 export async function getCompany(ctx: Ctx, a: { company: string }): Promise<ToolOut> {
   const mv = await memberView(ctx.member);
-  return companyOut(companyInfo(mv, a.company), mv, publicBase() ?? ctx.origin);
+  const i = companyInfo(mv, a.company);
+  return companyOut(i, mv, publicBase() ?? ctx.origin, await aboutOf(ctx, i));
 }
 
 export interface RoleArgs {
@@ -758,7 +766,7 @@ async function afterChange(ctx: Ctx, entity: Entity, id: string): Promise<ToolOu
   const base = publicBase() ?? ctx.origin;
   if (entity === "company") {
     const i = mv.byId.get(id);
-    return i ? { company: companyOut(i, mv, base) } : undefined;
+    return i ? { company: companyOut(i, mv, base, await aboutOf(ctx, i)) } : undefined;
   }
   if (entity === "engagement") {
     const i = mv.bySeat.get(id);

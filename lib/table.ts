@@ -2180,6 +2180,11 @@ function holdsOpenRole(s: State, me: Member, e: Node): boolean {
   });
 }
 
+/**
+ * A company About the viewer can see, as the table carries it: the cell without its text (GET
+ * /api/table?about= returns it whole). About is a system fact, so it never counts in the facts.
+ */
+const ABOUT_LATER = (): Cell => ({ s: "value", v: "", ver: 0, system: true, lazy: true });
 /** Company facts that would give a hidden company away. HQ is cut to its region instead. */
 const IDENTITY_FIELDS = new Set(["website", "linkedin", "about"]);
 /** The last part of an HQ ("Austin, TX" -> "TX"), so a hidden company keeps a region. */
@@ -2393,6 +2398,7 @@ export const contactInfo = (): NonNullable<View["contact"]> => ({ support: addre
  * The table as `token`'s member sees it. `asMember`: an admin asked to see it the way members do
  * ("See it as a member"): hidden companies stay hidden, and there is no review list or pilot
  * metrics. It changes nothing for anyone who is not an admin. Actions still run as the admin.
+ * Company About texts are left out (ABOUT_LATER): aboutCells reads them, a few companies at a time.
  */
 export async function buildView(token: string | null, opts: { asMember?: boolean } = {}): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
@@ -2401,6 +2407,34 @@ export async function buildView(token: string | null, opts: { asMember?: boolean
   if (statsCache && statsCache.seed === seed && Date.now() - statsCache.at < ANON_FRESH)
     return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled(), contact: contactInfo(), version: viewVersion(statsCache.s) };
   return anonView(seed, s);
+}
+
+/** The most companies one GET /api/table?about= answers for. */
+export const ABOUT_MAX = 50;
+/**
+ * GET /api/table?about=: the About cell of each company `ids` names (public company ids, up to
+ * ABOUT_MAX), exactly as the table carried it before the text left the table. fullView builds
+ * just those companies, so a locked company's About stays locked and nothing comes back that
+ * the member's table would not have shown. Ids that name no company are left out. Null when the
+ * token is nobody's.
+ */
+export async function aboutCells(token: string | null, ids: string[], opts: { asMember?: boolean } = {}): Promise<{ about: Record<string, Cell> } | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return null;
+  const g = viewGraph(seed, s);
+  const ix = companyIndex(g);
+  const cos = new Set<string>();
+  for (const id of ids.slice(0, ABOUT_MAX)) {
+    const c = ix.get(id);
+    // A company's own id only (the index also takes a seat's or a person's to its company).
+    if (c && g.companies.has(c) && pubId(c) === id) cos.add(c);
+  }
+  const about: Record<string, Cell> = {};
+  if (!cos.size) return { about };
+  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), cos, false, true);
+  for (const c of v.companies) about[c.id] = c.cells.about ?? { s: "empty" };
+  return { about };
 }
 
 /** The most companies an action's answer carries (an Unlock all on one record touches one). Past it, the page loads the table again. */
@@ -2466,9 +2500,10 @@ function belowLead(title: string | null): boolean {
  * The table as `me` sees it. `only`: build just these companies (internal ids), for an action's
  * answer (viewPatch). The member's own numbers, credit history, benchmarks and scan summary come
  * whole, the counts in `stats` cover only those companies, and nothing is cached from it.
- * `bench` false leaves the benchmarks out.
+ * `bench` false leaves the benchmarks out. `withAbout` keeps the company About texts in; without
+ * it an About the viewer can see is ABOUT_LATER (the page loads the text when the record opens).
  */
-async function fullView(seed: Seed, s: State, me: Member | null, asMember = false, only: Set<string> | null = null, bench = true): Promise<View> {
+async function fullView(seed: Seed, s: State, me: Member | null, asMember = false, only: Set<string> | null = null, bench = true, withAbout = false): Promise<View> {
   const g = viewGraph(seed, s);
   /** The viewer is an admin and sees the admin's view (not "See it as a member"). */
   const admin = isAdmin(me) && !asMember;
@@ -2655,6 +2690,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
           er.invite = { path: `/claim/${claimToken(e.id)}?ref=${encodeURIComponent(myCode)}`, ...(at ? { at } : {}) };
         });
     }
+    // The About is the longest text on a record and only an open record shows it: the table carries a marker, GET ?about= the text.
+    if (!withAbout && cells.about?.s === "value") cells.about = ABOUT_LATER();
     const rec: CompanyRec = {
       id: pubId(c.id),
       name: hidden ? HIDDEN_COMPANY : c.name,

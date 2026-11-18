@@ -52,6 +52,12 @@ export type Cell =
        * test the seat holder picker uses, so "Member" always means someone on Merlin now.
        */
       member?: { title: string; you?: boolean };
+      /**
+       * Company About only: the company has an About the viewer can see, but the table leaves its
+       * text out (`v` is ""). GET /api/table?about=<companyId> returns the cell whole, as the
+       * table used to carry it (lib/table.ts aboutCells, which server-side readers call too).
+       */
+      lazy?: true;
     }
   | { s: "reported"; mine: boolean; byMe?: boolean };
 

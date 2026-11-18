@@ -22,6 +22,7 @@
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
 import { VerifyName } from "./Verify";
+import { AboutText } from "./About";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
@@ -1512,7 +1513,6 @@ export function Drawer({
 
   const website = val(c.cells.website);
   const linkedin = val(c.cells.linkedin);
-  const about = val(c.cells.about);
   const emp = val(c.cells.employees);
   const rev = val(c.cells.revenue);
   const line = [val(c.cells.industry), emp && `${emp} employees`, rev && `${rev} revenue`, val(c.cells.hq)].filter(Boolean) as string[];
@@ -1715,7 +1715,7 @@ export function Drawer({
           {!c.hidden && (
             <section className="tp-dsec">
               <h3 className="tp-dsec-h">About</h3>
-              {about ? <p className="tp-about">{about}</p> : <p className="tp-about tp-faint">No About on file yet.</p>}
+              <AboutText id={c.id} cell={c.cells.about} />
             </section>
           )}
           {(!c.hidden || COMPANY_GTM.some((f) => c.cells[f]?.s !== "empty")) && (

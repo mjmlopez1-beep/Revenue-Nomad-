@@ -97,8 +97,6 @@ export interface CoInfo {
   teaser: string;
   /** What search reads on a company row: its name, domain and what the member can see there. */
   hay: string;
-  /** The company's About text (lowercase), when the member can see it. Matched by word start. */
-  aboutHay: string;
   /** The company's name and domain alone (search ranks these matches first). */
   nameHay: string;
 }
@@ -417,7 +415,7 @@ function infoOf(c: CompanyRec): CoInfo {
   const teaser = c.hidden
     ? [shown(c.cells.industry), shown(c.cells.employees) && `${shown(c.cells.employees)} employees`, shown(c.cells.hq)].filter(Boolean).join(" · ")
     : "";
-  return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay, aboutHay: (c.cells.about?.s === "value" ? c.cells.about.v : "").toLowerCase() };
+  return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay };
 }
 
 /**
@@ -784,13 +782,10 @@ export function hayOf(r: Row): string {
 export function searchTest(q: string): Test | null {
   const toks = searchWords(q);
   if (!toks.length) return null;
-  // The About text is long prose, so a word there counts only from its start ("pharma" finds "pharmaceutical", "one" does not find "phone").
-  // One pattern per word, made once for every row.
-  const starts = toks.map((t) => new RegExp(`(?:^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  // The About text is not searched: the table carries it without its text (Cell.lazy) and a record loads it when it opens.
   return (r) => {
     const h = hayOf(r);
-    const about = r.i.aboutHay;
-    return toks.every((t, n) => h.includes(t) || (!!about && starts[n].test(about)));
+    return toks.every((t) => h.includes(t));
   };
 }
 

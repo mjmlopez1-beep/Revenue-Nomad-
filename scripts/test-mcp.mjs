@@ -489,6 +489,13 @@ async function main() {
   const hiddenRow = s3.out?.companies?.find((c) => c.hidden);
   const gh = await tool(at, "get_company", { company: hiddenRow?.id });
   check("a hidden company's record keeps its name and website hidden", gh.out?.name === "Locked company" && gh.out.hidden === true && !("website" in gh.out && !/locked until/.test(gh.out.website)), { name: gh.out?.name, site: gh.out?.website });
+  // The table carries a company's About without its text (Cell.lazy): get_company reads the text from the server.
+  const aboutRow = (await A.view()).companies.find((c) => !c.hidden && c.cells.about?.lazy);
+  if (aboutRow) {
+    const ga = await tool(at, "get_company", { company: aboutRow.id });
+    const direct = (await call("GET", `/api/table?about=${aboutRow.id}`, { cookie: A.token, ipAddr: A.ip })).json?.about?.[aboutRow.id];
+    check("get_company gives the About text the table leaves out", typeof ga.out?.about === "string" && ga.out.about.length > 0 && ga.out.about === direct?.v, [ga.out?.about?.length, direct?.s]);
+  } else skip("get_company's About", "no company with an About on this seed");
 
   const lr = await tool(at, "list_open_roles", { since_days: 7, function: "Marketing" });
   // Our role: the newest Marketing role with a posted rate and hours on file (the seed's open roles were listed before this run).

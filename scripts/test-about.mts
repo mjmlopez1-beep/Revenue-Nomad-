@@ -312,14 +312,18 @@ eq("last run is stored", [st.about.lastRun.total, st.about.lastRun.filled, !!st.
 
 const view = await table.buildView("tok-sal");
 const co = view.companies.find((c) => c.name === "Acme Meta")!;
-eq("the view shows it as a system value from the company website", co.cells.about, { s: "value", v: metaText, ver: 0, system: true, from: "website" });
+eq("the view carries it as a marker without the text", co.cells.about, { s: "value", v: "", ver: 0, system: true, lazy: true });
+check("no About text anywhere in the view", !JSON.stringify(view).includes("warehouse robots") && !JSON.stringify(view).includes("original seed text"));
+const readAbout = async (tok: string, id: string) => (await table.aboutCells(tok, [id]))?.about[id];
+eq("GET ?about= gives it whole: a system value from the company website", await readAbout("tok-sal", co.id), { s: "value", v: metaText, ver: 0, system: true, from: "website" });
 eq("it is not the member's fact (Me.added) and costs them nothing", [view.me?.added, view.me?.credits], [0, 25]);
 const info = deriveAll(view.companies).find((i) => i.c.id === co.id)!;
 const row = { key: co.id, i: info };
-check("search finds the new text by word start", !!searchTest("warehou")?.(row) && !!searchTest("retailers")?.(row), info.aboutHay);
-check("search does not match inside a word", !searchTest("ouse")?.(row));
+check("search does not read the About (the table no longer carries it)", !searchTest("warehou")?.(row) && !searchTest("retailers")?.(row) && !!searchTest("acme")?.(row));
 const seeded = view.companies.find((c) => c.name === "Seeded Co")!;
-check("a seed About carries no website source", seeded.cells.about?.s === "value" && !("from" in seeded.cells.about && seeded.cells.about.from), seeded.cells.about);
+const seededCell = await readAbout("tok-sal", seeded.id);
+check("a seed About carries no website source", seededCell?.s === "value" && seededCell.v.startsWith("Seeded Co makes") && !("from" in seededCell && seededCell.from), seededCell);
+eq("signed out, ?about= is nothing (the route answers 401)", await table.aboutCells("nobody", [co.id]), null);
 const adminView = await table.buildView("tok-ada");
 const a = adminView.admin?.about;
 check("Pilot metrics: About counts", !!a && a.onFile.filled === 1 && a.onFile.skipped === 1 && a.onFile.failed === 1 && a.waiting === 0 && a.run?.done === 3 && a.enabled === false && a.running === false, a);
@@ -338,6 +342,9 @@ metaText = "Acme Meta now builds delivery drones for grocers, pharmacies and har
 const run5 = await runAbout({ fetch: fo, delayMs: 0, now: at(183) });
 eq("after another 90 days a changed site replaces our own text", [run5.total, run5.filled], [3, 1]);
 eq("  with the new text", stateOnDisk().values["c_meta.about"].value, metaText);
+// The changed text end to end: the table still carries only the marker, and ?about= reads the new text from the state.
+eq("  the table's marker is unchanged", (await table.buildView("tok-sal")).companies.find((c) => c.id === co.id)?.cells.about, { s: "value", v: "", ver: 0, system: true, lazy: true });
+eq("  and ?about= gives the new text", (await readAbout("tok-sal", co.id))?.s === "value" && (await readAbout("tok-sal", co.id) as { v: string }).v, metaText);
 
 // saveAbout never writes over an About someone else set.
 eq(
