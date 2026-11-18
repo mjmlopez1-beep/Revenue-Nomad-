@@ -151,6 +151,11 @@ export interface FieldValue {
   memberId?: string;
   /** Company HQ only: the country and region it was read as when it was added (lib/geo.ts). The value stays as typed. */
   geo?: Geo;
+  /**
+   * A seat holder's correction of what our records, the scan or another member said about their
+   * seat: the value it replaced. It goes back if they give the seat up ("Not my seat").
+   */
+  prev?: { value: string; by: string; at: string };
 }
 export interface LedgerEntry {
   memberId: string;
@@ -2657,6 +2662,30 @@ const LISTED_STATUS = "This role is still listed, so its status comes from the p
 export const SEAT_SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
 /** Claiming a seat-scan seat that a member already claimed. */
 const SEAT_TAKEN = "Another member already claimed this seat. If it's yours, report the seat holder and an admin will look at it.";
+/** Add with a name people try a form with, or copy from an example ("Acme", "Test", "Your client"): see isPlaceholderCompany. */
+export const PLACEHOLDER_REFUSED = "That reads like an example name, not a real company. Type the name the company goes by.";
+/** A person's title, email, phone or LinkedIn from a member who can't see who the person is. */
+export const FILL_NAME_FIRST = "Unlock their name and title first. Then you can add their details.";
+/** The same, on a person with no name on file. */
+const FILL_NO_NAME = "Add their name first. Then you can add their details.";
+/** A person's facts that only someone who can see who they are can add (the fill action). */
+const FILL_NEEDS_NAME = ["title", "email", "phone", "linkedin"];
+/** How far apart two starts can be and still be one seat, in months (a self-seat add that claims a seat-scan seat). */
+const SAME_SEAT_MONTHS = 3;
+/** A start month as the months it can mean: "2024-03" is one month, "2024" all twelve. Null when blank. */
+const monthSpan = (v: string | null | undefined): [number, number] | null => {
+  const m = /^(\d{4})(?:-(\d{2}))?/.exec(String(v ?? ""));
+  if (!m) return null;
+  const y = Number(m[1]) * 12;
+  return m[2] ? [y + Number(m[2]) - 1, y + Number(m[2]) - 1] : [y, y + 11];
+};
+/** Months between two starts (0 when they overlap, as a year and a month in it do), or null when either is blank. */
+const monthsApart = (a: string | null | undefined, b: string | null | undefined): number | null => {
+  const x = monthSpan(a);
+  const y = monthSpan(b);
+  if (!x || !y) return null;
+  return Math.max(0, Math.max(x[0], y[0]) - Math.min(x[1], y[1]));
+};
 
 /**
  * `dryRun` (the connector's "what would this cost"): the action runs on a copy of the state and
@@ -3008,6 +3037,8 @@ export async function perform(
         ...(linked ? { memberId: linked.id } : {}),
         // An HQ is kept as typed ("Austin, TX") with the place it names stored beside it.
         ...(entity === "company" && key === "hq" ? { geo: normalizeHq(value) } : {}),
+        // A correction keeps what it replaced, so "Not my seat" can put it back. Editing it again keeps the first one's.
+        ...(cur?.by === me.id ? (cur.prev ? { prev: cur.prev } : {}) : correction && cur ? { prev: { value: cur.value, by: cur.by, at: cur.at } } : {}),
       };
       if (scanClaim) {
         s.seatClaims = [...(s.seatClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: node.id, at: now }];
@@ -3055,12 +3086,65 @@ export async function perform(
     const claimNote = () =>
       claimKept ? " Others still see the role as open until your claim is confirmed." : "";
 
+    /**
+     * Put a person on file at a company (Add, and Add a person), or add to the one already there
+     * under that name: names compare by normName, so case, accents and spacing don't make a second
+     * person. The member who added that name can't add it again. Anyone else fills only what is
+     * empty on the person, earning for those, and their add counts as a confirmation of the name
+     * (the confirm rule: once two members confirm it, the author earns 1). `fields` are cleaned and
+     * hold a name. The person is not told which of their details matched: those stay locked.
+     */
+    const putPerson = (companyId: string, engagementId: string | null, fields: readonly (readonly [string, string])[]) => {
+      const typed = fields.find(([k]) => k === "name")![1];
+      const key = normName(typed);
+      const same = key ? [...g.contacts.values()].filter((p) => p.companyId === companyId && normName(valueOf(p, s, "name")?.value ?? "") === key) : [];
+      if (same.some((p) => valueOf(p, s, "name")!.by === me.id)) throw new ActionError(`You already added ${typed} here.`);
+      const into = same.find((p) => valueOf(p, s, "name")!.status === "live");
+      let earned = 0;
+      if (!into) {
+        const pid = newId("p");
+        s.contacts.push({ id: pid, engagementId, companyId, by: me.id, at: now });
+        const node: PersonNode = { id: pid, seedFields: {}, companyId, engagementId, source: "Member added" };
+        g.contacts.set(pid, node); // a second person with this name in the same Add is a repeat
+        for (const [k, v] of fields) earned += setValue(node, "contact", k, v);
+        return { node: node as Node, earned, merged: false, kept: 0, typed };
+      }
+      let kept = 0;
+      for (const [k, v] of fields) {
+        if (k === "name") continue;
+        if (valueOf(into, s, k)) kept++;
+        else earned += setValue(into, "contact", k, v);
+      }
+      const nk = fkey(into.id, "name");
+      const nv = valueOf(into, s, "name")!;
+      const list = s.verifications[nk] ?? [];
+      if (!list.includes(me.id)) {
+        s.verifications[nk] = [...list, me.id];
+        trustNow = null; // a confirmation can make the name's author count (trustOf)
+        if (!isSystem(nv.by) && list.length + 1 >= 2 && !s.ledger.some((l) => l.reason === "confirm" && l.ref === nk) && !s.held.some((h) => h.reason === "confirm" && h.ref === nk))
+          grant(s, nv.by, 1, "confirm", nk, now);
+      }
+      return { node: into as Node, earned, merged: true, kept, typed };
+    };
+
     const run = (): ActionResult => {
       switch (a?.type) {
         case "fill": {
           const node = nodeOf(a.entity, a.id);
           mustSee(companyOf(a.entity, node.id));
           const f = fieldOf(a.entity, a.field);
+          // A person's title, email, phone and LinkedIn come only from a member who can see who the
+          // person is: nobody knows the email of someone they can't name. Seeing the name means having
+          // added it, paid for it, or paid for the title that comes with it (PERSON_BUNDLE).
+          if (a.entity === "contact" && FILL_NEEDS_NAME.includes(f.key)) {
+            const nv = valueOf(node, s, "name");
+            if (!nv) throw new ActionError(FILL_NO_NAME);
+            const seesName =
+              nv.status === "live" &&
+              !nv.reporters?.includes(me.id) &&
+              (nv.by === me.id || (s.unlocks[fkey(node.id, "name")] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, "contact", "name"));
+            if (!seesName) throw new ActionError(FILL_NAME_FIRST);
+          }
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
           // Already filled means an edit of your own fact or a correction on your own seat (anything else is refused).
           const wasMine = !!valueOf(node, s, f.key);
@@ -3282,6 +3366,8 @@ export async function perform(
             [...g.companies.values()].find((c) => keyOfCompany(c.name) === nameKey);
           // A fractional firm, agency or marketplace is not a client (lib/firms.ts). One kept for an admin's review (a member holds a seat there) still takes facts.
           if (companyFirm(company ? g.companies.get(company.id)?.name ?? name : name) && !(company && firmsInReview(seed, s).has(company.id))) throw new ActionError(FIRM_REFUSED);
+          // "Acme", "Test", "Your client": the name of no real company, whether it is new or one kept for an admin's review.
+          if (placeholderName(company ? g.companies.get(company.id)?.name ?? name : name)) throw new ActionError(PLACEHOLDER_REFUSED);
           const isNew = !company;
           if (!company) {
             const id = newId("c", name);
@@ -3310,6 +3396,10 @@ export async function perform(
           let kept = 0;
           let engNew = false;
           let seatOnFile = false;
+          /** The member's own seat was on file from the seat scan, so this Add claimed it. */
+          let claimedScan = false;
+          /** On a claimed seat: answers that corrected what the scan said (they earn nothing). */
+          let answered = 0;
           if (wantEng || a.newEngagement || engFields.length) {
             const role = engFields.find(([k]) => k === "role")?.[1];
             const atCompany = [...g.engagements.values()].filter((e) => e.companyId === company!.id);
@@ -3325,10 +3415,39 @@ export async function perform(
             // An open role is never matched by its title: a past seat with the same title is its own record.
             // Titles compare by textKey (any script, accents aside). An empty key matches nothing.
             const roleKey = role ? textKey(role) : "";
-            const existing = wantEng
+            const ownMatch = wantEng
               ? atCompany.find((e) => e.id === wantEng)
               : (a.newEngagement ? atCompany.find((e) => isBlank(e) && mayMerge(e)) : atCompany.find((e) => madeByMe(e) && mayMerge(e))) ??
                 (roleKey ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && textKey(live(e, s, "role") ?? "") === roleKey && mayMerge(e)) : undefined);
+            // "Add a seat you held" where Revenue Nomad already found that seat (a seat-scan seat nobody
+            // has claimed): it is claimed instead of added again, so one seat is never two hires. Same
+            // title, or the same function, and starts at most SAME_SEAT_MONTHS apart (or one of them
+            // blank). The claim pays nothing, like claimSeat: only the empty facts it fills in earn.
+            const sent = (k: string) => engFields.find(([x]) => x === k)?.[1] ?? null;
+            const sentFn = sent("function") ?? functionOf(role ?? null);
+            const scanSeat =
+              ownMatch || !selfSeat || (sent("type") && !FRACTIONAL_TYPES.includes(sent("type")!)) || sent("status") === "Open role"
+                ? undefined
+                : atCompany
+                    .filter((e) => e.source === SEAT_SCAN && !valueOf(e, s, "operator") && !(s.notMine[me.id] ?? []).includes(e.id))
+                    .map((e) => {
+                      const theirRole = live(e, s, "role");
+                      const theirStart = live(e, s, "start");
+                      const sameRole = !!roleKey && textKey(theirRole ?? "") === roleKey;
+                      const sameFn = !!sentFn && (live(e, s, "function") ?? functionOf(theirRole)) === sentFn;
+                      const apart = monthsApart(sent("start"), theirStart);
+                      // A seat that ended well before this one started is another seat, whatever its start.
+                      const ended = monthSpan(sent("end") === "Ongoing" ? null : sent("end"));
+                      const began = monthSpan(theirStart);
+                      const before = !!ended && !!began && ended[1] < began[0] - SAME_SEAT_MONTHS;
+                      return { e, ok: (sameRole || sameFn) && (apart === null || apart <= SAME_SEAT_MONTHS) && !before, score: (sameRole ? 0 : 100) + (apart ?? 50) };
+                    })
+                    .filter((x) => x.ok)
+                    .sort((x, y) => x.score - y.score)[0]?.e;
+            if (scanSeat && (s.seatClaims ?? []).filter((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY).length >= SEAT_CLAIM_DAILY_MAX)
+              throw new ActionError(`We have this seat on file already, so adding it claims it. You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours, so add it tomorrow.`);
+            const existing = ownMatch ?? scanSeat;
+            claimedScan = !!scanSeat;
             // A new seat (or a blank one) has to say what the work was: a name alone is not a seat.
             if ((!existing || isBlank(existing)) && !engFields.some(([k]) => k === "function" || k === "role")) throw new ActionError(SEAT_NEEDS_WHAT);
             let eng: Node;
@@ -3337,10 +3456,28 @@ export async function perform(
               eng = existing;
               // What this Add saves, checked together (an end before the start, a start on an open role): see seatCheck.
               const pending = Object.fromEntries(engFields.filter(([k]) => !valueOf(existing, s, k)));
-              for (const [k, v] of engFields) {
-                if (valueOf(eng, s, k)) kept++;
-                else earned += setValue(eng, "engagement", k, v, seatPick, pending);
-              }
+              if (claimedScan) {
+                // Their seat now: the seat holder goes in first, as a claim (sorted so above), and what they
+                // say about the rest is theirs to say. An answer that differs from the scan's corrects it
+                // (for no credit, as on Your seats). A dated end with no status means it ended.
+                const sentEnd = sent("end");
+                const ends = !!sentEnd && sentEnd !== "Ongoing" && !sent("status");
+                if (ends) engFields.push(["status", "Ended"]);
+                Object.assign(pending, Object.fromEntries(engFields));
+                for (const [k, v] of engFields) {
+                  const had = valueOf(eng, s, k);
+                  // A year alone ("2024") says the same as the month on file in that year ("2024-03"): the month stays.
+                  if (had?.value === v || ((k === "start" || k === "end") && /^\d{4}$/.test(v) && !!had?.value.startsWith(`${v}-`))) kept += k === "status" && ends ? 0 : 1;
+                  else {
+                    if (had) answered++;
+                    earned += setValue(eng, "engagement", k, v, seatPick, pending);
+                  }
+                }
+              } else
+                for (const [k, v] of engFields) {
+                  if (valueOf(eng, s, k)) kept++;
+                  else earned += setValue(eng, "engagement", k, v, seatPick, pending);
+                }
             } else {
               // A new seat is one the member held: they name themselves as its holder.
               if (seatPick?.id !== me.id || !engFields.some(([k]) => k === "operator")) throw new ActionError(SEAT_SELF_ONLY);
@@ -3354,32 +3491,36 @@ export async function perform(
             // Everything sent about the seat was on file already.
             seatOnFile = !engNew && engFields.length > 0 && kept === engFields.length;
           }
+          // People: one already on file under the same name gets what's new instead of a second record (putPerson).
+          const onFile: string[] = [];
           for (const p of people) {
-            const pid = newId("p");
-            s.contacts.push({ id: pid, engagementId: eid, companyId: company.id, by: me.id, at: now });
-            const node: Node = { id: pid, seedFields: {} };
-            for (const [k, v] of p) earned += setValue(node, "contact", k, v);
+            const put = putPerson(company.id, eid, p);
+            earned += put.earned;
+            if (put.merged) onFile.push(put.typed);
           }
           const bonus = earned || capped || movedRate ? payReferral() : 0;
           const savedSome = !!(earned || capped || movedRate || people.length);
           // Nothing new went in: say so plainly (the old wording said a seat was added).
-          const nothing = !isNew && !engNew && !savedSome;
+          const nothing = !isNew && !engNew && !savedSome && !claimedScan;
           const where = isNew
             ? `Added ${companyName}`
             : engNew
               ? `Added a seat at ${companyName}`
-              : savedSome
-                ? `${companyName} was already on Merlin, so we added what you know to it`
-                : seatOnFile
-                  ? `That seat at ${companyName} is already on file. ${NOTHING_NEW.slice(0, -1)}`
-                  : `${companyName} is already on Merlin. ${NOTHING_NEW.slice(0, -1)}`;
+              : claimedScan
+                ? `Your seat at ${companyName} was already on file, so we put your name on it${earned || capped || answered ? " and added your answers" : ""}`
+                : savedSome
+                  ? `${companyName} was already on Merlin, so we added what you know to it`
+                  : seatOnFile
+                    ? `That seat at ${companyName} is already on file. ${NOTHING_NEW.slice(0, -1)}`
+                    : `${companyName} is already on Merlin. ${NOTHING_NEW.slice(0, -1)}`;
+          const merged = onFile.length ? ` ${onFile.join(" and ")} ${onFile.length === 1 ? "was" : "were"} already on file there, so we added what you know to ${onFile.length === 1 ? "that record" : "those records"}.` : "";
           const skipped =
             kept && !(nothing && seatOnFile) ? (kept > 1 ? ` ${kept} facts were already there, so we left them as they were.` : " 1 fact was already there, so we left it as it was.") : "";
           const leftOut = picksLeftOut
             ? ` You've added ${SELL_SAVE_MAX} answers today for ${PICKS}, so ${picksLeftOut === 1 ? "one of those wasn't" : `${picksLeftOut} of those weren't`} saved. Add ${picksLeftOut === 1 ? "it" : "them"} tomorrow.`
             : "";
           return {
-            message: `${where}.${credits(earned)}${bonusNote(bonus)}${skipped}${leftOut}${capNote(earned > 0)}${claimNote()}`,
+            message: `${where}.${credits(earned)}${bonusNote(bonus)}${skipped}${merged}${leftOut}${capNote(earned > 0)}${claimNote()}`,
             id: eid ? pubId(eid) : pubId(company.id),
             capped,
           };
@@ -3399,14 +3540,18 @@ export async function perform(
             if (error) throw new ActionError(`${f.label}. ${error}`);
             clean.push([k, value!]);
           }
-          const pid = newId("p");
-          s.contacts.push({ id: pid, engagementId: e?.id ?? null, companyId: c.id, by: me.id, at: now });
-          let earned = 0;
-          for (const [k, v] of clean) earned += setValue({ id: pid, seedFields: {} }, "contact", k, v);
+          // Someone already on file here under this name gets what's new, not a second record (putPerson).
+          const put = putPerson(c.id, e?.id ?? null, clean);
+          const earned = put.earned;
           const bonus = earned || capped ? payReferral() : 0;
+          const keptNote = put.kept ? (put.kept === 1 ? " 1 detail was already there, so we left it as it was." : ` ${put.kept} details were already there, so we left them as they were.`) : "";
           return {
-            message: `Added ${clean.find(([k]) => k === "name")![1]} at ${c.name}.${credits(earned)}${bonusNote(bonus)}${capNote(earned > 0)}`,
-            id: pubId(pid),
+            message: put.merged
+              ? earned || capped
+                ? `${put.typed} was already on file at ${c.name}, so we added what you know to that record. It counts as a confirmation too.${credits(earned)}${bonusNote(bonus)}${keptNote}${capNote(earned > 0)}`
+                : `${put.typed} is already on file at ${c.name}. ${NOTHING_NEW} It counts as a confirmation of their name.`
+              : `Added ${put.typed} at ${c.name}.${credits(earned)}${bonusNote(bonus)}${capNote(earned > 0)}`,
+            id: pubId(put.node.id),
             capped,
           };
         }
@@ -3699,27 +3844,103 @@ export async function perform(
           };
         }
         case "notMine": {
-          // "This isn't me": a seat matched to this member by name that they never held.
+          // "This isn't me": a seat matched to this member by name that they never held. On a seat
+          // they put their own name on (one they claimed, an open role they took, one they added) the
+          // app says "Not my seat" or "Remove this seat" (their own name, below).
           const e = g.engagements.get(inId("engagement", a.engagementId));
+          // "Not me" on a seat the seat scan found that nobody has claimed ("Is this you?"): it is not
+          // theirs, so an Add of theirs never claims it (the add action). Claiming it still can.
+          if (e && e.source === SEAT_SCAN && !valueOf(e, s, "operator")) {
+            if (!(s.notMine[me.id] ?? []).includes(e.id)) s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
+            return { message: "Got it. That seat isn't yours, so we'll leave it for whoever held it.", id: pubId(e.id) };
+          }
           if (!e || !linkedSeat(e.id)) throw new ActionError("That seat isn't linked to you.");
-          s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
           // A name a member put on the seat is hidden for everyone until an admin decides. So is a
           // name from our own records: we matched it by name, so it may be someone else's, and
           // nobody can unlock it (or buy it) while an admin checks. Removing it refunds whoever had.
           const k = fkey(e.id, "operator");
           const cur = valueOf(e, s, "operator");
           const wasClosed = !!tracks().get(e.id)?.closedAt;
-          // Their own claim on an open role the scan follows: taking it back clears the name, as an
-          // admin removal would (the credit it earned goes back), so the seat is free for whoever took it.
-          // A seat from the seat scan they claimed goes back the same way (it is unclaimed again).
-          const ownClaim = !!cur && cur.by === me.id && cur.memberId === me.id && (tracks().has(e.id) || e.source === SEAT_SCAN);
-          const fromRecords = !!cur && cur.by === "seed" && !ownClaim;
-          const hide = !!cur && (!isSystem(cur.by) || fromRecords) && !ownClaim;
           let reopened = false;
-          if (cur && ownClaim) {
-            removeFact(k, cur);
+          // Their own name on it: a seat-scan seat they claimed, an open role they took, a seat they
+          // added. Giving it up puts the seat back as it was: their name comes off (the credit it
+          // earned goes back, and whoever paid to see it gets theirs), so does every fact they added
+          // there (as a take-back would: the credits back, the unlocks refunded), and their private
+          // rate for it. What a correction of theirs replaced comes back. A seat they made, empty
+          // after that, goes, and so does a company they made for it that holds nothing else.
+          if (cur && cur.by === me.id) {
+            let facts = 0;
+            let taken = 0;
+            const undo = (fk: string) => {
+              for (const l of s.ledger) if (l.memberId === me.id && l.ref === fk && l.reason === "fill") l.undone = true;
+            };
+            for (const field of ENG_KEYS) {
+              const fk = fkey(e.id, field);
+              const fv = s.values[fk];
+              if (field === "operator" || !fv || fv.status === "removed" || fv.by !== me.id) continue;
+              facts++;
+              // A correction earned nothing: what it replaced goes back (its confirmations were for the correction).
+              if (!s.ledger.some((l) => l.memberId === me.id && l.ref === fk && l.reason === "fill") && (fv.prev || e.seedFields[field])) {
+                delete s.verifications[fk];
+                if (fv.prev && !(fv.prev.by === "seed" && e.seedFields[field] === fv.prev.value)) s.values[fk] = { value: fv.prev.value, by: fv.prev.by, at: fv.prev.at, status: "live" };
+                else delete s.values[fk];
+                continue;
+              }
+              taken += removeFact(fk, fv, "retract");
+              undo(fk);
+            }
+            taken += removeFact(k, cur, "retract");
+            undo(k);
             reopened = wasClosed && !tracks().get(e.id)?.closedAt;
-          } else if (cur && hide) {
+            s.benchRates = s.benchRates.filter((b) => {
+              if (b.by !== me.id || b.engagementId !== e.id) return true;
+              const ref = `bench.${b.id}`;
+              const paid = s.ledger.filter((l) => l.memberId === me.id && l.ref === ref).reduce((n, l) => n + l.delta, 0);
+              if (paid > 0) s.ledger.push({ memberId: me.id, delta: -paid, reason: "reversal", ref, at: now });
+              taken += Math.max(0, paid);
+              facts++;
+              return false;
+            });
+            const owns = (key: string, id: string) => key.slice(0, key.lastIndexOf(".")) === id;
+            // People they put on the seat stay, on the company: who works there is still true.
+            for (const p of s.contacts) if (p.engagementId === e.id && p.by === me.id) (p.companyId ??= e.companyId), (p.engagementId = null);
+            const made = s.engagements.some((x) => x.id === e.id && x.by === me.id);
+            const holds = Object.entries(s.values).some(([vk, v]) => v.status !== "removed" && owns(vk, e.id)) || Object.values(s.scan.roles).some((r) => r.engagementId === e.id);
+            let removedSeat = false;
+            if (made && !holds) {
+              removedSeat = true;
+              s.engagements = s.engagements.filter((x) => x.id !== e.id);
+              for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const vk of Object.keys(bag)) if (owns(vk, e.id)) delete bag[vk];
+              // People on it stay, on the company. So does another member's private rate for it.
+              for (const p of s.contacts) if (p.engagementId === e.id) (p.companyId ??= e.companyId), (p.engagementId = null);
+              for (const b of s.benchRates) if (b.engagementId === e.id) b.engagementId = null;
+              if (s.roleClaims) s.roleClaims = s.roleClaims.filter((c) => c.engagementId !== e.id);
+              for (const [m, ids] of Object.entries(s.notMine)) if (ids.includes(e.id)) s.notMine[m] = ids.filter((id) => id !== e.id);
+              const co = e.companyId;
+              const coLeft =
+                [...g.engagements.values()].some((x) => x.companyId === co && x.id !== e.id) ||
+                [...g.contacts.values()].some((p) => p.companyId === co) ||
+                s.contacts.some((p) => p.companyId === co) ||
+                Object.entries(s.values).some(([vk, v]) => v.status !== "removed" && owns(vk, co));
+              if (s.companies.some((c) => c.id === co && c.by === me.id) && !coLeft) {
+                refundUnlockers(fkey(co, "identity"));
+                s.companies = s.companies.filter((c) => c.id !== co);
+                for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const vk of Object.keys(bag)) if (owns(vk, co)) delete bag[vk];
+                for (const [m, ids] of Object.entries(s.follows)) if (ids.includes(co)) s.follows[m] = ids.filter((id) => id !== co);
+              }
+            } else s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
+            const earned = taken ? ` The ${taken === 1 ? "credit" : `${taken} credits`} it earned came off your balance.` : "";
+            const back = facts ? ` What you added to it came off too.${earned}` : earned;
+            return {
+              message: removedSeat ? `Removed that seat.${back}` : `Got it. That seat is no longer linked to you. Your name is off it.${back}${reopened ? " The role is open again." : ""}`,
+              id: pubId(e.id),
+              ...(removedSeat ? {} : { cells: ENG_KEYS.map((f) => changed("engagement", e, f)) }),
+            };
+          }
+          s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
+          const fromRecords = !!cur && cur.by === "seed";
+          const hide = !!cur && (!isSystem(cur.by) || fromRecords);
+          if (cur && hide) {
             s.values[k] = { ...cur, status: "reported", reporters: [...new Set([...(cur.reporters ?? []), me.id])], reportedBy: me.id };
             s.reportLog.push({ memberId: me.id, ref: k, at: now });
             // Nobody can see the name now, so whoever paid to see it gets the credit back at once.
@@ -3739,7 +3960,7 @@ export async function perform(
           return {
             message: fromRecords
               ? `Got it. Your name is off that seat. We'll check our records.${reopened ? " The role is open again." : ""}`
-              : `Got it. That seat is no longer linked to you.${ownClaim ? " Your name is off it." : hide ? " Members won't see the name on that seat until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
+              : `Got it. That seat is no longer linked to you.${hide ? " Members won't see the name on that seat until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
             id: pubId(e.id),
             cells: [...ENG_GATED, "status"].map((f) => changed("engagement", e, f)),
           };

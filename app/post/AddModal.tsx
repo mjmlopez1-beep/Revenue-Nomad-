@@ -17,11 +17,11 @@ import {
   ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PERSON_NAME_RE, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, cleanValue, fieldDef,
 } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
-import type { Cell } from "@/lib/tableTypes";
-import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, hue, initials, val } from "../ui/shared";
+import type { ActionResult, Cell, EngagementRec } from "@/lib/tableTypes";
+import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, hue, initials, post, val } from "../ui/shared";
 import { COMPANY_FILL, shown, type CoInfo } from "./model";
 import { SeatHolderInput, Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
-import { MissingFacts } from "./Drawer";
+import { MissingFacts, claimLine } from "./Drawer";
 import { MonthYear } from "./MonthYear";
 import { RateWho, reasonsFor, type RateChoice } from "./Seats";
 import { BENCH_RATE_HELP, atTime, plural, useDebounced } from "./hooks";
@@ -207,12 +207,18 @@ function NewCompany({
     if (revenue) companyFields.revenue = revenue;
     // A LinkedIn page is the company's LinkedIn, not its website.
     if (linkedin) companyFields.linkedin = website.trim();
-    const r = await ui.act({ type: "add", company: name.trim(), website: (!linkedin && website.trim()) || undefined, companyFields }, { quiet: true });
+    const r = await ui.act({ type: "add", company: name.trim(), website: (!linkedin && website.trim()) || undefined, companyFields }, { quiet: true, silentError: true });
     setBusy(false);
     if (r.ok && r.id) return onAdded(r.id);
     if (!r.ok) {
       const e = fromServer(r.message, "company", ["website", "industry", "employees", "revenue", "linkedin"]);
-      fail(e?.key === "linkedin" ? { key: "website", text: e.text } : /company (name|is called)|What's the company called/i.test(r.message) ? { key: "name", text: r.message } : e);
+      fail(
+        e?.key === "linkedin"
+          ? { key: "website", text: e.text }
+          : /company (name|is called)|What's the company called|example name|placeholder for a company/i.test(r.message)
+            ? { key: "name", text: r.message }
+            : e,
+      );
     }
   };
   return (
@@ -337,9 +343,132 @@ interface Sent {
   bench?: { ok: boolean; message: string };
 }
 
-/** `mine`: a seat the member held. They are the seat holder, and the seat goes on their Your seats page. */
-function EngagementForm({ i, onDone, mine, draft, setDraft }: { i: CoInfo; onDone: (s: Sent) => void; mine?: boolean; draft: SeatDraft; setDraft: Dispatch<SetStateAction<SeatDraft>> }) {
+/* ---------- a seat we already have ---------- */
+
+/** "Sales seat, started Jan 2025": an unclaimed seat as the list names it (its title instead, when the member can see it). */
+const claimableLabel = (e: EngagementRec) => {
+  const role = shown(e.cells.role);
+  const fn = shown(e.cells.function);
+  const start = shown(e.cells.start);
+  return [role ?? (fn ? `${fn} seat` : "A fractional seat"), start ? `started ${fmtMonth(start)}` : null].filter(Boolean).join(", ");
+};
+
+/**
+ * Seats Revenue Nomad found at the company that nobody has claimed, above the form for a seat
+ * the member held. Most members' seats are on file already: claiming one keeps a single seat
+ * from counting as two hires. "Claim it" shows what the seat says first ("Is this you?"), the
+ * same check as on the company record. "Not me" there tells the server it isn't theirs (it
+ * leaves the list), so a seat they add below is never put on it. Any other seat their Add
+ * matches, the server claims for them instead of adding it again.
+ */
+function ClaimFirst({ i, seats: all, onClaimed }: { i: CoInfo; seats: EngagementRec[]; onClaimed: (message: string, id: string) => void }) {
   const ui = useUi();
+  const [asking, setAsking] = useState<string | null>(null);
+  const [info, setInfo] = useState<NonNullable<ActionResult["claim"]> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notMe, setNotMe] = useState<Set<string>>(() => new Set());
+  const seats = all.filter((e) => !notMe.has(e.id));
+  // The seat being checked: an answer for one the member has moved on from is dropped.
+  const current = useRef<string | null>(null);
+  const close = () => {
+    current.current = null;
+    setAsking(null);
+  };
+  const notMine = (id: string) => {
+    close();
+    setNotMe((s) => new Set(s).add(id));
+    void ui.act({ type: "notMine", engagementId: id }, { quiet: true, silentError: true });
+  };
+  const check = async (id: string) => {
+    current.current = id;
+    setAsking(id);
+    setInfo(null);
+    setErr(null);
+    const r = await post<ActionResult>({ action: { type: "claimSeat", engagementId: id, preview: true } });
+    if (current.current !== id) return;
+    if (r.error || !r.claim) setErr(r.error || "We couldn't load this seat. Try again.");
+    else setInfo(r.claim);
+  };
+  const claim = async (id: string) => {
+    setBusy(true);
+    const r = await ui.act({ type: "claimSeat", engagementId: id }, { quiet: true, silentError: true });
+    setBusy(false);
+    if (r.ok) onClaimed(r.message, id);
+    else setErr(r.message);
+  };
+  if (!seats.length) return null;
+  const one = seats.length === 1;
+  return (
+    <section className="am-group am-claims" aria-labelledby="am-claims-h">
+      <h3 className="am-h3" id="am-claims-h">
+        {one ? "Is this one yours?" : "Is one of these yours?"}
+      </h3>
+      <p className="am-note">
+        We found {one ? "a seat" : `${seats.length} seats`} at {i.c.name} with nobody named on {one ? "it" : "them"} yet. If {one ? "it's" : "one is"} yours, claim it
+        instead of adding it again.
+      </p>
+      <ul className="am-claim-list">
+        {seats.map((e) => (
+          <li key={e.id} className={`am-claim-row${asking === e.id ? " on" : ""}`}>
+            {asking === e.id ? (
+              <div className="tp-frow-ask tp-claim-ask am-claim-ask" role="group" aria-label="Claim this seat">
+                {err ? (
+                  <p role="alert">{err}</p>
+                ) : info ? (
+                  <p>
+                    <b>Is this you?</b> {claimLine(info, i.c.name, shown(e.cells.function) ?? "fractional")}. Claim it? Other members will see your name on it, behind a 1 credit lock.
+                  </p>
+                ) : (
+                  <p aria-busy="true">Checking the seat</p>
+                )}
+                <span className="tp-frow-ask-acts">
+                  <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy || !info} aria-busy={busy} onClick={() => claim(e.id)}>
+                    {busy ? "Saving" : "Yes, it's my seat"}
+                  </button>
+                  <button type="button" className="btn btn-sm btn-ghost" disabled={busy} onClick={() => (info ? notMine(e.id) : close())}>
+                    {info ? "Not me" : "Cancel"}
+                  </button>
+                </span>
+              </div>
+            ) : (
+              <>
+                <span className="am-claim-what">{claimableLabel(e)}</span>
+                <button type="button" className="btn btn-sm" onClick={() => check(e.id)}>
+                  Claim it
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="am-hint am-claim-or">{one ? "Not yours? Add your seat below." : "None of them? Add your seat below."} If it matches one of these, your name goes on that one.</p>
+    </section>
+  );
+}
+
+/**
+ * `mine`: a seat the member held. They are the seat holder, and the seat goes on their Your seats
+ * page. `onClaimed`: the member claimed one of the company's unclaimed seats instead (ClaimFirst).
+ */
+function EngagementForm({
+  i,
+  onDone,
+  onClaimed,
+  mine,
+  draft,
+  setDraft,
+}: {
+  i: CoInfo;
+  onDone: (s: Sent) => void;
+  onClaimed?: (message: string, id: string) => void;
+  mine?: boolean;
+  draft: SeatDraft;
+  setDraft: Dispatch<SetStateAction<SeatDraft>>;
+}) {
+  const ui = useUi();
+  // Seats we found here that nobody has claimed: one may be this member's (a hidden company's can't be claimed from here).
+  const claimable = mine && onClaimed && !i.c.hidden ? i.engs.filter((e) => e.claimable && !e.yours) : [];
   // Their name as the seat holder, when it reads as a first and last name. Otherwise they type it.
   const asMe = mine && PERSON_NAME_RE.test(ui.me.name.trim());
   const v = draft.v;
@@ -397,7 +526,7 @@ function EngagementForm({ i, onDone, mine, draft, setDraft }: { i: CoInfo; onDon
         engagementFields: fields,
         ...(fields.operator && (mine || draft.member) ? { operatorMemberId: mine ? "me" : draft.member! } : {}),
       },
-      { quiet: true },
+      { quiet: true, silentError: true },
     );
     if (!r.ok) {
       setBusy(false);
@@ -405,7 +534,7 @@ function EngagementForm({ i, onDone, mine, draft, setDraft }: { i: CoInfo; onDon
     }
     let shared: Sent["bench"];
     if (bench && r.id) {
-      const b = await ui.act({ type: "benchRate", engagementId: r.id, pricing: bench.kind === "hourly" ? "Hourly" : "Monthly retainer", rate: v.rate.trim() }, { quiet: true });
+      const b = await ui.act({ type: "benchRate", engagementId: r.id, pricing: bench.kind === "hourly" ? "Hourly" : "Monthly retainer", rate: v.rate.trim() }, { quiet: true, silentError: true });
       shared = { ok: b.ok, message: b.message };
     }
     setBusy(false);
@@ -470,6 +599,7 @@ function EngagementForm({ i, onDone, mine, draft, setDraft }: { i: CoInfo; onDon
         void submit();
       }}
     >
+      {claimable.length > 0 && onClaimed && <ClaimFirst i={i} seats={claimable} onClaimed={onClaimed} />}
       <p className="am-note">
         {mine
           ? `Your seat at ${i.c.name}. Fill in what you remember and leave the rest.${earnsToday ? " Each answer earns 1 credit." : ""}`
@@ -619,7 +749,7 @@ function PersonForm({ i, onDone, draft, setDraft }: { i: CoInfo; onDone: (s: Sen
     setErr(null);
     setBusy(true);
     const before = ui.me.credits;
-    const r = await ui.act({ type: "addPerson", companyId: i.c.id, engagementId: draft.seat || null, person }, { quiet: true });
+    const r = await ui.act({ type: "addPerson", companyId: i.c.id, engagementId: draft.seat || null, person }, { quiet: true, silentError: true });
     setBusy(false);
     if (!r.ok) return fail(fromServer(r.message, "contact", PERSON_ORDER));
     setDraft((d) => ({ ...d, v: {} }));
@@ -669,7 +799,7 @@ function PersonForm({ i, onDone, draft, setDraft }: { i: CoInfo; onDone: (s: Sen
       }}
     >
       <p className="am-note">
-        Add someone at {i.c.name} a fractional would want to know, like the person who hires or who a seat reported to. Members spend 1 credit to see the name, and 1 more for each contact detail.
+        Add someone at {i.c.name} a fractional would want to know, like the person who hires or who a seat reported to. Members spend 1 credit to see their name and title, then 1 for each contact detail. If they’re on file already, your answers go on that record.
         {earnNote(ui.me).capped ? "" : " Each answer earns 1 credit."}
       </p>
       <div className="tp-form-2">
@@ -760,9 +890,10 @@ function DiscardAsk({ what, onKeep, onDiscard }: { what: string; onKeep: () => v
 
 /* ---------- the modal ---------- */
 
-/** What was just added, for the last screen. */
+/** What was just added, for the last screen. "claim": one of the company's unclaimed seats is the member's now (`seatId`). */
 interface Done extends Sent {
-  what: "seat" | "person";
+  what: "seat" | "person" | "claim";
+  seatId?: string;
 }
 
 /** The server's first sentence repeats the heading ("Added a seat at Acme."), so the panel leaves it out. */
@@ -923,7 +1054,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
     const t = requestAnimationFrame(() => {
       const root = rootRef.current;
       if (!root) return;
-      const el = done ? root.querySelector<HTMLElement>(".am-next-b") : root.querySelector<HTMLElement>(".tp-seg-b.on") ?? root.querySelector<HTMLElement>(".tp-engform button.tp-chipbtn, .tp-engform input");
+      const el = done ? root.querySelector<HTMLElement>(".am-next-b") : root.querySelector<HTMLElement>(".tp-seg-b.on") ?? root.querySelector<HTMLElement>(".am-claims button, .tp-engform button.tp-chipbtn, .tp-engform input");
       el?.focus({ preventScroll: !done });
       if (done) root.querySelector(".tp-done-panel")?.scrollIntoView({ block: "nearest" });
     });
@@ -996,8 +1127,11 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
     : "You earn 1 credit for each thing you add that we don't have yet.";
 
   const gained = done ? me.credits - done.before : 0;
+  // The seat was on file from our research, so the server claimed it for the member instead of adding it again.
+  const claimed = !!done && (done.what === "claim" || (done.what === "seat" && /so we put your name on it/.test(done.message)));
   // Nothing went in: no credit, not because of the daily limit, and the server did not say it added anything.
-  const nothingNew = !!done && done.what === "seat" && gained <= 0 && !done.capped && !/^Added |so we added/.test(done.message) && !done.bench?.ok;
+  const nothingNew = !!done && done.what === "seat" && !claimed && gained <= 0 && !done.capped && !/^Added |so we added/.test(done.message) && !done.bench?.ok;
+  const onClaimed = (message: string, id: string) => setDone({ n: 0, before: me.credits, message, capped: false, what: "claim", seatId: id });
   const doneLine = (d: Done, company: string) => {
     const rest = restOf(d.message, company);
     const now = gained > 0 ? ` You have ${me.credits} now.` : "";
@@ -1115,12 +1249,16 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                 <span className="am-done-t">
                   <b>
                     {done.what === "person"
-                      ? `Person added at ${i.c.name}`
-                      : nothingNew
-                        ? "That seat is already on file"
-                        : opts.mine
-                          ? `Your seat at ${i.c.name} is added`
-                          : `Seat added at ${i.c.name}`}
+                      ? / already on file at /.test(done.message)
+                        ? "That person was already on file"
+                        : `Person added at ${i.c.name}`
+                      : claimed
+                        ? `Your seat at ${i.c.name} is claimed`
+                        : nothingNew
+                          ? "That seat is already on file"
+                          : opts.mine
+                            ? `Your seat at ${i.c.name} is added`
+                            : `Seat added at ${i.c.name}`}
                   </b>
                   <span>{doneLine(done, i.c.name)}</span>
                   {nothingNew && <span>Open the company to confirm what&apos;s there, or report what&apos;s wrong.</span>}
@@ -1129,7 +1267,18 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
               </div>
               <h3 className="am-h3">What next?</h3>
               <div className="am-next">
-                {opts.mine ? (
+                {done.what === "claim" ? (
+                  <>
+                    <button type="button" className="am-next-b primary" onClick={() => (onClose(), ui.openSeats(done.seatId))}>
+                      <b>Fill in your seat</b>
+                      <span>{capped ? "It's on Your seats now. Answer what's missing whenever you like." : "It's on Your seats now. Each answer you add there earns 1 credit."}</span>
+                    </button>
+                    <button type="button" className="am-next-b" onClick={() => (setDone(null), setSelected(null), setQ(""), setTimeout(() => inputRef.current?.focus()))}>
+                      <b>Add another seat you held</b>
+                      <span>At this company or a different one.</span>
+                    </button>
+                  </>
+                ) : opts.mine ? (
                   <>
                     <button type="button" className="am-next-b primary" onClick={onClose}>
                       <b>Back to your seats</b>
@@ -1170,7 +1319,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
               </div>
             </div>
           ) : opts.mine ? (
-            <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} />
+            <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} onClaimed={onClaimed} />
           ) : (
             <>
               <div className="tp-seg" role="tablist" aria-label="What to add">
@@ -1187,7 +1336,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                 ))}
               </div>
               {/* Members add only seats they held: the seat form is always "A seat you held". */}
-              {mode === "engagement" && <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} />}
+              {mode === "engagement" && <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} onClaimed={onClaimed} />}
               {mode === "person" && <PersonForm i={i} draft={person} setDraft={setPerson} onDone={(s) => setDone({ ...s, what: "person" })} />}
               {mode === "facts" && (missingCo ? <MissingFacts i={i} /> : <p className="am-note">Every company detail is filled in.</p>)}
             </>

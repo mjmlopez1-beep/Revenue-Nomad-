@@ -343,6 +343,11 @@ const placeholders = ["Private Company", "Confidential", "Confidential Company",
 for (const n of placeholders) check(`a placeholder name is not a company: "${n}"`, isPlaceholderCompany(n) && !isRealCompany(n));
 for (const n of ["A Place for Mom", "Acme Robotics", "1440", "Private Family Office", "Independent Bank", "Stealth Security Labs", "The Hatch Company", "Hawaii Coffee Company", "ABC & Company", "Unknown Worlds Entertainment"])
   check(`a real name is not a placeholder: "${n}"`, !isPlaceholderCompany(n));
+// Names people try a form with, or copy from an example: a member can't add one (lib/table.ts, the add action).
+for (const n of ["Acme", "ACME Inc.", "Acme, Inc.", "Test", "Test Company 2", "Example", "Example.com", "Your client", "Your Company", "Company Name Here", "Demo Co", "Lorem Ipsum", "Sample", "Placeholder", "Fake Company", "Company X"])
+  check(`an example name is a placeholder: "${n}"`, isPlaceholderCompany(n));
+for (const n of ["Demo Converts", "Testament", "Test.io", "Example Health", "Your Celebrity Magazines", "Make Your Mark", "X Corp", "Yield.xyz", "Samplify", "Acme Brick"])
+  check(`a real name that starts like one is not: "${n}"`, !isPlaceholderCompany(n));
 
 // Links go out whole: https:// on a stored "acme.com/jobs/1", and nothing that isn't a web address.
 const links: [string, string | null][] = [

@@ -431,6 +431,19 @@ function SeatCard({
 
   // A name from our own records: saying "this isn't me" takes it off the seat for everyone while we check.
   const fromRecords = e.cells.operator?.s === "value" && e.cells.operator.from === "records";
+  // Their own name, which they put there: a seat we found that they claimed (or an open role they took),
+  // or a seat they added. Giving it up takes back everything they added to it (notMine on the server).
+  const op = e.cells.operator;
+  const ownName = op?.s === "value" && !!op.mine;
+  const addedIt = ownName && e.source === "Member added" && !e.opened;
+  const claimedIt = ownName && !addedIt;
+  const giveUp = addedIt
+    ? { link: "Remove this seat", q: "Remove this seat? Everything you added to it comes off, with the credits it earned.", go: "Remove it" }
+    : claimedIt
+      ? { link: "Not my seat", q: "Not your seat? We'll take your name off it, with everything you added to it and the credits it earned.", go: "Take my name off" }
+      : fromRecords
+        ? { link: "This isn't me", q: "Take your name off this seat? We matched it by name, so it may be someone else's. Nobody will see your name on it.", go: "Take my name off" }
+        : { link: "This isn't me", q: "Take your name off this seat? Another member put it there, so it may be someone else's. We'll hide it while we check.", go: "Take my name off" };
   const remove = async () => {
     setBusy(true);
     const r = await ui.act({ type: "notMine", engagementId: e.id }, { quiet: !fromRecords });
@@ -666,13 +679,9 @@ function SeatCard({
           <footer className="ys-seat-foot">
             {confirm ? (
               <>
-                <span>
-                  {fromRecords
-                    ? "Take your name off this seat? We matched it by name, so it may be someone else's. Nobody will see your name on it."
-                    : "Take this seat off your list? We matched it by name, so it may be someone else's."}
-                </span>
+                <span>{giveUp.q}</span>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={remove}>
-                  {busy ? "Removing" : fromRecords ? "Take my name off" : "Remove this seat"}
+                  {busy ? "Removing" : giveUp.go}
                 </button>
                 <button type="button" className="btn btn-sm btn-ghost" disabled={busy} onClick={() => setConfirm(false)}>
                   Keep it
@@ -680,7 +689,7 @@ function SeatCard({
               </>
             ) : (
               <button type="button" className="ys-notme" onClick={() => setConfirm(true)}>
-                This isn&apos;t me
+                {giveUp.link}
               </button>
             )}
           </footer>

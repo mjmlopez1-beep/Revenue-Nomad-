@@ -628,6 +628,9 @@ async function main() {
   check("a rate needs the member to say who may see it", noVis.isError && /rate_visibility/.test(noVis.text));
   const noWhat = await tool(at, "add_my_seat", { company: "Qa Own Seat Co" });
   check("a seat needs a function or a role", noWhat.isError && /function or its role/.test(noWhat.text));
+  // The "Things to ask" example, pasted as is: an example name is not a company, and nothing is added or earned.
+  const acme = await tool(at, "add_my_seat", { company: "Acme", function: "Marketing", role: "Fractional CMO", start: "2024-03", end: "2024-11" });
+  check("add_my_seat refuses an example name like Acme", acme.isError && /example name, not a real company/.test(acme.text) && !(await A.view()).companies.some((c) => c.name === "Acme"), acme.text);
   const own = await tool(at, "add_my_seat", { company: `Qa Own Seat ${RUN}`, function: "Marketing", role: "Fractional CMO", type: "Fractional", status: "Ended", start: "2023-02", end: "2023-11", pricing: "Monthly retainer", rate: "$9k/mo", rate_visibility: "benchmarks_only" });
   const av4 = await A.view();
   const ownSeat = av4.companies.flatMap((c) => c.engagements).find((e) => e.id === own.out?.seat_id);

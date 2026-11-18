@@ -3648,6 +3648,43 @@ button.tp-fs-row:active {
 .tp-engform .tp-form-2 .my {
   display: flex;
 }
+/* "Is one of these yours?": seats we found at the company with nobody named yet, above the form for a seat the member held. */
+.am-group.am-claims {
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+.am-claim-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.am-claim-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-height: 44px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.am-claim-row:first-child {
+  border-top: 0;
+}
+.am-claim-what {
+  flex: 1 1 180px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.am-claim-ask {
+  flex: 1 1 100%;
+  margin: 4px 0;
+}
 /* After adding: what was saved and earned, then what to do next. */
 .tp-done-panel {
   display: grid;

@@ -249,6 +249,8 @@ function pickEmpty(view, n, { free = false, entity, picks = false } = {}) {
     if (x.cell.s !== "empty" || !SAMPLE[col] || (free && !FREE.has(col)) || (entity && x.entity !== entity) || x.company.hidden) continue;
     // Only the seat holder adds facts about a seat: another member's seat is never picked.
     if (x.entity === "engagement" && !x.eng?.yours) continue;
+    // A person's title, email, phone and LinkedIn go in only from a member who sees their name.
+    if (x.entity === "contact" && ["title", "email", "phone", "linkedin"].includes(x.field) && x.person?.cells.name?.s !== "value") continue;
     if (!picks && PICKS.has(col)) continue;
     const k = `${x.id}.${x.field}`;
     if (claimed.has(k)) continue;
@@ -1016,15 +1018,21 @@ section("seats", async () => {
   const em = engOf(await Y.view(), mine.json?.id);
   check('add with operatorMemberId "me" links the seat to the viewer', mine.status === 200 && em?.yours === true && em.cells.operator?.v === "Yara Yours" && em.cells.operator.member?.you === true, { add: mine.json, yours: em?.yours });
 
-  // "This isn't me".
+  // "Remove this seat" (notMine on a seat the member added): what they added comes off with its credits, and the seat goes.
+  const yBefore = (await Y.view()).me.credits;
+  const uBefore = (await U.view()).me.credits;
   const not = await Y.act({ type: "notMine", engagementId: eid });
-  const ey2 = engOf(await Y.view(), eid);
-  check("notMine unlinks the seat", not.status === 200 && ey2?.yours === false, { not: not.json?.message, yours: ey2?.yours });
-  check("notMine returns the cells as they now look", Array.isArray(not.json?.cells) && not.json.cells.some((c) => c.field === "operator"), not.json?.cells?.map((c) => [c.field, c.cell.s]));
+  const vy2 = await Y.view();
+  check("Remove this seat takes the seat off the table", not.status === 200 && /^Removed that seat\. What you added to it came off too\. The \d+ credits it earned came off your balance\.$/.test(not.json?.message ?? "") && !engOf(vy2, eid), not.json?.message);
+  check("and its credits off the member's balance, while the member who paid for its rate gets theirs back", vy2.me.credits < yBefore && (await U.view()).me.credits === uBefore + 1, { y: [yBefore, vy2.me.credits], u: uBefore });
+  check("the person another member added on it stays, on the company", !!vy2.companies.find((c) => c.id === host.id)?.people.some((p) => p.id === tPerson.json?.id), tPerson.json?.id);
   const again = await Y.act({ type: "notMine", engagementId: eid });
-  check("notMine on a seat that isn't yours is refused", again.status === 400 && again.json?.error === "That seat isn't linked to you.", again.json);
+  check("notMine on a seat that is gone is refused", again.status === 400, again.json);
   const after = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "reason", value: "Build the first sales motion" });
   check("after notMine, the seat takes no more facts from them", after.status === 400, after.json);
+  // Their second seat goes the same way, and the answer carries no cells: the seat is gone. (A seat matched by name keeps its name under review: see the rules suite.)
+  const notMine2 = await Y.act({ type: "notMine", engagementId: mine.json?.id });
+  check("notMine on the second seat they added removes it too", notMine2.status === 200 && /^Removed that seat\./.test(notMine2.json?.message ?? "") && !notMine2.json?.cells, notMine2.json);
 
   // A real linked seat holder from the seed: free to see, and they can correct our own records.
   const sm = seedHolders[0];
@@ -1441,8 +1449,8 @@ section("scan", async () => {
   check("a company with an open role is not hidden from a member who held a seat there", zc?.hidden === false && zc.name === coH && zc.friendly.open === 1, { hidden: zc?.hidden, open: zc?.friendly.open });
   await Z.act({ type: "notMine", engagementId: zSeat.json?.id });
   const zc2 = (await Z.view()).companies.find((c) => c.id === zc?.id);
-  // Members add only seats they held, so the seat came from Zed: the facts Zed added there keep the company in view, as for anyone who added there.
-  check("after notMine the company stays in view for the member who added facts there", zc2?.hidden === false, { hidden: zc2?.hidden });
+  // Removing the seat takes back every fact Zed added there, so nothing of his keeps the company in view: it is locked again, as for anyone.
+  check("after Remove this seat the company is locked again for the member, who has nothing there now", zc2?.hidden === true && !zc2.engagements.some((e) => e.id === zSeat.json?.id), { hidden: zc2?.hidden });
 
   // Open roles from the seed close 35 days after the seed was built, unless a scan sees them.
   if (seedOpen.length) {

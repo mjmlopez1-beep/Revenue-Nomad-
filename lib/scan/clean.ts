@@ -118,14 +118,21 @@ const GENERIC_NOUN =
 const STAGE_LED =
   /^(?:series [a-f]\b|seed\b|pre-seed|early[- ]stage|growth[- ]stage|late[- ]stage|vc[- ]backed|pe[- ]backed|venture[- ]backed|bootstrapped|fast[- ]growing|high[- ]growth|leading|well[- ]funded|funded|b2b|b2c|saas|ai|fintech|healthtech)\b/i;
 
-/** Words that alone (all of a name's words) name no company: "Private Company", "Stealth Mode", "N/A", "Self-employed". */
+/** Words that alone (all of a name's words) name no company: "Private Company", "Stealth Mode", "N/A", "Self-employed", "Your client". */
 const PLACEHOLDER_WORDS = new Set(
   (
     "stealth mode confidential undisclosed private hidden anonymous unnamed unknown locked company companies startup startups client clients hiring employer " +
-    "the a an our my co inc llc ltd firm business organization organisation n na various multiple self employed freelance freelancer independent " +
-    "contractor consultant tbd tba none not disclosed specified provided name withheld"
+    "the a an our my your co inc llc ltd firm business organization organisation n na various multiple self employed freelance freelancer independent " +
+    "contractor consultant tbd tba none not disclosed specified provided name here x withheld"
   ).split(" ")
 );
+/**
+ * Names people type to try a form, or copy from an example: "Acme", "Test", "Example Inc",
+ * "Demo Co", "Lorem Ipsum", "Test Company 2". Squeezed, so case, spaces and punctuation don't
+ * matter. A longer real name that starts the same way ("Acme Robotics", "Demo Converts") is not one.
+ */
+const TEST_NAME =
+  /^(?:acme|test|testing|example|sample|demo|dummy|fake|placeholder|foo|foobar|asdf\w*|qwerty|lorem|loremipsum|xyz|xxx+)(?:co|com|company|corp|corporation|inc|incorporated|llc|ltd|limited|client|business|group)?\d{0,3}$/;
 /** "A fintech company", "A Series B SaaS startup": a description that ends in what it is. */
 const GENERIC_END =
   /\b(?:startup|start-up|scaleup|scale-up|company|firm|agency|brand|platform|business|client|organi[sz]ation|nonprofit|non-profit|provider|manufacturer|retailer|consultancy|venture|employer)\.?$/i;
@@ -133,14 +140,16 @@ const GENERIC_END =
 /**
  * A stand-in for a company that isn't named: "Private Company", "Confidential", "Stealth Startup",
  * "Undisclosed", "Company", "N/A", "Self-employed", "Various", "Multiple", "Freelance",
- * "Independent", "Hiring Company", "A B2B SaaS company". Such a record is not a real company: the
- * table, search, the connector and the preview leave it out (see placeholderHidden in lib/table.ts).
+ * "Independent", "Hiring Company", "A B2B SaaS company", and the names people try a form with
+ * ("Acme", "Test", "Example", "Your client"). Such a record is not a real company: the table,
+ * search, the connector and the preview leave it out (see placeholderName in lib/table.ts), and
+ * a member can't add one.
  */
 export function isPlaceholderCompany(name: unknown): boolean {
   const n = plain(name);
   const sq = squeeze(n);
   if (sq.length < 2) return true;
-  if (NO_NAME.has(sq)) return true;
+  if (NO_NAME.has(sq) || TEST_NAME.test(sq)) return true;
   const words = n.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (words.length && words.length <= 6 && words.every((w) => PLACEHOLDER_WORDS.has(w))) return true;
   if (/^an?\s+\S/i.test(n) && GENERIC_END.test(n)) return true;
