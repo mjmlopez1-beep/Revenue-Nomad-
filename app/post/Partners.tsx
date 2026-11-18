@@ -11,8 +11,12 @@
  *     these (GET /api/table?partners=1, lib/table.ts partnersView).
  *  b. Partners at your kind of clients. Who held seats in other functions at companies that fit the
  *     member's Ideal Fractional Profile (partnersModel.ts), from the member's own view of the table,
- *     so every lock holds: a holder's name is the 1 credit SEAT_BUNDLE unlock (with the role), and a
- *     locked company stays locked. After the unlock, Message (a member) or Invite to connect (not on
+ *     so every lock holds. Each card is a person: the seat's title leads (PartnersView.titles while
+ *     the name is locked: this page alone shows it ahead of the unlock), the name a blurred
+ *     placeholder under it, then the company, masked on a locked card (its name is free elsewhere;
+ *     here the person comes first) with its industry, revenue, size and place, and when they held
+ *     it. One full-width "Unlock · 1 credit" buys who held it, as in the table (SEAT_BUNDLE). After
+ *     the unlock, the name and the company, and Message (a member) or Invite to connect (not on
  *     Merlin yet), and Verify on a name nobody verified. Seats with nobody named are a count.
  *  c. Members on Merlin, listed by default: first name, title, function and the clients they want,
  *     with Connect. Never an email. Your profile has "Show me in Referral partners".
@@ -20,12 +24,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PartnersView } from "@/lib/tableTypes";
 import { clientKinds } from "@/lib/partners";
-import { CompanyLogo, IconChevron, LockedName, fmtMonth, initials } from "../ui/shared";
-import { coverOf, icpEmpty, icpLabel, seatBothLocked, seatNoun, seatWhat, shown, type CoInfo } from "./model";
+import { CompanyLogo, IconChevron, LockedName, fmtMonth, initials, lockedLook } from "../ui/shared";
+import { countryOf, countryShort, icpEmpty, icpLabel, regionOf, shown, type CoInfo } from "./model";
 import { HeldBy, RowFact } from "./Tables";
 import { ConnectButton, MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
-import { holderIsMember, partnerGroups, type PartnerGroup, type PartnerSeat } from "./partnersModel";
+import { holderIsMember, partnerGroups, seatLead, type PartnerGroup, type PartnerSeat } from "./partnersModel";
 import { useUi } from "./ui";
 import { plural } from "./hooks";
 import "./partners.css";
@@ -58,7 +62,8 @@ export function Partners({ infos, onBack, onProfile }: { infos: CoInfo[]; onBack
   const ui = useUi();
   const me = ui.me;
   const { data, failed, load } = usePartners([me.function, me.partners, me.icp]);
-  const { groups, fits } = useMemo(() => partnerGroups(infos, me), [infos, me]);
+  const titles = data?.titles ?? null;
+  const { groups, fits } = useMemo(() => partnerGroups(infos, me, titles), [infos, me, titles]);
   return (
     <div className="tp-page pt-page">
       <button type="button" className="tp-back" onClick={onBack}>
@@ -90,7 +95,7 @@ export function Partners({ infos, onBack, onProfile }: { infos: CoInfo[]; onBack
         <h2 className="tp-card-h" id="pt-seats-h">
           Partners at your kind of clients
         </h2>
-        <Seats groups={groups} fits={fits} onProfile={onProfile} />
+        <Seats groups={groups} fits={fits} titles={titles} onProfile={onProfile} />
       </section>
 
       <section className="tp-card pt-sec" aria-labelledby="pt-members-h">
@@ -167,7 +172,9 @@ function Order({ data, onProfile }: { data: PartnersView | null; onProfile: () =
 
 /* ---------- b. partners at your kind of clients ---------- */
 
-function Seats({ groups, fits, onProfile }: { groups: PartnerGroup[]; fits: number; onProfile: () => void }) {
+type Titles = Record<string, string> | null;
+
+function Seats({ groups, fits, titles, onProfile }: { groups: PartnerGroup[]; fits: number; titles: Titles; onProfile: () => void }) {
   const ui = useUi();
   const icp = ui.me.icp;
   if (icpEmpty(icp))
@@ -192,7 +199,7 @@ function Seats({ groups, fits, onProfile }: { groups: PartnerGroup[]; fits: numb
         </span>
       </div>
       {groups.length ? (
-        groups.map((g) => <Group key={g.fn} g={g} />)
+        groups.map((g) => <Group key={g.fn} g={g} titles={titles} />)
       ) : (
         <p className="pt-note">No seats in other functions at companies that fit your profile yet. As members add seats, they show here.</p>
       )}
@@ -200,18 +207,18 @@ function Seats({ groups, fits, onProfile }: { groups: PartnerGroup[]; fits: numb
   );
 }
 
-function Group({ g }: { g: PartnerGroup }) {
+function Group({ g, titles }: { g: PartnerGroup; titles: Titles }) {
   const [all, setAll] = useState(false);
   const shownSeats = all ? g.seats : g.seats.slice(0, SEATS_FIRST);
   return (
-    <section className="pt-group" aria-label={`${g.fn} seats`}>
+    <section className="pt-group" aria-label={`${g.fn} fractionals`}>
       <h3 className="pt-group-h">
-        {g.fn} <span className="pt-group-n num">{plural(g.seats.length, "seat")}</span>
+        <span>{g.fn}</span> {g.seats.length > 0 && <span className="pt-group-n num">· {plural(g.seats.length, "fractional")}</span>}
       </h3>
       {shownSeats.length > 0 && (
         <div className="pt-cards">
           {shownSeats.map((s) => (
-            <SeatCard key={s.e.id} s={s} />
+            <SeatCard key={s.e.id} s={s} titles={titles} />
           ))}
         </div>
       )}
@@ -229,11 +236,41 @@ function Group({ g }: { g: PartnerGroup }) {
   );
 }
 
-function SeatCard({ s }: { s: PartnerSeat }) {
+/** Where a company is, as a card says it: "Texas, US", "Germany". Null when its HQ names no place. */
+function placeLine(i: CoInfo): string | null {
+  const country = countryOf(i.c);
+  const region = regionOf(i.c);
+  if (!country) return region;
+  const short = countryShort(country);
+  return region && region !== country ? `${region}, ${short}` : short;
+}
+
+/** A person's name before the unlock: made-up letters from the seat's public id, blurred (the LockedName look). */
+function LockedPerson({ seed }: { seed: string }) {
+  const a = lockedLook(`${seed}.first`).name.split(" ")[0];
+  const b = lockedLook(`${seed}.last`).name.split(" ")[0];
+  return (
+    <span className="locked-name pt-name-locked">
+      <span className="locked-blur" aria-hidden>
+        {a} {b}
+      </span>
+      <span className="sr-only">Name locked</span>
+    </span>
+  );
+}
+
+/**
+ * One partner, person first. The title leads; the name sits under it, a blurred placeholder until
+ * the unlock. Then the company: on a locked card its name and logo are a neutral placeholder (the
+ * person is what this card sells) and what is free to know shows beside it: industry, revenue,
+ * size, place, and when they held the seat. One full-width action at the bottom: "Unlock · 1
+ * credit" (who held it, the table's own purchase), "Unlock company · 1 credit" first at a locked
+ * company, and after the unlock Message or Invite to connect.
+ */
+function SeatCard({ s, titles }: { s: PartnerSeat; titles: Titles }) {
   const ui = useUi();
   const { i, e } = s;
   const hidden = !!i.c.hidden;
-  const at = hidden ? "this company" : i.c.name;
   const fn = shown(e.cells.function);
   const start = shown(e.cells.start);
   const end = shown(e.cells.end);
@@ -242,43 +279,80 @@ function SeatCard({ s }: { s: PartnerSeat }) {
   const when = !start ? null : active ? `since ${fmtMonth(start)}` : end ? `${fmtMonth(start)} to ${fmtMonth(end)}` : `started ${fmtMonth(start)}`;
   const op = e.cells.operator;
   const name = op?.s === "value" ? op.v : null;
-  const t = (field: string) => ({ entity: "engagement" as const, id: e.id, field });
+  // Open: the member sees who held it (and the company is theirs to see).
+  const open = !!name && !hidden;
+  const co = i.c.cells;
+  const emp = shown(co.employees);
+  const facts = [shown(co.industry), shown(co.revenue), emp && `${emp} employees`].filter((x): x is string => !!x);
+  const place = placeLine(i);
+  const lead = seatLead(e, titles);
   return (
-    <article className="pt-card">
-      <button type="button" className="pt-card-co" onClick={() => ui.openCompany(i.c.id, e.id)} title={hidden ? "Open the record to see what unlocking it shows" : `Open ${i.c.name}`}>
-        <CompanyLogo name={hidden ? "" : i.c.name} domain={hidden ? null : i.c.iconDomain ?? i.domain} hidden={hidden} seed={i.c.id} />
-        <span className="pt-card-id">
-          <span className="pt-card-name">{hidden ? <LockedName seed={i.c.id} /> : i.c.name}</span>
-          <span className="pt-card-meta num">{[fn && `${fn} seat`, when].filter(Boolean).join(" · ")}</span>
-        </span>
-      </button>
-      <dl className="pt-facts">
-        {/* Who held the seat and their role are one purchase: while both are locked, one row and one lock. */}
-        {!seatBothLocked(e) && (
-          <div className="pt-fact">
-            <dt>Role</dt>
-            <dd>
-              <RowFact t={t("role")} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} noun={seatNoun(e, "role")} what={seatWhat(e, "role")} />
-            </dd>
-          </div>
+    <article className={`pt-card${open ? " is-open" : ""}`} aria-label={open ? `${lead}, ${name}` : `${lead}, name locked`}>
+      <div className="pt-who">
+        <span className="pt-title">{lead}</span>
+        <span className="pt-name">{open ? <HeldBy e={e} /> : <LockedPerson seed={e.id} />}</span>
+      </div>
+      <div className="pt-at">
+        {open ? (
+          <button type="button" className="pt-co" onClick={() => ui.openCompany(i.c.id, e.id)} title={`Open ${i.c.name}`}>
+            <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} seed={i.c.id} />
+            <span className="pt-co-name">{i.c.name}</span>
+            <IconChevron dir="right" />
+          </button>
+        ) : (
+          <span className="pt-co pt-co-locked">
+            <CompanyLogo name="" domain={null} hidden seed={i.c.id} />
+            <LockedName seed={i.c.id} className="pt-co-name" />
+          </span>
         )}
-        <div className="pt-fact">
-          <dt>{seatBothLocked(e) ? "Held by and role" : "Held by"}</dt>
-          <dd>
-            <HeldBy e={e} cover={coverOf(i, e, "operator")} />
-          </dd>
-        </div>
-      </dl>
-      {name && !hidden && (holderIsMember(e) || e.invite) && (
-        <div className="pt-next">
-          {holderIsMember(e) ? (
-            <MessageButton engagementId={e.id} name={name} company={i.c.name} role={shown(e.cells.role)} fn={fn} />
-          ) : (
-            <InviteConnect e={e} name={name} company={i.c.name} />
-          )}
-        </div>
-      )}
+        {facts.length > 0 && (
+          <span className="pt-co-facts">
+            {facts.map((f) => (
+              <span key={f}>{f}</span>
+            ))}
+          </span>
+        )}
+        {(place || when) && (
+          <span className="pt-co-facts">
+            {place && <span>{place}</span>}
+            {when && <span className="num">{when}</span>}
+          </span>
+        )}
+      </div>
+      <PartnerAction s={s} open={open} name={name} />
     </article>
+  );
+}
+
+/** The card's one action, full width. Nothing when there is nothing to do yet (a holder who can't be invited). */
+function PartnerAction({ s, open, name }: { s: PartnerSeat; open: boolean; name: string | null }) {
+  const { i, e } = s;
+  const fn = shown(e.cells.function);
+  if (open && name) {
+    if (!holderIsMember(e) && !e.invite) return null;
+    return (
+      <div className="pt-act">
+        {holderIsMember(e) ? (
+          <MessageButton engagementId={e.id} name={name} company={i.c.name} role={shown(e.cells.role)} fn={fn} />
+        ) : (
+          <InviteConnect e={e} name={name} company={i.c.name} />
+        )}
+      </div>
+    );
+  }
+  // A locked company (it is hiring now): its unlock comes first, then who held the seat.
+  if (i.c.hidden)
+    return (
+      <div className="pt-act">
+        <RowFact t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />
+        <span className="pt-act-note">This company is hiring now. Unlock it first, then who held the seat for 1 credit more.</span>
+      </div>
+    );
+  if (e.cells.operator?.s !== "locked") return null;
+  return (
+    <div className="pt-act">
+      <RowFact t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} what="who held this seat" />
+    </div>
   );
 }
 

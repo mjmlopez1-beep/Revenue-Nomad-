@@ -12,7 +12,10 @@
  *     message, kinds of clients.
  *  2. In process: the connector's warm paths say Message or Invite to connect, with the link, only
  *     after the unlock; "Partners at your kind of clients" (app/post/partnersModel.ts) on a member's
- *     own view never holds a name before the unlock; the page's order and answers with their
+ *     own view never holds a name before the unlock; partner cards lead with the seat's title
+ *     (PartnersView.titles: never the holder's name, the company's, an email or a link, while the
+ *     table, record and connector keep selling the role with who held it), titled seats first, and
+ *     the card's Unlock is the table's 1 credit purchase within the daily limit; the page's order and answers with their
  *     20-company and 20-member thresholds (partnersView).
  *  3. Over HTTP: the invite record (no duplicates), the claim through the link (the token verifies
  *     and the invite code is carried), the bonus for both once per invitee within REFERRAL_LIMIT, no
@@ -82,6 +85,9 @@ const P = {
   selma: "Selma Samefunc",
   farrah: "Farrah Outside",
   fula: "Fula Fulltimer",
+  tobin: "Tobin Untitled",
+  tobias: "Tobias Namewell",
+  cleo: "Cleo Coname",
 };
 const seedMembers = [
   { id: "sm_vera", name: "Vera Viewpoint", email: "vera-pt@example.com", title: "Fractional VP Sales", token: "pt-tok-vera" },
@@ -127,6 +133,11 @@ const engagements = [
   found("e_pt_pella2", "c_bravo", "Enablement", "Fractional VP Enablement", P.pella),
   seat("e_pt_nora", "c_bravo", { source: "Published engagement", function: "Marketing", role: "Fractional CMO", operator: P.nora, start: "2023-05", status: "Ended", end: "2024-01" }),
   found("e_pt_far", "c_far", "Marketing", "Fractional CMO", P.farrah),
+  // Partner cards lead with the title: a seat with none on file (the newest, so it sorts last only because the
+  // others have one), a title that carries its holder's name (never sent), and one that names the company.
+  found("e_pt_tobin", "c_bravo", "Customer Success", "", P.tobin, "2026-01"),
+  found("e_pt_tobias", "c_bravo", "Customer Success", `Fractional Head of CS (${P.tobias})`, P.tobias, "2025-06"),
+  found("e_pt_cleo", "c_alpha", "Partnerships", "Fractional VP Partnerships at Alpha Partner Co", P.cleo),
   // The order: Marketing before Sales and RevOps after it at 20 companies, Finance before it at 19 (with
   // full-time Marketing seats that would make Marketing 25 if they counted), Growth before a year-only
   // Sales start at 20 (a year alone is its December), and open roles that would make Partnerships 20.
@@ -245,6 +256,58 @@ check("a member who never signed in can be invited too", !!noraSeat.invite && !(
 const maraSeat = mk.seats.find((s) => shownName(s) === P.mara)!.e;
 check("a member on Merlin is messaged, not invited", !maraSeat.invite && !!(maraSeat.cells.operator as { member?: unknown }).member && PM.holderIsMember(maraSeat));
 check("no profile, no partners list", PM.partnerGroups(M.deriveAll(v.companies), { icp: null, function: "Sales" }).groups.length === 0);
+
+console.log("\nPartner cards, person first: the title before the unlock");
+check("a title with the company's name in it reads without it", T.partnerTitle("Fractional VP Partnerships at Alpha Partner Co", "Cleo Coname", "Alpha Partner Co", "alpha-pt.example.com") === "Fractional VP Partnerships");
+check(
+  "a title that holds any part of the holder's name, an email or a link is never sent",
+  T.partnerTitle("Jane Smith, Fractional CMO", "Jane Smith", "Acme", null) === null &&
+    T.partnerTitle("Fractional CMO (Smith)", "Jane Smith", "Acme", null) === null &&
+    T.partnerTitle("JaneSmith Fractional CMO", "Jane Smith", "Acme", null) === null &&
+    T.partnerTitle("Fractional CMO jane@acme.com", "Jo Doe", "Acme", null) === null &&
+    T.partnerTitle("Fractional CMO linkedin.com/in/jdoe", "Jo Doe", "Acme", null) === null &&
+    T.partnerTitle("Fractional CMO", "Jane Smith", "Acme", null) === "Fractional CMO",
+);
+const titler = await T.joinMember("Tess Titleview", "tess-pt@example.com", null, "10.90.0.2");
+await T.perform(titler.token, { type: "profile", function: "Sales", icp });
+const tv = (await T.partnersView(titler.token))!;
+const tt = tv.titles ?? {};
+check("the page's server half sends the title of a seat whose holder is locked", tt[pub("e_pt_quinn")] === "Fractional PMM Lead" && tt[pub("e_pt_lark0")] === "Fractional Head of CS" && tt[pub("e_pt_rory")] === "Fractional VP Partnerships", tt);
+check("cut of the company's name", tt[pub("e_pt_cleo")] === "Fractional VP Partnerships", tt[pub("e_pt_cleo")]);
+check("never a title that carries the holder's name, and nothing for a seat with no title", !(pub("e_pt_tobias") in tt) && !(pub("e_pt_tobin") in tt));
+check(
+  "only seats the page lists: not the member's own function, not Full-time, not at a company the profile rules out, not a seat with nobody named",
+  !(pub("e_pt_selma") in tt) && !(pub("e_pt_fula") in tt) && !(pub("e_pt_far") in tt) && !(pub("e_pt_fin1") in tt),
+);
+const tvText = JSON.stringify(tv);
+check("the partners answer holds no holder's name, email or profile link while locked", !leaks(tvText).length && !/@|linkedin|\/in\/|\/claim\//i.test(tvText), leaks(tvText));
+check("every title is free of every holder's name", Object.values(tt).every((t) => !HOLDER_NAMES.some((n) => n.split(" ").some((w) => t.toLowerCase().includes(w.toLowerCase())))), tt);
+let tView = await T.buildView(titler.token);
+const seatIn = (view: { companies: { engagements: { id: string; cells: Record<string, { s: string; v?: string }> }[] }[] }, internal: string) => {
+  for (const c of view.companies) for (const e of c.engagements) if (e.id === pub(internal)) return e;
+  return undefined;
+};
+let q = seatIn(tView, "e_pt_quinn")!;
+check("the table and the record keep the bundle: the role is locked with who held it", q.cells.operator.s === "locked" && q.cells.role.s === "locked" && !JSON.stringify(q).includes("PMM"), q.cells);
+MV.forgetView(titler.id);
+const tco = (await MCP.getCompany({ member: titler, origin: "https://merlin.example.com" }, { company: "Alpha Partner Co" })) as { seats: { id: string }[] };
+const tq = tco.seats.find((x) => x.id === pub("e_pt_quinn"));
+check("the connector keeps the bundle too: no title before the unlock", !!tq && !JSON.stringify(tq).includes("PMM Lead") && !leaks(JSON.stringify(tco)).length, tq);
+const tg = PM.partnerGroups(M.deriveAll(tView.companies), tView.me!, tt);
+const cs = tg.groups.find((x) => x.fn === "Customer Success")!;
+const csIds = cs.seats.map((s) => s.e.id);
+check("seats with a title come first, the two without last (newest first among them)", JSON.stringify(csIds.slice(-2)) === JSON.stringify([pub("e_pt_tobin"), pub("e_pt_tobias")]), csIds);
+check("without the titles the newest comes first, as before", PM.partnerGroups(M.deriveAll(tView.companies), tView.me!).groups.find((x) => x.fn === "Customer Success")!.seats[0].e.id === pub("e_pt_tobin"));
+const qe = tg.groups.find((x) => x.fn === "Product Marketing")!.seats[0].e;
+check("the card's lead: the title sent, else Fractional <function> leader", PM.seatLead(qe, tt) === "Fractional PMM Lead" && PM.seatLead(cs.seats[cs.seats.length - 2].e, tt) === "Fractional Customer Success leader");
+const before = tView.me!.credits;
+const left0 = tView.me!.unlocksLeft;
+await T.perform(titler.token, { type: "unlock", entity: "engagement", id: pub("e_pt_quinn"), field: "operator" });
+tView = await T.buildView(titler.token);
+q = seatIn(tView, "e_pt_quinn")!;
+check("the card's Unlock is the table's purchase: 1 credit for who held it, with the role", tView.me!.credits === before - 1 && q.cells.operator.v === P.quinn && q.cells.role.v === "Fractional PMM Lead", { credits: [before, tView.me!.credits], cells: q.cells });
+check("and it counts toward the daily unlock limit", tView.me!.unlocksLeft === left0 - 1, [left0, tView.me!.unlocksLeft]);
+check("once open, the title comes from the seat itself, not the page", !(pub("e_pt_quinn") in ((await T.partnersView(titler.token))!.titles ?? {})));
 
 console.log("\nWho gets hired before and after you");
 const pv = (await T.partnersView(vera.token))!;
@@ -487,6 +550,23 @@ if (up) {
   const pz = await ivy.partners();
   check("Referral partners answers a signed-in member", pz?.fn === "Sales" && Array.isArray(pz.members), pz && { fn: pz.fn });
   check("signed out: refused", (await call("GET", "/api/table?partners=1")).status === 401);
+  // Person first over HTTP: the raw answer a new member's phone gets.
+  const tw = await join("Tali Wirecheck", "tali-pt@example.com");
+  await tw.act({ type: "profile", function: "Sales", icp });
+  const raw = await call("GET", "/api/table?partners=1", { token: tw.token, ip: tw.ip });
+  const lark1 = pubIds.get("e_pt_lark1")!;
+  check("over HTTP: the title of a locked seat is in the answer", raw.json?.titles?.[lark1] === "Fractional Head of CS", raw.json?.titles);
+  check("over HTTP: no holder's name, email, profile link or claim link anywhere in it", !leaks(raw.text).length && !/@|linkedin|\/in\/|\/claim\//i.test(raw.text), leaks(raw.text));
+  const twView = await tw.view();
+  const l1 = seatOf(twView, "e_pt_lark1")!;
+  check("over HTTP: the table still sells the role with who held it", l1.cells.operator.s === "locked" && l1.cells.role.s === "locked");
+  const tw0 = twView.me.credits as number;
+  const twLeft = twView.me.unlocksLeft as number;
+  r = await unlock(tw, "e_pt_lark1");
+  const twAfter = await tw.view();
+  const l1b = seatOf(twAfter, "e_pt_lark1")!;
+  check("over HTTP: Unlock costs exactly 1 credit and opens the name and the title", r.status === 200 && twAfter.me.credits === tw0 - 1 && l1b.cells.operator.v === LARKS[1] && l1b.cells.role.v === "Fractional Head of CS", { status: r.status, credits: [tw0, twAfter.me.credits] });
+  check("over HTTP: it counts toward the daily unlock limit", twAfter.me.unlocksLeft === twLeft - 1, [twLeft, twAfter.me.unlocksLeft]);
   check("the order and the answers, with their thresholds", pz.order.some((x: { fn: string; when: string; companies: number }) => x.fn === "Marketing" && x.when === "before" && x.companies === 20) && !pz.order.some((x: { fn: string }) => x.fn === "Finance") && pz.answers?.n === 20, { order: pz.order, answers: pz.answers });
   const names = pz.members.map((m: { first: string }) => m.first);
   check("members on Merlin are listed by default, first names only, never an email", names.includes("Sam") && names.includes("Mara") && !/@/.test(JSON.stringify(pz.members)) && !/Signedin|Memberly|Answerwell|Marketeer/.test(JSON.stringify(pz.members)), names.slice(0, 8));

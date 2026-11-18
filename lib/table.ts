@@ -5566,7 +5566,79 @@ export async function partnersView(token: string | null): Promise<PartnersView |
     const conv = lastWith.get(m.id);
     return { id: pubId(m.id), first: firstName(m.name), title, fn: f, icp, ...(conv ? { conversationId: conv.id } : {}) };
   });
-  return { fn, order, companies, min: PARTNERS_MIN, answers, members, total: listed.length, listed: !s.profiles[me.id]?.partnersOff };
+  return { fn, order, companies, min: PARTNERS_MIN, answers, members, total: listed.length, listed: !s.profiles[me.id]?.partnersOff, titles: partnerTitles(g, s, tracks, idx, me, fn, mine) };
+}
+
+/**
+ * "Partners at your kind of clients" reads people first: each card leads with the title of the
+ * seat while the name stays locked. In the table, the record and the connector a seat's role
+ * still sells with who held it (SEAT_BUNDLE); only this page shows it ahead of the unlock, and
+ * only the title: never the name, the company, an email or a link (partnerTitle). Seats are the
+ * ones the page can list: a named holder, not an open role, not Full-time, outside the viewer's
+ * function, at companies the viewer's Ideal Fractional Profile doesn't rule out (a known part
+ * that conflicts), and not already open to the viewer (they paid, or it is their seat). Keyed by
+ * the seat's public id.
+ */
+function partnerTitles(g: Graph, s: State, tracks: Tracks, idx: MemberIndex, me: Member, fn: string | null, icp: Icp | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length)) return out;
+  // The table's own test (icpTest in app/post/model.ts) on what is on file, kept loose: only a known part that conflicts rules a company out.
+  const lower = (v: string) => v.trim().toLowerCase();
+  const country = (v: string) => {
+    const k = lower(v).replace(/\./g, "");
+    return k === "us" || k === "usa" || k === "united states of america" ? "united states" : k === "uk" ? "united kingdom" : k;
+  };
+  const conflicts = (want: string[], have: string | null, key: (v: string) => string) => !!want.length && !!have && !want.some((w) => key(w) === key(have));
+  const fitsAt = new Map<string, boolean>();
+  const fits = (c: Node) => {
+    let ok = fitsAt.get(c.id);
+    if (ok === undefined) {
+      ok =
+        !conflicts(icp.industries, live(c, s, "industry"), lower) &&
+        !conflicts(icp.employees, live(c, s, "employees"), (v) => v) &&
+        !conflicts(icp.revenue, live(c, s, "revenue"), (v) => v) &&
+        !conflicts(icp.countries, geoOf(c, s).country, country);
+      fitsAt.set(c.id, ok);
+    }
+    return ok;
+  };
+  for (const e of g.engagements.values()) {
+    if (!seatBundled(e, s) || isOpenRole(e, s, tracks)) continue;
+    if (live(e, s, "type") === "Full-time") continue;
+    const f = workFn(fnOf(e, s));
+    if (!f || f === fn) continue;
+    const c = g.companies.get(e.companyId);
+    if (!c || !fits(c)) continue;
+    const rv = valueOf(e, s, "role");
+    if (!rv || rv.status !== "live" || rv.reporters?.includes(me.id)) continue;
+    const opv = valueOf(e, s, "operator")!;
+    if (seatHolder(s, idx, e.id, opv)?.id === me.id) continue;
+    if (SEAT_BUNDLE.some((k) => (s.unlocks[fkey(e.id, k)] ?? []).includes(me.id))) continue;
+    const t = partnerTitle(rv.value, opv.value, c.name, live(c, s, "website") ?? null);
+    if (t) out[pubId(e.id)] = t;
+  }
+  return out;
+}
+
+/**
+ * A seat's title fit to show before its holder is unlocked: without the company's name or site
+ * (titleWithout), and nothing at all when it holds any part of the holder's name, an email, a
+ * link or a handle (the card then reads "Fractional <function> leader"). Null when nothing is left.
+ */
+export function partnerTitle(role: string, holder: string, company: string, site: string | null): string | null {
+  const t = titleWithout(role, company, site, "").trim();
+  if (!t || t.length > 80) return null;
+  if (/@|https?:|www\.|\.(?:com|io|co|net|org|ai)\b|linkedin|\/in\//i.test(t)) return null;
+  const words = holder
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((w) => w.toLowerCase())
+    .filter((w) => w.length >= 2);
+  const tw = new Set(t.toLowerCase().split(/[^\p{L}\p{N}]+/u));
+  if (words.some((w) => tw.has(w))) return null;
+  // A name typed without spaces ("JaneSmith") or run into the title.
+  const flat = t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  if (words.some((w) => w.length >= 4 && flat.includes(w))) return null;
+  return t;
 }
 
 /* ---------- last seen ---------- */
