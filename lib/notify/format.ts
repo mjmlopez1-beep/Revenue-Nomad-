@@ -10,6 +10,8 @@
 import { webLink } from "../links";
 import { hiresLine } from "../hired";
 import type { AlertItem, AlertKind, DestKind, HireNews } from "./types";
+import { radarAlert } from "../radar/format";
+import type { RadarItem } from "../radar/types";
 
 export interface Alert {
   kind: AlertKind | "test";
@@ -18,6 +20,10 @@ export interface Alert {
   lines: string[];
   /** Absolute link into Merlin, or "" when the app's address isn't known. */
   url: string;
+  /** The button's words in Slack (default "Open in Merlin"). The radar's free view says "See who". */
+  button?: string;
+  /** The small line under a Slack post (default: where to change alerts). */
+  footer?: string;
 }
 
 const flat = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim();
@@ -99,6 +105,7 @@ function seatLine(x: Extract<AlertItem, { kind: "seat" }>): string {
 export function alertFor(items: AlertItem[], base: string): Alert | null {
   if (!items.length) return null;
   const kind = items[0].kind;
+  if (kind === "radar") return radarAlert(items as RadarItem[], base);
   if (kind === "message") {
     const all = items as Extract<AlertItem, { kind: "message" }>[];
     // Fractionals who joined from the member's invite: one line between them, never a conversation link.
@@ -226,8 +233,8 @@ export function slackBody(a: Alert) {
     unfurl_media: false,
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: text.slice(0, 2900) } },
-      ...(url ? [{ type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open in Merlin" }, url, style: "primary", action_id: "open" }] }] : []),
-      { type: "context", elements: [{ type: "mrkdwn", text: "Merlin alerts. Change them in Integrations." }] },
+      ...(url ? [{ type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: a.button || "Open in Merlin" }, url, style: "primary", action_id: "open" }] }] : []),
+      { type: "context", elements: [{ type: "mrkdwn", text: esc(a.footer || "Merlin alerts. Change them in Integrations.") }] },
     ],
   };
 }

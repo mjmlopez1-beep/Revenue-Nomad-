@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AdminStats, View } from "@/lib/tableTypes";
-import { IconChevron, Num } from "../ui/shared";
+import { IconChevron, Num, useToast } from "../ui/shared";
 import { useUi } from "./ui";
 import "./pages.css";
 import "./verify.css";
@@ -115,6 +115,49 @@ function boardRows(a: AdminStats): BoardRow[] {
       error: !!run?.error,
     };
   });
+}
+
+/** The next-client radar (lib/radar): who has it on, what went out, opens and clicks, and "Send radar now". */
+function Radar({ r, refresh }: { r: NonNullable<AdminStats["radar"]>; refresh: () => Promise<void> }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/radar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "send" }) });
+      const j = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+      toast(j.message || j.error || (res.ok ? "Sent." : "That didn't go through. Try again."));
+      await refresh();
+    } catch {
+      toast("We couldn't reach Merlin. Check your connection and try again.", true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card
+      title="Next-client radar"
+      action={
+        <button type="button" className="btn btn-sm btn-pine" disabled={busy} aria-busy={busy} onClick={() => void send()}>
+          {busy ? "Sending" : "Send radar now"}
+        </button>
+      }
+    >
+      <Rows
+        items={[
+          ["Members with the radar on", n0(r.on)],
+          ["Members who turned it off", n0(r.off)],
+          ["Sent today", n0(r.sentToday)],
+          ["Sent in the last 7 days", n0(r.sent7)],
+          ["Opened in the last 7 days", n0(r.opens7)],
+          ["Clicks in the last 7 days", n0(r.clicks7)],
+          ["Clicks in all", n0(r.clicks)],
+          ["Last run", stamp(r.lastRunAt, "Not yet")],
+        ]}
+      />
+    </Card>
+  );
 }
 
 function Scan({ a, lastOkAt, refresh }: { a: AdminStats; lastOkAt: string | null | undefined; refresh: () => Promise<void> }) {
@@ -785,6 +828,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
             ]}
           />
         </Card>
+        {a.radar && <Radar r={a.radar} refresh={refresh} />}
         {a.integrations && (
           <Card title="Alerts in Slack">
             <Rows
@@ -794,6 +838,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
                 ["Role alerts sent", n0(a.integrations.sent.roles)],
                 ["Message alerts sent", n0(a.integrations.sent.message)],
                 ["Seat alerts sent", n0(a.integrations.sent.seat)],
+                ["Radar posts sent", n0(a.integrations.sent.radar ?? 0)],
                 ["Tests sent", n0(a.integrations.sent.test)],
                 ["Posts that failed", n0(a.integrations.failed)],
                 ["Connections that stopped", n0(a.integrations.broken)],

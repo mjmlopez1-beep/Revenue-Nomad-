@@ -1,0 +1,167 @@
+/* The Radar page (rd-, app/post/Radar.tsx). Phone first: one column, 44px taps. Cards are a 1px line and a 10px corner. */
+.rd-page {
+  max-width: 720px;
+}
+.rd-lead {
+  margin: -6px 0 16px;
+  max-width: 62ch;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.rd-note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--muted);
+}
+.rd-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rd-empty {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.rd-count {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.rd-count b {
+  color: var(--ink);
+  font-weight: 800;
+}
+.rd-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rd-card {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  color: var(--body-ink);
+}
+.rd-card-pro {
+  cursor: pointer;
+  transition: border-color var(--t) ease, background-color var(--t) ease;
+}
+.rd-card-pro:hover {
+  border-color: var(--line-strong);
+  background: var(--row-hover);
+}
+.rd-card-pro:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+/* Free: the one card, greyed. No company, no person, no link of its own. */
+.rd-card-free {
+  background: #f1f3f2;
+  border-color: #e7eae8;
+  color: var(--muted);
+}
+.rd-card-free .rd-h {
+  color: var(--muted);
+}
+.rd-kind {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: var(--r-chip);
+  background: var(--row-on);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--pine);
+}
+.rd-card-free .rd-kind {
+  background: #e4e8e6;
+  color: var(--muted);
+}
+.rd-h {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.rd-facts {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.rd-why {
+  font-size: 14px;
+  line-height: 20px;
+}
+.rd-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rd-more {
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.rd-btn {
+  min-height: 44px;
+  margin-top: 12px;
+}
+.rd-who {
+  margin-top: 12px;
+  max-width: 62ch;
+}
+.tp-card.rd-deliver {
+  margin-top: 24px;
+  display: grid;
+  gap: 8px;
+}
+.rd-deliver .tp-card-h {
+  margin: 0;
+}
+.rd-switch {
+  justify-self: start;
+  min-height: 44px;
+}
+@media (max-width: 560px) {
+  .rd-btn {
+    width: 100%;
+  }
+  .rd-card {
+    padding: 12px 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rd-card-pro {
+    transition: none;
+  }
+}

@@ -101,6 +101,7 @@ import {
   ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, pauseState, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
+import { radarStats, type RadarState } from "./radar/types";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 
 export type { Action, ActionResult, View } from "./tableTypes";
@@ -236,6 +237,8 @@ interface Profile {
   icp?: Icp | null;
   /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. */
   partnersOff?: boolean;
+  /** Turned off the next-client radar (Your profile, or the radar email's own unsubscribe link). See lib/radar. */
+  radarOff?: boolean;
   /**
    * The fractional functions they say usually get hired before them (Me.before): up to
    * BEFORE_MAX, [] for "Not sure", absent when never asked. Private to the member: anything
@@ -373,6 +376,8 @@ export interface State extends MessagingState {
   firmReview?: FirmReview[];
   /** Alerts in Slack and webhooks: each member's URLs (secret) and switches. See lib/notify. */
   integrations?: IntegrationsState;
+  /** The next-client radar: the last daily run, and the signals each member was sent (never twice). See lib/radar. */
+  radar?: RadarState;
   /** About texts read from company websites (lib/about): each company's last try, and the last run. The texts are values by "website". */
   about?: AboutState;
   /** Seat-holder names from public profiles: claims waiting for an admin, names an admin verified, names taken off, the switch. See publicName. */
@@ -2846,6 +2851,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       unread: unreadCount(s, me.id),
       messageEmail: !prof.messageEmailOff,
       partners: !prof.partnersOff,
+      radar: !prof.radarOff,
       proInterest: !!prof.proInterest,
       // Who they hunt, and their saved views (one list with the connector's saved searches).
       icp: prof.icp ?? null,
@@ -3116,6 +3122,19 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     seats: { linkedMembers: linked.size, factsMissing },
     benchmarks: { memberRates, privateRates: s.benchRates.length, indexRates: seed.rateIndex?.length ?? 0 },
     about: aboutStats(s, g, nowMs),
+    radar: radarStats(
+      s.radar,
+      s.signals,
+      s.profiles,
+      // Members whose radar is on and can match something: signed in, a function, an Ideal Fractional Profile.
+      idx.all.filter((m) => {
+        const p = s.profiles[m.id];
+        const fn = p?.function ?? functionOf(p?.title || m.title);
+        const icp = p?.icp;
+        return signedIn(s, idx, m.id) && !p?.radarOff && !!fn && fn !== "Other" && !!icp && !!(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
+      }).length,
+      nowMs,
+    ),
     ...(seed.engagements.some((e) => e.holderFrom === PUBLIC_PROFILE) || s.names ? { names: namesStats(seed, s, g, idx) } : {}),
   };
 }
@@ -3409,7 +3428,8 @@ function cleanDraft(raw: unknown, alerts: { id: string }[], now: string): Onboar
 /** Signals one member can send in 24 hours. More are dropped without a word. */
 const SIGNAL_DAILY_MAX = 200;
 const SIGNAL_KEEP = 20_000;
-const SIGNAL_NAMES = new Set(["wall", "pro_view", "pro_interest"]);
+/** radar_opened and radar_clicked come from the app's Radar page; the server records radar_sent and radar_off itself (lib/radar). */
+const SIGNAL_NAMES = new Set(["wall", "pro_view", "pro_interest", "radar_opened", "radar_clicked"]);
 /** Record a product signal, inside the member's daily limit. Returns whether it was kept. */
 function addSignal(s: State, memberId: string, name: string, where: string, now: string): boolean {
   const nowMs = Date.parse(now);
@@ -5073,6 +5093,20 @@ export async function perform(
             s.profiles[me.id] = p;
             return { message: a.messageEmail ? "We'll email you when a member messages you." : "Message emails are off. New messages still show in Messages." };
           }
+          if (typeof a.radar === "boolean") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            if (a.radar) delete p.radarOff;
+            else if (!p.radarOff) {
+              p.radarOff = true;
+              addSignal(s, me.id, "radar_off", "profile", now);
+            }
+            s.profiles[me.id] = p;
+            return {
+              message: a.radar
+                ? "Your radar is on. When a company like your clients moves, you hear about it the next morning."
+                : "Your radar is off. We won't send it by email or Slack. The Radar page still lists what's new.",
+            };
+          }
           if (typeof a.partners === "boolean") {
             const p = { ...(s.profiles[me.id] ?? {}) };
             if (a.partners) delete p.partnersOff;
@@ -5172,6 +5206,9 @@ export async function perform(
     const cells = out.cells;
     void import("./notify/events").then((n) => n.afterUnlock(token, cells)).catch((e) => console.error("unlock alerts failed", e));
   }
+  // The next-client radar: a seat added, an end recorded, a role filled can make a signal Pro members hear about at once.
+  if (!opts.dryRun && (a?.type === "fill" || a?.type === "add" || a?.type === "claimSeat"))
+    void import("./radar").then((r) => r.afterRadarChange()).catch((e) => console.error("radar instant failed", e));
   return out;
 }
 /** What a dry run would have done (perform with dryRun). Thrown so the change is dropped. */
@@ -5232,6 +5269,8 @@ export const tableInternals = {
   geoOf, firmsInReview,
   // Plans (lib/billing): the value moment that extends a trial, the saved views Free alerts on, Free's limits, the member's opaque billing ref.
   valueMoment, alertViewsOf, freeNow, billingRef, balance, grantPlanCredits,
+  // The next-client radar (lib/radar) reads hires and open roles the way the table does, and records its product signals.
+  belowLead, offBarRole, isUnseen, addSignal,
 };
 
 /* ---------- claim links (/claim/<token>) and Remove my name ---------- */
@@ -5960,6 +5999,8 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
   // Alerts in Slack for the roles this scan opened, and the week's new hires for saved views that follow them, so this
   // runs after every scan (lib/notify, loaded here so the files don't import each other at start). Nothing is sent when neither has news.
   void import("./notify/events").then((n) => n.afterScan(res.at)).catch((e) => console.error("scan alerts failed", e));
+  // The next-client radar: Pro members get the signals this scan made in the next alert batch (nothing while billing is off).
+  void import("./radar").then((r) => r.afterRadarChange()).catch((e) => console.error("radar instant failed", e));
   return res;
 }
 function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew: number): Promise<ScanApplyResult> {

@@ -3,6 +3,7 @@
  * Shared by server (lib/table.ts) and client (no Node imports).
  */
 import type { Entity } from "./tableFields";
+import type { RadarStats } from "./radar/types";
 
 /**
  * What one field looks like to the viewer.
@@ -284,6 +285,8 @@ export interface Me {
   messageEmail?: boolean;
   /** Listed for other members in Referral partners (on unless they turned it off in Your profile). */
   partners?: boolean;
+  /** The next-client radar by email and Slack (on unless they turned it off in Your profile or with the radar email's link). */
+  radar?: boolean;
   /** Who they hunt (onboarding, and the Ideal Fractional Profile pill over the table). Null until they say. */
   icp?: Icp | null;
   /**
@@ -745,8 +748,10 @@ export interface AdminStats {
   benchmarks: { memberRates: number; privateRates: number; indexRates: number };
   /** Messages between members, counts only (admins never read conversations). */
   messages?: { started: number; replied3d: number; closed: number; blocked: number; reported: number };
+  /** The next-client radar (lib/radar), counts only: members with it on, sent today and this week, opens and clicks. */
+  radar?: RadarStats;
   /** Alerts in Slack and webhooks (lib/notify), counts only. */
-  integrations?: { slackConnected: number; webhookConnected: number; broken: number; sent: { roles: number; message: number; seat: number; test: number }; failed: number };
+  integrations?: { slackConnected: number; webhookConnected: number; broken: number; sent: { roles: number; message: number; seat: number; radar: number; test: number }; failed: number };
   /**
    * About texts read from company websites (lib/about). `enabled`: RN_ABOUT=1. `run`: the run under
    * way, else the last one (null before the first). `onFile`: each company's last try. `waiting`:
@@ -868,9 +873,9 @@ export type Action =
    * Product signals for the pilot: hitting zero credits on an unlock ("wall"), seeing the Pro
    * offer ("pro_view") and asking to hear about Pro ("pro_interest"). `where` names the place.
    */
-  | { type: "signal"; name: "wall" | "pro_view" | "pro_interest"; where: string }
+  | { type: "signal"; name: "wall" | "pro_view" | "pro_interest" | "radar_opened" | "radar_clicked"; where: string }
   /** `partners`: listed in Referral partners for other members (Your profile, "Show me in Referral partners"). */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean }
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean; radar?: boolean }
   /** The invite loop: the inviter closed the line saying these fractionals joined from their invite (Me.joined ids). It doesn't come back. */
   | { type: "joinedSeen"; ids: string[] }
   /**

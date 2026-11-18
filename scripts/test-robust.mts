@@ -699,6 +699,8 @@ console.log("\nThe API's routes");
     "api/billing", "api/billing/webhook",
     "api/health", "api/integrations", "api/integrations/slack/callback", "api/integrations/slack/start", "api/mcp",
     "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
+    // The next-client radar: Send radar now (an admin's cookie), and the email's open pixel and tracked links (the radar's signature; a click only ever goes to a path in the app).
+    "api/radar", "api/radar/go", "api/radar/open",
     "api/table", "api/table/lookup", "api/table/names", "api/table/scan", "api/table/unsubscribe",
   ];
   eq("the API has exactly the routes Merlin uses (a new one is added to this list on purpose)", found.sort(), KNOWN);
