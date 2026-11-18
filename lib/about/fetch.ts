@@ -394,6 +394,31 @@ export function startUrl(domain: string, allow: FetchOpts["allow"]): URL | null 
 }
 
 /**
+ * One page by its full address (a company's careers page, lib/scan/sources/ats.ts), under the same
+ * rules as fetchHomepage: robots.txt first, every hop checked, 8 seconds, 512 KB, html only.
+ */
+export async function fetchPageAt(address: string, opts: FetchOpts = {}): Promise<Page> {
+  const o: FetchOpts = { ...opts, allow: opts.allow ?? testAllowance() };
+  let start: URL;
+  try {
+    start = new URL(address);
+  } catch {
+    return { ok: false, kind: "skipped", reason: "bad address" };
+  }
+  start.hash = "";
+  try {
+    if (!(await robotsAllows(start, o))) return { ok: false, kind: "skipped", reason: "robots.txt disallows" };
+    const { raw, url } = await follow(start, o, o.maxBytes ?? MAX_BYTES, "html");
+    if (raw.status < 200 || raw.status >= 300) return { ok: false, kind: "failed", reason: `http ${raw.status}` };
+    if (!/text\/html|application\/xhtml\+xml/.test(raw.type)) return { ok: false, kind: "skipped", reason: "not html" };
+    return { ok: true, url: url.href, host: url.hostname, status: raw.status, html: raw.body, truncated: raw.truncated };
+  } catch (e) {
+    if (e instanceof Refused) return { ok: false, kind: "skipped", reason: e.message };
+    return { ok: false, kind: "failed", reason: netReason(e) };
+  }
+}
+
+/**
  * The homepage of `domain`: robots.txt first, then the page, https first and plain http when
  * https can't connect. Safety refusals and robots are skips; network trouble and server errors
  * are failures (retried later).

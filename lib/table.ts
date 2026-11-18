@@ -65,10 +65,12 @@ import { readRate } from "./rates";
 import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
 import { emailEnabled, sendEmail } from "./email";
 import { renderDigest } from "./digest";
-import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
+import { MAX_ROLES, collectOpenRoles, scanSources, type ScanSource } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
 import { isBelowLead, keepsNonGtm } from "./seniority";
-import { companyKey, isPlaceholderCompany, textKey, titleWithout } from "./scan/clean";
+import { bestPosting, companyKey, isPlaceholderCompany, postingRank, sameRoleTitle, textKey, titleWithout } from "./scan/clean";
+import { checkPostings, fetchPosting, type PostingFetch } from "./scan/posting";
+import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type FeedFetch, type SiteFetch } from "./scan/sources/ats";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
@@ -82,7 +84,7 @@ import type {
   ScanSummary, View,
 } from "./tableTypes";
 import { BEFORE_MAX } from "./tableTypes";
-import type { DigestData, DigestHires, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
+import type { DigestData, DigestHires, PostingCheckResult, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
 import { followsHires } from "./hired";
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
 import { emptyConnector, type ConnectorState } from "./mcp/types";
@@ -205,8 +207,9 @@ export interface LedgerEntry {
    * (refunds): the end month it bought reads "Ongoing", which is free now (refundOngoingEnds).
    * retract (reversals): the member took back a fact they had added. name (refunds): the seat
    * holder's name from public profiles it bought came off the seat (This is wrong, Remove my name).
+   * duplicate (refunds): the member had bought two listings of one role, merged into one (mergeDuplicateRoles).
    */
-  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name";
+  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -243,9 +246,17 @@ interface RoleTrack {
   firstSeen: string;
   lastSeen: string;
   closedAt: string | null;
-  /** scan: the posting came down. filled: a member named the seat holder (a later scan won't reopen it). */
-  closedBy?: "scan" | "filled";
+  /**
+   * scan: the posting came down (its board stopped listing it). posting-closed: the posting check
+   * found every posting of it clearly closed (checkOpenPostings). filled: a member named the seat
+   * holder (a later scan won't reopen it).
+   */
+  closedBy?: "scan" | "filled" | "posting-closed";
   url: string;
+  /** Every posting link it was listed under, `url` included, when there is more than one (the same role on two boards). */
+  urls?: string[];
+  /** When the posting check last fetched its postings. */
+  checkedAt?: string;
   /** The board that last listed it, or "seed" for open roles that came with the seed. */
   source: string;
   postedAt?: string | null;
@@ -278,6 +289,8 @@ interface ScanState {
   /** The last run in which at least one board answered cleanly. */
   lastOkAt?: string | null;
   boards?: Record<string, BoardHealth>;
+  /** Career feeds of companies on Merlin, by website domain: the board found, or when none was (lib/scan/sources/ats.ts). */
+  ats?: AtsCache;
 }
 interface StoredBenchRate {
   id: string;
@@ -752,6 +765,9 @@ export async function loadState(): Promise<State> {
     if (seedNow) {
       const remapped = remapScanFunctions(s, seedNow);
       if (remapped) console.log(`Open roles given the function their title names: ${remapped}.`);
+      // The same role listed on two boards, filed twice before the scan matched them: one role, with both links.
+      const m = mergeDuplicateRoles(s, seedNow, new Date().toISOString());
+      if (m.merged) console.log(`Open roles listed twice, merged into one: ${m.merged} (credits paid back for a role bought twice: ${m.refunded}).`);
     }
     stateCache = s;
     stateDown = null;
@@ -2758,6 +2774,11 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         ledger.push({ at: l.at, delta: l.delta, reason: NAME_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
+      // A credit back for one of two listings of the same role the member had both bought (mergeDuplicateRoles).
+      if (l.reason === "refund" && l.why === "duplicate") {
+        ledger.push({ at: l.at, delta: l.delta, reason: DUPLICATE_REFUND, company: companyNameOf(id), field: "" });
+        continue;
+      }
       // A credit back for an unlock on a role that had already closed (applyScan).
       if (l.reason === "refund" && (l.why === "closed" || l.why === "removed" || l.why === "offbar")) {
         ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : l.why === "offbar" ? OFFBAR_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
@@ -2863,6 +2884,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
 const BENCH_LABEL = "Private rate";
 /** The ledger line for an unlock paid back because the role had closed. The company follows it ("… at Acme"). */
 const CLOSED_REFUND = "Refund for a role that had closed";
+/** The ledger line for a credit back when a member had bought two listings of one role (mergeDuplicateRoles). */
+const DUPLICATE_REFUND = "Refund for the same role listed twice";
 /** A role the scan took off the table: a full-time job an older screen had let in (lib/scan/remove.ts). */
 const REMOVED_REFUND = "Refund for a full-time job we took off the list";
 /** A role the scan took off the table because it is outside GTM and below Director (lib/seniority.ts). */
@@ -5709,7 +5732,7 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
     const keyOfUrl = new Map<string, string>();
     for (const [k, r] of Object.entries(roles)) {
       keyOfEng.set(r.engagementId, k);
-      if (r.url) keyOfUrl.set(urlKey(r.url), k);
+      for (const u of [r.url, ...(r.urls ?? [])]) if (u && !keyOfUrl.has(urlKey(u))) keyOfUrl.set(urlKey(u), k);
     }
     const byHost = new Map<string, CompanyNode>();
     const byName = new Map<string, CompanyNode>();
@@ -5748,7 +5771,10 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
       const titleKey = textKey(title);
       if (company.length < 2 || title.length < 2 || !coKey || !titleKey || company.toLowerCase() === HIDDEN_COMPANY.toLowerCase() || placeholderName(company)) continue;
       // A link too long to store whole loses its query string (tracking codes) rather than its end.
-      const url = cleanValue(def("posting"), String(raw.url ?? "").trim()).value ?? "";
+      const cleanUrl = (u: unknown) => cleanValue(def("posting"), String(u ?? "").trim()).value ?? "";
+      /** Every link this role was listed under (the same role on two boards, see dedupeRoles), the shown one first. */
+      const links = keepLinks([raw.url, ...(Array.isArray(raw.urls) ? raw.urls.slice(0, 8) : [])].map(cleanUrl));
+      let url = links[0] ?? "";
       const source = squeeze(raw.source, 60) || "scan";
       const key = squeeze(raw.key, 200) || `${coKey}:${titleKey}`;
       // A board's link to a host many companies share (a LinkedIn page) names no company by its host.
@@ -5759,10 +5785,23 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
         res.firms = (res.firms ?? 0) + 1;
         continue;
       }
+      // The link to show: the company's own site or ATS before a board that copied it.
+      const site = domain ?? (co ? hostOf(live(co, s, "website")) : null);
+      url = bestPosting(links, site) ?? url;
 
-      // The same posting: by its key, by its link, or the same title on a followed role at that company.
-      let k = roles[key] ? key : url ? keyOfUrl.get(urlKey(url)) : undefined;
-      if (!k && co) k = (engsAt.get(co.id) ?? []).filter((e) => keyOfEng.has(e.id) && roleSlug(e) === titleKey).map((e) => keyOfEng.get(e.id))[0];
+      // The same posting: by its key, by any of its links, or the same title on a followed role at that company:
+      // the same once arrangement words and tails are set aside (sameRoleTitle), in the same function, an open one first.
+      let k = roles[key] ? key : links.map((u) => keyOfUrl.get(urlKey(u))).find(Boolean);
+      if (!k && co) {
+        const fn = scanFunction(title, raw.function);
+        const followed = (engsAt.get(co.id) ?? []).filter((e) => keyOfEng.has(e.id));
+        const same =
+          followed.find((e) => roleSlug(e) === titleKey) ??
+          followed
+            .filter((e) => sameRoleTitle(live(e, s, "role"), title) && (!fn || !live(e, s, "function") || live(e, s, "function") === fn))
+            .sort((a, b) => Number(!!roles[keyOfEng.get(a.id)!].closedAt) - Number(!!roles[keyOfEng.get(b.id)!].closedAt))[0];
+        if (same) k = keyOfEng.get(same.id);
+      }
       if (k && !g.engagements.has(roles[k].engagementId)) {
         delete roles[k]; // its record is gone (the seed was rebuilt)
         k = undefined;
@@ -5774,6 +5813,15 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
         r.lastSeen = now;
         r.source = source;
         if (url) r.url = url;
+        const all = keepLinks([r.url, ...(r.urls ?? []), ...links]);
+        if (all.length > 1) r.urls = all;
+        for (const u of all) if (!keyOfUrl.has(urlKey(u))) keyOfUrl.set(urlKey(u), k);
+        // The Job posting link moves to the company's own site or ATS when a listing gives one and the link on file is a board's.
+        const posting = valueOf(g.engagements.get(r.engagementId), s, "posting");
+        if (posting && posting.status === "live" && isSystem(posting.by)) {
+          const better = bestPosting([posting.value, ...all], site);
+          if (better && postingRank(better, site) < postingRank(posting.value, site)) put(r.engagementId, "posting", better);
+        }
         delete r.misses;
         delete r.missAt;
         delete r.absentAt;
@@ -5849,8 +5897,9 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
       const hours = Math.round(Number(raw.hoursPerWeek));
       if (hours >= 1 && hours <= 80) fill("hours", String(hours));
       roles[key] = { engagementId: eng.id, companyId: co.id, firstSeen: now, lastSeen: now, closedAt: null, url, source, postedAt: raw.postedAt ? iso(raw.postedAt, "") || null : null };
+      if (links.length > 1) roles[key].urls = keepLinks([url, ...links]);
       keyOfEng.set(eng.id, key);
-      if (url) keyOfUrl.set(urlKey(url), key);
+      for (const u of [url, ...links]) if (u && !keyOfUrl.has(urlKey(u))) keyOfUrl.set(urlKey(u), key);
       seen.add(key);
       res.opened++;
     }
@@ -5944,32 +5993,325 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
       closedNow.push(r);
     }
 
-    if (closedNow.length) {
-      // An unlock made after the posting was last seen paid for a role that was already gone.
-      const since = new Map<string, string>(); // ledger ref -> unlocks later than this are paid back
-      for (const r of closedNow) {
-        since.set(fkey(r.engagementId, "role"), r.lastSeen);
-        since.set(fkey(r.engagementId, "posting"), r.lastSeen);
-        since.set(fkey(r.engagementId, "rate"), r.lastSeen);
-        // The company too, when this left it with no open role. It was last known to be hiring when any of its roles was last seen.
-        if ((engsAt.get(r.companyId) ?? []).some(openNow)) continue;
-        const last = Object.values(roles).filter((x) => x.companyId === r.companyId).map((x) => x.lastSeen).sort().pop();
-        since.set(fkey(r.companyId, "identity"), last ?? r.lastSeen);
-      }
-      for (const l of [...s.ledger]) {
-        const from = l.reason === "unlock" ? since.get(l.ref) : undefined;
-        if (from === undefined || l.at <= from || l.delta >= 0) continue;
-        if (s.ledger.some((x) => x.reason === "refund" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at)) continue; // already paid back
-        s.ledger.push({ memberId: l.memberId, delta: -l.delta, reason: "refund", ref: l.ref, at: now, why: "closed" });
-        refunded++;
-      }
-    }
+    refunded += refundClosed(s, closedNow, (companyId) => (engsAt.get(companyId) ?? []).some(openNow), now);
+
+    // Two followed roles that are one role listed twice (filed before the scan matched them) become one.
+    const merge = mergeDuplicateRoles(s, seed, now);
 
     s.scan.lastRunAt = now;
     s.scan.lastOkAt = clean.size ? now : okBefore;
     s.scan.sources = sources;
-    return { ...res, overCap, refunded, removed: removed.size, removedBelowBar: belowBar };
+    return { ...res, overCap, refunded, removed: removed.size, removedBelowBar: belowBar, ...(merge.merged ? { merged: merge.merged, mergeRefunds: merge.refunded } : {}) };
   });
+}
+
+/** Posting links, each once (by urlKey), at most 6, in the order given. */
+function keepLinks(urls: (string | null | undefined)[]): string[] {
+  const out = new Map<string, string>();
+  for (const u of urls) if (u && !out.has(urlKey(u))) out.set(urlKey(u), u);
+  return [...out.values()].slice(0, 6);
+}
+
+/**
+ * Pay back unlocks on roles that just closed: an unlock of a role's title, posting or rate made
+ * after its posting was last seen paid for a role that was already gone, and so did one of its
+ * company when no open role is left there (`companyStillOpen`). Each once. Returns how many.
+ */
+function refundClosed(s: State, closedNow: RoleTrack[], companyStillOpen: (companyId: string) => boolean, now: string): number {
+  if (!closedNow.length) return 0;
+  const since = new Map<string, string>(); // ledger ref -> unlocks later than this are paid back
+  for (const r of closedNow) {
+    since.set(fkey(r.engagementId, "role"), r.lastSeen);
+    since.set(fkey(r.engagementId, "posting"), r.lastSeen);
+    since.set(fkey(r.engagementId, "rate"), r.lastSeen);
+    // The company too, when this left it with no open role. It was last known to be hiring when any of its roles was last seen.
+    if (companyStillOpen(r.companyId)) continue;
+    const last = Object.values(s.scan.roles).filter((x) => x.companyId === r.companyId).map((x) => x.lastSeen).sort().pop();
+    since.set(fkey(r.companyId, "identity"), last ?? r.lastSeen);
+  }
+  // A member who had bought both listings of one role was paid one back when they merged (mergeDuplicateRoles): that purchase is settled.
+  const settled = new Map<string, number>();
+  for (const x of s.ledger) if (x.reason === "refund" && x.why === "duplicate") settled.set(`${x.memberId}|${x.ref}`, (settled.get(`${x.memberId}|${x.ref}`) ?? 0) + x.delta);
+  let refunded = 0;
+  for (const l of [...s.ledger]) {
+    const from = l.reason === "unlock" ? since.get(l.ref) : undefined;
+    if (from === undefined || l.at <= from || l.delta >= 0) continue;
+    if (s.ledger.some((x) => x.reason === "refund" && x.why !== "duplicate" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at)) continue; // already paid back
+    const left = settled.get(`${l.memberId}|${l.ref}`) ?? 0;
+    if (left >= -l.delta) {
+      settled.set(`${l.memberId}|${l.ref}`, left + l.delta);
+      continue;
+    }
+    s.ledger.push({ memberId: l.memberId, delta: -l.delta, reason: "refund", ref: l.ref, at: now, why: "closed" });
+    refunded++;
+  }
+  return refunded;
+}
+
+/**
+ * Open roles the scan added that are one role listed twice: the same company record, the same
+ * function (a role with none matches any), and titles that match once brackets, tails and
+ * arrangement words are set aside (sameRoleTitle in lib/scan/clean.ts). "Founding Commercial Lead"
+ * from one board and "Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain
+ * Software" from another are one role. Each group becomes one:
+ *  - the survivor is the one first seen earliest (it keeps that date), and takes every posting
+ *    link, the latest sighting, and any fact it lacks (rate, hours, type); its Job posting link is
+ *    the company's own site or ATS when one of the links is (bestPosting);
+ *  - every member who unlocked either copy holds the survivor's unlock, and a paid unlock of only
+ *    the copy now counts as one of the survivor, so a later close pays it back the same way;
+ *  - a member who paid for both gets the copy's credits back, once, with its own ledger line
+ *    (why "duplicate": "Refund for the same role listed twice");
+ *  - the copy's record goes; a person on it moves to the survivor.
+ * Only roles the scan itself added and that are still open, and never a copy a member wrote a
+ * fact on. Runs on every load of the state and after every scan, and changes nothing the second
+ * time. Returns how many copies it merged and how many refunds it wrote.
+ */
+export function mergeDuplicateRoles(s: State, seed: Seed, now: string): { merged: number; refunded: number } {
+  const byScan = new Set(s.engagements.filter((e) => e.by === "scan").map((e) => e.id));
+  const val = (id: string, field: string) => {
+    const v = s.values[fkey(id, field)];
+    return v && v.status === "live" ? v.value : null;
+  };
+  /** A fact on the copy that a member wrote: such a copy stays as it is. */
+  const memberWrote = (id: string) => Object.entries(s.values).some(([k, v]) => k.startsWith(`${id}.`) && !isSystem(v.by));
+  const open = Object.entries(s.scan.roles).filter(([, r]) => !r.closedAt && r.source !== "seed" && byScan.has(r.engagementId) && val(r.engagementId, "role"));
+  if (open.length < 2) return { merged: 0, refunded: 0 };
+  const seedCo = new Map(seed.companies.map((c) => [c.id, c.fields]));
+  const stateCo = new Map(s.companies.map((c) => [c.id, c.name]));
+  const sites = new Map<string, string | null>();
+  const names = new Map<string, string>();
+  const siteOf = (id: string) => {
+    if (!sites.has(id)) {
+      const v = s.values[fkey(id, "website")];
+      sites.set(id, hostOf(v ? (v.status === "live" ? v.value : null) : seedCo.get(id)?.website));
+    }
+    return sites.get(id)!;
+  };
+  const nameKey = (id: string) => {
+    if (!names.has(id)) names.set(id, companyKey(stateCo.get(id) ?? seedCo.get(id)?.name ?? ""));
+    return names.get(id)!;
+  };
+  /** The same company: one record, or the same website domain, or (when one has no website) the same cleaned name. */
+  const sameCo = (a: string, b: string) => {
+    if (a === b) return true;
+    const [x, y] = [siteOf(a), siteOf(b)];
+    if (x && y) return x === y;
+    const k = nameKey(a);
+    return !!k && k === nameKey(b);
+  };
+  // Oldest first: the first one a group meets is its survivor.
+  open.sort(([, a], [, b]) => a.firstSeen.localeCompare(b.firstSeen) || a.engagementId.localeCompare(b.engagementId));
+  const done = new Set<string>();
+  const emptied = new Map<string, string>(); // a copy's company -> the survivor's, when they are two records
+  let merged = 0;
+  let refunded = 0;
+  for (let i = 0; i < open.length; i++) {
+    const [, surv] = open[i];
+    if (done.has(surv.engagementId)) continue;
+    for (let j = i + 1; j < open.length; j++) {
+      const [dupKey, dup] = open[j];
+      if (done.has(dup.engagementId) || !sameCo(surv.companyId, dup.companyId)) continue;
+      const fa = val(surv.engagementId, "function");
+      const fb = val(dup.engagementId, "function");
+      if (fa && fb && fa !== fb) continue;
+      if (!sameRoleTitle(val(surv.engagementId, "role"), val(dup.engagementId, "role")) || memberWrote(dup.engagementId)) continue;
+      done.add(dup.engagementId);
+      refunded += mergeInto(s, surv, dup, siteOf(surv.companyId), now);
+      delete s.scan.roles[dupKey];
+      if (dup.companyId !== surv.companyId) emptied.set(dup.companyId, surv.companyId);
+      merged++;
+    }
+  }
+  // A copy filed under a second record of the company: that record goes when the scan added it and nothing else is on it.
+  for (const [from, to] of emptied) refunded += foldCompany(s, seed, from, to, now);
+  return { merged, refunded };
+}
+
+/**
+ * A company record the scan added, left with nothing once its role was merged into the same
+ * role at another record of the company: it goes, and whoever unlocked it holds the survivor's
+ * company. A member who paid for both companies gets the copy's credit back (why "duplicate").
+ * A record with anything else on it (a seat, a person, a fact a member wrote) stays.
+ */
+function foldCompany(s: State, seed: Seed, from: string, to: string, now: string): number {
+  if (seed.companies.some((c) => c.id === from) || !s.companies.some((c) => c.id === from && c.by === "scan")) return 0;
+  if (s.engagements.some((e) => e.companyId === from) || seed.engagements.some((e) => e.companyId === from)) return 0;
+  if (s.contacts.some((p) => p.companyId === from) || (seed.contacts ?? []).some((p) => p.companyId === from)) return 0;
+  if (Object.entries(s.values).some(([k, v]) => k.startsWith(`${from}.`) && !isSystem(v.by))) return 0;
+  const F = fkey(from, "identity");
+  const T = fkey(to, "identity");
+  if (s.unlocks[F]?.length) s.unlocks[T] = [...new Set([...(s.unlocks[T] ?? []), ...s.unlocks[F]])];
+  const paid = (ref: string) => (l: LedgerEntry) =>
+    l.reason === "unlock" && l.delta < 0 && l.ref === ref && !s.ledger.some((x) => x.reason === "refund" && x.why !== "duplicate" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at);
+  const paidTo = new Set(s.ledger.filter(paid(T)).map((l) => l.memberId));
+  const back = new Map<string, number>();
+  for (const l of s.ledger.filter(paid(F))) {
+    if (paidTo.has(l.memberId)) back.set(l.memberId, (back.get(l.memberId) ?? 0) - l.delta);
+    l.ref = T;
+  }
+  for (const l of s.ledger) if (l.reason === "refund" && l.ref === F) l.ref = T;
+  for (const [memberId, n] of back) s.ledger.push({ memberId, delta: n, reason: "refund", ref: T, at: now, why: "duplicate" });
+  s.companies = s.companies.filter((c) => c.id !== from);
+  for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const k of Object.keys(bag)) if (k.startsWith(`${from}.`)) delete bag[k];
+  for (const [m, ids] of Object.entries(s.follows)) if (ids.includes(from)) s.follows[m] = [...new Set(ids.map((x) => (x === from ? to : x)))];
+  return back.size;
+}
+
+/** Fold one copy of a role into its survivor (see mergeDuplicateRoles). Returns the refunds written. */
+function mergeInto(s: State, surv: RoleTrack, dup: RoleTrack, site: string | null, now: string): number {
+  const S = surv.engagementId;
+  const D = dup.engagementId;
+  // The track: every link, the latest sighting.
+  const links = keepLinks([surv.url, ...(surv.urls ?? []), dup.url, ...(dup.urls ?? [])]);
+  if (links.length > 1) surv.urls = links;
+  if (dup.lastSeen > surv.lastSeen) {
+    surv.lastSeen = dup.lastSeen;
+    surv.source = dup.source;
+    surv.url = dup.url || surv.url;
+    if (dup.misses === undefined) delete surv.misses;
+    else surv.misses = dup.misses;
+    if (dup.missAt === undefined) delete surv.missAt;
+    else surv.missAt = dup.missAt;
+    if (dup.absentAt === undefined) delete surv.absentAt;
+    else surv.absentAt = dup.absentAt;
+  }
+  if (!surv.postedAt && dup.postedAt) surv.postedAt = dup.postedAt;
+  if (dup.checkedAt && (!surv.checkedAt || dup.checkedAt < surv.checkedAt)) surv.checkedAt = dup.checkedAt;
+  // Facts: the company's own link, and any gap filled from the copy.
+  const sp = s.values[fkey(S, "posting")];
+  const best = bestPosting([sp?.status === "live" ? sp.value : null, ...links], site);
+  if (best && (!sp || (sp.status === "live" && isSystem(sp.by) && postingRank(best, site) < postingRank(sp.value, site)))) {
+    s.values[fkey(S, "posting")] = { value: best, by: "scan", at: sp?.at ?? now, status: "live" };
+    delete s.verifications[fkey(S, "posting")];
+  }
+  for (const f of ["rate", "hours", "type", "function"]) {
+    const dv = s.values[fkey(D, f)];
+    if (!s.values[fkey(S, f)] && dv && dv.status === "live") s.values[fkey(S, f)] = { ...dv };
+  }
+  // Unlocks: whoever unlocked either copy holds the survivor's.
+  for (const [k, ids] of Object.entries(s.unlocks)) {
+    if (!k.startsWith(`${D}.`)) continue;
+    const sk = `${S}.${k.slice(D.length + 1)}`;
+    s.unlocks[sk] = [...new Set([...(s.unlocks[sk] ?? []), ...ids])];
+  }
+  // Paid unlocks of the copy count as purchases of the survivor from now on (so a later close pays them back as usual), and a
+  // member who had bought both gets the copy's credits back, once. refundClosed counts that refund as settling one purchase.
+  const paid = (id: string) => (l: LedgerEntry) =>
+    l.reason === "unlock" && l.delta < 0 && l.ref.startsWith(`${id}.`) && !s.ledger.some((x) => x.reason === "refund" && x.why !== "duplicate" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at);
+  const paidSurv = new Set(s.ledger.filter(paid(S)).map((l) => l.memberId));
+  const back = new Map<string, { n: number; ref: string }>();
+  for (const l of s.ledger.filter(paid(D))) {
+    const sref = `${S}.${l.ref.slice(D.length + 1)}`;
+    if (paidSurv.has(l.memberId)) {
+      const b = back.get(l.memberId) ?? { n: 0, ref: sref };
+      b.n += -l.delta;
+      back.set(l.memberId, b);
+    }
+    l.ref = sref;
+  }
+  // A refund the copy already had (a role that closed and reopened) moves with its purchase.
+  for (const l of s.ledger) if (l.reason === "refund" && l.ref.startsWith(`${D}.`)) l.ref = `${S}.${l.ref.slice(D.length + 1)}`;
+  for (const [memberId, b] of back) s.ledger.push({ memberId, delta: b.n, reason: "refund", ref: b.ref, at: now, why: "duplicate" });
+  // The copy's record and facts go. A person on it, a benchmark rate, a claim or "This isn't me" moves to the survivor.
+  s.engagements = s.engagements.filter((e) => e.id !== D);
+  for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const k of Object.keys(bag)) if (k.startsWith(`${D}.`)) delete bag[k];
+  for (const p of s.contacts) if (p.engagementId === D) p.engagementId = S;
+  for (const b of s.benchRates) if (b.engagementId === D) b.engagementId = S;
+  for (const c of s.roleClaims ?? []) if (c.engagementId === D) c.engagementId = S;
+  for (const [m, ids] of Object.entries(s.notMine)) if (ids.includes(D)) s.notMine[m] = [...new Set(ids.map((x) => (x === D ? S : x)))];
+  return back.size;
+}
+
+/**
+ * The posting check, run after each scan (runScan): for the open roles the scan itself added
+ * (never one from our records or one a member added), the postings are fetched, the longest
+ * unchecked first, at most MAX_CHECKS fetches, 4 at a time, 8 seconds each (lib/scan/posting.ts).
+ * A role whose every posting is clearly closed closes now, closedBy "posting-closed", and its
+ * unlocks made after it was last listed are paid back as on any close (refundClosed). A role the
+ * scan saw listed at `skipSeenSince` or later is left for the next run: its board still lists it.
+ * Anything unclear changes nothing but the date it was checked.
+ */
+export async function checkOpenPostings(opts: { fetch: PostingFetch; now?: string; skipSeenSince?: string; max?: number }): Promise<PostingCheckResult> {
+  const [, s] = await Promise.all([loadSeed(), loadState()]);
+  const byScan = new Set(s.engagements.filter((e) => e.by === "scan").map((e) => e.id));
+  const targets = Object.entries(s.scan.roles)
+    .filter(([, r]) => !r.closedAt && r.source !== "seed" && byScan.has(r.engagementId) && !(opts.skipSeenSince && r.lastSeen >= opts.skipSeenSince))
+    .sort(([, a], [, b]) => (a.checkedAt ?? "").localeCompare(b.checkedAt ?? "") || a.lastSeen.localeCompare(b.lastSeen))
+    // Links are stored without their scheme ("acme.com/jobs/1"): they are fetched over https.
+    .map(([key, r]) => ({ key, urls: (r.urls?.length ? r.urls : [r.url]).filter(Boolean).map((u) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)), lastSeen: r.lastSeen }));
+  const out = await checkPostings(targets, { fetch: opts.fetch, max: opts.max });
+  const fetches = out.reduce((n, o) => n + o.fetches, 0);
+  if (!out.length) return { roles: 0, fetches, closed: 0, refunded: 0 };
+  const lastSeenOf = new Map(targets.map((t) => [t.key, t.lastSeen]));
+  return mutate((d, seedD): PostingCheckResult => {
+    const now = iso(opts.now, new Date().toISOString());
+    const closedNow: RoleTrack[] = [];
+    for (const o of out) {
+      const r = d.scan.roles[o.key];
+      // Seen again, closed or gone while the postings were fetched: what the scan knows now stands.
+      if (!r || r.closedAt || r.lastSeen !== lastSeenOf.get(o.key)) continue;
+      r.checkedAt = now;
+      if (o.verdict !== "closed" || !d.engagements.some((e) => e.id === r.engagementId)) continue;
+      r.closedAt = now;
+      r.closedBy = "posting-closed";
+      const sk = fkey(r.engagementId, "status");
+      const st = d.values[sk];
+      if (!st || st.status !== "live" || st.value === "Open role") {
+        delete d.verifications[sk];
+        d.values[sk] = { value: "Closed", by: "scan", at: now, status: "live" };
+      }
+      closedNow.push(r);
+    }
+    const g = graph(seedD, d);
+    const tracks = buildTracks(seedD, d);
+    const stillOpen = (companyId: string) => [...g.engagements.values()].some((e) => e.companyId === companyId && isOpenRole(e, d, tracks));
+    const refunded = refundClosed(d, closedNow, stillOpen, now);
+    return { roles: out.length, fetches, closed: closedNow.length, refunded };
+  });
+}
+
+/** Companies on Merlin with a website of their own, for career feed discovery: the most seats on file first. Never a firm or a placeholder. */
+function careerCompanies(seed: Seed, s: State): AtsCompany[] {
+  const g = graph(seed, s);
+  const seats = new Map<string, number>();
+  for (const e of g.engagements.values()) seats.set(e.companyId, (seats.get(e.companyId) ?? 0) + 1);
+  const out: { c: AtsCompany; n: number }[] = [];
+  for (const c of g.companies.values()) {
+    const site = live(c, s, "website");
+    const host = hostOf(site);
+    // A host many companies share (a LinkedIn page) is no company's own site.
+    if (!host || siteKey(site) !== host || !c.name || companyFirm(c.name)) continue;
+    out.push({ c: { name: c.name, domain: host }, n: seats.get(c.id) ?? 0 });
+  }
+  return out.sort((a, b) => b.n - a.n || a.c.name.localeCompare(b.c.name)).map((x) => x.c);
+}
+
+/**
+ * Career-page sources for this run (lib/scan/sources/ats.ts): discovery for the companies that are
+ * due, then one source per applicant tracking system over every board found so far. `save` keeps
+ * what discovery learned, and marks a board whose feed answered 404 for another look, in the
+ * state. Tests pass their own fetches.
+ */
+export async function careerSources(opts: { feed?: FeedFetch; site?: SiteFetch; now?: number; max?: number } = {}): Promise<{ sources: ScanSource[]; save: () => Promise<{ found: number; tried: number; gone: number }> }> {
+  const now = opts.now ?? Date.now();
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const companies = careerCompanies(seed, s);
+  const cache = s.scan.ats ?? {};
+  const fresh = await discover(companies, cache, { fetch: opts.feed ?? fetchFeed, site: opts.site, now, max: opts.max });
+  const all = { ...cache, ...fresh };
+  const byDomain = new Map(companies.map((c) => [c.domain.toLowerCase(), c]));
+  const boards = Object.entries(all).flatMap(([d, e]) => (e.board && byDomain.has(d) ? [{ board: e.board, company: byDomain.get(d)! }] : []));
+  const gone = new Set<string>();
+  const sources = atsSources(boards, { fetch: opts.feed ?? fetchFeed, gone: (d) => gone.add(d) });
+  const save = () =>
+    mutate((d) => {
+      const at = new Date(now).toISOString();
+      const ats = (d.scan.ats ??= {});
+      Object.assign(ats, fresh);
+      for (const x of gone) ats[x] = { at };
+      return { found: Object.values(fresh).filter((e) => e.board).length, tried: Object.keys(fresh).length, gone: gone.size };
+    });
+  return { sources, save };
 }
 
 export interface ScanRun {
@@ -5985,22 +6327,44 @@ let scanTriedAt = 0;
  * Scan the job boards, store what was found, then send the weekly email. One at a time: a second call joins the first.
  * `from` is for tests: boards to read in place of the real ones, and the scan's time.
  */
-export function runScan(origin?: string, from: { collect?: () => ReturnType<typeof collectOpenRoles>; now?: string } = {}): Promise<ScanRun> {
+export function runScan(
+  origin?: string,
+  from: { collect?: () => ReturnType<typeof collectOpenRoles>; now?: string; fetchPosting?: PostingFetch } = {},
+): Promise<ScanRun> {
   scanFlight ??= (async () => {
     const t0 = Date.now();
     scanTriedAt = t0;
     try {
-      // Tests never reach a job board.
-      const found = from.collect ? await from.collect() : process.env.RN_SCAN_TEST === "1" ? { roles: [], all: [], sources: [] } : await collectOpenRoles();
+      // Tests never reach a job board, a career feed or a posting.
+      const test = process.env.RN_SCAN_TEST === "1";
+      let found: Awaited<ReturnType<typeof collectOpenRoles>>;
+      if (from.collect) found = await from.collect();
+      else if (test) found = { roles: [], all: [], sources: [], seenKeys: [] };
+      else {
+        // The boards, and the career pages of companies on Merlin (discovered a few a run). A discovery that fails costs only those sources.
+        const careers = await careerSources().catch((e) => (console.error("career feed discovery failed", e), null));
+        try {
+          found = await collectOpenRoles({ sources: [...scanSources(), ...(careers?.sources ?? [])] });
+        } finally {
+          if (careers) await careers.save().then((c) => c.tried && console.log(`career feeds: looked up ${c.tried} companies, found ${c.found}, ${c.gone} feeds gone`)).catch((e) => console.error("career feed cache not saved", e));
+        }
+      }
       // Every role that passed the screen, not the capped list: a role still posted must be seen to stay open.
       const result = await applyScan({ roles: found.all, sources: found.sources, screenedOut: "screenedOut" in found ? found.screenedOut : [] }, from.now);
+      // The posting check: open roles whose every posting is clearly closed close now, before the weekly email counts them.
+      const postingFetch = from.fetchPosting ?? (test ? null : fetchPosting);
+      const posting = postingFetch
+        ? await checkOpenPostings({ fetch: postingFetch, now: from.now, skipSeenSince: result.at }).catch((e) => (console.error("posting check failed", e), null))
+        : null;
+      if (posting) result.postingClosed = posting.closed;
+      if (posting?.refunded) result.refunded = (result.refunded ?? 0) + posting.refunded;
       const digests = await sendDigests(result.at, origin).catch((e) => (console.error("digest failed", e), 0));
       // About texts for the companies without one, from their own websites (RN_ABOUT=1), in the background.
       if (aboutEnabled()) void import("./about/run").then((m) => m.runAbout()).catch((e) => console.error("about run failed", e));
       const failed = found.sources.filter((x) => x.error).length;
       console.log(
         `scan: ${found.all.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
-          `closed ${result.closed}, reopened ${result.reopened}, removed ${result.removed ?? 0} (${result.removedBelowBar ?? 0} below Director outside GTM), left out below Director ${result.belowBar ?? 0}, companies added ${result.companiesAdded}, left for a later run ${result.overCap ?? 0}, ` +
+          `closed ${result.closed} (${result.postingClosed ?? 0} by the posting check of ${posting?.roles ?? 0} roles, ${posting?.fetches ?? 0} fetches), merged ${result.merged ?? 0}, reopened ${result.reopened}, removed ${result.removed ?? 0} (${result.removedBelowBar ?? 0} below Director outside GTM), left out below Director ${result.belowBar ?? 0}, companies added ${result.companiesAdded}, left for a later run ${result.overCap ?? 0}, ` +
           `unlocks paid back ${result.refunded ?? 0}, emails ${digests}, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
       );
       return { result, sources: found.sources, digests };

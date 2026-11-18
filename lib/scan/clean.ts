@@ -102,7 +102,7 @@ const BOARDS = new Set(
     "careerbuilder", "craigslist", "remote.co", "dynamite jobs", "nodesk", "jobspresso", "justremote", "crossover", "braintrust",
     "catalant", "marketerhire", "growtal", "go fractional", "gofractional", "mayple", "robert half", "randstad", "adecco", "kforce",
     "insight global", "aquent", "creative circle", "korn ferry", "michael page", "hays", "manpower", "manpowergroup", "teksystems",
-    "hacker news", "reddit", "y combinator",
+    "hacker news", "reddit", "y combinator", "freehire", "freehire.me", "find fractional jobs", "findfractionaljobs",
   ].map(squeeze)
 );
 const BOARD_WORD = /\bjob ?boards?\b|\bjobs\b|\bcareers\b/i;
@@ -326,7 +326,7 @@ const NOT_COMPANY_HOSTS = [
   "typeform.com", "airtable.com", "tally.so", "jotform.com", "calendly.com", "bit.ly", "t.co", "lnkd.in", "twitter.com", "x.com",
   "facebook.com", "instagram.com", "youtube.com", "youtu.be", "tiktok.com", "medium.com", "substack.com", "github.com", "ycombinator.com",
   "crunchbase.com", "wikipedia.org", "gmail.com", "outlook.com", "yahoo.com", "hotmail.com", "icloud.com", "proton.me", "protonmail.com",
-  "reddit.com", "upwork.com", "toptal.com", "fiverr.com", "w3.org", "schema.org", "example.com",
+  "reddit.com", "freehire.me", "findfractionaljobs.com", "upwork.com", "toptal.com", "fiverr.com", "w3.org", "schema.org", "example.com",
 ];
 const SECOND_LEVEL = new Set(["co", "com", "org", "net", "ac", "gov", "edu"]);
 
@@ -387,4 +387,74 @@ export function companyDomain(company: string, opts: { companyUrl?: string | nul
     if (hostMatchesName(domain, company)) return domain;
   }
   return null;
+}
+
+/* ---------- the same role, listed twice ---------- */
+
+/** Words that say how the work is arranged, not what the job is. They never make two titles different. */
+const ARRANGEMENT_WORDS = new Set("fractional interim parttime contract contractor freelance freelancer remote".split(" "));
+
+/**
+ * A title as two listings of one role are compared: anything in brackets goes, then everything
+ * after the first " - ", " – ", " — ", ",", "|" or ":", then the words that only say how the work
+ * is arranged (fractional, interim, part-time, contract, freelance, remote), then case and
+ * punctuation. "Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software"
+ * and "Fractional Founding Commercial Lead" both read "founding commercial lead".
+ */
+export function normTitle(raw: unknown): string {
+  let s = plain(raw);
+  for (let i = 0; i < 3; i++) s = s.replace(/\s*[([{][^()[\]{}]*[)\]}]/g, " ");
+  s = s.split(/\s+[-–—]\s+|\s[–—]|[–—]\s|[,|:]/)[0] ?? "";
+  return s
+    .toLowerCase()
+    .replace(/part[\s-]*time/g, "parttime")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w && !ARRANGEMENT_WORDS.has(w))
+    .join(" ");
+}
+
+/**
+ * Two titles name the same role: their normalized forms (normTitle) are equal, or one is the
+ * start of the other, word for word, and at least 2 words long ("founding commercial lead" and
+ * "founding commercial lead wms"). Never for an empty title.
+ */
+export function sameRoleTitle(a: unknown, b: unknown): boolean {
+  const x = normTitle(a);
+  const y = normTitle(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return short.split(" ").length >= 2 && long.startsWith(short + " ");
+}
+
+/** Applicant tracking systems: a posting there is the company's own, published through its ATS. */
+const ATS_HOSTS = [
+  "greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "homerun.co", "recruitee.com", "teamtailor.com",
+  "bamboohr.com", "breezy.hr", "jobvite.com", "icims.com", "myworkdayjobs.com", "applytojob.com", "jazzhr.com", "rippling.com",
+  "pinpointhq.com", "personio.de", "personio.com", "workatastartup.com", "join.com", "dover.com",
+];
+
+/**
+ * How much a posting link is the company's own: 0 on its own website, 1 on its applicant tracking
+ * system, 2 anywhere else (a job board that copied it), 3 for no link. The Job posting link prefers the lowest.
+ */
+export function postingRank(url: unknown, domain?: string | null): number {
+  const host = hostOf(String(url ?? ""));
+  if (!host) return 3;
+  const own = domain ? hostOf(String(domain)) : null;
+  if (own && registrable(host) === registrable(own)) return 0;
+  if (ATS_HOSTS.some((b) => host === b || host.endsWith("." + b))) return 1;
+  return 2;
+}
+
+/** The link to show of several for one role: the company's own first (postingRank), then the first given. */
+export function bestPosting(urls: (string | null | undefined)[], domain?: string | null): string | null {
+  let best: string | null = null;
+  let rank = 99;
+  for (const u of urls) {
+    if (!u) continue;
+    const r = postingRank(u, domain);
+    if (r < rank) [best, rank] = [u, r];
+  }
+  return best;
 }

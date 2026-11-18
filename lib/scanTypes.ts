@@ -17,7 +17,10 @@ export interface ScanRole {
   function: string | null;
   /** One of ENGAGEMENT_TYPES ("Fractional", "Interim", "Advisory", "Project"), or null. */
   type: string | null;
+  /** The link to show: of every listing of this role, the company's own site or ATS first (bestPosting in lib/scan/clean.ts). */
   url: string;
+  /** Every posting link this role was found under, `url` included, when there is more than one (the same role on two boards). */
+  urls?: string[];
   /** Board or source name. */
   source: string;
   /** ISO date the posting went up, when known. */
@@ -75,6 +78,22 @@ export interface ScanApplyResult {
   removedBelowBar?: number;
   /** New roles left out because they are outside GTM and below Director (lib/seniority.ts). */
   belowBar?: number;
+  /** Open roles merged into another listing of the same role (lib/scan/clean.ts sameRoleTitle), and credits paid back for a role bought twice. */
+  merged?: number;
+  mergeRefunds?: number;
+  /** Open roles the posting check after the scan closed (every posting clearly closed). Set by runScan. */
+  postingClosed?: number;
+}
+
+/** What the posting check after a scan did (checkOpenPostings in lib/table.ts). */
+export interface PostingCheckResult {
+  /** Open roles whose postings were fetched, and how many fetches that took. */
+  roles: number;
+  fetches: number;
+  /** Roles closed because every posting of theirs was clearly closed. */
+  closed: number;
+  /** Unlocks paid back on those roles. */
+  refunded: number;
 }
 
 /** Everything one member's weekly email needs. No other member's data. */

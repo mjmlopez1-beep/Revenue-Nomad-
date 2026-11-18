@@ -10,9 +10,13 @@ import { spawnSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { cleanCompany, cleanTitle, companyDomain, isPlaceholderCompany, isRealCompany, roleKey, titleWithout } from "../lib/scan/clean";
+import { bestPosting, cleanCompany, cleanTitle, companyDomain, isPlaceholderCompany, isRealCompany, normTitle, postingRank, roleKey, sameRoleTitle, titleWithout } from "../lib/scan/clean";
+import { apiCheck, applyLinkOf, checkPosting, checkPostings, classifyPage, type Fetched, type PostingFetch } from "../lib/scan/posting";
+import { atsSources, boardFromUrl, careersLink, discover, discoverOne, dueForDiscovery, feedUrl, parseFeed, slugCandidates, type FeedFetch, type SiteFetch } from "../lib/scan/sources/ats";
+import { parseJobFeed } from "../lib/scan/sources/findfractionaljobs";
+import { parseFreehire } from "../lib/scan/sources/freehire";
 import { webLink } from "../lib/links";
-import { collectOpenRoles, dedupeRoles, gtmByTitle, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
+import { collectOpenRoles, dedupeRoles, gtmByTitle, MAX_ROLES, roleFunction, rolesFromRaw, roleType, scanSources, screenJob, type ScanRawJob } from "../lib/scan/collect";
 import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
 import { renderDigest } from "../lib/digest";
 import { signInEmail } from "../lib/email";
@@ -562,6 +566,362 @@ eq("past the cap, seenKeys still lists every role that passed", [overCap.roles.l
 eq("  and `all` hands every one of them over, newest first", overCap.all?.map((r) => r.company), ["Company 0", "Company 1", "Company 2", "Company 3", "Company 4"]);
 eq("malformed postings do not break rolesFromRaw", rolesFromRaw([null, job({})] as unknown as ScanRawJob[], NOW).length, 1);
 
+/* ---------- the same role on two boards ---------- */
+console.log("\nThe same role on two boards");
+
+eq(
+  "titles are compared without brackets, tails and arrangement words",
+  [
+    normTitle("Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software"),
+    normTitle("Fractional Founding Commercial Lead"),
+    normTitle("Interim VP of Sales - EMEA"),
+    normTitle("Part-Time Head of Growth | Remote"),
+    normTitle("Freelance CMO: B2B SaaS"),
+    normTitle("Contract RevOps Lead – US"),
+    normTitle("Go-to-Market Lead"),
+  ],
+  ["founding commercial lead", "founding commercial lead", "vp of sales", "head of growth", "cmo", "revops lead", "go to market lead"],
+);
+check("the owner's example: the two OpsBox titles are one role", sameRoleTitle("Founding Commercial Lead", "Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software"));
+check("one title the start of the other, 2 words or more, is one role", sameRoleTitle("Head of Marketing", "Head of Marketing Ecommerce"));
+check("  but a one-word start is not", !sameRoleTitle("CMO", "CMO Advisor"));
+check("different titles are not", !sameRoleTitle("VP of Sales", "VP of Marketing"));
+check("an empty title matches nothing", !sameRoleTitle("", "") && !sameRoleTitle("Fractional", "Fractional"));
+eq("posting links rank the company's own site, then its ATS, then a board", [postingRank("https://opsbox.example.com/careers/1", "opsbox.example.com"), postingRank("https://jobs.lever.co/opsbox/abc", "opsbox.example.com"), postingRank("https://freehire.me/jobs/x", "opsbox.example.com"), postingRank("", null)], [0, 1, 2, 3]);
+eq("bestPosting picks the company's own link", bestPosting(["https://www.fractionaljobs.io/jobs/a", "https://jobs.ashbyhq.com/opsbox/123", "https://careers.opsbox.example.com/1"], "opsbox.example.com"), "https://careers.opsbox.example.com/1");
+
+const opsFj = screenJob(
+  job({
+    title: "Founding Commercial Lead",
+    company: "OpsBox",
+    source: "fractionaljobs",
+    url: "https://www.fractionaljobs.io/jobs/founding-commercial-lead-at-opsbox",
+    fractionalBoard: true,
+    companyUrl: "https://opsbox.example",
+    description: "Fractional role listed on Fractional Jobs. Function: Sales.",
+    functionHint: "Sales",
+    rate: "$120/hr",
+    hoursPerWeek: 20,
+  }),
+  NOW,
+).role!;
+const opsFh = screenJob(
+  job({
+    title: "Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software",
+    company: "OpsBox",
+    source: "freehire",
+    url: "https://jobs.ashbyhq.com/opsbox/6d3e1c1a-0000-4000-8000-000000000001",
+    description: "OpsBox is hiring a fractional commercial lead to own sales for our WMS product.",
+  }),
+  NOW,
+).role!;
+check("both OpsBox listings pass the screen", !!opsFj && !!opsFh, [opsFj, opsFh]);
+check("  with different keys", opsFj && opsFh && opsFj.key !== opsFh.key);
+const opsOne = dedupeRoles([opsFj, opsFh]);
+eq("dedupeRoles keeps one role for the two", opsOne.length, 1);
+eq("  with both posting links", opsOne[0]?.urls?.length, 2);
+eq("  and shows the company's ATS link over the board's", opsOne[0]?.url, "https://jobs.ashbyhq.com/opsbox/6d3e1c1a-0000-4000-8000-000000000001");
+eq("  keeping the board's facts (rate, hours, domain)", [opsOne[0]?.rate, opsOne[0]?.hoursPerWeek, opsOne[0]?.domain], ["$120/hr", 20, "opsbox.example"]);
+const otherCo = dedupeRoles([opsFj, { ...opsFh, company: "Boxops", key: "boxops::x", domain: "boxops.example.com" }]);
+eq("another company's role of the same title stays its own", otherCo.length, 2);
+const otherFn = dedupeRoles([{ ...opsFj, title: "Head of Growth", function: "Growth" }, { ...opsFh, title: "Head of Growth Marketing", key: "opsbox::hgm", function: "Marketing" }]);
+eq("the same company and title start in another function stays its own", otherFn.length, 2);
+const byDomain = dedupeRoles([opsFj, { ...opsFh, company: "OpsBox Technologies Inc", key: "opsboxtech::x", domain: "opsbox.example" }]);
+eq("two names on one website domain are one company", byDomain.length, 1);
+const scanDup = await collectOpenRoles({
+  now: NOW,
+  sources: [
+    { name: "a", fetchJobs: async () => [job({ title: "Founding Commercial Lead", company: "OpsBox", url: "https://a.example.org/1", description: "We are hiring a fractional commercial lead to own sales." })] },
+    { name: "b", fetchJobs: async () => [job({ title: "Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software", company: "OpsBox", url: "https://b.example.org/2", description: "We are hiring a fractional commercial lead to own sales." })] },
+  ],
+});
+eq("collectOpenRoles hands over one role for the two boards", [scanDup.all.length, scanDup.all[0]?.urls?.length], [1, 2]);
+
+/* ---------- the posting check ---------- */
+console.log("\nThe posting check");
+
+const page = (status: number, text = "", url?: string): Fetched => ({ status, text, url: url ?? "" });
+const A = "https://acme.example.com/careers/fractional-vp-sales-123";
+eq("404 and 410 are clearly closed", [classifyPage(A, page(404)).verdict, classifyPage(A, page(410)).verdict], ["closed", "closed"]);
+eq(
+  "403, 429, 5xx, 401 and a network error change nothing",
+  [403, 429, 500, 502, 503, 401, 0].map((n) => classifyPage(A, page(n)).verdict),
+  ["unknown", "unknown", "unknown", "unknown", "unknown", "unknown", "unknown"],
+);
+eq("an open page with no closed words is open", classifyPage(A, page(200, "<h1>Fractional VP Sales</h1><p>Apply now</p>", A)).verdict, "open");
+const closedTexts = [
+  "We are no longer accepting applications for this role.",
+  "Sorry, this job is no longer available.",
+  "This position has been filled.",
+  "This job has expired.",
+  "This posting is closed.",
+  "This job posting is no longer active.",
+  "The job you are looking for is no longer open.",
+  "Applications for this role are now closed.",
+  "This role has already been filled",
+  "This position is no longer available",
+];
+for (const t of closedTexts) eq(`the page says closed: "${t}"`, classifyPage(A, page(200, `<main><p>${t}</p></main>`, A)).verdict, "closed");
+eq(
+  "the closed words inside a script, a style or a template do not count",
+  classifyPage(A, page(200, "<script>var msg='This job is no longer available'</script><template><p>This posting is closed.</p></template><p>Apply now</p>", A)).verdict,
+  "open",
+);
+eq("a page about something else does not count", classifyPage(A, page(200, "<p>We have no open roles in Finance right now. Apply for this one below.</p>", A)).verdict, "open");
+const idx = (to: string) => classifyPage(A, page(200, "<h1>Careers</h1>", to)).verdict;
+eq(
+  "a redirect to a careers or jobs index, the site root, a board's front page or Greenhouse's error page is closed",
+  [
+    idx("https://acme.example.com/careers"),
+    idx("https://acme.example.com/"),
+    idx("https://acme.example.com/en/jobs/"),
+    classifyPage("https://jobs.lever.co/acme/1234", page(200, "", "https://jobs.lever.co/acme")).verdict,
+    classifyPage("https://boards.greenhouse.io/acme/jobs/55", page(200, "", "https://job-boards.greenhouse.io/acme?error=true")).verdict,
+  ],
+  ["closed", "closed", "closed", "closed", "closed"],
+);
+eq(
+  "a redirect that keeps the posting (https, a slash, a code) or goes to another site changes nothing",
+  [idx("https://acme.example.com/careers/fractional-vp-sales-123/?utm=x"), idx("https://login.otherhost.example.net/"), idx("https://acme.example.com/careers/fractional-vp-sales-123-new")],
+  ["open", "open", "open"],
+);
+const fjOpenPage = `<div class="home-jobs_hiring-block-jobs w-condition-invisible"><h2>How Syndicated Job Posts Work</h2></div><a href="https://www.fractionaljobs.io/jobs/x#" class="fs_modal-1_button button no-cookie-button w-button">View Application</a><a href="https://jobs.ashbyhq.com/acme/6d3e1c1a-0000-4000-8000-000000000002" target="_blank" class="button is-secondary checked-cookie-btn w-button" style="display: none;">View Application</a><div class="home-jobs_hiring-block-jobs"><h2 class="heading-style-h4">This Role is Closed</h2><div>This company has already made a successful hire.</div></div>`;
+eq("fractionaljobs.io's closed block is in every posting, so its words are not read", classifyPage("https://www.fractionaljobs.io/jobs/x", page(200, fjOpenPage, "https://www.fractionaljobs.io/jobs/x"), false).verdict, "open");
+eq("  its employer's application link is found", applyLinkOf(fjOpenPage), "https://jobs.ashbyhq.com/acme/6d3e1c1a-0000-4000-8000-000000000002");
+eq(
+  "ATS links are checked through the system's own API",
+  [
+    apiCheck("https://boards.greenhouse.io/acme/jobs/4012345")?.api,
+    apiCheck("https://job-boards.greenhouse.io/acme/jobs/4012345?gh_src=x")?.api,
+    apiCheck("https://boards.greenhouse.io/embed/job_app?for=acme&token=4012345")?.api,
+    apiCheck("https://jobs.lever.co/acme/0c3f9a3e-1111-4222-8333-444455556666")?.api,
+    apiCheck("https://jobs.ashbyhq.com/acme/6d3e1c1a-0000-4000-8000-000000000002")?.api,
+    apiCheck("https://apply.workable.com/acme/j/AB12CD34EF/")?.api,
+    apiCheck("https://jobs.smartrecruiters.com/Acme/743999912345678-fractional-cmo")?.api,
+    apiCheck("https://acme.example.com/careers/1"),
+  ],
+  [
+    "https://boards-api.greenhouse.io/v1/boards/acme/jobs/4012345",
+    "https://boards-api.greenhouse.io/v1/boards/acme/jobs/4012345",
+    "https://boards-api.greenhouse.io/v1/boards/acme/jobs/4012345",
+    "https://api.lever.co/v0/postings/acme/0c3f9a3e-1111-4222-8333-444455556666",
+    "https://api.ashbyhq.com/posting-api/job-board/acme",
+    "https://apply.workable.com/api/v1/widget/accounts/acme",
+    "https://api.smartrecruiters.com/v1/companies/Acme/postings/743999912345678",
+    null,
+  ],
+);
+const ashby = apiCheck("https://jobs.ashbyhq.com/acme/6d3e1c1a-0000-4000-8000-000000000002")!;
+eq(
+  "Ashby: closed when the board answers without the job, open with it, unclear when the board is gone or down",
+  [
+    ashby.read(page(200, JSON.stringify({ jobs: [{ id: "other" }] }))).verdict,
+    ashby.read(page(200, JSON.stringify({ jobs: [{ id: "6d3e1c1a-0000-4000-8000-000000000002" }] }))).verdict,
+    ashby.read(page(404)).verdict,
+    ashby.read(page(503)).verdict,
+    ashby.read(page(200, "<html>")).verdict,
+  ],
+  ["closed", "open", "unknown", "unknown", "unknown"],
+);
+const gh = apiCheck("https://boards.greenhouse.io/acme/jobs/4012345")!;
+eq("Greenhouse, Lever and SmartRecruiters: the job's 404 is closed, 200 open, 429 unclear", [gh.read(page(404)).verdict, gh.read(page(200, "{}")).verdict, gh.read(page(429)).verdict], ["closed", "open", "unknown"]);
+const wk = apiCheck("https://apply.workable.com/acme/j/AB12CD34EF/")!;
+eq("Workable: by the job's shortcode on the account's list", [wk.read(page(200, JSON.stringify({ jobs: [{ shortcode: "AB12CD34EF" }] }))).verdict, wk.read(page(200, JSON.stringify({ jobs: [] }))).verdict], ["open", "closed"]);
+
+/** A fake web: address -> answer. Anything else is a network error. Every fetch is counted, with how many run at once. */
+function fakeWeb(pages: Record<string, Fetched | (() => Promise<Fetched>)>) {
+  const calls: string[] = [];
+  let now = 0;
+  let peak = 0;
+  const fetch: PostingFetch = async (url) => {
+    calls.push(url);
+    now++;
+    peak = Math.max(peak, now);
+    await new Promise((r) => setTimeout(r, 2));
+    try {
+      const p = pages[url];
+      if (!p) return { status: 0, url, text: "" };
+      const out = typeof p === "function" ? await p() : p;
+      return { ...out, url: out.url || url };
+    } finally {
+      now--;
+    }
+  };
+  return { fetch, calls, peak: () => peak };
+}
+const fjUrl = "https://www.fractionaljobs.io/jobs/founding-commercial-lead-at-acme";
+const web = fakeWeb({
+  [A]: page(404),
+  "https://boards-api.greenhouse.io/v1/boards/acme/jobs/1": page(404),
+  "https://boards-api.greenhouse.io/v1/boards/acme/jobs/2": page(200, "{}"),
+  [fjUrl]: page(200, fjOpenPage),
+  "https://api.ashbyhq.com/posting-api/job-board/acme": page(200, JSON.stringify({ jobs: [] })),
+  "https://slow.example.com/job/1": () => new Promise<Fetched>((r) => setTimeout(() => r(page(0)), 5)),
+});
+eq("checkPosting follows a fractionaljobs.io posting to its employer's ATS", [(await checkPosting(fjUrl, web.fetch)).verdict, (await checkPosting(fjUrl, web.fetch)).fetches], ["closed", 2]);
+const outcomes = await checkPostings(
+  [
+    { key: "gone", urls: [A] },
+    { key: "both-gone", urls: ["https://boards.greenhouse.io/acme/jobs/1", A] },
+    { key: "one-up", urls: ["https://boards.greenhouse.io/acme/jobs/1", "https://boards.greenhouse.io/acme/jobs/2"] },
+    { key: "timeout", urls: ["https://slow.example.com/job/1"] },
+    { key: "nolink", urls: [] },
+  ],
+  { fetch: web.fetch },
+);
+const verdict = (k: string) => outcomes.find((o) => o.key === k)?.verdict;
+eq("a role closes only when every posting of it is clearly closed", [verdict("gone"), verdict("both-gone"), verdict("one-up"), verdict("timeout"), verdict("nolink")], ["closed", "closed", "open", "open", undefined]);
+const manyWeb = fakeWeb(Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`https://co${i}.example.com/job/${i}`, page(404)])));
+const budget = await checkPostings(Array.from({ length: 400 }, (_, i) => ({ key: `k${i}`, urls: [`https://co${i}.example.com/job/${i}`] })), { fetch: manyWeb.fetch });
+eq("at most 300 fetches a run, the first in line first", [manyWeb.calls.length, budget.length, budget.some((o) => o.key === "k0"), budget.some((o) => o.key === "k399")], [300, 300, true, false]);
+check("  and never more than 4 at once", manyWeb.peak() <= 4, manyWeb.peak());
+
+/* ---------- career pages of companies on Merlin ---------- */
+console.log("\nCareer feeds");
+
+eq(
+  "boards from links on the five systems",
+  [
+    boardFromUrl("https://boards.greenhouse.io/acmerobotics/jobs/123"),
+    boardFromUrl("https://job-boards.greenhouse.io/acmerobotics"),
+    boardFromUrl("https://boards.greenhouse.io/embed/job_board?for=acmerobotics"),
+    boardFromUrl("https://jobs.lever.co/acme/abc"),
+    boardFromUrl("https://jobs.ashbyhq.com/Acme"),
+    boardFromUrl("https://apply.workable.com/acme-co/"),
+    boardFromUrl("https://acme.workable.com/"),
+    boardFromUrl("https://jobs.smartrecruiters.com/AcmeInc/123"),
+    boardFromUrl("https://www.acme.com/careers"),
+    boardFromUrl("https://jobs.lever.co/"),
+  ],
+  [
+    { ats: "greenhouse", slug: "acmerobotics" },
+    { ats: "greenhouse", slug: "acmerobotics" },
+    { ats: "greenhouse", slug: "acmerobotics" },
+    { ats: "lever", slug: "acme" },
+    { ats: "ashby", slug: "acme" },
+    { ats: "workable", slug: "acme-co" },
+    { ats: "workable", slug: "acme" },
+    { ats: "smartrecruiters", slug: "acmeinc" },
+    null,
+    null,
+  ],
+);
+eq("board names a company would pick", slugCandidates({ name: "Acme Robotics, Inc.", domain: "getacme.com" }), ["getacme", "acmerobotics", "acme-robotics"]);
+eq("its careers page, when the home page links one", careersLink('<a href="/about">About</a><a href="/company/careers">Careers</a>', "acme.example.com"), "https://acme.example.com/company/careers");
+const co = { name: "Acme Robotics", domain: "acmerobotics.example" };
+const ghFeed = { jobs: [{ title: "Fractional VP of Sales", absolute_url: "https://boards.greenhouse.io/acmerobotics/jobs/1", updated_at: daysAgo(3), first_published: daysAgo(4), location: { name: "Remote" }, content: "&lt;p&gt;A fractional VP of Sales, 15 hrs/week.&lt;/p&gt;" }, { title: "Senior Software Engineer", absolute_url: "https://boards.greenhouse.io/acmerobotics/jobs/2", updated_at: daysAgo(3), content: "&lt;p&gt;Full-time, with benefits.&lt;/p&gt;" }] };
+const leverFeed = [{ text: "Interim Head of Marketing", hostedUrl: "https://jobs.lever.co/acme/aaa", createdAt: NOW - 2 * 86_400_000, categories: { commitment: "Contract", location: "Remote", team: "Marketing" }, descriptionPlain: "An interim Head of Marketing for six months at acmerobotics.example.", lists: [] }];
+const ashbyFeed = { jobs: [{ id: "u1", title: "Fractional CRO", jobUrl: "https://jobs.ashbyhq.com/acme/u1", publishedAt: daysAgo(1), descriptionPlain: "A fractional CRO.", isListed: true, department: "Sales" }, { id: "u2", title: "Hidden", jobUrl: "https://jobs.ashbyhq.com/acme/u2", isListed: false }] };
+const workableFeed = { name: "Acme Robotics", jobs: [{ title: "Fractional CMO", shortcode: "AB12", url: "https://apply.workable.com/j/AB12", published_on: daysAgo(2).slice(0, 10), description: "A fractional CMO.", telecommuting: true }] };
+const srFeed = { totalFound: 1, content: [{ id: "7439999", name: "Fractional Head of RevOps", releasedDate: daysAgo(2), company: { identifier: "AcmeRobotics", name: "Acme Robotics" }, location: { city: "Austin", country: "us" }, typeOfEmployment: { label: "Contract" }, function: { label: "Sales" } }] };
+const parsed5 = [
+  parseFeed({ ats: "greenhouse", slug: "acmerobotics" }, ghFeed, co),
+  parseFeed({ ats: "lever", slug: "acme" }, leverFeed, co),
+  parseFeed({ ats: "ashby", slug: "acme" }, ashbyFeed, co),
+  parseFeed({ ats: "workable", slug: "acme" }, workableFeed, co),
+  parseFeed({ ats: "smartrecruiters", slug: "acmerobotics" }, srFeed, co),
+];
+eq("each system's feed is read", parsed5.map((p) => p?.length), [2, 1, 1, 1, 1]);
+eq(
+  "  under the Merlin company and its website",
+  parsed5.map((p) => [p?.[0]?.company, p?.[0]?.companyUrl, p?.[0]?.source]),
+  ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"].map((a) => ["Acme Robotics", "https://acmerobotics.example", `careers:${a}`]),
+);
+eq("  with the posting's own link", parsed5.map((p) => p?.[0]?.url), ["https://boards.greenhouse.io/acmerobotics/jobs/1", "https://jobs.lever.co/acme/aaa", "https://jobs.ashbyhq.com/acme/u1", "https://apply.workable.com/j/AB12", "https://jobs.smartrecruiters.com/AcmeRobotics/7439999"]);
+eq("a body that is not the feed is not read", [parseFeed({ ats: "greenhouse", slug: "x" }, { error: "nope" }, co), parseFeed({ ats: "lever", slug: "x" }, { ok: false }, co)], [null, null]);
+const feedRoles = rolesFromRaw(parsed5.flatMap((p) => p ?? []), NOW);
+eq(
+  "the feeds' postings go through the usual screen: the full-time engineer is left out",
+  feedRoles.map((r) => r.title).sort(),
+  ["Fractional CMO", "Fractional CRO", "Fractional Head of RevOps", "Fractional VP of Sales", "Interim Head of Marketing"],
+);
+check("  and each is filed under the company's own domain", feedRoles.every((r) => r.domain === "acmerobotics.example"), feedRoles.map((r) => r.domain));
+
+/** A fake set of feeds and sites for discovery. */
+function fakeFeeds(feeds: Record<string, { status: number; body?: unknown }>, sites: Record<string, string> = {}) {
+  const calls: string[] = [];
+  const feed: FeedFetch = async (url) => {
+    calls.push(url);
+    const f = feeds[url];
+    return f ? { status: f.status, text: typeof f.body === "string" ? f.body : JSON.stringify(f.body ?? {}) } : { status: 404, text: "" };
+  };
+  const site: SiteFetch = async (domain, address) => {
+    calls.push(address ?? `site:${domain}`);
+    const html = sites[address ?? domain];
+    return html === undefined ? { status: 0, text: "" } : { status: 200, text: html };
+  };
+  return { feed, site, calls };
+}
+const linked = fakeFeeds({ "https://api.lever.co/v0/postings/acme-hq?mode=json": { status: 200, body: leverFeed } }, { "acmerobotics.example": '<a href="https://jobs.lever.co/acme-hq">Jobs</a>' });
+eq("a board linked from the company's site is taken", await discoverOne(co, linked.feed, linked.site), { board: { ats: "lever", slug: "acme-hq" }, via: "site" });
+const viaCareers = fakeFeeds(
+  { "https://api.ashbyhq.com/posting-api/job-board/acmerobo": { status: 200, body: { jobs: [] } } },
+  { "acmerobotics.example": '<a href="/careers">Careers</a>', "https://acmerobotics.example/careers": '<iframe src="https://jobs.ashbyhq.com/acmerobo/embed"></iframe>' },
+);
+eq("  or from its careers page", (await discoverOne(co, viaCareers.feed, viaCareers.site))?.board, { ats: "ashby", slug: "acmerobo" });
+const guessed = fakeFeeds({ "https://boards-api.greenhouse.io/v1/boards/acmerobotics": { status: 200, body: { name: "Acme Robotics" } } });
+eq("a guessed Greenhouse board counts when its name is the company's", (await discoverOne(co, guessed.feed, guessed.site))?.board, { ats: "greenhouse", slug: "acmerobotics" });
+const wrong = fakeFeeds({ "https://boards-api.greenhouse.io/v1/boards/acmerobotics": { status: 200, body: { name: "Acme Robotics Plumbing of Ohio" } }, "https://api.lever.co/v0/postings/acmerobotics?mode=json": { status: 200, body: [{ text: "Plumber", hostedUrl: "https://jobs.lever.co/acmerobotics/1", descriptionPlain: "Fix pipes." }] } });
+eq("  and not when it belongs to someone else", await discoverOne(co, wrong.feed, wrong.site), null);
+check("  a guess tries at most 2 names on 5 systems, plus the site", wrong.calls.length <= 11, wrong.calls);
+const cos = Array.from({ length: 50 }, (_, i) => ({ name: `Co ${i}`, domain: `co${i}.example.com` }));
+const cache = {
+  "co0.example.com": { at: new Date(NOW - 5 * 86_400_000).toISOString() },
+  "co1.example.com": { at: new Date(NOW - 40 * 86_400_000).toISOString() },
+  "co2.example.com": { at: new Date(NOW - 90 * 86_400_000).toISOString(), board: { ats: "lever" as const, slug: "co2" } },
+};
+const due = dueForDiscovery(cos, cache, NOW);
+eq("discovery: at most 30 a run, new ones first, a miss again only after 30 days, a found board never", [due.length, due.some((c) => c.domain === "co0.example.com"), due.some((c) => c.domain === "co2.example.com"), due[0]?.domain], [30, false, false, "co3.example.com"]);
+const due2 = dueForDiscovery(cos.slice(0, 3), cache, NOW);
+eq("  the month-old miss is tried again", due2.map((c) => c.domain), ["co1.example.com"]);
+const disc = fakeFeeds({ "https://boards-api.greenhouse.io/v1/boards/co5": { status: 200, body: { name: "Co 5" } } });
+const learned = await discover(cos.slice(4, 7), {}, { fetch: disc.feed, site: disc.site, now: NOW });
+eq("  what it learns, found or not, is dated for the cache", Object.entries(learned).map(([d, e]) => [d, e.board?.slug ?? null, e.at]), [["co4.example.com", null, new Date(NOW).toISOString()], ["co5.example.com", "co5", new Date(NOW).toISOString()], ["co6.example.com", null, new Date(NOW).toISOString()]]);
+const goneDomains: string[] = [];
+const feedsUp = fakeFeeds({ [feedUrl({ ats: "greenhouse", slug: "acmerobotics" })]: { status: 200, body: ghFeed }, [feedUrl({ ats: "lever", slug: "gone" })]: { status: 404 } });
+const srcs = atsSources(
+  [
+    { board: { ats: "greenhouse", slug: "acmerobotics" }, company: co },
+    { board: { ats: "lever", slug: "gone" }, company: { name: "Gone Co", domain: "gone.example.com" } },
+  ],
+  { fetch: feedsUp.feed, gone: (d) => goneDomains.push(d) },
+);
+const careersScan = await collectOpenRoles({ now: NOW, sources: srcs });
+eq("one source per system", careersScan.sources.map((x) => x.source), ["careers:greenhouse", "careers:lever"]);
+eq("  a system whose every feed failed reports an error, the others go on", [careersScan.sources[0].matched, !!careersScan.sources[1].error, careersScan.all.length], [1, true, 1]);
+eq("  a feed that answers 404 is passed back for another look", goneDomains, ["gone.example.com"]);
+
+/* ---------- more boards ---------- */
+console.log("\nMore boards");
+
+const fffXml = `<?xml version="1.0"?><rss><channel><title>Jobs</title>
+<item><title>Fractional VP of Sales</title><link>https://findfractionaljobs.com/job/fractional-vp-of-sales/</link><pubDate>${new Date(NOW - 3 * 86_400_000).toUTCString()}</pubDate>
+<description><![CDATA[Short.]]></description><content:encoded><![CDATA[<p>Lumen Freight is hiring a fractional VP of Sales to build pipeline, 20 hours a week.</p>]]></content:encoded>
+<job_listing:location><![CDATA[Remote]]></job_listing:location><job_listing:job_type><![CDATA[Contract]]></job_listing:job_type><job_listing:job_category><![CDATA[Sales, Executive]]></job_listing:job_category><job_listing:company><![CDATA[Lumen Freight]]></job_listing:company></item>
+<item><title>Fractional Integrator</title><link>https://findfractionaljobs.com/job/fractional-integrator/</link><pubDate>${new Date(NOW - 3 * 86_400_000).toUTCString()}</pubDate><content:encoded><![CDATA[<p>Run operations.</p>]]></content:encoded><job_listing:job_category><![CDATA[Operations]]></job_listing:job_category></item>
+</channel></rss>`;
+const fff = parseJobFeed(fffXml);
+eq("findfractionaljobs.com: each item of the RSS feed is read", fff.map((j) => [j.title, j.company, j.functionHint, j.fractionalBoard]), [["Fractional VP of Sales", "Lumen Freight", "Sales", true], ["Fractional Integrator", "", "Operations", true]]);
+eq("  through the screen: the named GTM role stays, the one with no company goes", rolesFromRaw(fff, NOW).map((r) => `${r.company} | ${r.title} | ${r.function}`), ["Lumen Freight | Fractional VP of Sales | Sales"]);
+eq("  a page that is not the feed gives nothing", parseJobFeed("<html></html>").length, 0);
+const fh = parseFreehire({
+  data: [
+    { public_slug: "a1", title: "Fractional CMO", company: "Quill Health", url: "https://jobs.lever.co/quill/abc", posted_at: daysAgo(2), description: "A fractional CMO." },
+    { public_slug: "a2", title: "Fractional CFO", company: "Shut Co", url: "https://x.example.com", closed_at: daysAgo(1) },
+    { public_slug: "a3", title: "Interim CRO", company: "Agency", via_recruiter: true },
+    { public_slug: "a4", title: "Fractional Head of Growth", company: "Direct Co", direct_apply: true, url: "" },
+  ],
+});
+eq("freehire.me: open postings, the employer's link first, its own page when there is none", fh.map((j) => [j.title, j.url]), [["Fractional CMO", "https://jobs.lever.co/quill/abc"], ["Fractional Head of Growth", "https://freehire.me/jobs/a4"]]);
+const keyWas = process.env.RN_FREEHIRE_KEY;
+delete process.env.RN_FREEHIRE_KEY;
+check("  without its API plan key the scan leaves freehire out", !scanSources().some((x) => x.name === "freehire") && scanSources().some((x) => x.name === "findfractionaljobs"));
+process.env.RN_FREEHIRE_KEY = "test-key";
+check("  with the key it is read", scanSources().some((x) => x.name === "freehire"));
+if (keyWas === undefined) delete process.env.RN_FREEHIRE_KEY;
+else process.env.RN_FREEHIRE_KEY = keyWas;
+check("job boards are never a company: freehire and findfractionaljobs", !isRealCompany("freehire") && !isRealCompany("Find Fractional Jobs"));
+
 /* ---------- digest ---------- */
 console.log("\nDigest");
 
@@ -712,6 +1072,10 @@ const SCENARIOS: [string, string][] = [
   ["notfractional", "A full-time job an older screen let in, listed again"],
   ["seniority", "Roles outside GTM below Director"],
   ["functions", "Functions outside GTM, and the roles an older scan filed under Executive"],
+  ["postingcheck", "The posting check closes a role whose posting is gone"],
+  ["intake", "The same role from two boards"],
+  ["dupes", "Duplicates already on the table, merged on load"],
+  ["careers", "Career pages of companies on Merlin"],
 ];
 for (const [name, title] of SCENARIOS) {
   console.log(`\nStored scans: ${title}`);

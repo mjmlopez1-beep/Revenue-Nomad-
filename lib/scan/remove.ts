@@ -90,10 +90,18 @@ export function removeScreenedOut(s: State, screenedOut: unknown, ctx: Ctx): { r
   const whyOf = (ref: string): "offbar" | "removed" =>
     ownedBy(ref, offBar) || (identity.has(ref) && offBarCo.has(ref.slice(0, ref.lastIndexOf(".")))) ? "offbar" : "removed";
 
+  // A purchase settled when two listings of the role were merged (a "duplicate" refund, mergeDuplicateRoles in lib/table.ts) is not paid back again.
+  const settled = new Map<string, number>();
+  for (const x of s.ledger) if (x.reason === "refund" && x.why === "duplicate") settled.set(`${x.memberId}|${x.ref}`, (settled.get(`${x.memberId}|${x.ref}`) ?? 0) + x.delta);
   let refunded = 0;
   for (const l of [...s.ledger]) {
     if (l.reason !== "unlock" || l.delta >= 0 || !(ownedBy(l.ref, refundIds) || identity.has(l.ref))) continue;
-    if (s.ledger.some((x) => x.reason === "refund" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at)) continue; // already paid back
+    if (s.ledger.some((x) => x.reason === "refund" && x.why !== "duplicate" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at)) continue; // already paid back
+    const left = settled.get(`${l.memberId}|${l.ref}`) ?? 0;
+    if (left >= -l.delta) {
+      settled.set(`${l.memberId}|${l.ref}`, left + l.delta);
+      continue;
+    }
     s.ledger.push({ memberId: l.memberId, delta: -l.delta, reason: "refund", ref: l.ref, at: ctx.now, why: whyOf(l.ref) });
     refunded++;
   }

@@ -28,7 +28,9 @@ import * as remoteok from "../crawler/sources/remoteok";
 import * as weworkremotely from "../crawler/sources/weworkremotely";
 import * as greenhouse from "../crawler/sources/greenhouse";
 import * as fractionaljobs from "./sources/fractionaljobs";
-import { cleanCompany, cleanTitle, companyDomain, isRealCompany, plain, roleKey } from "./clean";
+import * as findfractionaljobs from "./sources/findfractionaljobs";
+import * as freehire from "./sources/freehire";
+import { bestPosting, cleanCompany, cleanTitle, companyDomain, companyKey, isRealCompany, plain, roleKey, sameRoleTitle } from "./clean";
 import { isDirectorPlus, isGtmFunction, keepsNonGtm } from "../seniority";
 
 /** A raw posting, plus facts a board gives as fields of their own instead of in the text. */
@@ -47,13 +49,20 @@ export interface ScanRawJob extends RawJob {
 export interface ScanSource {
   name: string;
   fetchJobs: () => Promise<ScanRawJob[]>;
+  /** Its own time limit, for a source that reads many feeds (lib/scan/sources/ats.ts). Else SOURCE_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 /**
  * Boards that carry listings. Hacker News and Reddit are left out: they only return discussion
  * threads, which the scan never uses. Greenhouse reads the boards named in RN_GREENHOUSE_BOARDS.
+ * findfractionaljobs.com is read through its public RSS feed. Career pages of companies on Merlin
+ * (lib/scan/sources/ats.ts) are added by runScan in lib/table.ts, which knows the companies.
  */
-export const SCAN_SOURCES: ScanSource[] = [fractionaljobs, remotive, remoteok, weworkremotely, greenhouse];
+export const SCAN_SOURCES: ScanSource[] = [fractionaljobs, remotive, remoteok, weworkremotely, greenhouse, findfractionaljobs];
+
+/** SCAN_SOURCES, and freehire.me when its API plan key is set (RN_FREEHIRE_KEY, see lib/scan/sources/freehire.ts). */
+export const scanSources = (): ScanSource[] => (freehire.configured() ? [...SCAN_SOURCES, freehire] : SCAN_SOURCES);
 
 export const MAX_ROLES = 60;
 export const STALE_DAYS = 60;
@@ -293,13 +302,72 @@ const detail = (r: ScanRole) => [r.domain, r.rate, r.hoursPerWeek, r.postedAt, r
 const posted = (r: ScanRole) => (r.postedAt ? Date.parse(r.postedAt) : 0);
 
 /**
- * One role per key. The posting with the most detail wins (then the newest), and takes any
- * fact it lacks from the others, since they describe the same seat.
+ * The same company: by website domain when both listings give one, else by cleaned name
+ * (companyKey: legal suffixes, brackets, a leading "The", case and accents aside).
+ */
+export function sameCompany(a: Pick<ScanRole, "company" | "domain">, b: Pick<ScanRole, "company" | "domain">): boolean {
+  if (a.domain && b.domain) return a.domain.toLowerCase().replace(/^www\./, "") === b.domain.toLowerCase().replace(/^www\./, "");
+  const k = companyKey(a.company);
+  return !!k && k === companyKey(b.company);
+}
+
+/**
+ * Two listings are one role: the same company (sameCompany), the same function (a listing whose
+ * function is unclear matches any), and titles that match once arrangement words, brackets and
+ * tails are set aside (sameRoleTitle). "Founding Commercial Lead" on one board and "Founding
+ * Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software" on another are one.
+ */
+export function sameRole(a: Pick<ScanRole, "company" | "domain" | "title" | "function">, b: Pick<ScanRole, "company" | "domain" | "title" | "function">): boolean {
+  if (a.function && b.function && a.function !== b.function) return false;
+  return sameCompany(a, b) && sameRoleTitle(a.title, b.title);
+}
+
+/** Every listing's links, the first of each once. */
+const linksOf = (group: ScanRole[]) => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of group)
+    for (const u of [r.url, ...(r.urls ?? [])]) {
+      const k = String(u ?? "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#]+$/, "");
+      if (!u || !k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(u);
+    }
+  return out;
+};
+
+/**
+ * One role per key, and one per role listed twice (sameRole). The posting with the most detail
+ * wins (then the newest), and takes any fact it lacks from the others, since they describe the
+ * same seat. It keeps every listing's link in `urls`, and `url` is the company's own site or ATS
+ * when one of them is there (bestPosting), else the winner's.
  */
 export function dedupeRoles(roles: ScanRole[]): ScanRole[] {
-  const byKey = new Map<string, ScanRole[]>();
-  for (const r of roles) byKey.set(r.key, [...(byKey.get(r.key) ?? []), r]);
-  return [...byKey.values()].map((group) => {
+  // Listings of one role: the same key, or sameRole. Union-find over buckets of one company name and of one domain.
+  const parent = roles.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const join = (i: number, j: number) => {
+    const a = find(i);
+    const b = find(j);
+    if (a !== b) parent[Math.max(a, b)] = Math.min(a, b);
+  };
+  const buckets = new Map<string, number[]>();
+  roles.forEach((r, i) => {
+    for (const b of [`k:${r.key}`, `n:${companyKey(r.company)}`, r.domain ? `d:${r.domain.toLowerCase().replace(/^www\./, "")}` : ""]) {
+      if (!b || b === "n:") continue;
+      buckets.set(b, [...(buckets.get(b) ?? []), i]);
+    }
+  });
+  for (const [b, ids] of buckets) {
+    if (b.startsWith("k:")) {
+      for (const i of ids.slice(1)) join(ids[0], i);
+      continue;
+    }
+    for (let x = 0; x < ids.length; x++) for (let y = x + 1; y < ids.length; y++) if (find(ids[x]) !== find(ids[y]) && sameRole(roles[ids[x]], roles[ids[y]])) join(ids[x], ids[y]);
+  }
+  const groups = new Map<number, ScanRole[]>();
+  roles.forEach((r, i) => groups.set(find(i), [...(groups.get(find(i)) ?? []), r]));
+  return [...groups.values()].map((group) => {
     const [best, ...rest] = [...group].sort((a, b) => detail(b) - detail(a) || posted(b) - posted(a));
     const merged = { ...best };
     for (const other of rest) {
@@ -308,6 +376,11 @@ export function dedupeRoles(roles: ScanRole[]): ScanRole[] {
       merged.hoursPerWeek ??= other.hoursPerWeek;
       merged.postedAt ??= other.postedAt;
       merged.function ??= other.function;
+    }
+    const links = linksOf(group);
+    if (links.length > 1) {
+      merged.urls = links;
+      merged.url = bestPosting([best.url, ...links], merged.domain) ?? best.url;
     }
     return merged;
   });
@@ -360,11 +433,11 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 export async function collectOpenRoles(
   opts: { sources?: ScanSource[]; now?: number; timeoutMs?: number; max?: number } = {}
 ): Promise<ScanCollectResult & { all: ScanRole[]; seenKeys: string[] }> {
-  const sources = opts.sources ?? SCAN_SOURCES;
+  const sources = opts.sources ?? scanSources();
   const now = opts.now ?? Date.now();
   const timeoutMs = opts.timeoutMs ?? SOURCE_TIMEOUT_MS;
 
-  const settled = await Promise.allSettled(sources.map((src) => withTimeout(Promise.resolve().then(() => src.fetchJobs()), timeoutMs)));
+  const settled = await Promise.allSettled(sources.map((src) => withTimeout(Promise.resolve().then(() => src.fetchJobs()), src.timeoutMs ?? timeoutMs)));
 
   const kept: ScanRole[] = [];
   const screenedOut: ScanScreenedOut[] = [];

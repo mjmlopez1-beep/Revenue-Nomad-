@@ -3,7 +3,7 @@
  * scripts/test-scan.mts starts each scenario in its own process, because the server module
  * keeps its state in memory and every scenario needs a fresh table. To run one by hand:
  *
- *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone|notfractional|seniority|functions>
+ *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone|notfractional|seniority|functions|postingcheck|intake|dupes|careers>
  *
  * It runs on a made-up seed in a temporary data folder. No network, and nothing from the real
  * seed. Prints PASS and FAIL lines, then "##RESULT <passed> <failed>".
@@ -64,7 +64,7 @@ Object.assign(process.env, {
 });
 for (const k of ["RESEND_API_KEY", "RN_EMAIL_FROM", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_DIGEST_ALL"]) delete process.env[k];
 // The server module logs what it does to the state. Keep the test output to PASS and FAIL lines.
-console.error = () => {};
+console.error = process.env.SCEN_DEBUG ? console.error : () => {};
 console.warn = () => {};
 console.log = ((log) => (...a: unknown[]) => (/^(PASS|FAIL|##)/.test(String(a[0])) ? log(...a) : undefined))(console.log);
 
@@ -652,7 +652,225 @@ async function functions() {
   check("the homepage counts the CFO as a Finance company hiring now", (fin.counts?.hiring ?? fin.rows?.filter((r) => r.kind === "open").length ?? 0) >= 1, { counts: fin.counts, rows: fin.rows?.length });
 }
 
-const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone, notfractional, seniority, functions };
+/** The Job posting link on file for a role, read from the saved state, without its scheme. */
+function savedPosting(company: string, title: string): string | null {
+  const st = JSON.parse(readFileSync(path.join(dir, "intel.json"), "utf8"));
+  const co = st.companies.find((c: { name: string }) => c.name === company)?.id;
+  const eng = st.engagements.find((e: { id: string; companyId: string }) => e.companyId === co && st.values[`${e.id}.role`]?.value === title)?.id;
+  return eng ? String(st.values[`${eng}.posting`]?.value ?? "").replace(/^https?:\/\//, "") || null : null;
+}
+
+/** The posting check: a role whose every posting is clearly closed closes at once, with the usual refunds. */
+async function postingcheck() {
+  const T0 = REAL_NOW - 20 * DAY;
+  const board = (matched: number) => [{ source: "board", fetched: 40, matched }];
+  const gone = sr("Postco Gone", "Fractional VP Sales", { url: "https://gone.example.org/jobs/1" });
+  const up = sr("Postco Up", "Fractional VP Sales", { url: "https://boards.greenhouse.io/postcoup/jobs/77" });
+  const flaky = sr("Postco Flaky", "Fractional VP Sales", { url: "https://flaky.example.org/jobs/1" });
+  const listed = sr("Postco Listed", "Fractional VP Sales", { url: "https://listed.example.org/jobs/1" });
+  const filled = sr("Postco Filled", "Fractional CMO", { url: "https://filled.example.org/jobs/9" });
+  await scan([gone, up, flaky, listed, filled], board(5), T0);
+  const v = await admin();
+  const idsOf = (name: string) => ({ co: companyOf(v, name)!.id, eng: roleOf(v, name)!.id });
+  await unlockAll("tok-sal", [
+    { entity: "company", id: idsOf("Postco Gone").co, field: "identity" },
+    { entity: "engagement", id: idsOf("Postco Gone").eng, field: "posting" },
+  ]);
+  const spent = 25 - (await credits("tok-sal"));
+  check("Sal paid for the gone role's company", spent >= 1, spent);
+
+  const calls: string[] = [];
+  const web: Record<string, { status: number; text?: string }> = {
+    "https://gone.example.org/jobs/1": { status: 404 },
+    "https://boards-api.greenhouse.io/v1/boards/postcoup/jobs/77": { status: 200, text: "{}" },
+    "https://listed.example.org/jobs/1": { status: 404 },
+    "https://filled.example.org/jobs/9": { status: 200, text: "<main><p>This position has been filled.</p></main>" },
+    // flaky.example.org answers nothing: a network error.
+  };
+  const fetchPosting = async (url: string) => {
+    calls.push(url);
+    const p = web[url];
+    return p ? { status: p.status, url, text: p.text ?? "" } : { status: 0, url, text: "" };
+  };
+  // A week later the board lists only one of them again.
+  const at = REAL_NOW - 13 * DAY;
+  const run = await t.runScan(undefined, { collect: async () => ({ roles: [listed], all: [listed], sources: board(1), seenKeys: [listed.key] }), now: iso(at), fetchPosting });
+  eq("the scan alone closes nothing on one quiet run", run.result.closed, 0);
+  eq("the posting check closes the 404 and the page that says filled", run.result.postingClosed, 2);
+  check("  it never fetched the role the board listed on this run, or the seed's role", !calls.includes("https://listed.example.org/jobs/1") && calls.length === 4, calls);
+  const v2 = await admin();
+  const st = (name: string) => [roleOf(v2, name)?.closedAt ? "closed" : "open", roleOf(v2, name)?.cells.status?.s === "value" ? roleOf(v2, name)?.cells.status : null];
+  eq(
+    "closed at once with status Closed; the one still up and the one that did not answer stay open",
+    ["Postco Gone", "Postco Filled", "Postco Up", "Postco Flaky", "Postco Listed", "Seedrole Systems"].map((n) => (roleOf(v2, n)?.closedAt ? "closed" : "open")),
+    ["closed", "closed", "open", "open", "open", "open"],
+  );
+  eq("  with the close time of the check", roleOf(v2, "Postco Gone")?.closedAt, iso(at));
+  void st;
+  eq("unlocks made after the posting was last seen are paid back, as on any close", [await credits("tok-sal"), run.result.refunded], [25, spent]);
+  const rows = (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "Refund for a role that had closed");
+  eq("  each one a ledger line", rows.length, spent);
+
+  // The next run checks the ones left, the longest unchecked first, and never the closed ones again.
+  calls.length = 0;
+  const r2 = await t.checkOpenPostings({ fetch: fetchPosting, now: iso(at + DAY), max: 1 });
+  eq("a budget of 1 checks one role: the one never checked comes first (the one listed last run, gone now)", [r2.roles, r2.fetches, r2.closed, calls], [1, 1, 1, ["https://listed.example.org/jobs/1"]]);
+  check("  never a closed one", !calls.some((u) => u.includes("gone.example.org") || u.includes("filled.example.org")), calls);
+  // Listed again on a board after the check closed it: it reopens, as a role whose posting came down does.
+  const back = await scan([gone], board(1), at + 2 * DAY);
+  eq("a role the check closed reopens when a board lists it again", [back.reopened, roleOf(await admin(), "Postco Gone")?.closedAt ?? null], [1, null]);
+}
+
+/** The same role from two boards, in one scan or across scans: one role with both links. */
+async function intake() {
+  const board = [{ source: "fractionaljobs", fetched: 10, matched: 1 }];
+  const other = [{ source: "freehire", fetched: 10, matched: 1 }];
+  const fj = sr("OpsBox", "Founding Commercial Lead", { url: "https://www.fractionaljobs.io/jobs/founding-commercial-lead-at-opsbox", source: "fractionaljobs", domain: "opsbox.example", function: "Sales" });
+  const fh = sr("OpsBox", "Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software", { url: "https://jobs.ashbyhq.com/opsbox/6d3e1c1a-0000-4000-8000-0000000000aa", source: "freehire", function: "Sales" });
+  const r1 = await scan([fj], board, REAL_NOW - 3 * DAY);
+  const r2 = await scan([fh], other, REAL_NOW - 2 * DAY);
+  eq("the second board's listing is the role already open, not a new one", [r1.opened, r2.opened, r2.stillOpen], [1, 0, 1]);
+  const v = await admin();
+  eq("one open role at OpsBox", companyOf(v, "OpsBox")?.engagements.filter((e) => e.source === "Demand scan").length, 1);
+  const role = roleOf(v, "OpsBox");
+  eq("  its Job posting link is the company's ATS, not the board", savedPosting("OpsBox", "Founding Commercial Lead"), "jobs.ashbyhq.com/opsbox/6d3e1c1a-0000-4000-8000-0000000000aa");
+  eq("  and its title stays the first one", role?.cells.role?.s === "value" ? role.cells.role.v : null, "Founding Commercial Lead");
+  const r3 = await scan([fj, fh], [...board, ...other], REAL_NOW - DAY);
+  eq("both listed at once: still one role", [r3.opened, r3.stillOpen], [0, 1]);
+  const vp = sr("OpsBox", "VP of Marketing", { function: "Marketing" });
+  eq("another role at the same company opens on its own", (await scan([vp], board, REAL_NOW)).opened, 1);
+}
+
+/** Duplicates already in the state from before the scan matched them: merged once on load, credits paid back once. */
+async function dupes() {
+  const T = (d: number) => iso(REAL_NOW - d * DAY);
+  const v = (value: string, at: string) => ({ value, by: "scan", at, status: "live" });
+  const state = {
+    // A second record of the company, from a board that gave no website: its copy of the role is merged too, and the record goes.
+    companies: [{ id: "c_ops", name: "OpsBox", by: "scan", at: T(20) }, { id: "c_ops2", name: "OpsBox, Inc.", by: "scan", at: T(5) }],
+    engagements: [
+      { id: "e_fj", companyId: "c_ops", by: "scan", at: T(20), source: "Demand scan" },
+      { id: "e_fh", companyId: "c_ops", by: "scan", at: T(10), source: "Demand scan" },
+      { id: "e_other", companyId: "c_ops", by: "scan", at: T(10), source: "Demand scan" },
+      { id: "e_dup2", companyId: "c_ops2", by: "scan", at: T(5), source: "Demand scan" },
+    ],
+    contacts: [],
+    values: {
+      "c_ops.website": v("opsbox.example", T(20)),
+      "e_fj.role": v("Founding Commercial Lead", T(20)),
+      "e_fj.function": v("Sales", T(20)),
+      "e_fj.status": v("Open role", T(20)),
+      "e_fj.posting": v("https://www.fractionaljobs.io/jobs/founding-commercial-lead-at-opsbox", T(20)),
+      "e_fj.rate": v("$120/hr", T(20)),
+      "e_fh.role": v("Founding Commercial Lead (Fractional to Full Time), WMS / Supply Chain Software", T(10)),
+      "e_fh.function": v("Sales", T(10)),
+      "e_fh.status": v("Open role", T(10)),
+      "e_fh.posting": v("https://jobs.ashbyhq.com/opsbox/6d3e1c1a-0000-4000-8000-0000000000bb", T(10)),
+      "e_other.role": v("Fractional CMO", T(10)),
+      "e_other.function": v("Marketing", T(10)),
+      "e_other.status": v("Open role", T(10)),
+      "e_dup2.role": v("Fractional Founding Commercial Lead", T(5)),
+      "e_dup2.function": v("Sales", T(5)),
+      "e_dup2.status": v("Open role", T(5)),
+      "e_dup2.posting": v("https://remotive.com/remote-jobs/sales/founding-commercial-lead-1", T(5)),
+    },
+    unlocks: { "c_ops.identity": ["m1", "m2"], "c_ops2.identity": ["m2", "m3"], "e_fj.posting": ["m1"], "e_fh.posting": ["m1", "m2"] },
+    verifications: {},
+    members: [],
+    ledger: [
+      { memberId: "m1", delta: -1, reason: "unlock", ref: "c_ops.identity", at: T(9) },
+      { memberId: "m1", delta: -1, reason: "unlock", ref: "e_fj.posting", at: T(9) },
+      { memberId: "m1", delta: -1, reason: "unlock", ref: "e_fh.posting", at: T(8) },
+      { memberId: "m2", delta: -1, reason: "unlock", ref: "c_ops.identity", at: T(8) },
+      { memberId: "m2", delta: -1, reason: "unlock", ref: "e_fh.posting", at: T(8) },
+      { memberId: "m2", delta: -1, reason: "unlock", ref: "c_ops2.identity", at: T(4) },
+      { memberId: "m3", delta: -1, reason: "unlock", ref: "c_ops2.identity", at: T(4) },
+    ],
+    profiles: {}, follows: {}, referralPaid: [], reportLog: [], held: [], benchRates: [], signals: [], notMine: {}, seen: {},
+    scan: {
+      lastRunAt: T(1),
+      sources: [],
+      roles: {
+        "opsbox::foundingcommerciallead": { engagementId: "e_fj", companyId: "c_ops", firstSeen: T(20), lastSeen: T(15), closedAt: null, url: "https://www.fractionaljobs.io/jobs/founding-commercial-lead-at-opsbox", source: "fractionaljobs" },
+        "opsbox::foundingcommercialleadfractionaltofulltimewmssupplychainsoftware": { engagementId: "e_fh", companyId: "c_ops", firstSeen: T(10), lastSeen: T(12), closedAt: null, url: "https://jobs.ashbyhq.com/opsbox/6d3e1c1a-0000-4000-8000-0000000000bb", source: "freehire" },
+        "opsboxinc::fractionalfoundingcommerciallead": { engagementId: "e_dup2", companyId: "c_ops2", firstSeen: T(5), lastSeen: T(13), closedAt: null, url: "https://remotive.com/remote-jobs/sales/founding-commercial-lead-1", source: "remotive" },
+        "opsbox::fractionalcmo": { engagementId: "e_other", companyId: "c_ops", firstSeen: T(10), lastSeen: T(12), closedAt: null, url: "https://x.example.org/cmo", source: "freehire" },
+      },
+    },
+    digest: { lastSentAt: null, sent: 0, members: {} },
+    flags: { starterFloor: 25 },
+  };
+  writeFileSync(path.join(dir, "intel.json"), JSON.stringify(state));
+  const view = await admin();
+  const roles = companyOf(view, "OpsBox")?.engagements.filter((e) => e.source === "Demand scan") ?? [];
+  const titleOf = (e: EngagementRec) => (e.cells.role?.s === "value" ? e.cells.role.v : "");
+  eq("on load the two copies are one role, and the other role at the company stays", roles.map(titleOf).sort(), ["Founding Commercial Lead", "Fractional CMO"]);
+  const kept = roles.find((e) => titleOf(e) === "Founding Commercial Lead");
+  eq("  the survivor keeps the earliest first-seen date", kept?.openedAt, T(20));
+  eq("  and the latest sighting", kept?.lastSeen, T(12));
+  const posting = (tok: string) => t.buildView(tok).then((x) => {
+    const e = x.companies.find((c) => c.name === "OpsBox")?.engagements.find((y) => y.cells.role?.s === "value" && y.cells.role.v === "Founding Commercial Lead");
+    return e?.cells.posting?.s;
+  });
+  eq("members who unlocked either copy see the survivor's posting", [await posting("tok-sal"), await posting("tok-mo")], ["value", "value"]);
+  eq("Sal, who paid for both, gets one credit back; Mo, who paid for one copy and both company records, gets the second record's back", [await credits("tok-sal"), await credits("tok-mo")], [25 - 2, 25 - 2]);
+  eq("Cy, who unlocked only the second record, keeps the company and pays nothing more", [await credits("tok-cy"), companyOf(await t.buildView("tok-cy"), "OpsBox")?.engagements.length ? "sees it" : "hidden"], [24, "sees it"]);
+  eq("the second record is gone", [companyOf(view, "OpsBox, Inc."), (await t.buildView("tok-mo")).ledger.filter((l) => l.reason === "Refund for the same role listed twice").length], [undefined, 1]);
+  const rows = (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "Refund for the same role listed twice");
+  eq("  with a clear ledger line naming the company", rows.map((l) => [l.delta, l.company]), [[1, "OpsBox"]]);
+  const again = await scan([], [{ source: "freehire", fetched: 0, matched: 0, error: "down" }], REAL_NOW);
+  eq("a scan after it merges nothing more and pays nothing twice", [again.merged ?? 0, await credits("tok-sal")], [0, 23]);
+  const saved = JSON.parse(readFileSync(path.join(dir, "intel.json"), "utf8"));
+  const track = Object.values(saved.scan.roles as Record<string, { engagementId: string; urls?: string[] }>).find((r) => r.engagementId === "e_fj");
+  eq("the survivor keeps all three posting links", track?.urls?.length, 3);
+  eq("  its Job posting link is the company's own ATS", savedPosting("OpsBox", "Founding Commercial Lead"), "jobs.ashbyhq.com/opsbox/6d3e1c1a-0000-4000-8000-0000000000bb");
+  eq("the copy's record and facts are gone", [saved.engagements.some((e: { id: string }) => e.id === "e_fh"), Object.keys(saved.values).some((k) => k.startsWith("e_fh."))], [false, false]);
+  // The role closes later: the purchases that stand are paid back once each, the one settled on merge is not.
+  const close = await t.checkOpenPostings({
+    fetch: async (url) => ({ status: url.includes("ashbyhq") ? 200 : 404, url, text: url.includes("ashbyhq") ? JSON.stringify({ jobs: [] }) : "" }),
+    now: iso(REAL_NOW + HOUR),
+  });
+  eq("when the merged role closes, its standing unlocks made after it was last seen are paid back", close.closed, 2);
+  eq("  Sal and Mo end with every credit back, never more", [await credits("tok-sal"), await credits("tok-mo")], [25, 25]);
+}
+
+/** Career pages of companies on Merlin: discovery, the cache, the feeds and the screen, with fetches of our own. */
+async function careers() {
+  const at = REAL_NOW;
+  // A company on Merlin with a website, through a scan of a board.
+  await scan([sr("Kestrel Freight", "Fractional VP Sales", { domain: "kestrelfreight.example" })], [{ source: "board", fetched: 5, matched: 1 }], at - DAY);
+  const feeds: Record<string, { status: number; body: unknown }> = {
+    "https://boards-api.greenhouse.io/v1/boards/kestrelfreight": { status: 200, body: { name: "Kestrel Freight" } },
+    "https://boards-api.greenhouse.io/v1/boards/kestrelfreight/jobs?content=true": {
+      status: 200,
+      body: { jobs: [{ title: "Fractional Head of Marketing", absolute_url: "https://boards.greenhouse.io/kestrelfreight/jobs/9", first_published: iso(at - 2 * DAY), content: "&lt;p&gt;A fractional head of marketing, 15 hours a week.&lt;/p&gt;" }, { title: "Warehouse Associate", absolute_url: "https://boards.greenhouse.io/kestrelfreight/jobs/10", first_published: iso(at - 2 * DAY), content: "Full-time with benefits." }] },
+    },
+  };
+  const calls: string[] = [];
+  const feed = async (url: string) => {
+    calls.push(url);
+    const f = feeds[url];
+    return f ? { status: f.status, text: JSON.stringify(f.body) } : { status: 404, text: "" };
+  };
+  const site = async () => ({ status: 0, text: "" });
+  const c1 = await t.careerSources({ feed, site, now: at });
+  eq("discovery finds the company's Greenhouse board and makes it a source", c1.sources.map((x) => x.name), ["careers:greenhouse"]);
+  const saved = await c1.save();
+  eq("  and keeps what it learned", [saved.tried, saved.found], [2, 1]);
+  const found = await collectOpenRoles({ sources: c1.sources, now: at });
+  const r = await t.applyScan({ roles: found.all, sources: found.sources }, iso(at));
+  eq("the feed's fractional role opens at the company already on Merlin; the full-time one is left out", [r.opened, r.companiesAdded], [1, 0]);
+  const v = await admin();
+  eq("  filed under it", companyOf(v, "Kestrel Freight")?.engagements.filter((e) => e.source === "Demand scan").length, 2);
+  calls.length = 0;
+  const c2 = await t.careerSources({ feed, site, now: at + DAY });
+  await c2.save();
+  check("the next run looks nobody up again: the board and the miss are cached", !calls.length && c2.sources.length === 1, calls);
+  const c3 = await t.careerSources({ feed, site, now: at + 31 * DAY });
+  check("  a miss is looked up again after a month", calls.length > 0 && c3.sources.length === 1, calls);
+}
+
+const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone, notfractional, seniority, functions, postingcheck, intake, dupes, careers };
 const name = process.argv[2] ?? "";
 try {
   if (!SCENARIOS[name]) throw new Error(`unknown scenario "${name}". One of: ${Object.keys(SCENARIOS).join(", ")}`);
