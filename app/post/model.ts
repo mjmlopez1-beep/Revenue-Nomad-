@@ -9,7 +9,7 @@ import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } fr
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
-  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE,
+  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
 
@@ -140,8 +140,39 @@ export function lockedOf(entity: Entity, id: string, cells: Record<string, Cell>
 export const personLead = (cells: Record<string, Cell>) => PERSON_BUNDLE.find((f) => cells[f]?.s === "locked") ?? null;
 /** Both a person's name and title are locked: one lock opens the two, so its label says "name and title". */
 export const personBothLocked = (cells: Record<string, Cell>) => PERSON_BUNDLE.every((f) => cells[f]?.s === "locked");
-/** What the lock on a person's name or title says it opens: "name and title" while both are locked. */
+/** What the lock on a person's name or title says it opens: "name and title" while both are locked. Either lock spends for both. */
 export const personNoun = (cells: Record<string, Cell>, field: string) => (PERSON_BUNDLE.includes(field) && personBothLocked(cells) ? "name and title" : undefined);
+/**
+ * The member can't see who this person is yet: their name or title is locked. Until they unlock
+ * it, the person's LinkedIn, email and phone wait ("Opens after the name"), and nothing but a
+ * relationship can be added about them (the server refuses the rest, see PERSON_DETAILS).
+ */
+export const personUnseen = (cells: Record<string, Cell>) => personLead(cells) !== null;
+/** Fields a member can't add to a person they can't see yet. */
+export const PERSON_NO_ADD = [...PERSON_DETAILS, "title"];
+
+/**
+ * Who held a seat and the role they held are one purchase on a seat whose holder is on file and
+ * that is not an open role (SEAT_BUNDLE in lib/tableFields.ts): 1 credit opens both, whichever lock
+ * is clicked. A seat with nobody named keeps its role as a purchase of its own.
+ */
+export const seatBundled = (e: EngagementRec) => !isOpenRole(e) && (e.cells.operator?.s === "locked" || e.cells.operator?.s === "value");
+/** Both the seat holder and the role are locked on a bundled seat: one purchase, counted once. */
+export const seatBothLocked = (e: EngagementRec) => seatBundled(e) && SEAT_BUNDLE.every((f) => e.cells[f]?.s === "locked");
+/** What a lock on a seat holder, or on the role that comes with them, says it opens ("Unlock who held it · 1 credit"). */
+export const seatNoun = (e: EngagementRec, field: string) =>
+  (field === "operator" && e.cells.operator?.s === "locked") || (field === "role" && seatBothLocked(e)) ? "who held it" : undefined;
+/** The same lock's tooltip and screen-reader name: "who held this seat and their role" when the role comes with it. */
+export const seatWhat = (e: EngagementRec, field: string) =>
+  seatNoun(e, field) ? (seatBothLocked(e) ? "who held this seat and their role" : "who held this seat") : undefined;
+
+/** A lock that waits for another purchase: quiet, never a button. The words show where there is room (the record, phone cards). */
+export const AFTER_NAME = "Opens after the name. Unlock their name and title first.";
+export const AFTER_COMPANY = "Opens after the company. Unlock the company first.";
+/** The short words of a waiting lock ("Opens after the name"), or null for a cover that isn't one. */
+export const waitWords = (cover: string | null | undefined) => (cover && cover.startsWith("Opens after") ? cover.slice(0, cover.indexOf(".")) : null);
+/** Said on an empty contact detail (or title) of a person the member can't see yet, in place of "+ Add". */
+export const ADD_AFTER_NAME = "Unlock their name and title first. Then you can add what you know about them.";
 
 /**
  * An open role for the purpose of buying it: its role, its posting and its posted rate are one
@@ -164,13 +195,16 @@ export const NOT_YET_ON_OPEN_ROLE = ["start", "end", "reason", "sourced"];
 /**
  * Why a locked fact in a list row or card is not its own paying control, or null when it is. At
  * a hidden company the row spends only through Unlock company (which also buys the role, the
- * posting and the posted rate of its open roles); its other locks are unlocked in the record. On
- * an open role the role, posting and rate are one purchase, so only the first lock spends.
+ * posting and the posted rate of its open roles). Who held a seat there opens after the company
+ * (the server refuses it before), and its other locks are unlocked in the record. On an open role
+ * the role, posting and rate are one purchase, so only the first lock spends. Who held a seat and
+ * their role are one purchase too, but either lock spends for both (seatNoun says so).
  */
 export function coverOf(i: CoInfo, e: EngagementRec | null | undefined, field: string): string | null {
   if (i.c.hidden) {
     if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field))
       return "Comes with the company. Unlock the company for 1 credit and you see its name, the job posting and the posted rate.";
+    if (e && (field === "operator" || (field === "role" && seatBundled(e)))) return AFTER_COMPANY;
     return "Open the record to unlock this.";
   }
   if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field) && bundleLead(e) !== field) return "Comes with this open role. One credit opens the job posting and the posted rate.";
@@ -179,13 +213,14 @@ export function coverOf(i: CoInfo, e: EngagementRec | null | undefined, field: s
 
 /**
  * Why a person's locked fact in a list row or card is not its own paying control, or null when it
- * is: the rules of coverOf, and a person's title comes with their name (one credit opens both),
- * so while both are locked only the name's lock spends and the title is a quiet lock.
+ * is. At a hidden company a person opens after the company. Their LinkedIn, email and phone open
+ * after their name and title. The name and the title are one purchase, and either lock spends for
+ * both (personNoun says "name and title").
  */
-export function personCoverOf(i: CoInfo, e: EngagementRec | null | undefined, p: PersonRec, field: string): string | null {
-  const base = coverOf(i, e, field);
-  if (base) return base;
-  if (PERSON_BUNDLE.includes(field) && p.cells[field]?.s === "locked" && personLead(p.cells) !== field) return "Comes with the name. One credit opens the name and the title.";
+export function personCoverOf(i: CoInfo, _e: EngagementRec | null | undefined, p: PersonRec, field: string): string | null {
+  if (p.cells[field]?.s !== "locked") return null;
+  if (i.c.hidden) return AFTER_COMPANY;
+  if (PERSON_DETAILS.includes(field) && personUnseen(p.cells)) return AFTER_NAME;
   return null;
 }
 
@@ -199,12 +234,14 @@ export function listedDays(e: EngagementRec): number {
 
 /**
  * Locked facts on one seat and its people, one entry per purchase. An open role's role, posting
- * and rate are one purchase: only the first of them still locked is in the list.
+ * and rate are one purchase: only the first of them still locked is in the list. So are who held a
+ * seat and their role: the seat holder stands for both.
  */
 export function lockedInEngagement(e: EngagementRec): FactRef[] {
   let own = lockedOf("engagement", e.id, e.cells);
   const lead = isOpenRole(e) ? bundleLead(e) : null;
   if (lead) own = own.filter((t) => t.field === lead || !OPEN_ROLE_BUNDLE.includes(t.field));
+  if (seatBothLocked(e)) own = own.filter((t) => t.field !== "role");
   return [...own, ...e.people.flatMap((p) => lockedOf("contact", p.id, p.cells))];
 }
 

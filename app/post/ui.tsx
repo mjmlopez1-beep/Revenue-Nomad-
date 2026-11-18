@@ -381,6 +381,21 @@ function Lock({ onUnlock, ver, from, what, noun, busy, later, broke }: { onUnloc
 }
 
 /**
+ * A lock that waits for another purchase: "Opens after the name" (a person's LinkedIn, email and
+ * phone) or "Opens after the company" (the people and seat holders of a locked company). Quiet,
+ * never a button: nothing here spends a credit. `tip` says what to unlock first.
+ */
+export function QuietLock({ words, tip }: { words: string; tip: string }) {
+  return (
+    <span className="tp-cell tp-lockwait tp-waits" title={tip}>
+      <IconLock />
+      <span className="tp-lockwait-t">{words}</span>
+      <span className="sr-only">{tip.slice(words.length)}</span>
+    </span>
+  );
+}
+
+/**
  * The fact just saved from the editor, so its cell takes focus when it turns into the value (the
  * add button that had focus is gone by then). `box` is the record it was saved in, if any, so a
  * cell for the same fact in the table behind the record does not take it.
@@ -395,9 +410,27 @@ let focusNext: { k: string; box: Element | null; until: number } | null = null;
  */
 /**
  * `at`: the company's name, for the lock's and the add button's names where the row does not say it (phone cards).
- * `noun`: where one lock opens more than this fact, what it opens ("name and title", see personNoun).
+ * `noun`: where one lock opens more than this fact, what it opens ("name and title", see personNoun;
+ * "who held it", see seatNoun). `what`: the lock's tooltip and screen-reader name for what it opens,
+ * where that is more than this fact ("who held this seat and their role", see seatWhat).
  */
-export function FactCell({ t, cell, render, addLabel = "Add", at, noun }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string; at?: string; noun?: string }) {
+export function FactCell({
+  t,
+  cell,
+  render,
+  addLabel = "Add",
+  at,
+  noun,
+  what: whatOverride,
+}: {
+  t: FactRef;
+  cell: Cell | undefined;
+  render?: (v: string) => ReactNode;
+  addLabel?: string;
+  at?: string;
+  noun?: string;
+  what?: string;
+}) {
   const ui = useCellUi();
   const ref = useRef<HTMLSpanElement>(null);
   const refocus = useRef(false);
@@ -459,7 +492,7 @@ export function FactCell({ t, cell, render, addLabel = "Add", at, noun }: { t: F
             ver={cell.ver}
             from={cell.from}
             what={(() => {
-              const w = noun === "name and title" ? "this person's name and title" : factWhat(t);
+              const w = whatOverride ?? (noun === "name and title" ? "this person's name and title" : factWhat(t));
               return at ? `${w} at ${at}` : w;
             })()}
             noun={t.field === "identity" ? "company" : noun}

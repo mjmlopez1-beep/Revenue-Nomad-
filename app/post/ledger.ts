@@ -3,9 +3,11 @@
  * popover and the Your credits page, so both say the same thing.
  *
  * The server sends each row's field as a label ("Role", "Start month", "Person email",
- * "Private rate", HIDDEN_COMPANY for a company unlock) and its reason as a key (fill, unlock, refund, reversal,
+ * "Private rate", HIDDEN_COMPANY for a company unlock, "Person name and title" or "Seat holder and
+ * role" for an unlock that opened both) and its reason as a key (fill, unlock, refund, reversal,
  * referral, confirm, retract), or as words for the rows that have no field ("Refund for a role
- * that had closed", with the company after it).
+ * that had closed", with the company after it, or "Gave back 1 credit: an ongoing seat's end month
+ * is free now.", with nothing after it).
  */
 import type { LedgerRow, Me } from "@/lib/tableTypes";
 import { ALL_FIELDS, HIDDEN_COMPANY } from "@/lib/tableFields";
@@ -19,6 +21,9 @@ for (const { entity, f } of ALL_FIELDS) {
   const label = entity === "contact" ? `Person ${fieldText(f.label)}` : f.label;
   if (!SAY.has(label)) SAY.set(label, f.say);
 }
+// One purchase that opens two facts: the server names an unlock of either half (and its refund) by the pair (boughtLabel in lib/table.ts).
+SAY.set("Person name and title", "a person's name and title");
+SAY.set("Seat holder and role", "the seat holder and their role");
 /** A company's pick-list answers: only 5 of these earn a credit each day (Me.sellEarnLeft). */
 const PICK_KEYS = new Set(["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle"]);
 const PICK_LABELS = new Set(ALL_FIELDS.filter(({ entity, f }) => entity === "company" && PICK_KEYS.has(f.key)).map(({ f }) => f.label));

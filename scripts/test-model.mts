@@ -14,7 +14,7 @@ import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
   bandRange, bestFit, countryOf, criteriaOf, icpLabel, icpMatch, icpTest, icpUnknown, industryWords, openSince, regionOf, splitByFn, viewName, withIcpSpelled, activeChips,
-  cardSeat, newRolesFor, newThisWeek, rolesThisWeek, personCoverOf, personNoun,
+  cardSeat, newRolesFor, newThisWeek, rolesThisWeek, personCoverOf, personNoun, personUnseen, PERSON_NO_ADD, seatBundled, seatBothLocked, seatNoun, seatWhat, waitWords, AFTER_NAME, AFTER_COMPANY,
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 
@@ -204,10 +204,19 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
     const li = deriveAll([lc]);
     check("a locked title is not searched", applyFilters(rowsFor("people", li), EMPTY_FILTERS, "all", "ceo", me).rows.length === 0 && applyFilters(rowsFor("companies", li), EMPTY_FILTERS, "all", "ceo", me).rows.length === 0);
     check("a person's name and title are one entry in Unlock all, the email another", JSON.stringify(li[0].locked.map((t) => t.field)) === JSON.stringify(["name", "email"]), li[0].locked);
-    check("a locked name and title: the name's lock spends, the title's is quiet", personCoverOf(li[0], null, lp, "name") === null && /^Comes with the name/.test(personCoverOf(li[0], null, lp, "title") ?? ""), [personCoverOf(li[0], null, lp, "name"), personCoverOf(li[0], null, lp, "title")]);
-    check("the lock says it opens the name and the title", personNoun(lp.cells, "name") === "name and title" && personNoun(lp.cells, "email") === undefined);
+    check("a locked name and title: either lock spends, for both", personCoverOf(li[0], null, lp, "name") === null && personCoverOf(li[0], null, lp, "title") === null, [personCoverOf(li[0], null, lp, "name"), personCoverOf(li[0], null, lp, "title")]);
+    check("the lock says it opens the name and the title, the title's too", personNoun(lp.cells, "name") === "name and title" && personNoun(lp.cells, "title") === "name and title" && personNoun(lp.cells, "email") === undefined);
+    check("their email waits for the name: a quiet lock, Opens after the name", personCoverOf(li[0], null, lp, "email") === AFTER_NAME && waitWords(AFTER_NAME) === "Opens after the name", personCoverOf(li[0], null, lp, "email"));
+    check("nothing but a relationship can be added to a person the member can't see", personUnseen(lp.cells) && PERSON_NO_ADD.join() === "linkedin,email,phone,title");
     const half: PersonRec = { ...locked(), cells: { ...locked().cells, name: val("Pia Person", { paid: true }), title: LOCKED } };
     check("a title locked alone is its own lock", personCoverOf(deriveAll([co("Half Co", [], [half])])[0], null, half, "title") === null && personNoun(half.cells, "title") === undefined);
+    const named: PersonRec = { ...locked(), cells: { ...locked().cells, name: val("Pia Person", { paid: true }), title: val("CEO", { paid: true }) } };
+    check("once the name and title show, the email is its own 1 credit lock", personCoverOf(deriveAll([co("Named Co", [], [named])])[0], null, named, "email") === null && !personUnseen(named.cells));
+    const hiddenPeople = { ...co("Locked People Co", [], [locked()]), hidden: true } as CompanyRec;
+    const hp = hiddenPeople.people[0];
+    const hpi = deriveAll([hiddenPeople])[0];
+    check("at a locked company its people open after the company", ["name", "title", "email"].every((f) => personCoverOf(hpi, null, hp, f) === AFTER_COMPANY) && waitWords(AFTER_COMPANY) === "Opens after the company");
+    check("a cover that isn't a wait has no words", waitWords("Open the record to unlock this.") === null && waitWords(null) === null);
     check("a seat's people count their name and title once too", JSON.stringify(lockedInEngagement({ ...eng({}), people: [locked()] }).filter((t) => t.entity === "contact").map((t) => t.field)) === JSON.stringify(["name", "email"]));
     const sortI = deriveAll([co("Zed Known", [], [{ ...locked(), cells: { ...locked().cells, title: val("Advisor") } }]), co("Amp Locked", [], [locked()])]);
     check("a locked title sorts as unknown (last)", sortRows(rowsFor("people", sortI), "title").map((r) => r.i.c.name).join() === "Zed Known,Amp Locked");
@@ -240,18 +249,39 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   const visible = deriveAll([co("Seen Co", [role, past])])[0];
   const fields = (refs: { field: string }[]) => refs.map((t) => t.field).sort().join();
   check("an open role's posting and rate are one purchase", fields(lockedInEngagement(role)) === "posting");
-  check("Unlock all at a visible company: the open role once and the past seat's two", visible.locked.length === 3, visible.locked);
+  check("Unlock all at a visible company: the open role once, and the past seat's holder with their role once", visible.locked.length === 2 && fields(visible.locked) === "operator,posting", visible.locked);
   const role2 = eng({ role: val("Fractional CMO"), posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   const past2 = eng({ role: LOCKED, operator: LOCKED }, { source: "Published engagement" });
   const hc = { ...co("Hidden", [role2, past2]), hidden: true } as CompanyRec;
   hc.cells = { ...hc.cells, website: LOCKED, linkedin: LOCKED, about: LOCKED };
   const hidden = deriveAll([hc])[0];
-  check("Unlock all at a locked company: the company (with the posting and rate) and the past seat's two", fields(hidden.locked) === "identity,operator,role", hidden.locked);
+  check("Unlock all at a locked company: the company (with the posting and rate), then the past seat's holder with their role", fields(hidden.locked) === "identity,operator", hidden.locked);
+  check("at a locked company who held a seat opens after the company, the role with them", coverOf(hidden, past2, "operator") === AFTER_COMPANY && coverOf(hidden, past2, "role") === AFTER_COMPANY);
+  const lone = eng({ role: LOCKED, operator: EMPTY }, { source: "Seat scan", claimable: true } as Partial<EngagementRec>);
+  const hc2 = { ...co("Hidden Lone", [role2, lone]), hidden: true } as CompanyRec;
+  check("at a locked company a seat's role with nobody named waits for the record, not the company", coverOf(deriveAll([hc2])[0], lone, "role") === "Open the record to unlock this.");
   check("at a locked company the open role's posting and rate are quiet on a row", !!coverOf(hidden, role2, "posting") && !!coverOf(hidden, role2, "rate"));
   check("at a visible company the rate is quiet while the posting is locked", coverOf(visible, role, "posting") === null && !!coverOf(visible, role, "rate"));
   const rateOnly = eng({ role: val("Fractional CMO"), posting: val("https://jobs.example.com/x"), rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   check("an open role with only its rate locked: the rate's lock is the one that spends", coverOf(deriveAll([co("Rate Co", [rateOnly])])[0], rateOnly, "rate") === null && fields(lockedInEngagement(rateOnly)) === "rate");
   check("an open role nobody holds can't have a start or end yet", isUnheldOpenRole(role) && !isUnheldOpenRole(past) && NOT_YET_ON_OPEN_ROLE.join() === "start,end,reason,sourced");
+}
+
+/* ---------- who held a seat and their role: one purchase (SEAT_BUNDLE) ---------- */
+
+{
+  const held = eng({ role: LOCKED, operator: LOCKED, status: val("Ended") }, { source: "Published engagement" });
+  check("a seat with its holder on file bundles the holder and the role", seatBundled(held) && seatBothLocked(held));
+  check("both locks say they open who held it", seatNoun(held, "operator") === "who held it" && seatNoun(held, "role") === "who held it" && seatWhat(held, "role") === "who held this seat and their role");
+  check("Unlock all counts the holder and the role once", lockedInEngagement(held).map((t) => t.field).join() === "operator", lockedInEngagement(held));
+  const nobody = eng({ role: LOCKED, operator: EMPTY }, { source: "Seat scan", claimable: true } as Partial<EngagementRec>);
+  check("a seat with nobody named keeps its role as its own lock", !seatBundled(nobody) && seatNoun(nobody, "role") === undefined && lockedInEngagement(nobody).map((t) => t.field).join() === "role");
+  const noRole = eng({ role: EMPTY, operator: LOCKED }, { source: "Member success story" });
+  check("a holder with no role on file: the lock opens who held it", seatNoun(noRole, "operator") === "who held it" && seatWhat(noRole, "operator") === "who held this seat" && lockedInEngagement(noRole).map((t) => t.field).join() === "operator");
+  const claimOpen = eng({ role: val("Fractional CMO"), operator: LOCKED, status: val("Open role", { system: true }), posting: LOCKED }, { opened: "2026-11-03", closed: null });
+  check("an open role is never bundled (its title is free)", !seatBundled(claimOpen) && seatNoun(claimOpen, "role") === undefined);
+  const paidHolder = eng({ role: val("Fractional CRO", { paid: true }), operator: val("Pat Holder", { paid: true }) }, { source: "Published engagement" });
+  check("once unlocked, nothing about the pair is locked", !seatBothLocked(paidHolder) && seatNoun(paidHolder, "operator") === undefined && lockedInEngagement(paidHolder).length === 0);
 }
 
 /* ---------- Repeat hirers (the tab that replaced Fractional friendly) ---------- */
@@ -411,6 +441,12 @@ const unnamed = ALL_FIELDS.filter(({ f }) => !f.identity && !f.system).filter(({
 });
 check("every field a member can add reads as a sentence in the history", unnamed.length === 0, unnamed.map((x) => `${x.entity}.${x.f.key}`));
 check("a person's LinkedIn keeps its capitals", ledgerLine(row("unlock", "Person LinkedIn", -1), 25).text === "Unlocked a person's LinkedIn at Acme" && fieldText("Person LinkedIn") === "person LinkedIn" && fieldText("HQ") === "HQ");
+check("a person's name and title read as one purchase in the history", ledgerLine(row("unlock", "Person name and title", -1), 25).text === "Unlocked a person's name and title at Acme");
+check("so do who held a seat and their role", ledgerLine(row("unlock", "Seat holder and role", -1), 25).text === "Unlocked the seat holder and their role at Acme" && ledgerLine(row("refund", "Seat holder and role"), 25).text === "Refund for the seat holder and their role at Acme, removed after review");
+check(
+  "the credit back for an ongoing end month reads the owner's line, with nothing after it",
+  ledgerLine(row("Gave back 1 credit: an ongoing seat's end month is free now.", "", 1, ""), 25).text === "Gave back 1 credit: an ongoing seat's end month is free now.",
+);
 check("a private rate never names a company", ledgerLine(row("fill", "Private rate", 1, ""), 25).text === "Shared a rate privately" && ledgerLine(row("Removed", "Private rate", -1, ""), 25).text === "Removed a rate you shared privately");
 // A locked company is one purchase with its open role, and the company leads so a cut-off line keeps it.
 check(

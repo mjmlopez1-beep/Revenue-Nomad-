@@ -836,7 +836,7 @@ export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focu
             keep private.
           </p>
           <p className="ys-lead-sub">
-            Members spend 1 credit to see your name on a seat, and 1 each for its title, end month, how you were found and the rate. Everything else here is free for every member to see.
+            Members spend 1 credit to see your name on a seat, and its title comes with it. The month a seat ended, how you were found and the rate are 1 credit each. Everything else here is free for every member to see.
           </p>
           <div className="ys-progress">
             <div className="ys-progress-box" role="status">

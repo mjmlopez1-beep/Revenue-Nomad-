@@ -22,10 +22,13 @@
 import { MessageButton } from "./Messages";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
-import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, type Entity } from "@/lib/tableFields";
+import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
-import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, personBothLocked, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
-import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
+import {
+  AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
+  seatMissingCount, shown, waitWords, type CoInfo, type FactRef,
+} from "./model";
+import { FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, storyTag, storyTitle } from "./Tables";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
@@ -392,6 +395,8 @@ function FieldRow({
   fixed = false,
   render,
   note,
+  waits,
+  noun,
 }: {
   t: FactRef;
   cell: Cell;
@@ -402,6 +407,10 @@ function FieldRow({
   fixed?: boolean;
   render?: (v: string) => ReactNode;
   note?: ReactNode;
+  /** A locked fact that opens only after another purchase (AFTER_NAME, AFTER_COMPANY): a quiet lock, nothing to spend. */
+  waits?: string | null;
+  /** What the lock opens, where its label says more than "Unlock" ("who held it"). */
+  noun?: string;
 }) {
   const ui = useUi();
   const env = useEnv();
@@ -420,7 +429,8 @@ function FieldRow({
     setStep(null);
     setTimeout(() => opener.current?.isConnected && opener.current.focus({ preventScroll: true }));
   };
-  const value = <FactCell t={t} cell={cell} render={render} />;
+  const words = cell.s === "locked" ? waitWords(waits) : null;
+  const value = words && waits ? <QuietLock words={words} tip={waits} /> : <FactCell t={t} cell={cell} render={render} noun={noun} />;
   if (env.touch) {
     const tap = f.tappable;
     const text = cell.s === "value" ? cell.v : "";
@@ -488,33 +498,52 @@ const GROUP_LABEL: Record<string, [string, string]> = {
 };
 
 /**
- * An open role's role, posting and rate are one purchase: one row, one lock, one price. The
- * server opens all of them for the 1 credit (and the company with them while it is hidden).
- * A person's name and title are one purchase too ("Unlock name and title · 1 credit").
- * `fields` are the ones still locked, in order.
+ * One purchase that opens more than one fact: one row, one lock, one price. An open role's
+ * posting and rate (and the company with them while it is hidden). A person's name and title
+ * ("Unlock name and title · 1 credit"). Who held a seat and their role ("Unlock who held it · 1
+ * credit"). `fields` are the ones still locked, in order. `waits`: the purchase opens only after
+ * another one (a locked company's people and seat holders), so the row is a quiet lock.
  */
-function OpenRoleLock({ entity = "engagement", id, hidden, fields }: { entity?: Entity; id: string; hidden: boolean; fields: string[] }) {
+function PairLock({ entity = "engagement", id, hidden, fields, waits }: { entity?: Entity; id: string; hidden: boolean; fields: string[]; waits?: string | null }) {
   const ui = useUi();
   const lead = fields[0];
   const t = { entity, id, field: lead };
   const person = entity === "contact";
+  const seat = entity === "engagement" && fields.includes("operator");
   const ref = useRef<HTMLSpanElement>(null);
   const [zero, setZero] = useState(false);
   const busy = fields.some((f) => ui.busy.has(cellKey(id, f)));
   const names = fields.map((f) => GROUP_LABEL[f]?.[1] ?? f);
-  const label = listOf(fields.map((f, k) => (k === 0 ? (GROUP_LABEL[f]?.[0] ?? f).replace(/^./, (x) => x.toUpperCase()) : GROUP_LABEL[f]?.[0] ?? f)));
+  const label = seat
+    ? "Held by and role"
+    : listOf(fields.map((f, k) => (k === 0 ? (GROUP_LABEL[f]?.[0] ?? f).replace(/^./, (x) => x.toUpperCase()) : GROUP_LABEL[f]?.[0] ?? f)));
+  const words = waitWords(waits);
+  if (words && waits)
+    return (
+      <div className="tp-frow">
+        <span className="tp-frow-l">{label}</span>
+        <span className="tp-frow-v" data-cell={cellKey(id, lead)}>
+          <QuietLock words={words} tip={waits} />
+        </span>
+      </div>
+    );
+  const broke = ui.me.credits <= 0;
+  // Today's unlocks are used up and credits are left: it says when, and spends nothing.
+  const later = !broke && ui.me.unlocksLeft === 0;
   return (
     <div className="tp-frow">
       <span className="tp-frow-l">{label}</span>
       <span className="tp-frow-v">
         <span className="tp-cell" data-cell={cellKey(id, lead)} ref={ref}>
           <LockPill
-            what={person ? "this person's name and title" : listOf(hidden ? ["the company", ...names] : names)}
-            noun={person ? "name and title" : undefined}
+            what={person ? "this person's name and title" : seat ? "who held this seat and their role" : listOf(hidden ? ["the company", ...names] : names)}
+            noun={person ? "name and title" : seat ? "who held it" : undefined}
             busy={busy}
+            later={later}
+            broke={broke}
             onUnlock={() => {
               if (ui.me.credits > 0) return ui.unlock(t);
-              sendSignal("wall", person ? lead : "role");
+              sendSignal("wall", person || seat ? lead : "role");
               setZero(true);
             }}
           />
@@ -532,7 +561,9 @@ const emptyRank = (f: string) => (EMPTY_FIRST.includes(f) ? EMPTY_FIRST.indexOf(
 /**
  * Known and locked fields as rows; the empty ones as a compact row of add pills (three, then
  * "Show N more"). `noAdd`: empty fields that take nothing here (an open role has no start or
- * seat holder yet). `pair`: two fields that unlock together, drawn as one row while both are locked.
+ * seat holder yet, a person the member can't see yet takes no contact details). `pair`: fields
+ * that unlock together, drawn as one row while two or more are locked. `waits`: why a locked field
+ * opens only after another purchase (AFTER_NAME, AFTER_COMPANY), or null when its lock spends.
  */
 function FieldList({
   entity,
@@ -549,6 +580,8 @@ function FieldList({
   listed,
   emptyNote,
   fixed = [],
+  waits,
+  nouns,
 }: {
   entity: Entity;
   id: string;
@@ -559,7 +592,7 @@ function FieldList({
   render?: Record<string, (v: string) => ReactNode>;
   notes?: Record<string, ReactNode>;
   after?: Record<string, ReactNode>;
-  /** Fields that unlock together (an open role's role, posting and rate, a person's name and title): one row while two or more are locked. */
+  /** Fields that unlock together (an open role's posting and rate, a person's name and title, who held a seat and their role): one row while two or more are locked. */
   pair?: string[];
   own?: boolean;
   listed?: boolean;
@@ -567,6 +600,9 @@ function FieldList({
   emptyNote?: ReactNode;
   /** Fields whose value the member added but can't edit here. */
   fixed?: string[];
+  waits?: (field: string) => string | null;
+  /** What a field's lock opens, where its label says more than "Unlock" (a seat holder's: "who held it"). */
+  nouns?: Record<string, string>;
 }) {
   const ui = useUi();
   const group = (pair ?? []).filter((f) => cells[f]?.s === "locked");
@@ -587,7 +623,7 @@ function FieldList({
           {present.map((f) => (
             <Fragment key={f}>
               {paired && f === group[0] ? (
-                <OpenRoleLock entity={entity} id={id} hidden={ui.isHidden(id)} fields={group} />
+                <PairLock entity={entity} id={id} hidden={ui.isHidden(id)} fields={group} waits={waits?.(f)} />
               ) : (
                 <FieldRow
                   t={{ entity, id, field: f }}
@@ -598,6 +634,8 @@ function FieldList({
                   own={own}
                   listed={listed}
                   fixed={fixed.includes(f)}
+                  waits={waits?.(f)}
+                  noun={nouns?.[f]}
                 />
               )}
               {after[f]}
@@ -631,6 +669,8 @@ const NOUN: Record<string, [string, string]> = {
   "company.about": ["About", "About texts"],
   "engagement.role": ["role", "roles"],
   "engagement.operator": ["seat holder", "seat holders"],
+  // Who held a seat with the role they held: one purchase (SEAT_BUNDLE).
+  "engagement.seat": ["seat holder with their role", "seat holders with their roles"],
   "engagement.end": ["end month", "end months"],
   "engagement.sourced": ["source of hire", "sources of hire"],
   "engagement.rate": ["rate", "rates"],
@@ -657,7 +697,9 @@ function planOf(i: CoInfo): Plan {
   const pairs = new Set<string>();
   const counts = new Map<string, number>();
   for (const t of items) {
-    const k = `${t.entity}.${t.field}`;
+    const seat = t.entity === "engagement" && t.field === "operator" ? engs.get(t.id) : undefined;
+    // The seat holder's lock stands for their role too while both are locked (one purchase, lockedInEngagement).
+    const k = seat && seatBundled(seat) && seat.cells.role?.s === "locked" ? "engagement.seat" : `${t.entity}.${t.field}`;
     counts.set(k, (counts.get(k) ?? 0) + 1);
     if (t.entity === "company" && ["identity", "website", "linkedin", "about"].includes(t.field) && i.c.hidden) {
       if (!company) cost++;
@@ -813,11 +855,18 @@ const personRender: Record<string, (v: string) => ReactNode> = {
   relationship: (v) => <span className="chip tp-fn">{v}</span>,
 };
 
-/** A person: the same rows as a seat. A card of its own at the company, flat inside a seat card. */
+/**
+ * A person: the same rows as a seat. A card of its own at the company, flat inside a seat card.
+ * At a locked company everything about them opens after the company. Their LinkedIn, email and
+ * phone open after their name and title, and until then nothing but a relationship can be added.
+ */
 function PersonCard({ p, inSeat }: { p: PersonRec; inSeat?: boolean }) {
+  const env = useEnv();
+  const unseen = personUnseen(p.cells);
+  const waits = (f: string) => (p.cells[f]?.s !== "locked" ? null : env.hidden ? AFTER_COMPANY : unseen && PERSON_DETAILS.includes(f) ? AFTER_NAME : null);
   return (
     <div className={`tp-person${inSeat ? "" : " tp-person-box"}`} id={`tp-d-${p.id}`}>
-      <FieldList entity="contact" id={p.id} cells={p.cells} fields={personFields(p)} render={personRender} pair={PERSON_BUNDLE} />
+      <FieldList entity="contact" id={p.id} cells={p.cells} fields={personFields(p)} render={personRender} pair={PERSON_BUNDLE} waits={waits} noAdd={unseen ? PERSON_NO_ADD : []} />
     </div>
   );
 }
@@ -1121,15 +1170,18 @@ function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; co
   const closed = !!e.closed && posting?.s === "value";
   const fnRender = (v: string) => <span className={`chip tp-fn${v === ui.me.function ? " tp-fn-me" : ""}`}>{v}</span>;
   // Nobody needs an intro to themselves, and a hidden company has no name to put in the email.
+  const fn = shown(e.cells.function);
   const reach = op && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
     <Reach
       name={op}
       member={!!(opCell?.s === "value" && opCell.member)}
-      seat={role ? `the ${role} seat` : "a fractional seat"}
+      seat={role ? `the ${role} seat` : fn ? `the fractional ${fn} seat` : "a fractional seat"}
       engagementId={e.id}
-      seatName={role ?? shown(e.cells.function)}
+      seatName={role ?? fn}
     />
   );
+  // Who held a seat (and the role that comes with them) opens after a locked company.
+  const waits = (f: string) => (hidden && e.cells[f]?.s === "locked" && (f === "operator" || (f === "role" && seatBundled(e))) ? AFTER_COMPANY : null);
   return (
     <article className={`tp-eng${focus ? " focus" : ""}`} id={`tp-d-${e.id}`}>
       <div className="tp-eng-top">
@@ -1152,10 +1204,12 @@ function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; co
         render={{ function: fnRender, type: (v) => <span className="chip tp-fn">{v}</span>, status: statusText }}
         notes={closed ? { posting: <span className="tp-frow-note">Closed {closedOn(e)}</span> } : {}}
         after={reach ? { operator: reach } : {}}
-        pair={open ? OPEN_ROLE_BUNDLE : undefined}
+        pair={open ? OPEN_ROLE_BUNDLE : seatBundled(e) ? SEAT_BUNDLE : undefined}
         own={e.yours}
         listed={open}
         fixed={open ? ["operator"] : []}
+        waits={waits}
+        nouns={{ operator: "who held it" }}
       />
       {/* The member named themselves on this seat and nobody has confirmed it yet (see Your seats). */}
       {!e.yours && opCell?.s === "value" && opCell.member?.you && (
@@ -1578,7 +1632,7 @@ export function Drawer({
           </div>
           {c.hidden && (
             <p className="tp-hidden-note">
-              This company is hiring a fractional now, and its role is free to see. 1 credit shows the company and its job posting{postedRate ? ", with the posted rate" : ""}. Contacts unlock separately. Once the role closes, everyone sees the company.
+              This company is hiring a fractional now, and its role is free to see. 1 credit shows the company and its job posting{postedRate ? ", with the posted rate" : ""}. Its people and seat holders open after that. Once the role closes, everyone sees the company.
             </p>
           )}
           {!phone && actions}

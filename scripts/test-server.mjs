@@ -249,6 +249,8 @@ function pickEmpty(view, n, { free = false, entity, picks = false } = {}) {
     if (x.cell.s !== "empty" || !SAMPLE[col] || (free && !FREE.has(col)) || (entity && x.entity !== entity) || x.company.hidden) continue;
     // Only the seat holder adds facts about a seat: another member's seat is never picked.
     if (x.entity === "engagement" && !x.eng?.yours) continue;
+    // Nobody adds a person's contact details or title before they can see who the person is (PERSON_DETAILS).
+    if (x.entity === "contact" && ["linkedin", "email", "phone", "title"].includes(x.field) && ["name", "title"].some((f) => x.person?.cells[f]?.s === "locked")) continue;
     if (!picks && PICKS.has(col)) continue;
     const k = `${x.id}.${x.field}`;
     if (claimed.has(k)) continue;
@@ -269,6 +271,10 @@ const pickLocked = (view, n) => {
   for (const x of cellsOf(view)) {
     if (out.length >= n) break;
     if (x.cell.s !== "locked" || x.entity === "company" || x.company.hidden) continue;
+    // Who held a seat and their role are one purchase: the role is left out while the holder is locked too.
+    if (x.entity === "engagement" && x.field === "role" && x.eng?.cells.operator?.s === "locked") continue;
+    // A person's LinkedIn, email and phone open after their name and title: left out until then.
+    if (x.entity === "contact" && ["linkedin", "email", "phone"].includes(x.field) && ["name", "title"].some((f) => x.person?.cells[f]?.s === "locked")) continue;
     if (x.entity === "contact" && ["name", "title"].includes(x.field)) {
       if (persons.has(x.id)) continue;
       persons.add(x.id);
@@ -786,15 +792,20 @@ section("hidden", async () => {
   // The ledger never names a hidden company.
   const L = await member("Lea Ledger", ip(82));
   const lv = await L.view();
-  // A person's name: the role of an open role now comes with the company, which would unhide it.
+  // A locked company's people and seat holders open after the company (the server refuses them before).
   const peopleAt = (x) => [...x.people, ...x.engagements.flatMap((e) => e.people)];
-  const h2 = lv.companies.find((x) => x.hidden && peopleAt(x).some((p) => p.cells.name?.s === "locked"));
-  if (h2) {
-    const p = peopleAt(h2).find((x) => x.cells.name?.s === "locked");
-    await L.act({ type: "unlock", entity: "contact", id: p.id, field: "name" });
-    const lv2 = await L.view();
-    check("the ledger says Hidden company for an unlock there", lv2.ledger[0]?.company === "Locked company", lv2.ledger[0]);
+  const hp = lv.companies.find((x) => x.hidden && peopleAt(x).some((p) => p.cells.name?.s === "locked"));
+  if (hp) {
+    const p = peopleAt(hp).find((x) => x.cells.name?.s === "locked");
+    const early = await L.act({ type: "unlock", entity: "contact", id: p.id, field: "name" });
+    check("a person at a locked company can't be unlocked before the company", early.status === 400 && early.json?.error === "Unlock the company first." && (await L.view()).me.credits === lv.me.credits, early.json);
   }
+  // The rate on the past seat Kai added there is still sold on its own: the ledger never names the company.
+  const rateFill = await K.act({ type: "fill", entity: "engagement", id: add.json?.id, field: "rate", value: "$9k/mo" });
+  const lRate = await L.act({ type: "unlock", entity: "engagement", id: add.json?.id, field: "rate" });
+  const lv2 = await L.view();
+  check("a past seat's rate at a locked company is still 1 credit on its own", rateFill.status === 200 && lRate.status === 200 && lv2.companies.find((x) => x.id === c.id)?.hidden === true, [rateFill.json?.error, lRate.json?.error ?? lRate.json?.message]);
+  check("the ledger says Hidden company for an unlock there", lv2.ledger[0]?.company === "Locked company", lv2.ledger[0]);
 });
 
 // "See it as a member": an admin's view built as a member's, from a query param or a cookie. Nobody else gets anything from it.

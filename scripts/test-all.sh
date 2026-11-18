@@ -77,6 +77,8 @@ run notify npx tsx scripts/test-notify.mts
 run about env ABOUT_PORT="$PORT" npx tsx scripts/test-about.mts
 run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
+# Bundles and prices on the server module: Ongoing end months free and refunded once on load, SEAT_SCAN_ROLE_FREE both ways (a copy of lib/ flips it).
+run econ npx tsx scripts/test-econ.mts
 # Clean company data: HQ country and region, standard industry, employees and revenue values, fractional firms removed, research firmographics, place filters.
 run geo npx tsx scripts/test-geo.mts
 run bench npx tsx scripts/test-bench.mjs

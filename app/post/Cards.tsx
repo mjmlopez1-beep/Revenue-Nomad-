@@ -12,7 +12,7 @@
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconLock, IconStar, LockedName, LockedSite, fmtMonth, val } from "../ui/shared";
-import { cardSeat, coverOf, isOpenRole, personCoverOf, personNoun, isUnheldOpenRole, known, type Row, type Tab } from "./model";
+import { cardSeat, coverOf, isOpenRole, personBothLocked, personCoverOf, personNoun, isUnheldOpenRole, known, seatBothLocked, seatNoun, seatWhat, type Row, type Tab } from "./model";
 import { YourSeat, earnNote, useCellUi } from "./ui";
 import { Fit, FnChips, HeldBy, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
 import { RoleDate } from "./RoleDate";
@@ -167,11 +167,14 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
         <div className="tp-pfacts">
           {e ? (
             <>
-              <Fact label={isOpenRole(e) ? "Open role" : "Role"}>
-                <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} />
-              </Fact>
+              {/* Who held the seat and their role are one purchase: while both are locked, one row and one lock for the two. */}
+              {!seatBothLocked(e) && (
+                <Fact label={isOpenRole(e) ? "Open role" : "Role"}>
+                  <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} noun={seatNoun(e, "role")} what={seatWhat(e, "role")} />
+                </Fact>
+              )}
               {held && (
-                <Fact label="Held by">
+                <Fact label={seatBothLocked(e) ? "Held by and role" : "Held by"}>
                   <HeldBy e={e} />
                 </Fact>
               )}
@@ -238,10 +241,13 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
         </>
       ) : (
         <div className="tp-pfacts">
-          <Fact label={openRole ? "Open role" : "Role"}>
-            <RowFact t={t("role")} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} />
-          </Fact>
-          <Fact label="Held by">
+          {/* Who held the seat and their role are one purchase: while both are locked, one row and one lock for the two. */}
+          {!seatBothLocked(e) && (
+            <Fact label={openRole ? "Open role" : "Role"}>
+              <RowFact t={t("role")} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} noun={seatNoun(e, "role")} what={seatWhat(e, "role")} />
+            </Fact>
+          )}
+          <Fact label={seatBothLocked(e) ? "Held by and role" : "Held by"}>
             <HeldBy e={e} />
           </Fact>
           {rate && (
@@ -262,22 +268,30 @@ const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r:
   const t = (field: string) => ({ entity: "contact" as const, id: p.id, field });
   const title = val(p.cells.title);
   const rel = val(p.cells.relationship);
+  // A locked name and title are one purchase: one row ("Name and title") and one lock for the two.
+  const both = personBothLocked(p.cells);
+  // A title can't be added to a person the member can't see yet.
+  const titleAddable = p.cells.title?.s !== "empty" || p.cells.name?.s !== "locked";
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} onOpen={onOpen} />
       <FirmoLine c={i.c} />
       <div className="tp-pcard-fns">
-        {title ? <span className="tp-pcard-title">{title}</span> : <RowFact t={t("title")} at={at} cell={p.cells.title} addLabel="Title" cover={personCoverOf(i, r.e, p, "title")} noun={personNoun(p.cells, "title")} />}
+        {title ? (
+          <span className="tp-pcard-title">{title}</span>
+        ) : (
+          !both && titleAddable && <RowFact t={t("title")} at={at} cell={p.cells.title} addLabel="Title" cover={personCoverOf(i, r.e, p, "title")} noun={personNoun(p.cells, "title")} />
+        )}
         {rel ? <span className="chip tp-fn">{rel}</span> : <RowFact t={t("relationship")} at={at} cell={p.cells.relationship} addLabel="Relationship" />}
       </div>
-      {/* At a hidden company the name is a quiet lock: the card opens the record, which unlocks it. */}
+      {/* At a hidden company the name is a quiet lock ("Opens after the company"): the card opens the record, which unlocks it. */}
       <div className="tp-pfacts">
-        <Fact label="Name">
+        <Fact label={both ? "Name and title" : "Name"}>
           <RowFact t={t("name")} at={at} cell={p.cells.name} cover={personCoverOf(i, r.e, p, "name")} noun={personNoun(p.cells, "name")} />
         </Fact>
         {p.cells.email?.s !== "empty" && p.cells.email && (
           <Fact label="Email">
-            <RowFact t={t("email")} at={at} cell={p.cells.email} cover={coverOf(i, r.e, "email")} />
+            <RowFact t={t("email")} at={at} cell={p.cells.email} cover={personCoverOf(i, r.e, p, "email")} />
           </Fact>
         )}
       </div>

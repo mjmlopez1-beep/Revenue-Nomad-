@@ -24,7 +24,14 @@
  * identityHidden() and hidesCompany(). The same credit opens the posting and the posted rate of
  * each open role there, whichever of them was asked for. An open role's title and its hours a week
  * are free (roleFree). Where the company is not hidden, the posting and the rate of an open role
- * are still one purchase (BUNDLE_FIELDS).
+ * are still one purchase (BUNDLE_FIELDS). The people and seat holders of a hidden company open
+ * only after the company does.
+ *
+ * Bundles and prices: a person's name and title are one purchase (holdsPersonPartner), and their
+ * LinkedIn, email and phone open only after it (knowsPerson in perform). On a seat whose holder is
+ * on file, who held it and their role are one purchase (holdsSeatPartner). An end month that says
+ * no more than the free status ("Ongoing", or any end on an Active seat or an open role) is free
+ * (endFree), and what members paid for one reading "Ongoing" was given back (refundOngoingEnds).
  *
  * Your seats: the member a seat-holder name resolves to can say "this isn't me"; see
  * seatHolder(). When the name is good evidence (our records, another member, the seat's maker,
@@ -64,7 +71,8 @@ import { keepsNonGtm } from "./seniority";
 import { companyKey, isPlaceholderCompany, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, type Entity,
+  stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
+  SEAT_SCAN_ROLE_FREE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -163,10 +171,11 @@ export interface LedgerEntry {
    * closed (refunds): the scan found the role had closed, and this unlock was made after its
    * posting was last seen. removed (refunds): the scan took the role off the table, a full-time
    * job an older screen had let in (lib/scan/remove.ts). offbar (refunds): the scan took the role
-   * off the table because it is outside GTM and below Director (lib/seniority.ts). retract
-   * (reversals): the member took back a fact they had added.
+   * off the table because it is outside GTM and below Director (lib/seniority.ts). ongoing
+   * (refunds): the end month it bought reads "Ongoing", which is free now (refundOngoingEnds).
+   * retract (reversals): the member took back a fact they had added.
    */
-  why?: "closed" | "removed" | "offbar" | "retract";
+  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -601,6 +610,11 @@ export async function loadState(): Promise<State> {
         if (STARTER_CREDITS + sum < 0) s.ledger.push({ memberId, delta: -(STARTER_CREDITS + sum), reason: "adjust", ref: "starter.floor", at });
     }
     s.flags.starterFloor = STARTER_CREDITS;
+    // An ongoing seat's end month is free now. Whoever paid to see one gets that credit back, once.
+    if (seedNow) {
+      const back = refundOngoingEnds(s, seedNow);
+      if (back) console.log(`Gave back ${back} credit${back === 1 ? "" : "s"} spent on end months that read Ongoing, which are free now.`);
+    }
     // Fractional firms, agencies and marketplaces are not clients: what the state holds about one goes (lib/firmRemoval.ts).
     try {
       const seed = await loadSeed();
@@ -681,6 +695,43 @@ function refundRetired(s: State, seed: Seed) {
     for (const m of s.unlocks[k]) s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
     delete s.unlocks[k];
   }
+}
+
+/**
+ * An end month that reads "Ongoing" is free to see now (endFree). Each member who paid a credit to
+ * see one gets it back, with the ledger line "Gave back 1 credit: an ongoing seat's end month is
+ * free now." Their unlock goes with it, so this changes nothing the second time it runs (it runs on
+ * every load of the state). An end that only became "Ongoing" later is given back on the next load.
+ * Returns the credits given back.
+ */
+function refundOngoingEnds(s: State, seed: Seed, now = new Date().toISOString()): number {
+  const seedEnd = new Map<string, string>();
+  for (const e of seed.engagements) if (e.fields.end) seedEnd.set(e.id, e.fields.end);
+  let paid: Map<string, number> | null = null;
+  let back = 0;
+  for (const k of Object.keys(s.unlocks)) {
+    const dot = k.lastIndexOf(".");
+    if (k.slice(dot + 1) !== "end") continue;
+    const v = s.values[k];
+    // A value in the state wins over the seed's (one removed hides the seed's), as in valueOf.
+    const value = v ? (v.status === "live" ? v.value : null) : seedEnd.get(k.slice(0, dot)) ?? null;
+    if (value !== "Ongoing") continue;
+    if (!paid) {
+      paid = new Map();
+      for (const l of s.ledger) {
+        if ((l.reason !== "unlock" && l.reason !== "refund") || !l.ref.endsWith(".end")) continue;
+        const pk = `${l.memberId} ${l.ref}`;
+        paid.set(pk, (paid.get(pk) ?? 0) - l.delta);
+      }
+    }
+    for (const m of s.unlocks[k]) {
+      if ((paid.get(`${m} ${k}`) ?? 0) <= 0) continue;
+      s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now, why: "ongoing" });
+      back++;
+    }
+    delete s.unlocks[k];
+  }
+  return back;
 }
 
 function mutate<T>(fn: (s: State, seed: Seed) => T): Promise<T> {
@@ -1406,9 +1457,12 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
 
 /**
  * One field as `me` sees it. `free` shows a gated fact without an unlock: a seat holder's own
- * seat, or the posting of a role the weekly scan closed (see postingFree).
+ * seat, or the posting of a role the weekly scan closed (see postingFree). An end month that says
+ * no more than the status (endFree) is always free, and so, with SEAT_SCAN_ROLE_FREE, is the role
+ * of a seat Revenue Nomad found that nobody is named on (scanRoleFree).
  */
 function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex, free = false): Cell {
+  if (entity === "engagement" && ((key === "end" && endFree(node, s)) || (key === "role" && scanRoleFree(node, s)))) free = true;
   const f = fieldDef(entity, key)!;
   const v = valueOf(node, s, f.key);
   if (!v) return { s: "empty" };
@@ -1425,8 +1479,9 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   // (The "Active" a member's claim puts on an open role is written as the scan's, but no posting said it.)
   const fromScan = v.by === "scan" && !(key === "status" && v.value === "Active");
   const from = v.by === "seed" ? ({ from: node!.research?.has(key) ? "research" : "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
-  // A person's title comes with their name, and the name with the title (PERSON_BUNDLE).
-  const paid = !!me && !mine && !!f.gated && ((s.unlocks[k] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key));
+  // A person's title comes with their name, and the name with the title (PERSON_BUNDLE). A seat's role comes with who held it, and the other way round (SEAT_BUNDLE).
+  const paid =
+    !!me && !mine && !!f.gated && ((s.unlocks[k] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key) || holdsSeatPartner(s, me, node, entity, key));
   if (!f.gated || mine || free || paid) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
     if (key === "operator" && idx) {
@@ -1674,7 +1729,8 @@ const BUNDLE_FIELDS = ["posting", "rate"];
  * who holds one of them sees the other at no charge, a title added later included. Holding means
  * paying for either, or having added the name (whoever added a person knows who they are). Adding
  * only the title does not open the name, or adding a title would buy a name and earn a credit at
- * once. Their email, phone and LinkedIn stay 1 credit each. True when `me` holds the other half.
+ * once. Their email, phone and LinkedIn stay 1 credit each, and open only once the member can see
+ * the name and title (PERSON_DETAILS, knowsPerson in perform). True when `me` holds the other half.
  */
 function holdsPersonPartner(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): boolean {
   if (!me || !node || entity !== "contact" || !PERSON_BUNDLE.includes(key)) return false;
@@ -1682,6 +1738,46 @@ function holdsPersonPartner(s: State, me: Member | null, node: Node | undefined,
   const v = valueOf(node, s, other);
   if (!v || v.status === "removed") return false;
   return (s.unlocks[fkey(node.id, other)] ?? []).includes(me.id) || (other === "name" && v.by === me.id);
+}
+/**
+ * An open role, read from its status (what cellOf can tell without the scan's tracks; the scan
+ * keeps the status of the roles it follows in step): "Open role", or a scanned posting with none.
+ */
+function openByStatus(e: Node, s: State): boolean {
+  const status = live(e, s, "status");
+  return status ? status === "Open role" : (e as EngNode).source === "Demand scan";
+}
+/**
+ * An end month that says no more than the free status: "Ongoing", or any end on an Active seat or
+ * an open role (an active seat can't hold a dated end, see ACTIVE_NO_END). It is free to see and
+ * never costs a credit. Only a dated end on a seat that ended or closed is a paid fact.
+ */
+function endFree(e: Node | undefined, s: State): boolean {
+  if (!e) return false;
+  if (live(e, s, "end") === "Ongoing") return true;
+  return live(e, s, "status") === "Active" || openByStatus(e, s);
+}
+/** SEAT_SCAN_ROLE_FREE: the role of a seat Revenue Nomad found that nobody is named on (no seat holder value at all) is a free fact. */
+const scanRoleFree = (e: Node | undefined, s: State) => SEAT_SCAN_ROLE_FREE && !!e && (e as EngNode).source === SEAT_SCAN && !valueOf(e, s, "operator");
+/**
+ * Who held a seat and the role they held are one purchase (SEAT_BUNDLE) on a seat whose holder is
+ * on file (a live name) and that is not an open role (whose title is free anyway). 1 credit opens
+ * both, whichever is asked for, and the purchase is recorded on the seat holder.
+ */
+function seatBundled(e: Node | undefined, s: State): boolean {
+  if (!e) return false;
+  const op = valueOf(e, s, "operator");
+  return !!op && op.status === "live" && !openByStatus(e, s);
+}
+/**
+ * The member paid for the other half of a seat's holder and role (SEAT_BUNDLE), so this half is
+ * free to them, a role or a name added later included. Only a paid unlock counts: adding a half
+ * opens nothing (the seat's own holder sees all of it anyway). True when `me` holds the other half.
+ */
+function holdsSeatPartner(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): boolean {
+  if (!me || !node || entity !== "engagement" || !SEAT_BUNDLE.includes(key) || !seatBundled(node, s)) return false;
+  const other = key === "operator" ? "role" : "operator";
+  return !!valueOf(node, s, other) && (s.unlocks[fkey(node.id, other)] ?? []).includes(me.id);
 }
 /**
  * An open role's title is free to see while the role is open. Once it closes or is filled, it
@@ -2045,6 +2141,18 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     const cid = companyIdOf(id);
     return hiddenIds.has(cid) ? HIDDEN_COMPANY : g.companies.get(cid)?.name ?? "";
   };
+  /** What an unlock (or its refund) bought, for the credit history: one half of a pair names the pair ("Person name and title"). */
+  const boughtLabel = (entity: Entity, id: string, field: string) => {
+    if (entity === "contact" && PERSON_BUNDLE.includes(field)) {
+      const p = g.contacts.get(id);
+      if (p && PERSON_BUNDLE.every((f) => valueOf(p, s, f))) return PERSON_PAIR_LABEL;
+    }
+    if (entity === "engagement" && SEAT_BUNDLE.includes(field)) {
+      const e = g.engagements.get(id);
+      if (e && seatBundled(e, s) && valueOf(e, s, "role")) return SEAT_PAIR_LABEL;
+    }
+    return ledgerLabel(entity, field);
+  };
   if (admin) {
     const lastReport = new Map<string, string>();
     for (const r of s.reportLog) if (r.at > (lastReport.get(r.ref) ?? "")) lastReport.set(r.ref, r.at);
@@ -2116,6 +2224,11 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         ledger.push({ at: l.at, delta: l.delta, reason: "Topped up to 0 when starter credits changed", company: "", field: "" });
         continue;
       }
+      // A credit back for an end month that read "Ongoing", free now (refundOngoingEnds). The line says it all.
+      if (l.reason === "refund" && l.why === "ongoing") {
+        ledger.push({ at: l.at, delta: l.delta, reason: ONGOING_REFUND, company: "", field: "" });
+        continue;
+      }
       // A credit back for an unlock on a role that had already closed (applyScan).
       if (l.reason === "refund" && (l.why === "closed" || l.why === "removed" || l.why === "offbar")) {
         ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : l.why === "offbar" ? OFFBAR_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
@@ -2126,7 +2239,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         ledger.push({ at: l.at, delta: l.delta, reason: `Took back ${say(entityOf(id), field)}`, company: companyNameOf(id), field: "" });
         continue;
       }
-      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: ledgerLabel(entityOf(id), field) });
+      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: l.reason === "unlock" || l.reason === "refund" ? boughtLabel(entityOf(id), id, field) : ledgerLabel(entityOf(id), field) });
     }
     ledger.reverse();
     const prof = s.profiles[me.id] ?? {};
@@ -2215,6 +2328,11 @@ const CLOSED_REFUND = "Refund for a role that had closed";
 const REMOVED_REFUND = "Refund for a full-time job we took off the list";
 /** A role the scan took off the table because it is outside GTM and below Director (lib/seniority.ts). */
 const OFFBAR_REFUND = "Refund for a role we took off the list";
+/** The credit back for an end month that read "Ongoing" (refundOngoingEnds). The owner's words. */
+const ONGOING_REFUND = "Gave back 1 credit: an ongoing seat's end month is free now.";
+/** A person's name and title, and who held a seat with their role, as the credit history names the purchase (app/post/ledger.ts reads these). */
+const PERSON_PAIR_LABEL = "Person name and title";
+const SEAT_PAIR_LABEL = "Seat holder and role";
 const fieldLabel = (entity: Entity, field: string) =>
   entity === "company" && field === "identity" ? HIDDEN_COMPANY : fieldDef(entity, field)?.label ?? field;
 /** The same for a row in the credit history. A person's fields say so: "Person email", not "Email". */
@@ -2657,6 +2775,12 @@ const LISTED_STATUS = "This role is still listed, so its status comes from the p
 export const SEAT_SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
 /** Claiming a seat-scan seat that a member already claimed. */
 const SEAT_TAKEN = "Another member already claimed this seat. If it's yours, report the seat holder and an admin will look at it.";
+/** Unlocking a person's LinkedIn, email or phone before the member can see who they are (PERSON_DETAILS). */
+export const NAME_FIRST = "Unlock their name and title first.";
+/** Adding a person's details or title while their name is locked to the member. */
+export const NAME_FIRST_ADD = "Unlock their name and title first. Then you can add what you know about them.";
+/** Unlocking a person or a seat holder at a company that is still locked to the member. */
+export const COMPANY_FIRST = "Unlock the company first.";
 
 /**
  * `dryRun` (the connector's "what would this cost"): the action runs on a copy of the state and
@@ -2740,11 +2864,32 @@ export async function perform(
         pickFree.set(companyId, s.companies.some((c) => c.id === companyId && c.by === me.id) || [...g.engagements.values()].some((e) => e.companyId === companyId && ownSeat(e.id)));
       return pickFree.get(companyId)!;
     };
-    /** Gated facts this member sees without an unlock: their own seat, an open role's title, the posting of a role the scan closed (unless its company is hidden), and the other half of a person's name and title they hold. */
+    /**
+     * Gated facts this member sees without an unlock: their own seat, an open role's title, an end
+     * month that says no more than the status, the posting of a role the scan closed (unless its
+     * company is hidden), the other half of a person's name and title or of a seat's holder and
+     * role they hold, and (SEAT_SCAN_ROLE_FREE) the role of a found seat nobody is named on.
+     */
     const freeFor = (entity: Entity, id: string, field: string) =>
       (entity === "contact" && holdsPersonPartner(s, me, g.contacts.get(id), entity, field)) ||
       (entity === "engagement" &&
-        ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) || (field === "role" && roleFree(g.engagements.get(id), s, tracks())) || ownSeat(id)));
+        ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) ||
+          (field === "role" && (roleFree(g.engagements.get(id), s, tracks()) || scanRoleFree(g.engagements.get(id), s))) ||
+          (field === "end" && endFree(g.engagements.get(id), s)) ||
+          holdsSeatPartner(s, me, g.engagements.get(id), entity, field) ||
+          ownSeat(id)));
+    /**
+     * The member can see who this person is: their name and title, where on file, are the member's
+     * own, paid for, or come with the other half. Until then the person's LinkedIn, email and phone
+     * can't be unlocked, and nothing can be added about them but a relationship (PERSON_DETAILS).
+     * A half under review (two reports hide it for everyone) holds nothing back: nobody can unlock
+     * it, and the screen shows no lock for it (the same test as personUnseen in app/post/model.ts).
+     */
+    const knowsPerson = (node: Node) =>
+      PERSON_BUNDLE.every((f) => {
+        const v = valueOf(node, s, f);
+        return !v || v.status !== "live" || v.by === me.id || (s.unlocks[fkey(node.id, f)] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, "contact", f);
+      });
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
     const mustSee = (companyId: string) => {
       if (hiddenFor(companyId)) throw new ActionError("This company is locked. Unlock it for 1 credit, then add what you know.");
@@ -2952,6 +3097,8 @@ export async function perform(
       if (entity === "engagement") {
         if (key === "operator" ? linked?.id !== me.id : !holdsSeat(node)) throw new ActionError(key === "operator" ? SEAT_SELF_ONLY : SEAT_HOLDER_ONLY);
       }
+      // A person's contact details and title come from a member who can see who the person is (a new person's adder always can).
+      if (entity === "contact" && (PERSON_DETAILS.includes(key) || key === "title") && !knowsPerson(node)) throw new ActionError(NAME_FIRST_ADD);
       // Picking yourself writes your own name. One on file under a single word takes the first and last name typed instead.
       let { value, error } = cleanValue(f, linked ? linked.name : raw);
       if (error && linked && linked.id === me.id && typeof raw === "string" && raw.trim()) ({ value, error } = cleanValue(f, raw));
@@ -3080,7 +3227,8 @@ export async function perform(
         case "unlock":
         case "unlockMany": {
           const items = a.type === "unlock" ? [a] : (a.items ?? []).slice(0, 60);
-          const todo: { k: string; node: Node; entity: Entity; field: string; pair?: boolean }[] = [];
+          /** `pair`: an open role's posting and rate. `seat`: who held a seat, with their role (SEAT_BUNDLE). */
+          const todo: { k: string; node: Node; entity: Entity; field: string; pair?: boolean; seat?: boolean }[] = [];
           const hid = new Map<string, boolean>();
           const hiddenNow = (companyId: string) => {
             if (!hid.has(companyId)) hid.set(companyId, hiddenFor(companyId));
@@ -3108,12 +3256,27 @@ export async function perform(
           const pairs = new Set<string>();
           /** People whose name and title this purchase already covers. */
           const persons = new Set<string>();
+          /** Seats whose holder and role this purchase already covers. */
+          const seatsBought = new Set<string>();
           const free: { node: Node; field: string }[] = [];
-          for (const it of items) {
-            const node = nodeOf(it.entity, it.id);
+          /**
+           * What opens a fact comes first: a person's name and title before their LinkedIn, email and
+           * phone, and a locked company before its people and seat holders. The same request may buy
+           * that first (Unlock all does), so such a fact waits for the rest of the request. Asked
+           * again at the end, it is refused, and nothing is spent.
+           */
+          const waitsFor = (entity: Entity, node: Node, field: string): string | null => {
+            const companyId = companyOf(entity, node.id);
+            const peopleSide = entity === "contact" || (entity === "engagement" && (field === "operator" || (field === "role" && seatBundled(node, s))));
+            if (peopleSide && hiddenNow(companyId) && !todo.some((t) => t.k === fkey(companyId, "identity"))) return COMPANY_FIRST;
+            if (entity === "contact" && PERSON_DETAILS.includes(field) && !persons.has(node.id) && !knowsPerson(node)) return NAME_FIRST;
+            return null;
+          };
+          const waiting: { it: (typeof items)[number]; node: Node }[] = [];
+          const take = (it: (typeof items)[number], node: Node, last: boolean) => {
             if (it.entity === "company" && (it.field === "identity" || IDENTITY_FIELDS.has(it.field))) {
               if (hiddenNow(node.id)) bundle(node);
-              continue;
+              return;
             }
             let itField = it.field;
             // An open role's posted hours show with its posting and posted rate (lockedHours in fullView): asking for them buys that purchase.
@@ -3122,37 +3285,60 @@ export async function perform(
               if (eng && isOpenRole(eng, s, tracks())) {
                 if (hiddenNow(eng.companyId)) {
                   bundle(g.companies.get(eng.companyId)!);
-                  continue;
+                  return;
                 }
                 const lead = BUNDLE_FIELDS.find((x) => valueOf(eng, s, x)?.status === "live");
-                if (!lead) continue;
+                if (!lead) return;
                 itField = lead;
               }
             }
             const f = fieldOf(it.entity, itField);
             const k = fkey(node.id, f.key);
             const cur = valueOf(node, s, f.key);
-            if (!cur || cur.status !== "live") continue;
-            if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id) || todo.some((t) => t.k === k)) continue;
-            if (freeFor(it.entity, node.id, f.key)) continue; // your own seat, or the posting of a closed role: already visible
+            if (!cur || cur.status !== "live") return;
+            if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id) || todo.some((t) => t.k === k)) return;
+            if (freeFor(it.entity, node.id, f.key)) return; // your own seat, an ongoing end, the posting of a closed role, the other half of a pair: already visible
+            const wait = waitsFor(it.entity, node, f.key);
+            if (wait) {
+              if (last) throw new ActionError(wait);
+              waiting.push({ it, node });
+              return;
+            }
             // A person's name and title: one purchase, whichever was asked for (the other is free after, see freeFor).
             if (it.entity === "contact" && PERSON_BUNDLE.includes(f.key)) {
-              if (persons.has(node.id)) continue;
+              if (persons.has(node.id)) return;
               persons.add(node.id);
+            }
+            // Who held a seat and their role: one purchase, whichever was asked for, recorded on the seat holder
+            // (unless the name is the member's own), so it counts as a seat holder unlocked.
+            if (it.entity === "engagement" && SEAT_BUNDLE.includes(f.key) && seatBundled(node, s)) {
+              if (seatsBought.has(node.id)) return;
+              seatsBought.add(node.id);
+              const lead = valueOf(node, s, "operator")?.by === me.id ? f.key : "operator";
+              todo.push({ k: fkey(node.id, lead), node, entity: "engagement", field: lead, seat: true });
+              return;
             }
             const eng = it.entity === "engagement" && BUNDLE_FIELDS.includes(f.key) ? g.engagements.get(node.id) : undefined;
             if (eng && isOpenRole(eng, s, tracks())) {
               if (hiddenNow(eng.companyId)) {
                 bundle(g.companies.get(eng.companyId)!);
-                continue;
+                return;
               }
-              if (pairs.has(eng.id)) continue;
+              if (pairs.has(eng.id)) return;
               pairs.add(eng.id);
               if (BUNDLE_FIELDS.some((x) => x !== f.key && has(eng, x))) free.push({ node, field: f.key });
               else todo.push({ k, node, entity: it.entity, field: f.key, pair: true });
-              continue;
+              return;
             }
             todo.push({ k, node, entity: it.entity, field: f.key });
+          };
+          for (const it of items) take(it, nodeOf(it.entity, it.id), false);
+          // What waited: the rest of the request may have bought what opens it (a company, then a person's name there, then their email).
+          while (waiting.length) {
+            const before = waiting.length;
+            for (const w of waiting.splice(0)) take(w.it, w.node, false);
+            // Nothing more opened: what still waits is refused (this throws), and nothing is spent.
+            if (waiting.length === before) take(waiting[0].it, waiting[0].node, true);
           }
           if (!todo.length && !free.length) {
             if (a.type === "unlock") throw new ActionError("Nothing here is locked, so no credit was spent.");
@@ -3213,6 +3399,11 @@ export async function perform(
             .filter((t) => t.entity === "contact" && PERSON_BUNDLE.includes(t.field))
             .map((t) => ({ node: t.node, field: t.field === "name" ? "title" : "name" }))
             .filter((x) => valueOf(x.node, s, x.field)?.status === "live");
+          // The other half of each seat's holder and role this bought. It shows through SEAT_BUNDLE: nothing more is recorded or charged.
+          const seatAlso = todo
+            .filter((t) => t.seat)
+            .map((t) => ({ node: t.node, field: t.field === "operator" ? "role" : "operator" }))
+            .filter((x) => valueOf(x.node, s, x.field)?.status === "live");
           for (const t of paired) for (const other of BUNDLE_FIELDS) if (other !== t.field && give(t.node, other)) came.push({ node: t.node, field: other });
           for (const x of free) for (const field of BUNDLE_FIELDS) if (!has(x.node, field) && give(x.node, field)) came.push({ node: x.node, field });
           const others = todo.length - companies.length - paired.length;
@@ -3220,13 +3411,15 @@ export async function perform(
           const price = need ? ` for ${need} credit${need > 1 ? "s" : ""}` : "";
           const noCharge = need ? "" : " You had already paid for this open role, so no credit was spent.";
           const companyName = (t: { node: Node }) => g.companies.get(t.node.id)?.name ?? "the company";
-          const opens = need + personAlso.length;
+          // Each purchase is one fact: a person's name and title count once, and so do who held a seat and their role.
           let message =
             todo.length === 1 && personAlso.length === 1
               ? `Unlocked a person's name and title${price}.`
-              : todo.length === 1
-                ? `Unlocked ${say(todo[0].entity, todo[0].field)}${price}.`
-                : `Unlocked ${opens} facts${price}.`;
+              : todo.length === 1 && seatAlso.length === 1
+                ? `Unlocked the seat holder and their role${price}.`
+                : todo.length === 1
+                  ? `Unlocked ${say(todo[0].entity, todo[0].field)}${price}.`
+                  : `Unlocked ${need} facts${price}.`;
           if (paired.length || free.length || (companies.length && came.length)) {
             // Name what the credit bought: "Acme, the role, the posting and the posted rate".
             const opened = new Set([...paired, ...came].filter((x) => BUNDLE_FIELDS.includes(x.field)).map((x) => `${x.node.id}.${x.field}`));
@@ -3244,6 +3437,7 @@ export async function perform(
               ...todo.filter((t) => t.field !== "identity").map((t) => changed(t.entity, t.node, t.field)),
               ...came.map((x) => changed("engagement", x.node, x.field)),
               ...personAlso.map((x) => changed("contact", x.node, x.field)),
+              ...seatAlso.map((x) => changed("engagement", x.node, x.field)),
               ...companies.flatMap((t) => [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", t.node, field))),
             ],
           };
@@ -3467,8 +3661,12 @@ export async function perform(
             f.key === "role" &&
             roleFree(node as EngNode, s, tracks()) &&
             (holdsOpenRole(s, me, node) || (s.unlocks[fkey((node as EngNode).companyId, "identity")] ?? []).includes(me.id));
-          // A person's name or title counts as paid for by whoever paid for the other half (PERSON_BUNDLE).
-          const paid = (s.unlocks[k] ?? []).includes(me.id) || paidRole || (a.entity === "contact" && holdsPersonPartner(s, me, node, a.entity, f.key));
+          // A person's name or title counts as paid for by whoever paid for the other half (PERSON_BUNDLE), and so does a seat's holder or role (SEAT_BUNDLE).
+          const paid =
+            (s.unlocks[k] ?? []).includes(me.id) ||
+            paidRole ||
+            (a.entity === "contact" && holdsPersonPartner(s, me, node, a.entity, f.key)) ||
+            (a.entity === "engagement" && holdsSeatPartner(s, me, node, a.entity, f.key));
           const own = a.entity === "engagement" && ownSeat(node.id);
           const canSee = !f.gated || paid || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee) throw new ActionError("There's nothing here to report. You can only report a fact you can see.");
@@ -3754,7 +3952,15 @@ export async function perform(
           // The fill that added it. A correction of our records on their own seat, or a value filled in from another answer, has none.
           const row = s.ledger.findLast((l) => l.memberId === me.id && l.ref === k && l.reason === "fill" && !l.undone);
           if (!row) throw new ActionError("You can only take back a fact you added. Edit this one instead.");
-          if ((s.unlocks[k] ?? []).some((m) => m !== me.id)) throw new ActionError("Someone already unlocked this, so it stays. You can still edit it.");
+          // Half of a pair another member bought (a person's name and title, who held a seat and their role) was part of what they paid for.
+          const partner =
+            a.entity === "contact" && PERSON_BUNDLE.includes(f.key)
+              ? f.key === "name" ? "title" : "name"
+              : a.entity === "engagement" && SEAT_BUNDLE.includes(f.key) && seatBundled(node, s)
+                ? f.key === "operator" ? "role" : "operator"
+                : null;
+          if ((s.unlocks[k] ?? []).some((m) => m !== me.id) || (partner && (s.unlocks[fkey(node.id, partner)] ?? []).some((m) => m !== me.id)))
+            throw new ActionError("Someone already unlocked this, so it stays. You can still edit it.");
           if ((s.verifications[k] ?? []).length) throw new ActionError("Someone already confirmed this, so it stays. You can still edit it.");
           // The invite bonus paid on this fact (it pays with the first fact on a record, in the same change).
           const paidInvite =

@@ -277,7 +277,9 @@ async function main() {
     const openNamedSales = openSales.filter((r) => r.company);
     check("Sales has more open roles than it names, and names at most 3 of them, the newest", openSales.length >= 6 && openNamedSales.length >= 1 && openNamedSales.length <= 3 && openSales.slice(0, openNamedSales.length).every((r) => r.company), openSales.map((r) => `${r.when} ${r.company?.name ?? "-"}`).join(" | "));
     const kept = openSales.filter((r) => !r.company && !r.blur);
-    check("the other open roles keep their title, with no trace of the company", kept.length >= 2 && kept.every((r) => /fractional head of sales/i.test(r.title) && !/quillfern/i.test(r.title)), kept.map((r) => r.title).join(" | "));
+    // A real open role from the seed can sit among the test's own (it depends on the day), so the titles checked are the test's.
+    const ours = kept.filter((r) => /fractional head of sales/i.test(r.title));
+    check("the other open roles keep their title, with no trace of the company", ours.length >= 2 && kept.every((r) => !/quillfern/i.test(r.title)), kept.map((r) => r.title).join(" | "));
     check("open-role companies shown: no posting link and no posted rate with it", !/jobs\.example\.com|\$175\/hr|\$9k\/mo/i.test(first.text + mk.text));
   }
   check("a past seat's row says only that a seat holder is on file", sales.filter((r) => r.kind === "hired").every((r) => /^(Fractional )?Sales seat$/.test(r.title) && (r.holder === undefined || typeof r.holder === "boolean")));

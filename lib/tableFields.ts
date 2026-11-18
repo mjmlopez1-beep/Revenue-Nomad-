@@ -7,10 +7,12 @@
  * Each value is stored once on its own record and shows everywhere it applies.
  *
  * Free fields describe the company and the shape of the work (function, type, status, start,
- * hours per week), so the free view is useful on its own. Locked fields are the intel
- * people trade for: the exact role, end date, who held the seat, rate, the
- * posting, and people's names, titles and contact details (a name and title are one unlock). Adding a missing fact earns 1 credit (max
- * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
+ * hours per week, and the end month of a seat that is still going), so the free view is useful on
+ * its own. Locked fields are the intel people trade for: the exact role, the end month of a seat
+ * that ended, who held the seat (with their role, one unlock), rate, the posting, and people's
+ * names, titles and contact details (a name and title are one unlock, and the contact details open
+ * after it). Adding a missing fact earns 1 credit (max EARN_CAP per rolling 24 hours); unlocking a
+ * locked fact someone else added costs 1.
  */
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
 
@@ -315,6 +317,7 @@ export const GROUPS: GroupDef[] = [
     fields: [
       { key: "source", label: "Source", kind: "text", gated: false, system: true, say: "the source" },
       { key: "function", label: "Function", kind: "choice", gated: false, options: FUNCTIONS, hint: "The function this seat covers.", say: "the function" },
+      // On a seat whose holder is on file, the role comes with who held it: one credit opens both (SEAT_BUNDLE).
       { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title, the way the client wrote it.", say: "the role" },
       { key: "type", label: "Type of work", short: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES, say: "the type of work" },
       { key: "status", label: "Status", kind: "choice", gated: false, options: STATUSES, hint: "Open role means the client is hiring for this seat now.", say: "the status" },
@@ -328,6 +331,7 @@ export const GROUPS: GroupDef[] = [
         say: "the seat holder",
       },
       { key: "start", label: "Start month", short: "Start", kind: "month", gated: false, hint: "The month the work started.", say: "the start month" },
+      // Locked only when it is a month on a seat that ended. "Ongoing", or any end on an Active seat or an open role, is free (endFree in lib/table.ts).
       { key: "end", label: "End month", short: "End", kind: "monthOrOngoing", gated: true, hint: "The month the work ended. Pick Ongoing if it's still going.", say: "the end month" },
       { key: "reason", label: "Why they hired", short: "Why hired", kind: "choice", gated: false, options: HIRE_REASONS, hint: "What the client brought the fractional in to do.", say: "the reason they hired" },
       { key: "sourced", label: "How it was sourced", short: "Sourced via", kind: "choice", gated: true, options: SOURCED_VIA, hint: "How the client found the fractional.", say: "how the seat was sourced" },
@@ -382,6 +386,24 @@ export const GROUPS: GroupDef[] = [
 
 /** A person's name and title: one unlock, 1 credit for both (holdsPersonPartner in lib/table.ts). The lead comes first. */
 export const PERSON_BUNDLE = ["name", "title"];
+/**
+ * A person's contact details. Each is 1 credit, and only once the member can see who the person
+ * is (their name and title): a LinkedIn address or an email often spells the name. The same goes
+ * for adding them, and for adding a title, so nobody earns for facts about a person they can't see.
+ */
+export const PERSON_DETAILS = ["linkedin", "email", "phone"];
+/**
+ * Who held a seat and the role they held: one unlock, 1 credit for both, on a seat whose holder is
+ * on file (holdsSeatPartner in lib/table.ts). The lead comes first, and the purchase is recorded
+ * on it. A seat with nobody named keeps its role as a purchase of its own.
+ */
+export const SEAT_BUNDLE = ["operator", "role"];
+/**
+ * The role of a seat Revenue Nomad found on LinkedIn that nobody is named on yet (source "Seat
+ * scan", no seat holder). False: it is a 1 credit fact like any past seat's role. True: it is a
+ * free fact everywhere (the table, Unlock all, the counts and the connector). The owner decides.
+ */
+export const SEAT_SCAN_ROLE_FREE = false;
 
 export const ALL_FIELDS = GROUPS.flatMap((g) => g.fields.map((f) => ({ entity: g.entity, f, col: `${g.entity}.${f.key}` })));
 /** Fields a member can fill (identity and system fields are never filled). */

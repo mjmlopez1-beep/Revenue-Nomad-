@@ -170,18 +170,28 @@ function pickEmpty(view, n, values = PLAIN) {
   return out;
 }
 const fillAct = ({ type, entity, id, field, value }) => ({ type, entity, id, field, value });
-/** n locked facts on engagements and people at companies that are not hidden. */
+/** A person's LinkedIn, email and phone open only after their name and title (PERSON_DETAILS in lib/tableFields.ts). */
+const DETAILS = ["linkedin", "email", "phone"];
+/**
+ * n locked facts on engagements and people at companies that are not hidden, each 1 credit on its
+ * own. A person's name and title are one purchase (the title is left out when the name is locked
+ * too), and so are who held a seat and their role (the role is left out when the holder is locked
+ * too). A person's contact details are left out while their name or title is locked: they open after it.
+ */
 function pickLocked(view, n) {
   const out = [];
   for (const c of view.companies) {
     if (c.hidden) continue;
     const people = [...c.people];
     for (const e of c.engagements) {
-      for (const [field, cell] of Object.entries(e.cells)) if (cell.s === "locked" && out.length < n) out.push({ entity: "engagement", id: e.id, field });
+      for (const [field, cell] of Object.entries(e.cells)) if (cell.s === "locked" && out.length < n && !(field === "role" && e.cells.operator?.s === "locked")) out.push({ entity: "engagement", id: e.id, field });
       people.push(...e.people);
     }
-    // A person's name and title are one purchase: the title is left out when the name is locked too.
-    for (const p of people) for (const [field, cell] of Object.entries(p.cells)) if (cell.s === "locked" && out.length < n && !(field === "title" && p.cells.name?.s === "locked")) out.push({ entity: "contact", id: p.id, field });
+    for (const p of people) {
+      const unseen = p.cells.name?.s === "locked" || p.cells.title?.s === "locked";
+      for (const [field, cell] of Object.entries(p.cells))
+        if (cell.s === "locked" && out.length < n && !(field === "title" && p.cells.name?.s === "locked") && !(unseen && DETAILS.includes(field))) out.push({ entity: "contact", id: p.id, field });
+    }
     if (out.length >= n) break;
   }
   if (out.length < n) throw new Error(`only ${out.length} locked facts`);

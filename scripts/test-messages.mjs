@@ -136,7 +136,8 @@ async function main() {
   check("the answer carries no email address and no internal id", noSecrets(start), JSON.stringify(start).slice(0, 300));
   const convId = start.conversation?.id;
   const salSees = start.conversation;
-  check("Sal sees the seat as far as he unlocked it (function, start year)", salSees?.about.company === "Acme Robotics" && salSees.about.seat === "Sales" && salSees.about.years === "2023", salSees?.about);
+  // Who held a seat and their role are one purchase (SEAT_BUNDLE): unlocking the holder opened the role too.
+  check("Sal sees the seat as far as he unlocked it (the role that came with who held it, start year)", salSees?.about.company === "Acme Robotics" && salSees.about.seat === "Fractional VP Sales" && salSees.about.years === "2023", salSees?.about);
   check("Sal sees Hana by name, never her email", salSees?.with.name === "Hana Holder" && salSees.with.first === "Hana" && !JSON.stringify(salSees).includes("hana.holder@"), salSees?.with);
   const exactly = await act(SAL, { type: "message.send", conversationId: convId, text: "y".repeat(2000) });
   check("2,000 characters is fine", exactly.ok, exactly);

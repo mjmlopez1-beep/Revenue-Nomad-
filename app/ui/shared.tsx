@@ -369,7 +369,9 @@ export function CompanyLogo({ name, domain, size = "md", hidden, seed }: { name:
  * and focus (always, on touch screens): "Unlock · 1 credit". One click or tap spends the credit.
  * `what` names the fact for the tooltip and screen readers ("the role", "this company").
  * `noun` is added to the label where one lock stands for more ("Unlock company"). A tight
- * spot can hide it (.lock-noun).
+ * spot can hide it (.lock-noun). `later`: today's unlocks are used up (credits left), so it reads
+ * "Unlocks again tomorrow" and a click does nothing. `broke`: 0 credits, so it reads "Earn a credit
+ * to unlock" (the click still runs, to show how to earn one). The same states as the app's Lock.
  */
 export function LockPill({
   onUnlock,
@@ -378,6 +380,8 @@ export function LockPill({
   noun,
   busy,
   from,
+  later,
+  broke,
 }: {
   onUnlock: () => void;
   ver?: number;
@@ -386,17 +390,20 @@ export function LockPill({
   busy?: boolean;
   /** Where a fact with no member confirmations came from (Cell.from). */
   from?: "records" | "posting";
+  later?: boolean;
+  broke?: boolean;
 }) {
-  const say = `Unlock ${what ?? "this"} for 1 credit`;
+  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `Earn a credit to unlock ${what ?? "this"}` : `Unlock ${what ?? "this"} for 1 credit`;
   const source = from === "records" ? "From Revenue Nomad records." : from === "posting" ? "From the job posting." : "";
   return (
     <button
       type="button"
-      className={`lock${busy ? " busy" : ""}`}
+      className={`lock${busy ? " busy" : ""}${later ? " later" : ""}${broke ? " broke" : ""}`}
       title={ver ? `${say}. Confirmed by ${ver} ${ver === 1 ? "member" : "members"}.` : source ? `${say}. ${source}` : say}
       aria-label={busy ? "Unlocking" : say}
+      aria-disabled={later || undefined}
       disabled={busy}
-      onClick={(e) => (e.stopPropagation(), onUnlock())}
+      onClick={(e) => (e.stopPropagation(), !later && onUnlock())}
     >
       <span className="lock-rest" aria-hidden>
         <IconLock />
@@ -404,11 +411,19 @@ export function LockPill({
       </span>
       <span className="lock-cta" aria-hidden>
         <IconLock />
-        <span>
-          {busy ? "Unlocking" : "Unlock"}
-          {!busy && noun && <span className="lock-noun"> {noun}</span>}
-        </span>
-        {!busy && <span className="lock-cost">· 1 credit</span>}
+        {later ? (
+          <span>Unlocks again tomorrow</span>
+        ) : broke && !busy ? (
+          <span>Earn a credit to unlock</span>
+        ) : (
+          <>
+            <span>
+              {busy ? "Unlocking" : "Unlock"}
+              {!busy && noun && <span className="lock-noun"> {noun}</span>}
+            </span>
+            {!busy && <span className="lock-cost">· 1 credit</span>}
+          </>
+        )}
       </span>
     </button>
   );

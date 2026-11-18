@@ -16,10 +16,11 @@
  * A lock's label never takes clicks (post.css), so only the lock's own box spends.
  */
 import { memo, useContext, useRef, useState, type ReactNode } from "react";
-import type { Cell, EngagementRec, Me } from "@/lib/tableTypes";
+import type { Cell, EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconLock, IconStar, LockedName, LockedSite, fmtMonth } from "../ui/shared";
 import {
-  COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, personCoverOf, personNoun, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
+  ADD_AFTER_NAME, COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, PERSON_NO_ADD, coverOf, personBothLocked, personCoverOf, personNoun, personUnseen, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn,
+  recentSeats, seatNoun, seatWhat, shown, waitWords, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
 } from "./model";
 import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
@@ -141,7 +142,8 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
         Open seat
       </span>
     );
-  return <RowFact t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} cover={cover} />;
+  // "Unlock who held it · 1 credit": the name, with the role they held, for one credit.
+  return <RowFact t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} cover={cover} noun={seatNoun(e, "operator")} what={seatWhat(e, "operator")} />;
 }
 
 /** The one unlock for a hidden company: its name, website, LinkedIn and About, and the role, posting and rate of its open roles. */
@@ -159,13 +161,17 @@ const SELL_FIELDS = new Set(["industry", "employees", "revenue", ...COMPANY_GTM]
 /** The member added this company or holds a seat here, so its answers are not held to the 5 a day. */
 export const ownCompany = (i: CoInfo) => !!i.c.added || i.engs.some((e) => e.yours);
 
-/** A locked fact that another control on the row buys, or the record: a quiet lock, never a button. */
-function Covered({ title }: { title: string }) {
+/**
+ * A locked fact that another control on the row buys, or the record: a quiet lock, never a button.
+ * `words` ("Opens after the name"): a lock that waits for another purchase says so where there is
+ * room (phone cards). In a table row it rests like the others, and its tooltip says it.
+ */
+function Covered({ title, words }: { title: string; words?: string | null }) {
   return (
     <span className="tp-cell tp-covered" title={title}>
       <IconLock />
-      <span className="lock-mask" aria-hidden />
-      <span className="sr-only">Locked. {title}</span>
+      {words ? <span className="tp-lockwait-t">{words}</span> : <span className="lock-mask" aria-hidden />}
+      <span className="sr-only">{words ? title.slice(words.length) : `Locked. ${title}`}</span>
     </span>
   );
 }
@@ -182,9 +188,10 @@ function LockWait() {
 }
 
 /**
- * A fact in a list row or card. It is FactCell, plus three rules only lists need: a lock another
- * control buys is quiet (`cover`), a lock past today's unlock limit says "Unlocks again
- * tomorrow", and a company answer past the 5 that earn today drops its "+1".
+ * A fact in a list row or card. It is FactCell, plus four rules only lists need: a lock another
+ * control buys (or that waits for another purchase) is quiet (`cover`), a lock past today's unlock
+ * limit says "Unlocks again tomorrow", an empty fact the member can't add here is a dash with the
+ * reason (`noAdd`), and a company answer past the 5 that earn today drops its "+1".
  */
 export function RowFact({
   t,
@@ -195,6 +202,8 @@ export function RowFact({
   own,
   at,
   noun,
+  what,
+  noAdd,
 }: {
   t: FactRef;
   cell: Cell | undefined;
@@ -205,15 +214,20 @@ export function RowFact({
   own?: boolean;
   /** The company's name, for the button names where the row does not show it next to them (phone cards). */
   at?: string;
-  /** Where one lock opens more than this fact, what it opens ("name and title"). */
+  /** Where one lock opens more than this fact, what it opens ("name and title", "who held it"). */
   noun?: string;
+  /** The lock's tooltip for what it opens, where that is more than this fact (see seatWhat). */
+  what?: string;
+  /** Why this empty fact can't be added here (a person the member can't see yet): a dash, never "+ Add". */
+  noAdd?: string | null;
 }) {
   const ui = useCellUi();
   const ref = useRef<HTMLSpanElement>(null);
   if (cell?.s === "locked") {
-    if (cover) return <Covered title={cover} />;
+    if (cover) return <Covered title={cover} words={ui.layout === "phone" ? waitWords(cover) : null} />;
     if (ui.me.unlocksLeft === 0 && ui.me.credits > 0) return <LockWait />;
   }
+  if (cell?.s === "empty" && noAdd) return <None title={noAdd} />;
   if (cell?.s === "empty" && t.entity === "company" && !own && SELL_FIELDS.has(t.field) && ui.me.sellEarnLeft === 0 && !ui.isHidden(t.id)) {
     return (
       <span className="tp-cell" data-cell={`${t.id}.${t.field}`} ref={ref} title="Only 5 answers like this earn a credit each day. You can still add it.">
@@ -221,7 +235,7 @@ export function RowFact({
       </span>
     );
   }
-  return <FactCell t={t} cell={cell} render={render} addLabel={addLabel} at={at} noun={noun} />;
+  return <FactCell t={t} cell={cell} render={render} addLabel={addLabel} at={at} noun={noun} what={what} />;
 }
 
 /** The tooltip on a locked company's name. */
@@ -321,7 +335,8 @@ function SeatCell({ i }: { i: CoInfo }) {
   const start = shown(e.cells.start);
   return (
     <span className="tp-stack">
-      <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} cell={e.cells.role} addLabel="Add role" cover={coverOf(i, e, "role")} />
+      {/* On a seat whose holder is on file the role comes with who held it: this lock opens both. */}
+      <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} cell={e.cells.role} addLabel="Add role" cover={coverOf(i, e, "role")} noun={seatNoun(e, "role")} what={seatWhat(e, "role")} />
       {e.opened ? <RoleDate e={e} /> : start && <span className="tp-stack-sub num">{fmtMonth(start)}</span>}
     </span>
   );
@@ -348,8 +363,8 @@ function PeopleCell({ i }: { i: CoInfo }) {
   const more = i.people.length - 1;
   return (
     <span className="tp-stack">
-      {/* A locked title comes with the name (one credit opens both): a quiet lock over the name's. */}
-      {tc?.s === "locked" ? (
+      {/* A locked name and title are one purchase: one lock, on the name's line ("Unlock name and title"). */}
+      {personBothLocked(dm.p.cells) ? null : tc?.s === "locked" ? (
         <span className="tp-ppl-t">
           <RowFact t={{ entity: "contact", id: dm.p.id, field: "title" }} cell={tc} cover={personCoverOf(i, dm.e, dm.p, "title")} />
         </span>
@@ -376,10 +391,13 @@ const rowProps = (r: Row, sel: boolean, onOpen: (r: Row) => void) => ({
   "data-row": r.key,
 });
 
-/** A fact of a seat in a row: quiet when another control buys it, a dash when an open role can't have it yet. */
+/**
+ * A fact of a seat in a row: quiet when another control buys it, a dash when an open role can't
+ * have it yet. Its role, on a seat whose holder is on file, opens with who held it (one lock each, one purchase).
+ */
 function engCell(i: CoInfo, e: EngagementRec, field: string, opts: { render?: (v: string) => ReactNode; addLabel?: string } = {}) {
   if (NOT_YET_ON_OPEN_ROLE.includes(field) && isUnheldOpenRole(e) && e.cells[field]?.s === "empty") return <None title={NOT_YET} />;
-  return <RowFact t={{ entity: "engagement", id: e.id, field }} cell={e.cells[field]} cover={coverOf(i, e, field)} {...opts} />;
+  return <RowFact t={{ entity: "engagement", id: e.id, field }} cell={e.cells[field]} cover={coverOf(i, e, field)} noun={seatNoun(e, field)} what={seatWhat(e, field)} {...opts} />;
 }
 
 const CompanyRow = memo(function CompanyRow({ r, mine, sel, onOpen, isNew, gap }: { r: Row; mine: string | null; sel: boolean; onOpen: (r: Row) => void; isNew: boolean; gap: boolean }) {
@@ -505,19 +523,40 @@ const EngRow = memo(function EngRow({ r, mine, sel, onOpen, hiring }: { r: Row; 
   );
 });
 
+/**
+ * A person's name and title in one cell. While both are locked: one lock, "Unlock name and title ·
+ * 1 credit", that opens the two. Otherwise the name, with the title under it.
+ */
+function NameAndTitle({ i, e, p }: { i: CoInfo; e: EngagementRec | null | undefined; p: PersonRec }) {
+  const t = (field: string) => ({ entity: "contact" as const, id: p.id, field });
+  if (personBothLocked(p.cells)) return <RowFact t={t("name")} cell={p.cells.name} cover={personCoverOf(i, e, p, "name")} noun={personNoun(p.cells, "name")} />;
+  return (
+    <span className="tp-stack">
+      <RowFact t={t("name")} cell={p.cells.name} cover={personCoverOf(i, e, p, "name")} addLabel="Name" />
+      <span className="tp-stack-sub">
+        <RowFact t={t("title")} cell={p.cells.title} cover={personCoverOf(i, e, p, "title")} addLabel="Title" noAdd={personUnseen(p.cells) ? ADD_AFTER_NAME : null} />
+      </span>
+    </span>
+  );
+}
+
 const PersonRow = memo(function PersonRow({ r, sel, onOpen }: { r: Row; sel: boolean; onOpen: (r: Row) => void }) {
   const p = r.p!;
   const i = r.i;
-  // A person's name and title are one purchase: while both are locked the name's lock spends and the title's is quiet.
-  const cellOf = (f: string) => <RowFact t={{ entity: "contact", id: p.id, field: f }} cell={p.cells[f]} cover={personCoverOf(i, r.e, p, f)} noun={personNoun(p.cells, f)} />;
+  // Their LinkedIn, email and phone open after the name and title: quiet locks, and no "+ Add", until then.
+  const unseen = personUnseen(p.cells);
+  const cellOf = (f: string) => (
+    <RowFact t={{ entity: "contact", id: p.id, field: f }} cell={p.cells[f]} cover={personCoverOf(i, r.e, p, f)} noun={personNoun(p.cells, f)} noAdd={unseen && PERSON_NO_ADD.includes(f) ? ADD_AFTER_NAME : null} />
+  );
   return (
     <tr {...rowProps(r, sel, onOpen)}>
       <td className="tp-sticky">
         <CompanyName i={i} following={i.c.following} />
       </td>
-      <td>{cellOf("title")}</td>
+      <td>
+        <NameAndTitle i={i} e={r.e} p={p} />
+      </td>
       <td>{cellOf("relationship")}</td>
-      <td>{cellOf("name")}</td>
       <td>{cellOf("linkedin")}</td>
       <td>{cellOf("email")}</td>
       <td>{cellOf("phone")}</td>
@@ -581,7 +620,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
     { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
     { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Their name costs 1 credit to see." },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. 1 credit shows who it was and the role they held." },
     { label: "Rate", cls: "w-rate num", rates: true },
     { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
@@ -604,7 +643,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Role", cls: "w-role" },
     { label: "Type", cls: "w-type" },
     { label: "Status", cls: "w-status" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Their name costs 1 credit to see." },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. 1 credit shows who it was and the role they held." },
     { label: "Start", cls: "w-date", sort: "start" },
     { label: "End", cls: "w-date" },
     { label: "Rate", cls: "w-rate num", rates: true },
@@ -623,9 +662,8 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
   ],
   people: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Title", cls: "w-title", sort: "title" },
+    { label: "Name and title", cls: "w-name", sort: "title", tip: "1 credit shows a person's name and title together. Their LinkedIn, email and phone open after that, 1 credit each." },
     { label: "Relationship", cls: "w-rel", tip: "Their part in hiring the fractional" },
-    { label: "Name", cls: "w-name" },
     { label: "LinkedIn", cls: "w-li" },
     { label: "Email", cls: "w-email" },
     { label: "Phone", cls: "w-phone" },
