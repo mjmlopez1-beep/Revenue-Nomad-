@@ -5,7 +5,7 @@
  * the locked cell and the add pill, value formatting and a small icon set.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Action, Cell, Me, PersonRec, View } from "@/lib/tableTypes";
+import type { Action, Cell, CompanyRec, LedgerRow, Me, PersonRec, View } from "@/lib/tableTypes";
 import { fieldDef, type Entity } from "@/lib/tableFields";
 import { webLink } from "@/lib/links";
 import { unpackView } from "@/lib/viewWire";
@@ -22,15 +22,65 @@ export type Act = (a: Action, opts?: ActOpts) => Promise<ActResult>;
 
 /** One cell an action changed. */
 export type CellPatch = { id: string; field: string; cell: Cell; entity?: string };
-/** What a POST may return besides its message: the changed cells (a list, or keyed "id.field") and the member's new numbers. */
-export type ActPatch = { cells?: CellPatch[] | Record<string, Cell> | null; me?: Partial<Me> | null };
+/**
+ * What a POST may return besides its message: the changed cells (a list, or keyed "id.field"),
+ * the member's new numbers (the whole Me on a current server), and the records the action
+ * touched as the member now sees them, with the credit history rows it wrote (ActionResult in
+ * lib/tableTypes.ts). `version` and `partial` say whether the page should load the table again.
+ */
+export type ActPatch = {
+  cells?: CellPatch[] | Record<string, Cell> | null;
+  me?: Partial<Me> | null;
+  companies?: CompanyRec[] | null;
+  ledgerNew?: LedgerRow[] | null;
+  benchmarks?: View["benchmarks"];
+  scan?: View["scan"];
+  reported?: View["reported"];
+  version?: string;
+  partial?: boolean;
+};
+
+/** The order the server sends companies in: best fit first, then by name. */
+const before = (a: CompanyRec, b: CompanyRec) => b.friendly.score - a.friendly.score || a.name.localeCompare(b.name);
 
 /**
  * Apply an action's changes to the view without a refetch. Only the companies that own a
- * changed cell get new objects (along the path to the cell); every other company keeps its
- * identity, so memoized rows can skip rendering.
+ * changed cell get new objects (along the path to the cell), and a company the answer sent
+ * whole takes the place of the one on screen (a new one goes where the server would list it);
+ * every other company keeps its identity, so memoized rows can skip rendering.
  */
 export function patchView(v: View, r: ActPatch): View {
+  const next = patchCells(v, r);
+  const recs = r.companies?.filter((c) => c && c.id) ?? [];
+  if (!recs.length && !r.ledgerNew?.length && !r.benchmarks && !r.scan && !r.reported) return next;
+  let companies = next.companies;
+  if (recs.length) {
+    const sent = new Map(recs.map((c) => [c.id, c]));
+    const placed = new Set<string>();
+    companies = companies.map((c) => {
+      const n = sent.get(c.id);
+      if (!n) return c;
+      placed.add(c.id);
+      return n;
+    });
+    for (const c of recs) {
+      if (placed.has(c.id)) continue;
+      const at = companies.findIndex((x) => before(c, x) < 0);
+      companies = at < 0 ? [...companies, c] : [...companies.slice(0, at), c, ...companies.slice(at)];
+    }
+  }
+  return {
+    ...next,
+    companies,
+    ...(r.ledgerNew?.length ? { ledger: [...r.ledgerNew, ...next.ledger] } : {}),
+    ...(r.benchmarks ? { benchmarks: r.benchmarks } : {}),
+    ...(r.scan ? { scan: r.scan } : {}),
+    ...(r.reported ? { reported: r.reported } : {}),
+  };
+}
+
+/** The changed cells and the member's numbers, applied in place of the old ones. */
+function patchCells(v: View, r: ActPatch): View {
   const me = r.me && v.me ? { ...v.me, ...r.me } : v.me;
   const list: CellPatch[] = Array.isArray(r.cells)
     ? r.cells

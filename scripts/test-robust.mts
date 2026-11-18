@@ -1,7 +1,11 @@
 /**
  * Checks of what keeps Merlin standing: a damaged state file, a missing seed, the health
  * check, the cap on table views, oversized and signed-out requests, what members can type, one
- * company one record, security headers and the weekly email's unsubscribe headers.
+ * company one record, security headers and the weekly email's unsubscribe headers. Also the
+ * API's routes (the old job-board routes are gone and answer 404), what an action's answer
+ * carries (the records it touched, the whole Me, the table version), the kept copy of a
+ * member's table and the signed-out counts kept for a few minutes. The load check is
+ * scripts/test-load.mjs.
  *
  *   npx tsx scripts/test-robust.mts            run everything (exits 1 on any failure)
  *   ROBUST_PORT=4599                           the port the test servers listen on (default 4599)
@@ -644,6 +648,62 @@ console.log("\nThe answer when Merlin cannot serve");
   }
 }
 
+/* ---------- an action's answer on the page (app/ui/shared.tsx patchView) ---------- */
+console.log("\nAn action's answer on the page's copy of the table");
+{
+  const S = await attempt(() => import("../app/ui/shared" as string) as Promise<typeof import("../app/ui/shared")>);
+  if (!S.ok) check("app/ui/shared.tsx loads", false, String(S.e).slice(0, 200));
+  else {
+    const { patchView } = S.v;
+    type V = Parameters<typeof patchView>[0];
+    const co = (id: string, name: string, score: number, hq = "Austin, TX") =>
+      ({ id, name, hidden: false, cells: { hq: { s: "value", v: hq, mine: false, ver: 0, iv: false } }, engagements: [], people: [], following: false, friendly: { score }, facts: { known: 1, locked: 0, missing: 0 } }) as unknown as V["companies"][number];
+    const a = co("c-a", "Alder", 50);
+    const b = co("c-b", "Birch", 30);
+    const c = co("c-c", "Cedar", 10);
+    const view = { me: { id: "m1", credits: 5, function: "Sales" }, companies: [a, b, c], ledger: [{ at: "2026-11-01", delta: 1 }], scan: { mine7: 0 }, stats: {} } as unknown as V;
+    const b2 = co("c-b", "Birch", 30, "Boise, ID");
+    const d = co("c-d", "Dogwood", 40);
+    const out = patchView(view, {
+      cells: [{ id: "c-a", field: "hq", cell: { s: "value", v: "Reno, NV", mine: true, ver: 0, iv: false } }],
+      companies: [b2, d],
+      me: { credits: 4, function: "Finance" },
+      ledgerNew: [{ at: "2026-11-18", delta: -1 } as never],
+      scan: { mine7: 2 } as never,
+    });
+    eq("a company the answer sends whole takes the place of the one on screen", out.companies.find((x) => x.id === "c-b")?.cells.hq, b2.cells.hq);
+    eq("a new one goes where the server lists it (best fit first)", out.companies.map((x) => x.id), ["c-a", "c-d", "c-b", "c-c"]);
+    check("a changed cell still lands, and a company nothing touched keeps its object (its rows don't render again)", (out.companies[0].cells.hq as { v: string }).v === "Reno, NV" && out.companies[3] === c && out.companies[0] !== a);
+    eq("the member's fields merge, the credit history rows go on top, the scan summary is replaced", [out.me?.credits, out.me?.function, out.me?.id, out.ledger.map((l) => l.at), (out.scan as { mine7: number }).mine7], [4, "Finance", "m1", ["2026-11-18", "2026-11-01"], 2]);
+    const b3 = co("c-b", "Birch", 30, "Provo, UT");
+    const both = patchView(view, { cells: [{ id: "c-b", field: "hq", cell: { s: "value", v: "Ogden, UT", mine: true, ver: 0, iv: false } }], companies: [b3] });
+    eq("when an answer has both, the record built after the action wins over its cells", (both.companies.find((x) => x.id === "c-b")?.cells.hq as { v: string }).v, "Provo, UT");
+    check("an answer with nothing in it leaves the page's copy as it was", patchView(view, {}) === view && patchView(view, { companies: [] }) === view);
+  }
+}
+
+/* ---------- the API's routes (app/api) ---------- */
+console.log("\nThe API's routes");
+{
+  const found: string[] = [];
+  const walk = (dir: string) => {
+    for (const f of readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, f.name);
+      if (f.isDirectory()) walk(p);
+      else if (f.name === "route.ts") found.push(path.relative(path.join(ROOT, "app"), path.dirname(p)).split(path.sep).join("/"));
+    }
+  };
+  walk(path.join(ROOT, "app", "api"));
+  // Each answers only with its own proof: the member's cookie, the cron secret, an OAuth token or flow, an unsubscribe signature. Health and the counts are public on purpose.
+  const KNOWN = [
+    "api/health", "api/integrations", "api/integrations/slack/callback", "api/integrations/slack/start", "api/mcp",
+    "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
+    "api/table", "api/table/lookup", "api/table/scan", "api/table/unsubscribe",
+  ];
+  eq("the API has exactly the routes Merlin uses (a new one is added to this list on purpose)", found.sort(), KNOWN);
+  check("none of the old job-board routes is back (jobs, crawl, prospects, profile)", !found.some((r) => /^api\/(jobs|crawl|prospects|profile)(\/|$)/.test(r)), found);
+}
+
 /* ---------- a damaged state file (lib/table.ts loadState) ---------- */
 console.log("\nA first start");
 child("first", freshDir("first"), S3_ENV);
@@ -846,7 +906,8 @@ else {
   writeFileSync(bigSeedPath, JSON.stringify(bigSeed));
 
   console.log("\nOver HTTP: a healthy server");
-  if (!(await startServer(freshDir("http-a"), bigSeedPath))) check("the test server started", false, serverLog.slice(-600));
+  const httpData = freshDir("http-a");
+  if (!(await startServer(httpData, bigSeedPath))) check("the test server started", false, serverLog.slice(-600));
   else {
     try {
       const health = await call("GET", "/api/health");
@@ -891,6 +952,61 @@ else {
       const meView = await call("GET", "/api/table", { token: me });
       check("a title cut at 80 never ends in half a character", well(meView.json?.me?.title) && meView.json.me.title.length === 79, meView.json?.me?.title);
 
+      // The old job-board API is gone: no listing of roles, no crawl, no writes to the volume, whoever asks.
+      const legacy = ["/api/jobs", "/api/jobs/seed000000000001", "/api/crawl", "/api/prospects", "/api/prospects/p1", "/api/prospects/scan", "/api/profile"];
+      const legacyStatus: Record<string, number[]> = {};
+      for (const p of legacy)
+        for (const method of ["GET", "POST", "PUT", "PATCH"]) {
+          const r = await call(method, p, { token: method === "GET" ? undefined : me, body: method === "GET" ? undefined : { status: "hidden", name: "Made Up" } });
+          (legacyStatus[p] ??= []).push(r.status);
+        }
+      check("the old job-board routes answer 404 to every method, signed in or out", Object.values(legacyStatus).every((s) => s.every((x) => x === 404)), legacyStatus);
+      eq("and nothing was written for them", readdirSync(httpData).filter((f) => /jobs|profile|prospects/.test(f)), []);
+
+      // An action's answer carries what changed (viewPatch): the records it touched as the member now sees them, the whole Me,
+      // the credit history rows it wrote and the table's version, so the page never downloads the whole table for it.
+      const pm = "fixtok-5";
+      const pmIp = ip(); // one network: the first visit from a network is noted (a write), which would move the version
+      const v0 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp });
+      const target = v0.json.companies.find((c: { engagements: { cells: Record<string, { s: string }> }[] }) => c.engagements.some((e) => e.cells.rate?.s === "locked"));
+      const seat = target.engagements.find((e: { cells: Record<string, { s: string }> }) => e.cells.rate?.s === "locked");
+      const ver0 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp }); // the first load noted the visit and the network (a write of their own), so start from the next
+      const un = await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "unlock", entity: "engagement", id: seat.id, field: "rate" } } });
+      const v1 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp });
+      const fresh = v1.json.companies.find((c: { id: string }) => c.id === target.id);
+      eq("an unlock's answer carries the company, built as a fresh view builds it", JSON.stringify(un.json?.companies?.[0]) === JSON.stringify(fresh), true);
+      eq("and the whole Me, the same as a fresh view's", JSON.stringify(un.json?.me) === JSON.stringify(v1.json.me), true);
+      eq("and the credit history row it wrote", [un.json?.ledgerNew?.length, JSON.stringify(un.json?.ledgerNew?.[0]) === JSON.stringify(v1.json.ledger[0])], [1, true]);
+      const vn = (x: string | null | undefined) => Number(String(x ?? "").split(":")[1]);
+      eq("an action with nobody else acting moves the table's version by one", [vn(un.json?.version) - vn(ver0.json.version), un.json?.version?.split(":")[0] === ver0.json.version?.split(":")[0]], [1, true]);
+      eq("a view says its version in the body and in a header", [typeof v1.json.version, v1.headers.get("x-view-version") === v1.json.version], ["string", true]);
+      const fo = await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "follow", companyId: target.id, on: true } } });
+      eq("a follow's answer carries the company, followed", [fo.json?.companies?.length, fo.json?.companies?.[0]?.following], [1, true]);
+      const pr = await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "profile", function: "Finance", goal: "roles", title: "Fractional CFO" } } });
+      eq("a profile's answer carries the member's answers and no records", [pr.json?.me?.function, pr.json?.me?.goal, pr.json?.me?.title, pr.json?.me?.onboarded, pr.json?.companies?.length], ["Finance", "roles", "Fractional CFO", true, 0]);
+      const coName = `Patchwork Analytics ${Date.now().toString(36)}`;
+      const ad = await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "add", company: coName, companyFields: { hq: "Denver, CO" } } } });
+      const v2 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp });
+      const added = v2.json.companies.find((c: { name: string }) => c.name === coName);
+      eq("an add's answer carries the new company as a fresh view has it", [ad.status, !!added, JSON.stringify(ad.json?.companies?.[0]) === JSON.stringify(added)], [200, true, true]);
+      const sv = await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "savedView", op: "save", name: "Patch check", place: "?p=hiring", criteria: {} } } });
+      check("a saved view's answer carries the member's saved views", sv.status !== 200 || (sv.json?.me?.savedViews ?? []).some((x: { name: string }) => x.name === "Patch check"), sv.json);
+      check("a saved view's id is not taken for a record (no partial answer)", sv.status !== 200 || !sv.json?.partial, sv.json);
+
+      // A member's table is kept, compressed, while nothing changes: the same bytes, without a second build.
+      const k1 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp });
+      const k2 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp });
+      eq("two loads with nothing changed in between answer the same table", [k1.headers.get("x-view-version") === k2.headers.get("x-view-version"), k1.text === k2.text], [true, true]);
+      const other = await call("GET", "/api/table", { token: "fixtok-6" });
+      eq("and another member gets their own", other.json?.me?.id, "fm6");
+
+      // The signed-out counts are kept for a few minutes, whatever members change (lib/table.ts ANON_FRESH).
+      const a1 = await call("GET", "/api/table");
+      await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "add", company: `${coName} Two`, companyFields: { hq: "Boise, ID" } } } });
+      const a2 = await call("GET", "/api/table");
+      eq("signed-out counts stay put right after a member adds a company", a2.json?.stats?.facts, a1.json?.stats?.facts);
+      check("and the signed-out answer carries no records", Array.isArray(a2.json?.companies) && a2.json.companies.length === 0 && a2.json.me === null, a2.json?.me);
+
       // One-click unsubscribe.
       const hmac = (s: string) => createHmac("sha256", ID_SECRET).update(s).digest("base64url");
       const link = (id: string, sig = hmac(`unsubscribe:${id}`).slice(0, 22)) => `/api/table/unsubscribe?m=${id[0]}_${hmac(id).slice(0, 12)}&s=${sig}`;
@@ -908,7 +1024,7 @@ else {
       check(`${BIG - 10} members loading at once: some are served and the rest are told to come back (${ok} served, ${busy.length} told)`, ok >= 4 && busy.length >= 1 && ok + busy.length === many.length, many.filter((r) => r.status !== 200 && r.status !== 503).slice(0, 5));
       check("the 503 carries Retry-After and a plain message", busy.length > 0 && busy.every((r) => r.retryAfter === "2" && /"error":"Merlin is busy/.test(r.error)), busy[0]);
       const afterBurst = await call("GET", "/api/table", { token: "fixtok-3" });
-      eq("and the server is still up afterwards", [afterBurst.status, afterBurst.json?.companies?.length], [200, 1800]);
+      eq("and the server is still up afterwards", [afterBurst.status, afterBurst.json?.companies?.length], [200, 1800 + 2]); // the seed's 1,800 and the two companies added above
     } catch (e) {
       check("the checks on a healthy server ran to the end", false, String((e as Error)?.stack ?? e).slice(0, 600));
     }

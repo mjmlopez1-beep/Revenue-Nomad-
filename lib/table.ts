@@ -466,6 +466,16 @@ let stateDown: { error: Unavailable; until: number } | null = null;
 /** Writes that reached the disk since this process started. A reader can tell whether a view it began is still current. */
 let commits = 0;
 export const stateVersion = () => commits;
+/** This process, for the table version: a restart starts the count again, so a version from before it never reads as current. */
+const BOOT = `${Date.now().toString(36)}${randomBytes(2).toString("hex")}`;
+/** The commit each committed state came from (0 for the state as loaded). */
+const stateVersions = new WeakMap<object, number>();
+/**
+ * The table's version as the page sees it, "<boot>:<commits>": of the state `s`, else of the
+ * state now. An action's answer carries it, so the page can tell whether other members changed
+ * the table since it last downloaded it (more than its own action's one commit).
+ */
+export const viewVersion = (s?: object) => `${BOOT}:${s ? stateVersions.get(s) ?? 0 : commits}`;
 
 /** Enough of a shape check to tell a state file from one that is cut short, emptied or not ours. */
 function isState(x: unknown): x is Partial<State> {
@@ -639,6 +649,11 @@ export async function loadState(): Promise<State> {
     } catch (e) {
       if (e instanceof Unavailable) throw e;
       console.error(`Fractional firm cleanup skipped: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // Open roles filed as Executive or with no function, before the scan knew the functions outside GTM, take the one their title names.
+    if (seedNow) {
+      const remapped = remapScanFunctions(s, seedNow);
+      if (remapped) console.log(`Open roles given the function their title names: ${remapped}.`);
     }
     stateCache = s;
     stateDown = null;
@@ -831,6 +846,7 @@ async function flush(): Promise<void> {
         await fs.rename(tmp, STATE_PATH);
         stateCache = draft;
         commits++;
+        stateVersions.set(draft, commits);
         await snapshot(DATA_DIR, json);
       } catch (e) {
         dirReady = false;
@@ -916,6 +932,40 @@ function graph(seed: Seed, s: State): Graph {
     if (companyId && !out.has(companyId) && !g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, companyId, engagementId: p.engagementId ?? null, source: "Member added" });
   }
   return g;
+}
+
+/**
+ * The graph of a committed state, built once for every view and patch that reads that state
+ * (views only read it). A draft inside mutate() changes in place, so it always gets its own.
+ */
+const viewGraphs = new WeakMap<State, { seed: Seed; g: Graph }>();
+function viewGraph(seed: Seed, s: State): Graph {
+  if (s !== stateCache) return graph(seed, s);
+  const hit = viewGraphs.get(s);
+  if (hit && hit.seed === seed) return hit.g;
+  const g = graph(seed, s);
+  viewGraphs.set(s, { seed, g });
+  return g;
+}
+/** Public id of every company, seat and person in a graph -> the internal id of its company. */
+const companyByPub = new WeakMap<Graph, Map<string, string>>();
+/**
+ * Every public id an index has held -> its company. A seat or a person never moves to another
+ * company, so this still names the company of a record an action took off the table, and the
+ * action's answer can carry that company without it.
+ */
+const companyOfPub = new Map<string, string>();
+function companyIndex(g: Graph): Map<string, string> {
+  let ix = companyByPub.get(g);
+  if (!ix) {
+    ix = new Map();
+    for (const c of g.companies.values()) ix.set(pubId(c.id), c.id);
+    for (const e of g.engagements.values()) ix.set(pubId(e.id), e.companyId);
+    for (const p of g.contacts.values()) ix.set(pubId(p.id), p.companyId);
+    for (const [pub, co] of ix) companyOfPub.set(pub, co);
+    companyByPub.set(g, ix);
+  }
+  return ix;
 }
 
 /* ---------- company facts from research: firmographics and place ---------- */
@@ -1603,7 +1653,7 @@ const keyOfCompany = (name: string) => {
 /** For the add form: is a company with this website (or name) already on Merlin? */
 export async function existingCompany(domain: string | null, name: string | null) {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
-  const g = graph(seed, s);
+  const g = viewGraph(seed, s);
   const d = siteKey(domain);
   const key = name ? keyOfCompany(name) : "";
   const c =
@@ -1874,14 +1924,27 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
 }
 
 /**
- * Signed-out views only need the counts: kept until the state or the seed changes (both are
- * replaced, never changed in place, so comparing the objects is enough). Signed-out visitors
- * who arrive while the counts are being rebuilt wait for that one build.
+ * Signed-out views only need the counts, which are marketing numbers: kept for ANON_FRESH
+ * whatever members change meanwhile (every member's view refreshes them too), and rebuilt when
+ * the seed changes. Signed-out visitors who arrive while the counts are being rebuilt wait for
+ * that one build.
  */
 let statsCache: { s: State; seed: Seed; stats: View["stats"]; at: number } | null = null;
-/** "Opened this week" moves with the clock, so the cached counts are rebuilt at least hourly. */
-const STATS_FRESH = 60 * 60 * 1000;
+/** How long the signed-out counts and the landing preview's companies are kept, whatever changes meanwhile. */
+const ANON_FRESH = 5 * 60 * 1000;
 let anonBuild: { s: State; seed: Seed; p: Promise<View> } | null = null;
+/**
+ * The signed-out build (the counts and the landing preview's companies), one at a time: everyone
+ * who asks while one runs waits for it, even when members changed the state meanwhile.
+ */
+function anonView(seed: Seed, s: State): Promise<View> {
+  if (!anonBuild || anonBuild.seed !== seed) {
+    const p = fullView(seed, s, null);
+    anonBuild = { s, seed, p };
+    p.finally(() => anonBuild?.p === p && (anonBuild = null)).catch(() => {});
+  }
+  return anonBuild.p;
+}
 
 /**
  * One company for the landing page's "Try it" preview (lib/preview.ts): the record as a
@@ -1902,17 +1965,14 @@ let anonCompanies: { s: State; seed: Seed; list: PreviewCompany[]; at: number } 
 const previewSeed = (id: string) => createHmac("sha256", ID_KEY).update(`landing-preview:${id}`).digest("base64url").slice(0, 14);
 
 /**
- * The companies the landing preview reads, from the signed-out build (rebuilt when the state or
- * the seed changed, or hourly, the same as the signed-out counts). Server side only.
+ * The companies the landing preview reads, from the signed-out build: kept for ANON_FRESH like
+ * the signed-out counts, whatever members change meanwhile, and rebuilt when the seed changes.
+ * Server side only.
  */
 export async function previewCompanies(): Promise<{ list: PreviewCompany[]; version: object }> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
-  const fresh = () => !!anonCompanies && anonCompanies.s === s && anonCompanies.seed === seed && Date.now() - anonCompanies.at < STATS_FRESH;
-  if (!fresh()) {
-    // Drop the cached counts so buildView rebuilds (sharing a build already under way).
-    if (statsCache && statsCache.s === s && statsCache.seed === seed) statsCache = null;
-    await buildView(null);
-  }
+  const fresh = !!anonCompanies && anonCompanies.seed === seed && Date.now() - anonCompanies.at < ANON_FRESH;
+  if (!fresh) await anonView(seed, s);
   const hit = anonCompanies;
   return hit ? { list: hit.list, version: hit } : { list: [], version: {} };
 }
@@ -1934,18 +1994,62 @@ export async function buildView(token: string | null, opts: { asMember?: boolean
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (me) return fullView(seed, s, me, !!opts.asMember && isAdmin(me));
-  if (statsCache && statsCache.s === s && statsCache.seed === seed && Date.now() - statsCache.at < STATS_FRESH)
-    return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled(), contact: contactInfo() };
-  if (!anonBuild || anonBuild.s !== s || anonBuild.seed !== seed) {
-    const p = fullView(seed, s, null);
-    anonBuild = { s, seed, p };
-    p.finally(() => anonBuild?.p === p && (anonBuild = null)).catch(() => {});
-  }
-  return anonBuild.p;
+  if (statsCache && statsCache.seed === seed && Date.now() - statsCache.at < ANON_FRESH)
+    return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled(), contact: contactInfo(), version: viewVersion(statsCache.s) };
+  return anonView(seed, s);
 }
 
-async function fullView(seed: Seed, s: State, me: Member | null, asMember = false): Promise<View> {
-  const g = graph(seed, s);
+/** The most companies an action's answer carries (an Unlock all on one record touches one). Past it, the page loads the table again. */
+const PATCH_MAX = 8;
+/**
+ * What an action changed, as `token`'s member now sees it, for the action's answer: the records
+ * of the companies `ids` name (public ids of companies, seats or people), built exactly as the
+ * full view builds them, the whole Me, the credit history rows written since `since` (an ISO
+ * time, newest first), the scan summary, the benchmarks when asked for, and an admin's review
+ * list. `partial` when some of it could not be built here: more than PATCH_MAX companies, or an
+ * id that names nothing any more (a record that went). Null when the token is nobody's.
+ */
+export async function viewPatch(
+  token: string | null,
+  ids: string[],
+  opts: { asMember?: boolean; since?: string; benchmarks?: boolean } = {},
+): Promise<(Pick<ActionResult, "companies" | "ledgerNew" | "benchmarks" | "scan" | "reported" | "partial" | "version"> & { me: Me }) | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return null;
+  const g = viewGraph(seed, s);
+  const ix = companyIndex(g);
+  const cos = new Set<string>();
+  let missing = false;
+  for (const id of new Set(ids.filter((x) => typeof x === "string" && x))) {
+    // A record the action took off the table: its company, when that is still there.
+    const c = ix.get(id) ?? companyOfPub.get(id);
+    if (c && g.companies.has(c)) cos.add(c);
+    else missing = true;
+  }
+  const many = cos.size > PATCH_MAX;
+  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), many ? new Set() : cos, !!opts.benchmarks);
+  const since = opts.since ?? "";
+  return {
+    companies: v.companies,
+    me: v.me!,
+    ledgerNew: v.ledger.filter((l) => l.at >= since),
+    scan: v.scan,
+    ...(opts.benchmarks ? { benchmarks: v.benchmarks } : {}),
+    ...(v.me?.admin ? { reported: v.reported } : {}),
+    ...(many || missing ? { partial: true } : {}),
+    version: v.version,
+  };
+}
+
+/**
+ * The table as `me` sees it. `only`: build just these companies (internal ids), for an action's
+ * answer (viewPatch). The member's own numbers, credit history, benchmarks and scan summary come
+ * whole, the counts in `stats` cover only those companies, and nothing is cached from it.
+ * `bench` false leaves the benchmarks out.
+ */
+async function fullView(seed: Seed, s: State, me: Member | null, asMember = false, only: Set<string> | null = null, bench = true): Promise<View> {
+  const g = viewGraph(seed, s);
   /** The viewer is an admin and sees the admin's view (not "See it as a member"). */
   const admin = isAdmin(me) && !asMember;
   const nowMs = Date.now();
@@ -1991,7 +2095,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   const ownSeatAt = new Set<string>();
 
   const icons = await iconDomains(
-    [...g.companies.values()].map((c) => ({ id: c.id, name: c.name, website: live(c, s, "website") })),
+    [...g.companies.values()].filter((c) => !only || only.has(c.id)).map((c) => ({ id: c.id, name: c.name, website: live(c, s, "website") })),
   );
 
   const companies: CompanyRec[] = [];
@@ -2003,6 +2107,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   /** Signed out: every company with its name and site, for the landing preview (never sent). */
   const forPreview: PreviewCompany[] | null = me ? null : [];
   for (const c of g.companies.values()) {
+    if (only && !only.has(c.id)) continue;
     const facts = { known: 0, locked: 0, missing: 0 };
     /** `addable`: an empty fact here is one the viewer can add (a seat's facts are its holder's alone). */
     const count = (cells: Record<string, Cell>, defs: typeof COMPANY_F, addable = true) => {
@@ -2317,8 +2422,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   // Counted for everyone: the landing page says how many roles opened this week.
   const scanAll = scanSummary(g, s, tracks, nowMs, meRec?.function ?? null);
   stats.openedWeek = scanAll.opened7;
-  statsCache = { s, seed, stats, at: nowMs };
-  if (forPreview) anonCompanies = { s, seed, list: forPreview, at: nowMs };
+  // A build of a few companies counts only those: it never stands in for the signed-out counts.
+  if (!only) statsCache = { s, seed, stats, at: nowMs };
+  if (forPreview && !only) anonCompanies = { s, seed, list: forPreview, at: nowMs };
   const scan = me ? scanAll : null;
   return {
     demo: !!seed.demo,
@@ -2330,8 +2436,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     reported,
     email: emailEnabled(),
     contact: contactInfo(),
-    ...(me && scan ? { benchmarks: benchmarks(seed, g, s, me.id), scan } : {}),
-    ...(me && scan && admin ? { admin: { ...adminStats(seed, s, g, idx, nowMs, scan, entityOf), messages: messageStats(s), integrations: integrationStats(s.integrations) }, reportedMessages: reportedMessages(s, memberName) } : {}),
+    ...(me && scan ? { ...(bench ? { benchmarks: benchmarks(seed, g, s, me.id) } : {}), scan } : {}),
+    ...(me && scan && admin && !only ? { admin: { ...adminStats(seed, s, g, idx, nowMs, scan, entityOf), messages: messageStats(s), integrations: integrationStats(s.integrations) }, reportedMessages: reportedMessages(s, memberName) } : {}),
+    version: viewVersion(s),
   };
 }
 
@@ -4419,6 +4526,55 @@ const hostOf = (raw: unknown) => {
 const urlKey = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#]+$/, "");
 
 /**
+ * The function of a role the scan stores: the board's own label when it is one of the table's
+ * functions (FUNCTIONS), else the one its title names (functionOf). A board's Executive or Other
+ * gives way to a title that names a function: a Fractional CFO is Finance.
+ */
+function scanFunction(title: string, boardFn: unknown): string | null {
+  const fromTitle = functionOf(title);
+  const board = typeof boardFn === "string" && FUNCTIONS.includes(boardFn) ? boardFn : null;
+  if (board && !((board === "Executive" || board === "Other") && fromTitle && fromTitle !== board)) return board;
+  return fromTitle;
+}
+
+/**
+ * Open roles the scan filed before it knew the functions outside GTM: a Fractional CFO under
+ * Executive, a Fractional Controller or CTO with no function. Each open role the scan follows
+ * whose function is empty or Executive, and whose title now names a function outside GTM
+ * (Finance, Technology, Operations, People, Legal, Product), gets that one. Only a function from
+ * the scan or our records changes (or a gap is filled): one a member set stays. The fact is dated
+ * with the role, so the record doesn't read as just updated. Runs on every load of the state and
+ * changes nothing the second time. Returns how many roles it changed.
+ */
+export function remapScanFunctions(s: State, seed: Seed): number {
+  const seedEng = new Map(seed.engagements.map((e) => [e.id, e.fields]));
+  /** A field as the record reads: a state value wins (a removed one hides the seed's), else the seed's. */
+  const read = (id: string, field: string) => {
+    const v = s.values[fkey(id, field)];
+    if (v) return v.status === "live" ? { value: v.value, by: v.by, at: v.at } : null;
+    const sv = seedEng.get(id)?.[field];
+    return sv ? { value: sv, by: "seed", at: "" } : null;
+  };
+  let changed = 0;
+  for (const t of buildTracks(seed, s).values()) {
+    if (t.closedAt) continue;
+    const k = fkey(t.engagementId, "function");
+    // A function under review (reported) or removed is left alone.
+    if (s.values[k] && s.values[k].status !== "live") continue;
+    const cur = read(t.engagementId, "function");
+    if (cur && (cur.value !== "Executive" || !isSystem(cur.by))) continue;
+    const role = read(t.engagementId, "role");
+    const fn = functionOf(role?.value);
+    // A GTM title already read as its function (the view fills an empty one from the title): only the functions outside GTM were missing.
+    if (!fn || fn === "Executive" || GTM_FUNCTIONS.includes(fn)) continue;
+    s.values[k] = { value: fn, by: "scan", at: role?.at || t.firstSeen, status: "live" };
+    delete s.verifications[k];
+    changed++;
+  }
+  return changed;
+}
+
+/**
  * Store one scan. `found.roles` is every posting that passed the screen, newest first, not only
  * the ones that fit under a cap: a posting seen again stays open (and a closed one reopens)
  * however many there are, and only roles opened for the first time are capped, at `maxNew` a run.
@@ -4587,8 +4743,7 @@ function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew:
         if (clean) put(eng.id, field, clean);
       };
       fill("role", title);
-      // The weekly scan is for GTM roles: a function outside GTM from a board reads from the title instead.
-      fill("function", raw.function && (GTM_FUNCTIONS.includes(raw.function) || raw.function === "Executive" || raw.function === "Other") ? raw.function : functionOf(title));
+      fill("function", scanFunction(title, raw.function));
       fill("type", raw.type && ENGAGEMENT_TYPES.includes(raw.type) ? raw.type : /\binterim\b/i.test(title) ? "Interim" : /\bfractional\b/i.test(title) ? "Fractional" : null);
       if (adopted) put(eng.id, "status", "Open role");
       else fill("status", "Open role");

@@ -1,20 +1,8 @@
-# Revenue Nomad
+# Merlin by Revenue Nomad
 
-Every open **fractional GTM** role. One board.
+Merlin (formerly Trading Post) is a give-to-get table of companies that hire fractional leaders, run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. Members add what they know (+1 credit a fact) and spend credits to see what other members added (1 credit a fact). A weekly scan of job boards keeps the open roles current.
 
-Revenue Nomad crawls the web for open fractional, interim, and contract go-to-market roles — fractional CROs, CMOs, RevOps leads, growth operators — scores each listing for relevance, and aggregates everything into a job board inside the **Operator Portal**.
-
-## How it works
-
-1. **Crawl** — source adapters pull from job boards *and* the places people talk about fractional GTM work:
-   - **Job boards:** [Remotive](https://remotive.com), [RemoteOK](https://remoteok.com), [We Work Remotely](https://weworkremotely.com), [fractionaljobs.io](https://www.fractionaljobs.io), and any [Greenhouse](https://greenhouse.io) company board via `RN_GREENHOUSE_BOARDS`
-   - **Communities:** [Hacker News](https://hn.algolia.com) stories *and* comments (catches "Ask HN: Who is hiring?" threads and founder chatter) and Reddit search — surfaced as **community leads**, distinct from listings on the board
-1b. **Predict** — the operator's ICP is deduced from their Revenue Nomad profile (role, industries, stages, employee/revenue size, segment, sales motions) and cross-referenced against a universal company dataset (the open YC company directory) — target accounts are discovered automatically, then enriched with timing signals: actively hiring, early-stage GTM inflection, content gaps, careers-page GTM roles, funding news, and leader departures. No manual account list needed.
-2. **Score & filter for truly fractional** — every item needs BOTH a relevance score above threshold AND a genuine fractional signal: fractional/interim/advisory wording, ≤4 days per week, ≤32 hours per week, or hourly-rate pricing. Full-time tells (benefits language, 40-hour weeks, annual salaries) subtract points, and full-time roles are dropped entirely. Commitment ("2 days/wk"), rate ("$150/hr"), and contract term ("6-month") are extracted as structured fields on each card.
-3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
-4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
-
-## Merlin — the product
+## The product
 
 The site *is* Merlin: `/` is the landing page, the login and the app (old `/table?k=` links redirect). Jigsaw for the fractional GTM community: every row is a fractional engagement — the company, the seat, and the people involved — and members **give** (add what's missing, verify what's right) to **get** (spend credits to unlock 🔒 fields).
 
@@ -30,6 +18,7 @@ The site *is* Merlin: `/` is the landing page, the login and the app (old `/tabl
 - **Weekly email.** After a scan that found new roles, each member who has signed in gets the week's new open roles, unless they turned it off (`RN_DIGEST_ALL=1` sends it to every member on file with an email, signed in or not). It only sends when email is set up (`RESEND_API_KEY`, `RN_EMAIL_FROM`) and `RN_PUBLIC_URL` is set; `RN_DIGEST=0` keeps it off. Every email carries an unsubscribe link (`GET /api/table/unsubscribe`), and members can switch it in Your credits (`settings`). The switch shows only while the weekly email is on for the server (`View.scan.digest`). `RN_EMAIL_FOOTER` is the postal address line printed in the footer when set.
 - **Pilot metrics** (admins, `View.admin`): members active in the last 7 and 30 days, credits at zero, how often members ran out of credits on an unlock, Pro waitlist interest and where it came from, the most unlocked and most added fields, scan and email health. It is in the account menu for admins, with "Download backup".
 - **Staying up.** `GET /api/health` answers 200 only when the real member seed loaded, the state loaded and the data folder takes writes, else 503 with which part failed. Point the host's health check at it (`railway.json` does, with 15 seconds to drain). With `RN_REQUIRE_SEED=1` (set in the Dockerfile) the app never runs on the sample data: if the seed does not open, every route answers 503. A state file that cannot be read or parsed never starts as an empty table: the newest daily backup that parses is loaded, the damaged file is kept as `intel.json.corrupt-<time>`, and with no usable backup every route answers 503 and nothing is written until a good `intel.json` is put back. Only a missing file with an empty `backups/` folder is a first start. At most 4 table views are built at once and 50 wait; past that the answer is 503 with `Retry-After`. A request body over 64 KB is refused. `npx tsx scripts/test-robust.mts` checks all of this (it starts its own servers, so build first).
+- **Speed.** A member's table is about 5.5 MB of JSON (a third of a megabyte compressed) and takes a few hundred milliseconds to build, so the page downloads it rarely. An action's answer carries what it changed (`viewPatch` in `lib/table.ts`: the records it touched as the member now sees them, the whole `Me`, the credit history rows it wrote, the scan summary, the benchmarks when a rate moved) and the table's version (`View.version`, `"<boot>:<commits>"`). The page applies the answer and downloads the table again only when the version says other members changed it too, and then a minute or so after its last download, or when the tab comes back after a minute away. Signed-out counts and the landing preview's companies are kept for 5 minutes whatever members change. A member's compressed table is kept while nothing changes (30 seconds at most). `node scripts/test-load.mjs` puts members to work at once and prints p50 and p90 of every kind of request (`LOAD_CLIENT=old` acts like the page before this, for a comparison).
 - **Pro waitlist.** The pilot is free. Where members run out (the zero-credits popover, a hidden company's record, Your credits, the foot of Hiring now) a "Pro is coming" offer asks who wants more, with no price. The app records each view, each "Email me when it opens" and each tap on a lock at 0 credits (`signal`), and Pilot metrics reports them.
 - **Add record** starts from the company URL: the server reads the site for the name and a suggested Revenue Nomad industry tag; the member sets revenue stage and employee count (Revenue Nomad pick lists, as they were at the time), the engagement, and the people (Reported to / Reported to me / Worked with). Everything is editable. **+ person** adds someone to any record.
 - **Join** from the landing page with a first and last name + email (new people; a one-word name is refused, the same test a seat holder's name gets, so the member can be matched to their seats). Revenue Nomad members sign in with their personal link (or its code); a member's email can't be claimed by joining.
@@ -54,20 +43,19 @@ node scripts/seal-intel-seed.mjs     # encrypts it to data/intel-seed.enc (key i
 
 Member data never goes into git in the clear (this repo is public): `data/intel-seed.json`, `data/intel-member-links.csv`, `data/intel-seed.key` and runtime state are git-ignored. Hosts get the AES-256-GCM encrypted `data/intel-seed.enc` with the code and open it with `RN_INTEL_SEED_KEY` (the contents of `data/intel-seed.key`). Use persistent storage for `RN_DATA_DIR` (Railway volume / Render disk / Docker volume). With no seed, the page runs on labeled demo data (`/?k=demo`), unless `RN_REQUIRE_SEED=1` is set, as it is in the Docker image: then a seed that does not open means 503 on every route.
 
-The job-board crawler and prospect engine remain back-end services only (`/api/crawl`, `/api/jobs`, `/api/prospects`) — future scheduled enrichment for Merlin, not part of the UI.
+The weekly scan (`lib/scan`) is the only part that reads job boards. It uses the board readers, scoring and fetch in `lib/crawler` (`sources/`, `score.ts`, `fetch.ts`). The old job-board API (`/api/jobs`, `/api/crawl`, `/api/prospects`, `/api/profile`), its daily cron and its crawl workflow are gone: those paths answer 404.
 
 ## Launch / Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmjmlopez1-beep%2FRevenue-Nomad-)
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fmjmlopez1-beep%2FRevenue-Nomad-)
+Merlin keeps its state in one JSON file on a persistent disk (`RN_DATA_DIR`), held in memory by one Node process, so it needs a host with a volume:
 
-Pick whichever fits:
+- **Railway (production)**: `railway.json` builds the Dockerfile and points the health check at `/api/health`. Mount a volume at `/data`.
+- **Render**: `render.yaml` provisions the web service plus a 1 GB persistent disk at `/var/data`, so Merlin's state survives restarts.
+- **Docker (any host: Fly.io, a VPS)**: `docker build -t merlin . && docker run -p 3000:3000 -v merlin-data:/data merlin`. The image is a self-contained standalone build; mount a volume at `/data` to keep Merlin's state.
 
-- **Vercel (fastest)** — click the button above, accept defaults, done. `vercel.json` schedules a daily crawl at 06:00 UTC automatically. Note: Vercel's filesystem is ephemeral, so the job database lives in `/tmp` and resets on cold starts — each crawl fully repopulates it, so the board stays fresh, but saved/applied state may not persist. Fine for a public board; set `CRON_SECRET` to protect the cron endpoint.
-- **Render (persistent)** — click the button above; `render.yaml` provisions the web service plus a 1 GB persistent disk at `/var/data`, so operator state (saved/applied/hidden) survives restarts.
-- **Docker (any host: Railway, Fly.io, a VPS)** — `docker build -t revenue-nomad . && docker run -p 3000:3000 -v rn-data:/data revenue-nomad`. The image is a self-contained standalone build; mount a volume at `/data` to persist the job database.
+Serverless hosts with a throwaway filesystem (Vercel, Netlify) lose the state on every cold start, so they are not supported.
 
-**Keeping the board fresh:** besides Vercel Cron, the repo ships a GitHub Actions workflow (`.github/workflows/crawl.yml`) that pings `POST {CRAWL_URL}/api/crawl` daily — set the repository variable `CRAWL_URL` to your deployed URL (and secret `CRON_SECRET` if you configured one). CI (`ci.yml`) builds every push.
+**The weekly scan:** set `RN_SCAN=1`, or point a weekly cron at `POST /api/table/scan` with the header `x-cron-secret: $RN_CRON_SECRET` (see Weekly scan above). CI (`.github/workflows/ci.yml`) builds every push.
 
 ## Getting started
 
@@ -76,9 +64,7 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-The board ships with clearly-labeled sample listings so the UI works immediately. Click **Run crawl** in the portal (or run `npm run crawl` from the CLI) to replace them with live roles.
-
-> Note: crawling makes outbound HTTPS requests to the job sources above, so it needs normal internet access. Each source fails independently — one being down never blocks the others.
+Without the private seed the app runs on labeled demo data (`/?k=demo`). The weekly scan makes outbound HTTPS requests to the job boards above, so it needs normal internet access. Each board fails on its own: one being down never blocks the others.
 
 ## Commands
 
@@ -86,20 +72,22 @@ The board ships with clearly-labeled sample listings so the UI works immediately
 | --- | --- |
 | `npm run dev` | Start the dev server |
 | `npm run build && npm start` | Production build + serve |
-| `npm run crawl` | Run the crawler once from the CLI |
+| `npm run test:all` | Every check, after a build (`scripts/test-all.sh`) |
+| `node scripts/test-load.mjs` | Members acting at once: p50 and p90 of table loads and actions (see the file for settings) |
 
 ## API
 
-- `GET /api/jobs` — list jobs. Query params: `q`, `function`, `engagement`, `source`, `status`, `minScore`, `remote=true`
-- `POST /api/crawl` — run a crawl and upsert results
-- `PATCH /api/jobs/:id` — body `{ "status": "new" | "saved" | "applied" | "hidden" }`
+- `GET /api/table`, `POST /api/table`: the table as the signed-in member sees it, sign-in, joining and every action (see `app/api/table/route.ts` and `Action` in `lib/tableTypes.ts`). Signed out, `GET` answers counts only.
+- `POST /api/table/scan`: the weekly scan, for a cron (`x-cron-secret`). `GET /api/table/unsubscribe`: the weekly email's unsubscribe link. `GET /api/table/lookup`: the Add form's prefill, members only.
+- `GET /api/health`: 200 only when the seed opened, the state loaded and the data folder takes writes.
+- `/api/mcp` and `/api/oauth/*`: the Claude connector (OAuth 2.1 with PKCE). `/api/integrations`: alerts in Slack and webhooks, members only.
 
 ## Configuration
 
 See `.env.example`:
 
-- `RN_GREENHOUSE_BOARDS` — comma-separated Greenhouse board tokens to watch specific companies
-- `RN_DATA_DIR` — where the JSON job database lives (defaults to `./data`)
+- `RN_GREENHOUSE_BOARDS`: comma-separated Greenhouse board tokens the weekly scan reads too
+- `RN_DATA_DIR`: where Merlin's state lives (defaults to `./data`). Use a persistent volume
 - `RN_STARTER_CREDITS` (default 25), `RN_ADMIN_EMAILS`: Merlin credits and admins
 - `RN_INTEL_SEED_KEY` (opens `data/intel-seed.enc`), `RN_REQUIRE_SEED=1` (never run on the sample data: 503 everywhere and a failing health check if the seed does not open; set in the Dockerfile), `RN_ID_SECRET` (signs public ids and unsubscribe links: set it to the seed key's current value once and keep it)
 - `RN_SUPPORT_EMAIL`, `RN_INTRO_EMAIL`: where members write for help and for an intro (`View.contact`, read at run time, never at build time)
@@ -109,10 +97,6 @@ See `.env.example`:
 - `RN_BACKUP_S3_ENDPOINT`, `RN_BACKUP_S3_BUCKET`, `RN_BACKUP_S3_KEY_ID`, `RN_BACKUP_S3_SECRET` (and `RN_BACKUP_S3_REGION`, `RN_BACKUP_S3_PATH_STYLE`): the off-site copy of the daily backup. `RN_LOGO_LOOKUP=off` stops logo lookups by name
 - Health check: point the host at `GET /api/health` (200 only when the seed opened, the state loaded and the data folder takes writes). `railway.json` sets it with 15 seconds to drain; Railway may ignore that file, so set the path and the drain time in the service settings too
 
-## Scheduling crawls
-
-Any scheduler that can hit `POST /api/crawl` (or run `npm run crawl`) works — a cron job, a Vercel/Netlify scheduled function, or GitHub Actions. Hourly-to-daily is plenty for these sources.
-
 ## Stack
 
-Next.js 15 (App Router) · React 19 · TypeScript · zero-dependency JSON store (no database required)
+Next.js 15 (App Router) · React 19 · TypeScript · one JSON state file on a volume (no database)

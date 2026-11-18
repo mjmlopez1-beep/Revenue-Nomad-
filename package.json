@@ -9,7 +9,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "crawl": "tsx scripts/crawl.ts",
     "test:all": "bash scripts/test-all.sh"
   },
   "dependencies": {

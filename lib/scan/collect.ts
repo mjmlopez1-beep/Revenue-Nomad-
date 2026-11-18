@@ -10,8 +10,9 @@
  *    role itself is, with no full-time tell in the posting (workSignal in lib/crawler/score.ts).
  *    Remote, "trusted advisor", "consultative", part-time, days or hours a week, an hourly rate
  *    and "contract" about customers never count on their own.
- *  - GTM seats only: a fractional CFO or CTO posting is left out even when it mentions sales,
- *    and a title outside GTM below Director ("School Staffing Coordinator") is left out too
+ *  - GTM seats at any level, and seats outside GTM (a fractional CFO, CTO or Head of People) at
+ *    Director and above only: a title outside GTM below Director ("School Staffing Coordinator")
+ *    is left out even when its posting mentions sales
  *  - posted in the last 60 days (postings with no date are kept)
  *  - a real, named company, so no "Confidential", no "A Series B startup", no job boards and no
  *    recruiters posting for a client they do not name
@@ -20,7 +21,7 @@
  */
 import type { JobFunction, RawJob } from "../types";
 import type { ScanCollectResult, ScanRole, ScanScreenedOut, ScanSourceResult } from "../scanTypes";
-import { ENGAGEMENT_TYPES, GTM_FUNCTIONS, cut, functionOf } from "../tableFields";
+import { ENGAGEMENT_TYPES, FUNCTIONS, cut, functionOf } from "../tableFields";
 import { scoreJob, workSignal, type ScoredTags, type WorkSignal } from "../crawler/score";
 import * as remotive from "../crawler/sources/remotive";
 import * as remoteok from "../crawler/sources/remoteok";
@@ -28,7 +29,7 @@ import * as weworkremotely from "../crawler/sources/weworkremotely";
 import * as greenhouse from "../crawler/sources/greenhouse";
 import * as fractionaljobs from "./sources/fractionaljobs";
 import { cleanCompany, cleanTitle, companyDomain, isRealCompany, plain, roleKey } from "./clean";
-import { isDirectorPlus, keepsNonGtm } from "../seniority";
+import { isDirectorPlus, isGtmFunction, keepsNonGtm } from "../seniority";
 
 /** A raw posting, plus facts a board gives as fields of their own instead of in the text. */
 export interface ScanRawJob extends RawJob {
@@ -93,11 +94,10 @@ export function workOf(raw: Pick<ScanRawJob, "title" | "description" | "fraction
 const NON_GTM_TITLE =
   /\b(?:cfo|cto|cio|ciso|coo|chro|cpo|clo|chief (?:financial|technology|technical|information|operating|operations|people|product|legal|medical|data|security|compliance|human resources|of staff)|finance|financial|fp&a|accounting|accountant|controller|bookkeep\w*|tax|audit\w*|payroll|treasury|engineer\w*|developer|programmer|architect|devops|software|data (?:scientist|engineer|analyst)|machine learning|it (?:manager|director|support|lead)|cyber\w*|security|hr|human resources|people|recruit\w*|talent|legal|counsel|attorney|lawyer|paralegal|compliance|product (?:manager|management|owner|lead|designer|design|director)|head of product|vp(?: of)? product|designer|ux|ui|creative director|art director|operations|supply chain|procurement|logistics|project manager|program manager|scrum|medical|clinical|nurse|physician|scientist|scientific|regulatory|lab|research(?:er)?|teacher|tutor|instructor|assistant|admin(?:istrator)?|office manager|editor|video|photograph\w*)\b/i;
 
-/** The title itself names a GTM function. The body is not consulted. */
-function gtmByTitle(title: string): boolean {
+/** The title itself names a GTM function (a CFO or CTO title names one outside GTM). The body is not consulted. */
+export function gtmByTitle(title: string): boolean {
   if (AI_GTM.test(title)) return true;
-  const fn = functionOf(title);
-  if (fn && fn !== "Executive") return true;
+  if (isGtmFunction(functionOf(title))) return true;
   return scoreJob({ title, company: "", url: "", source: "" }).functions.length > 0;
 }
 
@@ -124,11 +124,22 @@ const HINT_FUNCTION: Record<string, string> = {
   "demand generation": "Growth",
   "go-to-market": "Sales",
   gtm: "Sales",
+  // Boards' labels for seats outside GTM.
+  engineering: "Technology",
+  tech: "Technology",
+  it: "Technology",
+  accounting: "Finance",
+  "finance & accounting": "Finance",
+  hr: "People",
+  "human resources": "People",
+  "people & culture": "People",
+  "people operations": "People",
+  ops: "Operations",
+  "product management": "Product",
 };
 const AI_GTM = /\b(?:ai|genai|gen ai)\b.*\b(?:gtm|go[\s-]?to[\s-]?market)\b|\b(?:gtm|go[\s-]?to[\s-]?market)\b.*\b(?:ai|genai)\b|\bgtm engineer/i;
-/** The functions a scanned role can be in: the weekly scan is for GTM roles, so Finance, Technology and the like never come from it. */
-const SCAN_FUNCTIONS = [...GTM_FUNCTIONS, "Executive", "Other"];
-const known = (fn: string | null | undefined) => (fn && SCAN_FUNCTIONS.includes(fn) ? fn : null);
+/** A function the table has (FUNCTIONS): a GTM one, or one outside GTM for a seat at Director and above. */
+const known = (fn: string | null | undefined) => (fn && FUNCTIONS.includes(fn) ? fn : null);
 
 export function roleFunction(title: string, tags: Pick<ScoredTags, "functions">, hint?: string): string | null {
   if (AI_GTM.test(title) && known("AI GTM")) return "AI GTM";
@@ -136,7 +147,7 @@ export function roleFunction(title: string, tags: Pick<ScoredTags, "functions">,
   if (fromTitle) return fromTitle;
   if (hint) {
     const h = hint.trim();
-    const fromHint = known(SCAN_FUNCTIONS.find((f) => f.toLowerCase() === h.toLowerCase())) ?? known(HINT_FUNCTION[h.toLowerCase()]) ?? known(functionOf(h));
+    const fromHint = known(FUNCTIONS.find((f) => f.toLowerCase() === h.toLowerCase())) ?? known(HINT_FUNCTION[h.toLowerCase()]) ?? known(functionOf(h));
     if (fromHint && fromHint !== "Other") return fromHint;
   }
   const specific = tags.functions.find((t) => t !== "GTM Leadership") ?? tags.functions[0];

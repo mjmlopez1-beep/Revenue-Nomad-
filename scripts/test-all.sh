@@ -89,6 +89,8 @@ run bench npx tsx scripts/test-bench.mjs
 # The seat scan (scripts/add-seat-scan.mjs) and claiming its seats, on a made-up seed, with its own server.
 run seatscan env SEATSCAN_PORT="$PORT" npx tsx scripts/test-seatscan.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts
+# 20 members acting at once on their own server: every answer carries the member's numbers and the table version, no server errors, at most one table a minute each.
+run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs
 
 echo
 if [ "$fails" -eq 0 ]; then

@@ -199,7 +199,8 @@ const mine = g2.seats?.find((x) => x.id === mseat!.id);
 check("get_company: the claimed seat is theirs", !!mine?.yours && /\(you\)/.test(mine?.seat_holder ?? ""), mine);
 check("FUNCTIONS: GTM first, then the rest", F.FUNCTIONS.slice(0, F.GTM_FUNCTIONS.length).join() === F.GTM_FUNCTIONS.join() && ["Technology", "Finance", "Operations", "People", "Product", "Legal"].every((f) => F.FUNCTIONS.includes(f)));
 check("Seat scan reads as Revenue Nomad research", F.SOURCE_LABEL["Seat scan"] === "Revenue Nomad research");
-check("the weekly scan never files a role under Finance or Technology", C.roleFunction("Fractional CFO", { functions: [] } as never, "Finance") !== "Finance" && C.roleFunction("Fractional CTO", { functions: [] } as never, "Technology") !== "Technology");
+// The scan keeps Director-and-above roles outside GTM (lib/seniority.ts), each under its own function, never Executive or none.
+check("the weekly scan files a CFO under Finance and a CTO under Technology", C.roleFunction("Fractional CFO", { functions: [] } as never, "Finance") === "Finance" && C.roleFunction("Fractional CTO", { functions: [] } as never, "Technology") === "Technology");
 check("the weekly scan still files GTM roles", C.roleFunction("Fractional VP Sales", { functions: [] } as never) === "Sales");
 
 /* ---------- 3. over HTTP ---------- */

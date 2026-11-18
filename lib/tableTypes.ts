@@ -484,6 +484,12 @@ export interface View {
   admin?: AdminStats;
   /** Admins: messages members reported, waiting for a decision. */
   reportedMessages?: ReportedMessage[];
+  /**
+   * The table's version when this view was built, "<boot>:<commits>" (viewVersion in lib/table.ts).
+   * An action's answer carries the version after it, so the page can tell whether other members
+   * changed the table since (more than one commit later, or a restart). Older servers leave it out.
+   */
+  version?: string;
 }
 
 export interface ScanSummary {
@@ -685,12 +691,28 @@ export type ActionResult = {
   id?: string;
   capped?: boolean;
   cells?: { entity: Entity; id: string; field: string; cell: Cell }[];
-  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "owed" | "unlocksLeft" | "sellEarnLeft">;
+  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "owed" | "unlocksLeft" | "sellEarnLeft"> & Partial<Me>;
   /** Message actions: the conversation as the viewer now sees it, and their unread count. */
   conversation?: ConversationRec;
   unread?: number;
   /** claimSeat with `preview`: what the unclaimed seat says, for "Is this you?". */
   claim?: { role: string | null; function: string | null; start: string | null; end: string | null; status: string | null };
+  /**
+   * What the action changed, as the actor now sees it, so the page needn't download the table
+   * again (app/api/table/route.ts adds these to the answer of POST { action }). `companies`: the
+   * records of the companies it touched, built as the full view builds them. `me` is then the
+   * whole Me. `ledgerNew`: credit history rows the action wrote, newest first. `benchmarks` and
+   * `scan` when they may have moved, `reported` for an admin. `partial`: some of what it changed
+   * isn't here (too many companies, or a record that is gone), so the page loads the table again
+   * soon. `version`: the table's version after the action (see View.version).
+   */
+  companies?: CompanyRec[];
+  ledgerNew?: LedgerRow[];
+  benchmarks?: Benchmarks;
+  scan?: ScanSummary;
+  reported?: View["reported"];
+  partial?: boolean;
+  version?: string;
 };
 
 export const GOALS = [

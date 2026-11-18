@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { brotliCompress, constants as zc, gzip } from "zlib";
 import {
-  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, perform, searchMembers, touch, type Action,
+  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
 } from "@/lib/table";
 import { stateVersion } from "@/lib/table";
+import type { ActionResult } from "@/lib/tableTypes";
 import { emailEnabled, sendEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { guarded } from "@/lib/apiGuard";
@@ -111,13 +112,14 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
  * fires a burst of loads costs one. It is compressed in the encoding the first request asked for;
  * a request that joins it asking for another encoding compresses its own copy once.
  */
-type Built = { body: string; packed: Map<Enc, Promise<Uint8Array<ArrayBuffer>>> };
+type Built = { body: string; packed: Map<Enc, Promise<Uint8Array<ArrayBuffer>>>; version: string };
 const viewFlights = new Map<string, { p: Promise<Built>; started: number | null }>();
+const viewKey = (token: string | null, asMember = false, packed = false) => `${token ?? ""}${asMember ? "|member" : ""}${packed ? "|packed" : ""}`;
 const builtView = (token: string | null, enc: Enc | null, asMember = false, packed = false) =>
-  shared(viewFlights, `${token ?? ""}${asMember ? "|member" : ""}${packed ? "|packed" : ""}`, stateVersion, async (): Promise<Built> => {
+  shared(viewFlights, viewKey(token, asMember, packed), stateVersion, async (): Promise<Built> => {
     const view = await buildView(token, { asMember });
     const body = JSON.stringify(packed ? packView(view) : view);
-    const built: Built = { body, packed: new Map() };
+    const built: Built = { body, packed: new Map(), version: view.version ?? "" };
     if (enc && body.length > MIN_COMPRESS) {
       const p = compress(body, enc);
       built.packed.set(enc, p);
@@ -125,13 +127,61 @@ const builtView = (token: string | null, enc: Enc | null, asMember = false, pack
     }
     return built;
   });
+
+/**
+ * A member's table as sent last, compressed, kept while the state is the one it was built from
+ * (any change by anyone makes a new one) and for VIEW_KEEP_MS at most, since a few of its numbers
+ * move with the clock. A tab that loads twice, or two tabs, cost one build. Only the compressed
+ * bytes are kept (about a third of a megabyte each), for the VIEW_KEEP_MAX members who loaded last.
+ */
+const VIEW_KEEP_MS = 30_000;
+const VIEW_KEEP_MAX = 64;
+const keptViews = new Map<string, { version: string; at: number; enc: Enc; bytes: Uint8Array<ArrayBuffer> }>();
+function keepView(key: string, version: string, enc: Enc, bytes: Uint8Array<ArrayBuffer>) {
+  keptViews.delete(key);
+  keptViews.set(key, { version, at: Date.now(), enc, bytes });
+  while (keptViews.size > VIEW_KEEP_MAX) keptViews.delete(keptViews.keys().next().value!);
+}
+function keptView(key: string, enc: Enc | null): NextResponse | null {
+  const k = keptViews.get(key);
+  if (!k || !enc || k.enc !== enc || k.version !== viewVersion() || Date.now() - k.at > VIEW_KEEP_MS) return null;
+  return new NextResponse(k.bytes, { headers: { ...JSON_HEADERS, "content-encoding": enc, "x-view-version": k.version } });
+}
+
 /** The view as an answer, in the encoding this request asked for. */
-async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
-  if (!enc || view.body.length <= MIN_COMPRESS) return new NextResponse(view.body, { headers: JSON_HEADERS });
+async function viewAnswer(view: Built, enc: Enc | null, key?: string): Promise<NextResponse> {
+  const headers = { ...JSON_HEADERS, "x-view-version": view.version };
+  if (!enc || view.body.length <= MIN_COMPRESS) return new NextResponse(view.body, { headers });
   let p = view.packed.get(enc);
   if (!p) view.packed.set(enc, (p = compress(view.body, enc)));
-  return new NextResponse(await p, { headers: { ...JSON_HEADERS, "content-encoding": enc } });
+  const bytes = await p;
+  if (key) keepView(key, view.version, enc, bytes);
+  return new NextResponse(bytes, { headers: { ...headers, "content-encoding": enc } });
 }
+
+/**
+ * What an action's answer carries besides its message, so the page can update without the whole
+ * table: the records it touched (viewPatch in lib/table.ts). These actions change nothing a page
+ * shows, or answer with what they changed themselves (messages), or change too much (an admin
+ * removing everything a member added: the page loads the table again).
+ */
+const NO_PATCH = new Set(["scanNow", "aboutNow", "adminRemoveMember"]);
+/** Actions that can move the rate benchmarks. */
+const BENCH_ACTIONS = new Set(["benchRate", "benchRateRemove", "fill", "retract", "review", "adminRemove", "report"]);
+/** The public ids of the records an action touched: what it named, what it made, and the cells it changed. */
+function touchedIds(a: Action, out: ActionResult): string[] {
+  const ids: string[] = [];
+  const x = a as unknown as Record<string, unknown>;
+  // A saved view's id, a rate's id or a conversation's id names no record.
+  if (["fill", "unlock", "report", "verify", "review", "adminRemove", "retract"].includes(a.type) && typeof x.id === "string") ids.push(x.id);
+  for (const k of ["companyId", "engagementId"]) if (typeof x[k] === "string" && a.type !== "benchRate") ids.push(x[k] as string);
+  if (a.type === "unlockMany" && Array.isArray(a.items)) for (const it of a.items.slice(0, 60)) if (typeof it?.id === "string") ids.push(it.id);
+  if ((a.type === "add" || a.type === "addPerson") && typeof out.id === "string") ids.push(out.id);
+  for (const c of out.cells ?? []) if (typeof c?.id === "string") ids.push(c.id);
+  return ids;
+}
+const patchless = (a: Action) =>
+  !a || typeof a.type !== "string" || a.type.startsWith("message.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
@@ -198,12 +248,18 @@ export const GET = guarded(async (req: NextRequest) => {
   // weekly scan starts in the background when one is due (only with RN_SCAN=1).
   if (token) void touch(token, ip).catch((e) => console.error("last seen not saved", e));
   void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
+  // Signed out: the counts only, kept for a few minutes (buildView), so the landing page never waits in line behind members' tables.
+  if (!token || !(await memberForToken(token))) {
+    const view = await buildView(null);
+    return sendJson(req, view, { "x-view-version": view.version ?? "" });
+  }
   const enc = encodingFor(req);
   // An admin's "See it as a member". buildView ignores it for anyone who is not an admin.
   const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || req.nextUrl.searchParams.get("as") === "member";
   // ?compact=1 (the page asks for it): empty cells left out, put back by unpackView (lib/viewWire.ts).
   const packed = req.nextUrl.searchParams.get("compact") === "1";
-  return viewAnswer(await builtView(token, enc, asMember, packed), enc);
+  const key = viewKey(token, asMember, packed);
+  return keptView(key, enc) ?? viewAnswer(await builtView(token, enc, asMember, packed), enc, key);
 });
 
 /** The request body as JSON, or null when it is not JSON. "too large" past MAX_BODY, whatever Content-Length says. */
@@ -364,7 +420,17 @@ export const POST = guarded(async (req: NextRequest) => {
   }
   try {
     const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1";
-    return NextResponse.json(await perform(token, action, origin(req), { asMember }));
+    // Anything the action writes to the credit history is dated after this.
+    const since = new Date().toISOString();
+    const out = await perform(token, action, origin(req), { asMember });
+    if (patchless(action)) return sendJson(req, { ...out, version: viewVersion() });
+    // What changed, as the member now sees it (viewPatch). Without it the answer still stands, and the page loads the table again.
+    const patch = await viewPatch(token, touchedIds(action, out), { asMember, since, benchmarks: BENCH_ACTIONS.has(action.type) }).catch((e) => {
+      console.error("action answer without its records", e);
+      return null;
+    });
+    if (!patch) return sendJson(req, { ...out, partial: true, version: viewVersion() });
+    return sendJson(req, { ...out, ...patch, me: { ...patch.me, ...out.me } });
   } catch (e) {
     if (e instanceof ActionError) return err(e.message);
     throw e;
