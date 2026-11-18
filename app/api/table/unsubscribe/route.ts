@@ -3,6 +3,7 @@ import { readdirSync } from "fs";
 import path from "path";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { unsubscribe } from "@/lib/table";
+import { unsubscribeRadar } from "@/lib/radar";
 import { guarded, isBusy, isDown } from "@/lib/apiGuard";
 
 export const dynamic = "force-dynamic";
@@ -73,13 +74,22 @@ ${status === 200 ? CHECK : ""}<h1>${title}</h1>
 /** While Merlin cannot serve, the link answers 503 with a page, and nothing is changed. */
 const paused = (e: unknown) => (isDown(e) || isBusy(e) ? page("Try this link again in a few minutes", "Merlin is paused while we fix a problem on our side. Your weekly email setting has not changed yet.", 503) : null);
 
+/** The radar email's link carries r=radar (and its own signature, lib/radar radarSig): it turns the radar off, not the weekly email. */
+const isRadar = (q: URLSearchParams) => q.get("r") === "radar";
+
 /**
  * GET ?m=<public member id>&s=<signature>: the unsubscribe link in the weekly email. Turns the
- * email off for that member. No sign-in needed; the signature is the proof.
+ * email off for that member. No sign-in needed; the signature is the proof. With r=radar, the
+ * link in the next-client radar email, which turns the radar off (email and Slack).
  */
 export const GET = guarded(async (req: NextRequest) => {
   if (limited(`unsub:${clientIp(req)}`, 30, 60_000)) return page("Too many tries in one minute", "Wait a minute, then open the link from your email again.", 429);
   const q = req.nextUrl.searchParams;
+  if (isRadar(q)) {
+    if (!(await unsubscribeRadar(q.get("m"), q.get("s"))))
+      return page("That link didn't work", "It may have been cut off in your email. You can turn the radar off yourself under Your profile.", 400);
+    return page("Your radar is off", "We won't send you the next-client radar by email or Slack again. If you change your mind, turn it back on under Your profile.");
+  }
   if (!(await unsubscribe(q.get("m"), q.get("s"))))
     return page("That link didn't work", "It may have been cut off in your email. You can turn the weekly email off yourself under Your credits.", 400);
   return page("You're unsubscribed", "We won't send you the weekly email of new open roles again. If you change your mind, turn it back on under Your credits.");
@@ -94,5 +104,6 @@ export const GET = guarded(async (req: NextRequest) => {
 export const POST = guarded(async (req: NextRequest) => {
   if (limited(`unsub:${clientIp(req)}`, 30, 60_000)) return new NextResponse(null, { status: 429 });
   const q = req.nextUrl.searchParams;
-  return new NextResponse(null, { status: (await unsubscribe(q.get("m"), q.get("s"))) ? 200 : 400, headers: { "cache-control": "no-store" } });
+  const done = isRadar(q) ? await unsubscribeRadar(q.get("m"), q.get("s")) : await unsubscribe(q.get("m"), q.get("s"));
+  return new NextResponse(null, { status: done ? 200 : 400, headers: { "cache-control": "no-store" } });
 });

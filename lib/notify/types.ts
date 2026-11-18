@@ -1,3 +1,5 @@
+import type { RadarItem } from "../radar/types";
+
 /**
  * Alerts in Slack (and any tool that takes a webhook): what the runtime state keeps, and the
  * shapes the API sends to the app. Pure types and constants, no Node imports, so lib/table.ts,
@@ -7,12 +9,16 @@
  * ("hooks.slack.com/…/abcd"), and the admin export leaves it out.
  */
 
-/** The three alerts a member can turn on or off. */
-export type AlertKind = "roles" | "message" | "seat";
-export const ALERT_KINDS: AlertKind[] = ["roles", "message", "seat"];
+/**
+ * The three alerts a member can turn on or off on the Integrations page, and the next-client radar
+ * (lib/radar), which goes out the same way and in the same batches. The radar's switch is in Your
+ * profile (Profile.radarOff), not here, so its entry here stays on.
+ */
+export type AlertKind = "roles" | "message" | "seat" | "radar";
+export const ALERT_KINDS: AlertKind[] = ["roles", "message", "seat", "radar"];
 
 /** Every alert is on once a member connects. */
-export const DEFAULT_ALERTS: Record<AlertKind, boolean> = { roles: true, message: true, seat: true };
+export const DEFAULT_ALERTS: Record<AlertKind, boolean> = { roles: true, message: true, seat: true, radar: true };
 
 /** At most one post of each kind per member in this window. More events in it go out together. */
 export const BATCH_WINDOW_MS = 15 * 60 * 1000;
@@ -40,6 +46,8 @@ export interface StoredDest {
 
 /** One event waiting for its batch, kept until the window opens again. */
 export type AlertItem =
+  /** The next-client radar: a member's cards, already cut to their plan (lib/radar/types.ts). */
+  | RadarItem
   /**
    * `about` partners: a conversation from Referral partners, about no seat. invite: not a message they
    * got, but `from` (a fractional the member invited to connect) claimed their seat at `company`
@@ -163,7 +171,7 @@ export interface IntegrationStats {
 
 /** Counts for the pilot metrics, from the state. Pure. */
 export function integrationStats(st: IntegrationsState | undefined): IntegrationStats {
-  const out: IntegrationStats = { slackConnected: 0, webhookConnected: 0, broken: 0, sent: { roles: 0, message: 0, seat: 0, test: 0 }, failed: st?.stats.failed ?? 0 };
+  const out: IntegrationStats = { slackConnected: 0, webhookConnected: 0, broken: 0, sent: { roles: 0, message: 0, seat: 0, radar: 0, test: 0 }, failed: st?.stats.failed ?? 0 };
   for (const m of Object.values(st?.members ?? {})) {
     if (m.slack) out.slackConnected++;
     if (m.webhook) out.webhookConnected++;

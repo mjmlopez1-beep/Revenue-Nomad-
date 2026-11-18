@@ -46,6 +46,7 @@ import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
 import { Partners } from "./Partners";
+import { Radar } from "./Radar";
 import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
@@ -148,12 +149,12 @@ function previousVisit(): string | null {
 /** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
 type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
-type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners";
+type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "radar";
 
 /* ---------- the place in the address bar ---------- */
 
-const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners"];
-const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", messages: "Messages", integrations: "Integrations", partners: "Referral partners" };
+const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners", "radar"];
+const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", messages: "Messages", integrations: "Integrations", partners: "Referral partners", radar: "Your radar" };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
 const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["person", "people"] };
@@ -230,7 +231,8 @@ function readPlace(me: Me, from?: string) {
   const s = SORTS.find((x) => x.key === q.get("s"))?.key ?? null;
   const f = q.has("f") ? decodeFilters(q.get("f") === "-" ? "" : q.get("f")!) : d.f;
   // An old "Use it in Claude" link (p=claude) opens Integrations at its Claude section.
-  const p = q.get("p") === "claude" ? "integrations" : PAGES.find((x) => x === q.get("p")) ?? null;
+  // The radar's "See who" (?upgrade=radar, lib/radar UPGRADE_PATH) opens the Radar page until billing has its own.
+  const p = q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PAGES.find((x) => x === q.get("p")) ?? null;
   return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1" };
 }
 
@@ -2085,6 +2087,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           <main className="tp-main tp-main-page">
             <MessagesPage onBack={() => setPage("table")} openCompany={(id) => openCompany(id)} />
           </main>
+        ) : page === "radar" ? (
+          <main className="tp-main tp-main-page">
+            <Radar onBack={() => setPage("table")} onProfile={() => setIcpOpen(true)} openCompany={(id) => openCompany(id)} />
+          </main>
         ) : page === "partners" ? (
           <main className="tp-main tp-main-page">
             <Partners infos={infos} onBack={() => setPage("table")} onProfile={() => setIcpOpen(true)} />
@@ -2410,6 +2416,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               { group: "Find", label: "All companies", current: page === "table" && !currentView, onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               // Saved views: one entry. Its sheet lists every view to open, rename or remove; the filter rail lists them too.
               ...(views.length ? [{ group: "Find", label: "Saved views", hint: String(views.length), current: page === "table" && !!currentView, onClick: () => setViewsOpen(true) }] : []),
+              { group: "Find", label: "Your radar", current: page === "radar", onClick: () => (setEditor(null), setDrawer(null), setPage("radar")) },
               { group: "Find", label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },
               { group: "Find", label: "Rate benchmarks", current: page === "rates", onClick: () => (setDrawer(null), setPage("rates")) },
               ...(phone ? [{ group: "You", label: "Add what you know", onClick: () => openAdd() }] : []),

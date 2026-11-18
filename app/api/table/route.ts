@@ -15,6 +15,7 @@ import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
 import { PreviewError, preview } from "@/lib/preview";
+import { maybeRadar, radarView } from "@/lib/radar";
 
 export const dynamic = "force-dynamic";
 
@@ -192,6 +193,7 @@ const patchless = (a: Action) =>
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
+ * GET ?radar=1     RadarView: the Radar page, the last 24 hours' signals cut to the member's plan (lib/radar). 401 signed out.
  * GET ?export=1    admins: download the runtime state (a backup).
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
@@ -223,6 +225,11 @@ export const GET = guarded(async (req: NextRequest) => {
     return unread === null ? err(SIGNED_OUT_READ, 401) : NextResponse.json({ unread }, { headers: { "cache-control": "no-store" } });
   }
   // Referral partners (lib/table.ts partnersView): who gets hired before and after the member, counts of members' answers, and the members listed.
+  // The Radar page (lib/radar radarView): the last 24 hours' signals for the member, by their plan.
+  if (req.nextUrl.searchParams.get("radar") !== null) {
+    const r = await radarView(token);
+    return r ? sendJson(req, r) : err("You're signed out. Sign in again to see your radar.", 401);
+  }
   if (req.nextUrl.searchParams.get("partners") !== null) {
     const p = await partnersView(token);
     return p ? sendJson(req, p) : err("You're signed out. Sign in again to see your referral partners.", 401);
@@ -254,6 +261,8 @@ export const GET = guarded(async (req: NextRequest) => {
   // weekly scan starts in the background when one is due (only with RN_SCAN=1).
   if (token) void touch(token, ip).catch((e) => console.error("last seen not saved", e));
   void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
+  // The next-client radar's daily run, on the first page load after 13:00 UTC (lib/radar).
+  void maybeRadar(origin(req)).catch((e) => console.error("radar check failed", e));
   // Signed out: the counts only, kept for a few minutes (buildView), so the landing page never waits in line behind members' tables.
   if (!token || !(await memberForToken(token))) {
     const view = await buildView(null);

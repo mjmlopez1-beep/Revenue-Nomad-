@@ -16,7 +16,7 @@ import { IconCheck, IconSearch } from "../ui/shared";
 import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
 import { Sheet } from "./ui";
-import { PartnersSwitch } from "./PartnersSwitch";
+import { PartnersSwitch, RadarSwitch } from "./PartnersSwitch";
 import "./hunt.css";
 
 export const EMPTY_ICP: Icp = { industries: [], employees: [], revenue: [], countries: [] };
@@ -392,6 +392,7 @@ export function IcpSheet({
         )}
       </div>
       <IcpFields value={v} onChange={setV} industries={industries} countries={countries} />
+      <RadarSwitch />
       <PartnersSwitch />
       {views ? (
         <div className="hunt-sub hunt-views-sub">

@@ -9,6 +9,34 @@ import { useContext, useState } from "react";
 import { IconCheck } from "../ui/shared";
 import { UiCtx } from "./ui";
 
+/**
+ * Your profile: "Send me my radar", the next-client radar by email and Slack (lib/radar), on unless
+ * the member turned it off here or with the radar email's link. Saves at once, like the switch below.
+ */
+export function RadarSwitch() {
+  const ui = useContext(UiCtx);
+  const [busy, setBusy] = useState(false);
+  if (!ui) return null;
+  const on = ui.me.radar !== false;
+  const flip = async () => {
+    setBusy(true);
+    await ui.act({ type: "settings", radar: !on });
+    setBusy(false);
+  };
+  return (
+    <div className="hunt-sub pt-switch">
+      <div className="hunt-h">Your next-client radar</div>
+      <button type="button" role="switch" aria-checked={on} className={`tp-ftoggle hunt-email${on ? " on" : ""}`} disabled={busy} aria-busy={busy} onClick={() => void flip()}>
+        <span className="tp-check" aria-hidden>
+          {on && <IconCheck size={11} />}
+        </span>
+        <span className="tp-ftoggle-l">Send me my radar</span>
+      </button>
+      <p className="hunt-lead">On mornings when a company in your profile moves, by email and in Slack if you connected it. Never on a day with nothing new.</p>
+    </div>
+  );
+}
+
 export function PartnersSwitch() {
   // Only inside the app (the sheet could be shown elsewhere): it needs the member.
   const ui = useContext(UiCtx);
