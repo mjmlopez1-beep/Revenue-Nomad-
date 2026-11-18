@@ -67,6 +67,8 @@ serve preview node scripts/test-preview.mjs
 RN_PREVIEW_OPEN_ROLE_COMPANIES=0 serve preview-lock env PREVIEW_LOCKED=1 node scripts/test-preview.mjs
 # The Claude connector. RN_MCP_TEST=1: 2-second tokens for one test app, a short refresh grace, and metadata documents over http on localhost.
 RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
+# What members read about prices: the connector's words and unlock plans for the bundles (who held a seat with their role, contact details after the name, people after the company) on view data shaped as the server sends it, and the landing page's matrix and Questions.
+run prices npx tsx scripts/test-prices.mts
 # Onboarding: suggestions and their heading, Find your seats cards, a new member's title, the weekly email offered at the end.
 serve onboard npx tsx scripts/test-onboard.mts
 run scan npx tsx scripts/test-scan.mts

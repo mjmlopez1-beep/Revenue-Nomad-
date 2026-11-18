@@ -466,11 +466,20 @@ async function main() {
 
   const g1 = await tool(at, "get_company", { company: coRow?.id });
   const gSeat = g1.out?.seats?.[0];
-  check("get_company shows the seat with free facts and locked ones marked", gSeat?.function === "Sales" && gSeat.type === "Fractional" && gSeat.start === "2024-01" && gSeat.seat_holder === "locked, 1 credit to unlock" && gSeat.rate === "locked, 1 credit to unlock", gSeat);
+  check(
+    "get_company shows the seat with free facts and locked ones marked, who held it and the role they held as one purchase",
+    gSeat?.function === "Sales" &&
+      gSeat.type === "Fractional" &&
+      gSeat.start === "2024-01" &&
+      gSeat.seat_holder === "locked, 1 credit opens who held this seat and the role they held together" &&
+      gSeat.role === gSeat.seat_holder &&
+      gSeat.rate === "locked, 1 credit to unlock",
+    gSeat,
+  );
   const gPerson = gSeat?.people?.[0];
   check(
-    "the person's relationship shows, their name and title are locked together, their email on its own",
-    gPerson?.relationship === "Hiring for the seat" && gPerson.name === "locked, 1 credit opens this person's name and title together" && gPerson.title === gPerson.name && gPerson.email === "locked, 1 credit to unlock",
+    "the person's relationship shows, their name and title are locked together, their email opens after the name",
+    gPerson?.relationship === "Hiring for the seat" && gPerson.name === "locked, 1 credit opens this person's name and title together" && gPerson.title === gPerson.name && /^opens after the name\. Unlock their name and title first/.test(gPerson.email ?? ""),
     gPerson,
   );
   check("warm paths name the seat holder and the exec who hired for the seat", (g1.out?.warm_paths ?? []).some((w) => /held the Sales seat/.test(w.who)) && (g1.out?.warm_paths ?? []).some((w) => /hiring for the seat/.test(w.who)), g1.out?.warm_paths);
@@ -565,7 +574,7 @@ async function main() {
     const leaks = [...forbidden].filter((w) => all.includes(w));
     check(`no locked value or hidden company appears in any tool result (${forbidden.size} values checked)`, leaks.length === 0, leaks.length ? `${leaks.length} leaked` : undefined);
     check("no placeholder company (Private Company, Stealth Startup, Confidential) appears in any tool result", !/"(Private Company|Stealth Startup|Confidential|Start- Up|A Series B SaaS company)"/.test(all));
-    check("every website, LinkedIn and posting link in a tool result starts with https:// or http://", [...all.matchAll(/\\?"(website|linkedin|posting)\\?":\\?"([^"\\]*)/g)].every((m) => /^https?:\/\//.test(m[2]) || /^(on file|locked|No posting|under review)/.test(m[2])));
+    check("every website, LinkedIn and posting link in a tool result starts with https:// or http://", [...all.matchAll(/\\?"(website|linkedin|posting)\\?":\\?"([^"\\]*)/g)].every((m) => /^https?:\/\//.test(m[2]) || /^(on file|locked|opens after|No posting|under review)/.test(m[2])));
   }
 
   /* unlock: without confirm nothing is spent, with confirm 1 is, the same as the app */
@@ -591,6 +600,43 @@ async function main() {
   check("the email stays locked", done.out?.person?.email === "locked, 1 credit to unlock");
   const twice = await tool(at, "unlock", { entity: "person", id: gPerson.id, field: "name", confirm: true });
   check("unlocking what is already visible spends nothing", twice.out?.spent === 0 && (await A.view()).me.credits === before - 1, twice.out);
+  /*
+   * The order of purchases, as another fresh member (its own minute's limit): a person's contact
+   * details open after their name and title, who held a seat comes with the role they held, and at
+   * a locked company its people open after the company. Nothing here spends.
+   */
+  {
+    const D = await join("Dee Bundles");
+    secretWords.add(D.name);
+    const dc = await connect(D, { name: "Order" });
+    const dStart = (await D.view()).me.credits;
+    const early = await tool(dc.access_token, "unlock", { entity: "person", id: gPerson?.id, field: "email", confirm: true });
+    check("an email before the name is refused: unlock their name and title first", early.isError && /Unlock their name and title first/.test(early.text), early.text);
+    const pvHolder = await tool(dc.access_token, "unlock", { entity: "seat", id: gSeat?.id, field: "seat_holder" });
+    const pvRole = await tool(dc.access_token, "unlock", { entity: "seat", id: gSeat?.id, field: "role" });
+    check(
+      "who held a seat and the role they held price as one purchase, asked either way",
+      pvHolder.out?.would_spend === 1 && pvHolder.out.would_open === "who held this seat and the role they held" && pvRole.out?.would_spend === 1 && pvRole.out.would_open === pvHolder.out.would_open,
+      [pvHolder.out, pvRole.out],
+    );
+    // B, who types the locked company's name in Add, adds a decision maker there.
+    const bossName = "Hal Lockedfield";
+    const addBoss = await B.act({ type: "add", company: hiddenName, people: [{ name: bossName, title: `Chief Lock Officer ${RUN}`, relationship: "Decision maker" }] });
+    const gLocked = await tool(dc.access_token, "get_company", { company: ourRole.company_id });
+    const boss = (gLocked.out?.people ?? [])[0];
+    check(
+      "a person at a locked company reads 'opens after the company', and the warm path says to unlock the company first",
+      addBoss.status === 200 &&
+        /^opens after the company/.test(boss?.name ?? "") &&
+        boss.title === boss.name &&
+        !gLocked.text.includes(bossName) &&
+        (gLocked.out?.warm_paths ?? []).some((w) => w.person_id === boss.id && w.unlock_first?.field === "identity" && !w.unlock),
+      { add: addBoss.status, boss, paths: gLocked.out?.warm_paths },
+    );
+    const bossEarly = await tool(dc.access_token, "unlock", { entity: "person", id: boss?.id, field: "name", confirm: true });
+    check("unlocking that person first is refused: unlock the company first", bossEarly.isError && /Unlock the company first/.test(bossEarly.text), bossEarly.text);
+    check("and none of it spent a credit", (await D.view()).me.credits === dStart, dStart);
+  }
   // The hidden company: 1 credit opens its name and its open role, as Unlock company does in the app.
   const hp = await tool(at, "unlock", { entity: "company", id: ourRole.company_id, field: "identity" });
   check("unlocking a hidden company costs 1 credit, asked first", hp.out?.would_spend === 1 && /company and its open roles/.test(hp.out.would_open), hp.out);

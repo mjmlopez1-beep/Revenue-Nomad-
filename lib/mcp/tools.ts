@@ -3,7 +3,17 @@
  * the table (lib/mcp/view.ts) and every change goes through perform() in lib/table.ts, the path
  * the app uses, so credits, limits, hidden companies and the seat-holder rules are the app's.
  *
- * A locked fact never carries its value here either: it reads "locked, 1 credit to unlock".
+ * A locked fact never carries its value here either: it reads "locked, 1 credit to unlock", or
+ * says what the one credit opens with it and what has to come first. The prices are the
+ * server's, and these words follow them:
+ * - who held a seat and the role they held are one purchase on a seat whose holder is on file
+ *   (SEAT_BUNDLE). A seat with nobody named keeps its role as a fact of its own, free or locked
+ *   as its cell says.
+ * - a person's name and title are one purchase (PERSON_BUNDLE), and their LinkedIn, email and
+ *   phone open only after it (PERSON_DETAILS). unlock refuses them before.
+ * - at a locked company, its people and the fractionals who held its seats open only after the
+ *   company. unlock refuses them before.
+ * - an end month that only says the seat is still going is free (the server shows it).
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
@@ -38,8 +48,25 @@ const LOCKED_WITH_COMPANY = "on file, unlocks with the company (1 credit)";
 const NO_RATE = "No rate posted";
 const NO_POSTING = "No posting link on file";
 /** A person's name and title are one purchase (PERSON_BUNDLE). */
-const LOCKED_PERSON = "locked, 1 credit opens this person's name and title together";
+export const LOCKED_PERSON = "locked, 1 credit opens this person's name and title together";
+/** Who held a seat and the role they held are one purchase on a seat whose holder is on file (SEAT_BUNDLE). */
+export const LOCKED_SEAT = "locked, 1 credit opens who held this seat and the role they held together";
+/** A person's LinkedIn, email and phone wait for their name and title (PERSON_DETAILS). */
+export const AFTER_NAME = "opens after the name. Unlock their name and title first (1 credit for both), then this is 1 credit";
+/** A person, or who held a seat, at a company that is still locked. */
+export const AFTER_COMPANY = "opens after the company. Unlock the company first (1 credit)";
+/** What unlock says when asked for one of those too early: the server's words, then the way through. */
+export const NAME_FIRST = "Unlock their name and title first. One credit opens both (unlock this person with field name). Then their LinkedIn, email and phone are 1 credit each.";
+export const COMPANY_FIRST = "Unlock the company first. One credit opens it (unlock the company with field identity). Then its people and who held its seats can be unlocked.";
 const REVIEW = "under review";
+/** A person's contact details: they open only once the member can see who the person is (PERSON_DETAILS in lib/tableFields.ts). */
+const CONTACT_DETAILS = ["linkedin", "email", "phone"];
+/** Who held a seat and the role they held (SEAT_BUNDLE in lib/tableFields.ts). */
+const SEAT_PAIR = ["operator", "role"];
+/** The member can't see who this person is yet: their name or title is locked. */
+const personUnseen = (p: PersonRec) => PERSON_BUNDLE.some((f) => p.cells[f]?.s === "locked");
+/** A seat whose holder is on file (behind a lock or not) and that is not an open role: its holder and role are one purchase. */
+const seatBundled = (e: EngagementRec) => !isOpenRole(e) && (e.cells.operator?.s === "locked" || e.cells.operator?.s === "value");
 /** What one credit opens on an open role (the app's OPEN_ROLE_BUNDLE): its posting, posted rate and posted hours. */
 const ROLE_BUNDLE = ["posting", "rate", "hours"];
 /** Fields whose values are web addresses: sent as full https:// links (the table stores them without a scheme). */
@@ -157,14 +184,29 @@ function companySummary(i: CoInfo): ToolOut {
 
 const dayOfIso = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : undefined);
 
-function personOut(p: PersonRec, seatId?: string | null): ToolOut {
-  return { id: p.id, ...(seatId ? { seat_id: seatId } : {}), ...readAll(p.cells, PERSON_KEYS, (f) => (PERSON_BUNDLE.includes(f) ? LOCKED_PERSON : LOCKED)) };
+/** How a person's locked fact reads: after the company at a locked one, the contact details after the name, the name and title as one. */
+export function personLocked(p: PersonRec, hidden: boolean, field: string): string {
+  if (hidden) return AFTER_COMPANY;
+  if (CONTACT_DETAILS.includes(field) && personUnseen(p)) return AFTER_NAME;
+  return PERSON_BUNDLE.includes(field) ? LOCKED_PERSON : LOCKED;
 }
 
-function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
+export function personOut(p: PersonRec, seatId?: string | null, hidden = false): ToolOut {
+  return { id: p.id, ...(seatId ? { seat_id: seatId } : {}), ...readAll(p.cells, PERSON_KEYS, (f) => personLocked(p, hidden, f)) };
+}
+
+/** How a seat's locked fact reads: an open role's posting with the role or the company, who held it with their role, after the company at a locked one. */
+export function seatLocked(e: EngagementRec, hidden: boolean, field: string): string {
   const open = isOpenRole(e);
-  const lockedFor = (field: string) => (open && ROLE_BUNDLE.includes(field) ? (i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE) : LOCKED);
-  const facts = readAll(e.cells, SEAT_KEYS, lockedFor);
+  if (open && ROLE_BUNDLE.includes(field)) return hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE;
+  if (seatBundled(e) && SEAT_PAIR.includes(field)) return hidden ? AFTER_COMPANY : LOCKED_SEAT;
+  if (hidden && field === "operator") return AFTER_COMPANY;
+  return LOCKED;
+}
+
+export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
+  const open = isOpenRole(e);
+  const facts = readAll(e.cells, SEAT_KEYS, (field) => seatLocked(e, !!i.c.hidden, field));
   // Before anyone pays: say whether the posting gave a rate at all (never promise one that isn't there).
   if (open && !e.yours && !facts.rate) facts.rate = NO_RATE;
   const holder = e.cells.operator;
@@ -191,24 +233,34 @@ function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
           },
         }
       : {}),
-    ...(e.people.length ? { people: e.people.map((p) => personOut(p)) } : {}),
+    ...(e.people.length ? { people: e.people.map((p) => personOut(p, null, !!i.c.hidden)) } : {}),
     ...(e.yours ? { you_can_add: missingOf(e.cells, SEAT_KEYS, open ? ["start", "end", "reason", "sourced"] : []) } : {}),
     ...(e.claimable && !e.yours ? { claimable: "If this is the member's own seat, add_my_seat with this seat_id and claim: true makes it theirs (ask them first)." } : {}),
   };
 }
 
-/** The ways in: fellow fractionals who held a seat there, and the people who hired or managed them. */
-function warmPaths(i: CoInfo): ToolOut[] {
+/**
+ * The ways in: fellow fractionals who held a seat there, and the people who hired or managed them.
+ * At a locked company they open only after the company, so each says to unlock the company first.
+ */
+export function warmPaths(i: CoInfo): ToolOut[] {
   const out: ToolOut[] = [];
+  const hidden = !!i.c.hidden;
+  const company = { entity: "company", id: i.c.id, field: "identity" };
   for (const e of i.engs) {
     const h = e.cells.operator;
     if (!h || h.s === "empty" || e.yours) continue;
     const when = [shown(e.cells.start), shown(e.cells.end)].filter(Boolean).join(" to ");
+    const withRole = seatBundled(e) && e.cells.role?.s === "locked";
     out.push({
       who: `Fractional who held the ${shown(e.cells.function) ?? ""} seat${when ? ` (${when})` : ""}`.replace("the  seat", "a seat"),
-      name: read(h),
+      name: read(h, seatLocked(e, hidden, "operator")),
       seat_id: e.id,
-      ...(h.s === "locked" ? { unlock: { entity: "seat", id: e.id, field: "seat_holder" } } : {}),
+      ...(h.s === "locked"
+        ? hidden
+          ? { unlock_first: company }
+          : { unlock: { entity: "seat", id: e.id, field: "seat_holder" }, opens: withRole ? "who held it and the role they held, 1 credit" : "who held it, 1 credit" }
+        : {}),
     });
   }
   const ranked = ["Hiring for the seat", "Reported to", "Decision maker", "Worked with", "Reported to me"];
@@ -219,16 +271,28 @@ function warmPaths(i: CoInfo): ToolOut[] {
     const rel = shown(p.cells.relationship);
     out.push({
       who: [shown(p.cells.title), rel ? rel.toLowerCase() : null, e && shown(e.cells.function) ? `on the ${shown(e.cells.function)} seat` : null].filter(Boolean).join(", ") || "A person at the company",
-      name: read(p.cells.name),
+      name: read(p.cells.name, personLocked(p, hidden, "name")),
       person_id: p.id,
-      ...(p.cells.name.s === "locked" ? { unlock: { entity: "person", id: p.id, field: "name" } } : {}),
+      ...(p.cells.name.s === "locked" ? (hidden ? { unlock_first: company } : { unlock: { entity: "person", id: p.id, field: "name" }, opens: "their name and title, 1 credit" }) : {}),
     });
   }
   return out.slice(0, 10);
 }
 
-/** What unlocking everything here would buy: one entry per purchase (an open role's three facts are one). */
-const purchases = (i: CoInfo) => i.locked.length;
+/**
+ * What unlocking everything here would buy: one entry per purchase. An open role's posting, rate
+ * and hours are one (the table's list already counts them once), so are a person's name and title,
+ * and so are who held a seat and the role they held.
+ */
+export const purchases = (i: CoInfo) => {
+  const bought = new Set<string>();
+  for (const t of i.locked) {
+    const e = t.entity === "engagement" ? i.engs.find((x) => x.id === t.id) : undefined;
+    const pair = (t.entity === "contact" && PERSON_BUNDLE.includes(t.field)) || (!!e && seatBundled(e) && SEAT_PAIR.includes(t.field));
+    bought.add(`${t.entity} ${t.id} ${pair ? "pair" : t.field}`);
+  }
+  return bought.size;
+};
 
 function companyOut(i: CoInfo, mv: MemberView): ToolOut {
   const c = i.c;
@@ -238,7 +302,7 @@ function companyOut(i: CoInfo, mv: MemberView): ToolOut {
     ...facts,
     ...(c.hidden ? {} : { you_can_add: missingOf(c.cells, COMPANY_KEYS, ["about"]) }),
     seats: i.engs.map((e) => seatOut(e, i, mv)),
-    ...(c.people.length ? { people: c.people.map((p) => personOut(p)) } : {}),
+    ...(c.people.length ? { people: c.people.map((p) => personOut(p, null, !!c.hidden)) } : {}),
     warm_paths: warmPaths(i),
     locked: purchases(i)
       ? { purchases: purchases(i), note: `Up to ${purchases(i)} credit${purchases(i) > 1 ? "s" : ""} to unlock everything here. Call unlock with field "everything" (without confirm) for the exact cost.` }
@@ -483,10 +547,17 @@ export async function rateBenchmarks(ctx: Ctx, a: { function?: string; revenue?:
   // Groups nobody is in yet say nothing, unless they are all there is.
   const live = asked.filter((r) => r.monthly.n > 0 || r.hourly.n > 0);
   const rows = live.length ? live : asked;
+  // A revenue band with too few rates for a number still gets one: the same function across every client size, said so.
+  const shows = (r: (typeof b.rows)[number]) => r.monthly.median !== undefined || r.hourly.median !== undefined;
+  const wider = rev && rev !== "All" && !rows.some(shows) ? b.rows.filter((r) => (!fn || r.function === fn) && r.revenue === "All" && shows(r)) : [];
   return {
     about: "What fractionals charge, by function and the client's revenue at the time. Monthly retainers in dollars a month, hourly rates in dollars an hour. Each person counts once.",
-    rows: rows.map((r) => ({ function: r.function, client_revenue: r.revenue, monthly: statOut(r.monthly, "dollars a month"), hourly: statOut(r.hourly, "dollars an hour") })),
-    ...(rows.length ? {} : { note: "No group matches. Leave revenue out to see every band, or use revenue All." }),
+    rows: [...rows, ...wider].map((r) => ({ function: r.function, client_revenue: r.revenue, monthly: statOut(r.monthly, "dollars a month"), hourly: statOut(r.hourly, "dollars an hour") })),
+    ...(wider.length
+      ? { note: `Not enough rates at ${rev} yet to show a number. The rows with client_revenue All are the same function across every client size.` }
+      : rows.length
+        ? {}
+        : { note: "No group matches. Leave revenue out to see every band, or use revenue All." }),
   };
 }
 
@@ -518,7 +589,8 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     ...(me.sellEarnLeft !== undefined ? { pick_list_answers_that_still_earn_today: me.sellEarnLeft } : {}),
     facts_added: me.added,
     facts_unlocked: me.unlocked,
-    how_credits_work: "Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1. Your own seats are free to you.",
+    how_credits_work:
+      "Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1: who held a seat comes with the role they held, and a person's name with their title, for that one credit. A fractional you invite earns you both 10 credits when they add their first fact. Your own seats are free to you.",
     seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.map((f) => outKey(SEAT_KEYS, f)) })),
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
     saved_searches: alerts.length,
@@ -532,7 +604,7 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
 
 const ENTITY: Record<string, Entity> = { company: "company", seat: "engagement", engagement: "engagement", person: "contact", contact: "contact" };
 
-function unlockItems(mv: MemberView, entityRaw: string, id: string, fieldRaw: string): { items: FactRef[]; what: string; target: { entity: Entity; id: string } } {
+export function unlockItems(mv: MemberView, entityRaw: string, id: string, fieldRaw: string): { items: FactRef[]; what: string; target: { entity: Entity; id: string } } {
   const found = unlockFind(mv, entityRaw, id, fieldRaw);
   return { ...found, target: { entity: found.entity ?? ENTITY[entityRaw], id: found.id } };
 }
@@ -551,19 +623,44 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
   }
   if (entity === "engagement") {
     const { e, i } = seatInfo(mv, id);
-    if (all) return { items: lockedInEngagement(e), what: "everything locked on this seat", id: e.id };
+    const hidden = !!i.c.hidden;
+    const company: FactRef = { entity: "company", id: i.c.id, field: "identity" };
+    if (all) {
+      // Who held the seat and their role are one purchase: the seat holder stands for both.
+      const items = lockedInEngagement(e).filter((t) => !(t.entity === "engagement" && t.field === "role" && seatBundled(e) && e.cells.operator?.s === "locked"));
+      // At a locked company, who held the seat and its people open after the company: it comes first.
+      const waits = hidden && items.some((t) => t.entity === "contact" || (t.entity === "engagement" && SEAT_PAIR.includes(t.field) && seatBundled(e)) || t.field === "operator");
+      return waits ? { items: [company, ...items], what: "the company first, then everything locked on this seat", id: e.id } : { items, what: "everything locked on this seat", id: e.id };
+    }
     // list_open_roles calls them posted_rate and posted_hours.
     const field = fieldFrom(SEAT_KEYS, ({ posted_rate: "rate", posted_hours: "hours" } as Record<string, string>)[fieldRaw] ?? fieldRaw);
     if (!field) throw new ToolProblem(`On a seat, field is "everything" or one of: ${Object.keys(SEAT_KEYS).join(", ")}`);
     // An open role at a locked company: its posting, rate and hours come with the company (one purchase).
-    if (i.c.hidden && isOpenRole(e) && ROLE_BUNDLE.includes(field))
-      return { items: [{ entity: "company", id: i.c.id, field: "identity" }], what: `the company and its open roles: ${companyBundle(i).what}`, id: i.c.id, entity: "company" };
+    if (hidden && isOpenRole(e) && ROLE_BUNDLE.includes(field))
+      return { items: [company], what: `the company and its open roles: ${companyBundle(i).what}`, id: i.c.id, entity: "company" };
+    // Who held the seat and the role they held: one purchase, whichever was asked for. After the company at a locked one.
+    if (seatBundled(e) && SEAT_PAIR.includes(field)) {
+      const lead = SEAT_PAIR.find((f) => e.cells[f]?.s === "locked");
+      if (lead && hidden) throw new ToolProblem(COMPANY_FIRST);
+      return { items: lead ? [{ entity: "engagement", id: e.id, field: lead }] : [], what: "who held this seat and the role they held", id: e.id };
+    }
+    if (hidden && field === "operator" && e.cells.operator?.s === "locked") throw new ToolProblem(COMPANY_FIRST);
     return { items: e.cells[field]?.s === "locked" ? [{ entity: "engagement", id: e.id, field }] : [], what: `the ${outKey(SEAT_KEYS, field)}`, id: e.id };
   }
-  const { p } = personInfo(mv, id);
-  if (all) return { items: lockedOf("contact", p.id, p.cells), what: "everything locked about this person", id: p.id };
+  const { i, p } = personInfo(mv, id);
+  const hidden = !!i.c.hidden;
+  if (all) {
+    const items = lockedOf("contact", p.id, p.cells);
+    // At a locked company a person opens after the company, and their contact details after their name and title.
+    if (hidden && items.length) return { items: [{ entity: "company", id: i.c.id, field: "identity" }, ...items], what: "the company first, then everything locked about this person", id: p.id };
+    return { items, what: personUnseen(p) && items.length > 1 ? "this person's name and title, then the rest locked about them" : "everything locked about this person", id: p.id };
+  }
   const field = fieldFrom(PERSON_KEYS, fieldRaw);
   if (!field) throw new ToolProblem(`On a person, field is "everything" or one of: ${Object.keys(PERSON_KEYS).join(", ")}`);
+  if (p.cells[field]?.s === "locked") {
+    if (hidden) throw new ToolProblem(COMPANY_FIRST);
+    if (CONTACT_DETAILS.includes(field) && personUnseen(p)) throw new ToolProblem(NAME_FIRST);
+  }
   // The name and the title are one purchase: either one asks for both.
   const bundle = PERSON_BUNDLE.includes(field);
   return { items: p.cells[field]?.s === "locked" ? [{ entity: "contact", id: p.id, field }] : [], what: bundle ? "the person's name and title" : `the person's ${field}`, id: p.id };
@@ -584,7 +681,7 @@ async function afterChange(ctx: Ctx, entity: Entity, id: string): Promise<ToolOu
   }
   const i = mv.byPerson.get(id);
   const p = i?.people.find((x) => x.p.id === id);
-  return i && p ? { company: { id: i.c.id, name: i.c.name }, person: personOut(p.p, p.e?.id) } : undefined;
+  return i && p ? { company: { id: i.c.id, name: i.c.name }, person: personOut(p.p, p.e?.id, !!i.c.hidden) } : undefined;
 }
 
 export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: string; confirm?: boolean }): Promise<ToolOut> {

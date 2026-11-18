@@ -6,12 +6,15 @@
  * style, with three tabs (all, hiring now, no fractional in this function yet). The rows come
  * from GET /api/table?preview=1 (lib/preview.ts): the first 10 name their company with its logo
  * and domain; the rest come without one (`blur`) and show the app's blurred made-up name
- * (lockedLook, from the row's opaque seed), so the server never sends who they are. A bar under
- * the table says how many more there are. Never a person, a posting link or a rate. A company
- * with an open role is hidden in the app until a member spends a credit, so the answer names at
- * most 3 of them (lib/preview.ts PREVIEW_OPEN_NAMED). The other rows for them keep the role's
- * title and say the company unlocks with 1 credit. A tap on a row goes to the join form.
- * The same answer carries the hero's example record, handed up with `onExample`.
+ * (lockedLook, from the row's opaque seed), so the server never sends who they are. The button
+ * under the table says how many there are in all, the same number as the open tab. Never a
+ * person, a posting link or a rate. A company with an open role is hidden in the app until a
+ * member spends a credit, so the preview names at most 3 of them in all, whatever is picked
+ * (lib/preview.ts PREVIEW_OPEN_NAMED). The other rows for them keep the role's title and say the
+ * company unlocks with 1 credit. A tap on a row goes to the join form.
+ * A picked country keeps the companies whose country isn't on file yet, and each count says how
+ * many are in that country. The same answer carries the hero's example record, handed up with
+ * `onExample`.
  *
  * The section is up before any answer arrives: the counts are quiet bars until they land.
  * The picked function is kept in localStorage (tp_try_fn) so onboarding starts with it.
@@ -73,6 +76,8 @@ interface PreviewAnswer {
     repeat: number;
     anyHire: number;
   };
+  /** With a country picked: how many of each count are in it. The rest have no country on file yet. */
+  inCountry?: { hired: number; notYet: number; hiring: number; holders: number; all: number } | null;
   rows: PreviewRow[];
   example?: PreviewExample | null;
   openRoleCompanies?: boolean;
@@ -102,6 +107,19 @@ const seatNoun = (fn: string) => SEAT_NOUN[fn] ?? `${fn} lead`;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "the United States", "Canada": a country as it reads after "in". */
+const inCountryName = (c: string) => (/^(United |Netherlands$|Philippines$|Czech Republic$|Dominican Republic$|Bahamas$|Gambia$|Maldives$)/.test(c) ? `the ${c}` : c);
+/**
+ * What a count holds once a country is picked: "28 in the United States, plus 1,328 where the
+ * country isn't on file yet". Null with no country picked or nothing counted.
+ */
+function countrySplit(n: number, inC: number | undefined, country: string | null): string | null {
+  if (!country || inC === undefined || n <= 0) return null;
+  const rest = n - inC;
+  if (rest <= 0) return `All in ${inCountryName(country)}`;
+  return `${fmt(inC)} in ${inCountryName(country)}, plus ${fmt(rest)} where the country isn't on file yet`;
+}
 
 /** "posted today", "posted 3 days ago", "posted 2 weeks ago". */
 function postedAgo(day: string | null): string {
@@ -260,9 +278,14 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
   const c = answer && answer.fn === fn ? answer.counts : null;
   const rows = answer && answer.fn === fn ? answer.rows : [];
   const here = answer && answer.fn === fn && answer.view === view;
-  const total = here ? (answer.total ?? rows.length) : 0;
+  /** One number set: each tab's count is the one its button names ("Join free to see all 898"). */
+  const tabCount = (v: View) => (!c ? null : v === "hiring" ? c.hiring : v === "notyet" ? c.notYet : (c.all ?? null));
+  const total = here ? (tabCount(view) ?? answer.total ?? rows.length) : 0;
   const moreN = here ? Math.max(0, total - rows.length) : 0;
   const scoped = !!(industry || country);
+  /** With a country picked, what each count holds: "28 in the United States, plus 1,328 where the country isn't on file yet". */
+  const inC = answer && answer.fn === fn && answer.country ? answer.inCountry : null;
+  const split = (k: "hired" | "notYet" | "hiring") => (c && inC && answer?.country ? countrySplit(c[k], inC[k], answer.country) : null);
   // "customer success" in running text, but RevOps and AI GTM keep their capitals.
   const fnLow = /^[A-Z][a-z]+( [A-Z][a-z]+)*$/.test(fn) ? fn.toLowerCase() : fn;
   /** What to say when the tab has no rows: widen the filters only when one is set. */
@@ -280,7 +303,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
   };
   const ctaText =
     moreN > 0
-      ? "Join free to see them all"
+      ? `Join free to see all ${fmt(total)}`
       : here && rows.length === 0
         ? view === "all" && !scoped && c?.notYet
           ? "Join free to see these companies"
@@ -358,15 +381,22 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                   <div className="lp-try-count">
                     <dt>
                       {c && c.hired === 1 ? "company has" : "companies have"} hired a fractional {noun}
+                      {split("hired") ? <span className="lp-try-split">{split("hired")}</span> : null}
                     </dt>
                     <dd className="num">{c ? fmt(c.hired) : <span className="lp-skel" aria-label="Loading" />}</dd>
                   </div>
                   <div className="lp-try-count">
-                    <dt>hire fractionals but have no fractional {noun} yet</dt>
+                    <dt>
+                      hire fractionals but have no fractional {noun} yet
+                      {split("notYet") ? <span className="lp-try-split">{split("notYet")}</span> : null}
+                    </dt>
                     <dd className="num">{c ? fmt(c.notYet) : <span className="lp-skel" aria-label="Loading" />}</dd>
                   </div>
                   <div className="lp-try-count">
-                    <dt>{c && c.hiring === 1 ? "is hiring one now" : "are hiring one now"}</dt>
+                    <dt>
+                      {c && c.hiring === 1 ? "is hiring one now" : "are hiring one now"}
+                      {split("hiring") ? <span className="lp-try-split">{split("hiring")}</span> : null}
+                    </dt>
                     <dd className="num">{c ? fmt(c.hiring) : <span className="lp-skel" aria-label="Loading" />}</dd>
                   </div>
                 </dl>
@@ -379,7 +409,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
 
                 <div className="lp-tt-tabs" role="tablist" aria-label="Which companies">
                   {VIEWS.map((v) => {
-                    const n = v === "hiring" ? c?.hiring : v === "notyet" ? c?.notYet : (c?.all ?? null);
+                    const n = tabCount(v);
                     return (
                       <button
                         key={v}
@@ -401,7 +431,7 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
                 ) : (
                   <>
                     <p className="lp-tt-swipe" aria-hidden>
-                      Swipe the table for industry, size and country.
+                      Swipe the table for industry, size and revenue.
                     </p>
                     <div className={`lp-tt-frame${atEnd ? " is-end" : ""}`}>
                       <div
@@ -484,19 +514,13 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
           </div>
 
           <div className="lp-try-foot" ref={ctaRef}>
-            {moreN > 0 ? (
-              <p className="lp-tt-more">
-                These are <span className="num">{fmt(rows.length)}</span> of <strong className="num">{fmt(total)}</strong> companies. Join free to see the other{" "}
-                <span className="num">{fmt(moreN)}</span>.
-              </p>
-            ) : null}
-            <button type="button" className={`btn btn-lg lp-try-cta${primary ? " btn-primary" : " btn-pine"}`} onClick={onJoin}>
+            <button type="button" className={`btn btn-lg lp-try-cta num${primary ? " btn-primary" : " btn-pine"}`} onClick={onJoin}>
               {ctaText}
             </button>
             <p className="lp-try-note">
               {answer?.openRoleCompanies === false
-                ? "An open role's title is free. Inside Merlin, 1 credit shows the company behind it and its job posting. Another shows who held a seat."
-                : "An open role's title is free. Here we name a few of the companies hiring. Inside Merlin, 1 credit shows the company behind an open role and its job posting. Another shows who held a seat."}
+                ? "An open role's title is free. Inside Merlin, 1 credit shows the company behind it and its job posting. Another shows who held a seat and the role they held."
+                : "An open role's title is free. Here we name a few of the companies hiring. Inside Merlin, 1 credit shows the company behind an open role and its job posting. Another shows who held a seat and the role they held."}
             </p>
           </div>
         </div>

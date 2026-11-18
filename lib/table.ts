@@ -86,6 +86,7 @@ import { messageStats, reportedMessages, unreadCount, type MessagingState } from
 import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
 import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
+import { pillPlace } from "../app/onboard/place";
 import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
@@ -598,6 +599,15 @@ export async function loadState(): Promise<State> {
     for (const p of Object.values(s.profiles)) {
       if (!p.icp) continue;
       p.icp = { ...p.icp, industries: standardIndustries(p.icp.industries), employees: standardList("employees", p.icp.employees), revenue: standardList("revenue", p.icp.revenue) };
+    }
+    // The saved view onboarding made spelled the profile out as hard filters and opened empty. One
+    // that still matches that form for its member's profile opens with the profile pill on now.
+    for (const [memberId, list] of Object.entries(s.connector?.alerts ?? {})) {
+      const p = s.profiles[memberId];
+      for (const a of p?.icp ? list : []) {
+        const next = pillPlace(a.place, p.function ?? null, p.icp ?? null);
+        if (next) a.place = next;
+      }
     }
     for (const b of s.benchRates ?? []) if (b.revenue) b.revenue = currentValue("revenue", b.revenue);
     for (const l of s.ledger) {
@@ -4848,6 +4858,45 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
       }))
       .filter((x) => x.n > 0);
 
+  // The roles the email lists and the list its button opens (lib/digest.ts): the ones the headline
+  // counts, newest first, in free facts only. Never the company: the title loses its name and site.
+  type Listed = NonNullable<DigestData["roles"]>[number];
+  const rolesFor = new Map<string, { url: string; roles: Listed[] }>();
+  const listFor = (fn: string | null, mine: EngNode[]) => {
+    const own = !!fn && fn !== "Other" && mine.length > 0;
+    const key = own ? fn! : "";
+    const hit = rolesFor.get(key);
+    if (hit) return hit;
+    const url = `${base}/?${new URLSearchParams(own ? { v: "hiring", t: "seats", f: `fn:${fn}` } : { v: "hiring", t: "seats", af: "1", f: "-" })}`;
+    const seen = (e: EngNode) => tracks.get(e.id)?.firstSeen ?? "";
+    const roles = [...(own ? mine : fresh)]
+      .sort((a, b) => seen(b).localeCompare(seen(a)))
+      .slice(0, 5)
+      .map((e): Listed => {
+        const c = g.companies.get(e.companyId);
+        const rfn = fnOf(e, s);
+        const fallback = rfn ? `Fractional ${rfn} role` : "Fractional role";
+        const raw = live(e, s, "role");
+        const title = raw ? titleWithout(raw, c?.name ?? "", live(c, s, "website") ?? null, fallback).trim() : fallback;
+        const geo = geoOf(c, s);
+        const country = geo.country ? ({ "United States": "US", "United Kingdom": "UK" } as Record<string, string>)[geo.country] ?? geo.country : null;
+        const hq = live(c, s, "hq");
+        return {
+          title: !title || title.length > 90 || /https?:|www\.|@/i.test(title) ? fallback : title,
+          function: rfn,
+          industry: live(c, s, "industry"),
+          employees: live(c, s, "employees"),
+          // The region and country, never the city: what a hidden company shows.
+          region: geo.country ? [geo.region, country].filter(Boolean).join(", ") : hq ? hqRegion(hq) || null : null,
+          listed: seen(e).slice(0, 10) || null,
+          url: `${url}&c=${encodeURIComponent(pubId(e.companyId))}`,
+        };
+      });
+    const out = { url, roles };
+    rolesFor.set(key, out);
+    return out;
+  };
+
   // Only members who have signed in get it, unless RN_DIGEST_ALL=1 sends it to everyone on file.
   const everyone = process.env.RN_DIGEST_ALL === "1";
   const joined = new Set(s.members.map((m) => m.id));
@@ -4861,6 +4910,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     if (Number.isFinite(last) && nowMs - last < 6 * DAY) continue;
     const fn = prof.function ?? functionOf(prof.title || m.title);
     const mine = fn ? fresh.filter((e) => fnOf(e, s) === fn) : [];
+    const listed = listFor(fn, mine);
     out.push({
       memberId: m.id,
       data: {
@@ -4877,6 +4927,8 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         alerts: alertCounts(m),
         appUrl: base,
         unsubscribeUrl: `${base}/api/table/unsubscribe?m=${pubId(m.id)}&s=${unsubSig(m.id)}`,
+        rolesUrl: listed.url,
+        roles: listed.roles,
       },
     });
   }

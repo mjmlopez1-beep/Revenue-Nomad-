@@ -8,14 +8,20 @@ import { IconChevron } from "../ui/shared";
 import { useCopy } from "./Credits";
 import "./connect.css";
 
+/**
+ * Questions to paste into Claude. One that names a company is a template with the blanks in
+ * [brackets], so pasting it as it is can't add a seat at a made-up company or ask about one.
+ */
 const EXAMPLES = [
   "Which companies are the best fit for me to prospect as a fractional VP Marketing?",
-  "What's the best way into Acme?",
+  "What's the best way into [a company you want as a client]?",
   "Set up alerts on fractional Marketing roles at SaaS companies from $5M to $20M.",
   "What's new in open Sales roles this week?",
-  "What do fractional RevOps leads charge at $5M to $20M companies?",
-  "Add my seat at Acme. I was their fractional CMO from March to November 2024.",
+  "What does a fractional RevOps lead charge?",
+  "Add my seat. I was the fractional [your title] at [a client you worked with] from [month and year] to [month and year].",
 ];
+/** A question with blanks to fill in before it is sent. */
+const isTemplate = (q: string) => /\[[^\]]+\]/.test(q);
 
 function Code({ text, label, block = false }: { text: string; label: string; block?: boolean }) {
   const copy = useCopy();
@@ -126,7 +132,12 @@ export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: (
         <ul className="uc-asks">
           {EXAMPLES.map((q) => (
             <li key={q}>
-              <button type="button" className="uc-ask" onClick={() => void copy(q, "Question copied. Paste it into Claude.")} title="Copy this question">
+              <button
+                type="button"
+                className="uc-ask"
+                onClick={() => void copy(q, isTemplate(q) ? "Question copied. Paste it into Claude and fill in the brackets." : "Question copied. Paste it into Claude.")}
+                title="Copy this question"
+              >
                 {q}
               </button>
             </li>
