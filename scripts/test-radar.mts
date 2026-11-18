@@ -103,7 +103,7 @@ Object.assign(process.env, {
   RN_EMAIL_API_URL: "https://mail.test/emails",
   RN_DIGEST: "0",
 });
-for (const k of ["RN_BILLING", "RN_DIGEST_ALL", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADAR", "RN_EMAIL_REPLY_TO"]) delete process.env[k];
+for (const k of ["RN_BILLING", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR", "RN_DIGEST_ALL", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADAR", "RN_EMAIL_REPLY_TO"]) delete process.env[k];
 
 /* ---------- the network, replaced ---------- */
 
@@ -372,7 +372,9 @@ async function main() {
 
   /* ---------- Pro ---------- */
   console.log("\nPro (billing on)");
+  // Billing is live only with the Stripe settings too (lib/plan.ts billingLive). Made-up values: nothing here calls Stripe.
   process.env.RN_BILLING = "1";
+  for (const k of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR"]) process.env[k] = `test_${k.toLowerCase()}`;
   await T.mutate((d) => {
     (d as unknown as { billing: unknown }).billing = { members: { mem_pro: { proUntil: new Date(t0 + 60 * DAY).toISOString(), interval: "month" } } };
   });
@@ -409,6 +411,7 @@ async function main() {
   const piaNext = mails("pia.profit@example.com")[0]?.body as { text: string } | undefined;
   check("the next morning doesn't send Pro the instant signal again", !piaNext || !/Finance Director/.test(piaNext.text), piaNext?.text);
   delete process.env.RN_BILLING;
+  for (const k of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR"]) delete process.env[k];
   check("billing off again: Pro reads as free", !radar.isPro(await state(), "mem_pro", Date.now()) && !(await radar.radarView("tok-pro-0001", firstDay))?.day?.pro);
   check("billing off: nothing goes out at once", (await radar.radarInstant()) === 0);
 
