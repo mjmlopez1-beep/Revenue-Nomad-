@@ -2406,30 +2406,28 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             emailOn={view.email}
             contact={contact}
             items={[
-              // The way back to the table from any page. Marked while the member is on it.
-              { label: "The table", current: page === "table", onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
-              ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
-              // Saved views, newest first: one tap opens each. Manage saved views lists them all, to rename or remove.
-              ...[...views].reverse().slice(0, 5).map((v) => ({ label: v.name, hint: v.email ? "Weekly email" : undefined, current: page === "table" && currentView === v.id, onClick: () => openView(v) })),
-              ...(views.length ? [{ label: "Manage saved views", onClick: () => setViewsOpen(true) }] : []),
-              { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
-              { label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
-              { label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },
-              { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
-              { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
-              { label: "Integrations", hint: "Slack, Claude", current: page === "integrations", onClick: () => (setDrawer(null), setPage("integrations")) },
-              ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
-              { label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
-              { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
-              { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
-              // With email on: a one-time link by email, to open Merlin on another device.
-              ...(view.email ? [{ label: "Send me a new sign-in link", onClick: () => void emailMeLink(toast) }] : []),
-              // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
-              ...(me.admin || me.asMember ? [{ label: "See it as a member", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
+              // Four short sections. Find: where the member looks. You: what is theirs. Settings. Admin.
+              { group: "Find", label: "All companies", current: page === "table" && !currentView, onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
+              // Saved views: one entry. Its sheet lists every view to open, rename or remove; the filter rail lists them too.
+              ...(views.length ? [{ group: "Find", label: "Saved views", hint: String(views.length), current: page === "table" && !!currentView, onClick: () => setViewsOpen(true) }] : []),
+              { group: "Find", label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },
+              { group: "Find", label: "Rate benchmarks", current: page === "rates", onClick: () => (setDrawer(null), setPage("rates")) },
+              ...(phone ? [{ group: "You", label: "Add what you know", onClick: () => openAdd() }] : []),
+              { group: "You", label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
+              { group: "You", label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} to fill in` : undefined, onClick: () => openSeats() },
+              { group: "You", label: "Your credits", current: page === "credits", onClick: () => (setDrawer(null), setPage("credits")) },
+              { group: "You", label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },
+              { group: "Settings", label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
+              { group: "Settings", label: "Integrations", hint: "Slack, Claude", current: page === "integrations", onClick: () => (setDrawer(null), setPage("integrations")) },
+              // One way to get signed in elsewhere: emailed when email is on, else the link copied.
+              view.email
+                ? { group: "Settings", label: "Email me a sign-in link", onClick: () => void emailMeLink(toast) }
+                : { group: "Settings", label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
               // Single-letter shortcuts can be switched off (speech input, stray keys). Not offered on touch screens, which have none.
               ...(!touch
                 ? [
                     {
+                      group: "Settings",
                       label: keysOff ? "Turn on keyboard shortcuts" : "Turn off keyboard shortcuts",
                       hint: "/ F A J K",
                       onClick: () => {
@@ -2441,6 +2439,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                     },
                   ]
                 : []),
+              ...(me.admin && view.admin ? [{ group: "Admin", label: "Pilot metrics", current: page === "metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
+              // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
+              ...(me.admin || me.asMember ? [{ group: "Admin", label: "See it as a member", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
             ]}
           />
         )}

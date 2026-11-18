@@ -8,7 +8,7 @@
  * Also here, because the top bar is always on screen: "Questions and feedback" (the help sheet,
  * from the account menu or the ? key) and the Undo toast's host.
  */
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject, Fragment } from "react";
 import type { LedgerRow, Me, View } from "@/lib/tableTypes";
 import { Brand, IconCoin, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
@@ -377,6 +377,8 @@ export interface MenuItem {
   checked?: boolean;
   /** A count that needs the member (unread messages). Shown as a badge when above 0. */
   badge?: number;
+  /** The section it sits in. A small heading shows where the section changes. */
+  group?: string;
 }
 
 /**
@@ -446,9 +448,14 @@ export function AvatarMenu({
         </div>
       ) : (
         <>
-          {list.map((it) => (
+          {list.map((it, i) => (
+            <Fragment key={it.label}>
+            {it.group && it.group !== list[i - 1]?.group && (
+              <div className={`tp-menu-group${i ? " sep" : ""}`} role="presentation">
+                {it.group}
+              </div>
+            )}
             <button
-              key={it.label}
               type="button"
               role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
               aria-checked={it.checked === undefined ? undefined : it.checked}
@@ -467,7 +474,9 @@ export function AvatarMenu({
                 </span>
               )}
             </button>
+            </Fragment>
           ))}
+          <div className="tp-menu-sep" role="separator" />
           <button
             type="button"
             role="menuitem"
@@ -481,7 +490,6 @@ export function AvatarMenu({
           </button>
           {signOut && (
             <>
-              <div className="tp-menu-sep" role="separator" />
               <button type="button" role="menuitem" className="tp-menu-item" disabled={leaving} onClick={() => (emailOn ? out() : setAsking(true))}>
                 <span>Sign out</span>
               </button>

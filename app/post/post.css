@@ -876,6 +876,20 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+/* The account menu's section headings (Find, You, Settings, Admin). */
+.tp-menu-group {
+  padding: 8px 10px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3, #6b7280);
+}
+.tp-menu-group.sep {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
 /* The account menu: a line above Sign out, and Sign out's question in place of the items. */
 .tp-menu-sep {
   height: 1px;
