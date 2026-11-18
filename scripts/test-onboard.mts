@@ -23,6 +23,7 @@ import {
 } from "../app/onboard/firstView";
 import { applyFilters, deriveAll, hireOfRow, placeFilters, rowsFor, sortRows, type Row } from "../app/post/model";
 import { FUNCTIONS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
+import { invitedLine } from "../lib/notify/format";
 
 let passed = 0;
 let failed = 0;
@@ -366,6 +367,20 @@ if (BASE) {
     check("editable later, and a profile save without it keeps it", JSON.stringify(kept?.me?.before) === '["RevOps"]' && kept?.me?.firstView === sv.json?.id, kept?.me?.before);
     await act({ type: "savedView", op: "delete", id: sv.json?.id });
     check("once the first view is removed, the table no longer opens on it", (await view())?.me?.firstView === null);
+
+    // The invite loop: a member who joins from Olive's invite is told on onboarding's first step who invited them.
+    const code = (await view())?.me?.inviteCode;
+    const ipC = `10.79.${(Date.now() >> 8) & 255}.${Date.now() & 255}`;
+    const jc = await call({ join: { name: "Cleo Invitee", email: `qa+onboard-cleo-${stamp}@example.com`, ref: code } }, undefined, ipC);
+    const tokenC = (jc.r.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean) ?? null;
+    const cv = tokenC ? (await call(undefined, tokenC, ipC)).json : null;
+    check(
+      "a member who joins from an invite hears who invited them, and that they both get the bonus",
+      cv?.me?.onboarded === false && cv?.me?.invitedBy?.first === "Olive" && cv.me.invitedBy.both === true && invitedLine(cv.me.invitedBy.first, cv.me.invitedBy.both, 10) === "Olive invited you. You both get 10 credits when you add your first fact.",
+      cv?.me?.invitedBy,
+    );
+    check("by first name only, never an email", !!cv && !/@|Onboard/.test(JSON.stringify(cv.me?.invitedBy ?? {})));
+    check("a member who joined on their own hears nothing of the kind", (await view())?.me?.invitedBy === undefined);
   }
 
   // A member from before the question: their answers stay as they were.

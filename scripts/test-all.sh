@@ -94,6 +94,10 @@ run seatscan env SEATSCAN_PORT="$PORT" npx tsx scripts/test-seatscan.mts
 run names env NAMES_PORT="$PORT" npx tsx scripts/test-names.mts
 # Referral partners: Invite to connect, the claim bonus and the conversation it opens, Message, the Referral partners page and the connector's warm paths, on a made-up seed and key, with its own server.
 run partners env PARTNERS_PORT="$PORT" npx tsx scripts/test-partners.mts
+# Saved views: rename, the same view twice, remove and Undo, on the server and through the connector, on a made-up seed.
+run views npx tsx scripts/test-views.mts
+# The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
+run invites npx tsx scripts/test-invites.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts
 # 20 members acting at once on their own server: every answer carries the member's numbers and the table version, no server errors, at most one table a minute each.
 run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs

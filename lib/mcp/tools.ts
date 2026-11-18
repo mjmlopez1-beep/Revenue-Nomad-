@@ -26,6 +26,7 @@ import {
 } from "@/app/post/model";
 import { cleanWindow } from "../hired";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
+import { sameView } from "../hunt";
 import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
 import { publicBase, webLink } from "../links";
@@ -991,6 +992,9 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
   const { criteria, problems } = cleanCriteria(a);
   if (problems.length) throw new ToolProblem(problems.join(". "));
   if (!Object.keys(criteria).length) throw new ToolProblem("Say what to look for: a function, an industry, a size, a revenue band or a place.");
+  // One list with the app's saved views: a search the member has already is not saved twice (lib/hunt.ts sameView).
+  const dup = sameView(mine, { place: null, criteria });
+  if (dup) return { message: `You saved this search already, as "${dup.name}".`, saved_search: show(dup), delivery: emailNote(mv) };
   if (mine.length >= ALERT_MAX) throw new ToolProblem(`You have ${ALERT_MAX} saved searches, which is the most. Delete one first.`);
   const saved: SavedSearch = {
     id: `al_${randomBytes(6).toString("base64url")}`,

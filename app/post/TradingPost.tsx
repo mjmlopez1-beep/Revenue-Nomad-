@@ -56,13 +56,14 @@ import { MyCredits, signInLink, useCopy } from "./Credits";
 import { Integrations } from "./Integrations";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
-import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViews, type ProfileEdit } from "./Hunt";
+import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViewList, SavedViews, SavedViewsSheet, type ProfileEdit } from "./Hunt";
 import { HiredButton, HiredSentence } from "./Hired";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/lib/hired";
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
+import { joinedLine } from "@/lib/notify/format";
 import "./post.css";
 
 export interface TradingPostProps {
@@ -345,6 +346,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     }
   });
   const [saveOpen, setSaveOpen] = useState(false);
+  /** "Manage saved views" from the account menu. */
+  const [viewsOpen, setViewsOpen] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const creditsRef = useRef<HTMLButtonElement>(null);
@@ -654,6 +657,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     };
   });
   const [bonusOff, setBonusOff] = useState(false);
+  // The invite loop: who joined from this member's invite and wasn't shown yet (Me.joined). Closed here, it goes at once.
+  const [joinedOff, setJoinedOff] = useState<string[]>([]);
+  const joined = (me.joined ?? []).filter((j) => !joinedOff.includes(j.id));
+  const closeJoined = () => {
+    const ids = joined.map((j) => j.id);
+    setJoinedOff((x) => [...x, ...ids]);
+    void act({ type: "joinedSeen", ids }, { quiet: true, silentError: true });
+  };
   // A visit ends when the member leaves the page, so "since your last visit" means while they were away (not what they saw happen here).
   useEffect(() => {
     const left = (e: Event) => {
@@ -1435,6 +1446,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         )
       )}
       {(since.invite > 0 || since.confirm > 0) && !bonusOff && <Strip onClose={() => setBonusOff(true)}>{bonusText(since.invite, since.confirm)}</Strip>}
+      {/* The invite loop: fractionals who joined from the member's invite, once each (closing it tells the server). */}
+      {joined.length > 0 && <Strip onClose={closeJoined}>{joinedLine(joined, REFERRAL_BONUS)}</Strip>}
       {since.n > 0 && !sinceOff && (
         <Strip
           onClose={() => setSinceOff(true)}
@@ -1864,9 +1877,33 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setAllFns(x.all);
   };
   const saveView = async (name: string, email: boolean) => {
-    const r = await act({ type: "savedView", op: "save", name, email, place: herePlace, criteria: criteriaOf(spelled, fnOnly ? hireFn : null) });
-    return r.ok;
+    const known = new Map(views.map((v) => [v.id, v]));
+    const r = await act({ type: "savedView", op: "save", name, email, place: herePlace, criteria: criteriaOf(spelled, fnOnly ? hireFn : null) }, { quiet: true });
+    if (!r.ok) return false;
+    // A view they saved already comes back as that view ("You saved this view already, as …"): one tap opens it.
+    const had = r.id ? known.get(r.id) : undefined;
+    if (had && had.id !== currentView) toast(r.message, false, { action: { label: "Open it", onClick: () => openView(had) } });
+    else toast(r.message);
+    return true;
   };
+  /* Each saved view can be renamed and removed wherever it is listed (the filters, the account menu, Your profile, the Saved view sheet). */
+  const renameView = async (v: SavedViewRec, name: string) => (await act({ type: "savedView", op: "rename", id: v.id, name })).ok;
+  const emailView = (v: SavedViewRec, on: boolean) => void act({ type: "savedView", op: "email", id: v.id, on });
+  /** Remove, with Undo on the toast: the view comes back where it was, with its id (so a first view is one again). */
+  const removeView = async (v: SavedViewRec) => {
+    const at = views.findIndex((x) => x.id === v.id);
+    const r = await act({ type: "savedView", op: "delete", id: v.id }, { quiet: true });
+    if (!r.ok) return false;
+    toast(`Removed "${v.name}".`, false, { action: { label: "Undo", onClick: () => void act({ type: "savedView", op: "restore", view: v, at }) }, ms: 8000 });
+    return true;
+  };
+  /** The Saved view sheet over a view that is saved already: a new name and the weekly email, as changed. */
+  const editView = async (v: SavedViewRec, name: string, email: boolean) => {
+    if (name.trim() && name.trim() !== v.name && !(await renameView(v, name.trim()))) return false;
+    if (email !== v.email) emailView(v, email);
+    return true;
+  };
+  const viewActs = { onEmail: emailView, onRename: renameView, onRemove: removeView };
   // "Best fit for you": the one line on why, worked out once per company while that sort is on.
   const fitWhy = useMemo(() => {
     if (sort !== "best") return null;
@@ -1877,16 +1914,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       return w;
     };
   }, [sort, cellMe]);
-  const savedViews = (
-    <SavedViews
-      views={views}
-      current={currentView}
-      onOpen={openView}
-      onSave={() => setSaveOpen(true)}
-      onEmail={(v, on) => void act({ type: "savedView", op: "email", id: v.id, on })}
-      onRemove={(v) => void act({ type: "savedView", op: "delete", id: v.id })}
-    />
-  );
+  const savedViews = <SavedViews views={views} current={currentView} onOpen={openView} onSave={() => setSaveOpen(true)} {...viewActs} />;
   /*
    * Every filter on, as a chip that takes it off, on phones too: an onboarding answer's filter
    * ("No fractional Sales yet") is never only a number on the Filters button (C47).
@@ -2244,15 +2272,44 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             <InvitePanel fn={me.function} code={me.inviteCode} />
           </Sheet>
         )}
-        {icpOpen && <IcpSheet icp={me.icp} title={me.title} fn={me.function} before={me.before} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
+        {icpOpen && (
+          <IcpSheet
+            icp={me.icp}
+            title={me.title}
+            fn={me.function}
+            before={me.before}
+            companies={view.companies}
+            views={views.length ? <SavedViewList views={views} current={currentView} onOpen={(v) => (setIcpOpen(false), openView(v))} {...viewActs} /> : null}
+            onSave={saveIcp}
+            onClose={() => setIcpOpen(false)}
+          />
+        )}
         {saveOpen && (
           <SaveViewSheet
-            key={herePlace}
+            key={`${herePlace}|${currentView ?? ""}`}
             defaultName={viewName(hiredActive ? eff : spelled, tab, recordType, fnOnly ? hireFn : null, me.function)}
             emailOn={view.email}
             hires={hiredActive}
-            onSave={saveView}
+            // The view on screen is saved already: the sheet renames it, turns its email on or off, or removes it.
+            existing={views.find((v) => v.id === currentView) ?? null}
+            onSave={(name, email) => {
+              const saved = views.find((v) => v.id === currentView);
+              return saved ? editView(saved, name, email) : saveView(name, email);
+            }}
+            onRemove={async () => {
+              const saved = views.find((v) => v.id === currentView);
+              return saved ? removeView(saved) : false;
+            }}
             onClose={() => setSaveOpen(false)}
+          />
+        )}
+        {viewsOpen && (
+          <SavedViewsSheet
+            views={views}
+            current={currentView}
+            onOpen={(v) => (setViewsOpen(false), openView(v))}
+            {...viewActs}
+            onClose={() => setViewsOpen(false)}
           />
         )}
         {editor && (
@@ -2288,8 +2345,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               // The way back to the table from any page. Marked while the member is on it.
               { label: "The table", current: page === "table", onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
-              // Saved views, newest first: one tap opens each (the filters list them all and manage them).
+              // Saved views, newest first: one tap opens each. Manage saved views lists them all, to rename or remove.
               ...[...views].reverse().slice(0, 5).map((v) => ({ label: v.name, hint: v.email ? "Weekly email" : undefined, current: page === "table" && currentView === v.id, onClick: () => openView(v) })),
+              ...(views.length ? [{ label: "Manage saved views", onClick: () => setViewsOpen(true) }] : []),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
               { label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
               { label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },

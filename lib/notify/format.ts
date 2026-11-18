@@ -46,8 +46,39 @@ export function actorWords(actor: { function: string | null; title: string | nul
 const cap = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 const listWords = (xs: string[]) => (xs.length <= 1 ? xs[0] ?? "" : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
+/* ---------- the invite loop: the words the app, the email and the alerts share ---------- */
+
+/** "Sam joined Merlin from your invite": the alert's headline and the email's subject. */
+export const joinedHeadline = (first: string) => `${cut(flat(first), 40) || "A fractional"} joined Merlin from your invite`;
+
+/**
+ * The inviter's line when fractionals joined from their invite, in the app and in an alert. `both`:
+ * they both get `bonus` credits when that one adds a first fact (else no bonus is promised).
+ * "Sam joined Merlin from your invite. You both get 10 credits when Sam adds a first fact."
+ */
+export function joinedLine(joined: { first: string; both: boolean }[], bonus: number): string {
+  const firsts = joined.map((j) => cut(flat(j.first), 40) || "A fractional");
+  if (!firsts.length) return "";
+  if (firsts.length === 1) return `${joinedHeadline(firsts[0])}.${joined[0].both ? ` You both get ${bonus} credits when ${firsts[0]} adds a first fact.` : ""}`;
+  const names = firsts.length > 3 ? `${firsts.slice(0, 3).join(", ")} and ${plural(firsts.length - 3, "other")}` : listWords(firsts);
+  return `${names} joined Merlin from your invite.${joined.every((j) => j.both) ? ` Each time one of them adds a first fact, you both get ${bonus} credits.` : ""}`;
+}
+
+/**
+ * The invitee's line on onboarding's first step: "Ivy invited you. You both get 10 credits when you
+ * add your first fact." `both` false (the inviter is past REFERRAL_LIMIT): only the invitee's bonus.
+ */
+export function invitedLine(first: string, both: boolean, bonus: number): string {
+  return invitedParts(first, both, bonus).join(" ");
+}
+/** invitedLine in its two sentences, so the page can set the first one in bold. */
+export function invitedParts(first: string, both: boolean, bonus: number): [string, string] {
+  return [`${cut(flat(first), 40) || "A member"} invited you.`, `${both ? "You both get" : "You get"} ${bonus} credits when you add your first fact.`];
+}
+
 /** Links into the app. `base` is the app's address with no trailing slash. */
 export const links = {
+  home: (base: string) => (base ? `${base}/` : ""),
   thread: (base: string, id: string) => (base ? `${base}/?p=messages&m=${encodeURIComponent(id)}` : ""),
   messages: (base: string) => (base ? `${base}/?p=messages` : ""),
   company: (base: string, id: string) => (base ? `${base}/?c=${encodeURIComponent(id)}` : ""),
@@ -69,21 +100,33 @@ export function alertFor(items: AlertItem[], base: string): Alert | null {
   if (!items.length) return null;
   const kind = items[0].kind;
   if (kind === "message") {
-    const ms = items as Extract<AlertItem, { kind: "message" }>[];
-    if (ms.length === 1) {
+    const all = items as Extract<AlertItem, { kind: "message" }>[];
+    // Fractionals who joined from the member's invite: one line between them, never a conversation link.
+    const joins = all.filter((m) => m.about === "joined");
+    const joinedNow = joinedLine(joins.map((j) => ({ first: j.from, both: !!j.bonus })), joins.find((j) => j.bonus)?.bonus ?? 0);
+    const ms = all.filter((m) => m.about !== "joined");
+    if (!ms.length) {
+      const j = joins[0];
+      if (joins.length === 1) return { kind, count: 1, headline: joinedHeadline(j.from), lines: j.bonus ? [`You both get ${j.bonus} credits when ${j.from} adds a first fact.`] : [], url: links.home(base) };
+      return { kind, count: joins.length, headline: `${plural(joins.length, "fractional")} joined Merlin from your invite`, lines: [joinedNow], url: links.home(base) };
+    }
+    if (ms.length === 1 && !joins.length) {
       const m = ms[0];
       if (m.about === "invite")
         return { kind, count: 1, headline: `${m.from} claimed their seat at ${m.company} through your invite`, lines: ["You're connected as referral partners. Your note is the first message, so say hello."], url: links.thread(base, m.conversationId) };
       const about = m.about === "partners" ? "connecting as referral partners" : m.holder ? `your seat at ${m.company}` : `the seat at ${m.company}`;
       return { kind, count: 1, headline: `${m.from} sent you a message about ${about}`, lines: [`“${m.snippet}”`], url: links.thread(base, m.conversationId) };
     }
-    const latest = ms.slice(-3).reverse();
+    // With fractionals who joined, their line takes the last place.
+    const room = joins.length ? 2 : 3;
+    const latest = ms.slice(-room).reverse();
     const lines = latest.map((m) =>
       m.about === "invite" ? `${m.from} claimed their seat at ${m.company} through your invite.` : `${m.from}${m.about === "partners" ? "" : `, about ${m.company}`}. “${cut(m.snippet, 80)}”`,
     );
-    if (ms.length > 3) lines[2] = `${lines[2]} And ${plural(ms.length - 2, "more message")}.`;
+    if (ms.length > room) lines[room - 1] = `${lines[room - 1]} And ${plural(ms.length - room + 1, "more message")}.`;
+    if (joins.length) lines.push(joinedNow);
     const convs = new Set(ms.map((m) => m.conversationId));
-    return { kind, count: ms.length, headline: `${plural(ms.length, "new message")} on Merlin`, lines, url: convs.size === 1 ? links.thread(base, ms[0].conversationId) : links.messages(base) };
+    return { kind, count: all.length, headline: `${plural(ms.length, "new message")} on Merlin`, lines, url: convs.size === 1 ? links.thread(base, ms[0].conversationId) : links.messages(base) };
   }
   if (kind === "seat") {
     const ss = items as Extract<AlertItem, { kind: "seat" }>[];

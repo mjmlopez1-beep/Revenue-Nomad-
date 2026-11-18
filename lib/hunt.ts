@@ -8,7 +8,8 @@
  */
 import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, standardIndustries, stripInvisible } from "./tableFields";
 import type { Icp, SavedViewCriteria, SavedViewRec } from "./tableTypes";
-import { ALERT_MAX, cleanCriteria, describeAlert, pickFrom, type SavedSearch } from "./mcp/alerts";
+import { ALERT_MAX, cleanCriteria, countryKey, describeAlert, pickFrom, type SavedSearch } from "./mcp/alerts";
+import { followsHires } from "./hired";
 
 /** Problems the member can fix, as the app shows them. */
 export class HuntError extends Error {}
@@ -35,40 +36,90 @@ export function cleanIcp(raw: unknown): Icp | null {
   };
 }
 
-/** The views as the app gets them (Me.savedViews). */
-export function savedViewsOut(list: SavedSearch[] | undefined): SavedViewRec[] {
-  return (list ?? []).map((a) => {
-    const { id, name, createdAt, place, email, ...criteria } = a;
-    return { id, name, createdAt, place: place ?? null, email: email !== false, criteria: criteria as SavedViewCriteria };
-  });
+/** What a saved view looks for: everything but its id, name, date, place and email. */
+function criteriaOfView(a: SavedSearch): SavedViewCriteria {
+  const { id: _id, name: _name, createdAt: _at, place: _place, email: _email, ...criteria } = a; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return criteria;
 }
 
-/** One savedView action on a member's list. Returns the new list and what to say. */
-export function savedViewAction(
-  list: SavedSearch[],
-  a: { op: string; id?: string; name?: string; place?: string; criteria?: SavedViewCriteria; email?: boolean; on?: boolean },
-  newId: () => string,
-  now: string,
-): { list: SavedSearch[]; message: string; id?: string } {
-  if (a.op === "delete") {
-    const next = list.filter((x) => x.id !== a.id);
-    if (next.length === list.length) throw new HuntError("That saved view is gone already.");
-    return { list: next, message: "Removed that saved view." };
+/** The views as the app gets them (Me.savedViews). */
+export function savedViewsOut(list: SavedSearch[] | undefined): SavedViewRec[] {
+  return (list ?? []).map((a) => ({ id: a.id, name: a.name, createdAt: a.createdAt, place: a.place ?? null, email: a.email !== false, criteria: criteriaOfView(a) }));
+}
+
+/* ---------- the same view twice ---------- */
+
+/** A filters value ("fn:Sales|Finance~icp") written one way: each list in order, then the parts in order. */
+const filtersKey = (raw: string) =>
+  (raw === "-" ? "" : raw)
+    .split("~")
+    .filter(Boolean)
+    .map((part) => {
+      const at = part.indexOf(":");
+      return at < 0 ? part : `${part.slice(0, at)}:${part.slice(at + 1).split("|").filter(Boolean).sort().join("|")}`;
+    })
+    .sort()
+    .join("~");
+
+/**
+ * Where a view saved in the app opens, written one way: its list, tab, search and filters, in any
+ * order, without the sort, since the same rows in another order are the same view. Null for a view
+ * with no place (a search saved in Claude).
+ */
+export function placeKey(place: string | null | undefined): string | null {
+  const raw = String(place ?? "").replace(/^\?/, "").trim();
+  if (!raw) return null;
+  const parts: string[] = [];
+  for (const [k, v] of new URLSearchParams(raw)) {
+    if (k === "s") continue;
+    const val = k === "f" ? filtersKey(v) : k === "q" ? v.trim().toLowerCase().replace(/\s+/g, " ") : v;
+    if (val) parts.push(`${k}=${val}`);
   }
-  if (a.op === "email") {
-    const at = list.findIndex((x) => x.id === a.id);
-    if (at < 0) throw new HuntError("That saved view is gone already.");
-    const next = [...list];
-    next[at] = { ...next[at], email: a.on !== false };
-    return {
-      list: next,
-      id: a.id,
-      message: a.on !== false ? "We'll email you new matches each week." : "No more weekly email for this view. It stays saved.",
-    };
+  return parts.sort().join("&");
+}
+
+/** What a view looks for (its criteria), written one way: each list in order, a place and the countries in one spelling. */
+export function criteriaKey(c: SavedViewCriteria): string {
+  const list = (xs: readonly string[] | undefined) => [...new Set((xs ?? []).map((x) => String(x).trim()).filter(Boolean))].sort();
+  return JSON.stringify([
+    list(c.function ? [c.function] : c.functions),
+    list(c.industry),
+    list(c.employees),
+    list(c.revenue),
+    String(c.hq ?? "").trim().toLowerCase().replace(/\s+/g, " "),
+    list((c.country ?? []).map(countryKey)),
+    !!c.fractionalFriendly,
+    followsHires(c) ? [list(c.hiredFn), c.hiredWithin ?? 0] : null,
+  ]);
+}
+
+/**
+ * The member's saved view that is this one already, or null. Two views saved in the app are the same
+ * when they open the same rows (placeKey: the same list, tab, search and filters, whatever the sort).
+ * A search saved in Claude has no place, so it is the same as any view that looks for the same
+ * things (criteriaKey). `except`: a view to leave out (the one being put back).
+ */
+export function sameView(list: SavedSearch[], v: { place?: string | null; criteria: SavedViewCriteria }, except?: string): SavedSearch | null {
+  const here = placeKey(v.place);
+  const wants = criteriaKey(v.criteria);
+  for (const x of list) {
+    if (x.id === except) continue;
+    const there = placeKey(x.place);
+    if (here && there ? here === there : criteriaKey(x) === wants) return x;
   }
-  if (a.op !== "save") throw new HuntError("Save, delete or email.");
-  if (list.length >= ALERT_MAX) throw new HuntError(`You have ${ALERT_MAX} saved views, which is the most. Remove one first.`);
-  const c = a.criteria ?? {};
+  return null;
+}
+
+/** What "You saved this view already" says, with the name it was saved as. */
+export const savedAlready = (v: SavedSearch) => `You saved this view already, as "${v.name}".`;
+
+/* ---------- save, rename, remove, put back, the weekly email ---------- */
+
+/** A view's name as save and rename keep it: no invisible or control characters or angle brackets, at most 100 characters. */
+const cleanName = (raw: unknown) => stripInvisible(String(raw ?? "")).replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 100);
+
+/** The criteria from the app's loose input, cleaned the way the connector's are. Throws when a value isn't on our lists. */
+function viewCriteria(c: SavedViewCriteria = {}) {
   const { criteria, problems } = cleanCriteria({
     function: c.function,
     functions: c.functions,
@@ -83,9 +134,90 @@ export function savedViewAction(
     hiredWithin: c.hiredWithin,
   });
   if (problems.length) throw new HuntError("Some of these filters aren't on our lists any more. Change them and save again.");
-  // The place is the app's own address query: kept as text, never read by the server.
-  const place = typeof a.place === "string" ? a.place.replace(/[\u0000-\u001f<>"]/g, "").replace(/^\?/, "").slice(0, 1500) : "";
-  const name = stripInvisible(String(a.name ?? "")).replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 100) || describeAlert(criteria);
+  return criteria;
+}
+
+/** The place is the app's own address query: kept as text, never read by the server. */
+const cleanPlace = (raw: unknown) => (typeof raw === "string" ? raw.replace(/[\u0000-\u001f<>"]/g, "").replace(/^\?/, "").slice(0, 1500) : "");
+
+/** A view put back (Undo after Remove): it keeps the id it had, if that id is one we would make and is free. */
+const VIEW_ID = /^al_[A-Za-z0-9_-]{8}$/;
+
+/**
+ * One savedView action on a member's list. Returns the new list, what to say, and the view's id.
+ *   save     a new view. One the member has already (sameView) is not saved twice: the answer
+ *            says so, with that view's id, and the list stays as it was.
+ *   rename   a new name, cleaned as save cleans it (nothing left: a name made from the criteria).
+ *   delete   remove it.
+ *   restore  put a removed view back where it was (`view`, `at`), with its id, so a first view is
+ *            one again. Not when the member saved the same view since.
+ *   email    the weekly email for it on or off (`on`).
+ */
+export function savedViewAction(
+  list: SavedSearch[],
+  a: {
+    op: string;
+    id?: string;
+    name?: string;
+    place?: string;
+    criteria?: SavedViewCriteria;
+    email?: boolean;
+    on?: boolean;
+    view?: { id?: unknown; name?: unknown; place?: unknown; criteria?: SavedViewCriteria; email?: unknown; createdAt?: unknown };
+    at?: number;
+  },
+  newId: () => string,
+  now: string,
+): { list: SavedSearch[]; message: string; id?: string } {
+  const gone = () => new HuntError("That saved view is gone already.");
+  if (a.op === "delete") {
+    const next = list.filter((x) => x.id !== a.id);
+    if (next.length === list.length) throw gone();
+    return { list: next, message: "Removed that saved view." };
+  }
+  if (a.op === "email") {
+    const at = list.findIndex((x) => x.id === a.id);
+    if (at < 0) throw gone();
+    const next = [...list];
+    next[at] = { ...next[at], email: a.on !== false };
+    return {
+      list: next,
+      id: a.id,
+      message: a.on !== false ? "We'll email you new matches each week." : "No more weekly email for this view. It stays saved.",
+    };
+  }
+  if (a.op === "rename") {
+    const at = list.findIndex((x) => x.id === a.id);
+    if (at < 0) throw gone();
+    const name = cleanName(a.name) || describeAlert(criteriaOfView(list[at]));
+    const next = [...list];
+    next[at] = { ...next[at], name };
+    return { list: next, id: next[at].id, message: `Renamed it "${name}".` };
+  }
+  if (a.op === "restore") {
+    const v = a.view ?? {};
+    const criteria = viewCriteria(v.criteria);
+    // A search saved in Claude has no place, and keeps none.
+    const place = typeof v.place === "string" ? cleanPlace(v.place) : undefined;
+    const dup = sameView(list, { place, criteria });
+    if (dup) return { list, id: dup.id, message: savedAlready(dup) };
+    if (list.length >= ALERT_MAX) throw new HuntError(`You have ${ALERT_MAX} saved views, which is the most. Remove one first.`);
+    const keep = typeof v.id === "string" && VIEW_ID.test(v.id) && !list.some((x) => x.id === v.id);
+    const id = keep ? (v.id as string) : newId();
+    const made = typeof v.createdAt === "string" && Number.isFinite(Date.parse(v.createdAt)) && Date.parse(v.createdAt) <= Date.parse(now) ? new Date(v.createdAt).toISOString() : now;
+    const name = cleanName(v.name) || describeAlert(criteria);
+    const back: SavedSearch = { id, name, ...criteria, createdAt: made, ...(place !== undefined ? { place } : {}), ...(v.email === false ? { email: false } : {}) };
+    const at = Math.max(0, Math.min(list.length, Number.isInteger(a.at) ? (a.at as number) : list.length));
+    return { list: [...list.slice(0, at), back, ...list.slice(at)], id, message: `"${name}" is back.` };
+  }
+  if (a.op !== "save") throw new HuntError("Save, rename, delete or email.");
+  const criteria = viewCriteria(a.criteria);
+  const place = cleanPlace(a.place);
+  // The same view twice is one view: say which one it is, and change nothing.
+  const dup = sameView(list, { place, criteria });
+  if (dup) return { list, id: dup.id, message: savedAlready(dup) };
+  if (list.length >= ALERT_MAX) throw new HuntError(`You have ${ALERT_MAX} saved views, which is the most. Remove one first.`);
+  const name = cleanName(a.name) || describeAlert(criteria);
   const id = newId();
   const saved: SavedSearch = { id, name, ...criteria, createdAt: now, place, ...(a.email === false ? { email: false } : {}) };
   return { list: [...list, saved], id, message: a.email === false ? `Saved "${name}".` : `Saved "${name}". New matches come in your weekly email.` };

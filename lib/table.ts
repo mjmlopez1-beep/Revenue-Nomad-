@@ -355,6 +355,27 @@ export interface State extends MessagingState {
   names?: NamesState;
   /** Invite to connect: which member sent which seat's holder their claim link, and what came of it. See connectInvite. */
   seatInvites?: SeatInvite[];
+  /** The invite loop: who joined through whose invite, and when the inviter was told. See announceJoin. */
+  inviteJoins?: InviteJoin[];
+}
+
+/**
+ * The invite loop: `invitee` joined through `by`'s invite (Member.referredBy, from ?ref= on the
+ * homepage or a claim link). One per invitee, made when they join. `in`: when they were first
+ * signed in (their first visit). `told`: when the inviter was told, once (the app, the email when
+ * email is on, Slack or a webhook). `seen`: the inviter closed the line in the app. `skip`: the
+ * inviter is not told this way: "connect" when the invitee claimed their seat through the
+ * inviter's claim link, which tells them already (connectInvite), "gone" when the invite no longer
+ * stands (either account is gone).
+ */
+export interface InviteJoin {
+  by: string;
+  invitee: string;
+  at: string;
+  in?: string;
+  told?: string;
+  seen?: string;
+  skip?: "connect" | "gone";
 }
 
 /**
@@ -1388,6 +1409,26 @@ function releaseHeld(s: State, memberId: string, now: string): void {
 const heldFor = (s: State, memberId: string) => s.held.reduce((n, h) => n + (h.memberId === memberId ? h.delta : 0), 0);
 
 /**
+ * How many different invitees paid `inviter` the invite bonus in the 30 days before `nowMs`: the
+ * inviter is paid for REFERRAL_LIMIT of them (referralBonus), and the invite loop's lines promise
+ * the inviter a bonus only under it. Invitees, not rows: a bonus split by the daily cap leaves a
+ * ledger row and a held row, and later releases add more. The inviter's own row for having been
+ * invited is not an invite.
+ */
+function inviteesPaid(s: State, inviter: string, nowMs: number): number {
+  const ownReferrer = s.members.find((m) => m.id === inviter)?.referredBy;
+  const firstPaid = new Map<string, number>();
+  const note = (ref: string, at: string) => {
+    const invitee = refRecord(ref);
+    if (!ref.endsWith(".referral") || invitee === ownReferrer) return;
+    firstPaid.set(invitee, Math.min(firstPaid.get(invitee) ?? Infinity, Date.parse(at)));
+  };
+  for (const l of s.ledger) if (l.memberId === inviter && l.reason === "referral" && l.delta > 0) note(l.ref, l.at);
+  for (const h of s.held) if (h.memberId === inviter && h.reason === "referral") note(h.ref, h.at);
+  return [...firstPaid.values()].filter((t) => nowMs - t < 30 * DAY).length;
+}
+
+/**
  * The invite bonus, once per invitee: REFERRAL_BONUS to a member who joined through a fellow
  * member's invite code (referredBy), and the same to that inviter for up to REFERRAL_LIMIT
  * different invitees in 30 days. Both within the daily earning cap, the rest held (grant). It is
@@ -1400,21 +1441,8 @@ function referralBonus(s: State, seed: Seed, inviteeId: string, now: string): { 
   if (!joined?.referredBy || s.referralPaid.includes(inviteeId)) return { due: false, paid: 0, inviter: null };
   s.referralPaid.push(inviteeId);
   const inviter = joined.referredBy;
-  const nowMs = Date.parse(now);
-  // Count invitees, not rows: a bonus split by the daily cap leaves a ledger row and a held
-  // row, and later releases add more. The inviter's own row for having been invited is not an invite.
-  const ownReferrer = s.members.find((m) => m.id === inviter)?.referredBy;
-  const firstPaid = new Map<string, number>();
-  const note = (ref: string, at: string) => {
-    const invitee = refRecord(ref);
-    if (!ref.endsWith(".referral") || invitee === ownReferrer) return;
-    firstPaid.set(invitee, Math.min(firstPaid.get(invitee) ?? Infinity, Date.parse(at)));
-  };
-  for (const l of s.ledger) if (l.memberId === inviter && l.reason === "referral" && l.delta > 0) note(l.ref, l.at);
-  for (const h of s.held) if (h.memberId === inviter && h.reason === "referral") note(h.ref, h.at);
-  const recent = [...firstPaid.values()].filter((t) => nowMs - t < 30 * DAY).length;
   let inviterFirst: string | null = null;
-  if (recent < REFERRAL_LIMIT) {
+  if (inviteesPaid(s, inviter, Date.parse(now)) < REFERRAL_LIMIT) {
     grant(s, inviter, REFERRAL_BONUS, "referral", `${inviteeId}.referral`, now);
     const who = s.members.find((m) => m.id === inviter) ?? seed.members.find((m) => m.id === inviter);
     if (who) inviterFirst = firstName(who.name);
@@ -1967,6 +1995,8 @@ export async function joinMember(
     };
     s.members.push(m);
     keepIp(s, m.id, ipHash);
+    // The invite loop: the inviter hears about it once the invitee is in (announceJoin).
+    if (m.referredBy) (s.inviteJoins ??= []).push({ by: m.referredBy, invitee: m.id, at: m.at });
     memberIndexCache = null; // the draft changed in place: later jobs in this batch must see the new member
     return m;
   });
@@ -2767,6 +2797,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       invited: s.members.filter((m) => m.referredBy === me.id).length,
       invitesPaid: paidInvitees.size,
       invitePending: !!joinedMe?.referredBy && !s.referralPaid.includes(me.id),
+      // The invite loop: who invited them (onboarding says so), and who joined from their invite. First names only.
+      ...inviteLoopFor(s, idx, me, nowMs),
       added,
       unlocked,
       holdersUnlocked,
@@ -4981,6 +5013,12 @@ export async function perform(
           }
           return { message: "Saved." };
         }
+        case "joinedSeen": {
+          // The invite loop: the inviter closed the line saying who joined from their invite. It doesn't come back.
+          const ids = new Set((Array.isArray(a.ids) ? a.ids : []).slice(0, 50).map((x) => String(x)));
+          for (const j of s.inviteJoins ?? []) if (j.by === me.id && j.told && !j.seen && ids.has(pubId(j.invitee))) j.seen = now;
+          return { message: "" };
+        }
         case "invite": {
           // Invite to connect: the member sent this seat's holder their note and claim link. One record per member and seat.
           const e = g.engagements.get(inId("engagement", a.engagementId));
@@ -5439,17 +5477,120 @@ export async function touch(token: string | null | undefined, ip?: string): Prom
   const hash = ip ? ipHashOf(ip) : null;
   const key = `${me.id}:${hash}`;
   const newIp = !!hash && !(s.ips?.[me.id] ?? []).includes(hash) && !ipWriting.has(key);
-  if (!due && !newIp) return;
+  // The invite loop: an invitee's first time signed in starts the short wait before their inviter is told (announceJoin).
+  const firstIn = !!s.inviteJoins?.some((x) => x.invitee === me.id && !x.in && !x.told && !x.skip);
+  if (!due && !newIp && !firstIn) return scheduleJoins(s, me.id);
   if (due) seenAt.set(me.id, now);
   if (newIp) ipWriting.add(key);
   try {
     await mutate((d) => {
       if (due) d.seen[me.id] = new Date(now).toISOString();
       if (hash) keepIp(d, me.id, hash);
+      const j = firstIn ? d.inviteJoins?.find((x) => x.invitee === me.id && !x.in) : undefined;
+      if (j) j.in = new Date(now).toISOString();
     });
   } finally {
     if (newIp) ipWriting.delete(key);
   }
+  scheduleJoins(await loadState(), me.id);
+}
+
+/* ---------- the invite loop: a friend joined from your invite ---------- */
+
+/**
+ * How long after an invitee is first signed in their inviter is told. From a claim link they sign
+ * in first and claim the seat right after, and a claim through the inviter's link tells the
+ * inviter already (connectInvite): the wait lets that claim land, so the inviter hears once.
+ */
+export const JOIN_SETTLE_MS = 15_000;
+/** Joins waiting their turn in this process, by invitee: the timer, and when it fires on the process clock (performance.now). */
+const joinTimers = new Map<string, { t: ReturnType<typeof setTimeout>; fires: number }>();
+
+/**
+ * Give each join on this member (as invitee or as inviter) that is in and not told yet its turn,
+ * JOIN_SETTLE_MS after the invitee was first signed in. A restart loses the timers: the next visit
+ * of either one sets them again, from the state.
+ */
+function scheduleJoins(s: State, memberId: string): void {
+  for (const j of s.inviteJoins ?? []) {
+    if (j.told || j.skip || !j.in || (j.invitee !== memberId && j.by !== memberId)) continue;
+    const wait = Math.max(0, Date.parse(j.in) + JOIN_SETTLE_MS - Date.now()) + 200;
+    const fires = performance.now() + wait;
+    const cur = joinTimers.get(j.invitee);
+    if (cur && cur.fires <= fires) continue;
+    if (cur) clearTimeout(cur.t);
+    const t = setTimeout(() => {
+      joinTimers.delete(j.invitee);
+      void announceJoin(j.invitee).catch((e) => console.error("join notice failed", e));
+    }, wait);
+    t.unref?.();
+    joinTimers.set(j.invitee, { t, fires });
+  }
+}
+
+/** What the inviter is told when a fractional joined from their invite (lib/notify/joined.ts). A first name only. */
+export interface JoinNews {
+  inviterId: string;
+  /** The invitee's first name. */
+  first: string;
+  /** They both get REFERRAL_BONUS when the invitee adds a first fact (the inviter is under REFERRAL_LIMIT). */
+  both: boolean;
+  at: string;
+}
+
+/** Whether a join can be told now: in, settled, not told and not skipped. Read only. */
+const joinReady = (j: InviteJoin | undefined, nowMs: number): j is InviteJoin & { in: string } =>
+  !!j && !j.told && !j.skip && !!j.in && nowMs - Date.parse(j.in) >= JOIN_SETTLE_MS;
+
+/**
+ * Tell the inviter, once, that `inviteeId` joined from their invite: in the app (Me.joined), by
+ * email when email is on, and in Slack or a webhook. Only once the invitee is in and
+ * JOIN_SETTLE_MS has gone by, and not when they claimed their seat through this inviter's claim
+ * link, since Invite to connect told the inviter then. The bonus is promised only while the
+ * invitee's is still waiting and the inviter is under REFERRAL_LIMIT. Never the invitee's email.
+ */
+export async function announceJoin(inviteeId: string): Promise<JoinNews | null> {
+  if (!joinReady((await loadState()).inviteJoins?.find((x) => x.invitee === inviteeId), Date.now())) return null;
+  const news = await mutate((s, seed): JoinNews | null => {
+    const j = (s.inviteJoins ?? []).find((x) => x.invitee === inviteeId);
+    const nowMs = Date.now();
+    if (!joinReady(j, nowMs)) return null;
+    const invitee = s.members.find((m) => m.id === inviteeId);
+    const inviter = memberIndex(seed, s).byId.get(j.by);
+    if (!invitee || !inviter || invitee.referredBy !== j.by) {
+      j.skip = "gone";
+      return null;
+    }
+    if ((s.seatInvites ?? []).some((x) => x.by === j.by && x.claimedBy === inviteeId)) {
+      j.skip = "connect";
+      return null;
+    }
+    j.told = new Date(nowMs).toISOString();
+    return { inviterId: j.by, first: firstName(invitee.name), both: !s.referralPaid.includes(inviteeId) && inviteesPaid(s, j.by, nowMs) < REFERRAL_LIMIT, at: j.told };
+  });
+  if (news) await import("./notify/joined").then((n) => n.afterJoin(news)).catch((e) => console.error("join notice failed", e));
+  return news;
+}
+
+/**
+ * The invite loop on a member's own view. `invitedBy`: who invited them, while their invite bonus
+ * waits (onboarding's first step says so). `joined`: fractionals who joined from their invite that
+ * they haven't closed yet (the last 30 days). First names only.
+ */
+function inviteLoopFor(s: State, idx: MemberIndex, me: Member, nowMs: number): Pick<Me, "invitedBy" | "joined"> {
+  const out: Pick<Me, "invitedBy" | "joined"> = {};
+  const self = s.members.find((m) => m.id === me.id);
+  const inviter = self?.referredBy && !s.referralPaid.includes(me.id) ? idx.byId.get(self.referredBy) : undefined;
+  if (inviter) out.invitedBy = { first: firstName(inviter.name), both: inviteesPaid(s, inviter.id, nowMs) < REFERRAL_LIMIT };
+  const mine = (s.inviteJoins ?? []).filter((x) => x.by === me.id && x.told && !x.seen && nowMs - Date.parse(x.told) < 30 * DAY);
+  if (mine.length) {
+    const under = inviteesPaid(s, me.id, nowMs) < REFERRAL_LIMIT;
+    out.joined = mine.flatMap((x) => {
+      const m = s.members.find((y) => y.id === x.invitee);
+      return m ? [{ id: pubId(m.id), first: firstName(m.name), at: x.told!, both: under && !s.referralPaid.includes(m.id) }] : [];
+    });
+  }
+  return out;
 }
 
 /* ---------- the weekly scan: open roles, opened and closed with dates ---------- */

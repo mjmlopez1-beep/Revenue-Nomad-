@@ -1312,9 +1312,14 @@ section("hunt", async () => {
   check("delete removes one", del.status === 200 && (await H.view()).me.savedViews.length === 1, del.json);
   const again = await H.act({ type: "savedView", op: "delete", id: vs2[1].id });
   check("deleting it twice says it's gone", again.status === 400 && /gone/.test(again.json?.error ?? ""), again.json);
-  for (let k = 0; k < 19; k++) await H.act({ type: "savedView", op: "save", name: `View ${k}`, place: "v=all", criteria: {} });
-  const full = await H.act({ type: "savedView", op: "save", name: "One more", place: "v=all", criteria: {} });
+  // Each one another view (its own search): the same view twice is one view (lib/hunt.ts sameView).
+  for (let k = 0; k < 19; k++) await H.act({ type: "savedView", op: "save", name: `View ${k}`, place: `v=all&q=view${k}`, criteria: {} });
+  const twice = await H.act({ type: "savedView", op: "save", name: "View 3 again", place: "v=all&q=view3", criteria: {} });
+  check("a view saved already isn't saved twice: the answer names it and carries its id", twice.status === 200 && twice.json?.message === 'You saved this view already, as "View 3".' && (await H.view()).me.savedViews.find((v) => v.name === "View 3")?.id === twice.json?.id, twice.json);
+  const full = await H.act({ type: "savedView", op: "save", name: "One more", place: "v=all&q=one-more", criteria: {} });
   check("at most 20 saved views", full.status === 400 && /20 saved views/.test(full.json?.error ?? "") && (await H.view()).me.savedViews.length === 20, full.json);
+  const renamed = await H.act({ type: "savedView", op: "rename", id: vs[0].id, name: "Marketing <i>roles</i> I want" });
+  check("rename takes a new name, cleaned the way save cleans it", renamed.status === 200 && (await H.view()).me.savedViews[0].name === "Marketing iroles/i I want" && /^Renamed it/.test(renamed.json?.message ?? ""), renamed.json);
   check("onboarding stays done", (await H.view()).me.onboarded === true);
 });
 

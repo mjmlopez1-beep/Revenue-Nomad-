@@ -43,9 +43,12 @@ export type AlertItem =
   /**
    * `about` partners: a conversation from Referral partners, about no seat. invite: not a message they
    * got, but `from` (a fractional the member invited to connect) claimed their seat at `company`
-   * through the member's invite, which opened a conversation with the member's note in it.
+   * through the member's invite, which opened a conversation with the member's note in it. joined:
+   * `from` joined Merlin from the member's invite (the invite loop, lib/notify/joined.ts): no
+   * conversation, no company, and `bonus` is the credits they both get when `from` adds a first
+   * fact (left out when the member is past REFERRAL_LIMIT).
    */
-  | { kind: "message"; at: string; conversationId: string; from: string; company: string; holder: boolean; snippet: string; about?: "partners" | "invite" }
+  | { kind: "message"; at: string; conversationId: string; from: string; company: string; holder: boolean; snippet: string; about?: "partners" | "invite" | "joined"; bonus?: number }
   | {
       kind: "seat";
       at: string;

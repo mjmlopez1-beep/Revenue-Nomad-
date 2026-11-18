@@ -312,7 +312,7 @@ const ALERTS: { key: AlertKind; title: (fn: string | null, saved: number) => str
         saved ? ` It covers your ${saved === 1 ? "saved view" : `${saved} saved views`} too.` : " Saved views count too, once you have some."
       }`,
   },
-  { key: "message", title: () => "New messages", desc: () => "Who wrote, the company it's about and the first lines, with a link to reply. Never an email address." },
+  { key: "message", title: () => "New messages", desc: () => "Who wrote, the company it's about and the first lines, with a link to reply, and who joined from your invite. Never an email address." },
   {
     key: "seat",
     title: () => "Someone engages your seat",

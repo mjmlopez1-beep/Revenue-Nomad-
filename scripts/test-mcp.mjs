@@ -692,6 +692,9 @@ async function main() {
   check("alerts save keeps a saved search with a readable name", !sv.isError && /^Fractional Marketing roles at SaaS or Fintech companies, \$5M–\$20M$/.test(sv.out?.saved_search?.name ?? "") && /Email isn't set up/.test(sv.out.delivery), sv.out ?? sv.text);
   const sv2 = await tool(at, "alerts", { action: "save", name: "CMO roles", function: "Marketing" });
   check("a saved search counts the open roles that match now", sv2.out?.saved_search?.open_now >= 1 && sv2.out.open_now.length >= 1, sv2.out?.saved_search);
+  // One list with the app's saved views: the same search twice is one search (lib/hunt.ts sameView).
+  const sv2b = await tool(at, "alerts", { action: "save", name: "CMO roles again", function: "marketing" });
+  check("the same search again isn't saved twice: the answer names the one saved", !sv2b.isError && sv2b.out?.message === 'You saved this search already, as "CMO roles".' && sv2b.out?.saved_search?.id === sv2.out?.saved_search?.id, sv2b.out ?? sv2b.text);
   const ls = await tool(at, "alerts", { action: "list" });
   check("alerts list shows both", ls.out?.saved_searches?.length === 2 && ls.out.saved_searches.every((x) => typeof x.new_this_week === "number"));
   const badAlert = await tool(at, "alerts", { action: "save", revenue: ["a lot"] });

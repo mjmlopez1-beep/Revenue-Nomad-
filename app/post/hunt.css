@@ -177,23 +177,23 @@
   border-style: dashed;
   color: var(--pine);
 }
+/* A list that manages saved views (SavedViewList): the name, then Weekly email, Rename and Remove under it. */
 .hunt-vlist {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 6px;
 }
-.hunt-vlist li {
+.hunt-vitem {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 0;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 0;
   border-top: 1px solid var(--line);
 }
-.hunt-vlist li:first-child {
+.hunt-vitem:first-child {
   border-top: 0;
+  padding-top: 4px;
 }
 /* Manage: a view's name wraps to two lines before it is cut (L41). */
 .hunt-vname {
@@ -205,6 +205,86 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
+}
+/* Where the list opens views (the account menu's sheet, Your profile), the name is the way in. */
+.hunt-vopen {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+  color: var(--pine);
+  cursor: pointer;
+}
+.hunt-vopen:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hunt-vitem.on .hunt-vname {
+  color: var(--pine);
+}
+.hunt-vacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 16px;
+  min-width: 0;
+}
+.hunt-vbtns {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+.hunt-vact {
+  min-height: 32px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.hunt-vact.hunt-vremove {
+  color: var(--body-ink);
+}
+.hunt-vact:hover {
+  text-decoration-thickness: 2px;
+}
+.hunt-vopen:focus-visible,
+.hunt-vact:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.hunt-vrename {
+  display: grid;
+  gap: 8px;
+}
+.hunt-vinput {
+  width: 100%;
+}
+.hunt-vrename .hunt-vacts {
+  justify-content: flex-start;
+  gap: 8px;
+}
+/* "Saved view" sheet: Remove sits where Cancel does, quieter than the main button. */
+.hunt-vremove-btn {
+  color: var(--body-ink);
+}
+/* Your profile: the saved views come last, at the width of the rest of the sheet (.hunt-sub, below, starts its items). */
+.hunt-sub.hunt-views-sub {
+  justify-items: stretch;
+}
+.hunt-views-sheet .hunt-lead {
+  margin-bottom: 8px;
 }
 /* The pill's count split ("25 match, 144 more where a part isn't on file"): quieter than the profile. */
 .hunt-pill-split {
@@ -243,8 +323,18 @@
 
 @media (hover: none) and (pointer: coarse), (max-width: 767px) {
   .hunt-chip,
-  .hunt-pill-btn {
+  .hunt-pill-btn,
+  .hunt-vact,
+  .hunt-vrename .btn {
     min-height: 44px;
+  }
+  .hunt-vopen {
+    min-height: 44px;
+    font-size: 15px;
+  }
+  .hunt-vinput {
+    min-height: 44px;
+    font-size: 16px;
   }
   .hunt-pill {
     padding: 8px 8px 8px 12px;

@@ -252,6 +252,20 @@ export interface Me {
   invitesPaid: number;
   /** I joined from an invite and the bonus is still waiting for my first fact. */
   invitePending: boolean;
+  /**
+   * The invite loop, for the invitee: who invited them, while their invite bonus waits for their
+   * first fact (onboarding's first step says so). `both`: the inviter gets REFERRAL_BONUS too (they
+   * are under REFERRAL_LIMIT), else only the invitee does. Left out otherwise.
+   */
+  invitedBy?: { first: string; both: boolean };
+  /**
+   * The invite loop, for the inviter: fractionals who joined from their invite and that the app
+   * hasn't shown them yet (newest last, the last 30 days). `id` is the invitee's public id, for
+   * the joinedSeen action. `both`: they both get REFERRAL_BONUS when the invitee adds a first fact
+   * (the invitee's bonus is still waiting and the inviter is under REFERRAL_LIMIT). A first name
+   * only, never an email.
+   */
+  joined?: { id: string; first: string; at: string; both: boolean }[];
   /** Facts this member added, and unlocked. */
   added: number;
   unlocked: number;
@@ -722,10 +736,26 @@ export type Action =
   | { type: "onboardDraft"; draft: OnboardDraft | null }
   /**
    * Saved views, in the same store as the connector's alerts. save: `place` and `criteria` from
-   * the table, `name` (else one made from the criteria), `email` (on unless false). delete: `id`.
-   * email: turn the weekly email for `id` on or off (`on`). At most 20.
+   * the table, `name` (else one made from the criteria), `email` (on unless false). A view the
+   * member already has (the same place, or for a search saved in Claude the same criteria: see
+   * sameView in lib/hunt.ts) is not saved again: the answer says "You saved this view already, as
+   * …" and carries that view's `id`. rename: `id` and `name`, cleaned as save cleans it. delete:
+   * `id`. restore: put a view just removed back (Undo): `view` as Me.savedViews had it and `at`,
+   * its place in the list; it keeps its id. email: turn the weekly email for `id` on or off
+   * (`on`). At most 20.
    */
-  | { type: "savedView"; op: "save" | "delete" | "email"; id?: string; name?: string; place?: string; criteria?: SavedViewCriteria; email?: boolean; on?: boolean }
+  | {
+      type: "savedView";
+      op: "save" | "rename" | "delete" | "restore" | "email";
+      id?: string;
+      name?: string;
+      place?: string;
+      criteria?: SavedViewCriteria;
+      email?: boolean;
+      on?: boolean;
+      view?: SavedViewRec;
+      at?: number;
+    }
   | { type: "report"; entity: Entity; id: string; field: string }
   /** Confirm a value you can see is correct (one confirmation per member per value). */
   | { type: "verify"; entity: Entity; id: string; field: string }
@@ -769,6 +799,8 @@ export type Action =
   | { type: "signal"; name: "wall" | "pro_view" | "pro_interest"; where: string }
   /** `partners`: listed in Referral partners for other members (Your profile, "Show me in Referral partners"). */
   | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean }
+  /** The invite loop: the inviter closed the line saying these fractionals joined from their invite (Me.joined ids). It doesn't come back. */
+  | { type: "joinedSeen"; ids: string[] }
   /**
    * Invite to connect (EngagementRec.invite): the member sent the seat holder a note with the seat's
    * claim link. One record per member and seat ("Invited Nov 18"): sending again keeps the first date

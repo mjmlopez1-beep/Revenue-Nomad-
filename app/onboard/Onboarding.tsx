@@ -38,6 +38,8 @@ import {
 } from "./firstView";
 import { ICP_SKIPPED } from "@/app/post/getStarted";
 import { contactOf, mailto } from "../landing/contact";
+import { REFERRAL_BONUS } from "@/lib/tableFields";
+import { invitedParts } from "@/lib/notify/format";
 
 export interface OnboardingProps {
   view: View;
@@ -440,6 +442,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               seats={mySeats}
               published={published}
               credits={me.credits}
+              invited={me.invitedBy ? invitedParts(me.invitedBy.first, me.invitedBy.both, REFERRAL_BONUS) : null}
               fn={fn}
               setFn={(f) => {
                 setFn(f);
@@ -503,7 +506,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
 /* ---------- step 1: what this is, then who you are ---------- */
 
 function StepQuestions({
-  first, seats, published, credits, fn, setFn, title, setTitle, onNext,
+  first, seats, published, credits, invited, fn, setFn, title, setTitle, onNext,
 }: {
   first: string;
   /** Seats on file that carry the member's name. */
@@ -511,6 +514,8 @@ function StepQuestions({
   /** How many of them we matched to fractional work they published on Revenue Nomad. */
   published: number;
   credits: number;
+  /** "Ivy invited you." and "You both get 10 credits when you add your first fact." (invitedParts), for a member who joined from an invite. */
+  invited: [string, string] | null;
   fn: string | null;
   setFn: (f: string) => void;
   title: string;
@@ -544,6 +549,12 @@ function StepQuestions({
           <IconCoin size={13} />
         </span>
         <span>
+          {/* Joined from an invite: who sent it, and the credits it brings once they add a first fact. One note with the credits, so the first question stays near the top on a phone. */}
+          {invited ? (
+            <>
+              <strong>{invited[0]}</strong> {invited[1]}{" "}
+            </>
+          ) : null}
           You have{" "}
           <strong className="num">
             {credits} {credits === 1 ? "credit" : "credits"}

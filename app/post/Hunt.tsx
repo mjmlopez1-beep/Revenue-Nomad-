@@ -5,12 +5,14 @@
  * clients) as chips to pick (onboarding and the Edit sheet share IcpFields), the pine "Your Ideal
  * Fractional Profile" pill over the table, and saved views: "Save
  * this view" with its weekly email, and the saved views as chips at the top of the filters.
- * Saved views share one store with the Claude connector's saved searches (lib/hunt.ts).
+ * Wherever they are listed to manage (the filters' Manage, the account menu's Manage saved views,
+ * Your profile), each one has Weekly email, Rename and Remove (SavedViewList). Saved views share
+ * one store with the Claude connector's saved searches (lib/hunt.ts).
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import type { CompanyRec, Icp, SavedViewRec } from "@/lib/tableTypes";
 import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
-import { IconCheck, IconSearch, IconX } from "../ui/shared";
+import { IconCheck, IconSearch } from "../ui/shared";
 import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
 import { Sheet } from "./ui";
@@ -312,6 +314,7 @@ export function IcpSheet({
   fn,
   before,
   companies,
+  views,
   onSave,
   onClose,
 }: {
@@ -321,6 +324,8 @@ export function IcpSheet({
   /** Me.before: the fractionals usually hired before them, [] Not sure, undefined never asked. */
   before?: string[];
   companies: CompanyRec[];
+  /** The member's saved views to rename or remove (SavedViewList). They change at once, apart from the sheet's Save. */
+  views?: ReactNode;
   onSave: (v: ProfileEdit) => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -388,30 +393,52 @@ export function IcpSheet({
       </div>
       <IcpFields value={v} onChange={setV} industries={industries} countries={countries} />
       <PartnersSwitch />
+      {views ? (
+        <div className="hunt-sub hunt-views-sub">
+          <div className="hunt-h">Saved views</div>
+          <p className="hunt-lead">Open one from its name, or rename or remove it here.</p>
+          {views}
+        </div>
+      ) : null}
     </Sheet>
   );
 }
 
-/** "Save this view": a name (made from the filters) and the weekly email. `hires`: the view follows hires (Recently hired), so the email sends new hires, not open roles. */
+/**
+ * "Save this view": a name (made from the filters) and the weekly email. `hires`: the view follows
+ * hires (Recently hired), so the email sends new hires, not open roles. `existing`: the view on
+ * screen is saved already ("Saved view"), so the sheet edits it instead: its name and weekly email,
+ * and Remove.
+ */
 export function SaveViewSheet({
   defaultName,
   emailOn,
   hires = false,
+  existing,
   onSave,
+  onRemove,
   onClose,
 }: {
   defaultName: string;
   emailOn: boolean;
   hires?: boolean;
+  existing?: SavedViewRec | null;
   onSave: (name: string, email: boolean) => Promise<boolean>;
+  onRemove?: () => Promise<boolean>;
   onClose: () => void;
 }) {
-  const [name, setName] = useState(defaultName);
-  const [email, setEmail] = useState(true);
+  const [name, setName] = useState(existing?.name ?? defaultName);
+  const [email, setEmail] = useState(existing ? existing.email : true);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
-    const ok = await onSave(name.trim() || defaultName, email);
+    const ok = await onSave(name.trim() || existing?.name || defaultName, email);
+    setBusy(false);
+    if (ok) onClose();
+  };
+  const remove = async () => {
+    setBusy(true);
+    const ok = await onRemove?.();
     setBusy(false);
     if (ok) onClose();
   };
@@ -419,15 +446,21 @@ export function SaveViewSheet({
     <Sheet
       dialog
       className="hunt-sheet hunt-save"
-      title="Save this view"
+      title={existing ? "Saved view" : "Save this view"}
       onClose={onClose}
       footer={
         <div className="tp-sheet-actions">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
+          {existing && onRemove ? (
+            <button type="button" className="btn hunt-vremove-btn" disabled={busy} onClick={() => void remove()}>
+              Remove
+            </button>
+          ) : (
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+          )}
           <button type="button" className="btn btn-pine btn-lg tp-grow" disabled={busy} aria-busy={busy} onClick={save}>
-            {busy ? "Saving" : "Save view"}
+            {busy ? "Saving" : existing ? "Save changes" : "Save view"}
           </button>
         </div>
       }
@@ -460,21 +493,147 @@ export function SaveViewSheet({
   );
 }
 
-/** Saved views at the top of the filters: tap one to open it. Manage turns the weekly email on or off, or removes one. */
+/**
+ * What a list of saved views can do with each one: open it (where the list offers that), turn its
+ * weekly email on or off, rename it and remove it. Rename and remove answer whether it went through.
+ */
+export interface SavedViewActs {
+  onOpen?: (v: SavedViewRec) => void;
+  onEmail: (v: SavedViewRec, on: boolean) => void;
+  onRename: (v: SavedViewRec, name: string) => Promise<boolean>;
+  onRemove: (v: SavedViewRec) => Promise<boolean> | void;
+}
+
+/**
+ * One saved view in a list that manages them: its name (tap opens it, where the list offers that),
+ * then Weekly email, Rename and Remove under it. Rename turns the name into a field: Enter or Save
+ * name keeps the new one, Cancel keeps the old one.
+ */
+function SavedViewItem({ v, current, onOpen, onEmail, onRename, onRemove }: SavedViewActs & { v: SavedViewRec; current: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(v.name);
+  const [busy, setBusy] = useState(false);
+  const stop = () => {
+    setEditing(false);
+    setName(v.name);
+  };
+  const rename = async () => {
+    const next = name.trim();
+    if (!next || next === v.name) return stop();
+    setBusy(true);
+    const ok = await onRename(v, next);
+    setBusy(false);
+    if (ok) setEditing(false);
+  };
+  const from = v.place === null && <span className="hunt-vfrom"> · saved in Claude</span>;
+  if (editing)
+    return (
+      <li className="hunt-vitem">
+        <form
+          className="hunt-vrename"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void rename();
+          }}
+        >
+          <label className="sr-only" htmlFor={`hunt-vname-${v.id}`}>
+            New name for {v.name}
+          </label>
+          <input id={`hunt-vname-${v.id}`} className="input hunt-vinput" value={name} maxLength={100} autoFocus enterKeyHint="done" onChange={(e) => setName(e.target.value)} />
+          <span className="hunt-vacts">
+            <button type="submit" className="btn btn-sm btn-pine" disabled={busy || !name.trim()} aria-busy={busy}>
+              {busy ? "Saving" : "Save name"}
+            </button>
+            <button type="button" className="btn btn-sm" onClick={stop}>
+              Cancel
+            </button>
+          </span>
+        </form>
+      </li>
+    );
+  return (
+    <li className={`hunt-vitem${current ? " on" : ""}`}>
+      {onOpen ? (
+        <button type="button" className="hunt-vname hunt-vopen" title={`Open ${v.name}`} aria-current={current || undefined} onClick={() => onOpen(v)}>
+          {v.name}
+          {from}
+        </button>
+      ) : (
+        <span className="hunt-vname" title={v.name}>
+          {v.name}
+          {from}
+        </span>
+      )}
+      <span className="hunt-vacts">
+        <button type="button" role="checkbox" aria-checked={v.email} className={`tp-ftoggle tp-ftoggle-sm${v.email ? " on" : ""}`} onClick={() => onEmail(v, !v.email)}>
+          <span className="tp-check" aria-hidden>
+            {v.email && <IconCheck size={11} />}
+          </span>
+          <span className="tp-ftoggle-l">Weekly email</span>
+        </button>
+        {/* Rename and Remove stay together: beside the email where there is room, under it in the narrow filters. */}
+        <span className="hunt-vbtns">
+          <button
+            type="button"
+            className="hunt-vact"
+            aria-label={`Rename ${v.name}`}
+            onClick={() => {
+              setName(v.name);
+              setEditing(true);
+            }}
+          >
+            Rename
+          </button>
+          <button type="button" className="hunt-vact hunt-vremove" aria-label={`Remove ${v.name}`} onClick={() => void onRemove(v)}>
+            Remove
+          </button>
+        </span>
+      </span>
+    </li>
+  );
+}
+
+/** Saved views as a list to manage: each one with Weekly email, Rename and Remove (SavedViewItem). */
+export function SavedViewList({ views, current, ...acts }: SavedViewActs & { views: SavedViewRec[]; current: string | null }) {
+  return (
+    <ul className="hunt-vlist">
+      {views.map((v) => (
+        <SavedViewItem key={v.id} v={v} current={current === v.id} {...acts} />
+      ))}
+    </ul>
+  );
+}
+
+/** "Manage saved views" from the account menu: every saved view, to open, rename or remove. */
+export function SavedViewsSheet({ views, current, onClose, ...acts }: SavedViewActs & { views: SavedViewRec[]; current: string | null; onClose: () => void }) {
+  return (
+    <Sheet dialog className="hunt-sheet hunt-views-sheet" title="Saved views" onClose={onClose}>
+      {views.length ? (
+        <>
+          <p className="hunt-lead">Open a view from its name. The weekly email lists what&apos;s new for each view that has it on.</p>
+          <SavedViewList views={views} current={current} {...acts} />
+        </>
+      ) : (
+        <p className="hunt-lead">No saved views now. Save the filters you use most from the table, and open them in one tap.</p>
+      )}
+    </Sheet>
+  );
+}
+
+/** Saved views at the top of the filters: tap one to open it. Manage turns the weekly email on or off, renames one or removes it. */
 export function SavedViews({
   views,
   current,
   onOpen,
   onSave,
   onEmail,
+  onRename,
   onRemove,
-}: {
+}: SavedViewActs & {
   views: SavedViewRec[];
   current: string | null;
   onOpen: (v: SavedViewRec) => void;
   onSave: () => void;
-  onEmail: (v: SavedViewRec, on: boolean) => void;
-  onRemove: (v: SavedViewRec) => void;
 }) {
   const [manage, setManage] = useState(false);
   return (
@@ -487,26 +646,8 @@ export function SavedViews({
           </button>
         )}
       </div>
-      {manage ? (
-        <ul className="hunt-vlist">
-          {views.map((v) => (
-            <li key={v.id}>
-              <span className="hunt-vname" title={v.name}>
-                {v.name}
-                {v.place === null && <span className="hunt-vfrom"> · saved in Claude</span>}
-              </span>
-              <button type="button" role="checkbox" aria-checked={v.email} className={`tp-ftoggle tp-ftoggle-sm${v.email ? " on" : ""}`} onClick={() => onEmail(v, !v.email)}>
-                <span className="tp-check" aria-hidden>
-                  {v.email && <IconCheck size={11} />}
-                </span>
-                <span className="tp-ftoggle-l">Weekly email</span>
-              </button>
-              <button type="button" className="tp-iconbtn tp-iconbtn-sm hunt-vx" aria-label={`Remove ${v.name}`} onClick={() => onRemove(v)}>
-                <IconX size={12} />
-              </button>
-            </li>
-          ))}
-        </ul>
+      {manage && views.length > 0 ? (
+        <SavedViewList views={views} current={current} onEmail={onEmail} onRename={onRename} onRemove={onRemove} />
       ) : (
         <div className="hunt-chips">
           {views.map((v) => (
