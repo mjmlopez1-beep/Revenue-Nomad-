@@ -597,7 +597,10 @@ section("stats", async () => {
   const fills = pickEmpty(v, 1);
   await m.act(fillAct(fills[0]));
   const s3 = await call("GET", "/api/table", { ipAddr: anon });
-  check("stats change after a member action", s3.json.stats.facts === s2.json.stats.facts + 1, [s2.json.stats.facts, s3.json.stats.facts]);
+  // The signed-out counts are marketing numbers, kept for a few minutes whatever members change (lib/table.ts ANON_FRESH).
+  check("signed-out stats stay as they were right after a member action (kept for a few minutes)", s3.json.stats.facts === s2.json.stats.facts, [s2.json.stats.facts, s3.json.stats.facts]);
+  const v3 = await m.view();
+  check("a member's own view counts the new fact at once", v3.stats.facts === v.stats.facts + 1, [v.stats.facts, v3.stats.facts]);
   const open = v.companies.filter((c) => c.friendly.open > 0);
   check("hiring companies score Medium or better", open.length > 0 && open.every((c) => c.friendly.score >= 30 && ["Medium", "High"].includes(c.friendly.tier)), open.map((c) => [c.name, c.friendly.score]));
   check("every company's friendly has recent", v.companies.every((c) => typeof c.friendly.recent === "number"));

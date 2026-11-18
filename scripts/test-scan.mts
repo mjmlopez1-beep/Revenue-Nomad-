@@ -12,11 +12,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { cleanCompany, cleanTitle, companyDomain, isPlaceholderCompany, isRealCompany, roleKey, titleWithout } from "../lib/scan/clean";
 import { webLink } from "../lib/links";
-import { collectOpenRoles, dedupeRoles, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
+import { collectOpenRoles, dedupeRoles, gtmByTitle, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
 import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
 import { renderDigest } from "../lib/digest";
 import { signInEmail } from "../lib/email";
-import { ENGAGEMENT_TYPES, FUNCTIONS } from "../lib/tableFields";
+import { ENGAGEMENT_TYPES, FUNCTIONS, functionOf } from "../lib/tableFields";
 import { MIN_SCORE, scoreJob } from "../lib/crawler/score";
 import type { DigestData, ScanRole } from "../lib/scanTypes";
 
@@ -194,6 +194,61 @@ const salesy = "Work closely with our sales and marketing leaders on pipeline, r
 for (const title of ["Fractional CFO", "Fractional CTO", "Fractional COO", "Fractional Head of People", "Fractional General Counsel", "Fractional Head of Operations"]) {
   check(`keeps a Director-and-above seat outside GTM: ${title}`, !!screenJob(job({ title, description: salesy }), NOW).role);
 }
+// Its function is the one its title names, never Executive or none (the titles the audit found filed wrong first).
+const NON_GTM_TITLES: [string, string][] = [
+  ["Fractional CFO", "Finance"],
+  ["Fractional Controller", "Finance"],
+  ["Fractional Comptroller", "Finance"],
+  ["Fractional VP Finance", "Finance"],
+  ["Interim Vice President of Finance", "Finance"],
+  ["Interim Head of Finance", "Finance"],
+  ["Fractional CTO", "Technology"],
+  ["Fractional VP Engineering", "Technology"],
+  ["Head of Engineering (Interim)", "Technology"],
+  ["Fractional CIO", "Technology"],
+  ["Fractional CISO", "Technology"],
+  ["Interim COO", "Operations"],
+  ["Fractional Head of Operations", "Operations"],
+  ["Fractional CHRO", "People"],
+  ["Fractional Chief People Officer", "People"],
+  ["Fractional Head of People", "People"],
+  ["Interim HR Director", "People"],
+  ["Fractional General Counsel", "Legal"],
+  ["Fractional CLO", "Legal"],
+  ["Interim Head of Legal", "Legal"],
+  ["Fractional CPO", "Product"],
+  ["Interim Head of Product", "Product"],
+  ["Fractional VP Product", "Product"],
+  ["Fractional CEO", "Executive"],
+  ["Interim President", "Executive"],
+  ["Fractional Chief of Staff", "Executive"],
+];
+for (const [title, fn] of NON_GTM_TITLES) {
+  eq(`functionOf files ${title} under ${fn}`, functionOf(title), fn);
+  eq(`  and the scan keeps it there`, screenJob(job({ title, description: salesy }), NOW).role?.function, fn);
+}
+// Below Director the scan leaves these out, but a member's seat with such a title still gets the function.
+for (const [title, fn] of [["HR Business Partner", "People"], ["Head of Talent Acquisition", "People"], ["General Manager", "Executive"], ["Finance Manager", "Finance"], ["Chief Executive Officer", "Executive"]] as const)
+  eq(`functionOf files ${title} under ${fn}`, functionOf(title), fn);
+// GTM rules come first: an operations or product word inside a GTM title keeps the GTM function.
+for (const [title, fn] of [
+  ["Fractional Revenue Operations Lead", "RevOps"],
+  ["Head of Sales Operations", "RevOps"],
+  ["Fractional Marketing Operations Lead", "RevOps"],
+  ["Fractional Product Marketing Lead", "Product Marketing"],
+  ["VP Product Marketing", "Product Marketing"],
+  ["Fractional VP Sales", "Sales"],
+  ["VP Sales Engineering", "Sales"],
+  ["Fractional CRO", "Sales"],
+  ["Fractional GTM Engineer", "AI GTM"],
+  ["Fractional Partnerships Lead", "Partnerships"],
+] as const) eq(`a GTM title keeps its GTM function: ${title}`, functionOf(title), fn);
+// The board's own label for a seat outside GTM counts when the title names no function.
+eq("a board's Finance label is kept for a title that names none", roleFunction("Interim Director (Contract)", { functions: [] }, "Finance"), "Finance");
+eq("a board's Engineering label reads as Technology", roleFunction("Interim Director (Contract)", { functions: [] }, "Engineering"), "Technology");
+// A CFO or CTO title is not a GTM title, so a posting has to clear the seniority bar on its own.
+check("a CFO or CTO title is not read as GTM", !gtmByTitle("Fractional CFO") && !gtmByTitle("Fractional CTO") && gtmByTitle("Fractional VP Sales"), [gtmByTitle("Fractional CFO"), gtmByTitle("Fractional CTO")]);
+eq("a finance seat below Director is still left out, as a seat outside GTM", screenJob(job({ title: "Fractional Finance Manager", description: salesy }), NOW).skip, "not-gtm");
 check("drops a seat outside GTM below Director even when the body talks about sales: Fractional Product Manager", !!screenJob(job({ title: "Fractional Product Manager", description: salesy }), NOW).skip);
 for (const [title, fn] of [["Fractional Sales Engineer", "Sales"], ["Fractional GTM Engineer", "AI GTM"], ["Fractional Marketing Operations Lead", "RevOps"], ["Fractional Product Marketing Manager", "Product Marketing"], ["Fractional CEO", "Executive"]]) {
   eq(`keeps a GTM seat with a technical or executive word in the title: ${title}`, screenJob(job({ title, description: salesy }), NOW).role?.function, fn);
@@ -462,6 +517,7 @@ eq("  with the board's facts", [boardRoles[0]?.function, boardRoles[0]?.type, bo
 eq("  a company site that differs from the name is still taken from the board", [boardRoles[2]?.domain, boardRoles[2]?.rate, boardRoles[2]?.function], ["heypebble.example", "$6K–$9K/mo", "Partnerships"]);
 eq("  drops the unnamed company", screenJob(parsed[1], NOW).skip, "company");
 check("  keeps the Director-level finance seat (a Controller), as the owner asked", !!screenJob(parsed[2], NOW).role);
+eq("  and files it under Finance", screenJob(parsed[2], NOW).role?.function, "Finance");
 eq("  drops the 40 hour a week seat", screenJob(parsed[3], NOW).skip, "full-time");
 
 /* ---------- collector: sources ---------- */
@@ -645,6 +701,7 @@ const SCENARIOS: [string, string][] = [
   ["claimgone", "This isn't me on a role whose posting is long gone"],
   ["notfractional", "A full-time job an older screen let in, listed again"],
   ["seniority", "Roles outside GTM below Director"],
+  ["functions", "Functions outside GTM, and the roles an older scan filed under Executive"],
 ];
 for (const [name, title] of SCENARIOS) {
   console.log(`\nStored scans: ${title}`);

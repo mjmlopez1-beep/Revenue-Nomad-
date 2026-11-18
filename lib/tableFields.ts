@@ -237,7 +237,7 @@ export const HIRE_REASONS = [
 export const PRICING_MODELS = ["Monthly retainer", "Hourly", "Project fee", "Equity and cash"];
 /** Revenue Nomad standard employee count buckets. */
 export const RN_EMPLOYEES = ["1–10", "11–50", "51–200", "201–500", "501–1,000", "1,001+"];
-/** The GTM functions. The weekly scan of open roles looks for these alone. */
+/** The GTM functions. The weekly scan keeps their open roles at any seniority, and the rest only at Director and above (lib/seniority.ts). */
 export const GTM_FUNCTIONS = ["Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "AI GTM"];
 /**
  * Every function a seat can be in (role categories): the GTM ones first, then the rest of the
@@ -415,7 +415,26 @@ export const stripInvisible = (raw: unknown) =>
 const RATE_RE =
   /[$€£]|\d\s*k\b|\/\s*(hr|h|hour|day|wk|week|mo|month|yr|year|project)\b|\bper\b|\b(hourly|daily|weekly|monthly|annual|retainer|project|usd|eur|gbp)\b/i;
 
-/** Best-guess GTM function from a role title ("Fractional VP Sales" -> "Sales"). */
+/** "VP", "SVP", "EVP" or "Vice President", then "of" or a comma or neither, before a function's name ("VP of Finance", "Vice President, Product"). */
+const VP = String.raw`\b(?:[se]?vp|vice[\s-]president)\b,?\s+(?:of\s+)?`;
+/**
+ * Seats outside GTM, tried after the GTM rules, so "Revenue Operations" stays RevOps, "Product
+ * Marketing" stays Product Marketing and "VP Sales Engineering" stays Sales. Executive keeps the
+ * CEO, President, GM and Chief of Staff (tried last).
+ */
+const NON_GTM_RULES: [RegExp, string][] = [
+  [new RegExp(String.raw`\bcfo\b|chief financial|\bcontroller\b|\bcomptroller\b|${VP}finance\b|\bhead of finance\b|\bfinance\b|\bfinancial\b|\bfp&a\b|\baccounting\b|\btreasur(?:er|y)\b`), "Finance"],
+  [new RegExp(String.raw`\bcto\b|chief technology|chief technical|\bcio\b|chief information|\bciso\b|chief (?:information )?security|${VP}engineering\b|\bhead of engineering\b|\bengineering\b`), "Technology"],
+  [new RegExp(String.raw`\bcoo\b|chief operating|chief operations|\bhead of operations\b|${VP}operations\b|\boperations\b`), "Operations"],
+  [/\bchro\b|chief people|chief human resources|\bhead of (?:people|hr|human resources|talent)\b|\bhuman resources\b|\bhr\b|\bpeople (?:operations|ops|director|lead|leader)\b/, "People"],
+  [/\bgeneral counsel\b|\bclo\b|chief legal|\bhead of legal\b|\blegal\b|\bcounsel\b/, "Legal"],
+  [new RegExp(String.raw`\bcpo\b|chief product|\bhead of product\b|${VP}product\b|\bproduct (?:manager|management|lead|leader|director|owner)\b|\bdirector of product\b`), "Product"],
+];
+
+/**
+ * Best-guess function from a role title ("Fractional VP Sales" -> "Sales", "Fractional CFO" ->
+ * "Finance"). GTM first, then the seats outside GTM (NON_GTM_RULES), then Executive.
+ */
 export function functionOf(role: string | null | undefined): string | null {
   const r = ` ${String(role ?? "").toLowerCase()} `;
   if (!r.trim()) return null;
@@ -425,6 +444,8 @@ export function functionOf(role: string | null | undefined): string | null {
       /\bgtm engineer|go[- ]to[- ]market engineer|\bai[- ]?(native|first|led|powered)\b.*\b(gtm|go[- ]to[- ]market|sales|marketing|revenue|growth)|\bai[\s-]+(gtm|go[- ]to[- ]market|sdrs?|bdrs?|sales|revenue|rev ?ops|marketing|growth|outbound|prospecting|automation|agents?|workflows?|enablement|operations|ops)\b|\b(gtm|go[- ]to[- ]market|sales|revenue|marketing|growth|outbound) ai\b/,
       "AI GTM",
     ],
+    // People seats whose title holds a GTM word ("HR Business Partner", "Talent Acquisition"): before the Partnerships and Growth rules catch them.
+    [/\b(?:hr|human resources|people|talent)(?: business)? partner\b|\btalent acquisition\b/, "People"],
     [/rev ?ops|revenue operations|sales operations|sales ops|marketing operations|gtm operations|operations analyst/, "RevOps"],
     [/enablement|training/, "Enablement"],
     [/product marketing|\bpmm\b/, "Product Marketing"],
@@ -433,7 +454,8 @@ export function functionOf(role: string | null | undefined): string | null {
     [/growth|demand gen|acquisition/, "Growth"],
     [/marketing|\bcmo\b|brand|content|communications|\bpr\b/, "Marketing"],
     [/sales|\bcro\b|revenue|account executive|\bae\b|\bsdr\b|commercial|go-to-market|\bgtm\b/, "Sales"],
-    [/\bceo\b|\bcoo\b|president|general manager|\bgm\b|founder|managing director|chief of staff|\bcfo\b/, "Executive"],
+    ...NON_GTM_RULES,
+    [/\bceo\b|chief executive|president|general manager|\bgm\b|founder|managing director|chief of staff/, "Executive"],
   ];
   for (const [re, fn] of rules) if (re.test(r)) return fn;
   return null;

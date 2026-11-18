@@ -3,12 +3,12 @@
  * scripts/test-scan.mts starts each scenario in its own process, because the server module
  * keeps its state in memory and every scenario needs a fresh table. To run one by hand:
  *
- *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone|notfractional|seniority>
+ *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone|notfractional|seniority|functions>
  *
  * It runs on a made-up seed in a temporary data folder. No network, and nothing from the real
  * seed. Prints PASS and FAIL lines, then "##RESULT <passed> <failed>".
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { collectOpenRoles, type ScanRawJob } from "../lib/scan/collect";
@@ -519,8 +519,13 @@ async function seniority() {
   void ops;
   const cs = await preview({ fn: "Customer Success", view: "all" });
   check("  nor the scan's coordinator", !cs.rows.some((r) => /coordinator/i.test(r.title)), cs.rows);
+  // The CFO was filed under Executive by an older scan. Its title names Finance, so it is Finance now (remapScanFunctions, on load).
+  const cfoFn = roleOf(v0, "Numbro")?.cells.function;
+  eq("an open role an older scan filed under Executive takes the function its title names", cfoFn?.s === "value" ? cfoFn.v : cfoFn, "Finance");
+  const fin = await preview({ fn: "Finance", view: "all" });
+  check("  and the homepage keeps the fractional CFO, under Finance", fin.rows.some((r) => r.kind === "open"), fin.rows);
   const ex = await preview({ fn: "Executive", view: "all" });
-  check("  and it keeps the fractional CFO", ex.rows.some((r) => r.kind === "open"), ex.rows);
+  check("  and no longer under Executive", !ex.rows.some((r) => r.kind === "open"), ex.rows);
 
   // Run scan now: no board is read (RN_SCAN_TEST), and the removal pass still runs over what is on file.
   const run = await t.runScan(undefined, { now: iso(now) });
@@ -554,7 +559,100 @@ async function seniority() {
   eq("  with no company added for the three", ["Newschool District", "Codeworks", "Pixel Studio"].map((n) => !!companyOf(v2, n)), [false, false, false]);
 }
 
-const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone, notfractional, seniority };
+/**
+ * Functions outside GTM (functionOf, storeScan and remapScanFunctions in lib/table.ts). An older
+ * scan filed a Fractional CFO under Executive and stored a CTO and a Controller with no function.
+ * On load, open roles the scan follows whose function is empty or Executive take the one their
+ * title names. A function a member set, a role that closed and a Chief of Staff stay as they are,
+ * and the second pass finds nothing. New roles keep the board's function when the table has it.
+ */
+async function functions() {
+  const now = REAL_NOW;
+  const at = iso(now - 3 * DAY);
+  const v = (value: string, by = "scan") => ({ value, by, at, status: "live" });
+  const track = (engagementId: string, companyId: string, closedAt: string | null = null) => ({ engagementId, companyId, firstSeen: at, lastSeen: at, closedAt, url: `https://jobs.example.com/${engagementId}`, source: "board", postedAt: null });
+  // company id, company name, engagement id, title, function on file (null: none), who set it, closed
+  const rows: [string, string, string, string, string | null, string, boolean][] = [
+    ["c_fcfo", "Numberwise", "e_fcfo", "Fractional CFO", "Executive", "scan", false],
+    ["c_fcto", "Stackwell", "e_fcto", "Fractional CTO", null, "scan", false],
+    ["c_fctl", "Tallyford", "e_fctl", "Fractional Controller", "Executive", "m1", false],
+    ["c_fcos", "Chiefly", "e_fcos", "Fractional Chief of Staff", "Executive", "scan", false],
+    ["c_fcoo", "Opsgone", "e_fcoo", "Interim COO", "Executive", "scan", true],
+    ["c_fgc", "Counselry", "e_fgc", "Fractional General Counsel", "Legal", "scan", false],
+    ["c_fhop", "Peoplefirst", "e_fhop", "Fractional Head of People", "Other", "scan", false],
+    ["c_fvps", "Salesfirst", "e_fvps", "Fractional VP Sales", null, "scan", false],
+  ];
+  const state = {
+    companies: rows.map(([id, name]) => ({ id, name, by: "scan", at })),
+    engagements: rows.map(([co, , id]) => ({ id, companyId: co, by: "scan", at, source: "Demand scan" })),
+    contacts: [],
+    verifications: {},
+    values: Object.fromEntries(
+      rows.flatMap(([, , id, title, fn, by, closed]) => [
+        [`${id}.role`, v(title)],
+        [`${id}.status`, v(closed ? "Closed" : "Open role")],
+        ...(fn ? [[`${id}.function`, v(fn, by)]] : []),
+      ]),
+    ),
+    unlocks: {},
+    ledger: [],
+    scan: { lastRunAt: at, sources: [], roles: Object.fromEntries(rows.map(([co, , id, , , , closed]) => [`key:${id}`, track(id, co, closed ? at : null)])) },
+  };
+  const before = JSON.parse(JSON.stringify(state));
+  writeFileSync(path.join(dir, "intel.json"), JSON.stringify(state));
+
+  const fnOf = (view: View, name: string) => {
+    const c = roleOf(view, name)?.cells.function;
+    return c?.s === "value" ? c.v : c?.s ?? null;
+  };
+  const v0 = await admin();
+  eq(
+    "on load, open roles filed under Executive or with no function take the one their title names",
+    ["Numberwise", "Stackwell"].map((n) => fnOf(v0, n)),
+    ["Finance", "Technology"],
+  );
+  eq(
+    "a function a member set, a Chief of Staff, a closed role and a function that isn't Executive stay as they were",
+    ["Tallyford", "Chiefly", "Opsgone", "Counselry", "Peoplefirst"].map((n) => fnOf(v0, n)),
+    ["Executive", "Executive", "Executive", "Legal", "Other"],
+  );
+  // A change writes the state, remapped functions included. A second pass over what was written changes nothing.
+  await t.perform("tok-sal", { type: "follow", companyId: companyOf(v0, "Counselry")!.id, on: true });
+  const written = JSON.parse(readFileSync(path.join(dir, "intel.json"), "utf8"));
+  eq("the remapped functions are written with the next change, as the scan's", [written.values["e_fcfo.function"]?.value, written.values["e_fcfo.function"]?.by, written.values["e_fcto.function"]?.value], ["Finance", "scan", "Technology"]);
+  eq("dated with the role, so the record doesn't read as just updated", written.values["e_fcfo.function"]?.at, at);
+  eq("a GTM title with no function is left to the view, which reads it from the title", [written.values["e_fvps.function"], fnOf(v0, "Salesfirst")], [undefined, "Sales"]);
+  const remap = t.remapScanFunctions as (s: unknown, seed: unknown) => number;
+  eq("the first pass over the old state changes 2 roles", remap(before, seed), 2);
+  eq("a second pass changes nothing", [remap(written, seed), written.values["e_fctl.function"]?.by], [0, "m1"]);
+
+  // New roles: the board's function when it is one of the table's, else the title's. A board's Executive gives way to a title that names one.
+  const res = await scan(
+    [
+      sr("Ledgerline", "Fractional CFO", { function: "Finance" }),
+      sr("Kernelworks", "Fractional VP Engineering", { function: null }),
+      sr("Rulebook Co", "Fractional General Counsel", { function: "Executive" }),
+      sr("Opsway", "Interim COO", { function: "Operations" }),
+      sr("Humanly", "Fractional Head of People", { function: "People" }),
+      sr("Staffwise", "Fractional Chief of Staff", { function: "Executive" }),
+      sr("Pipeline Partners Inc", "Fractional VP of Sales", { function: "Sales" }),
+    ],
+    [{ source: "board", fetched: 7, matched: 7 }],
+    now,
+  );
+  eq("the scan opens all seven", res.opened, 7);
+  const v1 = await admin();
+  eq(
+    "each keeps its function: Finance, Technology, Legal, Operations, People, Executive and Sales",
+    ["Ledgerline", "Kernelworks", "Rulebook Co", "Opsway", "Humanly", "Staffwise", "Pipeline Partners Inc"].map((n) => fnOf(v1, n)),
+    ["Finance", "Technology", "Legal", "Operations", "People", "Executive", "Sales"],
+  );
+  const { preview } = await import("../lib/preview");
+  const fin = await preview({ fn: "Finance", view: "hiring" });
+  check("the homepage counts the CFO as a Finance company hiring now", (fin.counts?.hiring ?? fin.rows?.filter((r) => r.kind === "open").length ?? 0) >= 1, { counts: fin.counts, rows: fin.rows?.length });
+}
+
+const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone, notfractional, seniority, functions };
 const name = process.argv[2] ?? "";
 try {
   if (!SCENARIOS[name]) throw new Error(`unknown scenario "${name}". One of: ${Object.keys(SCENARIOS).join(", ")}`);

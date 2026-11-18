@@ -10,12 +10,15 @@
  * ?c= opens that company for a member and the landing page for anyone else.
  *
  * Keeping the view fresh:
+ *   - An action's answer carries what it changed (the records it touched, the member's numbers,
+ *     the credit history rows it wrote), so the page applies it and does not download the whole
+ *     table again. The answer also says the table's version: when other members changed the table
+ *     since this page downloaded it, the page downloads it again, at most once a minute.
  *   - The server can answer 503 with Retry-After (busy or paused). The view on screen stays and
  *     we try again after that many seconds. An error body never becomes the view.
  *   - A tab that comes back into view after a minute or more reloads its view.
- *   - Background refreshes that pile up (several follows in a row) run once more at the end,
- *     not once each, and a company that did not change keeps its object, so its rows don't
- *     render again.
+ *   - Background refreshes that pile up run once more at the end, not once each, and a company
+ *     that did not change keeps its object, so its rows don't render again.
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
@@ -160,8 +163,31 @@ if (typeof window !== "undefined") {
   else void import("./landing/Landing");
 }
 
-/** Actions that create records: wait for the full view so the new record is there. */
-const FULL_REFRESH = new Set(["add", "addPerson", "profile", "adminRemoveMember"]);
+/** An admin removing everything a member added changes records all over the table: wait for the full view. */
+const FULL_REFRESH = new Set(["adminRemoveMember"]);
+/** Other members' changes show within this long of an action (or of coming back to the tab). */
+const REFRESH_EVERY = 60_000;
+/**
+ * Up to this much more, picked at random each time: members who all arrived together (a blast)
+ * would otherwise all download the table again in the same second, a minute later.
+ */
+const REFRESH_SPREAD = 30_000;
+
+/** "<boot>:<commits>" (View.version), read. */
+const parseVersion = (v: string | null | undefined) => {
+  const m = typeof v === "string" ? v.match(/^(.+):(\d+)$/) : null;
+  return m ? { boot: m[1], n: Number(m[2]) } : null;
+};
+/**
+ * The table changed since the page's copy beyond this one action: more than one commit later, a
+ * restart, or a version the page can't read. Changes by other members in the same commit as the
+ * action wait for the next download.
+ */
+const othersChanged = (known: string | null, answer: string | null | undefined) => {
+  const a = parseVersion(answer);
+  const k = parseVersion(known);
+  return !a || !k || a.boot !== k.boot || a.n > k.n + 1;
+};
 
 /** Sign in's note for a visitor who followed a message email's link while signed out. */
 const MESSAGE_NOTE = "Sign in to read your message.";
@@ -222,6 +248,12 @@ function App() {
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toldBusy = useRef(false);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
+  /** The table version of the view on screen (View.version), moved on by each action's answer that only carried this page's own change. */
+  const version = useRef<string | null>(null);
+  /** Other members changed the table since the page's copy: download it again (see markStale). */
+  const stale = useRef(false);
+  const staleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markStaleRef = useRef<() => void>(() => {});
 
   const refresh = useCallback(async () => {
     const g = ++gen.current;
@@ -254,7 +286,11 @@ function App() {
     writeHint(!!r.view.me);
     setFailed(null);
     const v = r.view;
-    if (g === gen.current) setView((prev) => reuse(prev, v));
+    // A refresh an action overtook is dropped (it may predate the action), so the table is still owed.
+    if (g !== gen.current) return markStaleRef.current();
+    version.current = v.version ?? null;
+    stale.current = false;
+    setView((prev) => reuse(prev, v));
   }, [toast]);
   refreshRef.current = refresh;
 
@@ -277,6 +313,33 @@ function App() {
       syncing.current = null;
     })();
   }, [refresh]);
+
+  /**
+   * Other members changed the table since this page downloaded it: download it again a minute
+   * or so after the last download (at once when that was longer ago). A hidden tab waits until it
+   * is back in view (see the focus handler below), so a background tab costs nothing.
+   */
+  const markStale = useCallback(() => {
+    stale.current = true;
+    if (staleTimer.current) return;
+    const due = lastLoad.current + REFRESH_EVERY + Math.random() * REFRESH_SPREAD;
+    staleTimer.current = setTimeout(() => {
+      staleTimer.current = null;
+      if (stale.current && document.visibilityState === "visible") sync();
+    }, Math.max(0, due - Date.now()));
+  }, [sync]);
+  markStaleRef.current = markStale;
+
+  /** After an action's answer: it carried this page's own change only (the version moved by one), or the table is owed. */
+  const settle = useCallback(
+    (r: ActPatch) => {
+      if (r.partial || othersChanged(version.current, r.version)) return markStale();
+      const a = parseVersion(r.version);
+      const k = parseVersion(version.current);
+      if (a && k && a.n > k.n) version.current = r.version!;
+    },
+    [markStale],
+  );
 
   /** First load. If it fails there is nothing on screen yet, so say why and offer another try. */
   const load = useCallback(async () => {
@@ -314,7 +377,9 @@ function App() {
   // A tab that comes back after a minute away reloads, so it never shows credits or locks another tab already changed.
   useEffect(() => {
     const back = () => {
-      if (document.visibilityState === "visible" && loaded.current && Date.now() - lastLoad.current > 60_000) sync();
+      if (document.visibilityState !== "visible" || !loaded.current) return;
+      if (Date.now() - lastLoad.current > REFRESH_EVERY) sync();
+      else if (stale.current) markStale(); // owed while the tab was away: due a minute after the last download
     };
     document.addEventListener("visibilitychange", back);
     window.addEventListener("focus", back);
@@ -322,13 +387,14 @@ function App() {
       document.removeEventListener("visibilitychange", back);
       window.removeEventListener("focus", back);
       if (retry.current) clearTimeout(retry.current);
+      if (staleTimer.current) clearTimeout(staleTimer.current);
     };
-  }, [sync]);
+  }, [sync, markStale]);
 
   const act: Act = useCallback(
     async (a, opts) => {
       gen.current++; // a refresh still in flight predates this action
-      // Follow flips at once. The answer carries no cells, so the background refresh confirms it.
+      // Follow flips at once; the answer brings the company as the server now has it.
       const flip = a.type === "follow" ? a : null;
       if (flip) setView((v) => (v ? { ...v, companies: v.companies.map((c) => (c.id === flip.companyId ? { ...c, following: flip.on } : c)) } : v));
       const r = await post<{ message: string; id?: string; capped?: boolean } & ActPatch>({ action: a });
@@ -338,15 +404,15 @@ function App() {
         return { ok: false, message: r.error };
       }
       if (!opts?.quiet && r.message) toast(r.message);
-      if (flip) sync();
-      else if (!FULL_REFRESH.has(a.type) && (r.cells || r.me)) {
-        // Show the change now; the full view syncs in the background.
+      if (FULL_REFRESH.has(a.type)) await refresh();
+      else {
+        // The answer carries what changed: show it, and download the table again only when others changed it too (settle).
         setView((v) => (v ? patchView(v, r) : v));
-        sync();
-      } else await refresh();
+        settle(r);
+      }
       return { ok: true, message: r.message, id: r.id, capped: r.capped };
     },
-    [refresh, sync, toast],
+    [refresh, settle, sync, toast],
   );
 
   const signOut = useCallback(async () => {
@@ -360,10 +426,14 @@ function App() {
 
   /** Skipped onboarding ("Skip to the table"): the app opens on the table, even with seats on file. */
   const skipped = useRef(false);
-  /** Onboarding's last step: its profile action already reloaded the view, so a second download in the same breath is skipped. */
-  const onboarded = useCallback(async () => {
-    if (Date.now() - lastLoad.current > 1500) await refresh();
-  }, [refresh]);
+  /**
+   * Onboarding's last step. Its profile answer already put the member's answers on screen, so the
+   * app opens at once. The follows and the saved view onboarding sent on its own come with one
+   * download in the background (skipped when one just landed).
+   */
+  const onboarded = useCallback(() => {
+    if (Date.now() - lastLoad.current > 1500) sync();
+  }, [sync]);
   const onSkip = useCallback(() => {
     skipped.current = true;
   }, []);
