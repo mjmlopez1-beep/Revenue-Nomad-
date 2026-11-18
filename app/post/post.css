@@ -17,6 +17,12 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /*
+   * Clip, not hide: nothing can scroll the shell, not even scrollIntoView. The table frame and
+   * the pages scroll themselves. A scrolled shell slid the page up under the top bar and left a
+   * blank band at the bottom (Get started step 1).
+   */
+  overflow: clip;
 }
 .tp-body {
   flex: 1;
@@ -1561,9 +1567,10 @@ body:has(.tp-drawer) .pro-foot {
 }
 
 /* ---------- table ---------- */
+/* The frame ends at its last row when the rows are few (no white box below them), and scrolls inside when they are many. */
 .tp-frame-box {
   position: relative;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1585,6 +1592,8 @@ body:has(.tp-drawer) .pro-foot {
   opacity: 1;
 }
 .tp-frame {
+  /* What is positioned inside a row (screen-reader text) stays inside the frame that scrolls it, never in the shell. */
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -6494,4 +6503,224 @@ div.tp-pcard-when {
 .tp-pcard-fn {
   font-weight: 600;
   color: var(--ink);
+}
+
+/* ---------- first screen, Get started, the wall, Find your seats (batch 1) ---------- */
+
+/* Phones: Get started on one line. A tap runs the next step, the chevron opens every step. */
+.tp-check-card.tp-check-compact {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 48px;
+  padding: 2px 2px 2px 0;
+}
+.tp-check-line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px 0 14px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: none;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tp-check-line:disabled {
+  cursor: default;
+}
+.tp-check-line .tp-check-title {
+  flex: none;
+  font-size: 14px;
+}
+.tp-check-line .tp-check-n {
+  flex: none;
+}
+.tp-check-next {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--pine);
+}
+.tp-check-line > svg {
+  flex: none;
+  color: var(--pine);
+}
+.tp-check-compact .tp-iconbtn-sm,
+.tp-check-card .tp-check-more {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+.tp-check-card.vertical .tp-check-more {
+  margin-left: auto;
+}
+.tp-check-card.vertical .tp-check-more + .tp-check-x {
+  margin-left: 0;
+}
+
+/* How fresh the open roles are: under the list, so the list comes first. */
+.tp-scannote {
+  flex: none;
+}
+.tp-phone .tp-scanline.tp-scannote {
+  padding: 12px 16px 0;
+}
+
+/* The invite, a message ready to send (the wall, Get started, the account menu). */
+.tp-invite {
+  display: grid;
+  gap: 8px;
+}
+.tp-invite-l {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tp-invite-text.input {
+  height: auto;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+  resize: none;
+}
+.tp-invite-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tp-invite-acts .btn {
+  text-decoration: none;
+}
+.tp-invite-note {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.tp-zero .tp-zero-back {
+  justify-self: start;
+}
+.tp-invite-sheet .tp-invite {
+  padding-bottom: 8px;
+}
+@media (min-width: 768px) {
+  .tp-invite-sheet {
+    max-width: 480px;
+  }
+}
+.tp-phone .tp-invite-acts .btn {
+  min-height: 44px;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+/* Your seats: the search for seats the member held, at the top (and the whole empty state). */
+.ys-find {
+  margin: 0 0 24px;
+}
+.ys-find-h {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ys-find-p {
+  max-width: 640px;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.ys-find .ob-search {
+  margin-top: 12px;
+}
+.ys-find-n {
+  margin-top: 12px;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--volt-ink);
+}
+.ys-empty .ys-find {
+  width: 100%;
+  margin: 8px 0 0;
+}
+/* Inside the empty card the search is the action: its own buttons keep their own spacing. */
+.ys-empty .ys-find .btn {
+  margin-top: 0;
+}
+.ys-empty .ys-find-h {
+  font-size: 15px;
+  line-height: 22px;
+}
+.ys-empty-add.tp-flink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+/* Back from the wall: the member has a credit now, and one tap returns to the record they wanted. */
+.ys-backup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: -4px 0 20px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--volt-soft);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ys-backup b {
+  font-weight: 700;
+  color: var(--ink);
+}
+.tp-phone .ys-backup .btn {
+  min-height: 44px;
+}
+/* The Pro offer is hidden for now: its empty foot must not leave a blank band under the last row. */
+.pro-foot:empty {
+  display: none;
+}
+/* Phones: "0/3" with a chevron opens every step; the line beside it runs the next one. */
+.tp-check-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: none;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tp-check-count:hover {
+  background: var(--surface-2);
+}
+/* The search's results open over the sticky progress box under it (still under the top bar). */
+.ys-find .ob-search {
+  z-index: 25;
 }
