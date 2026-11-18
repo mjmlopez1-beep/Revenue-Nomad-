@@ -246,6 +246,12 @@ const host = (view) => {
   if (!c) throw new Error("no host company left");
   return c;
 };
+/** A host company with no seat Revenue Nomad found: adding a seat there adds one, it never claims a found seat instead. */
+const hostWithoutFound = (view) => {
+  const c = view.companies.filter((x) => !x.hidden && x.friendly.open === 0 && !/^Qa /.test(x.name) && !(x.engagements ?? []).some((e) => e.source === "Seat scan"))[hostN++];
+  if (!c) throw new Error("no host company left");
+  return c;
+};
 const sum = (rows) => rows.reduce((n, l) => n + l.delta, 0);
 
 /* ---------- sections ---------- */
@@ -511,7 +517,7 @@ section("invite", async () => {
   const j1 = await J.view();
   check("a private rate earns its credit and leaves the bonus waiting", priv.status === 200 && !/invite bonus/i.test(priv.json?.message ?? "") && j1.me.credits === STARTER + 1 && j1.me.invitePending === true, { message: priv.json?.message, credits: j1.me.credits });
   // A seat they held is a first fact on a record: the bonus is paid.
-  const seat = await J.act({ type: "add", company: host(await J.view()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Jo Joined", function: "Sales" } });
+  const seat = await J.act({ type: "add", company: hostWithoutFound(await J.view()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Jo Joined", function: "Sales" } });
   const j2 = await J.view();
   check("adding a seat they held pays the bonus", seat.status === 200 && /Your invite bonus added 10 more\./.test(seat.json?.message ?? "") && j2.me.credits === STARTER + 1 + 2 + 10 && j2.me.invitePending === false, { message: seat.json?.message, credits: j2.me.credits, pending: j2.me.invitePending });
   const iv = await I.view();
