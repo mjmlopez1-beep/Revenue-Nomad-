@@ -985,6 +985,13 @@ export interface PartnersView {
   total: number;
   /** The viewer is listed for other members. */
   listed: boolean;
+  /**
+   * "Partners at your kind of clients" leads with the seat's title while who held it is locked
+   * (lib/table.ts partnerTitles). Seat public id -> its title, cut of the company's name and never
+   * holding the holder's name, an email or a link. Only this page: elsewhere the role still sells
+   * with who held it (SEAT_BUNDLE).
+   */
+  titles?: Record<string, string>;
 }
 
 /**

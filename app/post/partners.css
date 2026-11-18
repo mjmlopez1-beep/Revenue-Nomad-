@@ -94,83 +94,207 @@
   font-weight: 500;
   color: var(--muted);
 }
+/* A partner card, person first: the title, the name (blurred until the unlock), the company with what is free to know, then one full-width action. One column, nothing side by side, so nothing runs past the edge. */
 .pt-cards {
   display: grid;
   gap: 8px;
 }
 .pt-card {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   background: var(--surface);
 }
-.pt-card-co {
+.pt-who {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pt-title {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.pt-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  min-height: 22px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+/* The name's verify button and member badge wrap under it on a narrow card. */
+.pt-name .vf-held {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.pt-name .tp-val-t {
+  overflow-wrap: anywhere;
+}
+.pt-name-locked .locked-blur,
+.pt-co-locked .locked-blur {
+  color: var(--muted);
+}
+.pt-at {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-2, var(--line));
+}
+.pt-co {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+button.pt-co {
+  justify-self: start;
   min-height: 44px;
-  margin: -4px;
-  padding: 4px;
+  margin: -6px -6px;
+  padding: 0 6px;
   border: 0;
   border-radius: var(--r-btn);
   background: none;
   font: inherit;
+  font-weight: 600;
   text-align: left;
-  color: inherit;
   cursor: pointer;
 }
-.pt-card-co:hover {
+button.pt-co:hover {
   background: var(--row-hover);
 }
-.pt-card-id {
-  display: grid;
-  min-width: 0;
+button.pt-co svg {
+  flex: none;
+  color: var(--muted);
 }
-.pt-card-name {
+.pt-co-name {
+  min-width: 0;
   overflow: hidden;
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 700;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.pt-card-meta {
+.pt-co-locked {
+  min-height: 32px;
+}
+/* A locked card's logo: a neutral tile, not the company's color. */
+.pt-co-locked .logo.logo-locked {
+  background: var(--surface-2, #eef0ee);
+}
+.pt-co-locked .logo-locked-in {
+  color: var(--muted);
+}
+/* Industry · revenue · size · place · when: each fact whole, wrapping between facts, never inside one. */
+.pt-co-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
   font-size: 13px;
   line-height: 20px;
   color: var(--muted);
 }
-.pt-facts {
+.pt-co-facts > span {
+  white-space: nowrap;
+}
+.pt-co-facts > span + span::before {
+  content: "·";
+  margin-right: 6px;
+}
+/* The one action: full width, 44px, always reading "Unlock · 1 credit". */
+.pt-act {
   display: grid;
   gap: 6px;
+  margin-top: auto;
+}
+.pt-act > .tp-cell,
+.pt-act > .btn,
+.pt-act > .tp-lockwait {
+  width: 100%;
+}
+.pt-act .tp-cell {
+  display: flex;
+}
+.pt-act .tp-cell > button.lock {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
   margin: 0;
-}
-.pt-fact {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
+  padding: 0 16px;
+  border: 1px solid var(--pine);
+  border-radius: var(--r-btn);
+  background: var(--pine);
+  color: #fff;
   font-size: 14px;
-  line-height: 20px;
 }
-.pt-fact dt {
+.pt-act .tp-cell > button.lock:hover {
+  background: var(--pine-hover);
+  border-color: var(--pine-hover);
+}
+.pt-act .tp-cell > button.lock .lock-rest {
+  display: none;
+}
+.pt-act .tp-cell > button.lock .lock-cta,
+.pt-act .tp-cell > button.lock.busy .lock-cta {
+  position: static;
+  transform: none;
+  display: inline-flex;
+  height: auto;
+  padding: 0;
+  background: none;
+  color: #fff;
+}
+.pt-act .tp-cell > button.lock .lock-cost {
+  color: rgba(255, 255, 255, 0.8);
+}
+.pt-act .tp-cell > button.lock:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.pt-act .tp-cell > button.lock:focus-visible .lock-cta {
+  outline: 0;
+}
+.pt-act .tp-cell > button.lock.later,
+.pt-act .tp-cell > button.lock.broke {
+  background: var(--surface-2, var(--surface));
+  border-color: var(--line);
+}
+.pt-act .tp-cell > button.lock.later .lock-cta,
+.pt-act .tp-cell > button.lock.broke .lock-cta {
   color: var(--muted);
 }
-.pt-fact dd {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  margin: 0;
+.pt-act .tp-lockwait {
+  justify-content: center;
+  min-height: 44px;
 }
-.pt-next {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+.pt-act .btn {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+}
+.pt-act .tp-invited {
+  text-align: center;
+}
+.pt-act-note {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
 }
 .pt-more {
   margin-top: 8px;
@@ -295,19 +419,36 @@
     grid-column: 1 / -1;
   }
   .pt-member-act .btn,
-  .pt-next .btn,
   .pt-showmore {
     min-height: 44px;
     width: 100%;
     justify-content: center;
   }
-  .pt-fact {
-    grid-template-columns: 96px minmax(0, 1fr);
-    min-height: 44px;
-  }
   .pt-more {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
+  }
+  /* A link inside a sentence: a 44px target without making the line taller. */
+  .pt-note .pt-link {
+    padding: 11px 0;
+    margin: -11px 0;
+  }
+}
+
+/* Wide screens: the page gets room, and partner cards and members sit side by side. */
+@media (min-width: 1024px) {
+  .pt-page {
+    max-width: 1080px;
+  }
+  .pt-cards {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+  }
+  .pt-members {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pt-lines {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
 }
