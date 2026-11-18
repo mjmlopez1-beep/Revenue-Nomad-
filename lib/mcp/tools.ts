@@ -420,7 +420,10 @@ export interface SearchArgs {
   unlocked?: boolean;
   /**
    * Recently hired (the table's Filters.hiredFn and .hiredWithin, lib/hired.ts): companies with a
-   * fractional hire in this function, or any of a list, whose start is within hired_within_months.
+   * fractional leader's hire in this function, or any of a list, whose start is within
+   * hired_within_months. Leadership seats only, as the table counts them (isLeaderHire): a seat
+   * whose title reads below Lead, like a Finance Manager, doesn't count, whether or not the member
+   * can see its title.
    */
   hired_function?: string | string[];
   /** The window in months (0 or left out: any time). Alone, a hire in any function. */
@@ -468,7 +471,7 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
     place = { country: inCountry.country, region: inCountry.region };
   }
   if (a.function) f.fn = [listValue("function", FUNCTIONS, a.function)];
-  // Recently hired, with the table's own rule (a hire in these functions whose start is in the window).
+  // Recently hired, with the table's own rule (a leadership hire in these functions whose start is in the window).
   f.hiredFn = [...new Set(listValues("hired_function", FUNCTIONS, a.hired_function))];
   if (a.hired_within_months !== undefined && a.hired_within_months !== null) {
     const n = Number(a.hired_within_months);

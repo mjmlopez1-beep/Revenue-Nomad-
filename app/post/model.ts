@@ -269,6 +269,17 @@ export const isHire = (e: EngagementRec) => {
   return !type || FRACTIONAL_TYPES.includes(type);
 };
 
+/**
+ * A fractional leader's hire: a hire (isHire) whose title doesn't read below Lead. C-level, VP,
+ * Head, Director, Lead and a title that shows no level count. A Manager or Staff title ("Fractional
+ * Finance Manager", "Fractional Content Engineer") doesn't. The server decides from the stored
+ * title, whether or not the member can see it, and marks such a seat (EngagementRec.belowLead).
+ * "Recently hired" counts these only: its filter, counts, sort and hire line, the onboarding first
+ * view and its suggested order, the hire alerts and the connector's hired_function. Every seat is
+ * still a hire for Functions hired, repeat hirers, fractional friendly and the benchmarks (isHire).
+ */
+export const isLeaderHire = (e: EngagementRec) => isHire(e) && !e.belowLead;
+
 /* ---------- recently hired (the rules are in lib/hired.ts) ---------- */
 
 /** One hire at a company: its seat, its function and the month its start stands for (null when no start is on file). */
@@ -278,19 +289,19 @@ interface HireAt {
   ym: string | null;
 }
 const hireCache = new WeakMap<CoInfo, HireAt[]>();
-/** A company's hires (isHire), the most recent start first, one with no start on file last. Worked out once per company. */
+/** A company's leadership hires (isLeaderHire), the most recent start first, one with no start on file last. Worked out once per company. */
 function hiresAt(i: CoInfo): HireAt[] {
   let h = hireCache.get(i);
   if (!h) {
-    h = i.engs.filter(isHire).map((e) => ({ e, fn: fnOfSeat(e), ym: hireMonth(shown(e.cells.start)) }));
+    h = i.engs.filter(isLeaderHire).map((e) => ({ e, fn: fnOfSeat(e), ym: hireMonth(shown(e.cells.start)) }));
     h.sort((a, b) => (b.ym ?? "").localeCompare(a.ym ?? ""));
     hireCache.set(i, h);
   }
   return h;
 }
-/** The hires a row reads: a seat row its own seat (when it is a hire), a company or person row the company's. */
+/** The leadership hires a row reads: a seat row its own seat (when it is one), a company or person row the company's. */
 const hiresOfRow = (r: Row): HireAt[] => {
-  if (r.e && !r.p) return isHire(r.e) ? [{ e: r.e, fn: fnOfSeat(r.e), ym: hireMonth(shown(r.e.cells.start)) }] : [];
+  if (r.e && !r.p) return isLeaderHire(r.e) ? [{ e: r.e, fn: fnOfSeat(r.e), ym: hireMonth(shown(r.e.cells.start)) }] : [];
   return hiresAt(r.i);
 };
 /** In one of the functions picked, or any function when none is. */
@@ -505,9 +516,9 @@ export function fitReason(i: CoInfo): string {
 
 export interface Filters {
   /**
-   * "Recently hired": a hire (isHire) in one of these functions, any function when none is picked,
-   * with a start inside `hiredWithin`. A company matches with one such hire, a seat row when it is
-   * one, a person row when their company has one. The rules are in lib/hired.ts.
+   * "Recently hired": a leadership hire (isLeaderHire) in one of these functions, any function when
+   * none is picked, with a start inside `hiredWithin`. A company matches with one such hire, a seat
+   * row when it is one, a person row when their company has one. The rules are in lib/hired.ts.
    */
   hiredFn: string[];
   /** The window, in months: 3, 6, 12 or 24 in the app (a link may say any whole number up to 240). 0 is any time. */

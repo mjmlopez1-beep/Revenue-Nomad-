@@ -403,6 +403,11 @@ for (const n of ["Acme", "ACME Inc.", "Acme, Inc.", "Test", "Test Company 2", "E
   check(`an example name is a placeholder: "${n}"`, isPlaceholderCompany(n));
 for (const n of ["Demo Converts", "Testament", "Test.io", "Example Health", "Your Celebrity Magazines", "Make Your Mark", "X Corp", "Yield.xyz", "Samplify", "Acme Brick"])
   check(`a real name that starts like one is not: "${n}"`, !isPlaceholderCompany(n));
+// A sector label is no company: 1 to 3 words ending in the singular "Industry" or "Sector". The graph leaves it out unless a member holds a seat there.
+for (const n of ["Non-Profit Sector", "Beauty Industry", "Public Sector", "The Tech Industry", "Industry", "Sector", "Not-For-Profit Sector", "Public Sector.", "  beauty   industry "])
+  check(`a sector label is not a company: "${n}"`, isPlaceholderCompany(n) && !isRealCompany(n));
+for (const n of ["Cambridge Heavy Industries", "Third Sector Intelligence", "REACH INDUSTRIES", "The Swedish Association of the Pharmaceutical Industry, LIF", "Industry City", "Sector 7 Labs", "Big Public Sector Partners", "The Beauty Industry Group"])
+  check(`a company with a sector word in its name stays: "${n}"`, !isPlaceholderCompany(n));
 
 // Links go out whole: https:// on a stored "acme.com/jobs/1", and nothing that isn't a web address.
 const links: [string, string | null][] = [

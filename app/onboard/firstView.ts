@@ -4,8 +4,9 @@
  *   - "Which fractional usually gets hired before you?": the functions it offers, in a suggested
  *     order (our data where it says something, else the usual ones for the member's function);
  *   - the first view those answers build: companies in the member's Ideal Fractional Profile that
- *     hired a fractional in those functions in the last 12 months and have no fractional in the
- *     member's own function yet, widened until it shows enough, and the saved view that reopens it;
+ *     hired a fractional leader in those functions in the last 12 months (a leadership seat, never
+ *     one whose title reads below Lead, isLeaderHire) and have no fractional in the member's own
+ *     function yet, widened until it shows enough, and the saved view that reopens it;
  *   - the goal a new member gets, and which copy of their answers to resume from.
  *
  * The first view is the "Recently hired" filter (Filters.hiredFn and .hiredWithin, lib/hired.ts)
@@ -16,7 +17,7 @@ import { FUNCTIONS } from "@/lib/tableFields";
 import { BEFORE_MAX, type EngagementRec, type Icp, type Me, type SavedViewCriteria } from "@/lib/tableTypes";
 import { fnLeader, hireMonth, windowPhrase } from "@/lib/hired";
 import {
-  EMPTY_FILTERS, absolutePlace, applyFilters, criteriaOf, hireOfRow, icpEmpty, isFirm, isHire, namedFn, rowsFor, shown, sortRows, viewName, withIcpSpelled,
+  EMPTY_FILTERS, absolutePlace, applyFilters, criteriaOf, hireOfRow, icpEmpty, isFirm, isLeaderHire, namedFn, rowsFor, shown, sortRows, viewName, withIcpSpelled,
   type CoInfo, type Filters, type Row,
 } from "@/app/post/model";
 
@@ -65,11 +66,12 @@ export function beforeOptions(fn: string | null): string[] {
 
 /**
  * The functions in the order the question offers them. First the ones our data says start before
- * the member's: at companies with hires in both (isHire, so full-time seats and open roles don't
- * count), the first hire in that function started in an earlier month than the first in theirs, at
- * BEFORE_MIN_COMPANIES or more companies. Then the usual ones for their function (BEFORE_DEFAULTS),
- * up to BEFORE_MAX in all (`suggested`). Then every other function, the ones found at the same
- * companies as theirs first. `fromData`: the suggested ones our data put there.
+ * the member's: at companies with leadership hires in both (isLeaderHire, so full-time seats, open
+ * roles and seats whose title reads below Lead don't count), the first hire in that function
+ * started in an earlier month than the first in theirs, at BEFORE_MIN_COMPANIES or more companies.
+ * Then the usual ones for their function (BEFORE_DEFAULTS), up to BEFORE_MAX in all (`suggested`).
+ * Then every other function, the ones found at the same companies as theirs first. `fromData`: the
+ * suggested ones our data put there.
  */
 export function beforeOrder(infos: CoInfo[], fn: string | null): { order: string[]; suggested: string[]; fromData: string[] } {
   const own = namedFn(fn);
@@ -84,7 +86,7 @@ export function beforeOrder(infos: CoInfo[], fn: string | null): { order: string
       // The earliest month on file per function ("" for hires with no start on file).
       const earliest = new Map<string, string>();
       for (const e of i.engs) {
-        if (!isHire(e)) continue;
+        if (!isLeaderHire(e)) continue;
         const f = shown(e.cells.function);
         if (!f) continue;
         const m = hireMonth(shown(e.cells.start)) ?? "";

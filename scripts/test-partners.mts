@@ -100,6 +100,8 @@ const companies = [
   ...Array.from({ length: 20 }, (_, i) => ({ id: `c_o${i}`, fields: { name: `Orchard Labs ${i + 1}` } })),
   ...Array.from({ length: 19 }, (_, i) => ({ id: `c_f${i}`, fields: { name: `Fieldstone Group ${i + 1}` } })),
   ...Array.from({ length: 20 }, (_, i) => ({ id: `c_g${i}`, fields: { name: `Granite Works ${i + 1}` } })),
+  { id: "c_j1", fields: { name: "Juniper Ledger" } },
+  { id: "c_j2", fields: { name: "Juniper Funnel" } },
 ];
 const seat = (id: string, companyId: string, fields: Record<string, string>, extra: Record<string, unknown> = {}) => ({
   id,
@@ -144,6 +146,13 @@ const engagements = [
     found(`e_g${i}s`, `c_g${i}`, "Sales", "Fractional VP Sales", null, "2024"),
     found(`e_g${i}g`, `c_g${i}`, "Growth", "Fractional Head of Growth", null, "2024-11"),
   ]).flat(),
+  // Leadership seats only: a seat whose title reads below Lead is no hire before or after anyone. Counted, this
+  // Finance Manager before a VP Sales would give Finance its 20th company, and this Sales Manager after a CMO
+  // would give Marketing a 21st and the page two more companies.
+  found("e_j1f", "c_j1", "Finance", "Fractional Finance Manager", null, "2022-03"),
+  found("e_j1s", "c_j1", "Sales", "Fractional VP Sales", null, "2023-03"),
+  found("e_j2m", "c_j2", "Marketing", "Fractional CMO", null, "2023-01"),
+  found("e_j2s", "c_j2", "Sales", "Fractional Sales Manager", null, "2024-06"),
 ];
 const seed = { builtAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), members: seedMembers, companies, engagements, contacts: [] };
 writeFileSync(seedPath, JSON.stringify(seed));
@@ -246,6 +255,11 @@ check("19 companies is not enough: no Finance line", line("Finance", "before") =
 check("a year-only start counts as its December: Growth before a 2024 Sales start", line("Growth", "before") === 20, pv.order);
 check("full-time seats and open roles are not hires", line("Marketing", "before") === 20 && line("Partnerships", "before") === undefined, pv.order);
 check("it counts the companies behind it", pv.companies === 59 && pv.min === 20, { companies: pv.companies, min: pv.min });
+check(
+  "leadership seats only: a Finance Manager before the VP Sales doesn't make Finance's 20th company, and a Sales Manager is no Sales seat to count from",
+  line("Finance", "before") === undefined && line("Marketing", "before") === 20 && pv.companies === 59,
+  { order: pv.order, companies: pv.companies },
+);
 check("members' answers as counts once 20 of the function answered (Not sure counts as an answer)", pv.answers?.n === 20 && JSON.stringify(pv.answers.fns) === JSON.stringify([{ fn: "Marketing", n: 15 }, { fn: "RevOps", n: 15 }, { fn: "Finance", n: 4 }]), pv.answers);
 const mara = seedMembers[3];
 await T.perform(mara.token, { type: "profile", function: "Marketing" });

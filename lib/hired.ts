@@ -7,6 +7,11 @@
  * - A hire is any seat that counts as one: a fractional, interim, advisory or project seat, or one
  *   with no type on file. Not a full-time seat, not an open role, and not a job posting that came
  *   down with nobody named in the seat (isHire in app/post/model.ts).
+ * - Only a fractional leader's seat counts here: C-level, VP, Head, Director, Lead, or a title that
+ *   shows no level. A seat whose title reads below Lead ("Fractional Finance Manager", "Fractional
+ *   Content Engineer") doesn't (isLeaderHire in app/post/model.ts). The server reads the stored
+ *   title, seen or not, and sends only a flag (EngagementRec.belowLead). Everywhere else, Functions
+ *   hired, repeat hirers and the benchmarks, every hire still counts.
  * - "In the last N months" reads the hire's start month: it counts when it is at most N months
  *   before this month. With 6 in November, May to November count (and any later month).
  * - A start with only a year counts as that year's December: "2025" reads as Dec 2025.

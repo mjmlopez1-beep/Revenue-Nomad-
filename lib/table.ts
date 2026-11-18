@@ -67,7 +67,7 @@ import { emailEnabled, sendEmail } from "./email";
 import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
-import { keepsNonGtm } from "./seniority";
+import { isBelowLead, keepsNonGtm } from "./seniority";
 import { companyKey, isPlaceholderCompany, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
@@ -2383,6 +2383,22 @@ export async function viewPatch(
 }
 
 /**
+ * Seat titles that read below Lead (isBelowLead in lib/seniority.ts), remembered by title: every
+ * view build and the Referral partners page read every seat's, and titles rarely change.
+ */
+const belowLeadTitles = new Map<string, boolean>();
+function belowLead(title: string | null): boolean {
+  if (!title) return false;
+  let v = belowLeadTitles.get(title);
+  if (v === undefined) {
+    v = isBelowLead(title);
+    if (belowLeadTitles.size > 50_000) belowLeadTitles.clear();
+    belowLeadTitles.set(title, v);
+  }
+  return v;
+}
+
+/**
  * The table as `me` sees it. `only`: build just these companies (internal ids), for an action's
  * answer (viewPatch). The member's own numbers, credit history, benchmarks and scan summary come
  * whole, the counts in `stats` cover only those companies, and nothing is cached from it.
@@ -2509,6 +2525,10 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         ...(unclaimedSeat(e, s) ? { claimable: true } : {}),
         // The viewer's own "This is me" on it waits for an admin.
         ...(me && pendingClaimers(s, e.id).includes(me.id) ? { claimWaiting: true } : {}),
+        // Recently hired counts leadership seats only. The stored title decides, whether or not this
+        // viewer can see it (SEAT_BUNDLE locks the role of a seat whose holder is on file), and only
+        // the flag goes out, never the title.
+        ...(belowLead(live(e, s, "role")) ? { belowLead: true } : {}),
         ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null, ...roleTimes(track) } : {}),
       };
     });
@@ -5289,9 +5309,10 @@ function beforeOf(p: Profile | undefined): string[] | null {
 /**
  * GET /api/table?partners=1, for a signed-in member (null otherwise). Three parts:
  *  - order: at each company, the first dated fractional seat in the member's function against the
- *    first in every other function (hires only: not open roles, not Full-time, not a posting that
- *    came down with nobody named; a year-only start is its December). A line shows once
- *    PARTNERS_MIN companies back it.
+ *    first in every other function (leadership hires only, as Recently hired counts them: not open
+ *    roles, not Full-time, not a posting that came down with nobody named, not a seat whose title
+ *    reads below Lead; a year-only start is its December). A line shows once PARTNERS_MIN
+ *    companies back it.
  *  - answers: members in the member's function who said which fractional usually gets hired before
  *    them (`before`), as counts, once PARTNERS_MIN of them answered.
  *  - members: everyone signed in who hasn't turned "Show me in Referral partners" off, but the
@@ -5317,6 +5338,8 @@ export async function partnersView(token: string | null): Promise<PartnersView |
     if (e.source === "Demand scan" && !live(e, s, "operator")) continue;
     const type = live(e, s, "type");
     if (type && !FRACTIONAL_TYPES.includes(type)) continue;
+    // A Finance Manager or a Content Engineer is no fractional leader: not a hire before or after anyone here.
+    if (belowLead(live(e, s, "role"))) continue;
     const f = workFn(fnOf(e, s));
     const m = startMonth(live(e, s, "start"));
     if (!f || !m) continue;

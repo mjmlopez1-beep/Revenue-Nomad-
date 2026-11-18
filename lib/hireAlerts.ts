@@ -15,6 +15,10 @@
  * a member), so the email lists what reopening the view lists: the Ideal Fractional Profile as the
  * member has it now, "No fractional Sales yet" in their function, the other filters. Free facts
  * only: a company that is locked for the member is left unnamed, and no seat holder is named.
+ *
+ * Leadership seats only, like the table (isLeaderHire): the view marks a seat whose stored title
+ * reads below Lead (EngagementRec.belowLead), and hiresOf and the filter leave it out, so a new
+ * "Fractional Finance Manager" seat is never "a fractional Finance leader" in the email or Slack.
  */
 import { buildView, loadSeed, loadState, tableInternals as T, type Member, type Seed, type State } from "./table";
 import type { SavedSearch } from "./mcp/alerts";

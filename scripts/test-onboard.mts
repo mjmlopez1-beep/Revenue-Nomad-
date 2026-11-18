@@ -53,6 +53,9 @@ function seat(cells: Record<string, Cell>, extra: Partial<EngagementRec> = {}): 
 /** A fractional hire in `fn` that started `k` months ago (null: no start on file). */
 const hire = (fn: string, k: number | null, extra: Record<string, Cell> = {}) =>
   seat({ function: v(fn), type: v("Fractional"), status: v("Active"), role: v(`Fractional ${fn} lead`), ...(k === null ? {} : { start: v(ym(k)) }), ...extra });
+/** The same with a title below Lead ("Fractional Marketing Manager"), as the server marks it (EngagementRec.belowLead). */
+const junior = (fn: string, k: number | null, role: string, extra: Record<string, Cell> = {}) =>
+  seat({ function: v(fn), type: v("Fractional"), status: v("Active"), role: v(role), ...(k === null ? {} : { start: v(ym(k)) }), ...extra }, { belowLead: true });
 function co(name: string, seats: EngagementRec[], o: { country?: string; industry?: string; employees?: string; hidden?: boolean; score?: number } = {}): CompanyRec {
   const fns = [...new Set(seats.map((e) => val(e.cells.function)).filter((x): x is string => !!x))];
   return {
@@ -131,6 +134,11 @@ const fullTime = [0, 1, 2].map((k) => co(`Full-time First ${k}`, [hire("Partners
 check("full-time seats don't count as hires before you", beforeOrder(deriveAll(fullTime), "Sales").fromData.length === 0);
 const later = [0, 1, 2].map((k) => co(`Growth Later ${k}`, [hire("Growth", 2), hire("Sales", 9)]));
 check("a function that came after doesn't count as before", beforeOrder(deriveAll(later), "Sales").fromData.length === 0);
+// Leadership seats only: a Growth Coordinator who started first, or a Sales Manager the member's function would start from, says nothing.
+const juniorFirst = [0, 1, 2].map((k) => co(`Junior Growth ${k}`, [junior("Growth", 20, "Fractional Growth Coordinator"), hire("Sales", 4)]));
+check("a seat below Lead that started first doesn't count as before", beforeOrder(deriveAll(juniorFirst), "Sales").fromData.length === 0, beforeOrder(deriveAll(juniorFirst), "Sales").fromData);
+const juniorMine = [0, 1, 2].map((k) => co(`Junior Sales ${k}`, [hire("Growth", 20), junior("Sales", 4, "Fractional Sales Manager")]));
+check("nor does a function before a seat below Lead in the member's own function", beforeOrder(deriveAll(juniorMine), "Sales").fromData.length === 0, beforeOrder(deriveAll(juniorMine), "Sales").fromData);
 check("up to 3: a fourth tap changes nothing", toggleBefore(["Marketing", "RevOps", "Finance"], "People").join() === "Marketing,RevOps,Finance");
 check("a tap takes one off, and picks one from Not sure or nothing", toggleBefore(["Marketing", "RevOps"], "RevOps").join() === "Marketing" && toggleBefore([], "Sales").join() === "Sales" && toggleBefore(null, "Sales").join() === "Sales");
 
@@ -207,6 +215,22 @@ const lockedHire = hireOfRow(fv8.rows.find((r) => r.i.c.id === locked.id)!, ["Ma
 check("its seat holder is a lock, and so is the role that comes with them", !!lockedHire && lockedHire.cells.role?.s === "locked" && lockedHire.cells.operator?.s === "locked");
 check("it counts the companies whose seat holder is on file (behind a lock): the member's potential referral partners", fv8.holders === 1 && fv1.holders === 0, [fv8.holders, fv1.holders]);
 check("and says so in one line, or nothing at none", holdersLine(fv8) === "At 1 of them, the fractional who held that seat is on file, a potential referral partner." && holdersLine({ holders: 3, rows: fv1.rows }) === "At 3 of them, the fractional who held that seat is on file. Each is a potential referral partner." && holdersLine(fv1) === null && holdersLine({ holders: 2, rows: fv8.rows.slice(0, 2) })!.startsWith("At all 2"), holdersLine(fv8));
+
+// Leadership seats only: six companies whose only Marketing seat is a Marketing Manager (its holder on file) are no "fractional Marketing leader".
+const juniors = Array.from({ length: 6 }, (_, k) => co(`Junior Marketing ${k}`, [junior("Marketing", 2, "Fractional Marketing Manager", { operator: LOCKED, role: LOCKED })], { country: "United States" }));
+const leaderCo = co("Marketing Leader", [hire("Marketing", 3)], { country: "United States" });
+const juniorInfos = deriveAll([...juniors, leaderCo]);
+const fvJ = firstView(juniorInfos, ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: [] });
+check("the first view counts leadership seats only: six Marketing Manager seats add no company", fvJ.first === 1 && fvJ.rows.length === 1 && fvJ.rows[0].i.c.name === "Marketing Leader", { first: fvJ.first, n: fvJ.rows.length });
+check("widening never brings them back: every step still counts leadership seats", fvJ.widened.length === 0, fvJ.widened);
+check("their seat holders are not counted as referral partners", fvJ.holders === 0, fvJ.holders);
+check("its sentence counts what it shows", firstViewLine(fvJ, "Sales") === "1 company in your profile hired a fractional Marketing leader in the last 12 months and has no fractional Sales yet.", firstViewLine(fvJ, "Sales"));
+check("and the saved view reopens with the same row", keys(reopen(fvJ.place, juniorInfos, who2)) === keys(fvJ.rows));
+// Only seats below Lead in 12 months, and a leader 18 months back: it widens past them to the leader.
+const lateInfos = deriveAll([...juniors, co("Late Leader", [hire("Marketing", 18)], { country: "United States" })]);
+const fvL = firstView(lateInfos, ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: [] });
+check("short of leaders, it widens past seats below Lead to a leader 18 months back", fvL.first === 0 && fvL.widened.join() === "window" && fvL.rows.length === 1 && fvL.rows[0].i.c.name === "Late Leader", { first: fvL.first, w: fvL.widened, n: fvL.rows.length });
+check("and says so", widenLine(fvL, "Sales") === "Nothing matched at first, so we looked back 24 months.", widenLine(fvL, "Sales"));
 
 /* ---------- the open roles view beside it ---------- */
 
@@ -308,6 +332,11 @@ if (BASE) {
     check("on the real table every function but their own and Other is offered, with 3 suggested", ord.suggested.length === 3 && ord.order.length === FUNCTIONS.length - 2, ord.suggested);
     const fv = firstView(infos, still.me!, { fn: "Sales", icp: US, before: ["Marketing", "Finance"], suggested: ord.suggested });
     check("the first view on the real table is never empty", fv.rows.length > 0, { n: fv.rows.length, w: fv.widened });
+    check(
+      "every hire it shows is a leadership seat, and the server marks seats below Lead with a flag only",
+      fv.rows.every((r) => !hireOfRow(r, fv.f.hiredFn, fv.f.hiredWithin)?.belowLead) &&
+        still.companies.every((c) => c.engagements.every((e) => e.belowLead === undefined || e.belowLead === true)),
+    );
     const thin = firstView(infos, still.me!, { fn: "Sales", icp: US, before: ["Product Marketing"], suggested: ord.suggested });
     check("a thin answer widens and is still never empty", thin.rows.length > 0 && thin.widened.length > 0, { n: thin.rows.length, w: thin.widened });
     const unsure = firstView(infos, still.me!, { fn: "Sales", icp: US, before: [], suggested: ord.suggested });

@@ -29,6 +29,9 @@ const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
 
 const HOLDER = "Nina Namedholder";
 const HIDDEN_NAME = "Hidden Freight Co";
+/** A seat below Lead whose holder is on file, so its role is locked with them (SEAT_BUNDLE): the member never sees this title. */
+const JUNIOR_TITLE = "Fractional Finance Systems Manager";
+const JUNIOR_HOLDER = "Hal Heldjunior";
 const seat = (id: string, companyId: string, fields: Record<string, string>, addedAt?: string) => ({ id, companyId, fields, verified: false, ...(addedAt ? { addedAt } : {}) });
 const fin = (start: string, extra: Record<string, string> = {}) => ({ source: "Seat scan", function: "Finance", role: "Fractional CFO", type: "Fractional", status: "Active", end: "Ongoing", start, ...extra });
 const seed = {
@@ -48,6 +51,10 @@ const seed = {
     { id: "c_eps", fields: { name: "Epsilon Works", website: "epsilon.example", hq: "London, UK" } },
     { id: "c_zeta", fields: { name: "Zeta Foods", website: "zeta.example", hq: "Miami, FL" } },
     { id: "c_five", fields: { name: "Five Pine", website: "fivepine.example", hq: "Portland, OR" } },
+    // Seats below Lead, all new this week and in the profile: never "a fractional leader" (see the counts below, which they'd raise).
+    { id: "c_juniper", fields: { name: "Juniper Content", website: "juniper.example", hq: "Austin, TX" } },
+    { id: "c_kestrel", fields: { name: "Kestrel Ledger", website: "kestrel.example", hq: "Austin, TX" } },
+    { id: "c_larch", fields: { name: "Larch Books", website: "larch.example", hq: "Denver, CO" } },
   ],
   engagements: [
     // Hired a while ago: on the table before this week (no addedAt), so never new.
@@ -68,6 +75,12 @@ const seed = {
     seat("e_eps", "c_eps", fin(ym(1)), ago(2)),
     // New, but it started nine months ago: outside a 6-month window.
     seat("e_zeta", "c_zeta", fin(ym(9)), ago(2)),
+    // Below Lead (Recently hired counts leadership seats only): a Content Engineer in Marketing, nobody named, its title free to see.
+    seat("e_juniper", "c_juniper", { source: "Seat scan", function: "Marketing", role: "Fractional Content Engineer", type: "Fractional", status: "Active", end: "Ongoing", start: ym(1) }, ago(1)),
+    // A Finance Manager whose holder is on file: its role is locked with them, so only the server knows the title.
+    seat("e_kestrel", "c_kestrel", { source: "Member success story", function: "Finance", role: JUNIOR_TITLE, type: "Fractional", status: "Active", start: ym(1), operator: JUNIOR_HOLDER }, ago(1)),
+    // A Finance Manager with a start that is only this year (its December): a year alone reads as usual, and the seat still doesn't count.
+    seat("e_larch", "c_larch", { source: "Seat scan", function: "Finance", role: "Finance Manager", type: "Fractional", status: "Active", end: "Ongoing", start: String(now.getFullYear()) }, ago(2)),
   ],
   contacts: [],
 };
@@ -164,6 +177,11 @@ async function main() {
   );
   check("a start in words", H.startWords("2026-03") === "Mar 2026" && H.startWords("2025") === "2025" && H.startWords("x") === "");
   check("a view follows hires with a function or a window", H.followsHires({ hiredFn: ["Finance"] }) && H.followsHires({ hiredWithin: 6 }) && !H.followsHires({ hiredFn: [], hiredWithin: 0 }) && !H.followsHires({}));
+  // Leadership seats only (lib/seniority.ts): the title the server reads.
+  const S = await import("../lib/seniority");
+  check("below Lead: a Manager or Staff title", S.isBelowLead("Fractional Finance Manager") && S.isBelowLead("Fractional Content Engineer") && S.isBelowLead("Marketing Coordinator") && S.isBelowLead("Assistant Director of Finance"));
+  check("a leadership title isn't: C-level, VP, Head, Director, Lead", ["Fractional CFO", "Interim Chief Revenue Officer", "Fractional VP Finance", "Head of Finance", "Fractional Finance Director", "Fractional Marketing Lead", "Senior Finance Manager"].every((x) => !S.isBelowLead(x)));
+  check("nor a title that shows no level, or none at all", !S.isBelowLead("Fractional Consultant") && !S.isBelowLead("Independent Consultant") && !S.isBelowLead("") && !S.isBelowLead(null) && !S.isBelowLead(undefined));
 
   /* ---------- the filter on the client model ---------- */
   console.log("\nThe filter");
@@ -263,6 +281,47 @@ async function main() {
   check("else the function most companies hired lately (not theirs)", M.suggestHiredFn(infos, "Sales", () => true) === "Finance" && M.suggestHiredFn(infos, "Finance", () => true) === "Marketing");
   check("with nothing on file, a sensible default", M.suggestHiredFn([], "Sales") === "Marketing" && M.suggestHiredFn([], "Marketing") === "Sales");
 
+  /* ---------- leadership seats only (EngagementRec.belowLead) ---------- */
+  console.log("\nLeadership seats only");
+  // A seat whose title reads below Lead, as the server marks it. The flag decides, whether or not the member sees the title.
+  const junior = (fn: string, start: string | null, role: Cell, extra: Record<string, Cell> = {}) =>
+    eng({ function: val(fn), type: val("Fractional"), status: val("Active"), role, ...(start ? { start: val(start) } : {}), ...extra }, { belowLead: true });
+  const LA = co("LA CFO", [hire("Finance", ym(1), { role: val("Fractional CFO") })]);
+  const LB = co("LB Finance Manager", [junior("Finance", ym(1), val("Fractional Finance Manager"))]);
+  const LC = co("LC Content Engineer", [junior("Marketing", ym(1), val("Fractional Content Engineer"))]);
+  const LD = co("LD Locked Junior", [junior("Finance", ym(1), LOCKED, { operator: LOCKED })]);
+  const LE = co("LE Junior This Year", [junior("Finance", yearOnly, val("Finance Manager"))]);
+  const LF = co("LF Leader This Year", [hire("Finance", yearOnly, { role: val("Fractional CFO") })]);
+  const LG = co("LG Both", [junior("Finance", ym(0), val("Fractional Finance Manager")), hire("Finance", ym(2), { role: val("Fractional VP Finance") })]);
+  const lead = [LA, LB, LC, LD, LE, LF, LG];
+  const leadInfos = M.deriveAll(lead);
+  const tag = new Map(lead.map((c) => [c.id, c.name.split(" ")[0]]));
+  const leaders = (type: "companies" | "engagements", x: Partial<import("../app/post/model").Filters>) =>
+    M.applyFilters(M.rowsFor(type, leadInfos), f(x), "all", "", me, true).rows;
+  const tags = (rows: import("../app/post/model").Row[]) => rows.map((r) => tag.get(r.i.c.id)).sort().join(",");
+  check("a Finance Manager seat and a Content Engineer seat don't match, a CFO does", tags(leaders("companies", { hiredFn: ["Finance"], hiredWithin: 3 })) === "LA,LF,LG" && tags(leaders("companies", { hiredFn: ["Marketing"], hiredWithin: 3 })) === "", tags(leaders("companies", { hiredFn: ["Finance"], hiredWithin: 3 })));
+  check("a junior seat whose role is locked doesn't match either: the server's flag decides, not what the member can see", !tags(leaders("companies", { hiredFn: ["Finance"], hiredWithin: 0 })).includes("LD"));
+  check("year-only starts still work: this year's CFO counts as December, this year's Finance Manager doesn't count", tags(leaders("companies", { hiredFn: ["Finance"], hiredWithin: 3 })).includes("LF") && !tags(leaders("companies", { hiredFn: ["Finance"], hiredWithin: 24 })).includes("LE"));
+  check("a window alone (any function) counts leadership seats only", tags(leaders("companies", { hiredWithin: 3 })) === "LA,LF,LG", tags(leaders("companies", { hiredWithin: 3 })));
+  const leadSeats = leaders("engagements", { hiredFn: ["Finance"], hiredWithin: 0 });
+  check("the seats list shows leadership seats only", leadSeats.length === 3 && leadSeats.every((r) => !!r.e && !r.e.belowLead), leadSeats.map((r) => r.e?.id));
+  const lfac = M.applyFilters(M.rowsFor("companies", leadInfos), f({ hiredFn: ["Finance"], hiredWithin: 3 }), "all", "", me).facets;
+  check("the counts leave junior seats out", lfac.hiredFn.Finance === 3 && lfac.hiredFn.Marketing === 0 && lfac.hiredAny === 3 && lfac.hiredWithin[0] === 3 && lfac.hiredWithin[3] === 3, { fn: lfac.hiredFn, any: lfac.hiredAny, within: lfac.hiredWithin });
+  const lgHire = M.hireOfRow({ key: LG.id, i: leadInfos[6] }, ["Finance"], 3);
+  check(
+    "at a company with both, the hire is the leader's: the VP Finance two months back, not last month's Finance Manager",
+    !!lgHire && !lgHire.belowLead && M.hireLine(lgHire).what === "Hired a fractional VP Finance" && M.hireLine(lgHire).when === H.startWords(ym(2)),
+    lgHire && M.hireLine(lgHire),
+  );
+  const leadOrder = M.sortRows(leaders("companies", { hiredFn: ["Finance"], hiredWithin: 0 }), "hired", false, "", { me, hire: { fns: ["Finance"], within: 0 } }).map((r) => tag.get(r.i.c.id)).join(",");
+  check("sorted by the most recent leadership hire: a junior seat never moves a company up", leadOrder === "LF,LA,LG", leadOrder);
+  const mkJuniors = [LC, co("LH Coordinator", [junior("Marketing", ym(1), val("Marketing Coordinator"))]), co("LI Manager", [junior("Marketing", ym(2), val("Fractional Marketing Manager"))])];
+  check("the function Recently hired opens on counts leadership hires only", M.suggestHiredFn(M.deriveAll([LA, ...mkJuniors]), "Sales") === "Finance", M.suggestHiredFn(M.deriveAll([LA, ...mkJuniors]), "Sales"));
+  check(
+    "isHire stays as it is: a junior seat is still a hire for Functions hired",
+    M.isHire(LB.engagements[0]) && !M.isLeaderHire(LB.engagements[0]) && leadInfos[1].fnState.hired.includes("Finance") && M.isLeaderHire(LA.engagements[0]),
+  );
+
   /* ---------- the address and saved views ---------- */
   console.log("\nThe address and saved views");
   const owner = f({ hiredFn: ["Finance"], hiredWithin: 6, notMine: true, icp: true });
@@ -318,6 +377,23 @@ async function main() {
   const salView = await t.buildView(SAL);
   const salRows = M.applyFilters(M.rowsFor("companies", M.deriveAll(salView.companies)), owner, "all", "", salView.me!, true).rows;
   check("the table lists the view's companies (old hires included)", salRows.length === 5, salRows.map((r) => r.i.c.hidden ? "(locked)" : r.i.c.name));
+  // Leadership seats only, decided on the server from the stored title (seen or not).
+  const seatAt = (name: string) => salView.companies.find((c) => c.name === name)?.engagements[0];
+  const kes = seatAt("Kestrel Ledger");
+  check("the server marks a seat whose stored title reads below Lead, with a flag and nothing more", kes?.belowLead === true && kes.cells.role?.s === "locked" && !("v" in (kes.cells.role ?? {})), kes && { belowLead: kes.belowLead, role: kes.cells.role });
+  check("a Content Engineer and a year-only Finance Manager are marked too, a CFO isn't", seatAt("Juniper Content")?.belowLead === true && seatAt("Larch Books")?.belowLead === true && seatAt("Beta Labs")?.belowLead === undefined && seatAt("Gamma Health")?.belowLead === undefined);
+  const wire = JSON.stringify(salView);
+  check("nothing the member receives carries the locked title, or who held that seat", !wire.includes(JUNIOR_TITLE) && !wire.includes("Systems Manager") && !wire.includes(JUNIOR_HOLDER));
+  const onTable = (x: Partial<import("../app/post/model").Filters>) =>
+    M.applyFilters(M.rowsFor("companies", M.deriveAll(salView.companies)), f(x), "all", "", salView.me!, true).rows.map((r) => r.i.c.name);
+  check(
+    "on the table, Finance Manager seats don't match a fractional Finance leader, CFOs do (a year-only start too)",
+    onTable({ hiredFn: ["Finance"], hiredWithin: 6 }).includes("Beta Labs") && onTable({ hiredFn: ["Finance"], hiredWithin: 6 }).includes("Gamma Health") && !onTable({ hiredFn: ["Finance"], hiredWithin: 0 }).some((n) => n === "Kestrel Ledger" || n === "Larch Books"),
+    onTable({ hiredFn: ["Finance"], hiredWithin: 0 }),
+  );
+  check("a Content Engineer seat is no fractional Marketing leader", !onTable({ hiredFn: ["Marketing"], hiredWithin: 0 }).includes("Juniper Content") && !onTable({ hiredWithin: 6 }).includes("Juniper Content"));
+  const kesInfo = M.deriveAll(salView.companies).find((x) => x.c.name === "Kestrel Ledger");
+  check("they are still hires everywhere else: Functions hired and the fractional hires on file", !!kesInfo && kesInfo.fnState.hired.includes("Finance") && kesInfo.c.friendly.fractional >= 1, kesInfo && { hired: kesInfo.fnState.hired, fractional: kesInfo.c.friendly.fractional });
   process.env.RN_DIGEST_ALL = "1";
   const list = await t.digestList(new Date(NOW).toISOString(), BASE);
   delete process.env.RN_DIGEST_ALL;
@@ -333,6 +409,11 @@ async function main() {
   check("a locked company is never named", !!h?.rows.some((r) => r.company === null) && !JSON.stringify(sal).includes(HIDDEN_NAME), h?.rows.map((r) => r.company));
   check("a member-added seat counts from when it was added", !!h?.rows.some((r) => r.company === "Five Pine"));
   check("the email data never names who held a seat", !JSON.stringify(sal).includes(HOLDER) && !JSON.stringify(sal).includes("Namedholder"));
+  check(
+    "new seats below Lead are never a fractional leader in the email, and a locked title never shows",
+    !!h && !h.rows.some((r) => ["Kestrel Ledger", "Larch Books", "Juniper Content"].includes(r.company ?? "")) && !JSON.stringify(sal).includes(JUNIOR_TITLE) && !JSON.stringify(sal).includes(JUNIOR_HOLDER),
+    h?.rows.map((r) => r.company),
+  );
   const mail = digest.renderDigest(sal!);
   check("the subject is the owner's line", mail.subject === "4 companies in your profile hired a fractional Finance leader this week", mail.subject);
   check("the email lists the companies in free facts: the company, the function, the start month", mail.text.includes(`Beta Labs · Finance · ${H.startWords(ym(1))}`) && mail.text.includes(`${digest.LOCKED_HIRER} · Finance · ${H.startWords(ym(2))}`), mail.text);
@@ -371,6 +452,7 @@ async function main() {
   check("the post lists companies in free facts, a locked one unnamed", text.includes(`Beta Labs · Finance · ${H.startWords(ym(1))}`) && text.includes("A company that's hiring now · Finance"), text);
   check("the post opens the saved view", text.includes(`${BASE}/?${salPlace}`), text);
   check("the post never names a seat holder or a locked company", !text.includes(HOLDER) && !text.includes(HIDDEN_NAME));
+  check("the post leaves seats below Lead out, and never carries a locked title", !text.includes("Kestrel Ledger") && !text.includes("Larch Books") && !text.includes("Juniper Content") && !text.includes(JUNIOR_TITLE) && !text.includes(JUNIOR_HOLDER));
   outbox.length = 0;
   skew += 16 * 60 * 1000;
   await t.applyScan({ roles: [], sources: [{ source: "board", fetched: 3, matched: 0 }] });
@@ -393,6 +475,14 @@ async function main() {
   check("a list of functions, with no_function_yet", res2.total === 6, res2.total);
   const res3 = await tools.searchCompanies(ctx, { hired_within_months: 6 });
   check("a window alone: any function", res3.total === 7, res3.total);
+  const juniors = ["Kestrel Ledger", "Larch Books", "Juniper Content"];
+  check(
+    "hired_function and hired_within_months count leadership seats only: no Finance Manager, no Content Engineer",
+    !cos.some((c) => juniors.includes(c.name)) && !(res3.companies as { name: string }[]).some((c) => juniors.includes(c.name)),
+    [cos.map((c) => c.name), (res3.companies as { name: string }[]).map((c) => c.name)],
+  );
+  const kesOut = await tools.getCompany(ctx, { company: "Kestrel Ledger" });
+  check("nothing the connector sends carries the locked junior title or its holder", !JSON.stringify([res, res2, res3, kesOut]).includes(JUNIOR_TITLE) && !JSON.stringify(kesOut).includes(JUNIOR_HOLDER) && JSON.stringify(kesOut).includes("Kestrel Ledger"));
   const bad = await tools.searchCompanies(ctx, { hired_function: "Nope" }).then(() => null, (e) => e);
   const badN = await tools.searchCompanies(ctx, { hired_function: "Finance", hired_within_months: -3 }).then(() => null, (e) => e);
   check("an unknown function or a negative window is a clear problem", bad instanceof tools.ToolProblem && badN instanceof tools.ToolProblem && /hired_within_months/.test(badN.message));

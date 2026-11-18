@@ -84,6 +84,20 @@ export const isDirectorPlus = (title: string | null | undefined): boolean => {
   return !!s && DIRECTOR_PLUS.includes(s);
 };
 
+/** Seniorities below Lead. A seat with such a title is no leadership seat. */
+export const BELOW_LEAD: readonly Seniority[] = ["Manager", "Staff"];
+
+/**
+ * The title reads below Lead: "Fractional Finance Manager", "Fractional Content Engineer". C-level,
+ * VP, Head, Director, Lead, and a title that shows no level ("Fractional Consultant") do not.
+ * "Recently hired" counts leadership seats only, so the server marks a seat whose stored title
+ * reads below Lead (EngagementRec.belowLead in lib/table.ts), whether or not the viewer can see it.
+ */
+export const isBelowLead = (title: string | null | undefined): boolean => {
+  const s = seniorityOf(title);
+  return !!s && BELOW_LEAD.includes(s);
+};
+
 /**
  * The role is in GTM. The title decides when it names a function. When it names none
  * ("Fractional Consultant (Contract)"), a GTM function on file (a board's label, or one a member

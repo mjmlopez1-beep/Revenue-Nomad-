@@ -89,6 +89,15 @@ export interface EngagementRec {
   /** The viewer said this seat is theirs ("This is me") and the name on it isn't theirs: an admin is checking. */
   claimWaiting?: boolean;
   /**
+   * The seat's title reads below Lead: a Manager or Staff title ("Fractional Finance Manager",
+   * "Fractional Content Engineer", isBelowLead in lib/seniority.ts). The server reads the stored
+   * title, whether or not the viewer can see it, and sends only this flag, never the title.
+   * "Recently hired" and everything built on it count leadership seats only (isLeaderHire in
+   * app/post/model.ts). The seat still counts as a hire everywhere else (isHire). Left out on every
+   * other seat.
+   */
+  belowLead?: boolean;
+  /**
    * The viewer can "Invite to connect" this seat's holder: they see the name, and the holder is not
    * a member who has signed in (a name from public profiles, or a member who never signed in), so
    * the seat's claim link is how they get on Merlin and connect. `path` is that link with the

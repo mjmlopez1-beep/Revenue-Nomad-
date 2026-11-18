@@ -136,14 +136,21 @@ const TEST_NAME =
 /** "A fintech company", "A Series B SaaS startup": a description that ends in what it is. */
 const GENERIC_END =
   /\b(?:startup|start-up|scaleup|scale-up|company|firm|agency|brand|platform|business|client|organi[sz]ation|nonprofit|non-profit|provider|manufacturer|retailer|consultancy|venture|employer)\.?$/i;
+/**
+ * A sector label: 1 to 3 words ending in the singular "Industry" or "Sector" ("Public Sector",
+ * "Beauty Industry", "Non-Profit Sector", "The Tech Industry"). A name in "Industries", or one that
+ * goes on past the word, is a company: "Cambridge Heavy Industries", "REACH INDUSTRIES", "Third
+ * Sector Intelligence", "The Swedish Association of the Pharmaceutical Industry, LIF".
+ */
+const SECTOR_LABEL = /^(?:\S+\s+){0,2}(?:industry|sector)$/i;
 
 /**
  * A stand-in for a company that isn't named: "Private Company", "Confidential", "Stealth Startup",
  * "Undisclosed", "Company", "N/A", "Self-employed", "Various", "Multiple", "Freelance",
- * "Independent", "Hiring Company", "A B2B SaaS company", and the names people try a form with
- * ("Acme", "Test", "Example", "Your client"). Such a record is not a real company: the table,
- * search, the connector and the preview leave it out (see placeholderName in lib/table.ts), and
- * a member can't add one.
+ * "Independent", "Hiring Company", "A B2B SaaS company", a sector label ("Public Sector", "Beauty
+ * Industry"), and the names people try a form with ("Acme", "Test", "Example", "Your client").
+ * Such a record is not a real company: the table, search, the connector and the preview leave it
+ * out (see placeholderName in lib/table.ts), and a member can't add one.
  */
 export function isPlaceholderCompany(name: unknown): boolean {
   const n = plain(name);
@@ -153,6 +160,7 @@ export function isPlaceholderCompany(name: unknown): boolean {
   const words = n.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (words.length && words.length <= 6 && words.every((w) => PLACEHOLDER_WORDS.has(w))) return true;
   if (/^an?\s+\S/i.test(n) && GENERIC_END.test(n)) return true;
+  if (SECTOR_LABEL.test(n.replace(/[\s.,;:!?]+$/, ""))) return true;
   return false;
 }
 
