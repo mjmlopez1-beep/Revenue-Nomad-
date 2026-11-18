@@ -25,6 +25,7 @@ import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
 import { InvitePanel } from "./Invite";
 import { SEAT_YIELD, tappedWhat, wallBack } from "./earnBack";
+import { marksConfirmed } from "./display";
 
 export type AddMode = "engagement" | "person" | "facts";
 export interface AddOpts {
@@ -484,11 +485,15 @@ export function FactCell({
         >
           <span className="tp-val-t">{render ? render(cell.v) : <FactValue t={t} v={cell.v} />}</span>
           {cell.member && <MemberBadge m={cell.member} />}
-          {flags.flash && (
-            <span className="tp-flash-check" aria-label="Unlocked">
-              <IconCheck size={11} />
-            </span>
-          )}
+          {/* Just unlocked: a check, except beside a name nobody verified (a tick there reads as "verified"). The flash says it. */}
+          {flags.flash &&
+            (marksConfirmed(cell) ? (
+              <span className="tp-flash-check" aria-label="Unlocked">
+                <IconCheck size={11} />
+              </span>
+            ) : (
+              <span className="sr-only">Unlocked</span>
+            ))}
         </span>
       );
     case "locked": {

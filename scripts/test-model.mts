@@ -19,6 +19,7 @@ import {
 } from "../app/post/model";
 import { holderSeen, holderTarget, lockedHolder, personTarget, sameBuy, stepOneKind } from "../app/post/getStarted";
 import { SEAT_YIELD, inviteMailto, inviteMessage, tappedWhat, wallBack } from "../app/post/earnBack";
+import { UNLOCKS_LEFT_TIP, confirmedWords, fnChipPlan, foldParts, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "../app/post/display";
 
 let passed = 0;
 let failed = 0;
@@ -806,6 +807,69 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
 
   // L42: a view's name says the shortcut that makes it.
   check("a view's name names its shortcuts", viewName({ ...EMPTY_FILTERS, notMine: true }, "all", "companies", null, "Marketing") === "Companies, no fractional Marketing yet");
+}
+
+/* ---------- what the table, the cards and the record show (app/post/display.ts) ---------- */
+{
+  // The Companies table's "Functions hired": 3 chips at most, the dashed "No fractional Sales yet" counted, then "+N".
+  const fnSeat = (fn: string) => eng({ function: val(fn), type: val("Fractional"), status: val("Active"), start: val("2025-03") }, { source: "Published engagement" });
+  const fnCo = (name: string, fns: string[]) => deriveAll([co(name, fns.map(fnSeat))])[0];
+  const many = fnCo("Many Co", ["Marketing", "Finance", "RevOps", "Customer Success"]);
+  check("four functions hired fractionally are on file", many.fnState.hired.length === 4, many.fnState);
+  const table = fnChipPlan(many, "Sales", { total: 3 });
+  check("table: 2 function chips, then +2, then No fractional Sales yet (3 chips in all)", table.chips.length === 2 && table.rest.length === 2 && table.gap, table);
+  check("table: +N names what it stands for", table.rest.join() === "RevOps,Customer Success", table.rest);
+  const mineHired = fnChipPlan(fnCo("Mine Co", ["Marketing", "Sales", "Finance", "RevOps"]), "Sales", { total: 3 });
+  check("table: the member's function hired comes first, 3 chips and +1, no dashed chip", mineHired.chips.length === 3 && mineHired.chips[0].f === "Sales" && mineHired.rest.length === 1 && !mineHired.gap, mineHired);
+  const filterOn = fnChipPlan(many, "Sales", { total: 3, gap: false });
+  check("table with the No fractional Sales yet filter on: 3 function chips and +1", filterOn.chips.length === 3 && filterOn.rest.length === 1 && !filterOn.gap, filterOn);
+  const one = fnChipPlan(fnCo("One Co", ["Marketing"]), "Sales", { total: 3 });
+  check("table: one function and the dashed chip, nothing folded into +N", one.chips.length === 1 && one.rest.length === 0 && one.gap, one);
+  const cards = fnChipPlan(many, "Sales");
+  check("phone cards keep 3 function chips beside the dashed chip", cards.chips.length === 3 && cards.rest.length === 1 && cards.gap, cards);
+  check("no function of their own: no dashed chip, 3 function chips", (() => {
+    const p = fnChipPlan(many, null, { total: 3 });
+    return p.chips.length === 3 && !p.gap;
+  })());
+
+  // No confirmation mark beside a name from public profiles nobody verified. Verify says how many confirmed it.
+  check("an unverified name gets no check, even confirmed once", !marksConfirmed(val("A Name", { unverified: true, ver: 1 })));
+  check("a verified name and any other fact keep the mark", marksConfirmed(val("A Name", { ver: 2 })) && marksConfirmed(val("Fractional CFO")));
+  check("a lock or an empty fact has no mark", !marksConfirmed(LOCKED) && !marksConfirmed(EMPTY) && !marksConfirmed(undefined));
+  check("Verify says how many members confirmed the name", confirmedWords(1) === "1 member confirmed this name." && confirmedWords(2) === "2 members confirmed this name.");
+  check("Verify says when nobody has yet", confirmedWords(0) === "No member has confirmed this name yet.");
+
+  // The day's unlock limit, shown only where it binds before the balance.
+  check("day one with credits earned: 25 unlocks left today", unlocksLeft({ credits: 29, unlocksLeft: 25 }) === 25 && unlocksLeftWords({ credits: 29, unlocksLeft: 25 }) === "25 unlocks left today");
+  check("the balance runs out first: nothing to say", unlocksLeftWords({ credits: 25, unlocksLeft: 25 }) === null && unlocksLeftWords({ credits: 10, unlocksLeft: 24 }) === null);
+  check("one left", unlocksLeftWords({ credits: 3, unlocksLeft: 1 }) === "1 unlock left today");
+  check("none left today with credits to spend", unlocksLeft({ credits: 5, unlocksLeft: 0 }) === 0 && unlocksLeftWords({ credits: 5, unlocksLeft: 0 }) === "No unlocks left today");
+  check("out of credits and unlocks: the credits say it, not the limit", unlocksLeftWords({ credits: 0, unlocksLeft: 0 }) === null);
+  check("no limit in play", unlocksLeftWords({ credits: 30, unlocksLeft: null }) === null && unlocksLeftWords({ credits: 30 }) === null);
+  check("the tooltip says the first day and the daily limit", /25 facts on their first day/.test(UNLOCKS_LEFT_TIP) && /100 a day/.test(UNLOCKS_LEFT_TIP));
+
+  // A hiring company the member unlocked: its job posting is the record's primary button.
+  const role = (posting: Cell, extra: Partial<EngagementRec> = {}) =>
+    eng({ status: val("Open role", { system: true }), role: val("Fractional VP Sales"), posting }, { opened: "2026-11-03", closed: null, ...extra });
+  const r1 = role(val("jobs.example.com/vp-sales"));
+  const r2 = role(val("https://jobs.example.com/cmo"));
+  const unlockedCo = (engs: EngagementRec[], extra: Partial<CompanyRec> = { unlocked: true }) => deriveAll([{ ...co("Hiring Co", engs), ...extra } as CompanyRec])[0];
+  const pick = postingToOpen(unlockedCo([r1, r2]), null);
+  check("unlocked and hiring: the newest open role's posting, as a web link", !!pick && pick.href === "https://jobs.example.com/vp-sales", pick);
+  check("opened at a seat: that open role's posting", postingToOpen(unlockedCo([r1, r2]), r2.id)?.href === "https://jobs.example.com/cmo");
+  check("still hidden: no posting button (Unlock company leads)", postingToOpen(unlockedCo([r1], { hidden: true }), null) === null);
+  check("seen without paying (added to it, or held a seat): Add keeps the lead", postingToOpen(unlockedCo([r1], {}), null) === null);
+  check("a posting still locked, or none: no button", postingToOpen(unlockedCo([role(LOCKED)]), null) === null && postingToOpen(unlockedCo([role(EMPTY)]), null) === null);
+  check("a closed role's posting is not the lead", postingToOpen(unlockedCo([role(val("https://jobs.example.com/old"), { closed: "2026-11-10" })]), null) === null);
+  check("a posting that is no web address is no button", postingToOpen(unlockedCo([role(val("javascript:alert(1)"))]), null) === null);
+
+  // Recently hired on a phone, folded to one line.
+  check(
+    "the folded line reads like the owner's example",
+    foldParts({ fns: ["Finance"], within: 6, scope: "in my profile", mine: "Sales", notMine: true }).join(" · ") === "Finance hires · 6 months · in my profile · no Sales yet",
+  );
+  check("two functions, any time, all companies, no gap switch", foldParts({ fns: ["Finance", "Marketing"], within: 0, scope: "all companies", mine: "Sales", notMine: false }).join(" · ") === "Finance or Marketing hires · any time · all companies");
+  check("three functions, and none picked", foldParts({ fns: ["Finance", "Marketing", "RevOps"], within: 12, scope: "in my profile", mine: null, notMine: true })[0] === "Hires in 3 functions" && foldParts({ fns: [], within: 3, scope: "x", mine: "Sales", notMine: false })[0] === "Hires in any function");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

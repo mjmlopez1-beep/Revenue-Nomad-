@@ -35,6 +35,7 @@ import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, storyTag, storyTitle } from "./Tables";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
+import { UNLOCKS_LEFT_TIP, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
 
 /** Where members reach Revenue Nomad (View.contact, read from the server at run time). */
 export type Contact = NonNullable<View["contact"]>;
@@ -178,11 +179,12 @@ type Step = null | "report" | "blocked" | "remove";
 /**
  * At rest: how many members confirmed it, else, for a fact the posting gave, "From the posting".
  * Most facts come from our records, so saying so on every row would be noise: the seat's own
- * source line, the tooltips and the fact sheet carry it.
+ * source line, the tooltips and the fact sheet carry it. A name nobody verified gets no tick
+ * (it would read as verified): its Verify button says how many members confirmed it.
  */
 function Provenance({ cell, source }: { cell: Cell; source: string }) {
   if (cell.s !== "value" || cell.system) return null;
-  if (cell.ver > 0) {
+  if (cell.ver > 0 && marksConfirmed(cell)) {
     const say = `Confirmed by ${plural(cell.ver, "member")}`;
     // The tick and the count are what a sighted member reads; a screen reader hears the sentence.
     return (
@@ -437,6 +439,8 @@ function FieldRow({
   if (env.touch) {
     const tap = f.tappable;
     const text = cell.s === "value" ? cell.v : "";
+    // The confirmations tick, never beside a name nobody verified (Verify says how many confirmed it).
+    const ticked = cell.s === "value" && cell.ver > 0 && marksConfirmed(cell);
     return (
       <div className={`tp-frow${tap ? " tp-frow-tap" : ""}`} ref={rowRef}>
         <span className="tp-frow-l">{label}</span>
@@ -445,9 +449,9 @@ function FieldRow({
           {note}
           {cell.s === "value" && cell.mine && <span className="tp-frow-cap">{cell.claimed ? "You claimed this" : "You added this"}</span>}
         </span>
-        {(tap || (cell.s === "value" && cell.ver > 0)) && (
+        {(tap || ticked) && (
           <span className="tp-meta" aria-hidden>
-            {cell.s === "value" && cell.ver > 0 && (
+            {ticked && cell.s === "value" && (
               <span className="tp-ver num">
                 <IconCheck size={11} /> {cell.ver}
               </span>
@@ -1222,7 +1226,7 @@ function EngagementCard({ e, companyId, company, focus, coPeople = [] }: { e: En
         notes={{
           ...(closed ? { posting: <span className="tp-frow-note">Closed {closedOn(e)}</span> } : {}),
           // A name from public profiles nobody has verified: Verify beside it, and no label. While the member's own claim on it waits, the line under the seat says so instead.
-          ...(opCell?.s === "value" && opCell.unverified && !e.claimWaiting ? { operator: <VerifyName engagementId={e.id} confirmed={!!opCell.iv} /> } : {}),
+          ...(opCell?.s === "value" && opCell.unverified && !e.claimWaiting ? { operator: <VerifyName engagementId={e.id} confirmed={!!opCell.iv} count={opCell.ver} /> } : {}),
         }}
         after={reach ? { operator: reach } : {}}
         pair={open ? OPEN_ROLE_BUNDLE : seatBundled(e) ? SEAT_BUNDLE : undefined}
@@ -1543,20 +1547,54 @@ export function Drawer({
   const gtmEmpty = COMPANY_GTM.filter((f) => c.cells[f]?.s === "empty");
   const sellOut = !env.exempt && (ui.me.sellEarnLeft ?? 1) <= 0 && !earnNote(ui.me).capped;
 
+  /*
+   * A hiring company the member unlocked: its job posting is what they paid for, so "Open the job
+   * posting" is the record's primary button (pine, the same place Unlock company was), and Add steps
+   * back to an outline button beside it.
+   */
+  const posting = postingToOpen(i, focus);
+  const postingRole = posting ? shown(posting.e.cells.role) : null;
+  const openPosting = (bar?: boolean) =>
+    posting && (
+      <a
+        className={`btn btn-pine${bar ? " tp-rsheet-post" : ""}`}
+        href={posting.href}
+        target="_blank"
+        rel="noreferrer"
+        title={postingRole ? `The job posting for ${postingRole}, in a new tab` : "The job posting, in a new tab"}
+      >
+        Open the job posting <IconExternal size={12} />
+        <span className="sr-only"> (opens in a new tab)</span>
+      </a>
+    );
+  /*
+   * The day's unlock limit, on the record's unlock line, while it binds before the balance (an
+   * account's first day): "25 unlocks left today", so the wall is never a surprise. Not at 0 (the
+   * buttons say "Unlocks again tomorrow"), and not when Unlock all already says how many are left.
+   */
+  const left = unlocksLeft(ui.me);
+  const leftWords = unlocksLeftWords(ui.me);
+  const capShown = !!leftWords && !!left && (c.hidden || (plan.items.length > 0 && plan.cost <= left));
   const actions = (
     <div className="tp-dactions">
       {c.hidden ? (
         <UnlockCompany id={c.id} rate={postedRate} />
       ) : (
         <>
+          {openPosting()}
           {/* The top bar's "Add what you know" starts from a search. This one adds to the company on screen. */}
-          <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
+          <button type="button" className={`btn${posting ? "" : " btn-primary"}`} onClick={() => ui.openAdd({ companyId: c.id })}>
             <IconPlus size={14} /> Add to this company
           </button>
           <UnlockAll plan={plan} />
         </>
       )}
     </div>
+  );
+  const capLine = capShown && (
+    <p className={phone ? "tp-rsheet-cap" : "tp-capline"} title={UNLOCKS_LEFT_TIP}>
+      {leftWords}
+    </p>
   );
   const followBtn = (
     <button
@@ -1661,6 +1699,13 @@ export function Drawer({
             </p>
           )}
           {!phone && actions}
+          {!phone && capLine}
+          {/* A phone's bar leads with the job posting once the company is unlocked: Unlock all moves up here. */}
+          {phone && posting && plan.items.length > 0 && (
+            <div className="tp-dactions">
+              <UnlockAll plan={plan} />
+            </div>
+          )}
           {c.hidden && (
             <div className="pro-under">
               <Pro where="hidden_company" variant="line" />
@@ -1756,7 +1801,8 @@ export function Drawer({
           </footer>
         </div>
         {phone && (
-          <div className="tp-rsheet-bar">
+          <div className={`tp-rsheet-bar${capLine ? " has-cap" : ""}`}>
+            {capLine}
             {/* The balance stays on screen while the sheet covers the top bar. */}
             <span className={`tp-rsheet-bal${ui.me.credits <= 3 ? " low" : ""}`} aria-label={plural(ui.me.credits, "credit")}>
               <b className="num">{ui.me.credits}</b>
@@ -1765,6 +1811,14 @@ export function Drawer({
             {c.hidden ? (
               // One action while the name is hidden, as on desktop. The facts unlock after it.
               <UnlockCompany id={c.id} rate={postedRate} bar />
+            ) : posting ? (
+              // Unlocked and hiring: the job posting first, Add beside it (Unlock all is in the record, under its header).
+              <>
+                {openPosting(true)}
+                <button type="button" className="btn tp-rsheet-add" aria-label="Add to this company" onClick={() => ui.openAdd({ companyId: c.id })}>
+                  <IconPlus size={14} /> Add
+                </button>
+              </>
             ) : (
               <>
                 {plan.items.length > 0 ? <UnlockAll plan={plan} bar /> : <span className="tp-rsheet-none">Nothing locked here</span>}

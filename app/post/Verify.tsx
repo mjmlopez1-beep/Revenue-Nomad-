@@ -12,13 +12,17 @@
  * Once the name is verified the server stops sending `unverified`, and the button is gone. On a
  * phone the choices open in a sheet, elsewhere in a popover. Clicks stay inside it, so a table row
  * under it never opens the record or spends a credit.
+ *
+ * Beside the name there is no check of any kind while it is unverified (a tick reads as
+ * "verified"). How many members confirmed it (`count`, the cell's `ver`) is said in here instead.
  */
 import { useRef, useState } from "react";
 import { IconCheck } from "../ui/shared";
 import { Anchored, Sheet, useCellUi } from "./ui";
+import { confirmedWords } from "./display";
 import "./verify.css";
 
-export function VerifyName({ engagementId, confirmed = false, waiting = false }: { engagementId: string; confirmed?: boolean; waiting?: boolean }) {
+export function VerifyName({ engagementId, confirmed = false, count = 0, waiting = false }: { engagementId: string; confirmed?: boolean; count?: number; waiting?: boolean }) {
   const ui = useCellUi();
   const btn = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -82,12 +86,14 @@ export function VerifyName({ engagementId, confirmed = false, waiting = false }:
         (ui.layout === "phone" ? (
           <Sheet title="Verify this name" onClose={() => setOpen(false)}>
             <p className="vf-lead">Who held this seat? Tell us if the name is right.</p>
+            <p className="vf-count num">{confirmedWords(count)}</p>
             {choices}
           </Sheet>
         ) : (
           btn.current && (
             <Anchored anchor={btn.current} width={340} onClose={() => setOpen(false)} label="Verify this name" className="vf-pop">
               <p className="vf-h">Verify this name</p>
+              <p className="vf-count num">{confirmedWords(count)}</p>
               {choices}
             </Anchored>
           )

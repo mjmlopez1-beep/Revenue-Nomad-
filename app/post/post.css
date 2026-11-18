@@ -386,6 +386,47 @@
 .tp-credits.low .tp-credits-n {
   color: var(--ember-on-pine);
 }
+/*
+ * The day's unlock limit binds before the balance: a second line, "25 unlocks left today", in the
+ * pill's own quiet white. The balance stays the first thing read. The pill stacks its two lines,
+ * so it is as wide as the wider one. Without the line, the balance's own wrapper steps out of the way.
+ */
+.tp-credits-top {
+  display: contents;
+}
+.tp-credits.has-cap {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 17px;
+}
+.tp-credits.has-cap .tp-credits-top {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.tp-credits-cap {
+  font-size: 11px;
+  line-height: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.72);
+}
+.tp-credits.low .tp-credits-cap {
+  color: var(--ember-on-pine);
+}
+/* Narrower phones: "25 unlocks today". At 340 and under the bar has no room for a second line: the record's unlock line and the pill's spoken name still say it. */
+@media (max-width: 379px) {
+  .tp-credits-cap-left {
+    display: none;
+  }
+}
+@media (max-width: 340px) {
+  .tp-top-phone .tp-credits-cap {
+    display: none;
+  }
+}
 .tp-delta {
   position: absolute;
   left: 50%;
@@ -1249,17 +1290,43 @@ body:has(.tp-drawer) .pro-foot {
 .tp-rtype-b.on .tp-cnt {
   color: var(--muted);
 }
-/* Views sit on a rule. The one in use is underlined in pine. */
+/*
+ * Views sit on a rule. The one in use is underlined in pine. The bar never shrinks under the table
+ * (a control that wraps stays on screen), and the count, Save this view and Sort keep the right edge.
+ */
 .tp-toolbar {
+  flex: none;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0 12px;
   min-height: 36px;
   border-bottom: 1px solid var(--line);
+  container: tp-toolbar / inline-size;
 }
 .tp-toolbar-sp {
-  flex: 1;
+  display: none;
+}
+.tp-toolbar > .tp-count {
+  margin-left: auto;
+}
+/*
+ * Too narrow for everything on one line (1280 with the filters open): the count steps out for the
+ * eye only, since the views and the list switch carry the same numbers, and Sort stays in the row.
+ */
+@container tp-toolbar (max-width: 1080px) {
+  .tp-toolbar > .tp-count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .tp-toolbar > .tp-savebtn {
+    margin-left: auto;
+  }
 }
 .tp-tabs {
   display: flex;
@@ -2616,6 +2683,13 @@ th.num .tp-th-link {
 }
 .tp-unlock-short {
   align-items: center;
+}
+/* The day's unlock limit, under the record's unlock line: "25 unlocks left today". */
+.tp-capline {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
 }
 .tp-unlockall {
   display: inline-flex;
@@ -4758,6 +4832,11 @@ button.tp-fsheet-row:disabled {
   margin: 0 4px;
   line-height: 42px;
 }
+.tp-top-phone .tp-credits.has-cap {
+  gap: 1px;
+  line-height: 17px;
+  padding: 0 9px;
+}
 /* The brand gives way first so the actions always fit (320 px and up). */
 .tp-brand-phone {
   gap: 8px;
@@ -5350,6 +5429,27 @@ button.tp-fsheet-row:disabled {
 .tp-rsheet-bal + .btn-pine {
   flex: 1;
 }
+/* An unlocked hiring company: "Open the job posting" takes the bar, Add keeps a compact outline button. */
+.tp-rsheet-bar > .tp-rsheet-post {
+  flex: 1;
+  min-width: 0;
+}
+.tp-rsheet-bar > .tp-rsheet-add {
+  flex: none;
+  min-width: 88px;
+}
+/* The day's unlock limit binds: a slim line across the top of the bar, over the balance and the buttons. */
+.tp-rsheet-bar.has-cap {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.tp-rsheet-cap {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--muted);
+}
 @media (max-width: 360px) {
   .tp-rsheet-bar > .btn-primary {
     min-width: 0;
@@ -5533,6 +5633,18 @@ button.tp-fsheet-row:disabled {
   border-radius: var(--r-btn);
   font-size: 15px;
   box-shadow: var(--overlay-shadow);
+  transition: background var(--t), border-color var(--t), color var(--t), opacity var(--t), visibility var(--t);
+}
+/* The first card reaches into the button's corner: it steps aside (out of reach and the tab order) until the list scrolls the card clear. */
+.tp-fab.tp-fab-aside {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tp-fab {
+    transition: none;
+  }
 }
 .tp-main-phone:has(.tp-fab) {
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
