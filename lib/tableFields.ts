@@ -399,11 +399,12 @@ export const PERSON_DETAILS = ["linkedin", "email", "phone"];
  */
 export const SEAT_BUNDLE = ["operator", "role"];
 /**
- * The role of a seat Revenue Nomad found on LinkedIn that nobody is named on yet (source "Seat
- * scan", no seat holder). False: it is a 1 credit fact like any past seat's role. True: it is a
- * free fact everywhere (the table, Unlock all, the counts and the connector). The owner decides.
+ * The role of a seat Revenue Nomad found that nobody is named on yet (source "Seat scan", no seat
+ * holder). True (the owner's call, Nov 18): it is a free fact everywhere (the table, Unlock all, the
+ * counts and the connector). False: it is a 1 credit fact like any past seat's role. Once a holder
+ * is on file the role sells with them (SEAT_BUNDLE).
  */
-export const SEAT_SCAN_ROLE_FREE = false;
+export const SEAT_SCAN_ROLE_FREE = true;
 
 export const ALL_FIELDS = GROUPS.flatMap((g) => g.fields.map((f) => ({ entity: g.entity, f, col: `${g.entity}.${f.key}` })));
 /** Fields a member can fill (identity and system fields are never filled). */

@@ -1120,6 +1120,11 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
     setBusy(false);
     setAsk(false);
   };
+  // "Not me" is kept on the server (notMine), so adding a seat later never claims this one for them.
+  const notMe = () => {
+    cancel();
+    void ui.act({ type: "notMine", engagementId: id }, { quiet: true, silentError: true });
+  };
   if (ask)
     return (
       <div className="tp-frow-ask tp-claim-ask" role="group" aria-label="Claim this seat">
@@ -1136,7 +1141,7 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
           <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy || !info} aria-busy={busy} onClick={claim}>
             {busy ? "Saving" : "Yes, it's my seat"}
           </button>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={cancel}>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={info ? notMe : cancel}>
             {info ? "Not me" : "Cancel"}
           </button>
         </span>

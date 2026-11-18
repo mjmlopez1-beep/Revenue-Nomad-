@@ -3235,6 +3235,12 @@ export async function perform(
      * `member` (seat holder only) links it to a member, whose name becomes the value. `pending`:
      * the other engagement fields the same action saves (see seatCheck).
      */
+    /**
+     * People whose name the member typed in this action and who were already on file under it
+     * (putPerson's merge): they know who the person is, so what they add about them goes in. The
+     * name and title stay locked to them all the same.
+     */
+    const typedName = new Set<string>();
     const setValue = (node: Node, entity: Entity, key: string, raw: unknown, member: Member | null = null, pending: Record<string, string> = {}): number => {
       const f = fieldOf(entity, key);
       const linked = key === "operator" ? member : null;
@@ -3244,7 +3250,7 @@ export async function perform(
         if (key === "operator" ? linked?.id !== me.id : !holdsSeat(node)) throw new ActionError(key === "operator" ? SEAT_SELF_ONLY : SEAT_HOLDER_ONLY);
       }
       // A person's contact details and title come from a member who can see who the person is (a new person's adder always can).
-      if (entity === "contact" && (PERSON_DETAILS.includes(key) || key === "title") && !knowsPerson(node)) throw new ActionError(NAME_FIRST_ADD);
+      if (entity === "contact" && (PERSON_DETAILS.includes(key) || key === "title") && !knowsPerson(node) && !typedName.has(node.id)) throw new ActionError(NAME_FIRST_ADD);
       // Picking yourself writes your own name. One on file under a single word takes the first and last name typed instead.
       let { value, error } = cleanValue(f, linked ? linked.name : raw);
       if (error && linked && linked.id === me.id && typeof raw === "string" && raw.trim()) ({ value, error } = cleanValue(f, raw));
@@ -3374,6 +3380,7 @@ export async function perform(
         return { node: node as Node, earned, merged: false, kept: 0, typed };
       }
       let kept = 0;
+      typedName.add(into.id);
       for (const [k, v] of fields) {
         if (k === "name") continue;
         if (valueOf(into, s, k)) kept++;

@@ -218,6 +218,9 @@ try {
   console.log(`\nSEAT_SCAN_ROLE_FREE turned the other way (${!SHIPPED_FREE}), on a copy of lib/`);
   const lib = path.join(scratch, "flipped", "lib");
   cpSync(path.join(ROOT, "lib"), lib, { recursive: true });
+  // lib/table.ts also reads one import-free file outside lib/ (the saved-view place, app/onboard/place.ts).
+  mkdirSync(path.join(scratch, "flipped", "app", "onboard"), { recursive: true });
+  cpSync(path.join(ROOT, "app", "onboard", "place.ts"), path.join(scratch, "flipped", "app", "onboard", "place.ts"));
   const fieldsPath = path.join(lib, "tableFields.ts");
   const before = readFileSync(fieldsPath, "utf8");
   const flipped = before.replace(`export const SEAT_SCAN_ROLE_FREE = ${SHIPPED_FREE};`, `export const SEAT_SCAN_ROLE_FREE = ${!SHIPPED_FREE};`);
