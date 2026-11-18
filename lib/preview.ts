@@ -35,7 +35,7 @@ import { createHash, randomBytes } from "crypto";
 import { previewCompanies, type PreviewCompany } from "./table";
 import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES } from "./tableFields";
 import { titleWithout } from "./scan/clean";
-import { keepsNonGtm } from "./seniority";
+import { isBelowLead, isDirectorPlus, isGtmFunction, keepsNonGtm } from "./seniority";
 import { countryName, countryOf, deriveAll, isFirm, isHire, isOpenRole, known, repeatHirer, shown, type CoInfo } from "@/app/post/model";
 import type { EngagementRec } from "./tableTypes";
 
@@ -193,6 +193,13 @@ const countryOfInfo = (i: CoInfo) => {
   return c ? countryName(c) : null;
 };
 const companyOut = (i: CoInfo): PreviewCompanyOut => ({ name: i.c.name, domain: i.domain ?? null, logo: i.c.iconDomain ?? i.domain ?? null });
+/** The raw title of an open role, when one is on file (never a system placeholder). */
+const rawRole = (e: EngagementRec) => (e.cells.role?.s === "value" && !e.cells.role.system ? e.cells.role.v : null);
+/** An open role the homepage leads with: a GTM function and a leadership title (a CMO, VP Sales, Head of Growth or Sales Leader; never a Manager or Staff title). A Controller never leads. */
+const gtmLeader = (e: EngagementRec) => {
+  const t = rawRole(e);
+  return isGtmFunction(fnOf(e)) && !!t && (isDirectorPlus(t) || /\blead(er)?\b/i.test(t)) && !isBelowLead(t);
+};
 const newestOpen = (es: EngagementRec[]) => [...es].sort((a, b) => (b.posted ?? b.opened ?? "").localeCompare(a.posted ?? a.opened ?? ""))[0];
 const monthOf = (v: string | null) => (v && /^\d{4}-\d{2}/.test(v) ? v.slice(0, 7) : null);
 /** Bigger companies read as better known: 0 for unknown, up to 6. */
@@ -240,8 +247,10 @@ function pickExample(infos: Source["infos"], open: boolean): { x: PreviewExample
   let best: { score: number; x: PreviewExample; seed: string | null } | null = null;
   for (const { i, p } of infos) {
     if (!i.domain || !shown(i.c.cells.industry) || !shown(i.c.cells.revenue)) continue;
-    const roles = i.engs.filter(isOpenRole);
-    if (roles.length && !open) continue;
+    const anyOpen = i.engs.filter(isOpenRole);
+    if (anyOpen.length && !open) continue;
+    // The hero leads with GTM leadership roles only: a company whose open roles are all something else shows its seat alone.
+    const roles = anyOpen.filter(gtmLeader);
     const seats = i.engs.filter((e) => isHire(e) && known(e.cells.operator) && fnOf(e));
     if (!seats.length) continue;
     const role = roles.length ? newestOpen(roles) : null;
@@ -266,7 +275,7 @@ function pickExample(infos: Source["infos"], open: boolean): { x: PreviewExample
         open: role && roleFn && roleT ? { title: roleT, function: roleFn, when: role.posted ?? role.opened ?? null } : null,
         seat: { function: fnOf(seat)!, start: monthOf(shown(seat.cells.start)), rnMember: p.rnHolders.has(seat.id) },
       },
-      seed: roles.length ? p.seed : null,
+      seed: anyOpen.length ? p.seed : null,
     };
   }
   return best ? { x: best.x, seed: best.seed } : null;
@@ -306,8 +315,8 @@ async function sourceNow(): Promise<Source> {
     .filter(({ i }) => listedCo(i))
     .map(({ i, p }) => ({ seed: p.seed, role: newestOpen(i.engs.filter((e) => isOpenRole(e) && PREVIEW_FUNCTIONS.includes(fnOf(e) ?? ""))) }))
     .filter((x) => x.role)
-    .map((x) => ({ seed: x.seed, at: x.role.posted ?? x.role.opened ?? "" }))
-    .sort((a, b) => b.at.localeCompare(a.at) || a.seed.localeCompare(b.seed));
+    .map((x) => ({ seed: x.seed, at: x.role.posted ?? x.role.opened ?? "", lead: gtmLeader(x.role) }))
+    .sort((a, b) => Number(b.lead) - Number(a.lead) || b.at.localeCompare(a.at) || a.seed.localeCompare(b.seed));
   for (const x of newest) {
     if (namedOpen.size >= cap) break;
     namedOpen.add(x.seed);
@@ -353,7 +362,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
   /** The same counts for the companies in the picked country (the rest have no country on file). */
   const here = { hired: 0, notYet: 0, hiring: 0, holders: 0, all: 0 };
 
-  const open: { row: PreviewRow; at: string; p: PreviewCompany; raw: string | null; at0: boolean }[] = [];
+  const open: { row: PreviewRow; at: string; p: PreviewCompany; raw: string | null; at0: boolean; lead: boolean }[] = [];
   const past: { row: PreviewRow; at: string; rich: number; at0: boolean }[] = [];
   const notYet: { row: PreviewRow; at: string; rich: number; at0: boolean }[] = [];
   for (const { i, p } of inScope) {
@@ -402,7 +411,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       if (view === "notyet") continue;
       const when = role.posted ?? role.opened ?? null;
       const raw = role.cells.role?.s === "value" && !role.cells.role.system ? role.cells.role.v : null;
-      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, named), type: shown(role.cells.type) ?? null, when }, at: when ?? "", p, raw, at0 });
+      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, named), type: shown(role.cells.type) ?? null, when }, at: when ?? "", p, raw, at0, lead: gtmLeader(role) });
       continue;
     }
     // Every other company the app's Function filter finds for this function: its fractional seat
@@ -426,7 +435,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
   }
   // With a country picked, the companies on file there come first, then those whose country isn't on file yet.
   const first = (a: { at0: boolean }, b: { at0: boolean }) => Number(b.at0) - Number(a.at0);
-  open.sort((a, b) => first(a, b) || b.at.localeCompare(a.at));
+  open.sort((a, b) => first(a, b) || Number(b.lead) - Number(a.lead) || b.at.localeCompare(a.at));
   // Newest seat first and undated ones last, so the dates run down the table in one order; then the rows that say the most.
   past.sort((a, b) => first(a, b) || b.at.localeCompare(a.at) || b.rich - a.rich);
   notYet.sort((a, b) => first(a, b) || b.rich - a.rich || b.at.localeCompare(a.at));
