@@ -14,6 +14,7 @@ import type { AdminStats, View } from "@/lib/tableTypes";
 import { IconChevron, Num } from "../ui/shared";
 import { useUi } from "./ui";
 import "./pages.css";
+import "./verify.css";
 
 const n0 = (n: number) => n.toLocaleString("en-US");
 /** Facts added for each fact unlocked, to two places. No unlocks yet reads as a dash. */
@@ -503,6 +504,101 @@ function RoleClaims({ rows, seats = false }: { rows: RoleClaim[]; seats?: boolea
   );
 }
 
+type NameClaim = NonNullable<AdminStats["names"]>["claims"][number];
+
+/** One claim waiting: who says the seat is theirs, the name on file, and the four answers. */
+function NameClaimRow({ c }: { c: NameClaim }) {
+  const ui = useUi();
+  const [busy, setBusy] = useState<string | null>(null);
+  const run = async (key: string, op: "approve" | "decline" | "verify" | "remove") => {
+    if (busy) return;
+    setBusy(key);
+    await ui.act(op === "approve" || op === "decline" ? { type: "names", op, engagementId: c.engagementId, memberId: c.memberId } : { type: "names", op, engagementId: c.engagementId });
+    setBusy(null);
+  };
+  return (
+    <li className="tp-pm-item tp-pm-claim">
+      <div className="tp-pm-item-h">
+        {c.member}
+        <span className="tp-pm-item-at"> says they held {c.seat ? `the ${c.seat} seat` : "a seat"}{c.company ? ` at ${c.company}` : ""}</span>
+      </div>
+      <div className="tp-pm-item-l">
+        The name on file is {c.onFile || "gone"}. {stamp(c.at, "–")}.
+      </div>
+      <div className="tp-pm-ask-acts">
+        <button type="button" className="btn btn-sm btn-pine" disabled={!!busy} aria-busy={busy === "approve"} onClick={() => void run("approve", "approve")}>
+          Give it to {c.member.split(" ")[0]}
+        </button>
+        <button type="button" className="btn btn-sm" disabled={!!busy} aria-busy={busy === "decline"} onClick={() => void run("decline", "decline")}>
+          Decline the claim
+        </button>
+        {c.onFile && (
+          <>
+            <button type="button" className="tp-tbtn" disabled={!!busy} onClick={() => void run("verify", "verify")}>
+              The name on file is right
+            </button>
+            <button type="button" className="tp-tbtn tp-tbtn-red" disabled={!!busy} onClick={() => void run("remove", "remove")}>
+              Remove the name
+            </button>
+          </>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * Seat-holder names from public profiles: the switch "Show names from public profiles until we
+ * reach N seats", where the table stands against it, the counts, and "This is me" claims whose
+ * name doesn't match the one on file, for an admin to decide.
+ */
+function PublicNames({ n, refresh }: { n: NonNullable<AdminStats["names"]>; refresh: () => Promise<void> }) {
+  const ui = useUi();
+  const [busy, setBusy] = useState(false);
+  const flip = async () => {
+    if (busy) return;
+    setBusy(true);
+    const r = await ui.act({ type: "names", op: "show", on: !n.on });
+    // Every seat with such a name changes, so the table is read again whole.
+    if (r.ok) await refresh();
+    setBusy(false);
+  };
+  const limit = n0(n.limit);
+  return (
+    <Card title="Names from public profiles" span={6}>
+      <label className="tp-pm-switch">
+        <input type="checkbox" checked={n.on} disabled={busy} onChange={() => void flip()} />
+        <span>Show names from public profiles until we reach {limit} seats</span>
+      </label>
+      <p className="tp-small muted tp-pm-foot" role="status">
+        {!n.on
+          ? "Off. Those seats read as unnamed, their role is free, and claims still work. Verified and claimed names still show."
+          : n.shown
+            ? `Showing. The table has ${n0(n.seats)} seats, so they show until it reaches ${limit}.`
+            : `Not showing. The table has ${n0(n.seats)} seats, past ${limit}, so they read as unnamed.`}
+      </p>
+      <Rows
+        items={[
+          ["Names on seats", n0(n.onFile)],
+          ["Not verified yet", n0(n.unverified)],
+          ["Claimed by the person", n0(n.claimed)],
+          ["Taken off", n0(n.removed)],
+        ]}
+      />
+      <h3 className="tp-pm-h3">Claims waiting for you</h3>
+      {n.claims.length === 0 ? (
+        <p className="tp-small muted">Nobody is waiting. A claim lands here when a member says a seat is theirs and their name doesn&apos;t match the one on file.</p>
+      ) : (
+        <ul className="tp-pm-list">
+          {n.claims.map((c) => (
+            <NameClaimRow key={`${c.engagementId}.${c.memberId}`} c={c} />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Promise<void>; onBack: () => void }) {
   const a = view.admin;
   if (!a) return null;
@@ -631,6 +727,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
         {a.recentAdds && <RecentAdds rows={a.recentAdds} />}
         {a.roleClaims && <RoleClaims rows={a.roleClaims} />}
         {a.seatClaims && <RoleClaims rows={a.seatClaims.map((c) => ({ ...c, closed: false }))} seats />}
+        {a.names && <PublicNames n={a.names} refresh={refresh} />}
 
         <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
         {a.about && <AboutFill a={a} refresh={refresh} />}

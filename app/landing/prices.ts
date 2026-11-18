@@ -7,8 +7,8 @@ import * as FIELDS from "@/lib/tableFields";
 import { GROUPS, type Entity } from "@/lib/tableFields";
 
 /**
- * lib/tableFields SEAT_SCAN_ROLE_FREE, the owner's switch: true when the role of a seat found on
- * LinkedIn with nobody named is free to see. Read by name, so this builds whether or not the
+ * lib/tableFields SEAT_SCAN_ROLE_FREE, the owner's switch: true when the role of a seat Revenue
+ * Nomad found with nobody named is free to see. Read by name, so this builds whether or not the
  * switch is there, and says "1 credit" (as the table does) until it is set.
  */
 export const SCAN_ROLE_FREE = (FIELDS as unknown as Record<string, unknown>)[["SEAT", "SCAN", "ROLE", "FREE"].join("_")] === true;

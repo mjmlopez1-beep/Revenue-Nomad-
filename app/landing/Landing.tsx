@@ -405,6 +405,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             <a className="mono" href="https://revenuenomad.com" target="_blank" rel="noopener noreferrer">
               revenuenomad.com
             </a>
+            <a href="/remove">Remove my name</a>
             <button type="button" className="lp-linkbtn lp-linkbtn-ink" onClick={() => openSignIn()}>
               Sign in
             </button>

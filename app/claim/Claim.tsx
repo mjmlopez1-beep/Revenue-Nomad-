@@ -1,0 +1,442 @@
+"use client";
+
+/**
+ * The claim link's page: "Is this your seat?", with the seat's free facts, and three answers.
+ *  - Claim it, join free: the join form (email, then name) or, for a member, Sign in. With email on,
+ *    the link we send comes back here (?k=…&go=1), signs in and claims the seat.
+ *  - Not me, and Remove my name: no account needed. The name comes off at once.
+ * The invite code from the link (?ref=) goes with the join, so the invite counts. Phone first.
+ * Every request goes to /api/table/names (claims and names) or /api/table (sign-in), and the
+ * page says what happened in a sentence. It never shows a person's name.
+ */
+import { useEffect, useId, useRef, useState } from "react";
+import "./claim.css";
+import { Brand, IconCheck, fmtMonth, post } from "../ui/shared";
+import type { ClaimPage } from "@/lib/table";
+
+type Done = { title: string; text: string; seats?: boolean };
+/** A claim's answer from the server: claimed now, or waiting for an admin (the name on the seat isn't theirs). */
+type ClaimAnswer = { message?: string; claimed?: boolean; waiting?: boolean };
+const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+const NAME_RE = /^\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'’.-]*)+$/u;
+/** The server's answer for an email that already has an account: offer Sign in. */
+const MEMBER_RE = /already belongs to a member|personal link/i;
+
+async function names<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T & { error?: string }> {
+  try {
+    const r = await fetch("/api/table/names", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
+  } catch {
+    return { error: NETWORK } as T & { error: string };
+  }
+}
+
+/** The server's answer without the words the heading already says ("It's yours." under "It's yours"). */
+function after(message: string, lead: string): string {
+  return message.startsWith(lead) ? message.slice(lead.length).trim() : message;
+}
+
+/** What the page says once a claim went through: the seat is theirs, or an admin checks it first. */
+function settled(r: ClaimAnswer, fresh: ClaimPage | null): Done {
+  if (r.waiting || fresh?.status === "waiting") return { title: "We'll check your claim", text: after(r.message ?? "", "Thanks.") };
+  return { title: "It's yours", text: after(r.message ?? "", "It's yours."), seats: fresh?.status === "yours" };
+}
+
+/**
+ * "Fractional VP Sales at Acme since Mar 2024". While the company is locked it reads "at a company
+ * that's hiring now, since Mar 2024": the comma keeps "since" with the seat, not the hiring.
+ */
+function seatLine(seat: NonNullable<ClaimPage["seat"]>): string {
+  const what = seat.role || (seat.fn ? `A fractional ${seat.fn} seat` : "A fractional seat");
+  const where = seat.company ? seat.company : "a company that's hiring now";
+  return `${what} at ${where}${seat.start ? `${seat.company ? "" : ","} since ${fmtMonth(seat.start)}` : ""}`;
+}
+
+export function ClaimView({ token, initial, refCode, support, starter }: { token: string; initial: ClaimPage | null; refCode: string | null; support: string | null; starter: number }) {
+  const [info, setInfo] = useState<ClaimPage | null>(initial);
+  const [done, setDone] = useState<Done | null>(null);
+  const [mode, setMode] = useState<"ask" | "join" | "signin" | "sent" | "remove">("ask");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [link, setLink] = useState("");
+  const [code, setCode] = useState("");
+  const id = useId();
+  const head = useRef<HTMLHeadingElement>(null);
+  const q = `t=${encodeURIComponent(token)}${refCode ? `&ref=${encodeURIComponent(refCode)}` : ""}`;
+
+  const fetchInfo = async (): Promise<ClaimPage | null> => {
+    try {
+      const r = await fetch(`/api/table/names?${q}`, { cache: "no-store" });
+      return r.ok ? ((await r.json()) as ClaimPage) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const claim = async () => {
+    setBusy("claim");
+    setError(null);
+    const r = await names<ClaimAnswer>({ op: "claim", t: token });
+    setBusy(null);
+    if (r.error) return setError(r.error);
+    const fresh = await fetchInfo();
+    if (fresh) setInfo(fresh);
+    setDone(settled(r, fresh));
+  };
+
+  // The heading takes focus when the page changes what it says, so a screen reader hears it.
+  useEffect(() => {
+    if (done) head.current?.focus();
+  }, [done]);
+
+  // An invite code that came with the link counts on the homepage too (app/Root.tsx keeps it the same way).
+  useEffect(() => {
+    if (!refCode) return;
+    try {
+      localStorage.setItem("tp_ref", refCode);
+    } catch {}
+  }, [refCode]);
+
+  // ?k= from the link we emailed: sign in here, then claim the seat (go=1 says the member asked to claim it).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const k = url.searchParams.get("k");
+    const go = url.searchParams.get("go") === "1";
+    if (!k) return;
+    url.searchParams.delete("k");
+    url.searchParams.delete("go");
+    window.history.replaceState(null, "", url.pathname + url.search);
+    void (async () => {
+      setBusy("signin");
+      const r = await post({ signIn: k });
+      if (r.error) {
+        setBusy(null);
+        return setError(r.error);
+      }
+      const fresh = await fetchInfo();
+      if (fresh) setInfo(fresh);
+      setBusy(null);
+      if (go && fresh?.status === "open") await claim();
+    })();
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const join = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const em = email.trim();
+    const nm = name.trim().replace(/\s+/g, " ");
+    if (!EMAIL_RE.test(em)) return setError(em ? "That doesn't look like an email address. Check it for a typo." : "Type your email first.");
+    if (!NAME_RE.test(nm)) return setError("Add your first and last name, like Jane Smith.");
+    setBusy("join");
+    setError(null);
+    const r = await names<ClaimAnswer & { sent?: boolean }>({ op: "join", t: token, email: em, name: nm, ref: refCode ?? undefined });
+    setBusy(null);
+    if (r.error) {
+      setError(r.error);
+      if (MEMBER_RE.test(r.error)) setMode("signin");
+      return;
+    }
+    if (r.sent) return setMode("sent");
+    const fresh = await fetchInfo();
+    if (fresh) setInfo(fresh);
+    // Joined: the seat is theirs, or their claim waits for an admin. A claim that couldn't go through says why.
+    setDone(r.claimed || r.waiting ? settled(r, fresh) : { title: "You're in", text: r.message ?? "" });
+  };
+
+  const signIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const v = link.trim();
+    if (!v) return setError("Paste the whole sign-in link we sent you.");
+    setBusy("link");
+    setError(null);
+    const r = await post({ signIn: v });
+    if (r.error) {
+      setBusy(null);
+      return setError(r.error);
+    }
+    const fresh = await fetchInfo();
+    if (fresh) setInfo(fresh);
+    setBusy(null);
+    setMode("ask");
+    if (fresh?.status === "open") await claim();
+  };
+
+  const emailMe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const em = email.trim();
+    if (!EMAIL_RE.test(em)) return setError(em ? "That doesn't look like an email address. Check it for a typo." : "Type your email first.");
+    setBusy("email");
+    setError(null);
+    const r = await names({ op: "email", t: token, email: em });
+    setBusy(null);
+    if (r.error) return setError(r.error);
+    setMode("sent");
+  };
+
+  const typeCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const v = code.replace(/\D/g, "");
+    if (v.length !== 6) return setError("Type the 6 digits from the email.");
+    setBusy("code");
+    setError(null);
+    const r = await post({ signInCode: { email: email.trim(), code: v } });
+    if (r.error) {
+      setBusy(null);
+      return setError(r.error);
+    }
+    const fresh = await fetchInfo();
+    if (fresh) setInfo(fresh);
+    setBusy(null);
+    if (fresh?.status === "open") await claim();
+    else setMode("ask");
+  };
+
+  const nameOff = async (op: "notme" | "remove") => {
+    if (busy) return;
+    setBusy(op);
+    setError(null);
+    const r = await names<{ message?: string; done?: boolean }>({ op, t: token });
+    setBusy(null);
+    if (r.error) return setError(r.error);
+    const fresh = await fetchInfo();
+    if (fresh) setInfo(fresh);
+    setDone({ title: op === "remove" ? (r.done ? "Your name is off" : "Nothing to take off") : "Thanks for telling us", text: r.message ?? "" });
+  };
+
+  const supportHref = support ? `mailto:${support}?subject=${encodeURIComponent("My seat on Merlin")}` : null;
+  const err = error ? (
+    <p className="cl-err" role="alert">
+      {error}
+    </p>
+  ) : null;
+
+  let body: React.ReactNode;
+  if (done) {
+    body = (
+      <>
+        <span className="cl-done" aria-hidden>
+          <IconCheck size={20} />
+        </span>
+        <h1 className="cl-h" ref={head} tabIndex={-1}>
+          {done.title}
+        </h1>
+        <p className="cl-p">{done.text}</p>
+        <a className="btn btn-pine btn-lg cl-wide" href={done.seats ? "/?p=seats" : "/"}>
+          {done.seats ? "Open Your seats" : "Open Merlin"}
+        </a>
+      </>
+    );
+  } else if (!info) {
+    body = (
+      <>
+        <h1 className="cl-h">We couldn&apos;t open this link just now</h1>
+        <p className="cl-p">Merlin may be busy for a moment. Try again in a few minutes.</p>
+        <button type="button" className="btn btn-pine btn-lg cl-wide" onClick={() => window.location.reload()}>
+          Try again
+        </button>
+      </>
+    );
+  } else if (info.status === "invalid" || !info.seat) {
+    body = (
+      <>
+        <h1 className="cl-h">That link didn&apos;t work</h1>
+        <p className="cl-p">It may be cut short, or the seat it pointed to is gone. Open the whole link from the message, or have a look around Merlin.</p>
+        <a className="btn btn-pine btn-lg cl-wide" href="/">
+          Open Merlin
+        </a>
+      </>
+    );
+  } else if (info.status === "yours") {
+    body = (
+      <>
+        <h1 className="cl-h">This is your seat</h1>
+        <p className="cl-seat">{seatLine(info.seat)}</p>
+        <p className="cl-p">It&apos;s on Your seats, where you can fill in what&apos;s missing. Each answer earns a credit.</p>
+        <a className="btn btn-pine btn-lg cl-wide" href="/?p=seats">
+          Open Your seats
+        </a>
+      </>
+    );
+  } else if (info.status === "waiting") {
+    body = (
+      <>
+        <h1 className="cl-h">We&apos;re checking your claim</h1>
+        <p className="cl-seat">{seatLine(info.seat)}</p>
+        <p className="cl-p">You said this seat is yours, and an admin is checking it. Your name goes on it once they agree.</p>
+        <a className="btn btn-lg cl-wide" href="/">
+          Open Merlin
+        </a>
+      </>
+    );
+  } else if (info.status === "held") {
+    body = (
+      <>
+        <h1 className="cl-h">This seat is already claimed</h1>
+        <p className="cl-seat">{seatLine(info.seat)}</p>
+        <p className="cl-p">
+          A member holds it on Merlin now.{" "}
+          {supportHref ? (
+            <>
+              If it&apos;s yours, write to <a href={supportHref}>{support}</a> and we&apos;ll sort it out.
+            </>
+          ) : (
+            "If it's yours, write to us and we'll sort it out."
+          )}
+        </p>
+        <a className="btn btn-lg cl-wide" href="/">
+          Open Merlin
+        </a>
+      </>
+    );
+  } else {
+    const signedIn = !!info.me;
+    body = (
+      <>
+        {info.inviter && <p className="cl-from">{info.inviter} sent you this link.</p>}
+        <h1 className="cl-h">Is this your seat?</h1>
+        <p className="cl-seat">{seatLine(info.seat)}</p>
+        <p className="cl-p">
+          Merlin is a free table of companies that hire fractional leaders, run by Revenue Nomad. Claim your seat and it&apos;s yours there.{" "}
+          {signedIn ? "Fill in what you know and each answer earns a credit." : `You start with ${starter} credits to see who held other seats, what clients paid and which roles are open now.`}
+        </p>
+        {mode === "sent" ? (
+          <div className="cl-box" role="status">
+            <p className="cl-box-h">Check your inbox</p>
+            <p className="cl-p cl-p-flush">
+              We sent a link to <span className="mono">{email}</span>. Open it and the seat is yours. It works once, for 20 minutes, and it sometimes lands in spam.
+            </p>
+            <form className="cl-form" onSubmit={typeCode} noValidate>
+              <label className="cl-label" htmlFor={`${id}-code`}>
+                Opening it on another device? Type the 6-digit code from the email here
+              </label>
+              <input id={`${id}-code`} className="input num" inputMode="numeric" autoComplete="one-time-code" maxLength={7} placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} />
+              {err}
+              <button type="submit" className="btn btn-pine btn-lg cl-wide" disabled={!!busy} aria-busy={busy === "code" || busy === "claim"}>
+                {busy === "code" || busy === "claim" ? "Claiming" : "Claim it"}
+              </button>
+            </form>
+          </div>
+        ) : mode === "join" ? (
+          <form className="cl-form" onSubmit={join} noValidate>
+            <label className="cl-label" htmlFor={`${id}-email`}>
+              Your email
+            </label>
+            <input id={`${id}-email`} className="input" type="email" inputMode="email" autoComplete="email" placeholder="you@yourfirm.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label className="cl-label" htmlFor={`${id}-name`}>
+              Your first and last name
+            </label>
+            <input id={`${id}-name`} className="input" autoComplete="name" placeholder="Jane Smith" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+            <p className="cl-help">Use the name you work under. Other members see it on your seat behind a lock, and never your email.</p>
+            {err}
+            <button type="submit" className="btn btn-pine btn-lg cl-wide" disabled={!!busy} aria-busy={busy === "join"}>
+              {busy === "join" ? "Joining" : info.email ? "Email me my link" : "Join and claim it"}
+            </button>
+            <button type="button" className="cl-link" onClick={() => (setMode("signin"), setError(null))}>
+              Already on Merlin? Sign in
+            </button>
+          </form>
+        ) : mode === "signin" ? (
+          <div className="cl-form">
+            {info.email && (
+              <form className="cl-form" onSubmit={emailMe} noValidate>
+                <label className="cl-label" htmlFor={`${id}-semail`}>
+                  Your email
+                </label>
+                <input id={`${id}-semail`} className="input" type="email" inputMode="email" autoComplete="email" placeholder="you@yourfirm.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <button type="submit" className="btn btn-pine btn-lg cl-wide" disabled={!!busy} aria-busy={busy === "email"}>
+                  {busy === "email" ? "Sending" : "Email me a sign-in link"}
+                </button>
+              </form>
+            )}
+            <form className="cl-form" onSubmit={signIn} noValidate>
+              <label className="cl-label" htmlFor={`${id}-link`}>
+                {info.email ? "Or paste your personal sign-in link" : "Paste your personal sign-in link"}
+              </label>
+              <input id={`${id}-link`} className="input mono" inputMode="url" autoComplete="off" autoCapitalize="none" placeholder="The link from your welcome email" value={link} onChange={(e) => setLink(e.target.value)} />
+              {err}
+              <button type="submit" className={`btn btn-lg cl-wide${info.email ? "" : " btn-pine"}`} disabled={!!busy} aria-busy={busy === "link" || busy === "claim"}>
+                {busy === "link" || busy === "claim" ? "Signing in" : "Sign in and claim it"}
+              </button>
+            </form>
+            <button type="button" className="cl-link" onClick={() => (setMode("join"), setError(null))}>
+              New to Merlin? Join free
+            </button>
+          </div>
+        ) : mode === "remove" ? (
+          <div className="cl-box" role="group" aria-label="Remove my name">
+            <p className="cl-box-h">Take your name off this seat?</p>
+            <p className="cl-p cl-p-flush">It comes off for everyone at once, and the seat shows nobody named. You don&apos;t need an account.</p>
+            {err}
+            <div className="cl-row">
+              <button type="button" className="btn btn-lg cl-red" disabled={!!busy} aria-busy={busy === "remove"} onClick={() => void nameOff("remove")}>
+                {busy === "remove" ? "Removing" : "Remove my name"}
+              </button>
+              <button type="button" className="btn btn-lg btn-ghost" onClick={() => setMode("ask")}>
+                Keep it
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {err}
+            {signedIn ? (
+              <>
+                <button type="button" className="btn btn-pine btn-lg cl-wide" disabled={!!busy} aria-busy={busy === "claim" || busy === "signin"} onClick={() => void claim()}>
+                  {busy === "claim" ? "Claiming" : busy === "signin" ? "Signing you in" : "Claim it"}
+                </button>
+                <p className="cl-help cl-center">Signed in as {info.me!.first}.</p>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn btn-pine btn-lg cl-wide" disabled={!!busy} aria-busy={busy === "signin"} onClick={() => (setMode("join"), setError(null))}>
+                  {busy === "signin" ? "Signing you in" : "Claim it, join free"}
+                </button>
+                <button type="button" className="cl-link" onClick={() => (setMode("signin"), setError(null))}>
+                  Already on Merlin? Sign in
+                </button>
+              </>
+            )}
+            <div className="cl-row cl-row-quiet">
+              <button type="button" className="btn btn-ghost" disabled={!!busy} aria-busy={busy === "notme"} onClick={() => void nameOff("notme")}>
+                Not me
+              </button>
+              {info.seat.named && (
+                <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => (setMode("remove"), setError(null))}>
+                  Remove my name
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div className="cl">
+      <header className="cl-top">
+        <a className="cl-brand" href="/" aria-label="Merlin, by Revenue Nomad">
+          <Brand dark size={28} />
+          <span>by Revenue Nomad</span>
+        </a>
+      </header>
+      <main className="cl-main">
+        <section className="cl-card" aria-live="polite">
+          {body}
+        </section>
+        <p className="cl-foot">
+          Is your name on another seat? <a href="/remove">Remove my name</a>
+        </p>
+      </main>
+    </div>
+  );
+}

@@ -211,8 +211,8 @@ export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
   if (open && !e.yours && !facts.rate) facts.rate = NO_RATE;
   const holder = e.cells.operator;
   if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Merlin${holder.member.title ? `, ${holder.member.title}` : ""})`;
-  // A seat Revenue Nomad found: no name is on file, and its fractional can claim it.
-  if (e.claimable) facts.seat_holder = "Not on Merlin yet";
+  // A seat Revenue Nomad found with no name on file: its fractional can claim it.
+  if (e.claimable && (!holder || holder.s === "empty")) facts.seat_holder = "Not on Merlin yet";
   if (open && facts.rate) (facts.posted_rate = facts.rate), delete facts.rate;
   if (open && facts.hours) (facts.posted_hours = facts.hours), delete facts.hours;
   const intro = mv.view.contact?.intro;
@@ -221,6 +221,8 @@ export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
     ...(open ? { open_role: true } : {}),
     ...(e.yours ? { yours: true } : {}),
     ...facts,
+    // A seat holder's name nobody has verified yet (the person hasn't claimed the seat, and two members or an admin haven't confirmed it).
+    ...(holder?.s === "value" && holder.unverified ? { holder_verified: false } : {}),
     ...(e.opened ? { listed_since: dayOfIso(e.openedAt ?? e.opened) } : {}),
     ...(e.posted ? { posted: e.posted } : {}),
     ...(e.closed ? { closed: dayOfIso(e.closedAt ?? e.closed) } : {}),
@@ -255,6 +257,7 @@ export function warmPaths(i: CoInfo): ToolOut[] {
     out.push({
       who: `Fractional who held the ${shown(e.cells.function) ?? ""} seat${when ? ` (${when})` : ""}`.replace("the  seat", "a seat"),
       name: read(h, seatLocked(e, hidden, "operator")),
+      ...(h.s === "value" && h.unverified ? { holder_verified: false } : {}),
       seat_id: e.id,
       ...(h.s === "locked"
         ? hidden
@@ -823,7 +826,7 @@ export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
       if (!e.claimable) throw new ToolProblem(e.yours ? "That seat is already the member's." : "Only a seat Revenue Nomad found that nobody has claimed can be claimed.");
       last = await act(ctx, { type: "claimSeat", engagementId: e.id });
       msgs.push(last.message);
-    } else if (e.claimable) throw new ToolProblem("Nobody holds this seat yet. If it is the member's own, ask them, then send claim: true.");
+    } else if (e.claimable) throw new ToolProblem("Nobody has claimed this seat yet. If it is the member's own, ask them, then send claim: true.");
     if (!todo.length && !rate && !a.claim) throw new ToolProblem("Send at least one fact about the seat.");
     for (const [field, value] of todo) {
       last = await act(ctx, { type: "fill", entity: "engagement", id: e.id, field, value });

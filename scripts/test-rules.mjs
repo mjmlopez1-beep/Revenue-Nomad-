@@ -652,6 +652,11 @@ section("report", async () => {
   for (const x of cellsOf(vv)) {
     const c = x.cell;
     if (c.s !== "value" && c.s !== "locked") continue;
+    // A seat holder named from public profiles on a seat Revenue Nomad found reads as Revenue Nomad research (scripts/add-seat-names.mjs).
+    if (c.from === "research" && x.entity === "engagement" && x.field === "operator" && x.eng?.source === "Seat scan") {
+      if (c.ver !== 0) wrong++;
+      continue;
+    }
     if (c.from !== undefined && c.from !== "records" && c.from !== "posting") wrong++;
     if (c.from === "records") (records++, c.s === "locked" && lockedFrom++, c.ver !== 0 && wrong++);
     if (c.s === "value" && c.mine && c.from !== undefined) memberFrom++;

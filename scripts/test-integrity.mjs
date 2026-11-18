@@ -112,7 +112,8 @@ const used = new Set();
 function scanHost(view, test = () => true) {
   for (const c of view.companies) {
     if (c.hidden || c.friendly.open !== 0 || c.mine || used.has(c.id) || /^Qa /.test(c.name)) continue;
-    const claimable = c.engagements.filter((e) => e.claimable);
+    // A seat the scan found with nobody named on it yet. One named from public profiles is only claimed by a name match (scripts/test-names.mts).
+    const claimable = c.engagements.filter((e) => e.claimable && e.cells.operator?.s === "empty");
     if (claimable.length !== 1) continue;
     const e = claimable[0];
     const fn = val(e.cells.function);
@@ -128,7 +129,7 @@ function scanHost(view, test = () => true) {
 function anyClaimable(view) {
   for (const c of view.companies) {
     if (c.hidden || used.has(c.id) || /^Qa /.test(c.name)) continue;
-    const e = c.engagements.find((x) => x.claimable);
+    const e = c.engagements.find((x) => x.claimable && x.cells.operator?.s === "empty");
     if (!e) continue;
     used.add(c.id);
     return { c, e };

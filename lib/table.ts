@@ -87,6 +87,8 @@ import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
 import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
 import { pillPlace } from "../app/onboard/place";
+import { sameName } from "./personName";
+import { claimToken, seatForToken } from "./claimToken";
 import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
@@ -113,6 +115,13 @@ interface SeedEngagement {
   companyId: string;
   fields: Record<string, string>;
   verified?: boolean;
+  /**
+   * Where the seat holder's name (fields.operator) came from when it was not from the person:
+   * PUBLIC_PROFILE, a name scripts/add-seat-names.mjs read from public profiles. Such a name is
+   * unverified until its fractional claims the seat, two members confirm it or an admin does
+   * (see publicName below).
+   */
+  holderFrom?: string;
 }
 interface SeedContact {
   id: string;
@@ -165,6 +174,12 @@ export interface FieldValue {
    * seat: the value it replaced. It goes back if they give the seat up ("Not my seat").
    */
   prev?: { value: string; by: string; at: string };
+  /**
+   * Seat holder only, on a value read from the seed: a name from public profiles (the seat's
+   * holderFrom is PUBLIC_PROFILE). It never links to a member by name (seatMember), and it is
+   * unverified until claimed, confirmed by two members or approved by an admin (nameVerified).
+   */
+  pub?: true;
 }
 export interface LedgerEntry {
   memberId: string;
@@ -179,9 +194,10 @@ export interface LedgerEntry {
    * job an older screen had let in (lib/scan/remove.ts). offbar (refunds): the scan took the role
    * off the table because it is outside GTM and below Director (lib/seniority.ts). ongoing
    * (refunds): the end month it bought reads "Ongoing", which is free now (refundOngoingEnds).
-   * retract (reversals): the member took back a fact they had added.
+   * retract (reversals): the member took back a fact they had added. name (refunds): the seat
+   * holder's name from public profiles it bought came off the seat (This is wrong, Remove my name).
    */
-  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract";
+  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -314,7 +330,26 @@ export interface State extends MessagingState {
   integrations?: IntegrationsState;
   /** About texts read from company websites (lib/about): each company's last try, and the last run. The texts are values by "website". */
   about?: AboutState;
+  /** Seat-holder names from public profiles: claims waiting for an admin, names an admin verified, names taken off, the switch. See publicName. */
+  names?: NamesState;
 }
+
+/**
+ * What members and admins did with the seat-holder names from public profiles. A name taken off
+ * a seat is also a removed value in State.values (so the seat reads as unnamed); `removed` keeps
+ * how, for the counts.
+ */
+export interface NamesState {
+  /** "This is me" on a name that isn't the member's own: an admin decides. Newest last. */
+  claims: { memberId: string; engagementId: string; at: string; status: "pending" | "approved" | "declined"; decidedAt?: string }[];
+  /** Names an admin marked as right, by engagement id (ISO time). */
+  verified: Record<string, string>;
+  /** Names taken off, by engagement id: when, and how (This is wrong, Not me or Remove my name on a claim link, the public Remove my name page, an admin). */
+  removed: Record<string, { at: string; how: "wrong" | "notme" | "remove" | "public" | "admin" }>;
+  /** The Pilot metrics switch "Show names from public profiles until we reach N seats" is off. */
+  hide?: boolean;
+}
+const emptyNames = (): NamesState => ({ claims: [], verified: {}, removed: {} });
 
 /* ---------- storage ---------- */
 
@@ -870,7 +905,8 @@ interface Node {
   research?: Set<string>;
 }
 type CompanyNode = Node & { name: string };
-type EngNode = Node & { companyId: string; verified: boolean; source: string };
+/** `holderFrom`: the seed's seat-holder name came from public profiles (PUBLIC_PROFILE), and it is on this node. */
+type EngNode = Node & { companyId: string; verified: boolean; source: string; holderFrom?: string };
 type PersonNode = Node & { companyId: string; engagementId: string | null; source: string };
 interface Graph {
   companies: Map<string, CompanyNode>;
@@ -916,9 +952,13 @@ function graph(seed: Seed, s: State): Graph {
     if (c.by === "scan") researchFill(seed, s, node);
     g.companies.set(c.id, node);
   }
+  let publicNames = 0;
   for (const e of seed.engagements)
-    if (!out.has(e.companyId))
-      g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added" });
+    if (!out.has(e.companyId)) {
+      const pub = e.holderFrom === PUBLIC_PROFILE && !!e.fields.operator;
+      if (pub) publicNames++;
+      g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added", ...(pub ? { holderFrom: PUBLIC_PROFILE } : {}) });
+    }
   for (const e of s.engagements)
     if (!g.engagements.has(e.id) && !out.has(e.companyId))
       g.engagements.set(e.id, { id: e.id, seedFields: e.source ? { source: e.source } : {}, companyId: e.companyId, verified: false, source: e.source ?? "Member added" });
@@ -931,7 +971,108 @@ function graph(seed: Seed, s: State): Graph {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
     if (companyId && !out.has(companyId) && !g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, companyId, engagementId: p.engagementId ?? null, source: "Member added" });
   }
+  // The switch: unverified names from public profiles show only while the table is under the
+  // threshold and the admins' switch is on. Off, those seats read as unnamed everywhere (their role
+  // is free again, and they can be claimed as unnamed seats). Verified and claimed names stay.
+  if (publicNames && !publicNamesOn(seed, s, g)) {
+    for (const e of g.engagements.values()) {
+      if (e.holderFrom !== PUBLIC_PROFILE || s.values[fkey(e.id, "operator")] || nameVerified(s, e.id)) continue;
+      const { operator: _name, ...rest } = e.seedFields; // eslint-disable-line @typescript-eslint/no-unused-vars
+      e.seedFields = rest;
+      delete e.holderFrom;
+    }
+  }
   return g;
+}
+
+/* ---------- seat-holder names from public profiles ---------- */
+
+/** EngagementRec's and the seed's mark for a seat-holder name read from public profiles (scripts/add-seat-names.mjs). */
+export const PUBLIC_PROFILE = "public profile";
+/** Unverified names show while the table has fewer seats than this (RN_UNVERIFIED_NAMES_UNTIL, 10,000 unless set). */
+export function namesUntil(): number {
+  const n = Number.parseInt(process.env.RN_UNVERIFIED_NAMES_UNTIL ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 10_000;
+}
+/** Seats on the table for the switch: past and current seats, not open roles (and not a posting that came down with nobody named). */
+function seatCount(seed: Seed, s: State, g: Graph): number {
+  const tracks = buildTracks(seed, s);
+  let n = 0;
+  for (const e of g.engagements.values()) {
+    if (isOpenRole(e, s, tracks)) continue;
+    if (e.source === "Demand scan" && !valueOf(e, s, "operator")) continue;
+    n++;
+  }
+  return n;
+}
+/** Unverified names from public profiles show: the admins' switch is on and the table is under namesUntil() seats. */
+function publicNamesOn(seed: Seed, s: State, g: Graph): boolean {
+  if (s.names?.hide) return false;
+  return seatCount(seed, s, g) < namesUntil();
+}
+/** The members whose "This is me" on this seat waits for an admin. */
+const pendingClaimers = (s: State, engId: string) => (s.names?.claims ?? []).filter((c) => c.engagementId === engId && c.status === "pending").map((c) => c.memberId);
+/**
+ * A name from public profiles is verified once an admin says so or two members confirmed it
+ * (the confirm action), not counting a member who says the seat is theirs. A member's claim
+ * replaces the name, so it is verified by the claim itself.
+ */
+function nameVerified(s: State, engId: string): boolean {
+  if (s.names?.verified?.[engId]) return true;
+  const claimers = new Set(pendingClaimers(s, engId));
+  return (s.verifications[fkey(engId, "operator")] ?? []).filter((m) => !claimers.has(m)).length >= 2;
+}
+/** The seat's holder is a name from public profiles that nobody claimed or took off. */
+function publicName(e: Node | undefined, s: State): FieldValue | null {
+  const v = valueOf(e, s, "operator");
+  return v?.pub && v.status === "live" ? v : null;
+}
+/** The same, and not verified yet: it shows with a Verify button, and its seat is unclaimed. */
+const unverifiedName = (e: Node | undefined, s: State) => !!e && !!publicName(e, s) && !nameVerified(s, e.id);
+/** Unclaimed (contract 2): a seat Revenue Nomad found with no holder, or with an unverified name from public profiles. */
+const unclaimedSeat = (e: EngNode, s: State) => e.source === SEAT_SCAN && (!valueOf(e, s, "operator") || unverifiedName(e, s));
+/** A seed name from public profiles no member has claimed or taken off, read from the seed itself (it is there even while the switch hides it). */
+function seedPublicName(seed: Seed, s: State, engId: string): string | null {
+  if (s.values[fkey(engId, "operator")]) return null;
+  const e = seed.engagements.find((x) => x.id === engId);
+  return e?.holderFrom === PUBLIC_PROFILE && e.fields.operator ? e.fields.operator : null;
+}
+/** Seat claims (claimSeat, an Add that claims a found seat, and claims waiting for an admin) a member made in the 24 hours before `nowMs`. */
+const claimsToday = (s: State, memberId: string, nowMs: number) =>
+  (s.seatClaims ?? []).filter((c) => c.memberId === memberId && nowMs - Date.parse(c.at) < DAY).length +
+  (s.names?.claims ?? []).filter((c) => c.memberId === memberId && nowMs - Date.parse(c.at) < DAY).length;
+/**
+ * Give 1 credit back to every member who paid to see this fact and hasn't had it back, and forget
+ * their unlock (the same rule as a removal on review). `why` names the refund in the credit history.
+ */
+function refundPaid(s: State, k: string, now: string, why?: LedgerEntry["why"]): number {
+  const net = new Map<string, number>();
+  for (const l of s.ledger) {
+    if (l.ref !== k || (l.reason !== "unlock" && l.reason !== "refund")) continue;
+    net.set(l.memberId, (net.get(l.memberId) ?? 0) - l.delta);
+  }
+  let n = 0;
+  for (const m of new Set(s.unlocks[k] ?? [])) {
+    if ((net.get(m) ?? 0) <= 0) continue;
+    s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now, ...(why ? { why } : {}) });
+    n++;
+  }
+  delete s.unlocks[k];
+  return n;
+}
+/**
+ * Take a name from public profiles off a seat, for everyone, at once: the seat reads as unnamed
+ * (its role is free again and it can be claimed), whoever paid to see the name gets the credit back
+ * once, and its confirmations go. Claims waiting on it stay for an admin.
+ */
+function takeNameOff(s: State, engId: string, how: NamesState["removed"][string]["how"], now: string): number {
+  const k = fkey(engId, "operator");
+  // The removed value keeps the seed's name off the seat. It holds no text: the name isn't kept anywhere it wasn't.
+  s.values[k] = { value: "", by: "seed", at: now, status: "removed" };
+  delete s.verifications[k];
+  const back = refundPaid(s, k, now, "name");
+  (s.names ??= emptyNames()).removed[engId] = { at: now, how };
+  return back;
 }
 
 /**
@@ -1298,7 +1439,9 @@ function valueOf(node: Node | undefined, s: State, field: string): FieldValue | 
   const v = s.values[fkey(node.id, field)];
   if (v) return v.status === "removed" ? null : v;
   const sv = node.seedFields[field];
-  return sv ? { value: sv, by: "seed", at: "", status: "live" } : null;
+  if (!sv) return null;
+  // A seat holder named from public profiles says so (FieldValue.pub).
+  return field === "operator" && (node as EngNode).holderFrom === PUBLIC_PROFILE ? { value: sv, by: "seed", at: "", status: "live", pub: true } : { value: sv, by: "seed", at: "", status: "live" };
 }
 /** Values from our own records (the seed) or the weekly scan: nobody earned a credit for them. */
 const isSystem = (by: string) => by === "seed" || by === "scan" || by === ABOUT_BY;
@@ -1344,6 +1487,8 @@ function memberIndex(seed: Seed, s: State): MemberIndex {
  * name match neither, and among joined accounts the one that joined first.
  */
 function seatMember(idx: MemberIndex, v: FieldValue): Member | null {
+  // A name from public profiles is nobody on Merlin until they claim the seat: a member who shares the name is not them.
+  if (v.pub) return null;
   if (v.memberId) return idx.byId.get(v.memberId) ?? null;
   const key = normName(v.value);
   if (!key) return null;
@@ -1543,12 +1688,15 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   const ver = vers.length;
   // (The "Active" a member's claim puts on an open role is written as the scan's, but no posting said it.)
   const fromScan = v.by === "scan" && !(key === "status" && v.value === "Active");
-  const from = v.by === "seed" ? ({ from: node!.research?.has(key) ? "research" : "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
+  // A seat holder named from public profiles reads as Revenue Nomad research, the seat's own source.
+  const from = v.by === "seed" ? ({ from: node!.research?.has(key) || v.pub ? "research" : "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
   // A person's title comes with their name, and the name with the title (PERSON_BUNDLE). A seat's role comes with who held it, and the other way round (SEAT_BUNDLE).
   const paid =
     !!me && !mine && !!f.gated && ((s.unlocks[k] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key) || holdsSeatPartner(s, me, node, entity, key));
   if (!f.gated || mine || free || paid) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
+    // Only to a viewer who sees the name: it is from public profiles and nobody has verified it yet (the Verify button).
+    if (key === "operator" && entity === "engagement" && v.pub && !nameVerified(s, node!.id)) out.unverified = true;
     if (key === "operator" && idx) {
       // "Member" only for someone on Merlin now: a seed member we invited who never signed in is just a name.
       const m = seatHolder(s, idx, node!.id, v);
@@ -1903,7 +2051,7 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
       continue;
     }
     // Every seat counts the same whatever its source (a member's story, a published engagement, a
-    // seat seen on LinkedIn), unless its type says it wasn't fractional (a full-time hire).
+    // seat Revenue Nomad found), unless its type says it wasn't fractional (a full-time hire).
     if (!type || FRACTIONAL_TYPES.includes(type)) {
       fractional++;
       if (fn) functions.add(fn);
@@ -2162,8 +2310,10 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       if (myAdds.has(e.id) || ePeopleNodes.some((p) => myAdds.has(p.id))) mine = true;
       return {
         id: pubId(e.id), source: e.source, verified: e.verified, cells, people: ePeople, updatedAt: eu, yours,
-        // A seat from the seat scan with nobody on it: its holder is not on Merlin yet, and they can claim it.
-        ...(e.source === SEAT_SCAN && !op ? { claimable: true } : {}),
+        // A seat from the seat scan nobody claimed (no name, or an unverified one from public profiles): its holder is not on Merlin yet, and they can claim it.
+        ...(unclaimedSeat(e, s) ? { claimable: true } : {}),
+        // The viewer's own "This is me" on it waits for an admin.
+        ...(me && pendingClaimers(s, e.id).includes(me.id) ? { claimWaiting: true } : {}),
         ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null, ...roleTimes(track) } : {}),
       };
     });
@@ -2349,6 +2499,11 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         ledger.push({ at: l.at, delta: l.delta, reason: ONGOING_REFUND, company: "", field: "" });
         continue;
       }
+      // A credit back for a seat holder's name from public profiles that came off the seat (takeNameOff), then "at Acme".
+      if (l.reason === "refund" && l.why === "name") {
+        ledger.push({ at: l.at, delta: l.delta, reason: NAME_REFUND, company: companyNameOf(id), field: "" });
+        continue;
+      }
       // A credit back for an unlock on a role that had already closed (applyScan).
       if (l.reason === "refund" && (l.why === "closed" || l.why === "removed" || l.why === "offbar")) {
         ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : l.why === "offbar" ? OFFBAR_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
@@ -2452,6 +2607,8 @@ const REMOVED_REFUND = "Refund for a full-time job we took off the list";
 const OFFBAR_REFUND = "Refund for a role we took off the list";
 /** The credit back for an end month that read "Ongoing" (refundOngoingEnds). The owner's words. */
 const ONGOING_REFUND = "Gave back 1 credit: an ongoing seat's end month is free now.";
+/** The credit back for a seat holder's name from public profiles that came off its seat (takeNameOff). The company follows it. */
+const NAME_REFUND = "Refund for a seat holder's name that came off";
 /** A person's name and title, and who held a seat with their role, as the credit history names the purchase (app/post/ledger.ts reads these). */
 const PERSON_PAIR_LABEL = "Person name and title";
 const SEAT_PAIR_LABEL = "Seat holder and role";
@@ -2642,7 +2799,41 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     seats: { linkedMembers: linked.size, factsMissing },
     benchmarks: { memberRates, privateRates: s.benchRates.length, indexRates: seed.rateIndex?.length ?? 0 },
     about: aboutStats(s, g, nowMs),
+    ...(seed.engagements.some((e) => e.holderFrom === PUBLIC_PROFILE) || s.names ? { names: namesStats(seed, s, g, idx) } : {}),
   };
+}
+
+/** Pilot metrics: the names from public profiles, the switch, and the claims waiting for an admin (namesStats is read from the seed, so the counts hold while the switch hides the names). */
+function namesStats(seed: Seed, s: State, g: Graph, idx: MemberIndex): NonNullable<AdminStats["names"]> {
+  let onFile = 0;
+  let unverified = 0;
+  let claimed = 0;
+  let removed = 0;
+  for (const e of seed.engagements) {
+    if (e.holderFrom !== PUBLIC_PROFILE || !e.fields.operator || !g.engagements.has(e.id)) continue;
+    const v = s.values[fkey(e.id, "operator")];
+    if (v?.status === "removed") removed++;
+    else if (v?.memberId) claimed++;
+    else {
+      onFile++;
+      if (!nameVerified(s, e.id)) unverified++;
+    }
+  }
+  const claims = (s.names?.claims ?? [])
+    .filter((c) => c.status === "pending" && idx.byId.has(c.memberId) && g.engagements.has(c.engagementId))
+    .map((c) => {
+      const e = g.engagements.get(c.engagementId)!;
+      return {
+        memberId: pubId(c.memberId),
+        member: idx.byId.get(c.memberId)!.name,
+        engagementId: pubId(e.id),
+        company: g.companies.get(e.companyId)?.name ?? "",
+        seat: live(e, s, "role") ?? fnOf(e, s),
+        onFile: publicName(e, s)?.value ?? seedPublicName(seed, s, e.id) ?? "",
+        at: c.at,
+      };
+    });
+  return { shown: publicNamesOn(seed, s, g), on: !s.names?.hide, limit: namesUntil(), seats: seatCount(seed, s, g), onFile, unverified, claimed, removed, claims };
 }
 
 /* ---------- rate benchmarks ---------- */
@@ -2897,6 +3088,10 @@ const LISTED_STATUS = "This role is still listed, so its status comes from the p
 export const SEAT_SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
 /** Claiming a seat-scan seat that a member already claimed. */
 const SEAT_TAKEN = "Another member already claimed this seat. If it's yours, report the seat holder and an admin will look at it.";
+/** "This is me" on a seat whose name from public profiles isn't the member's own name: it waits for an admin. */
+const CLAIM_QUEUED = "Thanks. The name on this seat doesn't match yours, so an admin checks your claim first. Until then the seat keeps the name it has.";
+/** The same member asking again while that claim waits. */
+const CLAIM_WAITING = "You said this seat is yours, and an admin is checking it. Your name goes on it once they agree.";
 /** Unlocking a person's LinkedIn, email or phone before the member can see who they are (PERSON_DETAILS). */
 export const NAME_FIRST = "Unlock their name and title first.";
 /** Adding a person's details or title while their name is locked to the member. */
@@ -2931,13 +3126,15 @@ const monthsApart = (a: string | null | undefined, b: string | null | undefined)
 /**
  * `dryRun` (the connector's "what would this cost"): the action runs on a copy of the state and
  * nothing is kept. The answer says what it would do, and `spent` the credits it would take. A
- * refusal is thrown as it would be.
+ * refusal is thrown as it would be. `claimLink`: a claimSeat that came through the seat's own
+ * claim link (/claim/<token>, claimByToken), so it works at a company locked by an open role too
+ * (claiming the seat shows the member that company, as a seat holder there).
  */
 export async function perform(
   token: string | null,
   a: Action,
   origin?: string,
-  opts: { dryRun?: boolean; asMember?: boolean } = {},
+  opts: { dryRun?: boolean; asMember?: boolean; claimLink?: boolean } = {},
 ): Promise<ActionResult & { spent?: number }> {
   if (a?.type === "scanNow") {
     if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
@@ -3258,10 +3455,11 @@ export async function perform(
       const cur = valueOf(node, s, key);
       // Claiming a seat from the seat scan: once, by its own fractional, a few a day, and for no credit (see claimSeat).
       const scanClaim = entity === "engagement" && key === "operator" && isScanSeat(node.id) && cur?.by !== me.id;
+      // A name from public profiles on it gives way to the member whose own name it is (first and last name match): the claim verifies it.
+      const pubClaim = scanClaim && !!cur?.pub && linked?.id === me.id && sameName(cur.value, me.name);
       if (scanClaim) {
-        if (cur) throw new ActionError(SEAT_TAKEN);
-        if ((s.seatClaims ?? []).filter((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY).length >= SEAT_CLAIM_DAILY_MAX)
-          throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
+        if (cur && !pubClaim) throw new ActionError(SEAT_TAKEN);
+        if (claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
       }
       // A seat holder can correct what our records or the scan say about their own seat.
       // What another member added still needs a report.
@@ -3270,7 +3468,7 @@ export async function perform(
       // An open role the scan follows keeps the posting's status while it is listed: its holder
       // can't close it for everyone by editing it (taking the role, or the posting coming down, does).
       if (correction && key === "status" && tracks().get(node.id) && !tracks().get(node.id)!.closedAt) throw new ActionError(LISTED_STATUS);
-      if (cur && cur.by !== me.id && !correction)
+      if (cur && cur.by !== me.id && !correction && !pubClaim)
         throw new ActionError(`${capital(say(entity, key))} is already there. Confirm it if it's right, or report it if it's wrong.`);
       if (entity === "engagement") seatCheck(node, key, value!, pending);
       // Picking yourself takes back an earlier "This isn't me" on this seat.
@@ -3312,6 +3510,8 @@ export async function perform(
       };
       if (scanClaim) {
         s.seatClaims = [...(s.seatClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: node.id, at: now }];
+        // Claims other members made on the name it replaced are settled: the seat is its named fractional's.
+        if (pubClaim) for (const c of s.names?.claims ?? []) if (c.engagementId === node.id && c.status === "pending") (c.status = "declined"), (c.decidedAt = now);
         return 0; // a claim earns nothing by itself; the facts added after it earn as usual
       }
       if (claimsRole)
@@ -3747,7 +3947,12 @@ export async function perform(
               ownMatch || !selfSeat || (sent("type") && !FRACTIONAL_TYPES.includes(sent("type")!)) || sent("status") === "Open role"
                 ? undefined
                 : atCompany
-                    .filter((e) => e.source === SEAT_SCAN && !valueOf(e, s, "operator") && !(s.notMine[me.id] ?? []).includes(e.id))
+                    // Unclaimed: nobody named, or a name from public profiles that is the member's own (someone else's name means it is another seat).
+                    .filter((e) => {
+                      if (e.source !== SEAT_SCAN || (s.notMine[me.id] ?? []).includes(e.id)) return false;
+                      const pn = publicName(e, s);
+                      return pn ? sameName(pn.value, me.name) : !valueOf(e, s, "operator");
+                    })
                     .map((e) => {
                       const theirRole = live(e, s, "role");
                       const theirStart = live(e, s, "start");
@@ -3762,7 +3967,7 @@ export async function perform(
                     })
                     .filter((x) => x.ok)
                     .sort((x, y) => x.score - y.score)[0]?.e;
-            if (scanSeat && (s.seatClaims ?? []).filter((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY).length >= SEAT_CLAIM_DAILY_MAX)
+            if (scanSeat && claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX)
               throw new ActionError(`We have this seat on file already, so adding it claims it. You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours, so add it tomorrow.`);
             const existing = ownMatch ?? scanSeat;
             claimedScan = !!scanSeat;
@@ -3785,7 +3990,8 @@ export async function perform(
                 for (const [k, v] of engFields) {
                   const had = valueOf(eng, s, k);
                   // A year alone ("2024") says the same as the month on file in that year ("2024-03"): the month stays.
-                  if (had?.value === v || ((k === "start" || k === "end") && /^\d{4}$/.test(v) && !!had?.value.startsWith(`${v}-`))) kept += k === "status" && ends ? 0 : 1;
+                  // The seat holder is always written: on a seat named from public profiles, the member's own name is the claim.
+                  if (k !== "operator" && (had?.value === v || ((k === "start" || k === "end") && /^\d{4}$/.test(v) && !!had?.value.startsWith(`${v}-`)))) kept += k === "status" && ends ? 0 : 1;
                   else {
                     if (had) answered++;
                     earned += setValue(eng, "engagement", k, v, seatPick, pending);
@@ -3947,6 +4153,16 @@ export async function perform(
           if (s.reportLog.filter((r) => r.memberId === me.id && nowMs - Date.parse(r.at) < DAY).length >= REPORT_DAILY_MAX)
             throw new ActionError(`You've reported ${REPORT_DAILY_MAX} facts in 24 hours, which is the limit. Try again tomorrow.`);
           if ((cur.reporters ?? []).includes(me.id)) return { message: "You already reported this." };
+          // "This is wrong" on an unverified name from public profiles: one report is enough. It comes off for everyone at once,
+          // whoever paid to see it gets the credit back, and the seat reads as unnamed (its role is free again).
+          if (a.entity === "engagement" && f.key === "operator" && cur.pub && !nameVerified(s, node.id)) {
+            const back = takeNameOff(s, node.id, "wrong", now);
+            s.reportLog.push({ memberId: me.id, ref: k, at: now });
+            return {
+              message: `Thanks. That name is off the seat for everyone now.${back ? " Anyone who paid to see it got the credit back." : ""}`,
+              cells: ENG_KEYS.map((field) => changed("engagement", node, field)),
+            };
+          }
           const reporters = [...(cur.reporters ?? []), me.id];
           // What the posting says about a role that is still listed stays up for everyone else: reports
           // send it to an admin, but two members can't blank the title or the link of a live opening.
@@ -3974,10 +4190,20 @@ export async function perform(
           const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee || cur.reporters?.includes(me.id)) throw new ActionError("There's nothing here to confirm. You can only confirm a fact you can see.");
           if (cur.by === me.id) throw new ActionError("You added this one, so another member has to confirm it.");
+          // "I know this is right" on a name from public profiles: from a member who says the seat is theirs it would be their own word twice.
+          const pubName = a.entity === "engagement" && f.key === "operator" && !!cur.pub;
+          if (pubName && pendingClaimers(s, node.id).includes(me.id)) throw new ActionError("You said this seat is yours, so the name on it needs other members to confirm it.");
+          const wasVerified = pubName && nameVerified(s, node.id);
           const list = s.verifications[k] ?? [];
           if (list.includes(me.id)) return { message: "You already confirmed this." };
           s.verifications[k] = [...list, me.id];
           trustNow = null; // a confirmation can make the fact's author count (trustOf)
+          // Two members confirming a name from public profiles verify it. Confirming earns nothing (it came from our research, not a member).
+          if (pubName && !wasVerified)
+            return {
+              message: nameVerified(s, node.id) ? "Confirmed the seat holder. Two members have confirmed this name now, so it's verified." : "Confirmed the seat holder. Once one more member confirms it, it's verified.",
+              cells: [changed(a.entity, node, f.key)],
+            };
           // The real count: members who confirmed it. Our own records and the scan are not confirmations.
           const n = list.length + 1;
           // The member who added a fact earns +1 once two other members confirm it (once per fact;
@@ -4069,6 +4295,55 @@ export async function perform(
           const what = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
           return { message: `Removed ${what} that ${target.name} added. The credits they earned came off their balance, and anyone who unlocked them got their credit back.` };
         }
+        case "names": {
+          // Seat-holder names from public profiles, in Pilot metrics: the switch, the claims waiting, and a name an admin checked.
+          if (!isAdmin(me)) throw new ActionError("Only admins can do this.");
+          const names = (s.names ??= emptyNames());
+          if (a.op === "show") {
+            if (a.on) delete names.hide;
+            else names.hide = true;
+            return {
+              message: a.on
+                ? `Names from public profiles show while the table has fewer than ${namesUntil().toLocaleString("en-US")} seats.`
+                : "Names from public profiles are hidden now. Their seats read as unnamed, and claims still work.",
+            };
+          }
+          const e = g.engagements.get(inId("engagement", a.engagementId));
+          if (!e) throw new ActionError(gone("engagement"));
+          const k = fkey(e.id, "operator");
+          const settle = (status: "approved" | "declined", except?: (typeof names.claims)[number]) => {
+            for (const c of names.claims) if (c !== except && c.engagementId === e.id && c.status === "pending") (c.status = status), (c.decidedAt = now);
+          };
+          if (a.op === "approve" || a.op === "decline") {
+            const who = memberIndex(seed, s).all.find((m) => pubId(m.id) === String(a.memberId ?? ""));
+            const c = who ? names.claims.find((x) => x.engagementId === e.id && x.memberId === who.id && x.status === "pending") : undefined;
+            if (!who || !c) throw new ActionError("That claim isn't waiting any more. It may already be settled.");
+            if (a.op === "decline") {
+              c.status = "declined";
+              c.decidedAt = now;
+              return { message: "Declined. The name on the seat stays as it was." };
+            }
+            const cur = s.values[k];
+            if (cur && cur.status === "live" && cur.memberId) throw new ActionError("A member already claimed this seat, so this claim can't go through.");
+            // The claim goes through as the member's own: their name on the seat, and it is on their Your seats.
+            s.values[k] = { value: who.name, by: who.id, memberId: who.id, at: now, status: "live" };
+            delete s.verifications[k];
+            c.status = "approved";
+            c.decidedAt = now;
+            settle("declined", c);
+            s.seatClaims = [...(s.seatClaims ?? []).filter((x) => nowMs - Date.parse(x.at) < CLAIM_KEEP), { memberId: who.id, engagementId: e.id, at: now }];
+            return { message: `Done. The seat is ${firstName(who.name)}'s now, and it's on their Your seats.`, cells: [changed("engagement", e, "operator")] };
+          }
+          const onFile = publicName(e, s)?.value ?? seedPublicName(seed, s, e.id);
+          if (!onFile) throw new ActionError("There's no name from public profiles on this seat any more.");
+          if (a.op === "verify") {
+            names.verified[e.id] = now;
+            settle("declined");
+            return { message: "Verified. The name stays on the seat, and its Verify button is gone.", cells: [changed("engagement", e, "operator")] };
+          }
+          const back = takeNameOff(s, e.id, "admin", now);
+          return { message: `Removed the name.${back ? " Anyone who paid to see it got the credit back." : ""}`, cells: ENG_KEYS.map((f) => changed("engagement", e, f)) };
+        }
         case "benchRate": {
           // A rate for the benchmarks only: it counts in the medians and is never on a record.
           const r = readRate(stripInvisible(a.rate).trim().slice(0, 60), a.pricing === "Hourly" || a.pricing === "Monthly retainer" ? a.pricing : null);
@@ -4145,22 +4420,43 @@ export async function perform(
           return { message: `Removed your rate from the benchmarks.${paid > 0 ? ` The ${paid === 1 ? "credit" : `${paid} credits`} it earned came off your balance.` : ""}` };
         }
         case "claimSeat": {
-          // "Is this your seat? Claim it": a seat from the seat scan, with nobody on it yet, becomes the viewer's.
+          // "Is this your seat? Claim it" (and "This is me"): a seat from the seat scan that no member has claimed becomes the viewer's.
           const e = g.engagements.get(inId("engagement", a.engagementId));
           if (!e) throw new ActionError(gone("engagement"));
           if (e.source !== SEAT_SCAN) throw new ActionError("Only seats Revenue Nomad found can be claimed. To add a seat you held, use Add.");
-          mustSee(e.companyId);
+          if (!opts.claimLink || a.preview) mustSee(e.companyId);
+          // A name from public profiles on it: the seat is unclaimed while it is unverified, and the member it names can always claim it.
+          const pub = publicName(e, s);
+          const theirs = !!pub && sameName(pub.value, me.name);
+          const waiting = pendingClaimers(s, e.id).includes(me.id);
           if (a.preview) {
             // "Is this you?": the seat's title and dates, so the member checks it before claiming. Only an unclaimed seat, a few dozen a day.
-            if (valueOf(e, s, "operator")) throw new ActionError(SEAT_TAKEN);
+            if (valueOf(e, s, "operator") && !(pub && (theirs || !nameVerified(s, e.id)))) throw new ActionError(SEAT_TAKEN);
+            if (waiting) throw new ActionError(CLAIM_WAITING);
             const seen = (claimPreviews.get(me.id) ?? []).filter((t) => nowMs - t < DAY);
             if (seen.length >= CLAIM_PREVIEW_DAILY_MAX) throw new ActionError("You've checked a lot of seats today. Try again tomorrow, or add the seat you held.");
             claimPreviews.set(me.id, [...seen, nowMs]);
-            return { message: "", id: pubId(e.id), claim: { role: live(e, s, "role"), function: live(e, s, "function"), start: live(e, s, "start"), end: live(e, s, "end"), status: live(e, s, "status") } };
+            // On a named seat the role sells with the name (SEAT_BUNDLE): only the member it names sees it here.
+            return {
+              message: "",
+              id: pubId(e.id),
+              claim: { role: !pub || theirs ? live(e, s, "role") : null, function: live(e, s, "function"), start: live(e, s, "start"), end: live(e, s, "end"), status: live(e, s, "status") },
+            };
+          }
+          if (pub && !theirs) {
+            // Someone else's name is on it. Verified: it is theirs. Unverified: an admin checks the claim, and the name stays until then.
+            if (nameVerified(s, e.id)) throw new ActionError(SEAT_TAKEN);
+            if (waiting) return { message: CLAIM_WAITING, id: pubId(e.id) };
+            if (claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
+            const names = (s.names ??= emptyNames());
+            names.claims = [...names.claims.filter((c) => c.status === "pending" || nowMs - Date.parse(c.decidedAt ?? c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: e.id, at: now, status: "pending" }];
+            return { message: CLAIM_QUEUED, id: pubId(e.id), cells: [changed("engagement", e, "operator")] };
           }
           setValue(e, "engagement", "operator", me.name, me);
           return {
-            message: "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.",
+            message: theirs
+              ? "It's yours. Your name matches the one on file, so it's verified now. Other members see it behind a 1 credit lock. Fill in what you know on Your seats."
+              : "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.",
             id: pubId(e.id),
             cells: ENG_KEYS.map((f) => changed("engagement", e, f)),
           };
@@ -4172,8 +4468,10 @@ export async function perform(
           const e = g.engagements.get(inId("engagement", a.engagementId));
           // "Not me" on a seat the seat scan found that nobody has claimed ("Is this you?"): it is not
           // theirs, so an Add of theirs never claims it (the add action). Claiming it still can.
-          if (e && e.source === SEAT_SCAN && !valueOf(e, s, "operator")) {
+          // The same on one named from public profiles that nobody claimed: the name is someone else's, and their claim on it (if any) is withdrawn.
+          if (e && e.source === SEAT_SCAN && (!valueOf(e, s, "operator") || publicName(e, s))) {
             if (!(s.notMine[me.id] ?? []).includes(e.id)) s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
+            if (s.names) s.names.claims = s.names.claims.filter((c) => !(c.memberId === me.id && c.engagementId === e.id && c.status === "pending"));
             return { message: "Got it. That seat isn't yours, so we'll leave it for whoever held it.", id: pubId(e.id) };
           }
           if (!e || !linkedSeat(e.id)) throw new ActionError("That seat isn't linked to you.");
@@ -4465,6 +4763,141 @@ export const tableInternals = {
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
   geoOf, firmsInReview,
 };
+
+/* ---------- claim links (/claim/<token>) and Remove my name ---------- */
+
+/** A graph's seat ids, kept with it, so seatForToken builds its index once per graph. */
+const seatIdLists = new WeakMap<Graph, string[]>();
+function seatIdsOf(g: Graph): string[] {
+  let l = seatIdLists.get(g);
+  if (!l) seatIdLists.set(g, (l = [...g.engagements.keys()]));
+  return l;
+}
+/** The internal id of the seat a claim token names, or null. */
+async function seatOfToken(token: unknown): Promise<string | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return seatForToken(token, seatIdsOf(viewGraph(seed, s)));
+}
+/** A seat's claim link path (/claim/<token>), from its public id, or null without the seed key. For pages and tools that offer the link (Invite to connect). */
+export async function claimPathFor(engagementPubId: string): Promise<string | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const id = [...viewGraph(seed, s).engagements.keys()].find((x) => pubId(x) === engagementPubId);
+  const t = id ? claimToken(id) : "";
+  return t ? `/claim/${t}` : null;
+}
+
+/**
+ * What a claim link's page shows. `status`: invalid (no seat has this token), open (a seat
+ * Revenue Nomad found that no member claimed: nobody named, or a name from public profiles),
+ * held (a member holds it, or a name that isn't from public profiles is on it), yours (the
+ * signed-in member holds it), waiting (their claim on it waits for an admin). `seat` is free facts
+ * only: the role (it is the person's own seat), the function, the start month and the company,
+ * which is null while it is locked by an open role. `named`: a name from public profiles is on it
+ * (Remove my name applies). Never a person's name.
+ */
+export interface ClaimPage {
+  status: "invalid" | "open" | "held" | "yours" | "waiting";
+  seat: { role: string | null; fn: string | null; company: string | null; start: string | null; named: boolean } | null;
+  me: { first: string } | null;
+  /** Sign-in links go by email (an email provider is set up). */
+  email: boolean;
+  /** The first name of the member whose invite code came with the link (?ref=), or null. */
+  inviter: string | null;
+}
+export async function claimPage(token: unknown, memberToken: string | null, ref?: unknown): Promise<ClaimPage> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, memberToken, s);
+  const g = viewGraph(seed, s);
+  const id = seatForToken(token, seatIdsOf(g));
+  const e = id ? g.engagements.get(id) : undefined;
+  const base = { me: me ? { first: firstName(me.name) } : null, email: emailEnabled(), inviter: await inviterName(ref).catch(() => null) };
+  if (!e) return { ...base, status: "invalid", seat: null };
+  const idx = memberIndex(seed, s);
+  const tracks = tracksOf(seed, s);
+  const op = valueOf(e, s, "operator");
+  const holder = seatHolder(s, idx, e.id, op);
+  const status: ClaimPage["status"] =
+    me && holder?.id === me.id ? "yours" : me && pendingClaimers(s, e.id).includes(me.id) ? "waiting" : e.source === SEAT_SCAN && (!op || publicName(e, s)) ? "open" : "held";
+  // A company with an open role is locked (for a visitor too), unless this member can see it.
+  const locked = [...g.engagements.values()].some((x) => x.companyId === e.companyId && hidesCompany(x, s, tracks)) && (!me || identityHidden(g, s, idx, tracks, me, e.companyId));
+  const mine = status !== "held";
+  return {
+    ...base,
+    status,
+    seat: {
+      role: mine ? live(e, s, "role") : null,
+      fn: fnOf(e, s),
+      company: locked ? null : g.companies.get(e.companyId)?.name ?? null,
+      start: live(e, s, "start"),
+      named: !!publicName(e, s) || !!seedPublicName(seed, s, e.id),
+    },
+  };
+}
+
+/**
+ * "Claim it" on a claim link: the signed-in member claims the seat it names (claimSeat, with the name rule), at a locked company too.
+ * `waiting`: the name on the seat isn't theirs, so the claim waits for an admin and the seat isn't theirs yet.
+ */
+export async function claimByToken(memberToken: string | null, token: unknown, origin?: string): Promise<ActionResult & { waiting: boolean }> {
+  const id = await seatOfToken(token);
+  if (!id) throw new ActionError("That claim link didn't work. It may be cut short. Open the whole link from the message.");
+  const out = await perform(memberToken, { type: "claimSeat", engagementId: pubId(id) }, origin, { claimLink: true });
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, memberToken, s);
+  return { ...out, waiting: !!me && pendingClaimers(s, id).includes(me.id) };
+}
+
+/**
+ * "Not me" or "Remove my name" on a claim link, no account needed: a name from public profiles on
+ * that seat comes off at once, for everyone, and whoever paid to see it gets the credit back. A
+ * signed-in member's "Not me" is kept too (an Add of theirs never claims the seat). The answer says
+ * what happened: done, or why not (the seat is claimed, there is no name on it, the link is wrong).
+ */
+export async function nameOffByToken(token: unknown, how: "notme" | "remove", memberToken?: string | null): Promise<{ done: boolean; why?: "invalid" | "held" | "unnamed" }> {
+  const id = await seatOfToken(token);
+  if (!id) return { done: false, why: "invalid" };
+  return mutate((s, seed) => {
+    const now = new Date().toISOString();
+    const me = memberToken ? memberByToken(seed, memberToken, s) : null;
+    if (me && how === "notme" && !(s.notMine[me.id] ?? []).includes(id)) s.notMine[me.id] = [...(s.notMine[me.id] ?? []), id];
+    const name = seedPublicName(seed, s, id);
+    if (!name) {
+      const v = s.values[fkey(id, "operator")];
+      return { done: false, why: v && v.status !== "removed" ? ("held" as const) : ("unnamed" as const) };
+    }
+    takeNameOff(s, id, how, now);
+    return { done: true };
+  });
+}
+
+/**
+ * The public Remove my name page: a name and a company. Every name from public profiles on a seat
+ * at that company (matched by its name or website, as Add matches companies) that is the same
+ * person (sameName) and nobody has verified or claimed comes off at once, with refunds. Returns how
+ * many came off. The page answers the same whatever this returns, so it can't be used to look up names.
+ */
+export async function nameOffByName(nameRaw: unknown, companyRaw: unknown): Promise<number> {
+  const name = tidy(nameRaw, 80);
+  const company = tidy(companyRaw, 120);
+  if (name.length < 3 || company.length < 2) return 0;
+  return mutate((s, seed) => {
+    const now = new Date().toISOString();
+    const g = graph(seed, s);
+    const site = siteKey(company);
+    const key = keyOfCompany(company);
+    const at = new Set([...g.companies.values()].filter((c) => (key && keyOfCompany(c.name) === key) || (site && siteKey(live(c, s, "website")) === site)).map((c) => c.id));
+    if (!at.size) return 0;
+    let n = 0;
+    for (const e of seed.engagements) {
+      if (!at.has(e.companyId) || nameVerified(s, e.id)) continue;
+      const onFile = seedPublicName(seed, s, e.id);
+      if (!onFile || !sameName(onFile, name)) continue;
+      takeNameOff(s, e.id, "public", now);
+      n++;
+    }
+    return n;
+  });
+}
 
 /* ---------- last seen ---------- */
 

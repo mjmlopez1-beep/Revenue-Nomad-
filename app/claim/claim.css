@@ -1,0 +1,231 @@
+/* The claim link's page and the public Remove my name page (cl-). Phone first: 16px gutters, 44px targets, one column. */
+.cl {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--body-ink);
+}
+.cl-top {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 16px;
+  background: var(--pine);
+  --focus: var(--volt);
+}
+.cl-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  border-radius: var(--r-btn);
+  color: #fff;
+  text-decoration: none;
+}
+.cl-brand span {
+  padding: 2px 0 0 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
+}
+.cl-main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+}
+.cl-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+.cl-from {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--volt-ink);
+}
+.cl-h {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.cl-h:focus {
+  outline: none;
+}
+.cl-seat {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--r-btn);
+  background: var(--volt-soft);
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.cl-p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+}
+.cl-p a,
+.cl-foot a {
+  color: var(--pine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cl-p-flush {
+  margin: 0;
+}
+.cl-wide {
+  width: 100%;
+}
+.cl-form {
+  display: grid;
+  gap: 8px;
+}
+.cl-form + .cl-form {
+  margin-top: 8px;
+}
+.cl-form .input {
+  min-height: 48px;
+  font-size: 16px;
+}
+.cl-form .btn {
+  margin-top: 8px;
+}
+.cl-label {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.cl-help {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.cl-center {
+  text-align: center;
+}
+.cl-err {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-btn);
+  background: #fdecef;
+  color: var(--red);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.cl-link {
+  justify-self: center;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--pine);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cl-row .btn {
+  flex: 1 1 140px;
+  min-height: 44px;
+}
+.cl-row-quiet {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.cl-row-quiet .btn {
+  color: var(--muted);
+}
+.cl-row-quiet .btn:hover {
+  color: var(--ink);
+}
+.cl-box {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-card);
+}
+.cl-box-h {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+}
+.cl-red {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.cl-red:hover,
+.cl-red:active {
+  background: #b5243b;
+  border-color: #b5243b;
+}
+.cl-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--volt);
+  color: var(--pine);
+}
+.cl-foot {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.cl-foot a {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+  padding: 0 4px;
+}
+@media (min-width: 768px) {
+  .cl-top {
+    padding: 0 24px;
+  }
+  .cl-main {
+    padding-top: 64px;
+  }
+  .cl-card {
+    padding: 32px;
+  }
+}
+@media (max-width: 359px) {
+  .cl-brand span {
+    display: none;
+  }
+}

@@ -256,7 +256,7 @@ const hostOf = (v: string) => v.replace(/^https?:\/\//i, "").replace(/^www\./i, 
 const fnOfSeat = (e: EngagementRec) => shown(e.cells.function);
 /**
  * A fractional hire on file: any seat, whatever its source (a member's story, a published
- * engagement, a seat seen on LinkedIn), unless its type says it was full-time. Not an open role,
+ * engagement, a seat Revenue Nomad found), unless its type says it was full-time. Not an open role,
  * and not a job posting that came down with nobody in the seat.
  */
 export const isHire = (e: EngagementRec) => {

@@ -36,6 +36,9 @@ export function Questions({ starter, support, intro = false }: QuestionsProps) {
           <p>{a}</p>
         </details>
       ))}
+      <p className="lp-faq-more">
+        Want your name off a seat? <a href="/remove">Remove my name</a>
+      </p>
       {support ? (
         <p className="lp-faq-more">
           Something else? Email{" "}

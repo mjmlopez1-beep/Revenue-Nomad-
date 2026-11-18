@@ -1,0 +1,159 @@
+/* Verify beside a seat holder's name from public profiles (vf-, app/post/Verify.tsx). Quiet at rest: one small outline button, no label. */
+.vf {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  /* Above a touch row's full-width tap target (.tp-frow-btn). */
+  position: relative;
+  z-index: 1;
+}
+/* The name and its button on one line in a table cell or a phone card: the name truncates, the button stays. */
+.vf-held {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+.vf-held > .tp-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vf-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-left: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-chip);
+  background: var(--surface);
+  color: var(--pine);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.vf-btn:hover {
+  border-color: var(--pine);
+}
+.vf-btn:active {
+  background: var(--row-on);
+}
+/* A 44px target on touch screens, without making the row taller than its text. */
+@media (pointer: coarse) {
+  .vf-btn {
+    position: relative;
+  }
+  .vf-btn::after {
+    content: "";
+    position: absolute;
+    inset: -10px -6px;
+  }
+}
+.vf-wait {
+  margin-left: 8px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.vf-pop {
+  padding: 12px 16px 4px;
+}
+.vf-h {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+}
+.vf-lead {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.vf-list {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+.vf-row {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.vf-row:last-child {
+  border-bottom: 0;
+}
+/* Only where a pointer hovers: a tap on a phone leaves no underline behind. */
+@media (hover: hover) {
+  button.vf-row:hover b {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+button.vf-row:active {
+  background: var(--row-on);
+}
+.vf-row:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.vf-row b {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 700;
+}
+.vf-row span {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.vf-row-red b {
+  color: var(--red);
+}
+.vf-row.is-done {
+  cursor: default;
+}
+.vf-row.is-done b {
+  color: var(--volt-ink);
+}
+
+/* Pilot metrics: the names switch and the claims waiting for an admin (app/post/Admin.tsx PublicNames). */
+.tp-pm-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tp-pm-switch input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pine);
+}
+.tp-pm-claim .tp-pm-ask-acts {
+  flex-wrap: wrap;
+  margin-top: 8px;
+}

@@ -20,6 +20,7 @@
  * phone it is modal: Tab stays inside and the page behind is inert.
  */
 import { MessageButton } from "./Messages";
+import { VerifyName } from "./Verify";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
@@ -151,7 +152,8 @@ function factInfo(t: FactRef, cell: Cell, ui: Ui, own: boolean, listed: boolean,
   const v = cell.s === "value" && !cell.system ? cell : null;
   const gated = !!fieldDef(t.entity, t.field)?.gated;
   // Their own name on their own seat is not theirs to confirm or report ("This isn't me" on Your seats unlinks it).
-  const canCheck = !!v && !v.mine && !v.member?.you;
+  // A name from public profiles nobody verified has its own three choices instead (Verify, app/post/Verify.tsx).
+  const canCheck = !!v && !v.mine && !v.member?.you && !v.unverified;
   // A free fact can be reported once the member has added one of their own. A fact they paid for, or one on their own seat, always.
   const reportBlocked = canCheck && !gated && !own && ui.me.added === 0;
   const admin = !!v && ui.me.admin && !v.from;
@@ -1207,7 +1209,11 @@ function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; co
         noAdd={vacant ? ["operator", "start", "end", "reason", "sourced"] : []}
         labels={open ? { rate: "Posted rate", hours: "Posted hours" } : {}}
         render={{ function: fnRender, type: (v) => <span className="chip tp-fn">{v}</span>, status: statusText }}
-        notes={closed ? { posting: <span className="tp-frow-note">Closed {closedOn(e)}</span> } : {}}
+        notes={{
+          ...(closed ? { posting: <span className="tp-frow-note">Closed {closedOn(e)}</span> } : {}),
+          // A name from public profiles nobody has verified: Verify beside it, and no label. While the member's own claim on it waits, the line under the seat says so instead.
+          ...(opCell?.s === "value" && opCell.unverified && !e.claimWaiting ? { operator: <VerifyName engagementId={e.id} confirmed={!!opCell.iv} /> } : {}),
+        }}
         after={reach ? { operator: reach } : {}}
         pair={open ? OPEN_ROLE_BUNDLE : seatBundled(e) ? SEAT_BUNDLE : undefined}
         own={e.yours}
@@ -1221,7 +1227,11 @@ function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; co
         <p className="tp-claim-wait">{open ? "Claimed by you. Others still see the role as open until your claim is confirmed." : "You're named on this seat. It opens for you once another member confirms it."}</p>
       )}
       {vacant && !hidden && !e.yours && <ClaimRole id={e.id} />}
-      {e.claimable && !hidden && !e.yours && <ClaimSeat id={e.id} seat={role ?? (shown(e.cells.function) ? `${shown(e.cells.function)}` : "fractional")} company={company} />}
+      {/* "Is this your seat?" while no name shows here. A name the member can see has Verify, whose first choice is the same claim. */}
+      {e.claimable && !hidden && !e.yours && !e.claimWaiting && opCell?.s !== "value" && (
+        <ClaimSeat id={e.id} seat={role ?? (shown(e.cells.function) ? `${shown(e.cells.function)}` : "fractional")} company={company} />
+      )}
+      {e.claimWaiting && !e.yours && <p className="tp-claim-wait">You said this seat is yours. An admin is checking it, and your name goes on it once they agree.</p>}
       {toFill > 0 && (
         <button type="button" className="ys-fill-link" onClick={() => ui.openSeats(e.id)}>
           Fill in the {toFill === 1 ? "one thing" : `${toFill} things`} missing on your seat

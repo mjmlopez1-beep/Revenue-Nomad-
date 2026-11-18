@@ -15,7 +15,11 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
   return [
     [
       "How do I reach the fractional who held a seat?",
-      `Where a seat holder is on file, 1 credit shows who held the seat and the role they held. If they are a member, message them inside Merlin. If not, find them on LinkedIn${intro ? " or ask us for an intro" : ""}. Many seats we found on LinkedIn have nobody named yet, until the fractional who held one claims it.`,
+      `Where a seat holder is on file, 1 credit shows who held the seat and the role they held. If they are a member, message them inside Merlin. If not, find them on LinkedIn${intro ? " or ask us for an intro" : ""}. Many seats Revenue Nomad found have nobody named yet, until the fractional who held one claims it.`,
+    ],
+    [
+      "Can I take my name off a seat?",
+      "Yes, and you don't need an account. Open Remove my name, type your name and the company, and it comes off at once. Anyone who paid to see it gets the credit back. If we sent you a link about your seat, it has the same button.",
     ],
     [
       "What is an Ideal Fractional Profile?",

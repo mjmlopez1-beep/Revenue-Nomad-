@@ -40,6 +40,12 @@ export type Cell =
       /** Seat holder only: the viewer claimed this seat from the seat scan (claimSeat), so it reads "You claimed this". */
       claimed?: boolean;
       /**
+       * Seat holder only: a name from public profiles that nobody has verified yet (the person
+       * didn't claim the seat, two members didn't confirm it and no admin did). The app shows a
+       * Verify button beside it. Sent only on a value, so only to a viewer who can see the name.
+       */
+      unverified?: boolean;
+      /**
        * Seat holder only: the name belongs to a Merlin member who has signed in (their
        * title; `you` when it's the viewer). Left out for a member who never signed in, the same
        * test the seat holder picker uses, so "Member" always means someone on Merlin now.
@@ -73,11 +79,15 @@ export interface EngagementRec {
    */
   yours: boolean;
   /**
-   * A seat Revenue Nomad found (source "Seat scan") that nobody holds yet: its fractional is not
-   * on Merlin yet. The seat holder cell is empty and is never added to ("Not on Merlin
-   * yet"). A member who held it claims it ("claimSeat"). Left out on every other seat.
+   * A seat Revenue Nomad found (source "Seat scan") that no member has claimed: nobody is named on
+   * it, or the name on it came from public profiles and is unverified (Cell.unverified). Its
+   * fractional is not on Merlin yet. The seat holder cell is empty ("Not on Merlin yet") or locked
+   * like any named seat's, and is never added to. A member who held it claims it ("claimSeat").
+   * Left out on every other seat.
    */
   claimable?: boolean;
+  /** The viewer said this seat is theirs ("This is me") and the name on it isn't theirs: an admin is checking. */
+  claimWaiting?: boolean;
   /**
    * Open roles found by the weekly scan (and open roles from the seed): the day the posting
    * was first seen and the day it stopped being listed (ISO dates). Free to see and to filter on.
@@ -534,6 +544,24 @@ export interface AdminStats {
    * `standing`: their name is still on the seat (not released or removed). Public ids.
    */
   seatClaims?: { memberId: string; name: string; company: string; engagementId: string; at: string; standing: boolean }[];
+  /**
+   * Seat-holder names from public profiles. `shown`: unverified names show now (the switch is on and
+   * the table has fewer than `limit` seats, past and current, not open roles). `on`: the admins'
+   * switch. Counts are seats: names still on seats (`onFile`, of which `unverified`), names members
+   * claimed, and names taken off. `claims`: "This is me" from members whose own name doesn't match,
+   * waiting for an admin, oldest first, with the name on file. Public ids.
+   */
+  names?: {
+    shown: boolean;
+    on: boolean;
+    limit: number;
+    seats: number;
+    onFile: number;
+    unverified: number;
+    claimed: number;
+    removed: number;
+    claims: { memberId: string; member: string; engagementId: string; company: string; seat: string | null; onFile: string; at: string }[];
+  };
   /** Members who hit zero credits while trying to unlock, and how many times. */
   /**
    * Fractional firms, agencies or marketplaces still on the table because a member holds a seat
@@ -675,6 +703,15 @@ export type Action =
   | { type: "message.read"; conversationId: string }
   /** Admins: decide on a reported message. */
   | { type: "message.review"; reportId: string; decision: "keep" | "remove" }
+  /**
+   * Admins, seat-holder names from public profiles (Pilot metrics). show: the switch "Show names
+   * from public profiles until we reach N seats" (`on`). approve or decline: a member's claim
+   * waiting on a seat (`memberId`). verify: the name on file is right. remove: take it off (whoever
+   * paid to see it gets the credit back). Ids are public ids.
+   */
+  | { type: "names"; op: "show"; on: boolean }
+  | { type: "names"; op: "approve" | "decline"; engagementId: string; memberId: string }
+  | { type: "names"; op: "verify" | "remove"; engagementId: string }
   /** Admins: run the open-role scan now. */
   | { type: "scanNow" }
   /** Admins: fill About texts from company websites now (lib/about; only with RN_ABOUT=1). Runs in the background. */

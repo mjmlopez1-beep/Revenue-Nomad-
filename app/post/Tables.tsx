@@ -25,6 +25,7 @@ import {
 import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
+import { VerifyName } from "./Verify";
 
 /**
  * How fractional friendly a company is, as a plain label. Hover for the reason and the score.
@@ -129,11 +130,20 @@ export function NoSeatYet({ fn }: { fn: string }) {
 /** Who held the seat. An open role has nobody yet, so it never asks for a name. */
 export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }) {
   if (e.yours) return <YourSeat id={e.id} />;
-  // A seat Revenue Nomad found: its holder isn't a member yet, so there is no name to add or unlock. They claim it in the record.
-  if (e.claimable)
+  // A seat Revenue Nomad found with nobody named: its holder isn't a member yet, so there is no name to add or unlock. They claim it in the record.
+  if (e.claimable && (!e.cells.operator || e.cells.operator.s === "empty"))
     return (
       <span className="tp-notyet" title="The seat holder isn't on Merlin yet. If it's your seat, claim it in the record.">
         Not on Merlin yet
+      </span>
+    );
+  // A name from public profiles nobody has verified: the name, with Verify beside it (no "not verified" label).
+  const op = e.cells.operator;
+  if (op?.s === "value" && op.unverified)
+    return (
+      <span className="vf-held">
+        <RowFact t={{ entity: "engagement", id: e.id, field: "operator" }} cell={op} cover={cover} noun={seatNoun(e, "operator")} what={seatWhat(e, "operator")} />
+        <VerifyName engagementId={e.id} confirmed={!!op.iv} waiting={!!e.claimWaiting} />
       </span>
     );
   if (isOpenRole(e) && e.cells.operator?.s === "empty")

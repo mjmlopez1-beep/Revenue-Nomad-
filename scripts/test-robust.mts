@@ -698,7 +698,7 @@ console.log("\nThe API's routes");
   const KNOWN = [
     "api/health", "api/integrations", "api/integrations/slack/callback", "api/integrations/slack/start", "api/mcp",
     "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
-    "api/table", "api/table/lookup", "api/table/scan", "api/table/unsubscribe",
+    "api/table", "api/table/lookup", "api/table/names", "api/table/scan", "api/table/unsubscribe",
   ];
   eq("the API has exactly the routes Merlin uses (a new one is added to this list on purpose)", found.sort(), KNOWN);
   check("none of the old job-board routes is back (jobs, crawl, prospects, profile)", !found.some((r) => /^api\/(jobs|crawl|prospects|profile)(\/|$)/.test(r)), found);
