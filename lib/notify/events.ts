@@ -64,7 +64,7 @@ async function scanAlerts(at: string): Promise<void> {
     return !!t && t.firstSeen === at && !t.closedAt && T.isOpenRole(e, s, tracks);
   });
   // Members with a saved view that follows hires: its new matches go in the same post, so a scan that opened nothing still can.
-  const hireWho = new Set(who.filter((id) => (s.connector?.alerts?.[id] ?? []).some(followsHires)));
+  const hireWho = new Set(who.filter((id) => (T.alertViewsOf(s, id, s.connector?.alerts?.[id] ?? [])).some(followsHires)));
   if (!fresh.length && !hireWho.size) return;
   const added = hireWho.size ? seatAddedTimes(seed, s) : null;
   const atMs = Date.parse(at);
@@ -97,14 +97,14 @@ async function scanAlerts(at: string): Promise<void> {
     // The HQ a member matches on is the one they see: a hidden company's region.
     const seen = (x: (typeof facts)[number]) => (x.f.hq && hiddenFor(x.e.companyId) ? { ...x.f, hq: T.hqRegion(x.f.hq) } : x.f);
     const mine = fn && fn !== "Other" ? facts.filter((x) => x.f.function === fn) : [];
-    const alerts = (s.connector?.alerts?.[id] ?? []).map((a) => ({ name: a.name, hits: facts.filter((x) => alertMatches(a, seen(x))) })).filter((a) => a.hits.length);
+    const alerts = (T.alertViewsOf(s, id, s.connector?.alerts?.[id] ?? [])).map((a) => ({ name: a.name, hits: facts.filter((x) => alertMatches(a, seen(x))) })).filter((a) => a.hits.length);
     const all = [...new Set([...mine, ...alerts.flatMap((a) => a.hits)])];
     let hires: HireNews[] = [];
     if (added && hireWho.has(id) && Number.isFinite(atMs)) {
       const prev = Date.parse(s.integrations?.members[id]?.hiresAt ?? "");
       const since = Math.max(Number.isFinite(prev) ? prev : 0, atMs - WEEK_MS);
       try {
-        hires = (await newHires(m, s.connector?.alerts?.[id] ?? [], since, atMs, added)).map((h) => ({
+        hires = (await newHires(m, T.alertViewsOf(s, id, s.connector?.alerts?.[id] ?? []), since, atMs, added)).map((h) => ({
           name: h.name,
           n: h.n,
           functions: h.functions,

@@ -1,0 +1,354 @@
+/* Plans (app/post/Billing.tsx): the plans sheet, Plan and billing, the trial banner, a line at a limit. Pine and white, volt for the one action; never ember. */
+
+/* ---------- Free against Pro ---------- */
+.bl-compare {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 20px;
+}
+.bl-compare th,
+.bl-compare td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.bl-compare thead th {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bl-compare thead th.on {
+  color: var(--pine);
+}
+.bl-compare tbody th {
+  width: 34%;
+  font-weight: 600;
+  color: var(--ink);
+}
+.bl-compare td {
+  color: var(--body-ink);
+}
+.bl-compare td.bl-pro {
+  color: var(--ink);
+  font-weight: 600;
+}
+.bl-compare tbody tr:last-child th,
+.bl-compare tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---------- the plans sheet ---------- */
+.bl-sheet-in {
+  display: grid;
+  gap: 14px;
+}
+.bl-lead {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--ink);
+}
+.bl-value {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--pine);
+}
+.bl-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.bl-plan {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.bl-plan-year {
+  border-color: var(--pine);
+  box-shadow: inset 0 0 0 1px var(--pine);
+}
+.bl-plan-tag {
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  padding: 1px 8px;
+  border-radius: var(--r-chip);
+  background: var(--pine);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+}
+.bl-plan-h {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.bl-plan-price {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.bl-plan-price span {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.bl-plan-sub {
+  min-height: 40px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.bl-plan-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+.bl-code {
+  font-size: 13px;
+}
+.bl-code-l {
+  display: grid;
+  grid-template-columns: auto minmax(0, 220px);
+  align-items: center;
+  gap: 4px 10px;
+  font-weight: 600;
+}
+.bl-code-in {
+  text-transform: uppercase;
+}
+.bl-code-hint {
+  grid-column: 1 / -1;
+  font-weight: 400;
+  color: var(--muted);
+}
+.bl-topup {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+}
+.bl-topup.on {
+  background: var(--volt-soft);
+  border-color: transparent;
+}
+.bl-topup-t {
+  flex: 1 1 220px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.bl-topup-t strong {
+  color: var(--ink);
+}
+.bl-sheet-in .bl-compare {
+  margin-top: 0;
+}
+.bl-sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+/* ---------- the trial banner ---------- */
+.tp-strip.bl-banner {
+  border-color: var(--pine-14);
+  background: var(--volt-soft);
+}
+.bl-banner-tag,
+.bl-note-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--r-chip);
+  background: var(--pine);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+}
+
+/* ---------- a line at a limit ---------- */
+.bl-note {
+  display: flex;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.bl-note-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.bl-wall {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- Pilot metrics' billing panel ---------- */
+.tp-pm-bill {
+  margin: 4px 0 12px;
+}
+
+/* ---------- Plan and billing ---------- */
+.bl-status {
+  display: flex;
+  align-items: center;
+  gap: 12px 20px;
+}
+.bl-status-t {
+  flex: 1;
+  min-width: 0;
+}
+.bl-status-trial,
+.bl-status-pro {
+  border-color: var(--pine-14);
+}
+.bl-status-h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.bl-days {
+  padding: 2px 8px;
+  border-radius: var(--r-chip);
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.bl-status-p {
+  max-width: 640px;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.bl-status-acts,
+.bl-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bl-acts {
+  margin-top: 12px;
+}
+.bl-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--volt-ink);
+}
+
+@media (max-width: 767px) {
+  .bl-plans {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .bl-plan-sub {
+    min-height: 0;
+  }
+  .bl-status {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bl-status-acts .btn,
+  .bl-acts .btn,
+  .bl-plan-btn {
+    min-height: 44px;
+  }
+  /* Phones: the line, then its button beside the X. The tag would only crowd it. */
+  .tp-strip.bl-banner {
+    flex-wrap: wrap;
+    padding: 8px 6px 8px 14px;
+  }
+  .bl-banner .bl-banner-tag {
+    display: none;
+  }
+  .bl-banner .tp-strip-t {
+    flex: 1 1 calc(100% - 48px);
+    order: 0;
+  }
+  .bl-banner > .tp-iconbtn {
+    order: 1;
+    align-self: flex-start;
+  }
+  .bl-banner .tp-strip-acts {
+    order: 2;
+  }
+  .bl-note {
+    flex-wrap: wrap;
+  }
+  /* The table stacks: each row is its label, then Free and Pro side by side. */
+  .bl-compare thead {
+    display: none;
+  }
+  .bl-compare tbody tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .bl-compare tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .bl-compare tbody th {
+    grid-column: 1 / -1;
+    width: auto;
+    padding: 0 0 4px;
+    border: 0;
+  }
+  .bl-compare td {
+    padding: 0 8px 0 0;
+    border: 0;
+  }
+  .bl-compare td::before {
+    content: attr(data-cap);
+    display: block;
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}

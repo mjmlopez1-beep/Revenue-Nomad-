@@ -694,8 +694,9 @@ console.log("\nThe API's routes");
     }
   };
   walk(path.join(ROOT, "app", "api"));
-  // Each answers only with its own proof: the member's cookie, the cron secret, an OAuth token or flow, an unsubscribe signature. Health and the counts are public on purpose.
+  // Each answers only with its own proof: the member's cookie, the cron secret, an OAuth token or flow, an unsubscribe signature, Stripe's webhook signature. Health and the counts are public on purpose.
   const KNOWN = [
+    "api/billing", "api/billing/webhook",
     "api/health", "api/integrations", "api/integrations/slack/callback", "api/integrations/slack/start", "api/mcp",
     "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
     "api/table", "api/table/lookup", "api/table/names", "api/table/scan", "api/table/unsubscribe",

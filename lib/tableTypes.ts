@@ -305,6 +305,53 @@ export interface Me {
   firstView?: string | null;
   /** Onboarding answers so far, while the member hasn't finished it, so another tab or device picks up there. Null otherwise. */
   draft?: OnboardDraft | null;
+  /** Onboarding's "How many clients do you have now?" (CLIENT_COUNTS), and "Are you looking for a new client?". Null when not answered. */
+  clientCount?: string | null;
+  looking?: boolean | null;
+  /** Their plan, only while billing is live (RN_BILLING=1 with Stripe set up). Left out otherwise: nothing is gated. */
+  plan?: PlanView;
+}
+
+/** Onboarding's answers to "How many clients do you have now?". */
+export const CLIENT_COUNTS = ["0", "1", "2", "3", "4+"] as const;
+
+/**
+ * A member's plan as the app shows it (lib/billing). Dates are ISO. Prices are shown only when
+ * `showPrices` (the trial is over or in its last 3 days) or at a wall the member hit.
+ */
+export interface PlanView {
+  name: "free" | "trial" | "pro";
+  /** The trial: when it ends, whole days left (1 on the last day), and whether it was extended. */
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  trialExtended: boolean;
+  /** A trial ran (it may be over). */
+  hadTrial: boolean;
+  /** In the trial's last 3 days: the banner and the trial-ending pitch. */
+  ending: boolean;
+  /** Paid Pro: paid to this date, monthly or yearly, set to end (cancelAt), paused. */
+  proUntil: string | null;
+  interval: "month" | "year" | null;
+  cancelAt: string | null;
+  /** "now": paused (Free, no charge) until pausedUntil. "booked": the pause starts at pausedFrom. */
+  pause: "now" | "booked" | null;
+  pausedFrom: string | null;
+  pausedUntil: string | null;
+  /** A paid subscription is running (cancel, pause and the portal apply). */
+  subscribed: boolean;
+  /** The member has a Stripe customer: the portal shows invoices and the card. */
+  portal: boolean;
+  /** Prices may show on the plan page and in the plans sheet. */
+  showPrices: boolean;
+  /** The top-up can be bought (its price is set up). */
+  topup: boolean;
+  /** "Not now" to "Are you looking for a new client?": the softer pitch, never a hard sell. */
+  notLooking: boolean;
+  /** The annual plan framed by their own rate ("Less than an hour of your time a month."), when they have a rate. */
+  annualLine: string | null;
+  prices: { month: number; year: number; topup: number; topupCredits: number; proCredits: number };
+  /** What Free allows now (null: no limit, on Pro). */
+  limits: { savedViews: number | null; claudePerDay: number | null };
 }
 
 /** The most functions "Which fractional usually gets hired before you?" takes. */
@@ -326,6 +373,9 @@ export interface OnboardDraft {
   roles: boolean;
   /** "Email me new ones each week" on the first view step. */
   email: boolean;
+  /** "How many clients do you have now?" (CLIENT_COUNTS) and "Are you looking for a new client?" on step 1, null until answered. */
+  clientCount?: string | null;
+  looking?: boolean | null;
   /** Clients typed on Find your seats: a company's public id, or "name:" and a name we don't have. */
   clients: string[];
   views: string[];
@@ -516,6 +566,8 @@ export interface Benchmarks {
   /** Rates on file that could be read as monthly or hourly. */
   total: number;
   rows: BenchmarkRow[];
+  /** Free while billing is live: medians by function only, no ranges and no client-size rows (Pro has them). */
+  limited?: boolean;
 }
 
 export interface View {
@@ -658,6 +710,26 @@ export interface AdminStats {
   walls: { members: number; hits: number };
   /** Pro waitlist: who asked, who saw the offer, and where they clicked. */
   pro: { interested: number; views: number; byWhere: Record<string, number> };
+  /**
+   * Billing, while it is live: members on the trial, on Pro (paused counts as Free), on Free;
+   * trials that ended and how many of those paid; monthly recurring revenue in cents (a yearly plan
+   * counts a twelfth); subscriptions that ended this calendar month; top-ups (all time and this
+   * month). Counts and money only.
+   */
+  billing?: {
+    trial: number;
+    pro: number;
+    free: number;
+    paused: number;
+    trialsEnded: number;
+    trialsPaid: number;
+    mrrCents: number;
+    churnMonth: number;
+    topups: number;
+    topupCents: number;
+    topupsMonth: number;
+    paidMonthCents: number;
+  };
   topUnlocked: { field: string; n: number }[];
   topAdded: { field: string; n: number }[];
   scan: { lastRunAt: string | null; openNow: number; opened7: number; closed30: number; sources: { source: string; fetched: number; matched: number; error?: string }[] };
@@ -731,7 +803,7 @@ export type Action =
    * sure" (left out: unchanged). `firstView`: the id of the saved view onboarding made (null takes
    * it off). It marks the member onboarded and drops their onboarding draft.
    */
-  | { type: "profile"; function?: string; goal?: string; title?: string; icp?: Icp | null; before?: string[]; firstView?: string | null }
+  | { type: "profile"; function?: string; goal?: string; title?: string; icp?: Icp | null; before?: string[]; firstView?: string | null; clientCount?: string | null; looking?: boolean | null }
   /** Onboarding's answers so far, after each step (null drops them). Nothing changes once the member is onboarded. */
   | { type: "onboardDraft"; draft: OnboardDraft | null }
   /**

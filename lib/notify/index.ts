@@ -9,7 +9,7 @@
  * together, with a count, when the window opens again. A weekly scan is one event.
  */
 import { publicBase } from "../links";
-import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type State } from "../table";
+import { ActionError, alertKindOpen, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type State } from "../table";
 import { functionOf } from "../tableFields";
 import { alertFor, bodyFor, testAlert, type Alert } from "./format";
 import { integrationsAllowed } from "./plan";
@@ -333,6 +333,8 @@ export function deliver(memberId: string, item: AlertItem): Promise<void> {
     (async () => {
       if (!integrationsAllowed(memberId)) return;
       const s0 = await loadState();
+      // Free (while billing is live) gets the weekly roles post only: message and seat alerts are Pro's.
+      if (!alertKindOpen(s0, memberId, item.kind)) return;
       const m0 = s0.integrations?.members[memberId];
       if (!live(m0).length || m0?.alerts[item.kind] === false) return;
       const nowMs = Date.now();
@@ -377,7 +379,7 @@ export function flushDue(): Promise<number> {
               continue;
             }
             delete mine.pending[kind];
-            if (!live(mine).length || mine.alerts[kind] === false || !integrationsAllowed(memberId)) continue;
+            if (!live(mine).length || mine.alerts[kind] === false || !integrationsAllowed(memberId) || !alertKindOpen(d, memberId, kind)) continue;
             mine.lastSent[kind] = new Date(nowMs).toISOString();
             out.push({ memberId, kind, items });
           }

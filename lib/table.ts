@@ -83,7 +83,7 @@ import type {
   Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, OnboardDraft, PartnersView, PersonRec,
   ScanSummary, View,
 } from "./tableTypes";
-import { BEFORE_MAX } from "./tableTypes";
+import { BEFORE_MAX, CLIENT_COUNTS, type PlanView } from "./tableTypes";
 import type { DigestData, DigestHires, PostingCheckResult, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
 import { followsHires } from "./hired";
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
@@ -96,6 +96,11 @@ import { claimToken, seatForToken } from "./claimToken";
 import { cleanNote, connectText, notePitch } from "./partners";
 import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
+import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
+import {
+  ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, pauseState, startTrial, trialEnding,
+  type BillingState,
+} from "./billing/rules";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 
 export type { Action, ActionResult, View } from "./tableTypes";
@@ -195,8 +200,11 @@ export interface FieldValue {
 export interface LedgerEntry {
   memberId: string;
   delta: number;
-  /** adjust: a one-time balance correction (ref "starter.floor"). */
-  reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm" | "adjust";
+  /**
+   * adjust: a one-time balance correction (ref "starter.floor"). plan: Pro's credits for a paid
+   * month (ref "plan.<invoice>.<month>"). topup: a top-up bought (ref "topup.<checkout session>").
+   */
+  reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm" | "adjust" | "plan" | "topup";
   ref: string;
   at: string;
   /**
@@ -238,6 +246,9 @@ interface Profile {
   firstView?: string;
   /** Onboarding answers so far, while not onboarded (the onboardDraft action). The profile action drops it. */
   draft?: OnboardDraft;
+  /** Onboarding's "How many clients do you have now?" (CLIENT_COUNTS) and "Are you looking for a new client?". */
+  clientCount?: string;
+  looking?: boolean;
 }
 /** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
 interface RoleTrack {
@@ -370,6 +381,8 @@ export interface State extends MessagingState {
   seatInvites?: SeatInvite[];
   /** The invite loop: who joined through whose invite, and when the inviter was told. See announceJoin. */
   inviteJoins?: InviteJoin[];
+  /** Plans and payments (lib/billing): each member's PlanRecord, Stripe events handled, money in. Only while billing is live. */
+  billing?: BillingState;
 }
 
 /**
@@ -2759,6 +2772,11 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "reversal" ? "Removed" : l.reason, company: "", field: BENCH_LABEL });
         continue;
       }
+      // Pro's credits for a paid month, and a top-up bought (lib/billing).
+      if (l.reason === "plan" || l.reason === "topup") {
+        ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "plan" ? "Pro credits for the month" : `Bought ${TOPUP_CREDITS} credits`, company: "", field: "" });
+        continue;
+      }
       // The one-time lift to 0 when starter credits went down.
       if (l.reason === "adjust") {
         ledger.push({ at: l.at, delta: l.delta, reason: "Topped up to 0 when starter credits changed", company: "", field: "" });
@@ -2837,6 +2855,10 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       ...(Array.isArray(prof.before) ? { before: [...prof.before] } : {}),
       firstView: prof.firstView && (s.connector?.alerts?.[me.id] ?? []).some((x) => x.id === prof.firstView && x.place) ? prof.firstView : null,
       draft: !prof.onboarded && prof.draft ? { ...prof.draft } : null,
+      clientCount: prof.clientCount ?? null,
+      looking: typeof prof.looking === "boolean" ? prof.looking : null,
+      // Their plan, only while billing is live (lib/billing). Without it nothing is gated.
+      ...(billingLive() ? { plan: planView(s, me.id, nowMs) } : {}),
       // Only the viewer's own. Nobody else's private rate ever leaves the server.
       benchRates: s.benchRates
         .filter((b) => b.by === me.id)
@@ -2874,8 +2896,18 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     reported,
     email: emailEnabled(),
     contact: contactInfo(),
-    ...(me && scan ? { ...(bench ? { benchmarks: benchmarks(seed, g, s, me.id) } : {}), scan } : {}),
-    ...(me && scan && admin && !only ? { admin: { ...adminStats(seed, s, g, idx, nowMs, scan, entityOf), messages: messageStats(s), integrations: integrationStats(s.integrations) }, reportedMessages: reportedMessages(s, memberName) } : {}),
+    ...(me && scan ? { ...(bench ? { benchmarks: freeNow(s, me.id, nowMs) ? freeBenchmarks(benchmarks(seed, g, s, me.id)) : benchmarks(seed, g, s, me.id) } : {}), scan } : {}),
+    ...(me && scan && admin && !only
+      ? {
+          admin: {
+            ...adminStats(seed, s, g, idx, nowMs, scan, entityOf),
+            messages: messageStats(s),
+            integrations: integrationStats(s.integrations),
+            ...(billingLive() ? { billing: billingStats(s, idx, nowMs) } : {}),
+          },
+          reportedMessages: reportedMessages(s, memberName),
+        }
+      : {}),
     version: viewVersion(s),
   };
 }
@@ -3365,6 +3397,8 @@ function cleanDraft(raw: unknown, alerts: { id: string }[], now: string): Onboar
     before: Array.isArray(r.before) ? cleanBefore(r.before) : null,
     roles: r.roles !== false,
     email: r.email !== false,
+    clientCount: typeof r.clientCount === "string" && (CLIENT_COUNTS as readonly string[]).includes(r.clientCount) ? r.clientCount : null,
+    looking: typeof r.looking === "boolean" ? r.looking : null,
     clients: [...new Set((Array.isArray(r.clients) ? r.clients : []).slice(0, 20).map((x) => draftText(x, 90)).filter(Boolean))],
     views: [...new Set((Array.isArray(r.views) ? r.views : []).map((x) => String(x ?? "")).filter((x) => own.has(x)))].slice(0, 2),
     saved: typeof r.saved === "string" && r.saved ? r.saved.slice(0, 3000) : null,
@@ -3499,6 +3533,7 @@ export async function perform(
     // Bonuses held at the cap are paid first, as the rolling window frees room.
     releaseHeld(s, me.id, now);
     const balBefore = balance(s, me.id);
+    const ledgerAt = s.ledger.length;
     const g = graph(seed, s);
     // Followed roles, rebuilt after a change to them (the draft changes in place).
     let tracksNow: Tracks | null = null;
@@ -4433,9 +4468,21 @@ export async function perform(
               p.firstView = id;
             }
           }
+          // Onboarding step 1: how many clients now, and whether they are looking for a new one. Both optional.
+          if (a.clientCount !== undefined) {
+            if (a.clientCount === null || a.clientCount === "") delete p.clientCount;
+            else if ((CLIENT_COUNTS as readonly string[]).includes(String(a.clientCount))) p.clientCount = String(a.clientCount);
+            else throw new ActionError("Pick how many clients you have from the list.");
+          }
+          if (a.looking !== undefined) {
+            if (typeof a.looking === "boolean") p.looking = a.looking;
+            else delete p.looking;
+          }
           p.onboarded = true;
           delete p.draft;
           s.profiles[me.id] = p;
+          // The reverse trial starts when onboarding is done (lib/billing), once.
+          startTrialIn(s, me.id, nowMs);
           return { message: "Saved." };
         }
         case "onboardDraft": {
@@ -4452,7 +4499,10 @@ export async function perform(
           s.connector ??= emptyConnector();
           s.connector.alerts ??= {};
           try {
+            const had = (s.connector.alerts[me.id] ?? []).length;
             const r = savedViewAction(s.connector.alerts[me.id] ?? [], a, () => `al_${randomBytes(6).toString("base64url")}`, now);
+            // Free keeps one saved view (onboarding's own views aside). A view they saved already still comes back as that view.
+            if (r.list.length > had && r.list.length > FREE_SAVED_VIEWS && s.profiles[me.id]?.onboarded && freeNow(s, me.id, nowMs)) throw new ActionError(SAVED_VIEW_FREE);
             s.connector.alerts[me.id] = r.list;
             return { message: r.message, ...(r.id ? { id: r.id } : {}) };
           } catch (e) {
@@ -5076,6 +5126,9 @@ export async function perform(
     };
 
     const out = run();
+    // Value in the trial's last days (a warm path unlocked: who held a seat or a person's name; an invite sent) extends it once.
+    if (billingLive() && (a.type === "invite" || s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && (l.ref.endsWith(".operator") || (l.ref.startsWith("p_") && l.ref.endsWith(".name"))))))
+      valueMoment(s, me.id, nowMs);
     if (movedRate && out.message) out.message += " This rate replaces the one you shared privately, which already earned its credit.";
     // A dry run throws, so the batch keeps nothing it wrote (see flush).
     if (opts.dryRun) throw refusal.message ? new ActionError(refusal.message) : new DryRun({ ...out, spent: balBefore - balance(s, me.id) });
@@ -5177,6 +5230,8 @@ export const tableInternals = {
   fnOf, hqRegion, isOpenRole, friendliness,
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
   geoOf, firmsInReview,
+  // Plans (lib/billing): the value moment that extends a trial, the saved views Free alerts on, Free's limits, the member's opaque billing ref.
+  valueMoment, alertViewsOf, freeNow, billingRef, balance, grantPlanCredits,
 };
 
 /* ---------- claim links (/claim/<token>) and Remove my name ---------- */
@@ -5516,6 +5571,197 @@ export async function touch(token: string | null | undefined, ip?: string): Prom
     if (newIp) ipWriting.delete(key);
   }
   scheduleJoins(await loadState(), me.id);
+}
+
+/* ---------- plans and payments (lib/plan.ts, lib/billing) ---------- */
+
+/** A member's plan record, as stored (undefined: Free, or billing never ran). */
+const planRec = (s: State, memberId: string): PlanRecord | undefined => s.billing?.members[memberId];
+/** Free's limits apply to this member now. Never while billing isn't live: then nothing is gated. */
+function freeNow(s: State, memberId: string, nowMs = Date.now()): boolean {
+  return gated(planRec(s, memberId), nowMs);
+}
+/** Start the reverse trial for an onboarded member who has had none (and never paid). Changes the draft; true when it started. */
+function startTrialIn(s: State, memberId: string, nowMs: number): boolean {
+  if (!billingLive() || !s.profiles[memberId]?.onboarded) return false;
+  const t = startTrial(planRec(s, memberId), nowMs);
+  if (!t) return false;
+  s.billing ??= emptyBilling();
+  s.billing.members[memberId] = t;
+  return true;
+}
+/** Value happened: a conversation opened, a warm path unlocked, an invite sent. In the trial's last 4 days it runs 7 longer, once. */
+function valueMoment(s: State, memberId: string, nowMs: number): boolean {
+  return billingLive() && extendTrial(planRec(s, memberId), nowMs);
+}
+/** The saved views a member's alerts and weekly email use: on Free the first one only (the rest stay saved and open in the app). */
+function alertViewsOf<T>(s: State, memberId: string, list: T[], nowMs = Date.now()): T[] {
+  return list.length > FREE_SAVED_VIEWS && freeNow(s, memberId, nowMs) ? list.slice(0, FREE_SAVED_VIEWS) : list;
+}
+/** Said when Free's one saved view is taken. The app opens the plans instead of sending it; this is the server's word. */
+export const SAVED_VIEW_FREE = "On Free you keep 1 saved view. Pro watches as many markets as you want, with alerts as soon as roles open.";
+/** The benchmarks on Free: the median by function, no middle half and no client-size rows. */
+function freeBenchmarks(b: Benchmarks): Benchmarks {
+  const median = ({ p25: _p25, p75: _p75, ...rest }: RateStat): RateStat => rest;
+  return { ...b, limited: true, rows: b.rows.filter((r) => r.revenue === "All").map((r) => ({ ...r, monthly: median(r.monthly), hourly: median(r.hourly) })) };
+}
+/** The member's own rate for the annual line: their newest rate shared for the benchmarks, else one they put on a record. */
+function ownRate(s: State, memberId: string): { kind: "monthly" | "hourly"; amount: number } | null {
+  const mine = s.benchRates.filter((b) => b.by === memberId).sort((a, b) => b.at.localeCompare(a.at))[0];
+  if (mine) return { kind: mine.kind, amount: mine.amount };
+  for (const [k, v] of Object.entries(s.values)) {
+    if (v.by !== memberId || v.status !== "live" || !k.endsWith(".rate")) continue;
+    const r = readRate(v.value, s.values[`${k.slice(0, -5)}.pricing`]?.value ?? null);
+    if (r) return r;
+  }
+  return null;
+}
+/** Me.plan: what the Plan and billing page, the banner and the upgrade moments read. */
+function planView(s: State, memberId: string, nowMs: number): PlanView {
+  const rec = planRec(s, memberId);
+  const name = planOf(rec, nowMs);
+  const prof = s.profiles[memberId] ?? {};
+  const ending = trialEnding(rec, nowMs);
+  const free = name === "free";
+  const pause = pauseState(rec, nowMs);
+  return {
+    name,
+    trialEndsAt: rec?.trialEndsAt ?? null,
+    trialDaysLeft: trialDaysLeft(rec, nowMs),
+    trialExtended: !!rec?.trialExtended,
+    hadTrial: !!rec?.trialStartedAt,
+    ending,
+    proUntil: rec?.proUntil ?? null,
+    interval: rec?.interval ?? null,
+    cancelAt: rec?.cancelAt ?? null,
+    pause,
+    pausedFrom: pause ? rec?.pausedFrom ?? null : null,
+    pausedUntil: pause ? rec?.pausedUntil ?? null : null,
+    subscribed: !!rec?.subscriptionId,
+    portal: !!rec?.customerId,
+    // No price before the trial's last days: it shows once the trial is over, ends soon, or on Pro.
+    showPrices: name !== "trial" || ending,
+    topup: !!process.env.STRIPE_PRICE_TOPUP?.trim(),
+    notLooking: prof.looking === false,
+    annualLine: annualLine(hourlyOf(ownRate(s, memberId))),
+    prices: { month: PRICES.month, year: PRICES.year, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
+    limits: { savedViews: free ? FREE_SAVED_VIEWS : null, claudePerDay: free ? FREE_MCP_PER_DAY : null },
+  };
+}
+
+/** Pilot metrics' billing panel: counts and money only, never a name. */
+function billingStats(s: State, idx: MemberIndex, nowMs: number): NonNullable<AdminStats["billing"]> {
+  const recs = s.billing?.members ?? {};
+  const month = new Date(nowMs).toISOString().slice(0, 7);
+  let trial = 0;
+  let pro = 0;
+  let paused = 0;
+  let trialsEnded = 0;
+  let trialsPaid = 0;
+  let mrrCents = 0;
+  for (const [id, rec] of Object.entries(recs)) {
+    if (!idx.byId.has(id)) continue;
+    const plan = planOf(rec, nowMs);
+    if (plan === "trial") trial++;
+    else if (plan === "pro") pro++;
+    if (pauseState(rec, nowMs) === "now") paused++;
+    // A trial that ended (or that a payment cut short), and whether it turned into a paid plan.
+    if (rec.trialEndsAt && (Date.parse(rec.trialEndsAt) <= nowMs || rec.paidSince)) {
+      trialsEnded++;
+      if (rec.paidSince) trialsPaid++;
+    }
+    // Recurring revenue from plans that will renew: not set to end, not paused now.
+    if (plan === "pro" && rec.subscriptionId && !rec.cancelAt) {
+      const cents = rec.cents || (rec.interval === "year" ? PRICES.year : PRICES.month) * 100;
+      mrrCents += rec.interval === "year" ? Math.round(cents / 12) : cents;
+    }
+  }
+  const pays = s.billing?.payments ?? [];
+  const topups = pays.filter((x) => x.kind === "topup");
+  const onboarded = idx.all.filter((m) => s.profiles[m.id]?.onboarded).length;
+  return {
+    trial,
+    pro,
+    paused,
+    free: Math.max(0, onboarded - trial - pro),
+    trialsEnded,
+    trialsPaid,
+    mrrCents,
+    churnMonth: new Set((s.billing?.ended ?? []).filter((x) => x.at.startsWith(month)).map((x) => x.memberId)).size,
+    topups: topups.length,
+    topupCents: topups.reduce((n, x) => n + x.cents, 0),
+    topupsMonth: topups.filter((x) => x.at.startsWith(month)).length,
+    paidMonthCents: pays.filter((x) => x.at.startsWith(month)).reduce((n, x) => n + x.cents, 0),
+  };
+}
+
+/** The member's opaque reference at Stripe: never their id or name, and nothing that leads back without the server's key. */
+function billingRef(memberId: string): string {
+  return `rn_${createHmac("sha256", ID_KEY).update(`billing:${memberId}`).digest("base64url").slice(0, 24)}`;
+}
+
+/** Pro credits for a paid month (one grant per month, each ref once). Changes the draft; returns the credits granted. */
+function grantPlanCredits(s: State, memberId: string, nowMs: number): number {
+  const ref = dueGrantRef(planRec(s, memberId), nowMs);
+  if (!ref || s.ledger.some((l) => l.reason === "plan" && l.ref === ref)) return 0;
+  s.ledger.push({ memberId, delta: PRO_CREDITS, reason: "plan", ref, at: new Date(nowMs).toISOString() });
+  return PRO_CREDITS;
+}
+/** Plan credit refs already on the ledger (a read-side shortcut, so a visit doesn't scan the ledger each time). */
+const grantedRefs = new Set<string>();
+let sweepAt = 0;
+
+/**
+ * A visit while billing is live: an onboarded member with no trial yet gets theirs (members who
+ * finished onboarding before billing was switched on start it here, on their next visit), and a
+ * yearly Pro member gets the month's credits. Writes only when one of those is due. Once an hour
+ * at most it also sends the trial notices that are due, in the background (lib/billing/server.ts).
+ */
+export async function billingVisit(token: string | null | undefined, origin?: string): Promise<void> {
+  if (!token || !billingLive()) return;
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (me) {
+    const nowMs = Date.now();
+    const rec = planRec(s, me.id);
+    const trial = !!s.profiles[me.id]?.onboarded && !!startTrial(rec, nowMs);
+    const ref = dueGrantRef(rec, nowMs);
+    let grant = false;
+    if (ref && !grantedRefs.has(ref)) {
+      if (s.ledger.some((l) => l.reason === "plan" && l.ref === ref)) grantedRefs.add(ref);
+      else grant = true;
+    }
+    if (trial || grant)
+      await mutate((d) => {
+        startTrialIn(d, me.id, Date.now());
+        grantPlanCredits(d, me.id, Date.now());
+      });
+  }
+  if (Date.now() - sweepAt > 60 * 60_000) {
+    sweepAt = Date.now();
+    void import("./billing/server").then((m) => m.sweep(undefined, origin)).catch((e) => console.error("billing notices failed", e));
+  }
+}
+
+/** Free's saved views are full: a new one would be one too many (the connector's saved searches ask this). */
+export async function savedViewsFull(memberId: string, have: number): Promise<boolean> {
+  const s = await loadState();
+  return have >= FREE_SAVED_VIEWS && !!s.profiles[memberId]?.onboarded && freeNow(s, memberId);
+}
+/** The Claude connector's requests a day on this member's plan: FREE_MCP_PER_DAY on Free, null for no extra limit. */
+export async function claudePerDay(memberId: string): Promise<number | null> {
+  return freeNow(await loadState(), memberId) ? FREE_MCP_PER_DAY : null;
+}
+/** Slack and webhooks: Free gets the weekly roles post only. Message and seat alerts are Pro's. */
+export function alertKindOpen(s: State, memberId: string, kind: string): boolean {
+  return kind === "roles" || !freeNow(s, memberId);
+}
+/** A member's plan by internal id, for lib/radar and anything else that reads a member by id: the record, Pro now, and Free's limits in play. */
+export async function planFor(memberId: string): Promise<{ rec: PlanRecord | undefined; pro: boolean; gated: boolean }> {
+  const s = await loadState();
+  const rec = planRec(s, memberId);
+  const nowMs = Date.now();
+  return { rec, pro: hasPro(rec, nowMs), gated: gated(rec, nowMs) };
 }
 
 /* ---------- the invite loop: a friend joined from your invite ---------- */
@@ -6438,7 +6684,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
   }
   // Saved views that follow hires ("Recently hired"): their new matches go in the email too, in a week with no new roles as well.
   const alertsOf = s.connector?.alerts ?? {};
-  const hireViewsOf = (id: string) => (alertsOf[id] ?? []).filter((a) => a.email !== false && followsHires(a));
+  const hireViewsOf = (id: string) => alertViewsOf(s, id, alertsOf[id] ?? [], nowMs).filter((a) => a.email !== false && followsHires(a));
   const anyHireViews = Object.keys(alertsOf).some((id) => hireViewsOf(id).length > 0);
   if (!fresh.length && !anyHireViews) return [];
   const hireMod = anyHireViews ? await import("./hireAlerts") : null;
@@ -6468,7 +6714,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     };
   });
   const alertCounts = (m: Member) =>
-    (alertsOf[m.id] ?? [])
+    alertViewsOf(s, m.id, alertsOf[m.id] ?? [], nowMs)
       // A saved view whose weekly email the member turned off stays saved, out of the email.
       .filter((a) => a.email !== false)
       .map((a) => ({

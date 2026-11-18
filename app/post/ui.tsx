@@ -23,6 +23,7 @@ import { BENCH_RATE_HELP, atTime, fieldText, plural, type Layout } from "./hooks
 import { owedLine } from "./ledger";
 import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
+import { CreditsWall, UpgradeNote } from "./Billing";
 import { InvitePanel } from "./Invite";
 import { SEAT_YIELD, tappedWhat, wallBack } from "./earnBack";
 import { marksConfirmed } from "./display";
@@ -246,9 +247,24 @@ export function YourSeat({ id }: { id: string }) {
 /** Whether the Pro waitlist offer shows anywhere in the app. Off: the owner decided not to call out Pro yet. */
 const PRO_SHOWN = false;
 
-/** The Pro waitlist offer, wired to the signed-in member. */
+/**
+ * The Pro waitlist offer, wired to the signed-in member. While billing is live (Me.plan) the places
+ * that had it show billing instead: out of credits, the top-up and Pro; Your credits, the top-up
+ * once prices may show. The waitlist never shows then.
+ */
 export function Pro({ where, variant }: { where: ProWhere; variant?: "card" | "line" }) {
   const ui = useUi();
+  const plan = ui.me.plan;
+  if (plan) {
+    if (where === "zero_credits") return <CreditsWall plan={plan} />;
+    if (where === "my_credits" && plan.showPrices && plan.topup)
+      return (
+        <UpgradeNote from="credits">
+          {plan.prices.topupCredits} more credits are ${plan.prices.topup}, once, on any plan.
+        </UpgradeNote>
+      );
+    return null;
+  }
   // The owner asked not to call out Pro in the product for now. Flip PRO_SHOWN to bring it back.
   if (!PRO_SHOWN) return null;
   return (

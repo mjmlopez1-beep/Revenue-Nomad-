@@ -14,6 +14,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconChevron, useToast } from "../ui/shared";
 import { useCopy } from "./Credits";
 import { UseInClaude } from "./UseInClaude";
+import { UpgradeNote } from "./Billing";
 import type { AlertKind, DestView, IntegrationsView } from "@/lib/notify/types";
 import "./connect.css";
 import "./pages.css";
@@ -430,6 +431,7 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
         <h2 className="in-h" id="in-slack-h">
           Alerts in Slack
         </h2>
+        <UpgradeNote from="slack">On Free, Slack gets the weekly post of new roles. Pro sends every alert: messages, your seats, and roles as they open.</UpgradeNote>
         {notice && (
           <div className={`in-notice${notice === "connected" ? " ok" : ""}`} role="status">
             <p>{NOTICE_WORDS[notice]}</p>
@@ -612,6 +614,7 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
         <h2 className="in-h" id="in-claude-h">
           Use it in Claude
         </h2>
+        <UpgradeNote from="claude">On Free, Claude can ask Merlin 20 times a day. Pro has no daily cap.</UpgradeNote>
         <UseInClaude embedded onBack={onBack} onCredits={onCredits} />
       </section>
     </div>
