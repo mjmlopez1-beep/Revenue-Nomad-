@@ -77,6 +77,16 @@
   line-height: 22px;
   color: var(--body-ink);
 }
+/* How many members confirmed the name: said in here, never as a check beside the name. */
+.vf-count {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.vf-lead + .vf-count {
+  margin-top: -4px;
+}
 .vf-list {
   display: grid;
   border-top: 1px solid var(--line);

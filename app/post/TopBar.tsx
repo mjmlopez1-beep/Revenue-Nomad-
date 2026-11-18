@@ -14,6 +14,7 @@ import { Brand, IconCoin, IconPlus, IconSearch, IconX, IconMenu, initials, timeA
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
+import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
 
@@ -35,10 +36,29 @@ export const lostLinkText = (support: string | null | undefined, emailOn: boolea
  * The balance. At 3 or fewer it turns ember, unless `quiet`: the next-move card is on the page
  * and already says so, and a screen carries one urgent thing at a time. A change in the balance
  * is read out ("24 credits") for screen readers.
+ *
+ * When the day's unlock limit binds before the balance (Me.unlocksLeft below credits, an account's
+ * first day most of all), a second line says so: "25 unlocks left today" ("25 unlocks today" on
+ * the narrowest phones), so the wall is never a surprise. `unlockTip` says why, in its tooltip.
  */
-export function CreditsPill({ me, onClick, btnRef, quiet }: { me: Me; onClick: () => void; btnRef?: RefObject<HTMLButtonElement | null>; quiet?: boolean }) {
+export function CreditsPill({
+  me,
+  onClick,
+  btnRef,
+  quiet,
+  unlockTip,
+}: {
+  me: Me;
+  onClick: () => void;
+  btnRef?: RefObject<HTMLButtonElement | null>;
+  quiet?: boolean;
+  /** Why the limit binds today (ledger.ts unlockLimitLine): the tooltip beside "25 unlocks left today". */
+  unlockTip?: string | null;
+}) {
   const low = me.credits <= 3 && !quiet;
   const owed = me.owed ?? 0;
+  const left = unlocksLeft(me);
+  const leftWords = unlocksLeftWords(me);
   const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
   const [said, setSaid] = useState("");
   const prev = useRef(me.credits);
@@ -57,18 +77,37 @@ export function CreditsPill({ me, onClick, btnRef, quiet }: { me: Me; onClick: (
       <button
         ref={btnRef}
         type="button"
-        className={`tp-credits${low ? " low" : ""}`}
+        className={`tp-credits${low ? " low" : ""}${leftWords ? " has-cap" : ""}`}
         onClick={onClick}
         aria-haspopup="dialog"
         aria-expanded={false}
-        aria-label={`You have ${plural(me.credits, "credit")}${owed > 0 ? ` and owe ${owed}` : ""}. Show where they came from.`}
-        title={owed > 0 ? owedText(owed) : me.credits <= 0 ? "You're out of credits. Add a fact you know and you earn one." : me.credits <= 3 ? "You're running low. Add a fact you know and you earn a credit." : undefined}
+        aria-label={`You have ${plural(me.credits, "credit")}${owed > 0 ? ` and owe ${owed}` : ""}${leftWords ? `, ${leftWords.charAt(0).toLowerCase()}${leftWords.slice(1)}` : ""}. Show where they came from.`}
+        title={
+          owed > 0
+            ? owedText(owed)
+            : me.credits <= 0
+              ? "You're out of credits. Add a fact you know and you earn one."
+              : me.credits <= 3
+                ? "You're running low. Add a fact you know and you earn a credit."
+                : leftWords
+                  ? (unlockTip ?? UNLOCKS_LEFT_TIP)
+                  : undefined
+        }
       >
-        <span className="tp-credits-i" aria-hidden>
-          <IconCoin size={14} />
+        {/* One line: the balance. With the day's limit binding, a second line under it (the pill then stacks the two). */}
+        <span className="tp-credits-top">
+          <span className="tp-credits-i" aria-hidden>
+            <IconCoin size={14} />
+          </span>
+          <span className="num tp-credits-n">{me.credits}</span>
+          <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>
         </span>
-        <span className="num tp-credits-n">{me.credits}</span>
-        <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>
+        {left !== null && (
+          <span className="tp-credits-cap" aria-hidden>
+            {left === 0 ? "No unlocks" : <><span className="num">{left}</span> {left === 1 ? "unlock" : "unlocks"}</>}
+            <span className="tp-credits-cap-left"> left</span> today
+          </span>
+        )}
         {delta && (
           <span key={delta.id} className={`tp-delta${delta.n > 0 ? " up" : " down"}`} aria-hidden>
             {delta.n > 0 ? `+${delta.n}` : `−${-delta.n}`}
@@ -506,6 +545,7 @@ export function TopBar({
   unread = 0,
   onMessages,
   onMessagesPage,
+  unlockTip,
 }: {
   me: Me;
   query: string;
@@ -535,6 +575,8 @@ export function TopBar({
   onMessages?: () => void;
   /** The Messages page is open. */
   onMessagesPage?: boolean;
+  /** Why the day's unlock limit binds (ledger.ts unlockLimitLine), for the credits pill's tooltip. */
+  unlockTip?: string | null;
 }) {
   const msgBtn = !!onMessages;
   const [searchOpen, setSearchOpen] = useState(false);
@@ -601,7 +643,7 @@ export function TopBar({
                   <IconSearch size={18} />
                 </button>
               )}
-              <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
+              <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
               {msgBtn && unread > 0 && <MessagesBtn unread={unread} onClick={onMessages!} here={onMessagesPage} />}
               {/* The main action on a phone is the labeled "Add what you know" at the foot of the list, in thumb reach. Pages reach it from the menu. */}
               <button ref={menuRef} type="button" className="tp-iconbtn tp-has-badge" aria-label={unread ? `Menu, ${unread} unread` : "Menu"} aria-haspopup="menu" aria-expanded={false} onClick={onMenu}>
@@ -626,7 +668,7 @@ export function TopBar({
       <div className="tp-top-right">
         {/* The meter's slot is first, so with nothing earned yet its room is the gap after the search, not a hole between the balance and Add. */}
         <EarnMeter me={me} onClick={onCredits} />
-        <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
+        <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
         <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>

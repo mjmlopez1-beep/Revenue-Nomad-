@@ -14,8 +14,13 @@
  * member's own function. The list sorts by the most recent hire (model.ts), and each row says who
  * was hired and when (Tables.tsx, Cards.tsx). The filter keys are Filters.hiredFn and .hiredWithin,
  * so the sentence lives in the address and in saved views.
+ *
+ * On a phone the sentence folds to one line once it has done its job, so the first company is on
+ * the first screen: "Finance hires · 6 months · in my profile · no Sales yet  Change". It folds
+ * after a pick (or Done), and starts folded when the view opened from a link or a saved view
+ * (TradingPost decides). Tapping the line opens the sentence again.
  */
-import { useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { FUNCTIONS } from "@/lib/tableFields";
 import { HIRED_WINDOWS, windowPhrase } from "@/lib/hired";
@@ -23,6 +28,7 @@ import { IconCheck, IconChevron, IconX } from "../ui/shared";
 import { ICP_FREE_TABS, icpEmpty, namedFn, type Facets, type Filters, type RecordType, type SortKey, type Tab } from "./model";
 import { Anchored } from "./ui";
 import { plural } from "./hooks";
+import { foldParts } from "./display";
 import "./hired.css";
 
 /** What the list is, as the sentence's subject: the view the member is on. */
@@ -92,6 +98,9 @@ export function HiredSentence({
   sort,
   onEditIcp,
   onOff,
+  folded = false,
+  onFold,
+  onUnfold,
 }: {
   f: Filters;
   setF: (f: Filters) => void;
@@ -107,11 +116,27 @@ export function HiredSentence({
   onEditIcp: () => void;
   /** Turn "Recently hired" off: the hire functions and the window go, the other filters stay. */
   onOff: () => void;
+  /** Phones: show the one line ("Finance hires · 6 months · …  Change") instead of the sentence. */
+  folded?: boolean;
+  /** Phones: fold the sentence (after a pick, or Done). Without it the sentence never folds. */
+  onFold?: () => void;
+  /** Open the folded line into the sentence again. */
+  onUnfold?: () => void;
 }) {
   const [open, setOpen] = useState<"scope" | "fn" | "when" | null>(null);
   const scopeRef = useRef<HTMLButtonElement>(null);
   const fnRef = useRef<HTMLButtonElement>(null);
   const whenRef = useRef<HTMLButtonElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  // Folding or opening takes away the control that was used: focus stays in the card (the line, or the sentence's first control).
+  const wasFolded = useRef(folded);
+  useEffect(() => {
+    if (wasFolded.current === folded) return;
+    wasFolded.current = folded;
+    const a = document.activeElement;
+    if (a && a !== document.body && !cardRef.current?.contains(a)) return;
+    cardRef.current?.querySelector<HTMLElement>(folded ? ".hired-fold-b" : ".hired-b")?.focus({ preventScroll: true });
+  }, [folded]);
   const hasIcp = !icpEmpty(me.icp);
   // Following and Unlocked are the member's own lists: the profile never narrows them, so the subject is plain text there.
   const ownList = ICP_FREE_TABS.includes(tab);
@@ -123,10 +148,46 @@ export function HiredSentence({
   // Every function, the ones with hires on file first: one with none here is listed, muted, so the member sees it was looked for.
   const fnOptions = [...FUNCTIONS].sort((a, b) => Number((fnCounts[b] ?? 0) > 0) - Number((fnCounts[a] ?? 0) > 0));
   const close = () => setOpen(null);
+  // A pick done, the sentence folds on a phone so the list it picked is on screen.
   const pick = (nf: Filters) => {
     setF(nf);
     close();
+    onFold?.();
   };
+  const noun = NOUN[type];
+
+  if (folded) {
+    // Which companies, as the line names them: "in my profile", "all companies", "companies you follow".
+    const scopeFold = ownList ? subject.toLowerCase() : icpOn ? "in my profile" : `all ${subject.charAt(0).toLowerCase()}${subject.slice(1)}`;
+    const parts = foldParts({ fns: f.hiredFn, within: f.hiredWithin, scope: scopeFold, mine, notMine: f.notMine });
+    return (
+      <section ref={cardRef} className="hired hired-fold" aria-label="Recently hired">
+        <button
+          type="button"
+          className="hired-fold-b"
+          aria-expanded={false}
+          aria-label={`Recently hired: ${parts.join(", ")}. ${plural(shownN, noun[0], noun[1])}. Change it`}
+          onClick={onUnfold}
+        >
+          {/* The line breaks only between parts, never inside "in my profile". */}
+          <span className="hired-fold-t" aria-hidden>
+            {parts.map((p, k) => (
+              <Fragment key={k}>
+                {k > 0 && " "}
+                <span className="hired-fold-p">
+                  {p}
+                  {k < parts.length - 1 && " ·"}
+                </span>
+              </Fragment>
+            ))}
+          </span>
+          <span className="hired-fold-c" aria-hidden>
+            Change <IconChevron size={12} />
+          </span>
+        </button>
+      </section>
+    );
+  }
 
   const scope = ownList ? (
     <span className="hired-fixed">{type === "companies" ? scopeWords : scopeLower}</span>
@@ -147,7 +208,7 @@ export function HiredSentence({
   );
   // The member's own function, when it can be named: "and have no fractional Sales yet", the No fractional Sales yet filter.
   const gap = mine ? (
-    <Part pressed={f.notMine} onClick={() => setF({ ...f, notMine: !f.notMine })}>
+    <Part pressed={f.notMine} onClick={() => (setF({ ...f, notMine: !f.notMine }), onFold?.())}>
       {type === "engagements" ? "with" : "and have"} no fractional {mine} yet
     </Part>
   ) : null;
@@ -171,15 +232,22 @@ export function HiredSentence({
       </>
     );
 
-  const noun = NOUN[type];
   return (
-    <section className="hired" aria-label="Recently hired">
+    <section ref={cardRef} className="hired" aria-label="Recently hired">
       <div className="hired-main">
         <p className="hired-s">{sentence}</p>
-        <p className="hired-n" aria-live="polite">
-          <span className="num">{plural(shownN, noun[0], noun[1])}</span>
-          {sort === "hired" && shownN > 1 ? ", the most recent hire first" : ""}
-        </p>
+        <div className="hired-foot">
+          <p className="hired-n" aria-live="polite">
+            <span className="num">{plural(shownN, noun[0], noun[1])}</span>
+            {sort === "hired" && shownN > 1 ? ", the most recent hire first" : ""}
+          </p>
+          {/* Phones: fold it to one line and see the list. */}
+          {onFold && (
+            <button type="button" className="hired-done" onClick={onFold}>
+              Done
+            </button>
+          )}
+        </div>
       </div>
       <button type="button" className="hired-x" aria-label="Turn off Recently hired" title="Turn off Recently hired" onClick={onOff}>
         <IconX size={14} />

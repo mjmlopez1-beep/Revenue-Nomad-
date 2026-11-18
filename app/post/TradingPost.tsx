@@ -63,6 +63,7 @@ import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
+import { unlockLimitLine } from "./ledger";
 import "./post.css";
 
 export interface TradingPostProps {
@@ -444,6 +445,22 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    * place, the rows sort by the most recent hire and say who was hired and when.
    */
   const hiredActive = hiredOn(eff);
+  /*
+   * Phones: the Recently hired sentence folds to one line once it has done its job, so the first
+   * company is on the first screen. It starts folded when the view came from a link, a reload or a
+   * saved view (the first view onboarding saved included), and whenever it turns on from anywhere
+   * but its chip (a saved view, the filters). From the chip it opens, for the first pick, and a pick
+   * or Done folds it again. Tapping the line opens it.
+   */
+  const [hiredFolded, setHiredFolded] = useState(() => hiredOn(place0.f));
+  /** Recently hired was just turned on from its chip (startHired): the sentence opens for the first pick. */
+  const hiredByChip = useRef(false);
+  const hiredWas = useRef(hiredActive);
+  useEffect(() => {
+    if (hiredActive && !hiredWas.current) setHiredFolded(!hiredByChip.current);
+    hiredByChip.current = false;
+    hiredWas.current = hiredActive;
+  }, [hiredActive]);
   const hireKey = hiredActive ? `${eff.hiredFn.join("|")}~${eff.hiredWithin}` : "";
   // One object while the functions and the window stay the same, so the memoized rows don't render again.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1367,6 +1384,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   /** The entry turned "No fractional <fn> yet" on, so turning Recently hired off takes it off again. */
   const hiredSetNotMine = useRef(false);
   const startHired = () => {
+    hiredByChip.current = true;
+    setHiredFolded(false);
     setPage("table");
     setDrawer(null);
     setQuery("");
@@ -1783,6 +1802,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       sort={sort}
       onEditIcp={() => setIcpOpen(true)}
       onOff={stopHired}
+      folded={phone && hiredFolded}
+      onFold={phone ? () => setHiredFolded(true) : undefined}
+      onUnfold={() => setHiredFolded(false)}
     />
   );
   /** Under a search: what the profile and filters keep out, one tap to see it; or, widened, the way back. */
@@ -1862,6 +1884,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setSearchWide(false);
     setQuery(x.q);
     setAllFns(x.all);
+    // A saved Recently hired view opens with its sentence folded on a phone: the list is what it saved.
+    setHiredFolded(true);
   };
   const saveView = async (name: string, email: boolean) => {
     const r = await act({ type: "savedView", op: "save", name, email, place: herePlace, criteria: criteriaOf(spelled, fnOnly ? hireFn : null) });
@@ -1928,6 +1952,45 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     document.getElementById("tp-results")?.focus();
   };
 
+  /*
+   * Phones: the floating "Add what you know" never covers the first card (its chips, its unlock and
+   * its buttons). While the first card reaches into the button's corner it steps aside (a fade, no
+   * motion), and it comes back once the list scrolls the card clear. It never moves, so its own
+   * box is where it would be.
+   */
+  const fabRef = useRef<HTMLButtonElement>(null);
+  const [fabAside, setFabAside] = useState(false);
+  const fabShown = phone && page === "table" && !recordOpen && !qt;
+  useEffect(() => {
+    if (!fabShown) {
+      setFabAside(false);
+      return;
+    }
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const fab = fabRef.current?.getBoundingClientRect();
+      const card = document.querySelector<HTMLElement>("#tp-results .tp-pcard")?.getBoundingClientRect();
+      setFabAside(!!fab && !!card && card.bottom > fab.top - 8 && card.top < fab.bottom);
+    };
+    const soon = () => {
+      if (!raf) raf = requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener("scroll", soon, { passive: true });
+    window.addEventListener("resize", soon);
+    // Whatever moves the first card (a banner closed, the sentence folded, a new list) changes the page's height.
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(soon);
+    const main = document.querySelector(".tp-main-phone");
+    if (ro && main) ro.observe(main);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", soon);
+      window.removeEventListener("resize", soon);
+      ro?.disconnect();
+    };
+  }, [fabShown, list]);
+
   /* ----- layout ----- */
   return (
     <UiCtx.Provider value={ui}>
@@ -1963,6 +2026,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           unread={unread}
           onMessages={() => (setEditor(null), setDrawer(null), setPage("messages"))}
           onMessagesPage={page === "messages"}
+          unlockTip={unlockLimitLine(me, view.ledger)}
         />
         {me.asMember && (
           <div className="tp-asmember" role="status">
@@ -2073,9 +2137,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             {more}
             {scanNote}
             {proFoot}
-            {/* The main action, labeled and in thumb reach (DSGNP-8). Not while searching: the keyboard has that space. */}
-            {!recordOpen && !qt && (
-              <button type="button" className="btn btn-primary tp-fab" onClick={() => openAdd()}>
+            {/* The main action, labeled and in thumb reach (DSGNP-8). Not while searching: the keyboard has that space. It steps aside while the first card is under it. */}
+            {fabShown && (
+              <button ref={fabRef} type="button" className={`btn btn-primary tp-fab${fabAside ? " tp-fab-aside" : ""}`} onClick={() => openAdd()}>
                 <IconPlus size={18} /> Add what you know
               </button>
             )}

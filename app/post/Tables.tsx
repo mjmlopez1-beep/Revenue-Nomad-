@@ -5,11 +5,12 @@
  * company column. Cells are 13px in the text face; numbers are right-aligned with tabular
  * figures; a long name, role or seat holder truncates with its full text in the tooltip.
  *
- * Each table leads with what a member can read (the company, its latest seat, the functions it
- * hired, its industry, size, revenue and HQ), then what they can unlock. On Hiring now every
- * row is an open role, so the tables switch to the columns that tell open roles apart. With
- * Recently hired on (`hire`), a company row leads with the hire it matched ("Hired a fractional
- * CFO · Mar 2026") and shows who held that seat.
+ * The companies table leads with the company and who held its latest seat (the warm path), then
+ * what a member can read (the seat, the functions it hired, its industry, size, revenue and HQ),
+ * then the rest of what they can unlock. "Functions hired" shows 3 chips at most, then "+N". On
+ * Hiring now every row is an open role, so the tables switch to the columns that tell open roles
+ * apart. With Recently hired on (`hire`), a company row shows the hire it matched ("Hired a
+ * fractional CFO · Mar 2026") in place of the latest seat, and who held that seat.
  *
  * Credits are never spent by a stray click. A row has at most one paying control per purchase:
  *   - a hidden company's row spends only through the lock on its logo (Unlock company, which also
@@ -29,6 +30,7 @@ import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage,
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
 import { VerifyName } from "./Verify";
+import { fnChipPlan } from "./display";
 
 /**
  * How fractional friendly a company is, as a plain label. Hover for the reason and the score.
@@ -69,21 +71,14 @@ export function UnlockedTag() {
  * ones with an open role and no hire yet ("Sales · hiring"), then the ones only member stories
  * mention (muted). "No Sales seat yet" follows when they hired other functions and nothing on file
  * names the member's, so a row never says "Sales" and "No Sales seat yet" together. `gap` false
- * leaves it out (the "No Sales seat yet" filter already says it).
+ * leaves it out (the "No Sales seat yet" filter already says it). `total` caps every chip in the
+ * cell, the dashed one included: the Companies table shows 3, then "+N" (display.ts fnChipPlan).
  */
-export function FnChips({ i, mine, max = 3, gap = true }: { i: CoInfo; mine: string | null; max?: number; gap?: boolean }) {
-  const { hired, hiring, story } = i.fnState;
-  const ordered = mine && hired.includes(mine) ? [mine, ...hired.filter((f) => f !== mine)] : hired;
-  const all = [
-    ...ordered.map((f) => ({ f, kind: "hired" as const })),
-    ...hiring.map((f) => ({ f, kind: "hiring" as const })),
-    ...story.map((f) => ({ f, kind: "story" as const })),
-  ];
-  const showGap = gap && !!mine && hired.length > 0 && !i.fns.includes(mine);
-  const rest = all.slice(max).map((x) => x.f);
+export function FnChips({ i, mine, max = 3, gap = true, total }: { i: CoInfo; mine: string | null; max?: number; gap?: boolean; total?: number }) {
+  const { chips, rest, gap: showGap } = fnChipPlan(i, mine, { max, total, gap });
   return (
     <span className="tp-fns">
-      {all.slice(0, max).map(({ f, kind }) => (
+      {chips.map(({ f, kind }) => (
         <span
           key={f}
           className={`chip tp-fn${kind === "story" ? " tp-fn-story" : kind === "hiring" ? " tp-fn-hiring" : f === mine ? " tp-fn-me" : ""}`}
@@ -98,10 +93,11 @@ export function FnChips({ i, mine, max = 3, gap = true }: { i: CoInfo; mine: str
       ))}
       {rest.length > 0 && (
         <span className="tp-more num" title={rest.join(", ")}>
-          +{rest.length}
+          <span aria-hidden>+{rest.length}</span>
+          <span className="sr-only">, and {rest.join(", ")}</span>
         </span>
       )}
-      {showGap && <NoSeatYet fn={mine} />}
+      {showGap && mine && <NoSeatYet fn={mine} />}
     </span>
   );
 }
@@ -146,7 +142,7 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
     return (
       <span className="vf-held">
         <RowFact t={{ entity: "engagement", id: e.id, field: "operator" }} cell={op} cover={cover} noun={seatNoun(e, "operator")} what={seatWhat(e, "operator")} />
-        <VerifyName engagementId={e.id} confirmed={!!op.iv} waiting={!!e.claimWaiting} />
+        <VerifyName engagementId={e.id} confirmed={!!op.iv} count={op.ver} waiting={!!e.claimWaiting} />
       </span>
     );
   if (isOpenRole(e) && e.cells.operator?.s === "empty")
@@ -370,9 +366,10 @@ function SeatCell({ i }: { i: CoInfo }) {
   );
 }
 
+/** A table row's functions: 3 chips at most, the dashed "No fractional Sales yet" counted, then "+N", so the column keeps one width. */
 function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: boolean }) {
   const ui = useCellUi();
-  if (i.fns.length) return <FnChips i={i} mine={mine} gap={gap} />;
+  if (i.fns.length) return <FnChips i={i} mine={mine} gap={gap} total={3} />;
   const e = i.engs.find((x) => x.cells.function?.s === "empty");
   if (e) return <RowFact t={{ entity: "engagement", id: e.id, field: "function" }} cell={e.cells.function} />;
   return <AddPill label="Add your seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
@@ -461,6 +458,8 @@ const CompanyRow = memo(function CompanyRow({
           </span>
         )}
       </td>
+      {/* Who held the seat comes right after the company: the warm path is the first thing a row offers. */}
+      <td>{e ? <HeldBy e={e} cover={coverOf(i, e, "operator")} /> : <None />}</td>
       <td>{hired ? <HireLine e={hired} /> : <SeatCell i={i} />}</td>
       <td>
         <FunctionsCell i={i} mine={mine} gap={gap} />
@@ -472,7 +471,6 @@ const CompanyRow = memo(function CompanyRow({
       <td>
         <Fit i={i} />
       </td>
-      <td>{e ? <HeldBy e={e} cover={coverOf(i, e, "operator")} /> : <None />}</td>
       <td className="num">{e ? engCell(i, e, "rate") : <None />}</td>
       <td className="c-lo">
         <PeopleCell i={i} />
@@ -655,30 +653,31 @@ function HeadTip({ label, tip }: { label: string; tip: string }) {
 
 /** Column headers, in sentence case. `num` right-aligns the column. `tip` says what a short header means. `rates` links to Rate benchmarks. */
 const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: SortKey; rates?: boolean }[]> = {
+  // Held by comes right after Company: at 1440, with the filters open, it is on screen without scrolling.
   companies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the latest seat. 1 credit shows who it was and the role they held." },
     { label: "Latest seat", cls: "w-seat", sort: "start" },
-    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for. A dashed chip means none in your function is on file yet." },
+    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
     { label: "Industry", cls: "w-ind" },
     { label: "Employees", cls: "w-emp num", sort: "employees" },
     { label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
     { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
     { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. 1 credit shows who it was and the role they held." },
     { label: "Rate", cls: "w-rate num", rates: true },
     { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
-  // Recently hired: the same columns, led by the hire each company matched. Held by and Rate are that seat's.
+  // Recently hired: the same columns, with the hire each company matched in place of the latest seat. Held by and Rate are that seat's.
   hiredCompanies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the recent hire's seat, a possible referral partner. 1 credit shows who it was and the role they held." },
     { label: "Recent hire", cls: "w-seat w-hire", sort: "hired", tip: "The most recent fractional hire that fits the sentence above, and the month it started. The role shows once you can see it." },
-    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for. A dashed chip means none in your function is on file yet." },
+    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
     { label: "Industry", cls: "w-ind" },
     { label: "Employees", cls: "w-emp num", sort: "employees" },
     { label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
     { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
     { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held that seat, a possible referral partner. 1 credit shows who it was and the role they held." },
     { label: "Rate", cls: "w-rate num", rates: true },
     { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
