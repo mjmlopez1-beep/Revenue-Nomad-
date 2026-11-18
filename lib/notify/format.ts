@@ -8,7 +8,8 @@
  * name of a member who only unlocked something: their function and title only.
  */
 import { webLink } from "../links";
-import type { AlertItem, AlertKind, DestKind } from "./types";
+import { hiresLine } from "../hired";
+import type { AlertItem, AlertKind, DestKind, HireNews } from "./types";
 
 export interface Alert {
   kind: AlertKind | "test";
@@ -113,14 +114,46 @@ export function alertFor(items: AlertItem[], base: string): Alert | null {
   const roles = rs.flatMap((r) => r.roles);
   const alerts = new Map<string, number>();
   for (const r of rs) for (const a of r.alerts) alerts.set(a.name, (alerts.get(a.name) ?? 0) + a.n);
+  // Saved views that follow hires, one entry each: two scans in one window add up (they never count one hire twice).
+  const hireViews = new Map<string, HireNews>();
+  for (const r of rs)
+    for (const h of r.hires ?? []) {
+      const cur = hireViews.get(h.name);
+      hireViews.set(h.name, cur ? { ...cur, n: cur.n + h.n, rows: [...cur.rows, ...h.rows] } : { ...h, rows: [...h.rows] });
+    }
+  const hires = [...hireViews.values()];
+  const viewUrl = (h: HireNews) => (base && h.place ? `${base}/?${h.place}` : links.hiring(base));
+  if (!total && hires.length) {
+    // No new roles for the member, only new hires: the first view's line is the headline, its companies the lines.
+    const h = hires[0];
+    const one = hires.length === 1;
+    const lines = one ? h.rows.slice(0, 3).map((r) => r.label) : hires.slice(0, 3).map((x) => `${hiresLine(x.n, x.functions, x.inProfile)}, for “${cut(x.name, 50)}”`);
+    if (one && h.n > lines.length && lines.length) lines[lines.length - 1] = `${lines[lines.length - 1]}. And ${plural(h.n - lines.length, "more")}.`;
+    return {
+      kind: "roles",
+      count: hires.reduce((n, x) => n + x.n, 0),
+      headline: one ? hiresLine(h.n, h.functions, h.inProfile) : `New hires for ${hires.length} of your saved views this week`,
+      lines,
+      url: viewUrl(h),
+    };
+  }
   const headline =
     fn && mine === total ? `${plural(total, `new open ${fn} role`)} in the latest scan` : `${plural(total, "new open role")} for you in the latest scan`;
   const lines = roles.slice(0, 3).map((r) => r.label);
   if (total > lines.length && lines.length) lines[lines.length - 1] = `${lines[lines.length - 1]}. And ${plural(total - lines.length, "more")}.`;
-  const saved = [...alerts].slice(0, 2).map(([name, n]) => `${n} ${n === 1 ? "matches" : "match"} your saved view “${cut(name, 60)}”`);
+  const saved = [
+    ...hires.map((h) => `${hiresLine(h.n, h.functions, h.inProfile)}, for your saved view “${cut(h.name, 50)}”`),
+    ...[...alerts].map(([name, n]) => `${n} ${n === 1 ? "matches" : "match"} your saved view “${cut(name, 60)}”`),
+  ].slice(0, 2);
   // At most 3 lines in all: the saved views take the last places.
   const out = [...lines.slice(0, Math.max(1, 3 - saved.length)), ...saved].slice(0, 3);
-  return { kind: "roles", count: total, headline, lines: out, url: roles.length === 1 && total === 1 ? links.company(base, roles[0].companyId) : links.hiring(base) };
+  return {
+    kind: "roles",
+    count: total + hires.reduce((n, h) => n + h.n, 0),
+    headline,
+    lines: out,
+    url: roles.length === 1 && total === 1 && !hires.length ? links.company(base, roles[0].companyId) : links.hiring(base),
+  };
 }
 
 /** The message "Send a test" posts. */

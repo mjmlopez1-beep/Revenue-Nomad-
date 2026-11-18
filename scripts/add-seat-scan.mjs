@@ -22,7 +22,9 @@
  * firm, or a fractional firm, from a client.
  *
  * Each kept row is one seat: source "Seat scan", type Fractional, status Active, end Ongoing, with
- * its title, start and function. The seat holder is NOT stored: these people did not share this
+ * its title, start and function. A seat this run adds carries `addedAt`, the run's time (a seat on
+ * file keeps its own), so saved views that follow hires hear about it that week (lib/hireAlerts.ts).
+ * The seat holder is NOT stored: these people did not share this
  * with us, so the seat has no holder until a member claims it as theirs ("claimSeat" in
  * lib/table.ts). A claim lives in the state, so a re-run never undoes one.
  *
@@ -232,6 +234,8 @@ const companyById = new Map(seed.companies.map((c) => [c.id, c]));
 const removedNames = new Set((seed.removedFirms?.companies ?? []).map((c) => companyKey(c.name)).filter(Boolean));
 const removedEngs = new Set((seed.removedFirms?.engagements ?? []).map((e) => e.id));
 const engIndex = new Map(seed.engagements.map((e, i) => [e.id, i]));
+/** This run's time: the day each new seat came into the table (SeedEngagement.addedAt). */
+const runAt = new Date().toISOString();
 /** Seats on file by company, title and start: the same seat under another id is a duplicate. */
 const seatSig = (companyId, role, start) => (role && start ? `${companyId}|${textKey(role)}|${start}` : null);
 const bySig = new Map();
@@ -393,6 +397,10 @@ for (const r of rows) {
   const eng = { id: engId, companyId: c.id, fields, verified: false };
   if (engId !== hashedId(seatId)) legacyKept++;
   const at = engIndex.get(eng.id);
+  // When the seat came into the table: a new seat gets this run's time, one on file keeps the day it came
+  // (lib/hireAlerts.ts counts a seat added in the last week as a new hire for saved views that follow hires).
+  if (at === undefined) eng.addedAt = runAt;
+  else if (seed.engagements[at].addedAt) eng.addedAt = seed.engagements[at].addedAt;
   if (at === undefined) {
     engIndex.set(eng.id, seed.engagements.length);
     seed.engagements.push(eng);

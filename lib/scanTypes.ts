@@ -108,6 +108,39 @@ export interface DigestData {
   rolesUrl?: string;
   /** Up to 5 of the roles the headline counts, newest first, in free facts only (DigestRole). */
   roles?: DigestRole[];
+  /**
+   * The member's saved views that follow hires ("Recently hired"), each with the companies that
+   * newly match it this week: a matching seat added to the table since their last email (at most a
+   * week). Only views with a match. Never a seat holder's name.
+   */
+  hires?: DigestHires[];
+}
+
+/** One saved view that follows hires, and what newly matches it. Free facts only. */
+export interface DigestHires {
+  /** The view's name, as the member saved it. */
+  name: string;
+  /** Companies that newly match. */
+  n: number;
+  /** The functions the view follows (empty: any function). */
+  functions: string[];
+  /** The view narrows to the member's Ideal Fractional Profile ("in your profile"). */
+  inProfile: boolean;
+  /** The saved view in the app (the button). */
+  url: string;
+  /** Up to 5, the most recent hire first. */
+  rows: DigestHireRow[];
+}
+
+/** One company that newly matches: its name only when it isn't locked for the member, the hire's function and start month. */
+export interface DigestHireRow {
+  /** Null while the company is locked (it has an open role the member hasn't unlocked). */
+  company: string | null;
+  function: string | null;
+  /** "2026-03", or a year alone. */
+  start: string | null;
+  /** The company's record in the app, over the saved view. */
+  url: string;
 }
 
 /** One new open role in the weekly email: free facts only, never the company or a locked fact. */

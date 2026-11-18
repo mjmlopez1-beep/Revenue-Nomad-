@@ -11,7 +11,8 @@ import {
   EMPTY_FILTERS, FIT_STEPS, LIST_OPTIONS, TOGGLE_LABEL, activeCount, clearedFilters, countryKey, namedFn, notMineLabel, placeWords, type Facets, type Filters, type ListKey, type ToggleKey,
 } from "./model";
 import { useOpenPage } from "./Tables";
-import { INDUSTRY_GROUPS } from "@/lib/tableFields";
+import { FUNCTIONS, INDUSTRY_GROUPS } from "@/lib/tableFields";
+import { HIRED_WINDOWS, windowWords } from "@/lib/hired";
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -287,6 +288,57 @@ function Country({ f, setF, counts, regions }: { f: Filters; setF: (f: Filters) 
   );
 }
 
+/**
+ * Recently hired: "Hired a fractional … in the last …". Functions (pick several) and the window,
+ * each with what it gives. A function with nothing behind it is left out unless picked. The same
+ * filter as the sentence over the table (Hired.tsx), so the two always agree.
+ */
+function Hired({ f, setF, facets }: { f: Filters; setF: (f: Filters) => void; facets: Facets }) {
+  const counts = facets.hiredFn ?? {};
+  const fns = FUNCTIONS.filter((o) => (counts[o] ?? 0) > 0 || f.hiredFn.includes(o));
+  return (
+    <>
+    <div className="tp-fblock">
+      <div className="tp-flabel">Hired a fractional</div>
+      {fns.length > 0 ? (
+        <div className="tp-fchips">
+          {fns.map((o) => {
+            const on = f.hiredFn.includes(o);
+            const n = counts[o] ?? 0;
+            return (
+              <button
+                key={o}
+                type="button"
+                aria-pressed={on}
+                className={`chip tp-fchip${on ? " chip-on" : ""}${!n && !on ? " zero" : ""}`}
+                onClick={() => setF({ ...f, hiredFn: on ? f.hiredFn.filter((x) => x !== o) : [...f.hiredFn, o] })}
+              >
+                {o} <span className="tp-cnt num">{n}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="tp-fnote">No fractional hires in this view yet.</p>
+      )}
+    </div>
+    <div className="tp-fblock">
+      <div className="tp-flabel">In the last</div>
+      <div className="tp-fchips" role="radiogroup" aria-label="In the last">
+        {HIRED_WINDOWS.map((w) => {
+          const on = f.hiredWithin === w;
+          return (
+            <button key={w} type="button" role="radio" aria-checked={on} className={`chip tp-fchip${on ? " chip-on" : ""}`} onClick={() => setF({ ...f, hiredWithin: w })}>
+              {w ? windowWords(w) : "Any time"} <span className="tp-cnt num">{facets.hiredWithin?.[w] ?? 0}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+    </>
+  );
+}
+
 /** A group that starts folded (Seat, People): open while one of its filters is on. */
 function Fold({ title, on, children }: { title: string; on: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(on);
@@ -348,6 +400,12 @@ export function FilterPanel({
       {/* The filter a fractional reaches for first: always open, at the top (C28). */}
       <Group title="Function">
         <ListBlock k="fn" title="Seat or open role in" f={f} setF={setF} counts={l.fn} />
+      </Group>
+      <Group title="Recently hired">
+        <Hired f={f} setF={setF} facets={facets} />
+        <p className="tp-fnote">
+          A hire is any seat on file that isn&apos;t full-time or an open role. It counts when it started in the window. A start with only a year counts as December of that year.
+        </p>
       </Group>
       <Group title="Shortcuts">
         <Toggle k="rateKnown" f={f} setF={setF} n={t.rateKnown} />

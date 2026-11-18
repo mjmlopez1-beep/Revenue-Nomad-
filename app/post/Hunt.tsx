@@ -11,7 +11,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { CompanyRec, Icp, SavedViewRec } from "@/lib/tableTypes";
 import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
 import { IconCheck, IconSearch, IconX } from "../ui/shared";
-import { countryKey, countryName, countryOf, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
+import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
+import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
 import { Sheet } from "./ui";
 import { PartnersSwitch } from "./PartnersSwitch";
 import "./hunt.css";
@@ -248,11 +249,56 @@ export function IcpPill({
   );
 }
 
-/** What a member tells us about themselves: title, function and Ideal Fractional Profile. */
+/**
+ * What a member tells us about themselves: title, function, Ideal Fractional Profile, and the
+ * fractionals usually hired before them (`before`: up to 3, [] for Not sure, left out when they
+ * didn't answer or didn't change it).
+ */
 export interface ProfileEdit {
   title: string;
   fn: string | null;
   icp: Icp;
+  before?: string[];
+}
+
+/**
+ * "Which fractional usually gets hired before you?" as chips: every function but the member's
+ * own and Other, the suggested ones first (app/onboard/firstView.ts beforeOrder), up to
+ * BEFORE_MAX, or Not sure. `value` null is not answered.
+ */
+export function BeforeFields({ fn, companies, value, onChange }: { fn: string | null; companies: CompanyRec[]; value: string[] | null; onChange: (v: string[] | null) => void }) {
+  const order = useMemo(() => beforeOrder(deriveAll(companies), fn), [companies, fn]);
+  const picked = value ?? [];
+  const unsure = value !== null && value.length === 0;
+  const full = picked.length >= BEFORE_MAX;
+  return (
+    <fieldset className="hunt-q">
+      <legend className="hunt-h">Which fractional usually gets hired before you?</legend>
+      <div className="hunt-chips" role="group" aria-label="Which fractional usually gets hired before you">
+        {order.order.map((o) => {
+          const on = picked.includes(o);
+          return (
+            <button
+              key={o}
+              type="button"
+              aria-pressed={on}
+              aria-disabled={!on && full}
+              className={`chip hunt-chip${on ? " chip-on" : ""}${!on && full ? " hunt-chip-full" : ""}`}
+              onClick={() => onChange(toggleBefore(value, o))}
+            >
+              {on && <IconCheck size={11} />}
+              {o}
+            </button>
+          );
+        })}
+        <button type="button" aria-pressed={unsure} className={`chip hunt-chip hunt-chip-unsure${unsure ? " chip-on" : ""}`} onClick={() => onChange(unsure ? null : [])}>
+          {unsure && <IconCheck size={11} />}
+          Not sure
+        </button>
+      </div>
+      <p className="hunt-lead">Up to {BEFORE_MAX}. Recently hired opens on the first one. Other members never see your answer, only how many members gave each one.</p>
+    </fieldset>
+  );
 }
 
 /**
@@ -264,6 +310,7 @@ export function IcpSheet({
   icp,
   title,
   fn,
+  before,
   companies,
   onSave,
   onClose,
@@ -271,6 +318,8 @@ export function IcpSheet({
   icp: Icp | null | undefined;
   title: string;
   fn: string | null;
+  /** Me.before: the fractionals usually hired before them, [] Not sure, undefined never asked. */
+  before?: string[];
   companies: CompanyRec[];
   onSave: (v: ProfileEdit) => Promise<boolean>;
   onClose: () => void;
@@ -278,12 +327,18 @@ export function IcpSheet({
   const [v, setV] = useState<Icp>(icp ?? EMPTY_ICP);
   const [t, setT] = useState(title);
   const [f, setF] = useState<string | null>(fn && FUNCTIONS.includes(fn) ? fn : null);
+  const [b, setB] = useState<string[] | null>(Array.isArray(before) ? before : null);
   const [busy, setBusy] = useState(false);
   const industries = useMemo(() => industriesByCount(companies), [companies]);
   const countries = useMemo(() => countriesByCount(companies), [companies]);
+  // Their own function can't come before them. Taking off their only pick leaves the question unanswered, not "Not sure".
+  const rest = b === null ? null : b.filter((x) => x !== f);
+  const nb = b !== null && b.length > 0 && rest !== null && rest.length === 0 ? null : rest;
   const save = async () => {
     setBusy(true);
-    const ok = await onSave({ title: t.trim(), fn: f, icp: v });
+    // An answer left as it was (or never given) isn't sent.
+    const changed = nb !== null && JSON.stringify(nb) !== JSON.stringify(before ?? null);
+    const ok = await onSave({ title: t.trim(), fn: f, icp: v, ...(changed ? { before: nb! } : {}) });
     setBusy(false);
     if (ok) onClose();
   };
@@ -320,6 +375,7 @@ export function IcpSheet({
           </div>
           <p className="hunt-lead">We point out open roles in your function and companies that haven&apos;t hired it yet.</p>
         </fieldset>
+        <BeforeFields fn={f} companies={companies} value={nb} onChange={setB} />
       </div>
       <div className="hunt-sub">
         <div className="hunt-h">Your Ideal Fractional Profile</div>
@@ -336,8 +392,20 @@ export function IcpSheet({
   );
 }
 
-/** "Save this view": a name (made from the filters) and the weekly email. */
-export function SaveViewSheet({ defaultName, emailOn, onSave, onClose }: { defaultName: string; emailOn: boolean; onSave: (name: string, email: boolean) => Promise<boolean>; onClose: () => void }) {
+/** "Save this view": a name (made from the filters) and the weekly email. `hires`: the view follows hires (Recently hired), so the email sends new hires, not open roles. */
+export function SaveViewSheet({
+  defaultName,
+  emailOn,
+  hires = false,
+  onSave,
+  onClose,
+}: {
+  defaultName: string;
+  emailOn: boolean;
+  hires?: boolean;
+  onSave: (name: string, email: boolean) => Promise<boolean>;
+  onClose: () => void;
+}) {
   const [name, setName] = useState(defaultName);
   const [email, setEmail] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -381,9 +449,11 @@ export function SaveViewSheet({ defaultName, emailOn, onSave, onClose }: { defau
           <span className="tp-ftoggle-l">Email me new matches each week</span>
         </button>
         <p className="hunt-note">
-          {emailOn
-            ? "The weekly email lists the open roles that came in matching this view. If you connect Merlin to Claude (Integrations), it can open this view too."
-            : "Email isn't switched on for the pilot yet. Your view is saved, and the weekly email starts once it is. If you connect Merlin to Claude (Integrations), it can open this view too."}
+          {!emailOn
+            ? "Email isn't switched on for the pilot yet. Your view is saved, and the weekly email starts once it is. If you connect Merlin to Claude (Integrations), it can open this view too."
+            : hires
+              ? "The weekly email lists the companies that newly match this view, when a hire like this one is added. Slack gets them too if you connect it (Integrations)."
+              : "The weekly email lists the open roles that came in matching this view. If you connect Merlin to Claude (Integrations), it can open this view too."}
         </p>
       </form>
     </Sheet>

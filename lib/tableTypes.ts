@@ -268,6 +268,46 @@ export interface Me {
    * alerts (lib/mcp/alerts.ts): a view saved in the app shows there, and one saved there shows here.
    */
   savedViews?: SavedViewRec[];
+  /**
+   * The fractional functions this member says usually get hired before them (onboarding's "Which
+   * fractional usually gets hired before you?", and Your profile), up to 3 (BEFORE_MAX). `[]` is
+   * "Not sure". Left out when they were never asked (members from before the question). Only the
+   * member reads it as a list: anyone else only ever sees counts, once 20 members of a function answered.
+   */
+  before?: string[];
+  /**
+   * The member's first view: the saved view onboarding made ("Your first view"). The table opens on
+   * it when the address names no place, while it is still saved. Null otherwise.
+   */
+  firstView?: string | null;
+  /** Onboarding answers so far, while the member hasn't finished it, so another tab or device picks up there. Null otherwise. */
+  draft?: OnboardDraft | null;
+}
+
+/** The most functions "Which fractional usually gets hired before you?" takes. */
+export const BEFORE_MAX = 3;
+
+/**
+ * Onboarding's answers so far (the onboardDraft action), saved after each step. `before` null is
+ * not answered yet, `[]` is "Not sure". `views`: the saved views the first view step made (the
+ * first view, then the open roles one), and `saved` what they were saved as, so going back and
+ * saving again replaces them. `at`: when the browser that saved it did (its own clock).
+ */
+export interface OnboardDraft {
+  step: number;
+  function: string | null;
+  title: string;
+  icp: Icp | null;
+  before: string[] | null;
+  /** "Also show open <function> roles" on the first view step. */
+  roles: boolean;
+  /** "Email me new ones each week" on the first view step. */
+  email: boolean;
+  /** Clients typed on Find your seats: a company's public id, or "name:" and a name we don't have. */
+  clients: string[];
+  views: string[];
+  saved: string | null;
+  at: string;
 }
 
 /**
@@ -282,7 +322,7 @@ export interface Icp {
   countries: string[];
 }
 
-/** What a saved view matches in the weekly email: open roles by their free facts only. */
+/** What a saved view matches in the weekly email: open roles by their free facts only, or new hires for a view that follows them. */
 export interface SavedViewCriteria {
   function?: string;
   functions?: string[];
@@ -292,6 +332,13 @@ export interface SavedViewCriteria {
   hq?: string;
   country?: string[];
   fractionalFriendly?: boolean;
+  /**
+   * "Recently hired" (Filters.hiredFn and .hiredWithin, lib/hired.ts): the view follows hires in
+   * these functions (none: any) with a start in the last `hiredWithin` months (0: any time). The
+   * weekly email and alerts then list companies that newly match, never open roles.
+   */
+  hiredFn?: string[];
+  hiredWithin?: number;
 }
 
 /** One saved view (Save this view) or saved search (the connector's alerts). */
@@ -656,8 +703,14 @@ export type Action =
   /** Add a person at a company, optionally tied to one engagement. */
   | { type: "addPerson"; companyId: string; engagementId?: string | null; person: Record<string, string> }
   | { type: "follow"; companyId: string; on: boolean }
-  /** Onboarding answers. */
-  | { type: "profile"; function?: string; goal?: string; title?: string; icp?: Icp | null }
+  /**
+   * Onboarding answers, and Your profile. `before`: up to BEFORE_MAX functions, `[]` for "Not
+   * sure" (left out: unchanged). `firstView`: the id of the saved view onboarding made (null takes
+   * it off). It marks the member onboarded and drops their onboarding draft.
+   */
+  | { type: "profile"; function?: string; goal?: string; title?: string; icp?: Icp | null; before?: string[]; firstView?: string | null }
+  /** Onboarding's answers so far, after each step (null drops them). Nothing changes once the member is onboarded. */
+  | { type: "onboardDraft"; draft: OnboardDraft | null }
   /**
    * Saved views, in the same store as the connector's alerts. save: `place` and `criteria` from
    * the table, `name` (else one made from the criteria), `email` (on unless false). delete: `id`.
@@ -810,6 +863,12 @@ export interface PartnersView {
   listed: boolean;
 }
 
+/**
+ * What a member came for (Me.goal): onboarding's first question until it ended on a first view.
+ * Members who answered it keep their answer, and the table still opens on it for them. New
+ * members get one from their answers: "adjacent" (no fractional in their function yet), or
+ * "friendly" when their function is a catch-all (app/onboard/firstView.ts goalFor).
+ */
 export const GOALS = [
   { key: "roles", label: "Open fractional roles" },
   { key: "friendly", label: "Companies that hire fractionals again" },

@@ -10,6 +10,7 @@
 import { FUNCTIONS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, industryWords, standardIndustries } from "../tableFields";
 import { toStandard } from "../industryMap";
 import { inPlace, placeFilter } from "../geo";
+import { cleanWindow, fnLeader, followsHires, windowPhrase } from "../hired";
 
 export interface SavedSearch {
   id: string;
@@ -36,6 +37,13 @@ export interface SavedSearch {
   place?: string;
   /** "Email me new matches each week". Left out means on (the connector's saved searches always were). */
   email?: boolean;
+  /**
+   * A view that follows hires ("Recently hired", lib/hired.ts): companies that hired a fractional
+   * in these functions (none: any) with a start in the last `hiredWithin` months (0: any time). It
+   * matches new hires, never open roles: lib/hireAlerts.ts reads it from its place.
+   */
+  hiredFn?: string[];
+  hiredWithin?: number;
 }
 
 /** The free facts of one open role that an alert reads. */
@@ -91,8 +99,9 @@ export function placeWords(v: string): string[] {
   return out;
 }
 
-/** Whether an open role matches a saved search. */
+/** Whether an open role matches a saved search. A view that follows hires matches new hires instead (lib/hireAlerts.ts), never an open role. */
 export function alertMatches(a: SavedSearch, r: RoleFacts): boolean {
+  if (followsHires(a)) return false;
   if (a.function && r.function !== a.function) return false;
   if (a.functions?.length && !(r.function && a.functions.includes(r.function))) return false;
   if (a.country?.length && r.country && !a.country.some((c) => sameCountry(c, r.country!))) return false;
@@ -120,6 +129,11 @@ export const sameCountry = (a: string, b: string) => countryKey(a) === countryKe
 
 /** A readable name for what an alert looks for: "Fractional Marketing roles at SaaS companies, $5M–$20M". */
 export function describeAlert(a: Omit<SavedSearch, "id" | "name" | "createdAt">): string {
+  // A view that follows hires reads as the table's sentence: "Companies that hired a fractional Finance leader in the last 6 months".
+  if (followsHires(a)) {
+    const inds = industryWords(a.industry ?? []).map((x) => x.replace(" (all)", ""));
+    return [`Companies that hired ${fnLeader(a.hiredFn ?? [])} ${windowPhrase(a.hiredWithin ?? 0)}`, inds.length ? `${inds.join(" or ")} companies` : ""].filter(Boolean).join(", ");
+  }
   const fns = a.function ? [a.function] : a.functions ?? [];
   const what = `${fns.length ? `Fractional ${fns.join(" or ")}` : "Fractional"} roles`;
   const inds = industryWords(a.industry ?? []).map((x) => x.replace(" (all)", ""));
@@ -143,6 +157,9 @@ export function cleanCriteria(raw: {
   fractional_friendly?: unknown;
   functions?: unknown;
   country?: unknown;
+  /** Recently hired: the functions (a list) and the window in months (0 or left out: any time). */
+  hiredFn?: unknown;
+  hiredWithin?: unknown;
 }): { criteria: Omit<SavedSearch, "id" | "name" | "createdAt">; problems: string[] } {
   const problems: string[] = [];
   const list = (key: string, values: unknown, options: readonly string[]) => {
@@ -172,6 +189,8 @@ export function cleanCriteria(raw: {
     .map((v) => String(v ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 60))
     .filter(Boolean)
     .slice(0, 12);
+  const hiredFn = list("hired function", raw.hiredFn, FUNCTIONS);
+  const hiredWithin = cleanWindow(raw.hiredWithin);
   return {
     criteria: {
       ...(fn ? { function: fn } : {}),
@@ -182,6 +201,7 @@ export function cleanCriteria(raw: {
       ...(raw.fractional_friendly === true ? { fractionalFriendly: true } : {}),
       ...(functions && !fn ? (functions.length === 1 ? { function: functions[0] } : { functions }) : {}),
       ...(country.length ? { country: [...new Set(country)] } : {}),
+      ...(hiredFn || hiredWithin ? { hiredFn: hiredFn ?? [], hiredWithin } : {}),
     },
     problems,
   };

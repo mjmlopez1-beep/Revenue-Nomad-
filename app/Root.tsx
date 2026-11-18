@@ -3,7 +3,7 @@
 /**
  * Decides what to show:
  *   signed out            -> Landing (marketing page, join, sign in)
- *   signed in, first run  -> Onboarding (two questions, follow companies, keep your link)
+ *   signed in, first run  -> Onboarding (who you are, ideal clients, who comes before you, the first view, your seats, your link)
  *   signed in             -> TradingPost (the app)
  * Handles ?k=CODE sign-in links and ?ref=CODE invite links. Every other query key (the app's
  * place: ?c=, ?p=, ?v= and so on) stays in the address bar for the app to read. A link with
@@ -427,9 +427,9 @@ function App() {
   /** Skipped onboarding ("Skip to the table"): the app opens on the table, even with seats on file. */
   const skipped = useRef(false);
   /**
-   * Onboarding's last step. Its profile answer already put the member's answers on screen, so the
-   * app opens at once. The follows and the saved view onboarding sent on its own come with one
-   * download in the background (skipped when one just landed).
+   * Onboarding's last step. Its profile answer already put the member's answers on screen (their
+   * first view with them, which the table opens on), so the app opens at once. Anything else
+   * onboarding sent on its own comes with one download in the background (skipped when one just landed).
    */
   const onboarded = useCallback(() => {
     if (Date.now() - lastLoad.current > 1500) sync();

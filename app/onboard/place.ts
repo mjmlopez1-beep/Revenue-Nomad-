@@ -1,9 +1,10 @@
 /**
- * Where the saved view behind onboarding's weekly email opens: Hiring now on seats, in the
- * member's function, with the Ideal Fractional Profile pill on (alertView in suggest.ts names it
- * and gives its email criteria). And the place it had before the pill, with the profile spelled
- * out as hard filters, which opened empty: lib/table.ts moves views saved that way when the state
- * loads. No imports, so the server reads this file as it is, wherever it runs from.
+ * Where onboarding's saved views open. The open roles one ("Also show open <function> roles"):
+ * Hiring now on seats, in the member's function, with the Ideal Fractional Profile pill on
+ * (alertView in suggest.ts names it and gives its email criteria), and the place it had before the
+ * pill, with the profile spelled out as hard filters, which opened empty: lib/table.ts moves views
+ * saved that way when the state loads. And the member's first view, which the table opens on.
+ * No imports, so the server reads this file as it is, wherever it runs from.
  */
 
 /** The parts of an Ideal Fractional Profile this reads (Icp in lib/tableTypes.ts). */
@@ -53,6 +54,17 @@ function spelledPlace(fn: string | null | undefined, icp: ProfileParts): string 
   const p = parts(icp);
   const list = (key: string, xs: string[]) => (xs.length ? [`${key}:${[...new Set(xs)].join("|")}`] : []);
   return hiringPlace([...list("industry", p.industries), ...list("employees", p.employees), ...list("revenue", p.revenue), ...(f ? [`fn:${f}`] : []), ...list("country", p.countries.map(countryName))]);
+}
+
+/**
+ * The member's first view (Me.firstView, the saved view onboarding made) while it is still saved:
+ * its place, which the table opens on when the address names none. Null otherwise, and for a
+ * member from before the first view (their onboarding answer, Me.goal, still decides).
+ */
+export function firstViewPlace(me: { firstView?: string | null; savedViews?: { id: string; place: string | null }[] | null }): string | null {
+  const id = me.firstView;
+  if (!id) return null;
+  return me.savedViews?.find((v) => v.id === id)?.place || null;
 }
 
 /**

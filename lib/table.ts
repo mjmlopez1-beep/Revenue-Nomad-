@@ -78,10 +78,12 @@ import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
 import { companyFirm, memberHoldsSeat, purgeFirms, seedFirmIds, type FirmReview, type RemovedFirms } from "./firmRemoval";
 import type {
-  Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PartnersView, PersonRec,
+  Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, OnboardDraft, PartnersView, PersonRec,
   ScanSummary, View,
 } from "./tableTypes";
-import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
+import { BEFORE_MAX } from "./tableTypes";
+import type { DigestData, DigestHires, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
+import { followsHires } from "./hired";
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
 import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
@@ -123,6 +125,12 @@ interface SeedEngagement {
    * (see publicName below).
    */
   holderFrom?: string;
+  /**
+   * When the seat came into the table (ISO), for "new hires this week" (lib/hireAlerts.ts).
+   * scripts/add-seat-scan.mjs stamps it on the seats it adds. Seats from before carry none and are
+   * never counted as new.
+   */
+  addedAt?: string;
 }
 interface SeedContact {
   id: string;
@@ -217,6 +225,16 @@ interface Profile {
   icp?: Icp | null;
   /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. */
   partnersOff?: boolean;
+  /**
+   * The fractional functions they say usually get hired before them (Me.before): up to
+   * BEFORE_MAX, [] for "Not sure", absent when never asked. Private to the member: anything
+   * shown to others reads it only as counts.
+   */
+  before?: string[];
+  /** The id of the saved view onboarding made, their first view (Me.firstView). */
+  firstView?: string;
+  /** Onboarding answers so far, while not onboarded (the onboardDraft action). The profile action drops it. */
+  draft?: OnboardDraft;
 }
 /** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
 interface RoleTrack {
@@ -2741,6 +2759,11 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       // Who they hunt, and their saved views (one list with the connector's saved searches).
       icp: prof.icp ?? null,
       savedViews: savedViewsOut(s.connector?.alerts?.[me.id]),
+      // Who usually gets hired before them (left out when never asked), their first view while it is
+      // saved, and onboarding's answers so far while they are still in it. Only ever their own.
+      ...(Array.isArray(prof.before) ? { before: [...prof.before] } : {}),
+      firstView: prof.firstView && (s.connector?.alerts?.[me.id] ?? []).some((x) => x.id === prof.firstView && x.place) ? prof.firstView : null,
+      draft: !prof.onboarded && prof.draft ? { ...prof.draft } : null,
       // Only the viewer's own. Nobody else's private rate ever leaves the server.
       benchRates: s.benchRates
         .filter((b) => b.by === me.id)
@@ -3223,6 +3246,56 @@ function benchmarks(seed: Seed, g: Graph, s: State, viewerId?: string): Benchmar
 /* ---------- actions ---------- */
 
 export class ActionError extends Error {}
+
+/* ---------- onboarding: "who gets hired before you", and the answers so far ---------- */
+
+/**
+ * "Which fractional usually gets hired before you?" from loose input: functions on the list, each
+ * once, in the order given, at most BEFORE_MAX. `[]` is "Not sure". `strict` (the profile action):
+ * anything but a list, or more than BEFORE_MAX, is refused with a message the member can act on.
+ */
+function cleanBefore(raw: unknown, { strict = false }: { strict?: boolean } = {}): string[] {
+  if (!Array.isArray(raw)) {
+    if (strict) throw new ActionError("Pick the functions from the list, or Not sure.");
+    return [];
+  }
+  const out = [...new Set(raw.slice(0, 40).map((x) => String(x ?? "").trim()).filter((x) => FUNCTIONS.includes(x)))];
+  if (strict && out.length > BEFORE_MAX) throw new ActionError(`Pick up to ${BEFORE_MAX} functions.`);
+  return out.slice(0, BEFORE_MAX);
+}
+
+/** A public id or a typed client name ("name:Acme"), as Find your seats keeps them: plain text, short. */
+const draftText = (raw: unknown, max: number) => tidy(String(raw ?? "").replace(/[\u0000-\u001f<>]/g, ""), max);
+
+/**
+ * Onboarding's answers so far, cleaned (OnboardDraft). Every part is optional: what is missing or
+ * not on its list comes back empty. Saved views are kept only when they are the member's own.
+ */
+function cleanDraft(raw: unknown, alerts: { id: string }[], now: string): OnboardDraft {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const step = Math.round(Number(r.step));
+  let icp: Icp | null = null;
+  try {
+    icp = r.icp && typeof r.icp === "object" ? cleanIcp(r.icp) : null;
+  } catch {
+    icp = null;
+  }
+  const own = new Set(alerts.map((x) => x.id));
+  const at = typeof r.at === "string" && Number.isFinite(Date.parse(r.at)) ? new Date(Date.parse(r.at)).toISOString() : now;
+  return {
+    step: Number.isFinite(step) ? Math.min(6, Math.max(1, step)) : 1,
+    function: typeof r.function === "string" && FUNCTIONS.includes(r.function) ? r.function : null,
+    title: draftText(r.title, 80),
+    icp,
+    before: Array.isArray(r.before) ? cleanBefore(r.before) : null,
+    roles: r.roles !== false,
+    email: r.email !== false,
+    clients: [...new Set((Array.isArray(r.clients) ? r.clients : []).slice(0, 20).map((x) => draftText(x, 90)).filter(Boolean))],
+    views: [...new Set((Array.isArray(r.views) ? r.views : []).map((x) => String(x ?? "")).filter((x) => own.has(x)))].slice(0, 2),
+    saved: typeof r.saved === "string" && r.saved ? r.saved.slice(0, 3000) : null,
+    at,
+  };
+}
 
 /** Signals one member can send in 24 hours. More are dropped without a word. */
 const SIGNAL_DAILY_MAX = 200;
@@ -4274,9 +4347,30 @@ export async function perform(
               throw e instanceof HuntError ? new ActionError(e.message) : e;
             }
           }
+          // "Which fractional usually gets hired before you?": up to BEFORE_MAX functions, [] for Not sure.
+          if (a.before !== undefined) p.before = cleanBefore(a.before, { strict: true });
+          // The first view: a saved view of this member's own, with a place in the table.
+          if (a.firstView !== undefined) {
+            if (a.firstView === null) delete p.firstView;
+            else {
+              const id = String(a.firstView);
+              if (!(s.connector?.alerts?.[me.id] ?? []).some((x) => x.id === id && x.place)) throw new ActionError("That saved view is gone already.");
+              p.firstView = id;
+            }
+          }
           p.onboarded = true;
+          delete p.draft;
           s.profiles[me.id] = p;
           return { message: "Saved." };
+        }
+        case "onboardDraft": {
+          // Onboarding's answers so far, so another tab or device picks up at the same step. Done is done.
+          const p = { ...(s.profiles[me.id] ?? {}) };
+          if (p.onboarded) return { message: "" };
+          if (a.draft === null) delete p.draft;
+          else p.draft = cleanDraft(a.draft, s.connector?.alerts?.[me.id] ?? [], now);
+          s.profiles[me.id] = p;
+          return { message: "" };
         }
         case "savedView": {
           // Save this view: the same list as the connector's saved searches (lib/hunt.ts).
@@ -5430,8 +5524,9 @@ export function remapScanFunctions(s: State, seed: Seed): number {
  */
 export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNew: number = MAX_ROLES): Promise<ScanApplyResult> {
   const res = await storeScan(found, nowIso, maxNew);
-  // Alerts in Slack for the roles this scan opened (lib/notify, loaded here so the files don't import each other at start).
-  if (res.opened) void import("./notify/events").then((n) => n.afterScan(res.at)).catch((e) => console.error("scan alerts failed", e));
+  // Alerts in Slack for the roles this scan opened, and the week's new hires for saved views that follow them, so this
+  // runs after every scan (lib/notify, loaded here so the files don't import each other at start). Nothing is sent when neither has news.
+  void import("./notify/events").then((n) => n.afterScan(res.at)).catch((e) => console.error("scan alerts failed", e));
   return res;
 }
 function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew: number): Promise<ScanApplyResult> {
@@ -5813,7 +5908,13 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
       if (nowMs - Date.parse(t.closedAt) < WEEK) closedRoles++;
     } else if (newThisWeek(t, nowMs) && isOpenRole(e, s, tracks) && !isUnseen(t)) fresh.push(e);
   }
-  if (!fresh.length) return [];
+  // Saved views that follow hires ("Recently hired"): their new matches go in the email too, in a week with no new roles as well.
+  const alertsOf = s.connector?.alerts ?? {};
+  const hireViewsOf = (id: string) => (alertsOf[id] ?? []).filter((a) => a.email !== false && followsHires(a));
+  const anyHireViews = Object.keys(alertsOf).some((id) => hireViewsOf(id).length > 0);
+  if (!fresh.length && !anyHireViews) return [];
+  const hireMod = anyHireViews ? await import("./hireAlerts") : null;
+  const added = hireMod ? hireMod.seatAddedTimes(seed, s) : null;
   const count = new Map<string, number>();
   for (const e of fresh) {
     const fn = fnOf(e, s) ?? "Other";
@@ -5822,7 +5923,6 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
   const byFunction = [...count].map(([fn, n]) => ({ function: fn, n })).sort((a, b) => b.n - a.n || a.function.localeCompare(b.function));
   // Saved searches (the connector's alerts) match the new roles by free facts only. The HQ a member
   // matches on is the one they see: a hidden company's region.
-  const alertsOf = s.connector?.alerts ?? {};
   const roleFacts = fresh.map((e) => {
     const c = g.companies.get(e.companyId);
     const engs = [...g.engagements.values()].filter((x) => x.companyId === e.companyId);
@@ -5901,6 +6001,27 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     if (prof.digestOff) continue;
     const last = Date.parse(s.digest.members[m.id] ?? "");
     if (Number.isFinite(last) && nowMs - last < 6 * DAY) continue;
+    // The member's views that follow hires: companies that newly match each one, since their last email (a week at most).
+    let hires: DigestHires[] = [];
+    const hireViews = hireMod && added ? hireViewsOf(m.id) : [];
+    if (hireMod && added && hireViews.length) {
+      try {
+        const since = Math.max(Number.isFinite(last) ? last : 0, nowMs - WEEK);
+        const viewUrl = (place: string | null) => (place ? `${base}/?${place}` : `${base}/`);
+        hires = (await hireMod.newHires(m, hireViews, since, nowMs, added)).map((h) => ({
+          name: h.name,
+          n: h.n,
+          functions: h.functions,
+          inProfile: h.inProfile,
+          url: viewUrl(h.place),
+          rows: h.rows.map((r) => ({ company: r.company, function: r.function, start: r.start, url: `${viewUrl(h.place)}${h.place ? "&" : "?"}c=${encodeURIComponent(r.companyId)}` })),
+        }));
+      } catch (e) {
+        console.error("weekly email: new hires failed for one member", e);
+      }
+    }
+    // A week with no new roles: only members with new hires for a saved view get one.
+    if (!fresh.length && !hires.length) continue;
     const fn = prof.function ?? functionOf(prof.title || m.title);
     const mine = fn ? fresh.filter((e) => fnOf(e, s) === fn) : [];
     const listed = listFor(fn, mine);
@@ -5922,6 +6043,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         unsubscribeUrl: `${base}/api/table/unsubscribe?m=${pubId(m.id)}&s=${unsubSig(m.id)}`,
         rolesUrl: listed.url,
         roles: listed.roles,
+        ...(hires.length ? { hires } : {}),
       },
     });
   }

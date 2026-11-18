@@ -78,6 +78,9 @@ export function savedViewAction(
     hq: c.hq,
     country: c.country,
     fractional_friendly: c.fractionalFriendly,
+    // Recently hired: a view that follows hires (lib/hired.ts). The email reads it from its place.
+    hiredFn: c.hiredFn,
+    hiredWithin: c.hiredWithin,
   });
   if (problems.length) throw new HuntError("Some of these filters aren't on our lists any more. Change them and save again.");
   // The place is the app's own address query: kept as text, never read by the server.

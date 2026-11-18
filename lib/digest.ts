@@ -12,13 +12,20 @@
  * RN_EMAIL_FOOTER   optional line for the footer, such as the sender's postal address
  */
 import { webLink } from "./links";
-import type { DigestData, DigestRole } from "./scanTypes";
+import type { DigestData, DigestHireRow, DigestHires, DigestRole } from "./scanTypes";
 import { MAIL, escHtml as esc, footerNote as footerLine, mailButton, mailP, mailShell, oneLine } from "./email";
+import { hiresLine, startWords } from "./hired";
 
 /** How many functions the list shows before the rest fold into one line. */
 const MAX_FUNCTIONS = 6;
 /** How many of the week's roles the email lists. */
 export const DIGEST_ROLES = 5;
+/** Saved views that follow hires the email covers, and the companies it lists for each. */
+export const DIGEST_HIRE_VIEWS = 3;
+export const DIGEST_HIRE_ROWS = 5;
+/** A company that is locked for the member is never named: it has an open role, so it reads as one. */
+export const LOCKED_HIRER = "A company that's hiring now";
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** "2026-11-17" -> "Nov 17". */
 const dayOf = (iso: unknown) => {
@@ -57,13 +64,36 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
       url: link(r?.url),
     }))
     .filter((r) => r.title);
+  // Saved views that follow hires, with what newly matches each: free facts only, a locked company unnamed, never who held the seat.
+  const hires = (Array.isArray(d.hires) ? d.hires : [])
+    .map((h: Partial<DigestHires>) => ({
+      name: oneLine(h?.name).slice(0, 120),
+      n: count(h?.n),
+      functions: (Array.isArray(h?.functions) ? h.functions : []).map((x) => oneLine(x).slice(0, 40)).filter(Boolean),
+      inProfile: h?.inProfile === true,
+      url: link(h?.url),
+      rows: (Array.isArray(h?.rows) ? h.rows : []).slice(0, DIGEST_HIRE_ROWS).map((r: Partial<DigestHireRow>) => ({
+        company: oneLine(r?.company).slice(0, 80) || LOCKED_HIRER,
+        meta: [oneLine(r?.function).slice(0, 40), startWords(oneLine(r?.start))].filter(Boolean).join(" · "),
+        url: link(r?.url),
+      })),
+    }))
+    .filter((h) => h.n > 0)
+    .slice(0, DIGEST_HIRE_VIEWS);
+  // No new open role this week, only new hires for a saved view: the email leads with the first view's line.
+  const hireOnly = newRoles === 0 && hires.length > 0;
 
   /* ---- the words ---- */
 
   // The headline is a number and what it counts, so the subject and the top of the email match.
-  const heroCount = mine > 0 ? mine : newRoles;
-  const heroLabel = mine > 0 ? `new ${fn} ${mine === 1 ? "role" : "roles"} this week` : `new fractional ${newRoles === 1 ? "role" : "roles"} this week`;
+  const heroCount = hireOnly ? hires[0].n : mine > 0 ? mine : newRoles;
+  const heroLabel = hireOnly
+    ? hiresLine(hires[0].n, hires[0].functions, hires[0].inProfile).replace(/^\d+ /, "")
+    : mine > 0
+      ? `new ${fn} ${mine === 1 ? "role" : "roles"} this week`
+      : `new fractional ${newRoles === 1 ? "role" : "roles"} this week`;
   const subject = heroCount > 0 ? `${heroCount} ${heroLabel}` : "No new fractional roles this week";
+  const hireCta = "Open the saved view";
 
   let lead: string;
   if (mine > 0) {
@@ -75,6 +105,9 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   } else if (newRoles > 0) {
     const none = fn && fn !== "Other" ? (newRoles === 1 ? `It is not in ${fn}. ` : `None are in ${fn}. `) : "";
     lead = `${none}${newRoles === 1 ? "The" : "Each"} company stays locked until you unlock it for 1 credit.`;
+  } else if (hireOnly) {
+    // Why this email came: the view the member saved, by its own name.
+    lead = hires[0].name ? `From your saved view “${hires[0].name}”.` : "";
   } else {
     lead = "The roles that were already open are still listed.";
   }
@@ -125,9 +158,21 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   const text = [
     `Hi ${first},`,
     "",
-    heroCount > 0 ? `${heroCount} ${heroLabel.replace(" this week", " opened this week")}.${lead ? " " + lead : ""}` : `No new fractional roles opened this week. ${lead}`,
+    hireOnly
+      ? `${heroCount} ${heroLabel}.${lead ? " " + lead : ""}`
+      : heroCount > 0
+        ? `${heroCount} ${heroLabel.replace(" this week", " opened this week")}.${lead ? " " + lead : ""}`
+        : `No new fractional roles opened this week. ${lead}`,
     ...(roles.length ? ["", ...roles.flatMap((r) => [r.title, ...(roleMeta(r) ? [`  ${roleMeta(r)}`] : []), ...(r.url ? [`  ${r.url}`] : [])])] : []),
-    ...(rolesUrl ? ["", cta, rolesUrl] : []),
+    ...(rolesUrl && !hireOnly ? ["", cta, rolesUrl] : []),
+    // Each saved view that follows hires: its line (the first one is the headline in a week with no new roles), the companies, the view.
+    ...hires.flatMap((h, k) => [
+      ...(hireOnly && k === 0 ? [] : ["", `${hiresLine(h.n, h.functions, h.inProfile)}.`]),
+      ...(h.name && !(hireOnly && k === 0) ? [`  From your saved view “${h.name}”`] : []),
+      "",
+      ...h.rows.flatMap((r) => [`${r.company}${r.meta ? ` · ${r.meta}` : ""}`, ...(r.url ? [`  ${r.url}`] : [])]),
+      ...(h.url ? ["", hireCta, h.url] : []),
+    ]),
     ...(showList ? ["", listTitle, ...shown.map((r) => `  ${r.function}  ${r.n}`), ...(rest ? [`  ${restLabel}  ${rest}`] : [])] : []),
     ...(alerts.length ? ["", alertsTitle, ...alerts.map((a) => `  ${a.name}  ${alertNew(a.n)}`)] : []),
     ...(closedLine ? ["", closedLine] : []),
@@ -145,11 +190,11 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
 
   const num = "font-variant-numeric:tabular-nums;";
   // The one ember element: a 10px dot before the count of roles live this week. The count itself is ember-ink, the ember for text on white.
+  // New hires are no live opening: their count is ink, with no dot.
   const hero =
     heroCount > 0
       ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px"><tr>
-<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0"><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${MAIL.ember}"></span></td>
-<td valign="middle" style="padding:0 12px 0 0;font-family:${MAIL.font};font-size:48px;line-height:52px;font-weight:800;letter-spacing:-0.03em;${num}color:${MAIL.emberInk}">${heroCount}</td>
+${hireOnly ? "" : `<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0"><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${MAIL.ember}"></span></td>\n`}<td valign="middle" style="padding:0 12px 0 0;font-family:${MAIL.font};font-size:48px;line-height:52px;font-weight:800;letter-spacing:-0.03em;${num}color:${hireOnly ? MAIL.ink : MAIL.emberInk}">${heroCount}</td>
 <td valign="middle" style="font-family:${MAIL.font};font-size:22px;line-height:26px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">${esc(heroLabel)}</td>
 </tr></table>`
       : `<p style="margin:0 0 12px;font-family:${MAIL.font};font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">No new fractional roles this week</p>`;
@@ -190,6 +235,40 @@ ${roles
 </table>`
     : "";
 
+  // A saved view that follows hires: its line in bold (the headline already says it in a week with no new roles), the
+  // companies that newly match (each a link to its record, never a locked company's name, never who held the seat), and a
+  // button to the view: the email's filled button in a week with no new roles, an outlined one under the roles' button
+  // otherwise (and for a second view), so the email still has one main button.
+  const outlineButton = (href: string, label: string) =>
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px"><tr>
+<td style="border:2px solid ${MAIL.pine};border-radius:8px"><a href="${esc(href)}" style="display:inline-block;padding:12px 22px;font-family:${MAIL.font};font-size:16px;line-height:20px;font-weight:700;color:${MAIL.pine};text-decoration:none;border-radius:8px">${esc(label)}</a></td>
+</tr></table>`;
+  const hireBlocks = hires
+    .map((h, k) => {
+      const lead0 = hireOnly && k === 0;
+      const head = lead0
+        ? ""
+        : `<p style="margin:0 0 4px;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:${MAIL.ink}">${esc(hiresLine(h.n, h.functions, h.inProfile))}</p>${
+            h.name ? `\n<p style="margin:0 0 12px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">From your saved view “${esc(h.name)}”</p>` : ""
+          }`;
+      const list = h.rows.length
+        ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;border-bottom:1px solid ${MAIL.line}">
+${h.rows
+  .map(
+    (r) => `<tr><td valign="top" style="padding:12px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font}">${
+      r.url
+        ? `<a href="${esc(r.url)}" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink};text-decoration:underline">${esc(r.company)}</a>`
+        : `<span style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink}">${esc(r.company)}</span>`
+    }${r.meta ? `<br><span style="font-size:14px;line-height:20px;${num}color:${MAIL.muted}">${esc(r.meta)}</span>` : ""}</td></tr>`,
+  )
+  .join("\n")}
+</table>`
+        : "";
+      const way = !h.url ? "" : hireOnly && k === 0 ? mailButton(h.url, hireCta, "margin:0 0 32px") : outlineButton(h.url, hireCta);
+      return [head, list, way].filter(Boolean).join("\n");
+    })
+    .join("\n");
+
   const seats = seatsLine
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr>
 <td bgcolor="${MAIL.voltSoft}" style="padding:12px 16px;border-radius:8px;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${esc(seatsLine)}</td>
@@ -200,9 +279,10 @@ ${roles
   const body = [
     mailP(`Hi ${esc(first)},`),
     hero,
-    lead ? mailP(esc(lead), rolesUrl || roles.length ? "margin-bottom:24px;" : "margin-bottom:32px;") : "",
+    lead ? mailP(esc(lead), rolesUrl || roles.length || hires.length ? "margin-bottom:24px;" : "margin-bottom:32px;") : "",
     roleList,
-    rolesUrl ? mailButton(rolesUrl, cta, "margin:0 0 32px") : "",
+    rolesUrl && !hireOnly ? mailButton(rolesUrl, cta, "margin:0 0 32px") : "",
+    hireBlocks,
     list,
     alertList,
     closedLine ? mailP(esc(closedLine)) : "",
