@@ -27,15 +27,17 @@
  * types into the page by accident.
  */
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Cell } from "@/lib/tableTypes";
 import type { Me } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
 import {
-  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
-  notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, rolesThisWeek, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
-  icpApplies, icpMatch, ICP_FREE_TABS,
+  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cardSeat, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
+  notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
+  icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
+import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, stepOneKind, type StepTarget } from "./getStarted";
+import { wallBack, type WallBack } from "./earnBack";
+import { InvitePanel } from "./Invite";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
 import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
 import { Seats } from "./Seats";
@@ -48,7 +50,7 @@ import { DataTable } from "./Tables";
 import { CardList } from "./Cards";
 import { Drawer } from "./Drawer";
 import { AddModal } from "./AddModal";
-import { MyCredits, inviteLink, signInLink, useCopy, useShareInvite } from "./Credits";
+import { MyCredits, signInLink, useCopy } from "./Credits";
 import { Integrations } from "./Integrations";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
@@ -69,6 +71,63 @@ export interface TradingPostProps {
 }
 
 const PAGE = 50;
+/** Hiring now with nothing in the member's function to list (one array, so the list below keeps its identity). */
+const NO_ROWS: Row[] = [];
+
+/** The nearest element that scrolls `el` (the table frame, a record's body), or null for the window. The page shell never does. */
+function scrollerOf(el: HTMLElement): HTMLElement | null {
+  for (let s = el.parentElement; s && s !== document.body && s !== document.documentElement; s = s.parentElement) {
+    const cs = getComputedStyle(s);
+    const y = /(auto|scroll)/.test(cs.overflowY) && s.scrollHeight > s.clientHeight;
+    const x = /(auto|scroll)/.test(cs.overflowX) && s.scrollWidth > s.clientWidth;
+    if (x || y) return s;
+  }
+  return null;
+}
+/**
+ * Bring `el` to the middle of its own scroller, on each axis only where it is out of sight. The
+ * table frame scrolls, never the app shell around it (which would slide the page up under the top
+ * bar and leave a blank band below, C-step1). Phones scroll the window.
+ */
+function scrollWithin(el: HTMLElement) {
+  const s = scrollerOf(el);
+  const r = el.getBoundingClientRect();
+  if (!s) {
+    if (r.top < 64 || r.bottom > window.innerHeight - 80) window.scrollTo({ top: Math.max(0, window.scrollY + r.top - window.innerHeight / 2 + r.height / 2) });
+    return;
+  }
+  const b = s.getBoundingClientRect();
+  // The sticky first column and the sticky header cover the frame's left and top edges.
+  const sticky = s.querySelector<HTMLElement>("td.tp-sticky");
+  const left = b.left + (sticky && !sticky.contains(el) ? sticky.offsetWidth : 0);
+  const top = b.top + (s.querySelector<HTMLElement>("thead")?.offsetHeight ?? 0);
+  const to: ScrollToOptions = {};
+  if (r.top < top || r.bottom > b.top + s.clientHeight) to.top = s.scrollTop + (r.top - b.top) - (s.clientHeight - r.height) / 2;
+  if (r.left < left || r.right > b.left + s.clientWidth) to.left = s.scrollLeft + (r.left - b.left) - (s.clientWidth - r.width) / 2;
+  if (to.top !== undefined || to.left !== undefined) s.scrollTo(to);
+}
+/** Run `then` with the first element `find` gives within `ms`, else `none` (lists draw a frame or two after they change). */
+function whenThere(find: () => HTMLElement | null, then: (el: HTMLElement) => void, none: () => void, ms = 1500) {
+  const until = Date.now() + ms;
+  const tick = () => {
+    const el = find();
+    if (el) return then(el);
+    if (Date.now() > until) return none();
+    setTimeout(tick, 50);
+  };
+  setTimeout(tick, 60);
+}
+/** A cell of one of `keys` inside `root`, the first key first. */
+const cellIn = (root: ParentNode | null, keys: string[]) => {
+  if (!root) return null;
+  for (const k of keys) {
+    const el = root.querySelector<HTMLElement>(`[data-cell="${CSS.escape(k)}"]`);
+    if (el) return el;
+  }
+  return null;
+};
+/** The open record (a side panel, or a phone's full screen sheet). */
+const recordRoot = () => document.querySelector<HTMLElement>(".tp-drawer, .tp-rsheet");
 
 /** The previous visit time, read once per page load (then this visit is stored). */
 let lastVisit: string | null | undefined;
@@ -271,6 +330,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [limit, setLimit] = useState(PAGE);
   const [page, setPage] = useState<Page>(() => (start === "seats" ? "seats" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? "table"));
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
+  /** Why Your seats is open: the fact the zero-credits wall was asked for (the way back once they earn), and whether its search comes first. */
+  const [seatCtx, setSeatCtx] = useState<{ back: WallBack | null; search: boolean }>({ back: null, search: false });
+  /** The invite message, in a sheet (Get started step 3, the account menu). */
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [moveOff, dismissMove] = useMoveDismissals();
   /** Conversations with something unread (Messages), for the badges on the avatar and in the menu. */
   const unread = useUnread(view.me?.unread);
@@ -297,6 +360,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [keysOff, setKeysOff] = useState(() => store.get("tp_keys_off") === "1");
   /** The "Your profile" sheet (with the Ideal Fractional Profile) and the "Save this view" sheet. */
   const [icpOpen, setIcpOpen] = useState(false);
+  /** The member skipped the Ideal Fractional Profile in onboarding during this visit (app/onboard sets it). */
+  const [icpSkipped] = useState(() => {
+    try {
+      return sessionStorage.getItem(ICP_SKIPPED) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [saveOpen, setSaveOpen] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -363,6 +434,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const seatN = seats.length;
   const seatMissing = useMemo(() => seatsMissing(seats), [seats]);
   const seatStats = useMemo(() => ({ n: seatN, missing: seatMissing }), [seatN, seatMissing]);
+  /** What Get started step 1 can point at in the member's whole table, and whether the table already shows one they paid for (getStarted.ts). */
+  const stepKind = useMemo(() => stepOneKind(infos), [infos]);
+  const stepSeen = useMemo(() => holderSeen(infos) || (stepKind === "person" && personSeen(infos)), [infos, stepKind]);
   const allRows = useMemo(() => rowsFor(recordType, infos), [recordType, infos]);
   /* The onboarding preset (PRESET_KEYS) narrows the All view only. */
   const [preset, setPreset] = useState<ToggleKey[]>(() => {
@@ -431,17 +505,56 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setSearchWide(false);
     setMine(clearedFilters(filters));
   };
+  /*
+   * Hiring now leads with the member's function: theirs alone, until "Show all functions". When
+   * none of their function's open roles fit the Ideal Fractional Profile, it lists all of them,
+   * with the profile lifted for this list and a line that says so, until "Only my profile". It
+   * never opens on other functions' roles (they are one tap away).
+   */
+  const fnSplit = useMemo(() => (hireFn ? splitByFn(filtered, hireFn) : null), [filtered, hireFn]);
+  /** "Only my profile": the member kept the profile on, though none of their function's roles fit it. */
+  const [fitOnly, setFitOnly] = useState(false);
+  useEffect(() => setFitOnly(false), [tab]);
+  const hireIcp = icpApplies(eff, tab, me);
+  /** Their function's open roles with the profile lifted, when none fit the profile (null otherwise). */
+  const liftRows = useMemo(() => {
+    if (!hireFn || !fnSplit || fnSplit.mine.length > 0 || !hireIcp || allFns || q.trim()) return null;
+    const mine = splitByFn(applyFilters(allRows, { ...eff, icp: false }, tab, q, cellMe, true).rows, hireFn).mine;
+    return mine.length ? mine : null;
+  }, [hireFn, fnSplit, hireIcp, allFns, q, allRows, eff, tab, cellMe]);
+  const lifted = !!liftRows && !fitOnly;
+  /** What Hiring now lists while it leads with the member's function. Null: every function (Show all functions), or a search. */
+  const hireList: Row[] | null = hireFn && fnSplit && !allFns && !q.trim() ? (fnSplit.mine.length ? fnSplit.mine : lifted ? liftRows! : NO_ROWS) : null;
+  const fnOnly = !!hireList;
+  /** Rows with a role new this week (in `fn`, when given): the "4 new this week" on Hiring now. */
+  const weekN = (rows: Row[], fn: string | null) =>
+    rows.filter((r) => (r.e ? [r.e] : r.i.engs).some((e) => newThisWeek(e) && (!fn || shown(e.cells.function) === fn))).length;
+  /** What Hiring now counts, in the list's own noun: "7 open Sales roles", "7 companies hiring Sales". */
+  const hireWords = (n: number, fn: string | null) =>
+    recordType === "companies"
+      ? `${plural(n, "company", "companies")} hiring${fn ? ` ${fn}` : ""}`
+      : recordType === "people"
+        ? `${plural(n, "person", "people")} at companies hiring${fn ? ` ${fn}` : ""}`
+        : plural(n, fn ? `open ${fn} role` : "open role");
   /**
    * How many of each list (companies, seats, people) this view holds, with the same filters, the
    * profile and the search: the list switch and the phone's list menu show these, so they always
    * agree with the All count. While searching, one tap moves to the list that has matches.
-   * Search reads only what the member can see, never a locked value (applyFilters).
+   * Search reads only what the member can see, never a locked value (applyFilters). On Hiring
+   * now they count what it lists: the member's function, with the profile lifted when it is.
    */
   const typeCounts = useMemo(() => {
     const out = {} as Record<RecordType, number>;
-    for (const t of RECORD_TYPES) out[t.key] = t.key === recordType ? filtered.length : applyFilters(rowsFor(t.key, infos), eff, tab, q, cellMe, true).rows.length;
+    const f = lifted ? { ...eff, icp: false } : eff;
+    for (const t of RECORD_TYPES) {
+      if (t.key === recordType) out[t.key] = (hireList ?? filtered).length;
+      else {
+        const rows = applyFilters(rowsFor(t.key, infos), f, tab, q, cellMe, true).rows;
+        out[t.key] = hireList && hireFn ? (hireList.length || lifted ? splitByFn(rows, hireFn).mine.length : 0) : rows.length;
+      }
+    }
     return out;
-  }, [recordType, filtered, infos, eff, tab, q, cellMe]);
+  }, [recordType, filtered, hireList, hireFn, lifted, infos, eff, tab, q, cellMe]);
   const searchCounts = q.trim() ? typeCounts : null;
   /** While a search is narrowed by the profile or filters: the matches they keep out ("3 more outside your filters · Show them"). */
   const narrowedBy = !wide && q.trim() ? { icp: icpApplies(eff, tab, me), filters: activeCount(eff) > 0 } : null;
@@ -450,12 +563,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     return Math.max(0, applyFilters(allRows, EMPTY_FILTERS, tab, q, cellMe, true).rows.length - filtered.length);
   }, [narrowedBy?.icp, narrowedBy?.filters, allRows, tab, q, cellMe, filtered]); // eslint-disable-line react-hooks/exhaustive-deps
   // Name matches come first while searching (decision 13).
-  // Hiring now: the member's function first. Until "Show all functions", only theirs (when they have any open).
-  const fnSplit = useMemo(() => (hireFn ? splitByFn(filtered, hireFn) : null), [filtered, hireFn]);
-  const fnOnly = !!fnSplit && !allFns && fnSplit.mine.length > 0 && !q.trim();
   const sortedLive = useMemo(
-    () => sortRows(fnOnly ? fnSplit!.mine : filtered, sort, tab === "needs", q, { me: cellMe, fnFirst: hireFn }),
-    [filtered, fnOnly, fnSplit, sort, tab, q, cellMe, hireFn],
+    () => sortRows(hireList ?? filtered, sort, tab === "needs", q, { me: cellMe, fnFirst: hireFn }),
+    [filtered, hireList, sort, tab, q, cellMe, hireFn],
   );
   /*
    * While a record is open, the rows keep the order they had when it opened: unlocking a hidden
@@ -463,7 +573,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    * view, search or filter takes a fresh order. Closing the record lets the rows settle.
    */
   const fKey = encodeFilters(filters);
-  const listKey = `${recordType}|${tab}|${sort}|${q}|${fKey}|${fnOnly}`;
+  const listKey = `${recordType}|${tab}|${sort}|${q}|${fKey}|${fnOnly}|${lifted}`;
   const frozen = useRef<{ key: string; at: Map<string, number> } | null>(null);
   if (!drawer) frozen.current = null;
   else if (!frozen.current || frozen.current.key !== listKey) frozen.current = { key: listKey, at: new Map(sortedLive.map((r, k) => [r.key, k])) };
@@ -501,7 +611,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     if (!a) return;
     const top = Math.max(0, a.getBoundingClientRect().top + window.scrollY - 56);
     if (window.scrollY > top + 1) window.scrollTo({ top });
-  }, [recordType, tab, fKey, q, sort]);
+  }, [recordType, tab, fKey, q, sort, allFns, lifted]);
 
   /* ----- phones: the view in use is always fully on screen in its scrolling row ----- */
   useEffect(() => {
@@ -646,11 +756,19 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setPage(p === "metrics" && !view.admin ? "table" : p);
   });
   const openSeats = useStable((engagementId?: string) => {
+    // From the zero-credits wall: the fact the member wanted, so Your seats can bring them back to it.
+    const from = wallBack.take();
     setEditor(null);
     setPop(null);
     setDrawer(null);
     setSeatFocus(engagementId ?? null);
+    setSeatCtx({ back: from, search: !!from?.search });
     setPage("seats");
+  });
+  /** Your seats, opened on its search for seats the member held (Get started step 2, "Find a seat you held"). */
+  const openSeatSearch = useStable(() => {
+    openSeats();
+    setSeatCtx({ back: null, search: true });
   });
   /** A record at a company whose name is hidden until the member unlocks it. */
   const isHidden = useStable((id: string) => !!ownerOf.get(id)?.c.hidden);
@@ -690,92 +808,144 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     scrollToRow.current = null;
     el.scrollIntoView({ block: "nearest" });
   }, [list, drawer?.rowKey]);
-  const shareInvite = useShareInvite();
-  // Phones and tablets open the share sheet (Messages, WhatsApp, LinkedIn). It copies the link where there is none.
+  // A message ready to send, with the link in it: Share it on a phone, Email it or Copy message anywhere.
   const invite = useStable(() => {
-    if (phone || touch) void shareInvite(inviteLink(me.inviteCode));
-    else copy(inviteLink(me.inviteCode), `Invite link copied. You both get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat.`);
+    setEditor(null);
+    setPop(null);
+    setInviteOpen(true);
   });
 
   /**
-   * The fact the guided steps point at. Adding: free company facts only (industry, size, HQ,
-   * revenue), never a guess at a role, rate or who held a seat. Unlocking: who held the seat
-   * first (the fact a credit is most worth), then the rate, then the role. A member looking for
-   * roles is pointed at an open role in their function (at a hidden company, its one lock opens
-   * the company, the role and the posting). Followed companies first, then seats in the
-   * member's own function, then the current sort. `only` limits the rows looked at. A lock that
-   * another control buys is skipped, and so is a hidden company where its row has no lock
-   * (phones and touch tablets).
+   * An empty free company fact at a company the member knows (industry, size, HQ, revenue), never
+   * a guess at a role, rate or who held a seat. `only` limits the rows looked at. Followed
+   * companies first, then the list's order.
    */
-  const firstFact = useStable((want: Cell["s"], only?: (r: Row) => boolean): { t: FactRef; row: Row; idx: number } | null => {
-    const fnOf = (r: Row) => shown((r.e ?? r.i.latest)?.cells.function);
-    const mineFn = (r: Row) => (me.function && fnOf(r) === me.function ? 1 : 0);
-    const roles = me.goal === "roles" && want === "locked";
-    const openMine = (r: Row) => (roles && (r.e ? [r.e] : r.i.engs).some((e) => isOpenSeat(e) && shown(e.cells.function) === me.function) ? 1 : 0);
-    const lockless = phone || touch;
-    const order = sorted
-      .map((r, idx) => ({ r, idx }))
-      .filter(({ r }) => (!only || only(r)) && !(want === "locked" && r.i.c.hidden && (lockless || !roles || me.unlocksLeft === 0)))
-      .sort((a, b) => openMine(b.r) - openMine(a.r) || Number(b.r.i.c.following) - Number(a.r.i.c.following) || mineFn(b.r) - mineFn(a.r) || a.idx - b.idx);
-    const lockedFields = roles ? ["role", "operator", "rate"] : ["operator", "rate", "role"];
-    for (const { r, idx } of order) {
-      const cands: [FactRef, Cell | undefined][] = [];
-      if (want === "empty") {
-        for (const f of ["industry", "employees", "hq", "revenue"]) cands.push([{ entity: "company", id: r.i.c.id, field: f }, r.i.c.cells[f]]);
-      } else if (r.p) {
-        for (const f of ["name", "email", "linkedin", "phone"]) cands.push([{ entity: "contact", id: r.p.id, field: f }, r.p.cells[f]]);
-      } else if (r.i.c.hidden) {
-        // Looking for roles: the hidden company's lock opens it with its open role, the posting and the rate, for 1 credit.
-        cands.push([{ entity: "company", id: r.i.c.id, field: "identity" }, { s: "locked", ver: 0 }]);
-      } else {
-        // An open role in the member's function, else the latest seat. (A phone card shows its role only: pointAt opens the record for the rest.)
-        const e = (openMine(r) ? (r.e ? r.e : r.i.engs.find((x) => isOpenSeat(x) && shown(x.cells.function) === me.function)) : null) ?? r.e ?? r.i.latest;
-        if (e) for (const f of lockedFields) if (!coverOf(r.i, e, f)) cands.push([{ entity: "engagement", id: e.id, field: f }, e.cells[f]]);
-      }
-      const hit = cands.find(([, c]) => c?.s === want);
-      if (hit) return { t: hit[0], row: r, idx };
+  const emptyFact = useStable((only: (r: Row) => boolean): StepTarget | null => {
+    let first: StepTarget | null = null;
+    for (let idx = 0; idx < sorted.length; idx++) {
+      const r = sorted[idx];
+      if (!only(r)) continue;
+      const f = ["industry", "employees", "hq", "revenue"].find((x) => r.i.c.cells[x]?.s === "empty");
+      if (!f) continue;
+      const hit: StepTarget = { t: { entity: "company", id: r.i.c.id, field: f }, i: r.i, row: r, idx, focus: null };
+      if (r.i.c.following) return hit;
+      first ??= hit;
     }
-    return null;
+    return first;
   });
-  /** Point at a fact in the list: pulse a lock, or open the editor on an empty fact. */
-  const pointAt = useStable((want: "locked" | "empty", hit: { t: FactRef; row: Row; idx: number }) => {
-    if (hit.idx >= limit) setLimit(hit.idx + 1);
-    const k = cellKey(hit.t.id, hit.t.field);
-    const pulseIt = () => {
-      cellFlags.set({ pulse: k });
-      setTimeout(() => cellFlags.set((f) => (f.pulse === k ? { pulse: null } : {})), 6000);
-    };
-    setTimeout(() => {
-      const cell = document.querySelector<HTMLElement>(`[data-cell="${k}"]`);
-      // A phone card shows a seat's role only. Who held it and the rate are in the record: open it at that seat and point there.
-      if (!cell && want === "locked" && phone && hit.t.entity === "engagement") {
-        setDrawer({ id: hit.row.i.c.id, rowKey: hit.row.key, focus: hit.t.id });
-        setTimeout(pulseIt, 350);
-        return;
+  /**
+   * "See who is hiring" (Get started step 1 for a member looking for roles): a locked company with
+   * an open role, in their function first. Its one lock opens the company, the job posting and the
+   * posted rate. Followed companies first, then the list's order, then the rest of their table.
+   */
+  const roleTarget = useStable((): StepTarget | null => {
+    const fn = namedFn(me.function);
+    const pick = (list: Row[], inList: boolean): StepTarget | null => {
+      let best: StepTarget | null = null;
+      let bestRank = Infinity;
+      for (let idx = 0; idx < list.length; idx++) {
+        const r = list[idx];
+        if (!r.i.c.hidden) continue;
+        const mine = !!fn && (r.e ? [r.e] : r.i.engs).some((e) => isOpenSeat(e) && shown(e.cells.function) === fn);
+        const rank = (mine ? 0 : 2e7) + (r.i.c.following ? 0 : 1e7) + idx;
+        if (rank >= bestRank) continue;
+        bestRank = rank;
+        best = { t: { entity: "company", id: r.i.c.id, field: "identity" }, i: r.i, row: inList ? r : null, idx: inList ? idx : -1, focus: null };
       }
-      // Company cells are not on screen in the Seats and People views (or on phone cards): use the row.
-      const el = cell ?? document.querySelector<HTMLElement>(`[data-row="${CSS.escape(hit.row.key)}"]`);
-      // Centered across too, so a lock's label in the last columns opens inside the frame.
-      el?.scrollIntoView({ block: "center", inline: "center" });
-      if (want === "locked") pulseIt();
-      else if (el || phone) setTimeout(() => setEditor({ el: el ?? document.body, t: hit.t }), 250); // phones edit in a sheet
-    }, 60);
+      return best;
+    };
+    return pick(sorted, true) ?? pick(infos.map((i) => ({ key: i.c.id, i })), false);
+  });
+  /** The seat a row shows its holder for: a seat row its own, a company row its latest seat (a phone card the one cardSeat picks), a person row none. */
+  const shownSeat = (r: Row) => (r.p ? null : r.e ? r.e : phone ? cardSeat(r.i, me.function) : r.i.latest);
+  /**
+   * Get started step 1. Looking for roles: who is hiring. Otherwise who held a seat, and nothing
+   * else: never a role, a rate or an end month (getStarted.ts). With no seat holder locked anywhere,
+   * the step names a person's name and title instead.
+   */
+  const stepOne = useStable(() => {
+    setPage("table");
+    setDrawer(null);
+    const hit = me.goal === "roles" ? roleTarget() : stepKind === "person" ? personTarget(sorted, infos) : holderTarget(sorted, infos, namedFn(me.function), shownSeat);
+    if (!hit) {
+      toast(me.goal === "roles" ? "You can already see every company that's hiring." : "There's nothing locked for you to see right now.");
+      return;
+    }
+    pointAt("locked", hit);
+  });
+  /** Pulse a lock for a few seconds (Get started, the way back from Your seats). */
+  const pulseKey = useStable((k: string) => {
+    cellFlags.set({ pulse: k });
+    setTimeout(() => cellFlags.set((f) => (f.pulse === k ? { pulse: null } : {})), 6000);
+  });
+  /** Open a company's record at a seat or a person, and point at the first of `keys` there (the lock that buys it). */
+  const pointInRecord = useStable((i: CoInfo, focus: string | null, keys: string[], row?: Row | null) => {
+    setPage("table");
+    setEditor(null);
+    setDrawer({ id: i.c.id, rowKey: row?.key ?? sorted.find((r) => r.i === i)?.key ?? i.c.id, focus });
+    whenThere(
+      () => cellIn(recordRoot(), keys),
+      (el) => {
+        scrollWithin(el);
+        pulseKey(el.dataset.cell ?? keys[0]);
+      },
+      () => {
+        if (keys.length) pulseKey(keys[0]);
+      },
+    );
+  });
+  /**
+   * Point at a fact: pulse a lock, or open the editor on an empty fact. The list scrolls inside
+   * its frame, never the page around it. A lock that isn't on screen (a company row shows its
+   * latest seat only, a phone card one seat, a locked company's card has no lock) is pointed at in
+   * the record, opened at that seat or person. One outside the list opens its record straight away.
+   */
+  const pointAt = useStable((want: "locked" | "empty", hit: StepTarget) => {
+    const keys = want === "locked" ? sameBuy(hit.t) : [cellKey(hit.t.id, hit.t.field)];
+    const row = hit.row;
+    if (!row) {
+      if (want === "locked") pointInRecord(hit.i, hit.focus, keys);
+      else openCompany(hit.i.c.id);
+      return;
+    }
+    if (hit.idx >= limit) setLimit(hit.idx + 1);
+    // In a row, a seat holder's own lock only: a row can show a seat's role without its holder, and the role is never the target.
+    const rowKeys = hit.t.entity === "engagement" && hit.t.field === "operator" ? keys.slice(0, 1) : keys;
+    whenThere(
+      () => document.querySelector<HTMLElement>(`[data-row="${CSS.escape(row.key)}"]`),
+      (rowEl) => {
+        const cell = cellIn(rowEl, rowKeys);
+        if (want === "locked") {
+          if (!cell) return pointInRecord(hit.i, hit.focus, keys, row);
+          scrollWithin(cell);
+          pulseKey(cell.dataset.cell ?? keys[0]);
+          return;
+        }
+        // Company cells are not on screen in the Seats and People views: the editor opens at the row (phones edit in a sheet).
+        scrollWithin(cell ?? rowEl);
+        setTimeout(() => setEditor({ el: cell ?? rowEl, t: hit.t }), 250);
+      },
+      () => {
+        if (want === "locked") pointInRecord(hit.i, hit.focus, keys, row);
+      },
+    );
   });
   /*
-   * Where "add a fact" sends the member (Get started, the low and zero credit lines, a waiting
-   * invite bonus): something they know. Their own seats first, then a company they follow or
-   * unlocked with a free fact missing, else the form for a seat they held. Never a stranger's
-   * company picked by the sort.
+   * Where "add a fact" sends the member (the low and zero credit lines, a waiting invite bonus):
+   * something they know. Their own seats first, then a company they follow or unlocked with a
+   * free fact missing, else the search for a seat they held. Never a stranger's company picked by
+   * the sort.
    */
   const knownCo = (i: CoInfo) => !i.c.hidden && (i.c.following || i.unlockedByMe);
   const knownGap = (i: CoInfo) => knownCo(i) && ["industry", "employees", "hq", "revenue"].some((f) => i.c.cells[f]?.s === "empty");
-  const addTarget: "seats" | "known" | "seat" = seatStats.missing > 0 ? "seats" : infos.some(knownGap) ? "known" : "seat";
-  const addLabel = addTarget === "seats" ? "Fill in your seats" : addTarget === "known" ? "Show me one to add" : "Add a seat you held";
+  // A member with no seat yet is sent to find one, the biggest earn there is (the zero-credits wall leads the same way).
+  const addTarget: "seats" | "known" | "seat" = seatStats.missing > 0 ? "seats" : seatStats.n > 0 && infos.some(knownGap) ? "known" : "seat";
+  const addLabel = addTarget === "seats" ? "Fill in your seats" : addTarget === "known" ? "Show me one to add" : seatStats.n > 0 ? "Find another seat you held" : "Find a seat you held";
   const showAdd = useStable(() => {
     if (addTarget === "seats") return openSeats();
-    if (addTarget === "seat") return openAdd({ mode: "engagement", mine: true });
+    if (addTarget === "seat") return openSeatSearch();
     setPage("table");
-    const hit = firstFact("empty", (r) => knownGap(r.i));
+    const hit = emptyFact((r) => knownGap(r.i));
     if (hit) {
       setDrawer(null);
       return pointAt("empty", hit);
@@ -784,17 +954,30 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     const i = infos.find(knownGap);
     if (i) openCompany(i.c.id);
   });
-  const showFact = useStable((want: "locked" | "empty") => {
-    if (want === "empty") return showAdd();
-    setPage("table");
-    setDrawer(null);
-    const hit = firstFact(want);
-    if (!hit) {
-      toast("Nothing is locked in this view. Clear your filters to see more.");
-      return;
+  const showFact = useStable((want: "locked" | "empty") => (want === "empty" ? showAdd() : stepOne()));
+  /**
+   * From Your seats back to the fact the zero-credits wall was opened on: its record, at that seat
+   * or person, with the lock pointed at (a seat holder and the seat's role, or a person's name and
+   * title, are one lock, so either cell will do).
+   */
+  const seatBack = useMemo(() => {
+    const b = seatCtx.back;
+    const i = b ? ownerOf.get(b.id) : undefined;
+    if (!b || !i) return null;
+    const keys: string[] = [];
+    if (b.key) {
+      const at = b.key.lastIndexOf(".");
+      const pair = ({ operator: "role", role: "operator", name: "title", title: "name" } as Record<string, string>)[b.key.slice(at + 1)];
+      keys.push(b.key, ...(pair ? [`${b.key.slice(0, at)}.${pair}`] : []));
     }
-    pointAt(want, hit);
-  });
+    return {
+      name: i.c.hidden ? "the locked company" : i.c.name,
+      go: () => {
+        setSeatCtx({ back: null, search: false });
+        pointInRecord(i, b.id !== i.c.id ? b.id : null, keys);
+      },
+    };
+  }, [seatCtx.back, ownerOf, pointInRecord]);
 
   /* ----- closing overlays: Esc, the back gesture ----- */
   const toggleFilters = useStable(() => {
@@ -1114,14 +1297,18 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     <Checklist
       me={me}
       vertical={phone}
+      // Phones: one line, so the first record is on the first screen.
+      compact={phone}
       onUnlock={() => showFact("locked")}
-      onAdd={() => openAdd({ mode: "engagement", mine: true })}
+      onAdd={openSeatSearch}
       onInvite={invite}
       onDismiss={hideCheck}
       seats={Math.min(seatStats.missing, earnRoom(me))}
       seatsHeld={seatStats.n}
       seatsLeft={seatStats.missing}
       onSeats={() => openSeats()}
+      stepOne={stepKind}
+      seen={stepSeen}
     />
   );
 
@@ -1179,6 +1366,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setTab("hiring");
     setSort(null);
     setAllFns(false);
+    setFitOnly(false);
     // Hiring now leads with the member's function on its own (no Function filter left behind for All),
     // and the profile pill stays as it was, so the list matches the card's count.
     setFilters({ ...EMPTY_FILTERS, icp: filters.icp });
@@ -1333,8 +1521,19 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </label>
   );
 
-  /** What a view lists. Hiring now lists the member's own function alone (until "Show all functions"), so it counts that. */
-  const tabCount = (t: Tab) => (t === "hiring" && namedFn(me.function) && !allFns && !searching && facets.hiringMine > 0 ? facets.hiringMine : facets.tabs[t]);
+  /*
+   * What a view lists. Hiring now lists the member's own function alone (until "Show all
+   * functions"), all of it with the profile lifted when none of it fits the profile, and never other
+   * functions' roles by default, so its count is that. On Hiring now itself, the list's own length.
+   */
+  const myFn = namedFn(me.function);
+  const hiringLift = useMemo(() => {
+    if (tab === "hiring" || !myFn || allFns || searching || facets.hiringMine > 0 || !icpApplies(unpreset, "hiring", me)) return 0;
+    return splitByFn(applyFilters(allRows, { ...unpreset, icp: false }, "hiring", q, cellMe, true).rows, myFn).mine.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, myFn, allFns, searching, facets.hiringMine, unpreset, me.icp, allRows, q, cellMe]);
+  const hiringN = !myFn || allFns || searching ? facets.tabs.hiring : tab === "hiring" ? sorted.length : facets.hiringMine || hiringLift;
+  const tabCount = (t: Tab) => (t === "hiring" ? hiringN : facets.tabs[t]);
   const viewButtons = TABS.map((t) => (
         <button
           key={t.key}
@@ -1346,7 +1545,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         >
           {t.label}
           {/* Every view shows what it lists, All too, so the count agrees with the list switch above it. The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}{" "}
-          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{tabCount(t.key)}</span>
+          <span className={`num tp-cnt${t.key === "hiring" && hiringN > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{tabCount(t.key)}</span>
         </button>
       ));
   // Phones: what to list (Companies, Seats or People, a short menu) is the list's title in the top bar, so it needs no row of its own (decision 16).
@@ -1389,6 +1588,18 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       onSearchAll={searchAll}
       onBrowse={clearAll}
       onAdd={() => openAdd()}
+      hiring={
+        hireList && hireFn && fnSplit
+          ? {
+              fn: hireFn,
+              outside: fitOnly && liftRows ? liftRows.length : 0,
+              outsideText: liftRows ? hireWords(liftRows.length, hireFn) : "",
+              others: fnSplit.others.length,
+              onOutside: () => setFitOnly(false),
+              onOthers: () => setAllFns(true),
+            }
+          : null
+      }
       elsewhere={
         searchCounts
           ? RECORD_TYPES.filter((t) => t.key !== recordType && searchCounts[t.key] > 0).map((t) => ({
@@ -1416,69 +1627,101 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </div>
   );
 
+  // On Hiring now the rail's "Open now" would only repeat the tab, so it steps out there (unless it is on).
   const filterPanel = (head?: React.ReactNode, top: React.ReactNode = savedViews) => (
-    <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} top={top} />
+    <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles && tab !== "hiring"} top={top} />
   );
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
   const scan = view.scan;
-  // Hiring now leads with the member's function: how many came in this week there and elsewhere, and one tap for every function.
-  // Counted inside the Ideal Fractional Profile pill while it is on, so the line agrees with the list under it.
-  const weekFit = icpApplies(eff, tab, me) ? icpTest(me.icp!) : null;
-  const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => !isFirm(i.c) && (!weekFit || weekFit(i.c))) : null;
-  // None in their function here: say so, rather than list other functions as if they were theirs.
-  const noneMine = !!hireFn && !!fnSplit && !qt && fnSplit.mine.length === 0 && filtered.length > 0 && !allFns && (
-    <p className="tp-scanline hunt-fnline">
-      <span>
-        No open {hireFn} roles {weekFit ? "in your Ideal Fractional Profile " : ""}right now. These are in other functions.
-      </span>
-      {weekFit && (
-        <button type="button" className="tp-flink" onClick={() => setEff({ ...eff, icp: false })}>
-          Show everyone
-        </button>
-      )}
+  /*
+   * Hiring now's one set of numbers, counted from the list itself: "7 open Sales roles, 4 new this
+   * week · 25 in other functions". The tab's count, the list switch and the toolbar count say the
+   * same 7. While none of their function's roles fit the profile, the line says so and lists them all.
+   */
+  const othersN = fnSplit?.others.length ?? 0;
+  const hireLine = (() => {
+    if (!hireFn || !fnSplit || qt) return null;
+    if (lifted)
+      return (
+        <>
+          <span>
+            None of the <b className="num">{hireWords(liftRows!.length, hireFn)}</b> fit your profile right now. Here they all are.
+          </span>
+          <button type="button" className="tp-flink" onClick={() => setFitOnly(true)}>
+            Only my profile
+          </button>
+          {othersN > 0 && (
+            <button type="button" className="tp-flink" onClick={() => setAllFns(true)}>
+              {othersN} in other functions fit your profile
+            </button>
+          )}
+        </>
+      );
+    if (allFns) {
+      const fresh = weekN(sorted, null);
+      return (
+        <>
+          <span>
+            <b className="num">{hireWords(sorted.length, null)}</b>
+            {fresh > 0 && <span className="num">, {fresh} new this week</span>} · <span className="num">{fnSplit.mine.length}</span> in {hireFn}
+          </span>
+          <button type="button" className="tp-flink" onClick={() => setAllFns(false)}>
+            Only {hireFn}
+          </button>
+        </>
+      );
+    }
+    if (!hireList?.length) return null;
+    const fresh = weekN(hireList, hireFn);
+    return (
+      <>
+        <span>
+          <b className="num">{hireWords(hireList.length, hireFn)}</b>
+          {fresh > 0 && <span className="num">, {fresh} new this week</span>}
+          {othersN > 0 && (
+            <>
+              {" "}
+              · <span className="num">{othersN}</span> in other functions
+            </>
+          )}
+        </span>
+        {othersN > 0 && (
+          <button type="button" className="tp-flink" onClick={() => setAllFns(true)}>
+            Show all functions
+          </button>
+        )}
+      </>
+    );
+  })();
+  const fnLine = hireLine && <p className="tp-scanline hunt-fnline">{hireLine}</p>;
+  const scanLine = tab === "hiring" && fnLine;
+  /** How fresh the open roles are, under the list: the list comes first on the screen. */
+  const scanNote = tab === "hiring" && scan && (
+    <p className="tp-scanline tp-scannote">
+      We check job boards for open fractional roles every week.
+      {/* "The first check runs this week" only while nothing is listed yet: roles members added show before any scan. */}
+      {scan.lastOkAt ? ` Last scan ${fmtStamp(scan.lastOkAt)}.` : scan.lastRunAt ? " The last scan could not read the job boards." : facets.tabs.hiring === 0 ? " The first check runs this week." : ""}
     </p>
-  );
-  const fnLine = hireFn && fnSplit && !qt && (fnSplit.mine.length > 0 || allFns) && (
-    <p className="tp-scanline hunt-fnline">
-      <span>
-        <b className="num">{plural(week!.mine, `${hireFn} role`)}</b> this week · <span className="num">{week!.others}</span> in other functions
-      </span>
-      {fnOnly ? (
-        <button type="button" className="tp-flink" onClick={() => setAllFns(true)}>
-          Show all functions
-        </button>
-      ) : (
-        <button type="button" className="tp-flink" onClick={() => setAllFns(false)}>
-          Only {hireFn}
-        </button>
-      )}
-    </p>
-  );
-  const scanLine = tab === "hiring" && scan && (
-    <>
-      {fnLine}
-      {noneMine}
-      <p className="tp-scanline">
-        We check job boards for open fractional roles every week.
-        {/* "The first check runs this week" only while nothing is listed yet: roles members added show before any scan. */}
-        {scan.lastOkAt ? ` Last scan ${fmtStamp(scan.lastOkAt)}.` : scan.lastRunAt ? " The last scan could not read the job boards." : facets.tabs.hiring === 0 ? " The first check runs this week." : ""}
-      </p>
-    </>
   );
   /* ----- who the member hunts: the Ideal Fractional Profile pill and saved views ----- */
   const icpOn = icpApplies(eff, tab, me);
   // Confirmed matches and maybes (a part the profile asks for isn't on file), so the count says what it mixes (C17).
+  // Counted on the rows listed (Hiring now lists the member's function alone), so the pill never counts rows the list doesn't show.
   const icpSplit = useMemo(() => {
     if (!icpOn) return null;
+    const listed = hireList ?? filtered;
     let match = 0;
-    for (const r of filtered) if (icpMatch(me.icp, r.i.c) === "match") match++;
-    return { match, maybe: filtered.length - match };
-  }, [icpOn, filtered, me.icp]);
+    for (const r of listed) if (icpMatch(me.icp, r.i.c) === "match") match++;
+    return { match, maybe: listed.length - match };
+  }, [icpOn, hireList, filtered, me.icp]);
   /*
    * The pill stays up while it narrows the list, a search included. It goes only where the profile
-   * doesn't apply: a search widened to everything, and the member's own lists (Following, Unlocked).
+   * doesn't apply: a search widened to everything, the member's own lists (Following, Unlocked),
+   * and Hiring now while it lists their function with the profile lifted (its line says so, and
+   * has "Only my profile"). A member who skipped the profile in onboarding isn't asked for it
+   * again in the same visit.
    */
-  const pill = page === "table" && !wide && !ICP_FREE_TABS.includes(tab) && (
+  const pill = page === "table" && !wide && !ICP_FREE_TABS.includes(tab) && !lifted && !(icpSkipped && icpEmpty(me.icp)) && (
     <IcpPill
       icp={me.icp}
       on={icpOn}
@@ -1698,7 +1941,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
-            <Seats seats={seats} infos={infos} focus={seatFocus} onBack={() => setPage("table")} />
+            <Seats seats={seats} infos={infos} focus={seatFocus} onBack={() => setPage("table")} search={seatCtx.search} back={seatBack} />
           </main>
         ) : phone ? (
           <main className="tp-main tp-main-phone">
@@ -1770,6 +2013,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               {empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} />}
             </div>
             {more}
+            {scanNote}
             {proFoot}
             {/* The main action, labeled and in thumb reach (DSGNP-8). Not while searching: the keyboard has that space. */}
             {!recordOpen && !qt && (
@@ -1856,6 +2100,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 </div>
                 <div className="tp-frame-fade" ref={fadeRef} aria-hidden />
               </div>
+              {scanNote}
             </main>
           </div>
         )}
@@ -1934,6 +2179,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           />
         )}
         {addOpts && <AddModal infos={infos} opts={addOpts} onClose={() => setAddOpts(null)} />}
+        {inviteOpen && (
+          <Sheet title="Invite a fractional" onClose={() => setInviteOpen(false)} dialog className="tp-invite-sheet">
+            <InvitePanel fn={me.function} code={me.inviteCode} />
+          </Sheet>
+        )}
         {icpOpen && <IcpSheet icp={me.icp} title={me.title} fn={me.function} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
         {saveOpen && (
           <SaveViewSheet key={herePlace} defaultName={viewName(spelled, tab, recordType, fnOnly ? hireFn : null, me.function)} emailOn={view.email} onSave={saveView} onClose={() => setSaveOpen(false)} />
@@ -2101,9 +2351,16 @@ function Empty({
   onSearchAll,
   onBrowse,
   elsewhere = [],
+  hiring = null,
 }: {
   /** While searching: the other lists that have matches (one tap moves there). */
   elsewhere?: { n: number; noun: [string, string]; go: () => void }[];
+  /**
+   * Hiring now in the member's function, with nothing of theirs to list. `outside`: their open
+   * roles the profile keeps out ("Only my profile" is on). `others`: rows in other functions,
+   * offered as a link, never listed by default.
+   */
+  hiring?: { fn: string; outside: number; outsideText: string; others: number; onOutside: () => void; onOthers: () => void } | null;
   q: string;
   tab: Tab;
   noun: string;
@@ -2132,6 +2389,21 @@ function Empty({
       { label: `Search all ${noun}`, go: onSearchAll, kind: "pine" },
       { label: "Clear search", go: onClearSearch },
     ];
+  } else if (hiring) {
+    const others = hiring.others > 0 ? [{ label: `See the ${hiring.others} in other functions`, go: hiring.onOthers }] : [];
+    if (hiring.outside > 0) {
+      h = `None of the ${hiring.outsideText} fit your profile right now`;
+      p = "They're all at companies outside your Ideal Fractional Profile.";
+      actions = [{ label: `Show all ${hiring.outside}`, go: hiring.onOutside, kind: "pine" }, ...others];
+    } else if (filtered) {
+      h = `No open ${hiring.fn} roles match these filters`;
+      p = "Take a filter off, or see what's open in other functions.";
+      actions = [{ label: "Clear filters", go: onClearFilters }, ...others];
+    } else {
+      h = `No open ${hiring.fn} roles right now`;
+      p = `We check job boards every week. New ${hiring.fn} roles show up here as we find them.`;
+      actions = others.length ? [{ ...others[0], kind: "pine" }] : [{ label: "See all companies", go: onBrowse }];
+    }
   } else if (q) {
     // Search reads what the member can see. Say so, rather than claim we have nothing.
     h = `No company, function or industry matches ${q}`;

@@ -24,6 +24,8 @@ import { BENCH_RATE_HELP, atTime, plural, store } from "./hooks";
 import { earnRoom } from "./NextMove";
 import { MonthYear } from "./MonthYear";
 import { RateWho, shortLabel, useUi, type RateChoice } from "./ui";
+import { FindSeats, seatsFound } from "../onboard/FindSeats";
+import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
@@ -710,7 +712,70 @@ export function waitingSeats(infos: CoInfo[]): { i: CoInfo; e: EngagementRec }[]
   return out;
 }
 
-export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focus: string | null; onBack: () => void; infos?: CoInfo[] }) {
+/**
+ * Find your seats on Your seats: the onboarding search (a client they worked with, the seats we
+ * found there, claim one or add the one they held). At the top of the page, and the whole of it
+ * while nothing is under their name yet. `autoFocus`: they came here to search (Get started step
+ * 2, the zero-credits wall).
+ */
+function FindSeatsHere({ infos, autoFocus, empty }: { infos: CoInfo[]; autoFocus: boolean; empty: boolean }) {
+  const ui = useUi();
+  const me = ui.me;
+  const [clients, setClients] = useState<string[]>([]);
+  const [added, setAdded] = useState<Record<string, number>>({});
+  const companies = useMemo(() => infos.map((i) => i.c), [infos]);
+  const found = seatsFound(companies, clients, added);
+  return (
+    <section className={`ys-find${empty ? " ys-find-empty" : ""}`} aria-label="Find a seat you held">
+      {/* The empty card says it already: its heading and line lead into the search. */}
+      {!empty && (
+        <>
+          <h2 className="ys-find-h">Find another seat you held</h2>
+          <p className="ys-find-p">
+            Type a client you worked with. We list the seats we found there. Claim yours and you see everything on it free, and each answer you add earns a credit, {SEAT_YIELD}.
+          </p>
+        </>
+      )}
+      <FindSeats
+        companies={companies}
+        fn={me.function}
+        title={me.title === "Member" ? "" : me.title}
+        name={me.name}
+        credits={me.credits}
+        clients={clients}
+        setClients={setClients}
+        act={ui.act}
+        autoFocus={autoFocus}
+        where="seats"
+        added={added}
+        setAdded={setAdded}
+      />
+      {found > 0 && (
+        <p className="ys-find-n num" role="status">
+          {found === 1 ? "1 seat is yours now. Fill it in below." : `${found} seats are yours now. Fill them in below.`}
+        </p>
+      )}
+    </section>
+  );
+}
+
+export function Seats({
+  seats,
+  focus,
+  onBack,
+  infos,
+  search = false,
+  back = null,
+}: {
+  seats: SeatInfo[];
+  focus: string | null;
+  onBack: () => void;
+  infos?: CoInfo[];
+  /** Open on the search for seats the member held. */
+  search?: boolean;
+  /** From the zero-credits wall: the record the member was unlocking, and the way back to it. */
+  back?: { name: string; go: () => void } | null;
+}) {
   const ui = useUi();
   const me = ui.me;
   /** Seats taken off the list in this visit ("This isn't me"), with what the server said. */
@@ -821,23 +886,48 @@ export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focu
     </section>
   );
 
+  const empty = list.length === 0 && gone.size === 0;
+  // The search, at the top of the page (the whole page while nothing is under their name yet).
+  const find = infos && <FindSeatsHere infos={infos} autoFocus={search} empty={empty} />;
   return (
     <div className="tp-page ys-page">
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
+      {/* From the zero-credits wall, the way out leads back to the record they were unlocking. */}
+      <button type="button" className="tp-back" onClick={back ? back.go : onBack}>
+        <IconChevron dir="left" /> {back ? `Back to ${back.name}` : "Back to the table"}
       </button>
       <h1 className="tp-page-h">Your seats</h1>
-      {list.length === 0 && gone.size === 0 ? (
-        <>
-          <div className="ys-empty">
+      {back && me.credits > 0 && (
+        <div className="ys-backup" role="status">
+          <span>
+            You have <b className="num">{plural(me.credits, "credit")}</b> now.
+          </span>
+          <button type="button" className="btn btn-pine btn-sm" onClick={back.go}>
+            Back to {back.name}
+          </button>
+        </div>
+      )}
+      {/*
+        One place in the page for the search, empty or not, so a seat claimed from an empty page keeps
+        its client card (the page fills in under it instead of starting the search over).
+      */}
+      <div className={empty ? "ys-empty" : "ys-find-top"}>
+        {empty && (
+          <>
             <h2 className="ys-empty-h">{waiting.length ? "No seat is confirmed as yours yet" : "We don't have a seat under your name yet"}</h2>
-            <p>Add one you held and it shows up here. Each answer you add to it earns 1 credit.</p>
-            <button type="button" className="btn btn-primary" onClick={addSeat}>
-              <IconPlus size={14} /> Add a seat you held
-            </button>
-          </div>
-          {waitingList}
-        </>
+            <p>
+              Type a client you worked with and we list the seats we found there. Claim yours, or add the one you held, and each answer you add earns a credit, {SEAT_YIELD}.
+            </p>
+          </>
+        )}
+        {find}
+        {empty && (
+          <button type="button" className="tp-flink ys-empty-add" onClick={addSeat}>
+            <IconPlus size={13} /> Add a seat with all its details
+          </button>
+        )}
+      </div>
+      {empty ? (
+        waitingList
       ) : (
         <>
           <p className="ys-lead">
@@ -845,7 +935,7 @@ export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focu
             keep private.
           </p>
           <p className="ys-lead-sub">
-            Members spend 1 credit to see your name on a seat, and its title comes with it. The month a seat ended, how you were found and the rate are 1 credit each. Everything else here is free for every member to see.
+            Members spend 1 credit to see your name on a seat, and the seat's title comes with it. How you were found, the rate and the month a past seat ended are 1 credit each. Everything else here is free for every member to see.
           </p>
           <div className="ys-progress">
             <div className="ys-progress-box" role="status">

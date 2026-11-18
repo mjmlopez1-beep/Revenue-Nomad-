@@ -17,6 +17,8 @@ import {
   cardSeat, newRolesFor, newThisWeek, rolesThisWeek, personCoverOf, personNoun, personUnseen, PERSON_NO_ADD, seatBundled, seatBothLocked, seatNoun, seatWhat, waitWords, AFTER_NAME, AFTER_COMPANY,
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
+import { holderSeen, holderTarget, lockedHolder, personTarget, sameBuy, stepOneKind } from "../app/post/getStarted";
+import { SEAT_YIELD, inviteMailto, inviteMessage, tappedWhat, wallBack } from "../app/post/earnBack";
 
 let passed = 0;
 let failed = 0;
@@ -531,11 +533,12 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("unlocking a seat holder ticks it", holder.steps[0].done);
   const roles = checkSteps({ ...base, goal: "roles", unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0 });
   check("looking for roles, a hidden company ticks See who is hiring", roles.steps[0].done && roles.steps[0].label === "See who is hiring");
-  // Step 2 is "Add a seat you held": only a seat ticks it, never a company fact or a rate shared for the benchmarks (C33, C42).
+  // Step 2 is "Find your seats": only a seat ticks it, never a company fact or a rate shared for the benchmarks (C33, C42).
   const facts = checkSteps({ ...base, added: 3, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0 });
-  check("facts and benchmark rates don't tick Add a seat you held", n(facts) === 1 && !facts.steps[1].done && facts.steps[1].label === "Add a seat you held", facts.steps[1]);
+  check("facts and benchmark rates don't tick Find your seats", n(facts) === 1 && !facts.steps[1].done && facts.steps[1].label === "Find your seats", facts.steps[1]);
+  check("step 2 says what a seat is worth, honestly", facts.steps[1].hint === "up to ~12 credits a seat", facts.steps[1].hint);
   const after = checkSteps({ ...base, added: 4, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 6, earn: 6 });
-  check("a seat on file ticks step 2, and its label stays the same", n(after) === 2 && after.steps[1].done && after.steps[1].label === "Add a seat you held", after.steps[1]);
+  check("a seat on file ticks step 2, and its label stays the same", n(after) === 2 && after.steps[1].done && after.steps[1].label === "Find your seats", after.steps[1]);
   check("Fill in your seats is a nudge once step 2 is done (it takes step 2's place: three items, never four)", !!after.nudge && after.nudge.label === "Fill in your seats" && after.steps.length === 3, after.nudge);
   const sticky = checkSteps({ ...base }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stuck: new Set(["unlock", "seat"]) });
   check("a step done before stays done", n(sticky) === 2);
@@ -543,6 +546,93 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("an old step 2 tick from any fact doesn't carry over", !oldTick.steps[1].done);
   const filled = checkSteps({ ...base }, { seatsHeld: 2, seatsLeft: 0, earn: 8 });
   check("seats on file with nothing left to fill: step 2 done, no nudge", filled.steps[1].done && !filled.nudge);
+  // A seat holder and the seat's role are one purchase: the credit may have gone through the role's lock.
+  const seenIt = checkSteps({ ...base, unlocked: 1, holdersUnlocked: 0 }, { seatsHeld: 0, seatsLeft: 0, earn: 0, seen: true, stepOne: "holder" });
+  check("a seat holder the table shows as paid for ticks See who held a seat", seenIt.steps[0].done && seenIt.steps[0].label === "See who held a seat", seenIt.steps[0]);
+  const person = checkSteps({ ...base }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "person" });
+  check("no seat holder locked anywhere: step 1 names a person's name and title instead", person.steps[0].label === "See who decides at a company" && !person.steps[0].done, person.steps[0]);
+  const none = checkSteps({ ...base }, { seatsHeld: 1, seatsLeft: 3, earn: 3, stepOne: "none" });
+  check(
+    "nothing locked anywhere: step 1 is left out, and the nudge still takes step 2's place",
+    none.steps.map((x) => x.key).join() === "seat,invite" && !!none.nudge,
+    none.steps.map((x) => x.key),
+  );
+  const rolesNone = checkSteps({ ...base, goal: "roles" }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "none" });
+  check("looking for roles, step 1 stays See who is hiring", rolesNone.steps[0].label === "See who is hiring" && rolesNone.steps.length === 3);
+}
+
+/* ---------- Get started step 1: who held a seat, and nothing else ---------- */
+
+{
+  const held = (fn: string, extra: Partial<EngagementRec> = {}, cells: Record<string, Cell> = {}) =>
+    eng({ function: val(fn), type: val("Fractional"), start: val("2024-01"), status: val("Ended"), operator: LOCKED, role: LOCKED, ...cells }, { source: "Published engagement", ...extra });
+  // A LinkedIn-found seat with nobody named: the latest seat at most companies, its role locked.
+  const research = (fn: string) => eng({ function: val(fn), start: val("2026-06"), status: val("Active"), operator: EMPTY, role: LOCKED, end: LOCKED }, { source: "Seat scan", claimable: true } as Partial<EngagementRec>);
+  const aSales = held("Sales");
+  const a = co("Alpha", [research("Marketing"), aSales]);
+  const bMkt = held("Marketing", {}, { start: val("2026-01") });
+  const b = co("Beta", [bMkt]);
+  const hiddenSeat = held("Sales");
+  const h = Object.assign(co("Locked company", [hiddenSeat]), { hidden: true });
+  const own = held("Sales", { yours: true }, { operator: val("Me Myself") });
+  const o = co("Own Co", [own]);
+  const infosS = deriveAll([a, b, h, o]);
+  const rows = rowsFor("companies", infosS);
+  const latest = (r: { i: { latest: EngagementRec | null } }) => r.i.latest;
+  check("the research seat is Alpha's latest seat (the row shows it)", infosS[0].latest?.source === "Seat scan", infosS[0].latest?.source);
+  const t1 = holderTarget(rows, infosS, "Sales", latest);
+  check("step 1 points at a seat holder, never the role of the seat the row shows", t1?.t.field === "operator" && t1.t.id === aSales.id && t1.focus === aSales.id, t1 && { field: t1.t.field, id: t1.t.id });
+  check("an older seat's holder counts: every seat of every row is looked at", t1?.row?.i.c.name === "Alpha" && t1.idx === 0);
+  const t2 = holderTarget(rows, infosS, "Marketing", latest);
+  check("seats in the member's function come first", t2?.t.id === bMkt.id, t2?.t.id);
+  b.following = true;
+  const followed = deriveAll([a, b, h, o]);
+  const t3 = holderTarget(rowsFor("companies", followed), followed, "Sales", latest);
+  check("followed companies come first", t3?.t.id === bMkt.id, t3?.t.id);
+  b.following = false;
+  check("never a locked company's holder, never the member's own seat", !lockedHolder(infosS[2], hiddenSeat) && !lockedHolder(infosS[3], own));
+  // The list on screen has no holder locked: the member's whole table, with no row (the record opens there).
+  const onlyHidden = rowsFor("companies", [infosS[2]]);
+  const t4 = holderTarget(onlyHidden, infosS, "Sales", latest);
+  check("no holder in the list on screen: one from the whole table, opened in its record", !!t4 && t4.row === null && t4.idx === -1 && t4.t.field === "operator" && t4.i.c.name === "Alpha", t4 && { row: t4.row, co: t4.i.c.name });
+  // The Seats list: each seat is its own row.
+  const seatRows = rowsFor("engagements", infosS);
+  const t5 = holderTarget(seatRows, infosS, null, (r) => r.e ?? null);
+  check("on the Seats list it is that seat's own holder", t5?.t.id === aSales.id && t5.row?.e === aSales, t5?.t.id);
+  check("a seat holder and the seat's role are found as one lock", sameBuy({ entity: "engagement", id: "e1", field: "operator" }).join() === "e1.operator,e1.role");
+  check("a person's name and title are found as one lock", sameBuy({ entity: "contact", id: "p1", field: "name" }).join() === "p1.name,p1.title");
+  check("with a seat holder locked anywhere, step 1 is the seat holder step", stepOneKind(infosS) === "holder");
+  // No seat holder locked anywhere: a person's name and title, else nothing.
+  const p = person();
+  const peopleOnly = deriveAll([co("Gamma", [research("Sales")], [p])]);
+  check("no seat holder anywhere but a person: the person step", stepOneKind(peopleOnly) === "person");
+  const pt = personTarget(rowsFor("companies", peopleOnly), peopleOnly);
+  check("the person step points at their name (name and title are one lock)", pt?.t.entity === "contact" && pt.t.id === p.id && pt.t.field === "name" && pt.focus === p.id, pt?.t);
+  check("nothing locked anywhere: no step 1 target", stepOneKind(deriveAll([co("Delta", [research("Sales")])])) === "none");
+  // Ticks from what the table shows.
+  check("nothing paid for yet: not seen", !holderSeen(infosS));
+  const paidSeat = held("Sales", {}, { operator: val("Jane Smith", { paid: true }) });
+  check("a seat holder the member paid for is seen", holderSeen(deriveAll([co("Paid Co", [paidSeat])])));
+  check("their own seat's holder is not", !holderSeen(infosS));
+}
+
+/* ---------- earning back from the wall: the fact named, the way back, the invite ---------- */
+
+{
+  check("the wall names the fact tapped", tappedWhat("e12.operator") === "who held this seat" && tappedWhat("e12.rate") === "the rate" && tappedWhat("p3.title") === "this person's name and title");
+  check("the wall's Unlock company button has no cell: the company", tappedWhat(null) === "this company" && tappedWhat("c9.identity") === "this company");
+  wallBack.set({ id: "e12", key: "e12.rate", search: true });
+  const back1 = wallBack.take();
+  check("Your seats takes what the wall left, once", back1?.key === "e12.rate" && back1.search && wallBack.take() === null, back1);
+  const msg = inviteMessage("Sales", "https://merlin.example/?ref=abc");
+  const words = msg.slice(0, msg.lastIndexOf("\n\n"));
+  check("the invite is written for the member's function, with the link at the end", /fractional sales leaders/.test(msg) && msg.endsWith("https://merlin.example/?ref=abc"), msg);
+  check("the invite keeps the voice rules (no colon, semicolon or em dash)", !/[:;—]/.test(words), words);
+  check("RevOps keeps its capitals in the invite", /fractional RevOps leaders/.test(inviteMessage("RevOps", "x")));
+  check("no named function: fractional leaders", /hire fractional leaders/.test(inviteMessage("Other", "x")));
+  const mail = inviteMailto(msg);
+  check("Email it opens a mail with the subject and the message filled in", mail.startsWith("mailto:?subject=Join%20me%20on%20Merlin&body=") && decodeURIComponent(mail.split("body=")[1]) === msg);
+  check("the wall states a seat's yield honestly", SEAT_YIELD === "up to ~12 credits a seat");
 }
 
 /* ---------- who the member hunts: ideal client, firms, country, best fit, saved views ---------- */

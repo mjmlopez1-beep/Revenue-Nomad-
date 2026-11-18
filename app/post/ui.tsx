@@ -23,6 +23,8 @@ import { BENCH_RATE_HELP, atTime, fieldText, plural, type Layout } from "./hooks
 import { owedLine } from "./ledger";
 import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
+import { InvitePanel } from "./Invite";
+import { SEAT_YIELD, tappedWhat, wallBack } from "./earnBack";
 
 export type AddMode = "engagement" | "person" | "facts";
 export interface AddOpts {
@@ -263,9 +265,11 @@ export const owedText = (owed: number) => owedLine(owed) ?? "";
 
 /**
  * Shown instead of spending at 0 credits (the server's "You're out of credits" refusal, never
- * the first-day unlock limit): what the member can add to earn one. Their own seats first,
- * then a seat they held, then facts on this company if they know it. A popover on desktop, a
- * sheet on phones.
+ * the first-day unlock limit). It names the fact the member tapped and the quickest way to earn
+ * a credit for it: their own seats when something is missing there, else finding a seat they
+ * held (the search on Your seats, up to ~12 credits a seat), then an invite with its message
+ * ready to send, then facts on this company if they know it. Your seats offers the way back to
+ * this fact once they have a credit (wallBack). A popover on desktop, a sheet on phones.
  */
 export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: string; onClose: () => void }) {
   const ui = useUi();
@@ -275,30 +279,34 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
   const owed = ui.me.owed ?? 0;
   const phone = ui.layout === "phone";
   const title = "You're out of credits";
+  const [inviting, setInviting] = useState(false);
+  // The lock that was tapped is its cell (a record's "Unlock company" button has none: the company).
+  const [key] = useState(() => anchor.closest("[data-cell]")?.getAttribute("data-cell") ?? null);
+  const what = tappedWhat(key);
+  const toSeats = (search: boolean) => () => {
+    wallBack.set({ id, key, search });
+    onClose();
+    ui.openSeats();
+  };
   /*
-   * The ways to earn, in order: the member's own seats (claim them, or fill in what is missing),
-   * a seat they held that isn't here, an invite. Pro comes last. Today's earning cap leaves only
-   * the invite, whose bonus waits until tomorrow if it has to.
+   * The ways to earn, in order: the member's own seats (fill in what is missing), else the search
+   * for a seat they held, then an invite. Pro comes last. Today's earning cap leaves only the
+   * invite, whose bonus waits until tomorrow if it has to.
    */
   const ways: { label: string; go: () => void }[] = [];
-  if (!earn.capped) {
+  if (!earn.capped)
     ways.push(
       ui.seats.missing > 0
-        ? { label: `Fill in your ${one ? "seat" : "seats"}`, go: () => (onClose(), ui.openSeats()) }
-        : { label: "Claim your seats", go: () => (onClose(), ui.openSeats()) },
+        ? { label: `Fill in your ${one ? "seat" : "seats"}`, go: toSeats(false) }
+        : { label: ui.seats.n > 0 ? "Find another seat you held" : "Find a seat you held", go: toSeats(true) },
     );
-    ways.push({ label: "Add a seat you held", go: () => (onClose(), ui.openAdd({ mode: "engagement", mine: true })) });
-  }
-  if (ui.invite) {
-    const invite = ui.invite;
-    ways.push({ label: `Invite a fractional (+${REFERRAL_BONUS} each)`, go: () => (onClose(), invite()) });
-  }
+  ways.push({ label: `Invite a fractional (+${REFERRAL_BONUS} each)`, go: () => setInviting(true) });
   const lead = earn.capped
-    ? `You've earned today's ${ui.me.earnCap}. You can earn again ${atTime(ui.me.earnResetsAt)}.`
+    ? `To see ${what}, you need a credit. You've earned today's ${ui.me.earnCap}, and you can earn again ${atTime(ui.me.earnResetsAt)}.`
     : ui.seats.missing > 0
-      ? `${plural(ui.seats.missing, "thing is", "things are")} still missing on your ${one ? "seat" : "seats"}. Each one you add earns a credit.`
-      : "Each fact you add about a seat you held earns a credit. Find yours, or add one that isn't here.";
-  const pills = facts.length > 0 && (
+      ? `To see ${what}, earn a credit first. ${plural(ui.seats.missing, "thing is", "things are")} still missing on your ${one ? "seat" : "seats"}, and each one you add earns a credit.`
+      : `To see ${what}, earn a credit first. Find ${ui.seats.n > 0 ? "another seat" : "a seat"} you held and claim it. Each answer you add there earns a credit, ${SEAT_YIELD}.`;
+  const pills = facts.length > 0 && !inviting && (
     <>
       <p className="tp-small muted">If you know this company, add one of these.</p>
       <div className="tp-zero-pills">
@@ -313,7 +321,14 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
     <>
       <p className="tp-zero-t">{lead}</p>
       {owed > 0 && <p className="tp-small">{owedText(owed)}</p>}
-      {ways.length > 0 && (
+      {inviting ? (
+        <>
+          <InvitePanel fn={ui.me.function} code={ui.me.inviteCode} />
+          <button type="button" className="tp-flink tp-zero-back" onClick={() => setInviting(false)}>
+            Other ways to earn
+          </button>
+        </>
+      ) : (
         <div className="tp-zero-ways">
           {ways.map((w, k) => (
             <button key={w.label} type="button" className={`btn${k === 0 ? " btn-primary" : ""}${phone ? " btn-lg" : " btn-sm"}`} onClick={w.go}>
@@ -333,7 +348,7 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
       </Sheet>
     );
   return (
-    <Anchored anchor={anchor} onClose={onClose} width={300} className="tp-zero" label={title}>
+    <Anchored anchor={anchor} onClose={onClose} width={inviting ? 360 : 320} className="tp-zero" label={title}>
       <p className="tp-zero-h">{title}</p>
       {body}
     </Anchored>

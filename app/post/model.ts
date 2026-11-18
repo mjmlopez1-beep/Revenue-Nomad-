@@ -1429,8 +1429,12 @@ export interface CheckStep {
 
 /**
  * The three Get started steps and the "Fill in your seats" nudge. Step 1 ticks only once the
- * member paid to see who held a seat (or, looking for roles, a hidden company). Step 2 is "Add a
- * seat you held" and ticks only when a seat is on file under their name (one they added or
+ * member paid to see who held a seat (or, looking for roles, a hidden company). `seen`: the table
+ * shows a seat holder they paid for, which ticks it too (a seat holder and the seat's role are one
+ * purchase, so the credit may have gone through the role's lock). `stepOne` says what step 1 can
+ * point at in their whole table (app/post/getStarted.ts): with no seat holder locked anywhere it
+ * names a person's name and title instead, and with nothing locked at all it is left out. Step 2
+ * is "Find your seats" and ticks only when a seat is on file under their name (one they added or
  * claimed, or one we matched to them): a company fact or a rate shared for the benchmarks never
  * ticks it, and its label never changes. A step in `stuck` (done before, in this browser) stays
  * done. Once step 2 is done and their seats still miss facts, the nudge takes step 2's place in
@@ -1438,22 +1442,27 @@ export interface CheckStep {
  */
 export function checkSteps(
   me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid">,
-  o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string> },
+  o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string>; seen?: boolean; stepOne?: "holder" | "person" | "none" },
 ): { steps: CheckStep[]; nudge: { label: string; hint: string } | null } {
   const paid = me.invitesPaid ?? 0;
   const holders = me.holdersUnlocked ?? me.unlocked;
   const companies = me.companiesUnlocked ?? 0;
   const roles = me.goal === "roles";
   const left = o.seatsLeft;
+  const unlockDone = (roles ? holders + companies > 0 : holders > 0 || !!o.seen) || !!o.stuck?.has("unlock");
+  const person = !roles && !unlockDone && o.stepOne === "person";
   const raw: CheckStep[] = [
-    { key: "unlock", done: roles ? holders + companies > 0 : holders > 0, label: roles ? "See who is hiring" : "See who held a seat", hint: "costs 1 credit" },
-    { key: "seat", done: o.seatsHeld > 0, label: "Add a seat you held", hint: "earns 1 credit" },
+    { key: "unlock", done: unlockDone, label: roles ? "See who is hiring" : person ? "See who decides at a company" : "See who held a seat", hint: "costs 1 credit" },
+    // A seat is worth up to about 12 credits: claimed or added, then each answer on it earns one.
+    { key: "seat", done: o.seatsHeld > 0, label: "Find your seats", hint: "up to ~12 credits a seat" },
     // Done once an invitee's first fact paid the bonus, not when they merely joined.
     { key: "invite", done: paid > 0, label: me.invited > paid ? `Invite a fractional, ${me.invited} joined` : "Invite a fractional", hint: `${REFERRAL_BONUS} credits each` },
   ];
-  const steps = raw.map((x) => ({ ...x, done: x.done || !!o.stuck?.has(x.key) }));
+  // Nothing locked anywhere to point step 1 at: it is left out rather than promise what isn't there.
+  const offered = !roles && !unlockDone && o.stepOne === "none" ? raw.filter((x) => x.key !== "unlock") : raw;
+  const steps = offered.map((x) => ({ ...x, done: x.done || !!o.stuck?.has(x.key) }));
   const nudge =
-    o.seatsHeld > 0 && left > 0 && steps[1].done
+    o.seatsHeld > 0 && left > 0 && !!steps.find((x) => x.key === "seat")?.done
       ? { label: "Fill in your seats", hint: o.earn >= left ? `${left} left, 1 credit each` : o.earn > 0 ? `${left} left, earns up to ${o.earn}` : `${left} left to fill` }
       : null;
   return { steps, nudge };
