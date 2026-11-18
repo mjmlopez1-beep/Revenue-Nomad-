@@ -78,7 +78,7 @@ import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
 import { companyFirm, memberHoldsSeat, purgeFirms, seedFirmIds, type FirmReview, type RemovedFirms } from "./firmRemoval";
 import type {
-  Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
+  Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PartnersView, PersonRec,
   ScanSummary, View,
 } from "./tableTypes";
 import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
@@ -89,6 +89,7 @@ import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
 import { pillPlace } from "../app/onboard/place";
 import { sameName } from "./personName";
 import { claimToken, seatForToken } from "./claimToken";
+import { cleanNote, connectText, notePitch } from "./partners";
 import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
@@ -214,6 +215,8 @@ interface Profile {
   proInterest?: boolean;
   /** Who they hunt: their ideal client (lib/hunt.ts). */
   icp?: Icp | null;
+  /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. */
+  partnersOff?: boolean;
 }
 /** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
 interface RoleTrack {
@@ -332,6 +335,24 @@ export interface State extends MessagingState {
   about?: AboutState;
   /** Seat-holder names from public profiles: claims waiting for an admin, names an admin verified, names taken off, the switch. See publicName. */
   names?: NamesState;
+  /** Invite to connect: which member sent which seat's holder their claim link, and what came of it. See connectInvite. */
+  seatInvites?: SeatInvite[];
+}
+
+/**
+ * Invite to connect: `by` sent the holder of `engagementId` a note with the seat's claim link
+ * (/claim/<token>?ref=<by's invite code>). One per member and seat: sending again keeps `at` and
+ * takes the newest `note`. When the holder claims the seat through the link, `claimedBy` and
+ * `claimedAt` say who and when, and `conversationId` is the conversation it opened (connectInvite).
+ */
+export interface SeatInvite {
+  by: string;
+  engagementId: string;
+  at: string;
+  note?: string;
+  claimedBy?: string;
+  claimedAt?: string;
+  conversationId?: string;
 }
 
 /**
@@ -340,8 +361,11 @@ export interface State extends MessagingState {
  * how, for the counts.
  */
 export interface NamesState {
-  /** "This is me" on a name that isn't the member's own: an admin decides. Newest last. */
-  claims: { memberId: string; engagementId: string; at: string; status: "pending" | "approved" | "declined"; decidedAt?: string }[];
+  /**
+   * "This is me" on a name that isn't the member's own: an admin decides. Newest last. `via`: the
+   * claim came through another member's invite link (their id), so approving it connects them.
+   */
+  claims: { memberId: string; engagementId: string; at: string; status: "pending" | "approved" | "declined"; decidedAt?: string; via?: string }[];
   /** Names an admin marked as right, by engagement id (ISO time). */
   verified: Record<string, string>;
   /** Names taken off, by engagement id: when, and how (This is wrong, Not me or Remove my name on a claim link, the public Remove my name page, an admin). */
@@ -1345,6 +1369,156 @@ function releaseHeld(s: State, memberId: string, now: string): void {
 
 const heldFor = (s: State, memberId: string) => s.held.reduce((n, h) => n + (h.memberId === memberId ? h.delta : 0), 0);
 
+/**
+ * The invite bonus, once per invitee: REFERRAL_BONUS to a member who joined through a fellow
+ * member's invite code (referredBy), and the same to that inviter for up to REFERRAL_LIMIT
+ * different invitees in 30 days. Both within the daily earning cap, the rest held (grant). It is
+ * due when the invitee adds a first fact to a record, or claims their seat through the inviter's
+ * claim link (connectInvite). `due`: it was due now (paid or held). `paid`: what the invitee got at
+ * once. `inviter`: the inviter's first name when they got theirs too.
+ */
+function referralBonus(s: State, seed: Seed, inviteeId: string, now: string): { due: boolean; paid: number; inviter: string | null } {
+  const joined = s.members.find((m) => m.id === inviteeId);
+  if (!joined?.referredBy || s.referralPaid.includes(inviteeId)) return { due: false, paid: 0, inviter: null };
+  s.referralPaid.push(inviteeId);
+  const inviter = joined.referredBy;
+  const nowMs = Date.parse(now);
+  // Count invitees, not rows: a bonus split by the daily cap leaves a ledger row and a held
+  // row, and later releases add more. The inviter's own row for having been invited is not an invite.
+  const ownReferrer = s.members.find((m) => m.id === inviter)?.referredBy;
+  const firstPaid = new Map<string, number>();
+  const note = (ref: string, at: string) => {
+    const invitee = refRecord(ref);
+    if (!ref.endsWith(".referral") || invitee === ownReferrer) return;
+    firstPaid.set(invitee, Math.min(firstPaid.get(invitee) ?? Infinity, Date.parse(at)));
+  };
+  for (const l of s.ledger) if (l.memberId === inviter && l.reason === "referral" && l.delta > 0) note(l.ref, l.at);
+  for (const h of s.held) if (h.memberId === inviter && h.reason === "referral") note(h.ref, h.at);
+  const recent = [...firstPaid.values()].filter((t) => nowMs - t < 30 * DAY).length;
+  let inviterFirst: string | null = null;
+  if (recent < REFERRAL_LIMIT) {
+    grant(s, inviter, REFERRAL_BONUS, "referral", `${inviteeId}.referral`, now);
+    const who = s.members.find((m) => m.id === inviter) ?? seed.members.find((m) => m.id === inviter);
+    if (who) inviterFirst = firstName(who.name);
+  }
+  return { due: true, paid: grant(s, inviteeId, REFERRAL_BONUS, "referral", `${inviter}.referral`, now), inviter: inviterFirst };
+}
+
+/** The member whose invite code this is (?ref= on a link), or null. */
+function memberByInviteCode(seed: Seed, s: State, codeRaw: unknown): Member | null {
+  const code = String(codeRaw ?? "").trim().slice(0, 40);
+  if (!code) return null;
+  return seed.members.find((m) => inviteCode(m.id) === code) ?? s.members.find((m) => inviteCode(m.id) === code) ?? null;
+}
+
+/**
+ * Invite to connect is offered on this seat to `me`: they see who held it (`sees`: the seat holder
+ * cell is a value for them, and the company is not locked), it isn't their own, and its holder is
+ * not a member who has signed in (those get Message instead). The holder must be someone the seat's
+ * claim link can bring in: a name from public profiles on a seat Revenue Nomad found (they claim
+ * it, lib/claimToken.ts), or a member who has never signed in (they sign in on the claim page). A
+ * name that resolves to nobody on Merlin and isn't from public profiles can't use the link, so it
+ * gets no invite. Needs the seed key (no key, no claim links).
+ */
+function invitable(s: State, idx: MemberIndex, me: Member, e: EngNode, sees: boolean): boolean {
+  if (!sees) return false;
+  const op = valueOf(e, s, "operator");
+  if (!op || op.status !== "live") return false;
+  const holder = seatHolder(s, idx, e.id, op);
+  if (holder?.id === me.id || (holder && signedIn(s, idx, holder.id))) return false;
+  if (!holder && !(e.source === SEAT_SCAN && op.pub)) return false;
+  return !!claimToken(e.id);
+}
+
+/** What connectInvite did: the conversation it opened (or found), and the invite bonus. */
+interface Connected {
+  conversationId: string | null;
+  /** The inviter's first name. */
+  inviter: string;
+  /** The invite bonus was due: the invitee gets REFERRAL_BONUS (now, or held under the daily cap). */
+  bonus: boolean;
+  /** The inviter got it too (under REFERRAL_LIMIT). */
+  inviterBonus: boolean;
+}
+
+/**
+ * Invite to connect, the claim: `invitee` claimed seat `engId` through `inviterId`'s claim link
+ * (or an admin approved that claim, or the seat was already theirs and they signed in through the
+ * link). Once per invite, and only for an invite that stands: the inviter sent it (a SeatInvite)
+ * or paid to see who held the seat (a link from the connector has no record), and the name they
+ * saw was not taken off the seat after they sent it. Never between a member and themselves. At once:
+ *  - the invite bonus for both (referralBonus), the claim counting as the invitee's first fact:
+ *    when `bonus` is on and the invitee joined through this inviter's invite code. Once per
+ *    invitee, REFERRAL_LIMIT for the inviter, the daily cap for both.
+ *  - a conversation between them about the seat, its first message from the inviter (their note,
+ *    connectText), unless they have one about this seat already, and none while either blocked the
+ *    other. It counts as unread for both until each opens it (lib/messageState.ts).
+ * Null when the invite doesn't stand.
+ */
+function connectInvite(s: State, seed: Seed, g: Graph, invitee: Member, engId: string, inviterId: string, now: string, bonus = true): Connected | null {
+  if (!inviterId || inviterId === invitee.id) return null;
+  const idx = memberIndex(seed, s);
+  const inviter = idx.byId.get(inviterId);
+  const e = g.engagements.get(engId);
+  if (!inviter || !e) return null;
+  s.seatInvites ??= [];
+  let inv = s.seatInvites.find((x) => x.by === inviterId && x.engagementId === engId);
+  const paidForName = (s.unlocks[fkey(engId, "operator")] ?? []).includes(inviterId) || (s.unlocks[fkey(engId, "role")] ?? []).includes(inviterId);
+  if (!inv && !paidForName) return null;
+  if (inv?.claimedBy) return null;
+  // The name they invited came off the seat since (This is wrong, Remove my name): that invite no longer stands.
+  const off = s.names?.removed?.[engId];
+  if (inv && off && off.at > inv.at) return null;
+  if (!inv) {
+    inv = { by: inviterId, engagementId: engId, at: now };
+    s.seatInvites.push(inv);
+  }
+  inv.claimedBy = invitee.id;
+  inv.claimedAt = now;
+  const joined = s.members.find((m) => m.id === invitee.id);
+  const paid = bonus && joined?.referredBy === inviterId ? referralBonus(s, seed, invitee.id, now) : null;
+  s.conversations ??= [];
+  const blocked = (s.blocks?.[inviterId] ?? []).includes(invitee.id) || (s.blocks?.[invitee.id] ?? []).includes(inviterId);
+  let conv = s.conversations.find((c) => c.about.engagementId === engId && ((c.a === inviterId && c.b === invitee.id) || (c.a === invitee.id && c.b === inviterId)));
+  if (!conv && !blocked) {
+    // The note they sent, else (a link from the connector) the note the app would have written.
+    const ip = s.profiles[inviterId] ?? {};
+    const note =
+      inv.note ??
+      notePitch({
+        first: firstName(invitee.name),
+        role: live(e, s, "role"),
+        fn: fnOf(e, s),
+        company: g.companies.get(e.companyId)?.name ?? "the company",
+        myTitle: ip.title || inviter.title,
+        myFn: ip.function ?? functionOf(ip.title || inviter.title),
+        icp: ip.icp ?? null,
+      });
+    conv = {
+      id: `cv${randomBytes(8).toString("hex")}`,
+      a: inviterId,
+      b: invitee.id,
+      about: { companyId: e.companyId, engagementId: engId },
+      kind: "invite",
+      messages: [{ id: `m${randomBytes(8).toString("hex")}`, by: inviterId, at: now, text: connectText(firstName(inviter.name), note) }],
+      readAt: {},
+      status: "open",
+      createdAt: now,
+    };
+    s.conversations.push(conv);
+  }
+  if (conv) inv.conversationId = conv.id;
+  return { conversationId: conv?.id ?? null, inviter: firstName(inviter.name), bonus: !!paid?.due, inviterBonus: !!paid?.inviter };
+}
+
+/** What the claim's answer adds when it came through an invite: the conversation, and the bonus. */
+function connectedNote(c: Connected | null): string {
+  if (!c) return "";
+  const thread = c.conversationId ? ` ${c.inviter} invited you to connect as referral partners, and your conversation is open in Messages.` : "";
+  const bonus = c.bonus ? (c.inviterBonus ? ` You and ${c.inviter} each get ${REFERRAL_BONUS} credits.` : ` You get ${REFERRAL_BONUS} credits for joining through ${c.inviter}'s invite.`) : "";
+  return `${thread}${bonus}`;
+}
+
 /* ---------- limits beside the daily earning cap ---------- */
 
 /**
@@ -2249,6 +2423,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   const companies: CompanyRec[] = [];
   const reviewFirms = firmsInReview(seed, s);
   const hiddenIds = new Set<string>();
+  /** Invite to connect: the seats the viewer invited (when), and their invite code for the claim links. */
+  const myInvites = new Map(me ? (s.seatInvites ?? []).filter((x) => x.by === me.id).map((x) => [x.engagementId, x.at] as const) : []);
+  const myCode = me ? inviteCode(me.id) : "";
   /** Companies the viewer created (the same test as exemptPick in perform). */
   const addedByMe = new Set(me ? s.companies.filter((x) => x.by === me.id).map((x) => x.id) : []);
   let peopleCount = 0;
@@ -2366,6 +2543,15 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         facts.locked--;
         facts.known++;
       }
+      // Invite to connect: the viewer sees who held a seat here, and its holder isn't on Merlin yet (invitable).
+      if (me)
+        engs.forEach((e, n) => {
+          const er = engRecs[n];
+          const op = er.cells.operator;
+          if (er.yours || op?.s !== "value" || op.member || !invitable(s, idx, me, e, true)) return;
+          const at = myInvites.get(e.id);
+          er.invite = { path: `/claim/${claimToken(e.id)}?ref=${encodeURIComponent(myCode)}`, ...(at ? { at } : {}) };
+        });
     }
     const rec: CompanyRec = {
       id: pubId(c.id),
@@ -2550,6 +2736,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       digest: !prof.digestOff,
       unread: unreadCount(s, me.id),
       messageEmail: !prof.messageEmailOff,
+      partners: !prof.partnersOff,
       proInterest: !!prof.proInterest,
       // Who they hunt, and their saved views (one list with the connector's saved searches).
       icp: prof.icp ?? null,
@@ -3128,13 +3315,15 @@ const monthsApart = (a: string | null | undefined, b: string | null | undefined)
  * nothing is kept. The answer says what it would do, and `spent` the credits it would take. A
  * refusal is thrown as it would be. `claimLink`: a claimSeat that came through the seat's own
  * claim link (/claim/<token>, claimByToken), so it works at a company locked by an open role too
- * (claiming the seat shows the member that company, as a seat holder there).
+ * (claiming the seat shows the member that company, as a seat holder there). `ref`: the invite code
+ * that came with that link (?ref=), so the claim connects the claimer with whoever sent it
+ * (connectInvite), or, when the claim waits for an admin, approving it does.
  */
 export async function perform(
   token: string | null,
   a: Action,
   origin?: string,
-  opts: { dryRun?: boolean; asMember?: boolean; claimLink?: boolean } = {},
+  opts: { dryRun?: boolean; asMember?: boolean; claimLink?: boolean; ref?: string } = {},
 ): Promise<ActionResult & { spent?: number }> {
   if (a?.type === "scanNow") {
     if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
@@ -3154,7 +3343,7 @@ export async function perform(
   }
   // Messages between members live in lib/messages.ts (loaded here, so the two files don't import each other at start).
   if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
-  const out = await mutate((s, seed): ActionResult & { refused?: string } => {
+  const out = await mutate((s, seed): ActionResult & { refused?: string; connected?: string } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError("You're signed out. Sign in again to add, confirm or unlock.");
     const now = new Date().toISOString();
@@ -3368,28 +3557,9 @@ export async function perform(
      */
     const payReferral = () => {
       if (a?.type === "benchRate") return 0;
-      const joined = s.members.find((m) => m.id === me.id);
-      if (!joined?.referredBy || s.referralPaid.includes(me.id)) return 0;
-      s.referralPaid.push(me.id);
-      const inviter = joined.referredBy;
-      // Count invitees, not rows: a bonus split by the daily cap leaves a ledger row and a held
-      // row, and later releases add more. The inviter's own row for having been invited is not an invite.
-      const ownReferrer = s.members.find((m) => m.id === inviter)?.referredBy;
-      const firstPaid = new Map<string, number>();
-      const note = (ref: string, at: string) => {
-        const invitee = refRecord(ref);
-        if (!ref.endsWith(".referral") || invitee === ownReferrer) return;
-        firstPaid.set(invitee, Math.min(firstPaid.get(invitee) ?? Infinity, Date.parse(at)));
-      };
-      for (const l of s.ledger) if (l.memberId === inviter && l.reason === "referral" && l.delta > 0) note(l.ref, l.at);
-      for (const h of s.held) if (h.memberId === inviter && h.reason === "referral") note(h.ref, h.at);
-      const recent = [...firstPaid.values()].filter((t) => nowMs - t < 30 * DAY).length;
-      if (recent < REFERRAL_LIMIT) {
-        grant(s, inviter, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
-        const who = s.members.find((m) => m.id === inviter) ?? seed.members.find((m) => m.id === inviter);
-        if (who) inviterPaid = firstName(who.name);
-      }
-      return grant(s, me.id, REFERRAL_BONUS, "referral", `${inviter}.referral`, now);
+      const r = referralBonus(s, seed, me.id, now);
+      if (r.inviter) inviterPaid = r.inviter;
+      return r.paid;
     };
     /**
      * What a seat can't say at once (FIRST-4, DESK-10). An open role nobody holds has no start,
@@ -3598,7 +3768,7 @@ export async function perform(
       return { node: into as Node, earned, merged: true, kept, typed };
     };
 
-    const run = (): ActionResult => {
+    const run = (): ActionResult & { connected?: string } => {
       switch (a?.type) {
         case "fill": {
           const node = nodeOf(a.entity, a.id);
@@ -4332,7 +4502,13 @@ export async function perform(
             c.decidedAt = now;
             settle("declined", c);
             s.seatClaims = [...(s.seatClaims ?? []).filter((x) => nowMs - Date.parse(x.at) < CLAIM_KEEP), { memberId: who.id, engagementId: e.id, at: now }];
-            return { message: `Done. The seat is ${firstName(who.name)}'s now, and it's on their Your seats.`, cells: [changed("engagement", e, "operator")] };
+            // The claim came through a member's invite link: now that it stands, it connects them (bonus and conversation).
+            const link = c.via ? connectInvite(s, seed, g, who, e.id, c.via, now) : null;
+            return {
+              message: `Done. The seat is ${firstName(who.name)}'s now, and it's on their Your seats.${link?.conversationId ? ` They came through ${link.inviter}'s invite, so a conversation between them is open.` : ""}`,
+              cells: [changed("engagement", e, "operator")],
+              ...(link?.conversationId ? { connected: link.conversationId } : {}),
+            };
           }
           const onFile = publicName(e, s)?.value ?? seedPublicName(seed, s, e.id);
           if (!onFile) throw new ActionError("There's no name from public profiles on this seat any more.");
@@ -4443,22 +4619,31 @@ export async function perform(
               claim: { role: !pub || theirs ? live(e, s, "role") : null, function: live(e, s, "function"), start: live(e, s, "start"), end: live(e, s, "end"), status: live(e, s, "status") },
             };
           }
+          // Through a member's invite link (/claim/<token>?ref=<code>): who sent it, so the claim connects them (connectInvite).
+          const via = opts.claimLink && opts.ref ? memberByInviteCode(seed, s, opts.ref) : null;
           if (pub && !theirs) {
             // Someone else's name is on it. Verified: it is theirs. Unverified: an admin checks the claim, and the name stays until then.
             if (nameVerified(s, e.id)) throw new ActionError(SEAT_TAKEN);
             if (waiting) return { message: CLAIM_WAITING, id: pubId(e.id) };
             if (claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
             const names = (s.names ??= emptyNames());
-            names.claims = [...names.claims.filter((c) => c.status === "pending" || nowMs - Date.parse(c.decidedAt ?? c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: e.id, at: now, status: "pending" }];
+            names.claims = [
+              ...names.claims.filter((c) => c.status === "pending" || nowMs - Date.parse(c.decidedAt ?? c.at) < CLAIM_KEEP),
+              // The invite connects them once an admin approves the claim.
+              { memberId: me.id, engagementId: e.id, at: now, status: "pending", ...(via && via.id !== me.id ? { via: via.id } : {}) },
+            ];
             return { message: CLAIM_QUEUED, id: pubId(e.id), cells: [changed("engagement", e, "operator")] };
           }
           setValue(e, "engagement", "operator", me.name, me);
+          const link = via ? connectInvite(s, seed, g, me, e.id, via.id, now) : null;
           return {
-            message: theirs
-              ? "It's yours. Your name matches the one on file, so it's verified now. Other members see it behind a 1 credit lock. Fill in what you know on Your seats."
-              : "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.",
+            message:
+              (theirs
+                ? "It's yours. Your name matches the one on file, so it's verified now. Other members see it behind a 1 credit lock. Fill in what you know on Your seats."
+                : "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.") + connectedNote(link),
             id: pubId(e.id),
             cells: ENG_KEYS.map((f) => changed("engagement", e, f)),
+            ...(link?.conversationId ? { connected: link.conversationId } : {}),
           };
         }
         case "notMine": {
@@ -4669,7 +4854,46 @@ export async function perform(
             s.profiles[me.id] = p;
             return { message: a.messageEmail ? "We'll email you when a member messages you." : "Message emails are off. New messages still show in Messages." };
           }
+          if (typeof a.partners === "boolean") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            if (a.partners) delete p.partnersOff;
+            else p.partnersOff = true;
+            s.profiles[me.id] = p;
+            return {
+              message: a.partners
+                ? "You're listed in Referral partners. Members see your first name, title, function and the kind of clients you want, never your email."
+                : "You're hidden from Referral partners. Members you already talk to can still write to you.",
+            };
+          }
           return { message: "Saved." };
+        }
+        case "invite": {
+          // Invite to connect: the member sent this seat's holder their note and claim link. One record per member and seat.
+          const e = g.engagements.get(inId("engagement", a.engagementId));
+          if (!e) throw new ActionError(gone("engagement"));
+          const sees =
+            !hiddenFor(e.companyId) && cellOf(s, me, e, "engagement", "operator", memberIndex(seed, s), freeFor("engagement", e.id, "operator")).s === "value";
+          if (!invitable(s, memberIndex(seed, s), me, e, sees)) {
+            const op = valueOf(e, s, "operator");
+            const holder = op ? seatHolder(s, memberIndex(seed, s), e.id, op) : null;
+            throw new ActionError(
+              !sees
+                ? "Unlock who held this seat first. Then you can invite them."
+                : holder?.id === me.id
+                  ? "That's your own seat."
+                  : holder
+                    ? `${firstName(holder.name)} is on Merlin already. Message them from the record instead.`
+                    : "This seat has no link to invite its holder with. Find them on LinkedIn instead.",
+            );
+          }
+          const note = cleanNote(a.note);
+          s.seatInvites ??= [];
+          const cur = s.seatInvites.find((x) => x.by === me.id && x.engagementId === e.id);
+          // No second record: the first date stays, and the newest note is what their conversation opens with.
+          if (cur) {
+            if (note && !cur.claimedBy) cur.note = note;
+          } else s.seatInvites.push({ by: me.id, engagementId: e.id, at: now, ...(note ? { note } : {}) });
+          return { message: "", id: pubId(e.id) };
         }
         default:
           throw new ActionError(UNKNOWN_ACTION);
@@ -4708,6 +4932,13 @@ export async function perform(
     throw e;
   });
   if (out.refused) throw new ActionError(out.refused);
+  // A claim through an invite opened a conversation: the inviter hears about it the way they hear about a message (lib/messages.ts).
+  const carried = out as { connected?: string };
+  if (carried.connected) {
+    const id = carried.connected;
+    delete carried.connected;
+    if (!opts.dryRun) void import("./messages").then((m) => m.afterConnect(id, origin)).catch((e) => console.error("connect notice failed", e));
+  }
   // Alerts in Slack: another member unlocked who held a seat, or facts on it.
   if (!opts.dryRun && (a?.type === "unlock" || a?.type === "unlockMany") && out.cells?.length) {
     const cells = out.cells;
@@ -4742,6 +4973,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   const { signins: _signins, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
+  // An invite's note is a message a member wrote: it leaves without its text too.
+  const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
   // Webhook URLs are secrets (anyone with one can post to that Slack channel): they leave as "connected" only, with no alerts waiting.
   const integrations = s.integrations && {
     ...s.integrations,
@@ -4749,7 +4982,14 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
       Object.entries(s.integrations.members).map(([id, m]) => [id, { ...m, pending: {}, ...(m.slack ? { slack: { ...m.slack, url: "" } } : {}), ...(m.webhook ? { webhook: { ...m.webhook, url: "" } } : {}) }]),
     ),
   };
-  return { ...rest, ...(conversations ? { conversations } : {}), ...(integrations ? { integrations } : {}), ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)), benchRates };
+  return {
+    ...rest,
+    ...(conversations ? { conversations } : {}),
+    ...(seatInvites ? { seatInvites } : {}),
+    ...(integrations ? { integrations } : {}),
+    ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)),
+    benchRates,
+  };
 }
 
 /**
@@ -4790,13 +5030,15 @@ export async function claimPathFor(engagementPubId: string): Promise<string | nu
  * What a claim link's page shows. `status`: invalid (no seat has this token), open (a seat
  * Revenue Nomad found that no member claimed: nobody named, or a name from public profiles),
  * held (a member holds it, or a name that isn't from public profiles is on it), yours (the
- * signed-in member holds it), waiting (their claim on it waits for an admin). `seat` is free facts
- * only: the role (it is the person's own seat), the function, the start month and the company,
- * which is null while it is locked by an open role. `named`: a name from public profiles is on it
- * (Remove my name applies). Never a person's name.
+ * signed-in member holds it), waiting (their claim on it waits for an admin), signin (a member
+ * holds it who has never signed in, and the visitor is signed out: the page asks them to sign in,
+ * which is how a member invited to connect gets in). `seat` is free facts only: the role (it is the
+ * person's own seat), the function, the start month and the company, which is null while it is
+ * locked by an open role. `named`: a name from public profiles is on it (Remove my name applies).
+ * Never a person's name.
  */
 export interface ClaimPage {
-  status: "invalid" | "open" | "held" | "yours" | "waiting";
+  status: "invalid" | "open" | "held" | "yours" | "waiting" | "signin";
   seat: { role: string | null; fn: string | null; company: string | null; start: string | null; named: boolean } | null;
   me: { first: string } | null;
   /** Sign-in links go by email (an email provider is set up). */
@@ -4817,7 +5059,15 @@ export async function claimPage(token: unknown, memberToken: string | null, ref?
   const op = valueOf(e, s, "operator");
   const holder = seatHolder(s, idx, e.id, op);
   const status: ClaimPage["status"] =
-    me && holder?.id === me.id ? "yours" : me && pendingClaimers(s, e.id).includes(me.id) ? "waiting" : e.source === SEAT_SCAN && (!op || publicName(e, s)) ? "open" : "held";
+    me && holder?.id === me.id
+      ? "yours"
+      : me && pendingClaimers(s, e.id).includes(me.id)
+        ? "waiting"
+        : e.source === SEAT_SCAN && (!op || publicName(e, s))
+          ? "open"
+          : !me && holder && !signedIn(s, idx, holder.id)
+            ? "signin"
+            : "held";
   // A company with an open role is locked (for a visitor too), unless this member can see it.
   const locked = [...g.engagements.values()].some((x) => x.companyId === e.companyId && hidesCompany(x, s, tracks)) && (!me || identityHidden(g, s, idx, tracks, me, e.companyId));
   const mine = status !== "held";
@@ -4837,11 +5087,35 @@ export async function claimPage(token: unknown, memberToken: string | null, ref?
 /**
  * "Claim it" on a claim link: the signed-in member claims the seat it names (claimSeat, with the name rule), at a locked company too.
  * `waiting`: the name on the seat isn't theirs, so the claim waits for an admin and the seat isn't theirs yet.
+ * `ref`: the invite code that came with the link. A claim through it connects the member with whoever
+ * sent it (connectInvite: the invite bonus and a conversation). A seat that is theirs already (they
+ * claimed it before, or it was on file under their name and they just signed in through the link)
+ * has nothing to claim, and the link still connects them, with no bonus: the claim didn't come through it.
  */
-export async function claimByToken(memberToken: string | null, token: unknown, origin?: string): Promise<ActionResult & { waiting: boolean }> {
+export async function claimByToken(memberToken: string | null, token: unknown, origin?: string, ref?: unknown): Promise<ActionResult & { waiting: boolean }> {
   const id = await seatOfToken(token);
   if (!id) throw new ActionError("That claim link didn't work. It may be cut short. Open the whole link from the message.");
-  const out = await perform(memberToken, { type: "claimSeat", engagementId: pubId(id) }, origin, { claimLink: true });
+  const code = typeof ref === "string" ? ref.trim().slice(0, 40) : "";
+  {
+    const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+    const me = memberByToken(seed, memberToken, s);
+    const g = viewGraph(seed, s);
+    if (me && seatHolder(s, memberIndex(seed, s), id, valueOf(g.engagements.get(id), s, "operator"))?.id === me.id) {
+      const link = code
+        ? await mutate((d, sd) => {
+            const who = memberByToken(sd, memberToken, d);
+            const inviter = memberByInviteCode(sd, d, code);
+            return who && inviter ? connectInvite(d, sd, graph(sd, d), who, id, inviter.id, new Date().toISOString(), false) : null;
+          })
+        : null;
+      if (link?.conversationId) {
+        const cid = link.conversationId;
+        void import("./messages").then((m) => m.afterConnect(cid)).catch((e) => console.error("connect notice failed", e));
+      }
+      return { message: `This seat is yours already.${connectedNote(link)}`, id: pubId(id), waiting: false };
+    }
+  }
+  const out = await perform(memberToken, { type: "claimSeat", engagementId: pubId(id) }, origin, { claimLink: true, ...(code ? { ref: code } : {}) });
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, memberToken, s);
   return { ...out, waiting: !!me && pendingClaimers(s, id).includes(me.id) };
@@ -4897,6 +5171,130 @@ export async function nameOffByName(nameRaw: unknown, companyRaw: unknown): Prom
     }
     return n;
   });
+}
+
+/* ---------- Referral partners (app/post/Partners.tsx) ---------- */
+
+/** A line on Referral partners needs this many companies behind it, and members' answers this many members. */
+export const PARTNERS_MIN = 20;
+/** Members the page lists at most (most relevant first). */
+const PARTNER_MEMBERS_MAX = 60;
+/** A start month as "YYYY-MM": a year alone counts as that year's December. Null when it isn't a date. */
+const startMonth = (v: string | null) => (v && /^\d{4}-\d{2}$/.test(v) ? v : v && /^\d{4}$/.test(v) ? `${v}-12` : null);
+/** A function a member works in, for these counts: "Other" names none. */
+const workFn = (f: string | null | undefined) => (f && f !== "Other" ? f : null);
+/**
+ * What the member said usually gets hired before them (Member profile field `before`, contract 3,
+ * stored by onboarding and Your profile): up to 3 functions, [] for "Not sure", null when never asked.
+ */
+function beforeOf(p: Profile | undefined): string[] | null {
+  const b = (p as { before?: unknown } | undefined)?.before;
+  return Array.isArray(b) ? b.filter((x): x is string => typeof x === "string" && FUNCTIONS.includes(x)).slice(0, 3) : null;
+}
+
+/**
+ * GET /api/table?partners=1, for a signed-in member (null otherwise). Three parts:
+ *  - order: at each company, the first dated fractional seat in the member's function against the
+ *    first in every other function (hires only: not open roles, not Full-time, not a posting that
+ *    came down with nobody named; a year-only start is its December). A line shows once
+ *    PARTNERS_MIN companies back it.
+ *  - answers: members in the member's function who said which fractional usually gets hired before
+ *    them (`before`), as counts, once PARTNERS_MIN of them answered.
+ *  - members: everyone signed in who hasn't turned "Show me in Referral partners" off, but the
+ *    member and anyone either of them blocked. First name, title, function and ideal clients, never
+ *    an email. Other functions first, then the most overlap with the member's ideal clients, then
+ *    the most recently seen.
+ */
+export async function partnersView(token: string | null): Promise<PartnersView | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return null;
+  const g = viewGraph(seed, s);
+  const idx = memberIndex(seed, s);
+  const tracks = tracksOf(seed, s);
+  const fnFor = (m: Member) => workFn(s.profiles[m.id]?.function ?? functionOf(s.profiles[m.id]?.title || m.title));
+  const fn = fnFor(me);
+
+  // The order: each company's first dated fractional seat in each function.
+  const firms = firmsInReview(seed, s);
+  const firsts = new Map<string, Map<string, string>>();
+  for (const e of g.engagements.values()) {
+    if (firms.has(e.companyId) || isOpenRole(e, s, tracks)) continue;
+    if (e.source === "Demand scan" && !live(e, s, "operator")) continue;
+    const type = live(e, s, "type");
+    if (type && !FRACTIONAL_TYPES.includes(type)) continue;
+    const f = workFn(fnOf(e, s));
+    const m = startMonth(live(e, s, "start"));
+    if (!f || !m) continue;
+    const at = firsts.get(e.companyId) ?? new Map<string, string>();
+    if (!at.has(f) || at.get(f)! > m) at.set(f, m);
+    firsts.set(e.companyId, at);
+  }
+  const before = new Map<string, number>();
+  const after = new Map<string, number>();
+  let companies = 0;
+  if (fn)
+    for (const at of firsts.values()) {
+      const mine = at.get(fn);
+      if (!mine || at.size < 2) continue;
+      companies++;
+      for (const [f, m] of at) {
+        if (f === fn) continue;
+        if (m < mine) before.set(f, (before.get(f) ?? 0) + 1);
+        else if (m > mine) after.set(f, (after.get(f) ?? 0) + 1);
+      }
+    }
+  const order: PartnersView["order"] = [
+    ...[...before].map(([f, n]) => ({ fn: f, when: "before" as const, companies: n })),
+    ...[...after].map(([f, n]) => ({ fn: f, when: "after" as const, companies: n })),
+  ]
+    .filter((x) => x.companies >= PARTNERS_MIN)
+    .sort((a, b) => b.companies - a.companies || a.fn.localeCompare(b.fn));
+
+  // Members' answers, counts only.
+  let answered = 0;
+  const named = new Map<string, number>();
+  if (fn)
+    for (const m of idx.all) {
+      const b = beforeOf(s.profiles[m.id]);
+      if (!b || fnFor(m) !== fn) continue;
+      answered++;
+      for (const f of new Set(b)) if (f !== fn) named.set(f, (named.get(f) ?? 0) + 1);
+    }
+  const answers =
+    answered >= PARTNERS_MIN ? { n: answered, fns: [...named].map(([f, n]) => ({ fn: f, n })).sort((a, b) => b.n - a.n || a.fn.localeCompare(b.fn)) } : null;
+
+  // The members.
+  const blocks = (a: string, b: string) => (s.blocks?.[a] ?? []).includes(b);
+  const lastWith = new Map<string, { id: string; at: string }>();
+  for (const c of s.conversations ?? []) {
+    const other = c.a === me.id ? c.b : c.b === me.id ? c.a : null;
+    if (!other) continue;
+    const at = c.messages[c.messages.length - 1]?.at ?? c.createdAt;
+    if (!lastWith.has(other) || lastWith.get(other)!.at < at) lastWith.set(other, { id: c.id, at });
+  }
+  const mine = s.profiles[me.id]?.icp ?? null;
+  const overlap = (icp: Icp | null | undefined) => {
+    if (!icp || !mine) return 0;
+    const both = (x: string[], y: string[]) => x.filter((v) => y.includes(v)).length;
+    return both(icp.industries, mine.industries) * 3 + both(icp.employees, mine.employees) * 2 + both(icp.revenue, mine.revenue) + both(icp.countries, mine.countries);
+  };
+  const listed = idx.all
+    .filter((m) => m.id !== me.id && signedIn(s, idx, m.id) && !s.profiles[m.id]?.partnersOff && !blocks(m.id, me.id) && !blocks(me.id, m.id))
+    .map((m) => ({ m, fn: fnFor(m), icp: s.profiles[m.id]?.icp ?? null }))
+    .sort(
+      (a, b) =>
+        Number(!!fn && a.fn === fn) - Number(!!fn && b.fn === fn) ||
+        overlap(b.icp) - overlap(a.icp) ||
+        (s.seen[b.m.id] ?? "").localeCompare(s.seen[a.m.id] ?? "") ||
+        a.m.name.localeCompare(b.m.name),
+    );
+  const members = listed.slice(0, PARTNER_MEMBERS_MAX).map(({ m, fn: f, icp }) => {
+    const title = (s.profiles[m.id]?.title || (m.title === "Member" ? "" : m.title) || "").trim();
+    const conv = lastWith.get(m.id);
+    return { id: pubId(m.id), first: firstName(m.name), title, fn: f, icp, ...(conv ? { conversationId: conv.id } : {}) };
+  });
+  return { fn, order, companies, min: PARTNERS_MIN, answers, members, total: listed.length, listed: !s.profiles[me.id]?.partnersOff };
 }
 
 /* ---------- last seen ---------- */

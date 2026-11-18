@@ -39,7 +39,7 @@ export function slides(intro: boolean): Slide[] {
       key: "seat",
       tab: "Who held the seat",
       title: "The fractional who held the seat",
-      body: `Open a company and see every seat on file. Unlock who held one, with the role they held, for 1 credit. Then message them inside Merlin${intro ? " or ask us for a warm intro" : ""}, and hear how it went before your first call.`,
+      body: "Open a company and see every seat on file. Unlock who held one, with the role they held, for 1 credit. Then message them inside Merlin, or invite them to connect if they aren't on it yet, and hear how it went before your first call.",
       cost: { label: "1 credit", kind: "locked" },
       img: { src: "/landing/seat.webp", ...SHOT, alt: "A seat on a company's record in Merlin: its function, type and dates, with the seat holder behind a lock" },
     },

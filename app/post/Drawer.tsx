@@ -20,6 +20,7 @@
  * phone it is modal: Tab stays inside and the page behind is inert.
  */
 import { MessageButton } from "./Messages";
+import { InviteConnect } from "./Invite";
 import { VerifyName } from "./Verify";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
@@ -994,44 +995,60 @@ function safeHref(build: () => string): string | null {
 }
 
 /**
- * After the seat holder is unlocked: how to reach them. This is the promise of the unlock, so
- * there is always a warm path. A member who has signed in gets a message inside Merlin ("Message
- * Ana"). "Ask for an intro" writes to Revenue Nomad (the intro inbox, else the support address)
- * whenever there is one. Without either address, a seat holder who isn't on Merlin yet is found
- * on LinkedIn, and the record says why there is no Message button.
+ * After the seat holder is unlocked: the next step with them. This is the promise of the unlock,
+ * and no step of it goes through Revenue Nomad's staff.
+ *  - A member who has signed in: "Message Ana", with a first message the member can change.
+ *  - Named but not on Merlin yet (a name from public profiles, or a member who never signed in):
+ *    "Invite to connect", a note with their seat's claim link (EngagementRec.invite). When they
+ *    claim the seat through it, a conversation opens between them, and a new member's invite bonus
+ *    goes to both.
+ *  - A name the claim link can't bring in: find them on LinkedIn.
+ * Then a link to Referral partners, for more fractionals at companies like this one.
  */
-function Reach({ name, member, seat, engagementId, seatName }: { name: string; member: boolean; seat: string; engagementId: string; seatName: string | null }) {
+function Reach({ e, name, member, emailTo }: { e: EngagementRec; name: string; member: boolean; emailTo: string | null }) {
   const ui = useUi();
   const env = useEnv();
-  const to = (env.contact?.intro || env.contact?.support || "").trim();
   const first = name.trim().split(/\s+/)[0] || name;
-  const intro = to
-    ? safeHref(
-        () =>
-          `mailto:${to}?cc=${encodeURIComponent(ui.me.email)}&subject=${encodeURIComponent(`Intro to ${name} at ${env.company}`)}&body=${encodeURIComponent(
-            `Hi,\n\nCould you introduce me (${ui.me.name}) to ${name}${member ? ", a Merlin member" : ""}? They held ${seat} at ${env.company} and I'd like to hear how it went.\n\nThanks`,
-          )}`,
-      )
-    : null;
   const li = safeHref(() => `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(name)}`);
-  if (!intro && !li && !member) return null;
   return (
     <div className="tp-reach">
-      {/* Members get a message inside Merlin. Everyone gets an intro through Revenue Nomad when there is an address for it, and LinkedIn as the last resort. */}
-      {member && <MessageButton engagementId={engagementId} name={name} company={env.company} seat={seatName} />}
-      {intro && (
-        <a className={member ? "btn btn-sm" : "btn btn-sm btn-pine"} href={intro} title={`Revenue Nomad introduces you to ${first}`}>
-          Ask for an intro
-        </a>
+      {member ? (
+        <MessageButton engagementId={e.id} name={name} company={env.company} role={shown(e.cells.role)} fn={shown(e.cells.function)} />
+      ) : e.invite ? (
+        <InviteConnect e={e} name={name} company={env.company} emailTo={emailTo} />
+      ) : (
+        li && (
+          <a className="btn btn-sm btn-primary" href={li} target="_blank" rel="noreferrer">
+            Find them on LinkedIn <IconExternal size={11} />
+          </a>
+        )
       )}
-      {li && (
-        <a className={member || intro ? "tp-intro" : "btn btn-sm btn-primary"} href={li} target="_blank" rel="noreferrer">
-          Find them on LinkedIn <IconExternal size={11} />
-        </a>
+      {!member && (
+        <span className="tp-reach-note">
+          {e.invite
+            ? e.invite.at
+              ? `Once ${first} claims their seat through your link, you're connected on Merlin.`
+              : `${first} isn't on Merlin yet. Invite them, and once they claim their seat you're connected there.`
+            : `${first} isn't on Merlin yet, so you can't message them here.`}
+        </span>
       )}
-      {!member && <span className="tp-reach-note">{first} isn&apos;t on Merlin yet, so you can&apos;t message them here.</span>}
+      <button type="button" className="tp-intro tp-reach-more" onClick={() => ui.openPage("partners")}>
+        More referral partners at companies like yours
+      </button>
     </div>
   );
+}
+
+/** Their email, when a person on file here has the seat holder's name and the member can see that email (Email it on Invite to connect). */
+const nameKey = (v: string) => v.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
+function emailOnFile(people: PersonRec[], name: string): string | null {
+  const k = nameKey(name);
+  for (const p of people) {
+    const n = p.cells.name;
+    const m = p.cells.email;
+    if (n?.s === "value" && nameKey(n.v) === k && m?.s === "value") return m.v;
+  }
+  return null;
 }
 
 /** An open role nobody holds yet: the member who took it says so (the seat then links to them). */
@@ -1161,7 +1178,7 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
 
 const ENG_ROWS = ["function", "type", ...ENG_FIELDS];
 
-function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; companyId: string; company: string; focus: boolean }) {
+function EngagementCard({ e, companyId, company, focus, coPeople = [] }: { e: EngagementRec; companyId: string; company: string; focus: boolean; coPeople?: PersonRec[] }) {
   const ui = useUi();
   const [adding, setAdding] = useState(false);
   const op = shown(e.cells.operator);
@@ -1176,16 +1193,9 @@ function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; co
   const posting = e.cells.posting;
   const closed = !!e.closed && posting?.s === "value";
   const fnRender = (v: string) => <span className={`chip tp-fn${v === ui.me.function ? " tp-fn-me" : ""}`}>{v}</span>;
-  // Nobody needs an intro to themselves, and a hidden company has no name to put in the email.
-  const fn = shown(e.cells.function);
+  // Nobody reaches out to themselves, and a hidden company's seat holders open after the company. Nobody named: no next step here (the claim below stays).
   const reach = op && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
-    <Reach
-      name={op}
-      member={!!(opCell?.s === "value" && opCell.member)}
-      seat={role ? `the ${role} seat` : fn ? `the fractional ${fn} seat` : "a fractional seat"}
-      engagementId={e.id}
-      seatName={role ?? fn}
-    />
+    <Reach e={e} name={op} member={!!(opCell?.s === "value" && opCell.member)} emailTo={e.invite ? emailOnFile([...e.people, ...coPeople], op) : null} />
   );
   // Who held a seat (and the role that comes with them) opens after a locked company.
   const waits = (f: string) => (hidden && e.cells[f]?.s === "locked" && (f === "operator" || (f === "role" && seatBundled(e))) ? AFTER_COMPANY : null);
@@ -1704,7 +1714,7 @@ export function Drawer({
             {notHires > 0 && <p className="tp-dsec-note">{seatSplit(i.engs)}</p>}
             {i.engs.length === 0 && <p className="tp-dsec-note">No seats on file here yet. Add one you know and earn a credit for each fact.</p>}
             {i.engs.map((e) => (
-              <EngagementCard key={e.id} e={e} companyId={c.id} company={c.hidden ? "this company" : c.name} focus={focus === e.id} />
+              <EngagementCard key={e.id} e={e} companyId={c.id} company={c.hidden ? "this company" : c.name} focus={focus === e.id} coPeople={c.people} />
             ))}
             {/* Nothing can be added to a hidden company until it is unlocked, so nothing offers to. */}
             {!c.hidden && (

@@ -40,7 +40,12 @@ export interface StoredDest {
 
 /** One event waiting for its batch, kept until the window opens again. */
 export type AlertItem =
-  | { kind: "message"; at: string; conversationId: string; from: string; company: string; holder: boolean; snippet: string }
+  /**
+   * `about` partners: a conversation from Referral partners, about no seat. invite: not a message they
+   * got, but `from` (a fractional the member invited to connect) claimed their seat at `company`
+   * through the member's invite, which opened a conversation with the member's note in it.
+   */
+  | { kind: "message"; at: string; conversationId: string; from: string; company: string; holder: boolean; snippet: string; about?: "partners" | "invite" }
   | {
       kind: "seat";
       at: string;

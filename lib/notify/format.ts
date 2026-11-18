@@ -71,11 +71,15 @@ export function alertFor(items: AlertItem[], base: string): Alert | null {
     const ms = items as Extract<AlertItem, { kind: "message" }>[];
     if (ms.length === 1) {
       const m = ms[0];
-      const about = m.holder ? `your seat at ${m.company}` : `the seat at ${m.company}`;
+      if (m.about === "invite")
+        return { kind, count: 1, headline: `${m.from} claimed their seat at ${m.company} through your invite`, lines: ["You're connected as referral partners. Your note is the first message, so say hello."], url: links.thread(base, m.conversationId) };
+      const about = m.about === "partners" ? "connecting as referral partners" : m.holder ? `your seat at ${m.company}` : `the seat at ${m.company}`;
       return { kind, count: 1, headline: `${m.from} sent you a message about ${about}`, lines: [`“${m.snippet}”`], url: links.thread(base, m.conversationId) };
     }
     const latest = ms.slice(-3).reverse();
-    const lines = latest.map((m) => `${m.from}, about ${m.company}. “${cut(m.snippet, 80)}”`);
+    const lines = latest.map((m) =>
+      m.about === "invite" ? `${m.from} claimed their seat at ${m.company} through your invite.` : `${m.from}${m.about === "partners" ? "" : `, about ${m.company}`}. “${cut(m.snippet, 80)}”`,
+    );
     if (ms.length > 3) lines[2] = `${lines[2]} And ${plural(ms.length - 2, "more message")}.`;
     const convs = new Set(ms.map((m) => m.conversationId));
     return { kind, count: ms.length, headline: `${plural(ms.length, "new message")} on Merlin`, lines, url: convs.size === 1 ? links.thread(base, ms[0].conversationId) : links.messages(base) };

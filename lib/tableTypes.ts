@@ -89,6 +89,15 @@ export interface EngagementRec {
   /** The viewer said this seat is theirs ("This is me") and the name on it isn't theirs: an admin is checking. */
   claimWaiting?: boolean;
   /**
+   * The viewer can "Invite to connect" this seat's holder: they see the name, and the holder is not
+   * a member who has signed in (a name from public profiles, or a member who never signed in), so
+   * the seat's claim link is how they get on Merlin and connect. `path` is that link with the
+   * viewer's invite code ("/claim/<token>?ref=<code>", lib/claimToken.ts). `at`: when the viewer
+   * sent it (one record per member and seat). Left out on every other seat, and on a server
+   * without the seed key (no claim links).
+   */
+  invite?: { path: string; at?: string };
+  /**
    * Open roles found by the weekly scan (and open roles from the seed): the day the posting
    * was first seen and the day it stopped being listed (ISO dates). Free to see and to filter on.
    * Both are left out on a seat that was never listed as an open role; `closed` is null while
@@ -250,6 +259,8 @@ export interface Me {
   unread?: number;
   /** An email when a member messages them (on unless they turned it off). Sent only while email is on. */
   messageEmail?: boolean;
+  /** Listed for other members in Referral partners (on unless they turned it off in Your profile). */
+  partners?: boolean;
   /** Who they hunt (onboarding, and the Ideal Fractional Profile pill over the table). Null until they say. */
   icp?: Icp | null;
   /**
@@ -317,8 +328,14 @@ export interface MessageRec {
 export interface ConversationRec {
   id: string;
   started: boolean;
-  /** The other member: name and title. Never their email or phone. */
-  with: { name: string; first: string; title: string };
+  /**
+   * partners: started from Referral partners, about no seat (`about` has empty ids). invite: opened
+   * by itself when a seat holder claimed their seat through the other member's invite (Invite to
+   * connect); `started` is the inviter. Left out on a conversation about a seat a member unlocked.
+   */
+  kind?: "partners" | "invite";
+  /** The other member: name, title and public id. Never their email or phone. */
+  with: { id?: string; name: string; first: string; title: string };
   about: {
     companyId: string;
     engagementId: string;
@@ -688,12 +705,22 @@ export type Action =
    * offer ("pro_view") and asking to hear about Pro ("pro_interest"). `where` names the place.
    */
   | { type: "signal"; name: "wall" | "pro_view" | "pro_interest"; where: string }
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean }
+  /** `partners`: listed in Referral partners for other members (Your profile, "Show me in Referral partners"). */
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean }
+  /**
+   * Invite to connect (EngagementRec.invite): the member sent the seat holder a note with the seat's
+   * claim link. One record per member and seat ("Invited Nov 18"): sending again keeps the first date
+   * and the latest note. When the holder claims the seat through the link, both get the invite bonus
+   * where it applies and a conversation opens with the note as its first message.
+   */
+  | { type: "invite"; engagementId: string; note?: string }
   /**
    * Messages between members (lib/messages.ts). Start one with the holder of a seat the viewer
    * can see (unlocked, or free) who has signed in. `engagementId` and `conversationId` are public ids.
    */
   | { type: "message.start"; engagementId: string; text: string }
+  /** Connect with a member listed in Referral partners (PartnersView.members): a conversation about no seat. `memberId` is a public id. */
+  | { type: "message.connect"; memberId: string; text: string }
   | { type: "message.send"; conversationId: string; text: string }
   /** "Not now": closes it. The other side sees that they aren't taking intros right now. */
   | { type: "message.close"; conversationId: string }
@@ -751,6 +778,37 @@ export type ActionResult = {
   partial?: boolean;
   version?: string;
 };
+
+/**
+ * GET /api/table?partners=1: the Referral partners page's server half (lib/table.ts partnersView).
+ * Counts only where it is about other members, and never an email. The page's "Partners at your
+ * kind of clients" comes from the member's own view of the table, with its locks.
+ */
+export interface PartnersView {
+  /** The function the order is about: the viewer's, or null when they haven't named one. */
+  fn: string | null;
+  /**
+   * Lines backed by at least `min` companies: at that many companies, the first fractional `fn`
+   * seat there started `when` (before or after) the first fractional seat in the viewer's function.
+   * Dated seats only. Most companies first.
+   */
+  order: { fn: string; when: "before" | "after"; companies: number }[];
+  /** Companies with a dated fractional seat in the viewer's function and one in another function. */
+  companies: number;
+  /** Companies a line needs, and members' answers the counts need (20 each). */
+  min: number;
+  /**
+   * Members in the viewer's function who said which fractionals usually get hired before them
+   * (`n`, "Not sure" included), and how many named each function. Null below `min` answers.
+   */
+  answers: { n: number; fns: { fn: string; n: number }[] } | null;
+  /** Members listed as referral partners (not the viewer), most relevant first: first name, title, function, ideal clients. */
+  members: { id: string; first: string; title: string; fn: string | null; icp: Icp | null; conversationId?: string }[];
+  /** Listed members in all (`members` holds the first of them). */
+  total: number;
+  /** The viewer is listed for other members. */
+  listed: boolean;
+}
 
 export const GOALS = [
   { key: "roles", label: "Open fractional roles" },

@@ -13,6 +13,7 @@ import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } f
 import { IconCheck, IconSearch, IconX } from "../ui/shared";
 import { countryKey, countryName, countryOf, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { Sheet } from "./ui";
+import { PartnersSwitch } from "./PartnersSwitch";
 import "./hunt.css";
 
 export const EMPTY_ICP: Icp = { industries: [], employees: [], revenue: [], countries: [] };
@@ -330,6 +331,7 @@ export function IcpSheet({
         )}
       </div>
       <IcpFields value={v} onChange={setV} industries={industries} countries={countries} />
+      <PartnersSwitch />
     </Sheet>
   );
 }

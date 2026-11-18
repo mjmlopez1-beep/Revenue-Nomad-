@@ -14,12 +14,14 @@ export const dynamic = "force-dynamic";
  * that touches a person's name is the same whoever asks, and none names anyone.
  *
  * GET  ?t=TOKEN[&ref=CODE]              the claim page's seat, as claimPage says (status, free facts only).
- * POST { op: "claim", t }               signed in: claim the seat (claimSeat, with the name rule).
+ * POST { op: "claim", t, ref }          signed in: claim the seat (claimSeat, with the name rule). With the invite
+ *                                       code from the link (ref), the claim connects them with whoever sent it
+ *                                       (Invite to connect). A seat that is theirs already just connects.
  * POST { op: "join", t, name, email, ref }  join free and claim it. With email off the member is in at
  *                                       once and the seat is claimed. With email on, the link to finish
  *                                       joining (or to sign in, for an address that is a member's) comes
  *                                       back to this page and claims it there. Same answer either way.
- * POST { op: "email", t, email }        a one-time sign-in link back to this page. Same answer for any address.
+ * POST { op: "email", t, email, ref }   a one-time sign-in link back to this page. Same answer for any address.
  * POST { op: "notme" | "remove", t }    the name comes off the seat, no account needed (rate-limited by network).
  * POST { op: "forget", name, company }  the public Remove my name page: the same answer whatever matched.
  */
@@ -46,11 +48,17 @@ function withSession(req: NextRequest, res: NextResponse, token: string) {
   return res;
 }
 
-/** A one-time link that signs in (or finishes joining) and comes back to this claim page to claim the seat. In the background. */
-function sendBack(req: NextRequest, m: { id: string; name: string; email: string }, purpose: "signin" | "join", t: string) {
+/** The invite code a link carried (?ref=), as it may go back into one: 40 base64url characters at most. */
+const refOf = (raw: unknown) => (typeof raw === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(raw.trim()) ? raw.trim() : null);
+
+/**
+ * A one-time link that signs in (or finishes joining) and comes back to this claim page to claim the
+ * seat, with the invite code the page came with (so the claim still connects them). In the background.
+ */
+function sendBack(req: NextRequest, m: { id: string; name: string; email: string }, purpose: "signin" | "join", t: string, ref: string | null = null) {
   void (async () => {
     const { token, code } = await createSignIn(m.id, purpose);
-    const e = oneTimeEmail(m.name, `${origin(req)}/claim/${t}?k=${encodeURIComponent(token)}&go=1`, code, purpose);
+    const e = oneTimeEmail(m.name, `${origin(req)}/claim/${t}?k=${encodeURIComponent(token)}&go=1${ref ? `&ref=${encodeURIComponent(ref)}` : ""}`, code, purpose);
     await sendEmail(m.email, e.subject, e.text, e.html);
   })().catch((e) => console.error("claim link email failed", e));
 }
@@ -90,6 +98,7 @@ export const POST = guarded(async (req: NextRequest) => {
 
   const t = body.t;
   if (!isClaimToken(t)) return err(BAD_LINK);
+  const ref = refOf(body.ref);
 
   if (op === "notme" || op === "remove") {
     if (limited(`nameoff:${ip}`, 20, 60 * 60_000)) return err(SLOW, 429);
@@ -111,7 +120,7 @@ export const POST = guarded(async (req: NextRequest) => {
   if (op === "claim") {
     if (limited(`claim:${ip}`, 30, 60 * 60_000)) return err(SLOW, 429);
     try {
-      const out = await claimByToken(token, t, origin(req));
+      const out = await claimByToken(token, t, origin(req), ref);
       return NextResponse.json({ ok: true, claimed: !out.waiting, waiting: out.waiting, message: out.message }, { headers: { "cache-control": "no-store" } });
     } catch (e) {
       if (e instanceof ActionError) return err(e.message);
@@ -125,7 +134,7 @@ export const POST = guarded(async (req: NextRequest) => {
     const email = String(body.email ?? "").trim().toLowerCase().slice(0, 120);
     if (limited(`email:${email}`, 3, 20 * 60_000)) return err("We've sent 3 links to that email in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
     const m = await memberByEmail(email);
-    if (m?.email) sendBack(req, m, "signin", t);
+    if (m?.email) sendBack(req, m, "signin", t, ref);
     return NextResponse.json({ ok: true, sent: true, message: "If that email is on Merlin, a link is on its way. Open it and the seat is yours." }, { headers: { "cache-control": "no-store" } });
   }
 
@@ -136,9 +145,9 @@ export const POST = guarded(async (req: NextRequest) => {
     if (emailEnabled() && limited(`email:${email}`, 3, 20 * 60_000)) return err("We've sent 3 links to that email in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
     try {
       // ?ref= came with the link: the invite counts the way an invite link's does.
-      const m = await joinMember(tidy(body.name, 80), email, body.ref, ip);
+      const m = await joinMember(tidy(body.name, 80), email, ref, ip);
       if (emailEnabled()) {
-        sendBack(req, m, m.existing ? "signin" : "join", t);
+        sendBack(req, m, m.existing ? "signin" : "join", t, ref);
         return NextResponse.json({ ok: true, sent: true }, { headers: { "cache-control": "no-store" } });
       }
       // In at once: the seat is claimed now, or the claim waits for an admin (the name on it isn't theirs). A claim that can't go through still leaves them signed in, with the reason.
@@ -146,7 +155,7 @@ export const POST = guarded(async (req: NextRequest) => {
       let claimed = false;
       let waiting = false;
       try {
-        const out = await claimByToken(m.token, t, origin(req));
+        const out = await claimByToken(m.token, t, origin(req), ref);
         message = out.message;
         waiting = out.waiting;
         claimed = !out.waiting;

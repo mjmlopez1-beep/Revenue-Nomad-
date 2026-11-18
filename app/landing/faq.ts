@@ -15,7 +15,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
   return [
     [
       "How do I reach the fractional who held a seat?",
-      `Where a seat holder is on file, 1 credit shows who held the seat and the role they held. If they are a member, message them inside Merlin. If not, find them on LinkedIn${intro ? " or ask us for an intro" : ""}. Many seats Revenue Nomad found have nobody named yet, until the fractional who held one claims it.`,
+      `Where a seat holder is on file, 1 credit shows who held the seat and the role they held. If they are a member, message them inside Merlin. If not, Invite to connect gives you a note and a link to their seat. When they claim it, a conversation opens between you, and if they're new to Merlin you both get ${REFERRAL_BONUS} credits. Many seats Revenue Nomad found have nobody named yet, until the fractional who held one claims it.`,
     ],
     [
       "Can I take my name off a seat?",
@@ -77,7 +77,11 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "How do invites work?",
-      `Invite a fractional you trust with your invite link. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat. A rate shared only for the benchmarks doesn't count, and there is no bonus when you both join from the same internet connection.`,
+      `Invite a fractional you trust with your invite link. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat, or claim their seat through your Invite to connect link. A rate shared only for the benchmarks doesn't count, and there is no bonus when you both join from the same internet connection.`,
+    ],
+    [
+      "What are referral partners?",
+      "Fractionals in other functions who work with the same kind of clients you do, so you can send each other work. Referral partners shows who gets hired before and after your function, who held seats at companies like yours, and the members you can write to. You're listed there for other members unless you turn it off in Your profile.",
     ],
     [
       "What does it cost?",

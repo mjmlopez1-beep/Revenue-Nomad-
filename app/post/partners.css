@@ -1,0 +1,313 @@
+/* Referral partners (pt-, app/post/Partners.tsx). Phone first: one column, 44px taps. Cards are a 1px line and a 10px corner. */
+.pt-page {
+  max-width: 760px;
+}
+.pt-lead {
+  margin: -6px 0 8px;
+  max-width: 62ch;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.tp-card.pt-sec {
+  margin-top: 16px;
+}
+.pt-sec .tp-card-h {
+  margin-bottom: 12px;
+  text-wrap: balance;
+}
+.pt-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--muted);
+}
+.pt-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pt-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* a. the order */
+.pt-lines {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pt-lines + .pt-lines,
+.pt-lines + .pt-note,
+.pt-note + .pt-lines {
+  margin-top: 12px;
+}
+.pt-line {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink);
+}
+.pt-when {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pt-when-before {
+  color: var(--volt-ink);
+}
+
+/* b. partners at your kind of clients */
+.hunt-pill.pt-pill {
+  margin: 0 0 16px;
+}
+.pt-group + .pt-group {
+  margin-top: 20px;
+}
+.pt-group-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+}
+.pt-group-n {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.pt-cards {
+  display: grid;
+  gap: 8px;
+}
+.pt-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.pt-card-co {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: -4px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.pt-card-co:hover {
+  background: var(--row-hover);
+}
+.pt-card-id {
+  display: grid;
+  min-width: 0;
+}
+.pt-card-name {
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pt-card-meta {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.pt-facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.pt-fact {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.pt-fact dt {
+  color: var(--muted);
+}
+.pt-fact dd {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+}
+.pt-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.pt-more {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.pt-unnamed {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* c. members */
+.pt-members {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pt-member {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+.pt-av {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--row-on);
+  color: var(--pine);
+  font-size: 15px;
+  font-weight: 700;
+}
+.pt-member-main {
+  display: grid;
+  min-width: 0;
+}
+.pt-member-name {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+}
+.pt-member-title {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--body-ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pt-member-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.pt-member-kinds {
+  min-width: 0;
+}
+.pt-showmore {
+  margin-top: 12px;
+}
+
+/* The record: the link under a seat holder's next step. */
+.tp-reach .tp-reach-more {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pine);
+  text-align: left;
+  cursor: pointer;
+}
+/* Invite to connect: the note grows to its text (Invite.tsx), up to half the screen, then scrolls. */
+.tp-connect-text.input {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+/* Invite to connect: the date it went, and the sheet's lead and warning. */
+.tp-invited {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--volt-ink);
+}
+.tp-invite-lead {
+  margin: 0 0 4px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.tp-invite-warn {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--red);
+}
+
+/* Phones: whole-width buttons in thumb reach, 44px taps. */
+@media (max-width: 767px) {
+  .tp-card.pt-sec {
+    padding: 16px;
+  }
+  .pt-member {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .pt-member-act {
+    grid-column: 1 / -1;
+  }
+  .pt-member-act .btn,
+  .pt-next .btn,
+  .pt-showmore {
+    min-height: 44px;
+    width: 100%;
+    justify-content: center;
+  }
+  .pt-fact {
+    grid-template-columns: 96px minmax(0, 1fr);
+    min-height: 44px;
+  }
+  .pt-more {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

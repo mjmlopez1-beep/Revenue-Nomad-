@@ -5,7 +5,10 @@
  *  - Claim it, join free: the join form (email, then name) or, for a member, Sign in. With email on,
  *    the link we send comes back here (?k=…&go=1), signs in and claims the seat.
  *  - Not me, and Remove my name: no account needed. The name comes off at once.
- * The invite code from the link (?ref=) goes with the join, so the invite counts. Phone first.
+ * The invite code from the link (?ref=) goes with the join and the claim, so the invite counts: a
+ * claim through a member's Invite to connect link opens a conversation between them, and a new
+ * member and the inviter both get the invite bonus. A seat on file under a member who has never
+ * signed in (status signin) asks them to sign in, and the link connects them once they do. Phone first.
  * Every request goes to /api/table/names (claims and names) or /api/table (sign-in), and the
  * page says what happened in a sentence. It never shows a person's name.
  */
@@ -13,8 +16,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import "./claim.css";
 import { Brand, IconCheck, fmtMonth, post } from "../ui/shared";
 import type { ClaimPage } from "@/lib/table";
+import { REFERRAL_BONUS } from "@/lib/tableFields";
 
-type Done = { title: string; text: string; seats?: boolean };
+type Done = { title: string; text: string; seats?: boolean; messages?: boolean };
 /** A claim's answer from the server: claimed now, or waiting for an admin (the name on the seat isn't theirs). */
 type ClaimAnswer = { message?: string; claimed?: boolean; waiting?: boolean };
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -41,7 +45,10 @@ function after(message: string, lead: string): string {
 /** What the page says once a claim went through: the seat is theirs, or an admin checks it first. */
 function settled(r: ClaimAnswer, fresh: ClaimPage | null): Done {
   if (r.waiting || fresh?.status === "waiting") return { title: "We'll check your claim", text: after(r.message ?? "", "Thanks.") };
-  return { title: "It's yours", text: after(r.message ?? "", "It's yours."), seats: fresh?.status === "yours" };
+  // Through an invite: the conversation with whoever sent the link is open (lib/table.ts connectedNote).
+  const messages = /conversation is open in Messages/.test(r.message ?? "");
+  const text = after(after(r.message ?? "", "It's yours."), "This seat is yours already.") || "It's on Your seats, where you can fill in what's missing. Each answer earns a credit.";
+  return { title: "It's yours", text, seats: fresh?.status === "yours" && !messages, messages };
 }
 
 /**
@@ -57,7 +64,8 @@ function seatLine(seat: NonNullable<ClaimPage["seat"]>): string {
 export function ClaimView({ token, initial, refCode, support, starter }: { token: string; initial: ClaimPage | null; refCode: string | null; support: string | null; starter: number }) {
   const [info, setInfo] = useState<ClaimPage | null>(initial);
   const [done, setDone] = useState<Done | null>(null);
-  const [mode, setMode] = useState<"ask" | "join" | "signin" | "sent" | "remove">("ask");
+  // A seat on file under a member who has never signed in: the page opens on signing in (they are a member already).
+  const [mode, setMode] = useState<"ask" | "join" | "signin" | "sent" | "remove">(initial?.status === "signin" ? "signin" : "ask");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -80,13 +88,24 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
   const claim = async () => {
     setBusy("claim");
     setError(null);
-    const r = await names<ClaimAnswer>({ op: "claim", t: token });
+    const r = await names<ClaimAnswer>({ op: "claim", t: token, ref: refCode ?? undefined });
     setBusy(null);
     if (r.error) return setError(r.error);
     const fresh = await fetchInfo();
     if (fresh) setInfo(fresh);
     setDone(settled(r, fresh));
   };
+
+  // Signed in already, on their own seat, through an invite link: that connects them with whoever sent it (once, on arrival).
+  useEffect(() => {
+    if (initial?.status !== "yours" || !refCode || new URL(window.location.href).searchParams.get("k")) return;
+    void (async () => {
+      const r = await names<ClaimAnswer>({ op: "claim", t: token, ref: refCode });
+      if (!r.error && /conversation is open in Messages/.test(r.message ?? "")) setDone(settled(r, initial));
+    })();
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The heading takes focus when the page changes what it says, so a screen reader hears it.
   useEffect(() => {
@@ -120,7 +139,7 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
       const fresh = await fetchInfo();
       if (fresh) setInfo(fresh);
       setBusy(null);
-      if (go && fresh?.status === "open") await claim();
+      if (go && (fresh?.status === "open" || (refCode && fresh?.status === "yours"))) await claim();
     })();
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +184,8 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
     if (fresh) setInfo(fresh);
     setBusy(null);
     setMode("ask");
-    if (fresh?.status === "open") await claim();
+    // Their seat to claim, or (an invite) theirs already: the claim connects them with whoever sent the link.
+    if (fresh?.status === "open" || (refCode && fresh?.status === "yours")) await claim();
   };
 
   const emailMe = async (e: React.FormEvent) => {
@@ -175,7 +195,7 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
     if (!EMAIL_RE.test(em)) return setError(em ? "That doesn't look like an email address. Check it for a typo." : "Type your email first.");
     setBusy("email");
     setError(null);
-    const r = await names({ op: "email", t: token, email: em });
+    const r = await names({ op: "email", t: token, email: em, ref: refCode ?? undefined });
     setBusy(null);
     if (r.error) return setError(r.error);
     setMode("sent");
@@ -196,7 +216,7 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
     const fresh = await fetchInfo();
     if (fresh) setInfo(fresh);
     setBusy(null);
-    if (fresh?.status === "open") await claim();
+    if (fresh?.status === "open" || (refCode && fresh?.status === "yours")) await claim();
     else setMode("ask");
   };
 
@@ -230,8 +250,8 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
           {done.title}
         </h1>
         <p className="cl-p">{done.text}</p>
-        <a className="btn btn-pine btn-lg cl-wide" href={done.seats ? "/?p=seats" : "/"}>
-          {done.seats ? "Open Your seats" : "Open Merlin"}
+        <a className="btn btn-pine btn-lg cl-wide" href={done.messages ? "/?p=messages" : done.seats ? "/?p=seats" : "/"}>
+          {done.messages ? "Open Messages" : done.seats ? "Open Your seats" : "Open Merlin"}
         </a>
       </>
     );
@@ -299,15 +319,29 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
     );
   } else {
     const signedIn = !!info.me;
+    // On file under a member who has never signed in: if it's theirs, signing in is all it takes.
+    const holder = info.status === "signin";
     body = (
       <>
         {info.inviter && <p className="cl-from">{info.inviter} sent you this link.</p>}
         <h1 className="cl-h">Is this your seat?</h1>
         <p className="cl-seat">{seatLine(info.seat)}</p>
-        <p className="cl-p">
-          Merlin is a free table of companies that hire fractional leaders, run by Revenue Nomad. Claim your seat and it&apos;s yours there.{" "}
-          {signedIn ? "Fill in what you know and each answer earns a credit." : `You start with ${starter} credits to see who held other seats, what clients paid and which roles are open now.`}
-        </p>
+        {holder ? (
+          <p className="cl-p">
+            It&apos;s on Merlin already, under the name of the fractional who held it. If that&apos;s you, sign in and it&apos;s yours to fill in.
+            {info.inviter ? ` Signing in connects you with ${info.inviter} as referral partners.` : ""}
+          </p>
+        ) : (
+          <p className="cl-p">
+            Merlin is a free table of companies that hire fractional leaders, run by Revenue Nomad. Claim your seat and it&apos;s yours there.{" "}
+            {signedIn ? "Fill in what you know and each answer earns a credit." : `You start with ${starter} credits to see who held other seats, what clients paid and which roles are open now.`}
+            {info.inviter
+              ? signedIn
+                ? ` Claiming it connects you with ${info.inviter} as referral partners.`
+                : ` Claiming it connects you with ${info.inviter} as referral partners, and if you're new to Merlin you both get ${REFERRAL_BONUS} credits.`
+              : ""}
+          </p>
+        )}
         {mode === "sent" ? (
           <div className="cl-box" role="status">
             <p className="cl-box-h">Check your inbox</p>
@@ -364,12 +398,20 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
               <input id={`${id}-link`} className="input mono" inputMode="url" autoComplete="off" autoCapitalize="none" placeholder="The link from your welcome email" value={link} onChange={(e) => setLink(e.target.value)} />
               {err}
               <button type="submit" className={`btn btn-lg cl-wide${info.email ? "" : " btn-pine"}`} disabled={!!busy} aria-busy={busy === "link" || busy === "claim"}>
-                {busy === "link" || busy === "claim" ? "Signing in" : "Sign in and claim it"}
+                {busy === "link" || busy === "claim" ? "Signing in" : holder ? "Sign in" : "Sign in and claim it"}
               </button>
             </form>
-            <button type="button" className="cl-link" onClick={() => (setMode("join"), setError(null))}>
-              New to Merlin? Join free
-            </button>
+            {holder ? (
+              <div className="cl-row cl-row-quiet">
+                <button type="button" className="btn btn-ghost" disabled={!!busy} aria-busy={busy === "notme"} onClick={() => void nameOff("notme")}>
+                  Not me
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="cl-link" onClick={() => (setMode("join"), setError(null))}>
+                New to Merlin? Join free
+              </button>
+            )}
           </div>
         ) : mode === "remove" ? (
           <div className="cl-box" role="group" aria-label="Remove my name">

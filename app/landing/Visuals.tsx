@@ -2,8 +2,8 @@
 
 /**
  * Product visuals for the landing page, drawn in HTML and CSS. In the hero's record, the controls a
- * member would use (Unlock, Message the seat holder, Find them on LinkedIn) are real buttons that
- * take the visitor to the join form (`onJoin`). The small "how credits work" demos are pictures.
+ * member would use (Unlock, Message the seat holder, Invite to connect) are real buttons that take
+ * the visitor to the join form (`onJoin`). The small "how credits work" demos are pictures.
  *
  * The hero's record is a real company from the table (lib/preview.ts PreviewExample): its free
  * facts, an open role when it has one, and a past seat whose holder is on file. It never names
@@ -87,8 +87,11 @@ const dayLabel = (d: string | null) => {
   return m && n ? `${MONTHS[m - 1]} ${n}` : null;
 };
 
-/** What a member can do once they unlock the seat holder. Each button takes the visitor to the join form. */
-function ReachOut({ intro, onJoin }: { intro: boolean; onJoin?: () => void }) {
+/**
+ * What a member can do once they unlock the seat holder: write to them when they're on Merlin, or
+ * invite them to connect when they aren't yet. Each button takes the visitor to the join form.
+ */
+function ReachOut({ onJoin }: { onJoin?: () => void }) {
   return (
     <div className="lp-reach-wrap">
       <span className="lp-reach-k">Once you join</span>
@@ -97,7 +100,7 @@ function ReachOut({ intro, onJoin }: { intro: boolean; onJoin?: () => void }) {
           Message the seat holder
         </button>
         <button type="button" className="lp-fake-btn" onClick={onJoin}>
-          {intro ? "Ask for an intro" : "Find them on LinkedIn"}
+          Invite to connect
         </button>
       </div>
     </div>
@@ -131,9 +134,10 @@ function RecordLoading() {
  * its open role when it has one (title free, posting behind a credit), and a past seat whose
  * holder is on file, with what a member can do next. It carries the page's one "Hiring now"
  * chip when the company is hiring. `example` undefined: still loading. Null: nothing fits.
- * `onJoin`: what the record's buttons do (the page's join form).
+ * `onJoin`: what the record's buttons do (the page's join form). `intro` is no longer read: no next
+ * step with a seat holder goes through Revenue Nomad's inbox now.
  */
-export function HeroRecord({ example, intro = true, onJoin }: { example: PreviewExample | null | undefined; intro?: boolean; onJoin?: () => void }) {
+export function HeroRecord({ example, onJoin }: { example: PreviewExample | null | undefined; intro?: boolean; onJoin?: () => void }) {
   if (example === null) return null;
   if (!example)
     return (
@@ -194,7 +198,7 @@ export function HeroRecord({ example, intro = true, onJoin }: { example: Preview
               <Locked w={84} />
             </Row>
           </dl>
-          <ReachOut intro={intro} onJoin={onJoin} />
+          <ReachOut onJoin={onJoin} />
         </div>
       </div>
       <figcaption className="lp-visual-cap">

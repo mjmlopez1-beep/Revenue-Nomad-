@@ -44,6 +44,7 @@ import { Seats } from "./Seats";
 import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
+import { Partners } from "./Partners";
 import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
@@ -142,12 +143,12 @@ function previousVisit(): string | null {
 /** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
 type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
-type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations";
+type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners";
 
 /* ---------- the place in the address bar ---------- */
 
-const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations"];
-const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", messages: "Messages", integrations: "Integrations" };
+const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners"];
+const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", messages: "Messages", integrations: "Integrations", partners: "Referral partners" };
 const TYPE_PARAM: Record<RecordType, string> = { companies: "companies", engagements: "seats", people: "people" };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -1939,6 +1940,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           <main className="tp-main tp-main-page">
             <MessagesPage onBack={() => setPage("table")} openCompany={(id) => openCompany(id)} />
           </main>
+        ) : page === "partners" ? (
+          <main className="tp-main tp-main-page">
+            <Partners infos={infos} onBack={() => setPage("table")} onProfile={() => setIcpOpen(true)} />
+          </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
             <Seats seats={seats} infos={infos} focus={seatFocus} onBack={() => setPage("table")} search={seatCtx.search} back={seatBack} />
@@ -2225,6 +2230,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               ...[...views].reverse().slice(0, 5).map((v) => ({ label: v.name, hint: v.email ? "Weekly email" : undefined, current: page === "table" && currentView === v.id, onClick: () => openView(v) })),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
               { label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
+              { label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },
               { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
               { label: "Integrations", hint: "Slack, Claude", current: page === "integrations", onClick: () => (setDrawer(null), setPage("integrations")) },

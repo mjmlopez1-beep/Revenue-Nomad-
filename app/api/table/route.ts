@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { brotliCompress, constants as zc, gzip } from "zlib";
 import {
-  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
+  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
 } from "@/lib/table";
 import { stateVersion } from "@/lib/table";
 import type { ActionResult } from "@/lib/tableTypes";
@@ -191,6 +191,7 @@ const patchless = (a: Action) =>
  *                  a person, email, phone, posting link or rate (lib/preview.ts). 400 on a value not on its list.
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
+ * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
  * GET ?export=1    admins: download the runtime state (a backup).
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
@@ -220,6 +221,11 @@ export const GET = guarded(async (req: NextRequest) => {
   if (req.nextUrl.searchParams.get("unread") !== null) {
     const unread = await unreadFor(token);
     return unread === null ? err(SIGNED_OUT_READ, 401) : NextResponse.json({ unread }, { headers: { "cache-control": "no-store" } });
+  }
+  // Referral partners (lib/table.ts partnersView): who gets hired before and after the member, counts of members' answers, and the members listed.
+  if (req.nextUrl.searchParams.get("partners") !== null) {
+    const p = await partnersView(token);
+    return p ? sendJson(req, p) : err("You're signed out. Sign in again to see your referral partners.", 401);
   }
   const ref = req.nextUrl.searchParams.get("ref");
   if (ref !== null) {

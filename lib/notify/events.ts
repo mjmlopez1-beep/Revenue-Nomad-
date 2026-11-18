@@ -124,17 +124,37 @@ async function messageAlert(conversationId: string): Promise<void> {
   if (!to || !from) return;
   const g = T.graph(seed, s);
   const tracks = T.tracksOf(seed, s);
-  const company = companyFor(g, s, idx, tracks, to, c.about.companyId);
-  const holder = toId === c.b;
+  // A conversation from Referral partners is about no seat.
+  const partners = !c.about.engagementId;
+  const company = partners ? "" : companyFor(g, s, idx, tracks, to, c.about.companyId);
+  const holder = !partners && toId === c.b;
   const first = T.firstName(from.name);
   const messagesOn = conn.alerts?.message !== false;
   if (messagesOn) {
-    void deliver(toId, { kind: "message", at: last.at, conversationId: c.id, from: first, company, holder, snippet: snippetOf(last.text) });
+    void deliver(toId, { kind: "message", at: last.at, conversationId: c.id, from: first, company, holder, snippet: snippetOf(last.text), ...(partners ? { about: "partners" as const } : {}) });
     return;
   }
+  if (partners) return;
   // Message alerts off: a first message to the seat holder about their seat still counts as someone engaging the seat.
   if (holder && c.messages.length === 1)
     void deliver(toId, { kind: "seat", at: last.at, companyId: T.pubId(c.about.companyId), company, what: "message", actor: { ...actorOf(s, from), first }, conversationId: c.id });
+}
+
+/**
+ * A fractional the member invited to connect claimed their seat through the invite, which opened a
+ * conversation (lib/table.ts connectInvite): the inviter's message alert says so (lib/messages.ts afterConnect).
+ */
+export const afterConnectAlert = (conversationId: string) => track(connectAlert(conversationId));
+async function connectAlert(conversationId: string): Promise<void> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const c = (s.conversations ?? []).find((x) => x.id === conversationId);
+  if (!c || c.kind !== "invite" || !s.integrations?.members[c.a]) return;
+  const idx = T.memberIndex(seed, s);
+  const to = idx.byId.get(c.a);
+  const partner = idx.byId.get(c.b);
+  if (!to || !partner) return;
+  const company = companyFor(T.graph(seed, s), s, idx, T.tracksOf(seed, s), to, c.about.companyId);
+  void deliver(to.id, { kind: "message", at: c.createdAt, conversationId: c.id, from: T.firstName(partner.name), company, holder: false, snippet: "", about: "invite" });
 }
 
 /* ---------- unlocks ---------- */

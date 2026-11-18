@@ -16,6 +16,7 @@ import { IconChevron, LockedName, initials, post, useToast } from "../ui/shared"
 import { HIDDEN_COMPANY } from "@/lib/tableFields";
 import { Sheet, useUi } from "./ui";
 import { useLayout } from "./hooks";
+import { partnerOpener, seatOpener } from "@/lib/partners";
 import "./messages.css";
 
 const MAX = 2000;
@@ -62,8 +63,14 @@ const seatDetail = (c: ConversationRec) => [c.about.seat, c.about.years].filter(
 
 /** The line above the first message: why this conversation exists. */
 function contextLine(c: ConversationRec): string {
+  if (c.kind === "partners") return c.started ? `You wrote to ${c.with.first} as a referral partner.` : `${c.with.first} found you in Referral partners and wants to connect.`;
   const d = seatDetail(c);
   const at = `${c.about.company && c.about.company !== HIDDEN_COMPANY ? c.about.company : "a company that's hiring"}${d ? ` (${d})` : ""}`;
+  // Opened by itself when the seat holder claimed their seat through the invite (Invite to connect).
+  if (c.kind === "invite")
+    return c.started
+      ? `${c.with.first} claimed their seat at ${at} through your invite. You're connected as referral partners.`
+      : `You claimed your seat at ${at} through ${c.with.first}'s invite. You're connected as referral partners.`;
   return c.started ? `You wrote to ${c.with.first} about their seat at ${at}.` : `${c.with.first} unlocked your seat at ${at} and wants to talk.`;
 }
 
@@ -75,11 +82,6 @@ function closedLine(c: ConversationRec): string | null {
   return c.started ? "They're not taking intros right now." : `${c.with.first} closed this conversation.`;
 }
 
-/** The opener a member can edit before sending. */
-export function suggestedOpener(first: string, company: string, seat: string | null): string {
-  const what = seat ? `the ${seat} seat` : "a fractional seat";
-  return `Hi ${first}, I saw you held ${what} at ${company}. I'm looking at them now and would love to hear how it went. Open to a quick chat?`;
-}
 
 function when(iso: string): string {
   const d = new Date(iso);
@@ -242,8 +244,14 @@ export function MessagesPage({ onBack, openCompany }: { onBack: () => void; open
                 <span className="ms-row-when num">{when(c.updatedAt)}</span>
               </span>
               <span className="ms-row-about">
-                {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company}
-                {c.about.seat ? ` · ${c.about.seat}` : ""}
+                {c.kind === "partners" ? (
+                  "Referral partners"
+                ) : (
+                  <>
+                    {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company}
+                    {c.about.seat ? ` · ${c.about.seat}` : ""}
+                  </>
+                )}
               </span>
               <span className="ms-row-last">
                 {last ? `${last.mine ? "You: " : ""}${last.removed ? "An admin removed this message." : last.text}` : ""}
@@ -420,19 +428,23 @@ function Thread({
             {c.with.name}
           </h2>
           {c.with.title && <p className="ms-head-sub">{c.with.title}</p>}
-          {/* The company is the seat being talked about, not where this person works. */}
-          <p className="ms-head-sub">
-            {c.started ? "About their " : "About your "}
-            {c.about.seat ? `${c.about.seat} ` : ""}seat at {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company || "a company"}
-            {c.about.company && (
-              <>
-                {" · "}
-                <button type="button" className="ms-link" onClick={() => openCompany(c.about.companyId)}>
-                  Open the record
-                </button>
-              </>
-            )}
-          </p>
+          {/* The company is the seat being talked about, not where this person works. A conversation from Referral partners is about no seat. */}
+          {c.kind === "partners" ? (
+            <p className="ms-head-sub">Connecting as referral partners</p>
+          ) : (
+            <p className="ms-head-sub">
+              {c.started ? "About their " : "About your "}
+              {c.about.seat ? `${c.about.seat} ` : ""}seat at {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company || "a company"}
+              {c.about.company && (
+                <>
+                  {" · "}
+                  <button type="button" className="ms-link" onClick={() => openCompany(c.about.companyId)}>
+                    Open the record
+                  </button>
+                </>
+              )}
+            </p>
+          )}
         </div>
         <div className="ms-head-acts">
           {/* Not now is the answer to an intro, so only the member who was written to has it. */}
@@ -544,56 +556,123 @@ function Thread({
 
 /**
  * "Message Ana" under a seat holder the member unlocked who is a member who has signed in.
- * Opens the compose sheet with an opener they can change. Once a conversation about this seat
- * exists it becomes "Open conversation" (with the unread count when they replied), never a
- * second opener.
+ * Opens the compose sheet with an opener they can change ("Hi Ana, I saw you held the fractional
+ * CMO seat at Acme…", lib/partners.ts seatOpener). Once a conversation about this seat exists it
+ * becomes "Open conversation" (with the unread count when they replied), never a second opener.
  */
-export function MessageButton({ engagementId, name, company, seat }: { engagementId: string; name: string; company: string; seat: string | null }) {
+export function MessageButton({ engagementId, name, company, role, fn }: { engagementId: string; name: string; company: string; role: string | null; fn: string | null }) {
   const ui = useUi();
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const first = firstOf(name);
   const conv = useConversationAbout(engagementId);
-  if (conv) {
-    const last = conv.messages[conv.messages.length - 1];
-    const state = conv.blocked
-      ? `You blocked ${first}.`
-      : conv.status === "closed" && conv.closedBy === "them"
-        ? `${first} isn't taking intros right now.`
-        : conv.unread
-          ? `${first} replied.`
-          : last && !last.mine
-            ? `${first} wrote to you.`
-            : `You wrote to ${first}.`;
-    return (
-      <>
-        <button type="button" className="btn btn-sm btn-pine tp-has-badge ms-rec-open" onClick={() => openConversation(ui.openPage, conv.id)}>
-          Open conversation
-          {conv.unread > 0 && (
-            <span className="tp-badge tp-badge-dot num" aria-label={`${conv.unread} unread`}>
-              {conv.unread}
-            </span>
-          )}
-        </button>
-        <span className="ms-rec-state">{state}</span>
-      </>
-    );
-  }
+  if (conv) return <OpenConversation conv={conv} first={first} />;
   return (
     <>
       <button ref={btn} type="button" className="btn btn-sm btn-pine" onClick={() => setOpen(true)}>
         Message {first}
       </button>
-      {open && <Compose engagementId={engagementId} name={name} company={company} seat={seat} onClose={() => setOpen(false)} restore={() => btn.current} />}
+      {open && (
+        <Compose
+          to={{ engagementId }}
+          first={first}
+          about={`About the ${role || fn ? `${role || fn} ` : ""}seat at ${company}.`}
+          opener={seatOpener({ first, role, fn, company, myTitle: ui.me.title, myFn: ui.me.function })}
+          onClose={() => setOpen(false)}
+          restore={() => btn.current}
+        />
+      )}
     </>
   );
 }
 
-function Compose({ engagementId, name, company, seat, onClose, restore }: { engagementId: string; name: string; company: string; seat: string | null; onClose: () => void; restore: () => HTMLElement | null }) {
+/** "Open conversation", with what happened last in it, where a conversation with them already exists. */
+function OpenConversation({ conv, first }: { conv: ConversationRec; first: string }) {
+  const ui = useUi();
+  const last = conv.messages[conv.messages.length - 1];
+  const state = conv.blocked
+    ? `You blocked ${first}.`
+    : conv.status === "closed" && conv.closedBy === "them"
+      ? `${first} isn't taking intros right now.`
+      : conv.unread
+        ? `${first} replied.`
+        : last && !last.mine
+          ? `${first} wrote to you.`
+          : `You wrote to ${first}.`;
+  return (
+    <>
+      <button type="button" className="btn btn-sm btn-pine tp-has-badge ms-rec-open" onClick={() => openConversation(ui.openPage, conv.id)}>
+        Open conversation
+        {conv.unread > 0 && (
+          <span className="tp-badge tp-badge-dot num" aria-label={`${conv.unread} unread`}>
+            {conv.unread}
+          </span>
+        )}
+      </button>
+      <span className="ms-rec-state">{state}</span>
+    </>
+  );
+}
+
+/**
+ * "Connect" with a member listed in Referral partners: a conversation about no seat
+ * (message.connect), with an opener they can change (lib/partners.ts partnerOpener). One per pair:
+ * once there is a conversation with them, it opens that one instead.
+ */
+export function ConnectButton({ member, conversationId }: { member: { id: string; first: string }; conversationId?: string | null }) {
+  const ui = useUi();
+  const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const known = conversationId ?? sent;
+  if (known)
+    return (
+      <button type="button" className="btn btn-sm" onClick={() => openConversation(ui.openPage, known)}>
+        Open conversation
+      </button>
+    );
+  return (
+    <>
+      <button ref={btn} type="button" className="btn btn-sm btn-pine" onClick={() => setOpen(true)}>
+        Connect
+      </button>
+      {open && (
+        <Compose
+          to={{ memberId: member.id }}
+          first={member.first}
+          about="About connecting as referral partners."
+          opener={partnerOpener({ first: member.first, myTitle: ui.me.title, myFn: ui.me.function, icp: ui.me.icp })}
+          onClose={() => setOpen(false)}
+          onSent={(c) => setSent(c.id)}
+          restore={() => btn.current}
+        />
+      )}
+    </>
+  );
+}
+
+function Compose({
+  to,
+  first,
+  about,
+  opener,
+  onClose,
+  onSent,
+  restore,
+}: {
+  /** A seat holder (a conversation about their seat), or a member from Referral partners (about no seat). */
+  to: { engagementId: string } | { memberId: string };
+  first: string;
+  /** What the conversation is about, the line over the message. */
+  about: string;
+  opener: string;
+  onClose: () => void;
+  onSent?: (c: ConversationRec) => void;
+  restore: () => HTMLElement | null;
+}) {
   const ui = useUi();
   const toast = useToast();
-  const first = firstOf(name);
-  const [text, setText] = useState(() => suggestedOpener(first, company, seat));
+  const [text, setText] = useState(opener);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const id = useId();
@@ -603,11 +682,14 @@ function Compose({ engagementId, name, company, seat, onClose, restore }: { enga
     if (busy || !text.trim() || len > MAX) return;
     setBusy(true);
     setErr(null);
-    const r = await send({ type: "message.start", engagementId, text: text.trim() });
+    const r = await send("engagementId" in to ? { type: "message.start", engagementId: to.engagementId, text: text.trim() } : { type: "message.connect", memberId: to.memberId, text: text.trim() });
     setBusy(false);
     if (r.error) return setErr(r.error);
     const c = r.conversation;
-    if (c) rememberOne(c);
+    if (c) {
+      rememberOne(c);
+      onSent?.(c);
+    }
     onClose();
     toast(r.message || "Sent.", false, { action: { label: "Open conversation", onClick: () => (c ? openConversation(ui.openPage, c.id) : ui.openPage("messages")) } });
   };
@@ -631,7 +713,7 @@ function Compose({ engagementId, name, company, seat, onClose, restore }: { enga
     >
       <form id={`${id}-f`} onSubmit={submit} className="ms-compose-form">
         <p className="ms-compose-about">
-          About the {seat ? `${seat} ` : ""}seat at {company}. {first} sees your name and title, never your email.
+          {about} {first} sees your name and title, never your email.
         </p>
         <label className="tp-lbl" htmlFor={`${id}-t`}>
           Your message

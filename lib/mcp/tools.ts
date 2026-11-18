@@ -28,6 +28,8 @@ import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type R
 import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
 import { publicBase, webLink } from "../links";
+import { firstOf, inviteNote, seatOpener } from "../partners";
+import { REFERRAL_BONUS } from "../tableFields";
 
 export interface Ctx {
   member: Member;
@@ -204,7 +206,41 @@ export function seatLocked(e: EngagementRec, hidden: boolean, field: string): st
   return LOCKED;
 }
 
-export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
+/**
+ * The next step with a seat holder the member can see (after the unlock), the app's own: Message
+ * them on Merlin when they are a member who has signed in; else Invite to connect, with the seat's
+ * claim link (EngagementRec.invite, with the member's invite code) and the note the app writes;
+ * else their LinkedIn search. No step goes through Revenue Nomad's staff.
+ */
+export function reachOf(e: EngagementRec, i: CoInfo, mv: MemberView, base = publicBase() ?? ""): ToolOut {
+  const h = e.cells.operator;
+  if (h?.s !== "value" || e.yours) return {};
+  const first = firstOf(h.v);
+  const me = mv.view.me;
+  const linkedin_search = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(h.v)}`;
+  const words = { first, role: shown(e.cells.role), fn: shown(e.cells.function), company: i.c.name, myTitle: me?.title ?? null, myFn: me?.function ?? null };
+  if (h.member)
+    return {
+      next_step: `Message ${first}`,
+      how: `${first} is on Merlin. Open this company in the app and press Message ${first}. The app writes a first message the member can change.`,
+      open_in_merlin: `${base}/?c=${encodeURIComponent(i.c.id)}`,
+      suggested_message: seatOpener(words),
+    };
+  if (e.invite) {
+    const link = `${base}${e.invite.path}`;
+    return {
+      next_step: "Invite to connect",
+      how: `${first} isn't on Merlin yet. Send them this note with the link. When they claim their seat through it, a conversation opens between you on Merlin, and if they're new to Merlin you both get ${REFERRAL_BONUS} credits.`,
+      invite_link: link,
+      suggested_note: inviteNote({ ...words, icp: me?.icp ?? null, link }),
+      ...(e.invite.at ? { invited: dayOfIso(e.invite.at) } : {}),
+      linkedin_search,
+    };
+  }
+  return { next_step: "Find them on LinkedIn", linkedin_search };
+}
+
+export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView, base = publicBase() ?? ""): ToolOut {
   const open = isOpenRole(e);
   const facts = readAll(e.cells, SEAT_KEYS, (field) => seatLocked(e, !!i.c.hidden, field));
   // Before anyone pays: say whether the posting gave a rate at all (never promise one that isn't there).
@@ -215,7 +251,6 @@ export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
   if (e.claimable && (!holder || holder.s === "empty")) facts.seat_holder = "Not on Merlin yet";
   if (open && facts.rate) (facts.posted_rate = facts.rate), delete facts.rate;
   if (open && facts.hours) (facts.posted_hours = facts.hours), delete facts.hours;
-  const intro = mv.view.contact?.intro;
   return {
     id: e.id,
     ...(open ? { open_role: true } : {}),
@@ -227,14 +262,7 @@ export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
     ...(e.posted ? { posted: e.posted } : {}),
     ...(e.closed ? { closed: dayOfIso(e.closedAt ?? e.closed) } : {}),
     ...(e.unseen ? { note: "Not seen in the last scan of its job board, so it may have closed." } : {}),
-    ...(holder?.s === "value" && !e.yours
-      ? {
-          reach_them: {
-            linkedin_search: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(holder.v)}`,
-            ...(intro ? { ask_revenue_nomad_for_an_intro: intro } : {}),
-          },
-        }
-      : {}),
+    ...(holder?.s === "value" && !e.yours && !holder.member?.you ? { reach_them: reachOf(e, i, mv, base) } : {}),
     ...(e.people.length ? { people: e.people.map((p) => personOut(p, null, !!i.c.hidden)) } : {}),
     ...(e.yours ? { you_can_add: missingOf(e.cells, SEAT_KEYS, open ? ["start", "end", "reason", "sourced"] : []) } : {}),
     ...(e.claimable && !e.yours ? { claimable: "If this is the member's own seat, add_my_seat with this seat_id and claim: true makes it theirs (ask them first)." } : {}),
@@ -244,8 +272,10 @@ export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
 /**
  * The ways in: fellow fractionals who held a seat there, and the people who hired or managed them.
  * At a locked company they open only after the company, so each says to unlock the company first.
+ * Once the member can see who held a seat, its entry says the next step (reachOf): Message them,
+ * or Invite to connect with the link. Before that it says what the unlock opens, and nothing more.
  */
-export function warmPaths(i: CoInfo): ToolOut[] {
+export function warmPaths(i: CoInfo, mv?: MemberView, base = publicBase() ?? ""): ToolOut[] {
   const out: ToolOut[] = [];
   const hidden = !!i.c.hidden;
   const company = { entity: "company", id: i.c.id, field: "identity" };
@@ -264,6 +294,7 @@ export function warmPaths(i: CoInfo): ToolOut[] {
           ? { unlock_first: company }
           : { unlock: { entity: "seat", id: e.id, field: "seat_holder" }, opens: withRole ? "who held it and the role they held, 1 credit" : "who held it, 1 credit" }
         : {}),
+      ...(h.s === "value" && mv && !h.member?.you ? reachOf(e, i, mv, base) : {}),
     });
   }
   const ranked = ["Hiring for the seat", "Reported to", "Decision maker", "Worked with", "Reported to me"];
@@ -297,16 +328,16 @@ export const purchases = (i: CoInfo) => {
   return bought.size;
 };
 
-function companyOut(i: CoInfo, mv: MemberView): ToolOut {
+function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? ""): ToolOut {
   const c = i.c;
   const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? "locked until you unlock the company (1 credit)" : LOCKED));
   return {
     ...companySummary(i),
     ...facts,
     ...(c.hidden ? {} : { you_can_add: missingOf(c.cells, COMPANY_KEYS, ["about"]) }),
-    seats: i.engs.map((e) => seatOut(e, i, mv)),
+    seats: i.engs.map((e) => seatOut(e, i, mv, base)),
     ...(c.people.length ? { people: c.people.map((p) => personOut(p, null, !!c.hidden)) } : {}),
-    warm_paths: warmPaths(i),
+    warm_paths: warmPaths(i, mv, base),
     locked: purchases(i)
       ? { purchases: purchases(i), note: `Up to ${purchases(i)} credit${purchases(i) > 1 ? "s" : ""} to unlock everything here. Call unlock with field "everything" (without confirm) for the exact cost.` }
       : "Nothing here is locked for you.",
@@ -453,7 +484,7 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
 
 export async function getCompany(ctx: Ctx, a: { company: string }): Promise<ToolOut> {
   const mv = await memberView(ctx.member);
-  return companyOut(companyInfo(mv, a.company), mv);
+  return companyOut(companyInfo(mv, a.company), mv, publicBase() ?? ctx.origin);
 }
 
 export interface RoleArgs {
@@ -673,14 +704,15 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
 async function afterChange(ctx: Ctx, entity: Entity, id: string): Promise<ToolOut | undefined> {
   forgetView(ctx.member.id);
   const mv = await memberView(ctx.member);
+  const base = publicBase() ?? ctx.origin;
   if (entity === "company") {
     const i = mv.byId.get(id);
-    return i ? { company: companyOut(i, mv) } : undefined;
+    return i ? { company: companyOut(i, mv, base) } : undefined;
   }
   if (entity === "engagement") {
     const i = mv.bySeat.get(id);
     const e = i?.engs.find((x) => x.id === id);
-    return i && e ? { company: { id: i.c.id, name: i.c.name }, seat: seatOut(e, i, mv) } : undefined;
+    return i && e ? { company: { id: i.c.id, name: i.c.name }, seat: seatOut(e, i, mv, base) } : undefined;
   }
   const i = mv.byPerson.get(id);
   const p = i?.people.find((x) => x.p.id === id);

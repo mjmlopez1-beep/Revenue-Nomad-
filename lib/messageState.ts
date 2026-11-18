@@ -17,12 +17,18 @@ export interface StoredMessage {
 /**
  * A conversation about one seat. `a` started it (they unlocked who held the seat), `b` is the
  * seat holder. Internal ids only: the client gets public ids.
+ *
+ * `kind` partners: `a` connected with `b` from Referral partners, about no seat (`about` holds
+ * empty ids). `kind` invite: it opened by itself when `b` claimed their seat through `a`'s invite
+ * (Invite to connect). Its first message is `a`'s note, and it counts as unread for `a` too until
+ * they open it, so the inviter sees that the partner is in.
  */
 export interface StoredConversation {
   id: string;
   a: string;
   b: string;
   about: { companyId: string; engagementId: string };
+  kind?: "partners" | "invite";
   messages: StoredMessage[];
   /** When each side last read it. */
   readAt: { a?: string; b?: string };
@@ -83,6 +89,8 @@ export function unreadIn(c: StoredConversation, memberId: string): number {
   const read = c.readAt[side] ?? "";
   let n = 0;
   for (const m of c.messages) if (m.by !== memberId && m.at > read) n++;
+  // An invite's conversation is news for the inviter too (the partner claimed their seat), until they open it.
+  if (c.kind === "invite" && side === "a" && !read && !n) n = 1;
   return n;
 }
 
