@@ -26,9 +26,12 @@ const company = z.string().describe("The company's id (from search_companies or 
 export const INSTRUCTIONS = `Merlin is a give-to-get table of companies that hire fractional leaders (sales, marketing, RevOps, customer success, finance, technology and more), run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. You act as the signed-in member.
 
 How the table works
-- Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts (company basics, a seat's function, type, status, start, why they hired) are always visible.
+- Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts are always visible: company basics, and a seat's function, type, status, start, why they hired, hours a week, and its end month while the seat is still going. Only a dated end on a seat that ended costs 1 credit.
 - A company with an open role is a "Locked company" until the member unlocks it for 1 credit, which also opens the job posting of its open roles, with the posted rate and hours when the posting gave them. Before that only the role's title, function and listed date show, with the company's industry, size and HQ region. Each open role says whether a rate was posted ("No rate posted", or "on file"): never promise a rate that isn't there. At a company the member can see, an open role's posting, posted rate and hours are one purchase.
-- A person's name and title are locked together: 1 credit opens both, whichever one you unlock. Their LinkedIn, email and phone are 1 credit each. A relationship (like Decision maker) is free.
+- At a locked company, its people and the fractionals who held its seats open only after the company. Unlock the company first, then them.
+- Who held a seat and the role they held are one purchase: 1 credit opens both, whichever one you unlock. A seat with nobody named yet (seat_holder "Not on Merlin yet") has no one to unlock, and its role shows free or locked like any other fact.
+- A person's name and title are one purchase: 1 credit opens both, whichever one you unlock. Their LinkedIn, email and phone open only after that, 1 credit each. A relationship (like Decision maker) is free.
+- Each locked value says what its credit opens, and what has to come first. Pass that on as it is.
 - Never spend a credit without asking. Call unlock without confirm first, tell the member what it costs and what it opens, and call it again with confirm true only after they say yes.
 
 Using it well
@@ -108,7 +111,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Get a company",
       description:
-        "Everything the member can see about one company: its facts, each seat (function, type, status, dates, who held it, rate, why they hired, open or closed), the people there with their relationship, warm_paths (the best ways in: the fractional who held a seat and the exec who hired them), what is still locked and what each unlock costs, and what the member could add to earn credits. Locked values read \"locked, 1 credit to unlock\". Use the ids here with unlock, add_person and follow_company.",
+        "Everything the member can see about one company: its facts, each seat (function, type, status, dates, who held it, rate, why they hired, open or closed), the people there with their relationship, warm_paths (the best ways in: the fractional who held a seat and the exec who hired them), what is still locked and what each unlock costs, and what the member could add to earn credits. Locked values read \"locked, 1 credit to unlock\" or say what the credit opens with them (who held a seat comes with the role they held, a person's name with their title) and what comes first (a person's contact details open after their name, and at a locked company its people and seat holders open after the company). Use the ids here with unlock, add_person and follow_company.",
       inputSchema: { company },
       annotations: { title: "Get a company", ...READ },
     },
@@ -168,7 +171,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Unlock",
       description:
-        'Spend credits to see locked facts. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it spends nothing and says what it would cost and open. Tell the member, and only if they say yes, call it again with the same arguments and confirm: true, which spends through the normal unlock and returns what is now visible. entity is "company", "seat" or "person". field is one field (for a seat: seat_holder, role, end, sourced, rate, posting, hours. For a person: name, email, phone, linkedin. For a locked company: identity, which opens its name and the job posting of its open roles, with the posted rate only when one was posted) or "everything" on a company, seat or person. Say what it opens from would_open, and mention a rate only when the role says one is on file.',
+        'Spend credits to see locked facts. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it spends nothing and says what it would cost and open. Tell the member, and only if they say yes, call it again with the same arguments and confirm: true, which spends through the normal unlock and returns what is now visible. entity is "company", "seat" or "person". field is one field (for a seat: seat_holder, role, end, sourced, rate, posting, hours. For a person: name, title, email, phone, linkedin. For a locked company: identity, which opens its name and the job posting of its open roles, with the posted rate only when one was posted) or "everything" on a company, seat or person. Who held a seat and the role they held are one purchase, and so are a person\'s name and title: 1 credit opens both, whichever you ask for. A person\'s email, phone and LinkedIn open only after their name and title, and at a locked company its people and seat holders open only after the company: asked for too early, unlock says what to unlock first. Say what it opens from would_open, and mention a rate only when the role says one is on file.',
       inputSchema: {
         entity: z.enum(["company", "seat", "person"]),
         id: z.string().describe("The company, seat or person id."),
@@ -224,7 +227,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Add my seat",
       description:
-        "Add a seat the member held themselves (a fractional engagement), or facts on one of their own seats already on file (seat_id from my_account). Members can only add their own seats: the seat holder is always the member. Each new fact earns 1 credit. Needs a function or a role. If they give a rate, ask who may see it and send rate_visibility. A seat Revenue Nomad found that nobody holds yet (claimable in get_company) becomes theirs with seat_id and claim: true, after they say it is theirs.",
+        "Add a seat the member held themselves (a fractional engagement), or facts on one of their own seats already on file (seat_id from my_account). Members can only add their own seats: the seat holder is always the member. Each new fact earns 1 credit. Needs a function or a role. Use the client's real name as the member gives it, never an example or a placeholder, and for a company not on Merlin yet confirm its exact name and website with the member first. If they give a rate, ask who may see it and send rate_visibility. A seat Revenue Nomad found that nobody holds yet (claimable in get_company) becomes theirs with seat_id and claim: true, after they say it is theirs.",
       inputSchema: {
         company: z.string().optional().describe("The company's name (or id). Not needed with seat_id."),
         website: z.string().optional(),

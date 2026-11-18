@@ -9,7 +9,7 @@
  *   BASE=http://localhost:4600 npx tsx scripts/test-onboard.mts
  */
 import type { Cell, CompanyRec, EngagementRec, Icp } from "../lib/tableTypes";
-import { alertView, metaOf, realTitle, seatFns, seatState, seatsAt, suggest, titlesFor } from "../app/onboard/suggest";
+import { alertView, metaOf, pillPlace, realTitle, seatFns, seatState, seatsAt, suggest, titlesFor } from "../app/onboard/suggest";
 
 let passed = 0;
 let failed = 0;
@@ -126,13 +126,23 @@ function val(c: Cell | undefined) {
 
 /* ---------- the weekly email at the end ---------- */
 
-const av = alertView("Sales", { industries: ["SaaS"], employees: ["11–50"], revenue: [], countries: ["United States"] });
+const avIcp: Icp = { industries: ["SaaS"], employees: ["11–50"], revenue: [], countries: ["United States"] };
+const av = alertView("Sales", avIcp);
 const place = new URLSearchParams(av.place);
 check("the alert opens Hiring now on seats", place.get("v") === "hiring" && place.get("t") === "seats", av.place);
-check("the alert's filters carry the function and the profile written out", /fn:Sales/.test(place.get("f") ?? "") && /industry:SaaS/.test(place.get("f") ?? "") && !/(^|~)icp(~|$)/.test(place.get("f") ?? ""), place.get("f"));
-check("the alert's criteria match the function and profile", av.criteria.function === "Sales" && av.criteria.industry?.[0] === "SaaS" && av.criteria.employees?.[0] === "11–50", av.criteria);
-check("the alert's name names the function", /^Sales roles/.test(av.name), av.name);
+check(
+  "the alert opens with the profile pill on and only the function as a hard filter, so a company with a part not on file stays in",
+  place.get("f") === "fn:Sales~icp",
+  place.get("f"),
+);
+check("the alert's criteria (the weekly email) spell the profile out", av.criteria.function === "Sales" && av.criteria.industry?.[0] === "SaaS" && av.criteria.employees?.[0] === "11–50" && av.criteria.country?.[0] === "United States", av.criteria);
+check("the alert's name names the function and the profile", /^Sales roles at SaaS companies/.test(av.name), av.name);
 check("no function: no function in the criteria", !alertView(null, null).criteria.function && new URLSearchParams(alertView(null, null).place).get("f") === "-");
+check("no profile: the function alone, no pill", new URLSearchParams(alertView("Marketing", null).place).get("f") === "fn:Marketing");
+// The view onboarding saved before, with the profile spelled out as hard filters, takes the pill form.
+const oldPlace = new URLSearchParams({ v: "hiring", t: "seats", f: "industry:SaaS~employees:11–50~fn:Sales~country:United States" }).toString();
+check("an old onboarding view (the profile spelled out) moves to the pill form", pillPlace(oldPlace, "Sales", avIcp) === av.place, pillPlace(oldPlace, "Sales", avIcp));
+check("the pill form, another profile, or a view the member saved themselves stays as it is", pillPlace(av.place, "Sales", avIcp) === null && pillPlace(oldPlace, "Sales", { ...avIcp, employees: ["51–200"] }) === null && pillPlace(oldPlace, "Marketing", avIcp) === null && pillPlace("v=all&t=companies&f=industry:SaaS", "Sales", avIcp) === null && pillPlace(oldPlace, "Sales", null) === null);
 
 /* ---------- the server: a new member's title, and the saved view ---------- */
 

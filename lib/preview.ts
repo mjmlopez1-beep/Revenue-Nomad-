@@ -16,14 +16,22 @@
  * replaced by a plain "Fractional <function> role".
  *
  * A company with an open role is hidden in the app until a member unlocks it (1 credit). Here at
- * most PREVIEW_OPEN_NAMED of them are named in one answer, rows and example record together: the
- * example's company when it has an open role, then the companies behind the newest open roles in
- * the picked function, industry and country. Every other open-role company comes without its
- * name ("Company unlocks with 1 credit"), and its role title is scrubbed of the company.
+ * most PREVIEW_OPEN_NAMED of them are named in all, whatever function, industry, country and tab
+ * is picked: one set, chosen once per build of the source (sourceNow). It holds the example's
+ * company when that has an open role, then the companies behind the newest open roles that Try it
+ * lists, across the whole table. Every other open-role company comes without its name ("Company
+ * unlocks with 1 credit") in every answer, and its role title is scrubbed of the company. A row
+ * whose company is withheld carries a seed made for that answer alone, so rows from two answers
+ * can't be matched up to name a company.
+ *
+ * A picked country keeps the companies whose country isn't on file yet (most of them), the way
+ * the app's Ideal Fractional Profile does, and `inCountry` says how many of each count are in
+ * that country. Its rows come first.
  *
  * Answers are kept in memory for a few minutes per (function, industry, country), and rebuilt
  * when the signed-out build changes (lib/table.ts previewCompanies).
  */
+import { createHash, randomBytes } from "crypto";
 import { previewCompanies, type PreviewCompany } from "./table";
 import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES } from "./tableFields";
 import { titleWithout } from "./scan/clean";
@@ -32,8 +40,9 @@ import { countryName, countryOf, deriveAll, isFirm, isHire, isOpenRole, known, r
 import type { EngagementRec } from "./tableTypes";
 
 /**
- * The most companies with an open role that one answer names (name, domain and logo), counting
- * the example record. The rest come without a company, the way the app hides them.
+ * The most companies with an open role the preview names (name, domain and logo), in all its
+ * answers together, counting the example record. The rest come without a company, the way the
+ * app hides them.
  */
 export const PREVIEW_OPEN_NAMED = 3;
 
@@ -73,7 +82,10 @@ export interface PreviewCompanyOut {
 }
 
 export interface PreviewRow {
-  /** Opaque and stable per company (an HMAC of the internal id). A key for the page, nothing more. */
+  /**
+   * Opaque. A key for the page, nothing more. Stable per company on a row that names it (an HMAC
+   * of the internal id). On a row whose company is withheld it is made for this answer alone.
+   */
   seed: string;
   /**
    * "open": an open role now. "hired": a seat in this function that a fractional held (or, where
@@ -81,7 +93,7 @@ export interface PreviewRow {
    * "notyet": a company that hired fractionals in other functions and none in this one.
    */
   kind: "open" | "hired" | "notyet";
-  /** Null for a row past PREVIEW_NAMED (`blur`), and for a company with an open role past the PREVIEW_OPEN_NAMED named ones. */
+  /** Null for a row past PREVIEW_NAMED (`blur`), and for a company with an open role outside the PREVIEW_OPEN_NAMED named ones. */
   company: PreviewCompanyOut | null;
   /** A row past PREVIEW_NAMED: the page blurs a made-up name from `seed`. Never the company. */
   blur?: boolean;
@@ -119,6 +131,7 @@ export interface PreviewAnswer {
   /** Rows the tab has in all (the answer carries the first PREVIEW_ROWS). */
   total: number;
   industry: string | null;
+  /** The picked country. Companies whose country isn't on file yet stay in every count and tab (see `inCountry`). */
   country: string | null;
   counts: {
     /** Companies that hired a fractional in this function. */
@@ -139,6 +152,11 @@ export interface PreviewAnswer {
     /** Companies that hired any fractional. */
     anyHire: number;
   };
+  /**
+   * With a country picked: how many of each count are in that country. The rest of each count
+   * are companies whose country isn't on file yet. Null when no country is picked.
+   */
+  inCountry: { hired: number; notYet: number; hiring: number; holders: number; all: number } | null;
   /** The first PREVIEW_NAMED name their company, the rest are `blur` rows. */
   rows: PreviewRow[];
   /** The hero's example record, the same for every function. Null when nothing on file fits. */
@@ -156,12 +174,18 @@ interface Source {
   infos: { i: CoInfo; p: PreviewCompany }[];
   options: PreviewAnswer["options"];
   example: PreviewExample | null;
-  /** The example's company has an open role: its seed, which takes one of the named open-role slots. */
-  exampleOpenSeed: string | null;
+  /**
+   * The companies with an open role that the preview names, by seed: at most `cap`, the same in
+   * every answer this source gives. The example's company first when it has an open role.
+   */
+  namedOpen: Set<string>;
   cap: number;
 }
 let source: Source | null = null;
 const answers = new Map<string, { at: number; a: PreviewAnswer }>();
+/** Seeds of withheld rows are made per answer with this, new each time the server starts. */
+const SEED_SALT = randomBytes(16);
+const answerSeed = (seed: string, key: string) => createHash("sha256").update(SEED_SALT).update(`${key}\u0000${seed}`).digest("base64url").slice(0, 14);
 
 const fnOf = (e: EngagementRec) => shown(e.cells.function);
 const countryOfInfo = (i: CoInfo) => {
@@ -274,10 +298,27 @@ async function sourceNow(): Promise<Source> {
   const industries = [...groups, ...RN_INDUSTRIES.filter((x) => (ind.get(x) ?? 0) >= OPTION_MIN)];
   const countries = [...ctry.entries()].filter(([, n]) => n >= OPTION_MIN).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([c]) => c);
   const ex = pickExample(infos, cap > 0);
-  source = { version, infos, options: { functions: PREVIEW_FUNCTIONS, industries, countries }, example: ex?.x ?? null, exampleOpenSeed: ex?.seed ?? null, cap };
+  // The open-role companies the preview names, once for every answer: the example's, then those
+  // behind the newest open roles Try it lists (industry and revenue on file, a function it offers).
+  const namedOpen = new Set<string>();
+  if (cap > 0 && ex?.seed) namedOpen.add(ex.seed);
+  const newest = infos
+    .filter(({ i }) => listedCo(i))
+    .map(({ i, p }) => ({ seed: p.seed, role: newestOpen(i.engs.filter((e) => isOpenRole(e) && PREVIEW_FUNCTIONS.includes(fnOf(e) ?? ""))) }))
+    .filter((x) => x.role)
+    .map((x) => ({ seed: x.seed, at: x.role.posted ?? x.role.opened ?? "" }))
+    .sort((a, b) => b.at.localeCompare(a.at) || a.seed.localeCompare(b.seed));
+  for (const x of newest) {
+    if (namedOpen.size >= cap) break;
+    namedOpen.add(x.seed);
+  }
+  source = { version, infos, options: { functions: PREVIEW_FUNCTIONS, industries, countries }, example: ex?.x ?? null, namedOpen, cap };
   answers.clear();
   return source;
 }
+
+/** Try it lists only companies with their industry and revenue on file (the owner's rule): a row with those blank tells a visitor too little. */
+const listedCo = (i: CoInfo) => !!shown(i.c.cells.industry) && !!shown(i.c.cells.revenue);
 
 /** A query value checked against its list. Empty means any. Anything else not on the list is refused. */
 function pick(raw: string | null | undefined, list: readonly string[], what: string): string | null {
@@ -302,44 +343,40 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
   const group = industry ? INDUSTRY_GROUPS.find((g) => g.label === industry)?.values ?? [industry] : null;
   const inScope = src.infos.filter(({ i }) => {
     if (group && !group.includes(shown(i.c.cells.industry) ?? "")) return false;
-    if (country && countryOfInfo(i) !== country) return false;
+    // A company whose country isn't on file stays in, as in the app's Ideal Fractional Profile. Only another country leaves.
+    const c = country ? countryOfInfo(i) : null;
+    if (c && c !== country) return false;
     return true;
   });
 
   const counts = { hired: 0, notYet: 0, hiring: 0, holders: 0, all: 0, repeat: 0, anyHire: 0 };
+  /** The same counts for the companies in the picked country (the rest have no country on file). */
+  const here = { hired: 0, notYet: 0, hiring: 0, holders: 0, all: 0 };
 
-  // The companies with an open role this answer names: the example's, then those behind the
-  // newest open roles in this function and scope, up to the cap. The same on every tab.
-  const namedOpen = new Set<string>();
-  if (src.cap > 0 && src.exampleOpenSeed) namedOpen.add(src.exampleOpenSeed);
-  const newest = inScope
-    .map(({ i, p }) => ({ seed: p.seed, role: newestOpen(i.engs.filter((e) => isOpenRole(e) && fnOf(e) === fn)) }))
-    .filter((x) => x.role)
-    .map((x) => ({ seed: x.seed, at: x.role.posted ?? x.role.opened ?? "" }))
-    .sort((a, b) => b.at.localeCompare(a.at));
-  for (const x of newest) {
-    if (namedOpen.size >= src.cap) break;
-    namedOpen.add(x.seed);
-  }
-
-  const open: { row: PreviewRow; at: string; p: PreviewCompany; raw: string | null }[] = [];
-  const past: { row: PreviewRow; at: string; rich: number }[] = [];
-  const notYet: { row: PreviewRow; at: string; rich: number }[] = [];
+  const open: { row: PreviewRow; at: string; p: PreviewCompany; raw: string | null; at0: boolean }[] = [];
+  const past: { row: PreviewRow; at: string; rich: number; at0: boolean }[] = [];
+  const notYet: { row: PreviewRow; at: string; rich: number; at0: boolean }[] = [];
   for (const { i, p } of inScope) {
     const { hired, hiring } = i.fnState;
+    // In the picked country (on file as that country): these rows come first, and `here` counts them.
+    const at0 = !!country && countryOfInfo(i) === country;
+    const add = (k: keyof typeof here) => {
+      counts[k]++;
+      if (at0) here[k]++;
+    };
     const openHere = i.engs.filter((e) => isOpenRole(e) && fnOf(e) === fn);
     const seats = i.engs.filter((e) => isHire(e) && fnOf(e) === fn);
     const held = seats.filter((e) => known(e.cells.operator));
-    if (hired.includes(fn)) counts.hired++;
+    if (hired.includes(fn)) add("hired");
     // Counted the way the app's Function filter and "Seat holder on file" count a company: any seat in this function.
-    if (i.engs.some((e) => fnOf(e) === fn && known(e.cells.operator))) counts.holders++;
+    if (i.engs.some((e) => fnOf(e) === fn && known(e.cells.operator))) add("holders");
     if (hired.length) counts.anyHire++;
     const none = hired.length > 0 && !hired.includes(fn) && !hiring.includes(fn) && !openHere.length;
-    if (none) counts.notYet++;
-    if (openHere.length) counts.hiring++;
+    if (none) add("notYet");
+    if (openHere.length) add("hiring");
     if (repeatHirer(i)) counts.repeat++;
-    // A company with any open role is hidden in the app: named here only when it is one of the few above.
-    const named = !i.engs.some(isOpenRole) || namedOpen.has(p.seed);
+    // A company with any open role is hidden in the app: named here only when it is one of the few the source picked.
+    const named = !i.engs.some(isOpenRole) || src.namedOpen.has(p.seed);
     const base = {
       seed: p.seed,
       function: fn,
@@ -355,17 +392,17 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       const others = hired.filter((f) => f !== "Other");
       const list = others.length ? (others.length > 2 ? `${others.slice(0, 2).join(", ")} and more` : others.join(" and ")) : "other functions";
       const last = i.engs.filter(isHire).map((e) => shown(e.cells.start) ?? "").sort().pop() || null;
-      notYet.push({ row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, type: null, when: monthOf(last) }, at: last ?? "", rich: rich0 + Math.min(others.length, 3) });
+      notYet.push({ row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, type: null, when: monthOf(last) }, at: last ?? "", rich: rich0 + Math.min(others.length, 3), at0 });
       continue;
     }
     // One row per company: its newest open role in this function, else its latest seat in it.
     const role = newestOpen(openHere);
     if (role) {
-      counts.all++;
+      add("all");
       if (view === "notyet") continue;
       const when = role.posted ?? role.opened ?? null;
       const raw = role.cells.role?.s === "value" && !role.cells.role.system ? role.cells.role.v : null;
-      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, named), type: shown(role.cells.type) ?? null, when }, at: when ?? "", p, raw });
+      open.push({ row: { ...base, kind: "open", title: roleTitle(role, p, fn, named), type: shown(role.cells.type) ?? null, when }, at: when ?? "", p, raw, at0 });
       continue;
     }
     // Every other company the app's Function filter finds for this function: its fractional seat
@@ -373,7 +410,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     if (!i.fns.includes(fn)) continue;
     const anyHere = i.engs.filter((e) => !isOpenRole(e) && fnOf(e) === fn);
     const seat = held[0] ?? seats[0] ?? anyHere.find((e) => known(e.cells.operator)) ?? anyHere[0] ?? null;
-    counts.all++;
+    add("all");
     if (view !== "all") continue;
     const start = seat ? shown(seat.cells.start) : null;
     const row: PreviewRow = {
@@ -385,24 +422,38 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       holder: !!seat && known(seat.cells.operator),
     };
     const rich = (row.company?.logo ? 3 : 0) + (row.holder ? 4 : 0) + Number(!!row.industry) + Number(!!row.employees) + Number(!!row.country);
-    past.push({ row, at: start ?? "", rich });
+    past.push({ row, at: start ?? "", rich, at0 });
   }
-  open.sort((a, b) => b.at.localeCompare(a.at));
+  // With a country picked, the companies on file there come first, then those whose country isn't on file yet.
+  const first = (a: { at0: boolean }, b: { at0: boolean }) => Number(b.at0) - Number(a.at0);
+  open.sort((a, b) => first(a, b) || b.at.localeCompare(a.at));
   // Newest seat first and undated ones last, so the dates run down the table in one order; then the rows that say the most.
-  past.sort((a, b) => b.at.localeCompare(a.at) || b.rich - a.rich);
-  notYet.sort((a, b) => b.rich - a.rich || b.at.localeCompare(a.at));
-  // Only companies with their industry and revenue on file are listed (the owner's rule): a row
-  // with those blank tells a visitor too little. The counts above still cover every company.
+  past.sort((a, b) => first(a, b) || b.at.localeCompare(a.at) || b.rich - a.rich);
+  notYet.sort((a, b) => first(a, b) || b.rich - a.rich || b.at.localeCompare(a.at));
+  // Only companies with their industry and revenue on file are listed (the owner's rule, listedCo).
+  // The counts above still cover every company, and they are what the page shows.
   const listed = (x: { row: PreviewRow }) => !!x.row.industry && !!x.row.revenue;
   const all: { row: PreviewRow; p?: PreviewCompany; raw?: string | null }[] = (view === "notyet" ? notYet : [...open, ...past]).filter(listed);
   const rows = all.slice(0, PREVIEW_ROWS).map((x, n): PreviewRow => {
-    if (n < PREVIEW_NAMED) return x.row;
+    if (n < PREVIEW_NAMED) return x.row.company ? x.row : { ...x.row, seed: answerSeed(x.row.seed, key) };
     // Past the named rows: no company, and an open role's title loses any trace of it.
     const title = x.row.kind === "open" && x.p && x.raw ? safeTitle(x.raw, x.p, fn) : x.row.title;
-    return { ...x.row, company: null, blur: true, title };
+    return { ...x.row, company: null, blur: true, title, seed: answerSeed(x.row.seed, key) };
   });
 
-  const a: PreviewAnswer = { fn, view, total: all.length, industry, country, counts, rows, example: src.example, openRoleCompanies: src.cap > 0, options: src.options };
+  const a: PreviewAnswer = {
+    fn,
+    view,
+    total: all.length,
+    industry,
+    country,
+    counts,
+    inCountry: country ? here : null,
+    rows,
+    example: src.example,
+    openRoleCompanies: src.cap > 0,
+    options: src.options,
+  };
   if (answers.size >= ANSWER_MAX) answers.clear();
   answers.set(key, { at: Date.now(), a });
   return a;

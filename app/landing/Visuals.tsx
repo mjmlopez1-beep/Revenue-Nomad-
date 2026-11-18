@@ -187,8 +187,8 @@ export function HeroRecord({ example, intro = true, onJoin }: { example: Preview
               <span className="lp-val">On file</span>
               {seat.rnMember ? <span className="chip lp-member">Revenue Nomad member</span> : null}
             </Row>
-            <Row k="Name">
-              <Unlock onJoin={onJoin} what="who held the seat" />
+            <Row k="Name and role">
+              <Unlock onJoin={onJoin} what="who held the seat and the role they held" />
             </Row>
             <Row k="Rate">
               <Locked w={84} />

@@ -16,10 +16,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
 import { Brand, IconLock, Num, type View } from "../ui/shared";
-import { EARN_CAP, GROUPS, REFERRAL_BONUS, type Entity } from "@/lib/tableFields";
+import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
 import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
 import { Questions } from "./Questions";
+import { priceMatrix } from "./prices";
 import { contactOf, mailto, signInFailText } from "./contact";
 import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
 import TryIt, { type PreviewExample } from "./TryIt";
@@ -47,38 +48,8 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 /** Revenue Nomad's network, as the page says it. */
 const NETWORK = "500+";
 
-/**
- * Free and locked fields, read from the field definitions so this page can't drift from what
- * the table does. `more` adds what is not a field: the dates on an open role (free) and the
- * one unlock that reveals a hidden company.
- */
-const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[]; note?: string }[] = (
-  [
-    {
-      entity: "company",
-      label: "The company",
-      freeFirst: ["Name"],
-      note: "While a company has an open role, its name, website and LinkedIn are locked. One credit shows the company and its job posting, and the posted rate when there is one. When the role closes, everyone sees the company again. Try it on this page names a few hiring companies as a sample.",
-    },
-    {
-      entity: "engagement",
-      label: "The seat",
-      freeLast: ["Title of an open role", "Open and closed dates"],
-      note: "An open role's title is free while it is open. The role on a past seat costs 1 credit.",
-    },
-    { entity: "contact", label: "A hiring contact", note: "A person's name and title are one unlock. One credit shows both." },
-  ] as { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; note?: string }[]
-).map((row) => {
-  const fields = (GROUPS.find((g) => g.entity === row.entity)?.fields ?? []).filter((f) => !f.identity && !f.system);
-  return {
-    entity: row.entity,
-    label: row.label,
-    free: [...(row.freeFirst ?? []), ...fields.filter((f) => !f.gated).map((f) => f.label), ...(row.freeLast ?? [])],
-    // An open role's title is free (above), so the locked one is a past seat's.
-    locked: fields.filter((f) => f.gated).map((f) => (row.entity === "engagement" && f.key === "role" ? "Role of a past seat" : f.label)),
-    note: row.note,
-  };
-});
+/** Free and locked fields, one locked chip per purchase (prices.ts). */
+const MATRIX = priceMatrix();
 
 /**
  * First name of the member whose invite link brought this visitor here. Root saves the
@@ -324,7 +295,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 <DemoUnlock />
                 <div className="lp-step-body">
                   <h3>Spend a credit to see one</h3>
-                  <p>One credit shows one thing, like who held a seat or what it paid. It stays open for you.</p>
+                  <p>One credit opens one answer, like who held a seat and the role they held, or what a seat paid. It stays open for you.</p>
                 </div>
               </li>
               <li className="lp-step">

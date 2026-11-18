@@ -1481,6 +1481,14 @@ button.lp-fake-btn {
   letter-spacing: -0.02em;
   color: var(--pine);
 }
+/* With a country picked: how many of the count are in it, and how many have no country on file yet. */
+.lp-try-split {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
 .lp-try-holders {
   margin-top: 16px;
   font-size: 15px;
@@ -1728,16 +1736,6 @@ button.lp-fake-btn {
   width: 130px;
   vertical-align: middle;
 }
-.lp-try-foot .lp-tt-more {
-  flex: 1 1 100%;
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--ink);
-}
-.lp-tt-more strong {
-  font-weight: 800;
-}
-
 /* ---------- what you can do: the showcase (Showcase.tsx) ---------- */
 .lp-cost-earn.chip {
   border-color: transparent;

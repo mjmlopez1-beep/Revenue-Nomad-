@@ -6,6 +6,7 @@
  */
 import type { Cell, CompanyRec, EngagementRec, GOALS, Icp } from "@/lib/tableTypes";
 import { EMPTY_FILTERS, bestFit, criteriaOf, deriveAll, icpEmpty, icpTest, isFirm, isUnheldOpenRole, viewName, withIcpSpelled, type Filters } from "@/app/post/model";
+import { onboardingPlace } from "./place";
 
 /** A cell's value when the viewer can see it. */
 const val = (c: Cell | undefined) => (c && c.s === "value" ? c.v : null);
@@ -230,31 +231,19 @@ export function seatsAt(c: CompanyRec | null | undefined, fn: string | null): { 
 
 /* ---------- the weekly email offered at the end ---------- */
 
-/** Filters as the table writes them in an address (encodeFilters in app/post/TradingPost.tsx). */
-function encode(f: Filters): string {
-  const parts: string[] = [];
-  for (const k of Object.keys(EMPTY_FILTERS) as (keyof Filters)[]) {
-    const v = f[k];
-    if (typeof v === "boolean") {
-      if (v) parts.push(k);
-    } else if (typeof v === "number") {
-      if (v) parts.push(`${k}:${v}`);
-    } else if (Array.isArray(v) && v.length) parts.push(`${k}:${v.join("|")}`);
-  }
-  return parts.join("~");
-}
-
 /**
  * The saved view behind "Email me new Sales roles that fit my profile each week": Hiring now in
- * their function, with their Ideal Fractional Profile written out (a saved view keeps what it
- * showed). The same place, name and criteria Save this view would make on that screen.
+ * their function, with the Ideal Fractional Profile pill on, the place Save this view makes on
+ * that screen (onboardingPlace in place.ts). Only the function is a hard filter, so a company
+ * whose size or country isn't on file stays in, as the pill keeps it. The name and the weekly
+ * email's criteria spell the profile out.
  */
 export function alertView(fn: string | null, icp: Icp | null): { name: string; place: string; criteria: ReturnType<typeof criteriaOf> } {
-  const f = withIcpSpelled({ ...EMPTY_FILTERS, fn: named(fn) ? [fn!] : [], icp: !icpEmpty(icp) }, icp);
-  const q = new URLSearchParams();
-  q.set("v", "hiring");
-  q.set("t", "seats");
-  q.set("f", encode(f) || "-");
-  return { name: viewName(f, "hiring", "engagements"), place: q.toString(), criteria: criteriaOf(f, null) };
+  const pill: Filters = { ...EMPTY_FILTERS, fn: named(fn) ? [fn!] : [], icp: !icpEmpty(icp) };
+  const spelled = withIcpSpelled(pill, icp);
+  return { name: viewName(spelled, "hiring", "engagements"), place: onboardingPlace(fn, icpEmpty(icp) ? null : icp), criteria: criteriaOf(spelled, null) };
 }
+
+/** A view onboarding saved before the pill (the profile spelled out, so it opened empty): its place now (place.ts). */
+export { pillPlace } from "./place";
 

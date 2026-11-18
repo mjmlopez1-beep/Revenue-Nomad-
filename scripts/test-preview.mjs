@@ -7,9 +7,12 @@
  * country it offers. No public id either. Each answer names at most 10 companies: the rows after
  * the 10th carry no company at all (`company: null`, `blur: true`) and no company's name in their
  * title, so the page can only blur a made-up one. Of the companies with an open role (hidden in
- * the app until a member unlocks one), each answer names at most 3, rows and example record
- * together (lib/preview.ts PREVIEW_OPEN_NAMED); the rest come with no company and a title with no
- * trace of it. Run against a throwaway server on a FRESH data dir:
+ * the app until a member unlocks one), the preview names at most 3 IN ALL, rows and example record
+ * together, across every function, industry, country and tab, and the same 3 between requests
+ * (lib/preview.ts PREVIEW_OPEN_NAMED); the rest come with no company, a title with no trace of it
+ * and a seed made for that answer alone. A picked country keeps the companies whose country isn't
+ * on file, says how many are in that country (`inCountry`), and lists that country's first.
+ * Run against a throwaway server on a FRESH data dir:
  *
  *   BASE=http://localhost:4600 node scripts/test-preview.mjs
  *
@@ -180,7 +183,11 @@ async function main() {
   const ROWS_MAX = 25;
   const CO_KEYS = new Set(["name", "domain", "logo"]);
   const EX_KEYS = { top: new Set(["company", "open", "seat"]), company: new Set(["name", "domain", "logo", "industry", "employees", "revenue", "country"]), open: new Set(["title", "function", "when"]), seat: new Set(["function", "start", "rnMember"]) };
-  const TOP_KEYS = new Set(["fn", "view", "total", "industry", "country", "counts", "rows", "example", "openRoleCompanies", "options"]);
+  const TOP_KEYS = new Set(["fn", "view", "total", "industry", "country", "counts", "inCountry", "rows", "example", "openRoleCompanies", "options"]);
+  /** Every open-role company any answer named: the preview's one set, at most OPEN_NAMED_MAX. */
+  const openNamedUnion = new Set();
+  /** Seeds of rows whose company is withheld, by answer: no two answers may share one. */
+  const withheldSeeds = new Map();
   let namedRows = 0;
   let namedSlots = 0;
   let blurRows = 0;
@@ -211,7 +218,21 @@ async function main() {
     const lc = (n) => String(n).trim().toLowerCase();
     const openNamed = new Set([...(a.rows ?? []).map((r) => r.company?.name), a.example?.company?.name].filter((n) => n && names.has(lc(n))).map(lc));
     openNamedMost = Math.max(openNamedMost, openNamed.size);
+    for (const n of openNamed) openNamedUnion.add(n);
     if (openNamed.size > OPEN_NAMED_MAX) shape.push(`${label}: ${openNamed.size} open-role companies named`);
+    const key = `${a.fn}|${a.industry ?? ""}|${a.country ?? ""}|${a.view}`;
+    if (!withheldSeeds.has(key)) withheldSeeds.set(key, new Set((a.rows ?? []).filter((r) => !r.company).map((r) => r.seed)));
+    // A picked country keeps the companies whose country isn't on file: no row is in another country, and
+    // that country's rows come first among the open roles, and among the past seats (open roles lead).
+    if (a.country) {
+      if ((a.rows ?? []).some((r) => r.country && r.country !== a.country)) shape.push(`${label}: a row in another country`);
+      for (const kind of ["open", "hired", "notyet"]) {
+        const ctry = (a.rows ?? []).filter((r) => r.kind === kind).map((r) => r.country);
+        if (ctry.some((x, n) => x === a.country && n > 0 && ctry[n - 1] !== a.country)) shape.push(`${label}: a ${kind} row in ${a.country} after one with no country`);
+      }
+      const ic = a.inCountry;
+      if (!ic || ["hired", "notYet", "hiring", "holders", "all"].some((k) => !Number.isInteger(ic[k]) || ic[k] < 0 || ic[k] > a.counts?.[k])) shape.push(`${label}: inCountry ${JSON.stringify(ic)}`);
+    } else if (a.inCountry !== null) shape.push(`${label}: inCountry with no country picked`);
     // Every other open-role company: not named anywhere in the answer, not even in a title.
     const shownHosts = [...(a.rows ?? []).flatMap((r) => [r.company?.domain, r.company?.logo]), a.example?.company?.domain, a.example?.company?.logo].filter(Boolean).map(lc);
     for (const h of hosts) if (low.includes(h) && !shownHosts.some((d) => d === h || h.endsWith(`.${d}`) || d.endsWith(`.${h}`))) leaks.push(`${label}: a kept-back open-role company's domain`);
@@ -259,7 +280,7 @@ async function main() {
   check("the preview answers for Sales", first.status === 200 && first.json?.counts && Array.isArray(first.json.rows), first.text.slice(0, 200));
   const opts = first.json?.options ?? { functions: [], industries: [], countries: [] };
   for (const x of [...opts.functions, ...opts.industries, ...opts.countries]) allowed.add(x.toLowerCase());
-  for (const w of ["fractional", "interim", "sales", "marketing", "head", "lead", "leader", "vp", "chief", "officer", "director", "seat", "role", "hired", "more", "other functions"]) allowed.add(w);
+  for (const w of ["fractional", "interim", "sales", "marketing", "head", "lead", "leader", "vp", "chief", "officer", "director", "seat", "role", "hired", "more", "other functions", "other", "functions"]) allowed.add(w);
   check("it offers every function but Other, and industries and countries", opts.functions.length >= 15 && !opts.functions.includes("Other") && opts.industries.length > 0 && opts.countries.length > 0, JSON.stringify(opts).slice(0, 200));
   inspect("Sales", first.json, first.text);
 
@@ -277,7 +298,9 @@ async function main() {
     const openNamedSales = openSales.filter((r) => r.company);
     check("Sales has more open roles than it names, and names at most 3 of them, the newest", openSales.length >= 6 && openNamedSales.length >= 1 && openNamedSales.length <= 3 && openSales.slice(0, openNamedSales.length).every((r) => r.company), openSales.map((r) => `${r.when} ${r.company?.name ?? "-"}`).join(" | "));
     const kept = openSales.filter((r) => !r.company && !r.blur);
-    check("the other open roles keep their title, with no trace of the company", kept.length >= 2 && kept.every((r) => /fractional head of sales/i.test(r.title) && !/quillfern/i.test(r.title)), kept.map((r) => r.title).join(" | "));
+    // A real open role from the seed can sit among the test's own (it depends on the day), so the titles checked are the test's.
+    const ours = kept.filter((r) => /fractional head of sales/i.test(r.title));
+    check("the other open roles keep their title, with no trace of the company", ours.length >= 2 && kept.every((r) => !/quillfern/i.test(r.title)), kept.map((r) => r.title).join(" | "));
     check("open-role companies shown: no posting link and no posted rate with it", !/jobs\.example\.com|\$175\/hr|\$9k\/mo/i.test(first.text + mk.text));
   }
   check("a past seat's row says only that a seat holder is on file", sales.filter((r) => r.kind === "hired").every((r) => /^(Fractional )?Sales seat$/.test(r.title) && (r.holder === undefined || typeof r.holder === "boolean")));
@@ -298,6 +321,88 @@ async function main() {
         inspect(label, r.json, r.text);
       });
     }
+  }
+  /**
+   * The cap of 3 is for the whole preview, not one answer: every function with the other two tabs
+   * in each country; every withheld open role asked about with its own industry and country (the
+   * way someone would try to name it); and a fixed sample of function, industry, country and tab
+   * together. However they are picked, no open-role company outside the one set is named.
+   */
+  const asked = new Set();
+  const ask = async (qs) => {
+    const todo = qs.filter((q) => {
+      const k = `${q.fn}|${q.ind ?? ""}|${q.country ?? ""}|${q.view ?? "all"}`;
+      if (asked.has(k)) return false;
+      asked.add(k);
+      return true;
+    });
+    for (let i = 0; i < todo.length; i += 16) {
+      const batch = todo.slice(i, i + 16);
+      const rs = await Promise.all(batch.map((q) => preview(q)));
+      rs.forEach((r, n) => {
+        const q = batch[n];
+        const label = `${q.fn}/${q.ind ?? "any"}/${q.country ?? "any"}/${q.view ?? "all"}`;
+        if (r.status !== 200) return shape.push(`${label}: status ${r.status}`);
+        inspect(label, r.json, r.text);
+      });
+    }
+    return todo.length;
+  };
+  let combos = 0;
+  if (!LOCKED) {
+    const withheld = [];
+    const fnQs = [];
+    for (const fn of opts.functions)
+      for (const view of ["hiring", "notyet"])
+        for (const country of opts.countries) fnQs.push({ fn, country, view });
+    combos += await ask(fnQs);
+    // Each open role kept back so far, asked with its own industry and country, on every tab.
+    for (const fn of opts.functions) {
+      const r = await preview({ fn, view: "hiring" });
+      for (const row of r.json?.rows ?? []) if (row.kind === "open" && !row.company) withheld.push({ fn, ind: row.industry, country: row.country });
+    }
+    const own = [];
+    for (const w of withheld) {
+      const ind = opts.industries.find((x) => x === w.ind) ?? null;
+      const country = opts.countries.find((x) => x === w.country) ?? null;
+      for (const view of ["all", "hiring", "notyet"]) {
+        if (ind) own.push({ fn: w.fn, ind, view });
+        if (ind && country) own.push({ fn: w.fn, ind, country, view });
+        if (country) own.push({ fn: w.fn, country, view });
+      }
+    }
+    combos += await ask(own);
+    // A fixed sample of everything together (the same each run).
+    // mulberry32, seeded: the same sample on every run.
+    let s = 7;
+    const rnd = (n) => {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = Math.imul(s ^ (s >>> 15), s | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) % n;
+    };
+    const sample = [];
+    for (let k = 0; k < 400; k++) {
+      const fn = opts.functions[rnd(opts.functions.length)];
+      const ind = rnd(4) ? opts.industries[rnd(opts.industries.length)] : undefined;
+      const country = rnd(3) ? opts.countries[rnd(opts.countries.length)] : undefined;
+      sample.push({ fn, ind, country, view: ["all", "hiring", "notyet"][rnd(3)] });
+    }
+    combos += await ask(sample);
+  }
+  check(
+    LOCKED
+      ? "no open-role company is named in any answer"
+      : `across every function, industry, country and tab (${answers} answers, ${combos} of them combined filters), at most ${OPEN_NAMED_MAX} open-role companies are named in all`,
+    openNamedUnion.size <= OPEN_NAMED_MAX && (LOCKED || (openNamedUnion.size > 0 && combos > 500)),
+    [...openNamedUnion].length,
+  );
+  {
+    // A withheld row's seed is made for its answer: the same seed in two answers would let them be matched up.
+    const seen = new Map();
+    let shared = 0;
+    for (const [k, seeds] of withheldSeeds) for (const sd of seeds) seen.has(sd) && seen.get(sd) !== k ? shared++ : seen.set(sd, k);
+    check("a row whose company is withheld carries a seed of its own answer, never one another answer shares", shared === 0 && seen.size > 0, shared);
   }
   check(`no person, email, phone, LinkedIn, posting, rate or id in any of ${answers} answers (${rowsSeen} rows)${LOCKED ? ", and no open-role company" : ""}`, leaks.length === 0, `${leaks.length} found, first ${leaks.slice(0, 3).join("; ")}`);
   check("every answer has only the fields the preview promises", shape.length === 0, shape.slice(0, 5).join("; "));
@@ -323,6 +428,40 @@ async function main() {
   check("every listed row has its industry and revenue on file", [tAll, tHiring, tNot].every((x) => (x.json?.rows ?? []).every((r) => r.industry && r.revenue)));
   const badView = await preview({ fn: "Sales", view: "everything" });
   check("a tab not on the list is refused", badView.status === 400 && !badView.json?.rows, badView.status);
+
+  // The same open-role companies between requests, and after the table changes (any change rebuilds what the preview reads).
+  if (!LOCKED) {
+    const namedNow = async () => {
+      const rs = await Promise.all([{ fn: "Sales" }, { fn: "Sales", view: "hiring" }, { fn: "Marketing", view: "hiring" }].map((q) => preview(q)));
+      const set = new Set();
+      for (const r of rs) for (const n of [...(r.json?.rows ?? []).map((x) => x.company?.name), r.json?.example?.company?.name]) if (n && names.has(String(n).trim().toLowerCase())) set.add(String(n).trim().toLowerCase());
+      return [...set].sort().join(" | ");
+    };
+    const before = await namedNow();
+    const q1 = companies.find((x) => /quillfern/i.test(x.name ?? ""));
+    const fill = q1 ? await call("POST", "/api/table", { token, body: { action: { type: "fill", entity: "company", id: q1.id, field: "hq", value: "Boise, ID" } } }) : null;
+    const again = await namedNow();
+    check("the same open-role companies are named between requests and after the table changes", before.length > 0 && before === again && fill?.status === 200, { same: before === again, fill: fill?.status });
+  }
+
+  // A picked country keeps the companies whose country isn't on file, and says how many are in it.
+  {
+    const us = opts.countries.includes("United States") ? "United States" : opts.countries[0];
+    const [anyC, inC, inCHiring] = await Promise.all([preview({ fn: "Sales" }), preview({ fn: "Sales", country: us }), preview({ fn: "Sales", country: us, view: "hiring" })]);
+    const a0 = anyC.json?.counts ?? {};
+    const a1 = inC.json?.counts ?? {};
+    const ic = inC.json?.inCountry ?? {};
+    check(
+      `a country keeps the companies with no country on file: ${us} answers ${a1.hired} hired, ${ic.hired} of them in ${us}`,
+      a1.hired > ic.hired && a1.hired <= a0.hired && a1.all <= a0.all && a1.all > ic.all && ic.hired > 0 && anyC.json?.inCountry === null,
+      { any: a0.hired, kept: a1.hired, inCountry: ic.hired },
+    );
+    check(
+      "its rows include that country's companies (first in each kind, checked above), and the hiring tab counts roles with no country on file too",
+      (inC.json?.rows ?? []).some((r) => r.country === us) && (inCHiring.json?.counts?.hiring ?? 0) >= (inCHiring.json?.inCountry?.hiring ?? 0) && inCHiring.json?.inCountry !== null,
+      (inC.json?.rows ?? []).slice(0, 3).map((r) => r.country),
+    );
+  }
 
   // Counts hang together.
   const c = first.json?.counts ?? {};

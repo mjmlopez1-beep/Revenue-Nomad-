@@ -30,6 +30,30 @@ const seed = {
   contacts: [],
 };
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
+// A state from before: Ned's saved view from onboarding spelled his profile out as hard filters (it opened
+// empty), and he saved another view himself. On load the first opens with the profile pill on.
+const ICP = { industries: ["SaaS"], employees: ["11–50"], revenue: [], countries: ["United States"] };
+const OLD_PLACE = new URLSearchParams({ v: "hiring", t: "seats", f: "industry:SaaS~employees:11–50~fn:Sales~country:United States" }).toString();
+const OWN_PLACE = "v=all&t=companies&f=industry:SaaS";
+const before = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+writeFileSync(
+  path.join(dir, "intel.json"),
+  JSON.stringify({
+    ledger: [],
+    values: {},
+    profiles: { m5: { function: "Sales", icp: ICP, onboarded: true } },
+    connector: {
+      clients: [],
+      grants: [],
+      alerts: {
+        m5: [
+          { id: "al_old", name: "Sales roles at SaaS companies", function: "Sales", industry: ["SaaS"], employees: ["11–50"], country: ["United States"], createdAt: before, place: OLD_PLACE, email: true },
+          { id: "al_own", name: "SaaS companies", industry: ["SaaS"], createdAt: before, place: OWN_PLACE, email: false },
+        ],
+      },
+    },
+  }),
+);
 Object.assign(process.env, {
   RN_DATA_DIR: dir,
   RN_INTEL_SEED: path.join(dir, "intel-seed.json"),
@@ -78,6 +102,17 @@ async function main() {
   const adminDigest = async () => (await t.buildView("tok-ada")).admin!.digest;
 
   check("pilot metrics say the weekly email is on", (await adminDigest()).enabled === true);
+
+  // The saved view onboarding made before the pill now opens with it (only the function a hard filter); the member's own view is untouched.
+  const { alertView } = await import("../app/onboard/suggest");
+  const nedViews = (await t.buildView("tok-ned")).me?.savedViews ?? [];
+  const oldOne = nedViews.find((v) => v.id === "al_old");
+  check(
+    "an onboarding view saved with the profile spelled out opens with the profile pill on now",
+    oldOne?.place === alertView("Sales", ICP).place && new URLSearchParams(oldOne.place ?? "").get("f") === "fn:Sales~icp" && oldOne.criteria.industry?.[0] === "SaaS" && oldOne.email === true,
+    oldOne,
+  );
+  check("a view the member saved themselves keeps its place", nedViews.find((v) => v.id === "al_own")?.place === OWN_PLACE, nedViews.map((v) => v.place));
   check("no email in a week with no new roles", (await t.sendDigests(at(0))) === 0 && outbox.length === 0, outbox.length);
 
   await t.perform("tok-opal", { type: "settings", digest: false });
@@ -96,7 +131,7 @@ async function main() {
   check("a saved search with new matches is in that member's email data", JSON.stringify(mo?.alerts) === JSON.stringify([{ name: "Fractional Marketing roles", n: 1 }]), mo?.alerts);
   check("a member without saved searches has none", Array.isArray(sal?.alerts) && sal!.alerts!.length === 0, sal?.alerts);
   const moMail = (await import("../lib/digest")).renderDigest(mo!);
-  check("the email lists the saved search and its new roles", moMail.text.includes("Your saved searches\n  Fractional Marketing roles  1 new") && moMail.html.includes("Fractional Marketing roles") && !moMail.text.includes("RevOps roles in Texas"), moMail.text);
+  check("the email lists the saved view and its new roles", moMail.text.includes("Your saved views\n  Fractional Marketing roles  1 new") && moMail.html.includes("Fractional Marketing roles") && !moMail.text.includes("RevOps roles in Texas"), moMail.text);
   check("the email never names the company of a saved search's match", !moMail.text.includes("Gamma Co") && !moMail.html.includes("Gamma Co"));
   check("everyone with an email who hasn't opted out is on the list", list.map((x) => x.memberId).sort().join() === "m1,m2,m4,m6", list.map((x) => x.memberId));
   delete process.env.RN_DIGEST_ALL;
@@ -109,6 +144,40 @@ async function main() {
   check("facts missing on the member's own seats are counted", sal?.seatFactsMissing === 13 && mo?.seatFactsMissing === 0, { sal: sal?.seatFactsMissing, mo: mo?.seatFactsMissing });
   check("credits, function and links are the member's own", sal?.credits === 25 && sal.function === "Sales" && sal.appUrl === BASE && sal.unsubscribeUrl.startsWith(`${BASE}/api/table/unsubscribe?m=m_`) && sal.unsubscribeUrl !== mo?.unsubscribeUrl, sal);
   check("the app link carries no sign-in code", !sal?.appUrl.includes("tok-") && !sal?.unsubscribeUrl.includes("tok-"));
+
+  // The button opens the list the headline counts: Hiring now in the member's function, with the profile off (f names it).
+  const place = (u: string | undefined) => (u ? new URL(u) : null);
+  const salList = place(sal?.rolesUrl);
+  check(
+    "the button opens Hiring now on seats in the member's function, the list the email counted",
+    salList?.origin === BASE && salList.searchParams.get("v") === "hiring" && salList.searchParams.get("t") === "seats" && salList.searchParams.get("f") === "fn:Sales" && place(mo?.rolesUrl)?.searchParams.get("f") === "fn:Marketing",
+    [sal?.rolesUrl, mo?.rolesUrl],
+  );
+  const ada = list.find((x) => x.memberId === "m6")?.data;
+  const adaList = place(ada?.rolesUrl);
+  check(
+    "a member with no new roles in a function of theirs gets every function's new roles (all functions, no filter)",
+    ada?.newRolesMine === 0 && adaList?.searchParams.get("af") === "1" && adaList.searchParams.get("f") === "-" && ada.roles?.length === 3,
+    { rolesUrl: ada?.rolesUrl, roles: ada?.roles?.length, mine: ada?.newRolesMine },
+  );
+  // Up to 5 roles, free facts only: the title, function, industry, size, region and listed day, linked to the record. Never the company.
+  const salRoles = sal?.roles ?? [];
+  check(
+    "the email data lists the member's new roles in free facts only, each linked to its record over that list",
+    salRoles.length === 2 &&
+      salRoles.every((r) => r.function === "Sales" && /^Fractional (VP|Head of) Sales$/.test(r.title) && r.url.startsWith(`${sal!.rolesUrl}&c=`) && /^\d{4}-\d{2}-\d{2}$/.test(r.listed ?? "")) &&
+      salRoles.every((r) => Object.keys(r).sort().join() === "employees,function,industry,listed,region,title,url"),
+    salRoles,
+  );
+  check("no company name anywhere in the roles the email lists", !JSON.stringify([sal?.roles, mo?.roles, ada?.roles]).match(/Acme|Beta Co|Gamma Co/), [sal?.roles, mo?.roles]);
+  const salMail = (await import("../lib/digest")).renderDigest(sal!);
+  check(
+    "the email shows each role with a link to its record, and the button links to the counted list",
+    salMail.text.includes("Fractional VP Sales") && salMail.text.includes(salRoles[0]?.url ?? "-") && salMail.html.includes(sal!.rolesUrl!.replace(/&/g, "&amp;")) && salMail.html.includes(salRoles[0]?.url.replace(/&/g, "&amp;") ?? "-"),
+    salMail.text,
+  );
+  check("the rendered email never names a company it counted", !/Acme|Beta Co|Gamma Co/.test(salMail.text + salMail.html + moMail.text + moMail.html));
+  check("a locked role says the credit shows which company is hiring (the hiring contact is a separate unlock)", /to see which company is hiring/.test(moMail.text) && !/see who is hiring/.test(moMail.text + salMail.text), moMail.text.split("\n")[2]);
 
   failFor = "flo@example.com";
   const n1 = await t.sendDigests(at(0));
@@ -139,7 +208,9 @@ async function main() {
   check("a week with no new roles sends nothing", week2 === 0 && (await t.sendDigests(at(14))) === 0, week2);
 
   outbox.length = 0;
-  await t.applyScan({ roles: [role(5, "Epsilon Co", "Fractional CRO", "Sales")], sources: clean }, at(21));
+  await t.applyScan({ roles: [role(5, "Epsilon Co", "Fractional CRO at Epsilon Co", "Sales")], sources: clean }, at(21));
+  const wk3 = (await t.digestList(at(21), BASE)).find((x) => x.memberId === "m1")?.data;
+  check("a role whose title names its company is listed without the name", wk3?.roles?.length === 1 && /^Fractional CRO/.test(wk3.roles[0].title) && !/Epsilon/i.test(JSON.stringify(wk3.roles)), wk3?.roles);
   process.env.RN_DIGEST = "0";
   check("RN_DIGEST=0 keeps it off", (await t.sendDigests(at(21))) === 0 && outbox.length === 0 && (await adminDigest()).enabled === false);
   delete process.env.RN_DIGEST;

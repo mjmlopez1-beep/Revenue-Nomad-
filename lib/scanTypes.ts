@@ -101,4 +101,26 @@ export interface DigestData {
   alerts?: { name: string; n: number }[];
   appUrl: string;
   unsubscribeUrl: string;
+  /**
+   * The list the headline counts, in the app: Hiring now in the member's function with the
+   * profile off, newest first (every function when the headline counts every new role).
+   */
+  rolesUrl?: string;
+  /** Up to 5 of the roles the headline counts, newest first, in free facts only (DigestRole). */
+  roles?: DigestRole[];
+}
+
+/** One new open role in the weekly email: free facts only, never the company or a locked fact. */
+export interface DigestRole {
+  /** The open role's title (free while it is open), with the company's name and site taken out. */
+  title: string;
+  function: string | null;
+  industry: string | null;
+  employees: string | null;
+  /** The HQ's region and country ("Texas, US"), never the city. Null when not on file. */
+  region: string | null;
+  /** The ISO day it was first listed. */
+  listed: string | null;
+  /** Its company's record in the app, over the list the headline counts. */
+  url: string;
 }
