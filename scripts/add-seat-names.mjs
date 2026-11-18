@@ -13,7 +13,10 @@
  * hex of HMAC-SHA256(key, "seat-scan:" + seat_id)), or by the first batch's id ("e_ss_" + the
  * seat_id's letters and digits).
  *
- * Only rows whose country is "United States" are read. The name is cleaned (lib/personName.ts):
+ * Only rows whose country is exactly "United States" are named. A seat named from a public profile
+ * whose row says the holder is elsewhere loses that name, and the run stops without writing if any
+ * seat outside the United States would still carry one (it prints that count, which must be 0).
+ * The name is cleaned (lib/personName.ts):
  * pronouns, credentials, emoji, nicknames and decoration go, and what is left must read as a first
  * and last name written out; a row whose name doesn't is skipped and counted. The seat gets the name
  * as its seat holder (fields.operator) and the marker holderFrom "public profile": the name is
@@ -133,6 +136,32 @@ for (const r of rows) {
   counts.named++;
 }
 
+// The owner's rule: no name for anyone based outside the United States. A seat named from a public
+// profile whose row in this file is outside the United States (the holder moved, or an older file
+// said otherwise) loses that name. A member's claim lives in the state and is not touched.
+let takenOff = 0;
+const outsideUs = (r) => String(r.country ?? "").trim() !== "United States";
+for (const r of rows) {
+  if (!outsideUs(r)) continue;
+  const sid = String(r.seat_id ?? "").trim();
+  const e = sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
+  if (e && e.holderFrom === "public profile") {
+    delete e.fields.operator;
+    delete e.holderFrom;
+    takenOff++;
+  }
+}
+const namedOutsideUs = rows.filter((r) => {
+  if (!outsideUs(r)) return false;
+  const sid = String(r.seat_id ?? "").trim();
+  const e = sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
+  return !!e && (e.holderFrom === "public profile" || (e.fields?.source === "Seat scan" && !!e.fields?.operator));
+}).length;
+if (namedOutsideUs) {
+  console.error(`${namedOutsideUs} seats outside the United States would carry a name. Nothing was written.`);
+  process.exit(1);
+}
+
 if (!dryRun) writeFileSync(seedPath, JSON.stringify(seed, null, 1));
 
 const matched = counts.matchedHashed + counts.matchedLegacy;
@@ -146,5 +175,6 @@ console.log(`named now: ${counts.named}`);
 console.log(`already had a seat holder (kept): ${counts.alreadyNamed}`);
 console.log(`skipped, the name doesn't read as a first and last name: ${skippedN}`);
 for (const [why, n] of Object.entries(skipped).sort((a, b) => b[1] - a[1])) console.log(`  skipped (${why}): ${n}`);
+console.log(`rows outside the United States: ${rows.length - counts.us}; names taken off them: ${takenOff}; named seats outside the United States: ${namedOutsideUs}`);
 console.log(`seed now: ${onFile} seats named from public profiles, of ${seed.engagements.filter((e) => e.fields?.source === "Seat scan").length} seat-scan seats`);
 if (!dryRun && !noSeal && seedPath === "data/intel-seed.json") execFileSync(process.execPath, ["scripts/seal-intel-seed.mjs"], { stdio: "inherit" });

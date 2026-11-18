@@ -643,8 +643,9 @@ section("gzip", async () => {
   const plain = await as(null);
   console.log(`  member view: ${(plain.body.length / 1024).toFixed(0)} KB raw, ${(z.body.length / 1024).toFixed(1)} KB gzip, ${(b.body.length / 1024).toFixed(1)} KB brotli`);
   check("brotli is smaller than gzip", b.body.length < z.body.length, [b.body.length, z.body.length]);
-  // The private seed holds about 5,000 companies since the second seat scan (under 370 KB brotli, 490 KB gzip in full; the page asks for ?compact=1).
-  check("the compressed view is under 600 KB", z.body.length < 600 * 1024 && b.body.length < 600 * 1024, [z.body.length, b.body.length]);
+  // The private seed holds about 6,600 companies since the third seat scan, most with an About line (about 740 KB brotli,
+  // 1,010 KB gzip in full; the page asks for ?compact=1).
+  check("the compressed view is under 1,100 KB", z.body.length < 1100 * 1024 && b.body.length < 1100 * 1024, [z.body.length, b.body.length]);
   check("both say the same thing", JSON.stringify(bv?.me) === JSON.stringify(zv?.me) && bv?.companies?.length === zv?.companies?.length, [bv?.companies?.length, zv?.companies?.length]);
   check("vary: Accept-Encoding", /accept-encoding/i.test(String(b.headers.vary ?? "")) && /accept-encoding/i.test(String(z.headers.vary ?? "")));
   check("not compressed when not accepted", !plain.headers["content-encoding"] && !!JSON.parse(plain.body.toString("utf8")).companies);

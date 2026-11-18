@@ -211,6 +211,22 @@ check("only the seat holder and the mark changed", JSON.stringify(s1.companies) 
 const second = runNames();
 check("a second run names nothing and keeps all 9", line(second.stdout, /named now: (\d+)/) === "0" && line(second.stdout, /\(kept\): (\d+)/) === "9", second.stdout);
 check("a second run leaves the seed as it was", readFileSync(seedPath, "utf8") === seedText);
+check("no seat outside the United States carries a name (the run says 0)", line(first.stdout, /named seats outside the United States: (\d+)/) === "0" && !eng(seat("fx-u1")[1]).fields.operator, first.stdout);
+{
+  // A seat named from a public profile whose row now puts the holder outside the United States loses the name.
+  const moved = {
+    ...seed,
+    engagements: [{ id: hashedId("fx-uk1"), companyId: "c_bravo", fields: { source: "Seat scan", role: "Fractional CFO", type: "Fractional", status: "Active", end: "Ongoing", operator: P.yorick }, holderFrom: "public profile", verified: false }],
+  };
+  const movedSeed = path.join(dir, "intel-seed-moved.json");
+  const movedCsv = path.join(dir, "seats-moved.csv");
+  writeFileSync(movedSeed, JSON.stringify(moved));
+  writeFileSync(movedCsv, [HEAD, csvRow({ ...base, seat_id: "fx-uk1", person_name: P.yorick, person_sales_nav_id: "NAVLEAD0099", company_name: "Bravo Fixture Labs", country: "United Kingdom" })].join("\n") + "\n");
+  const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-seat-names.mjs"), movedCsv, "--seed", movedSeed, "--no-seal"], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });
+  const after = JSON.parse(readFileSync(movedSeed, "utf8")).engagements[0];
+  check("a public-profile name on a seat outside the United States is taken off", r.status === 0 && !after.fields.operator && !after.holderFrom && /names taken off them: 1; named seats outside the United States: 0/.test(r.stdout), r.stdout + r.stderr);
+  check("  and the run prints no name", !leaksIn(r.stdout + r.stderr, Object.values(P)).length);
+}
 
 console.log("\nThe outreach file");
 const outCsv = path.join(dir, "outreach", "claim-your-seat.csv");

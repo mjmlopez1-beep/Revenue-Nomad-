@@ -169,6 +169,45 @@ const second = runScript();
 check("a second run adds nothing and changes nothing", line(second.stdout, /seats added: (\d+)/) === "0" && line(second.stdout, /updated: (\d+)/) === "0" && line(second.stdout, /companies created: (\d+)/) === "0", second.stdout);
 check("a second run leaves the seed as it was (apart from nothing)", JSON.stringify(JSON.parse(readFileSync(seedPath, "utf8")).engagements) === JSON.stringify(s1.engagements));
 
+// With the sheet's Companies tab: HQ country and About come from it, an About that names a seat
+// holder is left out, a company the file flags as a likely fractional provider is no client, a
+// value on file is never overwritten, and --counts-only prints no company name or title.
+{
+  const seed2Path = path.join(dir, "intel-seed-tab.json");
+  const csv2Path = path.join(dir, "seats-tab.csv");
+  const tabPath = path.join(dir, "companies-tab.csv");
+  writeFileSync(seed2Path, JSON.stringify(seed));
+  const tRows = [
+    { ...base, seat_id: "fx-tab1", person_name: PEOPLE[0], person_sales_nav_id: "NAVPERSON0101", seat_title: "Fractional VP Sales", company_name: "Kestrel Mills", company_sales_nav_id: "TABCO1", function: "Sales", role_category: "Sales Leadership", is_gtm: "TRUE", start_month_est: "2025-06" },
+    { ...base, seat_id: "fx-tab2", person_name: PEOPLE[13], person_sales_nav_id: "NAVPERSON0102", seat_title: "Fractional CMO", company_name: "Osprey Diagnostics", company_sales_nav_id: "TABCO2", function: "Marketing", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-07" },
+    { ...base, seat_id: "fx-tab3", person_name: PEOPLE[1], person_sales_nav_id: "NAVPERSON0103", seat_title: "Fractional CFO", company_name: "Heron Woodworks", company_sales_nav_id: "TABCO3", function: "Finance", role_category: "Non-GTM", is_gtm: "FALSE", start_month_est: "2025-08", company_likely_fractional_provider: "TRUE" },
+    { ...base, seat_id: "fx-tab4", person_name: PEOPLE[2], person_sales_nav_id: "NAVPERSON0104", seat_title: "Fractional VP Growth", company_name: "Northwind Labs", company_sales_nav_id: "TABCO4", function: "Growth", role_category: "Marketing", is_gtm: "TRUE", start_month_est: "2025-09" },
+  ];
+  writeFileSync(csv2Path, [HEAD, ...tRows.map(row)].join("\n") + "\n");
+  const TAB_HEAD = "company_sales_nav_id,company_name,company_linkedin_url,company_website,lookup_status,seat_count,industry,employee_range,employees_on_linkedin,revenue_range_provider,hq_country,domain,rn_revenue_bucket,rn_revenue_method,website_url,employee_range_std,company_about,likely_fractional_provider";
+  const tabRow = (o: Record<string, string>) => TAB_HEAD.split(",").map((k) => { const v = o[k] ?? ""; return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",");
+  const tab = [
+    { company_sales_nav_id: "TABCO1", company_name: "Kestrel Mills", company_website: "http://www.kestrelmills.example.com", industry: "Paper and Forest Product Manufacturing", employee_range: "2-10", employees_on_linkedin: "40", hq_country: "GB", rn_revenue_bucket: "$1M-$5M", employee_range_std: "#VALUE!", company_about: "Kestrel Mills makes recycled paper goods for offices.", likely_fractional_provider: "FALSE" },
+    { company_sales_nav_id: "TABCO2", company_name: "Osprey Diagnostics", company_website: "https://osprey.example.com", industry: "Medical Equipment Manufacturing", employee_range: "11-50", hq_country: "US", company_about: "Osprey Diagnostics, led by Barnaby Wexford, builds lab tests.", likely_fractional_provider: "FALSE" },
+    { company_sales_nav_id: "TABCO3", company_name: "Heron Woodworks", company_website: "https://heron.example.com", industry: "Furniture", hq_country: "US", company_about: "Heron Woodworks builds furniture.", likely_fractional_provider: "TRUE" },
+    { company_sales_nav_id: "TABCO4", company_name: "Northwind Labs", company_website: "https://northwind.example.com", industry: "Software Development", employee_range: "1001-5000", hq_country: "US", company_about: "Northwind Labs runs clinics.", likely_fractional_provider: "FALSE" },
+  ];
+  writeFileSync(tabPath, [TAB_HEAD, ...tab.map(tabRow)].join("\n") + "\n");
+  const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-seat-scan.mjs"), csv2Path, "--companies", tabPath, "--seed", seed2Path, "--no-seal", "--counts-only"], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });
+  check("with the Companies tab: the script runs", r.status === 0, r.stderr);
+  check("--counts-only prints no company name, title or person", !/Kestrel|Osprey|Heron|Northwind|Fractional (VP|CMO|CFO)/.test(r.stdout) && !leaks(r.stdout + r.stderr).filter((x) => x !== "Fixtureland").length, r.stdout);
+  check("a company the file flags as a likely fractional provider is no client", line(r.stdout, /dropped \(likely fractional provider \(the file's flag\)\): (\d+)/) === "1" && line(r.stdout, /seats added: (\d+)/) === "3", r.stdout);
+  const t = JSON.parse(readFileSync(seed2Path, "utf8"));
+  const tc = (name: string) => t.companies.find((c: { fields: Record<string, string> }) => c.fields.name === name);
+  const k = tc("Kestrel Mills");
+  check("a new company gets the tab's website, HQ country (from its code), About, and its own size band before the LinkedIn count", k?.fields.website === "kestrelmills.example.com" && k?.fields.hq === "United Kingdom" && k?.fields.country === "United Kingdom" && k?.fields.about === "Kestrel Mills makes recycled paper goods for offices." && k?.fields.employees === "1–10" && k?.fields.revenue === "$1M–$5M", k?.fields);
+  check("an About that names a seat holder is not stored", !!tc("Osprey Diagnostics") && !tc("Osprey Diagnostics").fields.about && !JSON.stringify(t).includes("Wexford"), tc("Osprey Diagnostics")?.fields);
+  check("no seat or company for the flagged provider", !tc("Heron Woodworks") && !t.engagements.some((e: { id: string }) => e.id === seatIdOf("fx-tab3")));
+  const n = tc("Northwind Labs");
+  check("a company on file keeps its values and only gets what it lacked (HQ, About)", n?.fields.industry === "Health Care" && n?.fields.employees === "51–200" && n?.fields.hq === "United States" && n?.fields.about === "Northwind Labs runs clinics.", n?.fields);
+  check("no person id or tab company id is stored", !/NAVPERSON|TABCO/.test(JSON.stringify(t)));
+}
+
 /* ---------- 2. in process: the view on the wire, MCP, the scan ---------- */
 
 console.log("\nIn process");
