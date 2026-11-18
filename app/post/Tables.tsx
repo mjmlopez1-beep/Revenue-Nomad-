@@ -7,7 +7,9 @@
  *
  * Each table leads with what a member can read (the company, its latest seat, the functions it
  * hired, its industry, size, revenue and HQ), then what they can unlock. On Hiring now every
- * row is an open role, so the tables switch to the columns that tell open roles apart.
+ * row is an open role, so the tables switch to the columns that tell open roles apart. With
+ * Recently hired on (`hire`), a company row leads with the hire it matched ("Hired a fractional
+ * CFO · Mar 2026") and shows who held that seat.
  *
  * Credits are never spent by a stray click. A row has at most one paying control per purchase:
  *   - a hidden company's row spends only through the lock on its logo (Unlock company, which also
@@ -19,9 +21,10 @@ import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import type { Cell, EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconLock, IconStar, LockedName, LockedSite, fmtMonth } from "../ui/shared";
 import {
-  ADD_AFTER_NAME, COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, PERSON_NO_ADD, coverOf, personBothLocked, personCoverOf, personNoun, personUnseen, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn,
-  recentSeats, seatNoun, seatWhat, shown, waitWords, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
+  ADD_AFTER_NAME, COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, PERSON_NO_ADD, coverOf, personBothLocked, personCoverOf, personNoun, personUnseen, fitReason, fitTier, hireLine, hireOfRow, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn,
+  recentSeats, seatNoun, seatWhat, shown, waitWords, type CoInfo, type FactRef, type HireCtx, type Row, type SortKey, type Tab,
 } from "./model";
+import "./hired.css";
 import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
@@ -327,6 +330,21 @@ const None = ({ title }: { title?: string }) => (
 );
 const NOT_YET = "This role is still open, so it has no start or end yet.";
 
+/**
+ * Recently hired: who the hire was and when, "Hired a fractional CFO · Mar 2026". The role title
+ * only when the member can see it: a seat whose holder is on file keeps its role locked with the
+ * holder (one purchase), so until then it reads "Hired a fractional Finance leader".
+ */
+export function HireLine({ e }: { e: EngagementRec }) {
+  const { what, when } = hireLine(e);
+  return (
+    <span className="hired-line" title={when ? `${what} · ${when}` : what}>
+      <span className="hired-what">{what}</span>
+      {when && <span className="hired-when num">&nbsp;· {when}</span>}
+    </span>
+  );
+}
+
 /** The latest seat: the role, and under it when it started (or since when the role is open). */
 function SeatCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
@@ -400,10 +418,28 @@ function engCell(i: CoInfo, e: EngagementRec, field: string, opts: { render?: (v
   return <RowFact t={{ entity: "engagement", id: e.id, field }} cell={e.cells[field]} cover={coverOf(i, e, field)} noun={seatNoun(e, field)} what={seatWhat(e, field)} {...opts} />;
 }
 
-const CompanyRow = memo(function CompanyRow({ r, mine, sel, onOpen, isNew, gap }: { r: Row; mine: string | null; sel: boolean; onOpen: (r: Row) => void; isNew: boolean; gap: boolean }) {
+const CompanyRow = memo(function CompanyRow({
+  r,
+  mine,
+  sel,
+  onOpen,
+  isNew,
+  gap,
+  hire,
+}: {
+  r: Row;
+  mine: string | null;
+  sel: boolean;
+  onOpen: (r: Row) => void;
+  isNew: boolean;
+  gap: boolean;
+  /** Recently hired: the row leads with the hire it matched, and Held by and Rate are that seat's. */
+  hire?: HireCtx | null;
+}) {
   const i = r.i;
   const c = i.c;
-  const e = i.latest;
+  const hired = hire ? hireOfRow(r, hire.fns, hire.within) : null;
+  const e = hired ?? i.latest;
   const co = (field: string) => <RowFact t={{ entity: "company", id: c.id, field }} cell={c.cells[field]} cover={coverOf(i, null, field)} own={ownCompany(i)} />;
   return (
     <tr {...rowProps(r, sel, onOpen)}>
@@ -415,9 +451,7 @@ const CompanyRow = memo(function CompanyRow({ r, mine, sel, onOpen, isNew, gap }
           </span>
         )}
       </td>
-      <td>
-        <SeatCell i={i} />
-      </td>
+      <td>{hired ? <HireLine e={hired} /> : <SeatCell i={i} />}</td>
       <td>
         <FunctionsCell i={i} mine={mine} gap={gap} />
       </td>
@@ -624,6 +658,20 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Rate", cls: "w-rate num", rates: true },
     { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
+  // Recently hired: the same columns, led by the hire each company matched. Held by and Rate are that seat's.
+  hiredCompanies: [
+    { label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { label: "Recent hire", cls: "w-seat w-hire", sort: "hired", tip: "The most recent fractional hire that fits the sentence above, and the month it started. The role shows once you can see it." },
+    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for. A dashed chip means none in your function is on file yet." },
+    { label: "Industry", cls: "w-ind" },
+    { label: "Employees", cls: "w-emp num", sort: "employees" },
+    { label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
+    { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
+    { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held that seat, a possible referral partner. 1 credit shows who it was and the role they held." },
+    { label: "Rate", cls: "w-rate num", rates: true },
+    { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
+  ],
   hiringCompanies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
     { label: "Open role", cls: "w-seat", tip: "The role, and when we first saw it listed" },
@@ -682,6 +730,7 @@ export function DataTable({
   newSince,
   tab,
   notMine = false,
+  hire = null,
   sort,
   onSort,
 }: {
@@ -693,14 +742,17 @@ export function DataTable({
   newSince: string | null;
   /** The view tab. Hiring now gets its own columns. Without it, a list of open roles alone does. */
   tab?: Tab;
-  /** The "No Sales seat yet" filter is on, so rows leave out their "No Sales seat yet" chip. */
+  /** The "No Sales seat yet" filter is on, so rows leave out their "No Sales seat yet" chip (Recently hired keeps it: each row says so). */
   notMine?: boolean;
+  /** Recently hired is on: company rows lead with the hire they matched. */
+  hire?: HireCtx | null;
   /** The sort in use, and how to change it from a column header (headers stay plain text without it). */
   sort?: SortKey;
   onSort?: (s: SortKey) => void;
 }) {
   const hiring = type !== "people" && (tab ? tab === "hiring" && allOpenRoles(rows) : allOpenRoles(rows));
-  const key = hiring ? (type === "companies" ? "hiringCompanies" : "hiringEngagements") : type;
+  const hired = !!hire && type === "companies" && !hiring;
+  const key = hiring ? (type === "companies" ? "hiringCompanies" : "hiringEngagements") : hired ? "hiredCompanies" : type;
   const openPage = useOpenPage();
   // A header that sorts is a button: name A to Z, everything else highest or newest first.
   const head: ReactNode = HEAD[key].map((h) => {
@@ -730,7 +782,7 @@ export function DataTable({
     );
   });
   return (
-    <table className={`tp-table tp-table-${type}${hiring ? " tp-table-hiring" : ""}`}>
+    <table className={`tp-table tp-table-${type}${hiring ? " tp-table-hiring" : ""}${hired ? " tp-table-hired" : ""}`}>
       <thead>
         <tr>{head}</tr>
       </thead>
@@ -747,7 +799,8 @@ export function DataTable({
                 sel={selected === r.key}
                 onOpen={onOpen}
                 isNew={!!newSince && !!r.i.c.updatedAt && r.i.c.updatedAt > newSince && r.i.c.following}
-                gap={!notMine}
+                gap={!notMine || hired}
+                hire={hired ? hire : null}
               />
             )
           ) : type === "engagements" ? (

@@ -261,7 +261,7 @@ export interface Icp {
   countries: string[];
 }
 
-/** What a saved view matches in the weekly email: open roles by their free facts only. */
+/** What a saved view matches in the weekly email: open roles by their free facts only, or new hires for a view that follows them. */
 export interface SavedViewCriteria {
   function?: string;
   functions?: string[];
@@ -271,6 +271,13 @@ export interface SavedViewCriteria {
   hq?: string;
   country?: string[];
   fractionalFriendly?: boolean;
+  /**
+   * "Recently hired" (Filters.hiredFn and .hiredWithin, lib/hired.ts): the view follows hires in
+   * these functions (none: any) with a start in the last `hiredWithin` months (0: any time). The
+   * weekly email and alerts then list companies that newly match, never open roles.
+   */
+  hiredFn?: string[];
+  hiredWithin?: number;
 }
 
 /** One saved view (Save this view) or saved search (the connector's alerts). */

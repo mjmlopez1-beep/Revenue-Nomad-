@@ -12,9 +12,9 @@
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconLock, IconStar, LockedName, LockedSite, fmtMonth, val } from "../ui/shared";
-import { cardSeat, coverOf, isOpenRole, personBothLocked, personCoverOf, personNoun, isUnheldOpenRole, known, seatBothLocked, seatNoun, seatWhat, type Row, type Tab } from "./model";
+import { cardSeat, coverOf, hireOfRow, isOpenRole, personBothLocked, personCoverOf, personNoun, isUnheldOpenRole, known, seatBothLocked, seatNoun, seatWhat, type HireCtx, type Row, type Tab } from "./model";
 import { YourSeat, earnNote, useCellUi } from "./ui";
-import { Fit, FnChips, HeldBy, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
+import { Fit, FnChips, HeldBy, HireLine, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
 import { RoleDate } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
 
@@ -115,14 +115,16 @@ function FirmoLine({ c }: { c: Row["i"]["c"] }) {
   return <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">No industry, size, revenue or HQ on file yet</span>}</div>;
 }
 
-const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean }) {
+const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, hire }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean; hire?: HireCtx | null }) {
   const ui = useCellUi();
   const i = r.i;
   const c = i.c;
   const at = c.hidden ? "this company" : c.name;
+  // Recently hired: the card is about the hire it matched ("Hired a fractional CFO · Mar 2026") and who held that seat.
+  const hired = hire ? hireOfRow(r, hire.fns, hire.within) : null;
   // A hidden company is about its open role. Any other company leads with a seat in the member's
   // function (one with its holder on file first), then a seat with a holder on file, then the latest (C45).
-  const e = cardSeat(i, me.function);
+  const e = hired ?? cardSeat(i, me.function);
   const miss = c.facts.missing;
   const own = i.engs.find((x) => x.yours);
   // What the seat is: its function first ("RevOps seat"), then its type and when it started.
@@ -146,7 +148,9 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
           <FnChips i={i} mine={me.function} max={own ? 2 : 3} />
         </div>
       )}
-      {e?.opened ? (
+      {hired ? (
+        <HireLine e={hired} />
+      ) : e?.opened ? (
         <div className="tp-pcard-role">
           {fn && <span className="tp-pcard-fn">{fn} · </span>}
           <RoleDate e={e} />
@@ -154,7 +158,10 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
       ) : (
         when && <div className="tp-pcard-when num">{when}</div>
       )}
-      {c.hidden ? (
+      {c.hidden && hired ? (
+        // A locked company that hired: who held the seat opens after the company, in its record.
+        <HiddenLine rate={i.engs.some((x) => isOpenRole(x) && (x.cells.rate?.s === "locked" || x.cells.rate?.s === "value"))} />
+      ) : c.hidden ? (
         <>
           {e && e.cells.role?.s === "value" && (
             <div className="tp-pfacts">
@@ -167,8 +174,8 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
         <div className="tp-pfacts">
           {e ? (
             <>
-              {/* Who held the seat and their role are one purchase: while both are locked, one row and one lock for the two. */}
-              {!seatBothLocked(e) && (
+              {/* Who held the seat and their role are one purchase: while both are locked, one row and one lock for the two. The hire line already says a role it can see. */}
+              {!seatBothLocked(e) && !hired && (
                 <Fact label={isOpenRole(e) ? "Open role" : "Role"}>
                   <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} noun={seatNoun(e, "role")} what={seatWhat(e, "role")} />
                 </Fact>
@@ -299,14 +306,29 @@ const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r:
   );
 });
 
-export function CardList({ type, rows, me, onOpen, tab }: { type: "companies" | "engagements" | "people"; rows: Row[]; me: Me; onOpen: (r: Row) => void; tab?: Tab }) {
+export function CardList({
+  type,
+  rows,
+  me,
+  onOpen,
+  tab,
+  hire = null,
+}: {
+  type: "companies" | "engagements" | "people";
+  rows: Row[];
+  me: Me;
+  onOpen: (r: Row) => void;
+  tab?: Tab;
+  /** Recently hired is on: company cards lead with the hire they matched. */
+  hire?: HireCtx | null;
+}) {
   // "N things still missing here" belongs to Needs facts. Without the tab, every card keeps it.
   const miss = !tab || tab === "needs";
   return (
     <div className="tp-cards">
       {rows.map((r) =>
         type === "companies" ? (
-          <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} miss={miss} />
+          <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} miss={miss} hire={hire} />
         ) : type === "engagements" ? (
           <EngCard key={r.key} r={r} me={me} onOpen={onOpen} />
         ) : (

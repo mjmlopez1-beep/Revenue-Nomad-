@@ -138,6 +138,12 @@ const s1 = JSON.parse(after1);
 const scanSeats = s1.engagements.filter((e: { fields: Record<string, string> }) => e.fields.source === "Seat scan");
 check("no seat-scan seat has a seat holder or a private flag", scanSeats.every((e: { fields: Record<string, string> }) => !("operator" in e.fields) && !("privateHolder" in e)));
 check("each seat is Fractional, Active, Ongoing", scanSeats.every((e: { fields: Record<string, string> }) => e.fields.type === "Fractional" && e.fields.status === "Active" && e.fields.end === "Ongoing"));
+// "New hires this week" for saved views that follow hires (lib/hireAlerts.ts) reads this day; a seat on file before the run has none.
+check(
+  "a new seat carries the day it came into the table (addedAt), the seat on file before has none",
+  scanSeats.filter((e: { id: string }) => e.id !== "e_ss_fxlegacy1").every((e: { addedAt?: string }) => Number.isFinite(Date.parse(e.addedAt ?? ""))) &&
+    !scanSeats.find((e: { id: string; addedAt?: string }) => e.id === "e_ss_fxlegacy1")?.addedAt,
+);
 const fnOf = (sid: string) => scanSeats.find((e: { id: string }) => e.id === seatIdOf(sid))?.fields;
 const seatOf = (id: string) => scanSeats.find((e: { id: string }) => e.id === id);
 check("new seats are keyed by an HMAC of seat_id, never by the seat_id itself", scanSeats.filter((e: { id: string }) => e.id !== "e_ss_fxlegacy1").every((e: { id: string }) => /^e_ss_[0-9a-f]{20}$/.test(e.id)) && !/fx-?(aaa|bbb|ccc|kkk|lll)/.test(after1));

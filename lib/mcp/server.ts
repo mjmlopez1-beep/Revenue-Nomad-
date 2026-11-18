@@ -76,12 +76,20 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Search companies",
       description:
-        "Find companies on Merlin, ranked like the table (best fit first: past fractional hires, functions hired, recent seats, open roles). Returns each company's id, free facts, fit, functions hired and how many facts are locked. Use it for prospecting: no_function_yet finds companies that hired fractionals in other functions but not this one yet, a common next hire. fractional_friendly keeps companies with past fractional hires or an open role. repeat_hirer keeps companies with 2 or more fractional hires, or hires in 2 or more functions. hiring_now keeps companies with an open fractional role (often locked). Follow up with get_company.",
+        "Find companies on Merlin, ranked like the table (best fit first: past fractional hires, functions hired, recent seats, open roles). Returns each company's id, free facts, fit, functions hired and how many facts are locked. Use it for prospecting: no_function_yet finds companies that hired fractionals in other functions but not this one yet, a common next hire. fractional_friendly keeps companies with past fractional hires or an open role. repeat_hirer keeps companies with 2 or more fractional hires, or hires in 2 or more functions. hiring_now keeps companies with an open fractional role (often locked). Recently hired, the table's sentence \"companies that hired a fractional Finance leader in the last 6 months\": hired_function (one function or a list) with hired_within_months (3, 6, 12 or 24; 0 or left out is any time). A hire is any seat on file that isn't full-time or an open role, and it counts when its start month is at most that many months before this month (a start with only a year counts as December of that year). With them the results come most recent hire first and each company carries recent_hire (function, start, and the role only when the member can see it; never who held the seat). For a VP Sales looking for companies that just hired a fractional Finance leader and have no Sales yet: hired_function Finance, hired_within_months 6, no_function_yet Sales. Follow up with get_company.",
       inputSchema: {
         query: z.string().optional().describe("Words to match in company names, domains, functions, industries and facts the member can see. Locked facts are not searchable."),
         function: fn.optional().describe(`Any seat in this function on file (hired, open or mentioned): ${list(FUNCTIONS)}`),
         function_hired: fn.optional().describe(`Companies that hired a fractional in this function: ${list(FUNCTIONS)}`),
         no_function_yet: fn.optional().describe(`Companies that hired fractionals in other functions and none in this one yet: ${list(FUNCTIONS)}`),
+        hired_function: z
+          .union([z.string(), z.array(z.string())])
+          .optional()
+          .describe(`Recently hired: companies with a fractional hire in this function, or in any of a list (with hired_within_months for how recent): ${list(FUNCTIONS)}`),
+        hired_within_months: z
+          .number()
+          .optional()
+          .describe("Recently hired: the hire's start month is at most this many months before this month (3, 6, 12 or 24). 0 or left out is any time. A start with only a year counts as December. Without hired_function, a hire in any function."),
         fractional_friendly: z.boolean().optional().describe("Only companies with past fractional hires or an open fractional role."),
         repeat_hirer: z.boolean().optional().describe("Only repeat hirers: 2 or more fractional hires on file, or hires in 2 or more functions. Open roles don't count as hires."),
         hiring_now: z.boolean().optional().describe("Only companies with an open fractional role now."),
@@ -97,7 +105,10 @@ export function makeServer(ctx: T.Ctx): McpServer {
         sales_cycle: z.string().optional().describe(list(RN_SALES_CYCLES)),
         following: z.boolean().optional().describe("Only companies the member follows."),
         unlocked: z.boolean().optional().describe("Only companies where the member unlocked something."),
-        sort: z.enum(["fit", "newest", "name", "employees", "revenue"]).optional().describe("fit (default), newest, name, employees or revenue."),
+        sort: z
+          .enum(["fit", "newest", "name", "employees", "revenue", "recent_hire"])
+          .optional()
+          .describe("fit (default), newest, name, employees, revenue or recent_hire (the most recent fractional hire first; the default with hired_function or hired_within_months)."),
         limit: z.number().int().optional().describe("How many to return, 1 to 25 (default 10)."),
         offset: z.number().int().optional().describe("Skip this many, to page through (use next_offset)."),
       },

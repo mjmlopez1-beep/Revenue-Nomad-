@@ -32,8 +32,8 @@ import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useT
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cardSeat, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
-  icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS,
-  type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
+  icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, suggestHiredFn,
+  type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, stepOneKind, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
@@ -55,10 +55,12 @@ import { Integrations } from "./Integrations";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
 import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViews, type ProfileEdit } from "./Hunt";
+import { HiredButton, HiredSentence } from "./Hired";
+import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/lib/hired";
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
-import { REFERRAL_BONUS, standardIndustries, standardList } from "@/lib/tableFields";
+import { REFERRAL_BONUS } from "@/lib/tableFields";
 import "./post.css";
 
 export interface TradingPostProps {
@@ -148,7 +150,6 @@ type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "
 
 const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations"];
 const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", messages: "Messages", integrations: "Integrations" };
-const TYPE_PARAM: Record<RecordType, string> = { companies: "companies", engagements: "seats", people: "people" };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
 const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["person", "people"] };
@@ -159,41 +160,7 @@ function chipEdges(el: HTMLElement) {
   el.dataset.end = String(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
 }
 
-/**
- * Filters as one short query value: only what differs from no filters, "~" between them. A
- * switch is its key ("rateKnown"), a list is "key:a|b", a number is "key:40". The keys come from
- * EMPTY_FILTERS, so a filter added there round-trips with no change here.
- */
-function encodeFilters(f: Filters): string {
-  const parts: string[] = [];
-  for (const k of Object.keys(EMPTY_FILTERS) as (keyof Filters)[]) {
-    const v = f[k];
-    if (typeof v === "boolean") {
-      if (v) parts.push(k);
-    } else if (typeof v === "number") {
-      if (v) parts.push(`${k}:${v}`);
-    } else if (Array.isArray(v) && v.length) parts.push(`${k}:${v.join("|")}`);
-  }
-  return parts.join("~");
-}
-function decodeFilters(s: string): Filters {
-  const f = { ...EMPTY_FILTERS } as Record<string, unknown>;
-  for (const part of s.split("~")) {
-    const at = part.indexOf(":");
-    const k = at < 0 ? part : part.slice(0, at);
-    const rest = at < 0 ? "" : part.slice(at + 1);
-    if (!k || !Object.prototype.hasOwnProperty.call(EMPTY_FILTERS, k)) continue;
-    const d = (EMPTY_FILTERS as unknown as Record<string, unknown>)[k];
-    if (typeof d === "boolean") f[k] = true;
-    else if (typeof d === "number") {
-      const n = Number(rest);
-      if (Number.isFinite(n)) f[k] = n;
-    } else if (Array.isArray(d)) f[k] = rest.split("|").filter(Boolean).slice(0, 50);
-  }
-  // A link or saved view from before the 110 industries: old labels take today's ("Software" is every Software industry).
-  const x = f as unknown as Filters;
-  return { ...x, industry: standardIndustries(x.industry), employees: standardList("employees", x.employees), revenue: standardList("revenue", x.revenue) };
-}
+/* The address helpers (encodeFilters, decodeFilters, absolutePlace, TYPE_PARAM) are in model.ts: the server and onboarding read places too. */
 
 /**
  * Filters an onboarding answer turns on ("No Sales seat yet" for a member after adjacent seats,
@@ -226,8 +193,11 @@ function defaultsFor(me: Me) {
     } as Filters,
   };
 }
-/** The sort a view opens on until the member picks one: Hiring now reads newest first (their function first). */
-const sortDefault = (me: Me, v: Tab): SortKey => (v === "hiring" ? "newest" : defaultsFor(me).s);
+/**
+ * The sort a view opens on until the member picks one: Hiring now reads newest first (their
+ * function first), Recently hired the most recent hire first.
+ */
+const sortDefault = (me: Me, v: Tab, f?: Filters): SortKey => (v === "hiring" ? "newest" : f && hiredOn(f) ? "hired" : defaultsFor(me).s);
 
 /** A place as an address query: the URL's own (read on mount and on Back and Forward), or a saved view's. */
 function readPlace(me: Me, from?: string) {
@@ -250,7 +220,7 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   const q = new URLSearchParams();
   if (x.v !== d.v) q.set("v", x.v);
   if (x.t !== d.t) q.set("t", TYPE_PARAM[x.t]);
-  if (x.s && x.s !== sortDefault(me, x.v)) q.set("s", x.s);
+  if (x.s && x.s !== sortDefault(me, x.v, x.f)) q.set("s", x.s);
   if (x.q.trim()) q.set("q", x.q.trim());
   const f = encodeFilters(x.f);
   if (f !== encodeFilters(d.f)) q.set("f", f || "-");
@@ -259,18 +229,6 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   if (x.p !== "table") q.set("p", x.p);
   const s = q.toString();
   return `${typeof window === "undefined" ? "/" : window.location.pathname}${s ? `?${s}` : ""}`;
-}
-
-/** A place written out in full (a saved view): it must open the same whatever the member's defaults are later. */
-function absolutePlace(x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; all?: boolean }): string {
-  const q = new URLSearchParams();
-  q.set("v", x.v);
-  q.set("t", TYPE_PARAM[x.t]);
-  if (x.s) q.set("s", x.s);
-  if (x.q.trim()) q.set("q", x.q.trim());
-  q.set("f", encodeFilters(x.f) || "-");
-  if (x.all && x.v === "hiring") q.set("af", "1");
-  return q.toString();
 }
 
 /** How deep in this app's own history entries we are (0 is the table). */
@@ -324,7 +282,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const tab: Tab = searching ? searchTab ?? "all" : tabPicked;
   const setTab = useCallback((t: Tab) => (searching ? setSearchTab(t) : setTabPicked(t)), [searching]);
   // The sort in use: the member's pick, else the view's default. One this list can't use (Most seats, carried over to People) reads as Most fractional-friendly.
-  const sort = sortFor(recordType, sortPicked ?? sortDefault(me, tab));
+  const sort = sortFor(recordType, sortPicked ?? sortDefault(me, tab, filters));
   /** Hiring now leads with the member's function (theirs only, until "Show all functions"). */
   const hireFn = tab === "hiring" ? namedFn(me.function) : null;
   const [limit, setLimit] = useState(PAGE);
@@ -463,6 +421,15 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // The onboarding preset narrows All, but not the open roles: with Open now picked, All lists what Hiring now lists.
   const presetHere = tab === "all" && !filters.roleState.includes("Open now");
   const eff = useMemo(() => (wide ? EMPTY_FILTERS : presetHere ? filters : unpreset), [wide, presetHere, filters, unpreset]);
+  /**
+   * Recently hired is on (Filters.hiredFn and .hiredWithin): its sentence takes the profile pill's
+   * place, the rows sort by the most recent hire and say who was hired and when.
+   */
+  const hiredActive = hiredOn(eff);
+  const hireKey = hiredActive ? `${eff.hiredFn.join("|")}~${eff.hiredWithin}` : "";
+  // One object while the functions and the window stay the same, so the memoized rows don't render again.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const hireCtx = useMemo<HireCtx | null>(() => (hiredActive ? { fns: eff.hiredFn, within: eff.hiredWithin } : null), [hireKey]);
   // Filters read only the member's function from `me` (cellMe changes with it): a new balance doesn't recount the table.
   const { rows: filtered, facets: facets0 } = useMemo(() => applyFilters(allRows, eff, tab, q, cellMe), [allRows, eff, tab, q, cellMe]);
   // With the preset on, All counts with it and every other view without it.
@@ -564,8 +531,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   }, [narrowedBy?.icp, narrowedBy?.filters, allRows, tab, q, cellMe, filtered]); // eslint-disable-line react-hooks/exhaustive-deps
   // Name matches come first while searching (decision 13).
   const sortedLive = useMemo(
-    () => sortRows(hireList ?? filtered, sort, tab === "needs", q, { me: cellMe, fnFirst: hireFn }),
-    [filtered, hireList, sort, tab, q, cellMe, hireFn],
+    () => sortRows(hireList ?? filtered, sort, tab === "needs", q, { me: cellMe, fnFirst: hireFn, hire: hireCtx }),
+    [filtered, hireList, sort, tab, q, cellMe, hireFn, hireCtx],
   );
   /*
    * While a record is open, the rows keep the order they had when it opened: unlocking a hidden
@@ -592,7 +559,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const listData = useMemo(() => ({ type: recordType, rows: visible }), [recordType, visible]);
   const list = useDeferredValue(listData);
   const nFilters = activeCount(eff);
-  const chips = activeChips(eff);
+  // While the Recently hired sentence is up it shows its own filters (the functions, the window, "No fractional Sales yet"), so the chips leave them out.
+  const chips = activeChips(eff).filter((c) => !(hiredActive && (c.id === "hired" || (c.id === "notMine" && !!namedFn(me.function)))));
   // The sidebar names the member's function ("No Sales seat yet"), so the chip does too.
   const chipLabel = (c: { id: string; label: string }) => (c.id === "notMine" && me.function ? notMineLabel(me.function) : c.label);
 
@@ -1372,6 +1340,40 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setFilters({ ...EMPTY_FILTERS, icp: filters.icp });
   };
 
+  /*
+   * Recently hired from its button: companies (in the member's profile, when the pill is on) that
+   * hired a fractional in the last 6 months, in the function that usually comes before theirs (their
+   * onboarding answer once there is one, else the one the most of those companies hired lately), with
+   * no fractional in their own function yet. The All view and the companies list, newest hire first.
+   */
+  /** The entry turned "No fractional <fn> yet" on, so turning Recently hired off takes it off again. */
+  const hiredSetNotMine = useRef(false);
+  const startHired = () => {
+    setPage("table");
+    setDrawer(null);
+    setQuery("");
+    setSearchTab(null);
+    setTabPicked("all");
+    setRecordType("companies");
+    setSort(null);
+    setAllFns(false);
+    setFitOnly(false);
+    const own = namedFn(me.function);
+    const fit = filters.icp && !icpEmpty(me.icp) ? icpTest(me.icp!) : null;
+    const fn = suggestHiredFn(infos, me.function, (i) => !fit || fit(i.c), (me as { before?: unknown }).before);
+    hiredSetNotMine.current = !!own && !filters.notMine;
+    // "No fractional <fn> yet" is the member's own filter from here (an onboarding answer only narrowed All).
+    setPreset((x) => x.filter((k) => k !== "notMine"));
+    setFilters({ ...filters, hiredFn: [fn], hiredWithin: HIRED_DEFAULT_WINDOW, notMine: own ? true : filters.notMine });
+  };
+  /** Turn Recently hired off: its functions and window go, the other filters stay (and the switch it turned on goes too). */
+  const stopHired = () => {
+    const off = hiredSetNotMine.current && eff.notMine;
+    hiredSetNotMine.current = false;
+    if (sortPicked === "hired") setSort(null);
+    setEff({ ...eff, hiredFn: [], hiredWithin: 0, ...(off ? { notMine: false } : {}) });
+  };
+
   // Credits running low or out. With the roles card up, it is a line inside the card, not a second banner.
   const creditLine = guide === "credits" && (move === "roles" || !move);
   // CreditLine draws nothing once the balance is back above 3 (and earning is open): the card then has no last line.
@@ -1563,9 +1565,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         <span>{TYPE_TITLE[recordType]}</span> <IconChevron size={12} />
       </button>
     ) : null;
+  // The way into Recently hired, beside the views: after Hiring now on a phone (in the scrolling row), after the views on wider screens.
+  const hiredBtn = <HiredButton key="hired" on={hiredActive} phone={phone} onClick={() => (hiredActive ? stopHired() : startHired())} />;
   const tabs = phone ? (
     <nav className="tp-pchips-scroll" aria-label="Views" onScroll={(e) => chipEdges(e.currentTarget)}>
-      {viewButtons}
+      {[...viewButtons.slice(0, 3), hiredBtn, ...viewButtons.slice(3)]}
     </nav>
   ) : (
     <nav className="tp-tabs" aria-label="Views">
@@ -1588,6 +1592,20 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       onSearchAll={searchAll}
       onBrowse={clearAll}
       onAdd={() => openAdd()}
+      hired={
+        hiredActive
+          ? {
+              words: `${fnLeader(eff.hiredFn)} ${windowPhrase(eff.hiredWithin)}`,
+              wider: (() => {
+                const at = HIRED_WINDOWS.indexOf(eff.hiredWithin as (typeof HIRED_WINDOWS)[number]);
+                const next = eff.hiredWithin > 0 ? (at >= 0 ? HIRED_WINDOWS[at + 1] : 0) : null;
+                return next === null || next === undefined ? null : { label: next ? `Try the last ${next} months` : "Try any time", go: () => setEff({ ...eff, hiredWithin: next }) };
+              })(),
+              anyFn: eff.hiredFn.length ? () => setEff({ ...eff, hiredFn: [] }) : null,
+              off: stopHired,
+            }
+          : null
+      }
       hiring={
         hireList && hireFn && fnSplit
           ? {
@@ -1733,6 +1751,22 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       onToggle={() => setEff({ ...eff, icp: !eff.icp })}
     />
   );
+  /** Recently hired: the sentence over the list, in the pill's place (its first part is the pill). */
+  const hiredSentence = page === "table" && hiredActive && (
+    <HiredSentence
+      f={eff}
+      setF={setEff}
+      me={me}
+      facets={facets}
+      type={recordType}
+      tab={tab}
+      icpOn={icpOn}
+      shownN={sorted.length}
+      sort={sort}
+      onEditIcp={() => setIcpOpen(true)}
+      onOff={stopHired}
+    />
+  );
   /** Under a search: what the profile and filters keep out, one tap to see it; or, widened, the way back. */
   const narrowWords = narrowedBy ? (narrowedBy.icp && narrowedBy.filters ? "your profile and filters" : narrowedBy.icp ? "your Ideal Fractional Profile" : "your filters") : "";
   const searchLine = qt && page === "table" && (wide || outside > 0) && (
@@ -1794,6 +1828,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             revenue: c.revenue ?? [],
             country: c.country ?? [],
             hq: c.hq ? [c.hq] : [],
+            hiredFn: c.hiredFn ?? [],
+            hiredWithin: c.hiredWithin ?? 0,
           } as Filters,
         };
     setPage("table");
@@ -1957,7 +1993,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               One sticky row: what to list (Companies, Seats or People, a menu), Filters (sort lives in its sheet) and the views,
               each with its count. The record type sits here, not in a row of its own, so the first card starts higher (decision 16).
             */}
-            {pill}
+            {hiredSentence || pill}
             <div className="tp-pchips">
               <button type="button" className={`chip tp-pchip tp-pfilter${nFilters ? " chip-on" : ""}`} onClick={() => setSideOverlay(true)} aria-label={`Sort and filter${nFilters ? `, ${plural(nFilters, "filter")} on` : ""}`}>
                 <IconFilter size={13} /> Filters{nFilters ? ` (${nFilters})` : ""}
@@ -2010,7 +2046,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             {scanLine}
             {followLine}
             <div id="tp-results" tabIndex={-1} className="tp-presults">
-              {empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} />}
+              {empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
             </div>
             {more}
             {scanNote}
@@ -2055,9 +2091,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 )}
                 {recordSwitch}
               </div>
-              {pill}
+              {hiredSentence || pill}
               <div className="tp-toolbar">
                 {tabs}
+                {hiredBtn}
                 <span className="tp-toolbar-sp" />
                 <span className="tp-count" aria-live="polite" aria-atomic="true">
                   <b className="num">{sorted.length}</b> {sorted.length === 1 ? noun[0] : noun[1]}
@@ -2090,6 +2127,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                         newSince={since.at}
                         tab={tab}
                         notMine={eff.notMine}
+                        hire={hireCtx}
                         sort={sort}
                         onSort={setSort}
                       />
@@ -2186,7 +2224,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         )}
         {icpOpen && <IcpSheet icp={me.icp} title={me.title} fn={me.function} companies={view.companies} onSave={saveIcp} onClose={() => setIcpOpen(false)} />}
         {saveOpen && (
-          <SaveViewSheet key={herePlace} defaultName={viewName(spelled, tab, recordType, fnOnly ? hireFn : null, me.function)} emailOn={view.email} onSave={saveView} onClose={() => setSaveOpen(false)} />
+          <SaveViewSheet
+            key={herePlace}
+            defaultName={viewName(hiredActive ? eff : spelled, tab, recordType, fnOnly ? hireFn : null, me.function)}
+            emailOn={view.email}
+            hires={hiredActive}
+            onSave={saveView}
+            onClose={() => setSaveOpen(false)}
+          />
         )}
         {editor && (
           <FactEditor
@@ -2352,7 +2397,13 @@ function Empty({
   onBrowse,
   elsewhere = [],
   hiring = null,
+  hired = null,
 }: {
+  /**
+   * Recently hired is on and nothing fits: what it looks for ("a fractional Finance leader in the
+   * last 6 months"), a longer window to try, any function, and the way out.
+   */
+  hired?: { words: string; wider: { label: string; go: () => void } | null; anyFn: (() => void) | null; off: () => void } | null;
   /** While searching: the other lists that have matches (one tap moves there). */
   elsewhere?: { n: number; noun: [string, string]; go: () => void }[];
   /**
@@ -2388,6 +2439,14 @@ function Empty({
     actions = [
       { label: `Search all ${noun}`, go: onSearchAll, kind: "pine" },
       { label: "Clear search", go: onClearSearch },
+    ];
+  } else if (hired && !q) {
+    h = `No ${noun} here hired ${hired.words}`;
+    p = "Try a longer window or any function. Your profile and the other filters still apply.";
+    actions = [
+      ...(hired.wider ? [{ label: hired.wider.label, go: hired.wider.go, kind: "pine" as const }] : []),
+      ...(hired.anyFn ? [{ label: "Any function", go: hired.anyFn }] : []),
+      { label: "Turn off Recently hired", go: hired.off },
     ];
   } else if (hiring) {
     const others = hiring.others > 0 ? [{ label: `See the ${hiring.others} in other functions`, go: hiring.onOthers }] : [];

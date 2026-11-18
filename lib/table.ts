@@ -81,7 +81,8 @@ import type {
   Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
   ScanSummary, View,
 } from "./tableTypes";
-import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
+import type { DigestData, DigestHires, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
+import { followsHires } from "./hired";
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
 import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
@@ -113,6 +114,12 @@ interface SeedEngagement {
   companyId: string;
   fields: Record<string, string>;
   verified?: boolean;
+  /**
+   * When the seat came into the table (ISO), for "new hires this week" (lib/hireAlerts.ts).
+   * scripts/add-seat-scan.mjs stamps it on the seats it adds. Seats from before carry none and are
+   * never counted as new.
+   */
+  addedAt?: string;
 }
 interface SeedContact {
   id: string;
@@ -4599,8 +4606,9 @@ export function remapScanFunctions(s: State, seed: Seed): number {
  */
 export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNew: number = MAX_ROLES): Promise<ScanApplyResult> {
   const res = await storeScan(found, nowIso, maxNew);
-  // Alerts in Slack for the roles this scan opened (lib/notify, loaded here so the files don't import each other at start).
-  if (res.opened) void import("./notify/events").then((n) => n.afterScan(res.at)).catch((e) => console.error("scan alerts failed", e));
+  // Alerts in Slack for the roles this scan opened, and the week's new hires for saved views that follow them, so this
+  // runs after every scan (lib/notify, loaded here so the files don't import each other at start). Nothing is sent when neither has news.
+  void import("./notify/events").then((n) => n.afterScan(res.at)).catch((e) => console.error("scan alerts failed", e));
   return res;
 }
 function storeScan(found: ScanCollectResult, nowIso: string | undefined, maxNew: number): Promise<ScanApplyResult> {
@@ -4982,7 +4990,13 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
       if (nowMs - Date.parse(t.closedAt) < WEEK) closedRoles++;
     } else if (newThisWeek(t, nowMs) && isOpenRole(e, s, tracks) && !isUnseen(t)) fresh.push(e);
   }
-  if (!fresh.length) return [];
+  // Saved views that follow hires ("Recently hired"): their new matches go in the email too, in a week with no new roles as well.
+  const alertsOf = s.connector?.alerts ?? {};
+  const hireViewsOf = (id: string) => (alertsOf[id] ?? []).filter((a) => a.email !== false && followsHires(a));
+  const anyHireViews = Object.keys(alertsOf).some((id) => hireViewsOf(id).length > 0);
+  if (!fresh.length && !anyHireViews) return [];
+  const hireMod = anyHireViews ? await import("./hireAlerts") : null;
+  const added = hireMod ? hireMod.seatAddedTimes(seed, s) : null;
   const count = new Map<string, number>();
   for (const e of fresh) {
     const fn = fnOf(e, s) ?? "Other";
@@ -4991,7 +5005,6 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
   const byFunction = [...count].map(([fn, n]) => ({ function: fn, n })).sort((a, b) => b.n - a.n || a.function.localeCompare(b.function));
   // Saved searches (the connector's alerts) match the new roles by free facts only. The HQ a member
   // matches on is the one they see: a hidden company's region.
-  const alertsOf = s.connector?.alerts ?? {};
   const roleFacts = fresh.map((e) => {
     const c = g.companies.get(e.companyId);
     const engs = [...g.engagements.values()].filter((x) => x.companyId === e.companyId);
@@ -5070,6 +5083,27 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     if (prof.digestOff) continue;
     const last = Date.parse(s.digest.members[m.id] ?? "");
     if (Number.isFinite(last) && nowMs - last < 6 * DAY) continue;
+    // The member's views that follow hires: companies that newly match each one, since their last email (a week at most).
+    let hires: DigestHires[] = [];
+    const hireViews = hireMod && added ? hireViewsOf(m.id) : [];
+    if (hireMod && added && hireViews.length) {
+      try {
+        const since = Math.max(Number.isFinite(last) ? last : 0, nowMs - WEEK);
+        const viewUrl = (place: string | null) => (place ? `${base}/?${place}` : `${base}/`);
+        hires = (await hireMod.newHires(m, hireViews, since, nowMs, added)).map((h) => ({
+          name: h.name,
+          n: h.n,
+          functions: h.functions,
+          inProfile: h.inProfile,
+          url: viewUrl(h.place),
+          rows: h.rows.map((r) => ({ company: r.company, function: r.function, start: r.start, url: `${viewUrl(h.place)}${h.place ? "&" : "?"}c=${encodeURIComponent(r.companyId)}` })),
+        }));
+      } catch (e) {
+        console.error("weekly email: new hires failed for one member", e);
+      }
+    }
+    // A week with no new roles: only members with new hires for a saved view get one.
+    if (!fresh.length && !hires.length) continue;
     const fn = prof.function ?? functionOf(prof.title || m.title);
     const mine = fn ? fresh.filter((e) => fnOf(e, s) === fn) : [];
     const listed = listFor(fn, mine);
@@ -5091,6 +5125,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         unsubscribeUrl: `${base}/api/table/unsubscribe?m=${pubId(m.id)}&s=${unsubSig(m.id)}`,
         rolesUrl: listed.url,
         roles: listed.roles,
+        ...(hires.length ? { hires } : {}),
       },
     });
   }

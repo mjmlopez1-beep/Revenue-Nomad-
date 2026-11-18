@@ -21,9 +21,10 @@ import { ActionError, connectorState, digestEnabled, inviteCode, perform, update
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
-  EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
-  type CoInfo, type FactRef, type Filters,
+  EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, hireOfRow, hiredOn, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
+  type CoInfo, type FactRef, type Filters, type SortKey,
 } from "@/app/post/model";
+import { cleanWindow } from "../hired";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
 import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
@@ -383,9 +384,24 @@ export interface SearchArgs {
   sales_cycle?: string;
   following?: boolean;
   unlocked?: boolean;
-  sort?: "fit" | "newest" | "name" | "employees" | "revenue";
+  /**
+   * Recently hired (the table's Filters.hiredFn and .hiredWithin, lib/hired.ts): companies with a
+   * fractional hire in this function, or any of a list, whose start is within hired_within_months.
+   */
+  hired_function?: string | string[];
+  /** The window in months (0 or left out: any time). Alone, a hire in any function. */
+  hired_within_months?: number;
+  sort?: "fit" | "newest" | "name" | "employees" | "revenue" | "recent_hire";
   limit?: number;
   offset?: number;
+}
+
+/** The hire a company matched Recently hired with: its function, start and role, the role only when the member can see it. Never who held the seat. */
+function recentHireOut(i: CoInfo, e: EngagementRec): ToolOut {
+  return {
+    seat_id: e.id,
+    ...readAll(e.cells, { function: "function", start: "start", role: "role" }, (field) => seatLocked(e, !!i.c.hidden, field)),
+  };
 }
 
 export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut> {
@@ -418,6 +434,14 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
     place = { country: inCountry.country, region: inCountry.region };
   }
   if (a.function) f.fn = [listValue("function", FUNCTIONS, a.function)];
+  // Recently hired, with the table's own rule (a hire in these functions whose start is in the window).
+  f.hiredFn = [...new Set(listValues("hired_function", FUNCTIONS, a.hired_function))];
+  if (a.hired_within_months !== undefined && a.hired_within_months !== null) {
+    const n = Number(a.hired_within_months);
+    if (!Number.isFinite(n) || n < 0) throw new ToolProblem("hired_within_months is a number of months, like 3, 6, 12 or 24. 0 means any time.");
+    f.hiredWithin = cleanWindow(n);
+  }
+  const hire = hiredOn(f) ? { fns: f.hiredFn, within: f.hiredWithin } : null;
   const hired = a.function_hired ? listValue("function_hired", FUNCTIONS, a.function_hired) : null;
   const notYet = a.no_function_yet ? listValue("no_function_yet", FUNCTIONS, a.no_function_yet) : null;
   const tab = a.hiring_now ? "hiring" : a.following ? "following" : a.unlocked ? "unlocked" : a.repeat_hirer ? "repeat" : "all";
@@ -432,8 +456,10 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
   if (hired) rows = rows.filter((r) => r.i.fnState.hired.includes(hired));
   // "No Marketing yet": they hired fractionals in other functions and none in this one (the app's "No Marketing seat yet").
   if (notYet) rows = rows.filter((r) => r.i.fnState.hired.length > 0 && !r.i.fnState.hired.includes(notYet) && !r.i.fnState.hiring.includes(notYet));
-  const sort = a.sort && ["fit", "newest", "name", "employees", "revenue"].includes(a.sort) ? a.sort : "fit";
-  rows = sortRows(rows, sort, false, q);
+  // Recently hired lists the most recent hire first, unless another order was asked for.
+  const sort: SortKey =
+    a.sort === "recent_hire" ? "hired" : a.sort && ["fit", "newest", "name", "employees", "revenue"].includes(a.sort) ? (a.sort as SortKey) : hire ? "hired" : "fit";
+  rows = sortRows(rows, sort, false, q, { hire });
   const limit = clampLimit(a.limit, 10, 25);
   const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
   const page = rows.slice(offset, offset + limit);
@@ -441,9 +467,18 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
     total: rows.length,
     showing: page.length,
     ...(offset + page.length < rows.length ? { next_offset: offset + page.length } : {}),
-    companies: page.map((r) => companySummary(r.i)),
+    companies: page.map((r) => {
+      const e = hire ? hireOfRow(r, hire.fns, hire.within) : null;
+      return { ...companySummary(r.i), ...(e ? { recent_hire: recentHireOut(r.i, e) } : {}) };
+    }),
     ...(rows.length === 0
-      ? { note: q ? "Nothing matched. Search reads company names, functions and industries, and the facts you can see. Names, roles and rates stay locked until unlocked, so search can't read them." : "Nothing matched these filters. Try fewer." }
+      ? {
+          note: q
+            ? "Nothing matched. Search reads company names, functions and industries, and the facts you can see. Names, roles and rates stay locked until unlocked, so search can't read them."
+            : hire && hire.within > 0
+              ? "Nothing matched these filters. Try a longer hired_within_months (12 or 24), another hired_function, or fewer filters."
+              : "Nothing matched these filters. Try fewer.",
+        }
       : {}),
   };
 }

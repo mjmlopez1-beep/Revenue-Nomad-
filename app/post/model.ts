@@ -9,13 +9,14 @@ import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } fr
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
-  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
+  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, standardIndustries, standardList,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
+import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startWords, windowPhrase, windowWords } from "@/lib/hired";
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "repeat" | "hiring" | "following" | "unlocked" | "needs";
-export type SortKey = "best" | "fit" | "newest" | "name" | "engagements" | "start" | "employees" | "revenue" | "fn" | "title" | "hq";
+export type SortKey = "best" | "fit" | "newest" | "name" | "engagements" | "start" | "hired" | "employees" | "revenue" | "fn" | "title" | "hq";
 
 /** `hint` is the tab's one line of explanation (its tooltip). */
 export const TABS: { key: Tab; label: string; hint?: string }[] = [
@@ -32,6 +33,8 @@ export const SORTS: { key: SortKey; label: string }[] = [
   { key: "name", label: "Company name" },
   { key: "engagements", label: "Most seats" },
   { key: "start", label: "Latest start" },
+  // The most recent fractional hire (lib/hired.ts), in the functions and window "Recently hired" picks.
+  { key: "hired", label: "Most recent hire" },
   { key: "fn", label: "Function" },
   { key: "title", label: "Title" },
   { key: "employees", label: "Most employees" },
@@ -40,9 +43,9 @@ export const SORTS: { key: SortKey; label: string }[] = [
 ];
 /** The sorts that mean something for each list: a seat sorts by its own start and function, a person by their title. */
 const SORTS_BY_TYPE: Record<RecordType, SortKey[]> = {
-  companies: ["best", "fit", "newest", "name", "engagements", "start", "employees", "revenue", "hq"],
-  engagements: ["best", "fit", "newest", "name", "start", "fn", "employees", "revenue"],
-  people: ["best", "fit", "newest", "name", "title", "hq"],
+  companies: ["best", "fit", "newest", "name", "engagements", "start", "hired", "employees", "revenue", "hq"],
+  engagements: ["best", "fit", "newest", "name", "start", "hired", "fn", "employees", "revenue"],
+  people: ["best", "fit", "newest", "name", "hired", "title", "hq"],
 };
 export const sortsFor = (t: RecordType) => SORTS.filter((s) => SORTS_BY_TYPE[t].includes(s.key));
 /** A sort the list can't use (Most seats, carried over to People) reads as Best fit there. */
@@ -266,6 +269,94 @@ export const isHire = (e: EngagementRec) => {
   return !type || FRACTIONAL_TYPES.includes(type);
 };
 
+/* ---------- recently hired (the rules are in lib/hired.ts) ---------- */
+
+/** One hire at a company: its seat, its function and the month its start stands for (null when no start is on file). */
+interface HireAt {
+  e: EngagementRec;
+  fn: string | null;
+  ym: string | null;
+}
+const hireCache = new WeakMap<CoInfo, HireAt[]>();
+/** A company's hires (isHire), the most recent start first, one with no start on file last. Worked out once per company. */
+function hiresAt(i: CoInfo): HireAt[] {
+  let h = hireCache.get(i);
+  if (!h) {
+    h = i.engs.filter(isHire).map((e) => ({ e, fn: fnOfSeat(e), ym: hireMonth(shown(e.cells.start)) }));
+    h.sort((a, b) => (b.ym ?? "").localeCompare(a.ym ?? ""));
+    hireCache.set(i, h);
+  }
+  return h;
+}
+/** The hires a row reads: a seat row its own seat (when it is a hire), a company or person row the company's. */
+const hiresOfRow = (r: Row): HireAt[] => {
+  if (r.e && !r.p) return isHire(r.e) ? [{ e: r.e, fn: fnOfSeat(r.e), ym: hireMonth(shown(r.e.cells.start)) }] : [];
+  return hiresAt(r.i);
+};
+/** In one of the functions picked, or any function when none is. */
+const fnFits = (fns: readonly string[], fn: string | null) => !fns.length || (!!fn && fns.includes(fn));
+/** Inside the window: any time (0), or a start month at most `within` months before this month (a later month too). */
+const windowFits = (ym: string | null, within: number, now: number) => !(within > 0) || (!!ym && monthsAgo(ym, now) <= within);
+
+/** The "Recently hired" filter is on: a function picked, or a window of months. (Filters made before the keys existed read as off.) */
+export const hiredOn = (f: Pick<Filters, "hiredFn" | "hiredWithin">) => (f.hiredFn?.length ?? 0) > 0 || (f.hiredWithin ?? 0) > 0;
+
+/** A company's hires in `fns` (none picked: any function) inside the window (0: any time), the most recent start first. */
+export function hiresOf(i: CoInfo, fns: readonly string[], within: number, now = Date.now()): EngagementRec[] {
+  return hiresAt(i)
+    .filter((h) => fnFits(fns, h.fn) && windowFits(h.ym, within, now))
+    .map((h) => h.e);
+}
+
+/**
+ * The hire a row stands for under "Recently hired": a seat row its own seat when that seat is a
+ * hire that fits, a company or person row the company's most recent hire that fits. Null when none.
+ */
+export function hireOfRow(r: Row, fns: readonly string[], within: number, now = Date.now()): EngagementRec | null {
+  for (const h of hiresOfRow(r)) if (fnFits(fns, h.fn) && windowFits(h.ym, within, now)) return h.e;
+  return null;
+}
+
+/**
+ * The hire line's words: "Hired a fractional CFO" and "Mar 2026". The role title only when the
+ * member can see it (a value): a seat whose holder is on file keeps its role locked with the
+ * holder (one purchase), and then the line names the function ("Hired a fractional Finance leader").
+ */
+export function hireLine(e: EngagementRec): { what: string; when: string | null } {
+  const role = e.cells.role?.s === "value" ? e.cells.role.v : null;
+  const start = shown(e.cells.start);
+  return { what: `Hired ${hireWhat(role, shown(e.cells.function))}`, when: start ? startWords(start) || null : null };
+}
+
+/** What "Recently hired" reads, for the rows and the sort. */
+export interface HireCtx {
+  fns: string[];
+  within: number;
+}
+
+/**
+ * The function "Recently hired" opens on. The member's own answer to "who usually gets hired
+ * before you" when there is one (`before`, from onboarding). Else the function, other than their
+ * own and the catch-alls, that the most companies `keep` lets through hired lately. Else Marketing,
+ * or Sales for a marketer.
+ */
+export function suggestHiredFn(infos: CoInfo[], mine: string | null, keep: (i: CoInfo) => boolean = () => true, before?: unknown): string {
+  const own = namedFn(mine);
+  const asked = Array.isArray(before) ? before.find((x): x is string => typeof x === "string" && FUNCTIONS.includes(x) && x !== own && !!namedFn(x)) : undefined;
+  if (asked) return asked;
+  const now = Date.now();
+  const n = new Map<string, number>();
+  for (const i of infos) {
+    if (isFirm(i.c) || !keep(i)) continue;
+    const seen = new Set<string>();
+    for (const h of hiresAt(i)) if (h.fn && h.fn !== own && namedFn(h.fn) && windowFits(h.ym, HIRED_DEFAULT_WINDOW, now)) seen.add(h.fn);
+    for (const fn of seen) n.set(fn, (n.get(fn) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  for (const fn of FUNCTIONS) if ((n.get(fn) ?? 0) > 0 && (!best || n.get(fn)! > n.get(best)!)) best = fn;
+  return best ?? (own === "Marketing" ? "Sales" : "Marketing");
+}
+
 function infoOf(c: CompanyRec): CoInfo {
   const website = shown(c.cells.website);
   const domain = website ? hostOf(website) : c.iconDomain;
@@ -413,6 +504,14 @@ export function fitReason(i: CoInfo): string {
 /* ---------- filters ---------- */
 
 export interface Filters {
+  /**
+   * "Recently hired": a hire (isHire) in one of these functions, any function when none is picked,
+   * with a start inside `hiredWithin`. A company matches with one such hire, a seat row when it is
+   * one, a person row when their company has one. The rules are in lib/hired.ts.
+   */
+  hiredFn: string[];
+  /** The window, in months: 3, 6, 12 or 24 in the app (a link may say any whole number up to 240). 0 is any time. */
+  hiredWithin: number;
   rateKnown: boolean;
   contactKnown: boolean;
   notMine: boolean;
@@ -444,6 +543,9 @@ export interface Filters {
 }
 
 export const EMPTY_FILTERS: Filters = {
+  // First, so an address reads "hiredFn:Finance~hiredWithin:6~notMine~icp" (encodeFilters follows this order).
+  hiredFn: [],
+  hiredWithin: 0,
   rateKnown: false,
   contactKnown: false,
   notMine: false,
@@ -864,6 +966,13 @@ function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
     }
   }
   if (f.fitMin > 0) out.push({ group: "fitMin", test: (r) => r.i.c.friendly.score >= f.fitMin });
+  // Recently hired: a hire in the functions picked, inside the window (lib/hired.ts).
+  if (hiredOn(f)) {
+    const now = Date.now();
+    const fns = f.hiredFn ?? [];
+    const within = f.hiredWithin ?? 0;
+    out.push({ group: "hired", test: (r) => hireOfRow(r, fns, within, now) !== null });
+  }
   return out;
 }
 
@@ -894,6 +1003,14 @@ export interface Facets {
   hiringMine: number;
   /** Rows the other filters let through with the ideal client lifted ("Show everyone"). */
   everyone: number;
+  /**
+   * Recently hired, counted with its own selection lifted: rows with a hire in each function inside
+   * the window picked (`hiredFn`), rows with a hire in the functions picked inside each window of
+   * HIRED_WINDOWS (`hiredWithin`), and rows with any hire inside the window picked (`hiredAny`).
+   */
+  hiredFn: Record<string, number>;
+  hiredWithin: Record<number, number>;
+  hiredAny: number;
 }
 
 /** Filtered rows plus counts for every filter option (each group counted with its own selection lifted). */
@@ -966,7 +1083,33 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
   const hiringMine = mineFn ? tabBase.filter((r) => tabTest("hiring", r) && rowOpenFns(r).includes(mineFn)).length : 0;
   let everyone = 0;
   for (const r of rows) if (pass(r, cs, "icp")) everyone++;
-  return { rows: result, facets: { toggles, lists, fit, tabs, hiringMine, everyone } };
+  // Recently hired: each function in the window picked, each window for the functions picked, and any function.
+  const now = Date.now();
+  const pickedFns = f.hiredFn ?? [];
+  const pickedWithin = f.hiredWithin ?? 0;
+  const hiredFn: Record<string, number> = Object.fromEntries(FUNCTIONS.map((o) => [o, 0]));
+  const hiredWithin: Record<number, number> = Object.fromEntries(HIRED_WINDOWS.map((w) => [w, 0]));
+  let hiredAny = 0;
+  for (const r of rows) {
+    if (!pass(r, cs, "hired")) continue;
+    const hs = hiresOfRow(r);
+    if (!hs.length) continue;
+    const inWin = new Set<string>();
+    let any = false;
+    // The most recent start among the hires in the functions picked ("" for one with no start on file).
+    let newest: string | null = null;
+    for (const h of hs) {
+      if (windowFits(h.ym, pickedWithin, now)) {
+        any = true;
+        if (h.fn) inWin.add(h.fn);
+      }
+      if (fnFits(pickedFns, h.fn) && (newest === null || (h.ym ?? "") > newest)) newest = h.ym ?? "";
+    }
+    if (any) hiredAny++;
+    for (const fn of inWin) if (fn in hiredFn) hiredFn[fn]++;
+    if (newest !== null) for (const w of HIRED_WINDOWS) if (windowFits(newest || null, w, now)) hiredWithin[w]++;
+  }
+  return { rows: result, facets: { toggles, lists, fit, tabs, hiringMine, everyone, hiredFn, hiredWithin, hiredAny } };
 }
 
 export function activeCount(f: Filters): number {
@@ -974,8 +1117,14 @@ export function activeCount(f: Filters): number {
   for (const k of TOGGLES) if (f[k]) n++;
   for (const k of LISTS) n += f[k].length;
   if (f.fitMin) n++;
+  // Recently hired is one filter (one chip), whatever it names.
+  if (hiredOn(f)) n++;
   return n;
 }
+
+/** The Recently hired filter as its chip reads: "Hired a fractional Finance leader, last 6 months". */
+export const hiredLabel = (f: Pick<Filters, "hiredFn" | "hiredWithin">) =>
+  `Hired ${fnLeader(f.hiredFn)}${f.hiredWithin > 0 ? `, last ${windowWords(f.hiredWithin)}` : ", any time"}`;
 
 /** No filters, keeping the Ideal Fractional Profile pill as it is (Clear all clears filters, not who the member hunts). */
 export const clearedFilters = (f: Filters): Filters => ({ ...EMPTY_FILTERS, icp: f.icp });
@@ -983,6 +1132,7 @@ export const clearedFilters = (f: Filters): Filters => ({ ...EMPTY_FILTERS, icp:
 /** Removable chips for the active filters. */
 export function activeChips(f: Filters): { id: string; label: string; clear: (f: Filters) => Filters }[] {
   const out: { id: string; label: string; clear: (f: Filters) => Filters }[] = [];
+  if (hiredOn(f)) out.push({ id: "hired", label: hiredLabel(f), clear: (x) => ({ ...x, hiredFn: [], hiredWithin: 0 }) });
   for (const k of TOGGLES) if (f[k]) out.push({ id: k, label: TOGGLE_LABEL[k], clear: (x) => ({ ...x, [k]: false }) });
   // A whole industry group picked reads as one chip ("Industry Software (all)") that clears all of it.
   const grouped = new Set<string>();
@@ -1014,6 +1164,8 @@ export interface SortCtx {
   me?: Pick<Me, "icp" | "function"> | null;
   /** Hiring now: open roles in this function first, and Recently updated reads as newest open role. */
   fnFirst?: string | null;
+  /** Recently hired: "Most recent hire" reads the hires in these functions inside this window. Without it, every hire. */
+  hire?: HireCtx | null;
 }
 export function sortRows(rows: Row[], sort: SortKey, needsFirst = false, q = "", ctx: SortCtx = {}): Row[] {
   const sorted = sortBy(rows, sort, needsFirst, ctx);
@@ -1059,6 +1211,19 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean, ctx: SortCtx = 
   };
   // A seat (and a person tied to one) in the member's own function leads, then a fractional or
   // interim seat ahead of a full-time one. Company rows have no seat of their own: 0.
+  // Most recent hire: the start month of the row's most recent hire that fits ("0" for one with no start, "" for no hire), once per row.
+  const hireBy = ctx.hire ?? { fns: [], within: 0 };
+  const hireNow = Date.now();
+  const hireMemo = new Map<Row, string>();
+  const hiredAt = (r: Row) => {
+    let v = hireMemo.get(r);
+    if (v === undefined) {
+      const e = hireOfRow(r, hireBy.fns, hireBy.within, hireNow);
+      v = e ? hireMonth(shown(e.cells.start)) ?? "0" : "";
+      hireMemo.set(r, v);
+    }
+    return v;
+  };
   const myFn = me ? namedFn(me.function) : null;
   const seatTier = (r: Row) => {
     if (!r.e || !me) return 0;
@@ -1072,6 +1237,7 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean, ctx: SortCtx = 
     name: (a, b) => byName(a, b) || start(b).localeCompare(start(a)) || byKey(a, b),
     engagements: (a, b) => b.i.c.engagements.length - a.i.c.engagements.length || score(b) - score(a) || byKey(a, b),
     start: (a, b) => start(b).localeCompare(start(a)) || score(b) - score(a) || byKey(a, b),
+    hired: (a, b) => hiredAt(b).localeCompare(hiredAt(a)) || score(b) - score(a) || byKey(a, b),
     employees: (a, b) => emp(b) - emp(a) || score(b) - score(a) || byKey(a, b),
     revenue: (a, b) => rev(b) - rev(a) || score(b) - score(a) || byKey(a, b),
     fn: (a, b) => byFn(a, b) || start(b).localeCompare(start(a)) || byKey(a, b),
@@ -1468,6 +1634,80 @@ export function checkSteps(
   return { steps, nudge };
 }
 
+/* ---------- places: the table's address, and saved views ---------- */
+
+/** The record type as the address writes it (t=). */
+export const TYPE_PARAM: Record<RecordType, string> = { companies: "companies", engagements: "seats", people: "people" };
+
+/**
+ * Filters as one short query value: only what differs from no filters, "~" between them. A
+ * switch is its key ("rateKnown"), a list is "key:a|b", a number is "key:40". The keys come from
+ * EMPTY_FILTERS, so a filter added there round-trips with no change here:
+ * "hiredFn:Finance~hiredWithin:6~notMine~icp".
+ */
+export function encodeFilters(f: Filters): string {
+  const parts: string[] = [];
+  for (const k of Object.keys(EMPTY_FILTERS) as (keyof Filters)[]) {
+    const v = f[k];
+    if (typeof v === "boolean") {
+      if (v) parts.push(k);
+    } else if (typeof v === "number") {
+      if (v) parts.push(`${k}:${v}`);
+    } else if (Array.isArray(v) && v.length) parts.push(`${k}:${v.join("|")}`);
+  }
+  return parts.join("~");
+}
+export function decodeFilters(s: string): Filters {
+  const f = { ...EMPTY_FILTERS } as Record<string, unknown>;
+  for (const part of s.split("~")) {
+    const at = part.indexOf(":");
+    const k = at < 0 ? part : part.slice(0, at);
+    const rest = at < 0 ? "" : part.slice(at + 1);
+    if (!k || !Object.prototype.hasOwnProperty.call(EMPTY_FILTERS, k)) continue;
+    const d = (EMPTY_FILTERS as unknown as Record<string, unknown>)[k];
+    if (typeof d === "boolean") f[k] = true;
+    else if (typeof d === "number") {
+      const n = Number(rest);
+      if (Number.isFinite(n)) f[k] = n;
+    } else if (Array.isArray(d)) f[k] = rest.split("|").filter(Boolean).slice(0, 50);
+  }
+  // A link or saved view from before the 110 industries: old labels take today's ("Software" is every Software industry).
+  const x = f as unknown as Filters;
+  return {
+    ...x,
+    industry: standardIndustries(x.industry),
+    employees: standardList("employees", x.employees),
+    revenue: standardList("revenue", x.revenue),
+    // Recently hired reads functions on the list only, and a whole number of months (0: any time).
+    hiredFn: x.hiredFn.filter((v) => FUNCTIONS.includes(v)),
+    hiredWithin: cleanWindow(x.hiredWithin),
+  };
+}
+
+/** A place written out in full (a saved view): it must open the same whatever the member's defaults are later. */
+export function absolutePlace(x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; all?: boolean }): string {
+  const q = new URLSearchParams();
+  q.set("v", x.v);
+  q.set("t", TYPE_PARAM[x.t]);
+  if (x.s) q.set("s", x.s);
+  if (x.q.trim()) q.set("q", x.q.trim());
+  q.set("f", encodeFilters(x.f) || "-");
+  if (x.all && x.v === "hiring") q.set("af", "1");
+  return q.toString();
+}
+
+/**
+ * What a saved view's place says, for whoever reads it outside the table (the weekly email and
+ * alerts, lib/hireAlerts.ts): the list, the view, the filters and the search. Null parts were
+ * not in it (the table then uses the member's defaults).
+ */
+export function placeFilters(place: string): { t: RecordType | null; v: Tab | null; f: Filters; q: string } {
+  const p = new URLSearchParams(place.replace(/^\?/, ""));
+  const t = (Object.keys(TYPE_PARAM) as RecordType[]).find((k) => TYPE_PARAM[k] === p.get("t")) ?? null;
+  const raw = p.get("f");
+  return { t, v: tabOf(p.get("v")), f: raw === null ? { ...EMPTY_FILTERS } : decodeFilters(raw === "-" ? "" : raw), q: (p.get("q") ?? "").slice(0, 200) };
+}
+
 /* ---------- saved views ---------- */
 
 /** The filters with the ideal client written out (a saved view keeps what it showed, whatever the member's clients are later). */
@@ -1477,7 +1717,11 @@ export function withIcpSpelled(f: Filters, icp: Icp | null | undefined): Filters
   return { ...f, icp: false, industry: add(f.industry, icp!.industries), employees: add(f.employees, icp!.employees), revenue: add(f.revenue, icp!.revenue), country: add(f.country, icp!.countries.map(countryName)) };
 }
 
-/** What a saved view matches in the weekly email (open roles, by free facts). */
+/**
+ * What a saved view matches in the weekly email: open roles by free facts, or, for a view that
+ * follows hires (Recently hired), its functions and window. The email reads a view that follows
+ * hires from its place (lib/hireAlerts.ts), so it lists what reopening the view lists.
+ */
 export function criteriaOf(f: Filters, hireFn: string | null) {
   const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
   return {
@@ -1487,6 +1731,7 @@ export function criteriaOf(f: Filters, hireFn: string | null) {
     ...(f.revenue.length ? { revenue: f.revenue } : {}),
     ...(f.country.length ? { country: f.country } : {}),
     ...(f.hq.length === 1 ? { hq: f.hq[0] } : {}),
+    ...(hiredOn(f) ? { hiredFn: f.hiredFn, hiredWithin: f.hiredWithin } : {}),
   };
 }
 
@@ -1496,6 +1741,25 @@ export function criteriaOf(f: Filters, hireFn: string | null) {
  * member's function for that one.
  */
 export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string | null = null, myFn: string | null = null): string {
+  // Recently hired leads with the hire, so a saved view's chip tells views apart even cut short:
+  // "Hired a fractional Finance leader in the last 6 months, in my profile, no fractional Sales yet".
+  if (hiredOn(f)) {
+    const rest = viewName({ ...f, hiredFn: [], hiredWithin: 0, notMine: false, icp: false }, tab, "companies", null, myFn);
+    const parts = [
+      `Hired ${fnLeader(f.hiredFn)} ${windowPhrase(f.hiredWithin)}`,
+      f.icp ? "in my profile" : "",
+      f.notMine && namedFn(myFn) ? `no fractional ${myFn} yet` : "",
+      type === "engagements" ? "seats" : type === "people" ? "people" : "",
+      rest === "Companies" ? "" : rest.replace(/^Companies(, )?/, ""),
+    ].filter(Boolean);
+    // At most 100 characters, whole parts only.
+    let name = parts[0];
+    for (const p of parts.slice(1)) {
+      if (name.length + 2 + p.length > 100) break;
+      name = `${name}, ${p}`;
+    }
+    return name.slice(0, 100);
+  }
   const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
   const roles = tab === "hiring" || type === "engagements" || fns.length > 0;
   const subject = fns.length ? `${fns.join(" or ")} ${tab === "hiring" ? "roles" : "seats"}` : tab === "hiring" ? "Open roles" : type === "people" ? "People" : roles ? "Seats" : "Companies";

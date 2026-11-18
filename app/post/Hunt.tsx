@@ -334,8 +334,20 @@ export function IcpSheet({
   );
 }
 
-/** "Save this view": a name (made from the filters) and the weekly email. */
-export function SaveViewSheet({ defaultName, emailOn, onSave, onClose }: { defaultName: string; emailOn: boolean; onSave: (name: string, email: boolean) => Promise<boolean>; onClose: () => void }) {
+/** "Save this view": a name (made from the filters) and the weekly email. `hires`: the view follows hires (Recently hired), so the email sends new hires, not open roles. */
+export function SaveViewSheet({
+  defaultName,
+  emailOn,
+  hires = false,
+  onSave,
+  onClose,
+}: {
+  defaultName: string;
+  emailOn: boolean;
+  hires?: boolean;
+  onSave: (name: string, email: boolean) => Promise<boolean>;
+  onClose: () => void;
+}) {
   const [name, setName] = useState(defaultName);
   const [email, setEmail] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -379,9 +391,11 @@ export function SaveViewSheet({ defaultName, emailOn, onSave, onClose }: { defau
           <span className="tp-ftoggle-l">Email me new matches each week</span>
         </button>
         <p className="hunt-note">
-          {emailOn
-            ? "The weekly email lists the open roles that came in matching this view. If you connect Merlin to Claude (Integrations), it can open this view too."
-            : "Email isn't switched on for the pilot yet. Your view is saved, and the weekly email starts once it is. If you connect Merlin to Claude (Integrations), it can open this view too."}
+          {!emailOn
+            ? "Email isn't switched on for the pilot yet. Your view is saved, and the weekly email starts once it is. If you connect Merlin to Claude (Integrations), it can open this view too."
+            : hires
+              ? "The weekly email lists the companies that newly match this view, when a hire like this one is added. Slack gets them too if you connect it (Integrations)."
+              : "The weekly email lists the open roles that came in matching this view. If you connect Merlin to Claude (Integrations), it can open this view too."}
         </p>
       </form>
     </Sheet>

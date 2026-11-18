@@ -65,7 +65,28 @@ export type AlertItem =
       mine: number;
       roles: { companyId: string; label: string }[];
       alerts: { name: string; n: number }[];
+      /**
+       * Saved views that follow hires ("Recently hired"): the companies that newly match each one
+       * since the last such post (a week at most), in free facts only. A scan with no new roles can
+       * still carry these. Left out when there are none.
+       */
+      hires?: HireNews[];
     };
+
+/** One saved view that follows hires, and what newly matches it, as an alert carries it. */
+export interface HireNews {
+  name: string;
+  /** Companies that newly match. */
+  n: number;
+  /** The functions the view follows (empty: any function). */
+  functions: string[];
+  /** The view narrows to the member's Ideal Fractional Profile. */
+  inProfile: boolean;
+  /** The view's place in the app (an address query), or null. */
+  place: string | null;
+  /** Up to 3: the company's public id and "Acme Robotics, Finance, Mar 2026" (a locked company is never named). */
+  rows: { companyId: string; label: string }[];
+}
 
 export interface MemberIntegrations {
   slack?: StoredDest;
@@ -75,6 +96,11 @@ export interface MemberIntegrations {
   lastSent: Partial<Record<AlertKind, string>>;
   /** Events waiting for the window to open again. */
   pending: Partial<Record<AlertKind, AlertItem[]>>;
+  /**
+   * The last scan whose post told this member about new hires for their saved views (ISO). The
+   * next one counts seats added after it, so a second scan in a week never repeats a hire.
+   */
+  hiresAt?: string;
 }
 
 export interface IntegrationsState {

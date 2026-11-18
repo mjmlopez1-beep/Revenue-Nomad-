@@ -1,0 +1,237 @@
+/*
+ * "Recently hired" (Hired.tsx): the sentence over the table, its pickers, the way in beside the
+ * views, and the hire line in rows and cards (Tables.tsx, Cards.tsx). hired- classes.
+ * The sentence is the pine card the Ideal Fractional Profile pill uses (it takes the pill's place
+ * while it is up), its controls are chips in the line of text.
+ */
+
+.hired {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 8px 10px 16px;
+  border-radius: var(--r-card);
+  background: var(--pine);
+  color: #fff;
+}
+.hired-main {
+  flex: 1;
+  min-width: 0;
+}
+.hired-s {
+  margin: 0;
+  font-size: 17px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: pretty;
+}
+.hired-fixed {
+  font-weight: 700;
+}
+/* A control in the sentence: a chip that reads as part of it. */
+.hired-b {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--r-chip);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  line-height: 22px;
+  vertical-align: baseline;
+  cursor: pointer;
+  transition: background var(--t), border-color var(--t);
+}
+.hired-b:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.hired-b:focus-visible,
+.hired-x:focus-visible,
+.hired-btn:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+.hired-b-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hired-b svg {
+  flex: none;
+}
+/* The "No fractional Sales yet" switch: on carries a volt check, off is a dashed line to tap. */
+.hired-b[aria-pressed="true"] svg {
+  color: var(--volt);
+}
+.hired-b.off {
+  border-style: dashed;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 600;
+}
+.hired-n {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: rgba(255, 255, 255, 0.78);
+}
+.hired-x {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background var(--t);
+}
+.hired-x:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* The pickers. */
+.hired-menu .tp-menu-item {
+  min-height: 38px;
+}
+.hired-cnt {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.hired-menu .tp-menu-item.on .hired-cnt {
+  color: var(--pine);
+}
+.hired-menu .tp-menu-item.hired-zero {
+  color: var(--faint);
+  font-weight: 500;
+}
+.hired-yours {
+  font-weight: 500;
+  color: var(--muted);
+}
+.hired-note {
+  margin: 6px 10px 4px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* The way in, beside the views: an outline chip, pine once it is on. */
+.hired-btn {
+  align-self: center;
+  height: 30px;
+  gap: 6px;
+  padding: 0 10px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.hired-btn:hover {
+  border-color: var(--pine);
+  background: var(--surface-2);
+}
+.hired-btn.chip-on {
+  color: #fff;
+}
+.hired-btn.chip-on:hover {
+  background: var(--pine-hover);
+  border-color: var(--pine-hover);
+}
+.hired-icon {
+  flex: none;
+}
+.hired-pchip .hired-icon {
+  margin-right: 2px;
+}
+
+/* The hire line in a row: "Hired a fractional CFO · Mar 2026". The who truncates, the month never does. */
+.hired-line {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.hired-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.hired-when {
+  flex: none;
+  white-space: nowrap;
+  color: var(--muted);
+}
+/* A table cell grows to its longest line: the line keeps to a fixed width, the way the seat column's stack does. */
+.tp-table .w-hire {
+  min-width: 260px;
+}
+.tp-table .hired-line {
+  max-width: 320px;
+}
+.hired-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hired-cell .tp-fn-gap {
+  align-self: flex-start;
+}
+/* Phone cards: the hire line under the firmographics. */
+.tp-pcard .hired-line {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+/* Phones: the list's children carry their own 16px gutter (as the profile pill does). */
+.tp-main-phone > .hired {
+  margin: 12px 16px;
+}
+@media (max-width: 767px) {
+  .hired {
+    padding: 6px 4px 10px 12px;
+  }
+  .hired-s {
+    font-size: 16px;
+    line-height: 46px;
+  }
+  .hired-b {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+  .hired-x {
+    width: 44px;
+    height: 44px;
+    margin-top: 2px;
+  }
+  .hired-menu .tp-menu-item {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hired-b,
+  .hired-x,
+  .hired-btn {
+    transition: none;
+  }
+}
