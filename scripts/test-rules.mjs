@@ -215,10 +215,15 @@ function seedFacts(view, n) {
   if (out.length < n) throw new Error(`only ${out.length} untouched seed facts`);
   return out;
 }
-/** Companies to add test seats to: visible, no open role, not used by another check. */
+/**
+ * Companies to add test seats to: visible, no open role, not used by another check, and no seat
+ * from the seat scan nobody has claimed (a member's own seat that matches one claims it instead).
+ */
 const usedHosts = new Set();
 function host(view) {
-  const c = view.companies.find((x) => !x.hidden && x.friendly.open === 0 && !x.mine && x.engagements.length > 0 && !usedHosts.has(x.id) && !/^Qa /.test(x.name));
+  const c = view.companies.find(
+    (x) => !x.hidden && x.friendly.open === 0 && !x.mine && x.engagements.length > 0 && !x.engagements.some((e) => e.claimable) && !usedHosts.has(x.id) && !/^Qa /.test(x.name),
+  );
   if (!c) throw new Error("no host company left");
   usedHosts.add(c.id);
   return c;
@@ -566,12 +571,14 @@ section("seat", async () => {
   const buy = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "rate" });
   check("others still unlock what she added", buy.status === 200 && buy.json?.cells?.[0]?.cell?.v === "$2k/mo", buy.json);
 
-  // "This isn't me" on a seat she added herself takes her name off it.
+  // "Remove this seat" on a seat she added herself: what she added comes off with its credits, the
+  // member who paid for her rate gets it back, and the seat goes (nothing else is on it).
+  const uRefund = (await U.view()).me.credits;
   const not = await Y.act({ type: "notMine", engagementId: eid });
-  check("this isn't me on her own seat unlinks it and sends the name to review", not.status === 200 && /^Got it\. That seat is no longer linked to you\./.test(not.json?.message ?? ""), not.json?.message ?? not.json);
-  check("the seat is no longer hers", engOf(await Y.view(), eid)?.yours === false);
+  check("Remove this seat on her own seat takes back what she added", not.status === 200 && /^Removed that seat\. What you added to it came off too\. The \d+ credits it earned came off your balance\.$/.test(not.json?.message ?? ""), not.json?.message ?? not.json);
+  check("the seat is gone, and the rate she was paid for is refunded", !engOf(await Y.view(), eid) && (await U.view()).me.credits === uRefund + 1);
   const late = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "sourced", value: "Referral" });
-  check("and takes no more facts from her", late.status === 400 && late.json?.error === HOLDER_ONLY, late.json);
+  check("and takes no more facts from her", late.status === 400, late.json);
 
   // On a name from our own records it takes the name off the seat for everyone, and an admin checks it.
   const sm = seedHolders[seedHolders.length - 1];
@@ -1372,21 +1379,22 @@ section("person", async () => {
   check("a title added later shows free to the member who holds the name", fillT.status === 200 && lpB?.cells.title?.v === LATER && (await B.view()).me.credits === STARTER - 2, lpB?.cells.title);
   check("and stays locked for a member who doesn't", lpC?.cells.title?.s === "locked", lpC?.cells.title);
 
-  // Nobody adds a title (or contact details) to a person whose name they can't see.
+  // Nobody adds a title (or an email, phone or LinkedIn) to a person whose name they can't see.
   const E = await member("Ed Entitled");
   const add3 = await A.act({ type: "addPerson", companyId: companyNamed(await A.view(), coName).id, person: { name: "Nia Notitle" } });
   const np = companyNamed(await E.view(), coName)?.people.find((p) => p.cells.title?.s === "empty");
   const e0 = (await E.view()).me.credits;
-  const eFill = await E.act({ type: "fill", entity: "contact", id: np?.id, field: "title", value: "CFO" });
-  const np2 = companyNamed(await E.view(), coName)?.people.find((p) => p.id === np?.id);
+  const eBlind = await E.act({ type: "fill", entity: "contact", id: np?.id, field: "title", value: "CFO" });
+  const np1 = companyNamed(await E.view(), coName)?.people.find((p) => p.id === np?.id);
   check(
     "adding a title to a person whose name you can't see is refused, and earns nothing",
-    add3.status === 200 && eFill.status === 400 && eFill.json?.error === "Unlock their name and title first. Then you can add what you know about them." && np2?.cells.title?.s === "empty" && (await E.view()).me.credits === e0,
-    { fill: eFill.json, title: np2?.cells.title?.s },
+    add3.status === 200 && eBlind.status === 400 && eBlind.json?.error === "Unlock their name and title first. Then you can add what you know about them." && np1?.cells.title?.s === "empty" && (await E.view()).me.credits === e0,
+    { fill: eBlind.json, title: np1?.cells.title?.s },
   );
   const eUn = await E.act({ type: "unlock", entity: "contact", id: np.id, field: "name" });
-  const eFill2 = await E.act({ type: "fill", entity: "contact", id: np.id, field: "title", value: "CFO" });
-  check("  once the name is unlocked (1 credit), the title can be added and earns 1", eUn.status === 200 && eFill2.status === 200 && (await E.view()).me.credits === e0, [eUn.json?.message, eFill2.json?.error ?? eFill2.json?.message]);
+  const eFill = await E.act({ type: "fill", entity: "contact", id: np?.id, field: "title", value: "CFO" });
+  const np2 = companyNamed(await E.view(), coName)?.people.find((p) => p.id === np?.id);
+  check("  once the name is unlocked (1 credit), adding the title earns 1", eUn.status === 200 && eFill.status === 200 && np2?.cells.title?.v === "CFO" && np2.cells.name?.s === "value" && (await E.view()).me.credits === e0, { un: eUn.json, fill: eFill.json, name: np2?.cells.name?.s });
 
   // Removal refunds each payer once per name and title, whichever half they paid for.
   const adm = await admin();
