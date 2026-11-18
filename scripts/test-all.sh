@@ -94,6 +94,8 @@ run seatscan env SEATSCAN_PORT="$PORT" npx tsx scripts/test-seatscan.mts
 run names env NAMES_PORT="$PORT" npx tsx scripts/test-names.mts
 # Referral partners: Invite to connect, the claim bonus and the conversation it opens, Message, the Referral partners page and the connector's warm paths, on a made-up seed and key, with its own server.
 run partners env PARTNERS_PORT="$PORT" npx tsx scripts/test-partners.mts
+# Plans and payments (lib/plan.ts, lib/billing): the trial and its extension, pause, cancel, the Stripe webhook (signature, each event, once), monthly credits and top-ups, Free's limits on and off, nothing changed with billing off. Fetch replaced: nothing reaches Stripe.
+run billing npx tsx scripts/test-billing.mts
 # Saved views: rename, the same view twice, remove and Undo, on the server and through the connector, on a made-up seed.
 run views npx tsx scripts/test-views.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.

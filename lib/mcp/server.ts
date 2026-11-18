@@ -3,14 +3,16 @@
  * Tool descriptions are written for the model: they say what the table holds and how to use it
  * well (warm paths, what "fractional friendly" means, and that every unlock asks first).
  *
- * Limits: 60 tool calls a minute and 2,000 a day per member (in memory, one server process).
+ * Limits: 60 tool calls a minute and 2,000 a day per member (in memory, one server process). On
+ * Free while billing is live, 20 a day (lib/billing/rules.ts FREE_MCP_PER_DAY), counted the same way.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { BUSY_MESSAGE, DOWN_MESSAGE, isBusy, isDown } from "../apiGuard";
 import { limited } from "../rateLimit";
-import { touch } from "../table";
+import { billingVisit, claudePerDay, touch } from "../table";
+import { upgradeUrl } from "../plan";
 import { BUSINESS_MODELS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
 import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
@@ -53,8 +55,13 @@ async function run(ctx: T.Ctx, work: () => Promise<T.ToolOut>): Promise<CallTool
   const id = ctx.member.id;
   if (limited(`mcp-day:${id}`, PER_DAY, 24 * 60 * 60 * 1000)) return text({ error: `That's ${PER_DAY} requests today, which is the daily limit. It resets within 24 hours.` }, true);
   if (limited(`mcp-min:${id}`, PER_MINUTE, 60_000)) return text({ error: `That's ${PER_MINUTE} requests in a minute, which is the limit. Wait a minute, then try again.` }, true);
+  // Free, while billing is live: FREE_MCP_PER_DAY requests a day (lib/billing). Pro keeps the limits above.
+  const cap = await claudePerDay(id).catch(() => null);
+  if (cap !== null && limited(`mcp-free:${id}`, cap, 24 * 60 * 60 * 1000))
+    return text({ error: `That's ${cap} requests today, the most on Merlin's Free plan. It resets within 24 hours. Pro has no daily cap: ${upgradeUrl(ctx.origin, "claude")}` }, true);
   // A visit, as in the app (written at most once per 6 hours).
   void touch(ctx.member.token).catch(() => {});
+  void billingVisit(ctx.member.token, ctx.origin).catch(() => {});
   try {
     return text(await work());
   } catch (e) {

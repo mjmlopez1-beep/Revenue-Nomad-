@@ -17,7 +17,8 @@
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
-import { ActionError, connectorState, digestEnabled, inviteCode, perform, updateConnector, type Member } from "../table";
+import { ActionError, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, type Member } from "../table";
+import { upgradeUrl } from "../plan";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
@@ -667,6 +668,17 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.map((f) => outKey(SEAT_KEYS, f)) })),
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
     saved_searches: alerts.length,
+    // Their plan, only while billing is live. No price: the member sees prices on Merlin.
+    ...(me.plan
+      ? {
+          plan:
+            me.plan.name === "trial"
+              ? `Pro trial, ${me.plan.trialDaysLeft} ${me.plan.trialDaysLeft === 1 ? "day" : "days"} left. It ends on Free with no charge.`
+              : me.plan.name === "pro"
+                ? "Pro"
+                : `Free: ${me.plan.limits.savedViews} saved search and ${me.plan.limits.claudePerDay} requests a day here. Plans: ${upgradeUrl(publicBase() ?? ctx.origin, "claude_account")}`,
+        }
+      : {}),
     weekly_email: emailNote(mv),
     // The app's public address (RN_PUBLIC_URL, once a custom domain is set), else the address the connector was reached on.
     invite_link: `${publicBase() ?? ctx.origin}/?ref=${inviteCode(ctx.member.id)}`,
@@ -996,6 +1008,9 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
   const dup = sameView(mine, { place: null, criteria });
   if (dup) return { message: `You saved this search already, as "${dup.name}".`, saved_search: show(dup), delivery: emailNote(mv) };
   if (mine.length >= ALERT_MAX) throw new ToolProblem(`You have ${ALERT_MAX} saved searches, which is the most. Delete one first.`);
+  // Free keeps one saved view (lib/billing). Pro watches as many as they want.
+  if (await savedViewsFull(ctx.member.id, mine.length))
+    throw new ToolProblem(`On Merlin's Free plan you keep 1 saved search, and you have it. Pro watches as many markets as you want: ${upgradeUrl(ctx.origin, "claude_views")}`);
   const saved: SavedSearch = {
     id: `al_${randomBytes(6).toString("base64url")}`,
     name: String(a.name ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 100) || describeAlert(criteria),

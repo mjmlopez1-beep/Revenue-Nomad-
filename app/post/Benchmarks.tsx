@@ -23,6 +23,7 @@ import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import { IconChevron, IconPlus, Num, post, useToast } from "../ui/shared";
 import { earnNote, useUi } from "./ui";
+import { UpgradeNote } from "./Billing";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
 
@@ -323,18 +324,23 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
           ? `${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} on file so far, from seats, rates members shared privately and Revenue Nomad's Rate Index. Each person counts once in a figure, however many rates they shared.`
           : "No rates yet. Yours can be the first."}
       </p>
-      <div className="tp-bm-tools">
-        <span className="tp-flabel" id="tp-bm-band">
-          Client revenue
-        </span>
-        <div className="tp-fchips" role="group" aria-labelledby="tp-bm-band">
-          {["All", ...RN_REVENUE].map((s) => (
-            <button key={s} type="button" aria-pressed={band === s} className={`chip tp-fchip${band === s ? " chip-on" : ""}`} onClick={() => setBand(s)}>
-              {s === "All" ? "All revenue" : s}
-            </button>
-          ))}
+      {b.limited ? (
+        // Free while billing is live: the median by function. The range and the client-size rows are Pro's.
+        <UpgradeNote from="bench">Free shows the median for each function. Pro adds the range, by function and by client size.</UpgradeNote>
+      ) : (
+        <div className="tp-bm-tools">
+          <span className="tp-flabel" id="tp-bm-band">
+            Client revenue
+          </span>
+          <div className="tp-fchips" role="group" aria-labelledby="tp-bm-band">
+            {["All", ...RN_REVENUE].map((s) => (
+              <button key={s} type="button" aria-pressed={band === s} className={`chip tp-fchip${band === s ? " chip-on" : ""}`} onClick={() => setBand(s)}>
+                {s === "All" ? "All revenue" : s}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       {rows.length > 0 && (
       <div className="tp-bm">
         <table className="bm-table" aria-label={`Rate benchmarks, ${band === "All" ? "all client revenue" : `client revenue ${band}`}`}>

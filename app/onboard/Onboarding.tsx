@@ -3,7 +3,9 @@
 /**
  * First run, about two minutes, and it ends on the member's first saved view. One calm card, and
  * the value comes before the ask:
- *   1. What Merlin is and what a credit buys, then their function and the title they go by. A
+ *   1. What Merlin is and what a credit buys, then their function and the title they go by, how
+ *      many clients they have now and whether they're looking for a new one (both optional; the
+ *      plans read the second to keep the pitch soft for someone who isn't). A
  *      member with seats on file hears where those came from and who can see their name, since
  *      most of them arrive by personal link and skip the landing page.
  *   2. Their Ideal Fractional Profile: the companies they want as clients (industries, size,
@@ -28,6 +30,7 @@ import "./onboard.css";
 import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, post, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
 import type { CompanyRec, Icp, OnboardDraft } from "@/lib/tableTypes";
+import { CLIENT_COUNTS } from "@/lib/tableTypes";
 import { countryOf, deriveAll, hireLine, hireOfRow, icpEmpty, type Filters, type Row } from "@/app/post/model";
 import { EMPTY_ICP, IcpFields, countriesByCount, industriesByCount } from "@/app/post/Hunt";
 import { alertView, named, realTitle, titlesFor } from "./suggest";
@@ -161,8 +164,11 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     const clients = Array.isArray(a.clients) ? a.clients.filter((id) => id.startsWith("name:") || known.has(id)).slice(0, 20) : [];
     const views = Array.isArray(a.views) ? a.views.filter((id) => saved.has(id)) : [];
     const step = resumeStep(entryStep() || a.step || 1, { fn, before }, total);
+    // "How many clients do you have now?" and "Are you looking for a new client?": optional, null until answered.
+    const clientCount = typeof a.clientCount === "string" && (CLIENT_COUNTS as readonly string[]).includes(a.clientCount) ? a.clientCount : me.clientCount ?? null;
+    const looking = typeof a.looking === "boolean" ? a.looking : me.looking ?? null;
     return {
-      fn, title, icp, before, clients, views, step,
+      fn, title, icp, before, clients, views, step, clientCount, looking,
       roles: a.roles !== false,
       email: a.email !== false,
       saved: views.length && typeof a.saved === "string" ? a.saved : null,
@@ -171,6 +177,8 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   const [step, setStep] = useState(init.step);
   const [fn, setFn] = useState<string | null>(init.fn);
   const [title, setTitle] = useState(init.title);
+  const [clientCount, setClientCount] = useState<string | null>(init.clientCount);
+  const [looking, setLooking] = useState<boolean | null>(init.looking);
   const [icp, setIcp] = useState<Icp>(init.icp);
   const [before, setBefore] = useState<string[] | null>(init.before);
   const [roles, setRoles] = useState(init.roles);
@@ -253,6 +261,8 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     before,
     roles,
     email,
+    clientCount,
+    looking,
     clients,
     views,
     saved,
@@ -260,7 +270,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   });
   const latest = useRef(answers);
   latest.current = answers;
-  useEffect(() => writeSaved(latest.current(step)), [me.id, step, fn, title, icp, before, roles, email, clients, views, saved]);
+  useEffect(() => writeSaved(latest.current(step)), [me.id, step, fn, title, icp, before, roles, email, clients, views, saved, clientCount, looking]);
 
   // Each new step goes to the server too, so a new tab or another device picks up here (the step it opened on is already there).
   const opened = useRef(true);
@@ -362,6 +372,8 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
         icp: icpEmpty(icp) ? null : icp,
         ...(before !== null ? { before } : {}),
         ...(views[0] ? { firstView: views[0] } : {}),
+        ...(clientCount !== null ? { clientCount } : {}),
+        ...(looking !== null ? { looking } : {}),
       },
       { quiet: true },
     );
@@ -454,6 +466,10 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               }}
               title={title}
               setTitle={setTitle}
+              clientCount={clientCount}
+              setClientCount={setClientCount}
+              looking={looking}
+              setLooking={setLooking}
               onNext={() => forward(2)}
             />
           ) : shown === 2 ? (
@@ -505,7 +521,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
 /* ---------- step 1: what this is, then who you are ---------- */
 
 function StepQuestions({
-  first, seats, published, credits, invited, fn, setFn, title, setTitle, onNext,
+  first, seats, published, credits, invited, fn, setFn, title, setTitle, clientCount, setClientCount, looking, setLooking, onNext,
 }: {
   first: string;
   /** Seats on file that carry the member's name. */
@@ -519,6 +535,10 @@ function StepQuestions({
   setFn: (f: string) => void;
   title: string;
   setTitle: (t: string) => void;
+  clientCount: string | null;
+  setClientCount: (c: string | null) => void;
+  looking: boolean | null;
+  setLooking: (l: boolean | null) => void;
   onNext: () => void;
 }) {
   return (
@@ -599,6 +619,32 @@ function StepQuestions({
         ) : null}
         <p className="ob-hint">Members see it when you message them.</p>
       </div>
+
+      <fieldset className="ob-q">
+        <legend className="ob-h">How many clients do you have now?</legend>
+        <div className="ob-chips" role="radiogroup" aria-label="Clients now">
+          {CLIENT_COUNTS.map((c) => (
+            <button key={c} type="button" role="radio" aria-checked={clientCount === c} className={`ob-chip${clientCount === c ? " ob-chip-on" : ""}`} onClick={() => setClientCount(clientCount === c ? null : c)}>
+              {c}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="ob-q">
+        <legend className="ob-h">Are you looking for a new client?</legend>
+        <div className="ob-chips" role="radiogroup" aria-label="Looking for a new client">
+          {([
+            [true, "Yes"],
+            [false, "Not now"],
+          ] as const).map(([v, label]) => (
+            <button key={label} type="button" role="radio" aria-checked={looking === v} className={`ob-chip${looking === v ? " ob-chip-on" : ""}`} onClick={() => setLooking(looking === v ? null : v)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="ob-hint">Both are optional. They help us show you what fits where your book is.</p>
+      </fieldset>
 
       <div className="ob-grow" />
       <div className="ob-foot">

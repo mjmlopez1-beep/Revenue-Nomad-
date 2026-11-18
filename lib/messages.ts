@@ -324,6 +324,8 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           const c: StoredConversation = { id: newId("cv"), a: me.id, b: holder.id, about: { companyId: e.companyId, engagementId: e.id }, messages: [], readAt: {}, status: "open", createdAt: now };
           convs.push(c);
           const r = write(c, a.text);
+          // A conversation opened: in a Pro trial's last days it runs a week longer, once (lib/billing).
+          T.valueMoment(s, me.id, nowMs);
           return { ...r, message: `Sent. ${name} will see it in Messages.` };
         }
         case "message.connect": {
@@ -343,6 +345,8 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           const c: StoredConversation = { id: newId("cv"), a: me.id, b: them.id, about: { companyId: "", engagementId: "" }, kind: "partners", messages: [], readAt: {}, status: "open", createdAt: now };
           convs.push(c);
           const r = write(c, a.text);
+          // A conversation opened: in a Pro trial's last days it runs a week longer, once (lib/billing).
+          T.valueMoment(s, me.id, nowMs);
           return { ...r, message: `Sent. ${name} will see it in Messages.` };
         }
         case "message.send":

@@ -599,6 +599,30 @@ function PublicNames({ n, refresh }: { n: NonNullable<AdminStats["names"]>; refr
   );
 }
 
+/** Dollars from cents, whole when they are whole ("$1,239", "$49.17"). */
+const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+
+/** Billing, while it is live (lib/billing): plans, trial-to-paid, recurring revenue, churn, top-ups. Counts and money only. */
+function BillingCard({ b }: { b: NonNullable<NonNullable<View["admin"]>["billing"]> }) {
+  return (
+    <Card title="Billing" span={6}>
+      <div className="tp-stats tp-pm-bill">
+        <Tile value={usd(b.mrrCents)} label="Monthly recurring revenue" sub="A yearly plan counts a twelfth. Plans set to end are left out." />
+        <Tile value={n0(b.pro)} label={b.pro === 1 ? "Member on Pro" : "Members on Pro"} sub={`${n0(b.trial)} on the trial, ${n0(b.free)} on Free${b.paused ? `, ${n0(b.paused)} paused` : ""}`} />
+        <Tile value={pct(b.trialsPaid, b.trialsEnded)} label="Trial to paid" sub={`${n0(b.trialsPaid)} of ${n0(b.trialsEnded)} trials that ended`} />
+        <Tile value={n0(b.churnMonth)} label="Ended this month" sub="Paid plans that stopped" />
+      </div>
+      <Rows
+        items={[
+          ["Paid this month", usd(b.paidMonthCents)],
+          ["Top-ups this month", n0(b.topupsMonth)],
+          ["Top-ups in all", `${n0(b.topups)} (${usd(b.topupCents)})`],
+        ]}
+      />
+    </Card>
+  );
+}
+
 export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Promise<void>; onBack: () => void }) {
   const a = view.admin;
   if (!a) return null;
@@ -624,6 +648,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
       </div>
 
       <div className="tp-pm-grid">
+        {a.billing && <BillingCard b={a.billing} />}
         <Card title="Members">
           <Rows
             items={[

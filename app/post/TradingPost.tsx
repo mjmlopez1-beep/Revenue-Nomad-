@@ -65,6 +65,7 @@ import { Checklist, Strip, sinceText } from "./Guide";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
+import { BillingPage, PlansHost, TrialBanner, openPlans } from "./Billing";
 import "./post.css";
 
 export interface TradingPostProps {
@@ -148,12 +149,22 @@ function previousVisit(): string | null {
 /** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
 type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
-type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners";
+type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing";
 
 /* ---------- the place in the address bar ---------- */
 
-const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners"];
-const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", messages: "Messages", integrations: "Integrations", partners: "Referral partners" };
+const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners", "billing"];
+const PAGE_TITLE: Record<Page, string> = {
+  table: "",
+  seats: "Your seats",
+  credits: "Your credits",
+  rates: "Rate benchmarks",
+  metrics: "Pilot metrics",
+  messages: "Messages",
+  integrations: "Integrations",
+  partners: "Referral partners",
+  billing: "Plan and billing",
+};
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
 const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["person", "people"] };
@@ -1428,6 +1439,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const noteNow = creditLine && (capped || me.credits <= 3);
   const banners = (
     <div className="tp-banners">
+      <TrialBanner plan={me.plan} />
       {move && (
         <div className={`tp-move${noteNow ? " has-note" : ""}`}>
           <NextMove
@@ -1900,6 +1912,31 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     // A saved Recently hired view opens with its sentence folded on a phone: the list is what it saved.
     setHiredFolded(true);
   };
+  /**
+   * "Save this view". On Free (billing live) with its one view saved already, a new one opens the
+   * plans instead ("Watch a second market"), with what this view would have caught: the new roles
+   * at the companies listed now, first seen in the last 30 days. A saved view on screen still opens
+   * its own sheet (rename, email, remove).
+   */
+  const askSave = () => {
+    const cap = me.plan?.limits.savedViews;
+    if (cap != null && me.onboarded && !currentView && views.length >= cap) {
+      const since = Date.now() - 30 * 86_400_000;
+      let caught = 0;
+      const seen = new Set<string>();
+      for (const r of filtered) {
+        if (seen.has(r.i.c.id)) continue;
+        seen.add(r.i.c.id);
+        for (const e of r.i.engs) {
+          const at = Date.parse(e.openedAt ?? (e.opened ? `${e.opened}T00:00:00Z` : ""));
+          if (Number.isFinite(at) && at >= since) caught++;
+        }
+      }
+      openPlans("views", { caught });
+      return;
+    }
+    setSaveOpen(true);
+  };
   const saveView = async (name: string, email: boolean) => {
     const known = new Map(views.map((v) => [v.id, v]));
     const r = await act({ type: "savedView", op: "save", name, email, place: herePlace, criteria: criteriaOf(spelled, fnOnly ? hireFn : null) }, { quiet: true });
@@ -1938,7 +1975,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       return w;
     };
   }, [sort, cellMe]);
-  const savedViews = <SavedViews views={views} current={currentView} onOpen={openView} onSave={() => setSaveOpen(true)} {...viewActs} />;
+  const savedViews = <SavedViews views={views} current={currentView} onOpen={openView} onSave={askSave} {...viewActs} />;
   /*
    * Every filter on, as a chip that takes it off, on phones too: an onboarding answer's filter
    * ("No fractional Sales yet") is never only a number on the Filters button (C47).
@@ -2085,6 +2122,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           <main className="tp-main tp-main-page">
             <MessagesPage onBack={() => setPage("table")} openCompany={(id) => openCompany(id)} />
           </main>
+        ) : page === "billing" && me.plan ? (
+          <main className="tp-main tp-main-page">
+            <BillingPage view={view} refresh={refresh} onBack={() => setPage("table")} />
+          </main>
         ) : page === "partners" ? (
           <main className="tp-main tp-main-page">
             <Partners infos={infos} onBack={() => setPage("table")} onProfile={() => setIcpOpen(true)} />
@@ -2219,7 +2260,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                     </>
                   )}
                 </span>
-                <button type="button" className="tp-sortbtn tp-savebtn" onClick={() => setSaveOpen(true)} aria-pressed={!!currentView}>
+                <button type="button" className="tp-sortbtn tp-savebtn" onClick={askSave} aria-pressed={!!currentView}>
                   {currentView ? "Saved view" : "Save this view"}
                 </button>
                 {sortMenu}
@@ -2367,6 +2408,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             onClose={() => setSaveOpen(false)}
           />
         )}
+        <PlansHost me={me} />
         {viewsOpen && (
           <SavedViewsSheet
             views={views}
@@ -2418,6 +2460,18 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               { group: "You", label: "Your credits", current: page === "credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { group: "You", label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },
               { group: "Settings", label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
+              // Only while billing is live (Me.plan): the plan, the trial's days left, renew, cancel, pause, the top-up.
+              ...(me.plan
+                ? [
+                    {
+                      group: "Settings",
+                      label: "Plan and billing",
+                      hint: me.plan.name === "trial" ? `Trial, ${me.plan.trialDaysLeft === 1 ? "last day" : `${me.plan.trialDaysLeft} days`}` : me.plan.name === "pro" ? "Pro" : "Free",
+                      current: page === "billing",
+                      onClick: () => (setEditor(null), setDrawer(null), setPage("billing")),
+                    },
+                  ]
+                : []),
               { group: "Settings", label: "Integrations", hint: "Slack, Claude", current: page === "integrations", onClick: () => (setDrawer(null), setPage("integrations")) },
               // One way to get signed in elsewhere: emailed when email is on, else the link copied.
               view.email

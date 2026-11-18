@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { brotliCompress, constants as zc, gzip } from "zlib";
 import {
-  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
+  ActionError, billingVisit, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
 } from "@/lib/table";
 import { stateVersion } from "@/lib/table";
 import type { ActionResult } from "@/lib/tableTypes";
@@ -259,6 +259,8 @@ export const GET = guarded(async (req: NextRequest) => {
     const view = await buildView(null);
     return sendJson(req, view, { "x-view-version": view.version ?? "" });
   }
+  // Plans (only while billing is live): a trial due to start, or a month's Pro credits, lands before the view is built. Nothing to do costs nothing.
+  await billingVisit(token, origin(req)).catch((e) => console.error("plan visit failed", e));
   const enc = encodingFor(req);
   // An admin's "See it as a member". buildView ignores it for anyone who is not an admin.
   const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || req.nextUrl.searchParams.get("as") === "member";
