@@ -633,7 +633,7 @@ export function TopBar({
         ) : (
           <>
             <button type="button" className="tp-brand tp-brand-phone" onClick={onHome} aria-label="Merlin home">
-              <Brand dark size={24} className="tp-brand-wm" />
+              <Brand dark size={32} className="tp-brand-wm" />
               <Brand dark size={30} kind="mark" className="tp-brand-mark" />
             </button>
             {listSwitch}
@@ -661,7 +661,7 @@ export function TopBar({
     <header className="tp-top">
       <button type="button" className="tp-brand" onClick={onHome} aria-label="Merlin home">
         <span className="tp-brand-logo">
-          <Brand dark size={28} />
+          <Brand dark size={36} />
         </span>
       </button>
       <div className="tp-top-mid">{search}</div>

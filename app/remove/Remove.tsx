@@ -48,8 +48,7 @@ export function RemoveView() {
     <div className="cl">
       <header className="cl-top">
         <a className="cl-brand" href="/" aria-label="Merlin, by Revenue Nomad">
-          <Brand dark size={28} />
-          <span>by Revenue Nomad</span>
+          <Brand dark size={36} />
         </a>
       </header>
       <main className="cl-main">

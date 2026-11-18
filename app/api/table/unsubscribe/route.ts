@@ -57,7 +57,7 @@ const page = (title: string, body: string, status = 200) =>
   new NextResponse(
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${title} · Merlin</title><style>${appFont()}${CSS}</style></head>
 <body>
-<header class="top"><a class="brand" href="/" aria-label="Merlin by Revenue Nomad, home"><img src="/brand/merlin-wordmark-on-dark.png" alt="Merlin" width="90" height="28"><span>by Revenue Nomad</span></a></header>
+<header class="top"><a class="brand" href="/" aria-label="Merlin by Revenue Nomad, home"><img src="/brand/merlin-lockup-on-dark.png" alt="Merlin by Revenue Nomad" width="122" height="36"></a></header>
 <main>
 <div class="card">
 ${status === 200 ? CHECK : ""}<h1>${title}</h1>

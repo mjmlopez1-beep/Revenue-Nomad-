@@ -41,8 +41,7 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
 function Mark() {
   return (
     <div className="cs-brand">
-      <Brand size={32} />
-      <span className="cs-by">by Revenue Nomad</span>
+      <Brand size={40} />
     </div>
   );
 }

@@ -385,8 +385,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     <div className="ob">
       <header className="ob-top">
         <span className="ob-brand">
-          <Brand size={28} />
-          <span className="ob-product">by Revenue Nomad</span>
+          <Brand size={36} />
         </span>
         <span className="ob-credits num" title="Your balance">
           <span className="ob-coin" aria-hidden>
