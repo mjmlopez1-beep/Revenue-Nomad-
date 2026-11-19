@@ -544,9 +544,16 @@ async function main() {
     const banned = new Set([personName, personEmail, bRate, hiddenName, hiddenSite, "$9,876/mo", C.token, A.token, B.token]);
     for (const w of seedWords) if (!cJson.includes(w) && !cJson.includes(JSON.stringify(w).slice(1, -1))) banned.add(w);
     const texts = [];
+    // A locked company's About shows too, without its own name, web address, links, emails or people (lib/scan/clean.ts
+    // aboutWithout). Its own words may name other companies or a title ("built on Microsoft", "Founder-led"): those
+    // are checked apart, for everything but other companies' names and seat titles.
+    const abouts = [];
     const read = async (name, args) => {
       const r = await tool(cc.access_token, name, args);
-      texts.push(r.text);
+      if (name === "get_company" && typeof r.out?.about === "string") {
+        abouts.push(r.out.about);
+        texts.push(JSON.stringify({ ...r.out, about: undefined }));
+      } else texts.push(r.text);
       return r;
     };
     const ids = [];
@@ -558,7 +565,9 @@ async function main() {
     await read("my_account", {});
     await read("rate_benchmarks", {});
     const all = texts.join("\n");
-    const leaks = [...banned].filter((w) => all.includes(w));
+    const aboutAll = abouts.join("\n");
+    const naturalWords = new Set([...(seedFile?.companies ?? []).map((c) => c.fields.name), ...(seedFile?.engagements ?? []).map((e) => e.fields.role)]);
+    const leaks = [...banned].filter((w) => all.includes(w) || (!naturalWords.has(w) && aboutAll.includes(w)));
     check(`a member reading ${uniq.length} company records and every open role sees no locked value or hidden name (${banned.size} values checked)`, uniq.length >= 20 && leaks.length === 0, leaks.length ? `${leaks.length} leaked` : uniq.length);
   }
 

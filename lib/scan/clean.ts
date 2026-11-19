@@ -340,9 +340,12 @@ const wordCount = (x: string) =>
  * address is made of it) reads "the company" ("The company" where a sentence starts). Its web
  * address reads "the company" too, and any link or email at it is removed (a short sentence that
  * was only there for it goes with it). `sites`: the company's website and its logo's domain.
- * The rest of the text is the company's own words, unchanged.
+ * The name's first part before a separator ("Terra Reporting | ESG Platform") counts as a way of
+ * writing it, and so does the run of the name's words the About opens with ("Cygnet is a gin brand"
+ * for "Cygnet Gin"), as written. `people`: names of the company's people and seat holders, which
+ * are paid facts: a sentence with one in it goes. The rest is the company's own words, unchanged.
  */
-export function aboutWithout(text: string, company: string, sites: (string | null | undefined)[]): string {
+export function aboutWithout(text: string, company: string, sites: (string | null | undefined)[], people: (string | null | undefined)[] = []): string {
   let s = String(text ?? "");
   if (!s.trim()) return s;
   const domains = new Set<string>();
@@ -372,7 +375,9 @@ export function aboutWithout(text: string, company: string, sites: (string | nul
   const full = plain(company).trim();
   const bare = cleanCompany(full);
   const core = bare.replace(/^the\s+/i, "").trim();
-  for (const n of [full, bare, core, core.replace(NAME_TAIL, "").trim()]) if (n.length >= 3) names.add(n);
+  // "Terra Reporting │ ESG Platform", "Align - Football's AI", "Folia Health: The Home-Reported Outcomes Company".
+  const head = cleanCompany(full.split(/\s+[|│–—-]\s+|\s*[|│:]\s*|\s+\(/)[0]).replace(/^the\s+/i, "").trim();
+  for (const n of [full, bare, core, core.replace(NAME_TAIL, "").trim(), head, head.replace(NAME_TAIL, "").trim()]) if (n.length >= 3) names.add(n);
   for (const l of labels) {
     names.add(l);
     if (l.includes("-")) names.add(l.replace(/-/g, " "));
@@ -389,10 +394,29 @@ export function aboutWithout(text: string, company: string, sites: (string | nul
     first.length >= 4 &&
     [...labels].some((l) => squeeze(l) === squeeze(first) || squeeze(l.split("-")[0]) === squeeze(first) || (first.length >= 6 && squeeze(l).startsWith(squeeze(first))));
   if (firstToo) cutName(first, "gu");
+  // The words of the name the About opens with ("Cygnet is", "Elk Ridge Investments buys"), as written there.
+  const nameWords = new Set(full.split(/[^\p{L}\p{N}&'’]+/u).map((w) => squeeze(w.replace(/['’]s$/i, ""))).filter((w) => w.length >= 2));
+  const lead = s.match(/^\s*(?:the\s+)?((?:[\p{L}\p{N}][\p{L}\p{N}&'’.-]*)(?:\s+[\p{L}\p{N}][\p{L}\p{N}&'’.-]*){0,5})/iu)?.[1] ?? "";
+  const run: string[] = [];
+  for (const w of lead.split(/\s+/)) {
+    if (!w || !nameWords.has(squeeze(w.replace(/['’]s$/i, "")))) break;
+    run.push(w.replace(/['’]s$/i, "").replace(/[.]+$/, ""));
+  }
+  const opening = run.join(" ");
+  if (opening.length >= 4 && /\p{Lu}|\p{N}/u.test(opening) && !opening.includes("\u0000")) cutName(opening, "gu");
   s = s
     // "Acme (acme.com)" and "Acme, Acme Inc." read once.
     .replace(new RegExp(`${CO_MARK}\\s*\\(\\s*${CO_MARK}\\s*\\)`, "g"), CO_MARK)
     .replace(new RegExp(`${CO_MARK}(?:\\s*[,/]\\s*${CO_MARK})+`, "g"), CO_MARK);
+  // A sentence naming one of the company's people (who they are is a paid fact) goes.
+  const who = [...new Set(people.map((x) => plain(x ?? "").trim()).filter((x) => x.length >= 5 && /\s/.test(x)))];
+  if (who.length) {
+    const named = new RegExp(`(^|[^\\p{L}\\p{N}])(?:${who.map((x) => x.split(/\s+/).map(escRe).join(String.raw`\s+`)).join("|")})(?=$|[^\\p{L}\\p{N}])`, "iu");
+    s = s
+      .split("\n")
+      .map((line) => line.split(/(?<=[.!?…]["')\]]*)[ \t]+/).filter((x) => !named.test(x)).join(" "))
+      .join("\n");
+  }
   // A short sentence with a link or an email in it ("Visit acme.com/about.", "Email hello@acme.com.") was there
   // for the link: it goes. A longer one keeps its words.
   if (s.includes(LINK_MARK))

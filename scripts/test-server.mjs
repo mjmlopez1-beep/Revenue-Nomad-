@@ -938,7 +938,9 @@ section("about", async () => {
     A.act({ type: "verify", entity: "company", id: one.id, field: "about" }),
     A.act({ type: "report", entity: "company", id: one.id, field: "about" }),
   ]);
-  check("adding, confirming or reporting an About is refused, as before", tries.every((t) => t.status === 400 && t.json?.error === "Members can't change that field."), tries.map((t) => t.json));
+  // At a locked company (a new member knows none) adding anything is refused first, for the lock (COMPANY_LOCKED_ADD).
+  const refusedFor = (t, n) => t.status === 400 && (t.json?.error === "Members can't change that field." || (n === 0 && !!one.hidden && /^This company is locked\. Unlock it/.test(t.json?.error ?? "")));
+  check("adding, confirming or reporting an About is refused, as before", tries.every(refusedFor), tries.map((t) => t.json));
   check("  and it reads the same after", JSON.stringify((await aboutOf(A, [one.id])).json?.about?.[one.id]) === JSON.stringify(got[one.id]));
   // A locked company: its About comes through ?about= without its name, web address, links and emails until the company is unlocked, then whole.
   const adm = await admin();

@@ -678,16 +678,16 @@ button.add:active {
 .locked-blur {
   --locked-ink: var(--ink);
   display: inline-block;
-  max-width: calc(100% + 20px);
-  padding: 8px 10px;
-  margin: -8px -10px;
+  max-width: calc(100% + 1.5em);
+  padding: 0.6em 0.75em;
+  margin: -0.6em -0.75em;
   vertical-align: bottom;
   white-space: nowrap;
   color: transparent;
-  text-shadow: 0 0 8px rgba(10, 26, 19, 0.55);
-  text-shadow: 0 0 8px color-mix(in srgb, var(--locked-ink) 55%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 16px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 16px), transparent);
+  text-shadow: 0 0 0.5em rgba(10, 26, 19, 0.62);
+  text-shadow: 0 0 0.5em color-mix(in srgb, var(--locked-ink) 62%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 0.7em, #000 calc(100% - 1.1em), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 0.7em, #000 calc(100% - 1.1em), transparent);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -703,8 +703,8 @@ span.locked-site {
 }
 /* The site line: lighter and a little smaller than the name's cloud. */
 .locked-site .locked-blur {
-  text-shadow: 0 0 7px rgba(91, 102, 97, 0.42);
-  text-shadow: 0 0 7px color-mix(in srgb, var(--locked-ink) 32%, transparent);
+  text-shadow: 0 0 0.5em rgba(91, 102, 97, 0.45);
+  text-shadow: 0 0 0.5em color-mix(in srgb, var(--locked-ink) 36%, transparent);
 }
 /* The logo when the company has none to show: a soft tile in its own color with a quiet building, never letters (they would read as a real mark). */
 .logo.logo-locked {
@@ -730,6 +730,8 @@ span.locked-site {
     -webkit-mask-image: none;
     mask-image: none;
     border-radius: 999px;
+    /* A pill a little shorter than the line, so a name and the site under it stay two bars. */
+    transform: scaleY(0.72);
     background: var(--line-strong);
   }
   .logo.logo-locked {
@@ -749,6 +751,7 @@ span.locked-site {
     forced-color-adjust: none;
     background: GrayText;
     border-radius: 999px;
+    transform: scaleY(0.72);
   }
 }
 

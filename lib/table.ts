@@ -2315,19 +2315,20 @@ const ABOUT_LATER = (): Cell => ({ s: "value", v: "", ver: 0, system: true, lazy
 const IDENTITY_FIELDS = new Set(["website", "linkedin", "about"]);
 /** The last part of an HQ ("Austin, TX" -> "TX"), so a hidden company keeps a region. */
 const hqRegion = (hq: string) => hq.split(",").map((x) => x.trim()).filter(Boolean).pop() ?? "";
+/** An About that was only a link (nothing left once it goes) is no About. */
+const aboutOrEmpty = (c: Cell & { s: "value" }, v: string): Cell => (/[\p{L}\p{N}]/u.test(v) ? { ...c, v } : { s: "empty" });
 /**
  * One company cell as a member sees it while the company is hidden: website and LinkedIn locked,
  * HQ cut to its region, the About's text without the giveaways in it. `co`: the company's name, its
- * website and its logo's domain, which the About is read without.
+ * website and its logo's domain, which the About is read without, and the names of its people and
+ * seat holders (paid facts: a sentence with one goes).
  */
-/** An About that was only a link (nothing left once it goes) is no About. */
-const aboutOrEmpty = (c: Cell & { s: "value" }, v: string): Cell => (/[\p{L}\p{N}]/u.test(v) ? { ...c, v } : { s: "empty" });
-const hideIdentity = (key: string, c: Cell, co: { name: string; sites: (string | null | undefined)[] }): Cell =>
+const hideIdentity = (key: string, c: Cell, co: { name: string; sites: (string | null | undefined)[]; people?: (string | null | undefined)[] }): Cell =>
   c.s !== "value"
     ? c
     : key === "about"
       ? c.v
-        ? aboutOrEmpty(c, aboutWithout(c.v, co.name, co.sites))
+        ? aboutOrEmpty(c, aboutWithout(c.v, co.name, co.sites, co.people))
         : c
       : IDENTITY_FIELDS.has(key)
         ? { s: "locked", ver: 0 }
@@ -2906,7 +2907,7 @@ async function fullView(
         er.cells.role = { ...rc, v: titleWithout(rc.v, c.name, site, fn ? `Fractional ${fn} role` : "Fractional role") };
       }
       // The About is read without the giveaways only where its text goes out (withAbout); the table carries a marker for it (ABOUT_LATER).
-      for (const k of [...IDENTITY_FIELDS, "hq"]) if (cells[k] && (k !== "about" || withAbout)) cells[k] = hideIdentity(k, cells[k], { name: c.name, sites: [live(c, s, "website"), icons[c.id]] });
+      for (const k of [...IDENTITY_FIELDS, "hq"]) if (cells[k] && (k !== "about" || withAbout)) cells[k] = hideIdentity(k, cells[k], { name: c.name, sites: [live(c, s, "website"), icons[c.id]], people: k === "about" ? [...people.map((p) => live(p, s, "name")), ...engs.map((e) => live(e, s, "operator"))] : [] });
     } else {
       for (const x of closedPostings) {
         x.cells.posting = cell(x.e, "engagement", "posting", true);

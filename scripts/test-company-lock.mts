@@ -628,10 +628,17 @@ async function main() {
     ["Founded in 2015, the Home Depot sells tools at homedepot.com.", "The Home Depot", ["https://www.homedepot.com"], "Founded in 2015, the company sells tools at the company."],
     ["Global Payments moves money. We are a global leader. Email press@globalpayments.com or visit https://globalpayments.com/news.", "Global Payments Inc.", ["globalpayments.com"], "The company moves money. We are a global leader."],
     ["ACME LABS makes widgets (acme.io). Learn more at www.acme.io/about-us.\n\nacme labs ships worldwide.", "Acme Labs", ["acme.io"], "The company makes widgets.\n\nThe company ships worldwide."],
-    ["Northwind sells tea. Its LinkedIn page is linkedin.com/company/northwind.", "Northwind Tea", ["linkedin.com/company/northwind"], "Northwind sells tea. Its LinkedIn page is linkedin.com/company/northwind."],
+    // A website on a shared host is no address of the company's own; the name the About opens with still goes.
+    ["Northwind sells tea. Its LinkedIn page is linkedin.com/company/northwind.", "Northwind Tea", ["linkedin.com/company/northwind"], "The company sells tea. Its LinkedIn page is linkedin.com/company/northwind."],
+    // The name before a separator, and the run of the name's words the About opens with, as written.
+    ["Terra Reporting offers an ESG platform. Terra Reporting is based in Oslo.", "Terra Reporting | ESG Platform | Cloud", [], "The company offers an ESG platform. The company is based in Oslo."],
+    ["Cygnet is a gin brand made in Wales. Every Cygnet bottle is hand-labelled. A cygnet is a young swan.", "Cygnet Gin", [], "The company is a gin brand made in Wales. Every the company bottle is hand-labelled. A cygnet is a young swan."],
+    ["Elk Ridge Investments buys rental homes.", "Investments Elk Ridge", [], "The company buys rental homes."],
+    // A sentence naming one of its people (a paid fact) goes.
+    ["Brightline builds maps. Founded by Dana Roe and Sam Lee, it serves cities. It has 40 staff.", "Brightline Maps", [], "The company builds maps. It has 40 staff."],
   ];
   for (const [text, name, sites, want] of scrubCases) {
-    const got = aboutWithout(text, name, sites);
+    const got = aboutWithout(text, name, sites, /Dana Roe/.test(text) ? ["Dana Roe", null, "Pat"] : []);
     check(`aboutWithout: ${JSON.stringify(text.slice(0, 48))}...`, got === want, got);
   }
 
