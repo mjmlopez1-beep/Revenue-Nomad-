@@ -8,7 +8,7 @@
  */
 import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, type State } from "../table";
 import { billingLive, planOf, upgradeUrl } from "../plan";
-import { applyEvent, emptyBilling, ENDING_DAYS, pauseDates, PAUSE_MONTHS, annualLine, hourlyOf, type StripeEvent } from "./rules";
+import { applyEvent, emptyBilling, ENDING_DAYS, FIRST_CHARGE_GRACE_MS, keepTrialEnd, pauseDates, PAUSE_MONTHS, proStartsLater, annualLine, hourlyOf, type StripeEvent } from "./rules";
 import * as stripe from "./stripe";
 import { renewalEmail, trialEndedEmail, trialEndingEmail, type ValueCounts } from "./emails";
 import { emailEnabled, sendEmail } from "../email";
@@ -110,7 +110,8 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
     switch (op) {
       case "checkout": {
         if (planOf(rec, nowMs) === "pro" && rec?.subscriptionId) throw new ActionError("You're on Pro already. Change your plan in Manage billing.");
-        return { url: await stripe.checkoutPro(who, body.interval === "year" ? "year" : "month", base, body.code) };
+        // During the trial with more than 48 hours left, the first charge waits for its end (keepTrialEnd).
+        return { url: await stripe.checkoutPro(who, body.interval === "year" ? "year" : "month", base, body.code, keepTrialEnd(rec, nowMs)) };
       }
       case "topup":
         if (!stripe.topupReady()) throw new ActionError("Top-ups aren't open yet.");
@@ -122,12 +123,24 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
       case "keep": {
         if (!rec?.subscriptionId) throw new ActionError("There's no paid plan to change.");
         await stripe.setCancel(rec.subscriptionId, op === "cancel");
+        // Bought during the trial and not charged yet: cancelling ends it with the trial, and nothing is charged.
+        const waiting = proStartsLater(rec, nowMs) ? rec.proStartsAt! : null;
         await T.mutate((d) => {
           const r = d.billing?.members[me.id];
           if (!r) return;
-          if (op === "cancel") r.cancelAt = r.proUntil ?? new Date(nowMs).toISOString();
+          if (waiting) {
+            if (op === "cancel") r.cancelAt = r.proUntil = waiting;
+            else {
+              delete r.cancelAt;
+              r.proUntil = new Date(Date.parse(waiting) + FIRST_CHARGE_GRACE_MS).toISOString();
+            }
+          } else if (op === "cancel") r.cancelAt = r.proUntil ?? new Date(nowMs).toISOString();
           else delete r.cancelAt;
         });
+        if (waiting)
+          return {
+            message: op === "cancel" ? `Cancelled. Nothing is charged. You keep Pro until ${dayWords(waiting)}, then you're on Free.` : `Pro carries on. The first charge comes on ${dayWords(waiting)}.`,
+          };
         const until = rec.proUntil ? dayWords(rec.proUntil) : "the end of this period";
         return { message: op === "cancel" ? `Cancelled. You keep Pro until ${until}, then you're on Free. Nothing more is charged.` : "Pro carries on. Nothing changes." };
       }

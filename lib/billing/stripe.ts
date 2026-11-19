@@ -67,9 +67,15 @@ interface Who {
   customerId?: string;
 }
 
-/** Checkout for Pro, monthly or yearly. Promotion codes can be typed; the survey code is applied when the member brought it. */
-export async function checkoutPro(who: Who, interval: "month" | "year", base: string, code?: unknown): Promise<string> {
+/**
+ * Checkout for Pro, monthly or yearly. Promotion codes can be typed; the survey code is applied when
+ * the member brought it. `trialEnd` (unix seconds, lib/billing/rules keepTrialEnd): bought during the
+ * trial, the subscription starts trialing to then, so the days left are kept and the first charge
+ * lands when the trial ends. It goes in the metadata too, so the webhook reads it on every event.
+ */
+export async function checkoutPro(who: Who, interval: "month" | "year", base: string, code?: unknown, trialEnd?: number | null): Promise<string> {
   const promo = surveyCode(code) ? process.env.STRIPE_PROMO_SURVEY?.trim() : "";
+  const trial = trialEnd && Number.isFinite(trialEnd) ? Math.floor(trialEnd) : null;
   const s = await call("POST", "checkout/sessions", {
     mode: "subscription",
     "line_items[0][price]": price(interval),
@@ -80,6 +86,7 @@ export async function checkoutPro(who: Who, interval: "month" | "year", base: st
     "metadata[ref]": who.ref,
     "metadata[interval]": interval,
     "subscription_data[metadata][ref]": who.ref,
+    ...(trial ? { "subscription_data[trial_end]": trial, "subscription_data[metadata][trial_end]": trial, "metadata[trial_end]": trial } : {}),
     ...(who.customerId ? { customer: who.customerId } : { customer_email: who.email }),
     // Stripe takes one or the other: a code applied for them, or a box to type one.
     ...(promo ? { "discounts[0][promotion_code]": promo } : { allow_promotion_codes: true }),

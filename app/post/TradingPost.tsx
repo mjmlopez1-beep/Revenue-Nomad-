@@ -69,7 +69,8 @@ import { Checklist, Strip, sinceText } from "./Guide";
 import { COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
-import { BillingPage, PlansHost, TrialBanner, openPlans } from "./Billing";
+import { BillingPage, PlansHost, ProTag, TrialBanner, openPlans } from "./Billing";
+import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import "./post.css";
 
 export interface TradingPostProps {
@@ -2056,7 +2057,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       return w;
     };
   }, [sort, cellMe]);
-  const savedViews = <SavedViews views={views} current={currentView} onOpen={openView} onSave={askSave} {...viewActs} />;
+  // A view past Free's one is Pro's: on Free the save is locked (it opens the plans), in the trial it says it's in the trial. Billing live only.
+  const saveTag = me.plan && me.plan.name !== "pro" && me.onboarded && !currentView && views.length >= FREE_SAVED_VIEWS ? <ProTag plan={me.plan} /> : null;
+  const savedViews = <SavedViews views={views} current={currentView} onOpen={openView} onSave={askSave} saveTag={saveTag} {...viewActs} />;
   /*
    * Every filter on, as a chip that takes it off, on phones too: an onboarding answer's filter
    * ("No fractional Sales yet") is never only a number on the Filters button (C47).
@@ -2374,6 +2377,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 </span>
                 <button type="button" className="tp-sortbtn tp-savebtn" onClick={askSave} aria-pressed={!!currentView}>
                   {currentView ? "Saved view" : "Save this view"}
+                  {saveTag}
                 </button>
                 {sortMenu}
               </div>
@@ -2561,6 +2565,17 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             emailOn={view.email}
             contact={contact}
             items={[
+              // On the trial or Free (billing live only): Upgrade to Pro first, above the sections. Plan and billing stays in Settings.
+              ...(me.plan && me.plan.name !== "pro"
+                ? [
+                    {
+                      label: "Upgrade to Pro",
+                      accent: true,
+                      hint: me.plan.name === "trial" ? (me.plan.trialDaysLeft === 1 ? "Trial, last day" : `Trial, ${me.plan.trialDaysLeft} days left`) : undefined,
+                      onClick: () => openPlans(me.plan!.name === "trial" ? "trial" : "billing"),
+                    },
+                  ]
+                : []),
               // Four short sections. Find: where the member looks. You: what is theirs. Settings. Admin.
               { group: "Find", label: "All companies", current: page === "table" && !currentView, onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               // Saved views: one entry. Its sheet lists every view to open, rename or remove; the filter rail lists them too.

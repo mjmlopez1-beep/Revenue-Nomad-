@@ -340,8 +340,8 @@ export interface Me {
 export const CLIENT_COUNTS = ["0", "1", "2", "3", "4+"] as const;
 
 /**
- * A member's plan as the app shows it (lib/billing). Dates are ISO. Prices are shown only when
- * `showPrices` (the trial is over or in its last 3 days) or at a wall the member hit.
+ * A member's plan as the app shows it (lib/billing). Dates are ISO. Prices and the plans show on
+ * any plan, the trial included: Pro can be bought at any point in it.
  */
 export interface PlanView {
   name: "free" | "trial" | "pro";
@@ -365,8 +365,13 @@ export interface PlanView {
   subscribed: boolean;
   /** The member has a Stripe customer: the portal shows invoices and the card. */
   portal: boolean;
-  /** Prices may show on the plan page and in the plans sheet. */
-  showPrices: boolean;
+  /**
+   * Buying Pro now, on the trial with more than 48 hours left: the first charge lands on this date
+   * (the trial's end) and the days left are kept. Null: charged at checkout.
+   */
+  firstChargeAt: string | null;
+  /** Bought during the trial: paid Pro starts on this date with its first charge. Nothing is charged before it. */
+  proStartsAt: string | null;
   /** The top-up can be bought (its price is set up). */
   topup: boolean;
   /** "Not now" to "Are you looking for a new client?": the softer pitch, never a hard sell. */

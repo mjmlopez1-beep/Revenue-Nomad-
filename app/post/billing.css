@@ -352,3 +352,281 @@
     color: var(--muted);
   }
 }
+
+/* ---------- Pro, marked where it sits (ProTag, ProLock, ProRow) ---------- */
+/* On Free a lock and "Pro"; in the trial "Pro · in your trial", in volt's soft tone. Never ember. */
+.bl-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--r-chip);
+  font-size: 11.5px;
+  line-height: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.bl-tag-lock {
+  background: var(--pine);
+  color: #fff;
+}
+.bl-tag-trial {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  box-shadow: inset 0 0 0 1px rgba(11, 107, 69, 0.18);
+}
+.bl-note-tag.bl-tag-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bl-note-trial {
+  border-color: rgba(11, 107, 69, 0.18);
+  background: var(--volt-soft);
+}
+.bl-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--pine-14);
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
+  color: var(--pine);
+  font-size: 13px;
+  font-weight: 700;
+  transition: background var(--t);
+}
+.bl-lock:hover {
+  background: var(--pine-8);
+}
+.bl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+}
+.bl-row-t {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.bl-row-h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.bl-row-d {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+}
+.bl-row.locked .bl-row-h {
+  color: var(--muted);
+}
+/* Buttons that carry a tag ("Save this view" with Pro): the tag sits after the words. */
+.tp-savebtn .bl-tag,
+.hunt-vsave .bl-tag {
+  margin-left: 2px;
+}
+/* The plans sheet: when the first charge comes, bought during the trial. */
+.bl-charge {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-card);
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.bl-charge svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+/* ---------- the top bar's way in (PlanPill) ---------- */
+/* On pine: outlined in white like the credits, Upgrade in volt. The trial's last 3 days fill it. */
+.tp-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 36px;
+  padding: 0 4px 0 11px;
+  border-radius: var(--r-btn);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background var(--t), border-color var(--t);
+}
+button.tp-plan:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.tp-plan-go {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 6px;
+  background: rgba(46, 229, 157, 0.14);
+  color: var(--volt);
+  font-weight: 700;
+}
+.tp-plan-trial.end {
+  border-color: var(--volt);
+}
+.tp-plan-trial.end .tp-plan-go {
+  background: var(--volt);
+  color: var(--pine);
+}
+.tp-plan-free {
+  padding: 0 12px;
+  border-color: var(--volt);
+  color: var(--volt);
+  font-weight: 700;
+}
+.tp-plan-pro {
+  height: 24px;
+  padding: 0 8px;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: none;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+/* Phones: one short chip. */
+.tp-plan-phone {
+  height: 32px;
+  padding: 0 10px;
+  border-color: rgba(46, 229, 157, 0.55);
+  color: var(--volt);
+  font-weight: 700;
+}
+.tp-plan-trial.end.tp-plan-phone {
+  background: var(--volt);
+  color: var(--pine);
+}
+/* Desktop under 1180px: the trial's words go, Upgrade stays (the days are in its title and spoken name). */
+@media (max-width: 1179px) {
+  .tp-top:not(.tp-top-phone) .tp-plan-trial .tp-plan-t {
+    display: none;
+  }
+  .tp-top:not(.tp-top-phone) .tp-plan-trial {
+    padding-left: 4px;
+  }
+}
+/* The account menu's first item, Upgrade to Pro. */
+.tp-menu-item.tp-menu-up {
+  color: var(--volt-ink);
+  font-weight: 700;
+}
+.tp-menu-item.tp-menu-up:hover,
+.tp-menu-item.tp-menu-up:focus-visible {
+  background: var(--volt-soft);
+}
+
+/* ---------- the benchmarks, locked on Free ---------- */
+/* No real range reaches a Free member: the blurred figure is a placeholder. */
+.bm-range-lock {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--pine);
+}
+.bm-range-lock:hover {
+  background: var(--pine-8);
+}
+.bm-range-fake {
+  filter: blur(4px);
+  color: var(--muted);
+  user-select: none;
+}
+.bm-chip-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.bm-tools-locked .tp-flabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Slack's alerts on Free: the Pro ones in place, their words quieter, a lock where the switch was. */
+.in-alert.locked .in-alert-h {
+  color: var(--muted);
+}
+.in-alert-h .bl-tag {
+  margin-left: 4px;
+}
+@media (max-width: 767px) {
+  .bl-row {
+    flex-wrap: wrap;
+  }
+}
+/*
+ * Phones with the Upgrade chip: the credits word gives way to the coin (as it does under 340px
+ * without the chip), never to a bare number, so the menu fits at 390. Under 370px the chip gives way instead.
+ */
+@media (min-width: 370px) and (max-width: 459px) {
+  .tp-top-phone:has(.tp-plan) .tp-credits-l {
+    display: none;
+  }
+  .tp-top-phone:has(.tp-plan) .tp-credits-i {
+    display: inline-flex;
+    opacity: 0.8;
+  }
+  .tp-top-phone:has(.tp-plan) .tp-credits {
+    gap: 4px;
+    padding: 0 9px;
+  }
+  .tp-plan-phone {
+    padding: 0 8px;
+    font-size: 13px;
+  }
+}
+/* The benchmarks' note sits over the client-size chips: room between them. */
+.bm-page .bl-note {
+  margin-bottom: 14px;
+}
+.tp-plan-short {
+  display: none;
+}
+@media (max-width: 384px) {
+  .tp-plan-phone .tp-plan-long {
+    display: none;
+  }
+  .tp-plan-phone .tp-plan-short {
+    display: inline;
+  }
+}
+@media (max-width: 369px) {
+  .tp-top-phone .tp-plan-phone {
+    display: none;
+  }
+}

@@ -743,9 +743,11 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
       ? {
           plan:
             me.plan.name === "trial"
-              ? `Pro trial, ${me.plan.trialDaysLeft} ${me.plan.trialDaysLeft === 1 ? "day" : "days"} left. It ends on Free with no charge.`
+              ? `Pro trial, ${me.plan.trialDaysLeft} ${me.plan.trialDaysLeft === 1 ? "day" : "days"} left. It ends on Free with no charge. To keep Pro: ${upgradeUrl(publicBase() ?? ctx.origin, "claude_account")}`
               : me.plan.name === "pro"
-                ? "Pro"
+                ? me.plan.proStartsAt
+                  ? `Pro, ${me.plan.interval === "year" ? "yearly" : "monthly"}. It starts with its first charge on ${me.plan.proStartsAt.slice(0, 10)}, when the trial ends.`
+                  : "Pro"
                 : `Free: ${me.plan.limits.savedViews} saved search and ${me.plan.limits.claudePerDay} requests a day here. Plans: ${upgradeUrl(publicBase() ?? ctx.origin, "claude_account")}`,
         }
       : {}),

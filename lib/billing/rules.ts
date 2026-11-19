@@ -12,7 +12,10 @@
  *   Top-up $19 for 50 credits, once, on any plan.
  *   Trial  14 days of Pro, no card, from the end of onboarding. Extended once by 7 days when, in its
  *          last 4 days, the member opens a conversation, unlocks a warm path or sends an invite.
- *          It ends quietly into Free.
+ *          It ends quietly into Free. Pro can be bought at any point in it: with more than 48 hours
+ *          left, the subscription starts in Stripe's trialing status with trial_end at the trial's
+ *          end (PlanRecord.proStartsAt), so the member keeps the days left and the first charge, with
+ *          its 100 credits, lands when the trial ends. With less left it is charged at once.
  */
 import { planOf, pausedAt, type PlanRecord } from "../plan";
 
@@ -31,6 +34,10 @@ export const FREE_SAVED_VIEWS = 1;
 export const FREE_MCP_PER_DAY = 20;
 /** A pause is one month. */
 export const PAUSE_MONTHS = 1;
+/** Subscribing during the trial keeps its days when more than this is left (Stripe wants trial_end at least 48 hours out). */
+export const KEEP_TRIAL_MIN_MS = 48 * 3_600_000;
+/** Subscribed during the trial: Pro carries on this long past the trial's end while its first charge goes through. */
+export const FIRST_CHARGE_GRACE_MS = 86_400_000;
 /** Stripe event ids kept for idempotency (newest last). */
 export const EVENTS_KEEP = 5000;
 
@@ -96,6 +103,19 @@ export function extendTrial(rec: PlanRecord | undefined, nowMs: number): boolean
 export const trialEnding = (rec: PlanRecord | undefined, nowMs: number) =>
   planOf(rec, nowMs) === "trial" && ms(rec!.trialEndsAt) - nowMs <= ENDING_DAYS * DAY;
 
+/**
+ * Subscribing now, during the trial: the trial's end as Stripe's trial_end (unix seconds), so the
+ * first charge lands then. Null when it is charged at once: not on the trial, or 48 hours or less left.
+ */
+export function keepTrialEnd(rec: PlanRecord | undefined, nowMs: number): number | null {
+  if (planOf(rec, nowMs) !== "trial") return null;
+  const end = ms(rec!.trialEndsAt);
+  return end - nowMs > KEEP_TRIAL_MIN_MS ? Math.floor(end / 1000) : null;
+}
+
+/** Subscribed during the trial, and paid Pro hasn't started yet: nothing charged, the first charge still to come. */
+export const proStartsLater = (rec: PlanRecord | undefined, nowMs: number) => !!rec?.proStartsAt && ms(rec.proStartsAt) > nowMs && !rec.invoiceId;
+
 /** A trial ran and is over, without a paid plan now. */
 export const trialOver = (rec: PlanRecord | undefined, nowMs: number) =>
   !!rec?.trialEndsAt && ms(rec.trialEndsAt) <= nowMs && planOf(rec, nowMs) === "free";
@@ -110,6 +130,7 @@ export const trialOver = (rec: PlanRecord | undefined, nowMs: number) =>
 export function pauseDates(rec: PlanRecord | undefined, nowMs: number): { from: string; until: string } | { why: string } {
   if (!rec?.subscriptionId) return { why: "There's no paid plan to pause." };
   if (rec.cancelAt) return { why: "Your plan is set to end. Keep Pro first, then pause it." };
+  if (proStartsLater(rec, nowMs)) return { why: "Nothing is charged until your trial ends. Pause once Pro has started." };
   if (Number.isFinite(ms(rec.pausedUntil)) && ms(rec.pausedUntil) > nowMs) return { why: "Pro is paused already." };
   const end = ms(rec.proUntil);
   const from = Number.isFinite(end) && end > nowMs ? end : nowMs;
@@ -178,6 +199,25 @@ function invoicePeriod(inv: Record<string, unknown>): { start: string | null; en
     interval: priceInterval === "year" ? "year" : priceInterval === "month" ? "month" : null,
   };
 }
+/** The trial's end we gave Stripe (metadata trial_end, unix seconds), on a session, a subscription or an invoice. */
+function metaTrialEnd(...metas: unknown[]): number | null {
+  for (const m of metas) {
+    const v = obj(m).trial_end;
+    const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v) ? Number(v) : NaN;
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+const invoiceMetas = (inv: Record<string, unknown>) => [obj(inv.subscription_details).metadata, obj(obj(inv.parent).subscription_details).metadata, inv.metadata];
+/**
+ * Subscribed during the trial (Stripe's trialing status): Pro to the trial's end, plus a day's grace
+ * while the first charge goes through, so nothing drops in between. Set to end: to the trial's end only.
+ */
+function holdTrial(rec: PlanRecord, endS: number, ending: boolean) {
+  const end = endS * 1000;
+  rec.proStartsAt = isoOf(end);
+  rec.proUntil = ending ? isoOf(end) : later(rec.proUntil, isoOf(end + FIRST_CHARGE_GRACE_MS));
+}
 /** A subscription's period end, wherever this API version puts it. */
 const subPeriodEnd = (sub: Record<string, unknown>) => num(sub.current_period_end) ?? num(obj(((obj(sub.items).data as unknown[]) ?? [])[0]).current_period_end);
 const subInterval = (sub: Record<string, unknown>): "month" | "year" | null => {
@@ -221,7 +261,14 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
         if (str(o.subscription)) rec.subscriptionId = str(o.subscription)!;
         const interval = meta.interval === "year" ? "year" : "month";
         rec.interval = interval;
-        if (o.payment_status === "paid" || o.payment_status === "no_payment_required") {
+        const settled = o.payment_status === "paid" || o.payment_status === "no_payment_required";
+        const trialEnd = metaTrialEnd(meta);
+        if (settled && trialEnd && trialEnd * 1000 > ctx.nowMs && !rec.invoiceId) {
+          // Bought during the trial: trialing at Stripe, nothing charged yet. Pro now and through the
+          // trial's end; the first paid invoice then moves Pro to its period's end.
+          holdTrial(rec, trialEnd, false);
+          delete rec.cancelAt;
+        } else if (settled) {
           // Pro at once, until the first invoice says exactly to when.
           rec.proUntil = later(rec.proUntil, addMonths(now, interval === "year" ? 12 : 1));
           rec.paidSince ??= now;
@@ -245,20 +292,32 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
       const rec = recOf(id);
       const period = invoicePeriod(o);
       const prevStart = rec.periodStart;
+      const prevInvoice = rec.invoiceId;
       rec.subscriptionId = sub;
       if (str(o.customer)) rec.customerId = str(o.customer)!;
       if (period.interval) rec.interval = period.interval;
+      const cents = num(o.amount_paid) ?? 0;
+      // The $0 invoice Stripe makes when a subscription starts in its trial: it pays for nothing.
+      // No credits, no money in, not the first paid month. Pro holds to the trial's end.
+      const trialEnd = metaTrialEnd(...invoiceMetas(o)) ?? (rec.proStartsAt ? Math.floor(ms(rec.proStartsAt) / 1000) : null);
+      if (cents === 0 && !prevInvoice && trialEnd && (!period.end || ms(period.end) <= trialEnd * 1000 + 60_000)) {
+        if (trialEnd * 1000 > ctx.nowMs) holdTrial(rec, trialEnd, !!rec.cancelAt);
+        return done({ handled: true, memberId: id, grants: [] });
+      }
+      // Paid Pro has started: the trial's wait is over.
+      delete rec.proStartsAt;
       rec.proUntil = later(rec.proUntil, period.end ?? addMonths(now, rec.interval === "year" ? 12 : 1));
       rec.paidSince ??= now;
       rec.invoiceId = str(o.id) ?? ev.id;
       rec.periodStart = period.start ?? now;
-      const cents = num(o.amount_paid) ?? 0;
       if (cents > 0 || !rec.cents) rec.cents = cents || rec.cents;
       // A pause that has run its course is over once Pro is paid again.
       if (rec.pausedUntil && ms(rec.pausedUntil) <= ctx.nowMs) delete rec.pausedUntil, delete rec.pausedFrom;
       pay(b, { memberId: id, at: now, cents, kind: rec.interval === "year" ? "year" : "month", ref: rec.invoiceId });
       const ref = dueGrantRef(rec, ctx.nowMs);
-      const renewal = o.billing_reason === "subscription_cycle";
+      // A renewal sends the receipt for the period before. The first charge after a trial (also a
+      // "subscription_cycle" at Stripe) follows no paid period, so it sends none.
+      const renewal = o.billing_reason === "subscription_cycle" && !!prevInvoice;
       return done({
         handled: true,
         memberId: id,
@@ -266,16 +325,25 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
         ...(renewal ? { receipt: { memberId: id, from: prevStart ?? rec.paidSince!, to: rec.periodStart } } : {}),
       });
     }
+    case "customer.subscription.created":
     case "customer.subscription.updated": {
       const id = ctx.memberOf({ ref: str(obj(o.metadata).ref), customer: str(o.customer), subscription: str(o.id) });
       if (!id) return done(none("unknown member"));
       const rec = recOf(id);
       if (str(o.id)) rec.subscriptionId = str(o.id)!;
+      if (str(o.customer)) rec.customerId = str(o.customer)!;
       const interval = subInterval(o);
       if (interval) rec.interval = interval;
       const end = unix(subPeriodEnd(o));
       if (o.cancel_at_period_end === true || num(o.cancel_at)) rec.cancelAt = unix(num(o.cancel_at)) ?? end ?? rec.proUntil ?? now;
       else delete rec.cancelAt;
+      // Trialing (bought during the trial): Pro through the trial's end, and to the end only once it
+      // is set to end. Nothing is charged before then, so nothing is paid for past it.
+      const trialEnd = o.status === "trialing" ? num(o.trial_end) ?? metaTrialEnd(o.metadata) : null;
+      if (trialEnd && trialEnd * 1000 > ctx.nowMs && !rec.invoiceId) {
+        holdTrial(rec, trialEnd, !!rec.cancelAt);
+        if (rec.cancelAt && ms(rec.cancelAt) > trialEnd * 1000) rec.cancelAt = isoOf(trialEnd * 1000);
+      } else if (o.status && o.status !== "trialing" && rec.proStartsAt && ms(rec.proStartsAt) <= ctx.nowMs) delete rec.proStartsAt;
       const pause = o.pause_collection ? obj(o.pause_collection) : null;
       if (pause && num(pause.resumes_at)) {
         rec.pausedUntil = unix(num(pause.resumes_at))!;
@@ -290,6 +358,15 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
       const id = ctx.memberOf({ ref: str(obj(o.metadata).ref), customer: str(o.customer), subscription: str(o.id) });
       if (!id) return done(none("unknown member"));
       const rec = recOf(id);
+      if (rec.proStartsAt && !rec.invoiceId && !rec.paidSince) {
+        // Ended before its first charge (bought during the trial, cancelled inside it): nothing was
+        // paid for, so nothing runs on. The member's own trial carries on to its end, then Free. Not churn.
+        if (!rec.subscriptionId || rec.subscriptionId === str(o.id)) delete rec.subscriptionId;
+        delete rec.proStartsAt;
+        delete rec.proUntil;
+        delete rec.cancelAt;
+        return done({ handled: true, memberId: id, grants: [] });
+      }
       // Pro runs to the end of what was paid for (proUntil), then Free. No new charge comes.
       if (!rec.subscriptionId || rec.subscriptionId === str(o.id)) delete rec.subscriptionId;
       rec.cancelAt ??= rec.proUntil ?? now;

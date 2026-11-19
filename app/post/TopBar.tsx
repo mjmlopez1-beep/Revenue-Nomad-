@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Pine top bar: brand, search, credits pill, earn meter, "Add what you know", avatar menu.
+ * Pine top bar: brand, search, the plan pill (billing live only), credits pill, earn meter, "Add what you know", avatar menu.
  * Every number here (the balance, "Earned 11 of 25 today", the ledger) is the text face with
  * tabular figures, never mono.
  *
@@ -17,6 +17,7 @@ import { Anchored, Sheet, UndoHost, owedText } from "./ui";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
+import { PlanPill } from "./Billing";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
 export type Contact = View["contact"] | null;
@@ -379,6 +380,8 @@ export interface MenuItem {
   badge?: number;
   /** The section it sits in. A small heading shows where the section changes. */
   group?: string;
+  /** The one item in the action color (Upgrade to Pro, at the top while on the trial or Free). */
+  accent?: boolean;
 }
 
 /**
@@ -460,7 +463,7 @@ export function AvatarMenu({
               role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
               aria-checked={it.checked === undefined ? undefined : it.checked}
               aria-current={it.current ? "page" : undefined}
-              className={`tp-menu-item${it.checked ? " on" : ""}${it.current ? " here" : ""}`}
+              className={`tp-menu-item${it.checked ? " on" : ""}${it.current ? " here" : ""}${it.accent ? " tp-menu-up" : ""}`}
               onClick={() => {
                 it.onClick();
                 onClose();
@@ -655,6 +658,7 @@ export function TopBar({
                   <IconSearch size={18} />
                 </button>
               )}
+              <PlanPill plan={me.plan} phone />
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
               {msgBtn && unread > 0 && <MessagesBtn unread={unread} onClick={onMessages!} here={onMessagesPage} />}
               {/* The main action on a phone is the labeled "Add what you know" at the foot of the list, in thumb reach. Pages reach it from the menu. */}
@@ -680,6 +684,8 @@ export function TopBar({
       <div className="tp-top-right">
         {/* The meter's slot is first, so with nothing earned yet its room is the gap after the search, not a hole between the balance and Add. */}
         <EarnMeter me={me} onClick={onCredits} />
+        {/* Only while billing is live (Me.plan): the trial's days with Upgrade, or Upgrade to Pro. */}
+        <PlanPill plan={me.plan} />
         <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
         <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>

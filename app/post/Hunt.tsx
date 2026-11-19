@@ -627,6 +627,7 @@ export function SavedViews({
   current,
   onOpen,
   onSave,
+  saveTag,
   onEmail,
   onRename,
   onRemove,
@@ -635,6 +636,8 @@ export function SavedViews({
   current: string | null;
   onOpen: (v: SavedViewRec) => void;
   onSave: () => void;
+  /** A view past Free's one is Pro's (billing live): its tag on Save this view, locked on Free. */
+  saveTag?: ReactNode;
 }) {
   const [manage, setManage] = useState(false);
   return (
@@ -658,6 +661,7 @@ export function SavedViews({
           ))}
           <button type="button" className="chip hunt-chip hunt-vsave" onClick={onSave}>
             Save this view
+            {saveTag}
           </button>
         </div>
       )}

@@ -249,15 +249,18 @@ const PRO_SHOWN = false;
 
 /**
  * The Pro waitlist offer, wired to the signed-in member. While billing is live (Me.plan) the places
- * that had it show billing instead: out of credits, the top-up and Pro; Your credits, the top-up
- * once prices may show. The waitlist never shows then.
+ * that had it show billing instead: out of credits, the top-up and Pro; Your credits, the top-up on
+ * Free and Pro's monthly credits on the trial. The waitlist never shows then.
  */
 export function Pro({ where, variant }: { where: ProWhere; variant?: "card" | "line" }) {
   const ui = useUi();
   const plan = ui.me.plan;
   if (plan) {
     if (where === "zero_credits") return <CreditsWall plan={plan} />;
-    if (where === "my_credits" && plan.showPrices && plan.topup)
+    // The trial has no monthly credits: those come with each paid month of Pro, so its tag is plain "Pro".
+    if (where === "my_credits" && plan.name === "trial")
+      return <UpgradeNote from="credits" inTrial={false} trial={`Pro adds ${plan.prices.proCredits} credits each paid month, on top of what you earn. They start with your first paid month.`} />;
+    if (where === "my_credits" && plan.topup)
       return (
         <UpgradeNote from="credits">
           {plan.prices.topupCredits} more credits are ${plan.prices.topup}, once, on any plan.

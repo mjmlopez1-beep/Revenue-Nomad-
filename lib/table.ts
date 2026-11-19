@@ -101,7 +101,7 @@ import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
 import {
-  ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, pauseState, startTrial, trialEnding,
+  ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
 import { FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStats } from "./radar/types";
@@ -6156,8 +6156,9 @@ function planView(s: State, memberId: string, nowMs: number): PlanView {
     pausedUntil: pause ? rec?.pausedUntil ?? null : null,
     subscribed: !!rec?.subscriptionId,
     portal: !!rec?.customerId,
-    // No price before the trial's last days: it shows once the trial is over, ends soon, or on Pro.
-    showPrices: name !== "trial" || ending,
+    // Pro can be bought any time in the trial; with more than 48 hours left the first charge waits for its end.
+    firstChargeAt: keepTrialEnd(rec, nowMs) ? rec!.trialEndsAt! : null,
+    proStartsAt: proStartsLater(rec, nowMs) ? rec!.proStartsAt! : null,
     topup: !!process.env.STRIPE_PRICE_TOPUP?.trim(),
     notLooking: prof.looking === false,
     annualLine: annualLine(hourlyOf(ownRate(s, memberId))),

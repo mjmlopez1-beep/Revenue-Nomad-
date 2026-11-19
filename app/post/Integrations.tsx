@@ -14,7 +14,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconChevron, useToast } from "../ui/shared";
 import { useCopy } from "./Credits";
 import { UseInClaude } from "./UseInClaude";
-import { UpgradeNote } from "./Billing";
+import { ProLock, ProRow, ProTag, UpgradeNote, planDay } from "./Billing";
+import { useUi } from "./ui";
 import type { AlertKind, DestView, IntegrationsView } from "@/lib/notify/types";
 import "./connect.css";
 import "./pages.css";
@@ -324,6 +325,8 @@ const ALERTS: { key: AlertKind; title: (fn: string | null, saved: number) => str
 export function Integrations({ onBack, onCredits, section }: { onBack: () => void; onCredits: () => void; section?: "claude" | "slack" }) {
   const toast = useToast();
   const copy = useCopy();
+  // Billing live only (Me.plan): Pro's alerts locked on Free, marked in the trial.
+  const plan = useUi().me.plan;
   const [view, setView] = useState<IntegrationsView | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -431,7 +434,9 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
         <h2 className="in-h" id="in-slack-h">
           Alerts in Slack
         </h2>
-        <UpgradeNote from="slack">On Free, Slack gets the weekly post of new roles. Pro sends every alert: messages, your seats, and roles as they open.</UpgradeNote>
+        <UpgradeNote from="slack" trial={plan?.name === "trial" ? `Every alert in Slack is Pro, yours in the trial until ${planDay(plan.trialEndsAt)}. On Free, Slack gets the weekly post of new roles.` : undefined}>
+          On Free, Slack gets the weekly post of new roles. Pro sends every alert: messages, your seats, and roles as they open.
+        </UpgradeNote>
         {notice && (
           <div className={`in-notice${notice === "connected" ? " ok" : ""}`} role="status">
             <p>{NOTICE_WORDS[notice]}</p>
@@ -523,19 +528,24 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
                   What you get alerts for
                 </h3>
                 <ul className="in-alerts">
-                  {ALERTS.map((a) => (
-                    <li key={a.key} className="in-alert">
-                      <div className="in-alert-t">
-                        <span className="in-alert-h" id={`in-a-${a.key}-t`}>
-                          {a.title(view.function, view.savedViews)}
-                        </span>
-                        <span className="in-alert-d" id={`in-a-${a.key}-d`}>
-                          {a.desc(view.function, view.savedViews)}
-                        </span>
-                      </div>
-                      <Switch id={`in-a-${a.key}`} on={view.alerts[a.key]} onChange={(on) => setAlert(a.key, on)} />
-                    </li>
-                  ))}
+                  {ALERTS.map((a) => {
+                    // Every alert but the weekly roles post is Pro's: locked in place on Free, marked in the trial.
+                    const pro = a.key !== "roles" && !!plan && plan.name !== "pro";
+                    const locked = pro && plan!.name === "free";
+                    return (
+                      <li key={a.key} className={`in-alert${locked ? " locked" : ""}`}>
+                        <div className="in-alert-t">
+                          <span className="in-alert-h" id={`in-a-${a.key}-t`}>
+                            {a.title(view.function, view.savedViews)} {pro && !locked && <ProTag plan={plan} />}
+                          </span>
+                          <span className="in-alert-d" id={`in-a-${a.key}-d`}>
+                            {a.desc(view.function, view.savedViews)}
+                          </span>
+                        </div>
+                        {locked ? <ProLock from="slack" what={a.title(view.function, view.savedViews)} /> : <Switch id={`in-a-${a.key}`} on={view.alerts[a.key]} onChange={(on) => setAlert(a.key, on)} />}
+                      </li>
+                    );
+                  })}
                 </ul>
                 <p className="in-hint">At most one post of each kind every 15 minutes. When more happen, they come together in one post with a count.</p>
               </section>
@@ -614,7 +624,12 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
         <h2 className="in-h" id="in-claude-h">
           Use it in Claude
         </h2>
-        <UpgradeNote from="claude">On Free, Claude can ask Merlin 20 times a day. Pro has no daily cap.</UpgradeNote>
+        <ProRow
+          from="claude"
+          title="No daily cap"
+          free="On Free, Claude can ask Merlin 20 times a day. Pro has no daily cap."
+          desc={plan?.name === "trial" ? `Claude can ask Merlin as often as you need, in your trial until ${planDay(plan.trialEndsAt)}. On Free it's 20 times a day.` : "Claude can ask Merlin as often as you need."}
+        />
         <UseInClaude embedded onBack={onBack} onCredits={onCredits} />
       </section>
     </div>

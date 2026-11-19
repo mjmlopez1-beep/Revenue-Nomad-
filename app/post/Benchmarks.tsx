@@ -21,9 +21,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionResult, BenchRate, BenchmarkRow, RateStat, View } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
-import { IconChevron, IconPlus, Num, post, useToast } from "../ui/shared";
+import { IconChevron, IconLock, IconPlus, Num, post, useToast } from "../ui/shared";
 import { earnNote, useUi } from "./ui";
-import { UpgradeNote } from "./Billing";
+import { ProTag, UpgradeNote, openPlans, planDay } from "./Billing";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
 
@@ -41,8 +41,12 @@ function needText(s: RateStat): string {
   return s.n === 0 ? `Needs rates from ${s.min} people` : `Needs rates from ${more} more ${more === 1 ? "person" : "people"}`;
 }
 
-/** The three cells for one way of charging: median, middle half, people. `side` places them on phones. */
-function Stat({ s, side, rangeN }: { s: RateStat; side: "m" | "h"; rangeN: number }) {
+/**
+ * The three cells for one way of charging: median, middle half, people. `side` places them on phones.
+ * `locked` (Free, billing live): the middle half is Pro's. The server sends no range on Free, so the
+ * cell is a blurred placeholder with a lock that opens the plans, never a real figure.
+ */
+function Stat({ s, side, rangeN, locked }: { s: RateStat; side: "m" | "h"; rangeN: number; locked?: boolean }) {
   const cap = CAP[side];
   const yours = s.withoutYours ? "Your own rate is left out of this figure." : undefined;
   if (s.median === undefined) {
@@ -73,6 +77,13 @@ function Stat({ s, side, rangeN }: { s: RateStat; side: "m" | "h"; rangeN: numbe
       <td className={`bm-${side} bm-range${range ? "" : " bm-range-none"}`}>
         {range ? (
           <Num>{`${money(s.p25!)}–${money(s.p75!)}`}</Num>
+        ) : locked && s.n >= rangeN ? (
+          <button type="button" className="bm-range-lock" onClick={() => openPlans("bench")} aria-label={`${cap}, middle half: Pro. See Pro`} title="The range is Pro. See Pro">
+            <span className="bm-range-fake" aria-hidden>
+              {side === "m" ? "$0,000–$00,000" : "$000–$000"}
+            </span>
+            <IconLock size={12} />
+          </button>
         ) : (
           <span className="bm-range-later" title={`The range shows once ${rangeN} people have a rate in this group.`}>
             At {rangeN} people
@@ -325,9 +336,31 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
           : "No rates yet. Yours can be the first."}
       </p>
       {b.limited ? (
-        // Free while billing is live: the median by function. The range and the client-size rows are Pro's.
-        <UpgradeNote from="bench">Free shows the median for each function. Pro adds the range, by function and by client size.</UpgradeNote>
+        // Free while billing is live: the median by function. The range and the client-size rows are Pro's:
+        // the sizes stay in place, locked, and open the plans. The server sends no client-size rows on Free.
+        <>
+          <UpgradeNote from="bench">Free shows the median for each function. Pro adds the range, by function and by client size.</UpgradeNote>
+          <div className="tp-bm-tools bm-tools-locked">
+            <span className="tp-flabel" id="tp-bm-band">
+              Client revenue <ProTag plan={ui.me.plan} />
+            </span>
+            <div className="tp-fchips" role="group" aria-labelledby="tp-bm-band">
+              <button type="button" aria-pressed className="chip tp-fchip chip-on">
+                All revenue
+              </button>
+              {RN_REVENUE.map((s) => (
+                <button key={s} type="button" aria-pressed={false} className="chip tp-fchip bm-chip-locked" onClick={() => openPlans("bench")} aria-label={`${s}: Pro. See Pro`}>
+                  <IconLock size={11} /> {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       ) : (
+        <>
+        {ui.me.plan?.name === "trial" && (
+          <UpgradeNote from="bench" trial={`The ranges and the rows by client size are Pro, yours in the trial until ${planDay(ui.me.plan.trialEndsAt)}. On Free you see the median for each function.`} />
+        )}
         <div className="tp-bm-tools">
           <span className="tp-flabel" id="tp-bm-band">
             Client revenue
@@ -340,6 +373,7 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
             ))}
           </div>
         </div>
+        </>
       )}
       {rows.length > 0 && (
       <div className="tp-bm">
@@ -391,8 +425,8 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
                     </span>
                   )}
                 </th>
-                <Stat s={r.monthly} side="m" rangeN={rangeN} />
-                <Stat s={r.hourly} side="h" rangeN={rangeN} />
+                <Stat s={r.monthly} side="m" rangeN={rangeN} locked={b.limited} />
+                <Stat s={r.hourly} side="h" rangeN={rangeN} locked={b.limited} />
               </tr>
             ))}
           </tbody>

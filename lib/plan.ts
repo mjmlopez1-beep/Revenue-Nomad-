@@ -29,6 +29,11 @@ export interface PlanRecord {
   trialExtended?: boolean;
   /** Paid Pro: the end of the period paid for (ISO). Renewals move it forward. */
   proUntil?: string;
+  /**
+   * Subscribed during the trial: the day paid Pro starts, with its first charge (the trial's end,
+   * Stripe's trial_end). Cleared once that first invoice is paid.
+   */
+  proStartsAt?: string;
   /** "month" | "year", for the billing page. */
   interval?: "month" | "year";
   /** Set when the member cancelled: Pro runs to proUntil, then Free. */

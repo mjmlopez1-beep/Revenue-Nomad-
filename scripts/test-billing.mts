@@ -10,12 +10,15 @@
  * replaced, and the keys are made-up test strings.
  *
  *  1. Pure: planOf over time, startTrial, extendTrial, pauseDates, dueGrantRef, the signature
- *     check, each webhook event through applyEvent (and twice), the annual line.
+ *     check, each webhook event through applyEvent (and twice), a subscription bought during the
+ *     trial (Stripe's trialing status: the $0 invoice, cancel and keep, the first paid invoice,
+ *     deleted inside the trial), the annual line.
  *  2. In process with billing off: nothing gated, no plan, no billing state.
  *  3. RN_BILLING=1 without Stripe: still off.
  *  4. Billing live: the trial at the end of onboarding and on the next visit, Free's limits (one
  *     saved view, medians only, Slack and Claude), the extension, the webhook end to end, checkout,
- *     the portal, cancel, keep, pause, resume, the trial notices, and Pilot metrics' counts.
+ *     the portal, cancel, keep, pause, resume, the trial notices, Pilot metrics' counts, and
+ *     upgrading during the trial end to end (trial_end at checkout, the webhook, the first charge).
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -205,6 +208,77 @@ async function main() {
   const newer = R.applyEvent(b2, ev("evt_n", "invoice.paid", { id: "in_n", customer: "cus_n", parent: { subscription_details: { subscription: "sub_n" } }, amount_paid: 59000, lines: { data: [{ period: { start: nowS, end: nowS + 365 * 86_400 }, pricing: {}, price: { recurring: { interval: "year" } } }] } }), { nowMs: T0, memberOf: (o) => (o.subscription === "sub_n" ? "mem_di" : null) });
   check("the newer invoice shape (parent.subscription_details) works, yearly", newer.handled && b2.members.mem_di.interval === "year" && newer.grants[0]?.ref === "plan.in_n.0", b2.members.mem_di);
 
+  console.log("\nBought during the trial: Stripe's trialing status");
+  const trialRec = R.startTrial(undefined, T0)!;
+  const trialEndS = Math.floor(Date.parse(trialRec.trialEndsAt!) / 1000);
+  check("checkout keeps the trial's days with more than 48 hours left", R.keepTrialEnd(trialRec, T0 + 2 * DAY) === trialEndS && R.keepTrialEnd(trialRec, T0 + 11.9 * DAY) === trialEndS);
+  check("48 hours or less left, or not on the trial: charged at once", R.keepTrialEnd(trialRec, T0 + 12 * DAY) === null && R.keepTrialEnd(trialRec, T0 + 13 * DAY) === null && R.keepTrialEnd({}, T0) === null && R.keepTrialEnd(paid, T0) === null);
+  const bt = R.emptyBilling();
+  bt.members.mem_tr = { ...trialRec };
+  const whoT = (o: { ref?: string | null; customer?: string | null; subscription?: string | null }) =>
+    o.ref === "rn_ref_tr" ? "mem_tr" : Object.entries(bt.members).find(([, r]) => (o.customer && r.customerId === o.customer) || (o.subscription && r.subscriptionId === o.subscription))?.[0] ?? null;
+  const ctxT = (ms: number) => ({ nowMs: ms, memberOf: whoT });
+  const tBuy = T0 + 3 * DAY;
+  const tBuyS = Math.floor(tBuy / 1000);
+  const trialInv = (id: string, start: number, end: number, reason: string, cents: number, meta: Record<string, unknown> = {}) => ({
+    id,
+    customer: "cus_tr",
+    parent: { subscription_details: { subscription: "sub_tr", metadata: { ref: "rn_ref_tr", ...meta } } },
+    billing_reason: reason,
+    amount_paid: cents,
+    lines: { data: [{ period: { start, end }, price: { recurring: { interval: "year" } } }] },
+  });
+  // Stripe may send the trial's $0 invoice before the checkout: the invoice's own metadata says it's the trial's.
+  const zero = R.applyEvent(bt, ev("evt_t0", "invoice.paid", trialInv("in_t0", tBuyS, trialEndS, "subscription_create", 0, { trial_end: String(trialEndS) })), ctxT(tBuy));
+  const trAfterZero = { ...bt.members.mem_tr };
+  check(
+    "the trial's $0 invoice: no credits, no money in, not the first paid month, Pro held to the trial's end",
+    zero.handled && zero.grants.length === 0 && !zero.receipt && bt.payments.length === 0 && !trAfterZero.invoiceId && !trAfterZero.paidSince && trAfterZero.proStartsAt === iso(trialEndS * 1000),
+    trAfterZero,
+  );
+  const coT = R.applyEvent(
+    bt,
+    ev("evt_t1", "checkout.session.completed", { id: "cs_tr", mode: "subscription", client_reference_id: "rn_ref_tr", customer: "cus_tr", subscription: "sub_tr", payment_status: "no_payment_required", metadata: { interval: "year", trial_end: String(trialEndS) } }),
+    ctxT(tBuy + 1000),
+  );
+  const trS = bt.members.mem_tr;
+  check(
+    "checkout during the trial: subscribed, Pro starts at the trial's end, nothing paid yet",
+    coT.handled && coT.grants.length === 0 && trS.subscriptionId === "sub_tr" && trS.interval === "year" && trS.proStartsAt === iso(trialEndS * 1000) && !trS.paidSince && R.proStartsLater(trS, tBuy) && plan.planOf(trS, tBuy) === "pro",
+    trS,
+  );
+  check("no Pro credits while trialing", R.dueGrantRef(trS, tBuy + DAY) === null);
+  check("Pro all the way through the trial's end and while the first charge goes through", plan.planOf(trS, trialEndS * 1000 - 1) === "pro" && plan.planOf(trS, trialEndS * 1000 + 3_600_000) === "pro");
+  check("no pause before Pro has started", "why" in R.pauseDates(trS, tBuy));
+  const subT = (id: string, extra: Record<string, unknown>) =>
+    ev(id, "customer.subscription.updated", { id: "sub_tr", customer: "cus_tr", status: "trialing", trial_end: trialEndS, metadata: { ref: "rn_ref_tr" }, items: { data: [{ current_period_end: trialEndS, price: { recurring: { interval: "year" } } }] }, ...extra });
+  R.applyEvent(bt, subT("evt_t2", { cancel_at_period_end: false }), ctxT(tBuy + 2000));
+  check("subscription.updated, trialing: still subscribed, Pro starts at the trial's end", trS.proStartsAt === iso(trialEndS * 1000) && !trS.cancelAt && plan.planOf(trS, trialEndS * 1000 + 3_600_000) === "pro", trS);
+  R.applyEvent(bt, subT("evt_t3", { cancel_at_period_end: true }), ctxT(tBuy + 3000));
+  check("cancelled while trialing: Pro to the trial's end, then Free, nothing charged", trS.cancelAt === iso(trialEndS * 1000) && trS.proUntil === iso(trialEndS * 1000) && plan.planOf(trS, trialEndS * 1000 - 1) === "pro" && plan.planOf(trS, trialEndS * 1000 + 1) === "free", trS);
+  R.applyEvent(bt, subT("evt_t4", { cancel_at_period_end: false }), ctxT(tBuy + 4000));
+  check("taken back: Pro through the first charge again", !trS.cancelAt && plan.planOf(trS, trialEndS * 1000 + 3_600_000) === "pro", trS);
+  const yearEndS = trialEndS + 365 * 86_400;
+  const first = R.applyEvent(bt, ev("evt_t5", "invoice.paid", trialInv("in_t1", trialEndS, yearEndS, "subscription_cycle", 59000, { trial_end: String(trialEndS) })), ctxT(trialEndS * 1000 + 60_000));
+  check(
+    "the first paid invoice, when the trial ends: 100 credits, money in, Pro to the period's end, no renewal receipt",
+    first.grants.length === 1 && first.grants[0].delta === 100 && first.grants[0].ref === "plan.in_t1.0" && !first.receipt && bt.payments.length === 1 && bt.payments[0].cents === 59000 && trS.proUntil === iso(yearEndS * 1000) && !trS.proStartsAt && trS.paidSince === iso(trialEndS * 1000 + 60_000),
+    { first, trS },
+  );
+  const renT = R.applyEvent(bt, ev("evt_t6", "invoice.paid", trialInv("in_t2", yearEndS, yearEndS + 365 * 86_400, "subscription_cycle", 59000)), ctxT(yearEndS * 1000 + 60_000));
+  check("the next year's renewal sends the receipt as usual", !!renT.receipt && renT.grants[0]?.ref === "plan.in_t2.0", renT);
+  // Ended inside the trial, before any charge: back to the member's own trial, not counted as churn.
+  const bd = R.emptyBilling();
+  bd.members.mem_tr = { ...trialRec };
+  R.applyEvent(bd, ev("evt_d1", "checkout.session.completed", { id: "cs_d", mode: "subscription", client_reference_id: "rn_ref_tr", customer: "cus_tr", subscription: "sub_tr", payment_status: "no_payment_required", metadata: { interval: "month", trial_end: trialEndS } }), { nowMs: tBuy, memberOf: (o) => (o.ref === "rn_ref_tr" || o.subscription === "sub_tr" ? "mem_tr" : null) });
+  R.applyEvent(bd, ev("evt_d2", "customer.subscription.deleted", { id: "sub_tr", customer: "cus_tr", status: "canceled" }), { nowMs: tBuy + DAY, memberOf: (o) => (o.subscription === "sub_tr" ? "mem_tr" : null) });
+  check("deleted inside the trial, nothing paid: the trial carries on to its end, not churn", plan.planOf(bd.members.mem_tr, tBuy + DAY) === "trial" && !bd.members.mem_tr.subscriptionId && !bd.members.mem_tr.proStartsAt && bd.ended.length === 0, bd.members.mem_tr);
+  // Bought with 2 days or less left: an ordinary checkout, charged at once (no trial_end in its metadata).
+  const bn = R.emptyBilling();
+  bn.members.mem_tr = { ...trialRec };
+  R.applyEvent(bn, ev("evt_n1", "checkout.session.completed", { id: "cs_n", mode: "subscription", client_reference_id: "rn_ref_tr", customer: "cus_tr", subscription: "sub_tr", payment_status: "paid", metadata: { interval: "month" } }), { nowMs: T0 + 13 * DAY, memberOf: () => "mem_tr" });
+  check("late in the trial: paid at once, Pro from now", plan.planOf(bn.members.mem_tr, T0 + 13 * DAY) === "pro" && !bn.members.mem_tr.proStartsAt && bn.members.mem_tr.paidSince === iso(T0 + 13 * DAY));
+
   console.log("\nThe annual line");
   check("framed by an hourly rate above $49", R.annualLine(R.hourlyOf({ kind: "hourly", amount: 175 })) === "Less than an hour of your time a month.");
   check("a retainer counts over about 60 hours", R.annualLine(R.hourlyOf({ kind: "monthly", amount: 9000 })) !== null && R.annualLine(R.hourlyOf({ kind: "monthly", amount: 2000 })) === null);
@@ -271,7 +345,7 @@ async function main() {
   // Al finished onboarding while billing was off: their trial starts on their next visit, like Bo's.
   await t.billingVisit(BO);
   const bo = await meOf(BO);
-  check("a member onboarded before billing starts the trial on their next visit", bo.plan?.name === "trial" && bo.plan.trialDaysLeft === 14 && !bo.plan.showPrices, bo.plan);
+  check("a member onboarded before billing starts the trial on their next visit", bo.plan?.name === "trial" && bo.plan.trialDaysLeft === 14 && bo.plan.firstChargeAt === bo.plan.trialEndsAt, bo.plan);
   const ref0 = (await state()).billing!.members.mem_bo.trialEndsAt;
   await t.billingVisit(BO);
   check("a second visit changes nothing", (await state()).billing!.members.mem_bo.trialEndsAt === ref0);
@@ -299,9 +373,9 @@ async function main() {
     s.billing!.members.mem_ad = { trialStartedAt: iso(now - 30 * DAY), trialEndsAt: iso(now - 16 * DAY) };
   });
   const cy = await meOf(CY);
-  check("after the trial: Free, quietly, with prices shown and the limits", cy.plan?.name === "free" && cy.plan.hadTrial && cy.plan.showPrices && cy.plan.limits.savedViews === 1 && cy.plan.limits.claudePerDay === 20, cy.plan);
+  check("after the trial: Free, quietly, with the limits, charged at checkout", cy.plan?.name === "free" && cy.plan.hadTrial && cy.plan.firstChargeAt === null && cy.plan.limits.savedViews === 1 && cy.plan.limits.claudePerDay === 20, cy.plan);
   const ed = await meOf(ED);
-  check("the last 3 days: the trial-ending moment, prices may show", ed.plan?.ending === true && ed.plan.showPrices && ed.plan.trialDaysLeft === 2 && ed.plan.notLooking);
+  check("the last 3 days: the trial-ending moment; 2 days left, so buying now is charged at once", ed.plan?.ending === true && ed.plan.firstChargeAt === null && ed.plan.trialDaysLeft === 2 && ed.plan.notLooking);
 
   console.log("\nFree's limits");
   const v4 = await save(CY, 4);
@@ -483,6 +557,54 @@ async function main() {
   const adm2 = (await t.buildView(AD)).admin?.billing;
   check("a subscription that ends counts as churn this month and leaves MRR", adm2?.churnMonth === 1 && adm2.mrrCents === 0, adm2);
   check("members never see the panel", !(await t.buildView(CY)).admin);
+
+  console.log("\nUpgrading during the trial, end to end");
+  const boP = (await meOf(BO)).plan!;
+  const boEndS = Math.floor(Date.parse(boP.trialEndsAt!) / 1000);
+  check("on the trial the plans show, and buying now waits for the trial's end", boP.name === "trial" && boP.firstChargeAt === boP.trialEndsAt && !boP.proStartsAt, boP);
+  calls.length = 0;
+  await server.billingAction(BO, "checkout", { interval: "year" }, "https://post.example.com");
+  const boCk = new URLSearchParams(calls[0]?.body ?? "");
+  check(
+    "checkout with more than 48 hours left: subscription_data[trial_end] is the trial's end, in the metadata too",
+    Number(boCk.get("subscription_data[trial_end]")) === boEndS && Number(boCk.get("metadata[trial_end]")) === boEndS && Number(boCk.get("subscription_data[metadata][trial_end]")) === boEndS && boCk.get("line_items[0][price]") === "price_year_test",
+    calls[0]?.body,
+  );
+  calls.length = 0;
+  await server.billingAction(ED, "checkout", { interval: "month" }, "https://post.example.com");
+  const edCk = new URLSearchParams(calls[0]?.body ?? "");
+  check("with 48 hours or less left: no trial_end, charged at once", calls.length === 1 && !edCk.has("subscription_data[trial_end]") && !edCk.has("metadata[trial_end]") && (await meOf(ED)).plan!.firstChargeAt === null);
+  const boRef = t.tableInternals.billingRef("mem_bo");
+  const boCredits0 = (await meOf(BO)).credits;
+  await hook({ id: "evt_b1", type: "checkout.session.completed", data: { object: { id: "cs_b1", mode: "subscription", client_reference_id: boRef, customer: "cus_bo", subscription: "sub_bo", payment_status: "no_payment_required", metadata: { ref: boRef, interval: "year", trial_end: String(boEndS) } } } });
+  await hook({ id: "evt_b2", type: "invoice.paid", data: { object: { id: "in_b0", customer: "cus_bo", parent: { subscription_details: { subscription: "sub_bo", metadata: { ref: boRef, trial_end: String(boEndS) } } }, billing_reason: "subscription_create", amount_paid: 0, lines: { data: [{ period: { start: Math.floor(Date.now() / 1000), end: boEndS }, price: { recurring: { interval: "year" } } }] } } } });
+  const boSub = (await meOf(BO)).plan!;
+  check(
+    "subscribed while trialing: Pro, yearly, starting at the trial's end, with the portal",
+    boSub.name === "pro" && boSub.subscribed && boSub.portal && boSub.interval === "year" && Math.floor(Date.parse(boSub.proStartsAt ?? "") / 1000) === boEndS && boSub.trialDaysLeft === null && !boSub.cancelAt,
+    boSub,
+  );
+  check("the trial's $0 invoice brings no credits", (await meOf(BO)).credits === boCredits0);
+  check("no Stripe id reaches the browser", !JSON.stringify(boSub).includes("cus_bo") && !JSON.stringify(boSub).includes("sub_bo") && !JSON.stringify(boSub).includes("in_b0"));
+  let boPause = "";
+  try {
+    await server.billingAction(BO, "pause", {});
+  } catch (e) {
+    boPause = (e as Error).message;
+  }
+  check("no pause before Pro has started", /Nothing is charged until your trial ends/.test(boPause), boPause);
+  calls.length = 0;
+  const boCn = await server.billingAction(BO, "cancel", {});
+  const boCnPlan = (await meOf(BO)).plan!;
+  check("cancel while trialing: nothing charged, Pro to the trial's end", /Nothing is charged/.test(boCn.message ?? "") && new URLSearchParams(calls[0]?.body ?? "").get("cancel_at_period_end") === "true" && boCnPlan.cancelAt === boCnPlan.proStartsAt && boCnPlan.name === "pro", { boCn, boCnPlan });
+  const boKp = await server.billingAction(BO, "keep", {});
+  check("keep: the first charge comes at the trial's end", /first charge comes on/.test(boKp.message ?? "") && !(await meOf(BO)).plan!.cancelAt, boKp);
+  // The trial's end: Stripe charges the first year. Its invoice.paid brings the month's 100 credits.
+  const atEnd = boEndS * 1000 + 60_000;
+  const firstPaid = JSON.stringify({ id: "evt_b3", type: "invoice.paid", data: { object: { id: "in_b1", customer: "cus_bo", parent: { subscription_details: { subscription: "sub_bo", metadata: { ref: boRef, trial_end: String(boEndS) } } }, billing_reason: "subscription_cycle", amount_paid: 59000, lines: { data: [{ period: { start: boEndS, end: boEndS + 365 * 86_400 }, price: { recurring: { interval: "year" } } }] } } } });
+  const fp = await server.handleWebhook(firstPaid, S.signFor(firstPaid, STRIPE_ENV.STRIPE_WEBHOOK_SECRET, Math.floor(atEnd / 1000)), undefined, atEnd);
+  const boPaid = (await meOf(BO)).plan!;
+  check("the first paid invoice: 100 credits, Pro to the year's end, the wait over", fp.status === 200 && (await meOf(BO)).credits === boCredits0 + 100 && boPaid.name === "pro" && !boPaid.proStartsAt && Math.floor(Date.parse(boPaid.proUntil!) / 1000) === boEndS + 365 * 86_400, { fp, boPaid });
 
   console.log("\nSwitched off again: everything as before");
   clearBilling();

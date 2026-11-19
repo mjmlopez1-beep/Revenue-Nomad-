@@ -26,6 +26,7 @@ import { DataTable, type SignalRows } from "./Tables";
 import { CardList } from "./Cards";
 import { UnlockCompany } from "./Drawer";
 import { plural } from "./hooks";
+import { ProRow, planDay } from "./Billing";
 import "./radar.css";
 
 let openedSent = false;
@@ -257,6 +258,13 @@ export function RadarPage({
             </span>
             <span className="tp-ftoggle-l">Send me {FEATURE_NAME} emails</span>
           </button>
+          {/* Billing live only: Slack as it happens is Pro's. Locked on Free, marked in the trial, nothing on Pro. */}
+          <ProRow
+            from="radar"
+            title="In Slack as it happens"
+            free="Pro posts each signal to Slack the moment it shows. On Free they come each morning."
+            desc={`Each signal posts to Slack the moment it shows, in your trial until ${planDay(me.plan?.trialEndsAt ?? null)}.${view.slack ? "" : " Connect Slack under Integrations to get them."}`}
+          />
         </section>
       )}
     </div>
