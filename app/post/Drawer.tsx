@@ -23,19 +23,49 @@ import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
 import { VerifyName } from "./Verify";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
+import type { Action, ActionResult, Cell, CompanyRec, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import {
   AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
-  seatMissingCount, shown, waitWords, type CoInfo, type FactRef,
+  seatMissingCount, shown, waitWords, fnGap, type CoInfo, type FactRef,
 } from "./model";
 import { FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
-import { Fit, HiddenCompany, NoSeatYet, storyTag, storyTitle } from "./Tables";
+import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
+import { checkedWords, isFractionalLead, leadItems, ledFullTimeWords } from "@/lib/leaders/types";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
+
+/**
+ * Who leads each function, from the company's own website (lib/leaders): "Sales: full-time CRO
+ * since Nov 2024 · Marketing: fractional CMO · from the company's website, checked Nov 18". Roles
+ * only, never a person, so it shows wherever the company's basics do, a hidden company too (with
+ * no link to its site there).
+ */
+export function LeadsLine({ c }: { c: CompanyRec }) {
+  const leads = c.leads;
+  if (!leads?.fns.length) return null;
+  const url = c.hidden ? null : leads.fns.map((l) => l.url).find((u): u is string => !!u && /^https?:\/\//i.test(u));
+  return (
+    <p className="tp-dleads">
+      <span className="tp-dleads-h">Who leads each function</span>{" "}
+      <span className="tp-dleads-t">{leadItems(leads).join(" · ")}</span>
+      <span className="tp-dleads-src">
+        {" · from "}
+        {url ? (
+          <a className="tp-link" href={url} target="_blank" rel="noreferrer nofollow">
+            the company&apos;s website
+          </a>
+        ) : (
+          "the company's website"
+        )}
+        , checked {checkedWords(leads.checkedAt)}
+      </span>
+    </p>
+  );
+}
 
 /** Where members reach Revenue Nomad (View.contact, read from the server at run time). */
 export type Contact = NonNullable<View["contact"]>;
@@ -1531,7 +1561,10 @@ export function Drawer({
   const hiringFns = i.fnState.hiring;
   const storyFns = i.fnState.story;
   // Never "Sales" beside "No Sales seat yet": an open role or a member story in it is not a gap to point at.
-  const gap = !!mine && hired.length > 0 && !i.fns.includes(mine);
+  // "No fractional Sales yet", or what the company's website says in its place (lib/leaders): a full-time leader, or a fractional one on the team.
+  const fg = fnGap(i, mine);
+  const gap = fg.gap;
+  const teamLeads = i.leads.filter((l) => isFractionalLead(l) && !hired.includes(l.fn));
   const mineNamed = namedFn(mine);
   // Where the seats came from. A role the scan found reads as a job posting, open or closed.
   const sources = [...new Set(i.engs.map((e) => SOURCE_SAY[e.source] ?? (SOURCE_LABEL[e.source] ?? e.source).toLowerCase()))];
@@ -1689,6 +1722,7 @@ export function Drawer({
             </div>
           )}
           {line.length ? <div className="tp-dline num">{line.join(" · ")}</div> : <MissingFacts i={i} title={false} skip={["website", "linkedin"]} />}
+          <LeadsLine c={c} />
           <div className="tp-dfit">
             <Fit i={i} big hot />
             <span className="tp-dfit-r num">{fitReason(i)}</span>
@@ -1724,7 +1758,7 @@ export function Drawer({
               <FieldList entity="company" id={c.id} cells={c.cells} fields={COMPANY_GTM} emptyNote={sellOut && gtmEmpty.length > 0 ? SELL_NOTE : undefined} />
             </section>
           )}
-          {(hired.length > 0 || hiringFns.length > 0 || storyFns.length > 0) && (
+          {(hired.length > 0 || hiringFns.length > 0 || storyFns.length > 0 || teamLeads.length > 0) && (
             <section className="tp-dsec">
               <h3 className="tp-dsec-h">{hired.length ? "Functions hired" : "Functions"}</h3>
               <div className="tp-chips">
@@ -1746,9 +1780,20 @@ export function Drawer({
                     <span className="tp-fn-tag"> · {storyTag(i, fn)}</span>
                   </span>
                 ))}
-                {gap && <NoSeatYet fn={mine} />}
+                {teamLeads.map((l) => (
+                  <OnTheTeam key={l.fn} l={l} />
+                ))}
+                {gap && mine && <NoSeatYet fn={mine} led={fg.led} />}
               </div>
-              {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No fractional ${mineNamed} seat` : "No fractional seat in your function"} is on file yet.</p>}
+              {gap &&
+                mine &&
+                (fg.led ? (
+                  <p className="tp-dsec-note tp-mt8">
+                    {ledFullTimeWords(mine, fg.led)}, from the company&apos;s website. No fractional {mine} seat is on file.
+                  </p>
+                ) : (
+                  <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No fractional ${mineNamed} seat` : "No fractional seat in your function"} is on file yet.</p>
+                ))}
               {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked full-time or posting closed are a full-time hire, or a job posting that came down with nobody named. Their seats are listed below but aren&apos;t counted as fractional hires.</p>}
             </section>
           )}

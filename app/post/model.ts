@@ -13,6 +13,7 @@ import {
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startWords, windowPhrase, windowWords } from "@/lib/hired";
+import { isFractionalLead, isFullTimeLead, ledFullTimeWords, onTheTeamWords, type LeadLine } from "@/lib/leaders/types";
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "repeat" | "hiring" | "following" | "unlocked" | "needs";
@@ -101,7 +102,41 @@ export interface CoInfo {
   aboutHay: string;
   /** The company's name and domain alone (search ranks these matches first). */
   nameHay: string;
+  /** Who leads each function, from the company's own website (CompanyRec.leads), empty when nothing is on file. */
+  leads: LeadLine[];
 }
+
+/* ---------- who leads each function (lib/leaders) ---------- */
+
+/** The leader on file for a function, if any. */
+export const leadIn = (i: Pick<CoInfo, "leads">, fn: string | null | undefined): LeadLine | null => (fn ? i.leads.find((l) => l.fn === fn) ?? null : null);
+/** Functions with a fractional or interim leader on file: the company hires fractionals there. */
+export const fractionalLeadFns = (i: Pick<CoInfo, "leads">): string[] => i.leads.filter(isFractionalLead).map((l) => l.fn);
+/** A full-time leader (Director or above) on file for the function, else null. */
+export const fullTimeLead = (i: Pick<CoInfo, "leads">, fn: string | null | undefined): LeadLine | null => {
+  const l = leadIn(i, fn);
+  return l && isFullTimeLead(l) ? l : null;
+};
+
+/**
+ * "No fractional Sales yet" at a company, and what is on file in its place. `gap`: they hired
+ * fractionals in other functions (a seat, or a fractional or interim leader on their site) and
+ * nothing names the member's function yet. `led`: a full-time leader of the member's function is
+ * on file, so the chip says "Sales led full-time since 2024" instead. `team`: a fractional or
+ * interim leader of the member's function is on file ("Fractional CMO on the team"), so there is
+ * no gap at all.
+ */
+export function fnGap(i: CoInfo, mine: string | null): { gap: boolean; led: LeadLine | null; team: LeadLine | null } {
+  if (!mine) return { gap: false, led: null, team: null };
+  const frac = fractionalLeadFns(i);
+  const team = frac.includes(mine) && !i.fnState.hired.includes(mine) ? leadIn(i, mine) : null;
+  const hiresFractionals = i.fnState.hired.length > 0 || frac.some((f) => f !== mine);
+  const gap = !team && hiresFractionals && !i.fns.includes(mine);
+  return { gap, led: gap ? fullTimeLead(i, mine) : null, team };
+}
+/** The gap's words, as the chip reads: "No fractional Sales yet", or "Sales led full-time since 2024". */
+export const gapWords = (fn: string, led: LeadLine | null) => (led ? ledFullTimeWords(fn, led) : notMineLabel(fn));
+export { onTheTeamWords };
 
 const informative = (e: EngagementRec) => Object.values(e.cells).filter(known).length;
 
@@ -417,7 +452,7 @@ function infoOf(c: CompanyRec): CoInfo {
   const teaser = c.hidden
     ? [shown(c.cells.industry), shown(c.cells.employees) && `${shown(c.cells.employees)} employees`, shown(c.cells.hq)].filter(Boolean).join(" · ")
     : "";
-  return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay, aboutHay: (c.cells.about?.s === "value" ? c.cells.about.v : "").toLowerCase() };
+  return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay, aboutHay: (c.cells.about?.s === "value" ? c.cells.about.v : "").toLowerCase(), leads: c.leads?.fns ?? [] };
 }
 
 /**
@@ -935,8 +970,10 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
       return (r) => {
         // A company with an open role in the member's function is hiring that seat now, so it is not "no seat yet".
         // Nor is one where a member story or a closed posting names the function: its chip shows on the row.
+        // A fractional or interim leader on the company's site counts as a fractional hire in that function.
         const s = r.i.fnState;
-        return !!me.function && s.hired.length > 0 && !s.hired.includes(me.function) && !s.hiring.includes(me.function) && !s.story.includes(me.function);
+        const frac = fractionalLeadFns(r.i);
+        return !!me.function && (s.hired.length > 0 || frac.length > 0) && !s.hired.includes(me.function) && !s.hiring.includes(me.function) && !s.story.includes(me.function) && !frac.includes(me.function);
       };
     case "statusKnown":
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => known(e.cells.status));
@@ -1505,13 +1542,23 @@ export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: n
     const y = (shown(e.cells.start) ?? "").slice(0, 4);
     if (!lastOther || y > lastOther.year) lastOther = { fn: f, year: y };
   }
-  const others = hired.filter((f) => f !== me.function);
+  // A fractional or interim leader on the company's site is a fractional hire in that function.
+  const frac = fractionalLeadFns(i);
+  const others = [...new Set([...hired, ...frac])].filter((f) => f !== me.function);
   score += Math.min(3, others.length);
   if (i.c.friendly.recent > 0) score += 2;
   if (lastOther) bits.push(lastOther.year ? `hired ${lastOther.fn} in ${lastOther.year}` : `hired ${lastOther.fn}`);
+  const led = fullTimeLead(i, fn);
   if (fn && hiring.includes(fn)) {
     score += 5;
     bits.push(`hiring ${fn} now`);
+  } else if (fn && !hired.includes(fn) && frac.includes(fn)) {
+    score -= 1;
+    bits.push(onTheTeamWords(leadIn(i, fn)!).replace(/^F/, "f").replace(/^I/, "i"));
+  } else if (fn && !hired.includes(fn) && others.length && led) {
+    // A full-time leader runs the function: no opening, so it ranks well below the companies with nobody on file (+4).
+    score -= 2;
+    bits.push(ledFullTimeWords(fn, led));
   } else if (fn && !hired.includes(fn) && others.length) {
     score += 4;
     bits.push(`no ${fn} seat`);

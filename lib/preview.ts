@@ -36,7 +36,7 @@ import { previewCompanies, type PreviewCompany } from "./table";
 import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES } from "./tableFields";
 import { titleWithout } from "./scan/clean";
 import { isBelowLead, isDirectorPlus, isGtmFunction, keepsNonGtm } from "./seniority";
-import { countryName, countryOf, deriveAll, isFirm, isHire, isOpenRole, known, repeatHirer, shown, type CoInfo } from "@/app/post/model";
+import { countryName, countryOf, deriveAll, fractionalLeadFns, fullTimeLead, isFirm, isHire, isOpenRole, known, repeatHirer, shown, type CoInfo } from "@/app/post/model";
 import type { EngagementRec } from "./tableTypes";
 
 /**
@@ -114,6 +114,8 @@ export interface PreviewRow {
   country: string | null;
   /** A past seat whose seat holder is on file (behind a lock in the app). Never who it is. */
   holder?: boolean;
+  /** "notyet" only: the company's website shows a full-time leader of this function, since this year ("" when it doesn't say). Never who. */
+  ledSince?: string;
 }
 
 /** One real company record for the hero: a past seat with its holder on file, and an open role when there is one. */
@@ -380,7 +382,9 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     // Counted the way the app's Function filter and "Seat holder on file" count a company: any seat in this function.
     if (i.engs.some((e) => fnOf(e) === fn && known(e.cells.operator))) add("holders");
     if (hired.length) counts.anyHire++;
-    const none = hired.length > 0 && !hired.includes(fn) && !hiring.includes(fn) && !openHere.length;
+    // A fractional or interim leader on the company's website is a fractional hire in that function (lib/leaders).
+    const frac = fractionalLeadFns(i);
+    const none = (hired.length > 0 || frac.length > 0) && !hired.includes(fn) && !hiring.includes(fn) && !openHere.length && !frac.includes(fn);
     if (none) add("notYet");
     if (openHere.length) add("hiring");
     if (repeatHirer(i)) counts.repeat++;
@@ -401,7 +405,14 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
       const others = hired.filter((f) => f !== "Other");
       const list = others.length ? (others.length > 2 ? `${others.slice(0, 2).join(", ")} and more` : others.join(" and ")) : "other functions";
       const last = i.engs.filter(isHire).map((e) => shown(e.cells.start) ?? "").sort().pop() || null;
-      notYet.push({ row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, type: null, when: monthOf(last) }, at: last ?? "", rich: rich0 + Math.min(others.length, 3), at0 });
+      // A full-time leader of this function on the company's website: no opening there, so it comes after the companies with nobody on file.
+      const led = fullTimeLead(i, fn);
+      notYet.push({
+        row: { ...base, kind: "notyet", title: `Hired fractional ${list}`, type: null, when: monthOf(last), ...(led ? { ledSince: led.since?.slice(0, 4) ?? "" } : {}) },
+        at: last ?? "",
+        rich: rich0 + Math.min(others.length, 3) - (led ? 100 : 0),
+        at0,
+      });
       continue;
     }
     // One row per company: its newest open role in this function, else its latest seat in it.

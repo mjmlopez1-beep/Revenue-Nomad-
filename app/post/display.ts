@@ -10,7 +10,8 @@
  */
 import type { Cell, EngagementRec, Me } from "@/lib/tableTypes";
 import { webLink } from "@/lib/links";
-import { isOpenRole, shown, type CoInfo } from "./model";
+import type { LeadLine } from "@/lib/leaders/types";
+import { fnGap, isOpenRole, shown, type CoInfo } from "./model";
 
 /** One chip in a company's functions: hired fractionally, an open role only, or only in member stories. */
 export interface FnChip {
@@ -26,14 +27,23 @@ export interface FnChip {
  * `total` caps every chip in the cell, the dashed one included (the Companies table: 3), so one
  * company with five functions never widens the whole column. The dashed chip always keeps its place.
  */
-export function fnChipPlan(i: CoInfo, mine: string | null, opts: { max?: number; total?: number; gap?: boolean } = {}): { chips: FnChip[]; rest: string[]; gap: boolean } {
+export function fnChipPlan(
+  i: CoInfo,
+  mine: string | null,
+  opts: { max?: number; total?: number; gap?: boolean } = {},
+): { chips: FnChip[]; rest: string[]; gap: boolean; led: LeadLine | null; team: LeadLine | null } {
   const { max = 3, total, gap = true } = opts;
   const { hired, hiring, story } = i.fnState;
   const ordered = mine && hired.includes(mine) ? [mine, ...hired.filter((f) => f !== mine)] : hired;
   const all: FnChip[] = [...ordered.map((f) => ({ f, kind: "hired" as const })), ...hiring.map((f) => ({ f, kind: "hiring" as const })), ...story.map((f) => ({ f, kind: "story" as const }))];
-  const showGap = gap && !!mine && hired.length > 0 && !i.fns.includes(mine);
-  const room = Math.max(1, total ? Math.min(max, total - (showGap ? 1 : 0)) : max);
-  return { chips: all.slice(0, room), rest: all.slice(room).map((x) => x.f), gap: showGap };
+  // From the company's website: a full-time leader of the member's function turns the dashed chip
+  // into "Sales led full-time since 2024" (shown even while the filter is on: it says something
+  // the filter doesn't), and a fractional or interim one is "Fractional CMO on the team".
+  const g = fnGap(i, mine);
+  const showGap = g.gap && (gap || !!g.led);
+  const extra = (showGap ? 1 : 0) + (g.team ? 1 : 0);
+  const room = Math.max(1, total ? Math.min(max, total - extra) : max);
+  return { chips: all.slice(0, room), rest: all.slice(room).map((x) => x.f), gap: showGap, led: showGap ? g.led : null, team: g.team };
 }
 
 /**

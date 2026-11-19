@@ -271,6 +271,18 @@
 .tp-pm-card-top .tp-card-h {
   margin: 0;
 }
+/* Who leads each function: which companies, then the button. */
+.tp-pm-leads-act {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.tp-pm-leads-act .tp-pm-select {
+  width: auto;
+  min-height: 32px;
+  font-size: 13px;
+}
 .tp-phone .tp-pm-card-top .btn {
   min-height: 44px;
 }
