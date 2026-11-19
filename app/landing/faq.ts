@@ -31,7 +31,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does an open role cost?",
-      "Its title is free. While the role is open, the company behind it is hidden. One credit shows the company and its job posting, with the posted rate and hours when the posting gave them. The people there, and who held its seats, open after the company. When the role closes, everyone sees the company again. Try it on the homepage names a few hiring companies as a sample.",
+      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. The people there, and who held its seats, open after the company. Try it on the homepage names a few hiring companies as a sample.",
     ],
     [
       "What does a seat cost to see?",

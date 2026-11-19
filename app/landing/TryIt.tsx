@@ -11,7 +11,7 @@
  * person, a posting link or a rate. A company with an open role is hidden in the app until a
  * member spends a credit, so the preview names at most 3 of them in all, whatever is picked
  * (lib/preview.ts PREVIEW_OPEN_NAMED). The other rows for them keep the role's title and say the
- * company unlocks with 1 credit. A tap on a row goes to the join form.
+ * company unlocks with 2 credits. A tap on a row goes to the join form.
  * A picked country keeps the companies whose country isn't on file yet, and each count says how
  * many are in that country. The same answer carries the hero's example record, handed up with
  * `onExample`.
@@ -154,7 +154,7 @@ function happening(r: PreviewRow, fn: string): string {
   return [startedOn(r.when), r.holder ? "Seat holder on file" : null].filter(Boolean).join(" · ") || "Fractional hire on file";
 }
 
-/** The company cell: logo, name and domain, a blurred made-up one past the first 10, or "unlocks with 1 credit" for a company with an open role kept back. */
+/** The company cell: logo, name and domain, a blurred made-up one past the first 10, or "unlocks with 2 credits" for a company with an open role kept back. */
 function CompanyCell({ r }: { r: PreviewRow }) {
   if (r.blur)
     return (
@@ -180,7 +180,7 @@ function CompanyCell({ r }: { r: PreviewRow }) {
           <IconLock size={13} />
         </span>
         <span className="lp-tt-cotext">
-          <span className="lp-tt-name lp-try-name-kept">Company unlocks with 1 credit</span>
+          <span className="lp-tt-name lp-try-name-kept">Company unlocks with 2 credits</span>
         </span>
       </span>
     );
@@ -523,8 +523,8 @@ export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps
             </button>
             <p className="lp-try-note">
               {answer?.openRoleCompanies === false
-                ? "An open role's title is free. Inside Merlin, 1 credit shows the company behind it and its job posting. Another shows who held a seat and the role they held."
-                : "An open role's title is free. Here we name a few of the companies hiring. Inside Merlin, 1 credit shows the company behind an open role and its job posting. Another shows who held a seat and the role they held."}
+                ? "An open role's title is free. Inside Merlin, 2 credits show the company behind it and its job posting. 1 more shows who held a seat and the role they held."
+                : "An open role's title is free. Here we name a few of the companies hiring. Inside Merlin, 2 credits show the company behind an open role and its job posting. 1 more shows who held a seat and the role they held."}
             </p>
           </div>
         </div>

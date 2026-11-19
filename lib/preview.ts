@@ -15,12 +15,12 @@
  * whether they are a Revenue Nomad member. A role title with a link or an address in it is
  * replaced by a plain "Fractional <function> role".
  *
- * A company with an open role is hidden in the app until a member unlocks it (1 credit). Here at
+ * A company with an open role is hidden in the app until a member unlocks it (2 credits). Here at
  * most PREVIEW_OPEN_NAMED of them are named in all, whatever function, industry, country and tab
  * is picked: one set, chosen once per build of the source (sourceNow). It holds the example's
  * company when that has an open role, then the companies behind the newest open roles that Try it
  * lists, across the whole table. Every other open-role company comes without its name ("Company
- * unlocks with 1 credit") in every answer, and its role title is scrubbed of the company. A row
+ * unlocks with 2 credits") in every answer, and its role title is scrubbed of the company. A row
  * whose company is withheld carries a seed made for that answer alone, so rows from two answers
  * can't be matched up to name a company.
  *

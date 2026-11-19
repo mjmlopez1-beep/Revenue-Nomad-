@@ -348,7 +348,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                       </div>
                       <div role="cell" className="lp-mx-cell">
                         <span className="lp-mx-label">
-                          <span className="num">{row.locked.length ? "1 credit each" : "1 credit"}</span>
+                          <span className="num">{row.price ?? (row.locked.length ? "1 credit each" : "1 credit")}</span>
                         </span>
                         {row.locked.length ? (
                           <ul className="lp-chiprow">

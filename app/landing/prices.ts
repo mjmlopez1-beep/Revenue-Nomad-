@@ -17,8 +17,10 @@ export interface PriceRow {
   entity: Entity;
   label: string;
   free: string[];
-  /** One chip per purchase, 1 credit each. */
+  /** One chip per purchase, 1 credit each unless `price` says otherwise. */
   locked: string[];
+  /** What the row's locked chips cost, where it isn't "1 credit each" ("2 credits" for a company). */
+  price?: string;
   note?: string;
 }
 
@@ -38,12 +40,13 @@ export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE): PriceRow[] {
     },
     contact: { name: "Name and title", title: null },
   };
-  const rows: { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; note?: string }[] = [
+  const rows: { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; lockedFirst?: string[]; price?: string; note?: string }[] = [
     {
       entity: "company",
       label: "The company",
-      freeFirst: ["Name"],
-      note: "While a company has an open role, its name, website and LinkedIn are locked. One credit shows the company and its job posting, with the posted rate and hours when the posting gave them. Its people and who held its seats open after that. When the role closes, everyone sees the company again. Try it on this page names a few hiring companies as a sample.",
+      lockedFirst: ["Name, website and logo"],
+      price: "2 credits",
+      note: "Every company's name, website, logo and LinkedIn are locked until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Its people and who held its seats open after that. Type a company's full name or website in search to find one you already know. Try it on this page names a few hiring companies as a sample.",
     },
     {
       entity: "engagement",
@@ -66,9 +69,13 @@ export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE): PriceRow[] {
       label: row.label,
       free: [...(row.freeFirst ?? []), ...fields.filter((f) => !f.gated).map((f) => f.label), ...(row.freeLast ?? [])],
       // Who held a seat first: it is the one most members come for.
-      locked: [...gated.filter((f) => f.key === "operator"), ...gated.filter((f) => f.key !== "operator")]
-        .map((f) => (f.key in named ? named[f.key] : f.label))
-        .filter((x): x is string => !!x),
+      locked: [
+        ...(row.lockedFirst ?? []),
+        ...[...gated.filter((f) => f.key === "operator"), ...gated.filter((f) => f.key !== "operator")]
+          .map((f) => (f.key in named ? named[f.key] : f.label))
+          .filter((x): x is string => !!x),
+      ],
+      ...(row.price ? { price: row.price } : {}),
       note: row.note,
     };
   });
