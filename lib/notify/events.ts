@@ -30,7 +30,7 @@ const listening = (s: State, kind: AlertItem["kind"]) =>
     .map(([id]) => id);
 
 /** The company's name as this member sees it. */
-function companyFor(g: G, s: State, idx: Idx, tracks: ReturnType<typeof T.tracksOf>, m: Member, companyId: string, hiddenWords = "a company that is hiring"): string {
+function companyFor(g: G, s: State, idx: Idx, tracks: ReturnType<typeof T.tracksOf>, m: Member, companyId: string, hiddenWords = "a locked company"): string {
   return T.identityHidden(g, s, idx, tracks, m, companyId) ? hiddenWords : g.companies.get(companyId)?.name || "a company";
 }
 
@@ -43,7 +43,7 @@ function actorOf(s: State, m: Member | undefined): { function: string | null; ti
 /* ---------- the weekly scan ---------- */
 
 /** How a company that newly matches a saved view reads in a post: "Acme Robotics · Finance · Mar 2026". A locked company is never named. */
-const hireLabel = (r: HireRow) => [r.company ?? "A company that's hiring now", r.function, startWords(r.start)].filter(Boolean).join(" · ");
+const hireLabel = (r: HireRow) => [r.company ?? "A locked company", r.function, startWords(r.start)].filter(Boolean).join(" · ");
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
@@ -120,7 +120,7 @@ async function scanAlerts(at: string): Promise<void> {
     const label = (x: (typeof facts)[number]) => {
       const f = seen(x);
       const hidden = hiddenFor(x.e.companyId);
-      const where = hidden ? (f.industry ? `at a ${f.industry} company` : "at a hidden company") : `at ${g.companies.get(x.e.companyId)?.name || "a company"}`;
+      const where = hidden ? (f.industry ? `at a ${f.industry} company` : "at a locked company") : `at ${g.companies.get(x.e.companyId)?.name || "a company"}`;
       const size = f.revenue ? `, ${f.revenue} revenue` : f.employees ? `, ${f.employees} employees` : "";
       // Where, from the country and region on file ("Texas, US"), else the HQ as the member sees it.
       const country = f.country ? (countryKey(f.country) === "united states" ? "US" : countryKey(f.country) === "united kingdom" ? "UK" : f.country) : null;

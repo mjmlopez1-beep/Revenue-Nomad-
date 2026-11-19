@@ -9,7 +9,7 @@ import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } fr
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
-  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, standardIndustries, standardList,
+  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, standardIndustries, standardList, COMPANY_PRICE_SAY,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startWords, windowPhrase, windowWords } from "@/lib/hired";
@@ -93,7 +93,7 @@ export interface CoInfo {
    */
   locked: FactRef[];
   unlockedByMe: boolean;
-  /** Hidden company only: industry, size and region, shown in place of the name's subline. */
+  /** Locked company only: industry, revenue, size and region ("SaaS · $1M–$5M · 11–50 · TX"), shown in place of the name's subline. */
   teaser: string;
   /** What search reads on a company row: its name, domain and what the member can see there. */
   hay: string;
@@ -171,7 +171,7 @@ export const seatWhat = (e: EngagementRec, field: string) =>
 
 /** A lock that waits for another purchase: quiet, never a button. The words show where there is room (the record, phone cards). */
 export const AFTER_NAME = "Opens after the name. Unlock their name and title first.";
-export const AFTER_COMPANY = "Opens after the company. Unlock the company first.";
+export const AFTER_COMPANY = `Opens after the company. Unlock the company first (${COMPANY_PRICE_SAY}).`;
 /** The short words of a waiting lock ("Opens after the name"), or null for a cover that isn't one. */
 export const waitWords = (cover: string | null | undefined) => (cover && cover.startsWith("Opens after") ? cover.slice(0, cover.indexOf(".")) : null);
 /** Said on an empty contact detail (or title) of a person the member can't see yet, in place of "+ Add". */
@@ -206,9 +206,9 @@ export const NOT_YET_ON_OPEN_ROLE = ["start", "end", "reason", "sourced"];
 export function coverOf(i: CoInfo, e: EngagementRec | null | undefined, field: string): string | null {
   if (i.c.hidden) {
     if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field))
-      return "Comes with the company. Unlock the company for 1 credit and you see its name, the job posting and the posted rate.";
-    if (e && (field === "operator" || (field === "role" && seatBundled(e)))) return AFTER_COMPANY;
-    return "Open the record to unlock this.";
+      return `Comes with the company. Unlock the company for ${COMPANY_PRICE_SAY} and you see its name, the job posting and the posted rate.`;
+    // Anything else paid there opens after the company: every purchase at a company owns it, so none comes first.
+    return AFTER_COMPANY;
   }
   if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field) && bundleLead(e) !== field) return "Comes with this open role. One credit opens the job posting and the posted rate.";
   return null;
@@ -414,9 +414,8 @@ function infoOf(c: CompanyRec): CoInfo {
   const parts: string[] = [nameHay, ...fns, ...textOf(c.cells)];
   for (const e of engs) parts.push(...textOf(e.cells));
   for (const { p } of people) parts.push(...textOf(p.cells));
-  const teaser = c.hidden
-    ? [shown(c.cells.industry), shown(c.cells.employees) && `${shown(c.cells.employees)} employees`, shown(c.cells.hq)].filter(Boolean).join(" · ")
-    : "";
+  // "SaaS · $1M–$5M · 11–50 · TX": the free facts, in place of the name's subline (the HQ is its region here).
+  const teaser = c.hidden ? [shown(c.cells.industry), shown(c.cells.revenue), shown(c.cells.employees), shown(c.cells.hq)].filter(Boolean).join(" · ") : "";
   return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay, aboutHay: (c.cells.about?.s === "value" ? c.cells.about.v : "").toLowerCase() };
 }
 
@@ -1619,17 +1618,23 @@ export interface CheckStep {
  */
 export function checkSteps(
   me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid">,
-  o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string>; seen?: boolean; stepOne?: "holder" | "person" | "none" },
+  o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string>; seen?: boolean; stepOne?: "holder" | "person" | "company" | "none" },
 ): { steps: CheckStep[]; nudge: { label: string; hint: string } | null } {
   const paid = me.invitesPaid ?? 0;
   const holders = me.holdersUnlocked ?? me.unlocked;
   const companies = me.companiesUnlocked ?? 0;
   const roles = me.goal === "roles";
   const left = o.seatsLeft;
-  const unlockDone = (roles ? holders + companies > 0 : holders > 0 || !!o.seen) || !!o.stuck?.has("unlock");
+  const company = !roles && o.stepOne === "company";
+  const unlockDone = (roles || company ? holders + companies > 0 : holders > 0 || !!o.seen) || !!o.stuck?.has("unlock");
   const person = !roles && !unlockDone && o.stepOne === "person";
   const raw: CheckStep[] = [
-    { key: "unlock", done: unlockDone, label: roles ? "See who is hiring" : person ? "See who decides at a company" : "See who held a seat", hint: "costs 1 credit" },
+    {
+      key: "unlock",
+      done: unlockDone,
+      label: roles ? "See who is hiring" : company ? "Unlock a company" : person ? "See who decides at a company" : "See who held a seat",
+      hint: roles || company ? `costs ${COMPANY_PRICE_SAY}` : "costs 1 credit",
+    },
     // A seat is worth up to about 12 credits: claimed or added, then each answer on it earns one.
     { key: "seat", done: o.seatsHeld > 0, label: "Find your seats", hint: "up to ~12 credits a seat" },
     // Done once an invitee's first fact paid the bonus, not when they merely joined.

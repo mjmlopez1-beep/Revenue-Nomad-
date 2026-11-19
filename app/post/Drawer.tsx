@@ -24,7 +24,7 @@ import { InviteConnect } from "./Invite";
 import { VerifyName } from "./Verify";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
-import { FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import {
   AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
@@ -709,14 +709,14 @@ function planOf(i: CoInfo): Plan {
     const k = seat && seatBundled(seat) && seat.cells.role?.s === "locked" ? "engagement.seat" : `${t.entity}.${t.field}`;
     counts.set(k, (counts.get(k) ?? 0) + 1);
     if (t.entity === "company" && ["identity", "website", "linkedin", "about"].includes(t.field) && i.c.hidden) {
-      if (!company) cost++;
+      if (!company) cost += COMPANY_PRICE;
       company = true;
       continue;
     }
     const e = t.entity === "engagement" ? engs.get(t.id) : undefined;
     if (e && OPEN_ROLE_BUNDLE.includes(t.field) && openRole(e)) {
       if (i.c.hidden) {
-        if (!company) cost++;
+        if (!company) cost += COMPANY_PRICE;
         company = true;
         continue;
       }
@@ -1201,8 +1201,8 @@ function EngagementCard({ e, companyId, company, focus, coPeople = [] }: { e: En
   const reach = op && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
     <Reach e={e} name={op} member={!!(opCell?.s === "value" && opCell.member)} emailTo={e.invite ? emailOnFile([...e.people, ...coPeople], op) : null} />
   );
-  // Who held a seat (and the role that comes with them) opens after a locked company.
-  const waits = (f: string) => (hidden && e.cells[f]?.s === "locked" && (f === "operator" || (f === "role" && seatBundled(e))) ? AFTER_COMPANY : null);
+  // Anything paid on a seat at a locked company opens after the company (an open role's posting and rate come with it).
+  const waits = (f: string) => (hidden && e.cells[f]?.s === "locked" && !(open && OPEN_ROLE_BUNDLE.includes(f)) ? AFTER_COMPANY : null);
   return (
     <article className={`tp-eng${focus ? " focus" : ""}`} id={`tp-d-${e.id}`}>
       <div className="tp-eng-top">
@@ -1315,20 +1315,21 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
 /* ---------- the drawer ---------- */
 
 /**
- * Unlock a hidden company's open role for 1 credit: the record's one action until it is
- * unlocked. Pine, because it spends. At 0 credits it shows how to earn one instead (and counts the wall).
+ * Unlock a locked company for COMPANY_PRICE credits: its name, website and logo, with the job
+ * posting (and posted rate) of each open role there. The record's one action until it is unlocked.
+ * Pine, because it spends. Short of the price it shows how to earn instead (and counts the wall).
  */
-function UnlockCompany({ id, rate, bar }: { id: string; rate: boolean; bar?: boolean }) {
+function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: boolean; roles: boolean; bar?: boolean }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const busy = ui.busy.has(cellKey(id, "identity"));
-  const broke = ui.me.credits <= 0;
-  // Today's unlocks are used up and credits are left: the button says when, and spends nothing.
-  const later = !broke && ui.me.unlocksLeft === 0;
-  const label = rate ? UNLOCK_ROLE_RATE : UNLOCK_ROLE;
-  const included = rate ? "Posting and rate included" : "Job posting included";
-  const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? "Earn a credit to unlock" : label;
+  const broke = ui.me.credits < COMPANY_PRICE;
+  // Today's unlocks are used up (a company counts as COMPANY_PRICE of them) and credits are left: the button says when, and spends nothing.
+  const later = !broke && (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE;
+  const label = UNLOCK_COMPANY;
+  const included = !roles ? "Name, website and logo" : rate ? "Job posting and rate included" : "Job posting included";
+  const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? "Earn credits to unlock" : label;
   return (
     <>
       <button
@@ -1339,7 +1340,7 @@ function UnlockCompany({ id, rate, bar }: { id: string; rate: boolean; bar?: boo
         aria-busy={busy}
         aria-label={busy || later || broke ? text : `${UNLOCK_ROLE_SAY}. ${included}.`}
         onClick={() => {
-          if (ui.me.credits > 0) return ui.unlock({ entity: "company", id, field: "identity" });
+          if (ui.me.credits >= COMPANY_PRICE) return ui.unlock({ entity: "company", id, field: "identity" }, { onWall: () => setZero(true) });
           sendSignal("wall", "identity");
           setZero(true);
         }}
@@ -1354,14 +1355,13 @@ function UnlockCompany({ id, rate, bar }: { id: string; rate: boolean; bar?: boo
           text
         )}
       </button>
-      {zero && ui.me.credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={id} onClose={() => setZero(false)} />}
+      {zero && ui.me.credits < COMPANY_PRICE && ref.current && <ZeroCredits anchor={ref.current} id={id} need={COMPANY_PRICE} onClose={() => setZero(false)} />}
     </>
   );
 }
 
 const COMPANY_ROWS = ["website", "linkedin", "industry", "employees", "revenue", "hq"];
-const UNLOCK_ROLE = "Unlock company and job posting · 1 credit";
-const UNLOCK_ROLE_RATE = "Unlock company, posting and rate · 1 credit";
+const UNLOCK_COMPANY = `Unlock company · ${COMPANY_PRICE_SAY}`;
 /**
  * What a seat counts as, by the same rule as the server's friendliness() (the header's "N
  * fractional seats" and the Fit tier): a fractional hire, an open role, or neither (a member
@@ -1389,8 +1389,8 @@ function seatSplit(engs: EngagementRec[]): string {
 }
 /** An open role here has a posted rate behind the lock (a locked cell always has a value). The unlock names the rate only then. */
 const hasPostedRate = (i: CoInfo) => i.engs.some((e) => openRole(e) && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value"));
-const UNLOCK_ROLE_SHORT = "Unlock company · 1 credit";
-const UNLOCK_ROLE_SAY = "Unlock company for 1 credit";
+const UNLOCK_ROLE_SHORT = UNLOCK_COMPANY;
+const UNLOCK_ROLE_SAY = `Unlock company for ${COMPANY_PRICE_SAY}`;
 
 export function Drawer({
   i,
@@ -1526,6 +1526,8 @@ export function Drawer({
   }
   const notHires = i.engs.filter((e) => seatKind(e) === "story").length;
   const postedRate = hasPostedRate(i);
+  /** An open role here: Unlock company comes with its job posting. */
+  const hiringHere = i.engs.some(openRole);
   const mine = ui.me.function;
   const hired = [...i.fnState.hired].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : (fnCounts.get(b) ?? 0) - (fnCounts.get(a) ?? 0)));
   const hiringFns = i.fnState.hiring;
@@ -1578,7 +1580,7 @@ export function Drawer({
   const actions = (
     <div className="tp-dactions">
       {c.hidden ? (
-        <UnlockCompany id={c.id} rate={postedRate} />
+        <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} />
       ) : (
         <>
           {openPosting()}
@@ -1695,7 +1697,9 @@ export function Drawer({
           </div>
           {c.hidden && (
             <p className="tp-hidden-note">
-              This company is hiring a fractional now, and its role is free to see. 1 credit shows the company and its job posting{postedRate ? ", with the posted rate" : ""}. Its people and seat holders open after that. Once the role closes, everyone sees the company.
+              {hiringHere
+                ? `Unlock to see the company's name, website and job postings${postedRate ? ", with the posted rate" : ""}. Its open roles are free to read. Who held each seat opens after that, 1 credit each.`
+                : "Unlock to see the company's name, website and job postings. Who held each seat opens after that, 1 credit each."}
             </p>
           )}
           {!phone && actions}
@@ -1810,7 +1814,7 @@ export function Drawer({
             </span>
             {c.hidden ? (
               // One action while the name is hidden, as on desktop. The facts unlock after it.
-              <UnlockCompany id={c.id} rate={postedRate} bar />
+              <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} bar />
             ) : posting ? (
               // Unlocked and hiring: the job posting first, Add beside it (Unlock all is in the record, under its header).
               <>

@@ -34,7 +34,7 @@ const thing = (label: string) => SAY.get(label) ?? `the ${fieldText(label)}`;
 export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?: string } {
   // A company still locked for the member arrives as HIDDEN_COMPANY. Never name it, and never say "hidden".
   const locked = l.company === HIDDEN_COMPANY;
-  const at = locked ? " at a company that's hiring" : l.company ? ` at ${l.company}` : "";
+  const at = locked ? " at a locked company" : l.company ? ` at ${l.company}` : "";
   const priv = l.field === PRIVATE_RATE;
   switch (l.reason) {
     case "fill":
@@ -48,8 +48,8 @@ export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?
               : `No credit. You had already earned ${earnCap} today.`,
       };
     case "unlock":
-      // A locked company is one purchase with the role, posting and rate of its open roles.
-      return { text: l.field === HIDDEN_COMPANY ? `Unlocked ${l.company && !locked ? l.company : "a company that's hiring"} and its open role` : `Unlocked ${thing(l.field)}${at}` };
+      // Unlock company: one purchase with the posting and rate of its open roles.
+      return { text: l.field === HIDDEN_COMPANY ? `Unlocked a company${l.company && !locked ? `: ${l.company}` : ""}` : `Unlocked ${thing(l.field)}${at}` };
     case "refund":
       return { text: `Refund for ${thing(l.field)}${at}, removed after review` };
     case "reversal":
@@ -82,7 +82,8 @@ const FIRST_DAY_UNLOCKS = 25;
 export function unlockLimitLine(me: Pick<Me, "credits" | "unlocksLeft">, ledger: LedgerRow[], nowMs = Date.now()): string | null {
   const left = me.unlocksLeft;
   if (left === null || left === undefined || left >= me.credits) return null;
-  const used = ledger.filter((l) => l.reason === "unlock" && nowMs - Date.parse(l.at) < 86_400_000).length;
+  // Counted in credits, as the server counts it: a company (2 credits) is 2 of the day's unlocks.
+  const used = ledger.filter((l) => l.reason === "unlock" && nowMs - Date.parse(l.at) < 86_400_000).reduce((n, l) => n + Math.max(1, -l.delta), 0);
   const firstDay = left + used <= FIRST_DAY_UNLOCKS;
   const now = left === 0 ? "You've used today's unlocks. Your credits are here tomorrow." : `You can unlock ${left} more ${left === 1 ? "fact" : "facts"} today.`;
   return firstDay ? `${now} New accounts can unlock ${FIRST_DAY_UNLOCKS} facts on day one.` : now;

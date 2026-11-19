@@ -99,13 +99,16 @@ const state = {
     "e_claimed1.operator": { value: "Gia Geo", by: "m1", at: daysAgo(1), status: "live", memberId: "m1" },
     "c_austin.industry": { value: "Software", by: "m3", at: daysAgo(6), status: "live" },
   },
-  unlocks: { "e_memberfirm.rate": ["m3"], "e_dropped1.rate": ["m3"] },
+  // Una also unlocked Thames Data and Maple Metrics (every company is locked until a member unlocks it or knows it), at the old price.
+  unlocks: { "e_memberfirm.rate": ["m3"], "e_dropped1.rate": ["m3"], "c_ldn.identity": ["m3"], "c_tor.identity": ["m3"] },
   verifications: {},
   members: [],
   ledger: [
     { memberId: "m2", delta: 1, reason: "fill", ref: "e_memberfirm.rate", at: daysAgo(5) },
     { memberId: "m3", delta: -1, reason: "unlock", ref: "e_memberfirm.rate", at: daysAgo(4) },
     { memberId: "m3", delta: -1, reason: "unlock", ref: "e_dropped1.rate", at: daysAgo(4) },
+    { memberId: "m3", delta: -1, reason: "unlock", ref: "c_ldn.identity", at: daysAgo(4) },
+    { memberId: "m3", delta: -1, reason: "unlock", ref: "c_tor.identity", at: daysAgo(4) },
   ],
   profiles: {},
   follows: { m3: ["c_memberfirm", "c_austin"] },

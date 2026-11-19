@@ -77,7 +77,8 @@ writeFileSync(
   JSON.stringify({
     ledger: [],
     values: {},
-    unlocks: {},
+    // Pia unlocked Fox Freight before (every company is locked for a member until they unlock it or know it).
+    unlocks: { "c_fox.identity": ["mem_pro"] },
     seen: Object.fromEntries(seed.members.map((m) => [m.id, ago(HOUR)])),
     profiles: {
       mem_sal: { function: "Sales", onboarded: true, icp: US_MID },
@@ -401,7 +402,8 @@ async function main() {
   await settle();
   const proPosts = radarPosts(SLACK_PRO);
   check("a scan's new Finance role reaches Pro in Slack in the next batch", proPosts.length === 1 && /New open role: Fractional Finance Director/.test(proPosts[0].raw), outbox.map((x) => `${x.url} ${x.raw.slice(0, 160)}`));
-  check("the company of a new open role is locked for them, so it stays unnamed", !/Fox Freight/.test(proPosts[0]?.raw ?? ""), proPosts[0]?.raw);
+  // Pia unlocked Fox Freight before: a company a member unlocked stays theirs, a new open role there too.
+  check("the company of a new open role is named for a member who unlocked it before", /Fox Freight/.test(proPosts[0]?.raw ?? ""), proPosts[0]?.raw);
   check("a free member gets nothing at once", radarPosts(SLACK_SAL).length === sal0);
   check("radar_sent where instant", (await state()).signals.some((x) => x.memberId === "mem_pro" && x.name === "radar_sent" && x.where === "instant"));
   skew += DAY;

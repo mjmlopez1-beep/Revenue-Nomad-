@@ -99,12 +99,12 @@ export function NextMove({
             line:
               roles.n === 1
                 ? roles.hidden > 0
-                  ? "The company is locked. 1 credit shows it with its job posting."
+                  ? "The company is locked. 2 credits show it with its job posting."
                   : "You can already see the company behind it."
                 : roles.hidden >= roles.n
-                  ? "The companies are locked. 1 credit shows one with its job posting."
+                  ? "The companies are locked. 2 credits show one with its job posting."
                   : roles.hidden > 0
-                    ? `${roles.hidden === 1 ? "1 of them is" : `${roles.hidden} of them are`} locked. 1 credit shows one with its job posting.`
+                    ? `${roles.hidden === 1 ? "1 of them is" : `${roles.hidden} of them are`} locked. 2 credits show one with its job posting.`
                     : "You can already see the company behind each one.",
             button: "See open roles",
             go: onRoles,

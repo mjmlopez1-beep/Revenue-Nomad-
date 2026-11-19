@@ -300,8 +300,8 @@ export const timeAgo = (iso: string | null | undefined) => {
 /* ---------- a locked company ---------- */
 
 /*
- * A company with an open role the member has not unlocked. The server never sends its name,
- * site or logo, only HIDDEN_COMPANY and an opaque public id. What the member sees is made up
+ * A company the member has not unlocked (every company is locked until they know it). The server
+ * never sends its name, site or logo, only HIDDEN_COMPANY and an opaque public id. What the member sees is made up
  * here from that id alone: letters of a plausible length, blurred, so the row reads as a real
  * company they can't see yet. Each id gets its own shape, so a page of them doesn't repeat.
  */
@@ -344,7 +344,7 @@ export function lockedLook(seed: string): LockedLook {
 }
 
 /** What a screen reader hears in place of a locked company's name. */
-export const LOCKED_SAY = "Company locked, 1 credit";
+export const LOCKED_SAY = "Company locked, 2 credits to unlock";
 
 /**
  * A locked company's name: made-up letters, blurred, that nobody can select or read aloud,

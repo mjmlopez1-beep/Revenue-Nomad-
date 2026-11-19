@@ -15,7 +15,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Action, Cell, Me } from "@/lib/tableTypes";
-import { REFERRAL_BONUS, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { readRate } from "@/lib/rates";
@@ -288,14 +288,17 @@ export const owedText = (owed: number) => owedLine(owed) ?? "";
  * ready to send, then facts on this company if they know it. Your seats offers the way back to
  * this fact once they have a credit (wallBack). A popover on desktop, a sheet on phones.
  */
-export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: string; onClose: () => void }) {
+/** `need`: what the lock costs (a company is COMPANY_PRICE), so 1 credit short of a company reads as such, not as out of credits. */
+export function ZeroCredits({ anchor, id, onClose, need = 1 }: { anchor: HTMLElement; id: string; onClose: () => void; need?: number }) {
   const ui = useUi();
   const earn = earnNote(ui.me);
   const facts = earn.capped ? [] : ui.addable(id);
   const one = ui.seats.n === 1;
   const owed = ui.me.owed ?? 0;
   const phone = ui.layout === "phone";
-  const title = "You're out of credits";
+  const short = Math.max(1, need - Math.max(0, ui.me.credits));
+  const title = ui.me.credits > 0 && need > ui.me.credits ? `This needs ${need} credits` : "You're out of credits";
+  const aCredit = short === 1 ? (ui.me.credits > 0 ? "one more credit" : "a credit") : `${short} credits`;
   const [inviting, setInviting] = useState(false);
   // The lock that was tapped is its cell (a record's "Unlock company" button has none: the company).
   const [key] = useState(() => anchor.closest("[data-cell]")?.getAttribute("data-cell") ?? null);
@@ -319,10 +322,10 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
     );
   ways.push({ label: `Invite a fractional (+${REFERRAL_BONUS} each)`, go: () => setInviting(true) });
   const lead = earn.capped
-    ? `To see ${what}, you need a credit. You've earned today's ${ui.me.earnCap}, and you can earn again ${atTime(ui.me.earnResetsAt)}.`
+    ? `To see ${what}, you need ${aCredit}. You've earned today's ${ui.me.earnCap}, and you can earn again ${atTime(ui.me.earnResetsAt)}.`
     : ui.seats.missing > 0
-      ? `To see ${what}, earn a credit first. ${plural(ui.seats.missing, "thing is", "things are")} still missing on your ${one ? "seat" : "seats"}, and each one you add earns a credit.`
-      : `To see ${what}, earn a credit first. Find ${ui.seats.n > 0 ? "another seat" : "a seat"} you held and claim it. Each answer you add there earns a credit, ${SEAT_YIELD}.`;
+      ? `To see ${what}, earn ${aCredit} first. ${plural(ui.seats.missing, "thing is", "things are")} still missing on your ${one ? "seat" : "seats"}, and each one you add earns a credit.`
+      : `To see ${what}, earn ${aCredit} first. Find ${ui.seats.n > 0 ? "another seat" : "a seat"} you held and claim it. Each answer you add there earns a credit, ${SEAT_YIELD}.`;
   const pills = facts.length > 0 && !inviting && (
     <>
       <p className="tp-small muted">If you know this company, add one of these.</p>
@@ -379,8 +382,33 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
  * is added to the label where one lock stands for more ("Unlock company"). At the day's unlock
  * limit (Me.unlocksLeft 0, credits left) it reads "Unlocks again tomorrow".
  */
-function Lock({ onUnlock, ver, from, what, noun, busy, later, broke }: { onUnlock: () => void; ver: number; from?: string; what: string; noun?: string; busy?: boolean; later?: boolean; broke?: boolean }) {
-  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `Earn a credit to unlock ${what}` : `Unlock ${what} for 1 credit`;
+/** What a lock costs: a company is COMPANY_PRICE, any other fact 1 credit. */
+export const lockCost = (t: { field: string }) => (t.field === "identity" ? COMPANY_PRICE : 1);
+const creditsSay = (n: number) => (n === 1 ? "1 credit" : `${n} credits`);
+
+function Lock({
+  onUnlock,
+  ver,
+  from,
+  what,
+  noun,
+  busy,
+  later,
+  broke,
+  cost = 1,
+}: {
+  onUnlock: () => void;
+  ver: number;
+  from?: string;
+  what: string;
+  noun?: string;
+  busy?: boolean;
+  later?: boolean;
+  broke?: boolean;
+  cost?: number;
+}) {
+  const earn = cost > 1 ? "Earn credits to unlock" : "Earn a credit to unlock";
+  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `${earn} ${what}` : `Unlock ${what} for ${creditsSay(cost)}`;
   const more = ver > 0 ? ` Confirmed by ${plural(ver, "member")}.` : from && FROM_SAY[from] ? ` ${FROM_SAY[from]}.` : "";
   return (
     <button type="button" className={`lock${busy ? " busy" : ""}${later ? " later" : ""}${broke ? " broke" : ""}`} title={`${say}.${more}`} aria-label={busy ? "Unlocking" : say} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
@@ -393,7 +421,7 @@ function Lock({ onUnlock, ver, from, what, noun, busy, later, broke }: { onUnloc
         {later ? (
           <span>Unlocks again tomorrow</span>
         ) : broke && !busy ? (
-          <span>Earn a credit to unlock</span>
+          <span>{earn}</span>
         ) : (
           <>
             <span>
@@ -402,7 +430,8 @@ function Lock({ onUnlock, ver, from, what, noun, busy, later, broke }: { onUnloc
             </span>
             {!busy && (
               <span className="lock-cost">
-                <span className="lock-dot">· </span>1 credit
+                <span className="lock-dot">· </span>
+                {creditsSay(cost)}
               </span>
             )}
           </>
@@ -513,14 +542,16 @@ export function FactCell({
         </span>
       );
     case "locked": {
-      const later = ui.me.unlocksLeft === 0 && credits > 0;
+      // A company costs COMPANY_PRICE: with fewer credits than that it is the wall, as at 0 for any fact.
+      const cost = lockCost(t);
+      const later = (ui.me.unlocksLeft ?? Infinity) < cost && credits >= cost;
       return (
         <span className={cls} data-cell={k} ref={ref}>
           <Lock
             onUnlock={() => {
               refocus.current = !!ref.current?.contains(document.activeElement);
               // The server can still answer "You're out of credits" (another tab spent them): then the popover opens, not a toast. The server counts that wall itself.
-              if (credits > 0) return ui.unlock(t, { onWall: () => setZero(true) });
+              if (credits >= cost) return ui.unlock(t, { onWall: () => setZero(true) });
               // The wall: out of credits at a locked fact. Counted for the pilot, by field.
               sendSignal("wall", t.field);
               setZero(true);
@@ -534,16 +565,17 @@ export function FactCell({
             noun={t.field === "identity" ? "company" : noun}
             busy={flags.busy}
             later={later}
-            broke={credits <= 0}
+            broke={credits < cost}
+            cost={cost}
           />
-          {zero && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
+          {zero && ref.current && <ZeroCredits anchor={ref.current} id={t.id} need={cost} onClose={() => setZero(false)} />}
         </span>
       );
     }
     case "empty":
       if (ui.isHidden(t.id))
         return (
-          <span className={`${cls} tp-none`} data-cell={k} title="This company is locked. Unlock it for 1 credit, then you can add this.">
+          <span className={`${cls} tp-none`} data-cell={k} title={`This company is locked. Unlock it for ${COMPANY_PRICE_SAY}, then you can add this.`}>
             –
           </span>
         );

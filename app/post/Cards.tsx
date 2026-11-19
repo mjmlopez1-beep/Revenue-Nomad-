@@ -11,6 +11,7 @@
  */
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
+import { COMPANY_PRICE_SAY } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconLock, IconStar, LockedName, LockedSite, fmtMonth, val } from "../ui/shared";
 import { cardSeat, coverOf, hireOfRow, isOpenRole, personBothLocked, personCoverOf, personNoun, isUnheldOpenRole, known, seatBothLocked, seatNoun, seatWhat, type HireCtx, type Row, type Tab } from "./model";
 import { YourSeat, earnNote, useCellUi } from "./ui";
@@ -86,16 +87,17 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 }
 
 /**
- * What a hidden company's card holds back, as plain text. Not a button: the card opens the
- * record, and the record's sticky bar has "Unlock company, posting and rate · 1 credit".
+ * What a locked company's card holds back, as plain text. Not a button: the card opens the
+ * record, and the record's sticky bar has "Unlock company · 2 credits". `roles`: an open role
+ * here, whose job posting comes with the company.
  */
-function HiddenLine({ rate }: { rate: boolean }) {
+function HiddenLine({ rate, roles = true }: { rate: boolean; roles?: boolean }) {
   // The rate only when the posting gave one: a card never promises a rate that isn't there (C49).
   return (
     <div className="tp-pcard-hidden">
       <IconLock />
       <span>
-        {rate ? "Company, posting and rate" : "Company and posting"} <span className="tp-pcard-hidden-cost">· 1 credit together</span>
+        {!roles ? "Unlock company" : rate ? "Company, posting and rate" : "Company and posting"} <span className="tp-pcard-hidden-cost">· {COMPANY_PRICE_SAY}{roles ? " together" : ""}</span>
       </span>
     </div>
   );
@@ -160,15 +162,23 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, h
       )}
       {c.hidden && hired ? (
         // A locked company that hired: who held the seat opens after the company, in its record.
-        <HiddenLine rate={i.engs.some((x) => isOpenRole(x) && (x.cells.rate?.s === "locked" || x.cells.rate?.s === "value"))} />
+        <HiddenLine rate={i.engs.some((x) => isOpenRole(x) && (x.cells.rate?.s === "locked" || x.cells.rate?.s === "value"))} roles={i.engs.some(isOpenRole)} />
       ) : c.hidden ? (
         <>
-          {e && e.cells.role?.s === "value" && (
+          {e && isOpenRole(e) && e.cells.role?.s === "value" && (
             <div className="tp-pfacts">
               <Fact label="Open role">{e.cells.role.v}</Fact>
             </div>
           )}
-          <HiddenLine rate={!!e && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} />
+          {/* A past seat at a locked company: who held it opens after the company (a quiet lock, never a button). */}
+          {e && !isOpenRole(e) && (e.cells.operator?.s === "locked" || e.claimable || e.yours) && (
+            <div className="tp-pfacts">
+              <Fact label="Held by">
+                <HeldBy e={e} cover={coverOf(i, e, "operator")} />
+              </Fact>
+            </div>
+          )}
+          <HiddenLine rate={!!e && isOpenRole(e) && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} roles={!!e && isOpenRole(e)} />
         </>
       ) : (
         <div className="tp-pfacts">
@@ -232,12 +242,19 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
       </div>
       {i.c.hidden ? (
         <>
-          {e.cells.role?.s === "value" && (
+          {openRole && e.cells.role?.s === "value" && (
             <div className="tp-pfacts">
               <Fact label="Open role">{e.cells.role.v}</Fact>
             </div>
           )}
-          <HiddenLine rate={e.cells.rate?.s === "locked" || e.cells.rate?.s === "value"} />
+          {!openRole && (e.cells.operator?.s === "locked" || e.claimable || e.yours) && (
+            <div className="tp-pfacts">
+              <Fact label="Held by">
+                <HeldBy e={e} cover={coverOf(i, e, "operator")} />
+              </Fact>
+            </div>
+          )}
+          <HiddenLine rate={openRole && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} roles={openRole} />
           {e.cells.rate?.s === "value" && (
             <div className="tp-pfacts">
               <Fact label="Posted rate">

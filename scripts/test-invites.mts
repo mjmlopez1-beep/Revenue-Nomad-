@@ -68,7 +68,8 @@ writeFileSync(
   JSON.stringify({
     ledger: limPaid,
     values: {},
-    unlocks: {},
+    // Ivy unlocked Claimpoint Systems before (every company is locked for a member until they unlock it or know it), where she invited Cora to connect.
+    unlocks: { "c_claim.identity": ["mem_ivy"] },
     seen: { mem_ivy: at0, mem_lim: at0 },
     profiles: { mem_ivy: { function: "Sales", onboarded: true }, mem_lim: { function: "Marketing", onboarded: true } },
     seatInvites: [{ by: "mem_ivy", engagementId: "e_claim_cora", at: at0 }],
@@ -269,7 +270,8 @@ async function main() {
   check("a new invitee is told who invited them, and that they both get the bonus", deeView.me?.invitedBy?.first === "Ivy" && deeView.me.invitedBy.both === true && deeView.me.onboarded === false, deeView.me?.invitedBy);
   check("onboarding's line reads", fmt.invitedLine(deeView.me!.invitedBy!.first, deeView.me!.invitedBy!.both, REFERRAL_BONUS) === "Ivy invited you. You both get 10 credits when you add your first fact.");
   check("it names the inviter by first name, never their email", !JSON.stringify(deeView.me?.invitedBy).includes("ivy.inviter") && !JSON.stringify(deeView.me?.invitedBy).includes("Inviter"));
-  const fill = await t.perform(dee.token, { type: "fill", entity: "company", id: pub("c_inv"), field: "hq", value: "Austin, TX" }, "https://post.example.com");
+  // Her first fact: a client of hers she adds (every company on file is locked for her until she unlocks it or knows it).
+  const fill = await t.perform(dee.token, { type: "add", company: "Deeclient Works", companyFields: { hq: "Austin, TX" } }, "https://post.example.com");
   const deeAfter = await t.buildView(dee.token);
   check("once their first fact pays the bonus, the mention is gone", /invite bonus/.test(fill.message) && !deeAfter.me?.invitedBy && deeAfter.me?.invitePending === false, fill.message);
   const ivyHad = await t.buildView(IVY);

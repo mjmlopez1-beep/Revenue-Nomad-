@@ -17,6 +17,6 @@ export const GET = guarded(async (req: NextRequest) => {
   const domain = normalizeDomain(url);
   if (!domain) return NextResponse.json({ error: "That doesn't look like a web address. Paste the whole thing, like acme.com." }, { status: 400 });
   const found = await lookupCompany(url);
-  const existing = await existingCompany(domain, found?.name ?? null);
+  const existing = await existingCompany(domain, found?.name ?? null, token);
   return NextResponse.json({ domain, name: found?.name ?? null, industry: found?.industry ?? null, description: found?.description ?? null, existing });
 });

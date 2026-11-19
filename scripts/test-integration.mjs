@@ -168,12 +168,16 @@ async function seedSignIn(m) {
 async function vouch(who) {
   const [a, b] = [seedMember(30), seedMember(31)];
   if (!a || !b) return false;
-  const f = pickEmpty(await who.view());
+  // On a company of their own (every company on file is locked for them): its industry, which the
+  // seed members can confirm while it stays locked for them.
+  const made = await who.act({ type: "add", company: `Qa Vouch Co ${RUN} ${++vouchN}` });
+  const f = { type: "fill", entity: "company", id: made.json?.id, field: "industry", value: "SaaS" };
   const r = await who.act(f);
   let ok = r.status === 200;
   for (const m of [a, b]) ok = (await (await seedSignIn(m)).act({ type: "verify", entity: f.entity, id: f.id, field: f.field })).status === 200 && ok;
   return ok;
 }
+let vouchN = 0;
 const NEED_SEED = "needs the seed file the server runs on (two seed members vouch for the member who claims the role)";
 
 /* ---------- test scans ---------- */
@@ -239,19 +243,49 @@ function pickLocked(view, n, skipIds = new Set()) {
   if (out.length < n) throw new Error(`only ${out.length} locked facts`);
   return out;
 }
-/** Companies with no open role, for adding seats. Each is used once in a run. */
+/**
+ * Companies with no open role, for adding seats, as the admin sees them (named): every company is
+ * locked for a member until they unlock it or know it, and a member adds their seat by the name.
+ * Each is used once in a run.
+ */
 let hostN = 5;
-const host = (view) => {
-  const c = view.companies.filter((x) => !x.hidden && x.friendly.open === 0 && !/^Qa /.test(x.name))[hostN++];
+const named = async () => (await (await admin()).view()).companies;
+const host = async () => {
+  const c = (await named()).filter((x) => x.friendly.open === 0 && !/^Qa /.test(x.name))[hostN++];
   if (!c) throw new Error("no host company left");
   return c;
 };
 /** A host company with no seat Revenue Nomad found: adding a seat there adds one, it never claims a found seat instead. */
-const hostWithoutFound = (view) => {
-  const c = view.companies.filter((x) => !x.hidden && x.friendly.open === 0 && !/^Qa /.test(x.name) && !(x.engagements ?? []).some((e) => e.source === "Seat scan"))[hostN++];
+const hostWithoutFound = async () => {
+  const c = (await named()).filter((x) => x.friendly.open === 0 && !/^Qa /.test(x.name) && !(x.engagements ?? []).some((e) => e.source === "Seat scan"))[hostN++];
   if (!c) throw new Error("no host company left");
   return c;
 };
+/** What Unlock company costs (COMPANY_PRICE in lib/tableFields.ts). */
+const PRICE = 2;
+const unlockCo = (who, id) => who.act({ type: "unlock", entity: "company", id, field: "identity" });
+/** Locked facts at a company (about as pickLocked counts them once it is unlocked). */
+const lockedAt = (c) =>
+  [...c.engagements.flatMap((e) => [...Object.values(e.cells), ...e.people.flatMap((p) => Object.values(p.cells))]), ...c.people.flatMap((p) => Object.values(p.cells))].filter((x) => x.s === "locked").length;
+const openedIds = new Set();
+/** Unlock companies with the most locked facts (none with an open role) until pickLocked finds `need(opened)` there. Returns how many. */
+async function openForLocked(who, need, skipIds = new Set(), max = 8) {
+  let opened = 0;
+  for (;;) {
+    let have = 0;
+    try {
+      have = pickLocked(await who.view(), 400, skipIds).length;
+    } catch (e) {
+      have = Number(String(e.message).match(/only (\d+)/)?.[1] ?? 0);
+    }
+    if (have >= need(opened) || opened >= max) return opened;
+    const c = (await who.view()).companies.filter((x) => x.hidden && x.friendly.open === 0 && !/^Qa /.test(x.name) && !openedIds.has(x.id)).sort((a, b) => lockedAt(b) - lockedAt(a))[0];
+    if (!c) return opened;
+    openedIds.add(c.id);
+    await unlockCo(who, c.id);
+    opened++;
+  }
+}
 const sum = (rows) => rows.reduce((n, l) => n + l.delta, 0);
 
 /* ---------- sections ---------- */
@@ -261,8 +295,8 @@ const section = (name, fn) => (sections[name] = fn);
 const OUT = "You're out of credits. Add a missing fact to earn one.";
 const CLOSED_REFUND = "Refund for a role that had closed";
 
-// The company, its role, its posting and its posted rate are one purchase. The first-day limit, the scan's
-// refund and an admin's removal must all count it as one.
+// The company, its role, its posting and its posted rate are one purchase (PRICE credits). The first-day
+// limit counts it in credits, the scan's close leaves it bought, and an admin's removal pays nobody twice.
 section("bundle", async () => {
   if (!(await canScan())) return skip("one-credit company unlock", NEED_SCAN);
   const adm = await admin();
@@ -284,17 +318,20 @@ section("bundle", async () => {
   const m0 = engOf(await M.view(), eid);
   check("the company is locked, the title is free, and the role says it was not seen in the last scan", m0?.company.hidden === true && m0.unseen === true && m0.cells.role?.s === "value" && m0.cells.posting?.s === "locked" && m0.cells.rate?.s === "locked", { hidden: m0?.company.hidden, unseen: m0?.unseen });
   const buy = await M.act({ type: "unlock", entity: "engagement", id: eid, field: "posting" });
-  check("unlocking the posting buys the company, the posting and the posted rate for 1 credit", buy.status === 200 && /^Unlocked .+, the posting and the posted rate for 1 credit\.$/.test(buy.json?.message ?? "") && buy.json?.me?.credits === STARTER - 1 && buy.json?.cells?.some((x) => x.id === eid && x.field === "rate" && x.cell.v === "$12,000/mo"), buy.json);
-  check("the first-day limit counts that as one unlock, not three", buy.json?.me?.unlocksLeft === STARTER - 1 && buy.json?.me?.unlocked === 1, buy.json?.me);
+  check(`unlocking the posting buys the company, the posting and the posted rate for ${PRICE} credits`, buy.status === 200 && /^Unlocked .+, the posting and the posted rate for 2 credits\.$/.test(buy.json?.message ?? "") && buy.json?.me?.credits === STARTER - PRICE && buy.json?.cells?.some((x) => x.id === eid && x.field === "rate" && x.cell.v === "$12,000/mo"), buy.json);
+  check("the first-day limit counts it as one purchase of PRICE credits, not three", buy.json?.me?.unlocksLeft === STARTER - PRICE && buy.json?.me?.unlocked === 1, buy.json?.me);
 
   // Another new account spends all 25 in one go: the purchase and 24 more facts.
+  // (Every company is locked for it: it unlocks a few others first, for facts to unlock there.)
   const P = await member("Pat Allin");
+  const k = await openForLocked(P, (n) => STARTER - PRICE - PRICE * n);
   const pv = await P.view();
-  const more = pickLocked(pv, STARTER);
-  const items = [{ entity: "company", id: coRec.id, field: "identity" }, { entity: "engagement", id: eid, field: "role" }, { entity: "engagement", id: eid, field: "posting" }, { entity: "engagement", id: eid, field: "rate" }, ...more.slice(0, STARTER - 1)];
+  const facts = STARTER - PRICE - PRICE * k;
+  const more = pickLocked(pv, facts + 1);
+  const items = [{ entity: "company", id: coRec.id, field: "identity" }, { entity: "engagement", id: eid, field: "role" }, { entity: "engagement", id: eid, field: "posting" }, { entity: "engagement", id: eid, field: "rate" }, ...more.slice(0, facts)];
   const all = await P.act({ type: "unlockMany", items });
-  check("a new account can spend all 25 credits on the purchase and 24 more facts", all.status === 200 && all.json?.me?.credits === 0 && all.json?.me?.unlocksLeft === 0 && all.json?.me?.unlocked === STARTER, all.json?.me ?? all.json);
-  const wall = await P.act({ type: "unlock", ...more[STARTER - 1] });
+  check(`a new account can spend all 25 credits: ${k} companies, the purchase and ${facts} more facts`, all.status === 200 && all.json?.me?.credits === 0 && all.json?.me?.unlocksLeft === 0 && all.json?.me?.unlocked === k + 1 + facts, all.json?.me ?? all.json);
+  const wall = await P.act({ type: "unlock", ...more[facts] });
   check("at 0 credits and 0 unlocks left, the answer is about credits", wall.status === 400 && wall.json?.error === OUT, wall.json);
 
   // A member who already sees the company (they added a fact there) pays once for the open role's posting and rate (LOGIC-2), here through the rate's lock.
@@ -303,26 +340,29 @@ section("bundle", async () => {
   const two = await N.act({ type: "unlockMany", items: [{ entity: "engagement", id: eid, field: "rate" }, { entity: "engagement", id: eid, field: "posting" }] });
   check("a member who already sees the company pays 1 for the posting and the rate together", fact.status === 200 && two.status === 200 && two.json?.me?.credits === STARTER + 1 - 1 && two.json?.message === "Unlocked the posting and the posted rate for 1 credit.", two.json?.me ?? two.json);
 
-  // The second clean miss, 20 days after the posting was last seen: the role closes, and every
-  // unlock made after it was last seen is paid back, row by row.
+  // The second clean miss, 20 days after the posting was last seen: the role closes, and the open role's
+  // posting bought after it was last seen is paid back. Unlock company is not: it bought the company,
+  // which a role closing doesn't take away (every company is locked until unlocked, hiring or not).
   const s3 = await scanPost({ ...rest, now: soon() });
-  check("the scan closes the role and pays back 3 unlocks (1 each)", s3.json?.result?.closed === 1 && s3.json?.result?.refunded === 3, s3.json?.result);
+  check("the scan closes the role and pays back the posting bought on its own (1), not the companies", s3.json?.result?.closed === 1 && s3.json?.result?.refunded === 1, s3.json?.result);
   const mv = await M.view();
   const mRefunds = mv.ledger.filter((l) => l.reason === CLOSED_REFUND);
-  check("the one-credit purchase comes back as 1 credit, not 3", mv.me.credits === STARTER && mRefunds.length === 1 && mRefunds[0].delta === 1, { credits: mv.me.credits, refunds: mRefunds.length });
-  check("the refund names the company in the ledger", mRefunds[0]?.company === co, mRefunds[0]);
+  check("a company bought with its open role stays bought when the role closes", mv.me.credits === STARTER - PRICE && mRefunds.length === 0 && !engOf(mv, eid)?.company.hidden, { credits: mv.me.credits, refunds: mRefunds.length });
   const pv2 = await P.view();
   const nv = await N.view();
-  check("the member who spent everything has 1 credit again", pv2.me.credits === 1 && pv2.me.owed === 0, { credits: pv2.me.credits, owed: pv2.me.owed });
-  check("the member who paid 1 for the posting and the rate gets it back", nv.me.credits === STARTER + 1 && nv.ledger.filter((l) => l.reason === CLOSED_REFUND).length === 1, nv.me.credits);
-  check("the closed role's company and posting are free to see now", engOf(await (await member("Lee Latecomer")).view(), eid)?.cells.posting?.s === "value" && engOf(nv, eid)?.company.hidden === false);
+  const nRefunds = nv.ledger.filter((l) => l.reason === CLOSED_REFUND);
+  check("the refund names the company in the ledger", nRefunds[0]?.company === co, nRefunds[0]);
+  check("the member who spent everything is still at 0", pv2.me.credits === 0 && pv2.me.owed === 0, { credits: pv2.me.credits, owed: pv2.me.owed });
+  check("the member who paid 1 for the posting and the rate gets it back", nv.me.credits === STARTER + 1 && nRefunds.length === 1 && nRefunds[0].delta === 1, nv.me.credits);
+  const lee = engOf(await (await member("Lee Latecomer")).view(), eid);
+  check("the closed role's posting is free to a member who sees the company, and its company stays locked for a new member", engOf(nv, eid)?.cells.posting?.s === "value" && engOf(nv, eid)?.company.hidden === false && lee?.company.hidden === true && lee.cells.posting?.s === "locked", { lee: lee?.company.hidden });
 
   // The same role's rate is then reported by two of them and removed. Nobody is paid a second time.
   const r1 = await N.act({ type: "report", entity: "engagement", id: eid, field: "rate" });
   const r2 = await M.act({ type: "report", entity: "engagement", id: eid, field: "rate" });
   const rm = await adm.act({ type: "review", entity: "engagement", id: eid, field: "rate", decision: "remove" });
   const after = [(await M.view()).me.credits, (await P.view()).me.credits, (await N.view()).me.credits];
-  check("an admin removal after the scan's refund pays nobody twice", r1.status === 200 && r2.status === 200 && rm.status === 200 && after[0] === STARTER && after[1] === 1 && after[2] === STARTER + 1, { statuses: [r1.status, r2.status, rm.status], after });
+  check("an admin removal after the scan's refund pays nobody twice", r1.status === 200 && r2.status === 200 && rm.status === 200 && after[0] === STARTER - PRICE && after[1] === 0 && after[2] === STARTER + 1, { statuses: [r1.status, r2.status, rm.status], after });
 });
 
 // A role a member took is closed on that member's word. The scan must not undo it while the
@@ -349,7 +389,8 @@ section("claim", async () => {
   await T.act({ type: "unlock", entity: "company", id: coId, field: "identity" });
   const claim = await T.act({ type: "fill", entity: "engagement", id: eid, field: "operator", value: "Tia Taker", memberId: "me" });
   const b1 = await look();
-  check("a member takes the open role and it closes", claim.status === 200 && b1.status === "Active" && b1.closed !== null && b1.hidden === false, { status: claim.status, b1 });
+  // It stays locked for a member who never unlocked it: every company is, hiring or not.
+  check("a member takes the open role and it closes", claim.status === 200 && b1.status === "Active" && b1.closed !== null && b1.hidden === true, { status: claim.status, b1 });
 
   const s2 = await scanPost(listed);
   check("the posting lingers and the scan leaves the role closed", s2.json?.result?.reopened === 0 && (await look()).status === "Active", s2.json?.result);
@@ -358,6 +399,7 @@ section("claim", async () => {
   const R1 = await member("Rex Reporter");
   const R2 = await member("Roz Reporter");
   for (const r of [R1, R2]) {
+    await unlockCo(r, coId);
     await r.act({ type: "unlock", entity: "engagement", id: eid, field: "operator" });
     await r.act({ type: "report", entity: "engagement", id: eid, field: "operator" });
   }
@@ -371,7 +413,7 @@ section("claim", async () => {
   const b4 = await look();
   check("when an admin removes the name the role is open again and the company hidden", rm.status === 200 && b4.status === "Open role" && b4.closed === null && b4.hidden === true && b4.holder === "empty", { status: rm.status, b4 });
   const credits = [(await T.view()).me.credits, (await R1.view()).me.credits, (await R2.view()).me.credits];
-  check("the claim's credit is taken back and both reporters get their unlock back", credits[0] === STARTER + 1 && credits[1] === STARTER && credits[2] === STARTER, credits);
+  check("the claim's credit is taken back and both reporters get their unlock back (the company stays theirs)", credits[0] === STARTER + 2 - PRICE && credits[1] === STARTER - PRICE && credits[2] === STARTER - PRICE, credits);
   const s4 = await scanPost(listed);
   check("the next scan counts it as still open", s4.json?.result?.reopened === 0 && s4.json?.result?.stillOpen === 4 && (await look()).status === "Open role", s4.json?.result);
 });
@@ -402,6 +444,9 @@ section("relist", async () => {
   // Her claim keeps a listed role closed only on an account that counts.
   if (!(await vouch(U))) return skip("relisted roles", NEED_SEED);
   const V = await member("Vic Voucher");
+  // The companies are locked for them: they unlock them first, so what follows is about the roles.
+  await unlockCo(U, companyNamed(av, mineCo)?.id);
+  await unlockCo(V, companyNamed(av, otherCo)?.id);
   const own = await U.act({ type: "fill", entity: "engagement", id: mineId, field: "operator", value: "Uma Owner", memberId: "me" });
   const typed = await V.act({ type: "fill", entity: "engagement", id: otherId, field: "operator", value: "Jane Thirdparty" });
   check("on a closed role a member can take the seat, and nobody can name somebody else", own.status === 200 && typed.status === 400 && typed.json?.error === "You can add seats you held. Pick yourself as the seat holder.", [own.json, typed.json]);
@@ -429,13 +474,19 @@ section("owed", async () => {
   if (v.me.credits !== STARTER || v.me.unlocked !== 0) return skip("refund against credits owed", "this seed member was used before on this server");
   // Another member puts a rate on a record, for the seed member to pay for.
   const W = await member("Wes Writer");
-  const seat = await W.act({ type: "add", company: host(await W.view()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: W.name, function: "Sales", type: "Fractional", pricing: "Monthly retainer", rate: "$9k/mo" } });
+  const wHost = await host();
+  const seat = await W.act({ type: "add", company: wHost.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: W.name, function: "Sales", type: "Fractional", pricing: "Monthly retainer", rate: "$9k/mo" } });
   const wEng = seat.json?.id;
-  // The seed member adds one fact (26 credits) and spends all 26: that rate and 25 more facts.
-  const mineFact = pickEmpty(v);
+  // The seed member adds one fact (26 credits) and spends all 26: the companies (every company is
+  // locked for it, Wes's included), that rate and the facts it has credits left for.
+  await unlockCo(D, wHost.id);
+  const k = await openForLocked(D, (n) => STARTER - PRICE - PRICE * n + 1, new Set([wEng]));
+  const mine = await D.act({ type: "add", company: `Qa Owed Own Co ${RUN}` });
+  const mineFact = { type: "fill", entity: "company", id: mine.json?.id, field: "hq", value: "Austin, TX" };
   await D.act(mineFact);
-  const more = pickLocked(await D.view(), STARTER, new Set([wEng]));
-  const spend = await D.act({ type: "unlockMany", items: [{ entity: "engagement", id: wEng, field: "rate" }, ...more] });
+  const left = (await D.view()).me.credits;
+  const more = pickLocked(await D.view(), left + 1, new Set([wEng]));
+  const spend = await D.act({ type: "unlockMany", items: [{ entity: "engagement", id: wEng, field: "rate" }, ...more.slice(0, left - 1)] });
   check("a member adds a fact and spends all 26 credits", seat.status === 200 && spend.status === 200 && spend.json?.me?.credits === 0 && spend.json?.me?.owed === 0, spend.json?.me ?? spend.json);
   const rm1 = await adm.act({ type: "adminRemove", entity: "company", id: mineFact.id, field: mineFact.field });
   const d1 = (await D.view()).me;
@@ -444,7 +495,7 @@ section("owed", async () => {
   const dv = await D.view();
   check("a refund for a removed fact pays off what is owed first", rm2.status === 200 && dv.me.credits === 0 && dv.me.owed === 0, { status: rm2.status, credits: dv.me.credits, owed: dv.me.owed });
   check("the ledger adds up to the same", sum(dv.ledger) === -STARTER, sum(dv.ledger));
-  const no = await D.act({ type: "unlock", ...pickLocked(dv, 1, new Set([wEng]))[0] });
+  const no = await D.act({ type: "unlock", ...more[left - 1] });
   check("at exactly 0 an unlock is refused for credits", no.status === 400 && no.json?.error === OUT, no.json);
   const wv = (await W.view()).me;
   check("the member whose rate was removed keeps the credits for the four facts that stand (the seat holder too)", wv.credits === STARTER + 4 && wv.owed === 0, { credits: wv.credits, owed: wv.owed });
@@ -458,7 +509,7 @@ section("bench", async () => {
   const A = await member("Bea Bench");
   const total = async () => (await A.view()).benchmarks.total;
   const t0 = await total();
-  const hosts = [host(await A.view()), host(await A.view())];
+  const hosts = [await host(), await host()];
   // Seats the member held: their own name as the seat holder (the server writes it).
   const add = (who, h, fields) => who.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Seat Holder", function: "Sales", type: "Fractional", ...fields } });
   const s1 = await add(A, hosts[0], { pricing: "Monthly retainer", rate: "$9k/mo" });
@@ -494,7 +545,7 @@ section("bench", async () => {
   if (!plain) return skip("a group's count after a removal", "every group already has rates");
   const rates = ["$6k/mo", "$8k/mo", "$9k/mo", "$10k/mo", "$12k/mo"];
   const seats = [];
-  for (let i = 0; i < 5; i++) seats.push(await T[i].c.act({ type: "add", company: host(await A.view()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Seat Holder", function: plain.function, revenue: plain.revenue, pricing: "Monthly retainer", rate: rates[i] } }));
+  for (let i = 0; i < 5; i++) seats.push(await T[i].c.act({ type: "add", company: (await host()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Seat Holder", function: plain.function, revenue: plain.revenue, pricing: "Monthly retainer", rate: rates[i] } }));
   const g1 = rowOf(await A.view(), plain.function, plain.revenue).monthly;
   check("five members' rates show a median for the group", seats.every((s) => s.status === 200) && g1.n === 5 && typeof g1.median === "number", g1);
   await adm.act({ type: "adminRemove", entity: "engagement", id: seats[0].json?.id, field: "rate" });
@@ -517,7 +568,7 @@ section("invite", async () => {
   const j1 = await J.view();
   check("a private rate earns its credit and leaves the bonus waiting", priv.status === 200 && !/invite bonus/i.test(priv.json?.message ?? "") && j1.me.credits === STARTER + 1 && j1.me.invitePending === true, { message: priv.json?.message, credits: j1.me.credits });
   // A seat they held is a first fact on a record: the bonus is paid.
-  const seat = await J.act({ type: "add", company: hostWithoutFound(await J.view()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Jo Joined", function: "Sales" } });
+  const seat = await J.act({ type: "add", company: (await hostWithoutFound()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Jo Joined", function: "Sales" } });
   const j2 = await J.view();
   check("adding a seat they held pays the bonus", seat.status === 200 && /Your invite bonus added 10 more\./.test(seat.json?.message ?? "") && j2.me.credits === STARTER + 1 + 2 + 10 && j2.me.invitePending === false, { message: seat.json?.message, credits: j2.me.credits, pending: j2.me.invitePending });
   const iv = await I.view();
@@ -528,7 +579,7 @@ section("invite", async () => {
 section("add", async () => {
   const A = await member("Ada Adder");
   const B = await member("Ben Adder");
-  const h = host(await A.view());
+  const h = await host();
   const a = await A.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: A.name, function: "Sales", type: "Fractional" } });
   const b = await B.act({ type: "add", company: h.name, operatorMemberId: "me", engagementFields: { operator: B.name, role: "Директор по продажам", type: "Interim" } });
   check("a seat with a title in another script is its own record, not another member's seat with no title", a.status === 200 && b.status === 200 && !!b.json?.id && b.json.id !== a.json?.id, { a: a.status, b: b.status, same: b.json?.id === a.json?.id });

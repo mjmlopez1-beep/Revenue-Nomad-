@@ -90,7 +90,11 @@ writeFileSync(
   path.join(dir, "intel.json"),
   JSON.stringify({
     ledger: [],
-    unlocks: {},
+    // Sal unlocked every company here but the one with an open role, under the old rules (every company is
+    // locked for a member until they unlock it or know it). That one stays locked for everyone, and is never named.
+    unlocks: Object.fromEntries(
+      ["c_alpha", "c_beta", "c_gamma", "c_delta", "c_eps", "c_zeta", "c_five", "c_juniper", "c_kestrel", "c_larch"].flatMap((id) => [[`${id}.identity`, ["m_sal"]]]),
+    ),
     // A seat a member added yesterday: new this week too.
     engagements: [{ id: "e_mem", companyId: "c_five", by: "m_ola", at: ago(1) }],
     values: {
@@ -449,7 +453,7 @@ async function main() {
   const text = JSON.stringify(posts[0]?.body ?? {});
   check("a scan with no new roles still posts the week's new hires", posts.length === 1, posts.length);
   check("the post's headline is the owner's line", text.includes("4 companies in your profile hired a fractional Finance leader this week"), text.slice(0, 400));
-  check("the post lists companies in free facts, a locked one unnamed", text.includes(`Beta Labs · Finance · ${H.startWords(ym(1))}`) && text.includes("A company that's hiring now · Finance"), text);
+  check("the post lists companies in free facts, a locked one unnamed", text.includes(`Beta Labs · Finance · ${H.startWords(ym(1))}`) && text.includes("A locked company · Finance"), text);
   check("the post opens the saved view", text.includes(`${BASE}/?${salPlace}`), text);
   check("the post never names a seat holder or a locked company", !text.includes(HOLDER) && !text.includes(HIDDEN_NAME));
   check("the post leaves seats below Lead out, and never carries a locked title", !text.includes("Kestrel Ledger") && !text.includes("Larch Books") && !text.includes("Juniper Content") && !text.includes(JUNIOR_TITLE) && !text.includes(JUNIOR_HOLDER));

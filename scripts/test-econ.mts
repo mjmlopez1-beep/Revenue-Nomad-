@@ -82,7 +82,11 @@ async function seatId(t: Table, role: string): Promise<string> {
   return hit.e.id;
 }
 const eng = (v: View, id: string): EngagementRec | undefined => engs(v).find(({ e }) => e.id === id)?.e;
-const company = (v: View, name: string): CompanyRec | undefined => v.companies.find((c) => c.name === name);
+/** A company in a member's view. Every company is locked for a member until they unlock it or know it, so a locked one is found by a seat of its own (Betaco has the found seat). */
+const company = (v: View, name: string): CompanyRec | undefined =>
+  v.companies.find((c) => c.name === name) ?? (name === "Betaco" ? v.companies.find((c) => c.engagements.some((e) => e.source === "Seat scan")) : v.companies.find((c) => !c.engagements.some((e) => e.source === "Seat scan")));
+/** Unlock company (2 credits): what is paid at a locked company opens after it. */
+const unlockCompany = (t: Table, token: string, c: CompanyRec | undefined) => tryAct(t, token, { type: "unlock", entity: "company", id: c?.id, field: "identity" });
 const tryAct = async (t: Table, token: string, a: unknown): Promise<{ ok: true; message: string } | { ok: false; error: string }> => {
   try {
     return { ok: true, message: (await t.perform(token, a as never)).message };
@@ -110,8 +114,12 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     check("for a member who paid nothing, the Ongoing end is free and the dated end is locked", eng(di, active)?.cells.end?.s === "value" && eng(di, ended)?.cells.end?.s === "locked", [eng(di, active)?.cells.end, eng(di, ended)?.cells.end]);
     const free = await tryAct(t, "tok-di", { type: "unlock", entity: "engagement", id: active, field: "end" });
     check("asking to unlock an Ongoing end spends nothing", !free.ok && free.error === NOTHING, free);
+    // Alphaco is locked for Di: the company first (2 credits), then the end month.
+    const early = await tryAct(t, "tok-di", { type: "unlock", entity: "engagement", id: ended, field: "end" });
+    check("a dated end at a locked company opens after the company", !early.ok && early.error === "Unlock the company first.", early);
+    await unlockCompany(t, "tok-di", company(di, "Alphaco"));
     const paid = await tryAct(t, "tok-di", { type: "unlock", entity: "engagement", id: ended, field: "end" });
-    check("a dated end on an Ended seat is 1 credit", paid.ok && paid.message === "Unlocked the end month for 1 credit." && (await t.buildView("tok-di")).me?.credits === 24, paid);
+    check("a dated end on an Ended seat is 1 credit", paid.ok && paid.message === "Unlocked the end month for 1 credit." && (await t.buildView("tok-di")).me?.credits === 22, paid);
   },
 
   /** A restart on the state the first start wrote: nothing is given back twice. */
@@ -119,7 +127,7 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     const t = await tableOf();
     const bo = await t.buildView("tok-bo");
     check("after a restart nothing is given back twice", bo.me?.credits === 24 && bo.ledger.filter((l) => l.reason === ONGOING_LINE).length === 2, [bo.me?.credits, bo.ledger.length]);
-    check("  and what another member bought since is kept", (await t.buildView("tok-di")).me?.credits === 24);
+    check("  and what another member bought since is kept", (await t.buildView("tok-di")).me?.credits === 22);
   },
 
   /** The role of a found seat nobody is named on, with SEAT_SCAN_ROLE_FREE as this tree has it (ECON_FREE says which). */
@@ -133,19 +141,27 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     const beta = company(di, "Betaco")!;
     const e = beta.engagements[0];
     const info = M.deriveAll([beta])[0];
+    // Turned off, the role is a paid fact, which at a locked company opens after the company: Di unlocks Betaco first.
+    if (!free) await unlockCompany(t, "tok-di", beta);
+    const diBefore = (await t.buildView("tok-di")).me?.credits;
     const r = await tryAct(t, "tok-di", { type: "unlock", entity: "engagement", id: e.id, field: "role" });
     if (free) {
       check("true: the found seat's role is a free value", e.cells.role?.s === "value" && e.cells.role.v === "Fractional CMO" && !e.cells.role.paid, e.cells.role);
-      check("true: Unlock all has nothing to buy there, and nothing counts as locked", info.locked.length === 0 && beta.facts.locked === 0, [info.locked, beta.facts]);
+      check("true: Unlock all has nothing to buy there but the company, and no fact counts as locked", info.locked.map((x) => x.field).join() === "identity" && beta.facts.locked === 0, [info.locked, beta.facts]);
       check("true: asking to unlock it spends nothing", !r.ok && r.error === NOTHING && (await t.buildView("tok-di")).me?.credits === 25, r);
     } else {
       check("false: the found seat's role is a 1 credit lock", e.cells.role?.s === "locked", e.cells.role);
-      check("false: Unlock all buys it, and it counts as locked", info.locked.map((x) => x.field).join() === "role" && beta.facts.locked === 1, [info.locked, beta.facts]);
-      check("false: unlocking it is 1 credit", r.ok && r.message === "Unlocked the role for 1 credit." && (await t.buildView("tok-di")).me?.credits === 24, r);
+      check("false: Unlock all buys the company, then it, and it counts as locked", info.locked.map((x) => x.field).join() === "identity,role" && beta.facts.locked === 1, [info.locked, beta.facts]);
+      check("false: unlocking it is 1 credit", r.ok && r.message === "Unlocked the role for 1 credit." && (await t.buildView("tok-di")).me?.credits === (diBefore ?? 0) - 1, r);
     }
-    // Its fractional claims it: the seat has a holder now, and the role comes with who held it.
+    // Its fractional claims it: the seat has a holder now, and the role comes with who held it. (In the
+    // app, from the record: the company is locked for Cy, so he unlocks it first. Typing its name in Add claims it too.)
+    await unlockCompany(t, "tok-cy", company(await t.buildView("tok-cy"), "Betaco"));
     const claim = await tryAct(t, "tok-cy", { type: "claimSeat", engagementId: e.id });
     check("its fractional claims the seat", claim.ok, claim);
+    const bo0 = await t.buildView("tok-bo");
+    // Betaco is locked for Bo: he unlocks it first, so what follows is about the seat.
+    await unlockCompany(t, "tok-bo", company(bo0, "Betaco"));
     const bo = await t.buildView("tok-bo");
     const be = company(bo, "Betaco")!.engagements[0];
     check("once claimed, who held it and the role are both locked, one purchase", be.cells.operator?.s === "locked" && be.cells.role?.s === "locked" && M.lockedInEngagement(be).map((x) => x.field).join() === "operator", [be.cells.operator, be.cells.role]);

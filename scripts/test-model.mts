@@ -262,7 +262,8 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   check("at a locked company who held a seat opens after the company, the role with them", coverOf(hidden, past2, "operator") === AFTER_COMPANY && coverOf(hidden, past2, "role") === AFTER_COMPANY);
   const lone = eng({ role: LOCKED, operator: EMPTY }, { source: "Seat scan", claimable: true } as Partial<EngagementRec>);
   const hc2 = { ...co("Hidden Lone", [role2, lone]), hidden: true } as CompanyRec;
-  check("at a locked company a seat's role with nobody named waits for the record, not the company", coverOf(deriveAll([hc2])[0], lone, "role") === "Open the record to unlock this.");
+  // Every purchase at a company opens it, so at a locked one each paid fact waits for the company.
+  check("at a locked company a seat's role with nobody named opens after the company too", coverOf(deriveAll([hc2])[0], lone, "role") === AFTER_COMPANY);
   check("at a locked company the open role's posting and rate are quiet on a row", !!coverOf(hidden, role2, "posting") && !!coverOf(hidden, role2, "rate"));
   check("at a visible company the rate is quiet while the posting is locked", coverOf(visible, role, "posting") === null && !!coverOf(visible, role, "rate"));
   const rateOnly = eng({ role: val("Fractional CMO"), posting: val("https://jobs.example.com/x"), rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
@@ -451,12 +452,12 @@ check(
   ledgerLine(row("Gave back 1 credit: an ongoing seat's end month is free now.", "", 1, ""), 25).text === "Gave back 1 credit: an ongoing seat's end month is free now.",
 );
 check("a private rate never names a company", ledgerLine(row("fill", "Private rate", 1, ""), 25).text === "Shared a rate privately" && ledgerLine(row("Removed", "Private rate", -1, ""), 25).text === "Removed a rate you shared privately");
-// A locked company is one purchase with its open role, and the company leads so a cut-off line keeps it.
+// Unlock company reads "Unlocked a company", with its name once the member sees it, and never names one still locked.
 check(
   "unlocking a locked company says so, and never names one still locked",
-  ledgerLine(row("unlock", HIDDEN_COMPANY, -1), 25).text === "Unlocked Acme and its open role" &&
-    ledgerLine(row("unlock", HIDDEN_COMPANY, -1, HIDDEN_COMPANY), 25).text === "Unlocked a company that's hiring and its open role" &&
-    ledgerLine(row("unlock", "Rate", -1, HIDDEN_COMPANY), 25).text === "Unlocked the rate at a company that's hiring",
+  ledgerLine(row("unlock", HIDDEN_COMPANY, -2), 25).text === "Unlocked a company: Acme" &&
+    ledgerLine(row("unlock", HIDDEN_COMPANY, -2, HIDDEN_COMPANY), 25).text === "Unlocked a company" &&
+    ledgerLine(row("unlock", "Rate", -1, HIDDEN_COMPANY), 25).text === "Unlocked the rate at a locked company",
 );
 check(
   "no credit history line says hidden or prints the placeholder",

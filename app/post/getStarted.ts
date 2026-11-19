@@ -19,17 +19,25 @@ export const lockedHolder = (i: CoInfo, e: EngagementRec) => !i.c.hidden && !e.y
 export const lockedPerson = (i: CoInfo, p: PersonRec) => !i.c.hidden && PERSON_BUNDLE.some((f) => p.cells[f]?.s === "locked");
 
 /** What step 1 can point at in the member's whole table. */
-export type StepOne = "holder" | "person" | "none";
+export type StepOne = "holder" | "person" | "company" | "none";
 
-/** A seat holder if any is locked anywhere, else a person's name and title, else nothing (the step is left out). */
+/**
+ * A seat holder if any is locked at a company the member can see, else a person's name and title
+ * there, else a locked company (every company is locked until the member unlocks it, and its seat
+ * holders open after it), else nothing (the step is left out).
+ */
 export function stepOneKind(infos: CoInfo[]): StepOne {
   let person = false;
+  let company = false;
   for (const i of infos) {
-    if (i.c.hidden) continue;
+    if (i.c.hidden) {
+      company = true;
+      continue;
+    }
     for (const e of i.engs) if (lockedHolder(i, e)) return "holder";
     if (!person && i.people.some(({ p }) => lockedPerson(i, p))) person = true;
   }
-  return person ? "person" : "none";
+  return person ? "person" : company ? "company" : "none";
 }
 
 /**

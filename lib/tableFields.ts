@@ -254,8 +254,15 @@ export const FRACTIONAL_TYPES = ["Fractional", "Interim", "Advisory", "Project"]
 /** "Closed" is an open role whose posting came down (the weekly scan sets it, with a date). */
 export const STATUSES = ["Open role", "Active", "Ended", "Closed"];
 
-/** The name the server sends for a company with an active open role until the member unlocks it (1 credit). The app draws a blurred placeholder in its place and never prints this. */
+/** The name the server sends for a company the member hasn't unlocked (every company, until they know it). The app draws a blurred placeholder in its place and never prints this. */
 export const HIDDEN_COMPANY = "Locked company";
+/**
+ * Credits to unlock a company: its name, website, logo, LinkedIn and About, with the job posting and
+ * posted rate of each open role there. Who held a seat there (1 credit) and its people open after it.
+ */
+export const COMPANY_PRICE = 2;
+/** "2 credits", for copy. */
+export const COMPANY_PRICE_SAY = `${COMPANY_PRICE} credits`;
 
 /** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;

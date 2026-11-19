@@ -20,6 +20,7 @@
  */
 import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import type { Cell, EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
+import { COMPANY_PRICE } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconLock, IconStar, LockedName, LockedSite, fmtMonth } from "../ui/shared";
 import {
   ADD_AFTER_NAME, COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, PERSON_NO_ADD, coverOf, personBothLocked, personCoverOf, personNoun, personUnseen, fitReason, fitTier, hireLine, hireOfRow, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn,
@@ -158,8 +159,8 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
 /** The one unlock for a hidden company: its name, website, LinkedIn and About, and the role, posting and rate of its open roles. */
 export function UnlockCompanyCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
-  // Today's unlocks are used up: the hidden logo already shows the lock, and its record says when.
-  if (ui.me.unlocksLeft === 0 && ui.me.credits > 0) return null;
+  // Today's unlocks are used up (a company counts as COMPANY_PRICE): the hidden logo already shows the lock, and its record says when.
+  if ((ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && ui.me.credits >= COMPANY_PRICE) return null;
   return <FactCell t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />;
 }
 
@@ -248,14 +249,14 @@ export function RowFact({
 }
 
 /** The tooltip on a locked company's name. */
-export const LOCKED_TIP = "This company is hiring a fractional now. Unlock it to see the company.";
+export const LOCKED_TIP = "This company is locked. Unlock it to see its name, website and job postings.";
 
 /**
- * A company with an open role the member hasn't unlocked: a blurred tile where the logo would
- * be, a blurred made-up name (LockedName, from the public id only), and what is free to know
- * (industry, size, region) where the domain would be. The record's header adds a blurred site.
+ * A company the member hasn't unlocked (every company, until they know it): a blurred tile where
+ * the logo would be, a blurred made-up name (LockedName, from the public id only), and what is
+ * free to know ("SaaS · $1M–$5M · 11–50 · TX") where the domain would be. The record's header adds a blurred site.
  *   table   the lock is the button, and only its own 28px box spends. Point at it, or tab to
- *           it, and its label reads "Unlock company · 1 credit". The name and the line under it
+ *           it, and its label reads "Unlock company · 2 credits". The name and the line under it
  *           open the record, so a click meant for the record never spends a credit.
  *   phone   the card has no unlock button: it opens the record (see Cards.tsx).
  *   big     the record's header. Its own Unlock company button sits below.

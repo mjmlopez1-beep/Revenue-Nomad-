@@ -27,7 +27,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./onboard.css";
-import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, post, val, type Act, type View } from "../ui/shared";
+import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, LockedName, post, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
 import type { CompanyRec, Icp, OnboardDraft } from "@/lib/tableTypes";
 import { CLIENT_COUNTS } from "@/lib/tableTypes";
@@ -777,7 +777,7 @@ function FirstRow({ r, f }: { r: Row; f: Filters }) {
     <li className="ob-fv-row">
       <CompanyLogo name={c.hidden ? "" : c.name} domain={c.hidden ? null : c.iconDomain} hidden={c.hidden} seed={c.id} />
       <div className="ob-fv-id">
-        <span className="ob-fv-name">{c.hidden ? "A company that's hiring now" : c.name}</span>
+        <span className="ob-fv-name">{c.hidden ? <LockedName seed={c.id} /> : c.name}</span>
         {meta ? <span className="ob-fv-meta">{meta}</span> : null}
         {hire ? (
           <span className="ob-fv-hire">

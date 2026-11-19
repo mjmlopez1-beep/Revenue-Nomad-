@@ -112,7 +112,7 @@ async function main() {
   check("once the name and title show, the email is 1 credit", T.personOut(seen).email === T.LOCKED, T.personOut(seen));
   const sPast = T.seatOut(past, il, mv);
   check("at a locked company, who held a seat and its role read 'opens after the company'", sPast.seat_holder === T.AFTER_COMPANY && sPast.role === T.AFTER_COMPANY && /^opens after the company/.test(T.AFTER_COMPANY), sPast);
-  check("an open role there still comes with the company", T.seatOut(role, il, mv).posting === "on file, unlocks with the company (1 credit)", T.seatOut(role, il, mv));
+  check("an open role there still comes with the company (2 credits)", T.seatOut(role, il, mv).posting === "on file, unlocks with the company (2 credits)", T.seatOut(role, il, mv));
   const pBoss = T.personOut(boss, null, true);
   check("a person at a locked company reads 'opens after the company', name, title and LinkedIn", pBoss.name === T.AFTER_COMPANY && pBoss.title === T.AFTER_COMPANY && pBoss.linkedin === T.AFTER_COMPANY, pBoss);
 

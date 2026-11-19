@@ -294,6 +294,9 @@ async function emailOn() {
     await call({ signIn: "tok-hana-000001" });
     const jv = await view(rot.cookie);
     const seat = jv.companies.flatMap((c) => c.engagements).find((e) => e.cells.function?.v === "Sales");
+    // The company first: every company is locked for a member until they unlock it, and who held a seat opens after it.
+    const seatCo = jv.companies.find((c) => c.engagements.some((e) => e.id === seat.id));
+    await call({ action: { type: "unlock", entity: "company", id: seatCo.id, field: "identity" } }, { token: rot.cookie });
     await call({ action: { type: "unlock", entity: "engagement", id: seat.id, field: "operator" } }, { token: rot.cookie });
     const start = await call({ action: { type: "message.start", engagementId: seat.id, text: "Hi Hana, how did the Acme seat go?" } }, { token: rot.cookie });
     check("a member messages a seat holder they unlocked", start.status === 200 && start.json?.conversation?.messages?.length === 1, start.json);

@@ -11,6 +11,10 @@
  *   as its cell says.
  * - a person's name and title are one purchase (PERSON_BUNDLE), and their LinkedIn, email and
  *   phone open only after it (PERSON_DETAILS). unlock refuses them before.
+ * - every company is locked until the member unlocks it (2 credits, COMPANY_PRICE) or already knows
+ *   it (they added to it, held a seat there, or paid for anything there). A locked company reads
+ *   as "Locked company" with its free facts (industry, size, revenue, HQ region, its seats'
+ *   functions and dates, its open roles) and an opaque id: never its name, website, LinkedIn or About.
  * - at a locked company, its people and the fractionals who held its seats open only after the
  *   company. unlock refuses them before.
  * - an end month that only says the seat is still going is free (the server shows it).
@@ -32,7 +36,7 @@ import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
-import { REFERRAL_BONUS } from "../tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS } from "../tableFields";
 
 export interface Ctx {
   member: Member;
@@ -49,7 +53,7 @@ export class ToolProblem extends Error {}
 export const LOCKED = "locked, 1 credit to unlock";
 /** An open role's posting, posted rate or posted hours: on file, and bought together (or with the company). */
 const LOCKED_ROLE = "on file, 1 credit opens it with the rest of this open role's job posting";
-const LOCKED_WITH_COMPANY = "on file, unlocks with the company (1 credit)";
+const LOCKED_WITH_COMPANY = `on file, unlocks with the company (${COMPANY_PRICE_SAY})`;
 const NO_RATE = "No rate posted";
 const NO_POSTING = "No posting link on file";
 /** A person's name and title are one purchase (PERSON_BUNDLE). */
@@ -59,10 +63,10 @@ export const LOCKED_SEAT = "locked, 1 credit opens who held this seat and the ro
 /** A person's LinkedIn, email and phone wait for their name and title (PERSON_DETAILS). */
 export const AFTER_NAME = "opens after the name. Unlock their name and title first (1 credit for both), then this is 1 credit";
 /** A person, or who held a seat, at a company that is still locked. */
-export const AFTER_COMPANY = "opens after the company. Unlock the company first (1 credit)";
+export const AFTER_COMPANY = `opens after the company. Unlock the company first (${COMPANY_PRICE_SAY})`;
 /** What unlock says when asked for one of those too early: the server's words, then the way through. */
 export const NAME_FIRST = "Unlock their name and title first. One credit opens both (unlock this person with field name). Then their LinkedIn, email and phone are 1 credit each.";
-export const COMPANY_FIRST = "Unlock the company first. One credit opens it (unlock the company with field identity). Then its people and who held its seats can be unlocked.";
+export const COMPANY_FIRST = `Unlock the company first. ${COMPANY_PRICE_SAY} open it (unlock the company with field identity). Then its people and who held its seats can be unlocked.`;
 const REVIEW = "under review";
 /** A person's contact details: they open only once the member can see who the person is (PERSON_DETAILS in lib/tableFields.ts). */
 const CONTACT_DETAILS = ["linkedin", "email", "phone"];
@@ -151,13 +155,14 @@ function notOnFile(i: CoInfo): string | undefined {
   return `${list} not on file yet`;
 }
 
-/** What 1 credit opens at a locked company, from what its open roles have on file. Never promises a rate that isn't there. */
+/** What Unlock company (COMPANY_PRICE) opens at a locked company, from what its open roles have on file. Never promises a rate that isn't there. */
 function companyBundle(i: CoInfo): { what: string; rate: boolean } {
   const open = i.engs.filter(isOpenRole);
   const has = (f: string) => open.some((e) => !!e.cells[f] && e.cells[f].s !== "empty");
   const parts = [has("posting") ? "the job posting" : null, has("rate") ? "the posted rate" : null, has("hours") ? "the posted hours" : null].filter((x): x is string => !!x);
   const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
-  return { what: `its name, website and LinkedIn${list ? `, and ${list} of its open role${open.length > 1 ? "s" : ""}` : ""}${has("rate") ? "" : ". No rate was posted"}`, rate: has("rate") };
+  const roles = open.length ? `${list ? `, and ${list} of its open role${open.length > 1 ? "s" : ""}` : ""}${has("rate") ? "" : ". No rate was posted"}` : "";
+  return { what: `its name, website, logo and LinkedIn${roles}`, rate: has("rate") };
 }
 
 function companySummary(i: CoInfo): ToolOut {
@@ -166,7 +171,7 @@ function companySummary(i: CoInfo): ToolOut {
   return {
     id: c.id,
     name: c.name,
-    ...(c.hidden ? { hidden: true, hidden_note: `Locked while it has an open role. Unlock the company for 1 credit to see ${companyBundle(i).what}.` } : {}),
+    ...(c.hidden ? { hidden: true, hidden_note: `Locked. Unlock the company for ${COMPANY_PRICE_SAY} to see ${companyBundle(i).what}. Until then it is known by its id and the free facts here.` } : {}),
     ...readAll(c.cells, { industry: "industry", employees: "employees", revenue: "revenue", hq: "hq" }),
     ...(missing ? { not_on_file: missing } : {}),
     ...(c.country ? { country: c.country } : {}),
@@ -204,8 +209,9 @@ export function personOut(p: PersonRec, seatId?: string | null, hidden = false):
 export function seatLocked(e: EngagementRec, hidden: boolean, field: string): string {
   const open = isOpenRole(e);
   if (open && ROLE_BUNDLE.includes(field)) return hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE;
-  if (seatBundled(e) && SEAT_PAIR.includes(field)) return hidden ? AFTER_COMPANY : LOCKED_SEAT;
-  if (hidden && field === "operator") return AFTER_COMPANY;
+  // At a locked company everything else paid opens after the company: any purchase there owns it.
+  if (hidden) return AFTER_COMPANY;
+  if (seatBundled(e) && SEAT_PAIR.includes(field)) return LOCKED_SEAT;
   return LOCKED;
 }
 
@@ -321,19 +327,22 @@ export function warmPaths(i: CoInfo, mv?: MemberView, base = publicBase() ?? "")
  * and hours are one (the table's list already counts them once), so are a person's name and title,
  * and so are who held a seat and the role they held.
  */
-export const purchases = (i: CoInfo) => {
+export const purchases = (i: CoInfo) => purchaseSet(i).size;
+/** What those purchases cost: 1 credit each, and COMPANY_PRICE for the company. */
+export const purchaseCredits = (i: CoInfo) => [...purchaseSet(i)].reduce((n, k) => n + (k.endsWith(" identity") ? COMPANY_PRICE : 1), 0);
+const purchaseSet = (i: CoInfo) => {
   const bought = new Set<string>();
   for (const t of i.locked) {
     const e = t.entity === "engagement" ? i.engs.find((x) => x.id === t.id) : undefined;
     const pair = (t.entity === "contact" && PERSON_BUNDLE.includes(t.field)) || (!!e && seatBundled(e) && SEAT_PAIR.includes(t.field));
     bought.add(`${t.entity} ${t.id} ${pair ? "pair" : t.field}`);
   }
-  return bought.size;
+  return bought;
 };
 
 function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? ""): ToolOut {
   const c = i.c;
-  const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? "locked until you unlock the company (1 credit)" : LOCKED));
+  const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? `locked until you unlock the company (${COMPANY_PRICE_SAY})` : LOCKED));
   return {
     ...companySummary(i),
     ...facts,
@@ -342,7 +351,7 @@ function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? ""): ToolO
     ...(c.people.length ? { people: c.people.map((p) => personOut(p, null, !!c.hidden)) } : {}),
     warm_paths: warmPaths(i, mv, base),
     locked: purchases(i)
-      ? { purchases: purchases(i), note: `Up to ${purchases(i)} credit${purchases(i) > 1 ? "s" : ""} to unlock everything here. Call unlock with field "everything" (without confirm) for the exact cost.` }
+      ? { purchases: purchases(i), note: `Up to ${purchaseCredits(i)} credit${purchaseCredits(i) > 1 ? "s" : ""} to unlock everything here. Call unlock with field "everything" (without confirm) for the exact cost.` }
       : "Nothing here is locked for you.",
   };
 }
@@ -581,7 +590,7 @@ function roleOut(i: CoInfo, e: EngagementRec): ToolOut {
     company_fit: fitOf(i),
     fit_reason: fitWhy(i),
     unlock: i.c.hidden
-      ? { cost: `1 credit opens the company: ${companyBundle(i).what}`, call: { entity: "company", id: i.c.id, field: "identity" } }
+      ? { cost: `${COMPANY_PRICE_SAY} open the company: ${companyBundle(i).what}`, call: { entity: "company", id: i.c.id, field: "identity" } }
       : lead
         ? {
             cost: `1 credit opens ${e.cells.posting?.s === "locked" ? "the job posting" : "what the posting gave"}${rate ? " and the posted rate" : ". No rate was posted"}`,
@@ -699,7 +708,7 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
   const all = fieldRaw === "everything" || fieldRaw === "all";
   if (entity === "company") {
     const i = companyInfo(mv, id);
-    if (all) return { items: i.locked, what: `everything locked at ${i.c.name}`, id: i.c.id };
+    if (all) return { items: i.locked, what: `everything locked at ${i.c.hidden ? "this company" : i.c.name}`, id: i.c.id };
     const field = ["identity", "name"].includes(fieldRaw) ? "identity" : fieldFrom(COMPANY_KEYS, fieldRaw);
     if (!field) throw new ToolProblem(`On a company, field is "everything", "identity" (a locked company's name) or one of: ${Object.keys(COMPANY_KEYS).join(", ")}`);
     if (field === "identity" || (i.c.hidden && ["website", "linkedin", "about"].includes(field)))
@@ -713,8 +722,8 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
     if (all) {
       // Who held the seat and their role are one purchase: the seat holder stands for both.
       const items = lockedInEngagement(e).filter((t) => !(t.entity === "engagement" && t.field === "role" && seatBundled(e) && e.cells.operator?.s === "locked"));
-      // At a locked company, who held the seat and its people open after the company: it comes first.
-      const waits = hidden && items.some((t) => t.entity === "contact" || (t.entity === "engagement" && SEAT_PAIR.includes(t.field) && seatBundled(e)) || t.field === "operator");
+      // At a locked company everything paid on the seat opens after the company: it comes first.
+      const waits = hidden && items.length > 0;
       return waits ? { items: [company, ...items], what: "the company first, then everything locked on this seat", id: e.id } : { items, what: "everything locked on this seat", id: e.id };
     }
     // list_open_roles calls them posted_rate and posted_hours.
@@ -729,7 +738,8 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
       if (lead && hidden) throw new ToolProblem(COMPANY_FIRST);
       return { items: lead ? [{ entity: "engagement", id: e.id, field: lead }] : [], what: "who held this seat and the role they held", id: e.id };
     }
-    if (hidden && field === "operator" && e.cells.operator?.s === "locked") throw new ToolProblem(COMPANY_FIRST);
+    // Anything else paid on a seat at a locked company opens after the company too.
+    if (hidden && e.cells[field]?.s === "locked") throw new ToolProblem(COMPANY_FIRST);
     return { items: e.cells[field]?.s === "locked" ? [{ entity: "engagement", id: e.id, field }] : [], what: `the ${outKey(SEAT_KEYS, field)}`, id: e.id };
   }
   const { i, p } = personInfo(mv, id);

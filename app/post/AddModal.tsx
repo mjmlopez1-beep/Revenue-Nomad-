@@ -210,6 +210,8 @@ function NewCompany({
     const r = await ui.act({ type: "add", company: name.trim(), website: (!linkedin && website.trim()) || undefined, companyFields }, { quiet: true, silentError: true });
     setBusy(false);
     if (r.ok && r.id) return onAdded(r.id);
+    // A company on file that is still locked for the member, with nothing new sent: the server names nothing and says what opens it.
+    if (r.ok) return fail({ key: "name", text: r.message });
     if (!r.ok) {
       const e = fromServer(r.message, "company", ["website", "industry", "employees", "revenue", "linkedin"]);
       fail(

@@ -310,10 +310,22 @@ eq("the admin's About stays", st.values["c_admin.about"].value, "Admin Co is des
 check("the seed's About is not written over", !st.values["c_seeded.about"]);
 eq("last run is stored", [st.about.lastRun.total, st.about.lastRun.filled, !!st.about.lastRun.endedAt], [3, 1, true]);
 
+// Every company is locked for a member until they unlock it (2 credits): Sal unlocks the ones he reads here that are locked for him.
+let unlockedNow = 0;
+{
+  const named = (await table.buildView("tok-ada")).companies;
+  const mine = (await table.buildView("tok-sal")).companies;
+  for (const n of ["Acme Meta", "Seeded Co"]) {
+    const id = named.find((c) => c.name === n)!.id;
+    if (!mine.find((c) => c.id === id)?.hidden) continue;
+    await table.perform("tok-sal", { type: "unlock", entity: "company", id, field: "identity" });
+    unlockedNow++;
+  }
+}
 const view = await table.buildView("tok-sal");
 const co = view.companies.find((c) => c.name === "Acme Meta")!;
 eq("the view shows it as a system value from the company website", co.cells.about, { s: "value", v: metaText, ver: 0, system: true, from: "website" });
-eq("it is not the member's fact (Me.added) and costs them nothing", [view.me?.added, view.me?.credits], [0, 25]);
+eq("it is not the member's fact (Me.added) and costs nothing past the company", [view.me?.added, view.me?.credits], [0, 25 - 2 * unlockedNow]);
 const info = deriveAll(view.companies).find((i) => i.c.id === co.id)!;
 const row = { key: co.id, i: info };
 check("search finds the new text by word start", !!searchTest("warehou")?.(row) && !!searchTest("retailers")?.(row), info.aboutHay);

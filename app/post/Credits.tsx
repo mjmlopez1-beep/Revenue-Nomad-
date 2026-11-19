@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LedgerRow, View } from "@/lib/tableTypes";
-import { EARN_CAP, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, EARN_CAP, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
 import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
@@ -280,7 +280,8 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
   const rules: [string, "plus" | "minus" | "flat", string][] = [
     [String(starter), "flat", `You start with ${starter} credits.`],
     ["+1", "plus", "You add a fact that's missing. Every answer on a seat you held earns 1, and so do company facts like the HQ or size, or a hiring contact."],
-    ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on. A locked company comes with its open role for 1 credit."],
+    ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on."],
+    [`−${COMPANY_PRICE}`, "minus", "You unlock a company: its name, website and logo, with the job posting of each open role there. Who held each seat is 1 more."],
     ["+1", "plus", "Two other members confirm a fact you added."],
     [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company or a seat. They get ${REFERRAL_BONUS} too.`],
   ];

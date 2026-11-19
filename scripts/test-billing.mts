@@ -56,7 +56,8 @@ writeFileSync(
   JSON.stringify({
     ledger: [],
     values: {},
-    unlocks: {},
+    // Al unlocked Ledgerline Labs before (every company is locked for a member until they unlock it or know it; who held a seat opens after it).
+    unlocks: { "c_bill.identity": ["mem_al"] },
     seen,
     // Bo finished onboarding before billing was switched on. Al hasn't yet.
     profiles: { mem_bo: { function: "Marketing", onboarded: true }, mem_cy: { function: "Sales", onboarded: true }, mem_di: { function: "Finance", onboarded: true }, mem_ed: { function: "Operations", onboarded: true, looking: false }, mem_ad: { function: "Technology", onboarded: true } },

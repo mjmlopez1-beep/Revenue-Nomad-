@@ -43,7 +43,8 @@ writeFileSync(
   JSON.stringify({
     ledger: [],
     values: {},
-    unlocks: {},
+    // Sal unlocked Acme Robotics before (every company is locked for a member until they unlock it or know it; who held a seat opens after it).
+    unlocks: { "c_acme.identity": ["mem_sal"] },
     seen: { mem_hana: at0, mem_sal: at0, mem_mo: at0, mem_ada: at0 },
     profiles: { mem_hana: { function: "Marketing", onboarded: true }, mem_mo: { function: "Marketing", onboarded: true }, mem_sal: { function: "Sales", onboarded: true } },
   }),

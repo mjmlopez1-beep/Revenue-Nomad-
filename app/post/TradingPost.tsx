@@ -63,7 +63,7 @@ import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/l
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
-import { REFERRAL_BONUS } from "@/lib/tableFields";
+import { COMPANY_PRICE_SAY, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
 import { BillingPage, PlansHost, TrialBanner, openPlans } from "./Billing";
@@ -806,7 +806,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setEditor(null);
     setPop(null);
     if (o?.companyId && isHidden(o.companyId)) {
-      toast("This company is locked. Unlock it for 1 credit, then add what you know.");
+      toast(`This company is locked. Unlock it for ${COMPANY_PRICE_SAY}, then add what you know.`);
       return;
     }
     setAddOpts(o ?? {});
@@ -862,9 +862,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     return first;
   });
   /**
-   * "See who is hiring" (Get started step 1 for a member looking for roles): a locked company with
-   * an open role, in their function first. Its one lock opens the company, the job posting and the
-   * posted rate. Followed companies first, then the list's order, then the rest of their table.
+   * "See who is hiring" (Get started step 1 for a member looking for roles) and "Unlock a company"
+   * (step 1 with no seat holder to point at): a locked company, one with an open role in their
+   * function first. Its one lock opens the company, the job posting and the posted rate. Followed
+   * companies first, then the list's order, then the rest of their table.
    */
   const roleTarget = useStable((): StepTarget | null => {
     const fn = namedFn(me.function);
@@ -894,9 +895,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const stepOne = useStable(() => {
     setPage("table");
     setDrawer(null);
-    const hit = me.goal === "roles" ? roleTarget() : stepKind === "person" ? personTarget(sorted, infos) : holderTarget(sorted, infos, namedFn(me.function), shownSeat);
+    const hit =
+      me.goal === "roles" || stepKind === "company" ? roleTarget() : stepKind === "person" ? personTarget(sorted, infos) : holderTarget(sorted, infos, namedFn(me.function), shownSeat);
     if (!hit) {
-      toast(me.goal === "roles" ? "You can already see every company that's hiring." : "There's nothing locked for you to see right now.");
+      toast(me.goal === "roles" || stepKind === "company" ? "You can already see every company." : "There's nothing locked for you to see right now.");
       return;
     }
     pointAt("locked", hit);

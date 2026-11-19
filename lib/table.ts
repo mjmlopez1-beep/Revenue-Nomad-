@@ -19,13 +19,14 @@
  * p_{company}_{person}), so none leaves the server. The client sees pubId(id), an opaque
  * HMAC, and perform() maps it back.
  *
- * Hidden companies: a company with an open role the scan follows (or one from our records)
- * keeps its name, website, LinkedIn, logo and About behind "Unlock company" (1 credit); see
- * identityHidden() and hidesCompany(). The same credit opens the posting and the posted rate of
- * each open role there, whichever of them was asked for. An open role's title and its hours a week
- * are free (roleFree). Where the company is not hidden, the posting and the rate of an open role
- * are still one purchase (BUNDLE_FIELDS). The people and seat holders of a hidden company open
- * only after the company does.
+ Locked companies: every company keeps its name, website, LinkedIn, logo and About behind
+ * "Unlock company" (COMPANY_PRICE, 2 credits) for a member until they know it (they added to it,
+ * held a seat there, or paid for anything there); see identityHidden() and knownCompanies(). The
+ * free facts (industry, size, revenue, HQ region, which functions it hired and when, open roles'
+ * titles and hours) show on every row. The same purchase opens the posting and the posted rate of
+ * each open role there, whichever of them was asked for. Where the company is not locked, the
+ * posting and the rate of an open role are still one purchase (BUNDLE_FIELDS). The people and seat
+ * holders of a locked company open only after the company does (COMPANY_FIRST).
  *
  * Bundles and prices: a person's name and title are one purchase (holdsPersonPartner), and their
  * LinkedIn, email and phone open only after it (knowsPerson in perform). On a seat whose holder is
@@ -74,7 +75,7 @@ import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type F
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
-  SEAT_SCAN_ROLE_FREE, type Entity,
+  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -1139,7 +1140,7 @@ const claimsToday = (s: State, memberId: string, nowMs: number) =>
   (s.seatClaims ?? []).filter((c) => c.memberId === memberId && nowMs - Date.parse(c.at) < DAY).length +
   (s.names?.claims ?? []).filter((c) => c.memberId === memberId && nowMs - Date.parse(c.at) < DAY).length;
 /**
- * Give 1 credit back to every member who paid to see this fact and hasn't had it back, and forget
+ * Give what they paid back to every member who paid to see this fact and hasn't had it back, and forget
  * their unlock (the same rule as a removal on review). `why` names the refund in the credit history.
  */
 function refundPaid(s: State, k: string, now: string, why?: LedgerEntry["why"]): number {
@@ -1150,8 +1151,10 @@ function refundPaid(s: State, k: string, now: string, why?: LedgerEntry["why"]):
   }
   let n = 0;
   for (const m of new Set(s.unlocks[k] ?? [])) {
-    if ((net.get(m) ?? 0) <= 0) continue;
-    s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now, ...(why ? { why } : {}) });
+    const paid = net.get(m) ?? 0;
+    if (paid <= 0) continue;
+    // All of it: 1 credit for a fact, COMPANY_PRICE for a company.
+    s.ledger.push({ memberId: m, delta: paid, reason: "refund", ref: k, at: now, ...(why ? { why } : {}) });
     n++;
   }
   delete s.unlocks[k];
@@ -1654,7 +1657,8 @@ function pickExempt(s: State, memberId: string, seatAt: Set<string>): (companyId
  */
 function unlockRoom(s: State, memberId: string, nowMs: number): { left: number; firstDay: boolean } {
   let used = 0;
-  for (const l of s.ledger) if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY) used++;
+  // Counted in credits: a company (COMPANY_PRICE) counts as that many unlocks, so day one's limit stays the starter credits.
+  for (const l of s.ledger) if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY) used += Math.max(1, -l.delta);
   const joinedAt = s.members.find((m) => m.id === memberId)?.at;
   const firstDay = !!joinedAt && nowMs - Date.parse(joinedAt) < DAY;
   return { left: Math.max(0, (firstDay ? NEW_MEMBER_UNLOCK_MAX : UNLOCK_DAILY_MAX) - used), firstDay };
@@ -2055,9 +2059,10 @@ const keyOfCompany = (name: string) => {
 };
 
 /** For the add form: is a company with this website (or name) already on Merlin? */
-export async function existingCompany(domain: string | null, name: string | null) {
+export async function existingCompany(domain: string | null, name: string | null, token?: string | null) {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const g = viewGraph(seed, s);
+  const me = token ? memberByToken(seed, token, s) : null;
   const d = siteKey(domain);
   const key = name ? keyOfCompany(name) : "";
   const c =
@@ -2065,6 +2070,9 @@ export async function existingCompany(domain: string | null, name: string | null
     (key && [...g.companies.values()].find((c) => keyOfCompany(c.name) === key)) ||
     null;
   if (!c) return null;
+  // A company still locked for this member is not named or pointed to: pasting a web address must not look companies up.
+  // The Add form treats it as new, and the server files what they add under the company on file (perform's add).
+  if (me && identityHidden(g, s, memberIndex(seed, s), tracksOf(seed, s), me, c.id)) return null;
   return { id: pubId(c.id), name: c.name, website: live(c, s, "website"), industry: live(c, s, "industry") };
 }
 
@@ -2154,10 +2162,6 @@ function isOpenRole(e: EngNode, s: State, tracks: Tracks): boolean {
   const status = live(e, s, "status");
   return status ? status === "Open role" : e.source === "Demand scan";
 }
-/**
- * An open role that hides its company: one the scan follows, or one from our records. A member
- * who marks a seat Open role shows it as an open role, and hides nothing until a scan lists it.
- */
 /**
  * An open role the scan added that fails the seniority bar (lib/seniority.ts): outside GTM and
  * below Director. The next scan takes it off the table (lib/scan/remove.ts, the same test); until
@@ -2258,24 +2262,74 @@ const roleFree = (e: EngNode | undefined, s: State, tracks: Tracks) => !!e && is
 const postingFree = (t: RoleTrack | undefined) => !!t?.closedAt && t.closedBy !== "filled";
 
 /**
- * Whether a company's identity is hidden from this member. A company with an active open role
- * is gated: its name, website, LinkedIn, logo and About cost 1 credit ("Unlock company"),
- * because the name alone is enough to find the role. It stays visible to admins, to members
- * who unlocked it or added anything there, and to the member who held a seat there.
+ * Whether a company's identity is hidden from this member. Every company is locked for a member
+ * until they unlock it: its name, website, LinkedIn, logo and About cost COMPANY_PRICE credits
+ * ("Unlock company"), because the name alone is enough to look the rest up. Its free facts
+ * (industry, size, revenue, HQ region, which functions it hired and when, its open roles' titles)
+ * say whether it is worth it. It stays visible to admins (not while they see it as a member), and
+ * to a member who already knows it (knownCompanies).
  */
-function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me: Member | null, companyId: string, asMember = false): boolean {
+function identityHidden(g: Graph, s: State, idx: MemberIndex, _tracks: Tracks, me: Member | null, companyId: string, asMember = false): boolean {
   if (!me || (isAdmin(me) && !asMember)) return false;
+  // The committed state never changes, so its answer is kept. A draft inside mutate() changes in place: asked one company at a time.
+  if (s === stateCache) return !knownCompanies(g, s, idx, me).has(companyId);
+  return !knowsCompany(g, s, idx, me, companyId);
+}
+
+/** knownCompanies for the committed state, by member (a new state starts a new map). */
+let knownCache: { s: State; byMember: Map<string, Set<string>> } | null = null;
+/**
+ * The companies a member already knows, so their identity is never locked for them:
+ *  - one they added to Merlin, or a seat, a person or a fact they added at it;
+ *  - a seat there whose holder name is theirs, or one they claimed and an admin approved (a claim
+ *    still waiting opens nothing: anyone can ask for any seat);
+ *  - anything they paid for there: Unlock company, an open role's posting or rate, a person, who
+ *    held a seat (any purchase at a company owns it, the unlocks made under the old rules included);
+ *  - a rate they shared for the benchmarks about a seat there.
+ * Confirming or reporting a free fact does not count (either can be done on a locked company's free
+ * facts, so it would open the company for nothing), and nor does following: neither was a purchase. Onboarding's typed clients are not either:
+ * they are the page's word, so a company there is known once the member adds their seat at it.
+ */
+function knownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<string> {
+  if (s === stateCache && knownCache?.s === s) {
+    const hit = knownCache.byMember.get(me.id);
+    if (hit) return hit;
+  }
+  const out = new Set<string>();
+  const coOf = (nodeId: string) => (g.companies.has(nodeId) ? nodeId : (g.engagements.get(nodeId)?.companyId ?? g.contacts.get(nodeId)?.companyId));
+  const add = (nodeId: string | null | undefined) => {
+    const c = nodeId ? coOf(nodeId) : undefined;
+    if (c) out.add(c);
+  };
+  const nodeOfKey = (k: string) => k.slice(0, k.lastIndexOf("."));
+  for (const c of s.companies) if (c.by === me.id) out.add(c.id);
+  for (const e of s.engagements) if (e.by === me.id) out.add(e.companyId);
+  for (const k in s.values) if (s.values[k].by === me.id) add(nodeOfKey(k));
+  for (const k in s.unlocks) if (s.unlocks[k].includes(me.id)) add(nodeOfKey(k));
+  for (const b of s.benchRates) if (b.by === me.id) add(b.engagementId);
+  for (const c of s.names?.claims ?? []) if (c.memberId === me.id && c.status === "approved") add(c.engagementId);
+  for (const e of g.engagements.values()) if (!out.has(e.companyId) && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id) out.add(e.companyId);
+  if (s === stateCache) {
+    if (knownCache?.s !== s) knownCache = { s, byMember: new Map() };
+    if (knownCache.byMember.size > 5000) knownCache.byMember.clear();
+    knownCache.byMember.set(me.id, out);
+  }
+  return out;
+}
+
+/** knownCompanies for one company, read from the state as it is now (a draft inside mutate()). */
+function knowsCompany(g: Graph, s: State, idx: MemberIndex, me: Member, companyId: string): boolean {
+  if (s.companies.some((c) => c.id === companyId && c.by === me.id)) return true;
+  if (s.engagements.some((e) => e.companyId === companyId && e.by === me.id)) return true;
   const engs = [...g.engagements.values()].filter((e) => e.companyId === companyId);
-  if (!engs.some((e) => hidesCompany(e, s, tracks))) return false;
-  // Paid for an open role's title, posting or rate there already (say while the role was closed): the company came with it.
-  if (engs.some((e) => isOpenRole(e, s, tracks) && holdsOpenRole(s, me, e))) return false;
-  if ((s.unlocks[fkey(companyId, "identity")] ?? []).includes(me.id)) return false;
-  if (s.companies.some((c) => c.id === companyId && c.by === me.id)) return false;
   const ids = new Set<string>([companyId, ...engs.map((e) => e.id)]);
   for (const p of g.contacts.values()) if (p.companyId === companyId) ids.add(p.id);
-  for (const [k, v] of Object.entries(s.values)) if (v.by === me.id && ids.has(k.slice(0, k.lastIndexOf(".")))) return false;
-  for (const e of engs) if (seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id) return false;
-  return true;
+  const at = (k: string) => ids.has(k.slice(0, k.lastIndexOf(".")));
+  for (const k in s.values) if (at(k) && s.values[k].by === me.id) return true;
+  for (const k in s.unlocks) if (at(k) && s.unlocks[k].includes(me.id)) return true;
+  if (s.benchRates.some((b) => b.by === me.id && !!b.engagementId && ids.has(b.engagementId))) return true;
+  if ((s.names?.claims ?? []).some((c) => c.memberId === me.id && c.status === "approved" && ids.has(c.engagementId))) return true;
+  return engs.some((e) => seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id);
 }
 
 /**
@@ -2521,16 +2575,21 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   const companies: CompanyRec[] = [];
   const reviewFirms = firmsInReview(seed, s);
   const hiddenIds = new Set<string>();
+  /** Companies this build made a record for. */
+  const builtIds = new Set<string>();
   /** Invite to connect: the seats the viewer invited (when), and their invite code for the claim links. */
   const myInvites = new Map(me ? (s.seatInvites ?? []).filter((x) => x.by === me.id).map((x) => [x.engagementId, x.at] as const) : []);
   const myCode = me ? inviteCode(me.id) : "";
   /** Companies the viewer created (the same test as exemptPick in perform). */
   const addedByMe = new Set(me ? s.companies.filter((x) => x.by === me.id).map((x) => x.id) : []);
+  /** Companies whose identity the viewer sees (identityHidden). Null for admins and signed out: nothing is locked. */
+  const known = me && !admin ? knownCompanies(g, s, idx, me) : null;
   let peopleCount = 0;
   /** Signed out: every company with its name and site, for the landing preview (never sent). */
   const forPreview: PreviewCompany[] | null = me ? null : [];
   for (const c of g.companies.values()) {
     if (only && !only.has(c.id)) continue;
+    builtIds.add(c.id);
     const facts = { known: 0, locked: 0, missing: 0 };
     /** `addable`: an empty fact here is one the viewer can add (a seat's facts are its holder's alone). */
     const count = (cells: Record<string, Cell>, defs: typeof COMPANY_F, addable = true) => {
@@ -2607,16 +2666,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     count(cells, COMPANY_F);
     // The place the viewer can see: none while the viewer's own report hides the HQ from them.
     const geo = cells.hq?.s === "value" ? geoOf(c, s) : NOWHERE;
-    // Same rule as identityHidden(), from what this loop already knows (that one scans every value).
-    const hidden =
-      !!me &&
-      !admin &&
-      engs.some((e) => hidesCompany(e, s, tracks)) &&
-      !engs.some((e) => isOpenRole(e, s, tracks) && holdsOpenRole(s, me, e)) &&
-      !mine &&
-      !(s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) &&
-      !addedByMe.has(c.id) &&
-      !holdsSeat;
+    // The rule of identityHidden(): every company is locked for a member until they know it (knownCompanies).
+    const hidden = !!me && !admin && !known!.has(c.id) && !mine && !addedByMe.has(c.id) && !holdsSeat;
     // An open role's posted hours are part of what its posting says: they show with the posting and
     // the posted rate (one purchase, or Unlock company at a hidden company), never before.
     engs.forEach((e, n) => {
@@ -2684,7 +2735,11 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         rnHolders: new Set(engs.filter((e) => seatHolder(s, idx, e.id, valueOf(e, s, "operator"))).map((e) => pubId(e.id))),
       });
   }
-  companies.sort((a, b) => b.friendly.score - a.friendly.score || a.name.localeCompare(b.name));
+  // Locked companies after the named ones of the same score, in the order of their public ids: an
+  // order by the real name (or the seed's, which is close to it) would say where each name falls.
+  companies.sort(
+    (a, b) => b.friendly.score - a.friendly.score || Number(!!a.hidden) - Number(!!b.hidden) || (a.hidden && b.hidden ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.name.localeCompare(b.name)),
+  );
 
   const nameOf = new Map<string, string>();
   for (const m of seed.members) nameOf.set(m.id, m.name);
@@ -2697,7 +2752,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
   const companyIdOf = (id: string) => (g.companies.has(id) ? id : g.engagements.get(id)?.companyId ?? g.contacts.get(id)?.companyId ?? "");
   const companyNameOf = (id: string) => {
     const cid = companyIdOf(id);
-    return hiddenIds.has(cid) ? HIDDEN_COMPANY : g.companies.get(cid)?.name ?? "";
+    // A company this build left out (an action's answer builds only what it touched) follows the same rule.
+    const locked = hiddenIds.has(cid) || (!!known && !builtIds.has(cid) && !known.has(cid));
+    return locked ? HIDDEN_COMPANY : g.companies.get(cid)?.name ?? "";
   };
   /** What an unlock (or its refund) bought, for the credit history: one half of a pair names the pair ("Person name and title"). */
   const boughtLabel = (entity: Entity, id: string, field: string) => {
@@ -3487,6 +3544,8 @@ export const NAME_FIRST = "Unlock their name and title first.";
 export const NAME_FIRST_ADD = "Unlock their name and title first. Then you can add what you know about them.";
 /** Unlocking a person or a seat holder at a company that is still locked to the member. */
 export const COMPANY_FIRST = "Unlock the company first.";
+/** Adding a fact by clicking into a locked company would open it for nothing (typing its name in Add still works). */
+export const COMPANY_LOCKED_ADD = `This company is locked. Unlock it for ${COMPANY_PRICE} credits, then add what you know.`;
 /** Add with a name people try a form with, or copy from an example ("Acme", "Test", "Your client"): see isPlaceholderCompany. */
 export const PLACEHOLDER_REFUSED = "That reads like an example name, not a real company. Type the name the company goes by.";
 /** A person's title, email, phone or LinkedIn from a member who can't see who the person is (the same words as NAME_FIRST_ADD). */
@@ -3627,7 +3686,7 @@ export async function perform(
       });
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
     const mustSee = (companyId: string) => {
-      if (hiddenFor(companyId)) throw new ActionError("This company is locked. Unlock it for 1 credit, then add what you know.");
+      if (hiddenFor(companyId)) throw new ActionError(COMPANY_LOCKED_ADD);
     };
     const nodeOf = (entity: Entity, raw: unknown): Node => {
       const id = inId(entity, raw);
@@ -3667,9 +3726,11 @@ export async function perform(
       }
       for (const m of s.unlocks[k] ?? []) {
         const pk = `${m} ${k}`;
-        if ((paidUnlocks.get(pk) ?? 0) <= 0) continue;
-        s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
-        paidUnlocks.set(pk, paidUnlocks.get(pk)! - 1);
+        // What they paid for it, all of it: 1 credit for a fact, COMPANY_PRICE for a company.
+        const paid = paidUnlocks.get(pk) ?? 0;
+        if (paid <= 0) continue;
+        s.ledger.push({ memberId: m, delta: paid, reason: "refund", ref: k, at: now });
+        paidUnlocks.set(pk, 0);
       }
       delete s.unlocks[k];
     };
@@ -4042,14 +4103,17 @@ export async function perform(
           const free: { node: Node; field: string }[] = [];
           /**
            * What opens a fact comes first: a person's name and title before their LinkedIn, email and
-           * phone, and a locked company before its people and seat holders. The same request may buy
-           * that first (Unlock all does), so such a fact waits for the rest of the request. Asked
-           * again at the end, it is refused, and nothing is spent.
+           * phone, and a locked company before anything paid there (its people, who held its seats, a
+           * past seat's rate or end): any purchase at a company owns it (knownCompanies), so none can
+           * come before Unlock company. An open role's posting and rate buy the company itself. The
+           * same request may buy that first (Unlock all does), so such a fact waits for the rest of
+           * the request. Asked again at the end, it is refused, and nothing is spent.
            */
           const waitsFor = (entity: Entity, node: Node, field: string): string | null => {
             const companyId = companyOf(entity, node.id);
-            const peopleSide = entity === "contact" || (entity === "engagement" && (field === "operator" || (field === "role" && seatBundled(node, s))));
-            if (peopleSide && hiddenNow(companyId) && !todo.some((t) => t.k === fkey(companyId, "identity"))) return COMPANY_FIRST;
+            const eng = entity === "engagement" ? g.engagements.get(node.id) : undefined;
+            const buysCompany = !!eng && BUNDLE_FIELDS.includes(field) && isOpenRole(eng, s, tracks());
+            if (!buysCompany && hiddenNow(companyId) && !todo.some((t) => t.k === fkey(companyId, "identity"))) return COMPANY_FIRST;
             if (entity === "contact" && PERSON_DETAILS.includes(field) && !persons.has(node.id) && !knowsPerson(node)) return NAME_FIRST;
             return null;
           };
@@ -4125,8 +4189,9 @@ export async function perform(
             if (a.type === "unlock") throw new ActionError("Nothing here is locked, so no credit was spent.");
             return { message: "You can already see all of these, so no credits were spent." };
           }
-          // What this unlock costs: 1 credit per fact, with each company and each open role one purchase.
-          const need = todo.length;
+          // What this unlock costs: 1 credit per fact, with each open role one purchase, and COMPANY_PRICE for each company.
+          const cost = (t: { field: string }) => (t.field === "identity" ? COMPANY_PRICE : 1);
+          const need = todo.reduce((n, t) => n + cost(t), 0);
           if (need) {
             // Accounts in their first 24 hours get a lower daily limit (unlockRoom).
             const { left, firstDay } = unlockRoom(s, me.id, nowMs);
@@ -4154,7 +4219,7 @@ export async function perform(
             }
           }
           for (const t of todo) {
-            s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: t.k, at: now });
+            s.ledger.push({ memberId: me.id, delta: -cost(t), reason: "unlock", ref: t.k, at: now });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
           /** Open a fact at no further charge. False when there is nothing there. */
@@ -4200,7 +4265,7 @@ export async function perform(
                 ? `Unlocked the seat holder and their role${price}.`
                 : todo.length === 1
                   ? `Unlocked ${say(todo[0].entity, todo[0].field)}${price}.`
-                  : `Unlocked ${need} facts${price}.`;
+                  : `Unlocked ${todo.length} facts${price}.`;
           if (paired.length || free.length || (companies.length && came.length)) {
             // Name what the credit bought: "Acme, the role, the posting and the posted rate".
             const opened = new Set([...paired, ...came].filter((x) => BUNDLE_FIELDS.includes(x.field)).map((x) => `${x.node.id}.${x.field}`));
@@ -4209,7 +4274,7 @@ export async function perform(
               return c === 1 ? [`the ${one}`] : c ? [`${c} ${many}`] : [];
             };
             const parts = [...(companies.length ? [companies.length === 1 ? companyName(companies[0]) : `${companies.length} companies`] : []), ...n("role", "role", "roles"), ...n("posting", "posting", "postings"), ...n("rate", "posted rate", "posted rates")];
-            const bought = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? `${need} facts`;
+            const bought = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? `${todo.length} facts`;
             message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""},` : ""}${price}.${noCharge}`;
           } else if (todo.length === 1 && companies.length) message = `Unlocked ${companyName(todo[0])}${price}.`;
           return {
@@ -4399,6 +4464,19 @@ export async function perform(
           const savedSome = !!(earned || capped || movedRate || people.length);
           // Nothing new went in: say so plainly (the old wording said a seat was added).
           const nothing = !isNew && !engNew && !savedSome && !claimedScan;
+          // A locked company stays locked for a member who added nothing to it: the answer never
+          // names it (the name on file may not be the one they typed) or hands over its id, so Add
+          // can't be used to look companies up. Adding a fact or a seat there opens it (knownCompanies),
+          // and that counts toward the day's limits like any other fact.
+          if (!isNew && hiddenFor(company.id))
+            return {
+              message: nothing
+                ? seatOnFile
+                  ? `That seat is already on file. ${NOTHING_NEW}`
+                  : `${NOTHING_NEW} Add a seat you held there and the company opens for you.`
+                : `Saved.${credits(earned)}${bonusNote(bonus)}${capNote(earned > 0)}`,
+              capped,
+            };
           const where = isNew
             ? `Added ${companyName}`
             : engNew
@@ -5337,8 +5415,9 @@ export async function claimPage(token: unknown, memberToken: string | null, ref?
           : !me && holder && !signedIn(s, idx, holder.id)
             ? "signin"
             : "held";
-  // A company with an open role is locked (for a visitor too), unless this member can see it.
-  const locked = [...g.engagements.values()].some((x) => x.companyId === e.companyId && hidesCompany(x, s, tracks)) && (!me || identityHidden(g, s, idx, tracks, me, e.companyId));
+  // A signed-in member sees the company only when it isn't locked for them (identityHidden: every company is, until they know it).
+  // A visitor with the link (the seat's holder, in the main) sees it unless it has an open role.
+  const locked = me ? identityHidden(g, s, idx, tracks, me, e.companyId) : [...g.engagements.values()].some((x) => x.companyId === e.companyId && hidesCompany(x, s, tracks));
   const mine = status !== "held";
   return {
     ...base,
@@ -6301,20 +6380,18 @@ function keepLinks(urls: (string | null | undefined)[]): string[] {
 
 /**
  * Pay back unlocks on roles that just closed: an unlock of a role's title, posting or rate made
- * after its posting was last seen paid for a role that was already gone, and so did one of its
- * company when no open role is left there (`companyStillOpen`). Each once. Returns how many.
+ * after its posting was last seen paid for a role that was already gone. Each once. Returns how
+ * many. An Unlock company is not paid back: it bought the company itself, which every company is
+ * locked behind whether or not it is hiring (`_companyStillOpen` is kept for the callers).
  */
-function refundClosed(s: State, closedNow: RoleTrack[], companyStillOpen: (companyId: string) => boolean, now: string): number {
+function refundClosed(s: State, closedNow: RoleTrack[], _companyStillOpen: (companyId: string) => boolean, now: string): number {
   if (!closedNow.length) return 0;
   const since = new Map<string, string>(); // ledger ref -> unlocks later than this are paid back
   for (const r of closedNow) {
     since.set(fkey(r.engagementId, "role"), r.lastSeen);
     since.set(fkey(r.engagementId, "posting"), r.lastSeen);
     since.set(fkey(r.engagementId, "rate"), r.lastSeen);
-    // The company too, when this left it with no open role. It was last known to be hiring when any of its roles was last seen.
-    if (companyStillOpen(r.companyId)) continue;
-    const last = Object.values(s.scan.roles).filter((x) => x.companyId === r.companyId).map((x) => x.lastSeen).sort().pop();
-    since.set(fkey(r.companyId, "identity"), last ?? r.lastSeen);
+    // Not the company: Unlock company buys its name, website and logo, which a role closing doesn't take away.
   }
   // A member who had bought both listings of one role was paid one back when they merged (mergeDuplicateRoles): that purchase is settled.
   const settled = new Map<string, number>();

@@ -315,13 +315,15 @@ async function madeUpSeat(token, fn, revenue, extra = {}, top = {}) {
   for (let i = 0; i < 2; i++) await share(await fresh(), FN, REV, "$150k/mo");
   const padded = await stat(newbie, FN, REV, "monthly");
   check("more new accounts change nothing", padded.n === 4 && !shown(padded), padded);
-  // Two seed members confirm a fact the 8 day old account added: now it counts.
-  const host = (await view(EIGHT_DAYS)).companies.find((c) => c.name === "Our Records Test Co");
-  const fact = await act(EIGHT_DAYS, { type: "fill", entity: "company", id: host?.id, field: "hq", value: "Austin, TX" });
-  const c1 = await act(S(51), { type: "verify", entity: "company", id: host?.id, field: "hq" });
+  // Two seed members confirm a fact the 8 day old account added: now it counts. (On a client it adds:
+  // every company on file is locked for it. Its industry, which the others can confirm while it stays locked for them.)
+  const made = await act(EIGHT_DAYS, { type: "add", company: "Eightday Client Co" });
+  const host = { id: made.ok ? made.id : undefined };
+  const fact = await act(EIGHT_DAYS, { type: "fill", entity: "company", id: host?.id, field: "industry", value: "SaaS" });
+  const c1 = await act(S(51), { type: "verify", entity: "company", id: host?.id, field: "industry" });
   const half = await stat(newbie, FN, REV, "monthly");
   check("one confirmation is not enough", fact.ok && c1.ok && half.n === 4 && !shown(half), { fact: fact.error, c1: c1.error, half });
-  const c2 = await act(S(52), { type: "verify", entity: "company", id: host?.id, field: "hq" });
+  const c2 = await act(S(52), { type: "verify", entity: "company", id: host?.id, field: "industry" });
   const vouched = await stat(newbie, FN, REV, "monthly");
   check("an account with a fact two members confirmed counts toward the floor", c2.ok && vouched.n === 5 && vouched.median === 7000 && !("p25" in vouched), { c2: c2.error, vouched });
 }
@@ -426,6 +428,8 @@ async function madeUpSeat(token, fn, revenue, extra = {}, top = {}) {
   check("they take the seat's function and the company's revenue band, as one contributor", placed.n === 1 && !shown(placed), placed);
   // Hours turn an hourly rate into a monthly point too. Only the seat holder adds hours to a seat,
   // and for a private rate only the member's own hours count.
+  // (They unlock the company first: it is locked for them, and a fill there would be refused for that.)
+  await act(S(42), { type: "unlock", entity: "company", id: v0.companies.find((c) => c.engagements.some((e) => e.id === own[0].id))?.id, field: "identity" });
   const theirs = await act(S(42), { type: "fill", entity: "engagement", id: own[0].id, field: "hours", value: "10" });
   const moved = await stat(ONLOOKER, "AI GTM", "Under $1M", "monthly");
   check("another member can't put hours on the seat, so no monthly point comes from a private hourly rate", !theirs.ok && theirs.error === "Only the person who held this seat can add this." && moved.n === 0, { theirs: theirs.error, moved });

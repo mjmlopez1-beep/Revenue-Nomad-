@@ -197,9 +197,58 @@ function pickLocked(view, n) {
   if (out.length < n) throw new Error(`only ${out.length} locked facts`);
   return out;
 }
-/** Companies with no open role, for adding seats (the same list for every new member). */
-const hostsOf = (view) => view.companies.filter((c) => !c.hidden && c.friendly.open === 0);
+/**
+ * Companies with no open role, for adding seats, as the admin sees them (named): every company is
+ * locked for a member until they unlock it or know it, and a member adds their seat by the name.
+ */
+const hostsOf = async () => (await (await admin()).view()).companies.filter((c) => c.friendly.open === 0 && !/^Qa /.test(c.name));
 let hostN = 60;
+/** What Unlock company costs (COMPANY_PRICE in lib/tableFields.ts). */
+const PRICE = 2;
+let ownN = 0;
+/** A company the member adds (theirs, so open to them), with `fields` as its first facts. Its pick lists earn without the 5 a day. */
+async function ownCompany(m, fields = {}) {
+  const r = await m.act({ type: "add", company: `Qa Own ${RUN} ${m.name.split(" ")[0]} Co ${++ownN}`, ...(Object.keys(fields).length ? { companyFields: fields } : {}) });
+  if (r.status !== 200 || !r.json?.id) throw new Error(`own company: ${r.json?.error}`);
+  return r;
+}
+const openedIds = new Set();
+/** Unlock up to n companies for this member (PRICE credits each) that pass `want`, none with an open role. Returns how many. */
+async function openWhere(m, want, n) {
+  const v = await m.view();
+  const pick = v.companies.filter((c) => c.hidden && c.friendly.open === 0 && !openedIds.has(c.id) && want(c)).slice(0, n);
+  for (const c of pick) {
+    openedIds.add(c.id);
+    await m.act({ type: "unlock", entity: "company", id: c.id, field: "identity" });
+  }
+  return pick.length;
+}
+/** Locked facts at a company as pickLocked counts them once it is unlocked (about). */
+const lockedAt = (c) =>
+  [...c.engagements.flatMap((e) => [...Object.values(e.cells), ...e.people.flatMap((p) => Object.values(p.cells))]), ...c.people.flatMap((p) => Object.values(p.cells))].filter((x) => x.s === "locked").length;
+/** Unlock the companies with the most locked facts until pickLocked finds `need(opened)` facts at them. Returns how many. */
+async function openForLocked(m, need, max = 8) {
+  let opened = 0;
+  for (;;) {
+    let have = 0;
+    try {
+      have = pickLocked(await m.view(), 400).length;
+    } catch (e) {
+      have = Number(String(e.message).match(/only (\d+)/)?.[1] ?? 0);
+    }
+    if (have >= need(opened) || opened >= max) return opened;
+    const v = await m.view();
+    const c = v.companies.filter((x) => x.hidden && x.friendly.open === 0 && !openedIds.has(x.id)).sort((a, b) => lockedAt(b) - lockedAt(a))[0];
+    if (!c) return opened;
+    openedIds.add(c.id);
+    await m.act({ type: "unlock", entity: "company", id: c.id, field: "identity" });
+    opened++;
+  }
+}
+/** Unlock these companies for this member (the ones another member opened, so they share the same locked facts). */
+async function openSame(m, ids) {
+  for (const id of ids) await m.act({ type: "unlock", entity: "company", id, field: "identity" });
+}
 
 /* ---------- sections ---------- */
 
@@ -273,29 +322,32 @@ section("admin", async () => {
 section("sell", async () => {
   // ECON-5, LOGIC-5: one-click pick lists that are easy to guess earn 5 a day and save 20 a day.
   const F = await member("Fen Filler");
+  check("Me.sellEarnLeft starts at 5", (await F.view()).me.sellEarnLeft === 5, (await F.view()).me.sellEarnLeft);
+  // Companies from our records to answer for (unlocked first: every company is locked for a new member, and its own are exempt).
+  await openWhere(F, (c) => Object.keys(SELL).every((k) => c.cells[k]?.s === "empty") && c.cells.hq?.s === "empty", 7);
   const v = await F.view();
-  check("Me.sellEarnLeft starts at 5", v.me.sellEarnLeft === 5, v.me.sellEarnLeft);
+  const base = v.me.credits;
   const sells = pickEmpty(v, 22, SELL);
   let r;
   for (let i = 0; i < 5; i++) {
     r = await F.act(fillAct(sells[i]));
     if (r.status !== 200 || !/You earned 1 credit\./.test(r.json?.message ?? "")) return fail(`sell: answer ${i + 1} should earn`, r.json);
   }
-  check("the first 5 answers under How they sell earn a credit each", r.json?.me?.credits === STARTER + 5 && r.json?.me?.sellEarnLeft === 0, r.json?.me);
+  check("the first 5 answers under How they sell earn a credit each", r.json?.me?.credits === base + 5 && r.json?.me?.sellEarnLeft === 0, r.json?.me);
   const sixth = await F.act(fillAct(sells[5]));
-  check("the 6th saves and earns nothing", sixth.status === 200 && sixth.json?.cells?.[0]?.cell?.s === "value" && sixth.json?.me?.credits === STARTER + 5 && sixth.json?.capped === true, sixth.json);
+  check("the 6th saves and earns nothing", sixth.status === 200 && sixth.json?.cells?.[0]?.cell?.s === "value" && sixth.json?.me?.credits === base + 5 && sixth.json?.capped === true, sixth.json);
   check(
     "its message says why, and what still earns",
     /^Added [^.]+\. Only 5 answers for a company's industry, size, revenue or how they sell earn a credit each day, so this one didn't earn\. An HQ, a website, a person or a fact on your own seat still earns\.$/.test(sixth.json?.message ?? "") && !/hit today's max/.test(sixth.json?.message ?? ""),
     sixth.json?.message,
   );
   const other = await F.act(fillAct(pickEmpty(v, 1, TYPED)[0]));
-  check("another kind of fact still earns after that", other.status === 200 && /You earned 1 credit\.$/.test(other.json?.message ?? "") && other.json?.me?.credits === STARTER + 6, other.json);
+  check("another kind of fact still earns after that", other.status === 200 && /You earned 1 credit\.$/.test(other.json?.message ?? "") && other.json?.me?.credits === base + 6, other.json);
   for (let i = 6; i < 20; i++) {
     r = await F.act(fillAct(sells[i]));
     if (r.status !== 200) return fail(`sell: answer ${i + 1} should save`, r.json);
   }
-  check("answers 7 to 20 save for no credit", r.json?.me?.credits === STARTER + 6 && r.json?.me?.earned24h === 6, r.json?.me);
+  check("answers 7 to 20 save for no credit", r.json?.me?.credits === base + 6 && r.json?.me?.earned24h === 6, r.json?.me);
   const over = await F.act(fillAct(sells[20]));
   check(
     "the 21st in a day is refused until tomorrow",
@@ -306,7 +358,7 @@ section("sell", async () => {
   const c21 = v2.companies.find((c) => c.id === sells[20].id);
   check("a refused answer is not saved", c21?.cells[sells[20].field]?.s === "empty" && v2.me.added === 21, { cell: c21?.cells[sells[20].field]?.s, added: v2.me.added });
   const still = await F.act(fillAct(pickEmpty(v, 1, TYPED)[0]));
-  check("other facts still go in past it", still.status === 200 && still.json?.me?.credits === STARTER + 7, still.json);
+  check("other facts still go in past it", still.status === 200 && still.json?.me?.credits === base + 7, still.json);
   // Repair round (N6): an Add that carries one more answer saves the rest of the form, and says what it left out.
   const viaAdd = await F.act({
     type: "add", company: sells[21].company.name, companyFields: { [sells[21].field]: sells[21].value }, newEngagement: true, operatorMemberId: "me",
@@ -315,7 +367,7 @@ section("sell", async () => {
   const c22 = (await F.view()).companies.find((c) => c.id === sells[21].id);
   check(
     "an Add with one answer past the limit saves the role, the rate and the seat holder, and leaves that answer out (N6)",
-    viaAdd.status === 200 && /so one of those wasn't saved\. Add it tomorrow\./.test(viaAdd.json?.message ?? "") && viaAdd.json?.me?.credits === STARTER + 11 && c22?.cells[sells[21].field]?.s === "empty",
+    viaAdd.status === 200 && /so one of those wasn't saved\. Add it tomorrow\./.test(viaAdd.json?.message ?? "") && viaAdd.json?.me?.credits === base + 11 && c22?.cells[sells[21].field]?.s === "empty",
     viaAdd.json?.error ?? [viaAdd.json?.message, viaAdd.json?.me?.credits, c22?.cells[sells[21].field]?.s],
   );
 });
@@ -323,32 +375,37 @@ section("sell", async () => {
 section("picks", async () => {
   // ECON-5 (repair round): industry, employees and revenue share the 5 a day with How they sell, except on a company the member added.
   const H = await member("Hal Picker");
+  // Companies from our records to answer for (unlocked first: every company is locked for a new member, and its own are exempt).
+  await openWhere(H, (c) => Object.keys(PICKS).filter((k) => c.cells[k]?.s === "empty").length >= 2 && Object.keys(SELL).some((k) => c.cells[k]?.s === "empty") && c.cells.hq?.s === "empty", 4);
   const v = await H.view();
+  const base = v.me.credits;
   const picks = pickEmpty(v, 6, PICKS);
   let r;
   for (let i = 0; i < 5; i++) r = await H.act(fillAct(picks[i]));
-  check("5 answers for industry, employees or revenue earn a credit each", r.json?.me?.credits === STARTER + 5 && r.json?.me?.sellEarnLeft === 0, r.json?.me);
+  check("5 answers for industry, employees or revenue earn a credit each", r.json?.me?.credits === base + 5 && r.json?.me?.sellEarnLeft === 0, r.json?.me);
   const sixth = await H.act(fillAct(picks[5]));
   check(
     "the 6th saves for no credit, on the same daily count as How they sell (ECON-5)",
-    sixth.status === 200 && sixth.json?.me?.credits === STARTER + 5 && /^Added [^.]+\. Only 5 answers for a company's industry, size, revenue or how they sell earn a credit each day/.test(sixth.json?.message ?? ""),
+    sixth.status === 200 && sixth.json?.me?.credits === base + 5 && /^Added [^.]+\. Only 5 answers for a company's industry, size, revenue or how they sell earn a credit each day/.test(sixth.json?.message ?? ""),
     sixth.json,
   );
   const sell = await H.act(fillAct(pickEmpty(v, 1, SELL)[0]));
-  check("a How they sell answer after them earns nothing either", sell.status === 200 && sell.json?.me?.credits === STARTER + 5, sell.json?.me);
+  check("a How they sell answer after them earns nothing either", sell.status === 200 && sell.json?.me?.credits === base + 5, sell.json?.me);
   const own = await H.act({ type: "add", company: `Qa Own Picks Co ${RUN}`, companyFields: { ...PICKS, businessModel: "B2B" } });
-  check("on a company the member adds, those answers still earn", own.status === 200 && own.json?.me?.credits === STARTER + 9 && !/didn't earn/.test(own.json?.message ?? ""), own.json);
+  check("on a company the member adds, those answers still earn", own.status === 200 && own.json?.me?.credits === base + 9 && !/didn't earn/.test(own.json?.message ?? ""), own.json);
   const typed = await H.act(fillAct(pickEmpty(v, 1, TYPED)[0]));
-  check("a typed fact still earns", typed.status === 200 && typed.json?.me?.credits === STARTER + 10, typed.json?.me);
+  check("a typed fact still earns", typed.status === 200 && typed.json?.me?.credits === base + 10, typed.json?.me);
 });
 
 section("flood", async () => {
   // ECON-5: a hard stop on facts per day, so the table can't be flooded past the earn cap.
   const G = await member("Gil Flood");
-  const v = await G.view();
   // A seat G holds, added first: facts on it don't count toward the 150.
-  const seat = await G.act({ type: "add", company: hostsOf(v)[hostN++].name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Sales", type: "Fractional", operator: "typed over" } });
+  const seat = await G.act({ type: "add", company: (await hostsOf())[hostN++].name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Sales", type: "Fractional", operator: "typed over" } });
   if (seat.status !== 200) return fail("flood: add own seat", seat.json);
+  // Companies of his own to fill in (every company on file is locked for him): their facts count toward the 150 like any.
+  for (let i = 0; i < 76; i++) await ownCompany(G);
+  const v = await G.view();
   // Typed facts, so the pick-list limits stay out of the way of this one.
   const fills = pickEmpty(v, 151, TYPED);
   let r;
@@ -375,8 +432,10 @@ section("adds", async () => {
   const adm = await admin();
   if (!adm) return skip("recent adds", "no admin account (set ADMIN_TOKEN)");
   const P = await member("Pia Private");
+  // A company of her own to add to (every company on file is locked for her). Its industry and size: facts others can report while it is locked for them.
+  await ownCompany(P);
   const pv = await P.view();
-  const [fact, fact2] = pickEmpty(pv, 2);
+  const [fact, fact2] = pickEmpty(pv, 2, PICKS);
   await P.act(fillAct(fact));
   await P.act(fillAct(fact2));
   await P.act({ type: "benchRate", pricing: "Hourly", rate: "$140/hr", function: "Sales" });
@@ -396,9 +455,10 @@ section("adds", async () => {
   // A removed fact drops out of the count.
   const R1 = await member("Rex Reporter");
   const R2 = await member("Rya Reporter");
-  const rv = await R1.view();
-  await R1.act(fillAct(pickEmpty(rv, 1)[0]));
-  await R2.act(fillAct(pickEmpty(rv, 1)[0]));
+  for (const who of [R1, R2]) {
+    await ownCompany(who);
+    await who.act(fillAct(pickEmpty(await who.view(), 1)[0]));
+  }
   const target = { entity: "company", id: fact.id, field: fact.field };
   const rep1 = await R1.act({ type: "report", ...target });
   const rep2 = await R2.act({ type: "report", ...target });
@@ -413,12 +473,13 @@ section("invites", async () => {
   const INV = await member("Ina Inviter");
   const iv = await INV.view();
   const code = iv.me.inviteCode;
-  const facts = pickEmpty(iv, 20);
+  // Each invitee's first fact: a client of theirs they add (every company on file is locked for a new member).
+  const firstFact = (who) => ownCompany(who, { hq: "Austin, TX" });
   let last;
   const paidAfter = [];
   for (let i = 1; i <= 6; i++) {
     const u = await member(`Guest Invitee${"abcdef"[i - 1]}`, { ref: code });
-    last = await u.act(fillAct(facts.pop()));
+    last = await firstFact(u);
     paidAfter.push((await INV.view()).me.invitesPaid);
   }
   const me6 = (await INV.view()).me;
@@ -429,11 +490,11 @@ section("invites", async () => {
 
   // The inviter's own bonus for having been invited is not one of their 5.
   const J = await member("Jo Joined", { ref: code });
-  await J.act(fillAct(facts.pop()));
+  await firstFact(J);
   const jcode = (await J.view()).me.inviteCode;
   for (let i = 1; i <= 5; i++) {
     const u = await member(`Visitor Invitee${"abcde"[i - 1]}`, { ref: jcode });
-    await u.act(fillAct(facts.pop()));
+    await firstFact(u);
   }
   const jme = (await J.view()).me;
   check("an inviter who was invited themselves still gets 5", jme.invitesPaid === 5 && jme.credits + jme.held === STARTER + 1 + 10 + 50, { paid: jme.invitesPaid, credits: jme.credits, held: jme.held });
@@ -445,7 +506,7 @@ section("invites", async () => {
   const bench = await N.act({ type: "benchRate", pricing: "Hourly", rate: "$160/hr", function: "Sales" });
   const nv = await N.view();
   check("a private rate as a first fact pays no invite bonus yet", bench.status === 200 && !/invite bonus/i.test(bench.json?.message ?? "") && bench.json?.me?.credits === STARTER + 1 && nv.me.invitePending === true && (await K.view()).me.invitesPaid === 0, bench.json);
-  const real = await N.act(fillAct(facts.pop()));
+  const real = await firstFact(N);
   const kme = (await K.view()).me;
   check("the first fact on a record pays it to both", /Your invite bonus added 10 more\./.test(real.json?.message ?? "") && real.json?.me?.credits === STARTER + 12 && kme.invitesPaid === 1 && kme.credits === STARTER + 10, { msg: real.json?.message, inviter: kme.credits });
   check("the toast names the inviter who got the bonus too", /Your invite bonus added 10 more\. Kit got 10 too\./.test(real.json?.message ?? ""), real.json?.message);
@@ -460,7 +521,7 @@ section("invites", async () => {
   const s2 = (await S2.view()).me;
   check("an invitee on a network the inviter visited from gets no invite", s1.invitePending === false, s1.invitePending);
   check("an invitee on the network the inviter joined from gets none either", s2.invitePending === false, s2.invitePending);
-  const s1f = await S1.act(fillAct(facts.pop()));
+  const s1f = await firstFact(S1);
   check("a same-network invite pays no bonus to either", !/invite bonus/i.test(s1f.json?.message ?? "") && (await K.view()).me.invited === 1, s1f.json?.message);
 
   // Seed members have no join network: theirs come from sign-ins and visits.
@@ -478,7 +539,7 @@ section("invites", async () => {
     check("nor does one on a network the seed member only visited from", (await X2.view()).me.invitePending === false);
     const X3 = await member("Xor Elsewhere", { ref: scode });
     const before = (await SI.view()).me;
-    const x3f = await X3.act(fillAct(facts.pop()));
+    const x3f = await firstFact(X3);
     const after = (await SI.view()).me;
     check("an invitee on another network still earns a seed member the bonus", /Your invite bonus added 10 more\./.test(x3f.json?.message ?? "") && before.invited === 1 && after.invitesPaid === 1 && after.credits + after.held === before.credits + before.held + 10, { invited: before.invited, paid: after.invitesPaid });
   } else skip("seed member invite checks", "no seed file the server knows");
@@ -497,34 +558,43 @@ section("invites", async () => {
 section("limit", async () => {
   // ECON-9, LOGIC-6: the first-day limit equals the starter credits, and the screen can show what is left.
   const L = await member("Lee Limit");
+  const v0 = await L.view();
+  check("a new account's Me carries unlocksLeft 25 and owed 0", v0.me.unlocksLeft === 25 && v0.me.owed === 0 && v0.me.credits === STARTER, { left: v0.me.unlocksLeft, owed: v0.me.owed });
+  // Companies to unlock facts at first: every company is locked for a new member. Each counts PRICE of the day's 25.
+  const k = await openForLocked(L, (n) => 29 - PRICE * n);
+  const coIds = [...openedIds].slice(-k);
+  const cos = PRICE * k;
+  await ownCompany(L);
   const v = await L.view();
-  check("a new account's Me carries unlocksLeft 25 and owed 0", v.me.unlocksLeft === 25 && v.me.owed === 0 && v.me.credits === STARTER, { left: v.me.unlocksLeft, owed: v.me.owed });
-  const locked = pickLocked(v, 30);
+  const locked = pickLocked(v, 29 - cos);
   for (const f of pickEmpty(v, 5)) await L.act(fillAct(f));
   const first = await L.act({ type: "unlock", ...locked[0] });
-  check("an unlock answers with the unlocks left", first.status === 200 && first.json?.me?.unlocksLeft === 24 && first.json?.me?.credits === STARTER + 4 && first.json?.me?.owed === 0, first.json?.me);
-  const r24 = await L.act({ type: "unlockMany", items: locked.slice(1, 25) });
+  check(`an unlock answers with the unlocks left (${k} companies first)`, first.status === 200 && first.json?.me?.unlocksLeft === 24 - cos && first.json?.me?.credits === STARTER + 4 - cos && first.json?.me?.owed === 0, first.json?.me);
+  const r24 = await L.act({ type: "unlockMany", items: locked.slice(1, 25 - cos) });
   check("a new account can unlock 25 facts on day one", r24.status === 200 && r24.json?.me?.unlocksLeft === 0 && r24.json?.me?.credits === 5, r24.json?.me ?? r24.json);
-  const r26 = await L.act({ type: "unlock", ...locked[25] });
+  const r26 = await L.act({ type: "unlock", ...locked[25 - cos] });
   check("past 25 the refusal names the limit and the credits that wait", r26.status === 400 && r26.json?.error === "You've unlocked 25 facts today, the day-one limit. Your 5 credits are here tomorrow.", r26.json);
-  const many = await L.act({ type: "unlockMany", items: locked.slice(25, 29) });
+  const many = await L.act({ type: "unlockMany", items: locked.slice(25 - cos, 29 - cos) });
   check("unlock all gets the same answer", many.status === 400 && many.json?.error === r26.json?.error, many.json);
   const lv = await L.view();
   check("the view agrees: 5 credits, 0 unlocks left", lv.me.credits === 5 && lv.me.unlocksLeft === 0, { credits: lv.me.credits, left: lv.me.unlocksLeft });
 
   const One = await member("Uno Limit");
-  await One.act(fillAct(pickEmpty(v, 1)[0]));
-  await One.act({ type: "unlockMany", items: locked.slice(0, 25) });
-  const one = await One.act({ type: "unlock", ...locked[25] });
+  await openSame(One, coIds);
+  await ownCompany(One);
+  await One.act(fillAct(pickEmpty(await One.view(), 1)[0]));
+  await One.act({ type: "unlockMany", items: locked.slice(0, 25 - cos) });
+  const one = await One.act({ type: "unlock", ...locked[25 - cos] });
   check("one credit left reads as one credit", one.json?.error === "You've unlocked 25 facts today, the day-one limit. Your 1 credit is here tomorrow.", one.json);
 
   // At 0 credits the out-of-credits answer wins, and the wall is counted.
   const adm = await admin();
   const Z = await member("Zed Zero");
+  await openSame(Z, coIds);
   const b = adm ? (await adm.view()).admin.walls : null;
-  const all = await Z.act({ type: "unlockMany", items: locked.slice(0, 25) });
+  const all = await Z.act({ type: "unlockMany", items: locked.slice(0, 25 - cos) });
   check("a new account can spend every starter credit on day one", all.status === 200 && all.json?.me?.credits === 0 && all.json?.me?.unlocksLeft === 0, all.json?.me ?? all.json);
-  const zero = await Z.act({ type: "unlock", ...locked[25] });
+  const zero = await Z.act({ type: "unlock", ...locked[25 - cos] });
   check("at 0 credits and 0 unlocks left, out of credits wins", zero.status === 400 && zero.json?.error === "You're out of credits. Add a missing fact to earn one.", zero.json);
   if (adm) {
     const w = (await adm.view()).admin.walls;
@@ -546,23 +616,28 @@ section("owed", async () => {
   const Z = await seedSignIn(sm, nextIp());
   const v = await Z.view();
   if (v.me.credits !== STARTER || v.me.unlocked !== 0) return skip("credits owed", "this seed member was used before on this server");
+  // Companies to unlock facts at first (every company is locked for it), then everything it has left.
+  const k = await openForLocked(Z, (n) => STARTER + 3 - PRICE * n);
+  const cos = PRICE * k;
+  await ownCompany(Z);
   const rate = await Z.act({ type: "benchRate", pricing: "Hourly", rate: "$150/hr", function: "Sales" });
-  const locked = pickLocked(v, STARTER + 3);
-  const spend = await Z.act({ type: "unlockMany", items: locked.slice(0, STARTER + 1) });
+  const vz = await Z.view();
+  const locked = pickLocked(vz, STARTER + 3 - cos);
+  const spend = await Z.act({ type: "unlockMany", items: locked.slice(0, STARTER + 1 - cos) });
   check("a member shares a private rate and spends everything", rate.status === 200 && spend.status === 200 && spend.json?.me?.credits === 0 && spend.json?.me?.owed === 0, spend.json?.me ?? spend.json);
   const rm = await Z.act({ type: "benchRateRemove", id: rate.json?.id });
   check("taking the rate back leaves 0 credits and 1 owed, not -1", rm.status === 200 && rm.json?.me?.credits === 0 && rm.json?.me?.owed === 1, rm.json?.me ?? rm.json);
   const zv = await Z.view();
   check("the view says the same", zv.me.credits === 0 && zv.me.owed === 1, { credits: zv.me.credits, owed: zv.me.owed });
   check("the ledger still holds the full take-back", zv.ledger.reduce((n, l) => n + l.delta, 0) === -(STARTER + 1), zv.ledger.reduce((n, l) => n + l.delta, 0));
-  const no = await Z.act({ type: "unlock", ...locked[STARTER + 1] });
+  const no = await Z.act({ type: "unlock", ...locked[STARTER + 1 - cos] });
   check("an unlock while owing gets the out-of-credits answer", no.status === 400 && no.json?.error === "You're out of credits. Add a missing fact to earn one.", no.json);
-  const pay = await Z.act(fillAct(pickEmpty(v, 1)[0]));
+  const pay = await Z.act(fillAct(pickEmpty(vz, 1)[0]));
   check("the next fact clears what is owed", pay.status === 200 && pay.json?.me?.credits === 0 && pay.json?.me?.owed === 0, pay.json?.me);
-  const still = await Z.act({ type: "unlock", ...locked[STARTER + 1] });
+  const still = await Z.act({ type: "unlock", ...locked[STARTER + 1 - cos] });
   check("at exactly 0 an unlock is still refused for credits", still.json?.error === "You're out of credits. Add a missing fact to earn one.", still.json);
-  await Z.act(fillAct(pickEmpty(v, 1)[0]));
-  const ok = await Z.act({ type: "unlock", ...locked[STARTER + 1] });
+  await Z.act(fillAct(pickEmpty(vz, 1)[0]));
+  const ok = await Z.act({ type: "unlock", ...locked[STARTER + 1 - cos] });
   check("one more fact and the unlock goes through", ok.status === 200 && ok.json?.me?.credits === 0, ok.json?.me ?? ok.json);
 });
 
@@ -581,8 +656,7 @@ section("picker", async () => {
     const names = async (who, q) => ((await who.people(q)).json?.members ?? []).map((m) => m.name);
     check("a seed member who never signed in is not listed, even by full name", !(await names(T, quiet.name)).includes(quiet.name));
     // Members add only seats they held: typing someone else's exact name doesn't make a seat for them.
-    const v = await T.view();
-    const add = await T.act({ type: "add", company: hostsOf(v)[hostN++].name, newEngagement: true, engagementFields: { function: "Sales", type: "Advisory", operator: quiet.name } });
+    const add = await T.act({ type: "add", company: (await hostsOf())[hostN++].name, newEngagement: true, engagementFields: { function: "Sales", type: "Advisory", operator: quiet.name } });
     check("a seat named for another member is refused", add.status === 400 && add.json?.error === "You can add seats you held. Pick yourself as the seat holder.", add.json);
     // A sweep by two-letter prefixes finds no seed member who hasn't signed in.
     const signedIn = new Set([0, 1, 2].map((n) => seedMember(n)?.name));

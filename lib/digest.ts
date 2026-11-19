@@ -24,7 +24,7 @@ export const DIGEST_ROLES = 5;
 export const DIGEST_HIRE_VIEWS = 3;
 export const DIGEST_HIRE_ROWS = 5;
 /** A company that is locked for the member is never named: it has an open role, so it reads as one. */
-export const LOCKED_HIRER = "A company that's hiring now";
+export const LOCKED_HIRER = "A locked company";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** "2026-11-17" -> "Nov 17". */
@@ -98,13 +98,13 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   let lead: string;
   if (mine > 0) {
     if (hidden === 0) lead = mine === 1 ? "You can already see the company." : mine === 2 ? "You can already see both companies." : `You can already see all ${mine} companies.`;
-    else if (mine === 1) lead = "The company is locked. Unlock it for 1 credit to see which company is hiring.";
-    else if (hidden === mine) lead = `All ${mine} companies are locked. Unlock one for 1 credit to see which company is hiring.`;
-    else if (hidden === 1) lead = `1 of the ${mine} companies is locked. Unlock it for 1 credit to see which company is hiring.`;
-    else lead = `${hidden} of the ${mine} companies are locked. Unlock one for 1 credit to see which company is hiring.`;
+    else if (mine === 1) lead = "The company is locked. Unlock it for 2 credits to see which company is hiring.";
+    else if (hidden === mine) lead = `All ${mine} companies are locked. Unlock one for 2 credits to see which company is hiring.`;
+    else if (hidden === 1) lead = `1 of the ${mine} companies is locked. Unlock it for 2 credits to see which company is hiring.`;
+    else lead = `${hidden} of the ${mine} companies are locked. Unlock one for 2 credits to see which company is hiring.`;
   } else if (newRoles > 0) {
     const none = fn && fn !== "Other" ? (newRoles === 1 ? `It is not in ${fn}. ` : `None are in ${fn}. `) : "";
-    lead = `${none}${newRoles === 1 ? "The" : "Each"} company stays locked until you unlock it for 1 credit.`;
+    lead = `${none}${newRoles === 1 ? "The" : "Each"} company stays locked until you unlock it for 2 credits.`;
   } else if (hireOnly) {
     // Why this email came: the view the member saved, by its own name.
     lead = hires[0].name ? `From your saved view “${hires[0].name}”.` : "";

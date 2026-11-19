@@ -44,6 +44,8 @@ writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
 const at0 = new Date().toISOString();
 const unlocks = {};
 for (let i = 0; i < HOLDERS; i++) unlocks[`e_many_${i}.operator`] = ["mem_sal"];
+// And Beta Labs, before (every company is locked for a member until they unlock it or know it; who held a seat opens after it).
+unlocks["c_beta.identity"] = ["mem_sal"];
 const seen = { mem_sal: at0, mem_hana: at0, mem_ada: at0 };
 for (let i = 0; i < HOLDERS; i++) seen[`mem_h${i}`] = at0;
 writeFileSync(path.join(dir, "intel.json"), JSON.stringify({ ledger: [], values: {}, unlocks, seen }));
