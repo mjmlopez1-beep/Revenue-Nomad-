@@ -25,7 +25,7 @@ for (const { entity, f } of ALL_FIELDS) {
 SAY.set("Person name and title", "a person's name and title");
 SAY.set("Seat holder and role", "the seat holder and their role");
 /** A company's pick-list answers: only 5 of these earn a credit each day (Me.sellEarnLeft). */
-const PICK_KEYS = new Set(["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle"]);
+const PICK_KEYS = new Set(["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "ownership"]);
 const PICK_LABELS = new Set(ALL_FIELDS.filter(({ entity, f }) => entity === "company" && PICK_KEYS.has(f.key)).map(({ f }) => f.label));
 const PRIVATE_RATE = "Private rate";
 const thing = (label: string) => SAY.get(label) ?? `the ${fieldText(label)}`;

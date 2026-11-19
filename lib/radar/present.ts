@@ -10,8 +10,11 @@
  * seat holder, not anyone at the company. No record id either: every card links to the day's
  * companies in the app (radarPath), where each locked one unlocks right on its row.
  */
-import type { RadarCard, RadarDay, RadarKind } from "./types";
+import type { RadarBand, RadarCard, RadarDay, RadarKind } from "./types";
 import type { RawSignal } from "./signals";
+
+/** A signal as a member gets it: why it is theirs, and (scored) its band and why-now. */
+export type MemberSignal = RawSignal & { why: string; band?: RadarBand; whyNow?: string };
 
 const SHORT_COUNTRY: Record<string, string> = { "United States": "US", "United Kingdom": "UK" };
 const an = (word: string) => (/^[aeiou]/i.test(word) && !/^(one|uni|use|eu)/i.test(word) ? "an" : "a");
@@ -62,7 +65,7 @@ export interface CardContext {
 /** "a Software company", "an E-commerce company", or "a company in your profile". */
 const someCompany = (industry: string | null) => (industry ? `${an(industry)} ${industry} company` : "a company in your profile");
 
-export function cardOf(sig: RawSignal & { why: string }, ctx: CardContext): RadarCard {
+export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
   const seen = ctx.visible(sig.companyId);
   const who = seen ? sig.co.name : sig.kind === "role" ? "a company that's hiring now" : someCompany(sig.co.industry);
   const fn = sig.fn ?? "";
@@ -81,6 +84,12 @@ export function cardOf(sig: RawSignal & { why: string }, ctx: CardContext): Rada
     case "funding":
       headline = `${cap(who)} raised ${sig.round ? `a ${sig.round}` : "money"}${sig.amount ? ` (${sig.amount})` : ""}`;
       break;
+    case "sales-build":
+      headline = sig.build && sig.build.from > 0 ? `${cap(who)} posted ${sig.build.to} full-time sales roles` : `${cap(who)} posted its first full-time sales roles`;
+      break;
+    case "departure":
+      headline = `${cap(who)} no longer lists a ${fn} leader`;
+      break;
   }
   return {
     id: ctx.cardId(sig.key),
@@ -89,6 +98,8 @@ export function cardOf(sig: RawSignal & { why: string }, ctx: CardContext): Rada
     headline,
     facts: factsOf(sig.co),
     why: sig.why,
+    ...(sig.band ? { band: sig.band } : {}),
+    ...(sig.whyNow ? { whyNow: sig.whyNow } : {}),
     company: seen ? sig.co.name : null,
     ...(seen ? {} : { locked: true }),
     url: ctx.url,
@@ -101,7 +112,7 @@ export function cardOf(sig: RawSignal & { why: string }, ctx: CardContext): Rada
  * (the row does, when the member can see it) nor a person: "Hired a fractional Finance leader ·
  * Finance usually comes before Sales, and they have no fractional Sales yet".
  */
-export function viewLine(sig: RawSignal & { why: string }): string {
+export function viewLine(sig: MemberSignal): string {
   const fn = sig.fn ?? "";
   switch (sig.kind) {
     case "adjacent":
@@ -112,23 +123,42 @@ export function viewLine(sig: RawSignal & { why: string }): string {
       return `A fractional ${fn} seat just ended · A seat like yours`;
     case "funding":
       return `Raised ${sig.round ? `a ${sig.round}` : "money"}${sig.amount ? ` (${sig.amount})` : ""} · Money in usually means hiring`;
+    case "sales-build":
+      return `${sig.build && sig.build.from > 0 ? `Posted ${sig.build.to} full-time sales roles` : "Posted its first full-time sales roles"} · ${sig.why}`;
+    case "departure":
+      return `No longer lists a ${fn} leader on its website · A seat like yours may need cover`;
   }
 }
 
+/** The note beside a line: "High · Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months". Null when unscored. */
+export const noteOf = (sig: Pick<MemberSignal, "band" | "whyNow">): string | null => (sig.band && sig.whyNow ? `${sig.band} · ${sig.whyNow}` : null);
+
 /** One delivery: every card, and the day's companies. Null with no signals (a nothing-day is never sent). */
-export function dayOf(sigs: (RawSignal & { why: string })[], ctx: CardContext, mode: RadarDay["mode"], day: string): RadarDay | null {
+export function dayOf(sigs: MemberSignal[], ctx: CardContext, mode: RadarDay["mode"], day: string): RadarDay | null {
   if (!sigs.length) return null;
   return { cards: sigs.map((x) => cardOf(x, ctx)), total: sigs.length, companies: new Set(sigs.map((x) => x.companyId)).size, day, url: ctx.url, mode };
 }
 
-/** What a day's view lists, from the kept rows: one entry a company, in the order they came, its lines in order. */
-export function rowsOf(sent: { c: string; kind: RadarKind; l: string }[], pub: (companyId: string) => string): { id: string; c: string; kinds: RadarKind[]; lines: string[] }[] {
-  const by = new Map<string, { id: string; c: string; kinds: RadarKind[]; lines: string[] }>();
+const BAND_RANK: Record<RadarBand, number> = { High: 0, Medium: 1, Low: 2 };
+
+/**
+ * What a day's view lists, from the kept rows: one entry a company, in the order they came (most
+ * likely first), its lines in order, each with its note (band and why-now), and the company's best band.
+ */
+export function rowsOf(
+  sent: { c: string; kind: RadarKind; l: string; b?: RadarBand; w?: string }[],
+  pub: (companyId: string) => string,
+): { id: string; c: string; kinds: RadarKind[]; lines: string[]; notes: string[]; band?: RadarBand }[] {
+  const by = new Map<string, { id: string; c: string; kinds: RadarKind[]; lines: string[]; notes: string[]; band?: RadarBand }>();
   for (const x of sent) {
     let r = by.get(x.c);
-    if (!r) by.set(x.c, (r = { id: pub(x.c), c: x.c, kinds: [], lines: [] }));
+    if (!r) by.set(x.c, (r = { id: pub(x.c), c: x.c, kinds: [], lines: [], notes: [] }));
     if (!r.kinds.includes(x.kind)) r.kinds.push(x.kind);
-    if (!r.lines.includes(x.l)) r.lines.push(x.l);
+    if (!r.lines.includes(x.l)) {
+      r.lines.push(x.l);
+      r.notes.push(noteOf({ band: x.b, whyNow: x.w }) ?? "");
+    }
+    if (x.b && (!r.band || BAND_RANK[x.b] < BAND_RANK[r.band])) r.band = x.b;
   }
   return [...by.values()];
 }

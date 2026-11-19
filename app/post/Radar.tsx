@@ -69,7 +69,7 @@ export function useRadarDay(active: boolean, day: string | null, again: unknown[
   return { data: data && (!day || data.day === day || data.expired) ? data : null, stale: data, failed, reload: load };
 }
 
-/** The member's rows for the day's companies, in the server's order (open roles, ended seats, hires before theirs). */
+/** The member's rows for the day's companies, in the server's order (most likely first). */
 export function radarRows(view: RadarView | null, rows: Row[]): Row[] {
   if (!view?.rows.length) return [];
   const by = new Map(rows.map((r) => [r.i.c.id, r]));
@@ -130,7 +130,10 @@ export function RadarPage({
       ),
     [open],
   );
-  const signals = useMemo<SignalRows>(() => ({ lines: new Map((view?.rows ?? []).map((x) => [x.id, x.lines])), action }), [view, action]);
+  const signals = useMemo<SignalRows>(
+    () => ({ lines: new Map((view?.rows ?? []).map((x) => [x.id, x.lines])), notes: new Map((view?.rows ?? []).flatMap((x) => (x.notes ? [[x.id, x.notes] as const] : []))), action }),
+    [view, action],
+  );
   const flip = async () => {
     setBusy(true);
     await ui.act({ type: "settings", radar: !(view?.on ?? true) });
@@ -152,14 +155,20 @@ export function RadarPage({
         Companies in your Ideal Fractional Profile that just moved
         {fn ? (
           <>
-            : a fractional hire in a function that usually comes before {fn}
-            {before.length ? ` (${before.join(", ")})` : ""}, a new open {fn} role, or a {fn} seat that just ended.
+            : a new open {fn} role, a {fn} seat that just ended or a {fn} leader who left, a fractional hire in another function, or a first sales team. Most likely to hire a
+            fractional {fn} next comes first, each with why now
+            {view?.beforeFromMember && before.length ? `, and the functions you said come before yours (${before.join(", ")}) count for more` : ""}.
           </>
         ) : (
           "."
         )}{" "}
         Unlock any of them right here.
       </p>
+      {view?.ready && (
+        <p className="rd-legend">
+          <span className="rd-band rd-band-high">High</span> <span className="rd-band rd-band-medium">Medium</span> come by email. <span className="rd-band rd-band-low">Low</span> is only here.
+        </p>
+      )}
 
       {view?.ready && day && (
         <div className="rd-bar">

@@ -24,6 +24,11 @@
  * Never twice: each member's sent signals are kept (State.radar.members[id].sent, 120 days). A
  * signal is marked sent only when it went out by email or Slack.
  *
+ * Crystal Ball's ranking (lib/radar/match.ts scoreFor, lib/radar/predict.ts): every member's
+ * signals are scored and ranked, most likely first. High and Medium go by email and Slack (the
+ * email's top EMAIL_CARDS); Low stays on the page only (the day's view keeps it with the delivery).
+ * Merlin's own transitions between fractional seats move the research's priors (observedTransitions).
+ *
  * Product signals (State.signals): radar_sent (one per delivery, where = email, slack, email+slack
  * or instant), radar_opened (the email's pixel, or the day's view in the app), radar_clicked (a
  * link in the email or Slack, through /api/radar/go), radar_off (Your profile, or the email's
@@ -35,9 +40,9 @@ import { publicBase } from "../links";
 import { emailEnabled, sendEmail } from "../email";
 import { billingLive, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
-import { detectSignals, fundingCompanies, type RawSignal } from "./signals";
-import { profileOf, signalsFor, icpIsEmpty, type RadarProfile } from "./match";
-import { dayOf, rowsOf, viewLine, type CardContext } from "./present";
+import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, type RawSignal } from "./signals";
+import { deliverable, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
+import { dayOf, rowsOf, viewLine, type CardContext, type MemberSignal } from "./present";
 import { renderRadarEmail } from "./format";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import {
@@ -130,7 +135,7 @@ function cardContext(c: Ctx, m: Member, day: string): CardContext {
 }
 
 /** A signal as the day's view keeps it. */
-const sentRow = (x: RawSignal & { why: string }): RadarSentRow => ({ k: x.key, c: x.companyId, kind: x.kind, l: viewLine(x) });
+const sentRow = (x: MemberSignal): RadarSentRow => ({ k: x.key, c: x.companyId, kind: x.kind, l: viewLine(x), ...(x.band ? { b: x.band } : {}), ...(x.whyNow ? { w: x.whyNow } : {}) });
 
 /** The member's radar profile, or null when the radar can match nothing for them (no function, or no Ideal Fractional Profile). */
 function readyProfile(c: Ctx, m: Member): RadarProfile | null {
@@ -156,10 +161,11 @@ const radarOf = (d: State): RadarState => {
 const sentKeys = (s: State, id: string) => s.radar?.members?.[id]?.sent ?? {};
 
 /**
- * Mark these signals sent to the member, and keep them as the day's companies (for the view the
- * links open). Forgets sent keys older than RADAR_KEEP_DAYS and days older than RADAR_KEEP_VIEW_DAYS.
+ * Mark these signals sent to the member, and keep `rows` (the delivered ones and the Low ones that
+ * stayed on the page) as the day's companies, for the view the links open. Forgets sent keys older
+ * than RADAR_KEEP_DAYS and days older than RADAR_KEEP_VIEW_DAYS.
  */
-function markSent(d: State, memberId: string, sigs: (RawSignal & { why: string })[], nowIso: string, via: string) {
+function markSent(d: State, memberId: string, sigs: MemberSignal[], nowIso: string, via: string, rows: MemberSignal[] = sigs) {
   const r = radarOf(d);
   const mine = (r.members[memberId] ??= { sent: {} });
   mine.sent ??= {};
@@ -170,10 +176,22 @@ function markSent(d: State, memberId: string, sigs: (RawSignal & { why: string }
   const days = (mine.days ??= {});
   for (const k of Object.keys(days)) if (!SIG_DAY_RE.test(k) || nowMs - dayStart(k) > RADAR_KEEP_VIEW_DAYS * DAY) delete days[k];
   const kept = (days[today] ??= []);
-  for (const x of sigs) if (!kept.some((y) => y.k === x.key) && kept.length < DAY_ROWS_MAX) kept.push(sentRow(x));
+  for (const x of rows) if (!kept.some((y) => y.k === x.key) && kept.length < DAY_ROWS_MAX) kept.push(sentRow(x));
   mine.lastAt = nowIso;
   mine.lastCount = sigs.length;
   mine.lastVia = via;
+}
+
+/** Funding events' companies with no ownership on file become VC-backed (by "scan": nobody earned for it, and a member can correct it). */
+function inferVcBacked(d: State, events: { companyId: string }[], nowIso: string): number {
+  let n = 0;
+  for (const f of events) {
+    const k = `${f.companyId}.ownership`;
+    if (d.values[k]) continue;
+    d.values[k] = { value: "VC-backed", by: "scan", at: nowIso, status: "live" };
+    n++;
+  }
+  return n;
 }
 
 /* ---------- the day's companies in the app ---------- */
@@ -207,7 +225,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     const wanted = inKeep && !list.includes(asked!) ? [...list, asked!] : list;
     // Days nothing went out: the signals that happened that day (and never went out another day).
     const fromMs = Math.min(...wanted.map(dayStart));
-    const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p).filter((x) => !keptKeys.has(x.key));
+    const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p, { counts: observedTransitions(seed, s), nowMs }).filter((x) => !keptKeys.has(x.key));
     for (const d of wanted) {
       const rows = kept[d]?.length ? kept[d] : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
       // A company merged away or taken out since is no row.
@@ -227,7 +245,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     today,
     ...(dayAsked != null && dayAsked !== "" && !inKeep ? { expired: true } : {}),
     days: list.map((d) => ({ day: d, companies: count(d) })),
-    rows: rowsOf(byDay.get(day) ?? [], T.pubId).map(({ id, kinds, lines }) => ({ id, kinds, lines })),
+    rows: rowsOf(byDay.get(day) ?? [], T.pubId).map(({ id, kinds, lines, notes, band }) => ({ id, kinds, lines, ...(notes.some(Boolean) ? { notes } : {}), ...(band ? { band } : {}) })),
     email: emailEnabled() && EMAIL_RE.test(m.email),
     slack: hasDest(s, m.id),
   };
@@ -268,13 +286,15 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   const nowMs = Date.parse(nowIso);
   const today = nowIso.slice(0, 10);
   const none: RadarRun = { ran: false, signals: 0, members: 0, emails: 0, slack: 0 };
-  const prev = await T.mutate((d): { at: string | null } | null => {
+  const prev = await T.mutate((d, seedD): { at: string | null } | null => {
     const r = radarOf(d);
     if (!opts.force && r.lastRunDay === today) return null;
     const at = r.lastRunAt;
     r.lastRunAt = nowIso;
     r.lastRunDay = today;
     r.stats.runs++;
+    // Each company's employee band as it changed, once a day (a crossing of 25 or 50 people, read later).
+    recordHeadcount(d, seedD, nowIso);
     return { at };
   });
   if (!prev) return none;
@@ -287,10 +307,13 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   }
   const src = opts.funding ?? fundingSource();
   const funding = await src.events({ sinceMs, nowMs, companies: fundingCompanies(seed, s0) }).catch((e) => (console.error("funding source failed", e), []));
+  // A company that raised a round is VC-backed, unless a member said otherwise (the only ownership Merlin infers).
+  if (funding.length) await T.mutate((d) => void inferVcBacked(d, funding, nowIso));
   const all = detectSignals(seed, s0, sinceMs, nowMs, funding);
   const out: RadarRun = { ran: true, signals: all.length, members: 0, emails: 0, slack: 0 };
   if (!all.length) return out;
   const c = ctxOf(seed, s0, nowMs);
+  const counts = observedTransitions(seed, s0);
   const mailOn = emailEnabled();
   for (const m of c.idx.all) {
     try {
@@ -305,8 +328,10 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       const last = s0.radar?.members?.[m.id]?.lastAt;
       if (!pro && last && last.slice(0, 10) === today && Date.parse(last) < nowMs) continue;
       const sent = sentKeys(s0, m.id);
-      const mine = signalsFor(all, p).filter((x) => !sent[x.key]);
-      const day = dayOf(mine, cardContext(c, m, today), "daily", today);
+      const mine = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key]);
+      // High and Medium go out; Low stays on the page (kept with the day's companies below).
+      const out_ = deliverable(mine);
+      const day = dayOf(out_, cardContext(c, m, today), "daily", today);
       if (!day) continue;
       // Someone may have turned it off while the run was going.
       const s1 = await loadState();
@@ -332,7 +357,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       out.members++;
       const where = via.join("+");
       await T.mutate((d) => {
-        markSent(d, m.id, mine, nowIso, where);
+        markSent(d, m.id, out_, nowIso, where, mine);
         const r = radarOf(d);
         r.stats.sent++;
         if (via.includes("email")) r.stats.emails++;
@@ -385,16 +410,18 @@ export async function radarInstant(nowIso?: string): Promise<number> {
   if (!pros.length || !base) return 0;
   const all: RawSignal[] = detectSignals(seed, s, since, nowMs);
   if (!all.length) return 0;
+  const counts = observedTransitions(seed, s);
   let n = 0;
   for (const m of pros) {
     const p = readyProfile(c, m);
     if (!p) continue;
     const sent = sentKeys(s, m.id);
-    const mine = signalsFor(all, p).filter((x) => !sent[x.key]);
-    const day = dayOf(mine, cardContext(c, m, now.slice(0, 10)), "instant", now.slice(0, 10));
+    const mine: Scored[] = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key]);
+    const out_ = deliverable(mine);
+    const day = dayOf(out_, cardContext(c, m, now.slice(0, 10)), "instant", now.slice(0, 10));
     if (!day) continue;
     await T.mutate((d) => {
-      markSent(d, m.id, mine, now, "instant");
+      markSent(d, m.id, out_, now, "instant", mine);
       radarOf(d).stats.instant++;
       T.addSignal(d, m.id, "radar_sent", "instant", now);
     });

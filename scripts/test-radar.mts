@@ -44,7 +44,8 @@ const seed = {
     { id: "mem_ada", name: "Ada Admin", email: "ada.admin@example.com", title: "Founder", token: "tok-ada-0001" },
   ],
   companies: [
-    { id: "c_acme", fields: { name: "Acme Robotics", website: "acme.example", industry: "SaaS", employees: "51–200", revenue: "$5M–$20M", hq: "Austin, TX" } },
+    // $1M–$5M: a fractional Marketing hire then Sales is one of the research's rules there (Crystal Ball, lib/radar/predict.ts rule 5).
+    { id: "c_acme", fields: { name: "Acme Robotics", website: "acme.example", industry: "SaaS", employees: "51–200", revenue: "$1M–$5M", hq: "Austin, TX" } },
     { id: "c_beta", fields: { name: "Beta Labs", website: "beta.example", industry: "SaaS", employees: "11–50", revenue: "$1M–$5M", hq: "Denver, CO" } },
     { id: "c_gamma", fields: { name: "Gamma Goods", website: "gamma.example", industry: "E-Commerce", employees: "1,001+", hq: "Seattle, WA" } },
     { id: "c_delta", fields: { name: "Delta Data", website: "delta.example", industry: "SaaS", employees: "51–200", hq: "London, UK" } },
@@ -86,7 +87,8 @@ writeFileSync(
     profiles: {
       mem_sal: { function: "Sales", onboarded: true, icp: US_MID },
       mem_mo: { function: "Marketing", onboarded: true, icp: { industries: ["SaaS"], employees: [], revenue: [], countries: [] } },
-      mem_pro: { function: "Finance", onboarded: true, icp: US_MID },
+      // Pia's own answer: Sales comes before Finance. It boosts that pair (it no longer decides who gets a hire).
+      mem_pro: { function: "Finance", onboarded: true, icp: US_MID, before: ["Sales"] },
       mem_off: { function: "Sales", onboarded: true, icp: US_MID, radarOff: true },
       mem_nofn: { onboarded: true, icp: US_MID },
       mem_noicp: { function: "Sales", onboarded: true },
@@ -256,10 +258,23 @@ async function main() {
   check("a hire outside the profile is left out (too big, abroad)", !forSal.includes(k("hire", "e_gamma_mkt")) && !forSal.includes(k("hire", "e_delta_mkt")));
   check("a company that already has a fractional in your function is left out", !forSal.includes(k("hire", "e_echo_mkt")));
   check("a hire in your own function is not adjacent", !forSal.includes(k("hire", "e_fox_sales")));
-  const forPro = match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_pro", "Finance")).map((x) => x.key);
-  check("Finance gets the Sales hire (Sales comes before Finance) and the Finance role", forPro.includes(k("hire", "e_fox_sales")) && forPro.length === 2, forPro);
-  const forMo = match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_mo", "Marketing")).map((x) => x.key);
-  check("Marketing in a SaaS profile gets the Marketing role and the Sales hire", forMo.length === 2 && forMo.includes(k("hire", "e_fox_sales")), forMo);
+  const proSigs = match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_pro", "Finance"));
+  const forPro = proSigs.map((x) => x.key);
+  check(
+    "Finance gets the Finance role first, then the Sales hire her own answer boosts, then the weaker hires",
+    forPro[0] === all.find((x) => x.kind === "role" && x.fn === "Finance")!.key && forPro[1] === k("hire", "e_fox_sales") && proSigs[1].band === "Medium" && proSigs.slice(2).every((x) => x.band === "Low"),
+    proSigs.map((x) => [x.key, x.band, x.score.toFixed(3)]),
+  );
+  const moSigs = match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_mo", "Marketing"));
+  const forMo = moSigs.map((x) => x.key);
+  check("Marketing in a SaaS profile gets the Marketing role and the Sales hire, the hire as Low", forMo.length === 2 && forMo.includes(k("hire", "e_fox_sales")) && moSigs[1].band === "Low", moSigs.map((x) => [x.key, x.band]));
+  const salSigs = match.signalsFor(all, pSal);
+  check("each signal has a band and a why-now line", salSigs.every((x) => ["High", "Medium", "Low"].includes(x.band) && x.whyNow.length > 10 && !/%/.test(x.whyNow)), salSigs.map((x) => [x.band, x.whyNow]));
+  check(
+    "the Marketing hire's why-now names the hire, when, and the window",
+    /^Fractional CMO hired (this month|1 month ago) · Sales usually follows in 4–9 months$/.test(salSigs.find((x) => x.key === k("hire", "e_acme_mkt"))?.whyNow ?? ""),
+    salSigs.map((x) => x.whyNow),
+  );
   check("a member with no function gets nothing", !match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_nofn", null)).length);
   check("a member with no profile gets nothing", !match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_noicp", "Sales")).length);
 
@@ -303,7 +318,14 @@ async function main() {
   check("the Slack post names no company, no person, no record", !named(salPost[0]?.raw ?? "").length && !pubLeaks(salPost[0]?.raw ?? "").length, salPost[0]?.raw);
   check("and no teaser", !/See who|more today/.test(salPost[0]?.raw ?? ""));
   const moMail = mails("mo.marketer@example.com")[0]?.body as { subject: string; html: string; text: string } | undefined;
-  check("Mo gets both of his signals", !!moMail && moMail.subject === `${types.YOUR_FEATURE}: 2 companies in your profile moved` && /Fractional Head of Marketing/.test(moMail.text) && /fractional Sales leader/.test(moMail.text), moMail?.subject);
+  check(
+    "Mo's email has his Marketing role, and not the Low Sales hire (it stays on the page)",
+    !!moMail && moMail.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /Fractional Head of Marketing/.test(moMail.text) && !/fractional Sales leader/.test(moMail.text),
+    moMail?.subject,
+  );
+  check("a Low signal is never marked sent", !Object.keys((await state()).radar?.members.mem_mo?.sent ?? {}).includes(k("hire", "e_fox_sales")));
+  check("but the day's companies keep it", ((await state()).radar?.members.mem_mo?.days?.[day0] ?? []).some((x) => x.k === k("hire", "e_fox_sales") && x.b === "Low"));
+  check("the email shows each card's band and why now", /High likelihood · Open now/.test(sm?.text ?? "") && /Medium likelihood · Fractional CMO hired/.test(sm?.text ?? "") && /<b style="font-weight:700">High likelihood<\/b>/.test(sm?.html ?? ""), sm?.text);
   check("Mo's email names nothing", !named(moMail).length && !pubLeaks(moMail).length, named(moMail));
   const piaMail = mails("pia.profit@example.com")[0]?.body as { subject: string; html: string; text: string } | undefined;
   check("a company the member already unlocked is named, with nothing to unlock", !!piaMail && /Fox Freight just hired a fractional Sales leader/.test(piaMail.text) && (piaMail.text.match(/unlock it in Merlin/g) ?? []).length === 1, piaMail?.text);
@@ -332,7 +354,7 @@ async function main() {
   // A new RevOps hire at Acme comes in (RevOps comes before Sales): only it goes out the morning after.
   await T.mutate((d) => {
     d.engagements.push({ id: "e_acme_ops_new", companyId: "c_acme", by: "mem_mo", at: nowIso() });
-    for (const [f, v] of Object.entries({ role: "Fractional Head of RevOps", function: "RevOps", type: "Fractional", start: monthAgo(0), status: "Active", end: "Ongoing" }))
+    for (const [f, v] of Object.entries({ role: "Fractional Head of Growth", function: "Growth", type: "Fractional", start: monthAgo(4), status: "Active", end: "Ongoing" }))
       d.values[`e_acme_ops_new.${f}`] = { value: v, by: "mem_mo", at: nowIso(), status: "live" };
   });
   skew += DAY;
@@ -343,7 +365,7 @@ async function main() {
   const sm3 = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
   check(
     "only the new signal goes out, nothing sent before",
-    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /just hired a fractional RevOps leader/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
+    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /just hired a fractional Growth leader/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
     { run3, subject: sm3?.subject },
   );
   check("its link opens that day", !!sm3 && sm3.text.includes(encodeURIComponent(types.radarPath(day2))));
@@ -430,7 +452,7 @@ async function main() {
   check("Pia is on Pro, Sal isn't", radar.isPro(await state(), "mem_pro", Date.now()) && !radar.isPro(await state(), "mem_sal", Date.now()));
   const piaFree = await radar.radarView("tok-pro-0001", day0, nowIso());
   const salPro = await radar.radarView("tok-sal-0001", day0, nowIso());
-  check("Pro and Free see the same day the same way", piaFree?.rows.length === 2 && salPro?.rows.length === 2 && !("pro" in (piaFree as object)), { pia: piaFree?.rows, sal: salPro?.rows });
+  check("Pro and Free see the same day the same way", piaFree?.rows.length === 4 && piaFree.rows.slice(2).every((x) => x.band === "Low") && salPro?.rows.length === 2 && !("pro" in (piaFree as object)), { pia: piaFree?.rows, sal: salPro?.rows });
 
   console.log("\nPro gets it at once");
   clear();

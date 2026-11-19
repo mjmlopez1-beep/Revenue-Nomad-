@@ -75,7 +75,7 @@ import { aboutWithout, bestPosting, companyKey, isPlaceholderCompany, postingRan
 import { checkPostings, fetchPosting, type PostingFetch } from "./scan/posting";
 import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type FeedFetch, type SiteFetch } from "./scan/sources/ats";
 import {
-  ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
+  ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
   SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, type Entity,
 } from "./tableFields";
@@ -104,7 +104,8 @@ import {
   ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, pauseState, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
-import { FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState } from "./radar/types";
+import { FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStats } from "./radar/types";
+import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, leadersEnabled, leadersProgress,
@@ -413,6 +414,34 @@ export interface State extends MessagingState {
   found?: Record<string, { id: string; at: string }[]>;
   /** Exact-name lookups that matched nothing, by member id (times, the last 24 hours), for their own daily limit. */
   findMisses?: Record<string, string[]>;
+  /**
+   * "Who introduced you", by internal seat id: the seat holder's own note (INTRO_FIELD). Never in a
+   * table, an export or the connector's answers; sent to the seat holder alone, and counted in Pilot metrics.
+   */
+  seatPrivate?: Record<string, { by: string; introducedBy: string; at: string }>;
+  /**
+   * Full-time sales hires a company's career feed lists (Account Executive, SDR, BDR), by internal
+   * company id: the count now, when the feed was last read, when a sales role was first seen, the
+   * last counts (newest last), and each time the count rose the way Crystal Ball reads as a sales
+   * build (lib/radar/signals.ts "sales-build"). Counts only, never a role or a link.
+   */
+  salesBuild?: Record<string, SalesBuildRecord>;
+  /**
+   * A leader the company's own website showed for a function is gone from it, read OK both times
+   * (lib/table.ts saveLeaders). Crystal Ball's "departure" signal. Newest last, 180 days kept. No names.
+   */
+  leaderDepartures?: { companyId: string; fn: string; kind: string; level: string; at: string }[];
+  /** Each company's employee band as it changed (oldest first), so a crossing of 25 or 50 can be read later. */
+  headcount?: Record<string, { band: string; at: string }[]>;
+}
+
+/** State.salesBuild[companyId]. */
+export interface SalesBuildRecord {
+  n: number;
+  at: string;
+  firstAt?: string;
+  hist: { n: number; at: string }[];
+  rises?: { at: string; from: number; to: number }[];
 }
 
 /**
@@ -1633,7 +1662,7 @@ function connectedNote(c: Connected | null): string {
  * click each and easy to guess, so they share their own limits. On a company the member added,
  * or where they hold a seat, they are not limited (see pickExempt).
  */
-const SELL_FIELDS = new Set(["businessModel", "motion", "dealSize", "salesCycle", "industry", "employees", "revenue"]);
+const SELL_FIELDS = new Set(["businessModel", "motion", "dealSize", "salesCycle", "industry", "employees", "revenue", "ownership"]);
 /** A ledger ref for a company pick-list answer (engagements have a revenue and employees "at the time" too; those are not counted). */
 const isPickRef = (ref: string) => ref.startsWith("c_") && SELL_FIELDS.has(refField(ref));
 /** Pick-list answers that earn a credit, per member per rolling 24 hours. More still save, for no credit. */
@@ -1908,6 +1937,8 @@ function missingOnSeat(e: Node, s: State): number {
     if (valueOf(e, s, k)) continue;
     // Function shows as filled when the role gives it away.
     if (k === "function" && functionOf(live(e, s, "role"))) continue;
+    // Why it ended is asked only once the seat has.
+    if (k === "endReason" && live(e, s, "status") !== "Ended" && !/^\d{4}/.test(live(e, s, "end") ?? "")) continue;
     n++;
   }
   return n;
@@ -2841,6 +2872,11 @@ async function fullView(
       if (yours || (!!me && seatHolder(s, idx, e.id, op)?.id === me.id)) holdsSeat = true;
       const openTitle = roleFree(e, s, tracks);
       for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key, yours || (f.key === "role" && openTitle));
+      // "Who introduced you" (INTRO_FIELD): the seat holder's own note, to them alone. Every other viewer's seat has no such cell.
+      if (yours) {
+        const note = s.seatPrivate?.[e.id];
+        cells[INTRO_FIELD.key] = note && note.by === me!.id ? { s: "value", v: note.introducedBy, ver: 0, mine: true } : { s: "empty" };
+      }
       if (postingFree(track) && cells.posting.s === "locked") closedPostings.push({ e, cells });
       // Function is free; derive it from the role when nobody set it.
       if (cells.function.s === "empty") {
@@ -3418,6 +3454,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
       }).length,
       nowMs,
     ),
+    radarModel: crystalModelStats(seed, s, g, nowMs),
     ...(seed.engagements.some((e) => e.holderFrom === PUBLIC_PROFILE) || s.names ? { names: namesStats(seed, s, g, idx) } : {}),
   };
 }
@@ -3739,6 +3776,7 @@ const OPEN_NO_DATES = "This role is still open, so it has no start or end yet.";
 const OPEN_NO_HIRE = "This role is still open, so nobody has been hired for it yet.";
 const OPEN_NO_END = "This role is still open, so it has no end yet.";
 const END_BEFORE_START = "The end month can't be before the start.";
+const NOT_ENDED_YET = "This seat hasn't ended yet. Add why it ended once it has.";
 const ACTIVE_NO_END = "An active seat has no end month yet. Pick Ongoing, or change the status to Ended.";
 const ENDED_NOT_ACTIVE = "This seat has an end month, so it isn't active. Pick Ended, or change the end month.";
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -4083,8 +4121,10 @@ export async function perform(
       const open = track ? !track.closedAt : status === "Open role" || (!status && g.engagements.get(node.id)?.source === "Demand scan");
       if (open && !val("operator")) {
         if (key === "start" || key === "end") throw new ActionError(OPEN_NO_DATES);
-        if (key === "reason" || key === "sourced") throw new ActionError(OPEN_NO_HIRE);
+        if (key === "reason" || key === "sourced" || key === "whyNow") throw new ActionError(OPEN_NO_HIRE);
       }
+      // Why it ended: only once it has (an Ended seat, or one with an end month).
+      if (key === "endReason" && (open || status === "Active" || (status !== "Ended" && !(val("end") && val("end") !== "Ongoing")))) throw new ActionError(NOT_ENDED_YET);
       const dated = (v: string | null): v is string => !!v && v !== "Ongoing";
       if (key === "end" && dated(value)) {
         if (open) throw new ActionError(OPEN_NO_END);
@@ -4281,6 +4321,25 @@ export async function perform(
         case "fill": {
           const node = nodeOf(a.entity, a.id);
           mustSee(companyOf(a.entity, node.id));
+          // "Who introduced you": the seat holder's own note, kept apart from the table (State.seatPrivate). No credit: nobody else ever sees it.
+          if (a.entity === "engagement" && a.field === INTRO_FIELD.key) {
+            if (!holdsSeat(node)) throw new ActionError(SEAT_HOLDER_ONLY);
+            const raw = String(a.value ?? "").trim();
+            const all = (s.seatPrivate ??= {});
+            if (!raw) {
+              delete all[node.id];
+              return { message: "Taken off. Only you ever saw it.", id: outId("engagement", node.id), cells: [] };
+            }
+            const { value, error } = cleanValue(INTRO_FIELD, raw);
+            if (error) throw new ActionError(`${INTRO_FIELD.label}. ${error}`);
+            const had = !!all[node.id];
+            all[node.id] = { by: me.id, introducedBy: value!, at: now };
+            return {
+              message: `${had ? "Updated" : "Saved"}. Only you see who introduced you. Merlin only counts it.`,
+              id: outId("engagement", node.id),
+              cells: [{ entity: "engagement" as const, id: outId("engagement", node.id), field: INTRO_FIELD.key, cell: { s: "value" as const, v: value!, ver: 0, mine: true } }],
+            };
+          }
           const f = fieldOf(a.entity, a.field);
           // A person's title, email, phone and LinkedIn come only from a member who can see who the
           // person is: nobody knows the email of someone they can't name. Seeing the name means having
@@ -6994,6 +7053,55 @@ function careerCompanies(seed: Seed, s: State): AtsCompany[] {
   return out.sort((a, b) => b.n - a.n || a.c.name.localeCompare(b.c.name)).map((x) => x.c);
 }
 
+/** Sales-build rises within this many days of each other count as one jump. */
+const SALES_JUMP_DAYS = 30;
+/** Counts kept per company (newest last). */
+const SALES_HIST_MAX = 12;
+
+/**
+ * Full-time sales hires each career feed listed this run (by domain), kept per company
+ * (State.salesBuild): counts and dates only. A rise Crystal Ball reads as a sales build is
+ * recorded once: from none to one or more, or two or more more than the lowest count of the last
+ * 30 days. The first read of a company is its baseline, never a rise.
+ */
+export function noteSalesHires(d: State, seed: Seed, byDomain: Map<string, number>, at: string): number {
+  const g = graph(seed, d);
+  const ids = new Map<string, string>();
+  for (const c of g.companies.values()) {
+    const host = hostOf(live(c, d, "website"));
+    if (host && !ids.has(host)) ids.set(host, c.id);
+  }
+  const all = (d.salesBuild ??= {});
+  const atMs = Date.parse(at);
+  let rises = 0;
+  for (const [domain, n] of byDomain) {
+    const id = ids.get(domain);
+    if (!id) continue;
+    const r = all[id];
+    if (!r) {
+      all[id] = { n, at, ...(n > 0 ? { firstAt: at } : {}), hist: [{ n, at }] };
+      continue;
+    }
+    const recent = r.hist.filter((x) => atMs - Date.parse(x.at) <= SALES_JUMP_DAYS * DAY_MS);
+    const low = Math.min(r.n, ...recent.map((x) => x.n));
+    const last = r.rises?.[r.rises.length - 1];
+    const lately = !!last && atMs - Date.parse(last.at) <= SALES_JUMP_DAYS * DAY_MS;
+    if (!lately && ((r.n === 0 && n >= 1) || n - low >= 2)) {
+      (r.rises ??= []).push({ at, from: r.n === 0 ? 0 : low, to: n });
+      if (r.rises.length > 6) r.rises.splice(0, r.rises.length - 6);
+      rises++;
+    }
+    if (n > 0 && !r.firstAt) r.firstAt = at;
+    if (n !== r.n) {
+      r.hist.push({ n, at });
+      if (r.hist.length > SALES_HIST_MAX) r.hist.splice(0, r.hist.length - SALES_HIST_MAX);
+    }
+    r.n = n;
+    r.at = at;
+  }
+  return rises;
+}
+
 /**
  * Career-page sources for this run (lib/scan/sources/ats.ts): discovery for the companies that are
  * due, then one source per applicant tracking system over every board found so far. `save` keeps
@@ -7010,13 +7118,15 @@ export async function careerSources(opts: { feed?: FeedFetch; site?: SiteFetch; 
   const byDomain = new Map(companies.map((c) => [c.domain.toLowerCase(), c]));
   const boards = Object.entries(all).flatMap(([d, e]) => (e.board && byDomain.has(d) ? [{ board: e.board, company: byDomain.get(d)! }] : []));
   const gone = new Set<string>();
-  const sources = atsSources(boards, { fetch: opts.feed ?? fetchFeed, gone: (d) => gone.add(d) });
+  const sales = new Map<string, number>();
+  const sources = atsSources(boards, { fetch: opts.feed ?? fetchFeed, gone: (d) => gone.add(d), salesCount: (d, n) => sales.set(d, n) });
   const save = () =>
-    mutate((d) => {
+    mutate((d, seedD) => {
       const at = new Date(now).toISOString();
       const ats = (d.scan.ats ??= {});
       Object.assign(ats, fresh);
       for (const x of gone) ats[x] = { at };
+      if (sales.size) noteSalesHires(d, seedD, sales, at);
       return { found: Object.values(fresh).filter((e) => e.board).length, tried: Object.keys(fresh).length, gone: gone.size };
     });
   return { sources, save };
@@ -7434,6 +7544,52 @@ export function saveAbout(outcomes: AboutOutcome[], run: AboutRunSummary | null,
 }
 
 /** Pilot metrics: the run under way (or the last one), and every company's status on file. */
+/**
+ * Pilot metrics: Crystal Ball's model. Merlin's observed transitions between fractional leadership
+ * seats (counted as lib/radar/predict.ts countTransitions counts them, the same seats the radar
+ * reads), the new seat and company facts on file, the sales builds and the departures. Counts
+ * only: no company, no person, and "who introduced you" only as how many seats have one.
+ */
+function crystalModelStats(seed: Seed, s: State, g: Graph, nowMs: number): NonNullable<RadarStats["model"]> {
+  const tracks = tracksOf(seed, s);
+  const firms = firmsInReview(seed, s);
+  const points: SeatPoint[] = [];
+  const facts = { ownership: 0, whyNow: 0, endReason: 0, introducedBy: 0, revenueThen: 0, employeesThen: 0 };
+  for (const e of g.engagements.values()) {
+    if (live(e, s, "whyNow")) facts.whyNow++;
+    if (live(e, s, "endReason")) facts.endReason++;
+    if (live(e, s, "revenue")) facts.revenueThen++;
+    if (live(e, s, "employees")) facts.employeesThen++;
+    if (firms.has(e.companyId) || isOpenRole(e, s, tracks) || (e.source === "Demand scan" && !live(e, s, "operator"))) continue;
+    const type = live(e, s, "type");
+    if (type && !FRACTIONAL_TYPES.includes(type)) continue;
+    if (belowLead(live(e, s, "role"))) continue;
+    const fn = fnOf(e, s);
+    const start = live(e, s, "start");
+    if (!fn || fn === "Other" || !start || !/^\d{4}(-\d{2})?$/.test(start)) continue;
+    const then = live(e, s, "revenue");
+    const now = live(g.companies.get(e.companyId), s, "revenue");
+    points.push({ companyId: e.companyId, fn, ym: start, stage: (isStage(then) ? then : isStage(now) ? now : null) as SeatPoint["stage"] });
+  }
+  for (const c of g.companies.values()) if (live(c, s, "ownership")) facts.ownership++;
+  facts.introducedBy = Object.keys(s.seatPrivate ?? {}).filter((id) => g.engagements.has(id)).length;
+  const counts = countTransitions(points);
+  const pairs: { from: string; to: string; n: number }[] = [];
+  for (const [from, row] of Object.entries(counts.byStage.all ?? {})) for (const [to, n] of Object.entries(row)) pairs.push({ from, to, n });
+  pairs.sort((a, b) => b.n - a.n || a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+  const sum = (stage: string) => Object.values(counts.byStage[stage] ?? {}).reduce((n, row) => n + Object.values(row).reduce((a, b) => a + b, 0), 0);
+  const builds = Object.entries(s.salesBuild ?? {}).filter(([id]) => g.companies.has(id));
+  return {
+    transitions: counts.total,
+    companies: counts.companies,
+    byStage: RN_REVENUE.map((stage) => ({ stage, n: sum(stage) })),
+    top: pairs.slice(0, 8),
+    facts,
+    salesBuild: { companies: builds.length, rises: builds.reduce((n, [, r]) => n + (r.rises?.length ?? 0), 0) },
+    departures: (s.leaderDepartures ?? []).filter((x) => nowMs - Date.parse(x.at) < 180 * DAY_MS).length,
+  };
+}
+
 function aboutStats(s: State, g: Graph, nowMs: number): NonNullable<AdminStats["about"]> {
   const onFile = { filled: 0, skipped: 0, failed: 0 };
   const reasons = new Map<string, number>();
@@ -7543,6 +7699,9 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
     const all = (s.leaders ??= {});
     const g = graph(seed, s);
     let n = 0;
+    const nowMs = Date.parse(now);
+    // Departures older than this are let go.
+    s.leaderDepartures = (s.leaderDepartures ?? []).filter((x) => nowMs - Date.parse(x.at) < 180 * DAY_MS);
     for (const o of outcomes) {
       if (!g.companies.has(o.companyId)) continue;
       const prev = all[o.companyId];
@@ -7550,12 +7709,17 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
       if (o.status === "found" || o.status === "none") {
         const functions = mergeFunctions(prev?.functions, o.functions);
         const found = Object.keys(functions).length > 0;
-        all[o.companyId] = { status: found ? "found" : "none", checkedAt: now, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts };
+        // A leader on file is gone: only when the last read and this one both read the site (a
+        // failure keeps what was on file), and a team page read before was read again.
+        if (prev && leadersReadOk(prev) && (!prev.team || o.team))
+          for (const [fn, l] of Object.entries(prev.functions))
+            if (!functions[fn] && FUNCTIONS.includes(fn) && fn !== "Other") s.leaderDepartures.push({ companyId: o.companyId, fn, kind: l.kind, level: l.level, at: now });
+        all[o.companyId] = { status: found ? "found" : "none", checkedAt: now, ok: true, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts };
       } else {
         // The site could not be read this time: what is on file stays.
         const functions = prev?.functions ?? {};
         const kept = Object.keys(functions).length > 0;
-        all[o.companyId] = { status: kept ? "found" : o.status, checkedAt: now, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts };
+        all[o.companyId] = { status: kept ? "found" : o.status, checkedAt: now, ok: false, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts };
       }
       n++;
     }
@@ -7563,6 +7727,12 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
     return n;
   });
 }
+
+/**
+ * The record's last read reached the site and its pages (found or none). A record from before `ok`
+ * was kept reads the same from its status and reason: a failure stores its reason, a read never does.
+ */
+const leadersReadOk = (r: LeadersRecord) => r.ok ?? ((r.status === "found" || r.status === "none") && (!r.why || r.why === "no leaders found"));
 
 /** CompanyRec.leads: the functions with a leader on file, in the order functions are listed. The page's address stays out at a hidden company. */
 function leadsOf(s: State, companyId: string, hidden: boolean): CompanyLeads | undefined {

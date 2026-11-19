@@ -141,7 +141,8 @@ async function main() {
   check("new roles are counted for all functions and for the member's own", sal?.newRoles === 3 && sal.newRolesMine === 2 && mo?.newRolesMine === 1, { sal: sal?.newRolesMine, mo: mo?.newRolesMine });
   check("hidden companies are counted for that member (a seat holder sees their own company)", sal?.newRolesMineHidden === 1 && mo?.newRolesMineHidden === 1, { sal: sal?.newRolesMineHidden, mo: mo?.newRolesMineHidden });
   check("functions come most roles first", JSON.stringify(sal?.byFunction) === JSON.stringify([{ function: "Sales", n: 2 }, { function: "Marketing", n: 1 }]), sal?.byFunction);
-  check("facts missing on the member's own seats are counted", sal?.seatFactsMissing === 13 && mo?.seatFactsMissing === 0, { sal: sal?.seatFactsMissing, mo: mo?.seatFactsMissing });
+  // 14: the seat's 13 facts and its Why now (Why it ended is only missing once a seat has ended).
+  check("facts missing on the member's own seats are counted", sal?.seatFactsMissing === 14 && mo?.seatFactsMissing === 0, { sal: sal?.seatFactsMissing, mo: mo?.seatFactsMissing });
   check("credits, function and links are the member's own", sal?.credits === 25 && sal.function === "Sales" && sal.appUrl === BASE && sal.unsubscribeUrl.startsWith(`${BASE}/api/table/unsubscribe?m=m_`) && sal.unsubscribeUrl !== mo?.unsubscribeUrl, sal);
   check("the app link carries no sign-in code", !sal?.appUrl.includes("tok-") && !sal?.unsubscribeUrl.includes("tok-"));
 

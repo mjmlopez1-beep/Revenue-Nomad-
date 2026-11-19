@@ -19,11 +19,11 @@ import type { Cell, EngagementRec } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import { CompanyLogo, IconCheck, LockedName, IconChevron, IconPencil, IconPlus, fmtValue } from "../ui/shared";
-import { COMPANY_GTM, SEAT_ASK, cellKey, shown, type CoInfo, type FactRef, type SeatInfo } from "./model";
+import { PRIVATE_ASK, SEAT_ASK, SEAT_CO_ASK, cellKey, shown, type CoInfo, type FactRef, type SeatInfo } from "./model";
 import { BENCH_RATE_HELP, atTime, plural, store } from "./hooks";
 import { earnRoom } from "./NextMove";
 import { MonthYear } from "./MonthYear";
-import { RateWho, shortLabel, useUi, type RateChoice } from "./ui";
+import { RateWho, shortLabel, splitPicks, useUi, type RateChoice } from "./ui";
 import { FindSeats, seatsFound } from "../onboard/FindSeats";
 import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
@@ -73,8 +73,12 @@ const SEAT_Q: Record<string, { q: string; hint?: string }> = {
   hours: { q: "About how many hours a week?" },
   revenue: { q: "What was their revenue when you started?" },
   employees: { q: "How many people worked there then?" },
+  whyNow: { q: "What made them bring someone in when they did?", hint: "Pick all that fit." },
+  endReason: { q: "Why did the seat end?" },
+  introducedBy: { q: "Who introduced you to them?", hint: "Only you see this. Merlin only counts it, never shows it to anyone." },
 };
 const companyQ = (name: string): Record<string, { q: string; hint?: string }> => ({
+  ownership: { q: `Who owns ${name}?` },
   businessModel: { q: `Who does ${name} sell to?` },
   motion: { q: `How does ${name} sell?` },
   dealSize: { q: `How big is a typical deal at ${name}?` },
@@ -98,7 +102,7 @@ function useFill(t: FactRef, onSaved: OnSaved) {
     setBusy(value!);
     const r = await ui.act({ type: "fill", entity: t.entity, id: t.id, field: t.field, value: value! }, { quiet: true });
     setBusy(null);
-    if (r.ok) onSaved(t, { earned: !r.capped && !/^Updated/.test(r.message) });
+    if (r.ok) onSaved(t, { earned: !r.capped && !/^Updated/.test(r.message) && !PRIVATE_ASK.includes(t.field) });
     else setErr(r.message);
   };
   return { busy, err, setErr, save };
@@ -110,6 +114,38 @@ const Err = ({ text }: { text: string | null }) =>
       {text}
     </p>
   ) : null;
+
+/** Several picks (Why now): chips that toggle, and Save. */
+function MultiAsk({ t, f, initial, onSaved }: { t: FactRef; f: FieldDef; initial?: string; onSaved: OnSaved }) {
+  const { busy, err, save } = useFill(t, onSaved);
+  const [picked, setPicked] = useState<string[]>(() => splitPicks(initial));
+  const list = f.options ?? [];
+  const value = list.filter((o) => picked.includes(o)).join(", ");
+  return (
+    <>
+      <div className="ys-chips" role="group" aria-label={f.label}>
+        {list.map((o) => (
+          <button
+            key={o}
+            type="button"
+            aria-pressed={picked.includes(o)}
+            className={`chip tp-chipbtn ys-chip${picked.includes(o) ? " chip-on" : ""}`}
+            disabled={!!busy}
+            onClick={() => setPicked((p) => (p.includes(o) ? p.filter((x) => x !== o) : [...p, o]))}
+          >
+            {o}
+          </button>
+        ))}
+      </div>
+      <div className="ys-inputrow">
+        <button type="button" className="btn btn-primary ys-save" disabled={!picked.length || !!busy || value === (initial ?? "")} onClick={() => save(value)}>
+          {busy ? "Saving" : "Save"}
+        </button>
+      </div>
+      <Err text={err} />
+    </>
+  );
+}
 
 /** A pick list: every option is a chip, and one tap saves. Asked again, the current answer is marked and tapping it keeps it. */
 function ChoiceAsk({ t, f, fn, initial, onSaved, onKeep }: { t: FactRef; f: FieldDef; fn: string | null; initial?: string; onSaved: OnSaved; onKeep?: () => void }) {
@@ -415,7 +451,7 @@ function SeatCard({
       const v = c?.s === "value" ? (f === "hours" ? c.v : fmtValue("engagement", f, c.v)) : c?.s === "reported" ? "Under review" : b ?? null;
       if (!v) return [];
       const act = c?.s === "value" ? (c.mine || just(e.id, f) ? "change" : c.system ? null : "report") : null;
-      return [{ k: `e.${f}`, v, label: shortLabel(def), note: b ? "Shared for benchmarks only" : null, s: just(e.id, f), act, t: { entity: "engagement", id: e.id, field: f }, cell: c }];
+      return [{ k: `e.${f}`, v, label: shortLabel(def), note: b ? "Shared for benchmarks only" : PRIVATE_ASK.includes(f) ? "Only you see this" : null, s: just(e.id, f), act, t: { entity: "engagement", id: e.id, field: f }, cell: c }];
     }),
     ...coAsks.flatMap((f): Known[] => {
       const c = i.c.cells[f];
@@ -629,12 +665,18 @@ function SeatCard({
             <div className={`ys-q${editing ? " again" : ""}`} key={`${editing ? "again:" : ""}${active.key}`} ref={qRef} data-ask={cellKey(active.t.id, active.t.field)}>
               <div className="ys-q-top">
                 <h2 className="ys-q-h">{active.q}</h2>
-                <span className={`ys-q-earn num${earns && !editing ? "" : " none"}`}>{editing ? "Changes earn no credit" : earns ? "+1 credit" : "No credit today"}</span>
+                {PRIVATE_ASK.includes(active.t.field) ? (
+                  <span className="ys-q-earn num none">Only you see this</span>
+                ) : (
+                  <span className={`ys-q-earn num${earns && !editing ? "" : " none"}`}>{editing ? "Changes earn no credit" : earns ? "+1 credit" : "No credit today"}</span>
+                )}
               </div>
               {active.hint && !editing && <p className="ys-q-hint">{active.hint}</p>}
               <div className="ys-q-c">
                 {active.t.field === "rate" && active.t.entity === "engagement" ? (
                   <RateAsk t={active.t} pricing={shown(e.cells.pricing)} initial={editing ? againValue : undefined} onSaved={onAnswered} />
+                ) : active.f.kind === "choice" && active.f.multi ? (
+                  <MultiAsk t={active.t} f={active.f} initial={editing ? againValue : undefined} onSaved={onAnswered} />
                 ) : active.f.kind === "choice" ? (
                   <ChoiceAsk t={active.t} f={active.f} fn={fn} initial={editing ? againValue : undefined} onSaved={onAnswered} onKeep={() => setReask(null)} />
                 ) : active.f.kind === "month" || active.f.kind === "monthOrOngoing" ? (
@@ -833,7 +875,7 @@ export function Seats({
   // Everything a seat can hold: its own facts, and how the company sells (asked once per company, on the first seat there).
   const totalOf = (s: SeatInfo) => {
     const firstThere = seats.find((x) => x.i.c.id === s.i.c.id) === s;
-    const co = firstThere && !s.i.c.hidden ? COMPANY_GTM.filter((f) => s.i.c.cells[f]).length : 0;
+    const co = firstThere && !s.i.c.hidden ? SEAT_CO_ASK.filter((f) => s.i.c.cells[f]).length : 0;
     return SEAT_ASK.filter((f) => s.e.cells[f] && !(f === "end" && isActive(s.e) && s.e.cells.end.s === "empty")).length + co;
   };
   const left = list.reduce((n, s) => n + leftOf(s), 0);

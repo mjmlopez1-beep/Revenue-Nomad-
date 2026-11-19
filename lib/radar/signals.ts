@@ -4,18 +4,26 @@
  * anything leaves the server.
  *
  * When each one happened, and what counts:
- *   adjacent  a fractional leadership hire (a hire whose title doesn't read below Lead, as Recently
- *             hired counts them: isLeaderHire in app/post/model.ts) came into the table in the
- *             window: the day a member added the seat, the day the seat scan added it
- *             (SeedEngagement.addedAt), or the day a member named who took an open role
- *             (lib/hireAlerts.ts seatAddedTimes). Its start is in the last 12 months: an old seat
- *             found today is no news.
- *   role      an open role first seen by the scan in the window, still open, listed in its last
- *             scan, and posted in the last 14 days when the board says (the weekly email's "new").
- *   seat      a seat's end month was recorded in the window (a member added or corrected it), or
- *             its status became Ended, and it ended in the last 6 months. Leadership seats only.
- *   funding   an event from lib/radar/sources/funding.ts (none until a provider is added).
+ *   adjacent    a fractional leadership hire (a hire whose title doesn't read below Lead, as Recently
+ *               hired counts them: isLeaderHire in app/post/model.ts) came into the table in the
+ *               window: the day a member added the seat, the day the seat scan added it
+ *               (SeedEngagement.addedAt), or the day a member named who took an open role
+ *               (lib/hireAlerts.ts seatAddedTimes). Its start is in the last HIRE_FRESH_MONTHS: how
+ *               much it still says is the timing curve's call (lib/radar/predict.ts timing), per member.
+ *   role        an open role first seen by the scan in the window, still open, listed in its last
+ *               scan, and posted in the last 14 days when the board says (the weekly email's "new").
+ *   seat        a seat's end month was recorded in the window (a member added or corrected it), or
+ *               its status became Ended, and it ended in the last 6 months. Leadership seats only.
+ *   funding     an event from lib/radar/sources/funding.ts (none until a provider is added).
+ *   sales-build the company's career feed went from no full-time sales hires (AE, SDR, BDR) to some,
+ *               or rose by two or more in 30 days (State.salesBuild, lib/table.ts noteSalesHires).
+ *   departure   a leader the company's own website listed for a function is gone from it, read OK
+ *               both times (State.leaderDepartures, lib/table.ts saveLeaders).
  * Firms kept for an admin's review are no clients: nothing there is a signal.
+ *
+ * Every signal also carries what Crystal Ball's likelihood reads (lib/radar/match.ts scoreFor): the
+ * stage (revenue when the seat started, else the company's band now), the ownership type, the
+ * company's recent fractional leadership seats, and, for an ended seat, why it ended.
  */
 import { tableInternals as T, type Seed, type State } from "../table";
 import { FRACTIONAL_TYPES } from "../tableFields";
@@ -25,9 +33,10 @@ import { titleWithout } from "../scan/clean";
 import { siteKey } from "../tableFields";
 import type { RadarKind } from "./types";
 import type { FundingCompany, FundingEvent } from "./sources/funding";
+import { countTransitions, isStage, type SeatPoint, type TransitionCounts } from "./predict";
 
-/** An adjacent hire is news while its start is at most this many months ago. */
-export const HIRE_FRESH_MONTHS = 12;
+/** An adjacent hire is news while its start is at most this many months ago (the longest timing window, lib/radar/predict.ts). */
+export const HIRE_FRESH_MONTHS = 18;
 /** An ended seat is news while its end is at most this many months ago. */
 export const END_FRESH_MONTHS = 6;
 /** A role the scan first saw is new while its posting is at most this old (when the board gives a date). */
@@ -41,10 +50,12 @@ export interface CompanyFacts {
   revenue: string | null;
   country: string | null;
   region: string | null;
+  /** B2B, B2C or B2B2C, when on file (a rule reads it). */
+  model?: string | null;
 }
 
 export interface RawSignal {
-  /** Never the same key twice to a member: "role:<seat public id>", "hire:…", "end:…", "fund:<company public id>:<day>". */
+  /** Never the same key twice to a member: "role:<seat public id>", "hire:…", "end:…", "fund:<company public id>:<day>", "build:…:<day>", "gone:…:<function>:<day>". */
   key: string;
   kind: RadarKind;
   at: string;
@@ -52,7 +63,7 @@ export interface RawSignal {
   /** Internal ids: never sent. */
   companyId: string;
   engagementId: string | null;
-  /** The function hired, the open role's, the ended seat's. Null for funding. */
+  /** The function hired, the open role's, the ended seat's, the departed leader's. Null for funding and a sales build. */
   fn: string | null;
   /** An open role's title without the company's name or site in it. */
   title: string | null;
@@ -64,6 +75,20 @@ export interface RawSignal {
   hiredFns: string[];
   /** Functions a full-time leader on the company's website leads, with the year since when ("" when it doesn't say). Left out when none. */
   ledFullTime?: Record<string, string>;
+  /** Crystal Ball's stage: the revenue band when the seat started (on file), else the company's band now. */
+  stage?: string | null;
+  /** Ownership on file (OWNERSHIP_TYPES), or read from a seat's "PE deal". Null: Unknown. */
+  owner?: string | null;
+  /** adjacent: the hire's start month. */
+  ym?: string | null;
+  /** The company's fractional leadership seats that started in the last HIRE_FRESH_MONTHS (an adjacent hire's own included). */
+  recent?: { fn: string; ym: string }[];
+  /** seat: why it ended, when the seat holder said. */
+  endReason?: string | null;
+  /** sales-build: the count of full-time sales hires before and now. */
+  build?: { from: number; to: number };
+  /** departure: who was on file (full-time, fractional; the level). Never a name. */
+  gone?: { kind: string; level: string };
 }
 
 type G = ReturnType<typeof T.graph>;
@@ -93,6 +118,7 @@ export function companyFacts(g: G, s: State, companyId: string): CompanyFacts | 
     revenue: T.live(c, s, "revenue"),
     country: geo.country,
     region: geo.region,
+    model: T.live(c, s, "businessModel"),
   };
 }
 
@@ -101,6 +127,51 @@ export function fundingCompanies(seed: Seed, s: State): FundingCompany[] {
   const g = T.graph(seed, s);
   const firms = T.firmsInReview(seed, s);
   return [...g.companies.values()].filter((c) => !firms.has(c.id)).map((c) => ({ id: c.id, name: c.name, domain: siteKey(T.live(c, s, "website")) || null }));
+}
+
+/**
+ * A company's ownership as Crystal Ball reads it: the company fact, else "PE-backed" when a seat
+ * holder said a PE deal was why the seat came about. Nothing is guessed from a name. Null: Unknown.
+ */
+export function ownershipOf(s: State, companyId: string, seats: EngNode[]): string | null {
+  const v = s.values[`${companyId}.ownership`];
+  if (v?.status === "live" && v.value) return v.value;
+  if (seats.some((e) => (T.live(e, s, "whyNow") ?? "").split(", ").includes("PE deal"))) return "PE-backed";
+  return null;
+}
+
+/** A seat's stage: the revenue band when it started (the seat's own "Revenue at the time"), else the company's band now. */
+export function stageOf(s: State, e: EngNode | null, companyRevenue: string | null): string | null {
+  const then = e ? T.live(e, s, "revenue") : null;
+  return isStage(then) ? then : isStage(companyRevenue) ? companyRevenue : null;
+}
+
+/**
+ * Every fractional or interim leadership seat with a start month, for counting transitions
+ * (lib/radar/predict.ts countTransitions). Firms in review are left out. Counts only leave here.
+ */
+export function seatPoints(seed: Seed, s: State): SeatPoint[] {
+  const g = T.graph(seed, s);
+  const tracks = T.tracksOf(seed, s);
+  const firms = T.firmsInReview(seed, s);
+  const out: SeatPoint[] = [];
+  for (const e of g.engagements.values()) {
+    if (firms.has(e.companyId) || !isLeaderRaw(e, s, tracks)) continue;
+    const fn = named(T.fnOf(e, s));
+    const start = T.live(e, s, "start");
+    if (!fn || !start || !/^\d{4}(-\d{2})?$/.test(start)) continue;
+    const c = g.companies.get(e.companyId);
+    out.push({ companyId: e.companyId, fn, ym: start, stage: stageOf(s, e, c ? T.live(c, s, "revenue") : null) as SeatPoint["stage"] });
+  }
+  return out;
+}
+
+const countsMemo = new WeakMap<State, TransitionCounts>();
+/** Merlin's observed transitions (A -> B by stage), for the Beta update. Kept per state. */
+export function observedTransitions(seed: Seed, s: State): TransitionCounts {
+  let c = countsMemo.get(s);
+  if (!c) countsMemo.set(s, (c = countTransitions(seatPoints(seed, s))));
+  return c;
 }
 
 /**
@@ -132,13 +203,33 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     }
     return h;
   };
+  // The company's fractional leadership seats of the last HIRE_FRESH_MONTHS, oldest first.
+  const recentOf = (companyId: string) =>
+    (byCompany.get(companyId) ?? [])
+      .filter((e) => isLeaderRaw(e, s, tracks))
+      .flatMap((e) => {
+        const fn = named(T.fnOf(e, s));
+        const ym = hireMonth(T.live(e, s, "start"));
+        return fn && ym && monthsAgo(ym, nowMs) <= HIRE_FRESH_MONTHS && monthsAgo(ym, nowMs) >= 0 ? [{ fn, ym }] : [];
+      })
+      .sort((a, b) => a.ym.localeCompare(b.ym));
   const out: RawSignal[] = [];
   const push = (x: Omit<RawSignal, "co" | "hiredFns" | "atMs"> & { atMs?: number }) => {
     if (firms.has(x.companyId)) return;
     const co = companyFacts(g, s, x.companyId);
     if (!co) return;
     const ft = Object.entries(s.leaders?.[x.companyId]?.functions ?? {}).filter(([, l]) => l.kind === "full-time");
-    out.push({ ...x, atMs: x.atMs ?? Date.parse(x.at), co, hiredFns: hiredFns(x.companyId), ...(ft.length ? { ledFullTime: Object.fromEntries(ft.map(([fn, l]) => [fn, l.since?.slice(0, 4) ?? ""])) } : {}) });
+    const e = x.engagementId ? g.engagements.get(x.engagementId) ?? null : null;
+    out.push({
+      ...x,
+      atMs: x.atMs ?? Date.parse(x.at),
+      co,
+      hiredFns: hiredFns(x.companyId),
+      ...(ft.length ? { ledFullTime: Object.fromEntries(ft.map(([fn, l]) => [fn, l.since?.slice(0, 4) ?? ""])) } : {}),
+      stage: stageOf(s, e, co.revenue),
+      owner: ownershipOf(s, x.companyId, byCompany.get(x.companyId) ?? []),
+      recent: recentOf(x.companyId),
+    });
   };
 
   // 1. Adjacent hires: leadership seats that came into the table in the window.
@@ -150,7 +241,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
     const ym = hireMonth(T.live(e, s, "start"));
     if (!ym || monthsAgo(ym, nowMs) > HIRE_FRESH_MONTHS) continue;
-    push({ key: `hire:${T.pubId(e.id)}`, kind: "adjacent", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null });
+    push({ key: `hire:${T.pubId(e.id)}`, kind: "adjacent", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, ym });
   }
 
   // 2. Open roles the scan first saw in the window.
@@ -185,7 +276,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (ym && monthsAgo(ym, nowMs) > END_FRESH_MONTHS) continue;
     const fn = named(T.fnOf(e, s));
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
-    push({ key: `end:${T.pubId(e.id)}`, kind: "seat", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null });
+    push({ key: `end:${T.pubId(e.id)}`, kind: "seat", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, endReason: T.live(e, s, "endReason") });
   }
 
   // 4. Funding, from the source (nothing until a provider is added).
@@ -195,5 +286,49 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     push({ key: `fund:${T.pubId(f.companyId)}:${f.at.slice(0, 10)}`, kind: "funding", at: new Date(at).toISOString(), atMs: at, companyId: f.companyId, engagementId: null, fn: null, title: null, round: f.round, amount: f.amount });
   }
 
+  // 5. First sales hires posted, or a jump in them (the career feeds' counts).
+  for (const [companyId, r] of Object.entries(s.salesBuild ?? {})) {
+    if (!g.companies.has(companyId)) continue;
+    for (const x of r.rises ?? []) {
+      const at = Date.parse(x.at);
+      if (!inWindow(at)) continue;
+      push({ key: `build:${T.pubId(companyId)}:${x.at.slice(0, 10)}`, kind: "sales-build", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn: null, title: null, build: { from: x.from, to: x.to } });
+    }
+  }
+
+  // 6. A leader gone from the company's own website.
+  for (const x of s.leaderDepartures ?? []) {
+    const at = Date.parse(x.at);
+    if (!inWindow(at) || !g.companies.has(x.companyId)) continue;
+    push({ key: `gone:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, kind: "departure", at: new Date(at).toISOString(), atMs: at, companyId: x.companyId, engagementId: null, fn: x.fn, title: null, gone: { kind: x.kind, level: x.level } });
+  }
+
   return out.sort((a, b) => b.atMs - a.atMs);
+}
+
+/**
+ * Note each company's employee band when it changed (State.headcount, oldest first), so a company
+ * crossing 25 or 50 people can be read later. Our records' band is the start and stays implicit:
+ * a company is noted only once its band differs from it, and then with that band first (dated when
+ * the records were built). Called once a day by the radar's run.
+ */
+export function recordHeadcount(d: State, seed: Seed, nowIso: string): number {
+  const g = T.graph(seed, d);
+  const all = (d.headcount ??= {});
+  let n = 0;
+  for (const c of g.companies.values()) {
+    const band = T.live(c, d, "employees");
+    if (!band) continue;
+    const was = (c as { seedFields?: Record<string, string | undefined> }).seedFields?.employees ?? null;
+    if (!all[c.id]) {
+      if (band === was) continue;
+      all[c.id] = was ? [{ band: was, at: seed.builtAt ?? nowIso }] : [];
+    }
+    const h = all[c.id];
+    if (h[h.length - 1]?.band === band) continue;
+    h.push({ band, at: nowIso });
+    if (h.length > 12) h.splice(0, h.length - 12);
+    n++;
+  }
+  return n;
 }

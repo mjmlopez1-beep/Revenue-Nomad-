@@ -132,7 +132,7 @@ const SOURCE_SAY: Record<string, string> = {
 /** A role still open: the scan follows it and it has not closed, or it is marked Open role. */
 const openRole = (e: EngagementRec) => (e.opened ? !e.closed : isOpenSeat(e));
 /** Company pick lists that share the 5 a day that earn (Me.sellEarnLeft). */
-const SELL_PICKS = ["industry", "employees", "revenue", ...COMPANY_GTM];
+const SELL_PICKS = ["industry", "employees", "revenue", "ownership", ...COMPANY_GTM];
 const SELL_NOTE = "Only 5 answers a day for a company's industry, size, revenue or how they sell earn a credit. You can still add them.";
 /** The day a role closed, in the viewer's time zone. */
 const closedOn = (e: EngagementRec) => (e.closedAt ? fmtStamp(e.closedAt) : e.closed ? fmtStamp(`${e.closed}T12:00:00`) : "");
@@ -1251,7 +1251,7 @@ function EngagementCard({ e, companyId, company, focus, coPeople = [] }: { e: En
         id={e.id}
         cells={e.cells}
         fields={ENG_ROWS}
-        noAdd={vacant ? ["operator", "start", "end", "reason", "sourced"] : []}
+        noAdd={vacant ? ["operator", "start", "end", "endReason", "reason", "whyNow", "sourced"] : shown(e.cells.status) !== "Ended" ? ["endReason"] : []}
         labels={open ? { rate: "Posted rate", hours: "Posted hours" } : {}}
         render={{ function: fnRender, type: (v) => <span className="chip tp-fn">{v}</span>, status: statusText }}
         notes={{
@@ -1392,7 +1392,7 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
   );
 }
 
-const COMPANY_ROWS = ["website", "linkedin", "industry", "employees", "revenue", "hq"];
+const COMPANY_ROWS = ["website", "linkedin", "industry", "employees", "revenue", "ownership", "hq"];
 const UNLOCK_COMPANY = `Unlock company · ${COMPANY_PRICE_SAY}`;
 /**
  * What a seat counts as, by the same rule as the server's friendliness() (the header's "N

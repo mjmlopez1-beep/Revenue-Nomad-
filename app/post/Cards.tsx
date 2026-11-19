@@ -123,12 +123,12 @@ function FirmoLine({ c }: { c: Row["i"]["c"] }) {
  * The radar's day: the company, what happened there and one button that spends
  * nothing by accident (it is its own tap, never the card's).
  */
-const SignalCard = memo(function SignalCard({ r, onOpen, lines, action }: { r: Row; onOpen: (r: Row) => void; lines: string[]; action: SignalRows["action"] }) {
+const SignalCard = memo(function SignalCard({ r, onOpen, lines, notes, action }: { r: Row; onOpen: (r: Row) => void; lines: string[]; notes?: string[]; action: SignalRows["action"] }) {
   return (
     <article className="tp-pcard rd-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} onOpen={onOpen} />
       {/* The header already gives the industry, size and revenue: the card says what happened, then the button. */}
-      <SignalLines lines={lines} />
+      <SignalLines lines={lines} notes={notes} />
       <div className="rd-pcard-act" onClick={(e) => e.stopPropagation()}>
         {action(r.i)}
       </div>
@@ -368,7 +368,7 @@ export function CardList({
     <div className="tp-cards">
       {rows.map((r) =>
         type === "companies" && signals ? (
-          <SignalCard key={r.key} r={r} onOpen={onOpen} lines={signals.lines.get(r.i.c.id) ?? NO_LINES} action={signals.action} />
+          <SignalCard key={r.key} r={r} onOpen={onOpen} lines={signals.lines.get(r.i.c.id) ?? NO_LINES} notes={signals.notes?.get(r.i.c.id)} action={signals.action} />
         ) : type === "companies" ? (
           <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} miss={miss} hire={hire} />
         ) : type === "engagements" ? (

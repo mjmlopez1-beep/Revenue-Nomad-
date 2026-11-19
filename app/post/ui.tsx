@@ -189,7 +189,7 @@ export const FROM_SAY: Record<string, string> = { records: "From Revenue Nomad r
  * Company pick lists that earn a credit for only 5 answers a day (Me.sellEarnLeft): industry,
  * size, revenue and the four under How they sell.
  */
-const PICK_LIMITED = ["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle"];
+const PICK_LIMITED = ["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "ownership"];
 const pickLimited = (t: FactRef) => t.entity === "company" && PICK_LIMITED.includes(t.field);
 
 /** Whether adding this fact earns a credit right now, as far as the screen can tell. */
@@ -1097,6 +1097,9 @@ export const labelFor = (f: FieldDef) => f.label;
 /** Short label for field lists and headers ("Held by", "Revenue then"). */
 export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f.short ?? f.label);
 
+/** A multi-pick value ("Fundraise, PE deal") as its picks. */
+export const splitPicks = (v: string | null | undefined) => (v ?? "").split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
+
 /** ARIA for the field inside an editor: its name (the editor's title), and the error when there is one. */
 export type FieldAria = { "aria-labelledby"?: string; "aria-invalid"?: boolean; "aria-describedby"?: string };
 
@@ -1128,6 +1131,27 @@ export function FieldInput({
       onSave(value);
     }
   };
+  if (f.kind === "choice" && f.options && f.multi) {
+    // Several picks: each chip toggles, and Save keeps them (stored in the list's order).
+    const picked = splitPicks(value);
+    const flip = (o: string) => onChange(f.options!.filter((x) => (x === o ? !picked.includes(o) : picked.includes(x))).join(", "));
+    return (
+      <div className="tp-chips" role="group" aria-label={aria?.["aria-labelledby"] ? undefined : f.label} aria-labelledby={aria?.["aria-labelledby"]}>
+        {f.options.map((o, idx) => (
+          <button
+            key={o}
+            type="button"
+            aria-pressed={picked.includes(o)}
+            autoFocus={autoFocus && idx === 0}
+            className={`chip tp-chipbtn${big ? " tp-chip-big" : ""}${picked.includes(o) ? " chip-on" : ""}`}
+            onClick={() => flip(o)}
+          >
+            {o}
+          </button>
+        ))}
+      </div>
+    );
+  }
   if (f.kind === "choice" && f.options) {
     if (f.options.length > 10) {
       const opts = f.options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
@@ -1519,7 +1543,8 @@ export function FactEditor({
     showUndo(said, () => ui.act({ type: "retract", entity: t.entity, id: t.id, field: t.field }));
     onClose();
   };
-  const simple = f.kind !== "choice";
+  // A choice saves on one tap; several picks (Why now) save with the button, like text.
+  const simple = f.kind !== "choice" || !!f.multi;
   const aria: FieldAria = { "aria-labelledby": hid, "aria-invalid": err ? true : undefined, "aria-describedby": err ? eid : undefined };
   const body = (
     <div ref={bodyRef} className="tp-ed-body">

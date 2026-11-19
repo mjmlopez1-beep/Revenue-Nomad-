@@ -3,9 +3,10 @@
  * card is already cut to what the member's table shows (lib/radar/present.ts), so nothing here
  * can name a company they can't see, or anyone at all.
  *
- * Both list every signal of the day (the email up to EMAIL_CARDS, Slack up to SLACK_CARDS, then
- * "And N more"), and every link, the cards' and the button's, opens the day's companies in the
- * app, where each locked one unlocks right on its row.
+ * Both list the day's signals most likely first (the email up to EMAIL_CARDS, Slack up to
+ * SLACK_CARDS, then "And N more"), each with its band and why-now line, and leave Low out (it stays
+ * on the page). Every link, the cards' and the button's, opens the day's companies in the app,
+ * where each locked one unlocks right on its row.
  */
 import { MAIL, escHtml as esc, footerNote, mailButton, mailP, mailShell, oneLine } from "../email";
 import { COMPANY_PRICE_SAY } from "../tableFields";
@@ -34,12 +35,17 @@ export const slackHeadline = (d: RadarDay) => `${YOUR_FEATURE} · ${companies(d.
 
 /* ---------- Slack and webhooks ---------- */
 
+/** A card that goes by email or Slack: never a Low one. */
+const sendable = (c: RadarCard) => c.band !== "Low";
+/** "High likelihood · Fractional CMO hired 5 months ago · Sales usually follows in 4–9 months", or null for a card from before Crystal Ball scored. */
+export const likelyLine = (c: RadarCard) => (c.band && c.whyNow ? `${c.band} likelihood · ${c.whyNow}` : null);
+
 /** Several radar items in one batch (Pro instant posts inside 15 minutes): one post, each card once. */
 export function mergeDays(items: RadarItem[]): RadarDay | null {
   if (!items.length) return null;
   const seen = new Set<string>();
   const cards: RadarCard[] = [];
-  for (const it of items) for (const c of it.day.cards) if (!seen.has(c.id)) (seen.add(c.id), cards.push(c));
+  for (const it of items) for (const c of it.day.cards) if (!seen.has(c.id) && sendable(c)) (seen.add(c.id), cards.push(c));
   const last = items[items.length - 1].day;
   return {
     cards,
@@ -55,7 +61,7 @@ export function radarAlert(items: RadarItem[], _base: string): Alert | null {
   const d = mergeDays(items);
   if (!d || !d.cards.length) return null;
   const shown = d.cards.slice(0, SLACK_CARDS);
-  const lines = shown.map((c) => `${c.headline}. ${c.why}`);
+  const lines = shown.map((c) => [`${c.headline}. ${c.why}`, likelyLine(c)].filter(Boolean).join(". "));
   if (d.cards.length > shown.length) lines.push(moreWords(d.cards.length - shown.length));
   return { kind: "radar", count: d.cards.length, headline: slackHeadline(d), lines, url: d.url, button: seeWords(d.companies), footer: RADAR_FOOTER };
 }
@@ -76,7 +82,9 @@ export interface RadarMail {
 const lockedLine = `Locked for you: unlock it in Merlin for ${COMPANY_PRICE_SAY}.`;
 
 export function renderRadarEmail(m: RadarMail): { subject: string; text: string; html: string } {
-  const d = m.day;
+  // Low never goes by email (it is on the page). The day passed in is cut already; this keeps it so.
+  const kept = m.day.cards.filter(sendable);
+  const d: RadarDay = kept.length === m.day.cards.length ? m.day : { ...m.day, cards: kept, total: kept.length, companies: new Set(kept.map((c) => c.co)).size };
   const first = oneLine(m.name).split(" ")[0].slice(0, 40) || "there";
   const subject = oneLine(radarSubject(d));
   const n = d.cards.length;
@@ -93,7 +101,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
     "",
     lead,
     "",
-    ...shown.flatMap((c) => [c.headline, `  ${c.facts.join(" · ")}`, `  ${c.why}`, ...(c.locked ? [`  ${lockedLine}`] : []), ""]),
+    ...shown.flatMap((c) => [c.headline, `  ${c.facts.join(" · ")}`, ...(likelyLine(c) ? [`  ${likelyLine(c)}`] : []), `  ${c.why}`, ...(c.locked ? [`  ${lockedLine}`] : []), ""]),
     ...(rest > 0 ? [moreWords(rest), ""] : []),
     button,
     d.url,
@@ -110,7 +118,9 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
   // Each headline links to the day's companies, where a locked one unlocks on its row.
   const card = (c: RadarCard) => `<tr><td style="padding:14px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font}">
 <a href="${esc(c.url)}" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink};text-decoration:underline">${esc(c.headline)}</a>
-<br><span style="${small};color:${MAIL.muted}">${esc(c.facts.join(" · "))}</span>
+<br><span style="${small};color:${MAIL.muted}">${esc(c.facts.join(" · "))}</span>${
+    c.band && c.whyNow ? `<br><span style="${small};color:${MAIL.ink}"><b style="font-weight:700">${esc(c.band)} likelihood</b> · ${esc(c.whyNow)}</span>` : ""
+  }
 <br><span style="${small};color:${MAIL.body}">${esc(c.why)}</span>${c.locked ? `<br><span style="${small};color:${MAIL.muted}">${esc(lockedLine)}</span>` : ""}
 </td></tr>`;
   const list = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border-bottom:1px solid ${MAIL.line}">

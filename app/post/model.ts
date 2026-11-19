@@ -8,7 +8,7 @@
 import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } from "@/lib/tableTypes";
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
-  RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
+  RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, OWNERSHIP_TYPES, SOURCE_LABEL, type Entity,
   REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, standardIndustries, standardList, COMPANY_PRICE_SAY,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
@@ -566,6 +566,7 @@ export interface Filters {
   motion: string[];
   dealSize: string[];
   salesCycle: string[];
+  ownership: string[];
   reason: string[];
   pricing: string[];
   /** Roles the weekly scan follows: open now, or closed. */
@@ -600,6 +601,7 @@ export const EMPTY_FILTERS: Filters = {
   motion: [],
   dealSize: [],
   salesCycle: [],
+  ownership: [],
   reason: [],
   pricing: [],
   roleState: [],
@@ -626,6 +628,7 @@ export type ListKey =
   | "motion"
   | "dealSize"
   | "salesCycle"
+  | "ownership"
   | "fn"
   | "type"
   | "reason"
@@ -660,6 +663,7 @@ export const LIST_LABEL: Record<ListKey, string> = {
   motion: "Sales motion",
   dealSize: "Deal size",
   salesCycle: "Sales cycle",
+  ownership: "Ownership",
   reason: "Why they hired",
   pricing: "Pricing",
   roleState: "Open roles",
@@ -690,6 +694,7 @@ export const LIST_OPTIONS: Record<Exclude<ListKey, OpenList>, string[]> = {
   motion: RN_MOTIONS,
   dealSize: RN_DEAL_SIZES,
   salesCycle: RN_SALES_CYCLES,
+  ownership: OWNERSHIP_TYPES,
   reason: HIRE_REASONS,
   pricing: PRICING_MODELS,
   roleState: ROLE_STATES,
@@ -890,6 +895,7 @@ export function optionTest(key: ListKey, opt: string): Test {
     case "motion":
     case "dealSize":
     case "salesCycle":
+    case "ownership":
       return (r) => shown(r.i.c.cells[key]) === opt;
     case "reason":
     case "pricing":
@@ -928,7 +934,7 @@ export function optionTest(key: ListKey, opt: string): Test {
  * against), so the facet counts read each row once instead of once per option. Null for the
  * lists optionTest matches another way (HQ by place, role state, source by label).
  */
-const BY_VALUE = new Set<ListKey>(["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "reason", "pricing", "type", "fn", "relationship"]);
+const BY_VALUE = new Set<ListKey>(["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "ownership", "reason", "pricing", "type", "fn", "relationship"]);
 function valuesOf(key: ListKey, r: Row): (string | null)[] | null {
   switch (key) {
     case "industry":
@@ -938,6 +944,7 @@ function valuesOf(key: ListKey, r: Row): (string | null)[] | null {
     case "motion":
     case "dealSize":
     case "salesCycle":
+    case "ownership":
       return [shown(r.i.c.cells[key])];
     case "reason":
     case "pricing":
@@ -979,7 +986,7 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
 }
 
 const TOGGLES: ToggleKey[] = ["rateKnown", "contactKnown", "notMine", "statusKnown", "fractionalNamed", "emailKnown"];
-const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "country", "region", "businessModel", "motion", "dealSize", "salesCycle", "fn", "type", "reason", "pricing", "roleState", "source", "relationship"];
+const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "country", "region", "businessModel", "motion", "dealSize", "salesCycle", "ownership", "fn", "type", "reason", "pricing", "roleState", "source", "relationship"];
 
 /** The member's own lists (what they follow, what they paid for): the Ideal Fractional Profile never narrows them. */
 export const ICP_FREE_TABS: Tab[] = ["following", "unlocked"];
@@ -1565,15 +1572,19 @@ export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: n
 
 /* ---------- facts to add ---------- */
 
-export const COMPANY_FILL = ["website", "industry", "employees", "revenue", "hq", "linkedin"];
-export const ENG_FIELDS = ["role", "status", "operator", "start", "end", "reason", "sourced", "pricing", "rate", "hours", "posting", "revenue", "employees"];
+export const COMPANY_FILL = ["website", "industry", "employees", "revenue", "ownership", "hq", "linkedin"];
+export const ENG_FIELDS = ["role", "status", "operator", "start", "end", "endReason", "reason", "whyNow", "sourced", "pricing", "rate", "hours", "posting", "revenue", "employees"];
 /** How the company sells (Revenue Nomad's standard lists), shown as its own block. */
 export const COMPANY_GTM = ["businessModel", "motion", "dealSize", "salesCycle"];
+/** What Your seats asks about a company under the member's first seat there: who owns it, then how it sells. */
+export const SEAT_CO_ASK = ["ownership", ...COMPANY_GTM];
 
 /* ---------- your seats ---------- */
 
 /** What a seat holder is asked for on their own seat, in the order the Your seats page asks. */
-export const SEAT_ASK = ["function", "role", "type", "status", "start", "end", "reason", "sourced", "pricing", "rate", "hours", "revenue", "employees"];
+export const SEAT_ASK = ["function", "role", "type", "status", "start", "end", "endReason", "reason", "whyNow", "sourced", "pricing", "rate", "hours", "revenue", "employees", "introducedBy"];
+/** Asked on Your seats but kept to the seat holder (INTRO_FIELD): it earns nothing, so it is never counted as a fact to add. */
+export const PRIVATE_ASK = ["introducedBy"];
 
 export interface SeatInfo {
   i: CoInfo;
@@ -1590,9 +1601,11 @@ export interface SeatInfo {
  * doesn't ask for it either).
  */
 const seatMissing = (e: EngagementRec, priv: Set<string | null>) =>
-  SEAT_ASK.filter((f) => e.cells[f]?.s === "empty" && !(f === "rate" && priv.has(e.id)) && !(f === "end" && shown(e.cells.status) === "Active"));
-/** How many facts the member can still add on one of their own seats. */
-export const seatMissingCount = (e: EngagementRec, me: Me) => seatMissing(e, new Set(me.benchRates.map((b) => b.engagementId))).length;
+  SEAT_ASK.filter(
+    (f) => e.cells[f]?.s === "empty" && !(f === "rate" && priv.has(e.id)) && !(f === "end" && shown(e.cells.status) === "Active") && !(f === "endReason" && shown(e.cells.status) !== "Ended"),
+  );
+/** How many facts the member can still add on one of their own seats (what earns: never the private note). */
+export const seatMissingCount = (e: EngagementRec, me: Me) => seatMissing(e, new Set(me.benchRates.map((b) => b.engagementId))).filter((f) => !PRIVATE_ASK.includes(f)).length;
 
 /** The seats the viewer holds (EngagementRec.yours) and what is still missing on each. */
 export function mySeats(infos: CoInfo[], me: Me): SeatInfo[] {
@@ -1603,7 +1616,7 @@ export function mySeats(infos: CoInfo[], me: Me): SeatInfo[] {
     for (const e of i.engs) {
       if (!e.yours) continue;
       const missing = seatMissing(e, priv);
-      const coMissing = first && !i.c.hidden ? COMPANY_GTM.filter((f) => i.c.cells[f]?.s === "empty") : [];
+      const coMissing = first && !i.c.hidden ? SEAT_CO_ASK.filter((f) => i.c.cells[f]?.s === "empty") : [];
       first = false;
       out.push({ i, e, missing, coMissing });
     }
@@ -1612,7 +1625,7 @@ export function mySeats(infos: CoInfo[], me: Me): SeatInfo[] {
 }
 
 /** Facts a member can still add across their seats. */
-export const seatsMissing = (seats: SeatInfo[]) => seats.reduce((n, s) => n + s.missing.length + s.coMissing.length, 0);
+export const seatsMissing = (seats: SeatInfo[]) => seats.reduce((n, s) => n + s.missing.filter((f) => !PRIVATE_ASK.includes(f)).length + s.coMissing.length, 0);
 
 /**
  * Open roles in a function new this week (newThisWeek), and how many of their companies are still

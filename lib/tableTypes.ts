@@ -777,6 +777,8 @@ export interface AdminStats {
   messages?: { started: number; replied3d: number; closed: number; blocked: number; reported: number };
   /** The next-client radar (lib/radar), counts only: members with it on, sent today and this week, opens and clicks. */
   radar?: RadarStats;
+  /** Crystal Ball's model: observed transitions and the new facts, counts only. */
+  radarModel?: NonNullable<RadarStats["model"]>;
   /** Alerts in Slack and webhooks (lib/notify), counts only. */
   integrations?: { slackConnected: number; webhookConnected: number; broken: number; sent: { roles: number; message: number; seat: number; radar: number; test: number }; failed: number };
   /**

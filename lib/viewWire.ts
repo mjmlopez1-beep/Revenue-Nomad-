@@ -70,6 +70,8 @@ export function unpackView(v: View): View {
     for (const p of c.people) p.cells = fill("contact", p.cells);
     for (const e of c.engagements) {
       e.cells = fill("engagement", e.cells);
+      // The seat holder's own "Who introduced you" (not a table field, so not in KEYS): theirs alone, empty until they add it.
+      if (e.yours && !e.cells.introducedBy) e.cells.introducedBy = { s: "empty" };
       for (const p of e.people) p.cells = fill("contact", p.cells);
     }
   }

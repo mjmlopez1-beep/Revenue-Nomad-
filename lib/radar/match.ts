@@ -1,16 +1,28 @@
 /**
- * Which signals are for which member. Pure, apart from beforeSuggested, which reads the table.
+ * Which signals are for which member, and how likely each one is to become their next client.
+ * Pure, apart from beforeSuggested, which reads the table.
  *
+ * Hard filters (unchanged):
  *   - The company is in the member's Ideal Fractional Profile, read the way the table's profile
  *     pill reads it (icpTest in app/post/model.ts): no known fact conflicts, and at least one part
  *     the profile asks for is on file and matches. A member with no profile matches nothing.
- *   - role and seat: the role or seat is in the member's function.
- *   - adjacent: the hire is in a function that usually comes before theirs: the ones they named
- *     (Profile.before), else the suggestion onboarding makes (beforeOrder in
- *     app/onboard/firstView.ts: our data where it says something, else the usual ones), and the
- *     company has no fractional in the member's own function yet.
- *   - funding: any function.
- * A member with no function (or "Other") has no radar: nothing says what's theirs.
+ *   - role, seat and departure: the role, seat or departed leader is in the member's function.
+ *   - adjacent: a hire in another function, at a company with no fractional in the member's own
+ *     function yet. A sales build: the same "no fractional yet". Funding: any function.
+ *   A member with no function (or "Other") has no radar: nothing says what's theirs.
+ *
+ * The score (scoreFor), one list for every kind:
+ *   likelihood x timing x fit x penalties, with
+ *   likelihood  P(the member's function is next | the company's recent fractional seats, its stage
+ *               and ownership), lib/radar/predict.ts, after Merlin's own transitions (counts). An
+ *               open role or an ended seat in their function is direct: near the top (ROLE_P, SEAT_P).
+ *   timing      the rule's gap window over the months since the seat started (predict.ts timing).
+ *   fit         FIT_BASE to 1, by how many parts the profile asks about are on file and match.
+ *   penalties   a full-time leader of the member's function on the company's website: x FT_PENALTY;
+ *               an ended seat that went to a full-time hire: x FT_PENALTY.
+ *   The member's own "usually hired before you" answer (Profile.before) no longer decides who gets
+ *   a hire: a pair they named is boosted (BEFORE_BOOST: they know their market).
+ * Cards rank by score. Each carries a band (High, Medium, Low) and a why-now line.
  */
 import { tableInternals as T, type Seed, type State } from "../table";
 import { countryKey } from "../mcp/alerts";
@@ -19,6 +31,11 @@ import type { CoInfo } from "@/app/post/model";
 import type { CompanyRec, EngagementRec, Icp } from "../tableTypes";
 import type { CompanyFacts, RawSignal } from "./signals";
 import { isLeaderRaw } from "./signals";
+import type { RadarBand } from "./types";
+import {
+  SCORE_FLOOR, SIGNAL_PRIORS, agoWords, bandOf, gapWords, hireWhyNow, isStage, leadWord, likelihood, ownerOf, timing, type TransitionCounts,
+} from "./predict";
+import { hireMonth, monthsAgo } from "../hired";
 
 export interface RadarProfile {
   memberId: string;
@@ -30,24 +47,47 @@ export interface RadarProfile {
   beforeFromMember: boolean;
 }
 
+/** An open role in the member's function: the most direct signal there is. */
+export const ROLE_P = 1;
+/** A seat like theirs just ended. */
+export const SEAT_P = 0.85;
+/** A full-time leader of their function on file (or an ended seat that went full-time): the score is cut to this share. */
+export const FT_PENALTY = 0.35;
+/** Fit runs from this (one part of the profile on file and matching, the rest unknown) to 1 (every part on file and matching). */
+export const FIT_BASE = 0.7;
+/** A pair the member named themselves: the chance it misses is cut by this share. */
+export const BEFORE_BOOST = 0.15;
+
 export const icpIsEmpty = (icp: Icp | null | undefined) => !icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
+
+/** Each part the profile asks about: true (on file, matches), false (on file, doesn't), null (not on file). */
+function icpParts(icp: Icp, co: CompanyFacts): (boolean | null)[] {
+  const key = (v: string) => v.trim().toLowerCase();
+  const parts = [
+    icp.industries.length ? (co.industry ? icp.industries.map(key).includes(key(co.industry)) : null) : undefined,
+    icp.employees.length ? (co.employees ? icp.employees.includes(co.employees) : null) : undefined,
+    icp.revenue.length ? (co.revenue ? icp.revenue.includes(co.revenue) : null) : undefined,
+    icp.countries.length ? (co.country ? icp.countries.some((x) => countryKey(x) === countryKey(co.country!)) : null) : undefined,
+  ];
+  return parts.filter((x): x is boolean | null => x !== undefined);
+}
 
 /** The company against the profile: icpTest's rule on the company's free facts. */
 export function inIcp(icp: Icp | null | undefined, co: CompanyFacts): boolean {
   if (icpIsEmpty(icp)) return false;
-  const p = icp!;
-  const key = (v: string) => v.trim().toLowerCase();
-  const parts = [
-    p.industries.length ? (co.industry ? p.industries.map(key).includes(key(co.industry)) : null) : undefined,
-    p.employees.length ? (co.employees ? p.employees.includes(co.employees) : null) : undefined,
-    p.revenue.length ? (co.revenue ? p.revenue.includes(co.revenue) : null) : undefined,
-    p.countries.length ? (co.country ? p.countries.some((x) => countryKey(x) === countryKey(co.country!)) : null) : undefined,
-  ];
+  const parts = icpParts(icp!, co);
   if (parts.includes(false)) return false;
   return parts.includes(true);
 }
 
-/** Why a signal is for this member, or null when it isn't. */
+/** How well the company fits the profile, from FIT_BASE to 1. Only for a company inIcp. */
+export function fitOf(icp: Icp, co: CompanyFacts): number {
+  const parts = icpParts(icp, co);
+  const yes = parts.filter((x) => x === true).length;
+  return parts.length ? FIT_BASE + (1 - FIT_BASE) * (yes / parts.length) : FIT_BASE;
+}
+
+/** Why a signal is for this member, or null when it isn't (the hard filters). */
 export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
   if (!p.fn || p.fn === "Other" || !inIcp(p.icp, sig.co)) return null;
   switch (sig.kind) {
@@ -55,27 +95,124 @@ export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
       return sig.fn === p.fn ? `An open ${p.fn} role, at a company in your profile` : null;
     case "seat":
       return sig.fn === p.fn ? `A ${p.fn} seat like yours, at a company in your profile` : null;
-    case "adjacent":
-      if (!sig.fn || sig.fn === p.fn || !p.before.includes(sig.fn) || sig.hiredFns.includes(p.fn)) return null;
+    case "departure":
+      return sig.fn === p.fn ? `Their ${p.fn} seat may need cover, at a company in your profile` : null;
+    case "adjacent": {
+      if (!sig.fn || sig.fn === p.fn || sig.hiredFns.includes(p.fn)) return null;
+      const comes = p.before.includes(sig.fn) ? `${sig.fn} usually comes before ${p.fn}` : `A fractional ${sig.fn} hire`;
       // A full-time leader of the member's function on the company's website: said in place of "no fractional yet".
-      if (sig.ledFullTime && p.fn in sig.ledFullTime) return `${sig.fn} usually comes before ${p.fn}. FT ${p.fn} Leader${sig.ledFullTime[p.fn] ? ` since ${sig.ledFullTime[p.fn]}` : ""}`;
-      return `${sig.fn} usually comes before ${p.fn}, and they have no fractional ${p.fn} yet`;
+      if (sig.ledFullTime && p.fn in sig.ledFullTime) return `${comes}. FT ${p.fn} Leader${sig.ledFullTime[p.fn] ? ` since ${sig.ledFullTime[p.fn]}` : ""}`;
+      return `${comes}, and they have no fractional ${p.fn} yet`;
+    }
+    case "sales-build":
+      return sig.hiredFns.includes(p.fn) ? null : `A sales team being built, and they have no fractional ${p.fn} yet`;
     case "funding":
       return "Money in usually means hiring, at a company in your profile";
   }
 }
 
-const ledLast = (x: RawSignal, p: RadarProfile) => Number(x.kind === "adjacent" && !!p.fn && !!x.ledFullTime && p.fn in x.ledFullTime);
-
-/** The signals for this member, in the order a free member sees the first one: roles, then ended seats, adjacent hires, funding; newest first within each. */
-export function signalsFor(all: RawSignal[], p: RadarProfile): (RawSignal & { why: string })[] {
-  const rank = { role: 0, seat: 1, adjacent: 2, funding: 3 } as const;
-  return all
-    .map((x) => ({ ...x, why: matchWhy(x, p) }))
-    .filter((x): x is RawSignal & { why: string } => !!x.why)
-    // An adjacent hire where a full-time leader already runs the member's function comes after the ones where nobody does.
-    .sort((a, b) => rank[a.kind] - rank[b.kind] || ledLast(a, p) - ledLast(b, p) || b.atMs - a.atMs || a.key.localeCompare(b.key));
+/** A signal scored for one member. */
+export interface Scored extends RawSignal {
+  why: string;
+  score: number;
+  band: RadarBand;
+  whyNow: string;
 }
+
+export interface ScoreCtx {
+  /** Merlin's observed transitions (signals.ts observedTransitions). None: the research's priors alone. */
+  counts?: TransitionCounts | null;
+  nowMs?: number;
+}
+
+const MONTH_MS = 30.44 * 24 * 60 * 60 * 1000;
+const sinceMonths = (atMs: number, nowMs: number) => Math.max(0, Math.floor((nowMs - atMs) / MONTH_MS));
+
+/** The score, band and why-now of one signal for one member, or null when it isn't theirs. */
+export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): Scored | null {
+  const why = matchWhy(sig, p);
+  if (!why || !p.fn) return null;
+  const nowMs = ctx.nowMs ?? Date.now();
+  const fit = fitOf(p.icp!, sig.co);
+  const stage = isStage(sig.stage) ? sig.stage : null;
+  const owner = ownerOf(sig.owner);
+  const ftLed = !!sig.ledFullTime && p.fn in sig.ledFullTime;
+  let score: number;
+  let whyNow: string;
+  switch (sig.kind) {
+    case "role":
+      score = ROLE_P * fit;
+      whyNow = `Open now · a direct opening in ${p.fn}`;
+      break;
+    case "seat": {
+      const fullTime = sig.endReason === "Converted to full-time" || sig.endReason === "Replaced by full-time hire";
+      score = SEAT_P * fit * (fullTime ? FT_PENALTY : 1);
+      whyNow = fullTime
+        ? `Just ended ${sig.endReason === "Converted to full-time" ? "as a full-time role" : "with a full-time hire"} · less likely to open again`
+        : "Just ended · the seat may be open again";
+      break;
+    }
+    case "departure": {
+      const pr = SIGNAL_PRIORS.departure["*"];
+      score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      whyNow = `${leadWord(p.fn)} gone from its website · ${pr.why} ${gapWords(pr.gap)}`;
+      break;
+    }
+    case "sales-build": {
+      const jump = !!sig.build && sig.build.from > 0;
+      const pr = SIGNAL_PRIORS[jump ? "sales-jump" : "sales-build"][p.fn];
+      const t = sinceMonths(sig.atMs, nowMs);
+      const p0 = pr ? pr.p : 0.02;
+      const gap = pr ? pr.gap : ([3, 12] as const);
+      score = p0 * timing(t, gap) * fit * (ftLed ? FT_PENALTY : 1);
+      const posted = jump ? `${sig.build!.to} full-time sales roles posted` : "First full-time sales roles posted";
+      whyNow = pr ? `${posted} · ${pr.why} ${gapWords(gap)}` : `${posted} · a sales build sometimes brings other seats`;
+      break;
+    }
+    case "funding": {
+      const pr = SIGNAL_PRIORS.funding[p.fn];
+      score = (pr ? pr.p : 0.08) * timing(sinceMonths(sig.atMs, nowMs), pr ? pr.gap : [0, 6]) * fit;
+      whyNow = pr ? `Raised money · ${pr.why} ${gapWords(pr.gap)}` : "Raised money · a round usually brings new seats";
+      break;
+    }
+    case "adjacent": {
+      // Each recent fractional leadership seat (this hire first) says something: the strongest one leads.
+      const seats = [{ fn: sig.fn!, ym: sig.ym ?? hireMonth(sig.at.slice(0, 7))! }, ...(sig.recent ?? []).filter((x) => !(x.fn === sig.fn && x.ym === sig.ym))];
+      let best: { s: number; line: string } | null = null;
+      for (const x of seats) {
+        if (!x.ym || x.fn === p.fn) continue;
+        const l = likelihood(x.fn, p.fn, stage, owner, { employees: sig.co.employees, businessModel: sig.co.model ?? null }, ctx.counts);
+        const named = p.beforeFromMember && p.before.includes(x.fn);
+        const lp = named ? 1 - (1 - l.p) * (1 - BEFORE_BOOST) : l.p;
+        const t = Math.max(0, monthsAgo(x.ym, nowMs));
+        const s = lp * timing(t, l.gap);
+        if (!best || s > best.s) best = { s, line: hireWhyNow(x.fn, p.fn, t, l) };
+      }
+      if (!best) return null;
+      score = best.s * fit * (ftLed ? FT_PENALTY : 1);
+      whyNow = best.line;
+      break;
+    }
+  }
+  if (!(score >= SCORE_FLOOR)) return null;
+  return { ...sig, why, score, band: bandOf(score), whyNow };
+}
+
+/** The months-ago words, for lines that are not a hire's ("this month", "2 months ago"). */
+export const sinceWords = (atMs: number, nowMs: number) => agoWords(sinceMonths(atMs, nowMs));
+
+const KIND_RANK: Record<RawSignal["kind"], number> = { role: 0, seat: 1, departure: 2, adjacent: 3, "sales-build": 4, funding: 5 };
+
+/** The signals for this member, ranked by score (most likely first); ties by kind (roles first), then newest. */
+export function signalsFor(all: RawSignal[], p: RadarProfile, ctx: ScoreCtx = {}): Scored[] {
+  return all
+    .map((x) => scoreFor(x, p, ctx))
+    .filter((x): x is Scored => !!x)
+    .sort((a, b) => b.score - a.score || KIND_RANK[a.kind] - KIND_RANK[b.kind] || b.atMs - a.atMs || a.key.localeCompare(b.key));
+}
+
+/** What goes by email and Slack: everything but Low (Low stays on the page). */
+export const deliverable = <X extends { band: RadarBand }>(xs: X[]) => xs.filter((x) => x.band !== "Low");
 
 /**
  * The functions onboarding would suggest as "usually hired before" `fn`, from the table's

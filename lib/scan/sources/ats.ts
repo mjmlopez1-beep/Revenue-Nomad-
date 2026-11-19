@@ -400,6 +400,22 @@ export async function discover(companies: AtsCompany[], cache: AtsCache, opts: {
   return out;
 }
 
+/* ---------- full-time sales hires (Crystal Ball's sales build) ---------- */
+
+/** An individual seller's title: Account Executive, AE, SDR, BDR, sales or business development rep. */
+const SALES_IC = /\b(?:account executives?|a\.?e\.?|sdrs?|bdrs?|sales development(?: rep(?:resentative)?s?)?|business development rep(?:resentative)?s?)\b/i;
+/** Not a full-time individual seller: a leader of one, or fractional, interim, part-time or contract work. */
+const NOT_FT_IC = /\b(?:fractional|interim|part[- ]time|contract(?:or)?|freelance|temporary|intern(?:ship)?|manager|director|head|lead|vp|vice president|chief|cro)\b/i;
+
+/**
+ * How many full-time sales hires (AE, SDR, BDR) a feed lists right now: a count only, kept by
+ * lib/table.ts careerSources for Crystal Ball. None of these ever becomes an open role on Merlin
+ * (the scan keeps fractional roles only).
+ */
+export function salesHireCount(jobs: Pick<ScanRawJob, "title">[]): number {
+  return jobs.filter((j) => SALES_IC.test(j.title) && !NOT_FT_IC.test(j.title)).length;
+}
+
 /* ---------- the sources ---------- */
 
 /**
@@ -407,7 +423,10 @@ export async function discover(companies: AtsCompany[], cache: AtsCache, opts: {
  * feed that fails is skipped (a system whose every feed failed reports an error); one that
  * answers 404 or 410 is passed to `gone`, so discovery looks the company up again.
  */
-export function atsSources(boards: { board: AtsBoard; company: AtsCompany }[], opts: { fetch?: FeedFetch; gone?: (domain: string) => void } = {}): ScanSource[] {
+export function atsSources(
+  boards: { board: AtsBoard; company: AtsCompany }[],
+  opts: { fetch?: FeedFetch; gone?: (domain: string) => void; salesCount?: (domain: string, n: number) => void } = {},
+): ScanSource[] {
   const fetch = opts.fetch ?? fetchFeed;
   const list = boards.slice(0, FEEDS_PER_RUN);
   return ATS_KINDS.filter((k) => list.some((x) => x.board.ats === k)).map((ats) => ({
@@ -422,6 +441,8 @@ export function atsSources(boards: { board: AtsBoard; company: AtsCompany }[], o
         if (r.status !== 200) return [];
         const parsed = parseFeed(board, json(r.text), company);
         if (parsed) ok++;
+        // Only a feed that answered and read counts: a failure is never read as no sales hires.
+        if (parsed) opts.salesCount?.(company.domain.toLowerCase(), salesHireCount(parsed));
         return parsed ?? [];
       });
       if (!ok && mine.length) throw new Error(`No ${ats} feed answered (${mine.length} tried)`);

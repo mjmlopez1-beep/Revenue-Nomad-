@@ -24,7 +24,7 @@ import { randomBytes } from "crypto";
 import { ActionError, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
-import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
+import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
   EMPTY_FILTERS, applyFilters, countryOf, deriveAll, fitReason, fitTier, friendlyCo, hireOfRow, hiredOn, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
   fractionalLeadFns, fullTimeLead,
@@ -86,11 +86,12 @@ const URL_FIELDS = new Set(["website", "linkedin", "posting"]);
 /** Output keys (what a model reads and sends back) and the field each one is. */
 const COMPANY_KEYS: Record<string, string> = {
   website: "website", industry: "industry", employees: "employees", revenue: "revenue", hq: "hq", linkedin: "linkedin", about: "about",
-  business_model: "businessModel", sales_motion: "motion", deal_size: "dealSize", sales_cycle: "salesCycle",
+  business_model: "businessModel", sales_motion: "motion", deal_size: "dealSize", sales_cycle: "salesCycle", ownership: "ownership",
 };
 const SEAT_KEYS: Record<string, string> = {
   function: "function", role: "role", type: "type", status: "status", seat_holder: "operator", start: "start", end: "end", why_hired: "reason",
   sourced: "sourced", pricing: "pricing", rate: "rate", hours: "hours", posting: "posting", revenue_then: "revenue", employees_then: "employees",
+  why_now: "whyNow", end_reason: "endReason",
 };
 const PERSON_KEYS: Record<string, string> = { name: "name", title: "title", relationship: "relationship", email: "email", phone: "phone", linkedin: "linkedin" };
 const outKey = (keys: Record<string, string>, field: string) => Object.keys(keys).find((k) => keys[k] === field) ?? field;
@@ -734,7 +735,7 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     facts_unlocked: me.unlocked,
     how_credits_work:
       "Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1: who held a seat comes with the role they held, and a person's name with their title, for that one credit. A fractional you invite earns you both 10 credits when they add their first fact. Your own seats are free to you.",
-    seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.map((f) => outKey(SEAT_KEYS, f)) })),
+    seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.filter((f) => f !== "introducedBy").map((f) => outKey(SEAT_KEYS, f)) })),
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
     saved_searches: alerts.length,
     // Their plan, only while billing is live. No price: the member sees prices on Merlin.
@@ -886,7 +887,7 @@ async function act(ctx: Ctx, action: Action) {
 const creditsLine = (r: Awaited<ReturnType<typeof perform>>) => ({ credits: r.me?.credits, ...(r.me ? { earned_today: r.me.earned24h } : {}) });
 
 const PICKS: Record<string, readonly string[]> = {
-  industry: RN_INDUSTRIES, employees: RN_EMPLOYEES, revenue: RN_REVENUE, businessModel: BUSINESS_MODELS, motion: RN_MOTIONS, dealSize: RN_DEAL_SIZES, salesCycle: RN_SALES_CYCLES,
+  industry: RN_INDUSTRIES, employees: RN_EMPLOYEES, revenue: RN_REVENUE, businessModel: BUSINESS_MODELS, motion: RN_MOTIONS, dealSize: RN_DEAL_SIZES, salesCycle: RN_SALES_CYCLES, ownership: OWNERSHIP_TYPES,
 };
 
 export async function addCompanyFact(ctx: Ctx, a: { company: string; field: string; value: string }): Promise<ToolOut> {
@@ -933,10 +934,15 @@ export interface SeatArgs {
   hours?: string | number;
   revenue_then?: string;
   employees_then?: string;
+  /** Several of WHY_NOW: a list, or one string with commas. */
+  why_now?: string | string[];
+  end_reason?: string;
+  /** The member's own note (INTRO_FIELD): kept to them, never sent back by any tool. */
+  introduced_by?: string;
 }
 
 const SEAT_PICKS: Record<string, readonly string[]> = {
-  function: FUNCTIONS, type: ENGAGEMENT_TYPES, status: STATUSES, reason: HIRE_REASONS, sourced: SOURCED_VIA, pricing: PRICING_MODELS, revenue: RN_REVENUE, employees: RN_EMPLOYEES,
+  function: FUNCTIONS, type: ENGAGEMENT_TYPES, status: STATUSES, reason: HIRE_REASONS, sourced: SOURCED_VIA, pricing: PRICING_MODELS, revenue: RN_REVENUE, employees: RN_EMPLOYEES, endReason: END_REASONS,
 };
 
 function seatFields(a: SeatArgs): Record<string, string> {
@@ -945,6 +951,12 @@ function seatFields(a: SeatArgs): Record<string, string> {
     if (field === "operator" || field === "posting" || field === "rate") continue;
     const raw = (a as Record<string, unknown>)[k];
     if (raw === undefined || raw === null || raw === "") continue;
+    // Why now takes several: each one from the list.
+    if (field === "whyNow") {
+      const picks = (Array.isArray(raw) ? raw : String(raw).split(/\s*[,;]\s*/)).map((x) => String(x).trim()).filter(Boolean);
+      if (picks.length) out[field] = picks.map((x) => listValue(k, WHY_NOW, x)).join(", ");
+      continue;
+    }
     out[field] = SEAT_PICKS[field] ? listValue(k, SEAT_PICKS[field], raw) : String(raw);
   }
   return out;
@@ -960,6 +972,13 @@ export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
       'Ask the member who can see this rate, then send rate_visibility. "members": members who unlock it see it on the seat. "benchmarks_only": it only counts in the rate benchmarks and is never shown with their name or the seat.',
     );
   const pricing = fields.pricing ?? null;
+  // "Who introduced you": the member's own note, saved apart from the seat's facts and never sent back.
+  const introNote = a.introduced_by !== undefined && a.introduced_by !== null && String(a.introduced_by).trim() ? String(a.introduced_by).trim() : null;
+  const saveIntro = async (engagementId: string) => {
+    if (!introNote) return null;
+    const r = await act(ctx, { type: "fill", entity: "engagement", id: engagementId, field: "introducedBy", value: introNote });
+    return r.message;
+  };
   const shareBench = async (engagementId: string) => {
     if (!rate || a.rate_visibility !== "benchmarks_only") return null;
     const kind = pricing === "Hourly" || /\/\s*h(ou)?r|hourly|an hour|per hour/i.test(rate) ? "Hourly" : "Monthly retainer";
@@ -980,11 +999,13 @@ export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
       last = await act(ctx, { type: "claimSeat", engagementId: e.id });
       msgs.push(last.message);
     } else if (e.claimable) throw new ToolProblem("Nobody has claimed this seat yet. If it is the member's own, ask them, then send claim: true.");
-    if (!todo.length && !rate && !a.claim) throw new ToolProblem("Send at least one fact about the seat.");
+    if (!todo.length && !rate && !a.claim && !introNote) throw new ToolProblem("Send at least one fact about the seat.");
     for (const [field, value] of todo) {
       last = await act(ctx, { type: "fill", entity: "engagement", id: e.id, field, value });
       msgs.push(last.message);
     }
+    const intro = await saveIntro(e.id);
+    if (intro) msgs.push(intro);
     const bench = await shareBench(e.id);
     if (bench) msgs.push(bench);
     return { message: msgs.join(" "), seat_id: e.id, ...(last ? creditsLine(last) : {}) };
@@ -1010,8 +1031,9 @@ export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
     engagementFields: { ...fields, operator: me.name },
     operatorMemberId: "me",
   });
+  const intro = r.id ? await saveIntro(r.id) : null;
   const bench = r.id ? await shareBench(r.id) : null;
-  return { message: [r.message, bench].filter(Boolean).join(" "), seat_id: r.id, ...creditsLine(r) };
+  return { message: [r.message, intro, bench].filter(Boolean).join(" "), seat_id: r.id, ...creditsLine(r) };
 }
 
 export async function followCompany(ctx: Ctx, a: { company: string; on?: boolean }): Promise<ToolOut> {

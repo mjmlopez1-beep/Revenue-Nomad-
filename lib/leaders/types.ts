@@ -41,6 +41,8 @@ export interface LeaderFn {
 export interface LeadersRecord {
   status: "found" | "none" | "skipped" | "failed";
   checkedAt: string;
+  /** The last read reached the site (found or none). False after a skip or a failure, which keep what was on file. */
+  ok?: boolean;
   hash?: string;
   functions: Record<string, LeaderFn>;
   why?: string;

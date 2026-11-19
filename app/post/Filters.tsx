@@ -443,6 +443,7 @@ export function FilterPanel({
         <ListBlock k="motion" title="Sales motion" f={f} setF={setF} counts={l.motion} />
         <ListBlock k="dealSize" title="Average deal size" f={f} setF={setF} counts={l.dealSize} />
         <ListBlock k="salesCycle" title="Average sales cycle" f={f} setF={setF} counts={l.salesCycle} />
+        <ListBlock k="ownership" title="Ownership" f={f} setF={setF} counts={l.ownership} />
         <div className="tp-fblock">
           <div className="tp-flabel">Fit score</div>
           <div className="tp-fchips">

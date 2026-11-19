@@ -918,6 +918,28 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
           />
         </Card>
         {a.radar && <Radar r={a.radar} refresh={refresh} />}
+        {a.radarModel && (
+          <Card title={`${FEATURE_NAME}: what our data says`}>
+            <Rows
+              items={[
+                ["Seat-to-seat transitions on file", n0(a.radarModel.transitions)],
+                ["Companies they come from", n0(a.radarModel.companies)],
+                ...a.radarModel.byStage.map((x): [string, string] => [`At ${x.stage}`, n0(x.n)]),
+                ...a.radarModel.top.map((x): [string, string] => [`${x.from} then ${x.to}`, n0(x.n)]),
+                ["Companies with ownership on file", n0(a.radarModel.facts.ownership)],
+                ["Seats with why now", n0(a.radarModel.facts.whyNow)],
+                ["Seats with why it ended", n0(a.radarModel.facts.endReason)],
+                ["Seats with revenue then", n0(a.radarModel.facts.revenueThen)],
+                ["Seats with employees then", n0(a.radarModel.facts.employeesThen)],
+                ["Seats with who introduced them (never shown)", n0(a.radarModel.facts.introducedBy)],
+                ["Companies whose sales hires are counted", n0(a.radarModel.salesBuild.companies)],
+                ["Sales builds seen", n0(a.radarModel.salesBuild.rises)],
+                ["Leaders gone from a website (180 days)", n0(a.radarModel.departures)],
+              ]}
+            />
+            <p className="tp-small muted tp-pm-foot">Each next seat moves the research&apos;s priors a little. About 30 in a cell before it can be trusted on its own.</p>
+          </Card>
+        )}
         {a.finds && (
           <Card title="Found by exact name (24 hours)">
             <Rows

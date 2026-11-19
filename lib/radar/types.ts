@@ -9,6 +9,14 @@
  *   role      an open role in their function, new since the last radar
  *   seat      a seat in their function just ended (the end was recorded since the last radar)
  *   funding   it raised money (no source yet: lib/radar/sources/funding.ts returns nothing)
+ *   sales-build  its career feed posted its first full-time sales hires (AE, SDR, BDR), or a jump in them
+ *   departure    a leader its own website listed for the member's function is gone from it
+ *
+ * Each signal for a member is scored (lib/radar/match.ts scoreFor, lib/radar/predict.ts): how
+ * likely the company is to hire a fractional in their function next, times how well the timing
+ * fits, times how well it fits their profile. Cards are ranked by that score and carry a plain
+ * band (High, Medium, Low) and a why-now line, never a percentage. Low stays off the email and
+ * Slack (it is still on the page).
  *
  * Every member sees every signal. A company's name is locked for everyone until they unlock it
  * (Unlock company, COMPANY_PRICE credits) or already know it, so a card names the company only
@@ -27,8 +35,10 @@ export const YOUR_FEATURE = `Your ${FEATURE_NAME}`;
 /** "your Crystal Ball": in running text. */
 export const yourFeature = `your ${FEATURE_NAME}`;
 
-export type RadarKind = "adjacent" | "role" | "seat" | "funding";
-export const RADAR_KINDS: RadarKind[] = ["role", "seat", "adjacent", "funding"];
+export type RadarKind = "adjacent" | "role" | "seat" | "funding" | "sales-build" | "departure";
+export const RADAR_KINDS: RadarKind[] = ["role", "seat", "departure", "adjacent", "sales-build", "funding"];
+/** How likely, in a word: never a percentage. */
+export type RadarBand = "High" | "Medium" | "Low";
 
 /** One signal as a member is sent it. Safe to store in an alert batch and to send to the browser. */
 export interface RadarCard {
@@ -43,6 +53,10 @@ export interface RadarCard {
   facts: string[];
   /** Why it is for them: "Marketing usually comes before Sales", "An open Sales role, at a company in your profile". */
   why: string;
+  /** How likely, in a word. */
+  band?: RadarBand;
+  /** Why now, from the rule: "Fractional CMO hired 5 months ago · Sales usually follows in 4–9 months". */
+  whyNow?: string;
   /** The company's name when the member's table shows it. Null otherwise. */
   company: string | null;
   /** The company is locked for the member: the day's companies are where they unlock it. */
@@ -85,6 +99,10 @@ export interface RadarRow {
   kinds: RadarKind[];
   /** A line for each signal, never naming the company: "Hired a fractional Finance leader · Finance usually comes before Sales". */
   lines: string[];
+  /** Beside each line: its band and why-now ("High · Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months"). */
+  notes?: string[];
+  /** The best band of the company's signals. */
+  band?: RadarBand;
 }
 
 /** GET /api/table?radar=1[&day=YYYY-MM-DD]: one day's companies, for the list in the app. */
@@ -117,6 +135,9 @@ export interface RadarSentRow {
   c: string;
   kind: RadarKind;
   l: string;
+  /** Band and why-now (rows kept before Crystal Ball scored have neither). */
+  b?: RadarBand;
+  w?: string;
 }
 
 /** Per member: what was sent, so a signal never goes twice, and each day's companies. */
@@ -171,6 +192,21 @@ export interface RadarStats {
   clicks7: number;
   clicks: number;
   lastRunAt: string | null;
+  /** Crystal Ball's model: Merlin's observed transitions between fractional leadership seats (A then B at one company), counts only. */
+  model?: {
+    transitions: number;
+    companies: number;
+    /** Transitions by the stage when the next seat started (seats with no stage on file are only in the total). */
+    byStage: { stage: string; n: number }[];
+    /** The most common pairs: function to function, counts. */
+    top: { from: string; to: string; n: number }[];
+    /** The new seat and company facts on file: counts only ("who introduced you" is counted, never shown). */
+    facts: { ownership: number; whyNow: number; endReason: number; introducedBy: number; revenueThen: number; employeesThen: number };
+    /** Companies whose career feed sales hires are counted, and the rises read as a sales build. */
+    salesBuild: { companies: number; rises: number };
+    /** Leaders gone from a company's website (the last 180 days). */
+    departures: number;
+  };
 }
 
 /** The radar panel's counts, from the state's parts. Pure. `eligible`: members with the radar on and a function and IFP. */

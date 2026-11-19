@@ -13,7 +13,7 @@ import { BUSY_MESSAGE, DOWN_MESSAGE, isBusy, isDown } from "../apiGuard";
 import { limited } from "../rateLimit";
 import { billingVisit, claudePerDay, touch } from "../table";
 import { upgradeUrl } from "../plan";
-import { BUSINESS_MODELS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
+import { BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
 import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
 
@@ -224,9 +224,9 @@ export function makeServer(ctx: T.Ctx): McpServer {
         "Add a missing fact about a company that the member knows (earns 1 credit when the field was empty). Only add what the member told you or confirmed. get_company lists what is missing under you_can_add.",
       inputSchema: {
         company,
-        field: z.string().describe("website, industry, employees, revenue, hq, linkedin, business_model, sales_motion, deal_size or sales_cycle"),
+        field: z.string().describe("website, industry, employees, revenue, hq, linkedin, business_model, sales_motion, deal_size, sales_cycle or ownership"),
         value: z.string().describe(
-          `The value. Pick lists: industry (${list(RN_INDUSTRIES)}), employees (${list(RN_EMPLOYEES)}), revenue (${list(RN_REVENUE)}), business_model (${list(BUSINESS_MODELS)}), sales_motion (${list(RN_MOTIONS)}), deal_size (${list(RN_DEAL_SIZES)}), sales_cycle (${list(RN_SALES_CYCLES)}).`,
+          `The value. Pick lists: industry (${list(RN_INDUSTRIES)}), employees (${list(RN_EMPLOYEES)}), revenue (${list(RN_REVENUE)}), business_model (${list(BUSINESS_MODELS)}), sales_motion (${list(RN_MOTIONS)}), deal_size (${list(RN_DEAL_SIZES)}), sales_cycle (${list(RN_SALES_CYCLES)}), ownership (${list(OWNERSHIP_TYPES)}).`,
         ),
       },
       annotations: { title: "Add a company fact", ...WRITE },
@@ -280,6 +280,9 @@ export function makeServer(ctx: T.Ctx): McpServer {
         hours: z.union([z.string(), z.number()]).optional().describe("Hours a week."),
         revenue_then: z.string().optional().describe(`The client's revenue at the time: ${list(RN_REVENUE)}`),
         employees_then: z.string().optional().describe(`The client's employees at the time: ${list(RN_EMPLOYEES)}`),
+        why_now: z.union([z.string(), z.array(z.string())]).optional().describe(`What made the client move when it did, one or more: ${list(WHY_NOW)}`),
+        end_reason: z.string().optional().describe(`Once the seat ended, why: ${list(END_REASONS)}`),
+        introduced_by: z.string().optional().describe("Who introduced the member to this client. Private: only the member sees it, Merlin only counts it, and no tool returns it."),
       },
       annotations: { title: "Add my seat", ...WRITE },
     },

@@ -1,0 +1,435 @@
+/**
+ * Crystal Ball's likelihood and timing: how likely a company is to hire a fractional in a given
+ * function next, and when. Pure: no state, no network, so the radar, the back-test
+ * (scripts/backtest-crystal.mts) and the checks (scripts/test-predict.mts) run it as it is.
+ *
+ * Source: Revenue Nomad research, 2026 (fractional hiring by revenue stage: the stage-by-role
+ * propensity matrix, sixteen transition rules with probability ranges and typical gaps, the
+ * buyer mix by company type, and the predictive signals). The research's numbers are modeled
+ * priors, not measured rates, so they are a starting point: Merlin's own seat records move them
+ * (a Beta prior worth PRIOR_WEIGHT observations, posterior mean used, see posterior).
+ *
+ *   P(next = B | last seat A, stage, ownership)
+ *     a transition rule that matches the stage, the ownership type and A, and names B: its midpoint
+ *     (times B's share when the rule names several seats, "sales leader or CMO");
+ *     else the propensity matrix as a fallback: REPEAT_RATE (a company coming back for another seat)
+ *     spread over the functions by their share at that stage, A left out.
+ *   Ownership unknown: the types blended by the research's buyer mix (BUYER_MIX).
+ *   Stage unknown: the six stages blended evenly.
+ *   timing(t): how strong the signal is t months after A started, from the rule's gap window.
+ *   band: High, Medium or Low from the final score, never a percentage.
+ */
+import { GTM_FUNCTIONS } from "../tableFields";
+
+/* ---------- stages and ownership ---------- */
+
+/** Revenue Nomad's revenue stages (RN_REVENUE), the stage bands the research uses. */
+export const STAGES = ["Pre-revenue", "Under $1M", "$1M–$5M", "$5M–$20M", "$20M–$50M", "$50M+"] as const;
+export type Stage = (typeof STAGES)[number];
+export const isStage = (v: unknown): v is Stage => typeof v === "string" && (STAGES as readonly string[]).includes(v);
+const [PRE, U1, S1_5, S5_20, S20_50, S50] = STAGES;
+
+/** Ownership as the rules read it. The company fact's values (OWNERSHIP_TYPES) map onto these. */
+export type Owner = "vc" | "boot" | "pe" | "family" | "public" | "nonprofit";
+export const OWNERS: Owner[] = ["vc", "boot", "pe", "family", "public", "nonprofit"];
+export const OWNER_OF: Record<string, Owner> = { "VC-backed": "vc", Bootstrapped: "boot", "PE-backed": "pe", "Family-owned": "family", Public: "public", "Non-profit": "nonprofit" };
+/** The company fact's value as an Owner, or null for Unknown (nothing on file). */
+export const ownerOf = (v: string | null | undefined): Owner | null => (v ? OWNER_OF[v] ?? null : null);
+
+/**
+ * Unknown ownership: the research's buyer mix of fractional postings (early-stage VC 36%,
+ * growth-stage VC 11%, bootstrapped 13%, non-profit 7%, PE-backed 2%, public 1%), normalized over
+ * these. Family-owned is not in the mix, so it weighs nothing here.
+ */
+export const BUYER_MIX: Record<Owner, number> = (() => {
+  const raw: Record<Owner, number> = { vc: 36 + 11, boot: 13, nonprofit: 7, pe: 2, public: 1, family: 0 };
+  const sum = Object.values(raw).reduce((a, b) => a + b, 0);
+  return Object.fromEntries(OWNERS.map((o) => [o, raw[o] / sum])) as Record<Owner, number>;
+})();
+
+/* ---------- the propensity matrix (fallback prior) ---------- */
+
+/** The research's role families. */
+type Family = "finance" | "marketing" | "engineering" | "sales" | "operations" | "people" | "product" | "revops" | "dataAi" | "security" | "legal" | "cs" | "other";
+
+/**
+ * Each family's share of a stage's fractional seats, in percent, in STAGES order (the research's
+ * stage-by-role propensity matrix, as given: modeled priors).
+ */
+export const PROPENSITY: Record<Family, readonly number[]> = {
+  finance: [12, 16, 20, 18, 20, 22],
+  marketing: [15, 20, 20, 18, 15, 12],
+  engineering: [30, 22, 13, 12, 8, 8],
+  sales: [5, 10, 13, 10, 10, 10],
+  operations: [5, 7, 10, 12, 12, 15],
+  people: [3, 3, 6, 10, 10, 10],
+  product: [10, 7, 4, 3, 2, 1],
+  revops: [0, 2, 5, 6, 6, 4],
+  dataAi: [8, 5, 3, 3, 5, 7],
+  security: [0, 1, 2, 3, 5, 6],
+  legal: [5, 3, 2, 3, 4, 4],
+  cs: [0, 1, 1, 2, 3, 2],
+  other: [7, 3, 1, 0, 0, 1],
+};
+
+/**
+ * Research role families on Merlin's functions, with the share of the family each one takes.
+ * One-to-one where the names agree. The splits are judgment calls, marked:
+ */
+export const FAMILY_FUNCTIONS: Record<Family, Record<string, number>> = {
+  finance: { Finance: 1 },
+  // Judgment: the family spans CMO, demand gen, brand and PMM; Merlin files growth leads and product marketing apart.
+  marketing: { Marketing: 0.75, Growth: 0.15, "Product Marketing": 0.1 },
+  engineering: { Technology: 1 },
+  // Judgment: partnership and channel leads sit on the sales side of the research's "sales leadership".
+  sales: { Sales: 0.85, Partnerships: 0.15 },
+  // Judgment: chiefs of staff and EOS integrators are often titled as executives on Merlin.
+  operations: { Operations: 0.85, Executive: 0.15 },
+  people: { People: 1 },
+  product: { Product: 1 },
+  revops: { RevOps: 1 },
+  // Judgment: a Chief AI Officer or data lead files as AI GTM when the work is go-to-market, as Technology when it is not; half each.
+  dataAi: { "AI GTM": 0.5, Technology: 0.5 },
+  // A CISO is a Technology seat on Merlin (lib/tableFields.ts functionOf).
+  security: { Technology: 1 },
+  legal: { Legal: 1 },
+  cs: { "Customer Success": 1 },
+  // Judgment: the research's "Other" is enablement, a fractional CEO, design and project managers.
+  other: { Enablement: 0.4, Executive: 0.3, Other: 0.3 },
+};
+
+/** A pair the matrix puts at 0% still happens now and then: never quite zero. */
+const PROPENSITY_FLOOR = 0.005;
+
+/** A function's share of a stage's fractional seats (0..1), from the matrix. Stage unknown: the six stages evenly. */
+export function propensity(fn: string, stage: Stage | null): number {
+  const at = (i: number) => {
+    let p = 0;
+    for (const [fam, split] of Object.entries(FAMILY_FUNCTIONS) as [Family, Record<string, number>][]) p += ((PROPENSITY[fam][i] ?? 0) / 100) * (split[fn] ?? 0);
+    return Math.max(PROPENSITY_FLOOR, p);
+  };
+  if (stage) return at(STAGES.indexOf(stage));
+  return STAGES.reduce((sum, _s, i) => sum + at(i), 0) / STAGES.length;
+}
+
+/**
+ * How often a company comes back for another fractional seat, "usually for a different function"
+ * (the research: 24% of postings come from repeat clients). Spread over the functions by their
+ * share, it is the chance of a pair no rule names.
+ */
+export const REPEAT_RATE = 0.24;
+/** The window used when no rule names the pair: the research's "existing seat passes 6 to 9 months, a second seat follows within 0 to 6". */
+export const FALLBACK_GAP: Gap = [3, 12];
+
+/* ---------- the transition rules ---------- */
+
+/** Months from the last seat's start to the next one: [earliest, latest] of the typical gap. */
+export type Gap = readonly [number, number];
+
+export interface Rule {
+  /** The research's rule number. */
+  n: number;
+  stages: readonly Stage[];
+  /** "any": every ownership type. Otherwise the types it holds for. */
+  owners: "any" | readonly Owner[];
+  /** The last fractional seat's function: Merlin functions, "gtm" (any GTM seat), "any" (any leadership seat), "none" (no fractional seat yet). */
+  from: readonly string[] | "gtm" | "any" | "none";
+  /** The next seat, with its share when the rule names several ("sales leader or CMO"). */
+  to: Record<string, number>;
+  /** The research's estimated probability, low and high. The midpoint is used. */
+  p: readonly [number, number];
+  gap: Gap;
+  /** One short line from the research's evidence. */
+  why: string;
+  /** Holds only when this is also true of the company. */
+  needs?: "headcount" | "b2b" | "founderLed";
+  /** Same function before and after: never a cross-function prediction (kept for the record). */
+  same?: boolean;
+  /** Needs a fact Merlin has no way to read yet (years into a PE hold). Never used. */
+  inactive?: boolean;
+}
+
+const VC: Owner[] = ["vc"];
+// Judgment: the research's "bootstrapped or founder-owned" includes family-owned companies.
+const BOOT: Owner[] = ["boot", "family"];
+const PE: Owner[] = ["pe"];
+const MKT = ["Marketing", "Growth"];
+
+/**
+ * The research's sixteen transition rules. Role families map to functions as FAMILY_FUNCTIONS says
+ * ("CTO or engineering lead" is Technology, "CRO or VP Sales" is Sales, "marketing ops" is RevOps,
+ * "CISO" is Technology, "recruiting or TA" is People, "GC" is Legal). Where a rule names two seats
+ * ("A or B"), each gets an even share unless noted.
+ */
+export const RULES: readonly Rule[] = [
+  // Judgment: "marketing or growth lead" splits 70/30 between Marketing and Growth.
+  { n: 1, stages: [PRE, U1], owners: VC, from: ["Technology"], to: { Marketing: 0.7, Growth: 0.3 }, p: [0.35, 0.45], gap: [3, 9], why: "engineering, then marketing, are the top early-stage VC seats" },
+  { n: 2, stages: [U1], owners: VC, from: MKT, to: { Finance: 1 }, p: [0.25, 0.35], gap: [3, 6], why: "finance comes in ahead of a priced round" },
+  { n: 3, stages: [S1_5], owners: "any", from: ["Finance"], to: { Finance: 1 }, p: [0.4, 0.5], gap: [0, 3], why: "a controller makes the CFO's work pay off", same: true },
+  { n: 4, stages: [S1_5], owners: BOOT, from: ["Finance"], to: { Sales: 0.5, Marketing: 0.5 }, p: [0.3, 0.4], gap: [3, 9], why: "a CFO's pricing and margin work shows the growth gap" },
+  { n: 5, stages: [S1_5], owners: "any", from: MKT, to: { Sales: 1 }, p: [0.2, 0.3], gap: [4, 9], why: "marketing pipeline shows where founder-led selling stalls" },
+  { n: 6, stages: [S1_5, S5_20], owners: "any", from: ["Sales"], to: { RevOps: 1 }, p: [0.35, 0.45], gap: [1, 4], why: "a sales playbook needs the CRM and forecasting work" },
+  // Judgment: "recruiting or TA, then sales enablement" splits 60/40 between People and Enablement.
+  { n: 7, stages: [S5_20], owners: "any", from: ["Sales"], to: { People: 0.6, Enablement: 0.4 }, p: [0.25, 0.35], gap: [2, 6], why: "a rebuilt playbook leads to hiring reps" },
+  { n: 8, stages: [S5_20], owners: "any", from: MKT, to: { RevOps: 1 }, p: [0.25, 0.35], gap: [3, 6], why: "revenue that can't be traced to programs needs marketing ops" },
+  { n: 9, stages: [S5_20], owners: "any", from: "gtm", to: { People: 1 }, p: [0.25, 0.35], gap: [3, 12], why: "fractional HR comes in at 25 to 50 people", needs: "headcount" },
+  { n: 10, stages: [S5_20], owners: "any", from: ["Finance", ...MKT], to: { Operations: 1 }, p: [0.15, 0.25], gap: [6, 12], why: "founder-led companies add an integrator", needs: "founderLed" },
+  { n: 11, stages: [S1_5, S5_20], owners: "any", from: ["Technology", "Sales"], to: { Technology: 1 }, p: [0.15, 0.25], gap: [1, 3], why: "the first enterprise security review needs a CISO", needs: "b2b" },
+  { n: 12, stages: [S5_20, S20_50], owners: "any", from: ["Finance"], to: { Legal: 1 }, p: [0.1, 0.2], gap: [3, 12], why: "fundraising, deals and contract volume bring in a GC" },
+  { n: 13, stages: STAGES, owners: PE, from: "none", to: { Finance: 1 }, p: [0.5, 0.65], gap: [0, 3], why: "sponsors replace the CFO early in most deals" },
+  { n: 14, stages: STAGES, owners: PE, from: ["Finance"], to: { Sales: 1 / 3, Marketing: 1 / 3, People: 1 / 3 }, p: [0.3, 0.4], gap: [3, 12], why: "PE playbooks add a CRO, CMO or CHRO in the first 100 days" },
+  // Judgment: an AI or data lead splits evenly between AI GTM and Technology (see FAMILY_FUNCTIONS).
+  { n: 15, stages: [S20_50, S50], owners: "any", from: "any", to: { "AI GTM": 0.5, Technology: 0.5 }, p: [0.1, 0.2], gap: [3, 12], why: "AI-titled fractional seats are rising" },
+  { n: 16, stages: STAGES, owners: PE, from: "any", to: { Finance: 1 }, p: [0.3, 0.4], gap: [12, 18], why: "an exit-focused CFO comes in before a sale", inactive: true },
+];
+
+/** What a rule's conditions read about a company, when known. */
+export interface CompanyFacts {
+  employees?: string | null;
+  businessModel?: string | null;
+}
+
+const fromMatches = (r: Rule, from: string | null) =>
+  r.from === "none" ? from === null : from === null ? false : r.from === "any" ? true : r.from === "gtm" ? GTM_FUNCTIONS.includes(from) : r.from.includes(from);
+const needsHold = (r: Rule, owner: Owner, co: CompanyFacts) => {
+  switch (r.needs) {
+    case undefined:
+      return true;
+    // Passing 25 to 50 people: the 11–50 and 51–200 bands (unknown counts, the rule is still a prior).
+    case "headcount":
+      return !co.employees || co.employees === "11–50" || co.employees === "51–200";
+    // Selling to businesses (unknown counts).
+    case "b2b":
+      return co.businessModel !== "B2C";
+    // Judgment: founder-led means not PE-backed, public or a non-profit.
+    case "founderLed":
+      return owner === "vc" || owner === "boot" || owner === "family";
+  }
+};
+
+/** The rules that hold for a stage, an ownership type and a last seat (null: no fractional seat yet). */
+export function rulesFor(stage: Stage, owner: Owner, from: string | null, co: CompanyFacts = {}): Rule[] {
+  return RULES.filter((r) => !r.inactive && r.stages.includes(stage) && (r.owners === "any" || r.owners.includes(owner)) && fromMatches(r, from) && needsHold(r, owner, co));
+}
+
+/** One prior: the probability, its window, and the rule behind it (null: the propensity matrix). */
+export interface Prior {
+  p: number;
+  gap: Gap;
+  rule: Rule | null;
+}
+
+const mid = (r: Rule) => (r.p[0] + r.p[1]) / 2;
+
+/** The prior for one stage and ownership type. */
+function priorAt(from: string | null, to: string, stage: Stage, owner: Owner, co: CompanyFacts): Prior {
+  let best: Prior | null = null;
+  for (const r of rulesFor(stage, owner, from, co)) {
+    const share = r.to[to];
+    if (!share || r.same || from === to) continue;
+    const p = mid(r) * share;
+    if (!best || p > best.p) best = { p, gap: r.gap, rule: r };
+  }
+  if (best) return best;
+  const left = from ? 1 - propensity(from, stage) : 1;
+  return { p: (REPEAT_RATE * propensity(to, stage)) / Math.max(0.2, left), gap: FALLBACK_GAP, rule: null };
+}
+
+/**
+ * P(the next fractional seat is `to` | the last one was `from`), before Merlin's own data. Stage
+ * null: the stages evenly. Owner null (Unknown): the types by BUYER_MIX. The window and the rule are
+ * the ones that carry the most of the blend.
+ */
+export function prior(from: string | null, to: string, stage: Stage | null, owner: Owner | null, co: CompanyFacts = {}): Prior {
+  const stages: [Stage, number][] = stage ? [[stage, 1]] : STAGES.map((s) => [s, 1 / STAGES.length]);
+  const owners: [Owner, number][] = owner ? [[owner, 1]] : OWNERS.filter((o) => BUYER_MIX[o] > 0).map((o) => [o, BUYER_MIX[o]]);
+  let p = 0;
+  let lead: { w: number; x: Prior } | null = null;
+  for (const [s, ws] of stages)
+    for (const [o, wo] of owners) {
+      const x = priorAt(from, to, s, o, co);
+      const w = ws * wo;
+      p += w * x.p;
+      const carry = w * x.p * (x.rule ? 1 : 0.5);
+      if (!lead || carry > lead.w) lead = { w: carry, x };
+    }
+  return { p, gap: lead!.x.gap, rule: lead!.x.rule };
+}
+
+/* ---------- Merlin's own data ---------- */
+
+/** Pseudo-observations the research's prior is worth against Merlin's counts. */
+export const PRIOR_WEIGHT = 20;
+
+/** Observed transitions A -> B, by stage band ("all" pools every stage, and seats with no stage on file). Counts only. */
+export interface TransitionCounts {
+  byStage: Record<string, Record<string, Record<string, number>>>;
+  /** Transitions counted, and companies they came from. */
+  total: number;
+  companies: number;
+}
+export const emptyCounts = (): TransitionCounts => ({ byStage: {}, total: 0, companies: 0 });
+
+/** One fractional or interim leadership seat, as the counting reads it. `ym`: its start ("2025-03", or a year). `stage`: revenue at its start, else the company's band. */
+export interface SeatPoint {
+  companyId: string;
+  fn: string;
+  ym: string;
+  stage: Stage | null;
+}
+
+/** "2025-03" -> months since year 0; a year alone is its first month. */
+export const monthIndex = (ym: string): number | null => {
+  const m = /^(\d{4})(?:-(\d{2}))?$/.exec(ym);
+  return m ? Number(m[1]) * 12 + (m[2] ? Number(m[2]) - 1 : 0) : null;
+};
+
+/**
+ * Count A -> B per company: seats ordered by start month, and for each seat A the next seat in a
+ * different function that starts after it. Filed under B's stage (the stage when the company made
+ * the next hire) and under "all". `before` (a month index): only seats that started before it.
+ */
+export function countTransitions(seats: SeatPoint[], before = Infinity): TransitionCounts {
+  const out = emptyCounts();
+  const by = new Map<string, { fn: string; m: number; stage: Stage | null }[]>();
+  for (const x of seats) {
+    const m = monthIndex(x.ym);
+    if (m === null || m >= before) continue;
+    const l = by.get(x.companyId) ?? [];
+    l.push({ fn: x.fn, m, stage: x.stage });
+    by.set(x.companyId, l);
+  }
+  const bump = (stage: string, a: string, b: string) => {
+    const s = (out.byStage[stage] ??= {});
+    const r = (s[a] ??= {});
+    r[b] = (r[b] ?? 0) + 1;
+  };
+  for (const list of by.values()) {
+    list.sort((a, b) => a.m - b.m || a.fn.localeCompare(b.fn));
+    let any = false;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      const first = list.find((x) => x.fn !== a.fn && x.m > a.m);
+      if (!first) continue;
+      // Two seats in other functions that start in the same month (a co-hire) both come next.
+      const next = new Map<string, Stage | null>();
+      for (const x of list) if (x.m === first.m && x.fn !== a.fn && !next.has(x.fn)) next.set(x.fn, x.stage);
+      any = true;
+      for (const [fn, stage] of next) {
+        out.total++;
+        bump("all", a.fn, fn);
+        if (stage) bump(stage, a.fn, fn);
+      }
+    }
+    if (any) out.companies++;
+  }
+  return out;
+}
+
+/** Transitions seen at other stages count this much toward a stage's estimate (a stage with few of its own still learns from the rest). */
+export const OTHER_STAGES_WEIGHT = 0.5;
+
+/**
+ * The posterior mean of P(A -> B) at a stage: the prior as a Beta worth PRIOR_WEIGHT observations,
+ * updated with the transitions out of A counted there (k of n went to B). Most stages have few
+ * transitions of their own, so the ones counted at other stages come in first at
+ * OTHER_STAGES_WEIGHT each (the stage's own then update that). Stage null: every count, whole.
+ */
+export function posterior(p0: number, counts: TransitionCounts | null | undefined, from: string | null, to: string, stage: Stage | null): number {
+  if (!counts || !from) return p0;
+  const kn = (row: Record<string, number> | undefined) => ({ k: row?.[to] ?? 0, n: Object.values(row ?? {}).reduce((a, b) => a + b, 0) });
+  const all = kn(counts.byStage.all?.[from]);
+  const beta = (p: number, k: number, n: number, w = 1) => (p * PRIOR_WEIGHT + w * k) / (PRIOR_WEIGHT + w * n);
+  if (!stage) return beta(p0, all.k, all.n);
+  const own = kn(counts.byStage[stage]?.[from]);
+  const p1 = beta(p0, Math.max(0, all.k - own.k), Math.max(0, all.n - own.n), OTHER_STAGES_WEIGHT);
+  return beta(p1, own.k, own.n);
+}
+
+/** The model's answer for one pair: the probability after Merlin's data, and the window and rule behind it. */
+export interface Likelihood extends Prior {
+  prior: number;
+}
+export function likelihood(from: string | null, to: string, stage: Stage | null, owner: Owner | null, co: CompanyFacts = {}, counts?: TransitionCounts | null): Likelihood {
+  const pr = prior(from, to, stage, owner, co);
+  return { ...pr, prior: pr.p, p: posterior(pr.p, counts, from, to, stage) };
+}
+
+/* ---------- timing ---------- */
+
+/** Strength while the window hasn't opened yet: it rises from here to 1 at the window's start. */
+export const TIMING_RISE_FROM = 0.4;
+/** Strength once the window has passed (after a 3-month decay): low, not zero. */
+export const TIMING_TAIL = 0.15;
+/** After the window, the tail lasts this long (counted from the seat's start, or the window's end plus 6 when later). */
+export const TIMING_TAIL_MONTHS = 12;
+
+/**
+ * How strong a signal is `t` months after the seat (or the event) it reads: a trapezoid over the
+ * rule's gap window. It rises into the window, is 1 inside it, falls over 3 months after it, then
+ * stays low (TIMING_TAIL) until TIMING_TAIL_MONTHS, and is 0 after that.
+ */
+export function timing(t: number, gap: Gap): number {
+  const [a, b] = gap;
+  if (!Number.isFinite(t) || t < 0) t = 0;
+  if (t < a) return TIMING_RISE_FROM + (1 - TIMING_RISE_FROM) * (t / a);
+  if (t <= b) return 1;
+  if (t <= b + 3) return 1 - (1 - TIMING_TAIL) * ((t - b) / 3);
+  return t <= Math.max(TIMING_TAIL_MONTHS, b + 6) ? TIMING_TAIL : 0;
+}
+
+/* ---------- bands ---------- */
+
+export type Band = "High" | "Medium" | "Low";
+/** A score at or over this is High, and over MEDIUM_AT Medium. Low stays off the email (it is still on the page). */
+export const HIGH_AT = 0.25;
+export const MEDIUM_AT = 0.1;
+export const bandOf = (score: number): Band => (score >= HIGH_AT ? "High" : score >= MEDIUM_AT ? "Medium" : "Low");
+/** Scores under this are noise: not even on the page. */
+export const SCORE_FLOOR = 0.015;
+
+/* ---------- the signals that are not a hire ---------- */
+
+/**
+ * What a signal other than a hire predicts, per function: its probability and window. From the
+ * research's predictive signals; the probabilities for "Medium" and "Strong" signals are judgment
+ * calls (the research gives a strength, not a rate).
+ */
+export const SIGNAL_PRIORS: Record<string, Record<string, { p: number; gap: Gap; why: string }>> = {
+  // "Founder still the only seller; first 2-3 AE job posts": a fractional sales leader, then RevOps (Medium, 3-9 months).
+  "sales-build": {
+    Sales: { p: 0.35, gap: [3, 9], why: "a fractional Sales leader usually follows" },
+    RevOps: { p: 0.2, gap: [4, 12], why: "RevOps usually follows the first sales hires" },
+  },
+  // "Job posts for SDRs or AEs rising": recruiting, enablement, RevOps (Medium, 1-6 months).
+  "sales-jump": {
+    Sales: { p: 0.3, gap: [3, 9], why: "a fractional Sales leader usually follows" },
+    RevOps: { p: 0.2, gap: [1, 6], why: "RevOps usually follows a sales hiring push" },
+    People: { p: 0.15, gap: [1, 6], why: "recruiting help usually follows a sales hiring push" },
+    Enablement: { p: 0.15, gap: [1, 6], why: "enablement usually follows a sales hiring push" },
+  },
+  // "CFO, VP Sales or CMO departure": interim or fractional cover for that seat (Strong, 0-2 months).
+  departure: { "*": { p: 0.55, gap: [0, 2], why: "interim or fractional cover usually follows" } },
+  // "Priced funding round": CFO or FP&A, then CMO and a sales leader (Strong, 0-6 months).
+  funding: {
+    Finance: { p: 0.35, gap: [0, 6], why: "finance usually follows a round" },
+    Marketing: { p: 0.3, gap: [0, 6], why: "marketing usually follows a round" },
+    Sales: { p: 0.3, gap: [0, 6], why: "a sales leader usually follows a round" },
+  },
+};
+
+/* ---------- words ---------- */
+
+const LEAD: Record<string, string> = { Sales: "CRO", Marketing: "CMO", Finance: "CFO", Technology: "CTO", Operations: "COO", People: "Head of People", Product: "CPO", Legal: "GC" };
+/** "CMO", "RevOps leader": how a fractional leadership seat in a function reads in a line. */
+export const leadWord = (fn: string) => LEAD[fn] ?? `${fn} leader`;
+/** "this month", "1 month ago", "5 months ago". */
+export const agoWords = (months: number) => (months <= 0 ? "this month" : months === 1 ? "1 month ago" : `${months} months ago`);
+/** "in 4–9 months", "within 3 months". */
+export const gapWords = (g: Gap) => (g[0] <= 0 ? `within ${g[1]} months` : `in ${g[0]}–${g[1]} months`);
+
+/** The why-now line for an adjacent hire: "Fractional CMO hired 5 months ago · Sales usually follows in 4–9 months". */
+export function hireWhyNow(from: string, to: string, months: number, l: Pick<Likelihood, "gap" | "rule">): string {
+  const lead = `Fractional ${leadWord(from)} hired ${agoWords(months)}`;
+  return l.rule ? `${lead} · ${to} usually follows ${gapWords(l.gap)}` : `${lead} · ${to} can follow ${gapWords(l.gap)}`;
+}

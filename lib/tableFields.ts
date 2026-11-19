@@ -219,6 +219,15 @@ export const RN_DEAL_SIZES = ["Under $15K", "$15K–$50K", "$50K–$150K", "$150
 export const RN_SALES_CYCLES = ["Under 5 days", "5–30 days", "30–90 days", "3–6 months", "6–12 months", "12+ months"];
 export const RN_MOTIONS = ["PLG", "PLG to sales", "Inside sales", "Enterprise sales", "Channel"];
 export const BUSINESS_MODELS = ["B2B", "B2C", "B2B2C"];
+/**
+ * Who owns the company. A free company fact (Crystal Ball reads it: lib/radar/predict.ts). Nothing
+ * on file reads as Unknown, which is not a value a member adds.
+ */
+export const OWNERSHIP_TYPES = ["VC-backed", "Bootstrapped", "PE-backed", "Family-owned", "Public", "Non-profit"];
+/** What a member can pick as a seat's "Why now" (several): what made the client move when it did. */
+export const WHY_NOW = ["Fundraise", "Leader departed", "PE deal", "Founder-led sales ceiling", "Compliance/SOC 2", "Headcount growth", "Audit/finance clean-up", "AI program", "Other"];
+/** Why a seat ended, once it has. */
+export const END_REASONS = ["Converted to full-time", "Replaced by full-time hire", "Project done", "Budget cut", "Other"];
 
 /** How the client found the fractional for this seat. */
 export const SOURCED_VIA = ["Referral", "Investor intro", "Former colleague", "Inbound", "Platform or marketplace", "Recruiter", "Cold outreach"];
@@ -295,6 +304,8 @@ export interface FieldDef {
   /** Set by the system (e.g. where a record came from); shown, never filled. */
   system?: boolean;
   options?: string[];
+  /** A choice where several can be picked: stored as the picks in the list's order, joined by ", ". */
+  multi?: boolean;
   placeholder?: string;
   /** One line shown in tooltips and the add form. */
   hint?: string;
@@ -328,6 +339,7 @@ export const GROUPS: GroupDef[] = [
       { key: "motion", label: "Sales motion", kind: "choice", gated: false, options: RN_MOTIONS, hint: "How the company sells most of its deals.", say: "the sales motion" },
       { key: "dealSize", label: "Average deal size", short: "Deal size", kind: "choice", gated: false, options: RN_DEAL_SIZES, say: "the average deal size" },
       { key: "salesCycle", label: "Average sales cycle", short: "Sales cycle", kind: "choice", gated: false, options: RN_SALES_CYCLES, say: "the average sales cycle" },
+      { key: "ownership", label: "Ownership", kind: "choice", gated: false, options: OWNERSHIP_TYPES, hint: "Who owns the company: venture investors, private equity, its founders, a family, the public markets.", say: "the ownership type" },
     ],
   },
   {
@@ -386,6 +398,8 @@ export const GROUPS: GroupDef[] = [
         hint: "How many people the client had when the work started.",
         say: "the employee count at the time",
       },
+      { key: "whyNow", label: "Why now", kind: "choice", multi: true, gated: false, options: WHY_NOW, hint: "What made the client move when it did. Pick all that fit.", say: "why now" },
+      { key: "endReason", label: "Why it ended", short: "Ended because", kind: "choice", gated: false, options: END_REASONS, hint: "Once the seat has ended: what came of it.", say: "why it ended" },
     ],
   },
   {
@@ -443,7 +457,23 @@ export const SOURCE_LABEL: Record<string, string> = {
   "Seat scan": "Revenue Nomad research",
 };
 
-const FIELD_BY_KEY = new Map<string, FieldDef>(ALL_FIELDS.map((x) => [`${x.entity}.${x.f.key}`, x.f]));
+/**
+ * "Who introduced you" on a seat: the seat holder's own note, never a fact of the table. It is not
+ * in GROUPS, so no table, export, count or connector answer ever carries it: the server keeps it
+ * apart (State.seatPrivate) and sends it to the seat holder alone. Merlin uses it only as counts.
+ */
+export const INTRO_FIELD: FieldDef = {
+  key: "introducedBy",
+  label: "Who introduced you",
+  short: "Introduced by",
+  kind: "text",
+  gated: true,
+  placeholder: "A name, a firm, or how it came about",
+  hint: "Only you see this. Merlin only counts it, never shows it.",
+  say: "who introduced you",
+};
+
+const FIELD_BY_KEY = new Map<string, FieldDef>([...ALL_FIELDS.map((x) => [`${x.entity}.${x.f.key}`, x.f] as const), ["engagement.introducedBy", INTRO_FIELD] as const]);
 export const fieldDef = (entity: string, key: string): FieldDef | undefined => FIELD_BY_KEY.get(`${entity}.${key}`);
 
 /**
@@ -649,6 +679,13 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     case "number":
       return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use a whole number from 1 to 80." };
     case "choice": {
+      // Several picks: each one on the list, kept in the list's order.
+      if (f.multi) {
+        const picks = v.split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean);
+        const list = f.options ?? [];
+        if (!picks.length || picks.some((x) => !list.includes(x))) return { error: "Pick from the list." };
+        return { value: list.filter((o) => picks.includes(o)).join(", ") };
+      }
       // Industry, employees and revenue take the closest standard value ("< $1M", "51-200", "Software Development").
       const now = STANDARD_FIELDS.has(f.key) ? toStandard(f.key, v) ?? v : v;
       return f.options?.includes(now) ? { value: now } : { error: "Pick one from the list." };

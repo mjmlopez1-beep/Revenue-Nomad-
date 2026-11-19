@@ -14,7 +14,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import {
-  ENGAGEMENT_TYPES, FOUND_NOTE, FUNCTIONS, HIRE_REASONS, PERSON_NAME_RE, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, cleanValue, fieldDef,
+  ENGAGEMENT_TYPES, END_REASONS, FOUND_NOTE, FUNCTIONS, HIRE_REASONS, INTRO_FIELD, PERSON_NAME_RE, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, WHY_NOW,
+  cleanValue, fieldDef,
 } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import type { ActionResult, Cell, EngagementRec } from "@/lib/tableTypes";
@@ -315,9 +316,9 @@ function NewCompany({
 
 /* ---------- step 2: what you know there ---------- */
 
-const ENG_ORDER = ["function", "role", "type", "status", "operator", "start", "end", "pricing", "rate", "hours", "reason", "sourced"] as const;
+const ENG_ORDER = ["function", "role", "type", "status", "operator", "start", "end", "pricing", "rate", "hours", "revenue", "employees", "reason", "whyNow", "sourced", "endReason"] as const;
 /** An open role nobody holds has none of these yet. */
-const OPEN_ROLE_SKIP = ["start", "end", "reason", "sourced"];
+const OPEN_ROLE_SKIP = ["start", "end", "reason", "sourced", "whyNow", "endReason", "revenue", "employees"];
 /** Statuses a member can give a seat. "Closed" is what the weekly scan sets when a posting comes down. */
 const MEMBER_STATUSES = STATUSES.filter((x) => x !== "Closed");
 const MINE_STATUSES = STATUSES.filter((x) => x === "Active" || x === "Ended");
@@ -480,7 +481,20 @@ function EngagementForm({
   const set = (k: string) => (x: string) => (setDraft((d) => ({ ...d, v: { ...d.v, [k]: x } })), setErr(null));
   // An open role nobody holds yet: no start, end or story, and the rate and hours are the posting's.
   const openRole = !mine && v.status === "Open role" && !v.operator?.trim();
-  const asked = ENG_ORDER.filter((k) => !(openRole && OPEN_ROLE_SKIP.includes(k)));
+  // Why it ended is asked only once the seat has (Ended, or an end month).
+  const ended = v.status === "Ended" || (!!v.end && v.end !== "Ongoing");
+  const asked = ENG_ORDER.filter((k) => !(openRole && OPEN_ROLE_SKIP.includes(k)) && !(k === "endReason" && !ended));
+  // The company's size and revenue now are where "at the time" starts: the member changes them if they were different then.
+  const coRevenue = shown(i.c.cells.revenue);
+  const coEmployees = shown(i.c.cells.employees);
+  useEffect(() => {
+    setDraft((d) => {
+      const add: Record<string, string> = {};
+      if (d.v.revenue === undefined && coRevenue) add.revenue = coRevenue;
+      if (d.v.employees === undefined && coEmployees) add.employees = coEmployees;
+      return Object.keys(add).length ? { ...d, v: { ...d.v, ...add } } : d;
+    });
+  }, [coRevenue, coEmployees, setDraft]);
   // The member's own name, filled in for them, is not an answer.
   const filled = asked.filter((k) => v[k]?.trim() && !(asMe && k === "operator"));
   // Their name counts (and earns) once there is something else: alone it makes no seat.
@@ -535,6 +549,8 @@ function EngagementForm({
       setBusy(false);
       return fail(fromServer(r.message, "engagement", ENG_ORDER));
     }
+    // Who introduced them: the member's own note, saved apart from the seat (never shown to anyone else).
+    if (mine && r.id && v.introducedBy?.trim()) await ui.act({ type: "fill", entity: "engagement", id: r.id, field: INTRO_FIELD.key, value: v.introducedBy.trim() }, { quiet: true, silentError: true });
     let shared: Sent["bench"];
     if (bench && r.id) {
       const b = await ui.act({ type: "benchRate", engagementId: r.id, pricing: bench.kind === "hourly" ? "Hourly" : "Monthly retainer", rate: v.rate.trim() }, { quiet: true, silentError: true });
@@ -576,6 +592,25 @@ function EngagementForm({
       <FieldErr id={id(k)} err={err} k={k} />
     </div>
   );
+  // Several picks (Why now): each chip toggles, kept in the list's order.
+  const manyPicks = (k: string, label: string, options: string[], hint?: string) => {
+    const on = (v[k] ?? "").split(", ").filter(Boolean);
+    const flip = (o: string) => set(k)(options.filter((x) => (x === o ? !on.includes(o) : on.includes(x))).join(", "));
+    return (
+      <div className="tp-form-row">
+        <Lbl text={label} filled={on.length > 0} />
+        <div className="tp-chips" role="group" aria-label={label} id={id(k)} tabIndex={-1}>
+          {options.map((o) => (
+            <button key={o} type="button" aria-pressed={on.includes(o)} className={`chip tp-chipbtn${on.includes(o) ? " chip-on" : ""}`} onClick={() => flip(o)}>
+              {o}
+            </button>
+          ))}
+        </div>
+        {hint && <div className="am-hint">{hint}</div>}
+        <FieldErr id={id(k)} err={err} k={k} />
+      </div>
+    );
+  };
   // The seat holder picker owns its input, so its error state is set here.
   const opInvalid = err?.key === "operator";
   useEffect(() => {
@@ -709,7 +744,33 @@ function EngagementForm({
         <section className="am-group" aria-label="How it came about">
           <h3 className="am-h3">How it came about</h3>
           {picks("reason", "Why they hired", reasonsFor(v.function, HIRE_REASONS))}
+          {manyPicks("whyNow", "Why now", WHY_NOW, "What made them move when they did. Pick all that fit.")}
           {picks("sourced", "How it was sourced", SOURCED_VIA)}
+          {ended && picks("endReason", "Why it ended", END_REASONS)}
+          {mine && (
+            <div className="tp-form-row">
+              <Lbl text="Who introduced you" filled={false} htmlFor={id("introducedBy")} />
+              <input
+                id={id("introducedBy")}
+                className="input"
+                autoComplete="off"
+                maxLength={MAX}
+                enterKeyHint="done"
+                placeholder={INTRO_FIELD.placeholder}
+                value={v.introducedBy ?? ""}
+                onChange={(e) => set("introducedBy")(e.target.value)}
+              />
+              <div className="am-hint">Only you see this. Merlin only counts it, never shows it to anyone.</div>
+            </div>
+          )}
+        </section>
+      )}
+      {!openRole && (
+        <section className="am-group" aria-label="The company then">
+          <h3 className="am-h3">The company when you started</h3>
+          {picks("revenue", "Revenue then", RN_REVENUE)}
+          {picks("employees", "Employees then", RN_EMPLOYEES)}
+          {(coRevenue || coEmployees) && <p className="am-hint am-hint-up">Filled in with what the company has on file now. Change it if it was different then.</p>}
         </section>
       )}
       <div className="tp-modal-actions">

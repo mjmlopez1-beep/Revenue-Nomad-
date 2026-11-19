@@ -430,7 +430,8 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   const active = mine(val("Active"));
   const ended = mine(val("Ended"));
   const meSeats = { function: "Sales", benchRates: [] } as unknown as Me;
-  check("an Active seat's end month is not missing (Your seats doesn't ask for it)", seatMissingCount(active, meSeats) === seatMissingCount(ended, meSeats) - 1, [seatMissingCount(active, meSeats), seatMissingCount(ended, meSeats)]);
+  // An ended seat also asks why it ended (endReason); an active one asks neither.
+  check("an Active seat's end month is not missing (Your seats doesn't ask for it), nor why it ended", seatMissingCount(active, meSeats) === seatMissingCount(ended, meSeats) - 2, [seatMissingCount(active, meSeats), seatMissingCount(ended, meSeats)]);
   const seats = mySeats(deriveAll([co("Held Co", [active])]), meSeats);
   check("Fill in your seats counts no end on an Active seat", seats.length === 1 && !seats[0].missing.includes("end"), seats[0]?.missing);
 }

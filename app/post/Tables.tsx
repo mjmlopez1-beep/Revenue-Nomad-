@@ -507,18 +507,36 @@ const CompanyRow = memo(function CompanyRow({
 export interface SignalRows {
   /** Company public id -> its lines ("Hired a fractional Finance leader · Finance usually comes before Sales"). */
   lines: Map<string, string[]>;
+  /** Company public id -> the note beside each line: "High · Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months". */
+  notes?: Map<string, string[]>;
   action: (i: CoInfo) => ReactNode;
 }
 
-/** The lines of what happened at a company, one a signal. */
-export function SignalLines({ lines }: { lines: string[] }) {
+/**
+ * The lines of what happened at a company, one a signal, each with its likelihood (a word, never a
+ * percentage) and why now under it.
+ */
+export function SignalLines({ lines, notes }: { lines: string[]; notes?: string[] }) {
   return (
     <span className="rd-lines">
-      {lines.map((l) => (
-        <span key={l} className="rd-line" title={l}>
-          {l}
-        </span>
-      ))}
+      {lines.map((l, i) => {
+        const note = notes?.[i] ?? "";
+        const cut = note.indexOf(" · ");
+        const band = cut > 0 ? note.slice(0, cut) : "";
+        return (
+          <span key={l} className="rd-line-wrap">
+            <span className="rd-line" title={l}>
+              {l}
+            </span>
+            {note && (
+              <span className="rd-note-line" title={note}>
+                {band && <span className={`rd-band rd-band-${band.toLowerCase()}`}>{band}</span>}
+                <span className="rd-why-now">{cut > 0 ? note.slice(cut + 3) : note}</span>
+              </span>
+            )}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -526,7 +544,7 @@ export function SignalLines({ lines }: { lines: string[] }) {
 /** The action never opens the record behind it: its own click only. */
 const own = (ev: React.SyntheticEvent) => ev.stopPropagation();
 
-const SignalCompanyRow = memo(function SignalCompanyRow({ r, sel, onOpen, lines, action }: { r: Row; sel: boolean; onOpen: (r: Row) => void; lines: string[]; action: SignalRows["action"] }) {
+const SignalCompanyRow = memo(function SignalCompanyRow({ r, sel, onOpen, lines, notes, action }: { r: Row; sel: boolean; onOpen: (r: Row) => void; lines: string[]; notes?: string[]; action: SignalRows["action"] }) {
   const i = r.i;
   const c = i.c;
   const co = (field: string) => <RowFact t={{ entity: "company", id: c.id, field }} cell={c.cells[field]} cover={coverOf(i, null, field)} own={ownCompany(i)} />;
@@ -536,7 +554,7 @@ const SignalCompanyRow = memo(function SignalCompanyRow({ r, sel, onOpen, lines,
         <CompanyName i={i} following={c.following} quiet />
       </td>
       <td className="rd-td-what">
-        <SignalLines lines={lines} />
+        <SignalLines lines={lines} notes={notes} />
       </td>
       <td className="num">{co("employees")}</td>
       <td>{co("hq")}</td>
@@ -883,7 +901,7 @@ export function DataTable({
         {rows.map((r) =>
           type === "companies" ? (
             sig ? (
-              <SignalCompanyRow key={r.key} r={r} sel={selected === r.key} onOpen={onOpen} lines={signals!.lines.get(r.i.c.id) ?? NO_LINES} action={signals!.action} />
+              <SignalCompanyRow key={r.key} r={r} sel={selected === r.key} onOpen={onOpen} lines={signals!.lines.get(r.i.c.id) ?? NO_LINES} notes={signals!.notes?.get(r.i.c.id)} action={signals!.action} />
             ) : hiring ? (
               <HiringCompanyRow key={r.key} r={r} mine={me.function} sel={selected === r.key} onOpen={onOpen} />
             ) : (
