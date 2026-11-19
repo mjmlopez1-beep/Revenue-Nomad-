@@ -267,6 +267,8 @@ const U = await import("../lib/notify/url.ts");
 U.setResolver(async () => ["93.184.216.34"]);
 const sm = seed.members[0];
 const ctx = { member: sm, origin: "https://merlin.example.com" };
+// The member unlocks Alpha first (2 credits): every company is locked for a member until they unlock it or know it.
+await T.perform(sm.token, { type: "unlock", entity: "company", id: T.tableInternals.pubId("c_alpha"), field: "identity" });
 const g0 = (await MCP.getCompany(ctx, { company: "Alpha Fixture Co" })) as { seats: { id: string; seat_holder?: string; role?: string; claimable?: string; holder_verified?: boolean }[]; warm_paths: { name?: string }[] };
 const named0 = g0.seats.find((x) => typeof x.seat_holder === "string" && x.seat_holder.startsWith("locked"));
 check("connector: a named seat's holder is locked with its role, 1 credit for both", !!named0 && /opens who held this seat and the role they held together/.test(named0.seat_holder ?? "") && /locked/.test(String(named0.role ?? "")), g0.seats);
@@ -395,6 +397,11 @@ if (up) {
   const bob = await join("Bertram Lookwell", "bob-names@example.com");
   const cat = await join("Cosima Rutledge", "cat-names@example.com");
   const dan = await join("Dashiell Ormsby", "dan-names@example.com");
+  // Every company is locked for a member until they unlock it or know it (2 credits), and what is paid
+  // or claimed at a locked one opens after it: the members unlock the fixture's companies they use
+  // here, all but Charlie, whose lock is checked below.
+  const pubOf = new Map([...pubCo].map(([pub, id]) => [id, pub]));
+  for (const w of [ann, bob, cat, dan]) for (const id of ["c_alpha", "c_bravo", "c_delta", "c_echo", "c_golf", "c_hotel", "c_india"]) await w.act({ type: "unlock", entity: "company", id: pubOf.get(id), field: "identity" });
 
   /* gating */
   let av = await ann.view();
@@ -574,6 +581,8 @@ if (up) {
     check("past the threshold, unverified names read as unnamed: role free, claimable", hidden.every((e) => e && (!e.cells.operator || e.cells.operator.s === "empty") && (e.cells.role?.s === "value" || e.cells.role?.s === "locked") && e.claimable), hidden.map((e) => [e?.cells.operator?.s, e?.cells.role?.s, e?.claimable]));
     check("and their roles are free again", hidden.filter((e) => e && !ev.companies.find((c: Co) => c.engagements.includes(e))?.hidden).every((e) => e!.cells.role?.s === "value"));
     check("no name anywhere in the view", !leaksIn(await eve.text()).length);
+    // (From the record of a company she unlocked first: a claim at a locked one is refused like any fact added there.)
+    await eve.act({ type: "unlock", entity: "company", id: ev.companies.find((c: Co) => c.engagements.some((e) => e.id === hidden[4]!.id))?.id, field: "identity" });
     r = await eve.act({ type: "claimSeat", engagementId: hidden[4]!.id });
     check("claims still work", r.status === 200 && /It's yours/.test(r.json?.message ?? ""), r.json);
     const adm2 = await join("Admin Qa", "admin-qa@example.com", { "x-cron-secret": "qa-cron" });

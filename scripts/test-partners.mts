@@ -185,7 +185,8 @@ function startState(dataDir: string) {
     seen[`sm_am${i}`] = at;
     profiles[`sm_am${i}`] = { onboarded: true, function: "Marketing", before: ["Sales"] };
   });
-  writeFileSync(path.join(dataDir, "intel.json"), JSON.stringify({ ledger: [], values: {}, unlocks: {}, verifications: {}, seen, profiles }));
+  // Vera unlocked Alpha Partner Co before (every company is locked for a member until they unlock it or know it; who held a seat opens after it).
+  writeFileSync(path.join(dataDir, "intel.json"), JSON.stringify({ ledger: [], values: {}, unlocks: { "c_alpha.identity": [seedMembers[0].id] }, verifications: {}, seen, profiles }));
 }
 
 /* ---------- 2. in process ---------- */
@@ -243,6 +244,8 @@ check("no seat holder's name before an unlock (the cells are locks)", !leaks(JSO
 const fin = pg.groups.find((x) => x.fn === "Finance");
 check("seats with nobody named are a count", fin?.seats.length === 0 && fin.unnamed === 2, fin && { seats: fin.seats.length, unnamed: fin.unnamed });
 check("a full-time seat is not a partner", !pg.groups.some((x) => x.seats.some((s) => s.e.id === pub("e_pt_fula"))));
+// The companies first (2 credits each): who held a seat at a locked company opens after it.
+for (const c of ["c_alpha", "c_bravo"]) await T.perform(fresh.token, { type: "unlock", entity: "company", id: pub(c), field: "identity" });
 for (const id of ["e_pt_pella", "e_pt_nora", "e_pt_mara"]) await T.perform(fresh.token, { type: "unlock", entity: "engagement", id: pub(id), field: "operator" });
 v = await T.buildView(fresh.token);
 pg = PM.partnerGroups(M.deriveAll(v.companies), v.me!);
@@ -289,6 +292,9 @@ const seatIn = (view: { companies: { engagements: { id: string; cells: Record<st
 };
 let q = seatIn(tView, "e_pt_quinn")!;
 check("the table and the record keep the bundle: the role is locked with who held it", q.cells.operator.s === "locked" && q.cells.role.s === "locked" && !JSON.stringify(q).includes("PMM"), q.cells);
+// Tess unlocks Alpha Partner Co (2 credits) to read it in the connector by its name: who held its seats stays locked.
+await T.perform(titler.token, { type: "unlock", entity: "company", id: pub("c_alpha"), field: "identity" });
+tView = await T.buildView(titler.token);
 MV.forgetView(titler.id);
 const tco = (await MCP.getCompany({ member: titler, origin: "https://merlin.example.com" }, { company: "Alpha Partner Co" })) as { seats: { id: string }[] };
 const tq = tco.seats.find((x) => x.id === pub("e_pt_quinn"));
@@ -409,7 +415,13 @@ const seatOf = (v: { companies: Co[] }, internal: string) => {
 };
 /** Public ids of the fixture's seats: the HTTP server signs them with the same RN_ID_SECRET as in process. */
 const pubIds = new Map(engagements.map((e) => [e.id, pub(e.id)]));
-const unlock = (w: Who, internal: string) => w.act({ type: "unlock", entity: "engagement", id: pubIds.get(internal), field: "operator" });
+const companyOfSeat = new Map(engagements.map((e) => [e.id, e.companyId]));
+/** Who held a seat, for 1 credit. Its company first, when it is still locked for them (2 credits): who held a seat there opens after it. */
+const unlock = async (w: Who, internal: string) => {
+  const co = (await w.view()).companies.find((c: Co & { hidden?: boolean }) => c.id === pub(companyOfSeat.get(internal)!));
+  if (co?.hidden) await w.act({ type: "unlock", entity: "company", id: co.id, field: "identity" });
+  return w.act({ type: "unlock", entity: "engagement", id: pubIds.get(internal), field: "operator" });
+};
 const invite = (w: Who, internal: string, text?: string) => w.act({ type: "invite", engagementId: pubIds.get(internal), ...(text ? { note: text } : {}) });
 
 const up = await startServer(path.join(dir, "http"));
@@ -424,6 +436,11 @@ if (up) {
   let r = await invite(ivy, "e_pt_pella", "Hi Pella");
   check("no invite before the unlock", r.status === 400 && /Unlock who held this seat first/.test(r.json?.error ?? ""), r.json);
   check("and no link in the view", !seatOf(await ivy.view(), "e_pt_pella")?.invite);
+  // The companies first (2 credits each): who held a seat at a locked company opens after it.
+  const unlockCos = async (w: Who, ids: string[]) => {
+    for (const id of ids) await w.act({ type: "unlock", entity: "company", id: pub(id), field: "identity" });
+  };
+  await unlockCos(ivy, ["c_alpha", "c_bravo"]);
   await unlock(ivy, "e_pt_pella");
   let ps = seatOf(await ivy.view(), "e_pt_pella")!;
   const pellaTok = claimTok("e_pt_pella");
@@ -489,7 +506,7 @@ if (up) {
   await invite(quinn, "e_pt_quinn", "Hi Quinn");
   const quinnCode = (await quinn.view()).me.inviteCode;
   r = await quinn.names({ op: "claim", t: claimTok("e_pt_quinn"), ref: quinnCode });
-  check("a self-invite claims the seat but connects nobody and pays nothing", r.status === 200 && /It's yours/.test(r.json?.message ?? "") && !/conversation|credits/.test(r.json?.message ?? "") && (await quinn.credits()) === 24 && (await quinn.messages()).conversations.length === 0, r.json);
+  check("a self-invite claims the seat but connects nobody and pays nothing", r.status === 200 && /It's yours/.test(r.json?.message ?? "") && !/conversation|credits/.test(r.json?.message ?? "") && (await quinn.credits()) === 25 - 2 - 1 && (await quinn.messages()).conversations.length === 0, r.json);
 
   /* REFERRAL_LIMIT: 6 invitees, the inviter is paid for 5 */
   const kit = await join("Kit Kinvite", "kit-pt@example.com");
@@ -506,7 +523,8 @@ if (up) {
   check("six invitees claimed their seats through the links", larks.length === 6);
   check("each invitee gets the bonus", (await Promise.all(larks.map((w) => w.credits()))).every((c) => c === 35));
   const kv = (await kit.view()).me;
-  check("the inviter is paid for 5 invitees in 30 days (REFERRAL_LIMIT), within the daily cap (the rest held)", kv.invitesPaid === 5 && kv.credits === 25 - 6 + 25 && kv.held === 25, { paid: kv.invitesPaid, credits: kv.credits, held: kv.held });
+  // (Kit paid 2 for the company first, then 1 for each of the six seat holders.)
+  check("the inviter is paid for 5 invitees in 30 days (REFERRAL_LIMIT), within the daily cap (the rest held)", kv.invitesPaid === 5 && kv.credits === 25 - 2 - 6 + 25 && kv.held === 25, { paid: kv.invitesPaid, credits: kv.credits, held: kv.held });
   check("and a conversation opened with each of them", (await kit.messages()).conversations.length === 6 && (await kit.messages()).unread === 6);
 
   /* a claim that waits for an admin, then approved */
@@ -557,6 +575,8 @@ if (up) {
   const lark1 = pubIds.get("e_pt_lark1")!;
   check("over HTTP: the title of a locked seat is in the answer", raw.json?.titles?.[lark1] === "Fractional Head of CS", raw.json?.titles);
   check("over HTTP: no holder's name, email, profile link or claim link anywhere in it", !leaks(raw.text).length && !/@|linkedin|\/in\/|\/claim\//i.test(raw.text), leaks(raw.text));
+  // The company first (2 credits): who held a seat at a locked company opens after it.
+  await tw.act({ type: "unlock", entity: "company", id: (await tw.view()).companies.find((c: Co) => c.engagements.some((e) => e.id === pubIds.get("e_pt_lark1")))?.id, field: "identity" });
   const twView = await tw.view();
   const l1 = seatOf(twView, "e_pt_lark1")!;
   check("over HTTP: the table still sells the role with who held it", l1.cells.operator.s === "locked" && l1.cells.role.s === "locked");

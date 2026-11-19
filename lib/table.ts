@@ -6515,18 +6515,22 @@ function keepLinks(urls: (string | null | undefined)[]): string[] {
 
 /**
  * Pay back unlocks on roles that just closed: an unlock of a role's title, posting or rate made
- * after its posting was last seen paid for a role that was already gone. Each once. Returns how
- * many. An Unlock company is not paid back: it bought the company itself, which every company is
- * locked behind whether or not it is hiring (`_companyStillOpen` is kept for the callers).
+ * after its posting was last seen paid for a role that was already gone, and so did one of its
+ * company when no open role is left there (`companyStillOpen`), in full (COMPANY_PRICE). Each once.
+ * Returns how many.
  */
-function refundClosed(s: State, closedNow: RoleTrack[], _companyStillOpen: (companyId: string) => boolean, now: string): number {
+function refundClosed(s: State, closedNow: RoleTrack[], companyStillOpen: (companyId: string) => boolean, now: string): number {
   if (!closedNow.length) return 0;
   const since = new Map<string, string>(); // ledger ref -> unlocks later than this are paid back
   for (const r of closedNow) {
     since.set(fkey(r.engagementId, "role"), r.lastSeen);
     since.set(fkey(r.engagementId, "posting"), r.lastSeen);
     since.set(fkey(r.engagementId, "rate"), r.lastSeen);
-    // Not the company: Unlock company buys its name, website and logo, which a role closing doesn't take away.
+    // The company too, when this left it with no open role: it was bought while it looked like it was
+    // hiring, and it wasn't. All of it comes back (COMPANY_PRICE), and the member still sees the company.
+    if (companyStillOpen(r.companyId)) continue;
+    const last = Object.values(s.scan.roles).filter((x) => x.companyId === r.companyId).map((x) => x.lastSeen).sort().pop();
+    since.set(fkey(r.companyId, "identity"), last ?? r.lastSeen);
   }
   // A member who had bought both listings of one role was paid one back when they merged (mergeDuplicateRoles): that purchase is settled.
   const settled = new Map<string, number>();

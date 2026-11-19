@@ -284,22 +284,23 @@ async function refunds() {
   await unlockAll("tok-mo", itemsFor(ids("Refundco Beta")));
   await unlockAll("tok-cy", [{ entity: "company", id: ids("Refundco Gamma").co, field: "identity" }]);
   const spent = { sal: 25 - (await credits("tok-sal")), mo: 25 - (await credits("tok-mo")), cy: 25 - (await credits("tok-cy")) };
-  check("each of them paid at least a credit", spent.sal >= 1 && spent.mo >= 1 && spent.cy === 1, spent);
+  // Unlock company is 2 credits (COMPANY_PRICE), with the posting of its open role in it: one ledger row each.
+  check("each of them paid for the company", spent.sal === 2 && spent.mo === 2 && spent.cy === 2, spent);
 
   // Alpha and Gamma's VP Sales role are gone from the board. Beta, Gamma's CMO role and the keeper stay up.
   const still = [B, C2, K];
   const s2 = await scan(still, board(3), now - 9 * DAY);
   eq("one clean miss closes nothing and pays nothing back", [s2.closed, s2.refunded], [0, 0]);
   const s3 = await scan(still, board(3), now - 8 * DAY);
-  eq("the second closes both roles and pays back the unlocks made after they were last seen", [s3.closed, s3.refunded], [2, spent.sal]);
+  eq("the second closes both roles and pays back the unlock made after they were last seen (one row, in full)", [s3.closed, s3.refunded], [2, 1]);
   eq("Sal has every credit back", await credits("tok-sal"), 25);
   const rows = (await t.buildView("tok-sal")).ledger.filter((l) => /closed/.test(l.reason));
   check(
     "each one is a line in his ledger that says why, with the company",
-    rows.length === spent.sal && rows.every((l) => l.delta === 1 && l.reason === "Refund for a role that had closed" && l.company === "Refundco Alpha" && l.field === ""),
+    rows.length === 1 && rows.every((l) => l.delta === spent.sal && l.reason === "Refund for a role that had closed" && l.company === "Refundco Alpha" && l.field === ""),
     rows,
   );
-  eq("Gamma still has an open role, so Cy's company unlock stands", await credits("tok-cy"), 24);
+  eq("Gamma still has an open role, so Cy's company unlock stands", await credits("tok-cy"), 23);
   eq("the same scan again pays nothing twice", [(await scan(still, board(3), now - 8 * DAY)).refunded, await credits("tok-sal")], [0, 25]);
 
   // Beta is seen again after Mo's unlock, then goes. Mo bought it while it was up: no refund.
@@ -351,7 +352,7 @@ async function small() {
   );
   // A member buys it after the posting was gone.
   await t.perform("tok-cy", { type: "unlock", entity: "engagement", id: e.id, field: "posting" });
-  eq("a member pays 1 credit for it", await credits("tok-cy"), 24);
+  eq("a member pays for it: the company, with its posting (2 credits)", await credits("tok-cy"), 23);
   const closed = await scan([], tiny(0), now + DAY);
   eq("the second answer without it closes it, and pays the member back (before, it stayed open for good)", [closed.closed, closed.refunded, roleOf(await admin(), "Smallco Labs")?.cells.status?.s === "value" && roleOf(await admin(), "Smallco Labs")?.cells.status.v, await credits("tok-cy")], [1, 1, "Closed", 25]);
   // A board with one listing that answers with far fewer listings than usual is not trusted to close anything.
@@ -382,7 +383,8 @@ async function claimgone() {
   eq(
     "then This isn't me closes it as the scan would have, instead of reopening it",
     [/open again/.test(not.message), after?.closed !== null, after?.cells.status?.s === "value" && after.cells.status.v, forMo?.hidden],
-    [false, true, "Closed", false],
+    // (Mo never unlocked the company: it stays locked for him, as every company is.)
+    [false, true, "Closed", true],
   );
 }
 
@@ -412,7 +414,7 @@ async function notfractional() {
   await unlockAll("tok-mo", [{ entity: "engagement", id: heng, field: "role" }, { entity: "engagement", id: heng, field: "posting" }]);
   await unlockAll("tok-cy", [{ entity: "company", id: companyOf(v0, "Keepwell Labs")!.id, field: "identity" }]);
   const spent = { sal: 25 - (await credits("tok-sal")), mo: 25 - (await credits("tok-mo")), cy: 25 - (await credits("tok-cy")) };
-  eq("each of them paid one credit", spent, { sal: 1, mo: 1, cy: 1 });
+  eq("each of them paid for one company (2 credits)", spent, { sal: 2, mo: 2, cy: 2 });
   check("Mo's purchase was the Halfway company", (await t.buildView("tok-mo")).companies.find((c) => c.id === hco)?.unlocked === true);
 
   // The board lists all four again. The two AE postings fail the screen now.
@@ -438,9 +440,9 @@ async function notfractional() {
   const seedRole = roleOf(v1, "Seedrole Systems");
   eq("the role from our records is still there, still open", [!!seedRole, seedRole?.closed ?? null], [true, null]);
   eq("Sal has his credit back: the AE job was the Gongish company's only open role", await credits("tok-sal"), 25);
-  eq("Halfway still has an open role, so Mo's company unlock stands, and Cy's Keepwell one too", [await credits("tok-mo"), await credits("tok-cy")], [24, 24]);
+  eq("Halfway still has an open role, so Mo's company unlock stands, and Cy's Keepwell one too", [await credits("tok-mo"), await credits("tok-cy")], [23, 23]);
   const rows = (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "refund");
-  check("the refund is a line in his ledger that says why", rows.length === 0 && (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "Refund for a full-time job we took off the list" && l.delta === 1).length === 1, (await t.buildView("tok-sal")).ledger);
+  check("the refund is a line in his ledger that says why", rows.length === 0 && (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "Refund for a full-time job we took off the list" && l.delta === 2).length === 1, (await t.buildView("tok-sal")).ledger);
 
   const again = await t.runScan(undefined, { collect: () => collectOpenRoles({ sources: [{ name: wwr, fetchJobs: async () => listing }], now: now + HOUR }), now: iso(now + HOUR) });
   eq("the same scan again removes nothing and pays nothing twice", [again.result.removed, again.result.refunded, await credits("tok-sal")], [0, 0, 25]);
@@ -707,9 +709,9 @@ async function postingcheck() {
   );
   eq("  with the close time of the check", roleOf(v2, "Postco Gone")?.closedAt, iso(at));
   void st;
-  eq("unlocks made after the posting was last seen are paid back, as on any close", [await credits("tok-sal"), run.result.refunded], [25, spent]);
+  eq("unlocks made after the posting was last seen are paid back, as on any close (the company in full, one row)", [await credits("tok-sal"), run.result.refunded], [25, 1]);
   const rows = (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "Refund for a role that had closed");
-  eq("  each one a ledger line", rows.length, spent);
+  eq("  each one a ledger line", rows.map((l) => l.delta), [spent]);
 
   // The next run checks the ones left, the longest unchecked first, and never the closed ones again.
   calls.length = 0;

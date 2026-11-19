@@ -226,6 +226,9 @@ check("the packed view unpacks to the same view", JSON.stringify(W.unpackView(JS
 check("the packed view is smaller", JSON.stringify(W.packView(v0)).length < full.length);
 check("no name in the view", !leaks(full).length, leaks(full));
 const ctx = { member: sm, origin: "https://post.example.com" };
+// The member unlocks Bluefin first (2 credits): every company is locked for a member until they unlock it or know it.
+const coPub = (name: string) => T.tableInternals.pubId(s1.companies.find((c: { fields: Record<string, string> }) => c.fields.name === name).id);
+await T.perform(sm.token, { type: "unlock", entity: "company", id: coPub("Bluefin Analytics"), field: "identity" });
 const g1 = (await MCP.getCompany(ctx, { company: "Bluefin Analytics" })) as { seats?: { id: string; seat_holder?: string; claimable?: string }[] };
 const mseat = g1.seats?.find((x) => x.claimable);
 check("get_company: the seat says nobody holds it yet, and how to claim it", !!mseat && mseat.seat_holder === "Not on Merlin yet", g1.seats);
@@ -311,6 +314,10 @@ if (up) {
   type Co = { id: string; name: string; engagements: Seat[]; friendly: { fractional: number; functions: string[] }; facts: { known: number; missing: number } };
   const coIn = (v: { companies: Co[] }, name: string) => v.companies.find((c) => c.name === name)!;
   const seatAt = (v: { companies: Co[] }, name: string, i = 0) => coIn(v, name).engagements.filter((e) => e.source === "Seat scan")[i];
+  // Every company is locked for a member until they unlock it or know it (and a claim from a locked
+  // record is refused like any fact added there): both unlock the companies they use here first.
+  const named = ((await adm.view()) as { companies: Co[] }).companies;
+  for (const w of [ann, bob]) for (const n of ["Corvid Freight", "Bluefin Analytics", "Dunmore Robotics", "Ember Grove", "Northwind Labs"]) await w.act({ type: "unlock", entity: "company", id: named.find((c) => c.name === n)!.id, field: "identity" });
 
   let bv = await bob.view();
   const bfB = coIn(bv, "Bluefin Analytics");

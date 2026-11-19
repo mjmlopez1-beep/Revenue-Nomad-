@@ -296,7 +296,7 @@ const OUT = "You're out of credits. Add a missing fact to earn one.";
 const CLOSED_REFUND = "Refund for a role that had closed";
 
 // The company, its role, its posting and its posted rate are one purchase (PRICE credits). The first-day
-// limit counts it in credits, the scan's close leaves it bought, and an admin's removal pays nobody twice.
+// limit counts it in credits, the scan's refund pays it back in full, and an admin's removal pays nobody twice.
 section("bundle", async () => {
   if (!(await canScan())) return skip("one-credit company unlock", NEED_SCAN);
   const adm = await admin();
@@ -340,19 +340,18 @@ section("bundle", async () => {
   const two = await N.act({ type: "unlockMany", items: [{ entity: "engagement", id: eid, field: "rate" }, { entity: "engagement", id: eid, field: "posting" }] });
   check("a member who already sees the company pays 1 for the posting and the rate together", fact.status === 200 && two.status === 200 && two.json?.me?.credits === STARTER + 1 - 1 && two.json?.message === "Unlocked the posting and the posted rate for 1 credit.", two.json?.me ?? two.json);
 
-  // The second clean miss, 20 days after the posting was last seen: the role closes, and the open role's
-  // posting bought after it was last seen is paid back. Unlock company is not: it bought the company,
-  // which a role closing doesn't take away (every company is locked until unlocked, hiring or not).
+  // The second clean miss, 20 days after the posting was last seen: the role closes, and every
+  // unlock made after it was last seen is paid back, row by row, a company in full.
   const s3 = await scanPost({ ...rest, now: soon() });
-  check("the scan closes the role and pays back the posting bought on its own (1), not the companies", s3.json?.result?.closed === 1 && s3.json?.result?.refunded === 1, s3.json?.result);
+  check("the scan closes the role and pays back 3 unlocks (one row each)", s3.json?.result?.closed === 1 && s3.json?.result?.refunded === 3, s3.json?.result);
   const mv = await M.view();
   const mRefunds = mv.ledger.filter((l) => l.reason === CLOSED_REFUND);
-  check("a company bought with its open role stays bought when the role closes", mv.me.credits === STARTER - PRICE && mRefunds.length === 0 && !engOf(mv, eid)?.company.hidden, { credits: mv.me.credits, refunds: mRefunds.length });
+  check(`the company purchase comes back as ${PRICE} credits, in one row, and the company stays theirs`, mv.me.credits === STARTER && mRefunds.length === 1 && mRefunds[0].delta === PRICE && !engOf(mv, eid)?.company.hidden, { credits: mv.me.credits, refunds: mRefunds.length });
+  check("the refund names the company in the ledger", mRefunds[0]?.company === co, mRefunds[0]);
   const pv2 = await P.view();
   const nv = await N.view();
   const nRefunds = nv.ledger.filter((l) => l.reason === CLOSED_REFUND);
-  check("the refund names the company in the ledger", nRefunds[0]?.company === co, nRefunds[0]);
-  check("the member who spent everything is still at 0", pv2.me.credits === 0 && pv2.me.owed === 0, { credits: pv2.me.credits, owed: pv2.me.owed });
+  check(`the member who spent everything has ${PRICE} credits again`, pv2.me.credits === PRICE && pv2.me.owed === 0, { credits: pv2.me.credits, owed: pv2.me.owed });
   check("the member who paid 1 for the posting and the rate gets it back", nv.me.credits === STARTER + 1 && nRefunds.length === 1 && nRefunds[0].delta === 1, nv.me.credits);
   const lee = engOf(await (await member("Lee Latecomer")).view(), eid);
   check("the closed role's posting is free to a member who sees the company, and its company stays locked for a new member", engOf(nv, eid)?.cells.posting?.s === "value" && engOf(nv, eid)?.company.hidden === false && lee?.company.hidden === true && lee.cells.posting?.s === "locked", { lee: lee?.company.hidden });
@@ -362,7 +361,7 @@ section("bundle", async () => {
   const r2 = await M.act({ type: "report", entity: "engagement", id: eid, field: "rate" });
   const rm = await adm.act({ type: "review", entity: "engagement", id: eid, field: "rate", decision: "remove" });
   const after = [(await M.view()).me.credits, (await P.view()).me.credits, (await N.view()).me.credits];
-  check("an admin removal after the scan's refund pays nobody twice", r1.status === 200 && r2.status === 200 && rm.status === 200 && after[0] === STARTER - PRICE && after[1] === 0 && after[2] === STARTER + 1, { statuses: [r1.status, r2.status, rm.status], after });
+  check("an admin removal after the scan's refund pays nobody twice", r1.status === 200 && r2.status === 200 && rm.status === 200 && after[0] === STARTER && after[1] === PRICE && after[2] === STARTER + 1, { statuses: [r1.status, r2.status, rm.status], after });
 });
 
 // A role a member took is closed on that member's word. The scan must not undo it while the
@@ -480,7 +479,7 @@ section("owed", async () => {
   // The seed member adds one fact (26 credits) and spends all 26: the companies (every company is
   // locked for it, Wes's included), that rate and the facts it has credits left for.
   await unlockCo(D, wHost.id);
-  const k = await openForLocked(D, (n) => STARTER - PRICE - PRICE * n + 1, new Set([wEng]));
+  const k = await openForLocked(D, (n) => STARTER - PRICE - PRICE * n + 2, new Set([wEng]));
   const mine = await D.act({ type: "add", company: `Qa Owed Own Co ${RUN}` });
   const mineFact = { type: "fill", entity: "company", id: mine.json?.id, field: "hq", value: "Austin, TX" };
   await D.act(mineFact);

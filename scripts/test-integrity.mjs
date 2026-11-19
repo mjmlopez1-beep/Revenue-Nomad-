@@ -284,6 +284,9 @@ section("people", async () => {
   check("and nothing was earned or added", (await A.credits()) === STARTER + 4 && peopleOf(companyNamed(await A.view(), coName)).length === 1);
 
   // Another member who knows them: what's empty goes onto the person on file, and it counts as a confirmation.
+  // (B and C unlock the company first: every company is locked for a member until they unlock it or know it.)
+  const PRICE = 2;
+  for (const who of [B, C]) await who.act({ type: "unlock", entity: "company", id: co.id, field: "identity" });
   const bp = await B.act({ type: "addPerson", companyId: co.id, person: { name: N.toLowerCase(), title: "VP Marketing", email: "morgan.ellery@example.com" } });
   const bView = await B.view();
   const bPerson = personOf(bView, pid);
@@ -292,14 +295,14 @@ section("people", async () => {
     bp.status === 200 && bp.json?.id === pid && /^.+ was already on file at .+, so we added what you know to that record\. It counts as a confirmation too\. You earned 1 credit\. 1 detail was already there, so we left it as it was\.$/.test(bp.json?.message ?? ""),
     bp.json,
   );
-  check("only the empty field earned, and there is still one person", bView.me.credits === STARTER + 1 && peopleOf(companyNamed(bView, coName)).length === 1, { credits: bView.me.credits, people: peopleOf(companyNamed(bView, coName)).length });
+  check("only the empty field earned, and there is still one person", bView.me.credits === STARTER + 1 - PRICE && peopleOf(companyNamed(bView, coName)).length === 1, { credits: bView.me.credits, people: peopleOf(companyNamed(bView, coName)).length });
   check("their email shows to them, and the name and title stay locked", bPerson?.cells.email?.v === "morgan.ellery@example.com" && bPerson.cells.name?.s === "locked" && bPerson.cells.title?.s === "locked", bPerson?.cells);
   const aName = personOf(await A.view(), pid)?.cells.name;
   check("the name shows one confirmation", aName?.s === "value" && aName.ver === 1, aName);
 
   // A third member with nothing new: a confirmation only, and the second one pays the author.
   const cp = await C.act({ type: "addPerson", companyId: co.id, person: { name: N } });
-  check("a third member with nothing new adds nothing and earns nothing", cp.status === 200 && cp.json?.message === `${N} is already on file at ${coName}. Nothing new was added. It counts as a confirmation of their name.` && (await C.credits()) === STARTER, cp.json);
+  check("a third member with nothing new adds nothing and earns nothing", cp.status === 200 && cp.json?.message === `${N} is already on file at ${coName}. Nothing new was added. It counts as a confirmation of their name.` && (await C.credits()) === STARTER - PRICE, cp.json);
   check("two members confirming the name pays the author the confirmation credit", (await A.credits()) === STARTER + 5 && personOf(await A.view(), pid)?.cells.name?.ver === 2);
   const cp2 = await C.act({ type: "addPerson", companyId: co.id, person: { name: N } });
   check("adding them again does not confirm twice", cp2.status === 200 && personOf(await A.view(), pid)?.cells.name?.ver === 2 && (await A.credits()) === STARTER + 5, cp2.json);
@@ -332,7 +335,9 @@ section("remove", async () => {
   if (add.status !== 200 || !sid) return fail("remove: add a seat", add.json);
   const a1 = await A.credits();
   check("the seat earned for each answer", a1 > STARTER, a1);
-  const co = companyNamed(await B.view(), coName);
+  // B and C unlock the company first: it is locked for them.
+  const co = companyNamed(await A.view(), coName);
+  for (const who of [B, C]) await who.act({ type: "unlock", entity: "company", id: co.id, field: "identity" });
   const bUn = await B.act({ type: "unlock", entity: "engagement", id: sid, field: "rate" });
   const b1 = await B.credits();
   const cP = await C.act({ type: "addPerson", companyId: co.id, engagementId: sid, person: { name: `Rob Reporter${RUN}`, relationship: "Reported to" } });
@@ -388,12 +393,16 @@ section("details", async () => {
   const F = await member("Fay Fresh");
   const v = await F.view();
   // A person from our records whose name is locked for this member and whose email is empty.
+  // (At a company she unlocks first, for 2 credits: every company is locked for a new member.)
   let target = null;
   for (const c of v.companies) {
-    if (c.hidden) continue;
     target = peopleOf(c).find((p) => p.cells.name?.s === "locked" && p.cells.email?.s === "empty" && p.cells.phone?.s === "empty");
-    if (target) break;
+    if (target) {
+      if (c.hidden) await F.act({ type: "unlock", entity: "company", id: c.id, field: "identity" });
+      break;
+    }
   }
+  const f0 = await F.credits();
   const NAME_FIRST = "Unlock their name and title first. Then you can add what you know about them.";
   if (target) {
     const tries = await Promise.all(
@@ -404,10 +413,10 @@ section("details", async () => {
       const t = await F.act({ type: "fill", entity: "contact", id: target.id, field: "title", value: "CFO" });
       check("so is their title", t.status === 400 && t.json?.error === NAME_FIRST, t.json);
     }
-    check("and nothing was earned", (await F.credits()) === STARTER);
+    check("and nothing was earned", (await F.credits()) === f0);
     const un = await F.act({ type: "unlock", entity: "contact", id: target.id, field: "name" });
     const fill = await F.act({ type: "fill", entity: "contact", id: target.id, field: "email", value: "someone@example.com" });
-    check("once they unlock the name, they can add the email and earn for it", un.status === 200 && fill.status === 200 && (await F.credits()) === STARTER, [un.json?.message, fill.json?.message]);
+    check("once they unlock the name, they can add the email and earn for it", un.status === 200 && fill.status === 200 && (await F.credits()) === f0, [un.json?.message, fill.json?.message]);
   } else skip("a person from our records", "no locked person with an empty email (needs the private seed)");
 
   // A person the member added: theirs to fill in. With their name taken back, nobody can add details.
@@ -417,6 +426,8 @@ section("details", async () => {
   const own = await F.act({ type: "fill", entity: "contact", id: p?.id, field: "title", value: "COO" });
   check("a member adds details to a person they added", add.status === 200 && own.status === 200, own.json);
   const G = await member("Gus Guess");
+  // Gus unlocks her company first: it is locked for him.
+  await G.act({ type: "unlock", entity: "company", id: companyNamed(await F.view(), coName)?.id, field: "identity" });
   const blind = await G.act({ type: "fill", entity: "contact", id: p?.id, field: "email", value: "una@example.com" });
   const rel = await G.act({ type: "fill", entity: "contact", id: p?.id, field: "relationship", value: "Decision maker" });
   check("another member can't add their email without the name", blind.status === 400 && blind.json?.error === NAME_FIRST, blind.json);

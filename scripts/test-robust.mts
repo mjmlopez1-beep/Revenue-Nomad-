@@ -79,10 +79,9 @@ const corruptCopies = () => readdirSync(process.env.RN_DATA_DIR!).filter((f) => 
 const unavailable = (e: unknown) => !!e && (e as { unavailable?: boolean }).unavailable === true;
 
 /** Add an HQ to one of the seed's companies as Ann: one fact, one credit, one write. */
+/** One fact: the HQ of a company on file, added by typing its name (every company is locked for a member until they know it; Add by name still works). */
 async function fillHq(t: Table, n: number) {
-  const v = await t.buildView("tok-a");
-  const c = v.companies.find((x) => x.name === `Fillco ${n}`)!;
-  return t.perform("tok-a", { type: "fill", entity: "company", id: c.id, field: "hq", value: "Austin, TX" });
+  return t.perform("tok-a", { type: "add", company: `Fillco ${n}`, companyFields: { hq: "Austin, TX" } });
 }
 /** Uploads to the made-up bucket, caught instead of sent. */
 function catchUploads(): string[] {
@@ -189,12 +188,14 @@ const CHILDREN: Record<string, () => Promise<void>> = {
   /** A change that fails costs one copy of the state, and never leaves part of itself behind. */
   async flush() {
     const t: Table = await import("../lib/table");
-    const v = await t.buildView("tok-a");
-    const idOf = (name: string) => v.companies.find((c) => c.name === name)!.id;
+    // A company is found by its public id: every company is locked for a member until they unlock it or know it.
+    const idOf = (name: string) => t.tableInternals.pubId(`c_fill${name.split(" ")[1]}`);
     const follow = () => t.perform("tok-a", { type: "follow", companyId: idOf("Fillco 6"), on: true });
     const hq = (n: number) => t.perform("tok-a", { type: "fill", entity: "company", id: idOf(`Fillco ${n}`), field: "hq", value: "Austin, TX" });
     const bad = () => t.perform("tok-a", { type: "nope" } as never);
     await follow(); // the first write of a process carries a one-time job of its own
+    // The two the member adds to: unlocked first (a fact added by clicking into a locked company is refused).
+    for (const n of [1, 2]) await t.perform("tok-a", { type: "unlock", entity: "company", id: idOf(`Fillco ${n}`), field: "identity" });
     let clones = 0;
     const real = globalThis.structuredClone;
     globalThis.structuredClone = ((x: unknown, o?: StructuredSerializeOptions) => (clones++, real(x, o))) as typeof structuredClone;
@@ -351,7 +352,6 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     await add("Societe Marquee");
     eq("an accented and an unaccented Latin spelling are still one record", (await count()) - n1, 5);
 
-    const seat = (await t.buildView("tok-a")).companies.find((c) => c.name === "Fillco 2")!;
     const made = await attempt(() => t.perform("tok-a", { type: "add", company: "Fillco 2", newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Ann Adder", function: "Sales" } } as never));
     const engId = made.ok ? made.v.id : null;
     const fill = (value: string) => attempt(() => t.perform("tok-a", { type: "fill", entity: "engagement", id: engId, field: "role", value } as never));
@@ -360,7 +360,7 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     eq("short real titles are taken as a role", ok, ["GM", "AE", "BD", "VP", "CS", "CX", "PR", "営業", "销售", "CMO"]);
     const one = await fill("a");
     const digits = await fill("1 2345");
-    check("one letter, or digits alone, is still not a title", !!seat && !one.ok && !digits.ok, [one.ok, digits.ok]);
+    check("one letter, or digits alone, is still not a title", !!engId && !one.ok && !digits.ok, [one.ok, digits.ok]);
   },
   /** The weekly email carries one-click unsubscribe headers. */
   async digest() {
@@ -973,6 +973,8 @@ else {
       const v0 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp });
       const target = v0.json.companies.find((c: { engagements: { cells: Record<string, { s: string }> }[] }) => c.engagements.some((e) => e.cells.rate?.s === "locked"));
       const seat = target.engagements.find((e: { cells: Record<string, { s: string }> }) => e.cells.rate?.s === "locked");
+      // The company first (2 credits): a fact paid at a locked company opens after it.
+      if (target.hidden) await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "unlock", entity: "company", id: target.id, field: "identity" } } });
       const ver0 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp }); // the first load noted the visit and the network (a write of their own), so start from the next
       const un = await call("POST", "/api/table", { token: pm, ipAddr: pmIp, body: { action: { type: "unlock", entity: "engagement", id: seat.id, field: "rate" } } });
       const v1 = await call("GET", "/api/table", { token: pm, ipAddr: pmIp });

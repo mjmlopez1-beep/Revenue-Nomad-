@@ -401,6 +401,11 @@ async function main() {
   });
   check("setup: a scan posts two open roles at new companies, and none under a placeholder name", scan.status === 200 && scan.json?.result?.opened === 2, scan.json);
 
+  // A unlocked B's company in the app (2 credits): every company is locked for a member until they unlock it or know it.
+  const bCoId = (await B.view()).companies.find((c) => c.name === coName)?.id;
+  const aCo = await A.act({ type: "unlock", entity: "company", id: bCoId, field: "identity" });
+  check("setup: A unlocks B's company for 2 credits", aCo.status === 200 && aCo.json?.me?.credits === STARTER - 2, aCo.json);
+
   /* A's view in the app: the ground truth of what A may see */
   const av0 = await A.view();
   const aJson0 = JSON.stringify(av0);
@@ -500,7 +505,7 @@ async function main() {
   const lr = await tool(at, "list_open_roles", { since_days: 7, function: "Marketing" });
   // Our role: the newest Marketing role with a posted rate and hours on file (the seed's open roles were listed before this run).
   const ourRole = lr.out?.roles?.find((r) => r.role === "Fractional CMO" && r.company === "Locked company" && /^on file/.test(r.posted_hours ?? ""));
-  const LOCKED_CO = "on file, unlocks with the company (1 credit)";
+  const LOCKED_CO = "on file, unlocks with the company (2 credits)";
   check("list_open_roles since 7 days lists this week's role at a locked company, its title free", !!ourRole && ourRole.company_hidden && ourRole.function === "Marketing" && ourRole.role === "Fractional CMO" && ourRole.posting === LOCKED_CO && ourRole.unlock?.call?.field === "identity", lr.out?.roles?.slice(0, 2));
   check("before unlocking, the posted hours, rate and posting say only that they are on file", ourRole?.posted_hours === LOCKED_CO && ourRole.posted_rate === LOCKED_CO && ourRole.posting === LOCKED_CO, ourRole);
   check("and the unlock says it opens the posted rate (one is on file)", /posted rate/.test(ourRole?.unlock?.cost ?? "") && !/No rate/.test(ourRole?.unlock?.cost ?? ""), ourRole?.unlock);
@@ -514,9 +519,9 @@ async function main() {
   const nrCo = await tool(at, "get_company", { company: noRate?.company_id });
   check("get_company on it: no rate promised, the seat says No rate posted, what isn't on file is named", /No rate was posted/.test(nrCo.out?.hidden_note ?? "") && nrCo.out?.seats?.[0]?.posted_rate === "No rate posted" && /not on file yet/.test(nrCo.out?.not_on_file ?? ""), { note: nrCo.out?.hidden_note, seat: nrCo.out?.seats?.[0] });
   const nrPrice = await tool(at, "unlock", { entity: "company", id: noRate?.company_id, field: "identity" });
-  check("its unlock price check opens the posting and says no rate was posted", nrPrice.out?.would_spend === 1 && /job posting/.test(nrPrice.out.would_open) && /No rate was posted/.test(nrPrice.out.would_open) && !/the posted rate/.test(nrPrice.out.would_open), nrPrice.out);
+  check("its unlock price check opens the posting and says no rate was posted", nrPrice.out?.would_spend === 2 && /job posting/.test(nrPrice.out.would_open) && /No rate was posted/.test(nrPrice.out.would_open) && !/the posted rate/.test(nrPrice.out.would_open), nrPrice.out);
   const hrsPrice = await tool(at, "unlock", { entity: "seat", id: ourRole?.seat_id, field: "posted_hours" });
-  check("asking for a locked role's hours prices the company (one purchase)", hrsPrice.out?.would_spend === 1 && /company and its open roles/.test(hrsPrice.out.would_open ?? ""), hrsPrice.out ?? hrsPrice.text);
+  check("asking for a locked role's hours prices the company (one purchase)", hrsPrice.out?.would_spend === 2 && /company and its open roles/.test(hrsPrice.out.would_open ?? ""), hrsPrice.out ?? hrsPrice.text);
   // Placeholder names are not companies: nowhere in search, open roles or the table.
   const phSearch = await Promise.all(["Private Company", "Stealth Startup", "Confidential"].map((q) => tool(at, "search_companies", { query: q, limit: 25 })));
   check("placeholder names find nothing in search", phSearch.every((r) => !r.isError && (r.out?.companies ?? []).every((c) => !/^(private company|stealth startup|confidential)$/i.test(c.name))), phSearch.map((r) => r.out?.total));
@@ -567,7 +572,7 @@ async function main() {
     const adText = adRoles.text;
     const adOur = adRoles.out?.roles?.find((r) => r.role === "Fractional CMO" && r.company === "Locked company" && /^on file/.test(r.posted_hours ?? ""));
     check("setup: the admin sees the hidden company's name in the app (admin view)", adView?.me?.admin === true && JSON.stringify(adView.companies.map((c) => c.name)).includes(hiddenName));
-    check("an admin's list_open_roles hides the company, its site, rate, hours and posting until unlocked", !!adOur && ![hiddenName, hiddenSite, norateName, norateSite, "$9,876/mo", `qamcp/${RUN}`].some((w) => adText.includes(w)) && adOur.posted_hours === "on file, unlocks with the company (1 credit)", adOur ?? adRoles.text.slice(0, 300));
+    check("an admin's list_open_roles hides the company, its site, rate, hours and posting until unlocked", !!adOur && ![hiddenName, hiddenSite, norateName, norateSite, "$9,876/mo", `qamcp/${RUN}`].some((w) => adText.includes(w)) && adOur.posted_hours === "on file, unlocks with the company (2 credits)", adOur ?? adRoles.text.slice(0, 300));
     const adSearch = await tool(ac.access_token, "search_companies", { hiring_now: true, limit: 25 });
     const adCo = await tool(ac.access_token, "get_company", { company: adOur?.company_id });
     check("and its search and company record keep it locked too", ![hiddenName, hiddenSite].some((w) => adSearch.text.includes(w) || adCo.text.includes(w)) && adCo.out?.name === "Locked company", adCo.out?.name);
@@ -616,6 +621,8 @@ async function main() {
     const D = await join("Dee Bundles");
     secretWords.add(D.name);
     const dc = await connect(D, { name: "Order" });
+    // D unlocked B's company in the app (every company is locked until a member unlocks it or knows it): what follows is about the seat and the person.
+    await D.act({ type: "unlock", entity: "company", id: bCoId, field: "identity" });
     const dStart = (await D.view()).me.credits;
     const early = await tool(dc.access_token, "unlock", { entity: "person", id: gPerson?.id, field: "email", confirm: true });
     check("an email before the name is refused: unlock their name and title first", early.isError && /Unlock their name and title first/.test(early.text), early.text);
@@ -644,13 +651,13 @@ async function main() {
     check("unlocking that person first is refused: unlock the company first", bossEarly.isError && /Unlock the company first/.test(bossEarly.text), bossEarly.text);
     check("and none of it spent a credit", (await D.view()).me.credits === dStart, dStart);
   }
-  // The hidden company: 1 credit opens its name and its open role, as Unlock company does in the app.
+  // The hidden company: 2 credits open its name and its open role, as Unlock company does in the app.
   const hp = await tool(at, "unlock", { entity: "company", id: ourRole.company_id, field: "identity" });
-  check("unlocking a hidden company costs 1 credit, asked first", hp.out?.would_spend === 1 && /company and its open roles/.test(hp.out.would_open), hp.out);
+  check("unlocking a hidden company costs 2 credits, asked first", hp.out?.would_spend === 2 && /company and its open roles/.test(hp.out.would_open), hp.out);
   const hd = await tool(at, "unlock", { entity: "company", id: ourRole.company_id, field: "identity", confirm: true });
   const av2 = await A.view();
   const appCo = av2.companies.find((c) => c.id === ourRole.company_id);
-  check("with confirm the company's name comes back, as the app shows it", hd.out?.company?.name === hiddenName && appCo?.name === hiddenName && !appCo.hidden && av2.me.credits === before - 2, { tool: hd.out?.company?.name === hiddenName, app: appCo?.name === hiddenName, credits: av2.me.credits });
+  check("with confirm the company's name comes back, as the app shows it", hd.out?.company?.name === hiddenName && appCo?.name === hiddenName && !appCo.hidden && av2.me.credits === before - 3, { tool: hd.out?.company?.name === hiddenName, app: appCo?.name === hiddenName, credits: av2.me.credits });
   check("and its open role came with it (role and posted rate visible)", hd.out?.company?.seats?.[0]?.role === "Fractional CMO" && hd.out.company.seats[0].posted_rate === "$9,876/mo", hd.out?.company?.seats?.[0]);
   check("and the posted hours and the posting link, with https://", hd.out?.company?.seats?.[0]?.posted_hours === "15" && hd.out.company.seats[0].posting === `https://jobs.example.com/qamcp/${RUN}`, hd.out?.company?.seats?.[0]);
   check("the company's website comes back as a full https:// link", hd.out?.company?.website === `https://${hiddenSite}`, hd.out?.company?.website);
@@ -663,7 +670,7 @@ async function main() {
   /* adding */
   const fact = await tool(at, "add_company_fact", { company: coRow.id, field: "hq", value: "Austin, TX" });
   const av3 = await A.view();
-  check("add_company_fact adds a missing fact and earns 1 credit", /Added the HQ/.test(fact.out?.message ?? "") && av3.companies.find((c) => c.id === coRow.id)?.cells.hq?.v === "Austin, TX" && av3.me.credits === before - 1, fact.out ?? fact.text);
+  check("add_company_fact adds a missing fact and earns 1 credit", /Added the HQ/.test(fact.out?.message ?? "") && av3.companies.find((c) => c.id === coRow.id)?.cells.hq?.v === "Austin, TX" && av3.me.credits === before - 2, fact.out ?? fact.text);
   const fact2 = await tool(at, "add_company_fact", { company: coRow.id, field: "employees", value: "11-50" });
   check("a pick-list value typed with a plain dash is read", !fact2.isError && av3 && (await A.view()).companies.find((c) => c.id === coRow.id)?.cells.employees?.v === "11–50", fact2.text);
   const factBad = await tool(at, "add_company_fact", { company: coRow.id, field: "industry", value: "Space lasers" });
