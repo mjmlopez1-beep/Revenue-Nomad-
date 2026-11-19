@@ -1981,7 +1981,7 @@ body:has(.tp-drawer) .pro-foot {
   border-color: var(--pine-14);
   color: var(--pine);
 }
-/* Mentioned only in member stories, not a fractional seat. "Sales led full-time since 2024" (tp-fn-led) reads the same. */
+/* Mentioned only in member stories, not a fractional seat. "FT Sales Leader since 2024" (tp-fn-led) reads the same. */
 .tp-fn-story {
   border-color: var(--line);
   color: var(--faint);

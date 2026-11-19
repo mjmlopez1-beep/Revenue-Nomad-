@@ -388,14 +388,14 @@ eq("the member reads as Sales", sal.function, "Sales");
 const td = info("TrueDialog Test");
 const gap = info("Gap Co");
 const g1 = fnGap(td, "Sales");
-check("TrueDialog: in place of No fractional Sales yet, Sales led full-time since 2024", g1.gap && !!g1.led && types.ledFullTimeWords("Sales", g1.led) === "Sales led full-time since 2024", g1);
+check("TrueDialog: in place of No fractional Sales yet, FT Sales Leader since 2024", g1.gap && !!g1.led && types.ledFullTimeWords("Sales", g1.led) === "FT Sales Leader since 2024", g1);
 const plan = fnChipPlan(td, "Sales", { total: 3 });
 check("  the table's chip says it (and shows with the filter on too)", plan.gap && !!plan.led && fnChipPlan(td, "Sales", { total: 3, gap: false }).led !== null, plan);
 const g2 = fnGap(gap, "Sales");
 check("Gap Co: still No fractional Sales yet", g2.gap && !g2.led, g2);
 const bTd = bestFit(td, sal);
 const bGap = bestFit(gap, sal);
-check("best fit ranks TrueDialog below Gap Co", bTd.score < bGap.score && /Sales led full-time since 2024/.test(bTd.reason) && /no Sales seat/.test(bGap.reason), [bTd, bGap]);
+check("best fit ranks TrueDialog below Gap Co", bTd.score < bGap.score && /FT Sales Leader since 2024/.test(bTd.reason) && /no Sales seat/.test(bGap.reason), [bTd, bGap]);
 const notMine = toggleTest("notMine", sal);
 const rows = rowsFor("companies", infos).filter(notMine);
 const ranked = sortRows(rows, "best", false, "", { me: sal });
@@ -417,7 +417,7 @@ const tools = await import("../lib/mcp/tools");
 const ctx = { member: (await table.memberForToken("tok-sal"))!, origin: "https://post.example.com" };
 const s1 = (await tools.searchCompanies(ctx, { no_function_yet: "Sales", limit: 25 })) as { companies: { name: string; who_leads?: string[]; who_leads_source?: string; no_function_yet_note?: string }[] };
 const names1 = s1.companies.map((x) => x.name);
-check("connector: no_function_yet lists Gap Co before TrueDialog, with a note", names1.indexOf("Gap Co") >= 0 && names1.indexOf("Gap Co") < names1.indexOf("TrueDialog Test") && s1.companies.find((x) => x.name === "TrueDialog Test")?.no_function_yet_note === "Sales led full-time since 2024 (company website)", s1.companies);
+check("connector: no_function_yet lists Gap Co before TrueDialog, with a note", names1.indexOf("Gap Co") >= 0 && names1.indexOf("Gap Co") < names1.indexOf("TrueDialog Test") && s1.companies.find((x) => x.name === "TrueDialog Test")?.no_function_yet_note === "FT Sales Leader since 2024 (company website)", s1.companies);
 const g = (await tools.getCompany(ctx, { company: "TrueDialog Test" })) as { who_leads?: string[]; who_leads_source?: string };
 eq("connector: the company carries the same lines", [g.who_leads, /^Company website, checked /.test(g.who_leads_source ?? "")], [["Sales: full-time CRO since Mar 2024", "Marketing: full-time CMO since Mar 2024", "Customer Success: full-time VP Customer Success"], true]);
 eq("connector output names no one", nameHits([s1, g]), []);
@@ -431,7 +431,7 @@ const prof = { memberId: "m2", fn: "Sales", icp: { industries: ["Software"], emp
 eq(
   "radar: a full-time leader on the site is said in place of no fractional Sales yet, and comes after",
   [matchWhy(sigOf("a"), prof), matchWhy(sigOf("b", { ledFullTime: { Sales: "2024" } }), prof), matchWhy(sigOf("c", { hiredFns: ["Finance", "Sales"] }), prof), signalsFor([sigOf("b", { ledFullTime: { Sales: "2024" }, atMs: NOW0 + 1 }), sigOf("a")], prof).map((x) => x.key)],
-  ["Finance usually comes before Sales, and they have no fractional Sales yet", "Finance usually comes before Sales. Sales led full-time since 2024", null, ["a", "b"]],
+  ["Finance usually comes before Sales, and they have no fractional Sales yet", "Finance usually comes before Sales. FT Sales Leader since 2024", null, ["a", "b"]],
 );
 
 /* ---------- Pilot metrics ---------- */

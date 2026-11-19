@@ -58,7 +58,7 @@ export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
     case "adjacent":
       if (!sig.fn || sig.fn === p.fn || !p.before.includes(sig.fn) || sig.hiredFns.includes(p.fn)) return null;
       // A full-time leader of the member's function on the company's website: said in place of "no fractional yet".
-      if (sig.ledFullTime && p.fn in sig.ledFullTime) return `${sig.fn} usually comes before ${p.fn}. ${p.fn} led full-time${sig.ledFullTime[p.fn] ? ` since ${sig.ledFullTime[p.fn]}` : ""}`;
+      if (sig.ledFullTime && p.fn in sig.ledFullTime) return `${sig.fn} usually comes before ${p.fn}. FT ${p.fn} Leader${sig.ledFullTime[p.fn] ? ` since ${sig.ledFullTime[p.fn]}` : ""}`;
       return `${sig.fn} usually comes before ${p.fn}, and they have no fractional ${p.fn} yet`;
     case "funding":
       return "Money in usually means hiring, at a company in your profile";
