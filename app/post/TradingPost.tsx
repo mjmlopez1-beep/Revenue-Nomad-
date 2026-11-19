@@ -2709,9 +2709,17 @@ function Empty({
     const list = elsewhere.map(say);
     p = `${list.length > 1 ? `${list[0]} and ${list[1]}` : list[0]} ${elsewhere.length === 1 && elsewhere[0].n === 1 ? "does" : "do"}.`;
     actions = elsewhere.map((x, k) => ({ label: `See ${say(x)}`, go: x.go, ...(k === 0 ? { kind: "pine" as const } : {}) }));
+  } else if (q && find?.none) {
+    // Looked up (it runs only when nothing on file matches, filters or not) as a company's exact name or website: nothing has it. Never how many names start with it.
+    h = FIND_NONE;
+    p = FIND_HINT;
+    actions = [
+      { label: "Add it", go: onAdd, kind: "add" },
+      { label: "Clear search", go: onClearSearch },
+    ];
   } else if (q && narrowed) {
     h = `Nothing in this view matches ${q}`;
-    p = `Your ${filtered ? "filters" : "view"} may be hiding it. Search all ${noun} instead.`;
+    p = find?.error ?? `Your ${filtered ? "filters" : "view"} may be hiding it. Search all ${noun} instead.`;
     actions = [
       { label: `Search all ${noun}`, go: onSearchAll, kind: "pine" },
       { label: "Clear search", go: onClearSearch },
@@ -2739,14 +2747,6 @@ function Empty({
       p = `We check job boards every week. New ${hiring.fn} roles show up here as we find them.`;
       actions = others.length ? [{ ...others[0], kind: "pine" }] : [{ label: "See all companies", go: onBrowse }];
     }
-  } else if (q && find?.none) {
-    // Looked up as a company's exact name or website: nothing has it. Never how many names start with it.
-    h = FIND_NONE;
-    p = FIND_HINT;
-    actions = [
-      { label: "Add it", go: onAdd, kind: "add" },
-      { label: "Clear search", go: onClearSearch },
-    ];
   } else if (q) {
     // Search reads what the member can see. A company's exact name or website finds a locked one.
     h = `No company, function or industry matches ${q}`;

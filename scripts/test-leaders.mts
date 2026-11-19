@@ -63,7 +63,8 @@ writeFileSync(
   JSON.stringify({
     ledger: [],
     values: {},
-    unlocks: {},
+    // Every company is locked until a member unlocks it (lib/table.ts): Sal already unlocked the three the product checks read by name.
+    unlocks: { "c_true.identity": ["m2"], "c_gap.identity": ["m2"], "c_ld.identity": ["m2"] },
     // Member activity at Cards Co: a follow.
     follows: { m2: ["c_cards"] },
     seen: { m2: new Date(NOW0 - DAY).toISOString(), m3: new Date(NOW0 - DAY).toISOString() },
