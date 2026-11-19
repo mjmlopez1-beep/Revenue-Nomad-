@@ -579,7 +579,7 @@ export async function findCompanyByName(ctx: Ctx, a: { name: string }): Promise<
       ...(i.c.found
         ? {
             named_for_this_answer: true,
-            note: `Named for this answer only, because the member typed its exact name. It stays locked in their lists and in get_company. Unlock the company (${COMPANY_PRICE_SAY}, unlock with field "identity") to keep it named, or add what they know there (it becomes theirs). Job postings, who held each seat and contact details cost what they cost at any company the member can see.`,
+            note: `Named for this answer only, because the member typed its exact name. It stays locked in their lists and in get_company until they add what they know there, claim a seat there, or pay for something there (a job posting, who held a seat): then it stays named for them. Job postings, who held each seat and contact details cost what they cost at any company the member can see.`,
           }
         : {}),
     });

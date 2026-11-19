@@ -25,7 +25,7 @@ import { VerifyName } from "./Verify";
 import { AboutText } from "./About";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Cell, CompanyRec, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, FOUND_NOTE, KEEP_NAMED, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, FOUND_NOTE, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import {
   AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
@@ -1350,11 +1350,7 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
  * posting (and posted rate) of each open role there. The record's one action until it is unlocked.
  * Pine, because it spends. Short of the price it shows how to earn instead (and counts the wall).
  */
-/**
- * `keep`: on a record opened from a search by the company's exact name, which names it there but
- * not in the tables: the same purchase, said as what it adds ("Keep it named in your tables").
- */
-function UnlockCompany({ id, rate, roles, bar, keep }: { id: string; rate: boolean; roles: boolean; bar?: boolean; keep?: boolean }) {
+function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: boolean; roles: boolean; bar?: boolean }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
@@ -1362,7 +1358,7 @@ function UnlockCompany({ id, rate, roles, bar, keep }: { id: string; rate: boole
   const broke = ui.me.credits < COMPANY_PRICE;
   // Today's unlocks are used up (a company counts as COMPANY_PRICE of them) and credits are left: the button says when, and spends nothing.
   const later = !broke && (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE;
-  const label = keep ? KEEP_NAMED : UNLOCK_COMPANY;
+  const label = UNLOCK_COMPANY;
   const included = !roles ? "Name, website and logo" : rate ? "Job posting and rate included" : "Job posting included";
   const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? "Earn credits to unlock" : label;
   return (
@@ -1370,7 +1366,7 @@ function UnlockCompany({ id, rate, roles, bar, keep }: { id: string; rate: boole
       <button
         ref={ref}
         type="button"
-        className={`btn ${keep ? "" : "btn-pine"}${bar ? " tp-uc-bar" : ""}`}
+        className={`btn btn-pine${bar ? " tp-uc-bar" : ""}`}
         disabled={busy || later}
         aria-busy={busy}
         aria-label={busy || later || broke ? text : `${UNLOCK_ROLE_SAY}. ${included}.`}
@@ -1626,8 +1622,6 @@ export function Drawer({
             <IconPlus size={14} /> Add to this company
           </button>
           <UnlockAll plan={plan} />
-          {/* Found by its exact name: named here, locked in the tables until it is unlocked (or the member adds to it). */}
-          {c.found && <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} keep />}
         </>
       )}
     </div>
@@ -1744,14 +1738,8 @@ export function Drawer({
           )}
           {c.found && (
             <p className="tp-found-dnote">
-              {FOUND_NOTE}. It stays locked in your tables until you unlock it or add what you know.
+              {FOUND_NOTE}. It stays named for you once you add what you know, claim a seat or unlock something here. Otherwise it goes back to locked when you close it.
             </p>
-          )}
-          {/* A phone's bar keeps the job posting and Add: keeping the name is here, under the note. */}
-          {phone && c.found && (
-            <div className="tp-dactions">
-              <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} keep />
-            </div>
           )}
           {!phone && actions}
           {!phone && capLine}

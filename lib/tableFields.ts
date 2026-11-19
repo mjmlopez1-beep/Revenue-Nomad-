@@ -275,7 +275,6 @@ export const FIND_NONE = "No company with that exact name or website.";
 /** The quiet note on a company found this way. */
 export const FOUND_NOTE = "Found by its exact name";
 /** Unlock company on a record opened from such a search. */
-export const KEEP_NAMED = `Keep it named in your tables · ${COMPANY_PRICE_SAY}`;
 
 /** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;
