@@ -166,7 +166,7 @@ async function viewAnswer(view: Built, enc: Enc | null, key?: string): Promise<N
  * shows, or answer with what they changed themselves (messages), or change too much (an admin
  * removing everything a member added: the page loads the table again).
  */
-const NO_PATCH = new Set(["scanNow", "aboutNow", "adminRemoveMember"]);
+const NO_PATCH = new Set(["scanNow", "aboutNow", "leadersNow", "adminRemoveMember"]);
 /** Actions that can move the rate benchmarks. */
 const BENCH_ACTIONS = new Set(["benchRate", "benchRateRemove", "fill", "retract", "review", "adminRemove", "report"]);
 /** The public ids of the records an action touched: what it named, what it made, and the cells it changed. */

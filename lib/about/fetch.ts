@@ -44,6 +44,12 @@ export interface FetchOpts {
   allow?: { loopback?: boolean; port?: number };
   /** Held around each request: at most one request per host at a time (lib/about/run.ts). */
   hostGate?: (host: string) => Promise<() => void>;
+  /**
+   * fetchPageAt and fetchXmlAt: whether robots.txt lets us read this address, in place of the
+   * check of "/" alone. lib/leaders reads robots.txt once per site and checks each page's own path
+   * (robotsAllowsPath), which is stricter: a Disallow of "/" still refuses every page.
+   */
+  robotsCheck?: (url: URL) => Promise<boolean>;
 }
 
 /** A refusal for safety (a private address, a bad port or scheme, a redirect elsewhere): never retried sooner than any other failure. */
@@ -370,6 +376,67 @@ export function robotsAllowsRoot(txt: string): boolean {
   return !best || best.allow;
 }
 
+/** The rules of the robots.txt group for our agent: the one for merlin-about if there is one, else the one for * (as robotsAllowsRoot reads them). */
+function robotsRules(txt: string): { allow: boolean; path: string }[] {
+  const groups: { agents: string[]; rules: { allow: boolean; path: string }[] }[] = [];
+  let cur: (typeof groups)[number] | null = null;
+  let lastWasAgent = false;
+  for (const line of txt.split(/\r?\n/)) {
+    const m = /^\s*([a-z-]+)\s*:\s*(.*?)\s*(#.*)?$/i.exec(line);
+    if (!m) continue;
+    const key = m[1].toLowerCase();
+    const val = m[2];
+    if (key === "user-agent") {
+      if (!cur || !lastWasAgent) groups.push((cur = { agents: [], rules: [] }));
+      cur.agents.push(val.toLowerCase());
+      lastWasAgent = true;
+      continue;
+    }
+    lastWasAgent = false;
+    if (!cur) continue;
+    if (key === "disallow" || key === "allow") cur.rules.push({ allow: key === "allow", path: val });
+  }
+  const mine = groups.filter((g) => g.agents.some((a) => a !== "*" && UA_TOKEN.startsWith(a.replace(/\/.*$/, ""))));
+  return (mine.length ? mine : groups.filter((g) => g.agents.includes("*"))).flatMap((g) => g.rules);
+}
+
+/**
+ * Whether robots.txt lets our agent fetch `path` (with its query): the longest rule that matches
+ * the start of the path wins, Allow wins a tie, "*" matches anything and a final "$" the end. An
+ * empty Disallow allows everything. A Disallow of "/" refuses every path no Allow names.
+ */
+export function robotsAllowsPath(txt: string, path: string): boolean {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  let best: { allow: boolean; len: number } | null = null;
+  for (const r of robotsRules(txt)) {
+    if (!r.path) continue;
+    const end = r.path.endsWith("$");
+    const body = (end ? r.path.slice(0, -1) : r.path)
+      .split("*")
+      .map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+      .join(".*");
+    if (!new RegExp(`^${body}${end ? "$" : ""}`).test(p)) continue;
+    if (!best || r.path.length > best.len || (r.path.length === best.len && r.allow)) best = { allow: r.allow, len: r.path.length };
+  }
+  return !best || best.allow;
+}
+
+/**
+ * A site's robots.txt, read once (lib/leaders checks each page's path against it). Null when there
+ * is none or it can't be read, which allows everything, as robotsAllows does. A safety refusal (a
+ * private address, a redirect elsewhere) is thrown.
+ */
+export async function fetchRobotsTxt(origin: URL, o: FetchOpts): Promise<string | null> {
+  try {
+    const { raw } = await follow(new URL("/robots.txt", origin), { ...o, timeoutMs: Math.min(o.timeoutMs ?? TIMEOUT_MS, TIMEOUT_MS) }, ROBOTS_MAX, "robots");
+    if (raw.status < 200 || raw.status >= 300 || /text\/html/.test(raw.type)) return null;
+    return raw.body;
+  } catch (e) {
+    if (e instanceof Refused) throw e;
+    return null;
+  }
+}
+
 /** Whether the site's robots.txt lets us read its homepage. A robots.txt that can't be read allows it. */
 export async function robotsAllows(origin: URL, o: FetchOpts): Promise<boolean> {
   try {
@@ -407,11 +474,36 @@ export async function fetchPageAt(address: string, opts: FetchOpts = {}): Promis
   }
   start.hash = "";
   try {
-    if (!(await robotsAllows(start, o))) return { ok: false, kind: "skipped", reason: "robots.txt disallows" };
+    if (!(await (o.robotsCheck ? o.robotsCheck(start) : robotsAllows(start, o)))) return { ok: false, kind: "skipped", reason: "robots.txt disallows" };
     const { raw, url } = await follow(start, o, o.maxBytes ?? MAX_BYTES, "html");
     if (raw.status < 200 || raw.status >= 300) return { ok: false, kind: "failed", reason: `http ${raw.status}` };
     if (!/text\/html|application\/xhtml\+xml/.test(raw.type)) return { ok: false, kind: "skipped", reason: "not html" };
     return { ok: true, url: url.href, host: url.hostname, status: raw.status, html: raw.body, truncated: raw.truncated };
+  } catch (e) {
+    if (e instanceof Refused) return { ok: false, kind: "skipped", reason: e.message };
+    return { ok: false, kind: "failed", reason: netReason(e) };
+  }
+}
+
+/**
+ * An XML file by its full address (a site's sitemap.xml, lib/leaders), under the same rules as
+ * fetchPageAt: robots.txt first, every hop checked, 8 seconds, 512 KB. XML or plain text only.
+ */
+export async function fetchXmlAt(address: string, opts: FetchOpts = {}): Promise<{ ok: true; url: string; host: string; body: string } | { ok: false; kind: "skipped" | "failed"; reason: string }> {
+  const o: FetchOpts = { ...opts, allow: opts.allow ?? testAllowance() };
+  let start: URL;
+  try {
+    start = new URL(address);
+  } catch {
+    return { ok: false, kind: "skipped", reason: "bad address" };
+  }
+  start.hash = "";
+  try {
+    if (!(await (o.robotsCheck ? o.robotsCheck(start) : robotsAllows(start, o)))) return { ok: false, kind: "skipped", reason: "robots.txt disallows" };
+    const { raw, url } = await follow(start, o, o.maxBytes ?? MAX_BYTES, "robots");
+    if (raw.status < 200 || raw.status >= 300) return { ok: false, kind: "failed", reason: `http ${raw.status}` };
+    if (!/xml|text\/plain/.test(raw.type)) return { ok: false, kind: "skipped", reason: "not xml" };
+    return { ok: true, url: url.href, host: url.hostname, body: raw.body };
   } catch (e) {
     if (e instanceof Refused) return { ok: false, kind: "skipped", reason: e.message };
     return { ok: false, kind: "failed", reason: netReason(e) };

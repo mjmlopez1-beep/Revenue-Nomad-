@@ -83,6 +83,8 @@ run radar npx tsx scripts/test-radar.mts
 run hired npx tsx scripts/test-hired.mts
 # About texts from company websites (lib/about): extraction, the fetch safety rules and storage, against a mock server on $PORT. Nothing leaves the machine.
 run about env ABOUT_PORT="$PORT" npx tsx scripts/test-about.mts
+# Who leads each function, from company websites (lib/leaders): titles, the pages found, robots.txt, the page cap, same site only, no names stored, the record's line, "No fractional Sales yet" and its ranking, the connector, Pilot metrics, RN_LEADERS off. A mock server on $PORT; nothing leaves the machine.
+run leaders env LEADERS_PORT="$PORT" npx tsx scripts/test-leaders.mts
 run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
 # Bundles and prices on the server module: Ongoing end months free and refunded once on load, SEAT_SCAN_ROLE_FREE both ways (a copy of lib/ flips it).

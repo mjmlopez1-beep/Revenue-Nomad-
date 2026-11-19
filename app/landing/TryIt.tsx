@@ -49,6 +49,8 @@ interface PreviewRow {
   revenue: string | null;
   country: string | null;
   holder?: boolean;
+  /** No fractional in this function yet, and the company's website shows a full-time leader of it, since this year ("" when it doesn't say). */
+  ledSince?: string;
 }
 export interface PreviewExample {
   company: PreviewCompany & {
@@ -145,6 +147,8 @@ const viewLabel = (v: View, fn: string) => (v === "all" ? "All" : v === "hiring"
 /** The quiet line under a row's title. */
 function happening(r: PreviewRow, fn: string): string {
   if (r.kind === "open") return `Open role · ${postedAgo(r.when)}`;
+  // The company's website shows a full-time leader of the function: it says so, in place of "No fractional Sales yet".
+  if (r.kind === "notyet" && r.ledSince !== undefined) return `${fn} led full-time${r.ledSince ? ` since ${r.ledSince}` : ""}`;
   if (r.kind === "notyet")
     return [`No fractional ${seatNoun(fn)} yet`, r.when ? startedOn(r.when)?.replace("Started", "Latest hire") : null].filter(Boolean).join(" · ");
   return [startedOn(r.when), r.holder ? "Seat holder on file" : null].filter(Boolean).join(" · ") || "Fractional hire on file";
