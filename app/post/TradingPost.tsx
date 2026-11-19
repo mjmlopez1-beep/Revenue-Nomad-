@@ -2247,6 +2247,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             )}
             {qt && (
               <div className="tp-pcount">
+                {!sorted.length && foundRows.length ? (
+                  <span>
+                    <b className="num">{foundRows.length}</b> found by its exact name
+                  </span>
+                ) : (
                 <span>
                   <b className="num">{sorted.length}</b>
                   {tab !== "all" ? (
@@ -2257,7 +2262,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                   ) : null}{" "}
                   matching <span className="tp-q">{qt}</span>
                 </span>
-                {tab !== "all" && (
+                )}
+                {tab !== "all" && sorted.length > 0 && (
                   <button type="button" className="tp-flink" onClick={() => setTab("all")}>
                     Show all
                   </button>
@@ -2323,11 +2329,19 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 {hiredBtn}
                 <span className="tp-toolbar-sp" />
                 <span className="tp-count" aria-live="polite" aria-atomic="true">
-                  <b className="num">{sorted.length}</b> {sorted.length === 1 ? noun[0] : noun[1]}
-                  {qt && (
+                  {!sorted.length && foundRows.length ? (
                     <>
-                      {" "}
-                      matching <span className="tp-q">{qt}</span>
+                      <b className="num">{foundRows.length}</b> found by its exact name
+                    </>
+                  ) : (
+                    <>
+                      <b className="num">{sorted.length}</b> {sorted.length === 1 ? noun[0] : noun[1]}
+                      {qt && (
+                        <>
+                          {" "}
+                          matching <span className="tp-q">{qt}</span>
+                        </>
+                      )}
                     </>
                   )}
                 </span>
