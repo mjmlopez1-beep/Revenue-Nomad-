@@ -170,8 +170,10 @@ export interface CompanyRec {
   name: string;
   /**
    * The company has an active open role and the viewer hasn't unlocked it: `name` is
-   * HIDDEN_COMPANY, website, LinkedIn and About come back locked, HQ is cut to its region and
-   * there is no logo. Unlock with { type: "unlock", entity: "company", id, field: "identity" }.
+   * HIDDEN_COMPANY, website and LinkedIn come back locked, the About's text (GET ?about=) comes
+   * without the company's name, web address, links and emails (lib/scan/clean.ts aboutWithout),
+   * HQ is cut to its region and `iconDomain` is null: the page draws the logo from GET
+   * /api/logo/<id> (lib/logo.ts), which never names the domain. Unlock with { type: "unlock", entity: "company", id, field: "identity" }.
    * That one credit also opens the role, the posting and the posted rate of each open role there.
    */
   hidden?: boolean;

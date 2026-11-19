@@ -19,11 +19,13 @@
  * p_{company}_{person}), so none leaves the server. The client sees pubId(id), an opaque
  * HMAC, and perform() maps it back.
  *
- Locked companies: every company keeps its name, website, LinkedIn, logo and About behind
- * "Unlock company" (COMPANY_PRICE, 2 credits) for a member until they know it (they added to it,
- * held a seat there, or paid for anything there); see identityHidden() and knownCompanies(). The
- * free facts (industry, size, revenue, HQ region, which functions it hired and when, open roles'
- * titles and hours) show on every row. The same purchase opens the posting and the posted rate of
+ Locked companies: every company keeps its name, website and LinkedIn behind "Unlock company"
+ * (COMPANY_PRICE, 2 credits) for a member until they know it (they added to it, held a seat
+ * there, or paid for anything there); see identityHidden() and knownCompanies(). The free facts
+ * (industry, size, revenue, HQ region, which functions it hired and when, open roles' titles and
+ * hours) show on every row. Its logo shows through GET /api/logo/<id> (logoDomain, lib/logo.ts),
+ * never with its domain in the page, and its About without its name, web address, links and
+ * emails (hideIdentity, aboutWithout). The same purchase opens the posting and the posted rate of
  * each open role there, whichever of them was asked for. Where the company is not locked, the
  * posting and the rate of an open role are still one purchase (BUNDLE_FIELDS). The people and seat
  * holders of a locked company open only after the company does (COMPANY_FIRST).
@@ -69,7 +71,7 @@ import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles, scanSources, type ScanSource } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
 import { isBelowLead, keepsNonGtm } from "./seniority";
-import { bestPosting, companyKey, isPlaceholderCompany, postingRank, sameRoleTitle, textKey, titleWithout } from "./scan/clean";
+import { aboutWithout, bestPosting, companyKey, isPlaceholderCompany, postingRank, sameRoleTitle, textKey, titleWithout } from "./scan/clean";
 import { checkPostings, fetchPosting, type PostingFetch } from "./scan/posting";
 import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type FeedFetch, type SiteFetch } from "./scan/sources/ats";
 import {
@@ -2306,13 +2308,33 @@ function holdsOpenRole(s: State, me: Member, e: Node): boolean {
  * /api/table?about= returns it whole). About is a system fact, so it never counts in the facts.
  */
 const ABOUT_LATER = (): Cell => ({ s: "value", v: "", ver: 0, system: true, lazy: true });
-/** Company facts that would give a hidden company away. HQ is cut to its region instead. */
+/**
+ * Company facts that would give a hidden company away. HQ is cut to its region instead, and the
+ * About shows without the company's name, web address, links and emails (aboutWithout).
+ */
 const IDENTITY_FIELDS = new Set(["website", "linkedin", "about"]);
 /** The last part of an HQ ("Austin, TX" -> "TX"), so a hidden company keeps a region. */
 const hqRegion = (hq: string) => hq.split(",").map((x) => x.trim()).filter(Boolean).pop() ?? "";
-/** One company cell as a member sees it while the company is hidden: identity facts locked, HQ cut to its region. */
-const hideIdentity = (key: string, c: Cell): Cell =>
-  c.s !== "value" ? c : IDENTITY_FIELDS.has(key) ? { s: "locked", ver: 0 } : key === "hq" ? { ...c, v: hqRegion(c.v) } : c;
+/** An About that was only a link (nothing left once it goes) is no About. */
+const aboutOrEmpty = (c: Cell & { s: "value" }, v: string): Cell => (/[\p{L}\p{N}]/u.test(v) ? { ...c, v } : { s: "empty" });
+/**
+ * One company cell as a member sees it while the company is hidden: website and LinkedIn locked,
+ * HQ cut to its region, the About's text without the giveaways in it. `co`: the company's name, its
+ * website and its logo's domain, which the About is read without, and the names of its people and
+ * seat holders (paid facts: a sentence with one goes).
+ */
+const hideIdentity = (key: string, c: Cell, co: { name: string; sites: (string | null | undefined)[]; people?: (string | null | undefined)[] }): Cell =>
+  c.s !== "value"
+    ? c
+    : key === "about"
+      ? c.v
+        ? aboutOrEmpty(c, aboutWithout(c.v, co.name, co.sites, co.people))
+        : c
+      : IDENTITY_FIELDS.has(key)
+        ? { s: "locked", ver: 0 }
+        : key === "hq"
+          ? { ...c, v: hqRegion(c.v) }
+          : c;
 /**
  * One purchase on an open role: its job posting and its posted rate. "Unlock company" opens both
  * on each open role at a locked company for the same credit. An open role's title is free (see
@@ -2585,11 +2607,14 @@ export const ABOUT_MAX = 50;
 /**
  * GET /api/table?about=: the About cell of each company `ids` names (public company ids, up to
  * ABOUT_MAX), exactly as the table carried it before the text left the table. fullView builds
- * just those companies, so a locked company's About stays locked and nothing comes back that
- * the member's table would not have shown. Ids that name no company are left out. Null when the
- * token is nobody's.
+ * just those companies, so a locked company's About comes without its name, web address, links
+ * and emails (hideIdentity), and nothing comes back that the member's table would not have shown.
+ * `found`: the record asking is one opened from a lookup by exact name (CompanyRec.found, GET
+ * ?about=...&found=1), which shows the whole About while the lookup lasts; without it a company
+ * only looked up reads as locked, as the tables show it. Ids that name no company are left out.
+ * Null when the token is nobody's.
  */
-export async function aboutCells(token: string | null, ids: string[], opts: { asMember?: boolean } = {}): Promise<{ about: Record<string, Cell> } | null> {
+export async function aboutCells(token: string | null, ids: string[], opts: { asMember?: boolean; found?: boolean } = {}): Promise<{ about: Record<string, Cell> } | null> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (!me) return null;
@@ -2603,10 +2628,32 @@ export async function aboutCells(token: string | null, ids: string[], opts: { as
   }
   const about: Record<string, Cell> = {};
   if (!cos.size) return { about };
-  // A record opened from a lookup by exact name shows its About (State.found).
-  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), cos, false, true, foundIds(s, me.id, Date.now()));
+  // A record opened from a lookup by exact name shows its whole About (State.found).
+  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), cos, false, true, opts.found ? foundIds(s, me.id, Date.now()) : null);
   for (const c of v.companies) about[c.id] = c.cells.about ?? { s: "empty" };
   return { about };
+}
+
+/**
+ * The domain a company's logo is drawn from, for GET /api/logo/<id> (lib/logo.ts): its website's
+ * host, else a domain looked up from its name earlier (lib/companyIcons.ts; this starts no lookup).
+ * `publicId` is a company's own public id. Null for anything else, a company with neither, or a
+ * website on a shared host (a LinkedIn page, a job board), whose icon is not the company's. Server
+ * side only: the domain never goes to the page of a member the company is locked for.
+ */
+export async function logoDomain(publicId: string): Promise<string | null> {
+  const id = String(publicId ?? "");
+  if (!/^c_[\w-]{6,40}$/.test(id)) return null;
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const g = viewGraph(seed, s);
+  const cid = companyIndex(g).get(id);
+  const node = cid ? g.companies.get(cid) : undefined;
+  if (!node || pubId(node.id) !== id) return null;
+  const site = siteKey(live(node, s, "website"));
+  if (site) return site.includes("/") ? null : site;
+  const icon = (await iconDomains([{ id: node.id, name: node.name, website: null }], { lookup: false }))[node.id];
+  const host = siteKey(icon);
+  return host && !host.includes("/") ? host : null;
 }
 
 /** The most companies an action's answer carries (an Unlock all on one record touches one). Past it, the page loads the table again. */
@@ -2859,7 +2906,8 @@ async function fullView(
         const fn = er.cells.function?.s === "value" ? er.cells.function.v : null;
         er.cells.role = { ...rc, v: titleWithout(rc.v, c.name, site, fn ? `Fractional ${fn} role` : "Fractional role") };
       }
-      for (const k of [...IDENTITY_FIELDS, "hq"]) if (cells[k]) cells[k] = hideIdentity(k, cells[k]);
+      // The About is read without the giveaways only where its text goes out (withAbout); the table carries a marker for it (ABOUT_LATER).
+      for (const k of [...IDENTITY_FIELDS, "hq"]) if (cells[k] && (k !== "about" || withAbout)) cells[k] = hideIdentity(k, cells[k], { name: c.name, sites: [live(c, s, "website"), icons[c.id]], people: k === "about" ? [...people.map((p) => live(p, s, "name")), ...engs.map((e) => live(e, s, "operator"))] : [] });
     } else {
       for (const x of closedPostings) {
         x.cells.posting = cell(x.e, "engagement", "posting", true);
@@ -3906,7 +3954,7 @@ export async function perform(
           return { entity, id: outId(entity, node.id), field, cell: { ...cell, v: titleWithout(cell.v, co.name, live(co, s, "website") ?? null, fn ? `Fractional ${fn} role` : "Fractional role") } };
         }
       }
-      return { entity, id: outId(entity, node.id), field, cell: hide ? hideIdentity(field, cell) : cell };
+      return { entity, id: outId(entity, node.id), field, cell: hide ? hideIdentity(field, cell, { name: (node as CompanyNode).name, sites: [live(node, s, "website")] }) : cell };
     };
     /** Each member's paid unlocks that have not been refunded, by `${memberId} ${ref}` (built when first needed). */
     let paidUnlocks: Map<string, number> | null = null;

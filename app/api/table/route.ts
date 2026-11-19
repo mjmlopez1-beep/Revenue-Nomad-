@@ -206,7 +206,9 @@ const patchless = (a: Action) =>
  * GET ?find=TEXT   a company by its exact name or website (the action "find", within its daily limits): its record
  *                  named for this answer only (CompanyRec.found), or { found: "none", message }. 401 signed out.
  * GET ?about=ID,ID { about: { [companyId]: Cell } }: up to 50 companies' About cells, which the table carries
- *                  without their text (Cell.lazy). The same locks as the table. 401 signed out.
+ *                  without their text (Cell.lazy). The same locks as the table: a locked company's About without its
+ *                  name, web address, links and emails. &found=1 from a record opened by its exact name: the whole
+ *                  About while that lookup lasts. 401 signed out.
  *
  * See also POST /api/table/scan (the weekly scan, for a cron), GET /api/table/unsubscribe and
  * GET /api/health. Every handler answers 503 while Merlin cannot serve (lib/apiGuard.ts).
@@ -231,7 +233,8 @@ export const GET = guarded(async (req: NextRequest) => {
     const ids = [...new Set(aboutIds.split(",").map((x) => x.trim()).filter(Boolean))];
     if (!(await memberForToken(token))) return err("You're signed out. Sign in again to see this company.", 401);
     if (!ids.length || ids.length > ABOUT_MAX) return err(`Ask for 1 to ${ABOUT_MAX} companies at a time.`);
-    const a = await aboutCells(token, ids, { asMember });
+    // found=1: asked by a record opened from a lookup by exact name, which shows the whole About; otherwise a locked company's comes without its name.
+    const a = await aboutCells(token, ids, { asMember, found: req.nextUrl.searchParams.get("found") === "1" });
     return a ? sendJson(req, a) : err("You're signed out. Sign in again to see this company.", 401);
   }
   // A company by its exact name or website (the action "find", lib/table.ts): it opens for the member, with its record.

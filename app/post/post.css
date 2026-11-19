@@ -2764,6 +2764,13 @@ th.num .tp-th-link {
   line-height: 20px;
   color: var(--body-ink);
 }
+/* Under a locked company's About: what the text leaves out until the unlock. */
+.tp-about-note {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--faint);
+}
 /* One seat: a card. 1px line, 10px corner, no shadow. */
 .tp-eng {
   border: 1px solid var(--line);
@@ -3118,6 +3125,10 @@ th.num .tp-th-link {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* A locked name's cloud spills soft past its letters (.locked-blur in globals.css): nothing clips it. */
+.tp-dbar-name:has(> .locked-name) {
+  overflow: visible;
 }
 /* Phones: once the name is in the bar it matters more than "4 of 587", and on narrow ones Follow keeps only its star. */
 .tp-rsheet .tp-dbar:has(.tp-dbar-co:not(.off)) .tp-dpos {
@@ -5916,10 +5927,15 @@ button.tp-fsheet-row:disabled {
 /* The blurred tile, name and site are in globals.css (.logo-locked, .locked-name, .locked-site). */
 .tp-hidden-name {
   font-weight: 600;
-  /* Truncates like a company name, so a chip beside it on a 320px card never cuts it off mid-letter. */
+  /* Narrows like a company name, so a chip beside it on a 320px card keeps its place. Nothing clips here:
+     the cloud spills soft past the letters and fades out at the right when it is too long (.locked-blur). */
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 100%;
+}
+/* The record's header clamps a long name to two lines; a locked one is one line of cloud, which must not be cut. */
+.tp-dname:has(> .locked-name) {
+  display: block;
+  overflow: visible;
 }
 .tp-co-hidden .tp-co-dom {
   color: var(--muted);

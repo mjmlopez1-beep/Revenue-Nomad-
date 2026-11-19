@@ -1139,3 +1139,7 @@
     flex: 1;
   }
 }
+/* A locked name's cloud spills soft past its letters (.locked-blur in globals.css): nothing clips it. */
+.ob-fv-name:has(> .locked-name) {
+  overflow: visible;
+}

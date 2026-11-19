@@ -1256,3 +1256,7 @@ button.ys-yours:hover {
   height: 44px;
   padding: 0 14px;
 }
+/* A locked name's cloud spills soft past its letters (.locked-blur in globals.css): nothing clips it. */
+.ys-co-name:has(> .locked-name) {
+  overflow: visible;
+}

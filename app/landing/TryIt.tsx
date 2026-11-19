@@ -159,7 +159,7 @@ function CompanyCell({ r }: { r: PreviewRow }) {
   if (r.blur)
     return (
       <span className="lp-tt-cobox">
-        <CompanyLogo name="" domain={null} hidden seed={r.seed} />
+        <CompanyLogo name="" domain={null} hidden noLogo seed={r.seed} />
         <span className="lp-tt-cotext">
           <span className="lp-tt-name">
             <span className="locked-name">

@@ -142,7 +142,7 @@
 }
 .pt-name-locked .locked-blur,
 .pt-co-locked .locked-blur {
-  color: var(--muted);
+  --locked-ink: var(--muted);
 }
 .pt-at {
   display: grid;

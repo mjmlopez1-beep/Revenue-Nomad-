@@ -85,9 +85,10 @@ async function lookup(name: string): Promise<string | null> {
 
 /**
  * Domains for icons, keyed by company id. Returns what's known now and starts
- * background lookups for the rest (never blocks the page).
+ * background lookups for the rest (never blocks the page). `lookup: false`: what's
+ * known now only, no lookup started (the logo route, lib/logo.ts).
  */
-export async function iconDomains(companies: { id: string; name: string; website?: string | null }[]): Promise<Record<string, string>> {
+export async function iconDomains(companies: { id: string; name: string; website?: string | null }[], opts: { lookup?: boolean } = {}): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   const c = await loadCache();
   const todo: { id: string; name: string }[] = [];
@@ -100,7 +101,7 @@ export async function iconDomains(companies: { id: string; name: string; website
     if (hit?.domain) out[co.id] = hit.domain;
     else if (!hit || Date.now() - Date.parse(hit.at) > MISS_RETRY_MS) todo.push(co);
   }
-  if (process.env.RN_LOGO_LOOKUP !== "off" && todo.length) {
+  if (process.env.RN_LOGO_LOOKUP !== "off" && opts.lookup !== false && todo.length) {
     const batch = todo.filter((t) => !inFlight.has(t.id)).slice(0, PER_PASS);
     batch.forEach((t) => inFlight.add(t.id));
     void (async () => {

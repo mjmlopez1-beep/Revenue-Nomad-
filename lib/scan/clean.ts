@@ -315,6 +315,137 @@ export function titleWithout(raw: string, company: string, domain: string | null
   return /\p{L}/u.test(s) && squeeze(s).length >= 2 ? s : fallback;
 }
 
+/** A legal suffix as it follows a name in running text ("Acme, Inc. builds"), cut with the name in aboutWithout. */
+const LEGAL_AFTER = String.raw`(?:,?\s+(?:inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|gmbh|plc|llp|pbc)\b\.?)?`;
+/** Where a cut name goes while aboutWithout works: never in an About, and no name pattern matches it. */
+const CO_MARK = "\u0000co\u0000";
+/** Where a removed link or email was, until aboutWithout tidies the sentence it was in. */
+const LINK_MARK = "\u0001";
+/** The characters a web path in running text may hold, and the last one (never the sentence's own period or comma). */
+const PATH_MID = String.raw`[^\s<>"'()\[\]{}]`;
+const PATH_END = String.raw`[^\s<>"'()\[\]{}.,;:!?]`;
+/** Words with a letter or a digit in a sentence, a cut name counting as one. */
+const wordCount = (x: string) =>
+  x
+    .replace(new RegExp(LINK_MARK, "g"), " ")
+    .replace(new RegExp(CO_MARK, "g"), " co ")
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+
+/**
+ * A locked company's About as a member may read it before they unlock the company: the text
+ * with the obvious giveaways taken out. Every way of writing its name (whole words, any case,
+ * with or without "The" and a legal suffix, the name without a trailing "Labs" or "Software",
+ * the web address's own name, and the first word of a longer name, as written, when the web
+ * address is made of it) reads "the company" ("The company" where a sentence starts). Its web
+ * address reads "the company" too, and any link or email at it is removed (a short sentence that
+ * was only there for it goes with it). `sites`: the company's website and its logo's domain.
+ * The name's first part before a separator ("Terra Reporting | ESG Platform") counts as a way of
+ * writing it, and so does the run of the name's words the About opens with ("Cygnet is a gin brand"
+ * for "Cygnet Gin"), as written. `people`: names of the company's people and seat holders, which
+ * are paid facts: a sentence with one in it goes. The rest is the company's own words, unchanged.
+ */
+export function aboutWithout(text: string, company: string, sites: (string | null | undefined)[], people: (string | null | undefined)[] = []): string {
+  let s = String(text ?? "");
+  if (!s.trim()) return s;
+  const domains = new Set<string>();
+  const labels = new Set<string>();
+  for (const raw of sites) {
+    const host = raw ? hostOf(raw) : null;
+    // A website on a shared host (a LinkedIn page, a job board) is not the company's own address.
+    if (!host || blockedHost(host)) continue;
+    const d = registrable(host.replace(/^www\./, ""));
+    domains.add(d);
+    const label = d.split(".")[0];
+    if (label.length >= 4) labels.add(label);
+  }
+  // Links and emails at the company's domain go (LINK_MARK), then the bare domain reads as the company.
+  for (const d of [...domains].sort((a, b) => b.length - a.length)) {
+    const at = String.raw`(?:[a-z0-9-]+\.)*${escRe(d)}(?![\w-]|\.[a-z0-9])`;
+    s = s
+      // "Acme (acme.com) builds": the address in brackets says nothing more than the name before it.
+      .replace(new RegExp(String.raw`\(\s*(?:https?:\/\/)?(?:www\.)?${at}\/?\s*\)`, "gi"), " ")
+      .replace(new RegExp(String.raw`(?<![\w.+-])[\w.+-]+@${at}`, "gi"), LINK_MARK)
+      .replace(new RegExp(String.raw`\b(?:https?:\/\/|www\.)${at}(?::\d+)?(?:[/?#](?:${PATH_MID}*${PATH_END})?)?`, "gi"), LINK_MARK)
+      .replace(new RegExp(String.raw`(?<![\w@./-])${at}(?::\d+)?[/?#](?:${PATH_MID}*${PATH_END})?`, "gi"), LINK_MARK)
+      .replace(new RegExp(String.raw`(?<![\w@./-])${at}`, "gi"), CO_MARK);
+  }
+  // The ways of writing the name, in any case, longest first ("Acme Health" before "Acme").
+  const names = new Set<string>();
+  const full = plain(company).trim();
+  const bare = cleanCompany(full);
+  const core = bare.replace(/^the\s+/i, "").trim();
+  // "Terra Reporting │ ESG Platform", "Align - Football's AI", "Folia Health: The Home-Reported Outcomes Company".
+  const head = cleanCompany(full.split(/\s+[|│–—-]\s+|\s*[|│:]\s*|\s+\(/)[0]).replace(/^the\s+/i, "").trim();
+  for (const n of [full, bare, core, core.replace(NAME_TAIL, "").trim(), head, head.replace(NAME_TAIL, "").trim()]) if (n.length >= 3) names.add(n);
+  for (const l of labels) {
+    names.add(l);
+    if (l.includes("-")) names.add(l.replace(/-/g, " "));
+  }
+  const cutName = (n: string, flags: string) => {
+    const words = n.split(/\s+/).filter(Boolean).map(escRe).join(String.raw`[\s-]+`);
+    s = s.replace(new RegExp(`(^|[^\\p{L}\\p{N}\\u0000])(?:[Tt]he\\s+)?${words}${LEGAL_AFTER}(?=$|[^\\p{L}\\p{N}])`, flags), `$1${CO_MARK}`);
+  };
+  for (const n of [...names].sort((a, b) => b.length - a.length)) cutName(n, "giu");
+  // "Acmeworks" alone for "Acmeworks Robotics" at acmeworks-robotics.com, as written (so "global" stays for "Global Payments").
+  const first = core.split(/\s+/)[0] ?? "";
+  const firstToo =
+    core.includes(" ") &&
+    first.length >= 4 &&
+    [...labels].some((l) => squeeze(l) === squeeze(first) || squeeze(l.split("-")[0]) === squeeze(first) || (first.length >= 6 && squeeze(l).startsWith(squeeze(first))));
+  if (firstToo) cutName(first, "gu");
+  // The words of the name the About opens with ("Cygnet is", "Elk Ridge Investments buys"), as written there.
+  const nameWords = new Set(full.split(/[^\p{L}\p{N}&'’]+/u).map((w) => squeeze(w.replace(/['’]s$/i, ""))).filter((w) => w.length >= 2));
+  const lead = s.match(/^\s*(?:the\s+)?((?:[\p{L}\p{N}][\p{L}\p{N}&'’.-]*)(?:\s+[\p{L}\p{N}][\p{L}\p{N}&'’.-]*){0,5})/iu)?.[1] ?? "";
+  const run: string[] = [];
+  for (const w of lead.split(/\s+/)) {
+    if (!w || !nameWords.has(squeeze(w.replace(/['’]s$/i, "")))) break;
+    run.push(w.replace(/['’]s$/i, "").replace(/[.]+$/, ""));
+  }
+  const opening = run.join(" ");
+  if (opening.length >= 4 && /\p{Lu}|\p{N}/u.test(opening) && !opening.includes("\u0000")) cutName(opening, "gu");
+  s = s
+    // "Acme (acme.com)" and "Acme, Acme Inc." read once.
+    .replace(new RegExp(`${CO_MARK}\\s*\\(\\s*${CO_MARK}\\s*\\)`, "g"), CO_MARK)
+    .replace(new RegExp(`${CO_MARK}(?:\\s*[,/]\\s*${CO_MARK})+`, "g"), CO_MARK);
+  // A sentence naming one of the company's people (who they are is a paid fact) goes.
+  const who = [...new Set(people.map((x) => plain(x ?? "").trim()).filter((x) => x.length >= 5 && /\s/.test(x)))];
+  if (who.length) {
+    const named = new RegExp(`(^|[^\\p{L}\\p{N}])(?:${who.map((x) => x.split(/\s+/).map(escRe).join(String.raw`\s+`)).join("|")})(?=$|[^\\p{L}\\p{N}])`, "iu");
+    s = s
+      .split("\n")
+      .map((line) => line.split(/(?<=[.!?…]["')\]]*)[ \t]+/).filter((x) => !named.test(x)).join(" "))
+      .join("\n");
+  }
+  // A short sentence with a link or an email in it ("Visit acme.com/about.", "Email hello@acme.com.") was there
+  // for the link: it goes. A longer one keeps its words.
+  if (s.includes(LINK_MARK))
+    s = s
+      .split("\n")
+      .map((line) =>
+        line
+          .split(/(?<=[.!?…]["')\]]*)[ \t]+/)
+          .filter((x) => !x.includes(LINK_MARK) || wordCount(x) > 8)
+          .join(" "),
+      )
+      .join("\n")
+      .replace(new RegExp(LINK_MARK, "g"), " ");
+  s = s
+    // What a removed link leaves: "( )", "more at .", "robots ..".
+    .replace(/\(\s*\)|\[\s*\]/g, " ")
+    .replace(/[ \t]+(?:at|via|on|visit|see)[ \t]*(?=[.,;:!?)]|$)/gim, "")
+    .replace(/[ \t]+([.,;:!?)])/g, "$1")
+    .replace(/([.!?])[ \t]*[.,;:]+/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/^[ \t]+|[ \t]+$/gm, "");
+  // "the company" in running text, "The company" where a sentence starts.
+  s = s
+    .replace(new RegExp(`(^|[.!?…]["')\\]]*\\s+|\\n\\s*|^["'(\\[]+)${CO_MARK}`, "g"), "$1The company")
+    .replace(new RegExp(CO_MARK, "g"), "the company");
+  return s.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+
 /* ---------- the company's own website ---------- */
 
 /** Job boards, applicant tracking systems, form tools, social sites and mail hosts. Never a company's own site. */

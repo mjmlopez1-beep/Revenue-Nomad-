@@ -1755,11 +1755,11 @@ export function Drawer({
               <Pro where="hidden_company" variant="line" />
             </div>
           )}
-          {/* About: a hidden company's About is part of what the unlock shows, so it says nothing until then. */}
-          {!c.hidden && (
+          {/* About: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
+          {(!c.hidden || c.cells.about?.s === "value") && (
             <section className="tp-dsec">
               <h3 className="tp-dsec-h">About</h3>
-              <AboutText id={c.id} cell={c.cells.about} />
+              <AboutText id={c.id} cell={c.cells.about} as={c.hidden ? "locked" : c.found ? "found" : "open"} />
             </section>
           )}
           {(!c.hidden || COMPANY_GTM.some((f) => c.cells[f]?.s !== "empty")) && (

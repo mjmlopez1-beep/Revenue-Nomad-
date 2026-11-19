@@ -347,16 +347,19 @@ const purchaseSet = (i: CoInfo) => {
 /** The company's About cell with its text (the table carries a visible About without it, Cell.lazy), read from the state. */
 async function aboutOf(ctx: Ctx, i: CoInfo | undefined): Promise<Cell | undefined> {
   if (!i || i.c.cells.about?.s !== "value" || !i.c.cells.about.lazy) return undefined;
-  return (await aboutCells(ctx.member.token, [i.c.id], { asMember: true }))?.about[i.c.id];
+  // A company named for this answer only (find_company) has its whole About; one locked for the member, without its name and links.
+  return (await aboutCells(ctx.member.token, [i.c.id], { asMember: true, found: !!i.c.found }))?.about[i.c.id];
 }
 
 /** One company for get_company. `about`: its About cell with the text (aboutOf). */
 function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? "", about?: Cell): ToolOut {
   const c = i.c;
-  const facts = readAll(about ? { ...c.cells, about } : c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? `locked until you unlock the company (${COMPANY_PRICE_SAY})` : LOCKED));
+  const facts = readAll(about ? { ...c.cells, about } : c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin"].includes(f) ? `locked until you unlock the company (${COMPANY_PRICE_SAY})` : LOCKED));
   return {
     ...companySummary(i),
     ...facts,
+    // A locked company's About reads without its name, web address, links and emails (lib/scan/clean.ts aboutWithout).
+    ...(c.hidden && facts.about ? { about_note: `The company's name, web address, links and emails are left out of this About until the member unlocks the company (${COMPANY_PRICE_SAY}).` } : {}),
     ...(c.hidden ? {} : { you_can_add: missingOf(c.cells, COMPANY_KEYS, ["about"]) }),
     seats: i.engs.map((e) => seatOut(e, i, mv, base)),
     ...(c.people.length ? { people: c.people.map((p) => personOut(p, null, !!c.hidden)) } : {}),

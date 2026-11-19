@@ -697,7 +697,10 @@ console.log("\nThe API's routes");
   // Each answers only with its own proof: the member's cookie, the cron secret, an OAuth token or flow, an unsubscribe signature, Stripe's webhook signature. Health and the counts are public on purpose.
   const KNOWN = [
     "api/billing", "api/billing/webhook",
-    "api/health", "api/integrations", "api/integrations/slack/callback", "api/integrations/slack/start", "api/mcp",
+    "api/health", "api/integrations", "api/integrations/slack/callback", "api/integrations/slack/start",
+    // A company's logo by its public id, as image bytes (lib/logo.ts): public on purpose, it names nothing.
+    "api/logo/[id]",
+    "api/mcp",
     "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
     // The radar: Send now (an admin's cookie), and the email's open pixel and tracked links (the radar's signature; a click only ever goes to a path in the app).
     "api/radar", "api/radar/go", "api/radar/open",
@@ -926,6 +929,10 @@ else {
           poweredBy: r.headers.get("x-powered-by"),
         });
       }
+
+      // The logo route by an id that names no company: 404 at once, never a redirect, and nothing fetched (no domain to ask about).
+      const logo = await call("GET", "/api/logo/c_madeupmadeup");
+      check("GET /api/logo/<an id that names no company> answers 404, no redirect", logo.status === 404 && !logo.headers.get("location"), { status: logo.status, location: logo.headers.get("location") });
 
       // Oversized bodies.
       const me = "fixtok-0";
