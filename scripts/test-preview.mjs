@@ -210,7 +210,12 @@ async function main() {
     if (named > NAMED_MAX) shape.push(`${label}: ${named} named companies`);
     const low = text.toLowerCase();
     for (const id of ids) if (text.includes(`"${id}"`)) leaks.push(`${label}: a public id`);
-    for (const p of people) if (low.includes(p)) leaks.push(`${label}: a person, member or contact detail`);
+    // A company's own name can hold a person's name (a foundation named after someone, e.g. "John W. Brick
+    // Mental Health Foundation"), which then matches a contact elsewhere named "John W.". The names the
+    // answer shows are allowed, so they are taken out before looking for people.
+    let lowPeople = low;
+    for (const n of [...(a.rows ?? []).map((r) => r.company?.name), a.example?.company?.name]) if (n) lowPeople = lowPeople.split(JSON.stringify(String(n).toLowerCase())).join('""');
+    for (const p of people) if (lowPeople.includes(p)) leaks.push(`${label}: a person, member or contact detail`);
     for (const l of links) if (low.includes(l)) leaks.push(`${label}: a posting link, a rate or a LinkedIn page`);
     if (/https?:|www\.|linkedin\.com\/|@/.test(low)) leaks.push(`${label}: a link or an email`);
     if (a.openRoleCompanies !== !LOCKED) shape.push(`${label}: openRoleCompanies is ${a.openRoleCompanies}`);
