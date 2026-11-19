@@ -188,10 +188,10 @@ export function leadsLine(leads: CompanyLeads, now = new Date()): string {
   return [...leadItems(leads), `from the company's website, checked ${checkedWords(leads.checkedAt, now)}`].join(" · ");
 }
 
-/** In place of "No fractional Sales yet" when a full-time leader is on file: "Sales led full-time since 2024". */
+/** In place of "No fractional Sales yet" when a full-time leader is on file: "FT Sales Leader since 2024". */
 export function ledFullTimeWords(fn: string, l: Pick<LeadLine, "since">): string {
   const y = sinceYear(l.since);
-  return `${fn} led full-time${y ? ` since ${y}` : ""}`;
+  return `FT ${fn} Leader${y ? ` since ${y}` : ""}`;
 }
 /** A fractional or interim leader on file: "Fractional CMO on the team". */
 export function onTheTeamWords(l: Pick<LeadLine, "fn" | "level" | "kind">): string {
