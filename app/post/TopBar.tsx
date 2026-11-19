@@ -536,6 +536,7 @@ export function TopBar({
   me,
   query,
   setQuery,
+  onSearchEnter,
   searchRef,
   phone,
   onCredits,
@@ -558,6 +559,8 @@ export function TopBar({
   me: Me;
   query: string;
   setQuery: (q: string) => void;
+  /** Enter in the search: look the text up as a company's exact name or website. */
+  onSearchEnter?: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
   phone: boolean;
   onCredits: () => void;
@@ -606,6 +609,7 @@ export function TopBar({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
+          if (e.key === "Enter") onSearchEnter?.();
           if (e.key === "Escape") {
             setQuery("");
             e.currentTarget.blur();

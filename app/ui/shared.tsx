@@ -51,7 +51,8 @@ const before = (a: CompanyRec, b: CompanyRec) => b.friendly.score - a.friendly.s
  */
 export function patchView(v: View, r: ActPatch): View {
   const next = patchCells(v, r);
-  const recs = r.companies?.filter((c) => c && c.id) ?? [];
+  // A company named for one search only (CompanyRec.found) never goes into the tables.
+  const recs = r.companies?.filter((c) => c && c.id && !c.found) ?? [];
   if (!recs.length && !r.ledgerNew?.length && !r.benchmarks && !r.scan && !r.reported) return next;
   let companies = next.companies;
   if (recs.length) {

@@ -44,6 +44,8 @@ const origin = (req: NextRequest) =>
   `${req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "")}://${req.headers.get("x-forwarded-host") ?? req.headers.get("host")}`;
 
 const err = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
+/** Lookups by exact name in a minute, per member (GET ?find= and the action "find" together). */
+const FIND_PER_MINUTE = 30;
 /** Past a per-minute limit. The limits are high enough that a person only meets this by accident. */
 const SLOW = "That's a lot in one minute. Give it a moment, then try again.";
 /** An action with no member behind it. The same words perform() uses. */
@@ -178,6 +180,7 @@ function touchedIds(a: Action, out: ActionResult): string[] {
   for (const k of ["companyId", "engagementId"]) if (typeof x[k] === "string" && a.type !== "benchRate") ids.push(x[k] as string);
   if (a.type === "unlockMany" && Array.isArray(a.items)) for (const it of a.items.slice(0, 60)) if (typeof it?.id === "string") ids.push(it.id);
   if ((a.type === "add" || a.type === "addPerson") && typeof out.id === "string") ids.push(out.id);
+  if (a.type === "find") for (const id of out.ids ?? []) if (typeof id === "string") ids.push(id);
   for (const c of out.cells ?? []) if (typeof c?.id === "string") ids.push(c.id);
   return ids;
 }
@@ -198,6 +201,8 @@ const patchless = (a: Action) =>
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
  *                  Anyone else gets their own view, as without it.
+ * GET ?find=TEXT   a company by its exact name or website (the action "find", within its daily limits): its record
+ *                  named for this answer only (CompanyRec.found), or { found: "none", message }. 401 signed out.
  * GET ?about=ID,ID { about: { [companyId]: Cell } }: up to 50 companies' About cells, which the table carries
  *                  without their text (Cell.lazy). The same locks as the table. 401 signed out.
  *
@@ -226,6 +231,25 @@ export const GET = guarded(async (req: NextRequest) => {
     if (!ids.length || ids.length > ABOUT_MAX) return err(`Ask for 1 to ${ABOUT_MAX} companies at a time.`);
     const a = await aboutCells(token, ids, { asMember });
     return a ? sendJson(req, a) : err("You're signed out. Sign in again to see this company.", 401);
+  }
+  // A company by its exact name or website (the action "find", lib/table.ts): it opens for the member, with its record.
+  const find = req.nextUrl.searchParams.get("find");
+  if (find !== null) {
+    const me = await memberForToken(token);
+    if (!me) return err("You're signed out. Sign in again to find a company.", 401);
+    if (limited(`find:${me.id}`, FIND_PER_MINUTE, 60_000)) return err(SLOW, 429);
+    const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || req.nextUrl.searchParams.get("as") === "member";
+    try {
+      const action: Action = { type: "find", text: find };
+      const since = new Date().toISOString();
+      const out = await perform(token, action, origin(req), { asMember });
+      // Named in this answer only (CompanyRec.found): the page shows it in the search and its record, never in the tables.
+      const patch = out.ids?.length ? await viewPatch(token, out.ids, { asMember, since, found: true }).catch(() => null) : null;
+      return sendJson(req, patch ? { ...out, ...patch, me: { ...patch.me, ...out.me } } : { ...out, version: viewVersion() });
+    } catch (e) {
+      if (e instanceof ActionError) return err(e.message);
+      throw e;
+    }
   }
   // Messages between members (lib/messages.ts): the viewer's conversations, or only the unread count for the badge.
   if (req.nextUrl.searchParams.get("messages") !== null) {
@@ -442,6 +466,8 @@ export const POST = guarded(async (req: NextRequest) => {
   }
   if (limited(`act:${me.id}`, 240, 60_000)) return err(SLOW, 429);
   const action = body.action as Action;
+  // Finding a company by its exact name has a per-minute limit of its own, besides its daily ones (lib/table.ts).
+  if (action?.type === "find" && limited(`find:${me.id}`, FIND_PER_MINUTE, 60_000)) return err(SLOW, 429);
   // Profile texts are cut on a whole character here (perform cuts them by unit).
   if (action?.type === "profile") {
     if (typeof action.title === "string") action.title = tidy(action.title, 80);
@@ -454,7 +480,7 @@ export const POST = guarded(async (req: NextRequest) => {
     const out = await perform(token, action, origin(req), { asMember });
     if (patchless(action)) return sendJson(req, { ...out, version: viewVersion() });
     // What changed, as the member now sees it (viewPatch). Without it the answer still stands, and the page loads the table again.
-    const patch = await viewPatch(token, touchedIds(action, out), { asMember, since, benchmarks: BENCH_ACTIONS.has(action.type) }).catch((e) => {
+    const patch = await viewPatch(token, touchedIds(action, out), { asMember, since, benchmarks: BENCH_ACTIONS.has(action.type), found: action.type === "find" }).catch((e) => {
       console.error("action answer without its records", e);
       return null;
     });

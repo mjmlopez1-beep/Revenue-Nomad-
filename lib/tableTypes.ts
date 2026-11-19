@@ -209,6 +209,12 @@ export interface CompanyRec {
    */
   unlocked?: boolean;
   /**
+   * Named for one answer only: the viewer looked this company up by its exact name or website
+   * (GET ?find=), and the tables still lock it. The page shows it in that search and in the record
+   * opened from it, never in a table. Unlock company keeps it named there.
+   */
+  found?: true;
+  /**
    * Who leads each function, read from the company's own website (lib/leaders): the function,
    * level, full-time or fractional, since when, and the page (left out at a hidden company). Never
    * a name. Free, as the company's basics are. Left out when nothing is on file.
@@ -732,6 +738,12 @@ export interface AdminStats {
    * counts a twelfth); subscriptions that ended this calendar month; top-ups (all time and this
    * month). Counts and money only.
    */
+  /**
+   * Lookups by exact name (the action "find"), the last 24 hours: companies looked up (new ones,
+   * counted toward the limit), members who looked any up, members at their limit, lookups that
+   * matched nothing, and members at that limit.
+   */
+  finds?: { today: number; members: number; atCap: number; misses: number; missCap: number };
   billing?: {
     trial: number;
     pro: number;
@@ -828,6 +840,12 @@ export type Action =
       operatorMemberId?: string;
       people?: Record<string, string>[];
     }
+  /**
+   * Find a company by its exact name or website (lib/table.ts exactMatches). A match opens the
+   * company for the member at no cost, for good (within REVEAL_DAILY_FREE / REVEAL_DAILY_PRO new
+   * ones a day); anything else opens nothing. The answer's `found`: "new", "again" or "none".
+   */
+  | { type: "find"; text: string }
   /** Add a person at a company, optionally tied to one engagement. */
   | { type: "addPerson"; companyId: string; engagementId?: string | null; person: Record<string, string> }
   | { type: "follow"; companyId: string; on: boolean }
@@ -960,6 +978,10 @@ export type ActionResult = {
   /** Message actions: the conversation as the viewer now sees it, and their unread count. */
   conversation?: ConversationRec;
   unread?: number;
+  /** find: "new" (opened now), "again" (open for them already) or "none" (no exact match); `ids`: every company it matched; `findsLeft`: new finds left today. */
+  found?: "new" | "again" | "none";
+  ids?: string[];
+  findsLeft?: number;
   /** claimSeat with `preview`: what the unclaimed seat says, for "Is this you?". */
   claim?: { role: string | null; function: string | null; start: string | null; end: string | null; status: string | null };
   /**

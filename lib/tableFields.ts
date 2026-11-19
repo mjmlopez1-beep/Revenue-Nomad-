@@ -264,6 +264,19 @@ export const COMPANY_PRICE = 2;
 /** "2 credits", for copy. */
 export const COMPANY_PRICE_SAY = `${COMPANY_PRICE} credits`;
 
+/*
+ * Finding a company by its exact name or website (the action "find", GET /api/table?find=): it
+ * shows named in that search and the record opened from it, and stays locked in the tables.
+ */
+/** The fewest characters a lookup by name reads. */
+export const FIND_MIN = 3;
+export const FIND_HINT = "Type a company's full name or website to find it.";
+export const FIND_NONE = "No company with that exact name or website.";
+/** The quiet note on a company found this way. */
+export const FOUND_NOTE = "Found by its exact name";
+/** Unlock company on a record opened from such a search. */
+export const KEEP_NAMED = `Keep it named in your tables · ${COMPANY_PRICE_SAY}`;
+
 /** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;
 /** Credits for inviting a fellow fractional, paid to both once the new member adds their first fact. */

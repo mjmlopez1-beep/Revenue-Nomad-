@@ -917,6 +917,19 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
           />
         </Card>
         {a.radar && <Radar r={a.radar} refresh={refresh} />}
+        {a.finds && (
+          <Card title="Found by exact name (24 hours)">
+            <Rows
+              items={[
+                ["Companies looked up", n0(a.finds.today)],
+                ["Members who looked one up", n0(a.finds.members)],
+                ["Members at their daily limit", n0(a.finds.atCap)],
+                ["Lookups with no match", n0(a.finds.misses)],
+                ["Members at the no-match limit", n0(a.finds.missCap)],
+              ]}
+            />
+          </Card>
+        )}
         {a.integrations && (
           <Card title="Alerts in Slack">
             <Rows

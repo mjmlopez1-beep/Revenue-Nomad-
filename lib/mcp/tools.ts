@@ -21,12 +21,12 @@
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
-import { ActionError, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, type Member } from "../table";
+import { ActionError, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
-  EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, hireOfRow, hiredOn, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
+  EMPTY_FILTERS, applyFilters, countryOf, deriveAll, fitReason, fitTier, friendlyCo, hireOfRow, hiredOn, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
   fractionalLeadFns, fullTimeLead,
   type CoInfo, type FactRef, type Filters, type SortKey,
 } from "@/app/post/model";
@@ -548,6 +548,43 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
         }
       : {}),
   };
+}
+
+/**
+ * find_company: a company by its exact full name or website, as the app's search finds one (the
+ * action "find", with its daily limits). A company still locked for the member is named in this
+ * answer only: the lists and get_company keep it locked, Unlock company keeps it named, and adding
+ * a fact or a seat there makes it theirs. A part of a name finds nothing and says nothing more.
+ */
+export async function findCompanyByName(ctx: Ctx, a: { name: string }): Promise<ToolOut> {
+  const text = String(a.name ?? "").trim();
+  let r: Awaited<ReturnType<typeof perform>>;
+  try {
+    r = await perform(ctx.member.token, { type: "find", text }, ctx.origin, { asMember: true });
+  } catch (e) {
+    if (e instanceof ActionError) throw new ToolProblem(e.message);
+    throw e;
+  }
+  forgetView(ctx.member.id);
+  if (r.found === "none" || !r.ids?.length) {
+    return { found: false, message: r.message, next: "Only a company's exact full name or its website finds it. Ask the member for the full name or the website, or add it with add_my_seat or add_company_fact." };
+  }
+  const patch = await viewPatch(ctx.member.token, r.ids, { asMember: true, found: true });
+  const mv = await memberView(ctx.member);
+  const base = publicBase() ?? ctx.origin;
+  const companies: ToolOut[] = [];
+  for (const i of deriveAll(patch?.companies ?? [])) {
+    companies.push({
+      ...companyOut(i, mv, base, await aboutOf(ctx, i)),
+      ...(i.c.found
+        ? {
+            named_for_this_answer: true,
+            note: `Named for this answer only, because the member typed its exact name. It stays locked in their lists and in get_company. Unlock the company (${COMPANY_PRICE_SAY}, unlock with field "identity") to keep it named, or add what they know there (it becomes theirs). Job postings, who held each seat and contact details cost what they cost at any company the member can see.`,
+          }
+        : {}),
+    });
+  }
+  return { found: true, message: r.message, ...(r.findsLeft != null ? { lookups_left_today: r.findsLeft } : {}), companies };
 }
 
 export async function getCompany(ctx: Ctx, a: { company: string }): Promise<ToolOut> {

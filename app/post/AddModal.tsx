@@ -14,12 +14,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import {
-  ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PERSON_NAME_RE, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, cleanValue, fieldDef,
+  ENGAGEMENT_TYPES, FOUND_NOTE, FUNCTIONS, HIRE_REASONS, PERSON_NAME_RE, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, cleanValue, fieldDef,
 } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import type { ActionResult, Cell, EngagementRec } from "@/lib/tableTypes";
 import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, hue, initials, post, val } from "../ui/shared";
-import { COMPANY_FILL, shown, type CoInfo } from "./model";
+import { COMPANY_FILL, deriveAll, shown, type CoInfo } from "./model";
+import { useExactFind } from "../ui/find";
 import { SeatHolderInput, Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
 import { MissingFacts, claimLine } from "./Drawer";
 import { MonthYear } from "./MonthYear";
@@ -947,10 +948,26 @@ if (typeof window !== "undefined") {
   });
 }
 
-export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddOpts; onClose: () => void }) {
+export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]; opts: AddOpts; onClose: () => void }) {
   const ui = useUi();
   const [selected, setSelected] = useState<string | null>(opts.companyId ?? null);
   const [q, setQ] = useState(opts.query ?? "");
+  /*
+   * A company's exact name or website, typed here, finds it even while it is locked in the tables
+   * (GET /api/table?find=, within the same daily limit as the search): it is named in this form, so
+   * the member can pick it and add what they know (which makes it theirs). A part of a name finds nothing.
+   */
+  const localHit = useMemo(() => {
+    const s = q.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "");
+    return !!s && tableInfos.some((x) => !x.c.hidden && (x.c.name.toLowerCase().includes(s) || (x.domain ?? "").includes(s)));
+  }, [q, tableInfos]);
+  const [findRes] = useExactFind(q, !selected && !localHit, 0, 900);
+  const infos = useMemo(() => {
+    const f = (findRes?.recs ?? []).filter((c) => c.found);
+    if (!f.length) return tableInfos;
+    const named = new Map(deriveAll(f).map((x) => [x.c.id, x]));
+    return tableInfos.map((x) => (x.c.hidden ? named.get(x.c.id) ?? x : x));
+  }, [findRes, tableInfos]);
   const [creating, setCreating] = useState(false);
   const [mode, setMode] = useState<AddMode>(opts.mode ?? "engagement");
   const [done, setDone] = useState<Done | null>(null);
@@ -1120,6 +1137,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
       <span className="tp-match-t">
         <span className="tp-match-n">{m.c.name}</span>
         {m.domain ? <span className="mono tp-small muted">{m.domain}</span> : <span className="tp-small muted num">{plural(m.c.engagements.length, "seat")} on file</span>}
+        {m.c.found && <span className="tp-small muted">{FOUND_NOTE}</span>}
       </span>
       {m.c.facts.missing > 0 && <span className="tp-match-miss tp-small num">{m.c.facts.missing} missing</span>}
     </button>

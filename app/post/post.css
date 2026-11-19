@@ -6906,3 +6906,71 @@ div.tp-pcard-when {
 .ys-find .ob-search {
   z-index: 25;
 }
+
+/*
+ * A company found by its exact name or website (GET /api/table?find=): on top of the search's
+ * results, named for this search only. A quiet note says how it got there.
+ */
+.tp-found {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+.tp-found li + li {
+  border-top: 1px solid var(--line);
+}
+.tp-found-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 14px 8px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  transition: background 0.12s;
+}
+.tp-found-row:hover {
+  background: var(--surface-2);
+}
+.tp-found-row:focus-visible {
+  outline-offset: -2px;
+}
+.tp-found-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.tp-found-n {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-found-note {
+  flex: none;
+  color: var(--body-ink);
+}
+@media (max-width: 520px) {
+  .tp-found-row {
+    flex-wrap: wrap;
+  }
+  .tp-found-note {
+    flex-basis: 100%;
+    padding-left: 44px;
+    margin-top: -4px;
+  }
+}
+.tp-found-dnote {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}

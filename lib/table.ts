@@ -74,7 +74,7 @@ import { checkPostings, fetchPosting, type PostingFetch } from "./scan/posting";
 import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type FeedFetch, type SiteFetch } from "./scan/sources/ats";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, tidy, HIDDEN_COMPANY, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
+  stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
   SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
@@ -401,6 +401,16 @@ export interface State extends MessagingState {
   inviteJoins?: InviteJoin[];
   /** Plans and payments (lib/billing): each member's PlanRecord, Stripe events handled, money in. Only while billing is live. */
   billing?: BillingState;
+  /**
+   * Companies a member looked up by their exact name or website (the action "find"), by member id,
+   * with when. The record opened from that search names the company; the tables never do (it stays
+   * locked there, knownCompanies leaves these out). For DAY_MS after a lookup the company opens
+   * again from search without counting again, and the record's actions (its About, a posting or
+   * a holder at the usual prices, adding a fact) work on it. Older rows are dropped as new ones come.
+   */
+  found?: Record<string, { id: string; at: string }[]>;
+  /** Exact-name lookups that matched nothing, by member id (times, the last 24 hours), for their own daily limit. */
+  findMisses?: Record<string, string[]>;
 }
 
 /**
@@ -2070,6 +2080,92 @@ const keyOfCompany = (name: string) => {
   return k;
 };
 
+/* ---------- finding a company by its exact name or website ---------- */
+
+/**
+ * A member who types a company's exact name or website sees it named in that search, at no cost:
+ * the record opened from it shows what Unlock company would (its name, logo, website, LinkedIn,
+ * About and the free facts), with postings, holders and contacts at the usual prices. The tables
+ * keep it locked (State.found is not a reason knownCompanies counts). Exact means the matching key every
+ * Add uses: case, punctuation, spaces, a leading "The" and legal suffixes aside (companyKey), or
+ * the website's host (siteKey: scheme, www and path aside). A part of a name opens nothing and
+ * never says how many companies start with it. New finds are limited per rolling 24 hours, and
+ * lookups that match nothing have a limit of their own.
+ */
+export const REVEAL_DAILY_FREE = 25;
+export const REVEAL_DAILY_PRO = 100;
+export const FIND_MISS_DAILY = 50;
+export { FIND_MIN, FIND_HINT, FIND_NONE };
+export const revealCapWords = (n: number) => `You've looked up ${n} companies by name today. More tomorrow, or unlock one from the table.`;
+export const FIND_MISS_CAP = `You've looked up ${FIND_MISS_DAILY} names with no match today. More tomorrow, or unlock one from the table.`;
+const DAY_MS = 24 * 3600_000;
+
+/** The companies whose name or website is exactly this text (as Add matches companies), at most 3. */
+function exactMatches(g: Graph, s: State, raw: unknown): Node[] {
+  const t = tidy(raw, 200);
+  if (t.length < FIND_MIN) return [];
+  const key = keyOfCompany(t);
+  const site = /\s/.test(t) ? null : siteKey(t);
+  if (!key && !site) return [];
+  const out: Node[] = [];
+  for (const c of g.companies.values()) {
+    if ((key && keyOfCompany(c.name) === key) || (site && siteKey(live(c, s, "website")) === site)) out.push(c);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+/** New finds a member has left in the rolling 24 hours: REVEAL_DAILY_PRO on Pro or a trial (billing live), else REVEAL_DAILY_FREE. */
+const revealCap = (s: State, memberId: string, nowMs: number) => (billingLive() && hasPro(planRec(s, memberId), nowMs) ? REVEAL_DAILY_PRO : REVEAL_DAILY_FREE);
+const foundRecent = (s: State, memberId: string, nowMs: number) => (s.found?.[memberId] ?? []).filter((r) => nowMs - Date.parse(r.at) < DAY_MS);
+const revealsToday = (s: State, memberId: string, nowMs: number) => foundRecent(s, memberId, nowMs).length;
+/** The companies this member looked up by exact name in the last DAY_MS (internal ids). */
+const foundIds = (s: State, memberId: string, nowMs: number) => new Set(foundRecent(s, memberId, nowMs).map((r) => r.id));
+/**
+ * Note a lookup of these companies (the ones still locked for the member and not looked up in the
+ * last DAY_MS). Returns how many it counted, or "cap" when that would go past the day's limit
+ * (nothing is noted then).
+ */
+function revealFor(s: State, memberId: string, ids: string[], locked: (id: string) => boolean, nowMs: number): number | "cap" {
+  const seen = foundIds(s, memberId, nowMs);
+  const todo = [...new Set(ids)].filter((id) => locked(id) && !seen.has(id));
+  if (!todo.length) return 0;
+  if (seen.size + todo.length > revealCap(s, memberId, nowMs)) return "cap";
+  const at = new Date(nowMs).toISOString();
+  const list = foundRecent(s, memberId, nowMs);
+  for (const id of todo) list.push({ id, at });
+  (s.found ??= {})[memberId] = list;
+  return todo.length;
+}
+/** A lookup that matched nothing, counted (the rolling 24 hours). False when the member is past FIND_MISS_DAILY already. */
+function missFor(s: State, memberId: string, nowMs: number): boolean {
+  const list = ((s.findMisses ??= {})[memberId] ??= []).filter((at) => nowMs - Date.parse(at) < DAY_MS);
+  s.findMisses[memberId] = list;
+  if (list.length >= FIND_MISS_DAILY) return false;
+  list.push(new Date(nowMs).toISOString());
+  return true;
+}
+/** Pilot metrics: new finds in the last 24 hours, members who found any, and members at their limit. */
+function findStats(s: State, nowMs: number) {
+  let today = 0;
+  let members = 0;
+  let atCap = 0;
+  for (const id in s.found ?? {}) {
+    const n = revealsToday(s, id, nowMs);
+    if (!n) continue;
+    today += n;
+    members++;
+    if (n >= revealCap(s, id, nowMs)) atCap++;
+  }
+  let misses = 0;
+  let missCap = 0;
+  for (const id in s.findMisses ?? {}) {
+    const n = s.findMisses![id].filter((at) => nowMs - Date.parse(at) < DAY_MS).length;
+    misses += n;
+    if (n >= FIND_MISS_DAILY) missCap++;
+  }
+  return { today, members, atCap, misses, missCap };
+}
+
 /** For the add form: is a company with this website (or name) already on Merlin? */
 export async function existingCompany(domain: string | null, name: string | null, token?: string | null) {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
@@ -2082,9 +2178,18 @@ export async function existingCompany(domain: string | null, name: string | null
     (key && [...g.companies.values()].find((c) => keyOfCompany(c.name) === key)) ||
     null;
   if (!c) return null;
-  // A company still locked for this member is not named or pointed to: pasting a web address must not look companies up.
-  // The Add form treats it as new, and the server files what they add under the company on file (perform's add).
-  if (me && identityHidden(g, s, memberIndex(seed, s), tracksOf(seed, s), me, c.id)) return null;
+  // A company still locked for this member: the website they pasted is exact, so it opens the company as a lookup by
+  // website does (find, within its daily limit). A match by the name read off that website is not something they
+  // typed, so it opens nothing. Locked, the Add form treats it as new, and the server files what they add under the
+  // company on file (perform's add).
+  if (me && identityHidden(g, s, memberIndex(seed, s), tracksOf(seed, s), me, c.id)) {
+    if (!d || siteKey(live(c, s, "website")) !== d) return null;
+    const r = await perform(token!, { type: "find", text: d }).catch((e) => {
+      if (e instanceof ActionError) return null;
+      throw e;
+    });
+    if (!r || r.id !== pubId(c.id)) return null;
+  }
   return { id: pubId(c.id), name: c.name, website: live(c, s, "website"), industry: live(c, s, "industry") };
 }
 
@@ -2498,7 +2603,8 @@ export async function aboutCells(token: string | null, ids: string[], opts: { as
   }
   const about: Record<string, Cell> = {};
   if (!cos.size) return { about };
-  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), cos, false, true);
+  // A record opened from a lookup by exact name shows its About (State.found).
+  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), cos, false, true, foundIds(s, me.id, Date.now()));
   for (const c of v.companies) about[c.id] = c.cells.about ?? { s: "empty" };
   return { about };
 }
@@ -2516,7 +2622,7 @@ const PATCH_MAX = 8;
 export async function viewPatch(
   token: string | null,
   ids: string[],
-  opts: { asMember?: boolean; since?: string; benchmarks?: boolean } = {},
+  opts: { asMember?: boolean; since?: string; benchmarks?: boolean; found?: boolean } = {},
 ): Promise<(Pick<ActionResult, "companies" | "ledgerNew" | "benchmarks" | "scan" | "reported" | "partial" | "version"> & { me: Me }) | null> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
@@ -2532,7 +2638,8 @@ export async function viewPatch(
     else missing = true;
   }
   const many = cos.size > PATCH_MAX;
-  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), many ? new Set() : cos, !!opts.benchmarks);
+  // found: the answer to a lookup by exact name, its companies named for that answer only (CompanyRec.found).
+  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), many ? new Set() : cos, !!opts.benchmarks, false, opts.found ? foundIds(s, me.id, Date.now()) : null);
   const since = opts.since ?? "";
   return {
     companies: v.companies,
@@ -2569,7 +2676,20 @@ function belowLead(title: string | null): boolean {
  * `bench` false leaves the benchmarks out. `withAbout` keeps the company About texts in; without
  * it an About the viewer can see is ABOUT_LATER (the page loads the text when the record opens).
  */
-async function fullView(seed: Seed, s: State, me: Member | null, asMember = false, only: Set<string> | null = null, bench = true, withAbout = false): Promise<View> {
+/**
+ * `found`: companies the member looked up by exact name, built named for this answer only
+ * (CompanyRec.found): the answer to a lookup, and the About of a record opened from it.
+ */
+async function fullView(
+  seed: Seed,
+  s: State,
+  me: Member | null,
+  asMember = false,
+  only: Set<string> | null = null,
+  bench = true,
+  withAbout = false,
+  found: Set<string> | null = null,
+): Promise<View> {
   const g = viewGraph(seed, s);
   /** The viewer is an admin and sees the admin's view (not "See it as a member"). */
   const admin = isAdmin(me) && !asMember;
@@ -2714,7 +2834,10 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     // The place the viewer can see: none while the viewer's own report hides the HQ from them.
     const geo = cells.hq?.s === "value" ? geoOf(c, s) : NOWHERE;
     // The rule of identityHidden(): every company is locked for a member until they know it (knownCompanies).
-    const hidden = !!me && !admin && !known!.has(c.id) && !mine && !addedByMe.has(c.id) && !holdsSeat;
+    const locked = !!me && !admin && !known!.has(c.id) && !mine && !addedByMe.has(c.id) && !holdsSeat;
+    // Looked up by its exact name: named in this answer, as Unlock company would show it, and still locked in the tables.
+    const foundNow = locked && !!found?.has(c.id);
+    const hidden = locked && !foundNow;
     // An open role's posted hours are part of what its posting says: they show with the posting and
     // the posted rate (one purchase, or Unlock company at a hidden company), never before.
     engs.forEach((e, n) => {
@@ -2774,6 +2897,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       // Paid to see it while it was hidden (Unlock company, or its open role's title or posting: one purchase, recorded on the company).
       ...(me && (s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) ? { unlocked: true } : {}),
       ...(addedByMe.has(c.id) ? { added: true } : {}),
+      ...(foundNow ? { found: true as const } : {}),
       // Who leads each function, from the company's own website: about roles, not people, so free wherever the company's basics show.
       ...(leads ? { leads } : {}),
     };
@@ -3018,6 +3142,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
             ...adminStats(seed, s, g, idx, nowMs, scan, entityOf),
             messages: messageStats(s),
             integrations: integrationStats(s.integrations),
+            finds: findStats(s, nowMs),
             ...(billingLive() ? { billing: billingStats(s, idx, nowMs) } : {}),
           },
           reportedMessages: reportedMessages(s, memberName),
@@ -3697,7 +3822,14 @@ export async function perform(
     const companyOf = (entity: Entity, id: string) =>
       entity === "company" ? id : entity === "engagement" ? g.engagements.get(id)?.companyId ?? "" : g.contacts.get(id)?.companyId ?? "";
     // An admin seeing the table as a member (asMember) unlocks by the same rule the page shows them.
-    const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, tracks(), me, companyId, !!opts.asMember);
+    /** Locked in the member's tables: what Unlock company buys. */
+    const lockedFor = (companyId: string) => identityHidden(g, s, idx0, tracks(), me, companyId, !!opts.asMember);
+    /**
+     * Locked for this action: a company the member looked up by its exact name (State.found, the
+     * last DAY_MS) is not, so the record opened from that search works as a named company's does.
+     */
+    const hiddenFor = (companyId: string) =>
+      lockedFor(companyId) && !(s.found?.[me.id] ?? []).some((r) => r.id === companyId && nowMs - Date.parse(r.at) < DAY_MS);
     /** Accounts that count (trustOf), worked out once per action. */
     let trustNow: ((memberId: string) => boolean) | null = null;
     const trusted = (memberId: string) => (trustNow ??= trustOf(seed, s))(memberId);
@@ -3765,10 +3897,11 @@ export async function perform(
     /** A changed cell for the result, as the actor now sees it. A hidden company's cells come back as the view shows them. */
     const changed = (entity: Entity, node: Node, field: string) => {
       const cell = cellOf(s, me, node, entity, field, memberIndex(seed, s), freeFor(entity, node.id, field));
-      const hide = entity === "company" && cell.s === "value" && (IDENTITY_FIELDS.has(field) || field === "hq") && hiddenFor(node.id);
+      // The tables' lock: an action's cells go into the tables, where a company looked up by name stays locked.
+      const hide = entity === "company" && cell.s === "value" && (IDENTITY_FIELDS.has(field) || field === "hq") && lockedFor(node.id);
       if (entity === "engagement" && field === "role" && cell.s === "value" && !cell.system) {
         const co = g.companies.get(companyOf("engagement", node.id));
-        if (co && hiddenFor(co.id)) {
+        if (co && lockedFor(co.id)) {
           const fn = live(node, s, "function") ?? functionOf(cell.v);
           return { entity, id: outId(entity, node.id), field, cell: { ...cell, v: titleWithout(cell.v, co.name, live(co, s, "website") ?? null, fn ? `Fractional ${fn} role` : "Fractional role") } };
         }
@@ -4183,7 +4316,8 @@ export async function perform(
           const waiting: { it: (typeof items)[number]; node: Node }[] = [];
           const take = (it: (typeof items)[number], node: Node, last: boolean) => {
             if (it.entity === "company" && (it.field === "identity" || IDENTITY_FIELDS.has(it.field))) {
-              if (hiddenNow(node.id)) bundle(node);
+              // Unlock company keeps it named in the tables, so it is for sale while the tables lock it (a lookup by name included).
+              if (lockedFor(node.id)) bundle(node);
               return;
             }
             let itField = it.field;
@@ -4387,6 +4521,8 @@ export async function perform(
           if (companyFirm(company ? g.companies.get(company.id)?.name ?? name : name) && !(company && firmsInReview(seed, s).has(company.id))) throw new ActionError(FIRM_REFUSED);
           // "Acme", "Test", "Your client": the name of no real company, whether it is new or one kept for an admin's review.
           if (placeholderName(company ? g.companies.get(company.id)?.name ?? name : name)) throw new ActionError(PLACEHOLDER_REFUSED);
+          // Typing a company's exact name or website is a lookup by name (find), within the same daily limit: the answer names it.
+          const revealed = company ? revealFor(s, me.id, [company.id], lockedFor, nowMs) : 0;
           const isNew = !company;
           if (!company) {
             const id = newId("c", name);
@@ -4533,11 +4669,11 @@ export async function perform(
           // and that counts toward the day's limits like any other fact.
           if (!isNew && hiddenFor(company.id))
             return {
-              message: nothing
+              message: (nothing
                 ? seatOnFile
                   ? `That seat is already on file. ${NOTHING_NEW}`
                   : `${NOTHING_NEW} Add a seat you held there and the company opens for you.`
-                : `Saved.${credits(earned)}${bonusNote(bonus)}${capNote(earned > 0)}`,
+                : `Saved.${credits(earned)}${bonusNote(bonus)}${capNote(earned > 0)}`) + (revealed === "cap" ? ` ${revealCapWords(revealCap(s, me.id, nowMs))}` : ""),
               capped,
             };
           const where = isNew
@@ -4591,6 +4727,27 @@ export async function perform(
               : `Added ${put.typed} at ${c.name}.${credits(earned)}${bonusNote(bonus)}${capNote(earned > 0)}`,
             id: pubId(put.node.id),
             capped,
+          };
+        }
+        case "find": {
+          // A company's exact name or website names it in this answer (State.found); anything else opens nothing and says nothing more.
+          const text = tidy(a.text, 200);
+          if (text.length < FIND_MIN) throw new ActionError(FIND_HINT);
+          if ((s.findMisses?.[me.id] ?? []).filter((at) => nowMs - Date.parse(at) < DAY_MS).length >= FIND_MISS_DAILY) throw new ActionError(FIND_MISS_CAP);
+          const hits = exactMatches(g, s, text);
+          if (!hits.length) {
+            missFor(s, me.id, nowMs);
+            return { message: FIND_NONE, found: "none" };
+          }
+          const opened = revealFor(s, me.id, hits.map((c) => c.id), lockedFor, nowMs);
+          if (opened === "cap") throw new ActionError(revealCapWords(revealCap(s, me.id, nowMs)));
+          const names = hits.map((c) => g.companies.get(c.id)?.name ?? "").filter(Boolean);
+          return {
+            message: `Found ${names.length > 1 ? `${names.length} companies by that exact name: ${names.join(", ")}` : names[0]}.`,
+            id: pubId(hits[0].id),
+            ids: hits.map((c) => pubId(c.id)),
+            found: opened ? "new" : "again",
+            findsLeft: Math.max(0, revealCap(s, me.id, nowMs) - revealsToday(s, me.id, nowMs)),
           };
         }
         case "follow": {

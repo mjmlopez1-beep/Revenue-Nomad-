@@ -31,6 +31,7 @@ How the exchange works
 - Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts are always visible: a company's industry, size, revenue and HQ region, and a seat's function, type, status, start, why they hired, hours a week, and its end month while the seat is still going. Only a dated end on a seat that ended costs 1 credit.
 - Every company is a "Locked company" (known by its id) until the member unlocks it for 2 credits, which opens its name, website, logo and LinkedIn and the job posting of its open roles, with the posted rate and hours when the posting gave them. A company the member added to, held a seat at, or paid for anything at is already theirs. Before that its industry, size, revenue, HQ region, which functions it hired fractionals for and when, and its open roles' titles, functions and listed dates show. Describe a locked company by those facts and its id, never guess its name. Each open role says whether a rate was posted ("No rate posted", or "on file"): never promise a rate that isn't there. At a company the member can see, an open role's posting, posted rate and hours are one purchase.
 - At a locked company, its people and the fractionals who held its seats open only after the company. Unlock the company first, then them.
+- When the member names a company in full or gives its website, find_company finds it even while it is locked, named for that answer only (free, up to 25 new companies a day). It stays locked in the lists: unlocking it keeps it named. Never use find_company to guess at names: a part of a name finds nothing.
 - Who held a seat and the role they held are one purchase: 1 credit opens both, whichever one you unlock. A seat with nobody named yet (seat_holder "Not on Merlin yet") has no one to unlock, and its role shows free or locked like any other fact.
 - A person's name and title are one purchase: 1 credit opens both, whichever one you unlock. Their LinkedIn, email and phone open only after that, 1 credit each. A relationship (like Decision maker) is free.
 - Each locked value says what its credit opens, and what has to come first. Pass that on as it is.
@@ -124,6 +125,18 @@ export function makeServer(ctx: T.Ctx): McpServer {
       annotations: { title: "Search companies", ...READ },
     },
     (a) => run(ctx, () => T.searchCompanies(ctx, a)),
+  );
+
+  server.registerTool(
+    "find_company",
+    {
+      title: "Find a company by its exact name",
+      description:
+        "A company by its exact full name or its website (acme.com), even one that is locked for the member: it comes back named, with its website, LinkedIn, About and free facts, for this answer only. Its lists and get_company keep it locked. Unlocking the company (2 credits) keeps it named; adding a fact or a seat there makes it the member's. Job postings, who held each seat and contact details cost what they cost at any company the member can see. A part of a name finds nothing. Up to 25 new companies a day (100 on Pro), and 50 lookups that match nothing.",
+      inputSchema: { name: z.string().describe("The company's exact full name (legal suffixes like Inc. and a leading The don't matter) or its website.") },
+      annotations: { title: "Find a company by its exact name", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    (a) => run(ctx, () => T.findCompanyByName(ctx, a)),
   );
 
   server.registerTool(

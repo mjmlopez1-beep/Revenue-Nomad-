@@ -28,7 +28,9 @@
  */
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
-import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
+import { CompanyLogo, IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
+import { useExactFind } from "../ui/find";
+import type { CompanyRec } from "@/lib/tableTypes";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cardSeat, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
@@ -63,7 +65,7 @@ import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/l
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
 import { Checklist, Strip, sinceText } from "./Guide";
-import { COMPANY_PRICE_SAY, REFERRAL_BONUS } from "@/lib/tableFields";
+import { COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
 import { BillingPage, PlansHost, TrialBanner, openPlans } from "./Billing";
@@ -401,16 +403,51 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   /* ----- data ----- */
   const infos = useMemo(() => deriveAll(view.companies), [view.companies]);
   const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
+  /*
+   * A company found by its exact name or website (lib/table.ts "find"): named in this search and
+   * the record opened from it, never in the tables. It goes when the search changes. One the
+   * tables name already (the member owns it, or just unlocked it) is the table's own record.
+   */
+  const [findNow, setFindNow] = useState(0);
+  const [findLocalNone, setFindLocalNone] = useState(false);
+  const [found, findAgain] = useExactFind(query, page === "table" && findLocalNone, findNow);
+  const foundInfos = useMemo(
+    () =>
+      found?.recs.length
+        ? deriveAll(found.recs).map((i) => {
+            const t = byId.get(i.c.id);
+            return t && (!i.c.found || !t.c.hidden) ? t : i;
+          })
+        : [],
+    [found, byId],
+  );
+  const foundById = useMemo(() => new Map(foundInfos.filter((i) => i.c.found).map((i) => [i.c.id, i])), [foundInfos]);
+  // An action on a found company that left it locked in the tables (a follow, a report): its record is asked for again (free the same day).
+  const foundStore = useRef(new Map<string, CompanyRec | undefined>());
+  useEffect(() => {
+    let changed = false;
+    const next = new Map<string, CompanyRec | undefined>();
+    for (const id of foundById.keys()) {
+      const now = byId.get(id)?.c;
+      if (foundStore.current.has(id) && foundStore.current.get(id) !== now) changed = true;
+      next.set(id, now);
+    }
+    foundStore.current = next;
+    if (changed) findAgain();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byId, foundById]);
+  /** The tables' records, with a found company's named record in place of its locked one: what the record and Add read. */
+  const shownInfos = useMemo(() => (foundById.size ? infos.map((i) => foundById.get(i.c.id) ?? i) : infos), [infos, foundById]);
   /** Any record id (company, engagement, person) to the company that owns it. */
   const ownerOf = useMemo(() => {
     const m = new Map<string, CoInfo>();
-    for (const i of infos) {
+    for (const i of shownInfos) {
       m.set(i.c.id, i);
       for (const e of i.engs) m.set(e.id, i);
       for (const { p } of i.people) m.set(p.id, i);
     }
     return m;
-  }, [infos]);
+  }, [shownInfos]);
   /** A rate typed on a seat the member held: the editor asks who can see it (decision 18). */
   const ownRateOf = (t: FactRef) => {
     if (t.entity !== "engagement" || t.field !== "rate") return undefined;
@@ -1286,7 +1323,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const cellUi: Ui = useMemo(() => mkUi(cellMe), [cellMe, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, holdsSeat, seatStats, openSeats, openPage, contact]);
 
-  const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;
+  const drawerInfo = drawer ? foundById.get(drawer.id) ?? byId.get(drawer.id) ?? null : null;
   const drawerPos = drawer ? sorted.findIndex((r) => r.key === drawer.rowKey) : -1;
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
   const noun = recordType === "companies" ? ["company", "companies"] : recordType === "engagements" ? ["seat", "seats"] : ["person", "people"];
@@ -1576,6 +1613,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         enterKeyHint="search"
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
+          if (e.key === "Enter") setFindNow(Date.now());
           if (e.key === "Escape") {
             setQuery("");
             e.currentTarget.blur();
@@ -1645,9 +1683,31 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   );
 
   const qt = q.trim();
-  const empty = sorted.length === 0 && (
+  // Nothing on screen matches the search: the text is looked up as a company's exact name or website.
+  const localNone = !!qt && RECORD_TYPES.every((t) => !typeCounts[t.key]) && outside === 0;
+  useEffect(() => setFindLocalNone(localNone), [localNone]);
+  /** Companies found by exact name that the list doesn't show already, on top of the results. */
+  const foundRows = foundInfos.filter((i) => !sorted.some((r) => r.i.c.id === i.c.id));
+  const foundStrip = foundRows.length > 0 && (
+    <ul className="tp-found" aria-label="Found by its exact name">
+      {foundRows.map((i) => (
+        <li key={i.c.id}>
+          <button type="button" className="tp-found-row" onClick={() => openCompany(i.c.id)}>
+            <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />
+            <span className="tp-found-t">
+              <span className="tp-found-n">{i.c.name}</span>
+              <span className="tp-small muted">{[shown(i.c.cells.industry), shown(i.c.cells.employees), i.c.country].filter(Boolean).join(" · ") || i.domain}</span>
+            </span>
+            <span className="tp-found-note tp-small">{FOUND_NOTE}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+  const empty = sorted.length === 0 && (foundRows.length ? <></> : (
     <Empty
       q={qt}
+      find={found && !found.recs.length ? { none: !!found.none, error: found.error ?? null } : null}
       tab={tab}
       noun={noun[1]}
       filtered={nFilters > 0}
@@ -1658,7 +1718,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       }}
       onSearchAll={searchAll}
       onBrowse={clearAll}
-      onAdd={() => openAdd()}
+      onAdd={() => openAdd(qt ? { query: qt } : undefined)}
       hired={
         hiredActive
           ? {
@@ -1695,7 +1755,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           : []
       }
     />
-  );
+  ));
   const more = sorted.length > limit && (
     <button type="button" className="tp-more-btn" onClick={() => setLimit((l) => l + PAGE)}>
       Show {Math.min(PAGE, sorted.length - limit)} more{" "}
@@ -2079,6 +2139,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             setQuery(v);
             if (page !== "table") setPage("table");
           }}
+          onSearchEnter={() => setFindNow(Date.now())}
           searchRef={searchRef}
           phone={phone}
           onCredits={() => setPop((p) => (p === "credits" ? null : "credits"))}
@@ -2210,6 +2271,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             {scanLine}
             {followLine}
             <div id="tp-results" tabIndex={-1} className="tp-presults">
+              {foundStrip}
               {empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
             </div>
             {more}
@@ -2280,6 +2342,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               {followLine}
               <div className="tp-frame-box" ref={frameBoxRef}>
                 <div className="tp-frame" ref={frameRef} id="tp-results" tabIndex={-1}>
+                  {foundStrip}
                   {empty || (
                     <>
                       <DataTable
@@ -2380,7 +2443,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             contact={contact}
           />
         )}
-        {addOpts && <AddModal infos={infos} opts={addOpts} onClose={() => setAddOpts(null)} />}
+        {addOpts && <AddModal infos={shownInfos} opts={addOpts} onClose={() => setAddOpts(null)} />}
         {inviteOpen && (
           <Sheet title="Invite a fractional" onClose={() => setInviteOpen(false)} dialog className="tp-invite-sheet">
             <InvitePanel fn={me.function} code={me.inviteCode} />
@@ -2608,7 +2671,10 @@ function Empty({
   elsewhere = [],
   hiring = null,
   hired = null,
+  find = null,
 }: {
+  /** The search was looked up as a company's exact name: `none`, nothing has that name or website; `error`, the lookup was refused (the day's limit). */
+  find?: { none: boolean; error: string | null } | null;
   /**
    * Recently hired is on and nothing fits: what it looks for ("a fractional Finance leader in the
    * last 6 months"), a longer window to try, any function, and the way out.
@@ -2673,10 +2739,18 @@ function Empty({
       p = `We check job boards every week. New ${hiring.fn} roles show up here as we find them.`;
       actions = others.length ? [{ ...others[0], kind: "pine" }] : [{ label: "See all companies", go: onBrowse }];
     }
+  } else if (q && find?.none) {
+    // Looked up as a company's exact name or website: nothing has it. Never how many names start with it.
+    h = FIND_NONE;
+    p = FIND_HINT;
+    actions = [
+      { label: "Add it", go: onAdd, kind: "add" },
+      { label: "Clear search", go: onClearSearch },
+    ];
   } else if (q) {
-    // Search reads what the member can see. Say so, rather than claim we have nothing.
+    // Search reads what the member can see. A company's exact name or website finds a locked one.
     h = `No company, function or industry matches ${q}`;
-    p = "Names, roles and rates stay locked until you unlock them, so search can't read them.";
+    p = find?.error ?? FIND_HINT;
     actions = [
       { label: "Clear search", go: onClearSearch, kind: "pine" },
       { label: "Add a company", go: onAdd, kind: "add" },

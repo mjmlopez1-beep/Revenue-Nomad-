@@ -15,6 +15,14 @@
  * under the old rules) named; admins see everything and "See it as a member" doesn't; the
  * landing page's preview still names companies; who held a seat opens after the company; Add by
  * name opens only with something added; a removed company is paid back in full.
+ *
+ * Found by exact name (the action "find", GET ?find=): a company's exact name or website names it
+ * in that answer only, case, punctuation, a leading "The" and legal suffixes aside; a part of a
+ * name, a prefix or a near miss finds nothing and says no count; the tables, Referral partners,
+ * the radar and the connector's lists keep it locked, and a fresh view does too; the record from
+ * the search shows its identity and About, with postings and holders at the usual prices; Unlock
+ * company and a fact added there keep it named; a repeat the same day is free; the limits (25 new
+ * a day on Free, 100 on Pro, 50 misses); the connector's find_company; Pilot metrics' counts.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -54,6 +62,10 @@ const seed = {
     { id: "m_cap", name: "Cara Capped", email: "cara@example.com", title: "Fractional CRO", token: "tok-cara-lock" },
     { id: "m_sam", name: "Sam Spammer", email: "sam@example.com", title: "Fractional CRO", token: "tok-sam-lock" },
     { id: "m_admin", name: "Avery Admin", email: "admin-lock@example.com", title: "Admin", token: "tok-admin-lock" },
+    { id: "m_finn", name: "Finn Finder", email: "finn@example.com", title: "Fractional CMO", token: "tok-finn-lock" },
+    { id: "m_fcap", name: "Fay Freecap", email: "fay@example.com", title: "Fractional CMO", token: "tok-fcap-lock" },
+    { id: "m_pcap", name: "Pia Procap", email: "pia@example.com", title: "Fractional CMO", token: "tok-pcap-lock" },
+    { id: "m_miss", name: "Milo Misser", email: "milo@example.com", title: "Fractional CMO", token: "tok-miss-lock" },
   ],
   companies: [
     { id: CO.acme.id, fields: coFields(CO.acme, { hq: "Austin, TX", industry: "SaaS", revenue: "$1M–$5M", employees: "11–50" }) },
@@ -105,6 +117,15 @@ writeFileSync(
     ],
     unlocks: { [`${CO.elm.id}.identity`]: ["m_olga"], "e_fox_open.posting": ["m_olga"], "p_gran_ceo.name": ["m_olga"] },
     companies: [{ id: SPAM.id, name: SPAM.name, by: "m_sam", at: ago(3) }],
+    // Fay has looked up 24 companies by name today (Free: 25), Pia 99 (Pro: 100), Milo has 49 lookups that matched nothing (50).
+    found: {
+      m_fcap: Array.from({ length: 24 }, (_, k) => ({ id: `c_gone${k}`, at: ago(0.2) })),
+      m_pcap: Array.from({ length: 99 }, (_, k) => ({ id: `c_gone${k}`, at: ago(0.2) })),
+      // Yesterday's lookups don't count today.
+      m_finn: [{ id: "c_gone_old", at: ago(2) }],
+    },
+    findMisses: { m_miss: Array.from({ length: 49 }, () => ago(0.2)) },
+    billing: { members: { m_pcap: { proUntil: new Date(NOW + 20 * DAY).toISOString(), interval: "month" } }, events: [], payments: [], ended: [] },
     values: {
       // Ada added the industry at Dunmorely: she knows it.
       [`${CO.dun.id}.industry`]: v("Biotech", "m_ada"),
@@ -213,7 +234,7 @@ async function main() {
   const found = (q: string) => M.applyFilters(M.rowsFor("companies", infos0), M.EMPTY_FILTERS, "all", q, v0.me!).rows.length;
   check("the table's search finds no locked company by its name or domain", found("acmeworks") === 0 && found("bluefin") === 0 && found("acmeworks-robotics.example") === 0, [found("acmeworks"), found("bluefin")]);
   check("it still finds them by free facts", found("saas") >= 2, found("saas"));
-  check("the Add form's lookup doesn't name or point to a locked company", (await T.existingCompany(CO.acme.site, CO.acme.name, "tok-nora-lock")) === null);
+  check("the Add form's lookup by a name read off a website (not typed) doesn't name or point to a locked company", (await T.existingCompany(null, CO.acme.name, "tok-nora-lock")) === null);
   const adminLook = await T.existingCompany(CO.acme.site, CO.acme.name, "tok-admin-lock");
   check("an admin's lookup still finds it", adminLook?.name === CO.acme.name, adminLook);
 
@@ -316,10 +337,10 @@ async function main() {
   /* ---------- Add by name ---------- */
   console.log("\nAdd by name");
   const noNew = await act("tok-nora-lock", { type: "add", company: CO.holl.name });
-  check("Add naming a locked company, with nothing new, names nothing and hands over no id", noNew.ok && !noNew.r.id && !noNew.r.message.includes("Hollowell") && /Nothing new was added/.test(noNew.r.message), noNew);
-  check("and the company stays locked", coOf(await view("tok-nora-lock"), CO.holl.id)!.hidden === true);
-  const site = await act("tok-nora-lock", { type: "add", company: "Some Name", website: CO.iris.site });
-  check("a web address alone doesn't look a company up either", site.ok && !site.r.id && !JSON.stringify(site.r).toLowerCase().includes("irisdale media"), site);
+  check("Add with a locked company's exact name, nothing new, names it in the answer (a lookup by name)", noNew.ok && noNew.r.message.includes(CO.holl.name) && /already on Merlin/.test(noNew.r.message), noNew);
+  check("and the company stays locked in the tables", coOf(await view("tok-nora-lock"), CO.holl.id)!.hidden === true);
+  const partAdd = await act("tok-nora-lock", { type: "add", company: "Irisdale", companyFields: { industry: "SaaS" } });
+  check("Add with a part of a name makes a new company and names no locked one", partAdd.ok && leaks(partAdd.r, [CO.iris.id]).every((x) => x.toLowerCase() === "irisdale") && !JSON.stringify(partAdd.r).includes(CO.iris.name), partAdd);
   const mySeat = await act("tok-nora-lock", {
     type: "add",
     company: CO.holl.name,
@@ -338,6 +359,103 @@ async function main() {
   const rm = await act("tok-admin-lock", { type: "adminRemoveMember", memberId: pub("m_sam") });
   const after = (await view("tok-nora-lock")).me!.credits;
   check("a company removed later is paid back in full (2 credits)", us.ok && rm.ok && after === before + 2, { us, rm: rm.ok ? rm.r.message : rm, before, after });
+
+  /* ---------- found by exact name ---------- */
+  console.log("\nFound by exact name");
+  const find = (token: string, text: string) => act(token, { type: "find", text });
+  const finnV0 = await view("tok-finn-lock");
+  for (const t of ["Acmeworks", "Acmeworks Rob", "acmework robotics", "Robotics", "acmeworks-robo", "bluefin-freight.example", "Ac"]) {
+    const r = await find("tok-finn-lock", t);
+    const out = r.ok ? r.r : r.error;
+    check(`"${t}" (a part, a prefix or a near miss) finds nothing, names nothing and says no count`, (r.ok ? r.r.found === "none" && !r.r.id && !r.r.ids && r.r.message === F.FIND_NONE : r.error === F.FIND_HINT) && leaks(out, ALL).length === 0 && !/\d/.test(JSON.stringify(r.ok ? r.r.message : r.error)), out);
+  }
+  const f1 = await find("tok-finn-lock", "  ACMEWORKS robotics, Inc. ");
+  check("the exact name, case, spaces and a legal suffix aside, finds it and names it in the answer", f1.ok && f1.r.found === "new" && f1.r.ids?.length === 1 && f1.r.ids[0] === pub(CO.acme.id) && f1.r.message.includes(CO.acme.name), f1);
+  check("a lookup the day before doesn't count today: 24 new ones left", f1.ok && f1.r.findsLeft === 24, f1.ok ? f1.r.findsLeft : f1);
+  const fp = await T.viewPatch("tok-finn-lock", [pub(CO.acme.id)], { found: true });
+  const fa = fp!.companies![0];
+  check(
+    "the record from the search shows what Unlock company would: name, logo, website, LinkedIn, the full HQ",
+    fa.found === true && !fa.hidden && fa.name === CO.acme.name && fa.iconDomain !== undefined && fa.cells.website?.s === "value" && fa.cells.linkedin?.s === "value" && fa.cells.hq?.s === "value" && fa.cells.hq.v === "Austin, TX",
+    fa,
+  );
+  const fab = await T.aboutCells("tok-finn-lock", [pub(CO.acme.id)]);
+  check("and its About (GET ?about=) while it is open from the search", fab?.about[pub(CO.acme.id)]?.s === "value", fab);
+  check("who held a seat there stays locked, at its usual price", fa.engagements.find((e) => e.id === pub("e_acme_sales"))?.cells.operator?.s === "locked");
+  const finnV1 = await view("tok-finn-lock");
+  check("the tables keep it locked: a fresh view names nothing", coOf(finnV1, CO.acme.id)!.hidden === true && leaks(finnV1, ALL).length === 0, leaks(finnV1, ALL));
+  check("nor does the packed view", leaks(W.packView(structuredClone(finnV1)), ALL).length === 0);
+  const plainPatch = await T.viewPatch("tok-finn-lock", [pub(CO.acme.id)]);
+  check("an action's ordinary patch keeps it locked too", plainPatch!.companies![0].hidden === true && leaks(plainPatch, ALL).length === 0);
+  const finn = (await T.memberForToken("tok-finn-lock"))!;
+  const fctx = { member: finn, origin: BASE };
+  forgetView(finn.id);
+  const lists = [await T.partnersView("tok-finn-lock"), await radarView("tok-finn-lock"), await tools.searchCompanies(fctx, {}), await tools.listOpenRoles(fctx, {}), await tools.getCompany(fctx, { company: pub(CO.acme.id) })];
+  check("Referral partners, the radar and the connector's lists and records keep it locked", lists.every((x) => leaks(x, ALL).length === 0), lists.map((x) => leaks(x, ALL)));
+  const f1b = await find("tok-finn-lock", "acmeworks robotics");
+  check("looking it up again the same day is free and counts nothing", f1b.ok && f1b.r.found === "again" && f1b.r.findsLeft === 24, f1b);
+  const fd = await find("tok-finn-lock", `https://www.${CO.blue.site}/about-us`);
+  check("an exact website (scheme, www and path aside) finds it", fd.ok && fd.r.found === "new" && fd.r.ids?.[0] === pub(CO.blue.id) && fd.r.findsLeft === 23, fd);
+  const fthe = await find("tok-finn-lock", "The Bluefin Freightlines LLC");
+  check("a leading The and a legal suffix don't matter (and it's a repeat)", fthe.ok && fthe.r.found === "again", fthe);
+  const fb = (await T.viewPatch("tok-finn-lock", [pub(CO.blue.id)], { found: true }))!.companies![0];
+  check("a hiring company found by name keeps its job posting locked, at the usual price", fb.found === true && fb.engagements[0].cells.posting?.s === "locked", fb.engagements[0].cells);
+  const credits0 = (await view("tok-finn-lock")).me!.credits;
+  const buyHolder = await act("tok-finn-lock", { type: "unlock", entity: "engagement", id: pub("e_acme_sales"), field: "operator" });
+  check("who held a seat there is 1 credit, not after the company", buyHolder.ok && buyHolder.r.me?.credits === credits0 - 1, buyHolder.ok ? buyHolder.r.message : buyHolder);
+  const buyPost = await act("tok-finn-lock", { type: "unlock", entity: "engagement", id: pub("e_blue_open"), field: "posting" });
+  check("an open role's posting (with its rate) is 1 credit", buyPost.ok && buyPost.r.me?.credits === credits0 - 2, buyPost.ok ? buyPost.r.message : buyPost);
+  const fc = await find("tok-finn-lock", CO.cobalt.name);
+  const keep = await act("tok-finn-lock", { type: "unlock", entity: "company", id: pub(CO.cobalt.id), field: "identity" });
+  const finnV2 = await view("tok-finn-lock");
+  check("Unlock company from the search costs 2 credits and keeps it named in the tables", fc.ok && keep.ok && keep.r.me?.credits === credits0 - 4 && coOf(finnV2, CO.cobalt.id)!.hidden === false && coOf(finnV2, CO.cobalt.id)!.name === CO.cobalt.name, keep.ok ? keep.r.message : keep);
+  const fe = await find("tok-finn-lock", CO.dun.site);
+  const fill = await act("tok-finn-lock", { type: "fill", entity: "company", id: pub(CO.dun.id), field: "employees", value: "11–50" });
+  check("adding a fact from the search makes it theirs: named in the tables", fe.ok && fill.ok && coOf(await view("tok-finn-lock"), CO.dun.id)!.hidden === false, fill.ok ? fill.r.message : fill);
+  const fg = await find("tok-finn-lock", CO.gran.name);
+  const finnV3 = await view("tok-finn-lock");
+  check("a company only looked up (nothing bought or added) is locked again in a reloaded view", fg.ok && coOf(finnV3, CO.gran.id)!.hidden === true && leaks(finnV3, [CO.gran.id, CO.elm.id, CO.iris.id, CO.holl.id, CO.fox.id]).length === 0);
+  check("the companies Finn bought something at are his (a purchase owns a company)", coOf(finnV3, CO.acme.id)!.hidden === false && coOf(finnV3, CO.blue.id)!.hidden === false);
+
+  console.log("\nThe limits");
+  const fay1 = await find("tok-fcap-lock", CO.acme.name);
+  check("on Free, the 25th new company of the day is found", fay1.ok && fay1.r.found === "new" && fay1.r.findsLeft === 0, fay1);
+  const fay2 = await find("tok-fcap-lock", CO.blue.name);
+  check("the 26th is refused, with the limit in plain words", !fay2.ok && fay2.error === "You've looked up 25 companies by name today. More tomorrow, or unlock one from the table." && leaks(fay2.error, ALL).length === 0, fay2);
+  const fay3 = await find("tok-fcap-lock", CO.acme.site);
+  check("a repeat still works at the limit", fay3.ok && fay3.r.found === "again", fay3);
+  const fay4 = await act("tok-fcap-lock", { type: "add", company: CO.blue.name });
+  check("Add with an exact name counts toward the same limit: at it, the answer names nothing", fay4.ok && !fay4.r.message.includes(CO.blue.name) && /looked up 25 companies by name today/.test(fay4.r.message), fay4);
+  const keepEnv = { ...process.env };
+  Object.assign(process.env, { RN_BILLING: "1", STRIPE_SECRET_KEY: "sk_test_madeup", STRIPE_WEBHOOK_SECRET: "whsec_madeup", STRIPE_PRICE_MONTH: "price_m", STRIPE_PRICE_YEAR: "price_y" });
+  try {
+    const pia1 = await find("tok-pcap-lock", CO.acme.name);
+    const pia2 = await find("tok-pcap-lock", CO.blue.name);
+    check("on Pro, the 100th is found and the 101st refused", pia1.ok && pia1.r.found === "new" && !pia2.ok && /looked up 100 companies by name today/.test(pia2.error), [pia1, pia2]);
+    const fay5 = await find("tok-fcap-lock", CO.iris.name);
+    check("with billing live, Free is still 25", !fay5.ok && /looked up 25 companies/.test(fay5.error), fay5);
+  } finally {
+    for (const k of ["RN_BILLING", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR"]) if (keepEnv[k] === undefined) delete process.env[k];
+  }
+  const milo1 = await find("tok-miss-lock", "Nowhere Industries");
+  check("the 50th lookup with no match still answers", milo1.ok && milo1.r.found === "none" && milo1.r.message === F.FIND_NONE, milo1);
+  const milo2 = await find("tok-miss-lock", "Nowhere Else Corp");
+  const milo3 = await find("tok-miss-lock", CO.acme.name);
+  check("past 50 misses, lookups stop for the day (an exact name too), naming nothing", !milo2.ok && !milo3.ok && milo2.error === T.FIND_MISS_CAP && milo3.error === T.FIND_MISS_CAP, [milo2, milo3]);
+
+  console.log("\nThe connector and Pilot metrics");
+  const mcpFind = await tools.findCompanyByName(fctx, { name: `${CO.iris.name}, Inc.` });
+  const mc = (mcpFind.companies as Record<string, unknown>[])?.[0];
+  check("find_company names a locked company for that answer, with its website and the note", mcpFind.found === true && mc?.name === CO.iris.name && mc?.named_for_this_answer === true && JSON.stringify(mc).includes(CO.iris.site), mcpFind);
+  forgetView(finn.id);
+  const after2 = [await tools.searchCompanies(fctx, {}), await tools.getCompany(fctx, { company: pub(CO.iris.id) })];
+  check("and the connector's lists and get_company keep it locked after", after2.every((x) => leaks(x, [CO.iris.id]).length === 0), after2.map((x) => leaks(x, [CO.iris.id])));
+  const mcpPart = await tools.findCompanyByName(fctx, { name: "Irisda Med" });
+  check("find_company with a part of a name finds nothing and names nothing", mcpPart.found === false && leaks(mcpPart, ALL).length === 0, mcpPart);
+  const siteLook = await T.existingCompany(CO.elm.site, null, "tok-finn-lock");
+  check("the Add form's lookup by an exact website names it (a lookup by name, counted)", siteLook?.name === CO.elm.name && coOf(await view("tok-finn-lock"), CO.elm.id)!.hidden === true, siteLook);
+  const adm = (await view("tok-admin-lock")).admin as { finds?: { today: number; members: number; atCap: number; misses: number; missCap: number } } | undefined;
+  check("Pilot metrics counts lookups today and members at the limits", !!adm?.finds && adm.finds.today >= 24 + 99 && adm.finds.members >= 3 && adm.finds.atCap === 2 && adm.finds.missCap === 1, adm?.finds);
 
   /* ---------- the landing page ---------- */
   console.log("\nThe landing page");

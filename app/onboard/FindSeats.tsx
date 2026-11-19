@@ -17,6 +17,8 @@ import type { ActionResult, CompanyRec, EngagementRec } from "@/lib/tableTypes";
 import { isFirm } from "@/app/post/model";
 import { SEAT_YIELD } from "@/app/post/earnBack";
 import { metaOf, seatLine as lineOf, seatState, seatsAt } from "./suggest";
+import { useExactFind } from "../ui/find";
+import { FOUND_NOTE } from "@/lib/tableFields";
 
 export { SEAT_YIELD };
 
@@ -165,7 +167,7 @@ export function seatsFound(companies: CompanyRec[], clients: string[], added: Re
 }
 
 export function FindSeats({
-  companies,
+  companies: tableCompanies,
   fn,
   title,
   name,
@@ -200,6 +202,25 @@ export function FindSeats({
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  /*
+   * A client's exact name or website finds it even while it is locked in the tables (GET
+   * /api/table?find=, within the search's daily limit): it is named here so the member can claim
+   * or add the seat they held there, which makes it theirs. Found companies picked as clients stay
+   * named on this list while it is open. A part of a name finds nothing.
+   */
+  const localHit = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return !!t && tableCompanies.some((c) => !c.hidden && c.name.toLowerCase().includes(t));
+  }, [q, tableCompanies]);
+  const [findRes] = useExactFind(q, !localHit, 0, 700);
+  const [picked, setPicked] = useState<Record<string, CompanyRec>>({});
+  const companies = useMemo(() => {
+    const named = new Map<string, CompanyRec>(Object.entries(picked));
+    for (const c of findRes?.recs ?? []) if (c.found) named.set(c.id, c);
+    if (!named.size) return tableCompanies;
+    // The tables' record once it is named there (the member claimed or added a seat), else the one found.
+    return tableCompanies.map((c) => (c.hidden ? named.get(c.id) ?? c : c));
+  }, [picked, findRes, tableCompanies]);
   const byId = useMemo(() => new Map(companies.map((c) => [c.id, c])), [companies]);
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -220,6 +241,8 @@ export function FindSeats({
     if (autoFocus) inputRef.current?.focus({ preventScroll: true });
   }, [autoFocus]);
   const pick = (id: string) => {
+    const f = findRes?.recs.find((c) => c.id === id && c.found);
+    if (f) setPicked((p) => ({ ...p, [id]: f }));
     setClients((c) => (c.includes(id) ? c : [...c, id].slice(-20)));
     setQ("");
     inputRef.current?.focus();
@@ -282,7 +305,7 @@ export function FindSeats({
                 <CompanyLogo name={c.name} domain={c.iconDomain} />
                 <span className="ob-result-id">
                   <span className="ob-result-name">{c.name}</span>
-                  <span className="ob-result-meta">{metaOf(c) || "On Merlin"}</span>
+                  <span className="ob-result-meta">{c.found ? FOUND_NOTE : metaOf(c) || "On Merlin"}</span>
                 </span>
               </li>
             ))}
