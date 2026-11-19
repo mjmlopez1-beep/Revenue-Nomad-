@@ -178,7 +178,8 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
     }
     setMailErr(null);
     setMailState("busy");
-    const r = await post({ emailLink: v });
+    // The link comes back to the page they asked from (a radar email's day of companies, say): the server keeps only a path in the app.
+    const r = await post({ emailLink: v, to: window.location.search ? window.location.pathname + window.location.search : undefined });
     if (r.error) {
       setMailState("idle");
       setMailErr(r.error);

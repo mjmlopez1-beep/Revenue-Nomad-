@@ -79,7 +79,7 @@ run digest npx tsx scripts/test-digest.ts
 run messages npx tsx scripts/test-messages.mjs
 # Alerts in Slack and webhooks (lib/notify), with fetch and name lookups replaced: nothing leaves the machine.
 run notify npx tsx scripts/test-notify.mts
-# The next-client radar (lib/radar): each signal, the profile and before-function matching, never twice, a free view that names nothing, Pro, no nothing-days, opt-out and unsubscribe, Slack and email, billing off as free. Fetch replaced: nothing leaves the machine.
+# The radar (lib/radar; FEATURE_NAME to members): each signal, the profile and before-function matching, never twice, every signal for every member with nothing locked named, links to the day's companies, the day's view and its 2-credit unlock, instant for Pro, no nothing-days, opt-out and unsubscribe, Slack and email. Fetch replaced: nothing leaves the machine.
 run radar npx tsx scripts/test-radar.mts
 # Recently hired (lib/hired.ts): the filter, its counts and sort, the address and saved views, the weekly email's line, the post in Slack and the connector's params, on a made-up seed with fetch replaced.
 run hired npx tsx scripts/test-hired.mts

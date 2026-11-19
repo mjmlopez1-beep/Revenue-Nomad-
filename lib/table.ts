@@ -102,7 +102,7 @@ import {
   ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, pauseState, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
-import { radarStats, type RadarState } from "./radar/types";
+import { FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState } from "./radar/types";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, leadersEnabled, leadersProgress,
@@ -5401,8 +5401,8 @@ export async function perform(
             s.profiles[me.id] = p;
             return {
               message: a.radar
-                ? "Your radar is on. When a company like your clients moves, you hear about it the next morning."
-                : "Your radar is off. We won't send it by email or Slack. The Radar page still lists what's new.",
+                ? `${YOUR_FEATURE} is on. When a company like your clients moves, you hear about it the next morning.`
+                : `${YOUR_FEATURE} is off. We won't send it by email or Slack. ${FEATURE_NAME} in the menu still lists what's new.`,
             };
           }
           if (typeof a.partners === "boolean") {

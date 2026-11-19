@@ -24,6 +24,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import dynamic from "next/dynamic";
 import { ToastProvider, calmRefusal, fetchView, patchView, post, useToast, type Act, type ActPatch, type View, type ViewResult } from "./ui/shared";
 import type { TradingPostProps } from "./post/TradingPost";
+import { SIG_DAY_RE, yourFeature } from "@/lib/radar/types";
 
 /* ---------- loading: the shape of what is coming, not a line of gray text ---------- */
 
@@ -191,6 +192,8 @@ const othersChanged = (known: string | null, answer: string | null | undefined) 
 
 /** Sign in's note for a visitor who followed a message email's link while signed out. */
 const MESSAGE_NOTE = "Sign in to read your message.";
+/** A link to a day of the radar (?sig=, its email and Slack). Signed out, Sign in opens with this; the emailed sign-in link comes back to the same day. */
+const RADAR_NOTE = `Sign in to see the companies from ${yourFeature}.`;
 const MESSAGE_LINK_USED = "That link was already used, or it's more than 7 days old. Sign in to read your message.";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -234,6 +237,8 @@ function App() {
   // A link to a conversation (?p=messages, from a message email). Signed out, Sign in opens with a note.
   // Signed in by that email's one-time link, the member goes straight to it, skipping onboarding for this visit.
   const [toMessage] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "messages");
+  const [toRadar] = useState(() => typeof window !== "undefined" && SIG_DAY_RE.test(new URLSearchParams(window.location.search).get("sig") ?? ""));
+  const linkNote = toMessage ? MESSAGE_NOTE : toRadar ? RADAR_NOTE : null;
   const fromMessageLink = useRef(false);
   // A visitor (as far as this browser knows) gets the landing page before the view arrives.
   const [guest, setGuest] = useState(false);
@@ -452,11 +457,11 @@ function App() {
         </button>
       </Skeleton>
     ) : guest ? (
-      <Landing view={null} onSignedIn={refresh} signInNote={toMessage ? MESSAGE_NOTE : null} />
+      <Landing view={null} onSignedIn={refresh} signInNote={linkNote} />
     ) : (
       <Skeleton />
     );
-  if (!view.me) return <Landing view={view} onSignedIn={refresh} signInError={signInError} signInNote={toMessage ? MESSAGE_NOTE : null} />;
+  if (!view.me) return <Landing view={view} onSignedIn={refresh} signInError={signInError} signInNote={linkNote} />;
   if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} onSkip={onSkip} />;
   // Straight from onboarding, a member with seats under their name starts on those seats.
   const start = firstRun.current && !skipped.current && view.companies.some((c) => c.engagements.some((e) => e.yours)) ? "seats" : undefined;

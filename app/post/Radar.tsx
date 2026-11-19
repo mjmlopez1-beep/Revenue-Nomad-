@@ -1,80 +1,155 @@
 "use client";
 
 /**
- * The Radar page (page "radar", the menu's Find section): the last 24 hours' signals at companies
- * in the member's Ideal Fractional Profile, so a member without Slack or email still sees them.
- * The server decides what each plan reveals (GET /api/table?radar=1, lib/radar): free, one greyed
- * card with no company and "N more today"; Pro, every card with the company when the member's
- * table shows it, each opening its record. Phone first: one column, every action a 44px tap.
+ * The radar's day (page "radar"; members read it as FEATURE_NAME): the Companies list cut to the
+ * companies in one UTC day of the member's signals, the page the email's and Slack's links open
+ * (/?p=table&sig=2026-11-19, also ?p=radar). The server decides which companies (GET
+ * /api/table?radar=1&day=, lib/radar radarView: only the member's own signals); the rows are the
+ * member's own table rows, so a company they don't know stays locked and named by nothing.
  *
- * Signals: radar_opened once per tab when the page shows, radar_clicked on a card or See who.
+ * Each row (desktop) and card (phones) says what happened there and has one button: Unlock
+ * company · 2 credits for a locked company (the record's own UnlockCompany, so the zero-credit
+ * wall and the daily limit work as everywhere), Open for one the member knows. The row or card
+ * itself opens the record, and closing it comes back here. A removable pill says what the list
+ * is ("From your Crystal Ball · Nov 19 · 2 companies"); taking it off shows all companies. The
+ * last 7 days are one tap each.
+ *
+ * Signals: radar_opened once per tab when the page shows, radar_clicked when a row is opened.
  */
-import { useCallback, useEffect, useState } from "react";
-import type { RadarCard, RadarKind, RadarView } from "@/lib/radar/types";
-import { IconChevron, IconCheck, IconLock, post } from "../ui/shared";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Me } from "@/lib/tableTypes";
+import { YOUR_FEATURE, FEATURE_NAME, yourFeature, type RadarView } from "@/lib/radar/types";
+import { IconChevron, IconCheck, IconX, post } from "../ui/shared";
+import { isOpenRole, type CoInfo, type Row } from "./model";
 import { useUi } from "./ui";
+import { DataTable, type SignalRows } from "./Tables";
+import { CardList } from "./Cards";
+import { UnlockCompany } from "./Drawer";
+import { plural } from "./hooks";
 import "./radar.css";
-
-const KIND: Record<RadarKind, string> = { adjacent: "Hire before yours", role: "Open role", seat: "Seat ended", funding: "Funding" };
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 let openedSent = false;
 const signal = (name: "radar_opened" | "radar_clicked", where: string) => void post({ action: { type: "signal", name, where } });
 
-export function Radar({ onBack, onProfile, openCompany }: { onBack: () => void; onProfile: () => void; openCompany: (id: string) => void }) {
-  const ui = useUi();
-  const me = ui.me;
+/** "Nov 19". */
+const shortDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+/** The day switcher's words: Today, Yesterday, then "Nov 17". */
+const dayLabel = (day: string, today: string) => {
+  if (day === today) return "Today";
+  if (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`) === 86_400_000) return "Yesterday";
+  return shortDay(day);
+};
+
+/**
+ * One day's companies from the server, while `active` (the page is open). The last answer stays
+ * after the page closes, so the record opened from it steps through the same companies.
+ * `day` null: the latest day with something in it.
+ */
+export function useRadarDay(active: boolean, day: string | null, again: unknown[]) {
   const [data, setData] = useState<RadarView | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const [whoNote, setWhoNote] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const want = useRef(0);
   const load = useCallback(async () => {
+    const n = ++want.current;
     try {
-      const r = await fetch("/api/table?radar=1", { cache: "no-store" });
+      const r = await fetch(`/api/table?radar=1${day ? `&day=${encodeURIComponent(day)}` : ""}`, { cache: "no-store" });
       const j = await r.json().catch(() => null);
-      if (!r.ok || !j) return setFailed(j?.error || "Your radar didn't load. Try again.");
+      if (n !== want.current) return;
+      if (!r.ok || !j) return setFailed(j?.error || `${YOUR_FEATURE} didn't load. Try again.`);
       setFailed(null);
       setData(j as RadarView);
     } catch {
-      setFailed("We couldn't reach Merlin. Check your connection and try again.");
+      if (n === want.current) setFailed("We couldn't reach Merlin. Check your connection and try again.");
     }
-  }, []);
+  }, [day]);
   useEffect(() => {
-    void load();
-  }, [load, me.function, me.icp, me.before, me.radar]);
+    if (active) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, load, ...again]);
+  return { data: data && (!day || data.day === day || data.expired) ? data : null, stale: data, failed, reload: load };
+}
+
+/** The member's rows for the day's companies, in the server's order (open roles, ended seats, hires before theirs). */
+export function radarRows(view: RadarView | null, rows: Row[]): Row[] {
+  if (!view?.rows.length) return [];
+  const by = new Map(rows.map((r) => [r.i.c.id, r]));
+  return view.rows.map((x) => by.get(x.id)).filter((r): r is Row => !!r);
+}
+
+/** An open role here has a posted rate behind the lock: the unlock names the rate only then. */
+const postedRate = (i: CoInfo) => i.engs.some((e) => isOpenRole(e) && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value"));
+
+export function RadarPage({
+  view,
+  failed,
+  reload,
+  rows,
+  me,
+  phone,
+  onBack,
+  onProfile,
+  onDay,
+  openCompany,
+}: {
+  view: RadarView | null;
+  failed: string | null;
+  reload: () => void;
+  /** The day's rows (radarRows). */
+  rows: Row[];
+  me: Me;
+  phone: boolean;
+  /** All companies: the pill taken off, or Back. */
+  onBack: () => void;
+  onProfile: () => void;
+  onDay: (day: string) => void;
+  openCompany: (id: string) => void;
+}) {
+  const ui = useUi();
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!openedSent) (openedSent = true), signal("radar_opened", "app");
   }, []);
 
-  const open = (c: RadarCard) => {
-    signal("radar_clicked", "app");
-    const id = new URLSearchParams(c.url.split("?")[1] ?? "").get("c");
-    if (id) openCompany(id);
-  };
-  const seeWho = () => {
-    signal("radar_clicked", "app");
-    // With billing on, the upgrade link. Off, nobody is on Pro yet: say so in place.
-    if (data?.billing && data.day) window.location.assign(data.day.seeWho);
-    else setWhoNote(true);
-  };
+  const open = useCallback(
+    (id: string) => {
+      signal("radar_clicked", "app");
+      openCompany(id);
+    },
+    [openCompany],
+  );
+  const openRow = useCallback((r: Row) => open(r.i.c.id), [open]);
+  // One button a company: Unlock company for a locked one (the record's own), Open for one the member knows.
+  const action = useCallback(
+    (i: CoInfo) =>
+      i.c.hidden ? (
+        <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
+      ) : (
+        <button type="button" className="btn rd-open" onClick={() => open(i.c.id)}>
+          Open<span className="sr-only"> {i.c.name}</span>
+        </button>
+      ),
+    [open],
+  );
+  const signals = useMemo<SignalRows>(() => ({ lines: new Map((view?.rows ?? []).map((x) => [x.id, x.lines])), action }), [view, action]);
   const flip = async () => {
     setBusy(true);
-    await ui.act({ type: "settings", radar: !(data?.on ?? true) });
+    await ui.act({ type: "settings", radar: !(view?.on ?? true) });
     setBusy(false);
-    void load();
+    reload();
   };
 
-  const fn = data?.function ?? me.function;
-  const before = data?.before ?? [];
-  const day = data?.day ?? null;
+  const fn = view?.function ?? me.function;
+  const before = view?.before ?? [];
+  const n = rows.length;
+  const day = view?.day ?? null;
   return (
     <div className="tp-page rd-page">
       <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
+        <IconChevron dir="left" /> All companies
       </button>
-      <h1 className="tp-page-h">Your next-client radar</h1>
+      <h1 className="tp-page-h">{YOUR_FEATURE}</h1>
       <p className="rd-lead">
-        Companies in your Ideal Fractional Profile that moved in the last 24 hours
+        Companies in your Ideal Fractional Profile that just moved
         {fn ? (
           <>
             : a fractional hire in a function that usually comes before {fn}
@@ -82,108 +157,96 @@ export function Radar({ onBack, onProfile, openCompany }: { onBack: () => void; 
           </>
         ) : (
           "."
-        )}
+        )}{" "}
+        Unlock any of them right here.
       </p>
 
-      {failed && !data ? (
+      {view?.ready && day && (
+        <div className="rd-bar">
+          <span className="chip chip-on rd-pill">
+            <span>
+              From {yourFeature} · {shortDay(day)} · {plural(n, "company", "companies")}
+            </span>
+            <button type="button" className="rd-pill-x" onClick={onBack} aria-label="Remove this filter and show all companies" title="Show all companies">
+              <IconX size={13} />
+            </button>
+          </span>
+          <div className="rd-days" role="group" aria-label="Pick a day">
+            {[...view.days, ...(view.days.some((d) => d.day === day) ? [] : [{ day, companies: n }])].map((d) => (
+              <button key={d.day} type="button" className={`chip rd-day${d.day === day ? " chip-on" : ""}`} aria-pressed={d.day === day} onClick={() => onDay(d.day)}>
+                {dayLabel(d.day, view.today)}
+                <span className="num rd-day-n" aria-label={`, ${plural(d.companies, "company", "companies")}`}>
+                  {d.companies}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view?.expired && (
+        <p className="rd-note rd-expired" role="status">
+          That day is older than we keep. Here is the latest instead.
+        </p>
+      )}
+
+      {failed && !view ? (
         <p className="rd-note" role="alert">
           {failed}{" "}
-          <button type="button" className="rd-link" onClick={() => void load()}>
+          <button type="button" className="rd-link" onClick={() => reload()}>
             Try again
           </button>
         </p>
-      ) : !data ? (
+      ) : !view ? (
         <p className="rd-note" role="status">
           Looking at what moved
         </p>
-      ) : !data.ready ? (
+      ) : !view.ready ? (
         <section className="tp-card rd-empty">
-          <p className="rd-note">Your radar needs your function and your Ideal Fractional Profile, the companies you want as clients.</p>
+          <p className="rd-note">
+            {YOUR_FEATURE} needs your function and your Ideal Fractional Profile, the companies you want as clients.
+          </p>
           <button type="button" className="btn btn-primary rd-btn" onClick={onProfile}>
             Open Your profile
           </button>
         </section>
-      ) : !day ? (
+      ) : !n ? (
         <section className="tp-card rd-empty">
-          <p className="rd-note">Nothing moved at companies in your profile in the last 24 hours. We never send a day with nothing in it.</p>
+          <p className="rd-note">
+            Nothing moved at companies in your profile {day === view.today ? "today" : `on ${shortDay(day!)}`}. We never send a day with nothing in it.
+          </p>
         </section>
-      ) : day.pro ? (
-        <>
-          <p className="rd-count">
-            <b className="num">{day.cards.length}</b> {day.cards.length === 1 ? "signal" : "signals"} today
-          </p>
-          <ul className="rd-list">
-            {day.cards.map((c) => (
-              <li key={c.id}>
-                <button type="button" className="rd-card rd-card-pro" onClick={() => open(c)}>
-                  <span className={`rd-kind rd-kind-${c.kind}`}>{KIND[c.kind]}</span>
-                  <span className="rd-h">{c.headline}</span>
-                  <span className="rd-facts">{c.facts.join(" · ")}</span>
-                  <span className="rd-why">{c.why}</span>
-                  <span className="rd-go">
-                    {c.locked ? (
-                      <>
-                        <IconLock size={12} /> Unlock it in the record
-                      </>
-                    ) : (
-                      "Open the record and the way in"
-                    )}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
+      ) : phone ? (
+        <div className="rd-cards">
+          <CardList type="companies" rows={rows} me={me} onOpen={openRow} signals={signals} />
+        </div>
       ) : (
-        <>
-          <p className="rd-count">
-            <b className="num">{day.total}</b> {day.total === 1 ? "signal" : "signals"} today
-          </p>
-          <ul className="rd-list">
-            {day.cards.map((c) => (
-              <li key={c.id}>
-                <div className="rd-card rd-card-free" aria-label={`${KIND[c.kind]}: ${c.headline}`}>
-                  <span className={`rd-kind rd-kind-${c.kind}`}>{KIND[c.kind]}</span>
-                  <span className="rd-h">{c.headline}</span>
-                  <span className="rd-facts">{c.facts.join(" · ")}</span>
-                  <span className="rd-why">{c.why}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {day.more > 0 && <p className="rd-more">{plural(day.more, "more signal")} today</p>}
-          <button type="button" className="btn btn-primary rd-btn" onClick={seeWho}>
-            See who
-          </button>
-          {whoNote && (
-            <p className="rd-note rd-who" role="status">
-              Who it is, and the way in, comes with Pro, which isn&apos;t open yet. Every one of these companies is in the table: filter by your profile to find them.
-            </p>
-          )}
-        </>
+        <div className="tp-frame rd-frame">
+          <DataTable type="companies" rows={rows} me={me} selected={null} onOpen={openRow} newSince={null} signals={signals} />
+        </div>
       )}
 
-      {data?.ready && (
+      {view?.ready && (
         <section className="tp-card rd-deliver" aria-labelledby="rd-deliver-h">
           <h2 className="tp-card-h" id="rd-deliver-h">
             Every morning
           </h2>
           <p className="rd-note">
-            {!data.on
-              ? "Your radar is off. This page still lists what moved."
-              : data.email && data.slack
-                ? "Your radar comes by email and in Slack, on mornings when something moved."
-                : data.email
-                  ? "Your radar comes by email, on mornings when something moved."
-                  : data.slack
-                    ? "Your radar comes in Slack, on mornings when something moved."
-                    : "Connect Slack under Integrations to get your radar every morning. Until then it is here."}
+            {!view.on
+              ? `${YOUR_FEATURE} is off. This page still lists what moved.`
+              : view.email && view.slack
+                ? `${YOUR_FEATURE} comes by email and in Slack, on mornings when something moved.`
+                : view.email
+                  ? `${YOUR_FEATURE} comes by email, on mornings when something moved.`
+                  : view.slack
+                    ? `${YOUR_FEATURE} comes in Slack, on mornings when something moved.`
+                    : `Connect Slack under Integrations to get ${yourFeature} every morning. Until then it is here.`}
           </p>
-          <button type="button" role="switch" aria-checked={data.on} className={`tp-ftoggle rd-switch${data.on ? " on" : ""}`} disabled={busy} aria-busy={busy} onClick={() => void flip()}>
+          <button type="button" role="switch" aria-checked={view.on} className={`tp-ftoggle rd-switch${view.on ? " on" : ""}`} disabled={busy} aria-busy={busy} onClick={() => void flip()}>
             <span className="tp-check" aria-hidden>
-              {data.on && <IconCheck size={11} />}
+              {view.on && <IconCheck size={11} />}
             </span>
-            <span className="tp-ftoggle-l">Send me my radar</span>
+            <span className="tp-ftoggle-l">Send me {FEATURE_NAME} emails</span>
           </button>
         </section>
       )}

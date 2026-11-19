@@ -1349,8 +1349,9 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
  * Unlock a locked company for COMPANY_PRICE credits: its name, website and logo, with the job
  * posting (and posted rate) of each open role there. The record's one action until it is unlocked.
  * Pine, because it spends. Short of the price it shows how to earn instead (and counts the wall).
+ * The day's companies from the radar (Radar.tsx) put it on each locked row and card too.
  */
-function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: boolean; roles: boolean; bar?: boolean }) {
+export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: boolean; roles: boolean; bar?: boolean }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);

@@ -283,5 +283,5 @@ export async function sweep(nowIso?: string, origin?: string): Promise<{ sent: n
   }
 }
 
-/** Where an upgrade link goes, from the server's public address. For the radar's teaser. */
+/** Where an upgrade link goes, from the server's public address. */
 export const upgradeLink = (from: string, origin?: string) => upgradeUrl(baseOf(origin), from);

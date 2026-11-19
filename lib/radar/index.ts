@@ -1,54 +1,56 @@
 /**
- * The next-client radar (server only): every morning, each member gets the signals that match
- * their Ideal Fractional Profile, by Slack (when connected) and email, and the app's Radar page
- * lists the last 24 hours'. See lib/radar/types.ts for the signals and lib/radar/present.ts for
- * what each plan reveals.
+ * The radar (server only; members read it by FEATURE_NAME, lib/radar/types.ts): every morning,
+ * each member gets the signals that match their Ideal Fractional Profile, by Slack (when
+ * connected) and email, and the app lists each day's companies. See lib/radar/types.ts for the
+ * signals and lib/radar/present.ts for what a card reveals.
  *
  * When it runs: once a UTC day, on the first page load after 13:00 UTC (maybeRadar, called where
- * the weekly scan's maybeScan is), and when an admin presses "Send radar now" (runRadar with
- * force). RN_RADAR=0 turns the daily run off. A run looks back to the last run (at most 7 days),
- * and a day with no signal for a member sends that member nothing.
+ * the weekly scan's maybeScan is), and when an admin presses "Send now" on Pilot metrics (runRadar
+ * with force). RN_RADAR=0 turns the daily run off. A run looks back to the last run (at most 7
+ * days), and a day with no signal for a member sends that member nothing.
  *
- * Plans (lib/plan.ts): with billing off (RN_BILLING unset) every member gets today's free product,
- * so the free view. Free: one greyed card a day and "N more today", once a UTC day. Pro (and the
- * trial): every card, each with the company when the member's table shows it and a link to its
- * record, and instant delivery: when a scan or a change to a seat makes a signal, Pro members with
- * Slack or a webhook get it in the next alert batch (radarInstant), not the next morning.
+ * Every member gets every signal: a company's name is locked for everyone until they unlock it,
+ * so nothing here is held back by plan. Each card names the company only when the member's table
+ * does, and every link (the cards' and the button) opens the day's companies in the app
+ * (radarPath: /?p=table&sig=<day>), where each locked one unlocks on its row for COMPANY_PRICE.
+ * Plans (lib/plan.ts) change delivery only: Pro (and the trial) get signals at once, when a scan or
+ * a change to a seat makes one, in the next alert batch with Slack or a webhook (radarInstant);
+ * everyone else gets one radar a UTC day. With billing off nobody is on Pro.
  *
- * Never twice: each member's sent signals are kept (State.radar.members[id].sent, 120 days), both
- * the card shown and the ones a free member was only told the count of. A signal is marked sent
- * only when it went out by email or Slack; the Radar page lists whatever matched today.
+ * The day's view (radarView): the companies that went out that UTC day, as kept with the delivery
+ * (State.radar.members[id].days, 14 days), so the email's link opens exactly what the email listed.
+ * A day nothing went out lists the signals that happened that day.
+ *
+ * Never twice: each member's sent signals are kept (State.radar.members[id].sent, 120 days). A
+ * signal is marked sent only when it went out by email or Slack.
  *
  * Product signals (State.signals): radar_sent (one per delivery, where = email, slack, email+slack
- * or instant), radar_opened (the email's pixel, or the Radar page), radar_clicked (a link in the
- * email or Slack, through /api/radar/go, or on the page), radar_off (Your profile, or the email's
+ * or instant), radar_opened (the email's pixel, or the day's view in the app), radar_clicked (a
+ * link in the email or Slack, through /api/radar/go), radar_off (Your profile, or the email's
  * unsubscribe link).
  */
 import { createHmac, timingSafeEqual } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { publicBase } from "../links";
 import { emailEnabled, sendEmail } from "../email";
-import { billingLive, hasPro, upgradeUrl, type PlanRecord } from "../plan";
+import { billingLive, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
 import { detectSignals, fundingCompanies, type RawSignal } from "./signals";
 import { profileOf, signalsFor, icpIsEmpty, type RadarProfile } from "./match";
-import { dayOf, type CardContext } from "./present";
+import { dayOf, rowsOf, viewLine, type CardContext } from "./present";
 import { renderRadarEmail } from "./format";
 import { fundingSource, type FundingSource } from "./sources/funding";
-import { RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_MAX_WINDOW_DAYS, emptyRadar, type RadarDay, type RadarState, type RadarView } from "./types";
+import {
+  RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarPath, type RadarDay, type RadarSentRow, type RadarState, type RadarView,
+} from "./types";
 
 const DAY = 24 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
-
-/**
- * Free's "See who" while billing isn't live: the app's Radar page with the upgrade offer
- * (app/post/TradingPost.tsx reads ?upgrade=radar).
- */
-export const UPGRADE_PATH = "/?upgrade=radar";
-/** Free's "See who": the plans sheet (lib/plan.ts) once billing is live, else UPGRADE_PATH. */
-export const seeWhoPath = (): string => (billingLive() ? upgradeUrl("", "radar") : UPGRADE_PATH);
-/** The Radar page in the app. */
-export const RADAR_PATH = "/?p=radar";
+/** A delivery's companies kept for one day's view: at most this many signals. */
+const DAY_ROWS_MAX = 200;
+/** The UTC day of a time. */
+const dayOfMs = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const dayStart = (day: string) => Date.parse(`${day}T00:00:00.000Z`);
 
 /* ---------- plans and links ---------- */
 
@@ -67,21 +69,40 @@ const sigOk = (memberId: string, sig: unknown) => {
 };
 /** An opaque card id per member: never a record's public id. */
 const cardId = (memberId: string, key: string) => createHmac("sha256", T.ID_KEY).update(`radar-card:${memberId}:${key}`).digest("base64url").slice(0, 12);
+/** An opaque company id per member, for counting companies in a merged post: never a record's public id. */
+const coId = (memberId: string, companyId: string) => createHmac("sha256", T.ID_KEY).update(`radar-co:${memberId}:${companyId}`).digest("base64url").slice(0, 12);
 
-/** A path the click link may send to: the app's root with a query, nothing else (no open redirect). */
+/**
+ * A path the click link may send to: the app's root with a query, nothing else (no open
+ * redirect). The day's companies (/?p=table&sig=2026-11-19) are one.
+ */
 export const safePath = (to: unknown): string | null => {
   const v = String(to ?? "");
   return /^\/(\?[A-Za-z0-9_\-.~%=&:+,]*)?$/.test(v) && v.length <= 300 ? v : null;
 };
 
+/**
+ * Where a sign-in link returns to (POST { emailLink, to }): the page the visitor asked from, a
+ * link to a day's companies say, as more of the sign-in link's query ("&p=table&sig=…"). Only a
+ * path safePath allows, without a sign-in code or invite code of its own. "" when there is none.
+ */
+export function returnQuery(to: unknown): string {
+  const path = safePath(to);
+  if (!path || path === "/") return "";
+  const q = new URLSearchParams(path.slice(2));
+  for (const k of ["k", "ref"]) q.delete(k);
+  const s = q.toString();
+  return s ? `&${s}` : "";
+}
+
 /** The radar email's own unsubscribe link (the weekly email's route, with r=radar and the radar's signature). */
 export const radarUnsubscribeUrl = (base: string, memberId: string) => `${base}/api/table/unsubscribe?m=${encodeURIComponent(T.pubId(memberId))}&s=${radarSig(memberId)}&r=radar`;
 
-/** Absolute, tracked links for one channel: each card's link and See who go through /api/radar/go. */
+/** Absolute, tracked links for one channel: each card's link and the button go through /api/radar/go. */
 function tracked(day: RadarDay, base: string, memberId: string, w: "email" | "slack"): RadarDay {
   const q = `m=${encodeURIComponent(T.pubId(memberId))}&s=${radarSig(memberId)}&w=${w}`;
   const go = (path: string) => `${base}/api/radar/go?${q}&to=${encodeURIComponent(path)}`;
-  return { ...day, seeWho: go(day.seeWho), cards: day.cards.map((c) => ({ ...c, url: go(c.url) })) };
+  return { ...day, url: go(day.url), cards: day.cards.map((c) => ({ ...c, url: go(c.url) })) };
 }
 
 /* ---------- who has a radar ---------- */
@@ -97,18 +118,19 @@ interface Ctx {
 }
 const ctxOf = (seed: Seed, s: State, nowMs: number): Ctx => ({ seed, s, g: T.graph(seed, s), idx: T.memberIndex(seed, s), tracks: T.tracksOf(seed, s), nowMs });
 
-function cardContext(c: Ctx, m: Member): CardContext & { radarPath: string } {
-  const pro = isPro(c.s, m.id, c.nowMs);
+/** A member's cards for one UTC day: every link opens that day's companies. */
+function cardContext(c: Ctx, m: Member, day: string): CardContext {
   return {
-    pro,
     // The member's own table, as a member: a company locked for them stays unnamed (an admin's too).
     visible: (companyId) => !T.identityHidden(c.g, c.s, c.idx, c.tracks, m, companyId, true),
-    recordPath: (companyId) => `/?c=${encodeURIComponent(T.pubId(companyId))}`,
-    seeWho: seeWhoPath(),
     cardId: (key) => cardId(m.id, key),
-    radarPath: RADAR_PATH,
+    coId: (companyId) => coId(m.id, companyId),
+    url: radarPath(day),
   };
 }
+
+/** A signal as the day's view keeps it. */
+const sentRow = (x: RawSignal & { why: string }): RadarSentRow => ({ k: x.key, c: x.companyId, kind: x.kind, l: viewLine(x) });
 
 /** The member's radar profile, or null when the radar can match nothing for them (no function, or no Ideal Fractional Profile). */
 function readyProfile(c: Ctx, m: Member): RadarProfile | null {
@@ -133,41 +155,79 @@ const radarOf = (d: State): RadarState => {
 };
 const sentKeys = (s: State, id: string) => s.radar?.members?.[id]?.sent ?? {};
 
-/** Mark these signals sent to the member, and forget ones older than RADAR_KEEP_DAYS. */
-function markSent(d: State, memberId: string, keys: string[], nowIso: string, via: string) {
+/**
+ * Mark these signals sent to the member, and keep them as the day's companies (for the view the
+ * links open). Forgets sent keys older than RADAR_KEEP_DAYS and days older than RADAR_KEEP_VIEW_DAYS.
+ */
+function markSent(d: State, memberId: string, sigs: (RawSignal & { why: string })[], nowIso: string, via: string) {
   const r = radarOf(d);
   const mine = (r.members[memberId] ??= { sent: {} });
   mine.sent ??= {};
   const nowMs = Date.parse(nowIso);
   for (const [k, at] of Object.entries(mine.sent)) if (nowMs - Date.parse(at) > RADAR_KEEP_DAYS * DAY) delete mine.sent[k];
-  for (const k of keys) mine.sent[k] = nowIso;
+  for (const x of sigs) mine.sent[x.key] = nowIso;
+  const today = nowIso.slice(0, 10);
+  const days = (mine.days ??= {});
+  for (const k of Object.keys(days)) if (!SIG_DAY_RE.test(k) || nowMs - dayStart(k) > RADAR_KEEP_VIEW_DAYS * DAY) delete days[k];
+  const kept = (days[today] ??= []);
+  for (const x of sigs) if (!kept.some((y) => y.k === x.key) && kept.length < DAY_ROWS_MAX) kept.push(sentRow(x));
   mine.lastAt = nowIso;
-  mine.lastCount = keys.length;
+  mine.lastCount = sigs.length;
   mine.lastVia = via;
 }
 
-/* ---------- the Radar page ---------- */
+/* ---------- the day's companies in the app ---------- */
 
-/** GET /api/table?radar=1: the last 24 hours' signals for the member, by their plan. Null when signed out. */
-export async function radarView(token: string | null, nowIso?: string): Promise<RadarView | null> {
+/**
+ * GET /api/table?radar=1[&day=YYYY-MM-DD]: one UTC day's companies for the member, the list the
+ * email's and Slack's links open. A day something went out lists exactly what went out (kept with
+ * the delivery); any other day of the last RADAR_VIEW_DAYS lists the signals that happened that
+ * day and were never sent. Only the member's own signals, and only companies still in the table.
+ * No day asked: the latest day with something in it. A day older than what is kept (or not a
+ * day): the latest, with `expired`. Null when signed out.
+ */
+export async function radarView(token: string | null, dayAsked?: string | null, nowIso?: string): Promise<RadarView | null> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = memberByToken(seed, token, s);
   if (!m) return null;
   const nowMs = Date.parse(nowIso ?? "") || Date.now();
+  const today = dayOfMs(nowMs);
   const c = ctxOf(seed, s, nowMs);
   const fn = functionFor(s, m);
   const p = profileOf(seed, s, m.id, fn);
   const ready = !!p.fn && !icpIsEmpty(p.icp);
-  let day: RadarDay | null = null;
-  if (ready) day = dayOf(signalsFor(detectSignals(seed, s, nowMs - DAY, nowMs), p), cardContext(c, m), "daily");
+  const list = Array.from({ length: RADAR_VIEW_DAYS }, (_, i) => dayOfMs(nowMs - i * DAY));
+  const asked = typeof dayAsked === "string" && SIG_DAY_RE.test(dayAsked) && Number.isFinite(dayStart(dayAsked)) ? dayAsked : null;
+  // A day asked for that is kept (an older email's link) is listed too.
+  const inKeep = !!asked && asked <= today && nowMs - dayStart(asked) <= RADAR_KEEP_VIEW_DAYS * DAY;
+  const byDay = new Map<string, RadarSentRow[]>();
+  if (ready) {
+    const kept = s.radar?.members?.[m.id]?.days ?? {};
+    const keptKeys = new Set(Object.values(kept).flatMap((rows) => rows.map((x) => x.k)));
+    const wanted = inKeep && !list.includes(asked!) ? [...list, asked!] : list;
+    // Days nothing went out: the signals that happened that day (and never went out another day).
+    const fromMs = Math.min(...wanted.map(dayStart));
+    const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p).filter((x) => !keptKeys.has(x.key));
+    for (const d of wanted) {
+      const rows = kept[d]?.length ? kept[d] : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
+      // A company merged away or taken out since is no row.
+      byDay.set(d, rows.filter((x) => c.g.companies.has(x.c)));
+    }
+  }
+  const count = (d: string) => new Set((byDay.get(d) ?? []).map((x) => x.c)).size;
+  const latest = list.find((d) => count(d) > 0) ?? today;
+  const day = inKeep ? asked! : latest;
   return {
     on: !s.profiles[m.id]?.radarOff,
     ready,
     function: p.fn,
     before: p.before,
     beforeFromMember: p.beforeFromMember,
-    billing: billingLive(),
     day,
+    today,
+    ...(dayAsked != null && dayAsked !== "" && !inKeep ? { expired: true } : {}),
+    days: list.map((d) => ({ day: d, companies: count(d) })),
+    rows: rowsOf(byDay.get(day) ?? [], T.pubId).map(({ id, kinds, lines }) => ({ id, kinds, lines })),
     email: emailEnabled() && EMAIL_RE.test(m.email),
     slack: hasDest(s, m.id),
   };
@@ -246,7 +306,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       if (!pro && last && last.slice(0, 10) === today && Date.parse(last) < nowMs) continue;
       const sent = sentKeys(s0, m.id);
       const mine = signalsFor(all, p).filter((x) => !sent[x.key]);
-      const day = dayOf(mine, cardContext(c, m), "daily");
+      const day = dayOf(mine, cardContext(c, m, today), "daily", today);
       if (!day) continue;
       // Someone may have turned it off while the run was going.
       const s1 = await loadState();
@@ -272,7 +332,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       out.members++;
       const where = via.join("+");
       await T.mutate((d) => {
-        markSent(d, m.id, mine.map((x) => x.key), nowIso, where);
+        markSent(d, m.id, mine, nowIso, where);
         const r = radarOf(d);
         r.stats.sent++;
         if (via.includes("email")) r.stats.emails++;
@@ -331,10 +391,10 @@ export async function radarInstant(nowIso?: string): Promise<number> {
     if (!p) continue;
     const sent = sentKeys(s, m.id);
     const mine = signalsFor(all, p).filter((x) => !sent[x.key]);
-    const day = dayOf(mine, cardContext(c, m), "instant");
+    const day = dayOf(mine, cardContext(c, m, now.slice(0, 10)), "instant", now.slice(0, 10));
     if (!day) continue;
     await T.mutate((d) => {
-      markSent(d, m.id, mine.map((x) => x.key), now, "instant");
+      markSent(d, m.id, mine, now, "instant");
       radarOf(d).stats.instant++;
       T.addSignal(d, m.id, "radar_sent", "instant", now);
     });

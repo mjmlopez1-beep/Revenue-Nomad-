@@ -1,6 +1,6 @@
 /**
  * A member's plan: Free, Pro trial, or Pro. The one place that answers "is this member on Pro
- * right now", so billing (lib/billing) and the radar (lib/radar) agree.
+ * right now", so billing (lib/billing) and the radar (lib/radar, instant delivery for Pro) agree.
  *
  * Paid plans only exist while billing is switched on (RN_BILLING=1). With it off, nobody is on a
  * trial or Pro and every member keeps today's free product: nothing is gated.
@@ -12,8 +12,9 @@
  * Pure: no state, no clock of its own. The stored record lives in State.billing.members[memberId]
  * (lib/table.ts); pass it in with the time.
  *
- * For the radar (and anything else that has a Free and a Pro form):
- *   gated(rec, nowMs)        true: show the Free form (the teaser). Never true while billing isn't live.
+ * For anything that has a Free and a Pro form (saved views, benchmarks, the Claude connector):
+ *   gated(rec, nowMs)        true: show the Free form. Never true while billing isn't live. The radar has no
+ *                            Free form: every member gets every signal; Pro gets them at once (hasPro).
  *   upgradeUrl(base, from)   where an upgrade link goes: the app's Plan and billing page with the plans open.
  */
 

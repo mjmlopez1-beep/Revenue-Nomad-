@@ -1,10 +1,14 @@
-/* The Radar page (rd-, app/post/Radar.tsx). Phone first: one column, 44px taps. Cards are a 1px line and a 10px corner. */
+/*
+ * The radar's day (rd-, app/post/Radar.tsx): one day's companies, with the filter pill and the
+ * day switcher over them. Desktop and tablet: the companies table with its own columns (what
+ * happened, and the one button). Phones: one card a company, the button full width, 44px taps.
+ */
 .rd-page {
-  max-width: 720px;
+  max-width: 1120px;
 }
 .rd-lead {
   margin: -6px 0 16px;
-  max-width: 62ch;
+  max-width: 70ch;
   font-size: 16px;
   line-height: 24px;
   color: var(--body-ink);
@@ -32,116 +36,150 @@
   gap: 12px;
   justify-items: start;
 }
-.rd-count {
-  margin: 0 0 8px;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--muted);
-}
-.rd-count b {
-  color: var(--ink);
-  font-weight: 800;
-}
-.rd-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.rd-card {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  min-height: 44px;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  font: inherit;
-  text-align: left;
-  color: var(--body-ink);
-}
-.rd-card-pro {
-  cursor: pointer;
-  transition: border-color var(--t) ease, background-color var(--t) ease;
-}
-.rd-card-pro:hover {
-  border-color: var(--line-strong);
-  background: var(--row-hover);
-}
-.rd-card-pro:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-/* Free: the one card, greyed. No company, no person, no link of its own. */
-.rd-card-free {
-  background: #f1f3f2;
-  border-color: #e7eae8;
-  color: var(--muted);
-}
-.rd-card-free .rd-h {
-  color: var(--muted);
-}
-.rd-kind {
-  justify-self: start;
-  padding: 2px 8px;
-  border-radius: var(--r-chip);
-  background: var(--row-on);
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 700;
-  color: var(--pine);
-}
-.rd-card-free .rd-kind {
-  background: #e4e8e6;
-  color: var(--muted);
-}
-.rd-h {
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 700;
-  color: var(--ink);
-  text-wrap: pretty;
-}
-.rd-facts {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--muted);
-}
-.rd-why {
-  font-size: 14px;
-  line-height: 20px;
-}
-.rd-go {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
-  color: var(--pine);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.rd-more {
-  margin: 12px 0 0;
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 700;
-  color: var(--ink);
-}
 .rd-btn {
   min-height: 44px;
+}
+.rd-expired {
+  margin-bottom: 12px;
+}
+
+/* ---- the filter pill and the days ---- */
+.rd-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0 0 16px;
+}
+.rd-pill {
+  height: 32px;
+  gap: 6px;
+  padding: 0 4px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.rd-pill-x {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.rd-pill-x:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.rd-pill-x:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.rd-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rd-day {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.rd-day:hover {
+  border-color: var(--pine);
+}
+.rd-day-n {
+  margin-left: 2px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.rd-day.chip-on .rd-day-n {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ---- what happened, in a row and on a card ---- */
+.rd-lines {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rd-line {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+  white-space: normal;
+}
+
+/* ---- the table (desktop, tablet) ---- */
+.rd-frame {
+  flex: none;
+  margin-bottom: 24px;
+}
+/* Fitted to the page: the lines wrap, so the button is always on screen. */
+.tp-table.rd-table {
+  width: 100%;
+}
+.rd-table th.w-co {
+  width: 280px;
+}
+.rd-table .rd-w-what {
+  min-width: 260px;
+  width: 60%;
+}
+.rd-table th.w-hq {
+  width: 140px;
+}
+.rd-table .rd-w-act {
+  width: 210px;
+}
+.rd-table td.rd-td-act {
+  text-align: right;
+}
+.rd-table td.rd-td-what {
+  white-space: normal;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.rd-table td.rd-td-act {
+  cursor: default;
+}
+.rd-table td.rd-td-act .btn {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.rd-open {
+  min-width: 88px;
+}
+
+/* ---- the cards (phones) ---- */
+.rd-cards {
+  margin: 0 -16px 24px;
+}
+.tp-pcard.rd-pcard {
+  padding-bottom: 16px;
+}
+.rd-pcard .rd-lines {
+  margin-top: 8px;
+}
+.rd-pcard .rd-line {
+  font-size: 14px;
+  line-height: 20px;
+}
+.rd-pcard-act {
   margin-top: 12px;
 }
-.rd-who {
-  margin-top: 12px;
-  max-width: 62ch;
+.rd-pcard-act .btn {
+  width: 100%;
+  min-height: 44px;
 }
+
+/* ---- delivery ---- */
 .tp-card.rd-deliver {
-  margin-top: 24px;
+  margin-top: 8px;
   display: grid;
   gap: 8px;
 }
@@ -156,12 +194,24 @@
   .rd-btn {
     width: 100%;
   }
-  .rd-card {
-    padding: 12px 14px;
+  .rd-bar {
+    gap: 10px;
+  }
+  .rd-days {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    padding: 0 16px 2px;
+    scrollbar-width: none;
+  }
+  .rd-day {
+    flex: none;
+    height: 36px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .rd-card-pro {
+  .rd-day {
     transition: none;
   }
 }

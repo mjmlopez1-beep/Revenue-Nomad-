@@ -1,19 +1,16 @@
 /**
- * A signal as a member is shown it: the one place that decides what each plan reveals. Pure.
+ * A signal as a member is shown it: the one place that decides what a card reveals. Pure.
  *
- * Free (and everyone while billing is off): no company, no person, no record id. The card reads
- * the size band, industry, state or region and country, the function hired or the role's title
- * (with the company's name and site cut out of it, and dropped for "Fractional <function> role"
- * when a word of the company's name is still in it), and the revenue band. Its link is the
- * upgrade link. A member gets one such card a day, with "N more today".
- *
- * Pro: every card, each linking to the company's record in the app, where the warm path is (who
- * held a seat there and who hired them, behind the same unlocks as always). The company is named
- * only when the member's own table shows it (`visible`, the table's identityHidden rule): a company
- * that is locked for them reads "a company that's hiring now" and the record is where they unlock
- * it. No person is ever named: not the seat holder, not anyone at the company.
+ * Every member gets every signal. A company's name is locked for everyone until they unlock it,
+ * so a card names the company only when the member's own table shows it (`visible`, the table's
+ * identityHidden rule). A company locked for them reads by its free facts: the size band,
+ * industry, state or region and country, the function hired or the role's title (with the
+ * company's name and site cut out of it, and dropped for "Fractional <function> role" when a word
+ * of the company's name is still in it), and the revenue band. No person is ever named: not the
+ * seat holder, not anyone at the company. No record id either: every card links to the day's
+ * companies in the app (radarPath), where each locked one unlocks right on its row.
  */
-import type { RadarCard, RadarDay } from "./types";
+import type { RadarCard, RadarDay, RadarKind } from "./types";
 import type { RawSignal } from "./signals";
 
 const SHORT_COUNTRY: Record<string, string> = { "United States": "US", "United Kingdom": "UK" };
@@ -43,7 +40,7 @@ const nameWords = (name: string) =>
 /** Words common in company names and in titles alike: their presence in a title gives nothing away. */
 const GENERIC = new Set(["group", "company", "holdings", "global", "partners", "solutions", "services", "systems", "technologies", "technology", "labs", "health", "capital", "ventures", "consulting", "marketing", "sales", "growth", "revenue", "finance", "operations", "people", "product", "brands", "digital", "media", "software", "data", "fractional", "head", "lead", "chief", "officer", "director", "president"]);
 
-/** A role title safe for the free view: no word of the company's name left in it. */
+/** A role title safe for a company the member can't see: no word of the company's name left in it. */
 export function safeTitle(title: string | null, companyName: string, fn: string | null): string {
   const fallback = fn ? `Fractional ${fn} role` : "Fractional role";
   if (!title) return fallback;
@@ -52,27 +49,24 @@ export function safeTitle(title: string | null, companyName: string, fn: string 
 }
 
 export interface CardContext {
-  pro: boolean;
-  /** The member's table shows this company (identityHidden is false for them). Asked only for Pro. */
+  /** The member's table shows this company (identityHidden is false for them). */
   visible: (companyId: string) => boolean;
-  /** The company's record in the app ("/?c=<public id>"). Asked only for Pro. */
-  recordPath: (companyId: string) => string;
-  /** The upgrade link (Free's "See who"). */
-  seeWho: string;
   /** An opaque id for a signal key, per member. */
   cardId: (key: string) => string;
+  /** An opaque id for a company, per member (never its public id). */
+  coId: (companyId: string) => string;
+  /** The day's companies in the app (radarPath). */
+  url: string;
 }
 
 /** "a Software company", "an E-commerce company", or "a company in your profile". */
 const someCompany = (industry: string | null) => (industry ? `${an(industry)} ${industry} company` : "a company in your profile");
 
 export function cardOf(sig: RawSignal & { why: string }, ctx: CardContext): RadarCard {
-  const pro = ctx.pro;
-  const seen = pro && ctx.visible(sig.companyId);
-  const locked = pro && !seen;
-  const who = seen ? sig.co.name : locked && sig.kind === "role" ? "a company that's hiring now" : someCompany(sig.co.industry);
+  const seen = ctx.visible(sig.companyId);
+  const who = seen ? sig.co.name : sig.kind === "role" ? "a company that's hiring now" : someCompany(sig.co.industry);
   const fn = sig.fn ?? "";
-  const title = pro ? sig.title || `Fractional ${fn} role` : safeTitle(sig.title, sig.co.name, sig.fn);
+  const title = seen ? sig.title || `Fractional ${fn} role` : safeTitle(sig.title, sig.co.name, sig.fn);
   let headline: string;
   switch (sig.kind) {
     case "adjacent":
@@ -90,20 +84,51 @@ export function cardOf(sig: RawSignal & { why: string }, ctx: CardContext): Rada
   }
   return {
     id: ctx.cardId(sig.key),
+    co: ctx.coId(sig.companyId),
     kind: sig.kind,
     headline,
     facts: factsOf(sig.co),
     why: sig.why,
     company: seen ? sig.co.name : null,
-    ...(locked ? { locked: true } : {}),
-    url: pro ? ctx.recordPath(sig.companyId) : ctx.seeWho,
+    ...(seen ? {} : { locked: true }),
+    url: ctx.url,
     at: sig.at,
   };
 }
 
-/** One delivery: every card for Pro; for Free the first card and "N more". Null with no signals (a nothing-day is never sent). */
-export function dayOf(sigs: (RawSignal & { why: string })[], ctx: CardContext & { radarPath: string }, mode: RadarDay["mode"]): RadarDay | null {
+/**
+ * The line a company's row in the day's view carries for one signal. It never names the company
+ * (the row does, when the member can see it) nor a person: "Hired a fractional Finance leader ·
+ * Finance usually comes before Sales, and they have no fractional Sales yet".
+ */
+export function viewLine(sig: RawSignal & { why: string }): string {
+  const fn = sig.fn ?? "";
+  switch (sig.kind) {
+    case "adjacent":
+      return `Hired a fractional ${fn} leader · ${sig.why}`;
+    case "role":
+      return `New open role: ${safeTitle(sig.title, sig.co.name, sig.fn)} · In your function`;
+    case "seat":
+      return `A fractional ${fn} seat just ended · A seat like yours`;
+    case "funding":
+      return `Raised ${sig.round ? `a ${sig.round}` : "money"}${sig.amount ? ` (${sig.amount})` : ""} · Money in usually means hiring`;
+  }
+}
+
+/** One delivery: every card, and the day's companies. Null with no signals (a nothing-day is never sent). */
+export function dayOf(sigs: (RawSignal & { why: string })[], ctx: CardContext, mode: RadarDay["mode"], day: string): RadarDay | null {
   if (!sigs.length) return null;
-  if (ctx.pro) return { pro: true, cards: sigs.map((x) => cardOf(x, ctx)), more: 0, total: sigs.length, seeWho: ctx.radarPath, mode };
-  return { pro: false, cards: [cardOf(sigs[0], ctx)], more: sigs.length - 1, total: sigs.length, seeWho: ctx.seeWho, mode };
+  return { cards: sigs.map((x) => cardOf(x, ctx)), total: sigs.length, companies: new Set(sigs.map((x) => x.companyId)).size, day, url: ctx.url, mode };
+}
+
+/** What a day's view lists, from the kept rows: one entry a company, in the order they came, its lines in order. */
+export function rowsOf(sent: { c: string; kind: RadarKind; l: string }[], pub: (companyId: string) => string): { id: string; c: string; kinds: RadarKind[]; lines: string[] }[] {
+  const by = new Map<string, { id: string; c: string; kinds: RadarKind[]; lines: string[] }>();
+  for (const x of sent) {
+    let r = by.get(x.c);
+    if (!r) by.set(x.c, (r = { id: pub(x.c), c: x.c, kinds: [], lines: [] }));
+    if (!r.kinds.includes(x.kind)) r.kinds.push(x.kind);
+    if (!r.lines.includes(x.l)) r.lines.push(x.l);
+  }
+  return [...by.values()];
 }

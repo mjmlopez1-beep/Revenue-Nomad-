@@ -1,15 +1,18 @@
 /**
- * Checks of the next-client radar (lib/radar), without a server, Slack, email or a network.
+ * Checks of the radar (lib/radar; members read it as FEATURE_NAME), without a server, Slack, email or a network.
  *
  *   npx tsx scripts/test-radar.mts
  *
  * Runs on a made-up seed in a temporary data dir. fetch is replaced, so every email (Resend's API)
  * and every Slack post is caught here, and nothing leaves the machine. The clock moves forward
  * where a rule is about days. Covers: each signal type, Ideal Fractional Profile matching, the
- * functions that come before the member's, never the same signal twice, a free view that never
- * names a company or a person (every output is scanned for the names on the seed), the Pro view,
- * days with nothing skipped, the switch and the email's unsubscribe link, the Slack and email
- * formats, the funding plumbing, the tracked links, and billing off reading as free.
+ * functions that come before the member's, never the same signal twice, every signal listed for
+ * every member with a company named only when the member already knows it (every output is
+ * scanned for the names on the seed) and no Pro-only teaser, every link opening the day's
+ * companies (/?p=table&sig=<day>), the day's view listing only the member's own companies and
+ * unlocking one for 2 credits, instant delivery for Pro, days with nothing skipped, the switch
+ * and the email's unsubscribe link, the Slack and email formats, the funding plumbing, the
+ * tracked links and the sign-in link that comes back to the day.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -260,41 +263,58 @@ async function main() {
   check("a member with no function gets nothing", !match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_nofn", null)).length);
   check("a member with no profile gets nothing", !match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_noicp", "Sales")).length);
 
-  /* ---------- billing off: the free view for everyone ---------- */
-  console.log("\nThe morning run, billing off (everyone free)");
+  /* ---------- the morning run: every member gets every signal ---------- */
+  console.log("\nThe morning run (billing off: nobody is on Pro, and nothing is held back)");
   check("billing is off", !plan.billingOn());
+  const day0 = nowIso().slice(0, 10);
+  const dayPath = types.radarPath(day0);
+  check("the day's link is the Companies list with the day", dayPath === `/?p=table&sig=${day0}`, dayPath);
+  check("the click link's rule lets it through", radar.safePath(dayPath) === dayPath);
   const run1 = await radar.runRadar({ now: nowIso() });
   await settle();
   check("the run went out", run1.ran && run1.signals >= 7, run1);
   const salMail = mails("sal.starter@example.com");
   check("Sal gets one email", salMail.length === 1, mails().map((x) => x.body.to));
   const sm = salMail[0]?.body as { subject: string; text: string; html: string; headers?: Record<string, string> };
-  check("its subject leads with the role and says how many more", /^New open role: Fractional VP Sales, at a SaaS company \(\+2 more today\)$/.test(sm?.subject ?? ""), sm?.subject);
-  check("the free email shows one greyed card", (sm?.html.match(/#F1F3F2/g) ?? []).length === 2 && /2 more today/.test(sm.html), sm?.html.slice(0, 200));
-  check("the card has the size band, industry, region and revenue band", /11–50 people · SaaS · Colorado, US · \$1M–\$5M revenue/.test(sm?.text ?? ""), sm?.text);
-  check("the button is See who, to the upgrade link", /See who/.test(sm?.html ?? "") && sm.html.includes(encodeURIComponent("/?upgrade=radar")), sm?.html);
-  check("the free email names no company and no person", !named(sm).length, named(sm));
-  check("the free email carries no record id", !pubLeaks(sm).length, pubLeaks(sm));
+  check("its subject names the feature and counts the companies", sm?.subject === `${types.YOUR_FEATURE}: 2 companies in your profile moved`, sm?.subject);
+  check("the email's heading says the same", (sm?.html ?? "").includes(`>${types.YOUR_FEATURE}: 2 companies in your profile moved</p>`));
+  check(
+    "every signal of the day is listed, each anonymous",
+    /New open role: Fractional VP Sales, at a company that's hiring now/.test(sm?.text ?? "") && /A fractional Sales seat just ended at a SaaS company/.test(sm.text) && /A SaaS company just hired a fractional Marketing leader/.test(sm.text),
+    sm?.text,
+  );
+  check("a card has the size band, industry, region and revenue band", /11–50 people · SaaS · Colorado, US · \$1M–\$5M revenue/.test(sm?.text ?? ""), sm?.text);
+  check("each locked one says it unlocks for 2 credits", (sm?.text.match(/unlock it in Merlin for 2 credits/g) ?? []).length === 3, sm?.text);
+  const salLinks = (sm?.html.match(/<a href="[^"]*"/g) ?? []).filter((x) => x.includes("/api/radar/go"));
+  check("the cards and the button all open the day's companies (tracked)", salLinks.length === 4 && salLinks.every((x) => x.includes(encodeURIComponent(dayPath))), salLinks);
+  check("the button says how many companies", /See the 2 companies/.test(sm?.html ?? "") && /See the 2 companies/.test(sm.text));
+  check("no Pro-only teaser: no See who, no count of the rest, no Pro", !/See who|more today|comes with Pro|isn.t open yet|upgrade=radar/i.test(JSON.stringify(sm)), sm?.text);
+  check("the email names no company and no person", !named(sm).length, named(sm));
+  check("the email carries no record id", !pubLeaks(sm).length, pubLeaks(sm));
   check("the unsubscribe link is the radar's own, as a header too", /r=radar/.test(sm?.text ?? "") && /r=radar/.test(String(sm?.headers?.["List-Unsubscribe"] ?? "")), sm?.headers);
+  check("its words are the feature's", sm?.html.includes(`Unsubscribe from ${types.FEATURE_NAME} emails`) && sm.text.includes(`To stop the ${types.FEATURE_NAME} emails`));
   check("the email counts opens with a pixel", /\/api\/radar\/open\?m=/.test(sm?.html ?? ""));
   const salPost = radarPosts(SLACK_SAL);
-  check("Sal gets one radar post in Slack", salPost.length === 1, outbox.filter((x) => x.url === SLACK_SAL).map((x) => x.raw));
+  check("Sal gets one post in Slack", salPost.length === 1, outbox.filter((x) => x.url === SLACK_SAL).map((x) => x.raw));
   const sp = salPost[0]?.body as { blocks: { type: string; elements?: { text: { text: string }; url: string }[] }[] };
   const button = sp?.blocks?.find((b) => b.type === "actions")?.elements?.[0];
-  check("the Slack post's button is See who", button?.text.text === "See who" && button.url.includes(encodeURIComponent("/?upgrade=radar")), button);
+  check("the Slack post's button opens the day's companies", button?.text.text === "See the 2 companies" && button.url.includes(encodeURIComponent(dayPath)), button);
+  check("the Slack post names the feature and lists all three", (salPost[0]?.raw ?? "").includes(`${types.YOUR_FEATURE} · 2 companies moved`) && /Fractional VP Sales/.test(salPost[0].raw) && /seat just ended/.test(salPost[0].raw) && /Marketing leader/.test(salPost[0].raw), salPost[0]?.raw);
   check("the Slack post names no company, no person, no record", !named(salPost[0]?.raw ?? "").length && !pubLeaks(salPost[0]?.raw ?? "").length, salPost[0]?.raw);
-  check("the Slack post says 2 more today", /2 more today/.test(salPost[0]?.raw ?? ""));
+  check("and no teaser", !/See who|more today/.test(salPost[0]?.raw ?? ""));
   const moMail = mails("mo.marketer@example.com")[0]?.body as { subject: string; html: string; text: string } | undefined;
-  check("Mo gets their one card and 1 more", !!moMail && /\(\+1 more today\)/.test(moMail.subject), moMail?.subject);
+  check("Mo gets both of his signals", !!moMail && moMail.subject === `${types.YOUR_FEATURE}: 2 companies in your profile moved` && /Fractional Head of Marketing/.test(moMail.text) && /fractional Sales leader/.test(moMail.text), moMail?.subject);
   check("Mo's email names nothing", !named(moMail).length && !pubLeaks(moMail).length, named(moMail));
-  const piaMail = mails("pia.profit@example.com")[0]?.body as { subject: string; html: string } | undefined;
-  check("billing off: a member with a Pro record still gets the free view", !!piaMail && /See who/.test(piaMail.html) && !named(piaMail).length, piaMail?.subject);
-  check("a member who turned the radar off gets nothing", !mails("otto.off@example.com").length);
+  const piaMail = mails("pia.profit@example.com")[0]?.body as { subject: string; html: string; text: string } | undefined;
+  check("a company the member already unlocked is named, with nothing to unlock", !!piaMail && /Fox Freight just hired a fractional Sales leader/.test(piaMail.text) && (piaMail.text.match(/unlock it in Merlin/g) ?? []).length === 1, piaMail?.text);
+  check("Pia's email names no company she can't see", !named(piaMail, NAMES.filter((x) => x !== "Fox Freight")).length, named(piaMail));
+  check("a member who turned it off gets nothing", !mails("otto.off@example.com").length);
   check("no function or no profile: nothing", !mails("nora.none@example.com").length && !mails("ned.noprofile@example.com").length);
   check("the admin, with nothing matching, gets nothing", !mails("ada.admin@example.com").length);
   const sA = await state();
   check("radar_sent is counted once per member delivered", sA.signals.filter((x) => x.name === "radar_sent").length === run1.members && run1.members === 3, run1);
-  check("every signal in the ping is marked sent, the counted ones too", Object.keys(sA.radar?.members.mem_sal?.sent ?? {}).length === 3, sA.radar?.members.mem_sal);
+  check("every signal in the email is marked sent", Object.keys(sA.radar?.members.mem_sal?.sent ?? {}).length === 3, sA.radar?.members.mem_sal);
+  check("the day's companies are kept with the delivery", sA.radar?.members.mem_sal?.days?.[day0]?.length === 3 && new Set(sA.radar.members.mem_sal.days[day0].map((x) => x.c)).size === 2, sA.radar?.members.mem_sal?.days);
   check("Sal's delivery went by email and Slack", sA.signals.some((x) => x.memberId === "mem_sal" && x.name === "radar_sent" && x.where === "email+slack"));
 
   console.log("\nOnce a day, never twice");
@@ -303,7 +323,7 @@ async function main() {
   check("a second run the same day doesn't run", !again.ran, again);
   const forced = await radar.runRadar({ now: nowIso(), force: true });
   await settle();
-  check("Send radar now runs, but a free member still gets one radar a day", forced.ran && !mails().length && !radarPosts(SLACK_SAL).length, { forced, n: mails().length });
+  check("Send now runs, but a member not on Pro still gets one a day", forced.ran && !mails().length && !radarPosts(SLACK_SAL).length, { forced, n: mails().length });
   skew += DAY;
   clear();
   const quiet = await radar.runRadar({ now: nowIso() });
@@ -317,21 +337,27 @@ async function main() {
   });
   skew += DAY;
   clear();
+  const day2 = nowIso().slice(0, 10);
   const run3 = await radar.runRadar({ now: nowIso() });
   await settle();
   const sm3 = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
-  check("only the new signal goes out, nothing sent before", !!sm3 && !/more today/.test(sm3.subject) && /just hired a fractional RevOps leader/.test(sm3.subject), { run3, subject: sm3?.subject });
+  check(
+    "only the new signal goes out, nothing sent before",
+    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /just hired a fractional RevOps leader/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
+    { run3, subject: sm3?.subject },
+  );
+  check("its link opens that day", !!sm3 && sm3.text.includes(encodeURIComponent(types.radarPath(day2))));
   const sentSal = Object.keys((await state()).radar?.members.mem_sal?.sent ?? {});
   check("no signal was sent to a member twice", sentSal.length === 4 && new Set(sentSal).size === 4, sentSal);
 
   console.log("\nThe switch and the unsubscribe link");
   const off = await t.perform("tok-sal-0001", { type: "settings", radar: false }, "https://post.example.com");
-  check("Your profile turns it off", /radar is off/i.test(off.message) && (await state()).profiles.mem_sal.radarOff === true, off);
+  check("Your profile turns it off", off.message.startsWith(`${types.YOUR_FEATURE} is off`) && (await state()).profiles.mem_sal.radarOff === true, off);
   check("radar_off is recorded", (await state()).signals.some((x) => x.memberId === "mem_sal" && x.name === "radar_off" && x.where === "profile"));
   const vOff = await t.buildView("tok-sal-0001");
   check("the view says it's off", vOff.me?.radar === false);
-  await t.perform("tok-sal-0001", { type: "settings", radar: true }, "https://post.example.com");
-  check("and on again", !(await state()).profiles.mem_sal.radarOff);
+  const on = await t.perform("tok-sal-0001", { type: "settings", radar: true }, "https://post.example.com");
+  check("and on again", !(await state()).profiles.mem_sal.radarOff && on.message.startsWith(`${types.YOUR_FEATURE} is on`), on);
   const msig = radar.radarSig("mem_mo");
   check("a link with a wrong signature does nothing", !(await radar.unsubscribeRadar(pub("mem_mo"), "nope")) && !(await radar.unsubscribeRadar("nobody", msig)) && !(await state()).profiles.mem_mo.radarOff);
   check("the radar's link isn't the weekly email's (a different signature)", !(await radar.unsubscribeRadar(pub("mem_mo"), "x".repeat(msig.length))));
@@ -350,29 +376,51 @@ async function main() {
   check("after unsubscribing, no radar email", !mails("mo.marketer@example.com").length, mails().map((x) => x.body.to));
 
   console.log("\nTracked links");
-  const go = await radar.radarClicked(pub("mem_sal"), radar.radarSig("mem_sal"), "email", "/?upgrade=radar");
-  check("a click goes to its path in the app", go === "/?upgrade=radar");
+  const go = await radar.radarClicked(pub("mem_sal"), radar.radarSig("mem_sal"), "email", dayPath);
+  check("a click goes to the day's companies", go === dayPath, go);
+  check("an older email's link still goes where it went", (await radar.radarClicked(pub("mem_sal"), radar.radarSig("mem_sal"), "email", "/?upgrade=radar")) === "/?upgrade=radar");
   check("radar_clicked is recorded", (await state()).signals.some((x) => x.memberId === "mem_sal" && x.name === "radar_clicked" && x.where === "email"));
   check("a link never sends anywhere else", (await radar.radarClicked(pub("mem_sal"), radar.radarSig("mem_sal"), "email", "https://evil.example/")) === null && radar.safePath("//evil.example") === null && radar.safePath("/api/table?export=1") === null);
   await radar.radarOpened(pub("mem_sal"), radar.radarSig("mem_sal"));
   await radar.radarOpened(pub("mem_sal"), radar.radarSig("mem_sal"));
   check("an open is counted once a day", (await state()).signals.filter((x) => x.memberId === "mem_sal" && x.name === "radar_opened").length === 1);
+  check("a sign-in link comes back to the day", radar.returnQuery(dayPath) === `&p=table&sig=${day0}` && radar.returnQuery("/?k=abc&sig=2026-01-02&ref=x") === "&sig=2026-01-02");
+  check("and nowhere else", radar.returnQuery("https://evil.example/?sig=1") === "" && radar.returnQuery("//evil.example") === "" && radar.returnQuery("/") === "" && radar.returnQuery(undefined) === "");
 
-  /* ---------- the Radar page ---------- */
-  console.log("\nThe Radar page");
-  // Back to the first day, so the page's last 24 hours hold the first signals.
-  const firstDay = new Date(t0 + 10 * 60_000).toISOString();
-  const page = await radar.radarView("tok-sal-0001", firstDay);
-  check("the page lists today's signals, free: one card and a count", !!page?.day && !page.day.pro && page.day.cards.length === 1 && page.day.more === 2, page?.day);
-  check("the free page names no company or person and carries no record id", !named(page).length && !pubLeaks(page).length, { names: named(page), ids: pubLeaks(page) });
-  check("the free card links to the upgrade path", page?.day?.cards[0].url === "/?upgrade=radar" && page.day.seeWho === "/?upgrade=radar");
+  /* ---------- the day's companies in the app ---------- */
+  console.log("\nThe day's companies (the page the links open)");
+  const page = await radar.radarView("tok-sal-0001", day0, nowIso());
+  const ids = (page?.rows ?? []).map((x) => x.id);
+  check("the email's day lists exactly the companies the email named, open role first", ids.join() === [pub("c_beta"), pub("c_acme")].join(), { ids, want: [pub("c_beta"), pub("c_acme")] });
+  check("every one of its signals is a line", (page?.rows[0]?.lines.length ?? 0) === 2 && page?.rows[1]?.lines.length === 1, page?.rows);
+  check("a line says what happened and why", page?.rows[1]?.lines[0] === "Hired a fractional Marketing leader · Marketing usually comes before Sales, and they have no fractional Sales yet", page?.rows[1]?.lines);
+  check("the view names no company and no person", !named(page).length, named(page));
+  check("and carries only the public ids of the member's own signal companies", pubLeaks(page).every((x) => x === pub("c_beta") || x === pub("c_acme")), pubLeaks(page));
+  check("the days: the last 7, today first, each with its companies", page?.days.length === 7 && page.days[0].day === page.today && page.days.find((d) => d.day === day0)?.companies === 2 && page.days.find((d) => d.day === day2)?.companies === 1, page?.days);
   check("the page says what it watches", page?.function === "Sales" && page.before.join() === "Marketing,RevOps,Finance" && page.ready && page.on && page.email && page.slack, page);
-  const noProfile = await radar.radarView("tok-noicp-0001", firstDay);
-  check("a member without a profile is told what it needs", noProfile?.ready === false && noProfile.day === null);
+  const latest = await radar.radarView("tok-sal-0001", null, nowIso());
+  check("no day asked: the latest day with something in it", latest?.day === day2 && latest.rows.map((x) => x.id).join() === pub("c_acme"), latest?.day);
+  const old = await radar.radarView("tok-sal-0001", "2020-01-01", nowIso());
+  check("a day older than what is kept: the latest, and it says so", !!old?.expired && old.day === day2, old);
+  check("a day that isn't one: the same", !!(await radar.radarView("tok-sal-0001", "../../x", nowIso()))?.expired);
+  const moPage = await radar.radarView("tok-mo-0001", day0, nowIso());
+  check("another member's link with the same day lists only their own companies", (moPage?.rows ?? []).every((x) => x.id !== pub("c_beta")) && (moPage?.rows.length ?? 0) === 2, moPage?.rows);
+  const ottoPage = await radar.radarView("tok-off-0001", day0, nowIso());
+  check("a member nothing went out to still sees the signals of each day", (ottoPage?.days ?? []).some((d) => d.companies > 0) && named(ottoPage).length === 0, ottoPage?.days);
+  const noProfile = await radar.radarView("tok-noicp-0001", day0, nowIso());
+  check("a member without a profile is told what it needs", noProfile?.ready === false && noProfile.rows.length === 0);
   check("signed out: nothing", (await radar.radarView(null)) === null);
+  // Unlock from the view: the same unlock as anywhere, 2 credits, and the company is named for them from then on.
+  const before = (await t.buildView("tok-sal-0001")).me!.credits;
+  const un = await t.perform("tok-sal-0001", { type: "unlock", entity: "company", id: page!.rows[0].id, field: "identity" }, "https://post.example.com");
+  const after = (await t.buildView("tok-sal-0001")).me!.credits;
+  check("unlocking a company from the view costs 2 credits", before - after === 2, { before, after, message: un.message });
+  const betaNow = (await t.buildView("tok-sal-0001")).companies.find((x) => x.id === page!.rows[0].id);
+  check("and the table names it now", !!betaNow && !betaNow.hidden && betaNow.name === "Beta Labs", betaNow?.name);
+  check("the day still lists it, unnamed in its lines", (await radar.radarView("tok-sal-0001", day0, nowIso()))?.rows[0]?.id === pub("c_beta") && !named((await radar.radarView("tok-sal-0001", day0, nowIso()))?.rows).length);
 
   /* ---------- Pro ---------- */
-  console.log("\nPro (billing on)");
+  console.log("\nPro (billing on): the same signals, at once");
   // Billing is live only with the Stripe settings too (lib/plan.ts billingLive). Made-up values: nothing here calls Stripe.
   process.env.RN_BILLING = "1";
   for (const k of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR"]) process.env[k] = `test_${k.toLowerCase()}`;
@@ -380,17 +428,9 @@ async function main() {
     (d as unknown as { billing: unknown }).billing = { members: { mem_pro: { proUntil: new Date(t0 + 60 * DAY).toISOString(), interval: "month" } } };
   });
   check("Pia is on Pro, Sal isn't", radar.isPro(await state(), "mem_pro", Date.now()) && !radar.isPro(await state(), "mem_sal", Date.now()));
-  const proPage = await radar.radarView("tok-pro-0001", firstDay);
-  const proCards = proPage?.day?.cards ?? [];
-  check("Pro sees every card", !!proPage?.day?.pro && proCards.length === 2 && proPage.day.more === 0, proPage?.day);
-  const fox = proCards.find((c) => c.kind === "adjacent");
-  check("a company the member's table shows is named, with its record", fox?.company === "Fox Freight" && fox.headline === "Fox Freight just hired a fractional Sales leader" && fox.url === `/?c=${encodeURIComponent(pub("c_fox"))}`, fox);
-  const cfo = proCards.find((c) => c.kind === "role");
-  check("a company locked for the member stays unnamed, and the record is where they unlock it", !!cfo?.locked && cfo.company === null && /a company that's hiring now/.test(cfo.headline) && cfo.url === `/?c=${encodeURIComponent(pub("c_beta"))}`, cfo);
-  check("Pro never names a hidden company or a person", !named(proPage, NAMES.filter((x) => x !== "Fox Freight")).length, named(proPage));
-  const proMail = fmt.renderRadarEmail({ name: "Pia Profit", day: proPage!.day!, unsubscribeUrl: "https://post.example.com/u", appUrl: "https://post.example.com" });
-  check("the Pro email lists every card with its record and the lock", (proMail.html.match(/<a href="\/\?c=/g) ?? []).length === 2 && /Locked for you/.test(proMail.html) && /See your radar/.test(proMail.html), proMail.subject);
-  check("the Pro email's subject counts them", proMail.subject === "2 new signals on your radar today", proMail.subject);
+  const piaFree = await radar.radarView("tok-pro-0001", day0, nowIso());
+  const salPro = await radar.radarView("tok-sal-0001", day0, nowIso());
+  check("Pro and Free see the same day the same way", piaFree?.rows.length === 2 && salPro?.rows.length === 2 && !("pro" in (piaFree as object)), { pia: piaFree?.rows, sal: salPro?.rows });
 
   console.log("\nPro gets it at once");
   clear();
@@ -404,8 +444,10 @@ async function main() {
   check("a scan's new Finance role reaches Pro in Slack in the next batch", proPosts.length === 1 && /New open role: Fractional Finance Director/.test(proPosts[0].raw), outbox.map((x) => `${x.url} ${x.raw.slice(0, 160)}`));
   // Pia unlocked Fox Freight before: a company a member unlocked stays theirs, a new open role there too.
   check("the company of a new open role is named for a member who unlocked it before", /Fox Freight/.test(proPosts[0]?.raw ?? ""), proPosts[0]?.raw);
-  check("a free member gets nothing at once", radarPosts(SLACK_SAL).length === sal0);
+  check("its button opens that day's companies", (proPosts[0]?.raw ?? "").includes(encodeURIComponent(types.radarPath(instantAt.slice(0, 10)))), proPosts[0]?.raw);
+  check("a member not on Pro gets nothing at once", radarPosts(SLACK_SAL).length === sal0);
   check("radar_sent where instant", (await state()).signals.some((x) => x.memberId === "mem_pro" && x.name === "radar_sent" && x.where === "instant"));
+  check("the instant signal is in that day's companies", (await radar.radarView("tok-pro-0001", instantAt.slice(0, 10), nowIso()))?.rows.some((x) => x.id === pub("c_fox")));
   skew += DAY;
   clear();
   await radar.runRadar({ now: nowIso() });
@@ -414,33 +456,36 @@ async function main() {
   check("the next morning doesn't send Pro the instant signal again", !piaNext || !/Finance Director/.test(piaNext.text), piaNext?.text);
   delete process.env.RN_BILLING;
   for (const k of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR"]) delete process.env[k];
-  check("billing off again: Pro reads as free", !radar.isPro(await state(), "mem_pro", Date.now()) && !(await radar.radarView("tok-pro-0001", firstDay))?.day?.pro);
+  check("billing off again: Pro reads as free", !radar.isPro(await state(), "mem_pro", Date.now()));
   check("billing off: nothing goes out at once", (await radar.radarInstant()) === 0);
 
   /* ---------- formats ---------- */
   console.log("\nSlack and email formats");
+  const VIEW = "https://post.example.com/day";
   const card = (i: number, o: Partial<import("../lib/radar/types").RadarCard> = {}) => ({
-    id: `id${i}`, kind: "adjacent" as const, headline: `Company ${i} just hired a fractional Marketing leader`, facts: ["51–200 people", "SaaS", "Texas, US"], why: "Marketing usually comes before Sales", company: `Company ${i}`, url: `https://post.example.com/go/${i}`, at: nowIso(), ...o,
+    id: `id${i}`, co: `co${i}`, kind: "adjacent" as const, headline: `A SaaS company just hired a fractional Marketing leader ${i}`, facts: ["51–200 people", "SaaS", "Texas, US"], why: "Marketing usually comes before Sales", company: null, locked: true, url: VIEW, at: nowIso(), ...o,
   });
-  const proDay = { pro: true, cards: Array.from({ length: 7 }, (_, i) => card(i)), more: 0, total: 7, seeWho: "https://post.example.com/r", mode: "daily" as const };
-  const a7 = fmt.radarAlert([{ kind: "radar", at: nowIso(), day: proDay }], "https://post.example.com")!;
-  check("Pro in Slack: five cards and 'And 2 more', a button to the radar", a7.lines.length === 6 && /And 2 more/.test(a7.lines[5]) && a7.button === "See your radar" && a7.url === "https://post.example.com/r", a7);
-  const one = fmt.radarAlert([{ kind: "radar", at: nowIso(), day: { ...proDay, cards: [card(1, { locked: true })], total: 1 } }], "")!;
-  check("Pro, one locked card: Unlock in Merlin, to its record", one.button === "Unlock in Merlin" && one.url === "https://post.example.com/go/1", one);
+  const dayOf = (cards: ReturnType<typeof card>[], mode: "daily" | "instant" = "daily") => ({ cards, total: cards.length, companies: new Set(cards.map((c) => c.co)).size, day: day0, url: VIEW, mode });
+  const a7 = fmt.radarAlert([{ kind: "radar", at: nowIso(), day: dayOf(Array.from({ length: 7 }, (_, i) => card(i))) }], "https://post.example.com")!;
+  check("Slack: five cards and 'And 2 more', a button to the day's companies", a7.lines.length === 6 && /And 2 more signals/.test(a7.lines[5]) && a7.button === "See the 7 companies" && a7.url === VIEW, a7);
+  check("Slack's headline names the feature", a7.headline === `${types.YOUR_FEATURE} · 7 companies moved`, a7.headline);
+  const one = fmt.radarAlert([{ kind: "radar", at: nowIso(), day: dayOf([card(1)]) }], "")!;
+  check("one card: See the company, to the day", one.button === "See the company" && one.url === VIEW && one.headline === `${types.YOUR_FEATURE} · 1 company moved`, one);
   const merged = fmt.mergeDays([
-    { kind: "radar", at: nowIso(), day: { ...proDay, cards: [card(1)], total: 1, mode: "instant" } },
-    { kind: "radar", at: nowIso(), day: { ...proDay, cards: [card(1), card(2)], total: 2, mode: "instant" } },
+    { kind: "radar", at: nowIso(), day: dayOf([card(1)], "instant") },
+    { kind: "radar", at: nowIso(), day: dayOf([card(1), card(2, { co: "co1" })], "instant") },
   ]);
-  check("two posts in one batch become one, each card once", merged?.cards.length === 2 && merged.mode === "instant", merged);
-  const freeDay = { pro: false, cards: [card(1, { company: null, headline: "A SaaS company just hired a fractional Marketing leader" })], more: 4, total: 5, seeWho: "https://post.example.com/up", mode: "daily" as const };
-  const fa = nfmt.alertFor([{ kind: "radar", at: nowIso(), day: freeDay }], "https://post.example.com")!;
-  const body = nfmt.slackBody(fa) as { text: string; blocks: { type: string; text?: { text: string }; elements?: { text: string | { text: string } }[] }[] };
-  check("free in Slack: the card, '4 more today', See who and the radar's footer", /4 more today/.test(JSON.stringify(body)) && /"See who"/.test(JSON.stringify(body)) && /Turn it off in Your profile/.test(JSON.stringify(body)), body);
+  check("two posts in one batch become one, each card once, companies counted once", merged?.cards.length === 2 && merged.companies === 1 && merged.mode === "instant", merged);
+  const fa = nfmt.alertFor([{ kind: "radar", at: nowIso(), day: dayOf([card(1), card(2)]) }], "https://post.example.com")!;
+  const body = nfmt.slackBody(fa) as { text: string; blocks: unknown[] };
+  check("in Slack: every card, the button and the feature's footer", /See the 2 companies/.test(JSON.stringify(body)) && JSON.stringify(body).includes(fmt.RADAR_FOOTER) && !/See who|more today/.test(JSON.stringify(body)), body);
   check("Slack mrkdwn is escaped", !/<script>/.test(JSON.stringify((nfmt.slackBody({ ...fa, headline: "<script>" }) as { blocks: unknown }).blocks)));
   check("other webhooks get the same words", (nfmt.webhookBody(fa, nowIso()) as { event: string; lines: string[] }).event === "radar");
-  const freeMail = fmt.renderRadarEmail({ name: "Sal Starter", day: freeDay, unsubscribeUrl: "https://post.example.com/u", appUrl: "https://post.example.com" });
-  check("the free email has no link but See who and unsubscribe", (freeMail.html.match(/<a href=/g) ?? []).length === 2 + 0 && freeMail.html.includes("https://post.example.com/up"), freeMail.html.match(/<a href="[^"]*"/g));
-  check("the email is escaped", !/<b>x<\/b>/.test(fmt.renderRadarEmail({ ...{ name: "<b>x</b>", day: freeDay, unsubscribeUrl: "u", appUrl: "" } }).html));
+  const twelve = fmt.renderRadarEmail({ name: "Sal Starter", day: dayOf(Array.from({ length: 12 }, (_, i) => card(i))), unsubscribeUrl: "https://post.example.com/u", appUrl: "https://post.example.com" });
+  check("the email lists 10, then 'And 2 more' to the day's companies", (twelve.html.match(/fractional Marketing leader \d+/g) ?? []).length === 10 && twelve.html.includes(`<a href="${VIEW}" style="color:#`) && /And 2 more signals\./.test(twelve.text), twelve.text);
+  const hrefs = [...new Set((twelve.html.match(/<a href="[^"]*"/g) ?? []).map((x) => x.slice(9, -1)))];
+  check("every link in the email is the day's companies, the unsubscribe link or the app", hrefs.every((h) => h === VIEW || h === "https://post.example.com/u" || h === "https://post.example.com"), hrefs);
+  check("the email is escaped", !/<b>x<\/b>/.test(fmt.renderRadarEmail({ name: "<b>x</b>", day: dayOf([card(1)]), unsubscribeUrl: "u", appUrl: "" }).html));
 
   console.log("\nFunding: the source and its plumbing");
   check("no provider: no events", (await funding.fundingSource().events({ sinceMs: 0, nowMs: Date.now(), companies: [] })).length === 0 && funding.fundingSource().name === "none");
@@ -450,8 +495,11 @@ async function main() {
   check("an event from a source becomes a funding signal", !!f && f.round === "Series A");
   const fSal = match.signalsFor(withFunding, match.profileOf(seedLoaded, await state(), "mem_sal", "Sales")).find((x) => x.kind === "funding");
   check("a funding signal reaches every function in the profile", !!fSal);
-  const fCard = present.cardOf(fSal!, { pro: false, visible: () => true, recordPath: () => "/x", seeWho: "/?upgrade=radar", cardId: (x) => x });
-  check("a free funding card names no company", fCard.headline === "A SaaS company raised a Series A ($12M)" && !named(fCard).length, fCard);
+  const fctx = { cardId: (x: string) => x, coId: (x: string) => x, url: "/x" };
+  const fCard = present.cardOf(fSal!, { ...fctx, visible: () => false });
+  check("a funding card at a locked company names no company", fCard.headline === "A SaaS company raised a Series A ($12M)" && !named(fCard).length && fCard.locked === true && fCard.url === "/x", fCard);
+  check("one the member knows is named", present.cardOf(fSal!, { ...fctx, visible: () => true }).headline === "Acme Robotics raised a Series A ($12M)");
+  check("its line in the day's view names nothing", present.viewLine(fSal!) === "Raised a Series A ($12M) · Money in usually means hiring");
   const failing = { name: "down", events: async () => Promise.reject(new Error("down")) };
   skew += DAY;
   const r5 = await radar.runRadar({ now: nowIso(), funding: failing as unknown as typeof stub });
@@ -461,7 +509,7 @@ async function main() {
   const admin = await t.buildView("tok-ada-0001");
   const rs = admin.admin?.radar;
   check("the radar panel counts members with it on", rs?.on === 2 && rs.off === 2, rs);
-  check("and what went out, opens and clicks", (rs?.sent7 ?? 0) >= 4 && rs!.clicks === 1 && rs!.opens7 === 1, rs);
+  check("and what went out, opens and clicks (the two tracked clicks above)", (rs?.sent7 ?? 0) >= 4 && rs!.clicks === 2 && rs!.opens7 === 1, rs);
   const st = types.radarStats(undefined, [{ name: "radar_sent", at: nowIso() }, { name: "radar_clicked", at: nowIso() }, { name: "wall", at: nowIso() }], { a: { radarOff: true } }, 3, Date.now());
   check("radarStats counts only radar signals", st.sentToday === 1 && st.clicks === 1 && st.off === 1 && st.on === 3, st);
 }

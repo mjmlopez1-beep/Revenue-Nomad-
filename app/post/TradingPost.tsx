@@ -48,7 +48,8 @@ import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
 import { Partners } from "./Partners";
-import { Radar } from "./Radar";
+import { RadarPage, radarRows, useRadarDay } from "./Radar";
+import { FEATURE_NAME, SIG_DAY_RE, YOUR_FEATURE } from "@/lib/radar/types";
 import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
@@ -167,7 +168,7 @@ const PAGE_TITLE: Record<Page, string> = {
   integrations: "Integrations",
   partners: "Referral partners",
   billing: "Plan and billing",
-  radar: "Your radar",
+  radar: YOUR_FEATURE,
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -245,13 +246,15 @@ function readPlace(me: Me, from?: string) {
   const s = SORTS.find((x) => x.key === q.get("s"))?.key ?? null;
   const f = q.has("f") ? decodeFilters(q.get("f") === "-" ? "" : q.get("f")!) : d.f;
   // An old "Use it in Claude" link (p=claude) opens Integrations at its Claude section.
-  // The radar's "See who" (?upgrade=radar, lib/radar UPGRADE_PATH) opens the Radar page until billing has its own.
-  const p = q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PAGES.find((x) => x === q.get("p")) ?? null;
-  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1" };
+  // A day of the radar (?sig=2026-11-19, the email's and Slack's links, lib/radar radarPath) opens that day's companies,
+  // and so does an older email's "See who" (?upgrade=radar).
+  const sig = SIG_DAY_RE.test(q.get("sig") ?? "") ? q.get("sig") : null;
+  const p = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PAGES.find((x) => x === q.get("p")) ?? null;
+  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig };
 }
 
 /** The address for a place, leaving out what the member's defaults already say. */
-function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean }): string {
+function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null }): string {
   const d = defaultsFor(me);
   const q = new URLSearchParams();
   if (x.v !== d.v) q.set("v", x.v);
@@ -263,6 +266,8 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   if (x.all && x.v === "hiring") q.set("af", "1");
   if (x.p === "table" && x.c) q.set("c", x.c);
   if (x.p !== "table") q.set("p", x.p);
+  // The radar's day says which day, so a reload or a shared link opens the same companies.
+  if (x.p === "radar" && x.sig) q.set("sig", x.sig);
   const s = q.toString();
   return `${typeof window === "undefined" ? "/" : window.location.pathname}${s ? `?${s}` : ""}`;
 }
@@ -643,6 +648,16 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       .map((x) => x.r);
   }, [sortedLive, frozenAt]);
   const visible = useMemo(() => sorted.slice(0, limit), [sorted, limit]);
+  /*
+   * The radar's day (page "radar", Radar.tsx): one day's companies from the member's signals, the
+   * page the email's and Slack's links open. `sigDay` null: the latest day with something in it.
+   * The record opened from it steps through the same companies (navRows).
+   */
+  const [sigDay, setSigDay] = useState<string | null>(place0.sig);
+  const radar = useRadarDay(page === "radar", sigDay, [me.function, me.icp, me.before]);
+  const radarList = useMemo(() => radarRows(radar.stale, rowsFor("companies", infos)), [radar.stale, infos]);
+  /** The rows the open record steps through (J and K, "1 of 7"): the radar's day when it was opened from there. */
+  const navRows = drawer?.returnTo === "radar" ? radarList : sorted;
   // Counts and sheets update on the next frame; the long list behind them follows when it can.
   // The record type travels with its rows, so a deferred list never renders rows of another type.
   const listData = useMemo(() => ({ type: recordType, rows: visible }), [recordType, visible]);
@@ -856,11 +871,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   /** A record stepped to with J/K: its row scrolls into view once the list has drawn it. */
   const scrollToRow = useRef<string | null>(null);
   const step = useStable((d: 1 | -1) => {
-    if (!drawer || !sorted.length) return;
-    const idx = sorted.findIndex((r) => r.key === drawer.rowKey);
-    const next = sorted[Math.max(0, Math.min(sorted.length - 1, idx < 0 ? 0 : idx + d))];
+    if (!drawer || !navRows.length) return;
+    const idx = navRows.findIndex((r) => r.key === drawer.rowKey);
+    const next = navRows[Math.max(0, Math.min(navRows.length - 1, idx < 0 ? 0 : idx + d))];
     if (!next) return;
-    const nIdx = sorted.indexOf(next);
+    const nIdx = navRows === sorted ? sorted.indexOf(next) : -1;
     if (nIdx >= limit) setLimit((l) => Math.max(l, nIdx + 1));
     scrollToRow.current = next.key;
     openRow(next);
@@ -1071,7 +1086,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const navOpen = page !== "table" || !!drawer;
   const overlayOpen = layout !== "desktop" && !!(editor || pop || sortOpen || addOpts || sideOverlay);
   const depth = (navOpen ? 1 : 0) + (overlayOpen ? 1 : 0);
-  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns });
+  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay ?? radar.stale?.day ?? null });
   const urlRef = useRef(url);
   urlRef.current = url;
   const depthRef = useRef(depth);
@@ -1176,6 +1191,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       const x = readPlace(me);
       if (x.p && (x.p !== "metrics" || view.admin)) {
         setDrawer(null);
+        if (x.p === "radar") setSigDay(x.sig);
         setPage(x.p);
       } else if (x.c && byId.has(x.c)) openCompany(x.c);
     }
@@ -1324,7 +1340,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const cellUi: Ui = useMemo(() => mkUi(cellMe), [cellMe, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, holdsSeat, seatStats, openSeats, openPage, contact]);
 
   const drawerInfo = drawer ? foundById.get(drawer.id) ?? byId.get(drawer.id) ?? null : null;
-  const drawerPos = drawer ? sorted.findIndex((r) => r.key === drawer.rowKey) : -1;
+  const drawerPos = drawer ? navRows.findIndex((r) => r.key === drawer.rowKey) : -1;
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
   const noun = recordType === "companies" ? ["company", "companies"] : recordType === "engagements" ? ["seat", "seats"] : ["person", "people"];
 
@@ -2189,8 +2205,19 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             <MessagesPage onBack={() => setPage("table")} openCompany={(id) => openCompany(id)} />
           </main>
         ) : page === "radar" ? (
-          <main className="tp-main tp-main-page">
-            <Radar onBack={() => setPage("table")} onProfile={() => setIcpOpen(true)} openCompany={(id) => openCompany(id)} />
+          <main className="tp-main tp-main-page rd-main">
+            <RadarPage
+              view={radar.data}
+              failed={radar.failed}
+              reload={() => void radar.reload()}
+              rows={radar.data ? radarList : []}
+              me={cellMe}
+              phone={phone}
+              onBack={() => setPage("table")}
+              onProfile={() => setIcpOpen(true)}
+              onDay={setSigDay}
+              openCompany={openCompany}
+            />
           </main>
         ) : page === "billing" && me.plan ? (
           <main className="tp-main tp-main-page">
@@ -2452,7 +2479,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             focus={drawer.focus}
             onClose={closeDrawer}
             onStep={step}
-            pos={drawerPos >= 0 ? { n: drawerPos + 1, of: sorted.length } : null}
+            pos={drawerPos >= 0 ? { n: drawerPos + 1, of: navRows.length } : null}
             phone={phone}
             contact={contact}
           />
@@ -2538,7 +2565,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               { group: "Find", label: "All companies", current: page === "table" && !currentView, onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               // Saved views: one entry. Its sheet lists every view to open, rename or remove; the filter rail lists them too.
               ...(views.length ? [{ group: "Find", label: "Saved views", hint: String(views.length), current: page === "table" && !!currentView, onClick: () => setViewsOpen(true) }] : []),
-              { group: "Find", label: "Your radar", current: page === "radar", onClick: () => (setEditor(null), setDrawer(null), setPage("radar")) },
+              { group: "Find", label: FEATURE_NAME, current: page === "radar", onClick: () => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar")) },
               { group: "Find", label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },
               { group: "Find", label: "Rate benchmarks", current: page === "rates", onClick: () => (setDrawer(null), setPage("rates")) },
               ...(phone ? [{ group: "You", label: "Add what you know", onClick: () => openAdd() }] : []),

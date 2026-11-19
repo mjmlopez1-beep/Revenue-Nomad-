@@ -4,6 +4,7 @@ import path from "path";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { unsubscribe } from "@/lib/table";
 import { unsubscribeRadar } from "@/lib/radar";
+import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
 import { guarded, isBusy, isDown } from "@/lib/apiGuard";
 
 export const dynamic = "force-dynamic";
@@ -80,15 +81,15 @@ const isRadar = (q: URLSearchParams) => q.get("r") === "radar";
 /**
  * GET ?m=<public member id>&s=<signature>: the unsubscribe link in the weekly email. Turns the
  * email off for that member. No sign-in needed; the signature is the proof. With r=radar, the
- * link in the next-client radar email, which turns the radar off (email and Slack).
+ * link in the radar email (FEATURE_NAME), which turns the radar off (email and Slack).
  */
 export const GET = guarded(async (req: NextRequest) => {
   if (limited(`unsub:${clientIp(req)}`, 30, 60_000)) return page("Too many tries in one minute", "Wait a minute, then open the link from your email again.", 429);
   const q = req.nextUrl.searchParams;
   if (isRadar(q)) {
     if (!(await unsubscribeRadar(q.get("m"), q.get("s"))))
-      return page("That link didn't work", "It may have been cut off in your email. You can turn the radar off yourself under Your profile.", 400);
-    return page("Your radar is off", "We won't send you the next-client radar by email or Slack again. If you change your mind, turn it back on under Your profile.");
+      return page("That link didn't work", `It may have been cut off in your email. You can turn ${FEATURE_NAME} emails off yourself under Your profile.`, 400);
+    return page(`${YOUR_FEATURE} is off`, `We won't send you ${FEATURE_NAME} emails or Slack posts again. If you change your mind, turn it back on under Your profile.`);
   }
   if (!(await unsubscribe(q.get("m"), q.get("s"))))
     return page("That link didn't work", "It may have been cut off in your email. You can turn the weekly email off yourself under Your credits.", 400);

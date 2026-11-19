@@ -7,8 +7,8 @@
  *   Free   25 starting credits, 1 per fact (25 a day), 1 saved view with the weekly email, medians
  *          only in the rate benchmarks, Slack gets the weekly roles post only, 20 Claude requests a day.
  *   Pro    $59 a month or $590 a year: unlimited saved views, every alert in Slack, the Claude
- *          connector without the daily cap, the benchmarks' ranges by client size, the full radar,
- *          and 100 credits each paid month.
+ *          connector without the daily cap, the benchmarks' ranges by client size, the radar's signals
+ *          in Slack as they happen (everyone gets every signal each morning), and 100 credits each paid month.
  *   Top-up $19 for 50 credits, once, on any plan.
  *   Trial  14 days of Pro, no card, from the end of onboarding. Extended once by 7 days when, in its
  *          last 4 days, the member opens a conversation, unlocks a warm path or sends an invite.

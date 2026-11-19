@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AdminStats, View } from "@/lib/tableTypes";
 import { IconChevron, Num, useToast } from "../ui/shared";
 import { useUi } from "./ui";
+import { FEATURE_NAME } from "@/lib/radar/types";
 import "./pages.css";
 import "./verify.css";
 
@@ -117,7 +118,7 @@ function boardRows(a: AdminStats): BoardRow[] {
   });
 }
 
-/** The next-client radar (lib/radar): who has it on, what went out, opens and clicks, and "Send radar now". */
+/** The radar (lib/radar, FEATURE_NAME): who has it on, what went out, opens and clicks, and "Send now". */
 function Radar({ r, refresh }: { r: NonNullable<AdminStats["radar"]>; refresh: () => Promise<void> }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -137,16 +138,16 @@ function Radar({ r, refresh }: { r: NonNullable<AdminStats["radar"]>; refresh: (
   };
   return (
     <Card
-      title="Next-client radar"
+      title={FEATURE_NAME}
       action={
         <button type="button" className="btn btn-sm btn-pine" disabled={busy} aria-busy={busy} onClick={() => void send()}>
-          {busy ? "Sending" : "Send radar now"}
+          {busy ? "Sending" : `Send ${FEATURE_NAME} now`}
         </button>
       }
     >
       <Rows
         items={[
-          ["Members with the radar on", n0(r.on)],
+          [`Members with ${FEATURE_NAME} on`, n0(r.on)],
           ["Members who turned it off", n0(r.off)],
           ["Sent today", n0(r.sentToday)],
           ["Sent in the last 7 days", n0(r.sent7)],
@@ -939,7 +940,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
                 ["Role alerts sent", n0(a.integrations.sent.roles)],
                 ["Message alerts sent", n0(a.integrations.sent.message)],
                 ["Seat alerts sent", n0(a.integrations.sent.seat)],
-                ["Radar posts sent", n0(a.integrations.sent.radar ?? 0)],
+                [`${FEATURE_NAME} posts sent`, n0(a.integrations.sent.radar ?? 0)],
                 ["Tests sent", n0(a.integrations.sent.test)],
                 ["Posts that failed", n0(a.integrations.failed)],
                 ["Connections that stopped", n0(a.integrations.broken)],

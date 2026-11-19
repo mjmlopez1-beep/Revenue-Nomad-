@@ -8,10 +8,11 @@
 import { useContext, useState } from "react";
 import { IconCheck } from "../ui/shared";
 import { UiCtx } from "./ui";
+import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
 
 /**
- * Your profile: "Send me my radar", the next-client radar by email and Slack (lib/radar), on unless
- * the member turned it off here or with the radar email's link. Saves at once, like the switch below.
+ * Your profile: "Send me <FEATURE_NAME> emails", the radar by email and Slack (lib/radar), on
+ * unless the member turned it off here or with the radar email's link. Saves at once, like the switch below.
  */
 export function RadarSwitch() {
   const ui = useContext(UiCtx);
@@ -25,12 +26,12 @@ export function RadarSwitch() {
   };
   return (
     <div className="hunt-sub pt-switch">
-      <div className="hunt-h">Your next-client radar</div>
+      <div className="hunt-h">{YOUR_FEATURE}</div>
       <button type="button" role="switch" aria-checked={on} className={`tp-ftoggle hunt-email${on ? " on" : ""}`} disabled={busy} aria-busy={busy} onClick={() => void flip()}>
         <span className="tp-check" aria-hidden>
           {on && <IconCheck size={11} />}
         </span>
-        <span className="tp-ftoggle-l">Send me my radar</span>
+        <span className="tp-ftoggle-l">Send me {FEATURE_NAME} emails</span>
       </button>
       <p className="hunt-lead">On mornings when a company in your profile moves, by email and in Slack if you connected it. Never on a day with nothing new.</p>
     </div>

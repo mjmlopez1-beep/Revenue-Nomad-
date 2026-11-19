@@ -1,7 +1,7 @@
 /**
  * GET ?m=<public member id>&s=<signature>&w=email|slack&to=<path>: a link in the radar's email or
  * Slack post. Counts radar_clicked for the member it was signed for, then sends them to `to`, a
- * path in the app ("/?c=…", "/?upgrade=radar"). Any other `to` goes to the app's home: never
+ * path in the app (the day's companies, "/?p=table&sig=2026-11-19"). Any other `to` goes to the app's home: never
  * another site.
  */
 import { NextRequest, NextResponse } from "next/server";

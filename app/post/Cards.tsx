@@ -8,6 +8,8 @@
  *
  * The card itself opens the record, and a tap meant for it never spends a credit. A locked
  * company's card has no unlock button at all: its record's sticky bar holds the one unlock.
+ * The one exception is the radar's day (`signals`, Radar.tsx): each card says what happened there
+ * and carries its own button, Unlock company for a locked company, Open for one the member knows.
  */
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
@@ -15,7 +17,7 @@ import { COMPANY_PRICE_SAY } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconLock, IconStar, LockedName, LockedSite, fmtMonth, val } from "../ui/shared";
 import { cardSeat, coverOf, hireOfRow, isOpenRole, personBothLocked, personCoverOf, personNoun, isUnheldOpenRole, known, seatBothLocked, seatNoun, seatWhat, type HireCtx, type Row, type Tab } from "./model";
 import { YourSeat, earnNote, useCellUi } from "./ui";
-import { Fit, FnChips, HeldBy, HireLine, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
+import { Fit, FnChips, HeldBy, HireLine, LOCKED_TIP, RowFact, SignalLines, UnlockedTag, type SignalRows } from "./Tables";
 import { RoleDate } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
 
@@ -116,6 +118,24 @@ function FirmoLine({ c }: { c: Row["i"]["c"] }) {
   const line = firmo(c);
   return <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">No industry, size, revenue or HQ on file yet</span>}</div>;
 }
+
+/**
+ * The radar's day: the company, what happened there and one button that spends
+ * nothing by accident (it is its own tap, never the card's).
+ */
+const SignalCard = memo(function SignalCard({ r, onOpen, lines, action }: { r: Row; onOpen: (r: Row) => void; lines: string[]; action: SignalRows["action"] }) {
+  return (
+    <article className="tp-pcard rd-pcard" onClick={() => onOpen(r)} data-row={r.key}>
+      <Head r={r} onOpen={onOpen} />
+      {/* The header already gives the industry, size and revenue: the card says what happened, then the button. */}
+      <SignalLines lines={lines} />
+      <div className="rd-pcard-act" onClick={(e) => e.stopPropagation()}>
+        {action(r.i)}
+      </div>
+    </article>
+  );
+});
+const NO_LINES: string[] = [];
 
 const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, hire }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean; hire?: HireCtx | null }) {
   const ui = useCellUi();
@@ -330,6 +350,7 @@ export function CardList({
   onOpen,
   tab,
   hire = null,
+  signals = null,
 }: {
   type: "companies" | "engagements" | "people";
   rows: Row[];
@@ -338,13 +359,17 @@ export function CardList({
   tab?: Tab;
   /** Recently hired is on: company cards lead with the hire they matched. */
   hire?: HireCtx | null;
+  /** The radar's day: each company's lines and its own button (SignalCard). */
+  signals?: SignalRows | null;
 }) {
   // "N things still missing here" belongs to Needs facts. Without the tab, every card keeps it.
   const miss = !tab || tab === "needs";
   return (
     <div className="tp-cards">
       {rows.map((r) =>
-        type === "companies" ? (
+        type === "companies" && signals ? (
+          <SignalCard key={r.key} r={r} onOpen={onOpen} lines={signals.lines.get(r.i.c.id) ?? NO_LINES} action={signals.action} />
+        ) : type === "companies" ? (
           <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} miss={miss} hire={hire} />
         ) : type === "engagements" ? (
           <EngCard key={r.key} r={r} me={me} onOpen={onOpen} />

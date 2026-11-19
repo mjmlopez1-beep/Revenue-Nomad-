@@ -20,7 +20,7 @@ export interface Alert {
   lines: string[];
   /** Absolute link into Merlin, or "" when the app's address isn't known. */
   url: string;
-  /** The button's words in Slack (default "Open in Merlin"). The radar's free view says "See who". */
+  /** The button's words in Slack (default "Open in Merlin"). The radar's says "See the 2 companies". */
   button?: string;
   /** The small line under a Slack post (default: where to change alerts). */
   footer?: string;

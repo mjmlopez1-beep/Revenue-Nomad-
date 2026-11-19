@@ -15,7 +15,8 @@ import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
 import { PreviewError, preview } from "@/lib/preview";
-import { maybeRadar, radarView } from "@/lib/radar";
+import { maybeRadar, radarView, returnQuery } from "@/lib/radar";
+import { yourFeature } from "@/lib/radar/types";
 
 export const dynamic = "force-dynamic";
 
@@ -60,12 +61,13 @@ const mailKey = (raw: unknown) => String(raw ?? "").trim().toLowerCase().slice(0
 
 /**
  * Email a one-time link and code to a member, in the background: the answer doesn't wait for
- * it, so it takes as long for an address that is nobody's.
+ * it, so it takes as long for an address that is nobody's. `back`: returnQuery, so the link opens
+ * where the visitor asked from.
  */
-function sendOneTime(req: NextRequest, m: { id: string; name: string; email: string }, purpose: "signin" | "join") {
+function sendOneTime(req: NextRequest, m: { id: string; name: string; email: string }, purpose: "signin" | "join", back = "") {
   void (async () => {
     const { token, code } = await createSignIn(m.id, purpose);
-    const e = oneTimeEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(token)}`, code, purpose);
+    const e = oneTimeEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(token)}${back}`, code, purpose);
     await sendEmail(m.email, e.subject, e.text, e.html);
   })().catch((e) => console.error("sign-in email failed", e));
 }
@@ -196,7 +198,7 @@ const patchless = (a: Action) =>
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
- * GET ?radar=1     RadarView: the Radar page, the last 24 hours' signals cut to the member's plan (lib/radar). 401 signed out.
+ * GET ?radar=1[&day=YYYY-MM-DD]  RadarView: one day's companies from the member's radar (lib/radar radarView), the list its email and Slack links open. 401 signed out.
  * GET ?export=1    admins: download the runtime state (a backup).
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
@@ -261,10 +263,10 @@ export const GET = guarded(async (req: NextRequest) => {
     return unread === null ? err(SIGNED_OUT_READ, 401) : NextResponse.json({ unread }, { headers: { "cache-control": "no-store" } });
   }
   // Referral partners (lib/table.ts partnersView): who gets hired before and after the member, counts of members' answers, and the members listed.
-  // The Radar page (lib/radar radarView): the last 24 hours' signals for the member, by their plan.
+  // One day's companies from the member's radar (lib/radar radarView): the list its email and Slack open, with the day switcher.
   if (req.nextUrl.searchParams.get("radar") !== null) {
-    const r = await radarView(token);
-    return r ? sendJson(req, r) : err("You're signed out. Sign in again to see your radar.", 401);
+    const r = await radarView(token, req.nextUrl.searchParams.get("day"));
+    return r ? sendJson(req, r) : err(`You're signed out. Sign in again to see ${yourFeature}.`, 401);
   }
   if (req.nextUrl.searchParams.get("partners") !== null) {
     const p = await partnersView(token);
@@ -406,7 +408,7 @@ export const POST = guarded(async (req: NextRequest) => {
       return err("We've sent 3 links to that email in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
     const m = await memberByEmail(body.emailLink);
     // A one-time link and code (lib/signin.ts), in the background. Same answer either way.
-    if (m?.email) sendOneTime(req, m, "signin");
+    if (m?.email) sendOneTime(req, m, "signin", returnQuery(body.to));
     return NextResponse.json({ ok: true, sent: true, message: LINK_ON_ITS_WAY });
   }
 

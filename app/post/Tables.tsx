@@ -279,8 +279,9 @@ export const LOCKED_TIP = "This company is locked. Unlock it to see its name, we
  *   phone   the card has no unlock button: it opens the record (see Cards.tsx).
  *   big     the record's header. Its own Unlock company button sits below.
  * `bare` leaves out the industry, size and region line where the same facts are printed right under it.
+ * `quiet` leaves out the lock button where the row has its own Unlock company button (the radar's day).
  */
-export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare?: boolean }) {
+export function HiddenCompany({ i, big, bare, quiet }: { i: CoInfo; big?: boolean; bare?: boolean; quiet?: boolean }) {
   const ui = useCellUi();
   const why = useFitWhy(i);
   const teaser = !bare && <span className="tp-co-dom" title={why ?? undefined}>{i.teaser || "Industry, size and HQ not on file yet"}</span>;
@@ -308,7 +309,7 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
           </span>
         </span>
         {teaser}
-        {table && <UnlockCompanyCell i={i} />}
+        {table && !quiet && <UnlockCompanyCell i={i} />}
       </span>
     </span>
   );
@@ -318,11 +319,11 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
  * `tagged`: a hiring company the member unlocked says "Unlocked" beside its name. The companies
  * table says it beside its Hiring now chip instead (Fit), so it passes false.
  */
-function CompanyName({ i, following, tagged = true }: { i: CoInfo; following?: boolean; tagged?: boolean }) {
+function CompanyName({ i, following, tagged = true, quiet }: { i: CoInfo; following?: boolean; tagged?: boolean; quiet?: boolean }) {
   const why = useFitWhy(i);
   // Best fit for you: a maybe (part of the ideal client not on file) says so under the name, not only in the tooltip.
   const unknown = why?.match(/(?:^|· )([^·]*not on file)$/)?.[1] ?? null;
-  if (i.c.hidden) return <HiddenCompany i={i} />;
+  if (i.c.hidden) return <HiddenCompany i={i} quiet={quiet} />;
   return (
     <span className="tp-co">
       <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />
@@ -493,6 +494,54 @@ const CompanyRow = memo(function CompanyRow({
       <td className="num">{e ? engCell(i, e, "rate") : <None />}</td>
       <td className="c-lo">
         <PeopleCell i={i} />
+      </td>
+    </tr>
+  );
+});
+
+/**
+ * The radar's day (Radar.tsx): what happened at each company, and the one action. `action` is the
+ * row's own Unlock company button for a locked company (the lock on its logo steps aside, so the
+ * row has one paying control), else Open. Both come from Radar.tsx.
+ */
+export interface SignalRows {
+  /** Company public id -> its lines ("Hired a fractional Finance leader · Finance usually comes before Sales"). */
+  lines: Map<string, string[]>;
+  action: (i: CoInfo) => ReactNode;
+}
+
+/** The lines of what happened at a company, one a signal. */
+export function SignalLines({ lines }: { lines: string[] }) {
+  return (
+    <span className="rd-lines">
+      {lines.map((l) => (
+        <span key={l} className="rd-line" title={l}>
+          {l}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** The action never opens the record behind it: its own click only. */
+const own = (ev: React.SyntheticEvent) => ev.stopPropagation();
+
+const SignalCompanyRow = memo(function SignalCompanyRow({ r, sel, onOpen, lines, action }: { r: Row; sel: boolean; onOpen: (r: Row) => void; lines: string[]; action: SignalRows["action"] }) {
+  const i = r.i;
+  const c = i.c;
+  const co = (field: string) => <RowFact t={{ entity: "company", id: c.id, field }} cell={c.cells[field]} cover={coverOf(i, null, field)} own={ownCompany(i)} />;
+  return (
+    <tr {...rowProps(r, sel, onOpen)}>
+      <td className="tp-sticky">
+        <CompanyName i={i} following={c.following} quiet />
+      </td>
+      <td className="rd-td-what">
+        <SignalLines lines={lines} />
+      </td>
+      <td className="num">{co("employees")}</td>
+      <td>{co("hq")}</td>
+      <td className="rd-td-act" onClick={own} onKeyDown={own}>
+        {action(i)}
       </td>
     </tr>
   );
@@ -700,6 +749,14 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Rate", cls: "w-rate num", rates: true },
     { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
+  // The radar's day: what happened at each company, two facts, and its one action (Unlock company or Open), fitted to the page.
+  signalCompanies: [
+    { label: "Company", cls: "tp-sticky w-co" },
+    { label: "What happened", cls: "rd-w-what" },
+    { label: "Employees", cls: "w-emp num" },
+    { label: "HQ", cls: "w-hq" },
+    { label: "", cls: "rd-w-act" },
+  ],
   hiringCompanies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
     { label: "Open role", cls: "w-seat", tip: "The role, and when we first saw it listed" },
@@ -746,6 +803,8 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
   ],
 };
 
+const NO_LINES: string[] = [];
+
 /** Every row is an open role (Hiring now, or the Open now filter): the open-role columns. */
 export const allOpenRoles = (rows: Row[]) => rows.length > 0 && rows.every((r) => !!openRoleOf(r));
 
@@ -761,6 +820,7 @@ export function DataTable({
   hire = null,
   sort,
   onSort,
+  signals = null,
 }: {
   type: "companies" | "engagements" | "people";
   rows: Row[];
@@ -777,10 +837,13 @@ export function DataTable({
   /** The sort in use, and how to change it from a column header (headers stay plain text without it). */
   sort?: SortKey;
   onSort?: (s: SortKey) => void;
+  /** The radar's day: each company's lines and its one action, in their own columns. */
+  signals?: SignalRows | null;
 }) {
-  const hiring = type !== "people" && (tab ? tab === "hiring" && allOpenRoles(rows) : allOpenRoles(rows));
-  const hired = !!hire && type === "companies" && !hiring;
-  const key = hiring ? (type === "companies" ? "hiringCompanies" : "hiringEngagements") : hired ? "hiredCompanies" : type;
+  const sig = !!signals && type === "companies";
+  const hiring = !sig && type !== "people" && (tab ? tab === "hiring" && allOpenRoles(rows) : allOpenRoles(rows));
+  const hired = !sig && !!hire && type === "companies" && !hiring;
+  const key = sig ? "signalCompanies" : hiring ? (type === "companies" ? "hiringCompanies" : "hiringEngagements") : hired ? "hiredCompanies" : type;
   const openPage = useOpenPage();
   // A header that sorts is a button: name A to Z, everything else highest or newest first.
   const head: ReactNode = HEAD[key].map((h) => {
@@ -789,7 +852,7 @@ export function DataTable({
     // Names, functions, titles and places go A to Z. Everything else highest or newest first.
     const az = !!h.sort && AZ.includes(h.sort);
     return (
-      <th key={h.label} className={h.cls} scope="col" title={h.tip} aria-sort={on ? (az ? "ascending" : "descending") : undefined}>
+      <th key={h.label || "act"} className={h.cls} scope="col" title={h.tip} aria-sort={on ? (az ? "ascending" : "descending") : undefined}>
         {h.rates && openPage ? (
           // Where rates show, the medians are one click away (LOGIC-7).
           <button type="button" className="tp-th-sort tp-th-link" onClick={() => openPage("rates")} title="See rate benchmarks: medians by function and client revenue">
@@ -802,22 +865,26 @@ export function DataTable({
             {h.label}
             <IconChevron size={12} dir={az ? "up" : "down"} />
           </button>
-        ) : (
+        ) : h.label ? (
           h.label
+        ) : (
+          <span className="sr-only">Unlock or open</span>
         )}
         {h.tip && <HeadTip label={h.label} tip={h.tip} />}
       </th>
     );
   });
   return (
-    <table className={`tp-table tp-table-${type}${hiring ? " tp-table-hiring" : ""}${hired ? " tp-table-hired" : ""}`}>
+    <table className={`tp-table tp-table-${type}${hiring ? " tp-table-hiring" : ""}${hired ? " tp-table-hired" : ""}${sig ? " rd-table" : ""}`}>
       <thead>
         <tr>{head}</tr>
       </thead>
       <tbody>
         {rows.map((r) =>
           type === "companies" ? (
-            hiring ? (
+            sig ? (
+              <SignalCompanyRow key={r.key} r={r} sel={selected === r.key} onOpen={onOpen} lines={signals!.lines.get(r.i.c.id) ?? NO_LINES} action={signals!.action} />
+            ) : hiring ? (
               <HiringCompanyRow key={r.key} r={r} mine={me.function} sel={selected === r.key} onOpen={onOpen} />
             ) : (
               <CompanyRow

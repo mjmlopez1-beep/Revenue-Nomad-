@@ -8,7 +8,7 @@
  *                 cancel, pause, the top-up, and invoices and the card in Stripe's portal.
  *   PlansHost     the plans sheet, opened from an upgrade moment with openPlans(from): the trial
  *                 ending, a second saved view, the full benchmarks, Slack and Claude limits, out of
- *                 credits, the radar's teaser. Free against Pro in plain words, yearly first.
+ *                 credits. Free against Pro in plain words, yearly first.
  *   TrialBanner   the trial's last 3 days, over the table.
  *   UpgradeNote   one calm line at a limit, with a way to see Pro.
  *
@@ -20,6 +20,7 @@ import type { Me, PlanView, View } from "@/lib/tableTypes";
 import { IconCheck, IconChevron, IconX, useToast } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
+import { FEATURE_NAME } from "@/lib/radar/types";
 import "./billing.css";
 
 /** Where the plans were opened from: an upgrade moment. */
@@ -92,7 +93,7 @@ function useBilling() {
 const ROWS: [string, string, string][] = [
   ["Open roles", "In your weekly email", "As soon as they open"],
   ["Saved views", "1, with the weekly email", "As many as you want, with alerts"],
-  ["Next-client radar", "A preview", "The full radar"],
+  [FEATURE_NAME, "Every signal, each morning", "Every signal, in Slack as it happens"],
   ["Rate benchmarks", "Medians by function", "Ranges by function and client size"],
   ["Slack", "The weekly roles post", "Every alert"],
   ["Claude", "20 requests a day", "No daily cap"],
@@ -140,7 +141,7 @@ const TITLE: Record<PlansFrom, string> = {
   credits: "More credits",
   slack: "Every alert in Slack",
   claude: "Claude without the daily cap",
-  radar: "See the full radar",
+  radar: `${FEATURE_NAME} as it happens`,
   billing: "Merlin Pro",
 };
 export const VALUE_LINE = "See who's hiring before it's posted, the hiring exec and the warm path, instantly.";
