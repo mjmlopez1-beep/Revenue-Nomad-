@@ -37,7 +37,7 @@ export function fnChipPlan(
   const ordered = mine && hired.includes(mine) ? [mine, ...hired.filter((f) => f !== mine)] : hired;
   const all: FnChip[] = [...ordered.map((f) => ({ f, kind: "hired" as const })), ...hiring.map((f) => ({ f, kind: "hiring" as const })), ...story.map((f) => ({ f, kind: "story" as const }))];
   // From the company's website: a full-time leader of the member's function turns the dashed chip
-  // into "Sales led full-time since 2024" (shown even while the filter is on: it says something
+  // into "FT Sales Leader since 2024" (shown even while the filter is on: it says something
   // the filter doesn't), and a fractional or interim one is "Fractional CMO on the team".
   const g = fnGap(i, mine);
   const showGap = g.gap && (gap || !!g.led);

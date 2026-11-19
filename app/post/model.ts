@@ -120,7 +120,7 @@ export const fullTimeLead = (i: Pick<CoInfo, "leads">, fn: string | null | undef
  * "No fractional Sales yet" at a company, and what is on file in its place. `gap`: they hired
  * fractionals in other functions (a seat, or a fractional or interim leader on their site) and
  * nothing names the member's function yet. `led`: a full-time leader of the member's function is
- * on file, so the chip says "Sales led full-time since 2024" instead. `team`: a fractional or
+ * on file, so the chip says "FT Sales Leader since 2024" instead. `team`: a fractional or
  * interim leader of the member's function is on file ("Fractional CMO on the team"), so there is
  * no gap at all.
  */
@@ -132,7 +132,7 @@ export function fnGap(i: CoInfo, mine: string | null): { gap: boolean; led: Lead
   const gap = !team && hiresFractionals && !i.fns.includes(mine);
   return { gap, led: gap ? fullTimeLead(i, mine) : null, team };
 }
-/** The gap's words, as the chip reads: "No fractional Sales yet", or "Sales led full-time since 2024". */
+/** The gap's words, as the chip reads: "No fractional Sales yet", or "FT Sales Leader since 2024". */
 export const gapWords = (fn: string, led: LeadLine | null) => (led ? ledFullTimeWords(fn, led) : notMineLabel(fn));
 export { onTheTeamWords };
 

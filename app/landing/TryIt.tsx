@@ -148,7 +148,7 @@ const viewLabel = (v: View, fn: string) => (v === "all" ? "All" : v === "hiring"
 function happening(r: PreviewRow, fn: string): string {
   if (r.kind === "open") return `Open role · ${postedAgo(r.when)}`;
   // The company's website shows a full-time leader of the function: it says so, in place of "No fractional Sales yet".
-  if (r.kind === "notyet" && r.ledSince !== undefined) return `${fn} led full-time${r.ledSince ? ` since ${r.ledSince}` : ""}`;
+  if (r.kind === "notyet" && r.ledSince !== undefined) return `FT ${fn} Leader${r.ledSince ? ` since ${r.ledSince}` : ""}`;
   if (r.kind === "notyet")
     return [`No fractional ${seatNoun(fn)} yet`, r.when ? startedOn(r.when)?.replace("Started", "Latest hire") : null].filter(Boolean).join(" · ");
   return [startedOn(r.when), r.holder ? "Seat holder on file" : null].filter(Boolean).join(" · ") || "Fractional hire on file";
