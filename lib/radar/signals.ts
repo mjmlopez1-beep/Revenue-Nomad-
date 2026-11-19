@@ -60,8 +60,10 @@ export interface RawSignal {
   round?: string | null;
   amount?: string | null;
   co: CompanyFacts;
-  /** Functions the company has a fractional hire in (any time), for "no fractional in your function yet". */
+  /** Functions the company has a fractional hire in (any time), for "no fractional in your function yet". A fractional or interim leader on its website (lib/leaders) counts. */
   hiredFns: string[];
+  /** Functions a full-time leader on the company's website leads, with the year since when ("" when it doesn't say). Left out when none. */
+  ledFullTime?: Record<string, string>;
 }
 
 type G = ReturnType<typeof T.graph>;
@@ -122,7 +124,10 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
   const hiredFns = (companyId: string) => {
     let h = hiredFnsMemo.get(companyId);
     if (!h) {
-      h = [...new Set((byCompany.get(companyId) ?? []).filter((e) => isHireRaw(e, s, tracks)).map((e) => named(T.fnOf(e, s))).filter((x): x is string => !!x))];
+      const leads = Object.entries(s.leaders?.[companyId]?.functions ?? {})
+        .filter(([, l]) => l.kind === "fractional" || l.kind === "interim")
+        .map(([fn]) => fn);
+      h = [...new Set([...(byCompany.get(companyId) ?? []).filter((e) => isHireRaw(e, s, tracks)).map((e) => named(T.fnOf(e, s))), ...leads].filter((x): x is string => !!x))];
       hiredFnsMemo.set(companyId, h);
     }
     return h;
@@ -132,7 +137,8 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (firms.has(x.companyId)) return;
     const co = companyFacts(g, s, x.companyId);
     if (!co) return;
-    out.push({ ...x, atMs: x.atMs ?? Date.parse(x.at), co, hiredFns: hiredFns(x.companyId) });
+    const ft = Object.entries(s.leaders?.[x.companyId]?.functions ?? {}).filter(([, l]) => l.kind === "full-time");
+    out.push({ ...x, atMs: x.atMs ?? Date.parse(x.at), co, hiredFns: hiredFns(x.companyId), ...(ft.length ? { ledFullTime: Object.fromEntries(ft.map(([fn, l]) => [fn, l.since?.slice(0, 4) ?? ""])) } : {}) });
   };
 
   // 1. Adjacent hires: leadership seats that came into the table in the window.

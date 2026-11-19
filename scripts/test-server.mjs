@@ -23,7 +23,7 @@
  *   CRON_SECRET    the server's RN_CRON_SECRET (default qa-cron)
  *   ID_SECRET      the server's RN_ID_SECRET, to build an unsubscribe link (default: the dev key)
  *   ONLY           comma-separated sections to run (default all): ssrf ids economy ip unlock
- *                  reports fields stats gzip result join seat hidden gtm benchmarks seats
+ *                  reports fields stats gzip result join seat hidden about asmember gtm benchmarks seats
  *                  benchrate pilot settings hunt scan load
  *   LOAD_OUT       write the load test's accounts and expected ledgers to this file
  *   CHECK_LEDGERS  re-check a LOAD_OUT file only (run it after restarting the server, to
@@ -704,9 +704,9 @@ section("gzip", async () => {
   const plain = await as(null);
   console.log(`  member view: ${(plain.body.length / 1024).toFixed(0)} KB raw, ${(z.body.length / 1024).toFixed(1)} KB gzip, ${(b.body.length / 1024).toFixed(1)} KB brotli`);
   check("brotli is smaller than gzip", b.body.length < z.body.length, [b.body.length, z.body.length]);
-  // The private seed holds about 6,600 companies since the third seat scan, most with an About line (about 740 KB brotli,
-  // 1,010 KB gzip in full; the page asks for ?compact=1).
-  check("the compressed view is under 1,100 KB", z.body.length < 1100 * 1024 && b.body.length < 1100 * 1024, [z.body.length, b.body.length]);
+  // The private seed holds about 6,600 companies since the third seat scan. Their About texts are not in the table (a record
+  // loads its own, GET ?about=): about 660 KB gzip and 480 KB brotli in full (it was 1,010 KB gzip with them; the page asks for ?compact=1).
+  check("the compressed view is under 800 KB", z.body.length < 800 * 1024 && b.body.length < 800 * 1024, [z.body.length, b.body.length]);
   check("both say the same thing", JSON.stringify(bv?.me) === JSON.stringify(zv?.me) && bv?.companies?.length === zv?.companies?.length, [bv?.companies?.length, zv?.companies?.length]);
   check("vary: Accept-Encoding", /accept-encoding/i.test(String(b.headers.vary ?? "")) && /accept-encoding/i.test(String(z.headers.vary ?? "")));
   check("not compressed when not accepted", !plain.headers["content-encoding"] && !!JSON.parse(plain.body.toString("utf8")).companies);
@@ -883,6 +883,72 @@ section("hidden", async () => {
   check("  then it is 1 credit", lCo.status === 200 && lRate2.status === 200 && lv2.me.credits === STARTER - PRICE - 1, [lCo.json?.error, lRate2.json?.error ?? lRate2.json?.message]);
   const coRow = lv2.ledger.find((l) => l.reason === "unlock" && l.delta === -PRICE);
   check("the ledger has one row for the company, of PRICE credits, named once it is unlocked", coRow?.field === "Locked company" && coRow.company === c2.name, coRow);
+});
+
+// Company About texts: the table carries a visible About as a marker with no text (Cell.lazy), and a record loads its own
+// with GET ?about= (up to 50 at once), with the table's locks.
+section("about", async () => {
+  const A = await member("Abe About", ip(180));
+  const aboutOf = (who, ids, extra = "") => call("GET", `/api/table?about=${ids.join(",")}${extra}`, { token: who.token, ipAddr: who.ip });
+  const v = await A.view();
+  const shownAbout = v.companies.filter((c) => c.cells.about?.s === "value");
+  check(
+    "the table carries no About text: a visible About is a marker (lazy, no text)",
+    shownAbout.every((c) => c.cells.about.v === "" && c.cells.about.lazy === true && c.cells.about.system === true),
+    shownAbout.find((c) => c.cells.about.v !== "" || !c.cells.about.lazy)?.cells.about,
+  );
+  check("  a locked company's About is locked or empty, as before", v.companies.filter((c) => c.hidden).every((c) => ["locked", "empty"].includes(c.cells.about?.s)));
+  if (!shownAbout.length) return skip("About reads", "no company with an About on this seed");
+  const batch = shownAbout.slice(0, 50);
+  const r = await aboutOf(A, batch.map((c) => c.id));
+  const got = r.json?.about ?? {};
+  check(
+    "GET ?about= with 50 ids returns each company's About cell with its text",
+    r.status === 200 && batch.every((c) => got[c.id]?.s === "value" && got[c.id].v.length > 0 && got[c.id].system === true && got[c.id].ver === 0 && !got[c.id].lazy),
+    { status: r.status, miss: batch.find((c) => got[c.id]?.s !== "value")?.id },
+  );
+  check("  only the companies asked for, and a cell says nothing more than the table did (its source at most)", Object.keys(got).length === batch.length && Object.values(got).every((c) => Object.keys(c).every((k) => ["s", "v", "ver", "system", "from"].includes(k)) && (c.from === undefined || c.from === "website")), Object.values(got)[0]);
+  const texts = Object.values(got).map((c) => JSON.stringify(c.v).slice(1, -1)).filter((t) => t.length >= 40);
+  const plain = (await call("GET", "/api/table", { token: A.token, ipAddr: A.ip })).text;
+  const compact = (await call("GET", "/api/table?compact=1", { token: A.token, ipAddr: A.ip })).text;
+  check("none of those texts is in the table, full or ?compact=1", texts.length > 0 && texts.every((t) => !plain.includes(t) && !compact.includes(t)), texts.length);
+  const br = await rawGet(`/api/table?about=${batch.map((c) => c.id).join(",")}`, { "accept-encoding": "br", cookie: `rn_table=${A.token}`, "x-forwarded-for": A.ip });
+  check("  the answer is compressed", br.status === 200 && br.headers["content-encoding"] === "br", br.headers["content-encoding"]);
+  const one = batch[0];
+  const out = await call("GET", `/api/table?about=${one.id}`, { ipAddr: ip(181) });
+  check("signed out: 401, and no text", out.status === 401 && !out.text.includes(texts[0] ?? "\u0000"), out.status);
+  const madeUp = await call("GET", `/api/table?about=${one.id}`, { token: "not-a-member-token", ipAddr: ip(181) });
+  check("a sign-in that is nobody's: 401", madeUp.status === 401, madeUp.status);
+  const seat = v.companies.flatMap((c) => c.engagements)[0];
+  const odd = await aboutOf(A, ["c_AAAAAAAAAAAA", ...(seat ? [seat.id] : [])]);
+  check("an id that names no company (or names a seat) is left out", odd.status === 200 && Object.keys(odd.json?.about ?? {}).length === 0, odd.json);
+  const many = await aboutOf(A, Array.from({ length: 51 }, (_, n) => `c_${String(n).padStart(12, "A")}`));
+  const none = await call("GET", "/api/table?about=", { token: A.token, ipAddr: A.ip });
+  check("51 ids, or none, is refused", many.status === 400 && none.status === 400, [many.status, none.status]);
+  // Members can't add, confirm or report an About (it is a system fact), the same as before it left the table.
+  const tries = await Promise.all([
+    A.act({ type: "fill", entity: "company", id: one.id, field: "about", value: "We make things for other people who make things." }),
+    A.act({ type: "verify", entity: "company", id: one.id, field: "about" }),
+    A.act({ type: "report", entity: "company", id: one.id, field: "about" }),
+  ]);
+  check("adding, confirming or reporting an About is refused, as before", tries.every((t) => t.status === 400 && t.json?.error === "Members can't change that field."), tries.map((t) => t.json));
+  check("  and it reads the same after", JSON.stringify((await aboutOf(A, [one.id])).json?.about?.[one.id]) === JSON.stringify(got[one.id]));
+  // A locked company: its About stays locked through ?about= until the company is unlocked, then the text comes.
+  const adm = await admin();
+  if (!adm) return skip("About at a locked company", "no admin account (set ADMIN_TOKEN)");
+  const av = await adm.view();
+  const withAbout = new Set(av.companies.filter((c) => c.cells.about?.s === "value").map((c) => c.id));
+  const hid = v.companies.find((c) => c.hidden && withAbout.has(c.id));
+  if (!hid) return skip("About at a locked company", "no locked company with an About");
+  const locked = (await aboutOf(A, [hid.id])).json?.about?.[hid.id];
+  check("a locked company's About is locked through ?about= too, with no text", locked?.s === "locked" && !("v" in locked), locked);
+  const admCell = (await aboutOf(adm, [hid.id])).json?.about?.[hid.id];
+  const asMember = (await aboutOf(adm, [hid.id], "&as=member")).json?.about?.[hid.id];
+  check("  an admin reads it; with ?as=member it is locked as for a member", admCell?.s === "value" && admCell.v.length > 0 && asMember?.s === "locked", [admCell?.s, asMember?.s]);
+  const un = await A.act({ type: "unlock", entity: "company", id: hid.id, field: "identity" });
+  const after = (await A.view()).companies.find((c) => c.id === hid.id);
+  const opened = (await aboutOf(A, [hid.id])).json?.about?.[hid.id];
+  check("once unlocked the table shows the marker and ?about= the text", un.status === 200 && after?.cells.about?.lazy === true && opened?.s === "value" && opened.v === admCell?.v, [un.status, after?.cells.about, opened?.s]);
 });
 
 // "See it as a member": an admin's view built as a member's, from a query param or a cookie. Nobody else gets anything from it.

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { brotliCompress, constants as zc, gzip } from "zlib";
 import {
-  ActionError, billingVisit, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
+  ABOUT_MAX, ActionError, aboutCells, billingVisit, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
 } from "@/lib/table";
 import { stateVersion } from "@/lib/table";
 import type { ActionResult } from "@/lib/tableTypes";
@@ -166,7 +166,7 @@ async function viewAnswer(view: Built, enc: Enc | null, key?: string): Promise<N
  * shows, or answer with what they changed themselves (messages), or change too much (an admin
  * removing everything a member added: the page loads the table again).
  */
-const NO_PATCH = new Set(["scanNow", "aboutNow", "adminRemoveMember"]);
+const NO_PATCH = new Set(["scanNow", "aboutNow", "leadersNow", "adminRemoveMember"]);
 /** Actions that can move the rate benchmarks. */
 const BENCH_ACTIONS = new Set(["benchRate", "benchRateRemove", "fill", "retract", "review", "adminRemove", "report"]);
 /** The public ids of the records an action touched: what it named, what it made, and the cells it changed. */
@@ -198,6 +198,8 @@ const patchless = (a: Action) =>
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
  *                  Anyone else gets their own view, as without it.
+ * GET ?about=ID,ID { about: { [companyId]: Cell } }: up to 50 companies' About cells, which the table carries
+ *                  without their text (Cell.lazy). The same locks as the table. 401 signed out.
  *
  * See also POST /api/table/scan (the weekly scan, for a cron), GET /api/table/unsubscribe and
  * GET /api/health. Every handler answers 503 while Merlin cannot serve (lib/apiGuard.ts).
@@ -215,6 +217,16 @@ export const GET = guarded(async (req: NextRequest) => {
     return NextResponse.json({ members: await searchMembers(token, people) }, { headers: { "cache-control": "no-store" } });
   }
   if (limited(`get:${ip}`, 120, 60_000)) return err(SLOW, 429);
+  // A company's About, loaded when its record opens (the table leaves the text out, lib/table.ts aboutCells).
+  const aboutIds = req.nextUrl.searchParams.get("about");
+  if (aboutIds !== null) {
+    const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || req.nextUrl.searchParams.get("as") === "member";
+    const ids = [...new Set(aboutIds.split(",").map((x) => x.trim()).filter(Boolean))];
+    if (!(await memberForToken(token))) return err("You're signed out. Sign in again to see this company.", 401);
+    if (!ids.length || ids.length > ABOUT_MAX) return err(`Ask for 1 to ${ABOUT_MAX} companies at a time.`);
+    const a = await aboutCells(token, ids, { asMember });
+    return a ? sendJson(req, a) : err("You're signed out. Sign in again to see this company.", 401);
+  }
   // Messages between members (lib/messages.ts): the viewer's conversations, or only the unread count for the badge.
   if (req.nextUrl.searchParams.get("messages") !== null) {
     const list = await listConversations(token);

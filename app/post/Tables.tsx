@@ -24,7 +24,7 @@ import { COMPANY_PRICE } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconLock, IconStar, LockedName, LockedSite, fmtMonth } from "../ui/shared";
 import {
   ADD_AFTER_NAME, COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, PERSON_NO_ADD, coverOf, personBothLocked, personCoverOf, personNoun, personUnseen, fitReason, fitTier, hireLine, hireOfRow, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn,
-  recentSeats, seatNoun, seatWhat, shown, waitWords, type CoInfo, type FactRef, type HireCtx, type Row, type SortKey, type Tab,
+  recentSeats, seatNoun, seatWhat, shown, waitWords, gapWords, onTheTeamWords, type CoInfo, type FactRef, type HireCtx, type Row, type SortKey, type Tab,
 } from "./model";
 import "./hired.css";
 import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage, type Ui } from "./ui";
@@ -32,6 +32,7 @@ import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
 import { VerifyName } from "./Verify";
 import { fnChipPlan } from "./display";
+import { leadPhrase, type LeadLine } from "@/lib/leaders/types";
 
 /**
  * How fractional friendly a company is, as a plain label. Hover for the reason and the score.
@@ -76,7 +77,7 @@ export function UnlockedTag() {
  * cell, the dashed one included: the Companies table shows 3, then "+N" (display.ts fnChipPlan).
  */
 export function FnChips({ i, mine, max = 3, gap = true, total }: { i: CoInfo; mine: string | null; max?: number; gap?: boolean; total?: number }) {
-  const { chips, rest, gap: showGap } = fnChipPlan(i, mine, { max, total, gap });
+  const { chips, rest, gap: showGap, led, team } = fnChipPlan(i, mine, { max, total, gap });
   return (
     <span className="tp-fns">
       {chips.map(({ f, kind }) => (
@@ -98,7 +99,8 @@ export function FnChips({ i, mine, max = 3, gap = true, total }: { i: CoInfo; mi
           <span className="sr-only">, and {rest.join(", ")}</span>
         </span>
       )}
-      {showGap && mine && <NoSeatYet fn={mine} />}
+      {team && <OnTheTeam l={team} />}
+      {showGap && mine && <NoSeatYet fn={mine} led={led} />}
     </span>
   );
 }
@@ -118,11 +120,27 @@ export const storyTag = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "postin
 const storyWhy = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "from a posting that came down" : "a full-time hire");
 
 /** They hired fractionals in other functions, not the member's yet. Dashed, like anything missing. */
-export function NoSeatYet({ fn }: { fn: string }) {
+export function NoSeatYet({ fn, led }: { fn: string; led?: LeadLine | null }) {
   const named = namedFn(fn);
+  // A full-time leader of the function is on the company's website: no opening to point at, and it says so.
+  if (led)
+    return (
+      <span className="chip tp-fn tp-fn-story tp-fn-led" title={`From the company's website: a ${leadPhrase(led)} leads ${fn}. No fractional ${fn} seat is on file.`}>
+        {gapWords(fn, led)}
+      </span>
+    );
   return (
     <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other functions. ${named ? `No fractional ${named} seat` : "No fractional seat in your function"} is on file yet.`}>
       {named ? `No fractional ${named} yet` : "No fractional in your function yet"}
+    </span>
+  );
+}
+
+/** A fractional or interim leader of the function on the company's website: "Fractional CMO on the team". */
+export function OnTheTeam({ l }: { l: LeadLine }) {
+  return (
+    <span className="chip tp-fn tp-fn-team" title={`From the company's website: a ${leadPhrase(l)} leads ${l.fn}.`}>
+      {onTheTeamWords(l)}
     </span>
   );
 }

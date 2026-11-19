@@ -333,6 +333,93 @@ function AboutFill({ a, refresh }: { a: AdminStats; refresh: () => Promise<void>
   );
 }
 
+/**
+ * Who leads each function, read from company websites (lib/leaders): a run of the next 200
+ * companies or all of them (only with RN_LEADERS=1 on the server), its counts as it goes, and
+ * what is on file. While a run goes on the view is read again every few seconds.
+ */
+function LeadersRead({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
+  const ui = useUi();
+  const [busy, setBusy] = useState(false);
+  const [scope, setScope] = useState<"next" | "all">("next");
+  const x = a.leaders!;
+  const running = x.running || busy;
+  const live = useRef(refresh);
+  live.current = refresh;
+  useEffect(() => {
+    if (!x.running) return;
+    const t = setInterval(() => void live.current(), 5000);
+    return () => clearInterval(t);
+  }, [x.running]);
+  const start = async () => {
+    if (busy) return;
+    setBusy(true);
+    const r = await ui.act({ type: "leadersNow", scope }, { quiet: true });
+    if (r.ok) await sleep(1500);
+    await refresh();
+    setBusy(false);
+  };
+  const r = x.run;
+  const f = x.onFile;
+  return (
+    <Card
+      title="Who leads each function"
+      span={3}
+      action={
+        <span className="tp-pm-leads-act">
+          <select className="select tp-pm-select" aria-label="Which companies" value={scope} disabled={running || !x.enabled} onChange={(e) => setScope(e.target.value === "all" ? "all" : "next")}>
+            <option value="next">Next 200 companies</option>
+            <option value="all">All companies</option>
+          </select>
+          <button type="button" className="btn btn-sm btn-pine" disabled={running || !x.enabled} onClick={() => void start()}>
+            {running ? "Reading" : "Read leadership pages"}
+          </button>
+        </span>
+      }
+    >
+      <Rows
+        items={[
+          [x.running ? "This run" : "Last run", r ? `${n0(r.done)} of ${n0(r.total)} done` : "Not yet"],
+          ["Companies read", n0(r?.read ?? 0)],
+          ["Pages read", n0(r?.pages ?? 0)],
+          ["With a team or leadership page", n0(r?.team ?? 0)],
+          ["With a press release", n0(r?.press ?? 0)],
+          ["Functions found", n0(r?.functions ?? 0)],
+          ["Fractional or interim found", n0(r?.fractional ?? 0)],
+          ["Full-time found", n0(r?.fullTime ?? 0)],
+          ["Failed, blocked by robots.txt, skipped", r ? `${n0(r.failed)} · ${n0(r.robots)} · ${n0(Math.max(0, r.skipped - r.robots))}` : "0 · 0 · 0"],
+          [x.running ? "Started" : "Finished", r ? stamp(x.running ? r.startedAt : r.endedAt, "Stopped before the end") : "Not yet"],
+        ]}
+      />
+      <h3 className="tp-pm-h3">On file</h3>
+      <Rows
+        items={[
+          ["Companies read", n0(f.read)],
+          ["Functions with a leader", n0(f.functions)],
+          ["Fractional or interim", n0(f.fractional)],
+          ["Full-time", n0(f.fullTime)],
+          ["Nobody found", n0(f.none)],
+          ["Failed, blocked by robots.txt, skipped", `${n0(f.failed)} · ${n0(f.robots)} · ${n0(f.skipped)}`],
+          ["Due for a read", n0(x.due)],
+        ]}
+      />
+      {x.reasons.length > 0 && (
+        <>
+          <h3 className="tp-pm-h3">Why some were not read</h3>
+          <Rows items={x.reasons.map((q) => [q.why[0].toUpperCase() + q.why.slice(1), n0(q.n)] as [string, string])} />
+        </>
+      )}
+      <p className="tp-small muted tp-pm-foot" role="status">
+        {!x.enabled
+          ? "Off. It starts once RN_LEADERS=1 is set on the server."
+          : running
+            ? "Reading company websites, four at a time. This page updates as it goes."
+            : "Reads each company's leadership, team and press pages for who leads each function. No names are kept."}
+      </p>
+    </Card>
+  );
+}
+
 type RecentAdd = NonNullable<AdminStats["recentAdds"]>[number];
 
 /** The remove-everything step: a question first, focus on the safe answer, Esc to back out. */
@@ -799,6 +886,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
 
         <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
         {a.about && <AboutFill a={a} refresh={refresh} />}
+        {a.leaders && <LeadersRead a={a} refresh={refresh} />}
 
         <Card title="Weekly email">
           <Rows

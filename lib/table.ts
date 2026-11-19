@@ -104,6 +104,11 @@ import {
 } from "./billing/rules";
 import { radarStats, type RadarState } from "./radar/types";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
+import {
+  REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, leadersEnabled, leadersProgress,
+  type CompanyLeads, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
+} from "./leaders/types";
+import { mergeFunctions } from "./leaders/pick";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -381,6 +386,13 @@ export interface State extends MessagingState {
   radar?: RadarState;
   /** About texts read from company websites (lib/about): each company's last try, and the last run. The texts are values by "website". */
   about?: AboutState;
+  /**
+   * Who leads each function, read from each company's own website (lib/leaders), by internal
+   * company id: the function, level, full-time or fractional, since when and the page. Never a name.
+   */
+  leaders?: Record<string, LeadersRecord>;
+  /** The last run that read leadership pages (lib/leaders/run.ts). */
+  leadersRun?: LeadersRunSummary | null;
   /** Seat-holder names from public profiles: claims waiting for an admin, names an admin verified, names taken off, the switch. See publicName. */
   names?: NamesState;
   /** Invite to connect: which member sent which seat's holder their claim link, and what came of it. See connectInvite. */
@@ -2184,6 +2196,11 @@ function holdsOpenRole(s: State, me: Member, e: Node): boolean {
   });
 }
 
+/**
+ * A company About the viewer can see, as the table carries it: the cell without its text (GET
+ * /api/table?about= returns it whole). About is a system fact, so it never counts in the facts.
+ */
+const ABOUT_LATER = (): Cell => ({ s: "value", v: "", ver: 0, system: true, lazy: true });
 /** Company facts that would give a hidden company away. HQ is cut to its region instead. */
 const IDENTITY_FIELDS = new Set(["website", "linkedin", "about"]);
 /** The last part of an HQ ("Austin, TX" -> "TX"), so a hidden company keeps a region. */
@@ -2447,6 +2464,7 @@ export const contactInfo = (): NonNullable<View["contact"]> => ({ support: addre
  * The table as `token`'s member sees it. `asMember`: an admin asked to see it the way members do
  * ("See it as a member"): hidden companies stay hidden, and there is no review list or pilot
  * metrics. It changes nothing for anyone who is not an admin. Actions still run as the admin.
+ * Company About texts are left out (ABOUT_LATER): aboutCells reads them, a few companies at a time.
  */
 export async function buildView(token: string | null, opts: { asMember?: boolean } = {}): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
@@ -2455,6 +2473,34 @@ export async function buildView(token: string | null, opts: { asMember?: boolean
   if (statsCache && statsCache.seed === seed && Date.now() - statsCache.at < ANON_FRESH)
     return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled(), contact: contactInfo(), version: viewVersion(statsCache.s) };
   return anonView(seed, s);
+}
+
+/** The most companies one GET /api/table?about= answers for. */
+export const ABOUT_MAX = 50;
+/**
+ * GET /api/table?about=: the About cell of each company `ids` names (public company ids, up to
+ * ABOUT_MAX), exactly as the table carried it before the text left the table. fullView builds
+ * just those companies, so a locked company's About stays locked and nothing comes back that
+ * the member's table would not have shown. Ids that name no company are left out. Null when the
+ * token is nobody's.
+ */
+export async function aboutCells(token: string | null, ids: string[], opts: { asMember?: boolean } = {}): Promise<{ about: Record<string, Cell> } | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return null;
+  const g = viewGraph(seed, s);
+  const ix = companyIndex(g);
+  const cos = new Set<string>();
+  for (const id of ids.slice(0, ABOUT_MAX)) {
+    const c = ix.get(id);
+    // A company's own id only (the index also takes a seat's or a person's to its company).
+    if (c && g.companies.has(c) && pubId(c) === id) cos.add(c);
+  }
+  const about: Record<string, Cell> = {};
+  if (!cos.size) return { about };
+  const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), cos, false, true);
+  for (const c of v.companies) about[c.id] = c.cells.about ?? { s: "empty" };
+  return { about };
 }
 
 /** The most companies an action's answer carries (an Unlock all on one record touches one). Past it, the page loads the table again. */
@@ -2520,9 +2566,10 @@ function belowLead(title: string | null): boolean {
  * The table as `me` sees it. `only`: build just these companies (internal ids), for an action's
  * answer (viewPatch). The member's own numbers, credit history, benchmarks and scan summary come
  * whole, the counts in `stats` cover only those companies, and nothing is cached from it.
- * `bench` false leaves the benchmarks out.
+ * `bench` false leaves the benchmarks out. `withAbout` keeps the company About texts in; without
+ * it an About the viewer can see is ABOUT_LATER (the page loads the text when the record opens).
  */
-async function fullView(seed: Seed, s: State, me: Member | null, asMember = false, only: Set<string> | null = null, bench = true): Promise<View> {
+async function fullView(seed: Seed, s: State, me: Member | null, asMember = false, only: Set<string> | null = null, bench = true, withAbout = false): Promise<View> {
   const g = viewGraph(seed, s);
   /** The viewer is an admin and sees the admin's view (not "See it as a member"). */
   const admin = isAdmin(me) && !asMember;
@@ -2706,6 +2753,9 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
           er.invite = { path: `/claim/${claimToken(e.id)}?ref=${encodeURIComponent(myCode)}`, ...(at ? { at } : {}) };
         });
     }
+    // The About is the longest text on a record and only an open record shows it: the table carries a marker, GET ?about= the text.
+    if (!withAbout && cells.about?.s === "value") cells.about = ABOUT_LATER();
+    const leads = leadsOf(s, c.id, hidden);
     const rec: CompanyRec = {
       id: pubId(c.id),
       name: hidden ? HIDDEN_COMPANY : c.name,
@@ -2724,6 +2774,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       // Paid to see it while it was hidden (Unlock company, or its open role's title or posting: one purchase, recorded on the company).
       ...(me && (s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) ? { unlocked: true } : {}),
       ...(addedByMe.has(c.id) ? { added: true } : {}),
+      // Who leads each function, from the company's own website: about roles, not people, so free wherever the company's basics show.
+      ...(leads ? { leads } : {}),
     };
     companies.push(rec);
     if (forPreview)
@@ -3179,6 +3231,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     seats: { linkedMembers: linked.size, factsMissing },
     benchmarks: { memberRates, privateRates: s.benchRates.length, indexRates: seed.rateIndex?.length ?? 0 },
     about: aboutStats(s, g, nowMs),
+    leaders: leadersStats(s, g, nowMs),
     radar: radarStats(
       s.radar,
       s.signals,
@@ -3601,6 +3654,16 @@ export async function perform(
     if (aboutProgress.running && run) return { message: `Already running: ${run.done} of ${run.total} companies done.` };
     void import("./about/run").then((m) => m.runAbout()).catch((e) => console.error("about run failed", e));
     return { message: "Started. It reads each company's website, four at a time, so it takes a while." };
+  }
+  if (a?.type === "leadersNow") {
+    if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
+    if (!isAdmin(await memberForToken(token))) throw new ActionError("Only admins can start this.");
+    if (!leadersEnabled()) throw new ActionError("Reading leadership pages is off. Set RN_LEADERS=1 on the server to turn it on.");
+    const run = leadersProgress.run;
+    if (leadersProgress.running && run) return { message: `Already running: ${run.done} of ${run.total} companies done.` };
+    const scope = a.scope === "all" ? "all" : "next";
+    void import("./leaders/run").then((m) => m.runLeaders({ scope })).catch((e) => console.error("leaders run failed", e));
+    return { message: `Started on ${scope === "all" ? "every company due" : "the next 200 companies"}. It reads each company's site, four at a time, so it takes a while.` };
   }
   // Messages between members live in lib/messages.ts (loaded here, so the two files don't import each other at start).
   if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
@@ -5645,7 +5708,79 @@ export async function partnersView(token: string | null): Promise<PartnersView |
     const conv = lastWith.get(m.id);
     return { id: pubId(m.id), first: firstName(m.name), title, fn: f, icp, ...(conv ? { conversationId: conv.id } : {}) };
   });
-  return { fn, order, companies, min: PARTNERS_MIN, answers, members, total: listed.length, listed: !s.profiles[me.id]?.partnersOff };
+  return { fn, order, companies, min: PARTNERS_MIN, answers, members, total: listed.length, listed: !s.profiles[me.id]?.partnersOff, titles: partnerTitles(g, s, tracks, idx, me, fn, mine) };
+}
+
+/**
+ * "Partners at your kind of clients" reads people first: each card leads with the title of the
+ * seat while the name stays locked. In the table, the record and the connector a seat's role
+ * still sells with who held it (SEAT_BUNDLE); only this page shows it ahead of the unlock, and
+ * only the title: never the name, the company, an email or a link (partnerTitle). Seats are the
+ * ones the page can list: a named holder, not an open role, not Full-time, outside the viewer's
+ * function, at companies the viewer's Ideal Fractional Profile doesn't rule out (a known part
+ * that conflicts), and not already open to the viewer (they paid, or it is their seat). Keyed by
+ * the seat's public id.
+ */
+function partnerTitles(g: Graph, s: State, tracks: Tracks, idx: MemberIndex, me: Member, fn: string | null, icp: Icp | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length)) return out;
+  // The table's own test (icpTest in app/post/model.ts) on what is on file, kept loose: only a known part that conflicts rules a company out.
+  const lower = (v: string) => v.trim().toLowerCase();
+  const country = (v: string) => {
+    const k = lower(v).replace(/\./g, "");
+    return k === "us" || k === "usa" || k === "united states of america" ? "united states" : k === "uk" ? "united kingdom" : k;
+  };
+  const conflicts = (want: string[], have: string | null, key: (v: string) => string) => !!want.length && !!have && !want.some((w) => key(w) === key(have));
+  const fitsAt = new Map<string, boolean>();
+  const fits = (c: Node) => {
+    let ok = fitsAt.get(c.id);
+    if (ok === undefined) {
+      ok =
+        !conflicts(icp.industries, live(c, s, "industry"), lower) &&
+        !conflicts(icp.employees, live(c, s, "employees"), (v) => v) &&
+        !conflicts(icp.revenue, live(c, s, "revenue"), (v) => v) &&
+        !conflicts(icp.countries, geoOf(c, s).country, country);
+      fitsAt.set(c.id, ok);
+    }
+    return ok;
+  };
+  for (const e of g.engagements.values()) {
+    if (!seatBundled(e, s) || isOpenRole(e, s, tracks)) continue;
+    if (live(e, s, "type") === "Full-time") continue;
+    const f = workFn(fnOf(e, s));
+    if (!f || f === fn) continue;
+    const c = g.companies.get(e.companyId);
+    if (!c || !fits(c)) continue;
+    const rv = valueOf(e, s, "role");
+    if (!rv || rv.status !== "live" || rv.reporters?.includes(me.id)) continue;
+    const opv = valueOf(e, s, "operator")!;
+    if (seatHolder(s, idx, e.id, opv)?.id === me.id) continue;
+    if (SEAT_BUNDLE.some((k) => (s.unlocks[fkey(e.id, k)] ?? []).includes(me.id))) continue;
+    const t = partnerTitle(rv.value, opv.value, c.name, live(c, s, "website") ?? null);
+    if (t) out[pubId(e.id)] = t;
+  }
+  return out;
+}
+
+/**
+ * A seat's title fit to show before its holder is unlocked: without the company's name or site
+ * (titleWithout), and nothing at all when it holds any part of the holder's name, an email, a
+ * link or a handle (the card then reads "Fractional <function> leader"). Null when nothing is left.
+ */
+export function partnerTitle(role: string, holder: string, company: string, site: string | null): string | null {
+  const t = titleWithout(role, company, site, "").trim();
+  if (!t || t.length > 80) return null;
+  if (/@|https?:|www\.|\.(?:com|io|co|net|org|ai)\b|linkedin|\/in\//i.test(t)) return null;
+  const words = holder
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((w) => w.toLowerCase())
+    .filter((w) => w.length >= 2);
+  const tw = new Set(t.toLowerCase().split(/[^\p{L}\p{N}]+/u));
+  if (words.some((w) => tw.has(w))) return null;
+  // A name typed without spaces ("JaneSmith") or run into the title.
+  const flat = t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  if (words.some((w) => w.length >= 4 && flat.includes(w))) return null;
+  return t;
 }
 
 /* ---------- last seen ---------- */
@@ -7112,6 +7247,157 @@ function aboutStats(s: State, g: Graph, nowMs: number): NonNullable<AdminStats["
     waiting,
     withAbout,
     companies: g.companies.size,
+    reasons: [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([why, n]) => ({ why, n })),
+  };
+}
+
+/* ---------- who leads each function, from company websites (lib/leaders) ---------- */
+
+/** A fractional firm or agency (lib/firmRemoval.ts): its team page lists the fractionals it places, not its own leaders. */
+const isFirmNode = (node: CompanyNode, s: State) => !!companyFirm(node.name, live(node, s, "about"), live(node, s, "website"));
+
+/** Whether a company is due a read of its leadership pages, and its record if any. */
+function leadersDue(s: State, node: CompanyNode, nowMs: number): { domain: string; prev: LeadersRecord | null } | null {
+  const domain = siteKey(live(node, s, "website"));
+  // No website, or one on a shared host (a profile or job board page): no site of the company's own to read.
+  if (!domain || domain.includes("/")) return null;
+  const prev = s.leaders?.[node.id] ?? null;
+  if (!prev) return { domain, prev };
+  const age = nowMs - Date.parse(prev.checkedAt);
+  if (!Number.isFinite(age)) return { domain, prev };
+  return age >= (prev.status === "found" ? LEADERS_REFRESH_DAYS : LEADERS_RETRY_DAYS) * DAY ? { domain, prev } : null;
+}
+
+/** Per company: an open role there now (2), and what members did there (1 each: a follow, an unlock, a fact a member added, a seat a member added). */
+function leadersWeights(seed: Seed, s: State, g: Graph): Map<string, number> {
+  const w = new Map<string, number>();
+  const bump = (id: string | undefined, n: number) => {
+    if (id && g.companies.has(id)) w.set(id, (w.get(id) ?? 0) + n);
+  };
+  const companyOf = (id: string) => (g.companies.has(id) ? id : g.engagements.get(id)?.companyId ?? g.contacts.get(id)?.companyId);
+  const tracks = tracksOf(seed, s);
+  const open = new Set<string>();
+  for (const e of g.engagements.values()) {
+    if (!open.has(e.companyId) && isOpenRole(e, s, tracks)) {
+      open.add(e.companyId);
+      bump(e.companyId, 2);
+    }
+  }
+  for (const e of s.engagements) if (!isSystem(e.by)) bump(e.companyId, 1);
+  for (const list of Object.values(s.follows)) for (const id of list) bump(id, 1);
+  for (const [k, who] of Object.entries(s.unlocks)) if (who.length) bump(companyOf(k.slice(0, k.lastIndexOf("."))), 1);
+  for (const [k, v] of Object.entries(s.values)) if (!isSystem(v.by)) bump(companyOf(k.slice(0, k.lastIndexOf("."))), 1);
+  return w;
+}
+
+/**
+ * Companies due a read of their leadership pages, the most useful first: companies with an open
+ * role or member activity (the busiest first), then the rest; inside each, never read before
+ * ahead of read longest ago.
+ */
+export async function leadersTargets(nowIso?: string): Promise<LeadersTarget[]> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
+  const g = graph(seed, s);
+  const w = leadersWeights(seed, s, g);
+  const out: (LeadersTarget & { w: number })[] = [];
+  for (const node of g.companies.values()) {
+    const due = leadersDue(s, node, nowMs);
+    if (due && !isFirmNode(node, s)) out.push({ companyId: node.id, name: node.name, domain: due.domain, prev: due.prev, w: w.get(node.id) ?? 0 });
+  }
+  out.sort(
+    (a, b) =>
+      Number(b.w > 0) - Number(a.w > 0) ||
+      b.w - a.w ||
+      Number(!!a.prev) - Number(!!b.prev) ||
+      (a.prev?.checkedAt ?? "").localeCompare(b.prev?.checkedAt ?? "") ||
+      a.companyId.localeCompare(b.companyId),
+  );
+  return out.map(({ w: _w, ...t }) => t);
+}
+
+const leadersHash = (fns: LeadersRecord["functions"]) =>
+  createHash("sha256")
+    .update(JSON.stringify(Object.keys(fns).sort().map((k) => [k, fns[k].level, fns[k].kind, fns[k].since ?? ""])))
+    .digest("base64url")
+    .slice(0, 22);
+
+/**
+ * Store a batch of leadership reads, each company's record whole (State.leaders): its status, when
+ * it was read, the functions found (merged with what was on file, lib/leaders/pick.ts) and the
+ * counts for Pilot metrics. A read that could not reach the site keeps the leaders on file and
+ * tries again later. Nothing here holds a name. `run` is the run so far. Returns how many were stored.
+ */
+export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary | null, nowIso?: string): Promise<number> {
+  return mutate((s, seed) => {
+    const now = nowIso ?? new Date().toISOString();
+    const all = (s.leaders ??= {});
+    const g = graph(seed, s);
+    let n = 0;
+    for (const o of outcomes) {
+      if (!g.companies.has(o.companyId)) continue;
+      const prev = all[o.companyId];
+      const counts = { pages: o.pages, ...(o.team ? { team: true } : {}), ...(o.press ? { press: true } : {}), ...(o.robots ? { robots: o.robots } : {}) };
+      if (o.status === "found" || o.status === "none") {
+        const functions = mergeFunctions(prev?.functions, o.functions);
+        const found = Object.keys(functions).length > 0;
+        all[o.companyId] = { status: found ? "found" : "none", checkedAt: now, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts };
+      } else {
+        // The site could not be read this time: what is on file stays.
+        const functions = prev?.functions ?? {};
+        const kept = Object.keys(functions).length > 0;
+        all[o.companyId] = { status: kept ? "found" : o.status, checkedAt: now, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts };
+      }
+      n++;
+    }
+    if (run) s.leadersRun = { ...run };
+    return n;
+  });
+}
+
+/** CompanyRec.leads: the functions with a leader on file, in the order functions are listed. The page's address stays out at a hidden company. */
+function leadsOf(s: State, companyId: string, hidden: boolean): CompanyLeads | undefined {
+  const r = s.leaders?.[companyId];
+  if (!r) return undefined;
+  const fns = FUNCTIONS.filter((f) => r.functions[f]).map((fn) => {
+    const l = r.functions[fn];
+    return { fn, level: l.level, kind: l.kind, ...(l.since ? { since: l.since } : {}), how: l.how, ...(hidden ? {} : { url: l.url }) };
+  });
+  return fns.length ? { checkedAt: r.checkedAt, fns } : undefined;
+}
+
+/** Pilot metrics: the run under way (or the last one), and what is on file. */
+function leadersStats(s: State, g: Graph, nowMs: number): NonNullable<AdminStats["leaders"]> {
+  const onFile = { companies: 0, read: 0, pages: 0, team: 0, press: 0, functions: 0, fractional: 0, fullTime: 0, none: 0, failed: 0, robots: 0, skipped: 0 };
+  const reasons = new Map<string, number>();
+  for (const [id, r] of Object.entries(s.leaders ?? {})) {
+    if (!g.companies.has(id)) continue;
+    onFile.companies++;
+    if (r.status === "found" || r.status === "none") onFile.read++;
+    if (r.status === "none") onFile.none++;
+    if (r.status === "failed") onFile.failed++;
+    if (r.status === "skipped") {
+      if (r.why === "robots.txt disallows") onFile.robots++;
+      else onFile.skipped++;
+    }
+    if (r.status !== "found" && r.why && r.why !== "no leaders found") reasons.set(r.why, (reasons.get(r.why) ?? 0) + 1);
+    onFile.pages += r.pages ?? 0;
+    if (r.team) onFile.team++;
+    if (r.press) onFile.press++;
+    for (const l of Object.values(r.functions)) {
+      onFile.functions++;
+      if (l.kind === "fractional" || l.kind === "interim") onFile.fractional++;
+      if (l.kind === "full-time") onFile.fullTime++;
+    }
+  }
+  let due = 0;
+  for (const node of g.companies.values()) if (leadersDue(s, node, nowMs) && !isFirmNode(node, s)) due++;
+  return {
+    enabled: leadersEnabled(),
+    running: leadersProgress.running,
+    run: leadersProgress.run ?? s.leadersRun ?? null,
+    onFile,
+    due,
     reasons: [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([why, n]) => ({ why, n })),
   };
 }

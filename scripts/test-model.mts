@@ -188,7 +188,8 @@ check("a value showing without a paid flag is not an unlock", !recordsName.eng &
   check("a seat search reads the company's industry", seats("software").length === 2);
   const cos = (q: string) => applyFilters(rowsFor("companies", [i]), EMPTY_FILTERS, "all", q, me).rows.length;
   check("a pasted address finds the company", cos("https://www.supersend.io/pricing") === 1 && cos("www.supersend.io") === 1 && cos("supersend.io/") === 1);
-  check("the About text is searched by the start of a word", cos("outreach") === 1 && cos("outre") === 1 && cos("utreach") === 0 && cos("one") === 0);
+  // The table carries an About without its text (Cell.lazy, a record loads it), so search never reads it, even a text it was given.
+  check("the About text is not searched", cos("outreach") === 0 && cos("outre") === 0 && cos("supersend") === 1);
   check("the source is not searched", cos("member story") === 0 && cos("success") === 0);
   {
     const h = co("Hidden Pharma", [eng({ status: val("Open role", { system: true }), function: val("Sales") }, { opened: "2026-11-03", closed: null })]);

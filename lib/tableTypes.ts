@@ -4,6 +4,7 @@
  */
 import type { Entity } from "./tableFields";
 import type { RadarStats } from "./radar/types";
+import type { CompanyLeads, LeadersRunSummary } from "./leaders/types";
 
 /**
  * What one field looks like to the viewer.
@@ -52,6 +53,12 @@ export type Cell =
        * test the seat holder picker uses, so "Member" always means someone on Merlin now.
        */
       member?: { title: string; you?: boolean };
+      /**
+       * Company About only: the company has an About the viewer can see, but the table leaves its
+       * text out (`v` is ""). GET /api/table?about=<companyId> returns the cell whole, as the
+       * table used to carry it (lib/table.ts aboutCells, which server-side readers call too).
+       */
+      lazy?: true;
     }
   | { s: "reported"; mine: boolean; byMe?: boolean };
 
@@ -201,6 +208,12 @@ export interface CompanyRec {
    * the viewer sees because they added to it or held a seat there.
    */
   unlocked?: boolean;
+  /**
+   * Who leads each function, read from the company's own website (lib/leaders): the function,
+   * level, full-time or fractional, since when, and the page (left out at a hidden company). Never
+   * a name. Free, as the company's basics are. Left out when nothing is on file.
+   */
+  leads?: CompanyLeads;
 }
 
 export interface Me {
@@ -768,6 +781,21 @@ export interface AdminStats {
     companies: number;
     reasons: { why: string; n: number }[];
   };
+  /**
+   * Who leads each function, read from company websites (lib/leaders). `enabled`: RN_LEADERS=1.
+   * `run`: the run under way, else the last one. `onFile`: what the state holds, counted per
+   * company (companies read, pages read, with a team page, with a press page, none found, failed,
+   * left alone by robots.txt, skipped) and per function (found, fractional or interim, full-time).
+   * `due`: companies a run would read now. `reasons`: the most common reasons for a skip or failure.
+   */
+  leaders?: {
+    enabled: boolean;
+    running: boolean;
+    run: LeadersRunSummary | null;
+    onFile: { companies: number; read: number; pages: number; team: number; press: number; functions: number; fractional: number; fullTime: number; none: number; failed: number; robots: number; skipped: number };
+    due: number;
+    reasons: { why: string; n: number }[];
+  };
 }
 
 export type Action =
@@ -913,7 +941,9 @@ export type Action =
   /** Admins: run the open-role scan now. */
   | { type: "scanNow" }
   /** Admins: fill About texts from company websites now (lib/about; only with RN_ABOUT=1). Runs in the background. */
-  | { type: "aboutNow" };
+  | { type: "aboutNow" }
+  /** Admins: read who leads each function from company websites (lib/leaders; only with RN_LEADERS=1), the next 200 companies or all of them. Runs in the background. */
+  | { type: "leadersNow"; scope?: "next" | "all" };
 
 /**
  * What POST { action } returns. `cells` are the cells the action changed, as the actor now
@@ -979,6 +1009,13 @@ export interface PartnersView {
   total: number;
   /** The viewer is listed for other members. */
   listed: boolean;
+  /**
+   * "Partners at your kind of clients" leads with the seat's title while who held it is locked
+   * (lib/table.ts partnerTitles). Seat public id -> its title, cut of the company's name and never
+   * holding the holder's name, an email or a link. Only this page: elsewhere the role still sells
+   * with who held it (SEAT_BUNDLE).
+   */
+  titles?: Record<string, string>;
 }
 
 /**

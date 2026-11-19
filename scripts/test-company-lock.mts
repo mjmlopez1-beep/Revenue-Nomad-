@@ -111,6 +111,10 @@ writeFileSync(
       [`${SPAM.id}.website`]: v(SPAM.site, "m_sam"),
       [`${SPAM.id}.industry`]: v("SaaS", "m_sam"),
     },
+    // Who leads Sales at Acmeworks, read from its own site (lib/leaders): a free fact, its page link the company's own.
+    leaders: {
+      [CO.acme.id]: { status: "found", checkedAt: ago(2), functions: { Sales: { level: "VP", kind: "full-time", since: "2024", how: "team page", url: `https://${CO.acme.site}/team`, seenAt: ago(2) } } },
+    },
     seen: Object.fromEntries(seed.members.map((m) => [m.id, ago(1)])),
     profiles: Object.fromEntries(seed.members.map((m) => [m.id, { title: m.title, onboarded: true }])),
   }),
@@ -193,6 +197,9 @@ async function main() {
     bRole.cells.role?.s === "value" && bRole.cells.role.v === "Fractional CMO" && bRole.cells.function?.s === "value" && bRole.cells.posting?.s === "locked" && b0.friendly.open === 1,
     bRole.cells,
   );
+  check("who leads each function is free on a locked company, without the page it came from", a0.leads?.fns[0]?.fn === "Sales" && a0.leads.fns[0].kind === "full-time" && !("url" in a0.leads.fns[0]), a0.leads);
+  const ab = await T.aboutCells("tok-nora-lock", [pub(CO.acme.id), pub(CO.blue.id)]);
+  check("GET ?about= gives a locked company's About locked, and names nothing", !!ab && Object.values(ab.about).every((c) => c.s === "locked") && leaks(ab, ALL).length === 0, ab);
   check("the client model's teaser reads the free facts", M.deriveAll([a0])[0].teaser === "SaaS · $1M–$5M · 11–50 · TX", M.deriveAll([a0])[0].teaser);
   check("no locked company's name, domain, LinkedIn or About anywhere in the view", leaks(v0, ALL).length === 0, leaks(v0, ALL));
   const packed = W.packView(structuredClone(v0));
@@ -246,6 +253,8 @@ async function main() {
   check("Unlock company costs 2 credits and names it", un.ok && un.r.me?.credits === 23 && /^Unlocked Acmeworks Robotics for 2 credits\.$/.test(un.r.message), un.ok ? un.r.message : un);
   const v1 = await view("tok-nora-lock");
   const a1 = coOf(v1, CO.acme.id)!;
+  const ab1 = await T.aboutCells("tok-nora-lock", [pub(CO.acme.id)]);
+  check("once unlocked, GET ?about= gives its About, and the leader's page comes with the record", ab1?.about[pub(CO.acme.id)]?.s === "value" && (ab1.about[pub(CO.acme.id)] as { v: string }).v === CO.acme.about && coOf(await view("tok-nora-lock"), CO.acme.id)?.leads?.fns[0]?.url === `https://${CO.acme.site}/team`, ab1);
   check(
     "the member now sees its name, website, LinkedIn, logo and About, and the full HQ",
     !a1.hidden && a1.name === CO.acme.name && a1.cells.website?.s === "value" && a1.cells.linkedin?.s === "value" && a1.cells.about?.s === "value" && a1.cells.hq?.s === "value" && a1.cells.hq.v === "Austin, TX" && !!a1.unlocked,

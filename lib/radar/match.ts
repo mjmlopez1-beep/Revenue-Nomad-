@@ -57,11 +57,15 @@ export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
       return sig.fn === p.fn ? `A ${p.fn} seat like yours, at a company in your profile` : null;
     case "adjacent":
       if (!sig.fn || sig.fn === p.fn || !p.before.includes(sig.fn) || sig.hiredFns.includes(p.fn)) return null;
+      // A full-time leader of the member's function on the company's website: said in place of "no fractional yet".
+      if (sig.ledFullTime && p.fn in sig.ledFullTime) return `${sig.fn} usually comes before ${p.fn}. ${p.fn} led full-time${sig.ledFullTime[p.fn] ? ` since ${sig.ledFullTime[p.fn]}` : ""}`;
       return `${sig.fn} usually comes before ${p.fn}, and they have no fractional ${p.fn} yet`;
     case "funding":
       return "Money in usually means hiring, at a company in your profile";
   }
 }
+
+const ledLast = (x: RawSignal, p: RadarProfile) => Number(x.kind === "adjacent" && !!p.fn && !!x.ledFullTime && p.fn in x.ledFullTime);
 
 /** The signals for this member, in the order a free member sees the first one: roles, then ended seats, adjacent hires, funding; newest first within each. */
 export function signalsFor(all: RawSignal[], p: RadarProfile): (RawSignal & { why: string })[] {
@@ -69,7 +73,8 @@ export function signalsFor(all: RawSignal[], p: RadarProfile): (RawSignal & { wh
   return all
     .map((x) => ({ ...x, why: matchWhy(x, p) }))
     .filter((x): x is RawSignal & { why: string } => !!x.why)
-    .sort((a, b) => rank[a.kind] - rank[b.kind] || b.atMs - a.atMs || a.key.localeCompare(b.key));
+    // An adjacent hire where a full-time leader already runs the member's function comes after the ones where nobody does.
+    .sort((a, b) => rank[a.kind] - rank[b.kind] || ledLast(a, p) - ledLast(b, p) || b.atMs - a.atMs || a.key.localeCompare(b.key));
 }
 
 /**

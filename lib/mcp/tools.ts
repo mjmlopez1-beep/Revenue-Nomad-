@@ -21,14 +21,16 @@
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
-import { ActionError, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, type Member } from "../table";
+import { ActionError, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
   EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, hireOfRow, hiredOn, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
+  fractionalLeadFns, fullTimeLead,
   type CoInfo, type FactRef, type Filters, type SortKey,
 } from "@/app/post/model";
+import { LEADERS_SOURCE, checkedWords, leadItems, ledFullTimeWords } from "../leaders/types";
 import { cleanWindow } from "../hired";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
 import { sameView } from "../hunt";
@@ -184,6 +186,8 @@ function companySummary(i: CoInfo): ToolOut {
     fractional_hires: c.friendly.fractional,
     ...(repeatHirer(i) ? { repeat_hirer: true } : {}),
     ...(i.fnState.hiring.length ? { hiring_now: i.fnState.hiring } : {}),
+    // Who leads each function, from the company's own website: roles only, never a person.
+    ...(c.leads?.fns.length ? { who_leads: leadItems(c.leads), who_leads_source: `${LEADERS_SOURCE}, checked ${checkedWords(c.leads.checkedAt)}` } : {}),
     seats: i.engs.length,
     ...(c.friendly.open ? { open_roles: c.friendly.open } : {}),
     ...(c.friendly.operators ? { fellow_fractionals: c.friendly.operators } : {}),
@@ -340,9 +344,16 @@ const purchaseSet = (i: CoInfo) => {
   return bought;
 };
 
-function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? ""): ToolOut {
+/** The company's About cell with its text (the table carries a visible About without it, Cell.lazy), read from the state. */
+async function aboutOf(ctx: Ctx, i: CoInfo | undefined): Promise<Cell | undefined> {
+  if (!i || i.c.cells.about?.s !== "value" || !i.c.cells.about.lazy) return undefined;
+  return (await aboutCells(ctx.member.token, [i.c.id], { asMember: true }))?.about[i.c.id];
+}
+
+/** One company for get_company. `about`: its About cell with the text (aboutOf). */
+function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? "", about?: Cell): ToolOut {
   const c = i.c;
-  const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? `locked until you unlock the company (${COMPANY_PRICE_SAY})` : LOCKED));
+  const facts = readAll(about ? { ...c.cells, about } : c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? `locked until you unlock the company (${COMPANY_PRICE_SAY})` : LOCKED));
   return {
     ...companySummary(i),
     ...facts,
@@ -503,11 +514,18 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
   if (a.unlocked && tab !== "unlocked") rows = rows.filter((r) => r.i.unlockedByMe);
   if (hired) rows = rows.filter((r) => r.i.fnState.hired.includes(hired));
   // "No Marketing yet": they hired fractionals in other functions and none in this one (the app's "No Marketing seat yet").
-  if (notYet) rows = rows.filter((r) => r.i.fnState.hired.length > 0 && !r.i.fnState.hired.includes(notYet) && !r.i.fnState.hiring.includes(notYet));
+  // A fractional or interim leader on the company's website counts as a fractional hire in that function.
+  if (notYet)
+    rows = rows.filter((r) => {
+      const frac = fractionalLeadFns(r.i);
+      return (r.i.fnState.hired.length > 0 || frac.length > 0) && !r.i.fnState.hired.includes(notYet) && !r.i.fnState.hiring.includes(notYet) && !frac.includes(notYet);
+    });
   // Recently hired lists the most recent hire first, unless another order was asked for.
   const sort: SortKey =
     a.sort === "recent_hire" ? "hired" : a.sort && ["fit", "newest", "name", "employees", "revenue"].includes(a.sort) ? (a.sort as SortKey) : hire ? "hired" : "fit";
   rows = sortRows(rows, sort, false, q, { hire });
+  // "No Sales yet": a company whose website shows a full-time leader of that function has no opening there, so it comes after the ones with nobody on file.
+  if (notYet) rows = [...rows.filter((r) => !fullTimeLead(r.i, notYet)), ...rows.filter((r) => !!fullTimeLead(r.i, notYet))];
   const limit = clampLimit(a.limit, 10, 25);
   const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
   const page = rows.slice(offset, offset + limit);
@@ -517,7 +535,8 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
     ...(offset + page.length < rows.length ? { next_offset: offset + page.length } : {}),
     companies: page.map((r) => {
       const e = hire ? hireOfRow(r, hire.fns, hire.within) : null;
-      return { ...companySummary(r.i), ...(e ? { recent_hire: recentHireOut(r.i, e) } : {}) };
+      const led = notYet ? fullTimeLead(r.i, notYet) : null;
+      return { ...companySummary(r.i), ...(e ? { recent_hire: recentHireOut(r.i, e) } : {}), ...(led ? { no_function_yet_note: `${ledFullTimeWords(notYet!, led)} (company website)` } : {}) };
     }),
     ...(rows.length === 0
       ? {
@@ -533,7 +552,8 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
 
 export async function getCompany(ctx: Ctx, a: { company: string }): Promise<ToolOut> {
   const mv = await memberView(ctx.member);
-  return companyOut(companyInfo(mv, a.company), mv, publicBase() ?? ctx.origin);
+  const i = companyInfo(mv, a.company);
+  return companyOut(i, mv, publicBase() ?? ctx.origin, await aboutOf(ctx, i));
 }
 
 export interface RoleArgs {
@@ -768,7 +788,7 @@ async function afterChange(ctx: Ctx, entity: Entity, id: string): Promise<ToolOu
   const base = publicBase() ?? ctx.origin;
   if (entity === "company") {
     const i = mv.byId.get(id);
-    return i ? { company: companyOut(i, mv, base) } : undefined;
+    return i ? { company: companyOut(i, mv, base, await aboutOf(ctx, i)) } : undefined;
   }
   if (entity === "engagement") {
     const i = mv.bySeat.get(id);

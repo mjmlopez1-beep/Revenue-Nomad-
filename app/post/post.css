@@ -1976,7 +1976,12 @@ body:has(.tp-drawer) .pro-foot {
   color: var(--pine);
   font-weight: 600;
 }
-/* Mentioned only in member stories, not a fractional seat. */
+/* A fractional or interim leader on the company's website: "Fractional CMO on the team". */
+.tp-fn-team {
+  border-color: var(--pine-14);
+  color: var(--pine);
+}
+/* Mentioned only in member stories, not a fractional seat. "Sales led full-time since 2024" (tp-fn-led) reads the same. */
 .tp-fn-story {
   border-color: var(--line);
   color: var(--faint);
@@ -2675,6 +2680,20 @@ th.num .tp-th-link {
   font-size: 13.5px;
   line-height: 20px;
   color: var(--body-ink);
+}
+/* Who leads each function, from the company's own website (lib/leaders). */
+.tp-dleads {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--body-ink);
+  overflow-wrap: anywhere;
+}
+.tp-dleads-h {
+  font-weight: 600;
+}
+.tp-dleads-src {
+  color: var(--muted);
 }
 .tp-dfit {
   display: flex;
