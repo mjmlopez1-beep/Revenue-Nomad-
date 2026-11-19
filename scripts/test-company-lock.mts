@@ -1,7 +1,9 @@
 /**
- * Checks of the company lock: every company's identity (name, website, logo, LinkedIn, About) is
- * locked for a member until they unlock it for COMPANY_PRICE credits or already know it (they
- * added to it, held a seat there, or paid for anything there). No server: lib/table.ts runs in
+ * Checks of the company lock: every company's identity (name, website, LinkedIn) is locked for a
+ * member until they unlock it for COMPANY_PRICE credits or already know it (they added to it,
+ * held a seat there, or paid for anything there). Its About shows without its name, web address,
+ * links and emails, and its logo through GET /api/logo/<id> (lib/logo.ts) with the icon services
+ * replaced, never with the domain in the page. No server: lib/table.ts runs in
  * process on a made-up seed in a temporary data dir, with fetch replaced, so nothing leaves the
  * machine.
  *
@@ -15,6 +17,14 @@
  * under the old rules) named; admins see everything and "See it as a member" doesn't; the
  * landing page's preview still names companies; who held a seat opens after the company; Add by
  * name opens only with something added; a removed company is paid back in full.
+ *
+ * The logo and the About: the route sends image bytes (Google's service first, DuckDuckGo's after a
+ * blank 16px icon), never a redirect or the service's headers, 404 for an unknown id, a seat's id,
+ * no domain or no icon (an SVG included), from memory the second time, 429 past its per-address
+ * limit; the page's markup for a locked company points at /api/logo/<public id> and holds no icon
+ * service address, domain or name; the plain tile has no letters. A locked company's About (GET
+ * ?about=, get_company) reads "the company" for its name and drops its links and emails, the
+ * unlocked and the found-by-name record get it whole, and aboutWithout's cases one by one.
  *
  * Found by exact name (the action "find", GET ?find=): a company's exact name or website names it
  * in that answer only, case, punctuation, a leading "The" and legal suffixes aside; a part of a
@@ -39,7 +49,13 @@ const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
 /** Every company's identity: what must never reach a member who hasn't unlocked it. */
 const CO = {
   acme: { id: "c_acmeworks", name: "Acmeworks Robotics", site: "acmeworks-robotics.example", linkedin: "linkedin.com/company/acmeworks-robotics", about: "Acmeworks builds warehouse robots for grocers." },
-  blue: { id: "c_bluefin", name: "Bluefin Freightlines", site: "bluefin-freightlines.example", linkedin: "linkedin.com/company/bluefin-freightlines", about: "Bluefin moves cold freight across the Gulf." },
+  blue: {
+    id: "c_bluefin",
+    name: "Bluefin Freightlines",
+    site: "bluefin-freightlines.example",
+    linkedin: "linkedin.com/company/bluefin-freightlines",
+    about: "The Bluefin Freightlines, LLC team moves cold freight across the Gulf for bluefin-freightlines.example customers. Quotes: hello@bluefin-freightlines.example. Read more at https://www.bluefin-freightlines.example/about-us.",
+  },
   cobalt: { id: "c_cobalt", name: "Cobaltharbor Analytics", site: "cobaltharbor.example", linkedin: "linkedin.com/company/cobaltharbor", about: "Cobaltharbor sells port analytics." },
   dun: { id: "c_dunmore", name: "Dunmorely Labs", site: "dunmorely.example", linkedin: "linkedin.com/company/dunmorely", about: "Dunmorely makes lab kits." },
   elm: { id: "c_elmstead", name: "Elmsteadia Bank", site: "elmsteadia.example", linkedin: "linkedin.com/company/elmsteadia", about: "Elmsteadia is a community bank." },
@@ -48,6 +64,13 @@ const CO = {
   holl: { id: "c_hollowell", name: "Hollowell Partners", site: "hollowell-partners.example", linkedin: "linkedin.com/company/hollowell-partners", about: "Hollowell advises family offices." },
   iris: { id: "c_irisdale", name: "Irisdale Media", site: "irisdale.example", linkedin: "linkedin.com/company/irisdale", about: "Irisdale publishes trade magazines." },
 };
+/** What a locked company's About reads before the unlock (lib/scan/clean.ts aboutWithout): no name, no domain, no link or email. */
+const SCRUBBED = {
+  acme: "The company builds warehouse robots for grocers.",
+  blue: "The company team moves cold freight across the Gulf for the company customers.",
+};
+/** A company with no website and no icon on file: its logo is the plain tile. */
+const NOSITE = { id: "c_nositeco", name: "Nositeco Widgets", site: "", linkedin: "", about: "" };
 const coFields = (c: (typeof CO)[keyof typeof CO], extra: Record<string, string>) => ({ name: c.name, website: c.site, linkedin: c.linkedin, about: c.about, ...extra });
 const seat = (id: string, companyId: string, fields: Record<string, string>) => ({ id, companyId, fields, verified: false });
 const seed = {
@@ -77,6 +100,7 @@ const seed = {
     { id: CO.gran.id, fields: coFields(CO.gran, { hq: "Portland, OR" }) },
     { id: CO.holl.id, fields: coFields(CO.holl, { hq: "New York, NY" }) },
     { id: CO.iris.id, fields: coFields(CO.iris, { hq: "Seattle, WA" }) },
+    { id: NOSITE.id, fields: { name: NOSITE.name, hq: "Reno, NV", industry: "Manufacturing" } },
   ],
   engagements: [
     // A past seat with its holder on file: who held it opens after the company.
@@ -152,7 +176,35 @@ for (const k of ["RESEND_API_KEY", "RN_EMAIL_FROM", "RN_DIGEST", "RN_DIGEST_ALL"
 
 /* ---------- the network, replaced ---------- */
 
-globalThis.fetch = (async () => new Response("ok", { status: 200 })) as typeof fetch;
+/** A PNG or ICO header of the given width, as the icon services send them (lib/logo.ts reads the width). */
+const png = (w: number) => {
+  const b = new Uint8Array(40);
+  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  new DataView(b.buffer).setUint32(16, w);
+  new DataView(b.buffer).setUint32(20, w);
+  return b;
+};
+const ico = (w: number) => Uint8Array.from([0, 0, 1, 0, 1, 0, w, w, 0, 0, 1, 0, 32, 0, 9, 9, 9, 9, 22, 0, 0, 0]);
+/** Every request the code made, with how it asked to treat redirects. */
+const fetched: { url: string; redirect?: string }[] = [];
+/**
+ * The icon services, replaced: Acmeworks has a 64px icon at Google's; Bluefin only Google's blank
+ * 16px stand-in, and a 32px icon at DuckDuckGo's; Dunmorely an SVG (never sent on); anything else
+ * 404. Each answer carries headers that name the domain, which must never reach the page.
+ */
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const url = String(input instanceof Request ? input.url : input);
+  fetched.push({ url, redirect: init?.redirect });
+  const google = url.startsWith("https://www.google.com/s2/favicons?");
+  const ddg = url.startsWith("https://icons.duckduckgo.com/ip3/");
+  if (!google && !ddg) return new Response("ok", { status: 200 });
+  const dom = google ? new URL(url).searchParams.get("domain") ?? "" : decodeURIComponent(url.slice(url.indexOf("/ip3/") + 5).replace(/\.ico$/, ""));
+  const leaky = { "x-upstream-domain": dom, "content-disposition": `inline; filename="${dom}.png"`, etag: `"${dom}"`, "x-company": "Acmeworks Robotics" };
+  if (dom === CO.acme.site && google) return new Response(png(64), { headers: { "content-type": "image/png", ...leaky } });
+  if (dom === CO.blue.site) return google ? new Response(png(16), { headers: { "content-type": "image/png", ...leaky } }) : new Response(ico(32), { headers: { "content-type": "image/vnd.microsoft.icon", ...leaky } });
+  if (dom === CO.dun.site) return new Response("<svg xmlns='http://www.w3.org/2000/svg'/>", { headers: { "content-type": "image/svg+xml", ...leaky } });
+  return new Response("not found", { status: 404, headers: leaky });
+}) as typeof fetch;
 
 let passes = 0;
 let failures = 0;
@@ -164,7 +216,7 @@ const check = (name: string, ok: boolean, detail?: unknown) => {
 
 /** The identity of every company in `ids`, in the forms it could leak: name, domain, the website's own name, LinkedIn, About. */
 const identityOf = (ids: string[]) =>
-  [...Object.values(CO), { ...SPAM, linkedin: "", about: "" }]
+  [...Object.values(CO), { ...SPAM, linkedin: "", about: "" }, NOSITE]
     .filter((c) => ids.includes(c.id))
     .flatMap((c) => [c.name, c.name.split(" ")[0], c.site, c.site.split(".")[0], c.linkedin, c.about].filter((x) => x && x.length >= 5));
 /** The identities found anywhere in `out` (any JSON), lowercased: none is the pass. */
@@ -184,7 +236,7 @@ async function main() {
   const { radarView } = await import("../lib/radar");
   const { preview } = await import("../lib/preview");
   const pub = T.tableInternals.pubId;
-  const ALL = [...Object.values(CO).map((c) => c.id), SPAM.id];
+  const ALL = [...Object.values(CO).map((c) => c.id), SPAM.id, NOSITE.id];
   const view = (token: string, asMember = false) => T.buildView(token, { asMember });
   const coOf = (vw: Awaited<ReturnType<typeof view>>, id: string) => vw.companies.find((c) => c.id === pub(id));
   const act = async (token: string, a: Parameters<typeof T.perform>[1]) => {
@@ -199,7 +251,13 @@ async function main() {
   console.log("A new member");
   const v0 = await view("tok-nora-lock");
   check("every company is locked for a new member", v0.companies.length === ALL.length && v0.companies.every((c) => c.hidden && c.name === F.HIDDEN_COMPANY && c.iconDomain === null), v0.companies.map((c) => [c.name, c.hidden]));
-  check("website, LinkedIn and About come back locked", v0.companies.every((c) => ["website", "linkedin", "about"].every((k) => !c.cells[k] || c.cells[k].s !== "value")));
+  check("website and LinkedIn come back locked", v0.companies.every((c) => ["website", "linkedin"].every((k) => !c.cells[k] || c.cells[k].s !== "value")));
+  check(
+    "the About is there, as the table's marker without its text (GET ?about= has it)",
+    v0.companies.every((c) => !c.cells.about || c.cells.about.s === "empty" || (c.cells.about.s === "value" && c.cells.about.v === "" && c.cells.about.lazy === true)) &&
+      coOf(v0, CO.acme.id)!.cells.about?.s === "value",
+    v0.companies.map((c) => c.cells.about),
+  );
   const a0 = coOf(v0, CO.acme.id)!;
   check(
     "the free facts are there: industry, revenue, size and the HQ's region only",
@@ -220,7 +278,13 @@ async function main() {
   );
   check("who leads each function is free on a locked company, without the page it came from", a0.leads?.fns[0]?.fn === "Sales" && a0.leads.fns[0].kind === "full-time" && !("url" in a0.leads.fns[0]), a0.leads);
   const ab = await T.aboutCells("tok-nora-lock", [pub(CO.acme.id), pub(CO.blue.id)]);
-  check("GET ?about= gives a locked company's About locked, and names nothing", !!ab && Object.values(ab.about).every((c) => c.s === "locked") && leaks(ab, ALL).length === 0, ab);
+  const abText = (x: typeof ab, id: string) => (x?.about[pub(id)]?.s === "value" ? (x.about[pub(id)] as { v: string }).v : null);
+  check(
+    "GET ?about= gives a locked company's About, its name and the leading The and legal suffix read as the company",
+    abText(ab, CO.acme.id) === SCRUBBED.acme && abText(ab, CO.blue.id) === SCRUBBED.blue,
+    ab,
+  );
+  check("and it names nothing: no name, no first word of it, no domain, no link, no email", leaks(ab, ALL).length === 0 && !/\.example|@|https?:/i.test(JSON.stringify(ab)), leaks(ab, ALL));
   check("the client model's teaser reads the free facts", M.deriveAll([a0])[0].teaser === "SaaS · $1M–$5M · 11–50 · TX", M.deriveAll([a0])[0].teaser);
   check("no locked company's name, domain, LinkedIn or About anywhere in the view", leaks(v0, ALL).length === 0, leaks(v0, ALL));
   const packed = W.packView(structuredClone(v0));
@@ -251,6 +315,11 @@ async function main() {
   const or = await tools.listOpenRoles(ctx, {});
   const gc = await tools.getCompany(ctx, { company: pub(CO.blue.id) });
   check("the connector's search, open roles and records name no locked company", [sc, scQ, or, gc].every((x) => leaks(x, ALL).length === 0), [sc, or, gc].map((x) => leaks(x, ALL)));
+  check(
+    "get_company gives a locked company's About without its name or links, says so, and keeps its website and LinkedIn locked",
+    gc.about === SCRUBBED.blue && typeof gc.about_note === "string" && /left out/.test(gc.about_note as string) && /locked until you unlock/.test(String(gc.website)) && /locked until you unlock/.test(String(gc.linkedin)),
+    { about: gc.about, note: gc.about_note, website: gc.website, linkedin: gc.linkedin },
+  );
   check("the connector describes a locked company by its free facts and an id", (sc.companies as { id: string; name: string; hidden?: boolean; industry?: string }[]).some((c) => c.hidden && c.name === F.HIDDEN_COMPANY && c.id === pub(CO.acme.id) && c.industry === "SaaS"), sc.companies);
   check("the connector's search can't find one by name", scQ.total === 0, scQ.total);
   let byName = "";
@@ -379,8 +448,10 @@ async function main() {
     fa.found === true && !fa.hidden && fa.name === CO.acme.name && fa.iconDomain !== undefined && fa.cells.website?.s === "value" && fa.cells.linkedin?.s === "value" && fa.cells.hq?.s === "value" && fa.cells.hq.v === "Austin, TX",
     fa,
   );
-  const fab = await T.aboutCells("tok-finn-lock", [pub(CO.acme.id)]);
-  check("and its About (GET ?about=) while it is open from the search", fab?.about[pub(CO.acme.id)]?.s === "value", fab);
+  const fab = await T.aboutCells("tok-finn-lock", [pub(CO.acme.id)], { found: true });
+  const fabTable = await T.aboutCells("tok-finn-lock", [pub(CO.acme.id)]);
+  check("and its whole About (GET ?about=&found=1) while it is open from the search", abText(fab, CO.acme.id) === CO.acme.about, fab);
+  check("while the tables' locked record of it asks without found=1 and reads it without the name", abText(fabTable, CO.acme.id) === SCRUBBED.acme, fabTable);
   check("who held a seat there stays locked, at its usual price", fa.engagements.find((e) => e.id === pub("e_acme_sales"))?.cells.operator?.s === "locked");
   const finnV1 = await view("tok-finn-lock");
   check("the tables keep it locked: a fresh view names nothing", coOf(finnV1, CO.acme.id)!.hidden === true && leaks(finnV1, ALL).length === 0, leaks(finnV1, ALL));
@@ -447,8 +518,9 @@ async function main() {
   const mcpFind = await tools.findCompanyByName(fctx, { name: `${CO.iris.name}, Inc.` });
   const mc = (mcpFind.companies as Record<string, unknown>[])?.[0];
   check("find_company names a locked company for that answer, with its website and the note", mcpFind.found === true && mc?.name === CO.iris.name && mc?.named_for_this_answer === true && JSON.stringify(mc).includes(CO.iris.site), mcpFind);
+  check("with its whole About, and no note that something is left out", mc?.about === CO.iris.about && !("about_note" in (mc ?? {})), mc);
   forgetView(finn.id);
-  const after2 = [await tools.searchCompanies(fctx, {}), await tools.getCompany(fctx, { company: pub(CO.iris.id) })];
+  const after2 =[await tools.searchCompanies(fctx, {}), await tools.getCompany(fctx, { company: pub(CO.iris.id) })];
   check("and the connector's lists and get_company keep it locked after", after2.every((x) => leaks(x, [CO.iris.id]).length === 0), after2.map((x) => leaks(x, [CO.iris.id])));
   const mcpPart = await tools.findCompanyByName(fctx, { name: "Irisda Med" });
   check("find_company with a part of a name finds nothing and names nothing", mcpPart.found === false && leaks(mcpPart, ALL).length === 0, mcpPart);
@@ -456,6 +528,112 @@ async function main() {
   check("the Add form's lookup by an exact website names it (a lookup by name, counted)", siteLook?.name === CO.elm.name && coOf(await view("tok-finn-lock"), CO.elm.id)!.hidden === true, siteLook);
   const adm = (await view("tok-admin-lock")).admin as { finds?: { today: number; members: number; atCap: number; misses: number; missCap: number } } | undefined;
   check("Pilot metrics counts lookups today and members at the limits", !!adm?.finds && adm.finds.today >= 24 + 99 && adm.finds.members >= 3 && adm.finds.atCap === 2 && adm.finds.missCap === 1, adm?.finds);
+
+  /* ---------- the logo (GET /api/logo/<id>, lib/logo.ts) ---------- */
+  console.log("\nThe logo");
+  const Lg = await import("../lib/logo");
+  const ask = (id: string, ip = "198.51.100.7") => Lg.logoResponse(new Request(`${BASE}/api/logo/${encodeURIComponent(id)}`, { headers: { "x-forwarded-for": ip } }), id);
+  const headersOf = (r: Response) => Object.fromEntries(r.headers.entries());
+  let from = fetched.length;
+  const lg1 = await ask(pub(CO.acme.id));
+  const lgBytes = new Uint8Array(await lg1.arrayBuffer());
+  const lgAsked = fetched.slice(from);
+  check(
+    "a locked company's id gives its icon as image bytes, kept by browsers for a day",
+    lg1.status === 200 && lg1.headers.get("content-type") === "image/png" && lgBytes.length === 40 && lgBytes[0] === 0x89 && lg1.headers.get("cache-control") === "public, max-age=86400",
+    { status: lg1.status, headers: headersOf(lg1), n: lgBytes.length },
+  );
+  check(
+    "never a redirect, and none of the icon service's headers: no domain and no name in them",
+    lg1.status < 300 && !lg1.headers.has("location") && ["etag", "content-disposition", "x-upstream-domain", "x-company"].every((k) => !lg1.headers.has(k)) && leaks(headersOf(lg1), ALL).length === 0,
+    headersOf(lg1),
+  );
+  check(
+    "the server asked Google's service at 64px first, following its redirects itself",
+    lgAsked.length === 1 && lgAsked[0].url === `https://www.google.com/s2/favicons?domain=${CO.acme.site}&sz=64` && lgAsked[0].redirect === "follow",
+    lgAsked,
+  );
+  from = fetched.length;
+  const lg2 = await ask(pub(CO.acme.id));
+  check("a second ask comes from memory, without asking the service again", lg2.status === 200 && fetched.length === from, fetched.slice(from));
+  from = fetched.length;
+  const lgBlue = await ask(pub(CO.blue.id));
+  const blueAsked = fetched.slice(from).map((x) => x.url.split("?")[0].split("/ip3/")[0]);
+  check(
+    "Google's blank 16px stand-in is no logo: then DuckDuckGo's, as the app does",
+    lgBlue.status === 200 && lgBlue.headers.get("content-type") === "image/x-icon" && blueAsked.join() === "https://www.google.com/s2/favicons,https://icons.duckduckgo.com",
+    { status: lgBlue.status, type: lgBlue.headers.get("content-type"), blueAsked },
+  );
+  const lgNone = await ask(pub(CO.cobalt.id));
+  check("no icon at either service: 404, with no body", lgNone.status === 404 && (await lgNone.text()) === "" && leaks(headersOf(lgNone), ALL).length === 0, { status: lgNone.status, headers: headersOf(lgNone) });
+  const lgSvg = await ask(pub(CO.dun.id));
+  check("an SVG is never sent on (it can carry script): 404", lgSvg.status === 404, lgSvg.status);
+  from = fetched.length;
+  const odd = await Promise.all(["c_madeupmadeup1", "../../etc/passwd", "", CO.acme.id, pub("e_acme_sales"), pub(NOSITE.id)].map((id) => ask(id)));
+  check(
+    "an unknown id, a made-up one, a seat's id, an internal id, a company with no domain: 404, and nothing is fetched",
+    odd.every((r) => r.status === 404) && fetched.length === from,
+    { status: odd.map((r) => r.status), fetched: fetched.slice(from) },
+  );
+  const burst: number[] = [];
+  for (let k = 0; k <= Lg.LOGO_PER_MINUTE; k++) burst.push((await ask("c_madeupmadeup2", "198.51.100.99")).status);
+  const other = await ask(pub(CO.acme.id), "198.51.100.100");
+  check("past LOGO_PER_MINUTE a minute from one address: 429, other addresses unaffected", burst.at(-1) === 429 && burst.slice(0, -1).every((s) => s === 404) && other.status === 200, { last: burst.at(-1), other: other.status });
+
+  /* ---------- the page: what it draws for a locked company ---------- */
+  console.log("\nThe page");
+  const React = await import("react");
+  (globalThis as { React?: unknown }).React = React;
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const S = await import("../app/ui/shared");
+  const vLock = await view("tok-nora-lock");
+  const locked = vLock.companies.filter((c) => c.hidden);
+  const html = locked
+    .map((c) =>
+      renderToStaticMarkup(
+        React.createElement(
+          "div",
+          null,
+          React.createElement(S.CompanyLogo, { name: c.name, domain: c.iconDomain, hidden: true, seed: c.id }),
+          React.createElement(S.CompanyLogo, { name: c.name, domain: c.iconDomain, hidden: true, seed: c.id, size: "lg" }),
+          React.createElement(S.LockedName, { seed: c.id }),
+          React.createElement(S.LockedSite, { seed: c.id }),
+        ),
+      ),
+    )
+    .join("\n");
+  check(
+    "a locked company's logo is drawn from /api/logo/<its public id>",
+    locked.length > 3 && locked.every((c) => html.includes(`src="/api/logo/${c.id}"`)),
+    html.slice(0, 600),
+  );
+  check(
+    "and the page has no icon service's address, domain or name for it (src, srcset, alt, title)",
+    !/google\.com\/s2|duckduckgo|favicon|srcset|title=/i.test(html) && leaks(html, ALL).length === 0 && /alt=""/.test(html),
+    leaks(html, ALL),
+  );
+  // Nora added a company of her own called "Irisdale" (Add by name, above): that one is hers to see.
+  const lockedIds = ALL.filter((x) => !coOf(vLock, x) || coOf(vLock, x)!.hidden);
+  check("nor does the view the page is built from", !/google\.com\/s2|duckduckgo|favicon/i.test(JSON.stringify(vLock)) && leaks(vLock, lockedIds).filter((x) => x.toLowerCase() !== "irisdale").length === 0, { ids: lockedIds, leaks: leaks(vLock, lockedIds), icon: JSON.stringify(vLock).match(/.{40}(favicon|duckduckgo).{40}/i)?.[0] });
+  const tile = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: "", domain: null, hidden: true, seed: "Zq3-preview-seed", noLogo: true }));
+  check("with no logo, a plain soft tile: a building, never made-up letters", /class="logo logo-locked"/.test(tile) && /<svg/.test(tile) && !/>[A-Z?]{1,2}</.test(tile) && !tile.includes("/api/logo"), tile);
+  const namedLogo = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: CO.acme.name, domain: CO.acme.site }));
+  check("a company the member can name keeps its icon from the services directly, as before", namedLogo.includes(`https://www.google.com/s2/favicons?domain=${CO.acme.site}&amp;sz=64`), namedLogo);
+
+  /* ---------- the About, read without the company ---------- */
+  console.log("\nThe About without the company");
+  const { aboutWithout } = await import("../lib/scan/clean");
+  const scrubCases: [string, string, string[], string][] = [
+    ["Acme Robotics, Inc. builds robots. Acme's robots pick groceries.", "Acme Robotics", ["acme-robotics.com"], "The company builds robots. The company's robots pick groceries."],
+    ["Founded in 2015, the Home Depot sells tools at homedepot.com.", "The Home Depot", ["https://www.homedepot.com"], "Founded in 2015, the company sells tools at the company."],
+    ["Global Payments moves money. We are a global leader. Email press@globalpayments.com or visit https://globalpayments.com/news.", "Global Payments Inc.", ["globalpayments.com"], "The company moves money. We are a global leader."],
+    ["ACME LABS makes widgets (acme.io). Learn more at www.acme.io/about-us.\n\nacme labs ships worldwide.", "Acme Labs", ["acme.io"], "The company makes widgets.\n\nThe company ships worldwide."],
+    ["Northwind sells tea. Its LinkedIn page is linkedin.com/company/northwind.", "Northwind Tea", ["linkedin.com/company/northwind"], "Northwind sells tea. Its LinkedIn page is linkedin.com/company/northwind."],
+  ];
+  for (const [text, name, sites, want] of scrubCases) {
+    const got = aboutWithout(text, name, sites);
+    check(`aboutWithout: ${JSON.stringify(text.slice(0, 48))}...`, got === want, got);
+  }
 
   /* ---------- the landing page ---------- */
   console.log("\nThe landing page");

@@ -827,7 +827,11 @@ section("hidden", async () => {
   // One with an open role, so the answer names what came with it.
   const c = hid.find((x) => x.friendly.open > 0) ?? hid[0];
   if (!c) return fail("hidden: no hidden company to test");
-  check("a hidden company has no name, logo, website, LinkedIn or About", c.name === "Locked company" && c.iconDomain === null && ["website", "linkedin", "about"].every((k) => c.cells[k]?.s !== "value"), { name: c.name, icon: c.iconDomain, w: c.cells.website, l: c.cells.linkedin });
+  check(
+    "a hidden company has no name, logo domain, website or LinkedIn, and its About only as the marker (no text)",
+    c.name === "Locked company" && c.iconDomain === null && ["website", "linkedin"].every((k) => c.cells[k]?.s !== "value") && (c.cells.about?.s !== "value" || (c.cells.about.v === "" && c.cells.about.lazy === true)),
+    { name: c.name, icon: c.iconDomain, w: c.cells.website, l: c.cells.linkedin, a: c.cells.about },
+  );
   const hq = c.cells.hq;
   check("a hidden company's HQ is cut to its region", !hq || hq.s !== "value" || !hq.v.includes(","), hq);
   check("company ids are opaque", v.companies.every((x) => /^c_[A-Za-z0-9_-]{12}$/.test(x.id)), v.companies.slice(0, 3).map((x) => x.id));
@@ -897,14 +901,16 @@ section("about", async () => {
     shownAbout.every((c) => c.cells.about.v === "" && c.cells.about.lazy === true && c.cells.about.system === true),
     shownAbout.find((c) => c.cells.about.v !== "" || !c.cells.about.lazy)?.cells.about,
   );
-  check("  a locked company's About is locked or empty, as before", v.companies.filter((c) => c.hidden).every((c) => ["locked", "empty"].includes(c.cells.about?.s)));
+  // A locked company's About shows too, without its name and links (lib/scan/clean.ts aboutWithout): the same marker in the table.
+  check("  a locked company's About is the same marker, or empty", v.companies.filter((c) => c.hidden).every((c) => !c.cells.about || c.cells.about.s === "empty" || (c.cells.about.s === "value" && c.cells.about.v === "" && c.cells.about.lazy === true)));
   if (!shownAbout.length) return skip("About reads", "no company with an About on this seed");
   const batch = shownAbout.slice(0, 50);
   const r = await aboutOf(A, batch.map((c) => c.id));
   const got = r.json?.about ?? {};
   check(
     "GET ?about= with 50 ids returns each company's About cell with its text",
-    r.status === 200 && batch.every((c) => got[c.id]?.s === "value" && got[c.id].v.length > 0 && got[c.id].system === true && got[c.id].ver === 0 && !got[c.id].lazy),
+    // (A locked company's About that was only a link has nothing left once the link goes: empty.)
+    r.status === 200 && batch.every((c) => (got[c.id]?.s === "value" && got[c.id].v.length > 0 && got[c.id].system === true && got[c.id].ver === 0 && !got[c.id].lazy) || (c.hidden && got[c.id]?.s === "empty")),
     { status: r.status, miss: batch.find((c) => got[c.id]?.s !== "value")?.id },
   );
   check("  only the companies asked for, and a cell says nothing more than the table did (its source at most)", Object.keys(got).length === batch.length && Object.values(got).every((c) => Object.keys(c).every((k) => ["s", "v", "ver", "system", "from"].includes(k)) && (c.from === undefined || c.from === "website")), Object.values(got)[0]);
@@ -914,7 +920,8 @@ section("about", async () => {
   check("none of those texts is in the table, full or ?compact=1", texts.length > 0 && texts.every((t) => !plain.includes(t) && !compact.includes(t)), texts.length);
   const br = await rawGet(`/api/table?about=${batch.map((c) => c.id).join(",")}`, { "accept-encoding": "br", cookie: `rn_table=${A.token}`, "x-forwarded-for": A.ip });
   check("  the answer is compressed", br.status === 200 && br.headers["content-encoding"] === "br", br.headers["content-encoding"]);
-  const one = batch[0];
+  // One with text, and one the member can see where there is one (adding a fact at a locked company is refused before the field is).
+  const one = batch.find((c) => !c.hidden && got[c.id]?.s === "value") ?? batch.find((c) => got[c.id]?.s === "value") ?? batch[0];
   const out = await call("GET", `/api/table?about=${one.id}`, { ipAddr: ip(181) });
   check("signed out: 401, and no text", out.status === 401 && !out.text.includes(texts[0] ?? "\u0000"), out.status);
   const madeUp = await call("GET", `/api/table?about=${one.id}`, { token: "not-a-member-token", ipAddr: ip(181) });
@@ -933,7 +940,7 @@ section("about", async () => {
   ]);
   check("adding, confirming or reporting an About is refused, as before", tries.every((t) => t.status === 400 && t.json?.error === "Members can't change that field."), tries.map((t) => t.json));
   check("  and it reads the same after", JSON.stringify((await aboutOf(A, [one.id])).json?.about?.[one.id]) === JSON.stringify(got[one.id]));
-  // A locked company: its About stays locked through ?about= until the company is unlocked, then the text comes.
+  // A locked company: its About comes through ?about= without its name, web address, links and emails until the company is unlocked, then whole.
   const adm = await admin();
   if (!adm) return skip("About at a locked company", "no admin account (set ADMIN_TOKEN)");
   const av = await adm.view();
@@ -941,10 +948,20 @@ section("about", async () => {
   const hid = v.companies.find((c) => c.hidden && withAbout.has(c.id));
   if (!hid) return skip("About at a locked company", "no locked company with an About");
   const locked = (await aboutOf(A, [hid.id])).json?.about?.[hid.id];
-  check("a locked company's About is locked through ?about= too, with no text", locked?.s === "locked" && !("v" in locked), locked);
+  const real = av.companies.find((c) => c.id === hid.id);
+  const realHost = real?.cells.website?.s === "value" ? real.cells.website.v.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split(/[/?#]/)[0].toLowerCase() : "";
+  // (A website on a shared host, a profile page, is not the company's own address and is not cut.)
+  const ownHost = /(^|\.)(linkedin|facebook|twitter|x|instagram|crunchbase|wellfound|angel)\.(com|co)$/.test(realHost) ? "" : realHost;
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const namesIt = (t) => !!real && real.name.length >= 3 && new RegExp(`(^|[^\\p{L}\\p{N}])${esc(real.name)}($|[^\\p{L}\\p{N}])`, "iu").test(t);
+  check(
+    "a locked company's About comes through ?about= without its name or web address",
+    (locked?.s === "value" && locked.v.length > 0 && !namesIt(locked.v) && (!ownHost || !locked.v.toLowerCase().includes(ownHost))) || locked?.s === "empty",
+    { s: locked?.s, names: locked?.v ? namesIt(locked.v) : null },
+  );
   const admCell = (await aboutOf(adm, [hid.id])).json?.about?.[hid.id];
   const asMember = (await aboutOf(adm, [hid.id], "&as=member")).json?.about?.[hid.id];
-  check("  an admin reads it; with ?as=member it is locked as for a member", admCell?.s === "value" && admCell.v.length > 0 && asMember?.s === "locked", [admCell?.s, asMember?.s]);
+  check("  an admin reads it whole; with ?as=member it reads as for a member", admCell?.s === "value" && admCell.v.length > 0 && JSON.stringify(asMember) === JSON.stringify(locked), [admCell?.s, asMember?.s]);
   const un = await A.act({ type: "unlock", entity: "company", id: hid.id, field: "identity" });
   const after = (await A.view()).companies.find((c) => c.id === hid.id);
   const opened = (await aboutOf(A, [hid.id])).json?.about?.[hid.id];

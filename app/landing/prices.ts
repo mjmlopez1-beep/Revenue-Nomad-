@@ -44,9 +44,9 @@ export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE): PriceRow[] {
     {
       entity: "company",
       label: "The company",
-      lockedFirst: ["Name, website and logo"],
+      lockedFirst: ["Name and website"],
       price: "2 credits",
-      note: "Every company's name, website, logo and LinkedIn are locked until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Its people and who held its seats open after that. Type a company's full name or website in search to find one you already know. Try it on this page names a few hiring companies as a sample.",
+      note: "Every company's name, website and LinkedIn are locked until you unlock it. Its logo and About show (the About without its name, web address or links). 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Its people and who held its seats open after that. Type a company's full name or website in search to find one you already know. Try it on this page names a few hiring companies as a sample.",
     },
     {
       entity: "engagement",

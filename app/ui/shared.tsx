@@ -373,23 +373,67 @@ export function LockedSite({ seed, className }: { seed: string; className?: stri
 
 /* ---------- company logo ---------- */
 
-/** `hidden`: a locked company's logo, a soft colored tile with blurred letters. `seed` (its public id) picks the color. */
-export function CompanyLogo({ name, domain, size = "md", hidden, seed }: { name: string; domain: string | null; size?: "md" | "lg"; hidden?: boolean; seed?: string }) {
+/** A company's public id (lib/table.ts pubId), the only thing GET /api/logo/<id> takes. */
+const COMPANY_ID = /^c_[\w-]{6,40}$/;
+
+/**
+ * `hidden`: a locked company's logo. The page never has its domain, so the image comes from our
+ * own GET /api/logo/<id> (lib/logo.ts), which fetches the icon on the server and sends only its
+ * bytes. `seed` is the company's public id. With no logo (a 404, or a blank 16px icon) it is a
+ * plain soft tile in a color from the id, with a quiet building in it: never letters, which would
+ * read as a real mark. `noLogo`: the tile only (the landing page's rows have no company id).
+ * A company the member can name keeps the icon services' addresses with its domain, as before.
+ */
+export function CompanyLogo({
+  name,
+  domain,
+  size = "md",
+  hidden,
+  seed,
+  noLogo,
+}: {
+  name: string;
+  domain: string | null;
+  size?: "md" | "lg";
+  hidden?: boolean;
+  seed?: string;
+  noLogo?: boolean;
+}) {
   const sources = useMemo(
     () =>
-      domain
-        ? [`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`, `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`]
-        : [],
-    [domain],
+      hidden
+        ? seed && !noLogo && COMPANY_ID.test(seed)
+          ? [`/api/logo/${encodeURIComponent(seed)}`]
+          : []
+        : domain
+          ? [`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`, `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`]
+          : [],
+    [domain, hidden, seed, noLogo],
   );
   const [idx, setIdx] = useState(0);
-  useEffect(() => setIdx(0), [domain]);
+  useEffect(() => setIdx(0), [domain, hidden, seed]);
   const cls = `logo${size === "lg" ? " logo-lg" : ""}`;
   if (hidden) {
-    const look = lockedLook(seed ?? name);
+    if (idx < sources.length)
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          className={cls}
+          src={sources[idx]}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          decoding="async"
+          // A blank or tiny icon is no logo: the tile instead.
+          onLoad={(e) => e.currentTarget.naturalWidth <= 16 && setIdx(sources.length)}
+          onError={() => setIdx(sources.length)}
+        />
+      );
     return (
-      <span className={`${cls} logo-locked`} aria-hidden style={{ ["--lk" as string]: look.hue }}>
-        <span className="logo-locked-in">{look.mark}</span>
+      <span className={`${cls} logo-locked`} aria-hidden style={{ ["--lk" as string]: lockedLook(seed ?? name).hue }}>
+        <span className="logo-locked-in">
+          <IconBuilding size={size === "lg" ? 20 : 14} />
+        </span>
       </span>
     );
   }
@@ -539,7 +583,9 @@ export const IconStar = ({ size = 16, filled }: { size?: number; filled?: boolea
 export const IconLink = ({ size = 14 }: { size?: number }) => svg(<><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></>, size);
 export const IconUsers = ({ size = 14 }: { size?: number }) => svg(<><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6" /></>, size);
 export const IconBriefcase = ({ size = 14 }: { size?: number }) => svg(<><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" /></>, size);
-export const IconCoin = ({ size = 14 }: { size?: number }) => svg(<><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9 9.5c0-1 1.3-1.8 3-1.8s3 .8 3 1.8-1.3 1.6-3 2-3 1-3 2 1.3 1.8 3 1.8 3-.8 3-1.8" /></>, size);
+export const IconBuilding = ({ size = 14 }: { size?: number }) =>
+  svg(<><path d="M5 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16" /><path d="M15 10h3a1 1 0 0 1 1 1v10" /><path d="M3 21h18" /><path d="M9 8h2M9 12h2M9 16h2" /></>, size);
+export const IconCoin =({ size = 14 }: { size?: number }) => svg(<><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9 9.5c0-1 1.3-1.8 3-1.8s3 .8 3 1.8-1.3 1.6-3 2-3 1-3 2 1.3 1.8 3 1.8 3-.8 3-1.8" /></>, size);
 export const IconMenu = ({ size = 18 }: { size?: number }) => svg(<path d="M4 7h16M4 12h16M4 17h16" />, size);
 export const IconExternal = ({ size = 12 }: { size?: number }) => svg(<><path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>, size);
 export const IconPencil = ({ size = 12 }: { size?: number }) => svg(<><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>, size);

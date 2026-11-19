@@ -196,7 +196,7 @@ async function main() {
   const seatFree = row(priceMatrix(true), "engagement");
   check("with it on, that role is free", seatFree.free.includes("Role of a seat with nobody named") && !seatFree.locked.includes("Role of a seat with nobody named"), seatFree);
   const co = row(paid, "company");
-  check("the company's name is not free: name, website and logo are one 2-credit unlock", !co.free.includes("Name") && co.locked[0] === "Name, website and logo" && co.price === "2 credits" && /2 credits show the company/.test(co.note ?? ""), co);
+  check("the company's name is not free: name and website are one 2-credit unlock", !co.free.includes("Name") && co.locked[0] === "Name and website" && co.price === "2 credits" && /2 credits show the company/.test(co.note ?? ""), co);
   check("no copy says a company shows again when its role closes", !/everyone sees the company again/.test(JSON.stringify(paid)) && !faqItems(5).some((q: unknown) => /everyone sees the company again|1 credit shows the company/.test(JSON.stringify(q))));
   const contact = row(paid, "contact");
   check(

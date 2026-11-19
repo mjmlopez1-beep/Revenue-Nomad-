@@ -1694,6 +1694,10 @@ button.lp-fake-btn {
 .lp-tt-dom.locked-site {
   text-overflow: clip;
 }
+/* A blurred name's cloud spills soft past its letters (.locked-blur in globals.css): nothing clips it here. */
+.lp-tt-name:has(> .locked-name) {
+  overflow: visible;
+}
 .lp-tt-title,
 .lp-tt-sub {
   display: block;

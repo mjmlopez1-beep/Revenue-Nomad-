@@ -69,7 +69,7 @@ RN_PREVIEW_OPEN_ROLE_COMPANIES=0 serve preview-lock env PREVIEW_LOCKED=1 node sc
 RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 # What members read about prices: the connector's words and unlock plans for the bundles (who held a seat with their role, contact details after the name, people after the company) on view data shaped as the server sends it, and the landing page's matrix and Questions.
 run prices npx tsx scripts/test-prices.mts
-# The company lock: every company's name, website, logo, LinkedIn and About locked for a member until they unlock it (2 credits) or already know it, on a made-up seed in process.
+# The company lock: every company's name, website and LinkedIn locked for a member until they unlock it (2 credits) or already know it, its About without its name or links, its logo through /api/logo with fetch replaced, on a made-up seed in process.
 run lock npx tsx scripts/test-company-lock.mts
 # Onboarding: suggestions and their heading, Find your seats cards, a new member's title, the weekly email offered at the end.
 serve onboard npx tsx scripts/test-onboard.mts

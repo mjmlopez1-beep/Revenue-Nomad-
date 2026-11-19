@@ -664,63 +664,91 @@ button.add:active {
 }
 
 /*
- * A locked company (an open role the member hasn't unlocked). Its name, site and logo are
- * made-up letters from its public id (lockedLook in app/ui/shared.tsx), blurred so they read
- * as a company you can't see yet. The real ones never reach the page. Never put this on real data.
+ * A locked company (one the member hasn't unlocked). Its name and site are made-up letters from
+ * its public id (lockedLook in app/ui/shared.tsx), drawn as a soft, rounded cloud: the letters
+ * themselves are transparent and only their glow shows, so the shapes hint at a word with no
+ * hard edge. The real ones never reach the page. Never put this on real data.
+ *
+ * The cloud spills past the letters, so its box carries that room as padding (with a negative
+ * margin, the layout doesn't move) and nothing around it clips: no overflow: hidden on it or its
+ * parents (see .tp-hidden-name, .tp-dname). Where a name is too long for its cell it fades out at
+ * the right (mask-image) instead of being cut. --locked-ink is the glow's color (a dark surface
+ * can set a light one).
  */
 .locked-blur {
-  filter: blur(5px);
+  --locked-ink: var(--ink);
+  display: inline-block;
+  max-width: calc(100% + 20px);
+  padding: 8px 10px;
+  margin: -8px -10px;
+  vertical-align: bottom;
+  white-space: nowrap;
+  color: transparent;
+  text-shadow: 0 0 8px rgba(10, 26, 19, 0.55);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--locked-ink) 55%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 16px), transparent);
   user-select: none;
   -webkit-user-select: none;
 }
-.locked-name,
-.locked-site {
+span.locked-name,
+span.locked-site {
   display: inline-block;
   max-width: 100%;
-  /* Room for the blur, so a truncating parent doesn't cut it to a hard edge. */
-  padding: 0 4px;
-  margin: 0 -4px;
+  min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
   vertical-align: bottom;
+  overflow: visible;
+  text-overflow: clip;
 }
+/* The site line: lighter and a little smaller than the name's cloud. */
 .locked-site .locked-blur {
-  color: var(--muted);
+  text-shadow: 0 0 7px rgba(91, 102, 97, 0.42);
+  text-shadow: 0 0 7px color-mix(in srgb, var(--locked-ink) 32%, transparent);
 }
-/* The logo: a soft tile in the company's own color, its letters blurred. */
+/* The logo when the company has none to show: a soft tile in its own color with a quiet building, never letters (they would read as a real mark). */
 .logo.logo-locked {
   border-color: transparent;
-  background: hsl(var(--lk, 160) 45% 90%);
+  background: hsl(var(--lk, 160) 45% 92%);
+  color: hsl(var(--lk, 160) 30% 42%);
 }
 .logo-locked-in {
-  filter: blur(3px);
-  color: hsl(var(--lk, 160) 40% 38%);
+  display: inline-flex;
+  opacity: 0.55;
   user-select: none;
   -webkit-user-select: none;
 }
-/* No blur where it would get in the way: a plain masked bar in the text's place. */
+/* No glow where it would get in the way: a plain rounded bar in the text's place. */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .locked-blur,
-  .logo-locked-in {
-    filter: none;
-    color: transparent !important;
-  }
   .locked-blur {
-    border-radius: 4px;
-    background: var(--line);
+    max-width: 100%;
+    padding: 0 6px;
+    margin: 0 -6px;
+    overflow: hidden;
+    color: transparent !important;
+    text-shadow: none !important;
+    -webkit-mask-image: none;
+    mask-image: none;
+    border-radius: 999px;
+    background: var(--line-strong);
   }
   .logo.logo-locked {
     border-color: var(--line);
   }
 }
 @media (forced-colors: active) {
-  .locked-blur,
-  .logo-locked-in {
-    filter: none;
+  .locked-blur {
+    max-width: 100%;
+    padding: 0 6px;
+    margin: 0 -6px;
+    overflow: hidden;
     color: transparent;
+    text-shadow: none;
+    -webkit-mask-image: none;
+    mask-image: none;
     forced-color-adjust: none;
     background: GrayText;
-    border-radius: 4px;
+    border-radius: 999px;
   }
 }
 
