@@ -182,8 +182,8 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
 /** The one unlock for a hidden company: its name, website, LinkedIn and About, and the role, posting and rate of its open roles. */
 export function UnlockCompanyCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
-  // Today's unlocks are used up (a company counts as COMPANY_PRICE): the hidden logo already shows the lock, and its record says when.
-  if ((ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && ui.me.credits >= COMPANY_PRICE) return null;
+  // Today's unlocks are used up (a company counts as COMPANY_PRICE, the free one too): the row says so at once, never a button that does nothing.
+  if ((ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || ui.me.freeCompany)) return <LockWait />;
   return <FactCell t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />;
 }
 
@@ -310,7 +310,7 @@ export function HiddenCompany({ i, big, bare, quiet }: { i: CoInfo; big?: boolea
       <span className="tp-co-text">
         <span className="tp-co-name">
           <span className="tp-hidden-name" title={LOCKED_TIP}>
-            <LockedName seed={i.c.id} />
+            <LockedName seed={i.c.id} shown={i.c.shownName} />
           </span>
         </span>
         {teaser}

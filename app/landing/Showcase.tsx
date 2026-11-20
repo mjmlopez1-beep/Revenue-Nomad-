@@ -277,7 +277,7 @@ export default function Showcase({ intro }: { intro: boolean }) {
       ) : null}
 
       <p className="lp-show-more">
-        <span className="lp-show-more-k">Also in the pilot</span> {MORE_FEATURES.join(" · ")}
+        <span className="lp-show-more-k">Also in Merlin</span> {MORE_FEATURES.join(" · ")}
       </p>
     </div>
   );

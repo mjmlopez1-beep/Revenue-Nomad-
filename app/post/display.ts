@@ -10,6 +10,7 @@
  */
 import type { Cell, EngagementRec, Me } from "@/lib/tableTypes";
 import { webLink } from "@/lib/links";
+import { COMPANY_PRICE } from "@/lib/tableFields";
 import type { LeadLine } from "@/lib/leaders/types";
 import { fnGap, isOpenRole, shown, type CoInfo } from "./model";
 
@@ -89,6 +90,19 @@ export function unlocksLeftWords(me: Pick<Me, "credits" | "unlocksLeft">): strin
   if (left === null) return null;
   return left === 0 ? "No unlocks left today" : `${left} ${left === 1 ? "unlock" : "unlocks"} left today`;
 }
+
+/**
+ * The free company of the day can be used now: one is left today (Me.freeCompany) and the day's
+ * unlock limit still has room for a company (it counts as COMPANY_PRICE, like a paid one). At the
+ * limit, every unlock button says "Unlocks again tomorrow", this one too.
+ */
+export function freeCompanyNow(me: Pick<Me, "freeCompany" | "unlocksLeft">): boolean {
+  return !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE;
+}
+/** The unlock button's words while the free company of the day is left. */
+export const UNLOCK_FREE = "Unlock free · 1 left today";
+/** The same, said once near the balance and on Get started. */
+export const FREE_COMPANY_TODAY = "1 free company today";
 
 /** Why a balance can't all be spent today, for the tooltips beside "25 unlocks left today". */
 export const UNLOCKS_LEFT_TIP = "New accounts can unlock 25 facts on their first day, then up to 100 a day. Credits you don't spend stay yours.";

@@ -328,7 +328,7 @@ eq("the view carries it as a marker without the text", co.cells.about, { s: "val
 check("no About text anywhere in the view", !JSON.stringify(view).includes("warehouse robots") && !JSON.stringify(view).includes("original seed text"));
 const readAbout = async (tok: string, id: string) => (await table.aboutCells(tok, [id]))?.about[id];
 eq("GET ?about= gives it whole: a system value from the company website", await readAbout("tok-sal", co.id), { s: "value", v: metaText, ver: 0, system: true, from: "website" });
-eq("it is not the member's fact (Me.added) and costs nothing past the company", [view.me?.added, view.me?.credits], [0, 25 - 2 * unlockedNow]);
+eq("it is not the member's fact (Me.added) and costs nothing past the company", [view.me?.added, view.me?.credits], [0, 25 - 2 * Math.max(0, unlockedNow - 1)]); // the first company of the day is free
 const info = deriveAll(view.companies).find((i) => i.c.id === co.id)!;
 const row = { key: co.id, i: info };
 check("search does not read the About (the table no longer carries it)", !searchTest("warehou")?.(row) && !searchTest("retailers")?.(row) && !!searchTest("acme")?.(row));

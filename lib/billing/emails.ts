@@ -1,5 +1,5 @@
 /**
- * Billing's emails: the trial ending (3 days before, and the last day), the value receipt when the
+ * Billing's emails: the value receipt 3 days before the trial ends (day 18 of 21, with Keep Pro, in place of a countdown), the last-day note, the value receipt when the
  * trial ends (with the annual plan first), and the value receipt at each renewal. Counts only:
  * never another member's name, never a company the member hasn't unlocked.
  *
@@ -8,6 +8,7 @@
  */
 import { MAIL, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine } from "../email";
 import { PRICES, TOPUP_CREDITS } from "./rules";
+import { functionOf } from "../tableFields";
 
 /** What a member got in a period, as counts. */
 export interface ValueCounts {
@@ -17,6 +18,36 @@ export interface ValueCounts {
   /** New open roles in their function while they were on Pro. */
   roles: number;
   function: string | null;
+}
+
+/** The parts of the state the counts read (lib/table.ts State). */
+interface CountState {
+  profiles: Record<string, { function?: string; title?: string }>;
+  conversations?: { a: string; createdAt: string }[];
+  seatInvites?: { by: string; at: string }[];
+  ledger: { memberId: string; reason: string; at: string }[];
+}
+
+/** What a member got between two times: conversations they opened, intros they sent, unlocks, new roles in their function. */
+export function valueCounts(s: CountState, seedTracks: Map<string, { firstSeen: string; engagementId: string }> | null, fnOfEng: ((engId: string) => string | null) | null, memberId: string, fromIso: string, toIso: string): ValueCounts {
+  const from = Date.parse(fromIso);
+  const to = Date.parse(toIso);
+  const inside = (iso?: string | null) => {
+    const t = Date.parse(iso ?? "");
+    return Number.isFinite(t) && t >= from && t < to;
+  };
+  const prof = s.profiles[memberId] ?? {};
+  const fn = prof.function ?? functionOf(prof.title ?? "") ?? null;
+  let roles = 0;
+  if (seedTracks && fnOfEng && fn)
+    for (const t of seedTracks.values()) if (inside(t.firstSeen) && fnOfEng(t.engagementId) === fn) roles++;
+  return {
+    conversations: (s.conversations ?? []).filter((c) => c.a === memberId && inside(c.createdAt)).length,
+    invites: (s.seatInvites ?? []).filter((x) => x.by === memberId && inside(x.at)).length,
+    unlocks: s.ledger.filter((l) => l.memberId === memberId && l.reason === "unlock" && inside(l.at)).length,
+    roles,
+    function: fn,
+  };
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
@@ -64,6 +95,27 @@ export function trialEndingEmail(o: { first: string; days: number; notLooking: b
   const offer = o.notLooking ? `If your book fills up again later, Pro is a click away.` : priceWords(o.rateLine);
   const text = [`Hi ${first},`, "", `Your Merlin Pro trial ends ${when}.`, "", lead, "", offer, "", link, "", "--", WHY].join("\n");
   const html = shell(subject, lead, [mailP(`Hi ${escHtml(first)},`), mailH(escHtml(subject)), mailP(escHtml(lead)), mailP(escHtml(offer), "margin-bottom:24px;"), mailButton(link, o.notLooking ? "Open Merlin" : "Keep Pro", "margin:0 0 8px")], link);
+  return { subject, text, html };
+}
+
+/**
+ * The value receipt before the decision: 3 days before the trial ends (day 18 of 21), what it gave
+ * them so far, then Keep Pro. It takes the place of the 3-day note, so there is one email, not two.
+ */
+export function trialReceiptEmail(o: { first: string; days: number; counts: ValueCounts; rateLine: string | null; link: string }) {
+  const first = oneLine(o.first).slice(0, 40) || "there";
+  const lines = valueLines(o.counts);
+  const subject = `Your Pro trial ends in ${o.days} days`;
+  const link = oneLine(o.link);
+  const lead = lines.length ? "Here's what your trial gave you so far:" : "Your trial is still yours for a few days: who's hiring before it's posted, the hiring exec and the warm path, as soon as roles open.";
+  const after = `After it ends you're on Free, unless you keep Pro. ${priceWords(o.rateLine)}`;
+  const text = [`Hi ${first},`, "", lead, ...(lines.length ? lines.map((l) => `- ${l}`) : []), "", after, "", link, "", "--", WHY].join("\n");
+  const html = shell(
+    subject,
+    lead,
+    [mailP(`Hi ${escHtml(first)},`), mailH(escHtml(subject)), mailP(escHtml(lead), lines.length ? "margin-bottom:8px;" : ""), ...(lines.length ? [listHtml(lines)] : []), mailP(escHtml(after), "margin-bottom:24px;"), mailButton(link, "Keep Pro", "margin:0 0 8px")],
+    link,
+  );
   return { subject, text, html };
 }
 

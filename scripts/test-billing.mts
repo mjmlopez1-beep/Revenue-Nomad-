@@ -126,21 +126,21 @@ async function main() {
   process.env.RN_BILLING = "1";
   const T0 = Date.parse("2026-11-01T12:00:00Z");
   const tr = R.startTrial(undefined, T0)!;
-  check("a trial starts with 14 days", !!tr && Date.parse(tr.trialEndsAt!) - T0 === 14 * DAY && tr.trialStartedAt === iso(T0), tr);
-  check("it is the trial on day 1 and day 14, Free after", plan.planOf(tr, T0) === "trial" && plan.planOf(tr, T0 + 14 * DAY - 1) === "trial" && plan.planOf(tr, T0 + 14 * DAY) === "free");
+  check("a trial starts with 21 days", !!tr && Date.parse(tr.trialEndsAt!) - T0 === 21 * DAY && tr.trialStartedAt === iso(T0), tr);
+  check("it is the trial on day 1 and day 21, Free after", plan.planOf(tr, T0) === "trial" && plan.planOf(tr, T0 + 21 * DAY - 1) === "trial" && plan.planOf(tr, T0 + 21 * DAY) === "free");
   check("Pro and the trial both have Pro", plan.hasPro(tr, T0) && plan.hasPro({ proUntil: iso(T0 + DAY) }, T0) && !plan.hasPro({}, T0));
-  check("days left count down to the last day", plan.trialDaysLeft(tr, T0) === 14 && plan.trialDaysLeft(tr, T0 + 13.5 * DAY) === 1 && plan.trialDaysLeft(tr, T0 + 15 * DAY) === null);
-  check("the trial-ending moment is the last 3 days", !R.trialEnding(tr, T0 + 10 * DAY) && R.trialEnding(tr, T0 + 11 * DAY) && R.trialEnding(tr, T0 + 13.9 * DAY) && !R.trialEnding(tr, T0 + 14 * DAY));
+  check("days left count down to the last day", plan.trialDaysLeft(tr, T0) === 21 && plan.trialDaysLeft(tr, T0 + 20.5 * DAY) === 1 && plan.trialDaysLeft(tr, T0 + 22 * DAY) === null);
+  check("the trial-ending moment is the last 3 days", !R.trialEnding(tr, T0 + 17 * DAY) && R.trialEnding(tr, T0 + 18 * DAY) && R.trialEnding(tr, T0 + 20.9 * DAY) && !R.trialEnding(tr, T0 + 21 * DAY));
   check("a second trial never starts", R.startTrial(tr, T0 + 30 * DAY) === null && R.startTrial({ paidSince: iso(T0) }, T0) === null && R.startTrial({ proUntil: iso(T0) }, T0) === null);
   check("paid Pro outranks the trial, a pause outranks both", plan.planOf({ ...tr, proUntil: iso(T0 + 40 * DAY) }, T0 + 20 * DAY) === "pro" && plan.planOf({ ...tr, pausedUntil: iso(T0 + 2 * DAY) }, T0) === "free");
 
   console.log("\nThe extension, once");
   const ex = { ...tr };
   check("value early in the trial changes nothing", !R.extendTrial(ex, T0 + 5 * DAY) && ex.trialEndsAt === tr.trialEndsAt);
-  check("value in the last 4 days adds 7 days", R.extendTrial(ex, T0 + 10.5 * DAY) && Date.parse(ex.trialEndsAt!) === T0 + 21 * DAY && ex.trialExtended === true, ex);
-  check("only once", !R.extendTrial(ex, T0 + 18 * DAY) && Date.parse(ex.trialEndsAt!) === T0 + 21 * DAY);
+  check("value in the last 4 days adds 7 days", R.extendTrial(ex, T0 + 17.5 * DAY) && Date.parse(ex.trialEndsAt!) === T0 + 28 * DAY && ex.trialExtended === true, ex);
+  check("only once", !R.extendTrial(ex, T0 + 25 * DAY) && Date.parse(ex.trialEndsAt!) === T0 + 28 * DAY);
   const over = { ...tr };
-  check("not after the trial ended", !R.extendTrial(over, T0 + 15 * DAY) && !over.trialExtended);
+  check("not after the trial ended", !R.extendTrial(over, T0 + 22 * DAY) && !over.trialExtended);
 
   console.log("\nPause and cancel");
   const paid = { subscriptionId: "sub_1", customerId: "cus_1", proUntil: iso(T0 + 10 * DAY), paidSince: iso(T0 - 20 * DAY), interval: "month" as const };
@@ -211,8 +211,8 @@ async function main() {
   console.log("\nBought during the trial: Stripe's trialing status");
   const trialRec = R.startTrial(undefined, T0)!;
   const trialEndS = Math.floor(Date.parse(trialRec.trialEndsAt!) / 1000);
-  check("checkout keeps the trial's days with more than 48 hours left", R.keepTrialEnd(trialRec, T0 + 2 * DAY) === trialEndS && R.keepTrialEnd(trialRec, T0 + 11.9 * DAY) === trialEndS);
-  check("48 hours or less left, or not on the trial: charged at once", R.keepTrialEnd(trialRec, T0 + 12 * DAY) === null && R.keepTrialEnd(trialRec, T0 + 13 * DAY) === null && R.keepTrialEnd({}, T0) === null && R.keepTrialEnd(paid, T0) === null);
+  check("checkout keeps the trial's days with more than 48 hours left", R.keepTrialEnd(trialRec, T0 + 2 * DAY) === trialEndS && R.keepTrialEnd(trialRec, T0 + 18.9 * DAY) === trialEndS);
+  check("48 hours or less left, or not on the trial: charged at once", R.keepTrialEnd(trialRec, T0 + 19 * DAY) === null && R.keepTrialEnd(trialRec, T0 + 20 * DAY) === null && R.keepTrialEnd({}, T0) === null && R.keepTrialEnd(paid, T0) === null);
   const bt = R.emptyBilling();
   bt.members.mem_tr = { ...trialRec };
   const whoT = (o: { ref?: string | null; customer?: string | null; subscription?: string | null }) =>
@@ -276,8 +276,8 @@ async function main() {
   // Bought with 2 days or less left: an ordinary checkout, charged at once (no trial_end in its metadata).
   const bn = R.emptyBilling();
   bn.members.mem_tr = { ...trialRec };
-  R.applyEvent(bn, ev("evt_n1", "checkout.session.completed", { id: "cs_n", mode: "subscription", client_reference_id: "rn_ref_tr", customer: "cus_tr", subscription: "sub_tr", payment_status: "paid", metadata: { interval: "month" } }), { nowMs: T0 + 13 * DAY, memberOf: () => "mem_tr" });
-  check("late in the trial: paid at once, Pro from now", plan.planOf(bn.members.mem_tr, T0 + 13 * DAY) === "pro" && !bn.members.mem_tr.proStartsAt && bn.members.mem_tr.paidSince === iso(T0 + 13 * DAY));
+  R.applyEvent(bn, ev("evt_n1", "checkout.session.completed", { id: "cs_n", mode: "subscription", client_reference_id: "rn_ref_tr", customer: "cus_tr", subscription: "sub_tr", payment_status: "paid", metadata: { interval: "month" } }), { nowMs: T0 + 20 * DAY, memberOf: () => "mem_tr" });
+  check("late in the trial: paid at once, Pro from now", plan.planOf(bn.members.mem_tr, T0 + 20 * DAY) === "pro" && !bn.members.mem_tr.proStartsAt && bn.members.mem_tr.paidSince === iso(T0 + 20 * DAY));
 
   console.log("\nThe annual line");
   check("framed by an hourly rate above $49", R.annualLine(R.hourlyOf({ kind: "hourly", amount: 175 })) === "Less than an hour of your time a month.");
@@ -331,6 +331,8 @@ async function main() {
     refused = (e as Error).message;
   }
   check("billing actions are refused in words, and nothing reaches Stripe", refused === "Plans aren't open yet." && calls.length === 0, refused);
+  const codeOff = await act(CY, { type: "promoCode", code: "RN-SURVEY10" });
+  check("a discount code from the address is not kept while billing is off", codeOff.ok && !(await state()).profiles.mem_cy?.promo && (await meOf(CY)).plan === undefined, codeOff);
 
   console.log("\nRN_BILLING=1 without Stripe: still off");
   process.env.RN_BILLING = "1";
@@ -345,7 +347,7 @@ async function main() {
   // Al finished onboarding while billing was off: their trial starts on their next visit, like Bo's.
   await t.billingVisit(BO);
   const bo = await meOf(BO);
-  check("a member onboarded before billing starts the trial on their next visit", bo.plan?.name === "trial" && bo.plan.trialDaysLeft === 14 && bo.plan.firstChargeAt === bo.plan.trialEndsAt, bo.plan);
+  check("a member onboarded before billing starts the trial on their next visit", bo.plan?.name === "trial" && bo.plan.trialDaysLeft === 21 && bo.plan.firstChargeAt === bo.plan.trialEndsAt, bo.plan);
   const ref0 = (await state()).billing!.members.mem_bo.trialEndsAt;
   await t.billingVisit(BO);
   check("a second visit changes nothing", (await state()).billing!.members.mem_bo.trialEndsAt === ref0);
@@ -359,7 +361,7 @@ async function main() {
     check("onboarding's draft keeps the two answers", (await meOf(fay.token)).draft?.clientCount === "0" && (await meOf(fay.token)).draft?.looking === false);
     await act(fay.token, { type: "profile", function: "Marketing", clientCount: "0", looking: false });
     const f2 = (await meOf(fay.token)).plan;
-    check("finishing onboarding starts the 14-day trial", f2?.name === "trial" && f2.trialDaysLeft === 14 && f2.notLooking, f2);
+    check("finishing onboarding starts the 21-day trial", f2?.name === "trial" && f2.trialDaysLeft === 21 && f2.notLooking, f2);
     const bad = await act(fay.token, { type: "profile", clientCount: "7" });
     check("a client count off the list is refused", !bad.ok);
   } else check("a new member could join", false);
@@ -477,6 +479,21 @@ async function main() {
   await server.billingAction(CY, "checkout", { interval: "year", code: " rn-survey10 " }, "https://post.example.com");
   const ck2 = new URLSearchParams(calls[0]?.body ?? "");
   check("the survey code is applied as its promotion code (and the yearly price)", ck2.get("discounts[0][promotion_code]") === "promo_survey_test" && !ck2.has("allow_promotion_codes") && ck2.get("line_items[0][price]") === "price_year_test");
+  // From the landing page (?code=RN-SURVEY10) through joining: the code is kept with the member, shown on the plans and applied at checkout untyped.
+  await t.joinMember("Gil Surveyed", "gil.surveyed@example.com", undefined, "10.9.9.9", null, "rn-survey10");
+  const gil = await t.memberByEmail("gil.surveyed@example.com");
+  if (gil) {
+    await act(gil.token, { type: "profile", function: "Sales", clientCount: "1", looking: true });
+    const gp = (await meOf(gil.token)).plan;
+    check("a code brought through joining shows on the plans: RN-SURVEY10 applied, 10% off", gp?.code?.code === "RN-SURVEY10" && gp.code.off === "10% off", gp?.code);
+    calls.length = 0;
+    await server.billingAction(gil.token, "checkout", { interval: "month" }, "https://post.example.com");
+    const ck3 = new URLSearchParams(calls[0]?.body ?? "");
+    check("and checkout applies it without it being typed again", ck3.get("discounts[0][promotion_code]") === "promo_survey_test" && !ck3.has("allow_promotion_codes"), calls[0]?.body);
+  } else check("a member could join with a code", false);
+  const codeLive = await act(DI, { type: "promoCode", code: "rn-survey10" });
+  check("a signed-in member's code from the address is kept too (promoCode)", codeLive.ok && (await meOf(DI)).plan?.code?.code === "RN-SURVEY10");
+  check("a member with no code has none on the plans", (await meOf(BO)).plan?.code === null);
   calls.length = 0;
   const tp = await server.billingAction(CY, "topup", {}, "https://post.example.com");
   const tpBody = new URLSearchParams(calls[0]?.body ?? "");
@@ -530,6 +547,14 @@ async function main() {
   const sw = await server.sweep();
   const to = (who: string) => mails.filter((m) => m.to === who);
   check("Al (3 days left, looking): the 3-day note", to("al.trialson@example.com").length === 1 && /ends in \d+ days/.test(to("al.trialson@example.com")[0].subject), to("al.trialson@example.com").map((m) => m.subject));
+  check(
+    "it is the value receipt with Keep Pro, in place of a countdown (one email, not two)",
+    /what your trial gave you so far|still yours for a few days/.test(to("al.trialson@example.com")[0]?.text ?? "") && /After it ends you're on Free, unless you keep Pro/.test(to("al.trialson@example.com")[0]?.text ?? "") && /\$590 a year/.test(to("al.trialson@example.com")[0]?.text ?? ""),
+    to("al.trialson@example.com")[0]?.text,
+  );
+  const alEnd = (await meOf(AL)).plan!;
+  check("the app has the receipt in the trial's last 3 days (Plan and billing, the banner)", alEnd.ending && Array.isArray(alEnd.receipt), alEnd);
+  check("and not earlier in the trial", (await meOf(BO)).plan!.receipt === undefined);
   check("Ed (not looking): no countdown at 2 days", to("ed.quietly@example.com").length === 0);
   check("Cy (ended 6 days ago): the value receipt with the yearly plan first", to("cy.freeman@example.com").length === 1 && /trial is over/.test(to("cy.freeman@example.com")[0].subject) && /\$590 a year, which is 2 months free, or \$59 a month/.test(to("cy.freeman@example.com")[0].text));
   check("Ada (ended 16 days ago): too long ago, nothing", to("ada.admin@example.com").length === 0);

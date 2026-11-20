@@ -104,6 +104,8 @@ import {
   ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
+import { surveyCode } from "./billing/stripe";
+import { valueCounts, valueLines } from "./billing/emails";
 import { FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStats } from "./radar/types";
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
@@ -230,8 +232,12 @@ export interface LedgerEntry {
    * holder's name from public profiles it bought came off the seat (This is wrong, Remove my name).
    * duplicate (refunds): the member had bought two listings of one role, merged into one (mergeDuplicateRoles).
    * leader (refunds): the member said a company they had just unlocked has a full-time leader, and its website then showed one (payLeaderBack).
+   * free (company unlocks): the member's free company of the day (delta 0, see freeCompanyLeft). It
+   * counts as COMPANY_PRICE toward the day's unlock limit like a paid one. pending (fills): a fact
+   * the member added at a company where their own new seat waits to be confirmed (pendingSeats):
+   * it earns 0 until then, and is paid when the seat is confirmed (confirmSeat).
    */
-  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader";
+  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader" | "free" | "pending";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -246,6 +252,8 @@ interface Profile {
   messageEmailOff?: boolean;
   /** Asked to hear about Pro. */
   proInterest?: boolean;
+  /** A seed member's discount code from the address (?code=), for checkout. Joined members keep theirs on their member record. */
+  promo?: string;
   /** Who they hunt: their ideal client (lib/hunt.ts). */
   icp?: Icp | null;
   /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. */
@@ -342,7 +350,8 @@ export interface State extends MessagingState {
   verifications: Record<string, string[]>;
   /** People who joined from the landing page (seed members sign in with their link). */
   /** proven: joined while sign-in links went by email, so the link proved the address (see trustOf). */
-  members: (Member & { at: string; referredBy?: string; ipHash?: string; proven?: boolean })[];
+  /** `promo`: the discount code they arrived with (?code=), applied at checkout (lib/billing). */
+  members: (Member & { at: string; referredBy?: string; ipHash?: string; proven?: boolean; promo?: string })[];
   /**
    * Each member's recent networks as hashes (never the address), newest last, at most IP_KEEP.
    * Seed members too. Written at sign-in and on visits. An invite that joins from one of the
@@ -357,7 +366,7 @@ export interface State extends MessagingState {
   /** Every report, for the daily report limit and the admin review list. */
   reportLog: { memberId: string; ref: string; at: string }[];
   /** Bonus credits earned while at the daily cap, paid as the rolling window frees room. */
-  held: { memberId: string; delta: number; reason: "referral" | "confirm"; ref: string; at: string }[];
+  held: { memberId: string; delta: number; reason: "referral" | "confirm" | "fill"; ref: string; at: string }[];
   /** Rates shared for the benchmarks only. Never sent to anyone but the member who shared them. */
   benchRates: StoredBenchRate[];
   /** Product signals for the pilot (walls hit, Pro offer seen, Pro interest). Newest 20,000. */
@@ -376,6 +385,19 @@ export interface State extends MessagingState {
    * still counts toward the limit. Rows older than 30 days are dropped.
    */
   seatClaims?: { memberId: string; engagementId: string; at: string }[];
+  /**
+   * Seats a member added as their own at a company that wasn't on file (a new company, or one whose
+   * own first seat still waits). What the member adds at that company earns 0 for now (ledger why
+   * "pending") and is paid once the seat is confirmed (confirmSeat): another member confirms a fact
+   * on it, or an admin does. Confirmed seats leave the list.
+   */
+  pendingSeats?: { memberId: string; engagementId: string; companyId: string; at: string }[];
+  /**
+   * Locked companies a member opened (a locked company's record, or its card expanded), once per
+   * member, company and UTC day, for Pilot metrics' demand counts. Admins only ever see counts.
+   * The newest LOCKED_VIEWS_KEEP.
+   */
+  lockedViews?: { memberId: string; companyId: string; day: string }[];
   /** Each member's last visit (written at most once per 6 hours). */
   seen: Record<string, string>;
   scan: ScanState;
@@ -1506,10 +1528,71 @@ function releaseHeld(s: State, memberId: string, now: string): void {
     }
     const room = Math.max(0, EARN_CAP - earning(s, memberId, Date.parse(now)).earned);
     const pay = Math.min(h.delta, room);
-    if (pay > 0) s.ledger.push({ memberId, delta: pay, reason: h.reason, ref: h.ref, at: now });
+    // A fact's own credit (a confirmed seat's, held at the cap) goes on its own 0 row, so the fact counts once.
+    if (pay > 0 && h.reason === "fill") payFillRow(s, memberId, h.ref, pay, now);
+    else if (pay > 0) s.ledger.push({ memberId, delta: pay, reason: h.reason, ref: h.ref, at: now });
     if (h.delta > pay) keep.push({ ...h, delta: h.delta - pay });
   }
   s.held = keep;
+}
+
+/** Pay a fact's credit onto the 0 row it earned at first (dated now, so it counts in today's 25). */
+function payFillRow(s: State, memberId: string, ref: string, delta: number, now: string): void {
+  const i = s.ledger.findIndex((l) => l.memberId === memberId && l.reason === "fill" && l.ref === ref && l.delta === 0 && !l.undone);
+  if (i < 0) {
+    s.ledger.push({ memberId, delta, reason: "fill", ref, at: now });
+    return;
+  }
+  const [row] = s.ledger.splice(i, 1);
+  delete row.why;
+  s.ledger.push({ ...row, delta, at: now });
+}
+
+/** The record a ledger ref is about belongs to this company (a company, a seat or a person there). */
+function refCompany(s: State, g: Graph, ref: string): string | null {
+  const id = refRecord(ref);
+  if (g.companies.has(id)) return id;
+  const e = g.engagements.get(id)?.companyId ?? s.engagements.find((x) => x.id === id)?.companyId;
+  if (e) return e;
+  const p = g.contacts.get(id);
+  return p?.companyId ?? g.engagements.get(p?.engagementId ?? "")?.companyId ?? s.contacts.find((x) => x.id === id)?.companyId ?? null;
+}
+
+/** Facts waiting on a seat of theirs to be confirmed, still standing: what "+N when confirmed" counts. */
+function pendingFor(s: State, memberId: string): number {
+  let n = 0;
+  for (const l of s.ledger) if (l.memberId === memberId && l.reason === "fill" && l.why === "pending" && !l.undone && s.values[l.ref]?.status === "live" && s.values[l.ref].by === memberId) n++;
+  return n;
+}
+
+/**
+ * A member's own seat at a company that wasn't on file is confirmed (another member confirmed a
+ * fact on it, or an admin did): every fact they added at that company while it waited is paid now,
+ * within the daily cap (the rest is held and paid as room frees). Returns the credits it earned.
+ */
+function confirmSeat(s: State, g: Graph, engId: string, now: string): number {
+  const p = (s.pendingSeats ?? []).find((x) => x.engagementId === engId);
+  if (!p) return 0;
+  // Every seat of theirs waiting at that company counts as confirmed with it.
+  s.pendingSeats = (s.pendingSeats ?? []).filter((x) => !(x.memberId === p.memberId && x.companyId === p.companyId));
+  let n = 0;
+  for (const l of [...s.ledger]) {
+    if (l.memberId !== p.memberId || l.reason !== "fill" || l.why !== "pending" || l.undone) continue;
+    if (refCompany(s, g, l.ref) !== p.companyId) continue;
+    const v = s.values[l.ref];
+    if (!v || v.status !== "live" || v.by !== p.memberId) {
+      delete l.why; // taken back or removed while it waited: nothing to pay
+      continue;
+    }
+    const room = Math.max(0, EARN_CAP - earning(s, p.memberId, Date.parse(now)).earned);
+    if (room > 0) payFillRow(s, p.memberId, l.ref, 1, now);
+    else {
+      delete l.why;
+      s.held.push({ memberId: p.memberId, delta: 1, reason: "fill", ref: l.ref, at: now });
+    }
+    n++;
+  }
+  return n;
 }
 
 const heldFor = (s: State, memberId: string) => s.held.reduce((n, h) => n + (h.memberId === memberId ? h.delta : 0), 0);
@@ -1727,11 +1810,28 @@ function pickExempt(s: State, memberId: string, seatAt: Set<string>): (companyId
 function unlockRoom(s: State, memberId: string, nowMs: number): { left: number; firstDay: boolean } {
   let used = 0;
   // Counted in credits: a company (COMPANY_PRICE) counts as that many unlocks, so day one's limit stays the starter credits.
-  for (const l of s.ledger) if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY) used += Math.max(1, -l.delta);
+  // The free company of the day counts the same as a paid one.
+  for (const l of s.ledger) if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY) used += l.why === "free" ? COMPANY_PRICE : Math.max(1, -l.delta);
   const joinedAt = s.members.find((m) => m.id === memberId)?.at;
   const firstDay = !!joinedAt && nowMs - Date.parse(joinedAt) < DAY;
   return { left: Math.max(0, (firstDay ? NEW_MEMBER_UNLOCK_MAX : UNLOCK_DAILY_MAX) - used), firstDay };
 }
+
+/**
+ * The free company of the day: every member (Free, trial and Pro alike) unlocks one company a UTC
+ * day for no credits. It makes the company theirs like a paid unlock and counts toward the day's
+ * unlock limits (unlockRoom). It doesn't roll over. True while today's is still left.
+ */
+function freeCompanyLeft(s: State, memberId: string, nowMs: number): boolean {
+  // A test server only (RN_SCAN_TEST=1): RN_FREE_COMPANY=off leaves it out, for the suites that check what paid unlocks cost.
+  if (process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off") return false;
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  return !s.ledger.some((l) => l.memberId === memberId && l.reason === "unlock" && l.why === "free" && l.at.slice(0, 10) === today);
+}
+/** The credit history's words for it (LedgerRow.reason). */
+export const FREE_COMPANY_LINE = "Free company of the day";
+/** Said after the unlock that used it. */
+export const FREE_COMPANY_USED = "That was your free company today, so it cost no credits. The next one is free tomorrow.";
 
 /** What a member sees of their balance: never a negative number. A shortfall is shown as credits owed. */
 const shownBalance = (bal: number) => ({ credits: Math.max(0, bal), owed: Math.max(0, -bal) });
@@ -2069,7 +2169,7 @@ const JOIN_NAME_RE = /^\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'’.-]*)+$/u;
  * it is most likely the same person with a second email.
  */
 export async function joinMember(
-  nameRaw: unknown, emailRaw: unknown, ref?: unknown, ip = "local", operatorSecret?: string | null,
+  nameRaw: unknown, emailRaw: unknown, ref?: unknown, ip = "local", operatorSecret?: string | null, promoRaw?: unknown,
 ): Promise<Member & { existing?: boolean }> {
   const ipHash = createHash("sha256").update("rn-ip:" + ip).digest("hex").slice(0, 16);
   return mutate((s, seed) => {
@@ -2082,6 +2182,8 @@ export async function joinMember(
     const seedMember = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
     const joined = s.members.find((m) => inboxKey(m.email) === inbox);
     if (seedMember || joined) {
+      // A member back through the survey link: their code waits for checkout too.
+      if (emailEnabled() && cleanPromo(promoRaw)) setPromo(s, (seedMember ?? joined)!.id, cleanPromo(promoRaw));
       if (emailEnabled()) return { ...(seedMember ? withToken(seedMember, s) : joined)!, existing: true }; // route emails them a sign-in link
       throw new ActionError("That email already belongs to a member. Sign in with your personal link.");
     }
@@ -2099,6 +2201,8 @@ export async function joinMember(
       // No title until they give one: "Member" is only a display fallback, never a stored title.
       id: newId("j", name), name, email, title: "", token: randomBytes(12).toString("base64url"), at: new Date().toISOString(), ipHash,
       ...(referrer && !sameNetwork ? { referredBy: referrer.id } : {}),
+      // The discount code from the landing page (?code=), kept so checkout applies it later.
+      ...(cleanPromo(promoRaw) ? { promo: cleanPromo(promoRaw) } : {}),
       // With email on, the one-time link to finish joining goes only to this address: using it
       // proves the address and sets `proven` (lib/signin.ts, see trustOf).
     };
@@ -3148,12 +3252,17 @@ async function fullView(
         ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : l.why === "offbar" ? OFFBAR_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
+      // The free company of the day: "Free company of the day", then the company (theirs now).
+      if (l.reason === "unlock" && l.why === "free") {
+        ledger.push({ at: l.at, delta: l.delta, reason: FREE_COMPANY_LINE, company: companyNameOf(id), field: "" });
+        continue;
+      }
       // A fact the member took back (retract): "Took back the HQ", then "at Acme".
       if (l.reason === "reversal" && l.why === "retract") {
         ledger.push({ at: l.at, delta: l.delta, reason: `Took back ${say(entityOf(id), field)}`, company: companyNameOf(id), field: "" });
         continue;
       }
-      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: l.reason === "unlock" || l.reason === "refund" ? boughtLabel(entityOf(id), id, field) : ledgerLabel(entityOf(id), field) });
+      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: l.reason === "unlock" || l.reason === "refund" ? boughtLabel(entityOf(id), id, field) : ledgerLabel(entityOf(id), field), ...(l.why === "pending" ? { pending: true as const } : {}) });
     }
     ledger.reverse();
     const prof = s.profiles[me.id] ?? {};
@@ -3170,11 +3279,13 @@ async function fullView(
       onboarded: !!prof.onboarded,
       ...shownBalance(balance(s, me.id)),
       unlocksLeft: unlockRoom(s, me.id, nowMs).left,
+      freeCompany: freeCompanyLeft(s, me.id, nowMs),
       sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, pickExempt(s, me.id, ownSeatAt)).earned),
       earned24h: earned,
       earnCap: EARN_CAP,
       earnResetsAt: resetsAt,
       held: heldFor(s, me.id),
+      pending: pendingFor(s, me.id),
       admin,
       ...(asMember ? { asMember: true } : {}),
       token: me.token,
@@ -3205,7 +3316,7 @@ async function fullView(
       clientCount: prof.clientCount ?? null,
       looking: typeof prof.looking === "boolean" ? prof.looking : null,
       // Their plan, only while billing is live (lib/billing). Without it nothing is gated.
-      ...(billingLive() ? { plan: planView(s, me.id, nowMs) } : {}),
+      ...(billingLive() ? { plan: planView(s, me.id, nowMs, { tracks, fnOfEng: (engId) => { const e = g.engagements.get(engId); return e ? fnOf(e, s) : null; } }) } : {}),
       // Only the viewer's own. Nobody else's private rate ever leaves the server.
       benchRates: s.benchRates
         .filter((b) => b.by === me.id)
@@ -3334,6 +3445,31 @@ function digestOn() {
 
 /* ---------- pilot metrics (admins) ---------- */
 
+/**
+ * Demand for locked companies (State.lockedViews), as counts: views in the last 7 and 30 days,
+ * the members behind them, and how many of those views the same member went on to unlock (a
+ * company unlock of theirs on the view's day or after). Never which company or which member.
+ */
+function lockedViewStats(s: State, nowMs: number): NonNullable<AdminStats["lockedViews"]> {
+  const bought = new Map<string, string>(); // `${member} ${company}` -> first unlock day
+  for (const l of s.ledger) {
+    if (l.reason !== "unlock" || !l.ref.endsWith(".identity")) continue;
+    const k = `${l.memberId} ${refRecord(l.ref)}`;
+    const d = l.at.slice(0, 10);
+    if (!bought.has(k) || d < bought.get(k)!) bought.set(k, d);
+  }
+  const count = (days: number) => {
+    const from = new Date(nowMs - days * DAY).toISOString().slice(0, 10);
+    const rows = (s.lockedViews ?? []).filter((v) => v.day > from);
+    // An unlock on or after a view's day: bought after looking (a later unlock of a company opened on two days counts once a view).
+    const unlocked = rows.filter((v) => (bought.get(`${v.memberId} ${v.companyId}`) ?? "") >= v.day).length;
+    return { views: rows.length, members: new Set(rows.map((v) => v.memberId)).size, unlocked };
+  };
+  const w = count(7);
+  const m = count(30);
+  return { views7: w.views, members7: w.members, unlocked7: w.unlocked, views30: m.views, members30: m.members, unlocked30: m.unlocked };
+}
+
 function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: number, scan: ScanSummary, entityOf: (id: string) => Entity): AdminStats {
   // Balances of everyone who has shown up: joined, signed in, onboarded or in the ledger.
   const sums = new Map<string, number>();
@@ -3461,6 +3597,17 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
       // A placeholder name kept only because a member holds a seat there (see graph).
       .concat(placeholdersInReview(g).map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: "placeholder name", at: "" }))),
     walls: { members: walled.size, hits },
+    lockedViews: lockedViewStats(s, nowMs),
+    pendingSeats: (s.pendingSeats ?? [])
+      .filter((p) => idx.byId.has(p.memberId) && g.engagements.has(p.engagementId))
+      .map((p) => ({
+        memberId: pubId(p.memberId),
+        name: idx.byId.get(p.memberId)!.name,
+        company: g.companies.get(p.companyId)?.name ?? "",
+        engagementId: pubId(p.engagementId),
+        at: p.at,
+        credits: s.ledger.filter((l) => l.memberId === p.memberId && l.reason === "fill" && l.why === "pending" && !l.undone && refCompany(s, g, l.ref) === p.companyId && s.values[l.ref]?.status === "live").length,
+      })),
     pro: { interested: Object.values(s.profiles).filter((p) => p.proInterest).length, views, byWhere },
     topUnlocked: top("unlock"),
     topAdded: top("fill"),
@@ -3779,6 +3926,9 @@ function cleanDraft(raw: unknown, alerts: { id: string }[], now: string): Onboar
 /** Signals one member can send in 24 hours. More are dropped without a word. */
 const SIGNAL_DAILY_MAX = 200;
 const SIGNAL_KEEP = 20_000;
+/** Locked companies counted as viewed per member per UTC day (State.lockedViews), and how many rows are kept. */
+const LOCKED_VIEWS_DAILY_MAX = 200;
+const LOCKED_VIEWS_KEEP = 50_000;
 /** radar_opened and radar_clicked come from the app's Radar page; the server records radar_sent and radar_off itself (lib/radar). */
 const SIGNAL_NAMES = new Set(["wall", "pro_view", "pro_interest", "radar_opened", "radar_clicked"]);
 /** Record a product signal, inside the member's daily limit. Returns whether it was kept. */
@@ -3817,6 +3967,8 @@ const endBeforeListed = (firstSeen: string) =>
 /** Month `a` ("2025-03", or a year alone) ends before month `b` starts. A year alone compares by year. */
 const monthBefore = (a: string, b: string) => (a.length === 4 || b.length === 4 ? a.slice(0, 4) < b.slice(0, 4) : a < b);
 
+/** Why a seat's credits wait (pendingSeats): said after "+4 when confirmed". */
+export const PENDING_WHY = "A seat at a company new to Merlin earns once another member confirms a fact on it, or an admin checks it.";
 /** An Add that found everything it sent already on file. */
 const NOTHING_NEW = "Nothing new was added.";
 /** A seat needs to say what the work was. A name alone is not a seat. */
@@ -4105,6 +4257,32 @@ export async function perform(
     /** A fill saved for no credit because it was a "How they sell" answer past the ones that earn today. */
     let sellCapped = false;
     /**
+     * Companies where the member's own new seat waits to be confirmed (State.pendingSeats), and the
+     * one this Add makes with their seat in it (`pendingCo`): their facts there earn when it is.
+     */
+    let pendingCo: string | null = null;
+    const waitsAt = (ref: string) => {
+      const co = refCompany(s, g, ref);
+      return !!co && (co === pendingCo || (s.pendingSeats ?? []).some((p) => p.memberId === me.id && p.companyId === co));
+    };
+    /** Facts this action saved that wait for a seat to be confirmed. */
+    let pendingNow = 0;
+    /** The member joined at (seed members: never, so every company was there before them). */
+    const joinedAt = s.members.find((m) => m.id === me.id)?.at ?? "";
+    /**
+     * The invite bonus waits for a first fact on a company that was on Merlin before the invitee
+     * joined, and not on a seat they made themselves: a client they add with their own seat is not it.
+     */
+    let referralOk = false;
+    const noteReferral = (ref: string) => {
+      if (referralOk) return;
+      const rec = refRecord(ref);
+      const co = refCompany(s, g, ref);
+      if (!co || s.engagements.some((e) => e.id === rec && e.by === me.id)) return;
+      const made = s.companies.find((c) => c.id === co);
+      if (!made || (!!joinedAt && made.at < joinedAt)) referralOk = true;
+    };
+    /**
      * Pay a fill, within the rolling 24 hour cap. Records a 0 entry when it earns nothing (so a
      * later reversal knows). Two limits sit beside the cap, and a fill past either hard limit is
      * refused (the throw drops the whole action, so nothing half-saved stays):
@@ -4123,8 +4301,15 @@ export async function perform(
         if (today.length >= FILL_DAILY_MAX && !ownSeat(refRecord(ref)) && today.filter((l) => !ownSeat(refRecord(l.ref))).length >= FILL_DAILY_MAX)
           throw new ActionError(`You've added ${FILL_DAILY_MAX} facts today, and that's the daily limit. Add more tomorrow. You can still fill in the seats you hold.`);
       }
+      // At a company where the member's own new seat waits to be confirmed: no credit yet, paid when it is (confirmSeat).
+      if (!ref.startsWith("bench.") && waitsAt(ref)) {
+        s.ledger.push({ memberId: me.id, delta: 0, reason: "fill", ref, at: now, why: "pending" });
+        pendingNow++;
+        return 0;
+      }
       const d = earns && EARN_CAP - earning(s, me.id, nowMs).earned > 0 ? 1 : 0;
       s.ledger.push({ memberId: me.id, delta: d, reason: "fill", ref, at: now });
+      if (!ref.startsWith("bench.")) noteReferral(ref);
       return d;
     };
     /**
@@ -4133,7 +4318,7 @@ export async function perform(
      * The inviter is paid for REFERRAL_LIMIT different invitees per 30 days.
      */
     const payReferral = () => {
-      if (a?.type === "benchRate") return 0;
+      if (a?.type === "benchRate" || !referralOk) return 0;
       const r = referralBonus(s, seed, me.id, now);
       if (r.inviter) inviterPaid = r.inviter;
       return r.paid;
@@ -4285,9 +4470,11 @@ export async function perform(
         alsoChanged.push({ entity, node, field: "status" });
       }
       if (cur) return 0; // editing your own value, or correcting your seat, earns nothing extra
-      if (entity === "engagement" && key === "rate" && movePrivateRate(node.id, k)) return 0; // already paid as a benchmark-only rate
+      if (entity === "engagement" && key === "rate" && movePrivateRate(node.id, k)) return noteReferral(k), 0; // already paid as a benchmark-only rate
+      const waited = pendingNow;
       const d = awardFill(k);
-      if (!d) capped = true;
+      // No credit because it waits for the seat to be confirmed is not the daily cap.
+      if (!d && pendingNow === waited) capped = true;
       return d;
     };
     /** What to say when the daily limit stopped a credit. `some`: part of this change did earn. */
@@ -4299,7 +4486,9 @@ export async function perform(
       // The limit has one name everywhere ("earned today"). The client adds when earning opens again (Me.earnResetsAt), in the member's own time zone.
       return ` No credit ${some ? "for the rest" : "this time"}, because you've earned today's ${EARN_CAP}.`;
     };
-    const credits = (n: number) => (n ? ` You earned ${n} credit${n > 1 ? "s" : ""}.` : "");
+    const credits = (n: number) => (n ? ` You earned ${n} credit${n > 1 ? "s" : ""}.` : "") + pendingNote();
+    /** "+4 when confirmed": what waits for the member's seat at a company new to Merlin. */
+    const pendingNote = () => (pendingNow ? ` +${pendingNow} when confirmed. ${PENDING_WHY}` : "");
     const bonusNote = (n: number) => (n ? ` Your invite bonus added ${n} more.${inviterPaid ? ` ${inviterPaid} got ${REFERRAL_BONUS} too.` : ""}` : "");
     /** Said when a claim on an open role was saved and the role stays open (claimKept). */
     const claimNote = () =>
@@ -4525,22 +4714,26 @@ export async function perform(
             return { message: "You can already see all of these, so no credits were spent." };
           }
           // What this unlock costs: 1 credit per fact, with each open role one purchase, and COMPANY_PRICE for each company.
-          const cost = (t: { field: string }) => (t.field === "identity" ? COMPANY_PRICE : 1);
+          // The first company of the member's UTC day is free (freeCompanyLeft); it still counts toward the day's limit.
+          const freeK = freeCompanyLeft(s, me.id, nowMs) ? todo.find((t) => t.field === "identity")?.k ?? null : null;
+          const units = (t: { field: string }) => (t.field === "identity" ? COMPANY_PRICE : 1);
+          const cost = (t: { k: string; field: string }) => (t.k === freeK ? 0 : units(t));
           const need = todo.reduce((n, t) => n + cost(t), 0);
-          if (need) {
+          const room = todo.reduce((n, t) => n + units(t), 0);
+          if (room) {
             // Accounts in their first 24 hours get a lower daily limit (unlockRoom).
             const { left, firstDay } = unlockRoom(s, me.id, nowMs);
             const bal = balance(s, me.id);
             // Out of credits (0, or owing after a removal) is the wall whatever the daily limit says.
             // Short of credits comes first too, unless the limit binds as tightly (earning more wouldn't help then).
-            if (bal <= 0 || (bal < need && bal < left)) {
+            if (need && (bal <= 0 || (bal < need && bal < left))) {
               const msg = bal > 0 ? `That needs ${need} credits and you have ${bal}. Add a missing fact to earn more.` : "You're out of credits. Add a missing fact to earn one.";
               // The wall: counted for the pilot, so the refusal is returned (a throw would drop the count).
               if (!addSignal(s, me.id, "wall", "server", now)) throw new ActionError(msg);
               refusal.message = msg;
               return { message: "" };
             }
-            if (need > left) {
+            if (room > left) {
               const limit = firstDay
                 ? `New accounts can unlock ${NEW_MEMBER_UNLOCK_MAX} facts in their first 24 hours, then ${UNLOCK_DAILY_MAX} a day.`
                 : `The limit is ${UNLOCK_DAILY_MAX} unlocks in 24 hours.`;
@@ -4554,7 +4747,7 @@ export async function perform(
             }
           }
           for (const t of todo) {
-            s.ledger.push({ memberId: me.id, delta: -cost(t), reason: "unlock", ref: t.k, at: now });
+            s.ledger.push({ memberId: me.id, delta: -cost(t), reason: "unlock", ref: t.k, at: now, ...(t.k === freeK ? { why: "free" as const } : {}) });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
           /** Open a fact at no further charge. False when there is nothing there. */
@@ -4590,7 +4783,7 @@ export async function perform(
           const others = todo.length - companies.length - paired.length;
           // "for 1 credit", or nothing when the member had already paid for part of an open role.
           const price = need ? ` for ${need} credit${need > 1 ? "s" : ""}` : "";
-          const noCharge = need ? "" : " You had already paid for this open role, so no credit was spent.";
+          const noCharge = need || freeK ? "" : " You had already paid for this open role, so no credit was spent.";
           const companyName = (t: { node: Node }) => g.companies.get(t.node.id)?.name ?? "the company";
           // Each purchase is one fact: a person's name and title count once, and so do who held a seat and their role.
           let message =
@@ -4612,6 +4805,8 @@ export async function perform(
             const bought = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? `${todo.length} facts`;
             message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""},` : ""}${price}.${noCharge}`;
           } else if (todo.length === 1 && companies.length) message = `Unlocked ${companyName(todo[0])}${price}.`;
+          // The free company of the day: no credits for it, and it is said so.
+          if (freeK) message += ` ${FREE_COMPANY_USED}`;
           return {
             message,
             cells: [
@@ -4669,6 +4864,10 @@ export async function perform(
             g.companies.set(id, { ...company, name });
           }
           const companyName = g.companies.get(company.id)!.name;
+          // The member's own seat at a company that wasn't on file (new here, or one whose own first seat still
+          // waits): what they add there waits for the seat to be confirmed (pendingSeats), so a made-up client earns nothing.
+          const selfSeatSent = seatPick?.id === me.id && engFields.some(([k]) => k === "operator");
+          if (selfSeatSent && (isNew || (s.pendingSeats ?? []).some((p) => p.companyId === company!.id))) pendingCo = company.id;
           let earned = 0;
           // A pick-list answer past the day's limit is left out, and the rest of the form still goes in.
           let picksLeftOut = 0;
@@ -4789,6 +4988,9 @@ export async function perform(
             }
             // Everything sent about the seat was on file already.
             seatOnFile = !engNew && engFields.length > 0 && kept === engFields.length;
+            // Their seat at a company that wasn't on file waits to be confirmed.
+            if (pendingCo && eid && !(s.pendingSeats ?? []).some((p) => p.engagementId === eid))
+              (s.pendingSeats ??= []).push({ memberId: me.id, engagementId: eid, companyId: pendingCo, at: now });
           }
           // People: one already on file under the same name gets what's new instead of a second record (putPerson).
           const onFile: string[] = [];
@@ -5075,6 +5277,8 @@ export async function perform(
           if (list.includes(me.id)) return { message: "You already confirmed this." };
           s.verifications[k] = [...list, me.id];
           trustNow = null; // a confirmation can make the fact's author count (trustOf)
+          // Another member confirming a fact on a seat that waits to be confirmed confirms the seat: its holder's credits are paid.
+          if (a.entity === "engagement" && (s.pendingSeats ?? []).some((p) => p.engagementId === node.id && p.memberId !== me.id)) confirmSeat(s, g, node.id, now);
           // Two members confirming a name from public profiles verify it. Confirming earns nothing (it came from our research, not a member).
           if (pubName && !wasVerified)
             return {
@@ -5105,6 +5309,36 @@ export async function perform(
           // Wrong data: the field reopens, the filler loses what it earned, unlockers get theirs back.
           removeFact(k, cur);
           return { message: REMOVED };
+        }
+        case "confirmSeat": {
+          // Pilot metrics: an admin confirms a member's own seat at a company that was new to Merlin, and its credits are paid.
+          if (!isAdmin(me)) throw new ActionError("Only admins can confirm a seat.");
+          const id = inId("engagement", a.engagementId);
+          const p = (s.pendingSeats ?? []).find((x) => x.engagementId === id);
+          if (!p) throw new ActionError("That seat isn't waiting any more. It may already be confirmed.");
+          const paid = confirmSeat(s, g, id, now);
+          const who = memberIndex(seed, s).byId.get(p.memberId);
+          return { message: `Confirmed.${who ? ` ${firstName(who.name)}` : " The member"} gets ${paid} ${paid === 1 ? "credit" : "credits"} for it${paid ? "" : " (nothing was still standing)"}.` };
+        }
+        case "lockedView": {
+          // A locked company's record opened (or its card expanded): counted once per member, company and UTC day, for Pilot metrics.
+          const id = fromPub.get(String(a.companyId ?? "")) ?? "";
+          if (!g.companies.has(id) || !lockedFor(id)) return { message: "" };
+          const day = now.slice(0, 10);
+          const list = (s.lockedViews ??= []);
+          if (list.some((x) => x.memberId === me.id && x.companyId === id && x.day === day)) return { message: "" };
+          if (list.filter((x) => x.memberId === me.id && x.day === day).length >= LOCKED_VIEWS_DAILY_MAX) return { message: "" };
+          list.push({ memberId: me.id, companyId: id, day });
+          if (list.length > LOCKED_VIEWS_KEEP) list.splice(0, list.length - LOCKED_VIEWS_KEEP);
+          return { message: "" };
+        }
+        case "promoCode": {
+          // A code from the address (?code=RN-SURVEY10) the member arrived with: kept with them for checkout (billing live only).
+          if (!billingLive()) return { message: "" };
+          const code = cleanPromo(a.code);
+          if (!code) return { message: "" };
+          setPromo(s, me.id, code);
+          return { message: "" };
         }
         case "adminRemove": {
           // An admin takes one member-added fact off the table. No report is needed.
@@ -5653,8 +5887,8 @@ export async function perform(
     return {
       ...out,
       me: {
-        ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
-        unlocksLeft: unlockRoom(s, me.id, nowMs).left, sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
+        ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), pending: pendingFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
+        unlocksLeft: unlockRoom(s, me.id, nowMs).left, freeCompany: freeCompanyLeft(s, me.id, nowMs), sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
       },
     };
   }).catch((e) => {
@@ -6158,6 +6392,31 @@ export async function touch(token: string | null | undefined, ip?: string): Prom
 
 /** A member's plan record, as stored (undefined: Free, or billing never ran). */
 const planRec = (s: State, memberId: string): PlanRecord | undefined => s.billing?.members[memberId];
+/** A discount code as kept: letters, digits, - and _, upper case, at most 40. "" when nothing is left. */
+export const cleanPromo = (raw: unknown) =>
+  String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "")
+    .slice(0, 40);
+/** The discount code a member arrived with (?code=), or "". */
+export const promoOf = (s: State, memberId: string): string => s.members.find((m) => m.id === memberId)?.promo ?? s.profiles[memberId]?.promo ?? "";
+/** Keep a member's discount code (the newest one wins). */
+function setPromo(s: State, memberId: string, code: string) {
+  const joined = s.members.find((m) => m.id === memberId);
+  if (joined) joined.promo = code;
+  else s.profiles[memberId] = { ...(s.profiles[memberId] ?? {}), promo: code };
+}
+/**
+ * The survey code on the plans sheet: "RN-SURVEY10 applied: 10% off" when the member's code is
+ * the survey code (RN_SURVEY_CODE) and Stripe applies it for them (STRIPE_PROMO_SURVEY). The
+ * percent is read from the code's last digits. Null otherwise.
+ */
+function promoView(code: string): PlanView["code"] {
+  if (!code || !surveyCode(code) || !process.env.STRIPE_PROMO_SURVEY?.trim()) return null;
+  const pct = /(\d{1,2})$/.exec(code)?.[1];
+  return { code, off: pct ? `${Number(pct)}% off` : "a discount" };
+}
 /** Free's limits apply to this member now. Never while billing isn't live: then nothing is gated. */
 function freeNow(s: State, memberId: string, nowMs = Date.now()): boolean {
   return gated(planRec(s, memberId), nowMs);
@@ -6198,14 +6457,18 @@ function ownRate(s: State, memberId: string): { kind: "monthly" | "hourly"; amou
   return null;
 }
 /** Me.plan: what the Plan and billing page, the banner and the upgrade moments read. */
-function planView(s: State, memberId: string, nowMs: number): PlanView {
+function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: Tracks; fnOfEng: (engId: string) => string | null }): PlanView {
   const rec = planRec(s, memberId);
   const name = planOf(rec, nowMs);
   const prof = s.profiles[memberId] ?? {};
   const ending = trialEnding(rec, nowMs);
   const free = name === "free";
   const pause = pauseState(rec, nowMs);
+  // The value receipt before the decision: in the trial's last 3 days, what it gave them so far (the same counts as its email).
+  const receipt = ending && rec?.trialStartedAt ? valueLines(valueCounts(s, roles?.tracks ?? null, roles?.fnOfEng ?? null, memberId, rec.trialStartedAt, new Date(nowMs + 1).toISOString())) : null;
   return {
+    code: promoView(promoOf(s, memberId)),
+    ...(receipt ? { receipt } : {}),
     name,
     trialEndsAt: rec?.trialEndsAt ?? null,
     trialDaysLeft: trialDaysLeft(rec, nowMs),

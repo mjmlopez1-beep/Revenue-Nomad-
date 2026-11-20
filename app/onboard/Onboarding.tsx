@@ -197,11 +197,12 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   const cardRef = useRef<HTMLDivElement>(null);
   // Seats on file that carry this member's name. When there are any, that is where they go next.
   const mySeats = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours).length, 0), [view.companies]);
-  // Of those, the ones we matched to work they published with us (the rest a member added with their name on it).
+  // Of those, the ones we matched to work they published with us, and the ones Revenue Nomad's own seat scan found (the rest a member added with their name on it).
   const published = useMemo(
     () => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours && (e.source === "Published engagement" || e.source === "Member success story")).length, 0),
     [view.companies],
   );
+  const scanned = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours && e.source === "Seat scan").length, 0), [view.companies]);
   const emailOn = !!view.scan?.digest;
   // Credits earned on the way (a seat added on Find your seats): "+4" beside the balance for a moment.
   const [bump, setBump] = useState(0);
@@ -453,6 +454,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               first={first}
               seats={mySeats}
               published={published}
+              scanned={scanned}
               credits={me.credits}
               invited={me.invitedBy ? invitedParts(me.invitedBy.first, me.invitedBy.both, REFERRAL_BONUS) : null}
               fn={fn}
@@ -529,14 +531,31 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
 
 /* ---------- step 1: what this is, then who you are ---------- */
 
+/**
+ * Where the seats with their name came from: work they published on Revenue Nomad, Revenue
+ * Nomad's own seat scan ("Revenue Nomad found 1 seat with your name"), or members.
+ */
+function seatsLine(seats: number, published: number, scanned: number): string {
+  const n = (k: number) => (k === 1 ? "1 seat" : `${k} seats`);
+  if (published === seats) return `We started it from the fractional work you published on Revenue Nomad, so ${seats === 1 ? "1 seat already carries" : `${seats} seats already carry`} your name.`;
+  if (scanned === seats) return `Revenue Nomad found ${n(seats)} with your name.`;
+  if (!published && !scanned) return `Members have already put your name on ${n(seats)}.`;
+  const members = seats - published - scanned;
+  const parts = [...(published ? [`we matched ${published} to the fractional work you published on Revenue Nomad`] : []), ...(scanned ? [`Revenue Nomad found ${scanned}`] : []), ...(members ? ["members added the rest"] : [])];
+  const said = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
+  return `${seats} seats already carry your name: ${said}.`;
+}
+
 function StepQuestions({
-  first, seats, published, credits, invited, fn, setFn, title, setTitle, clientCount, setClientCount, looking, setLooking, onNext,
+  first, seats, published, scanned, credits, invited, fn, setFn, title, setTitle, clientCount, setClientCount, looking, setLooking, onNext,
 }: {
   first: string;
   /** Seats on file that carry the member's name. */
   seats: number;
   /** How many of them we matched to fractional work they published on Revenue Nomad. */
   published: number;
+  /** How many of them Revenue Nomad's own seat scan found (source "Seat scan"): no member put the name there. */
+  scanned: number;
   credits: number;
   /** "Ivy invited you." and "You both get 10 credits when you add your first fact." (invitedParts), for a member who joined from an invite. */
   invited: [string, string] | null;
@@ -563,15 +582,7 @@ function StepQuestions({
       <p className="ob-sub">
         Merlin is a data exchange for fractional operators. Share what you know about fractional work to earn credits, and see which companies hire
         fractionals, what they&apos;ve paid and which roles are open now.
-        {seats
-          ? ` ${
-              published === seats
-                ? `We started it from the fractional work you published on Revenue Nomad, so ${seats === 1 ? "1 seat already carries" : `${seats} seats already carry`} your name.`
-                : published > 0
-                  ? `${seats} seats already carry your name. We matched ${published} to the fractional work you published on Revenue Nomad, and members added the rest.`
-                  : `Members have already put your name on ${seats === 1 ? "1 seat" : `${seats} seats`}.`
-            } Other members see your name on a seat only after they spend 1 credit.`
-          : null}
+        {seats ? ` ${seatsLine(seats, published, scanned)} Other members see your name on a seat only after they spend 1 credit.` : null}
       </p>
       <p className="ob-credit-note">
         <span className="ob-coin" aria-hidden>
@@ -588,7 +599,7 @@ function StepQuestions({
           <strong className="num">
             {credits} {credits === 1 ? "credit" : "credits"}
           </strong>
-          . A credit shows you one thing another member added, like who held a seat or an open role. Adding what you know earns credits back.
+          . A credit shows you one thing another member added, like who held a seat. A company, with the job posting of each open role there, is 2 credits, and your first company each day is free. Adding what you know earns credits back.
         </span>
       </p>
 

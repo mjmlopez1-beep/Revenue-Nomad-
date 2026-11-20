@@ -10,7 +10,7 @@
  *          connector without the daily cap, the benchmarks' ranges by client size, the radar's signals
  *          in Slack as they happen (everyone gets every signal each morning), and 100 credits each paid month.
  *   Top-up $19 for 50 credits, once, on any plan.
- *   Trial  14 days of Pro, no card, from the end of onboarding. Extended once by 7 days when, in its
+ *   Trial  21 days of Pro, no card, from the end of onboarding. Extended once by 7 days when, in its
  *          last 4 days, the member opens a conversation, unlocks a warm path or sends an invite.
  *          It ends quietly into Free. Pro can be bought at any point in it: with more than 48 hours
  *          left, the subscription starts in Stripe's trialing status with trial_end at the trial's
@@ -22,7 +22,7 @@ import { planOf, pausedAt, type PlanRecord } from "../plan";
 export const PRICES = { month: 59, year: 590, topup: 19 } as const;
 export const TOPUP_CREDITS = 50;
 export const PRO_CREDITS = 100;
-export const TRIAL_DAYS = 14;
+export const TRIAL_DAYS = 21;
 export const EXTEND_DAYS = 7;
 /** The trial is extended when value happens in its last this-many days. */
 export const EXTEND_WINDOW_DAYS = 4;

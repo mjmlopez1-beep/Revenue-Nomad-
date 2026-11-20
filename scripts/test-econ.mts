@@ -114,12 +114,12 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     check("for a member who paid nothing, the Ongoing end is free and the dated end is locked", eng(di, active)?.cells.end?.s === "value" && eng(di, ended)?.cells.end?.s === "locked", [eng(di, active)?.cells.end, eng(di, ended)?.cells.end]);
     const free = await tryAct(t, "tok-di", { type: "unlock", entity: "engagement", id: active, field: "end" });
     check("asking to unlock an Ongoing end spends nothing", !free.ok && free.error === NOTHING, free);
-    // Alphaco is locked for Di: the company first (2 credits), then the end month.
+    // Alphaco is locked for Di: the company first (her free company of the day here, else 2 credits), then the end month.
     const early = await tryAct(t, "tok-di", { type: "unlock", entity: "engagement", id: ended, field: "end" });
     check("a dated end at a locked company opens after the company", !early.ok && early.error === "Unlock the company first.", early);
     await unlockCompany(t, "tok-di", company(di, "Alphaco"));
     const paid = await tryAct(t, "tok-di", { type: "unlock", entity: "engagement", id: ended, field: "end" });
-    check("a dated end on an Ended seat is 1 credit", paid.ok && paid.message === "Unlocked the end month for 1 credit." && (await t.buildView("tok-di")).me?.credits === 22, paid);
+    check("a dated end on an Ended seat is 1 credit", paid.ok && paid.message === "Unlocked the end month for 1 credit." && (await t.buildView("tok-di")).me?.credits === 24, paid);
   },
 
   /** A restart on the state the first start wrote: nothing is given back twice. */
@@ -127,7 +127,7 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     const t = await tableOf();
     const bo = await t.buildView("tok-bo");
     check("after a restart nothing is given back twice", bo.me?.credits === 24 && bo.ledger.filter((l) => l.reason === ONGOING_LINE).length === 2, [bo.me?.credits, bo.ledger.length]);
-    check("  and what another member bought since is kept", (await t.buildView("tok-di")).me?.credits === 22);
+    check("  and what another member bought since is kept", (await t.buildView("tok-di")).me?.credits === 24);
   },
 
   /** The role of a found seat nobody is named on, with SEAT_SCAN_ROLE_FREE as this tree has it (ECON_FREE says which). */

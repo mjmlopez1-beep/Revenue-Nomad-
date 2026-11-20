@@ -21,7 +21,7 @@
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
-import { ActionError, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
+import { ActionError, FREE_COMPANY_USED, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
@@ -739,11 +739,14 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     earned_today: `${me.earned24h} of ${me.earnCap}`,
     ...(me.earnResetsAt ? { earning_opens_again_at: me.earnResetsAt } : {}),
     ...(me.unlocksLeft !== null && me.unlocksLeft !== undefined ? { unlocks_left_today: me.unlocksLeft } : {}),
+    // One company a UTC day unlocks free, on any plan (it counts toward the day's unlocks).
+    free_company_today: me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE ? "1 left: the next company unlock today costs no credits" : "used today: the next one is free tomorrow (UTC)",
+    ...(me.pending ? { credits_waiting: `${me.pending}, paid when the member's seat at a company new to Merlin is confirmed` } : {}),
     ...(me.sellEarnLeft !== undefined ? { pick_list_answers_that_still_earn_today: me.sellEarnLeft } : {}),
     facts_added: me.added,
     facts_unlocked: me.unlocked,
     how_credits_work:
-      "Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1: who held a seat comes with the role they held, and a person's name with their title, for that one credit. A fractional you invite earns you both 10 credits when they add their first fact. Your own seats are free to you.",
+      `Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1: who held a seat comes with the role they held, and a person's name with their title, for that one credit. A company is ${COMPANY_PRICE_SAY}, and the first company each day is free. A fractional you invite earns you both 10 credits when they add their first fact to a company already on Merlin. Your own seats are free to you. A seat you add at a company new to Merlin earns once another member or an admin confirms it.`,
     seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.filter((f) => f !== "introducedBy").map((f) => outKey(SEAT_KEYS, f)) })),
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
     saved_searches: alerts.length,
@@ -871,7 +874,7 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
         would_spend: cost,
         credits_now: me.credits,
         would_open: what,
-        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`} Nothing was spent.${more}`,
+        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : ""} Nothing was spent.${more}`,
         next: "Ask the member if they want to spend this. Only if they say yes, call unlock again with the same arguments and confirm: true.",
       };
     }

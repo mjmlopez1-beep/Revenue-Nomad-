@@ -28,6 +28,8 @@ SAY.set("Seat holder and role", "the seat holder and their role");
 const PICK_KEYS = new Set(["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "ownership"]);
 const PICK_LABELS = new Set(ALL_FIELDS.filter(({ entity, f }) => entity === "company" && PICK_KEYS.has(f.key)).map(({ f }) => f.label));
 const PRIVATE_RATE = "Private rate";
+/** The free company of the day's row (lib/table.ts FREE_COMPANY_LINE). */
+const FREE_COMPANY = "Free company of the day";
 const thing = (label: string) => SAY.get(label) ?? `the ${fieldText(label)}`;
 
 /** `note` explains an amount of 0. */
@@ -37,13 +39,18 @@ export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?
   const at = locked ? " at a locked company" : l.company ? ` at ${l.company}` : "";
   const priv = l.field === PRIVATE_RATE;
   switch (l.reason) {
+    case FREE_COMPANY:
+      // The free company of the day: no credits, and the company is theirs like a paid one.
+      return { text: `${FREE_COMPANY}${l.company && !locked ? `: ${l.company}` : ""}` };
     case "fill":
       return {
         text: priv ? "Shared a rate privately" : `Added ${thing(l.field)}${at}`,
         note:
           l.delta !== 0
             ? undefined
-            : PICK_LABELS.has(l.field)
+            : l.pending
+              ? "+1 when your seat there is confirmed."
+              : PICK_LABELS.has(l.field)
               ? `No credit. Only 5 answers like this earn each day, and ${earnCap} credits in all.`
               : `No credit. You had already earned ${earnCap} today.`,
       };
@@ -83,7 +90,7 @@ export function unlockLimitLine(me: Pick<Me, "credits" | "unlocksLeft">, ledger:
   const left = me.unlocksLeft;
   if (left === null || left === undefined || left >= me.credits) return null;
   // Counted in credits, as the server counts it: a company (2 credits) is 2 of the day's unlocks.
-  const used = ledger.filter((l) => l.reason === "unlock" && nowMs - Date.parse(l.at) < 86_400_000).reduce((n, l) => n + Math.max(1, -l.delta), 0);
+  const used = ledger.filter((l) => l.reason === "unlock" && nowMs - Date.parse(l.at) < 86_400_000).reduce((n, l) => n + Math.max(1, -l.delta), 0) + ledger.filter((l) => l.reason === FREE_COMPANY && nowMs - Date.parse(l.at) < 86_400_000).length * 2;
   const firstDay = left + used <= FIRST_DAY_UNLOCKS;
   const now = left === 0 ? "You've used today's unlocks. Your credits are here tomorrow." : `You can unlock ${left} more ${left === 1 ? "fact" : "facts"} today.`;
   return firstDay ? `${now} New accounts can unlock ${FIRST_DAY_UNLOCKS} facts on day one.` : now;

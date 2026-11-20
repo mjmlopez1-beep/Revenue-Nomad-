@@ -6,15 +6,14 @@
  * Works only while billing is live (lib/plan.ts billingLive: RN_BILLING=1 and Stripe set up).
  * Stripe ids stay on the server; the browser only ever gets a Checkout or Portal address.
  */
-import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, type State } from "../table";
+import { ActionError, cleanPromo, loadSeed, loadState, memberByToken, promoOf, tableInternals as T, type State } from "../table";
 import { billingLive, planOf, upgradeUrl } from "../plan";
 import { applyEvent, emptyBilling, ENDING_DAYS, FIRST_CHARGE_GRACE_MS, keepTrialEnd, pauseDates, PAUSE_MONTHS, proStartsLater, annualLine, hourlyOf, type StripeEvent } from "./rules";
 import * as stripe from "./stripe";
-import { renewalEmail, trialEndedEmail, trialEndingEmail, type ValueCounts } from "./emails";
+import { renewalEmail, trialEndedEmail, trialEndingEmail, trialReceiptEmail, valueCounts, type ValueCounts } from "./emails";
 import { emailEnabled, sendEmail } from "../email";
 import { publicBase } from "../links";
 import { addSignIn } from "../signin";
-import { functionOf } from "../tableFields";
 
 const DAY = 86_400_000;
 /** "November 18", with the year when it isn't this one. */
@@ -40,27 +39,8 @@ function memberOf(s: State, all: { id: string }[]) {
 
 /* ---------- what a member did, as counts ---------- */
 
-/** What a member got between two times: conversations they opened, intros they sent, unlocks, new roles in their function. */
-export function valueCounts(s: State, seedTracks: Map<string, { firstSeen: string; engagementId: string }> | null, fnOfEng: ((engId: string) => string | null) | null, memberId: string, fromIso: string, toIso: string): ValueCounts {
-  const from = Date.parse(fromIso);
-  const to = Date.parse(toIso);
-  const inside = (iso?: string | null) => {
-    const t = Date.parse(iso ?? "");
-    return Number.isFinite(t) && t >= from && t < to;
-  };
-  const prof = s.profiles[memberId] ?? {};
-  const fn = prof.function ?? functionOf(prof.title ?? "") ?? null;
-  let roles = 0;
-  if (seedTracks && fnOfEng && fn)
-    for (const t of seedTracks.values()) if (inside(t.firstSeen) && fnOfEng(t.engagementId) === fn) roles++;
-  return {
-    conversations: (s.conversations ?? []).filter((c) => c.a === memberId && inside(c.createdAt)).length,
-    invites: (s.seatInvites ?? []).filter((x) => x.by === memberId && inside(x.at)).length,
-    unlocks: s.ledger.filter((l) => l.memberId === memberId && l.reason === "unlock" && inside(l.at)).length,
-    roles,
-    function: fn,
-  };
-}
+/** What a member got between two times (lib/billing/emails.ts valueCounts, kept there so the app's receipt reads the same counts). */
+export { valueCounts };
 
 /** Counts for one member, reading the open roles the scan followed. */
 async function countsFor(memberId: string, fromIso: string, toIso: string): Promise<ValueCounts> {
@@ -111,7 +91,8 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
       case "checkout": {
         if (planOf(rec, nowMs) === "pro" && rec?.subscriptionId) throw new ActionError("You're on Pro already. Change your plan in Manage billing.");
         // During the trial with more than 48 hours left, the first charge waits for its end (keepTrialEnd).
-        return { url: await stripe.checkoutPro(who, body.interval === "year" ? "year" : "month", base, body.code, keepTrialEnd(rec, nowMs)) };
+        // The code they typed, else the one they arrived with (?code=, kept from the landing page through joining).
+        return { url: await stripe.checkoutPro(who, body.interval === "year" ? "year" : "month", base, cleanPromo(body.code) || promoOf(s, me.id), keepTrialEnd(rec, nowMs)) };
       }
       case "topup":
         if (!stripe.topupReady()) throw new ActionError("Top-ups aren't open yet.");
@@ -227,7 +208,7 @@ export async function handleWebhook(raw: string, signature: string | null, origi
 let sweeping = false;
 
 /**
- * Send the trial notices that are due (3 days before, the last day, and the value receipt when it
+ * Send the trial notices that are due (3 days before: the value receipt so far; the last day; and the value receipt when it
  * ended), and the month's Pro credits on yearly plans. Each notice once per member (PlanRecord.notices).
  * Runs at most once an hour from page loads (billingVisit). Returns how many emails went out.
  */
@@ -281,10 +262,13 @@ export async function sweep(nowIso?: string, origin?: string): Promise<{ sent: n
     let sent = 0;
     for (const d of due) {
       try {
+        // 3 days before the end (day 18 of 21): the value receipt, with Keep Pro, in place of a countdown. The last day keeps its short note.
         const e =
           d.kind === "trialEnd"
             ? trialEndedEmail({ first: d.first, counts: await countsFor(d.memberId, d.from, d.till), notLooking: d.notLooking, rateLine: d.rateLine, link: d.link })
-            : trialEndingEmail({ first: d.first, days: d.kind === "trialLast" ? 1 : d.days, notLooking: d.notLooking, rateLine: d.rateLine, link: d.link });
+            : d.kind === "trial3"
+              ? trialReceiptEmail({ first: d.first, days: d.days, counts: await countsFor(d.memberId, d.from, new Date(nowMs).toISOString()), rateLine: d.rateLine, link: d.link })
+              : trialEndingEmail({ first: d.first, days: 1, notLooking: d.notLooking, rateLine: d.rateLine, link: d.link });
         if (await sendEmail(d.to, e.subject, e.text, e.html)) sent++;
       } catch (e) {
         console.error("billing notice failed for one member", e);

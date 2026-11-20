@@ -103,6 +103,12 @@ export interface RadarRow {
   notes?: string[];
   /** The best band of the company's signals. */
   band?: RadarBand;
+  /**
+   * Trial and Pro only: the company's name, free on this view while the member's table still has
+   * it locked. It doesn't make the company theirs or cost a credit; its people and seat holders
+   * keep their own unlocks.
+   */
+  name?: string;
 }
 
 /** GET /api/table?radar=1[&day=YYYY-MM-DD]: one day's companies, for the list in the app. */

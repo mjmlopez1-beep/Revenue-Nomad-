@@ -26,7 +26,7 @@ import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
 import { CreditsWall, UpgradeNote } from "./Billing";
 import { InvitePanel } from "./Invite";
 import { SEAT_YIELD, tappedWhat, wallBack } from "./earnBack";
-import { marksConfirmed } from "./display";
+import { freeCompanyNow, marksConfirmed } from "./display";
 
 export type AddMode = "engagement" | "person" | "facts";
 export interface AddOpts {
@@ -387,7 +387,8 @@ export function ZeroCredits({ anchor, id, onClose, need = 1 }: { anchor: HTMLEle
  */
 /** What a lock costs: a company is COMPANY_PRICE, any other fact 1 credit. */
 export const lockCost = (t: { field: string }) => (t.field === "identity" ? COMPANY_PRICE : 1);
-const creditsSay = (n: number) => (n === 1 ? "1 credit" : `${n} credits`);
+/** A lock's price: "1 credit", "2 credits", and the free company of the day "free · 1 left today". */
+const creditsSay = (n: number) => (n === 0 ? "free · 1 left today" : n === 1 ? "1 credit" : `${n} credits`);
 
 function Lock({
   onUnlock,
@@ -411,7 +412,7 @@ function Lock({
   cost?: number;
 }) {
   const earn = cost > 1 ? "Earn credits to unlock" : "Earn a credit to unlock";
-  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `${earn} ${what}` : `Unlock ${what} for ${creditsSay(cost)}`;
+  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `${earn} ${what}` : cost === 0 ? `Unlock ${what} free. It's your 1 free company today` : `Unlock ${what} for ${creditsSay(cost)}`;
   const more = ver > 0 ? ` Confirmed by ${plural(ver, "member")}.` : from && FROM_SAY[from] ? ` ${FROM_SAY[from]}.` : "";
   return (
     <button type="button" className={`lock${busy ? " busy" : ""}${later ? " later" : ""}${broke ? " broke" : ""}`} title={`${say}.${more}`} aria-label={busy ? "Unlocking" : say} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
@@ -546,15 +547,17 @@ export function FactCell({
       );
     case "locked": {
       // A company costs COMPANY_PRICE: with fewer credits than that it is the wall, as at 0 for any fact.
-      const cost = lockCost(t);
-      const later = (ui.me.unlocksLeft ?? Infinity) < cost && credits >= cost;
+      // The free company of the day costs nothing (it still counts toward the day's unlocks).
+      const free = t.field === "identity" && freeCompanyNow(ui.me);
+      const cost = free ? 0 : lockCost(t);
+      const later = (ui.me.unlocksLeft ?? Infinity) < lockCost(t) && (credits >= lockCost(t) || (t.field === "identity" && !!ui.me.freeCompany));
       return (
         <span className={cls} data-cell={k} ref={ref}>
           <Lock
             onUnlock={() => {
               refocus.current = !!ref.current?.contains(document.activeElement);
               // The server can still answer "You're out of credits" (another tab spent them): then the popover opens, not a toast. The server counts that wall itself.
-              if (credits >= cost) return ui.unlock(t, { onWall: () => setZero(true) });
+              if (free || credits >= cost) return ui.unlock(t, { onWall: () => setZero(true) });
               // The wall: out of credits at a locked fact. Counted for the pilot, by field.
               sendSignal("wall", t.field);
               setZero(true);
@@ -568,7 +571,7 @@ export function FactCell({
             noun={t.field === "identity" ? "company" : noun}
             busy={flags.busy}
             later={later}
-            broke={credits < cost}
+            broke={!free && credits < cost}
             cost={cost}
           />
           {zero && ref.current && <ZeroCredits anchor={ref.current} id={t.id} need={cost} onClose={() => setZero(false)} />}

@@ -556,8 +556,8 @@ section("bench", async () => {
   check("everything a second member added is removed: the group is at 3 of 5", g3.n === 3 && g3.median === undefined, g3);
 });
 
-// The invite bonus waits for the invitee's first fact on a record. A rate shared for the
-// benchmarks only is not one, but it becomes one when the member puts it on the record.
+// The invite bonus waits for the invitee's first fact on a company that was on Merlin before they
+// joined. A rate shared for the benchmarks only is not one, and nor is their own new seat.
 section("invite", async () => {
   const I = await member("Ivy Inviter");
   const code = (await I.view()).me.inviteCode;
@@ -566,10 +566,19 @@ section("invite", async () => {
   const priv = await J.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$8k/mo", function: "Sales" });
   const j1 = await J.view();
   check("a private rate earns its credit and leaves the bonus waiting", priv.status === 200 && !/invite bonus/i.test(priv.json?.message ?? "") && j1.me.credits === STARTER + 1 && j1.me.invitePending === true, { message: priv.json?.message, credits: j1.me.credits });
-  // A seat they held is a first fact on a record: the bonus is paid.
-  const seat = await J.act({ type: "add", company: (await hostWithoutFound()).name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Jo Joined", function: "Sales" } });
+  // Their own new seat earns its credits but is not it (FAKE-SEATS: a made-up client could pay it), even at a company on file.
+  const hostCo = await hostWithoutFound();
+  const seat = await J.act({ type: "add", company: hostCo.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Jo Joined", function: "Sales" } });
   const j2 = await J.view();
-  check("adding a seat they held pays the bonus", seat.status === 200 && /Your invite bonus added 10 more\./.test(seat.json?.message ?? "") && j2.me.credits === STARTER + 1 + 2 + 10 && j2.me.invitePending === false, { message: seat.json?.message, credits: j2.me.credits, pending: j2.me.invitePending });
+  check("adding a seat they held earns, and leaves the bonus waiting", seat.status === 200 && !/invite bonus/i.test(seat.json?.message ?? "") && j2.me.credits === STARTER + 1 + 2 && j2.me.invitePending === true, { message: seat.json?.message, credits: j2.me.credits, pending: j2.me.invitePending });
+  // A fact on the company itself, which was on Merlin before they joined: that pays the bonus, to both.
+  const jc = j2.companies.find((c) => c.name === hostCo.name);
+  const field = ["hq", "website", "linkedin"].find((f) => jc?.cells[f]?.s === "empty");
+  if (!jc || !field) return skip("the invite bonus on a company fact", "the host company has no empty HQ, website or LinkedIn");
+  const value = { hq: "Austin, TX", website: `qa-invite-${RUN}.example.com`, linkedin: `linkedin.com/company/qa-invite-${RUN}` }[field];
+  const fact = await J.act({ type: "fill", entity: "company", id: jc.id, field, value });
+  const j3 = await J.view();
+  check("a fact on a company already on Merlin pays the bonus", fact.status === 200 && /Your invite bonus added 10 more\./.test(fact.json?.message ?? "") && j3.me.credits === STARTER + 1 + 2 + 1 + 10 && j3.me.invitePending === false, { message: fact.json?.message, credits: j3.me.credits });
   const iv = await I.view();
   check("the inviter is paid too", iv.me.credits === STARTER + 10 && iv.me.invitesPaid === 1, { credits: iv.me.credits, paid: iv.me.invitesPaid });
 });

@@ -91,6 +91,13 @@ const companyOf = (v: View, name: string): CompanyRec | undefined => v.companies
 const roleOf = (v: View, name: string, n = 0): EngagementRec | undefined => companyOf(v, name)?.engagements.filter((e) => e.source === "Demand scan")[n];
 /** Every unlock a member tries, whether or not one unlock already bought the others. */
 async function unlockAll(token: string, items: { entity: "company" | "engagement"; id: string; field: string }[]) {
+  // These scenarios check what paid unlocks give back: the member's free company of the day (a 0-credit unlock) is spent first, on a company gone since.
+  await t.tableInternals.mutate((d, seed) => {
+    const m = t.memberByToken(seed, token, d);
+    const today = new Date().toISOString().slice(0, 10);
+    if (m && !d.ledger.some((l) => l.memberId === m.id && l.why === "free" && l.at.slice(0, 10) === today))
+      d.ledger.push({ memberId: m.id, delta: 0, reason: "unlock", ref: "c_gone_free.identity", at: new Date().toISOString(), why: "free" });
+  });
   for (const it of items) await t.perform(token, { type: "unlock", ...it }).catch(() => null);
 }
 const credits = async (token: string) => (await t.buildView(token)).me!.credits;
@@ -351,7 +358,7 @@ async function small() {
     [0, true, null, 0],
   );
   // A member buys it after the posting was gone.
-  await t.perform("tok-cy", { type: "unlock", entity: "engagement", id: e.id, field: "posting" });
+  await unlockAll("tok-cy", [{ entity: "engagement", id: e.id, field: "posting" }]);
   eq("a member pays for it: the company, with its posting (2 credits)", await credits("tok-cy"), 23);
   const closed = await scan([], tiny(0), now + DAY);
   eq("the second answer without it closes it, and pays the member back (before, it stayed open for good)", [closed.closed, closed.refunded, roleOf(await admin(), "Smallco Labs")?.cells.status?.s === "value" && roleOf(await admin(), "Smallco Labs")?.cells.status.v, await credits("tok-cy")], [1, 1, "Closed", 25]);

@@ -4,6 +4,7 @@
  * scripts/test-prices.mts can check what they say about prices.
  */
 import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
+import { PRICES, TOPUP_CREDITS, TRIAL_DAYS } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
 
 /** Unlocks an account gets in its first 24 hours, then in any 24 hours after (the server's limits). */
@@ -31,7 +32,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does an open role cost?",
-      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. The people there, and who held its seats, open after the company. Try it on the homepage names a few hiring companies as a sample.",
+      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Your first company each day is free. The people there, and who held its seats, open after the company. Try it on the homepage names a few hiring companies as a sample.",
     ],
     [
       "What does a seat cost to see?",
@@ -77,7 +78,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "How do invites work?",
-      `Invite a fractional you trust with your invite link. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat, or claim their seat through your Invite to connect link. A rate shared only for the benchmarks doesn't count, and there is no bonus when you both join from the same internet connection.`,
+      `Invite a fractional you trust with your invite link. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company that's already on Merlin, or claim their seat through your Invite to connect link. A rate shared only for the benchmarks doesn't count, and there is no bonus when you both join from the same internet connection.`,
     ],
     [
       "What are referral partners?",
@@ -85,7 +86,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does it cost?",
-      `Nothing. The pilot is free and you start with ${starter} credits. If you run low, add something you know or invite a fractional you trust.`,
+      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and unlock one company a day for free. Pro starts with a ${TRIAL_DAYS}-day trial, no card needed. After that Pro is $${PRICES.month} a month or $${PRICES.year} a year. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
     ],
   ];
 }

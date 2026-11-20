@@ -220,6 +220,17 @@ const openedIds = new Set();
 const lockedAt = (c) =>
   [...c.engagements.flatMap((e) => [...Object.values(e.cells), ...e.people.flatMap((p) => Object.values(p.cells))]), ...c.people.flatMap((p) => Object.values(p.cells))].filter((x) => x.s === "locked").length;
 /** Unlock n more companies for this member (PRICE credits each): those with the most locked facts, none with an open role. Returns how many. */
+/**
+ * A fact on a company that was on Merlin before the member joined (what the invite bonus waits
+ * for): an HQ on a company with none, typed by its exact name. Each call takes another company.
+ */
+let onFileN = 0;
+async function factOnFile(who) {
+  shared.noHq ??= (await (await admin()).view()).companies.filter((c) => c.cells.hq?.s === "empty" && c.friendly.open === 0 && !/^Qa /.test(c.name));
+  const c = shared.noHq[onFileN++];
+  if (!c) throw new Error("no company without an HQ left");
+  return who.act({ type: "add", company: c.name, companyFields: { hq: "Austin, TX" } });
+}
 async function openLocked(m, n) {
   const v = await m.view();
   const pick = v.companies.filter((c) => c.hidden && c.friendly.open === 0 && !openedIds.has(c.id)).sort((a, b) => lockedAt(b) - lockedAt(a)).slice(0, n);
@@ -463,9 +474,12 @@ section("economy", async () => {
   check("after B joins: B invitePending", b.invitePending === true, b);
   await ownCompanies(B, 3);
   const vB = await B.view();
-  const bFills = pickEmpty(vB, 5);
-  const first = await B.act(fillAct(bFills[0]));
-  check("B's first fact pays the invite bonus", /Your invite bonus added 10 more\./.test(first.json?.message ?? ""), first.json);
+  const bFills = pickEmpty(vB, 4);
+  // A fact on a client B added himself is not it: the bonus waits for a company that was on Merlin before B joined.
+  const own = await B.act(fillAct(bFills[0]));
+  check("a fact on B's own new company pays no invite bonus", own.status === 200 && !/invite bonus/i.test(own.json?.message ?? "") && own.json?.me?.invitePending !== false, own.json);
+  const first = await factOnFile(B);
+  check("B's first fact on a company already on Merlin pays the invite bonus", /Your invite bonus added 10 more\./.test(first.json?.message ?? ""), first.json);
   for (const t of bFills.slice(1)) await B.act(fillAct(t));
   const vA2 = await A.view();
   a = vA2.me;

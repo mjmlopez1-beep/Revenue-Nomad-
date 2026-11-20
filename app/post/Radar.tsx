@@ -76,7 +76,9 @@ export function useRadarDay(active: boolean, day: string | null, again: unknown[
 export function radarRows(view: RadarView | null, rows: Row[]): Row[] {
   if (!view?.rows.length) return [];
   const by = new Map(rows.map((r) => [r.i.c.id, r]));
-  return view.rows.map((x) => by.get(x.id)).filter((r): r is Row => !!r);
+  // Trial and Pro: a locked company reads by its name here, free (RadarRow.name). It stays locked, with its own Unlock company.
+  const named = (r: Row, name?: string): Row => (name && r.i.c.hidden ? { ...r, i: { ...r.i, c: { ...r.i.c, shownName: name } } } : r);
+  return view.rows.map((x) => (by.has(x.id) ? named(by.get(x.id)!, x.name) : undefined)).filter((r): r is Row => !!r);
 }
 
 /** An open role here has a posted rate behind the lock: the unlock names the rate only then. */

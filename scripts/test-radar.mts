@@ -436,7 +436,8 @@ async function main() {
   const before = (await t.buildView("tok-sal-0001")).me!.credits;
   const un = await t.perform("tok-sal-0001", { type: "unlock", entity: "company", id: page!.rows[0].id, field: "identity" }, "https://post.example.com");
   const after = (await t.buildView("tok-sal-0001")).me!.credits;
-  check("unlocking a company from the view costs 2 credits", before - after === 2, { before, after, message: un.message });
+  // (The first company of a member's day is free, so this one is: the next would be 2 credits.)
+  check("unlocking a company from the view is the same unlock: today's free company, then 2 credits", before - after === 0 && /free company today/.test(un.message), { before, after, message: un.message });
   const betaNow = (await t.buildView("tok-sal-0001")).companies.find((x) => x.id === page!.rows[0].id);
   check("and the table names it now", !!betaNow && !betaNow.hidden && betaNow.name === "Beta Labs", betaNow?.name);
   check("the day still lists it, unnamed in its lines", (await radar.radarView("tok-sal-0001", day0, nowIso()))?.rows[0]?.id === pub("c_beta") && !named((await radar.radarView("tok-sal-0001", day0, nowIso()))?.rows).length);
@@ -453,6 +454,12 @@ async function main() {
   const piaFree = await radar.radarView("tok-pro-0001", day0, nowIso());
   const salPro = await radar.radarView("tok-sal-0001", day0, nowIso());
   check("Pro and Free see the same day the same way", piaFree?.rows.length === 4 && piaFree.rows.slice(2).every((x) => x.band === "Low") && salPro?.rows.length === 2 && !("pro" in (piaFree as object)), { pia: piaFree?.rows, sal: salPro?.rows });
+  const piaTable = await t.buildView("tok-pro-0001");
+  check(
+    "on Pro each locked company on the day is named free, and stays locked and unbought in the table; Free sees no name",
+    !!piaFree?.rows.some((x) => x.name) && piaFree.rows.filter((x) => x.name).every((x) => piaTable.companies.find((c) => c.id === x.id)?.hidden === true) && !salPro?.rows.some((x) => x.name),
+    piaFree?.rows,
+  );
 
   console.log("\nPro gets it at once");
   clear();

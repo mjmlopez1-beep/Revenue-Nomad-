@@ -362,6 +362,13 @@ function App() {
           localStorage.setItem("tp_ref", ref);
         } catch {}
       }
+      // A discount code (?code=RN-SURVEY10) stays from the landing page through joining and the sign-in link, for checkout.
+      const code = url.searchParams.get("code");
+      if (code) {
+        try {
+          localStorage.setItem("tp_code", code.slice(0, 40));
+        } catch {}
+      }
       if (!k && lastSawVisitor()) setGuest(true);
       if (k) {
         const r = await post({ signIn: k });
@@ -405,6 +412,10 @@ function App() {
       const r = await post<{ message: string; id?: string; capped?: boolean } & ActPatch>({ action: a });
       if (r.error) {
         if (!opts?.silentError) toast(r.error, !calmRefusal(r.error));
+        // The day's unlock limit: every unlock button says "Unlocks again tomorrow" at once, before the table comes back.
+        const fewer = /^You can unlock (\d+) more today/.exec(r.error);
+        const left = fewer ? Number(fewer[1]) : /^You've unlocked \d+ facts today|^You've reached today's unlock limit/.test(r.error) ? 0 : null;
+        if (left !== null) setView((v) => (v?.me ? { ...v, me: { ...v.me, unlocksLeft: Math.min(left, v.me.unlocksLeft ?? left) } } : v));
         sync(); // replaces any background sync this action superseded, and undoes a flip that failed
         return { ok: false, message: r.error };
       }
@@ -447,6 +458,20 @@ function App() {
   useEffect(() => {
     if (onboarding) firstRun.current = true;
   }, [onboarding]);
+
+  // A member who brought a discount code (?code=, kept as tp_code) that the server doesn't have yet: give it over once, so checkout applies it.
+  const codeSent = useRef(false);
+  const needCode = !!view?.me?.plan && !view.me.plan.code;
+  useEffect(() => {
+    if (!needCode || codeSent.current) return;
+    let code = "";
+    try {
+      code = localStorage.getItem("tp_code") ?? "";
+    } catch {}
+    if (!code) return;
+    codeSent.current = true;
+    void post<{ message?: string }>({ action: { type: "promoCode", code } }).then((r) => (r.error ? undefined : refresh()));
+  }, [needCode, refresh]);
 
   if (!view)
     return failed ? (
