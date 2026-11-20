@@ -17,6 +17,7 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 import { FUNDING_SKIP_WORDS, type FundingSkip } from "@/lib/funding/types";
 import "./pages.css";
 import "./verify.css";
+import { NetworkMetrics } from "./network/Network"; // [google network]
 
 const n0 = (n: number) => n.toLocaleString("en-US");
 /** Facts added for each fact unlocked, to two places. No unlocks yet reads as a dash. */
@@ -1027,6 +1028,8 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
             />
           </Card>
         )}
+        {/* [google network] counts only: no names, no emails (nothing with RN_GOOGLE off). */}
+        <NetworkMetrics Card={Card} Rows={Rows} />
       </div>
     </div>
   );

@@ -42,6 +42,7 @@ import { billingLive, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
 import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, type RawSignal } from "./signals";
 import { deliverable, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
+import { networkWarmth } from "../google/types"; // [google network]
 import { dayOf, rowsOf, viewLine, type CardContext, type MemberSignal } from "./present";
 import { renderRadarEmail } from "./format";
 import { fundingSource, type FundingSource } from "./sources/funding";
@@ -225,7 +226,8 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     const wanted = inKeep && !list.includes(asked!) ? [...list, asked!] : list;
     // Days nothing went out: the signals that happened that day (and never went out another day).
     const fromMs = Math.min(...wanted.map(dayStart));
-    const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p, { counts: observedTransitions(seed, s), nowMs }).filter((x) => !keptKeys.has(x.key));
+    // [google network] the page ranks by who the member knows too (networkWarmth: nothing with RN_GOOGLE off).
+    const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p, { counts: observedTransitions(seed, s), nowMs, warmth: networkWarmth(s, m.id, nowMs) }).filter((x) => !keptKeys.has(x.key));
     for (const d of wanted) {
       const rows = kept[d]?.length ? kept[d] : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
       // A company merged away or taken out since is no row.

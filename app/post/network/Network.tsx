@@ -1,0 +1,732 @@
+"use client";
+
+/**
+ * Your network, everywhere it shows (lib/google): the page (You -> Your network), the record's
+ * "Your way in", Crystal Ball's "You know someone" chip, the Google card on Integrations, the
+ * Claude prompt, onboarding's prompt and Pilot metrics' counts. Each renders nothing with RN_GOOGLE
+ * off. Everything here is the signed-in member's own: the server never sends anyone else's.
+ */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { IconChevron, initials, timeAgo, useToast } from "../../ui/shared";
+import { useCopy } from "../Credits";
+import { icpEmpty, icpTest, type CoInfo } from "../model";
+import type { Me } from "@/lib/tableTypes";
+import { SOURCE_WORDS, type LinkView, type NetCompanyView, type NetPersonView, type NetSource, type NetworkView, type Warmth } from "@/lib/google/types";
+import { NOTICE_WORDS, countsLine, daysAgo, firstName, load, monthYear, netAct, takeNotice, useNetCompany, useNetwork, type GoogleNotice } from "./useNetwork";
+import "./network.css";
+
+const START = "/api/integrations/google/start";
+const sources = (src: NetSource[]) => src.map((s) => SOURCE_WORDS[s]).join(", ");
+
+/* ---------- small parts ---------- */
+
+export function GoogleG({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden focusable="false">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
+  );
+}
+
+export function WarmthChip({ w }: { w: Warmth }) {
+  return <span className={`nw-warm nw-l-${w.toLowerCase()}`}>{w}</span>;
+}
+
+const Tick = () => (
+  <svg className="nw-tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M5 12l5 5L20 7" />
+  </svg>
+);
+const Cross = () => (
+  <svg className="nw-cross" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+/** What Merlin reads and what it never does: the same words on the page, the Integrations card and onboarding. */
+export function ReadsList({ gmail = false }: { gmail?: boolean }) {
+  return (
+    <div className="nw-reads">
+      <span className="nw-reads-h">What Merlin reads</span>
+      <p>
+        <Tick /> Who you meet with, and when, from your calendar
+      </p>
+      <p>
+        <Tick /> Names, companies and titles in your contacts
+      </p>
+      <p>
+        <Tick /> Meetings over months that look like a seat you held
+      </p>
+      {gmail && (
+        <p>
+          <Tick /> Gmail, if you add it: who you email and when, from the From, To and Date lines
+        </p>
+      )}
+      <span className="nw-reads-sep" aria-hidden />
+      <span className="nw-reads-h">What it never does</span>
+      <p>
+        <Cross /> {gmail ? "Read the subject or text of any email" : "Read your email"}
+      </p>
+      <p>
+        <Cross /> Keep meeting titles, notes or guest lists
+      </p>
+      <p>
+        <Cross /> Show your contacts to anyone else
+      </p>
+      <p>
+        <Cross /> Change, send or delete anything
+      </p>
+    </div>
+  );
+}
+
+function ConnectButton({ label = "Connect Google", href = START, onClick }: { label?: string; href?: string; onClick?: () => void }) {
+  return onClick ? (
+    <button type="button" className="btn btn-primary nw-connect" onClick={onClick}>
+      <span className="nw-g" aria-hidden>
+        <GoogleG />
+      </span>
+      {label}
+    </button>
+  ) : (
+    <a className="btn btn-primary nw-connect" href={href}>
+      <span className="nw-g" aria-hidden>
+        <GoogleG />
+      </span>
+      {label}
+    </a>
+  );
+}
+
+function Notice() {
+  const [n, setN] = useState<GoogleNotice | null>(null);
+  useEffect(() => setN(takeNotice()), []);
+  if (!n) return null;
+  return (
+    <div className={`in-notice${n === "connected" || n === "gmail" ? " ok" : ""}`} role="status">
+      <p>{NOTICE_WORDS[n]}</p>
+      <button type="button" className="btn btn-ghost in-notice-x" onClick={() => setN(null)} aria-label="Dismiss">
+        OK
+      </button>
+    </div>
+  );
+}
+
+const updated = (l: LinkView | null) => (l?.syncedAt ? `updated ${timeAgo(l.syncedAt)}` : "not read yet");
+
+/** Disconnect and delete everything, with one "are you sure" step in place. */
+function DeleteAll({ busy, onDone }: { busy: boolean; onDone?: () => void }) {
+  const toast = useToast();
+  const [ask, setAsk] = useState(false);
+  const [working, setWorking] = useState(false);
+  if (!ask)
+    return (
+      <button type="button" className="btn nw-danger" disabled={busy} onClick={() => setAsk(true)}>
+        Disconnect and delete everything
+      </button>
+    );
+  return (
+    <div className="nw-confirm" role="group" aria-label="Delete everything?">
+      <p>Merlin revokes its access at Google and deletes everything it kept about your network, what Claude saved included. This can&apos;t be undone.</p>
+      <div className="nw-row">
+        <button
+          type="button"
+          className="btn nw-danger-solid"
+          aria-busy={working}
+          disabled={working}
+          onClick={async () => {
+            setWorking(true);
+            const r = await netAct("disconnect");
+            setWorking(false);
+            setAsk(false);
+            toast(r.error ?? r.message ?? "Deleted.", !!r.error);
+            if (!r.error) onDone?.();
+          }}
+        >
+          {working ? "Deleting" : "Delete everything"}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={() => setAsk(false)}>
+          Keep it
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- the Your network page ---------- */
+
+export function NetworkPage({
+  infos, me, onBack, openCompany, onRadar, onSeats, onClaude, refresh,
+}: {
+  infos: CoInfo[];
+  me: Me;
+  onBack: () => void;
+  openCompany: (id: string) => void;
+  onRadar: () => void;
+  onSeats: () => void;
+  onClaude: () => void;
+  refresh: () => void;
+}) {
+  const { view, off, failed } = useNetwork();
+  const toast = useToast();
+  const [all, setAll] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    if (off) onBack();
+  }, [off, onBack]);
+  // When a read finishes, the table picks up the companies it named for you.
+  const wasSyncing = useRef(false);
+  useEffect(() => {
+    if (wasSyncing.current && view && !view.syncing) refresh();
+    wasSyncing.current = !!view?.syncing;
+  }, [view, refresh]);
+
+  const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
+  const fitTest = useMemo(() => (icpEmpty(me.icp) ? null : icpTest(me.icp!)), [me.icp]);
+  const companies = view?.companies ?? [];
+  const fit = fitTest ? companies.filter((c) => byId.get(c.id) && fitTest(byId.get(c.id)!.c)).length : null;
+  const seats = companies.filter((c) => c.seat && !byId.get(c.id)?.engs.some((e) => e.yours));
+  const people = view ? Math.max(view.stats.real, companies.reduce((a, c) => a + c.people.filter((p) => p.meetings >= 2 || p.both).length, 0)) : 0;
+
+  const run = async (key: string, op: Parameters<typeof netAct>[0]) => {
+    setBusy(key);
+    const r = await netAct(op);
+    setBusy(null);
+    toast(r.error ?? r.message ?? "Done.", !!r.error);
+  };
+
+  const g = view?.google ?? null;
+  const shown = all ? companies : companies.slice(0, 12);
+  return (
+    <div className="tp-page nw-page">
+      <button type="button" className="tp-back" onClick={onBack}>
+        <IconChevron dir="left" /> All companies
+      </button>
+      <Notice />
+      {!view ? (
+        <p className="cr-note" role="status">
+          {failed ? "We couldn't load your network. Refresh the page to try again." : "Loading your network…"}
+        </p>
+      ) : !g && !view.claude ? (
+        <ConnectHero view={view} onClaude={onClaude} />
+      ) : (
+        <>
+          <span className="nw-status">
+            {view.syncing ? "Mapping who you know…" : g ? `Google connected · read-only · ${updated(g)}` : `Saved from your Gmail via Claude · ${timeAgo(view.claude!.at)}`}
+          </span>
+          <h1 className="tp-page-h nw-h1">
+            {companies.length
+              ? `You already know someone at ${companies.length} ${companies.length === 1 ? "company" : "companies"} on Merlin`
+              : view.syncing
+                ? "Your network"
+                : "No one you know is at a company on Merlin yet"}
+          </h1>
+          {g?.status === "reconnect" && (
+            <Reconnect what="Google" note={`What Merlin found stays, last updated ${g.syncedAt ? timeAgo(g.syncedAt) : "before"}.`} href={START} />
+          )}
+          {view.gmail?.status === "reconnect" && (
+            <Reconnect what="Gmail" label="Reconnect Gmail (test access lasts 7 days)" note={`What Gmail showed stays, last updated ${view.gmail.syncedAt ? timeAgo(view.gmail.syncedAt) : "before"}.`} href={`${START}?gmail=1`} />
+          )}
+          <div className="nw-stats">
+            <div className="nw-stat nw-stat-pine">
+              <span className="nw-stat-n num">{fit ?? companies.length}</span>
+              <span className="nw-stat-l">{fit === null ? "companies on Merlin you know someone at" : "fit your Ideal Fractional Profile"}</span>
+            </div>
+            <div className="nw-stat">
+              <span className="nw-stat-n num">{people}</span>
+              <span className="nw-stat-l">people you really meet with</span>
+            </div>
+            <div className="nw-stat">
+              <span className="nw-stat-n num">{seats.length}</span>
+              <span className="nw-stat-l">{seats.length === 1 ? "seat you might have held" : "seats you might have held"}</span>
+            </div>
+            <div className="nw-stat">
+              <span className="nw-stat-n num">{view.stats.unmatched}</span>
+              <span className="nw-stat-l">people at companies not on Merlin yet</span>
+            </div>
+          </div>
+
+          {companies.length > 0 && (
+            <>
+              <div className="nw-listhead">
+                <h2 className="nw-h2">Warmest first</h2>
+                <span className="nw-muted">Named for you free: you already know them</span>
+              </div>
+              <ul className="nw-list">
+                {shown.map((c) => (
+                  <CompanyRow key={c.id} c={c} onOpen={() => openCompany(c.id)} />
+                ))}
+              </ul>
+              {companies.length > shown.length && (
+                <button type="button" className="btn btn-ghost nw-more" onClick={() => setAll(true)}>
+                  Show all {companies.length}
+                </button>
+              )}
+              <button type="button" className="btn btn-primary nw-wide" onClick={onRadar}>
+                See them in your Crystal Ball
+              </button>
+            </>
+          )}
+
+          {seats.length > 0 && (
+            <section className="tp-card nw-card" aria-labelledby="nw-seats-h">
+              <h2 className="tp-card-h" id="nw-seats-h">
+                {seats.length === 1 ? "A seat you might have held" : `${seats.length} seats you might have held`}
+              </h2>
+              <p className="nw-muted">You met with these companies over months. If it was a seat, add it in Your seats. Nothing is added until you do.</p>
+              <ul className="nw-seats">
+                {seats.slice(0, 6).map((c) => (
+                  <li key={c.id}>
+                    <span className="nw-seat-t">{c.name}</span>
+                    <span className="nw-muted">
+                      {c.meetings} meetings · {monthYear(c.seat!.from)} to {monthYear(c.seat!.to)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="btn nw-wide" onClick={onSeats}>
+                Confirm in Your seats
+              </button>
+            </section>
+          )}
+
+          <Sources view={view} busy={busy} run={run} onClaude={onClaude} />
+
+          <section className="tp-card nw-card" aria-labelledby="nw-keeps-h">
+            <h2 className="tp-card-h" id="nw-keeps-h">
+              What Merlin keeps
+            </h2>
+            {companies[0]?.people[0] ? <Keeps c={companies[0]} p={companies[0].people[0]} /> : null}
+            <p className="nw-body">
+              That&apos;s all of it: conclusions, never a meeting title, a note or the text of an email. Only you see your network. Other members never learn who you know,
+              and it never feeds anyone else&apos;s counts.
+            </p>
+            <div className="nw-row nw-wrap">
+              {g && g.status !== "reconnect" && (
+                <button type="button" className="btn" aria-busy={busy === "sync"} disabled={!!busy || view.syncing} onClick={() => void run("sync", "sync")}>
+                  {view.syncing ? "Reading" : "Read again now"}
+                </button>
+              )}
+              <DeleteAll busy={!!busy} />
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Reconnect({ what, label, note, href }: { what: string; label?: string; note: string; href: string }) {
+  return (
+    <div className="nw-reconnect" role="status">
+      <span>
+        <strong>{what} needs reconnecting.</strong> {note}
+      </span>
+      <a className="btn btn-sm" href={href}>
+        {label ?? `Reconnect ${what}`}
+      </a>
+    </div>
+  );
+}
+
+function ConnectHero({ view, onClaude }: { view: NetworkView; onClaude: () => void }) {
+  return (
+    <div className="nw-hero">
+      <span className="nw-new">New · Your network</span>
+      <h1 className="tp-page-h nw-h1">See where you already have a way in</h1>
+      <p className="nw-lead">
+        Connect your Google account and Merlin matches the people you meet with and the contacts you keep against every company on Merlin. Your Crystal Ball then leads with
+        companies where you know someone.
+      </p>
+      <ReadsList />
+      {view.configured ? <ConnectButton /> : <p className="nw-muted">Google isn&apos;t set up on Merlin yet. Ask us to switch it on.</p>}
+      <p className="nw-small">Read-only. Takes a minute or two to map. Disconnect and delete everything any time.</p>
+      <button type="button" className="nw-link" onClick={onClaude}>
+        Rather keep it in Claude? Use your own Claude instead
+      </button>
+    </div>
+  );
+}
+
+function CompanyRow({ c, onOpen }: { c: NetCompanyView; onOpen: () => void }) {
+  const p = c.people[0];
+  const who = p ? [firstName(p.name) ?? "Someone", p.title].filter(Boolean).join(", ") : "Someone";
+  const counts = countsLine({ meetings: p?.meetings ?? c.meetings, emails: p?.emails ?? c.emails });
+  return (
+    <li>
+      <button type="button" className="nw-co" onClick={onOpen}>
+        <span className="nw-ini" aria-hidden>
+          {initials(c.name)}
+        </span>
+        <span className="nw-co-t">
+          <span className="nw-co-name">{c.name}</span>
+          <span className="nw-co-who">
+            {who}
+            {counts ? ` · ${counts}` : ""}
+            {c.last ? ` · last ${daysAgo(c.last)}` : ""}
+          </span>
+          <span className="nw-co-src">
+            {c.next ? `Meeting ${daysAgo(c.next)} · ` : ""}
+            {c.people.length + c.more > 1 ? `${c.people.length + c.more} people · ` : ""}From {sources(c.src)}
+          </span>
+        </span>
+        <WarmthChip w={c.warmth} />
+      </button>
+    </li>
+  );
+}
+
+function Keeps({ c, p }: { c: NetCompanyView; p: NetPersonView }) {
+  const name = firstName(p.name) ?? "this person";
+  return (
+    <>
+      <p className="nw-muted">Everything Merlin keeps about {name}:</p>
+      <dl className="nw-keeps">
+        <div>
+          <dt>Company</dt>
+          <dd>{c.site ?? c.name}</dd>
+        </div>
+        {p.title && (
+          <div>
+            <dt>Title</dt>
+            <dd>{p.title}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Warmth</dt>
+          <dd>{p.warmth}</dd>
+        </div>
+        <div>
+          <dt>Meetings / emails</dt>
+          <dd className="num">
+            {p.meetings} / {p.emails}
+          </dd>
+        </div>
+        {p.last && (
+          <div>
+            <dt>Last in touch</dt>
+            <dd>{new Date(`${p.last}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</dd>
+          </div>
+        )}
+        <div>
+          <dt>From</dt>
+          <dd>{sources(p.src)}</dd>
+        </div>
+      </dl>
+    </>
+  );
+}
+
+/** Where it came from: Google, Gmail (test members), Gmail via Claude, each with its own off switch. */
+function Sources({ view, busy, run, onClaude }: { view: NetworkView; busy: string | null; run: (key: string, op: "sync" | "drop-gmail" | "forget-claude") => Promise<void>; onClaude: () => void }) {
+  const g = view.google;
+  return (
+    <section className="tp-card nw-card" aria-labelledby="nw-src-h">
+      <h2 className="tp-card-h" id="nw-src-h">
+        Where it comes from
+      </h2>
+      <div className="nw-src">
+        <span className="nw-g" aria-hidden>
+          <GoogleG />
+        </span>
+        <span className="nw-src-t">
+          <strong>Calendar and Contacts</strong>
+          <span className="nw-muted">{g ? `${g.email || "Google"} · ${g.status === "reconnect" ? "needs reconnecting" : updated(g)}` : "Not connected"}</span>
+        </span>
+        {!g && view.configured && (
+          <a className="btn btn-sm" href={START}>
+            Connect
+          </a>
+        )}
+      </div>
+      {view.gmailOffered && (
+        <div className="nw-src">
+          <span className="nw-g" aria-hidden>
+            <GoogleG />
+          </span>
+          <span className="nw-src-t">
+            <strong>Gmail (test members)</strong>
+            <span className="nw-muted">
+              {view.gmail
+                ? `${view.gmail.status === "reconnect" ? "Needs reconnecting" : updated(view.gmail)} · who you email and when, never a subject or a word of an email`
+                : "Also add who you email and when: the From, To and Date lines only, never a subject or a word of an email. Test access lasts 7 days, then you reconnect."}
+            </span>
+          </span>
+          {view.gmail ? (
+            <button type="button" className="btn btn-sm" aria-busy={busy === "gmail"} disabled={!!busy} onClick={() => void run("gmail", "drop-gmail")}>
+              Drop Gmail
+            </button>
+          ) : (
+            <a className="btn btn-sm" href={`${START}?gmail=1`}>
+              Add Gmail
+            </a>
+          )}
+        </div>
+      )}
+      {view.gmail && !view.gmailOwnClient && (
+        <p className="nw-small">Dropping Gmail deletes what it found here. To take Gmail access back at Google too, remove Merlin in your Google Account&apos;s security settings, which also stops Calendar and Contacts.</p>
+      )}
+      <div className="nw-src">
+        <span className="nw-claude" aria-hidden>
+          C
+        </span>
+        <span className="nw-src-t">
+          <strong>Gmail via Claude</strong>
+          <span className="nw-muted">
+            {view.claude
+              ? `Your Claude saved ${view.claude.companies} ${view.claude.companies === 1 ? "company" : "companies"} · ${timeAgo(view.claude.at)}`
+              : "Your own Claude reads your inbox on your side and saves only conclusions here. Merlin never reads your email."}
+          </span>
+        </span>
+        {view.claude ? (
+          <button type="button" className="btn btn-sm" aria-busy={busy === "claude"} disabled={!!busy} onClick={() => void run("claude", "forget-claude")}>
+            Delete what Claude saved
+          </button>
+        ) : (
+          <button type="button" className="btn btn-sm" onClick={onClaude}>
+            How
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ---------- the record: Your way in ---------- */
+
+const noteFor = (p: NetPersonView, company: string) => {
+  const first = firstName(p.name) ?? "there";
+  return `Hi ${first},\n\nIt's been a little while. ${company} came up for me this week and I'd love to hear what's next for the team. Open to 20 minutes next week?\n\n`;
+};
+
+/** Above the seats and people on a company's record: who the member knows there, warmest first, and a note to send themselves. */
+export function WayIn({ companyId, company }: { companyId: string; company: string }) {
+  const c = useNetCompany(companyId);
+  const copy = useCopy();
+  const [draft, setDraft] = useState<number | null>(null);
+  if (!c) return null;
+  const people = c.people.slice(0, 4);
+  const p = draft !== null ? people[draft] : null;
+  const note = p ? noteFor(p, company) : "";
+  return (
+    <section className="tp-dsec nw-wayin" aria-labelledby={`nw-way-${companyId}`}>
+      <h3 className="tp-dsec-h" id={`nw-way-${companyId}`}>
+        Your way in <span className="nw-muted nw-way-from">from your {sources(c.src).toLowerCase().replace("gmail via claude", "Claude")}</span>
+      </h3>
+      <ol className="nw-people">
+        {people.map((x, k) => (
+          <li key={k}>
+            <span className="nw-pn num" aria-hidden>
+              {k + 1}
+            </span>
+            <span className="nw-pt">
+              <span className="nw-pname">
+                {x.name ?? "Someone you know"}
+                {x.title ? ` · ${x.title}` : ""}
+                {x.dm && <span className="nw-dm"> · Decision maker</span>}
+              </span>
+              <span className="nw-muted">
+                {[countsLine(x), x.both ? "replies both ways" : "", x.last ? `last ${daysAgo(x.last)}` : "", x.next ? `meeting ${daysAgo(x.next)}` : ""].filter(Boolean).join(" · ") || `From ${sources(x.src)}`}
+              </span>
+              <span className="nw-pw">
+                <WarmthChip w={x.warmth} />
+                {draft !== k && (
+                  <button type="button" className="nw-link" onClick={() => setDraft(k)}>
+                    Draft a note
+                  </button>
+                )}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {c.more > 0 && <p className="nw-small">And {c.more} more you know there.</p>}
+      {p && (
+        <div className="nw-note">
+          <span className="nw-note-h">Suggested note to {firstName(p.name) ?? "them"}</span>
+          <p>{note.trim()}</p>
+          <div className="nw-row nw-wrap">
+            {p.email && (
+              <a className="btn btn-sm btn-primary" href={`mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("Catching up")}&body=${encodeURIComponent(note)}`}>
+                Open in your email
+              </a>
+            )}
+            <button type="button" className="btn btn-sm" onClick={() => void copy(note.trim(), "Note copied.")}>
+              Copy
+            </button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setDraft(null)}>
+              Close
+            </button>
+          </div>
+          <span className="nw-small">Merlin never sends for you. You review and send it yourself.</span>
+        </div>
+      )}
+      <p className="nw-small">Named for you free: you already know someone here. Only you see this.</p>
+    </section>
+  );
+}
+
+/** Crystal Ball's card: "You know someone · Warm". */
+export function KnowChip({ companyId }: { companyId: string }) {
+  const c = useNetCompany(companyId);
+  if (!c) return null;
+  return (
+    <span className={`nw-know nw-l-${c.warmth.toLowerCase()}`} title={`${c.warmth}, from your ${sources(c.src)}`}>
+      You know someone<span className="sr-only">, {c.warmth}</span>
+    </span>
+  );
+}
+
+/* ---------- Integrations ---------- */
+
+/** The Google card on Integrations: Connect, or what's connected, Disconnect and delete. */
+export function GoogleSection({ onNetwork }: { onNetwork: () => void }) {
+  const { view } = useNetwork();
+  if (!view) return null;
+  const g = view.google;
+  return (
+    <section className="in-section" id="google" aria-labelledby="in-google-h">
+      <h2 className="in-h" id="in-google-h">
+        Your network from Google
+      </h2>
+      <p className="uc-lead">See who you already know at companies on Merlin, from your calendar and contacts. Read-only, no email, and never shown to other members.</p>
+      <section className="tp-card in-card nw-card" aria-labelledby="in-google-card">
+        <div className="in-card-h">
+          <span className="in-mark in-mark-sm" aria-hidden>
+            <GoogleG />
+          </span>
+          <h3 className="tp-card-h" id="in-google-card">
+            Google Calendar and Contacts
+          </h3>
+          <span className={`chip ${g && g.status !== "reconnect" ? "chip-volt" : "chip-outline"}`}>{g ? (g.status === "reconnect" ? "Needs reconnecting" : "Connected") : "Not set up"}</span>
+        </div>
+        {g ? (
+          <>
+            <p className="nw-body">
+              {g.email ? `${g.email} · ` : ""}
+              {updated(g)} · {view.companies.length} {view.companies.length === 1 ? "company" : "companies"} you know people at
+            </p>
+            {g.status === "reconnect" && <Reconnect what="Google" note="What Merlin found stays." href={START} />}
+            {view.gmailOffered && (
+              <p className="nw-body">
+                {view.gmail ? (
+                  view.gmail.status === "reconnect" ? (
+                    <a className="btn btn-sm" href={`${START}?gmail=1`}>
+                      Reconnect Gmail (test access lasts 7 days)
+                    </a>
+                  ) : (
+                    `Gmail added · ${updated(view.gmail)}`
+                  )
+                ) : (
+                  <a className="btn btn-sm" href={`${START}?gmail=1`}>
+                    Also add Gmail (test members)
+                  </a>
+                )}
+              </p>
+            )}
+            <div className="nw-row nw-wrap">
+              <button type="button" className="btn" onClick={onNetwork}>
+                Open Your network
+              </button>
+              <DeleteAll busy={false} />
+            </div>
+          </>
+        ) : (
+          <>
+            <ReadsList />
+            {view.configured ? <ConnectButton /> : <p className="nw-muted">Google isn&apos;t set up on Merlin yet.</p>}
+          </>
+        )}
+      </section>
+    </section>
+  );
+}
+
+export const CLAUDE_PROMPT =
+  "Look through my Gmail for the last 2 years. Find people I've emailed back and forth with at companies, and save my network to Merlin: company website, their name and title, how many emails, and when we last spoke. Don't send any email text.";
+
+/** Integrations, Claude section: the prompt to copy, and what Merlin keeps. */
+export function ClaudeNetworkPrompt() {
+  const { view } = useNetwork();
+  const copy = useCopy();
+  if (!view) return null;
+  return (
+    <section className="tp-card in-card nw-card" id="claude-network" aria-labelledby="nw-claude-h">
+      <h3 className="tp-card-h" id="nw-claude-h">
+        Add your Gmail network through your own Claude
+      </h3>
+      <p className="nw-body">
+        With Merlin and Gmail both connected in your Claude, ask it to look through your inbox. Claude reads your email on your side, and you choose what it saves here: only
+        conclusions. Merlin never reads your email.
+      </p>
+      <blockquote className="nw-prompt">{CLAUDE_PROMPT}</blockquote>
+      <div className="nw-row nw-wrap">
+        <button type="button" className="btn btn-primary" onClick={() => void copy(CLAUDE_PROMPT, "Copied. Paste it into Claude.")}>
+          Copy the prompt
+        </button>
+      </div>
+      <p className="nw-small">
+        What Merlin keeps: the company, the person&apos;s name and title, about how many emails, when you last spoke and whether replies go both ways. Never a subject or a word of an
+        email. Only you see it, and you can delete it on Your network.
+        {view.claude ? ` Your Claude has saved ${view.claude.companies} ${view.claude.companies === 1 ? "company" : "companies"} so far.` : ""}
+      </p>
+    </section>
+  );
+}
+
+/* ---------- onboarding ---------- */
+
+/** An optional prompt on onboarding's last step. Skipping it is the step's own Next. */
+export function OnboardGoogle({ onConnect }: { onConnect: () => void }) {
+  const { view } = useNetwork();
+  if (!view || !view.configured || view.google) return null;
+  return (
+    <div className="nw-onboard">
+      <span className="nw-g nw-g-lg" aria-hidden>
+        <GoogleG size={22} />
+      </span>
+      <span className="nw-onboard-t">
+        <strong>Connect Google to see who you already know</strong>
+        <span className="nw-muted">Your calendar and contacts, read-only. Merlin shows you which companies you have a way into. Only you see it. Optional: skip it for now.</span>
+      </span>
+      <ConnectButton label="Connect Google" onClick={onConnect} />
+    </div>
+  );
+}
+export const startGoogle = (from = "") => window.location.assign(`${START}${from ? `?from=${from}` : ""}`);
+
+/* ---------- Pilot metrics (admins): counts only ---------- */
+
+export function NetworkMetrics({ Card, Rows }: { Card: (p: { title: string; children: ReactNode }) => ReactNode; Rows: (p: { items: [string, ReactNode][] }) => ReactNode }) {
+  const [n, setN] = useState<{ connected: number; gmail: number; claude: number; reconnect: number; companies: number; matched: number } | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/integrations/google?stats=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => live && j?.counts && setN(j.counts))
+      .catch(() => {});
+    void load();
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!n) return null;
+  const f = (x: number) => x.toLocaleString("en-US");
+  return (
+    <Card title="Your network (counts only)">
+      <Rows
+        items={[
+          ["Members connected to Google", f(n.connected)],
+          ["Members with Gmail (test)", f(n.gmail)],
+          ["Members who saved from Claude", f(n.claude)],
+          ["Connections that need reconnecting", f(n.reconnect)],
+          ["Companies matched, all members", f(n.matched)],
+          ["Different companies matched", f(n.companies)],
+        ]}
+      />
+    </Card>
+  );
+}

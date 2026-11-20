@@ -39,6 +39,7 @@ import { LeaderReport } from "./LeaderReport";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
+import { WayIn } from "./network/Network"; // [google network]
 
 /**
  * Who leads each function, from the company's own website (lib/leaders): "Sales: full-time CRO
@@ -1758,6 +1759,8 @@ export function Drawer({
               <Pro where="hidden_company" variant="line" />
             </div>
           )}
+          {/* [google network] Your way in: who the member knows here, above the seats and people (nothing with RN_GOOGLE off). */}
+          {!c.hidden && <WayIn companyId={c.id} company={c.name} />}
           {/* About: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
           {(!c.hidden || c.cells.about?.s === "value") && (
             <section className="tp-dsec">

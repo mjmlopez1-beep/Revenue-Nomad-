@@ -17,6 +17,7 @@ import { UseInClaude } from "./UseInClaude";
 import { ProLock, ProRow, ProTag, UpgradeNote, planDay } from "./Billing";
 import { useUi } from "./ui";
 import type { AlertKind, DestView, IntegrationsView } from "@/lib/notify/types";
+import { ClaudeNetworkPrompt, GoogleSection } from "./network/Network"; // [google network]
 import "./connect.css";
 import "./pages.css";
 import "./integrations.css";
@@ -322,7 +323,7 @@ const ALERTS: { key: AlertKind; title: (fn: string | null, saved: number) => str
   },
 ];
 
-export function Integrations({ onBack, onCredits, section }: { onBack: () => void; onCredits: () => void; section?: "claude" | "slack" }) {
+export function Integrations({ onBack, onCredits, section, onNetwork }: { onBack: () => void; onCredits: () => void; section?: "claude" | "slack"; onNetwork?: () => void }) {
   const toast = useToast();
   const copy = useCopy();
   // Billing live only (Me.plan): Pro's alerts locked on Free, marked in the trial.
@@ -620,6 +621,9 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
         )}
       </section>
 
+      {/* [google network] Google Calendar and Contacts (nothing with RN_GOOGLE off). */}
+      <GoogleSection onNetwork={onNetwork ?? onBack} />
+
       <section className="in-section" id="claude" ref={claudeRef} aria-labelledby="in-claude-h">
         <h2 className="in-h" id="in-claude-h">
           Use it in Claude
@@ -631,6 +635,8 @@ export function Integrations({ onBack, onCredits, section }: { onBack: () => voi
           desc={plan?.name === "trial" ? `Claude can ask Merlin as often as you need, in your trial until ${planDay(plan.trialEndsAt)}. On Free it's 20 times a day.` : "Claude can ask Merlin as often as you need."}
         />
         <UseInClaude embedded onBack={onBack} onCredits={onCredits} />
+        {/* [google network] the prompt for adding a Gmail network through the member's own Claude. */}
+        <ClaudeNetworkPrompt />
       </section>
     </div>
   );

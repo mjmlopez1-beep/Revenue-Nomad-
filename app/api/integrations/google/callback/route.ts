@@ -1,0 +1,31 @@
+/**
+ * GET /api/integrations/google/callback: where Google sends the member back after consent
+ * (lib/google finishConnect). Then to Your network with ?google=connected, gmail, denied, scopes
+ * or failed. The code and tokens are never logged or sent to the browser; the page that follows
+ * sends no referrer.
+ *
+ * The Authorized redirect URI on the OAuth client: `${RN_PUBLIC_URL}/api/integrations/google/callback`.
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { guarded } from "@/lib/apiGuard";
+import { publicOrigin } from "@/lib/mcp/http";
+import { finishConnect } from "@/lib/google";
+import { STATE_COOKIE, STATE_COOKIE_PATH } from "@/lib/google/config";
+
+export const dynamic = "force-dynamic";
+const COOKIE = "rn_table";
+const noStore = { "cache-control": "no-store" };
+
+export const GET = guarded(async (req: NextRequest) => {
+  const origin = publicOrigin(req);
+  const q = req.nextUrl.searchParams;
+  const { outcome } = await finishConnect(
+    req.cookies.get(COOKIE)?.value ?? null,
+    { state: q.get("state"), code: q.get("code"), error: q.get("error") },
+    req.cookies.get(STATE_COOKIE)?.value ?? null,
+    origin,
+  );
+  const res = NextResponse.redirect(`${origin}/?p=network&google=${outcome}`, { status: 303, headers: { ...noStore, "referrer-policy": "no-referrer" } });
+  res.cookies.set(STATE_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: origin.startsWith("https://"), path: STATE_COOKIE_PATH, maxAge: 0 });
+  return res;
+});

@@ -697,7 +697,10 @@ console.log("\nThe API's routes");
   // Each answers only with its own proof: the member's cookie, the cron secret, an OAuth token or flow, an unsubscribe signature, Stripe's webhook signature. Health and the counts are public on purpose.
   const KNOWN = [
     "api/billing", "api/billing/webhook",
-    "api/health", "api/integrations", "api/integrations/slack/callback", "api/integrations/slack/start",
+    "api/health", "api/integrations",
+    // [google network] Your network (lib/google): the member's cookie, and Google's OAuth flow (a one-time state bound to the member and the browser).
+    "api/integrations/google", "api/integrations/google/callback", "api/integrations/google/start",
+    "api/integrations/slack/callback", "api/integrations/slack/start",
     // A company's logo by its public id, as image bytes (lib/logo.ts): public on purpose, it names nothing.
     "api/logo/[id]",
     "api/mcp",

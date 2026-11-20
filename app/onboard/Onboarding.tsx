@@ -43,6 +43,7 @@ import { ICP_SKIPPED } from "@/app/post/getStarted";
 import { contactOf, mailto } from "../landing/contact";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { invitedParts } from "@/lib/notify/format";
+import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
 
 export interface OnboardingProps {
   view: View;
@@ -503,7 +504,15 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               setClients={setClients}
               act={act}
               savedLine={justSaved && savedNow ? (email && emailOn ? "Your first view is saved. New ones come in your weekly email." : "Your first view is saved under Saved views.") : null}
-              handoff={linkStep ? null : <SeatsNext n={mySeats} busy={busy} onFill={() => finish(false, "seats")} />}
+              handoff={
+                linkStep ? null : (
+                  <>
+                    <SeatsNext n={mySeats} busy={busy} onFill={() => finish(false, "seats")} />
+                    {/* [google network] optional and skippable: Next skips it (nothing with RN_GOOGLE off). */}
+                    <OnboardGoogle onConnect={() => void finish(false, "table").then(() => startGoogle("onboard"))} />
+                  </>
+                )
+              }
               nextLabel={linkStep ? "Get my sign-in link" : "Open my table"}
               busy={busy}
               onBack={back}

@@ -44,6 +44,7 @@ import {
 } from "./predict";
 import { fullTimeWords, noLeaderWords, type FnKnow, type LeaderHow, type LeaderLevel } from "../leaders/types";
 import { hireMonth, monthsAgo } from "../hired";
+import type { Warmth } from "../google/types"; // [google network]
 
 export interface RadarProfile {
   memberId: string;
@@ -153,7 +154,15 @@ export interface ScoreCtx {
   /** Merlin's observed transitions (signals.ts observedTransitions). None: the research's priors alone. */
   counts?: TransitionCounts | null;
   nowMs?: number;
+  /** [google network] How well the member knows someone at a company (lib/google/types.ts networkWarmth). Ranks only: the band stays the score's. */
+  warmth?: (companyId: string) => Warmth | null;
 }
+
+/**
+ * [google network] The ranking is likelihood x timing x warmth: a company where the member knows
+ * someone ranks higher by how warm that is. Only the order changes, never the score or the band.
+ */
+export const warmthMultiplier = (w: Warmth | null | undefined) => (w === "Hot" ? 1.6 : w === "Warm" ? 1.35 : w === "Fading" ? 1.15 : w === "Cold" ? 1.05 : 1);
 
 const MONTH_MS = 30.44 * 24 * 60 * 60 * 1000;
 const sinceMonths = (atMs: number, nowMs: number) => Math.max(0, Math.floor((nowMs - atMs) / MONTH_MS));
@@ -259,10 +268,11 @@ const KIND_RANK: Record<RawSignal["kind"], number> = { role: 0, seat: 1, departu
 
 /** The signals for this member, ranked by score (most likely first); ties by kind (roles first), then newest. */
 export function signalsFor(all: RawSignal[], p: RadarProfile, ctx: ScoreCtx = {}): Scored[] {
+  const w = (x: Scored) => x.score * warmthMultiplier(ctx.warmth?.(x.companyId)); // [google network]
   return all
     .map((x) => scoreFor(x, p, ctx))
     .filter((x): x is Scored => !!x)
-    .sort((a, b) => b.score - a.score || KIND_RANK[a.kind] - KIND_RANK[b.kind] || b.atMs - a.atMs || a.key.localeCompare(b.key));
+    .sort((a, b) => w(b) - w(a) || KIND_RANK[a.kind] - KIND_RANK[b.kind] || b.atMs - a.atMs || a.key.localeCompare(b.key));
 }
 
 /** What goes by email and Slack: everything but Low (Low stays on the page). */

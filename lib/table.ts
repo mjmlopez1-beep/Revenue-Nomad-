@@ -113,6 +113,8 @@ import {
 } from "./leaders/types";
 import { mergeFunctions } from "./leaders/pick";
 import { fundingAdminStats, type FundingState } from "./funding/types";
+// [google network] companies a member knows someone at are named for them free (lib/google/types.ts).
+import { networkKnown, type NetworkState } from "./google/types";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -445,6 +447,8 @@ export interface State extends MessagingState {
   headcount?: Record<string, { band: string; at: string }[]>;
   /** Funding events from SEC Form D filings, matched to companies on file, and each run's counts (lib/funding). No person's name. */
   funding?: FundingState;
+  /** [google network] Each member's own network (lib/google/types.ts): private to them, never exported or counted for others. */
+  network?: NetworkState;
 }
 
 /** State.salesBuild[companyId]. */
@@ -2496,6 +2500,8 @@ function knownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<s
   for (const b of s.benchRates) if (b.by === me.id) add(b.engagementId);
   for (const c of s.names?.claims ?? []) if (c.memberId === me.id && c.status === "approved") add(c.engagementId);
   for (const e of g.engagements.values()) if (!out.has(e.companyId) && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id) out.add(e.companyId);
+  // [google network] someone they really know there (Calendar, Contacts, Gmail, or saved from their own Claude). RN_GOOGLE=1 only.
+  for (const id of networkKnown(s, me.id)) if (g.companies.has(id)) out.add(id);
   if (s === stateCache) {
     if (knownCache?.s !== s) knownCache = { s, byMember: new Map() };
     if (knownCache.byMember.size > 5000) knownCache.byMember.clear();
@@ -2508,6 +2514,7 @@ function knownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<s
 function knowsCompany(g: Graph, s: State, idx: MemberIndex, me: Member, companyId: string): boolean {
   if (s.companies.some((c) => c.id === companyId && c.by === me.id)) return true;
   if (s.engagements.some((e) => e.companyId === companyId && e.by === me.id)) return true;
+  if (networkKnown(s, me.id).has(companyId)) return true; // [google network]
   const engs = [...g.engagements.values()].filter((e) => e.companyId === companyId);
   const ids = new Set<string>([companyId, ...engs.map((e) => e.id)]);
   for (const p of g.contacts.values()) if (p.companyId === companyId) ids.add(p.id);
@@ -5697,7 +5704,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
     .sort((a, b) => a.fn.localeCompare(b.fn) || a.kind.localeCompare(b.kind) || a.amount - b.amount || (a.revenue ?? "").localeCompare(b.revenue ?? ""));
   // Admins never read members' conversations: they leave without their texts (the volume's daily
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
-  const { signins: _signins, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
+  const { signins: _signins, network: _network, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
