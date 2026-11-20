@@ -95,6 +95,8 @@ run today npx tsx scripts/test-today.mts
 run first npx tsx scripts/test-first.mts
 # The shared table (lib/table.ts memberView): every member's table, admins' included, the same JSON as the table built whole after each kind of action; nothing one member did in another's; a change in everyone's next table; built once per state. In process.
 run viewcache npx tsx scripts/test-viewcache.mts
+# Automatic jobs (lib/schedule.ts, lib/scheduler.ts, lib/jobs.ts, app/api/jobs, instrumentation.ts): each cadence's due and next run across day and week boundaries, env switches that keep a job off, a running job never started twice, cadence changes admin-only and checked, the timer never during a build or on a test server. In process, homepage reads replaced.
+run schedule npx tsx scripts/test-schedule.mts
 # Crystal Ball's likelihood and timing (lib/radar/predict.ts): the rules by stage and ownership, the unknown-type blend, the Beta update, the timing curve, the ranking, Low off the email, the new seat and company facts (who introduced you stays the seat holder's), first sales hires and departed leaders. In process, fetch replaced.
 run predict npx tsx scripts/test-predict.mts
 # Recently hired (lib/hired.ts): the filter, its counts and sort, the address and saved views, the weekly email's line, the post in Slack and the connector's params, on a made-up seed with fetch replaced.

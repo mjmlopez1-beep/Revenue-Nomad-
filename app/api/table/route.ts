@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { brotliCompress, constants as zc, gzip } from "zlib";
 import {
-  ABOUT_MAX, ActionError, aboutCells, billingVisit, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
+  ABOUT_MAX, ActionError, aboutCells, billingVisit, buildView, exportState, inviterName, isAdmin, joinMember, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
 } from "@/lib/table";
 import { stateVersion } from "@/lib/table";
 import type { ActionResult } from "@/lib/tableTypes";
@@ -20,9 +20,9 @@ import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
 import { PreviewError, preview } from "@/lib/preview";
-import { maybeRadar, radarView, returnQuery } from "@/lib/radar";
+import { radarView, returnQuery } from "@/lib/radar";
 import { yourFeature } from "@/lib/radar/types";
-import { maybeFunding } from "@/lib/funding/run";
+import { runDueJobs } from "@/lib/jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -332,16 +332,12 @@ export const GET = guarded(async (req: NextRequest) => {
       "content-disposition": `attachment; filename="merlin-${new Date().toISOString().slice(0, 10)}.json"`,
     });
   }
-  // Neither holds the page up: the visit is noted (at most once per 6 hours per member), and a
-  // weekly scan starts in the background when one is due (only with RN_SCAN=1).
+  // Neither holds the page up: the visit is noted (at most once per 6 hours per member), and the
+  // background jobs that are due start (lib/jobs.ts runDueJobs: the scan, Crystal Ball, leadership
+  // pages, funding filings, About texts, each on its schedule and its env switch). The scheduler's
+  // timer (instrumentation.ts) runs the same checks every few minutes; this is the backup.
   if (token) void touch(token, ip).catch((e) => console.error("last seen not saved", e));
-  void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
-  // The next-client radar's daily run, on the first page load after 13:00 UTC (lib/radar).
-  void maybeRadar(origin(req)).catch((e) => console.error("radar check failed", e));
-  // Who leads each function: the daily background read of company websites (RN_LEADERS=1 only, lib/leaders/run.ts maybeLeaders).
-  if (process.env.RN_LEADERS === "1") void import("@/lib/leaders/run").then((m) => m.maybeLeaders()).catch((e) => console.error("leaders check failed", e));
-  // Funding from SEC Form D filings, once a UTC day after 06:00 UTC (only with RN_FUNDING=1, lib/funding).
-  void maybeFunding().catch((e) => console.error("funding check failed", e));
+  void runDueJobs(origin(req)).catch((e) => console.error("job checks failed", e));
   // Signed out: the counts only, kept for a few minutes (buildView), so the landing page never waits in line behind members' tables.
   if (!token || !(await memberForToken(token))) {
     const view = await buildView(null);

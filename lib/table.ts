@@ -116,6 +116,7 @@ import {
 import { mergeFunctions } from "./leaders/pick";
 import { fundingAdminStats, type FundingState } from "./funding/types";
 import { inSlot } from "./viewQueue";
+import { isDue, settingOf, type ScheduleState } from "./schedule";
 // [google network] companies a member knows someone at are named for them free (lib/google/types.ts).
 import { networkKnown, type NetworkState } from "./google/types";
 
@@ -472,6 +473,8 @@ export interface State extends MessagingState {
   funding?: FundingState;
   /** [google network] Each member's own network (lib/google/types.ts): private to them, never exported or counted for others. */
   network?: NetworkState;
+  /** Automatic jobs (lib/schedule.ts): the cadences the owner changed in Pilot metrics. The rest follow JOB_DEFAULTS. */
+  schedule?: ScheduleState;
 }
 
 /** State.salesBuild[companyId]. */
@@ -7862,7 +7865,7 @@ export function runScan(
       if (posting?.refunded) result.refunded = (result.refunded ?? 0) + posting.refunded;
       const digests = await sendDigests(result.at, origin).catch((e) => (console.error("digest failed", e), 0));
       // About texts for the companies without one, from their own websites (RN_ABOUT=1), in the background.
-      if (aboutEnabled()) void import("./about/run").then((m) => m.runAbout()).catch((e) => console.error("about run failed", e));
+      if (aboutEnabled() && settingOf((await loadState().catch(() => null))?.schedule, "about").every !== "off") void import("./about/run").then((m) => m.runAbout()).catch((e) => console.error("about run failed", e));
       const failed = found.sources.filter((x) => x.error).length;
       console.log(
         `scan: ${found.all.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
@@ -7877,19 +7880,25 @@ export function runScan(
   return scanFlight;
 }
 
+/** Whether a scan is running in this process (Pilot metrics' Automatic jobs). */
+export const scanRunning = () => scanFlight !== null;
+
 /**
- * Start a scan in the background when one is due: RN_SCAN=1, and the last run is more than 7
- * days old (or there is none). A run where every board failed is tried again after 6 hours.
- * Called on page loads, so it must stay cheap: at most one try an hour.
+ * Start a scan in the background when one is due: RN_SCAN=1, and its schedule says so
+ * (lib/schedule.ts: once a week by default). A run where every board failed is tried again after
+ * 6 hours. Called by the scheduler and on page loads, so it must stay cheap: at most one try an hour.
  */
-export async function maybeScan(origin?: string): Promise<void> {
-  if (process.env.RN_SCAN !== "1" || scanFlight || Date.now() - scanTriedAt < 60 * 60_000) return;
+export async function maybeScan(origin?: string, nowMs = Date.now()): Promise<boolean> {
+  if (process.env.RN_SCAN !== "1" || scanFlight || nowMs - scanTriedAt < 60 * 60_000) return false;
   const s = await loadState();
-  const age = Date.now() - Date.parse(s.scan.lastRunAt ?? "");
+  const st = settingOf(s.schedule, "scan");
+  const last = Date.parse(s.scan.lastRunAt ?? "");
   const allFailed = s.scan.sources.length > 0 && !s.scan.sources.some((x) => !x.error && x.fetched > 0);
-  if (Number.isFinite(age) && age < (allFailed ? 6 * 60 * 60_000 : WEEK)) return;
-  scanTriedAt = Date.now();
+  const retry = st.every !== "off" && allFailed && nowMs - last >= 6 * 60 * 60_000;
+  if (!retry && !isDue(st, last, nowMs)) return false;
+  scanTriedAt = nowMs;
   void runScan(origin).catch((e) => console.error("scan failed", e));
+  return true;
 }
 
 /* ---------- the weekly email ---------- */

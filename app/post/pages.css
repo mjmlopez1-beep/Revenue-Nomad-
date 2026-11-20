@@ -545,6 +545,97 @@
 .tp-phone .tp-pm-ask-acts .btn {
   min-height: 44px;
 }
+/* Automatic jobs: one row per job, the same columns in every row; on phones each row stacks. */
+.tp-pm-grid.tp-pm-jobs-top {
+  margin: 0 0 12px;
+}
+.tp-jobs-intro {
+  margin: 4px 0 0;
+}
+.tp-jobs-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.tp-jobs-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.1fr) minmax(232px, max-content) minmax(150px, 1.3fr) minmax(110px, 0.8fr) max-content;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 10px 0;
+  border-top: 1px solid var(--surface-2);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.tp-jobs-row:first-child {
+  border-top: 0;
+}
+.tp-jobs-what,
+.tp-jobs-cell {
+  display: grid;
+  min-width: 0;
+}
+.tp-jobs-name {
+  font-weight: 600;
+}
+.tp-jobs-desc,
+.tp-jobs-l {
+  color: var(--muted);
+}
+.tp-jobs-l {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.tp-jobs-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tp-jobs-pick .tp-pm-select {
+  width: auto;
+  min-height: 32px;
+  font-size: 13px;
+}
+.tp-jobs-off {
+  font-weight: 600;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.tp-jobs-bad {
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
+.tp-jobs-none {
+  color: var(--faint);
+}
+.tp-jobs-live {
+  font-weight: 600;
+  color: var(--volt-ink);
+}
+.tp-jobs-act {
+  justify-self: end;
+}
+@media (max-width: 1023px) {
+  .tp-jobs-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .tp-jobs-what {
+    grid-column: 1 / -1;
+  }
+  .tp-jobs-act {
+    justify-self: start;
+  }
+}
+@media (max-width: 767px) {
+  .tp-jobs-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.tp-phone .tp-jobs-act .btn,
+.tp-phone .tp-jobs-pick .tp-pm-select {
+  min-height: 44px;
+}
 
 /* ---------- settings: the weekly email switch ---------- */
 .tp-card.tp-set {

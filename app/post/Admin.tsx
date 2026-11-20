@@ -11,13 +11,14 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AdminStats, View } from "@/lib/tableTypes";
-import { IconChevron, Num, useToast } from "../ui/shared";
+import { IconChevron, Num } from "../ui/shared";
 import { useUi } from "./ui";
 import { FEATURE_NAME } from "@/lib/radar/types";
 import { FUNDING_SKIP_WORDS, type FundingSkip } from "@/lib/funding/types";
 import "./pages.css";
 import "./verify.css";
 import { NetworkMetrics } from "./network/Network"; // [google network]
+import { AutoJobs } from "./AdminJobs";
 
 const n0 = (n: number) => n.toLocaleString("en-US");
 /** Facts added for each fact unlocked, to two places. No unlocks yet reads as a dash. */
@@ -120,33 +121,10 @@ function boardRows(a: AdminStats): BoardRow[] {
   });
 }
 
-/** The radar (lib/radar, FEATURE_NAME): who has it on, what went out, opens and clicks, and "Send now". */
-function Radar({ r, refresh }: { r: NonNullable<AdminStats["radar"]>; refresh: () => Promise<void> }) {
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  const send = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/radar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "send" }) });
-      const j = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
-      toast(j.message || j.error || (res.ok ? "Sent." : "That didn't go through. Try again."));
-      await refresh();
-    } catch {
-      toast("We couldn't reach Merlin. Check your connection and try again.", true);
-    } finally {
-      setBusy(false);
-    }
-  };
+/** The radar (lib/radar, FEATURE_NAME): who has it on, what went out, opens and clicks. Run now is in Automatic jobs. */
+function Radar({ r }: { r: NonNullable<AdminStats["radar"]> }) {
   return (
-    <Card
-      title={FEATURE_NAME}
-      action={
-        <button type="button" className="btn btn-sm btn-pine" disabled={busy} aria-busy={busy} onClick={() => void send()}>
-          {busy ? "Sending" : `Send ${FEATURE_NAME} now`}
-        </button>
-      }
-    >
+    <Card title={FEATURE_NAME}>
       <Rows
         items={[
           [`Members with ${FEATURE_NAME} on`, n0(r.on)],
@@ -163,56 +141,13 @@ function Radar({ r, refresh }: { r: NonNullable<AdminStats["radar"]>; refresh: (
   );
 }
 
-function Scan({ a, lastOkAt, refresh }: { a: AdminStats; lastOkAt: string | null | undefined; refresh: () => Promise<void> }) {
-  const ui = useUi();
-  const [busy, setBusy] = useState(false);
-  /** How the last run from this page ended: it finished, or it is still going after two minutes. */
-  const [ended, setEnded] = useState<"done" | "slow" | null>(null);
-  const lastRun = useRef(a.scan.lastRunAt);
-  lastRun.current = a.scan.lastRunAt;
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
-
-  /** Start a scan, then keep reading the view until its last run time moves (a scan runs in the background). */
-  const run = async () => {
-    if (busy) return;
-    const before = lastRun.current;
-    setBusy(true);
-    setEnded(null);
-    const r = await ui.act({ type: "scanNow" }, { quiet: true });
-    if (!r.ok) return setBusy(false);
-    let done = false;
-    for (let i = 0; i < 45 && alive.current; i++) {
-      await sleep(i < 4 ? 1200 : 4000);
-      if (lastRun.current !== before) {
-        done = true;
-        break;
-      }
-      await refresh();
-    }
-    if (!alive.current) return;
-    setBusy(false);
-    setEnded(done ? "done" : "slow");
-  };
-
+/** The open-roles scan: the last run, the open roles, each job board. Run now is in Automatic jobs. */
+function Scan({ a, lastOkAt }: { a: AdminStats; lastOkAt: string | null | undefined }) {
   const s = a.scan;
   const boards = boardRows(a);
   const distrusted = boards.some((b) => b.problem && !b.error);
   return (
-    <Card
-      title="Weekly scan for open roles"
-      span={6}
-      action={
-        <button type="button" className="btn btn-sm btn-pine" disabled={busy} onClick={() => void run()}>
-          {busy ? "Scanning" : "Run scan now"}
-        </button>
-      }
-    >
+    <Card title="Open roles scan" span={6}>
       <div className="tp-pm-scan">
         <Rows
           items={[
@@ -259,55 +194,21 @@ function Scan({ a, lastOkAt, refresh }: { a: AdminStats; lastOkAt: string | null
           {distrusted && <p className="tp-small muted tp-pm-foot">A board that is not trusted on a run never closes a role. Its roles stay as they were until it reads clean again.</p>}
         </div>
       </div>
-      <p className="tp-small muted tp-pm-foot" role="status">
-        {busy
-          ? "Reading the job boards. This page updates when the scan finishes."
-          : ended === "slow"
-            ? "The scan is still running. Reload this page in a few minutes to see the result."
-            : ended === "done"
-              ? "The scan finished. These numbers are current."
-              : "A scan reads every job board and keeps the fractional GTM roles. It can take a minute or two."}
-      </p>
+      <p className="tp-small muted tp-pm-foot">A scan reads every job board and keeps the fractional GTM roles, then sends the weekly email. It can take a minute or two.</p>
     </Card>
   );
 }
 
 /**
- * About texts from company websites (lib/about): the run under way or the last one, what is on
- * file, and a button to start a run (only with RN_ABOUT=1 on the server). While a run goes on the
- * view is read again every few seconds.
+ * About texts from company websites (lib/about): the run under way or the last one, and what is
+ * on file. Run now and the schedule are in Automatic jobs, which reads the view again while it runs.
  */
-function AboutFill({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
-  const ui = useUi();
-  const [busy, setBusy] = useState(false);
+function AboutFill({ a }: { a: AdminStats }) {
   const x = a.about!;
-  const running = x.running || busy;
-  const live = useRef(refresh);
-  live.current = refresh;
-  useEffect(() => {
-    if (!x.running) return;
-    const t = setInterval(() => void live.current(), 5000);
-    return () => clearInterval(t);
-  }, [x.running]);
-  const start = async () => {
-    if (busy) return;
-    setBusy(true);
-    const r = await ui.act({ type: "aboutNow" }, { quiet: true });
-    if (r.ok) await sleep(1500);
-    await refresh();
-    setBusy(false);
-  };
+  const running = x.running;
   const r = x.run;
   return (
-    <Card
-      title="About texts from company websites"
-      span={3}
-      action={
-        <button type="button" className="btn btn-sm btn-pine" disabled={running || !x.enabled} onClick={() => void start()}>
-          {running ? "Filling" : "Fill About texts from websites"}
-        </button>
-      }
-    >
+    <Card title="About texts from company websites" span={3}>
       <Rows
         items={[
           ["Companies with an About", `${n0(x.withAbout)} of ${n0(x.companies)}`],
@@ -327,7 +228,7 @@ function AboutFill({ a, refresh }: { a: AdminStats; refresh: () => Promise<void>
       )}
       <p className="tp-small muted tp-pm-foot" role="status">
         {!x.enabled
-          ? "Off. It starts once RN_ABOUT=1 is set on the server, and then also runs after each weekly scan."
+          ? "Off. It starts once RN_ABOUT=1 is set on the server, then runs on its schedule and after each weekly scan."
           : running
             ? "Reading company websites, four at a time. This page updates as it goes."
             : "Reads the homepage of each company with no About yet. Nobody earns credits for these texts."}
@@ -875,6 +776,10 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
           Download backup
         </a>
       </div>
+      {/* The background jobs first: what runs on its own, how often, and Run now. */}
+      <div className="tp-pm-grid tp-pm-jobs-top">
+        <AutoJobs refresh={refresh} />
+      </div>
 
       <div className="tp-stats">
         <Tile value={n0(a.members.active7)} label="Members active this week" sub={`${n0(a.members.active30)} in the last 30 days`} />
@@ -1031,8 +936,8 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
         {a.names && <PublicNames n={a.names} refresh={refresh} />}
         {a.pendingSeats && <PendingSeats rows={a.pendingSeats} refresh={refresh} />}
 
-        <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
-        {a.about && <AboutFill a={a} refresh={refresh} />}
+        <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} />
+        {a.about && <AboutFill a={a} />}
         {a.leaders && <LeadersRead a={a} refresh={refresh} />}
         {a.funding && <FundingFilings a={a} />}
 
@@ -1064,7 +969,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
             ]}
           />
         </Card>
-        {a.radar && <Radar r={a.radar} refresh={refresh} />}
+        {a.radar && <Radar r={a.radar} />}
         {a.radarModel && (
           <Card title={`${FEATURE_NAME}: what our data says`}>
             <Rows
