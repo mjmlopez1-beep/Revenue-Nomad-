@@ -2866,7 +2866,7 @@ const NOBODY_BLIND = new Set([
 ]);
 /** Per fact or confirmation: these change the records of the company they are at. */
 const BY_RECORD = new Set(["values", "verifications"]);
-/** Only who is in them matters (signedIn): a timestamp moving changes nothing Nobody sees. */
+/** Only who is in them matters, together (signedIn): a timestamp moving, or a member who had signed in already, changes nothing Nobody sees. */
 const BY_WHO = new Set(["seen", "profiles", "ips"]);
 const sameJson = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
 /** Two facts the same, field by field (a fact is a small flat record; its reporters a list). */
@@ -2885,13 +2885,14 @@ const sameFact = (a: Record<string, unknown> | undefined, b: Record<string, unkn
   }
   return true;
 };
-/** Who is in one of the BY_WHO parts: signedIn reads seen and profiles by key, ips by a non-empty list. */
-const whoIn = (key: string, x: unknown) =>
-  Object.entries((x ?? {}) as Record<string, unknown>)
-    .filter(([, v]) => (key === "ips" ? Array.isArray(v) && v.length > 0 : v !== undefined && v !== null))
-    .map(([k]) => k)
-    .sort()
-    .join("\u0000");
+/** Everyone signedIn counts as signed in, as it reads them: a member who joined, or has a seen time, a profile or an address on file. */
+const signedInIds = (s: State) => {
+  const ids = new Set(s.members.map((m) => m.id));
+  for (const [k, v] of Object.entries(s.seen ?? {})) if (v) ids.add(k);
+  for (const [k, v] of Object.entries(s.profiles ?? {})) if (v) ids.add(k);
+  for (const [k, v] of Object.entries(s.ips ?? {})) if (v?.length) ids.add(k);
+  return [...ids].sort().join("\u0000");
+};
 /**
  * The companies whose Nobody record may read differently on `b` than on `a`, both committed
  * states with the same seed: the companies of the facts and confirmations that changed. Null when
@@ -2911,10 +2912,7 @@ function nobodyChanges(a: State, b: State, ga: Graph, gb: Graph): Set<string> | 
     if (NOBODY_BLIND.has(key)) continue;
     const x = (a as unknown as Record<string, unknown>)[key];
     const y = (b as unknown as Record<string, unknown>)[key];
-    if (BY_WHO.has(key)) {
-      if (whoIn(key, x) !== whoIn(key, y)) return null;
-      continue;
-    }
+    if (BY_WHO.has(key)) continue;
     if (BY_RECORD.has(key)) {
       const xa = (x ?? {}) as Record<string, Record<string, unknown> | string[]>;
       const ya = (y ?? {}) as Record<string, Record<string, unknown> | string[]>;
@@ -2931,6 +2929,7 @@ function nobodyChanges(a: State, b: State, ga: Graph, gb: Graph): Set<string> | 
     }
     if (!sameJson(x, y)) return null;
   }
+  if (signedInIds(a) !== signedInIds(b)) return null;
   // The same companies, seats and people in both, in the same order (the table's order breaks ties by it).
   if (ga.companies.size !== gb.companies.size || ga.engagements.size !== gb.engagements.size || ga.contacts.size !== gb.contacts.size) return null;
   const ia = ga.companies.keys();

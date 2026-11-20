@@ -35,6 +35,8 @@ const seed = {
     { id: "m_cal", name: "Cal Cedar", email: "cal@example.com", title: "Fractional CFO", token: "tok-cal-cache" },
     { id: "m_hal", name: "Hal Holder", email: "hal@example.com", title: "Fractional CRO", token: "tok-hal-cache" },
     { id: "m_adm", name: "Ada Admin", email: "admin-cache@example.com", title: "Admin", token: "tok-adm-cache" },
+    // A seed member who never signed in, holding a seat: their first visit makes them a member on Merlin.
+    { id: "m_sid", name: "Sid Sleeper", email: "sid@example.com", title: "Fractional CMO", token: "tok-sid-cache" },
   ],
   companies: [
     co("c_alpha", "Alphaquill Systems", "alphaquill.example", { hq: "Austin, TX", industry: "SaaS", employees: "11–50" }),
@@ -51,11 +53,12 @@ const seed = {
     seat("e_delta", "c_delta", { source: "Seat scan", function: "Finance", role: "Fractional CFO", type: "Fractional", status: "Active", start: "2025-03", end: "Ongoing" }),
     seat("e_echo", "c_echo", { source: "Seat scan", function: "Marketing", role: "Fractional CMO", type: "Fractional", status: "Active", start: "2025-04", end: "Ongoing" }),
     seat("e_fable_open", "c_fable", { source: "Demand scan", function: "Sales", role: "Fractional CRO", status: "Open role", posting: "https://fablewick.example/careers/cro" }),
+    seat("e_echo_sid", "c_echo", { source: "Member success story", function: "Marketing", role: "Fractional CMO", type: "Fractional", status: "Ended", start: "2023-01", end: "2023-09", operator: "Sid Sleeper" }),
   ],
   contacts: [{ id: "p_alpha_ceo", companyId: "c_alpha", fields: { name: "Gwen Gatekeeper", title: "CEO", relationship: "Decision maker", email: "gwen@alphaquill.example" } }],
 };
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
-writeFileSync(path.join(dir, "intel.json"), JSON.stringify({ ledger: [], values: {}, unlocks: {}, seen: Object.fromEntries(seed.members.map((m) => [m.id, ago(1)])) }));
+writeFileSync(path.join(dir, "intel.json"), JSON.stringify({ ledger: [], values: {}, unlocks: {}, seen: Object.fromEntries(seed.members.filter((m) => m.id !== "m_sid").map((m) => [m.id, ago(1)])) }));
 Object.assign(process.env, {
   RN_DATA_DIR: dir,
   RN_INTEL_SEED: path.join(dir, "intel-seed.json"),
@@ -197,6 +200,13 @@ async function main() {
   await t.buildView(TOK.bob);
   check("and once the whole build is SHARED_KEEP_MS old, it is built whole", t.sharedViewStats().builds === k0 + 1, t.sharedViewStats());
   await parity("later on");
+
+  // A seed member's first visit: who is on Merlin changed, so the shared part is built whole.
+  const sid0 = t.sharedViewStats().builds;
+  await t.touch("tok-sid-cache", "10.9.9.9");
+  await t.buildView(TOK.bob);
+  check("a seed member's first visit builds the shared part whole", t.sharedViewStats().builds === sid0 + 1, t.sharedViewStats());
+  await parity("after a seed member's first visit", [...Object.values(TOK), "tok-sid-cache"]);
 }
 
 try {
