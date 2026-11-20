@@ -3,8 +3,8 @@
  * day switcher over them. Desktop and tablet: the companies table with its own columns (what
  * happened, and the one button). Phones: one card a company, the button full width, 44px taps.
  */
-.rd-page {
-  max-width: 1120px;
+.tp-page.rd-page {
+  max-width: 1440px;
 }
 .rd-lead {
   margin: -6px 0 16px;
@@ -170,25 +170,35 @@
   flex: none;
   margin-bottom: 24px;
 }
-/* Fitted to the page: the lines wrap, so the button is always on screen. */
+/*
+ * Fitted to the page at every width: the table is never wider than its frame. "What happened" takes
+ * what the other columns leave, and its lines wrap. The action column is as wide as its widest
+ * button (nothing in it is ever cut), and "They have a full-time Sales leader" wraps under Open.
+ * (Two classes on each rule: post.css loads after this file and sets the shared table's widths.)
+ */
 .tp-table.rd-table {
   width: 100%;
 }
-.rd-table th.w-co {
-  width: 280px;
+.rd-page .rd-table th.w-co {
+  width: 240px;
 }
-.rd-table .rd-w-what {
-  min-width: 260px;
-  width: 60%;
+.rd-page .rd-table .rd-w-what {
+  min-width: 200px;
+  width: auto;
 }
-.rd-table th.w-hq {
-  width: 140px;
+.rd-page .rd-table th.w-hq {
+  width: 100px;
+  min-width: 100px;
 }
-.rd-table .rd-w-act {
-  width: 210px;
+.rd-page .rd-table .rd-w-act {
+  width: 1%;
+  min-width: 176px;
 }
 .rd-table td.rd-td-act {
   text-align: right;
+  white-space: normal;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 .rd-table td.rd-td-what {
   white-space: normal;
@@ -202,8 +212,34 @@
   min-height: 36px;
   white-space: nowrap;
 }
+.rd-page .rd-table td.rd-td-act .rd-acts {
+  justify-items: end;
+}
+.rd-page .rd-table td.rd-td-act .lr-open {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: right;
+  line-height: 20px;
+}
 .rd-open {
   min-width: 88px;
+}
+/* A tablet (768 to 1023 wide): the button's words wrap too, so the five columns fit the frame. */
+@media (max-width: 1023px) {
+  .rd-page .rd-table .rd-w-what {
+    min-width: 160px;
+  }
+  .rd-page .rd-table .rd-w-act {
+    min-width: 128px;
+  }
+  .rd-page .rd-table td.rd-td-act .btn {
+    max-width: 168px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    white-space: normal;
+  }
 }
 
 /* ---- the cards (phones) ---- */
