@@ -715,6 +715,16 @@
   font-weight: 800;
 }
 
+/* Column names: in full, short on a phone. */
+.hm-short {
+  display: none;
+}
+/* Home is white from edge to edge, under the tab bar too. */
+.tp-app.tp-on-home,
+.tp-app.tp-on-home .tp-col {
+  background: var(--surface);
+}
+
 /* Narrower screens: two cards a row, the sections one under the other. */
 @media (max-width: 1199px) {
   .hm-grid {
@@ -794,10 +804,20 @@
   }
   .hm-lrow {
     flex-wrap: wrap;
+    gap: 4px 12px;
     padding: 10px;
+  }
+  .hm-lrow-open {
+    flex-basis: 100%;
   }
   .hm-lrow-act {
     margin-left: 52px;
+  }
+  .hm-long {
+    display: none;
+  }
+  .hm-short {
+    display: inline;
   }
   .hm-col-opened {
     display: none;

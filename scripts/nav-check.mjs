@@ -204,7 +204,11 @@ async function context(member, opts = {}) {
   }, ago(3 * DAY));
   return ctx;
 }
-const settle = (page) => page.waitForFunction(() => !document.querySelector(".tp-allwait, .td-card-skel"), null, { timeout: 20_000 }).catch(() => {});
+/** The app is drawn (its top bar is there) and nothing on screen is still loading. */
+const settle = (page) =>
+  page
+    .waitForFunction(() => !!document.querySelector(".tp-top") && !document.querySelector(".tp-allwait, .td-card-skel, .hm-card-wait"), null, { timeout: 20_000 })
+    .catch(() => {});
 const shot = async (page, name) => {
   await page.screenshot({ path: path.join(OUT, `${name}.png`) });
   console.log(`shot ${name}.png`);
@@ -219,15 +223,66 @@ async function firstPaint() {
     await cdp.send("Network.enable");
     await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 85, downloadThroughput: (9 * 1024 * 1024) / 8, uploadThroughput: (9 * 1024 * 1024) / 8 });
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    // The moment the lead card is in the page, seen from inside it (a poll from outside lands late while the page is busy).
+    await page.addInitScript(() => {
+      const mo = new MutationObserver(() => {
+        if (window.__lead == null && document.querySelector(".td-card:not(.td-card-skel)")) {
+          window.__lead = performance.now();
+          mo.disconnect();
+        }
+      });
+      mo.observe(document, { childList: true, subtree: true });
+    });
+    if (process.env.TRACE)
+      await page.addInitScript(() => {
+        window.__lt = [];
+        try {
+          new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__lt.push(`${Math.round(e.startTime)}+${Math.round(e.duration)}`))).observe({ type: "longtask", buffered: true });
+        } catch {}
+      });
+    if (process.env.PROFILE) {
+      await cdp.send("Profiler.enable");
+      await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
+      await cdp.send("Profiler.start");
+    }
+    if (process.env.TRACEFILE) await browser.startTracing(page, { path: process.env.TRACEFILE, categories: ["devtools.timeline", "disabled-by-default-devtools.timeline", "blink.user_timing", "loading"] });
     const start = Date.now();
     await page.goto(`${BASE}/`, { waitUntil: "commit" });
     // Home is painted: its lead card (not the skeleton) is on screen.
     await page.waitForSelector(".td-card:not(.td-card-skel)", { timeout: 30_000 });
-    const ms = await page.evaluate(() => {
-      const el = document.querySelector(".td-card:not(.td-card-skel)");
-      return el ? performance.now() : null;
-    });
+    const ms = await page.evaluate(() => window.__lead ?? null);
+    if (process.env.TRACEFILE) await browser.stopTracing();
+    if (process.env.PROFILE) {
+      const { profile } = await cdp.send("Profiler.stop");
+      // Self time by function and file, up to the lead card.
+      const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+      const self = new Map();
+      const dt = profile.timeDeltas;
+      let t = profile.startTime;
+      const leadUs = profile.startTime + (ms ?? 0) * 1000;
+      profile.samples.forEach((id, k) => {
+        t += dt[k];
+        const n = byId.get(id);
+        const f = n.callFrame;
+        const key = `${f.functionName || "(anon)"} ${f.url.split("/").pop()}:${f.lineNumber}`;
+        self.set(key, (self.get(key) ?? 0) + dt[k] / 1000);
+      });
+      void leadUs;
+      console.log([...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => `${v.toFixed(1)}ms ${k}`).join("\n"));
+    }
     const fcp = await page.evaluate(() => performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? null);
+    if (process.env.TRACE)
+      console.log(
+        await page.evaluate(() =>
+          performance
+            .getEntriesByType("resource")
+            .filter((r) => r.duration > 30)
+            .map((r) => `${Math.round(r.startTime)}-${Math.round(r.responseEnd)} ${Math.round(r.encodedBodySize / 1024)}KB ${r.name.replace(location.origin, "").slice(0, 70)}`)
+            .join("\n"),
+        ),
+        "\nlong tasks:",
+        await page.evaluate(() => (window.__lt ?? []).join(" ")),
+      );
     times.push({ lead: Math.round(ms ?? Date.now() - start), fcp: fcp ? Math.round(fcp) : null });
     await ctx.close();
   }
@@ -357,11 +412,30 @@ try {
     const r = await (await fetch(`${BASE}/api/table?radar=1`, { headers: { cookie: `rn_table=${MEMBERS.trial.token}` } })).json();
     console.log(JSON.stringify({ ready: r.ready, day: r.day, days: r.days, rows: r.rows?.length, fn: r.function, before: r.before }));
   }
+  if (ONLY === "probe") {
+    // What sticks out past the right edge at one width (PROBE=/?p=table, WIDTH=390).
+    const w = Number(process.env.WIDTH || 390);
+    const ctx = await context(MEMBERS.trial, { ...iphone, viewport: { width: w, height: 800 } });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}${process.env.PROBE || "/?p=table"}`);
+    await settle(page);
+    await page.waitForTimeout(500);
+    const out = await page.evaluate((vw) => {
+      const hits = [];
+      for (const el of document.querySelectorAll("body *")) {
+        const r = el.getBoundingClientRect();
+        if (r.right > vw + 0.5 && r.width > 0) hits.push(`${el.tagName.toLowerCase()}.${String(el.className).split(" ").join(".")} right=${Math.round(r.right)} w=${Math.round(r.width)}`);
+      }
+      return hits.slice(0, 25);
+    }, w);
+    console.log(out.join("\n"));
+    await ctx.close();
+  }
   if (ONLY === "paint" || ONLY === "all") await firstPaint();
   if (ONLY === "shots" || ONLY === "all") await shots();
   if (ONLY === "clicks" || ONLY === "all") await clicks();
   if (ONLY === "sideways" || ONLY === "all") await sideways();
-  writeFileSync(path.join(OUT, "results.json"), JSON.stringify(results, null, 2));
+  writeFileSync(path.join(OUT, `results-${ONLY}.json`), JSON.stringify(results, null, 2));
 } catch (e) {
   console.error(e);
   console.error(serverLog.slice(-3000));

@@ -26,6 +26,7 @@
  * be turned off from the account menu (WCAG 2.1.4), for speech input and for anyone who
  * types into the page by accident.
  */
+import dynamic from "next/dynamic";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { CompanyLogo, IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
@@ -48,7 +49,6 @@ import { Seats } from "./Seats";
 import { earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar, useRadarNew } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
-import { Partners } from "./Partners";
 import { RadarPage, radarRows, useRadarDay } from "./Radar";
 import { FEATURE_NAME, SIG_DAY_RE, YOUR_FEATURE } from "@/lib/radar/types";
 import { emailMeLink } from "./Settings";
@@ -56,11 +56,7 @@ import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
 import { CardList } from "./Cards";
 import { Drawer } from "./Drawer";
-import { AddModal } from "./AddModal";
 import { MyCredits, signInLink, useCopy } from "./Credits";
-import { Integrations } from "./Integrations";
-import { Benchmarks } from "./Benchmarks";
-import { Admin } from "./Admin";
 import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViewList, SavedViews, SavedViewsSheet, type ProfileEdit } from "./Hunt";
 import { HiredButton, HiredSentence } from "./Hired";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/lib/hired";
@@ -81,6 +77,30 @@ import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { NetworkPage } from "./network/Network"; // [google network]
 import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./post.css";
+
+/*
+ * Pages a member opens now and then, and the Add form, load on their own: Home and the table paint
+ * without them, and they are fetched once the whole table is here (preloadLater below).
+ */
+const pageWait = () => (
+  <div className="tp-allwait" role="status" aria-busy>
+    <p className="tp-allwait-t">Loading…</p>
+  </div>
+);
+const loadAdd = () => import("./AddModal");
+const loadIntegrations = () => import("./Integrations");
+const loadBenchmarks = () => import("./Benchmarks");
+const loadPartners = () => import("./Partners");
+const loadAdmin = () => import("./Admin");
+const AddModal = dynamic(() => loadAdd().then((m) => m.AddModal), { ssr: false });
+const Integrations = dynamic(() => loadIntegrations().then((m) => m.Integrations), { ssr: false, loading: pageWait });
+const Benchmarks = dynamic(() => loadBenchmarks().then((m) => m.Benchmarks), { ssr: false, loading: pageWait });
+const Partners = dynamic(() => loadPartners().then((m) => m.Partners), { ssr: false, loading: pageWait });
+const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
+/** Fetch them while the member reads (the Add form first): opening one is then instant. */
+const preloadLater = (admin: boolean) => {
+  for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadPartners, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
+};
 import "./nav.css";
 
 export interface TradingPostProps {
@@ -773,6 +793,15 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // The pages that load on their own (Add, Integrations and the rest) come once the whole table is here and the page is idle.
+  useEffect(() => {
+    if (waiting) return;
+    const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
+    const go = () => preloadLater(!!view.admin);
+    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(go, { timeout: 3000 }) : go()), 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting]);
   const rolesNew = useMemo(() => (todayShown ? rolesSince(infos, me.function, since.at) : 0), [todayShown, infos, me.function, since.at]);
   const today = useTodayData(todayShown || countWanted, since.at, { roles: rolesNew, follows: since.n }, partial?.today);
   const radarLatest = today.data?.latest ?? null;
@@ -2296,7 +2325,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const skip = (e: React.MouseEvent) => {
     // Move focus without a hash in the address bar (it would be a history entry of its own).
     e.preventDefault();
-    document.getElementById("tp-results")?.focus();
+    const to = document.getElementById("tp-results") ?? document.querySelector<HTMLElement>(".tp-col main h1, .tp-col main");
+    if (to && !to.hasAttribute("tabindex")) to.setAttribute("tabindex", "-1");
+    to?.focus();
   };
 
   /*
@@ -2344,12 +2375,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     <UiCtx.Provider value={ui}>
       <CellUiCtx.Provider value={cellUi}>
       <FitWhyCtx.Provider value={fitWhy}>
-      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}`}>
-        {page === "table" && (
-          <a href="#tp-results" className="tp-skip" onClick={skip}>
-            Skip to the {phone ? "list" : "table"}
-          </a>
-        )}
+      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${page === "today" ? " tp-on-home" : ""}`}>
+        {/* The first Tab stop: past the sidebar, to the list or the page. */}
+        <a href={page === "table" ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
+          {page === "table" ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
+        </a>
         {navSide && (
           <Sidebar
             items={nav}

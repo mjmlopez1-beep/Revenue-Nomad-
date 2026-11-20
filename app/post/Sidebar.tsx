@@ -200,9 +200,9 @@ function NavLists({ items, onNav, compact, onManageViews }: { items: NavItem[]; 
         return (
           <div key={g.key} className={`tp-nav-g tp-nav-g-${g.key}`}>
             {g.label && (
-              <h2 className="tp-nav-h" id={`tp-nav-h-${g.key}`}>
+              <div className="tp-nav-h" id={`tp-nav-h-${g.key}`}>
                 {g.label}
-              </h2>
+              </div>
             )}
             <ul className="tp-nav-ul" aria-labelledby={g.label ? `tp-nav-h-${g.key}` : undefined}>
               {g.key === "yours" && views.length > 0 && !compact && (
@@ -399,8 +399,8 @@ export function MoreSheet({
       <div ref={ref} className="tp-nav tp-nav-sheet">
         <NavLists items={rest.filter((it) => it.group !== "foot")} onNav={go} onManageViews={() => (onClose(), onManageViews())} />
         <div className="tp-nav-g">
-          <h2 className="tp-nav-h">Settings</h2>
-          <ul className="tp-nav-ul">
+          <div className="tp-nav-h" id="tp-nav-h-settings">Settings</div>
+          <ul className="tp-nav-ul" aria-labelledby="tp-nav-h-settings">
             {rest
               .filter((it) => it.group === "foot")
               .map((it) => (

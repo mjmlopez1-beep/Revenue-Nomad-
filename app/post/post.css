@@ -1206,6 +1206,8 @@ body:has(.tp-drawer) .pro-foot {
 /* ---------- content header ---------- */
 .tp-banners {
   display: grid;
+  /* A one-line nudge gives way at its end ("…"), never widens the page past a phone's edge. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 .tp-banners:empty {

@@ -15,7 +15,7 @@
  * the whole table (the saved views' counts, the seats card, the search's matches) waits a moment
  * in its own place, at its own size, so nothing moves when it lands.
  */
-import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Me, SavedViewRec } from "@/lib/tableTypes";
 import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
 import { CompanyLogo, IconChevron, IconSearch, IconX, LockedName, timeAgo } from "../ui/shared";
@@ -110,7 +110,33 @@ function GoLink({ to, className, children, label }: { to: Go; className?: string
   );
 }
 
+/**
+ * Home's first paint is its top: the greeting, the search, the four cards and the best lead. The
+ * rest (the next leads, since your last visit, the saved views) comes on the next frame, the first
+ * time Home is drawn on a visit, so a phone paints sooner. Later visits to Home draw it all at once.
+ */
+let drawnOnce = false;
+function useAfterFirstPaint() {
+  const [on, setOn] = useState(drawnOnce);
+  useEffect(() => {
+    if (on) return;
+    let t = 0;
+    const raf = requestAnimationFrame(() => {
+      t = window.setTimeout(() => {
+        drawnOnce = true;
+        setOn(true);
+      }, 0);
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [on]);
+  return on;
+}
+
 export function HomePage(p: HomeProps) {
+  const rest = useAfterFirstPaint();
   const { data, byId, me } = p;
   // The leads: Crystal Ball's companies in the member's table, in its order (the top one is the card).
   const leads = useMemo(() => {
@@ -234,7 +260,7 @@ export function HomePage(p: HomeProps) {
               <p className="td-none">Nothing new in your profile today. Browse every company, or widen who you want to work with in Your profile.</p>
             </section>
           )}
-          {next.length > 0 && (
+          {rest && next.length > 0 && (
             <ul className="hm-leadrows" aria-label={`More from ${FEATURE_NAME}`}>
               {next.map(({ i, row }) => (
                 <li key={i.c.id} className="hm-lrow">
@@ -254,6 +280,7 @@ export function HomePage(p: HomeProps) {
           )}
         </section>
 
+        {rest && (
         <section className="hm-sec hm-since" aria-labelledby="hm-since-h">
           <h2 className="hm-h2" id="hm-since-h">
             {p.sinceAt ? "Since your last visit" : "What's new"}
@@ -276,10 +303,11 @@ export function HomePage(p: HomeProps) {
             <p className="hm-quiet">{p.sinceAt ? `Nothing new ${sinceLow}. No new companies, roles or messages.` : "This is your first visit. New companies, roles and messages show here next time."}</p>
           )}
         </section>
+        )}
       </div>
 
-      <SavedViewsTable views={p.views} onOpen={p.onOpenView} onEmail={p.onEmailView} table={p.table} waiting={p.waiting} />
-      {p.events}
+      {rest && <SavedViewsTable views={p.views} onOpen={p.onOpenView} onEmail={p.onEmailView} table={p.table} waiting={p.waiting} />}
+      {rest && p.events}
     </div>
   );
 }
@@ -488,9 +516,17 @@ function SavedViewsTable({ views, onOpen, onEmail, table, waiting }: { views: Ho
                   Matches
                 </th>
                 <th scope="col" className="hm-num">
-                  New since last visit
+                  <span className="hm-long">New since last visit</span>
+                  <span className="hm-short">
+                    New
+                  </span>
                 </th>
-                <th scope="col">Weekly email</th>
+                <th scope="col">
+                  <span className="hm-long">Weekly email</span>
+                  <span className="hm-short">
+                    Email
+                  </span>
+                </th>
                 <th scope="col" className="hm-col-opened">
                   Last opened
                 </th>
