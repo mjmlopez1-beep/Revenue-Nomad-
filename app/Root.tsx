@@ -152,6 +152,12 @@ const Landing = dynamic(() => import("./landing/Landing"), { ssr: false, loading
  */
 const Onboarding = dynamic<OnboardingProps & { viewReady?: boolean }>(() => import("./onboard/Onboarding"), { ssr: false, loading: pageLoading });
 /**
+ * Onboarding's own component, once its code is here (JoinForm starts the download while the name
+ * is typed): drawn as it is, so it shows the moment the join answer lands. Through the dynamic
+ * wrapper it would wait behind its loading frame, which React holds for about 300 ms.
+ */
+let onboardingNow: React.ComponentType<OnboardingProps & { viewReady?: boolean }> | null = null;
+/**
  * `start` is where the app opens when the member has just finished onboarding: "seats" when a
  * seat on file carries their name, so the first thing they see is what they can fill in.
  * The app reads it once, when it mounts.
@@ -269,6 +275,8 @@ function App() {
   const [viewReady, setViewReady] = useState(true);
   const waitingView = useRef(false);
   const syncRef = useRef<() => void>(() => {});
+  /** A view with companies reached this page (deriveInSlices ran for it). */
+  const hadTable = useRef(false);
 
   const refresh = useCallback(async () => {
     const g = ++gen.current;
@@ -301,6 +309,14 @@ function App() {
     writeHint(!!r.view.me);
     setFailed(null);
     const v = r.view;
+    // The first table on this page: what the app works out for each company is worked out a slice at a
+    // time first (deriveInSlices), so a phone never freezes on a few thousand companies at once. A later
+    // download keeps the records that did not change (reuse), and their work with them.
+    if (!hadTable.current && v.companies.length) {
+      // Loaded with the app (TradingPost and Onboarding use it), so a visitor on the landing page never downloads it.
+      await import("./post/model").then((m) => m.deriveInSlices(v.companies)).catch(() => {});
+      hadTable.current = true;
+    }
     // A refresh an action overtook is dropped (it may predate the action), so the table is still owed:
     // at once while onboarding waits for its first table, else within the minute.
     if (g !== gen.current) return waitingView.current ? syncRef.current() : markStaleRef.current();
@@ -341,6 +357,7 @@ function App() {
   const joined = useCallback(
     async (me?: Me) => {
       if (!me || me.onboarded) return refresh();
+      if (!onboardingNow) onboardingNow = (await import("./onboard/Onboarding").catch(() => null))?.default ?? null;
       waitingView.current = true;
       setViewReady(false);
       setView((v) => ({ demo: v?.demo ?? false, me, companies: [], stats: v?.stats ?? { companies: 0, engagements: 0, people: 0, fractionalFriendly: 0, openRoles: 0, members: 0, facts: 0, starter: me.credits }, ledger: [], reported: [], email: v?.email ?? false, contact: v?.contact }));
@@ -517,7 +534,10 @@ function App() {
       <Skeleton />
     );
   if (!view.me) return <Landing view={view} onSignedIn={joined} signInError={signInError} signInNote={linkNote} />;
-  if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} onSkip={onSkip} viewReady={viewReady} />;
+  if (onboarding) {
+    const Ob = onboardingNow ?? Onboarding;
+    return <Ob view={view} act={act} onDone={onboarded} onSkip={onSkip} viewReady={viewReady} />;
+  }
   // Done with onboarding before its first table landed: the app's frame until it does.
   if (!viewReady) return <Skeleton member />;
   // Straight from onboarding, a member with seats under their name starts on those seats.

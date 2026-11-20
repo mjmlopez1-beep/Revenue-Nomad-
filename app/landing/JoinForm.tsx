@@ -60,8 +60,11 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
   const id = useId();
 
   useEffect(() => {
-    if (step === "name") nameRef.current?.focus();
-  }, [step]);
+    if (step !== "name") return;
+    nameRef.current?.focus();
+    // Onboarding opens the moment the join answer lands: its code downloads while the name is typed.
+    if (!emailOn) void import("../onboard/Onboarding").catch(() => {});
+  }, [step, emailOn]);
 
   const submitEmail = (e: React.FormEvent) => {
     e.preventDefault();

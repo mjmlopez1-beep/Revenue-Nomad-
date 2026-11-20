@@ -114,30 +114,20 @@ const isSourceCell = (c: Cell | undefined, source: string) => {
 };
 
 /**
- * Record keys as the server writes them (fullView in lib/table.ts), and the values most records
- * have, which the wire leaves out: no logo domain, no region, nobody on file, not followed, never
- * changed, not the member's; a seat not verified, not theirs, never changed. unpackCompany puts
- * them back in this order.
+ * The values most records have, which the wire leaves out: no logo domain, no region, nobody on
+ * file, not followed, never changed, not the member's; a seat not verified, not theirs, never
+ * changed. unpackCompany and unpackSeat put them back where the server writes them (fullView in
+ * lib/table.ts: a company's id, name, hidden, iconDomain, cells, friendly, country, region,
+ * engagements, people, following, facts, updatedAt, mine, then the rest; a seat's id, source,
+ * verified, cells, people, updatedAt, yours, then the rest).
  */
-const CO_ORDER = ["id", "name", "hidden", "iconDomain", "cells", "friendly", "country", "region", "engagements", "people", "following", "facts", "updatedAt", "mine"];
 const CO_DEFAULT: Wire = { iconDomain: null, region: null, people: [], following: false, updatedAt: null, mine: false };
-const ENG_ORDER = ["id", "source", "verified", "cells", "people", "updatedAt", "yours"];
 const ENG_DEFAULT: Wire = { verified: false, people: [], updatedAt: null, yours: false };
 const isDefault = (v: unknown, d: unknown) => v === d || (Array.isArray(v) && Array.isArray(d) && !v.length && !d.length);
 /** `x` without its keys that hold their default. */
 const lean = (x: Wire, dflt: Wire): Wire => {
   const out: Wire = {};
   for (const k in x) if (!(k in dflt) || !isDefault(x[k], dflt[k])) out[k] = x[k];
-  return out;
-};
-/** `x` with its defaults back, its keys in `order` and then the rest as they came. */
-const full = (x: Wire, order: string[], dflt: Wire): Wire => {
-  const out: Wire = {};
-  for (const k of order) {
-    if (k in x) out[k] = x[k];
-    else if (k in dflt) out[k] = Array.isArray(dflt[k]) ? [] : dflt[k];
-  }
-  for (const k in x) if (!(k in out)) out[k] = x[k];
   return out;
 };
 
@@ -181,20 +171,27 @@ export function packedViewJson(v: View): string {
 
 const unpackPerson = (p: PersonRec): PersonRec => ({ ...p, cells: fill("contact", p.cells) });
 const unpackSeat = (w: EngagementRec): EngagementRec => {
-  const e = full(w as unknown as Wire, ENG_ORDER, ENG_DEFAULT) as unknown as EngagementRec;
-  e.cells = fill("engagement", e.cells, e.source ? { source: sourceCell(e.source) } : undefined);
+  const x = w as unknown as Wire;
+  const yours = x.yours ?? false;
+  // In the order the server writes a seat, written out: this runs for every seat on every load.
+  const cells = fill("engagement", w.cells, w.source ? { source: sourceCell(w.source) } : undefined);
   // The seat holder's own "Who introduced you" (not a table field, so not in KEYS): theirs alone, empty until they add it.
-  if (e.yours && !e.cells.introducedBy) e.cells.introducedBy = { s: "empty" };
-  e.people = e.people.map(unpackPerson);
-  return e;
+  if (yours && !cells.introducedBy) cells.introducedBy = { s: "empty" };
+  const e: Wire = { id: x.id, source: x.source, verified: x.verified ?? false, cells, people: w.people ? w.people.map(unpackPerson) : [], updatedAt: "updatedAt" in x ? x.updatedAt : null, yours };
+  for (const k in x) if (!(k in e)) e[k] = x[k];
+  return e as unknown as EngagementRec;
 };
 /** A packed company whole again, as the server built it (a new object). */
 export function unpackCompany(w: CompanyRec): CompanyRec {
-  const c = full(w as unknown as Wire, CO_ORDER, CO_DEFAULT) as unknown as CompanyRec;
-  c.cells = fill("company", c.cells);
-  c.people = c.people.map(unpackPerson);
-  c.engagements = c.engagements.map(unpackSeat);
-  return c;
+  const x = w as unknown as Wire;
+  // In the order the server writes a company, written out: this runs for every company on every load.
+  const c: Wire = {
+    id: x.id, name: x.name, hidden: x.hidden, iconDomain: "iconDomain" in x ? x.iconDomain : null, cells: fill("company", w.cells), friendly: x.friendly, country: x.country,
+    region: "region" in x ? x.region : null, engagements: w.engagements.map(unpackSeat), people: w.people ? w.people.map(unpackPerson) : [], following: x.following ?? false, facts: x.facts,
+    updatedAt: "updatedAt" in x ? x.updatedAt : null, mine: x.mine ?? false,
+  };
+  for (const k in x) if (!(k in c)) c[k] = x[k];
+  return c as unknown as CompanyRec;
 }
 
 /** A packed view whole again, in place (it was just parsed). A full view comes back as it is. */

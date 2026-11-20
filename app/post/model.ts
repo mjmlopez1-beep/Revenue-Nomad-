@@ -444,12 +444,24 @@ function infoOf(c: CompanyRec): CoInfo {
     !!c.unlocked || engs.some(engUnlocked) || people.some(({ p }) => personGated.some((g) => p.cells[g] && isUnlocked(p.cells[g])));
   // A locked company has no name to search (the server sends a placeholder).
   const nameHay = c.hidden ? "" : [c.name, domain ?? ""].join(" ").toLowerCase();
-  const parts: string[] = [nameHay, ...fns, ...textOf(c.cells)];
-  for (const e of engs) parts.push(...textOf(e.cells));
-  for (const { p } of people) parts.push(...textOf(p.cells));
   // "SaaS · $1M–$5M · 11–50 · TX": the free facts, in place of the name's subline (the HQ is its region here).
   const teaser = c.hidden ? [shown(c.cells.industry), shown(c.cells.revenue), shown(c.cells.employees), shown(c.cells.hq)].filter(Boolean).join(" · ") : "";
-  return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay, leads: c.leads?.fns ?? [] };
+  const info = { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: "", nameHay, leads: c.leads?.fns ?? [] };
+  // The search text is read only once a search is typed: worked out then, once (a few thousand companies' cells joined).
+  let hay: string | undefined;
+  Object.defineProperty(info, "hay", {
+    enumerable: true,
+    get: () => {
+      if (hay === undefined) {
+        const parts: string[] = [nameHay, ...fns, ...textOf(c.cells)];
+        for (const e of engs) parts.push(...textOf(e.cells));
+        for (const { p } of people) parts.push(...textOf(p.cells));
+        hay = parts.join(" ").toLowerCase();
+      }
+      return hay;
+    },
+  });
+  return info;
 }
 
 /**
@@ -468,6 +480,27 @@ export function cardSeat(i: CoInfo, fn: string | null): EngagementRec | null {
 
 /** Derived info per company object. A patched view keeps unchanged companies, so their info (and rows) keep identity too. */
 const infoCache = new WeakMap<CompanyRec, CoInfo>();
+/** Back to the page for a moment: a message to ourselves runs after what is waiting (input, a paint), sooner than a timer. */
+const yieldToPage = () =>
+  new Promise<void>((go) => {
+    if (typeof MessageChannel === "undefined") return void setTimeout(go, 0);
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => go();
+    ch.port2.postMessage(0);
+  });
+/**
+ * deriveAll a slice at a time: fills its cache for `companies` in slices of about `sliceMs`,
+ * giving the page back between them, so a phone that just downloaded a few thousand companies
+ * never freezes on them in one go. deriveAll then finds every one ready.
+ */
+export async function deriveInSlices(companies: CompanyRec[], sliceMs = 12): Promise<void> {
+  let i = 0;
+  while (i < companies.length) {
+    const end = performance.now() + sliceMs;
+    for (; i < companies.length && performance.now() < end; i++) if (!infoCache.has(companies[i])) infoCache.set(companies[i], infoOf(companies[i]));
+    if (i < companies.length) await yieldToPage();
+  }
+}
 export function deriveAll(companies: CompanyRec[]): CoInfo[] {
   return companies.map((c) => {
     let i = infoCache.get(c);
