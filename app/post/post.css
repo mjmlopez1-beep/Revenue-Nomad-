@@ -7086,3 +7086,37 @@ div.tp-pcard-when {
 .tp-dsec .lr-open {
   margin-top: 8px;
 }
+
+/* ---------- [ux ws3] the nudge slot: one line, one thing to do (nudges.ts NudgeSlot) ---------- */
+.nudge {
+  min-height: 44px;
+}
+.nudge-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nudge-go {
+  flex: none;
+}
+/* On a phone the slot takes one line: the text gives way (its full words are its title), the button stays. */
+.tp-phone .nudge {
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 4px 4px 4px 12px;
+}
+.tp-phone .nudge-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  font-size: 14px;
+}
+.tp-phone .nudge-go {
+  min-height: 36px;
+}
+/* [ux ws3] The floating Add steps out on an empty list (the empty state has its own way on) and in the first session (while Get started shows). */
+.tp-main-phone:has(.tp-noresults) .tp-fab,
+.tp-main-phone:has(.tp-check-line) .tp-fab,
+.tp-main-phone:has(.nudge-step) .tp-fab {
+  display: none;
+}

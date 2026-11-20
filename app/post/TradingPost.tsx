@@ -38,6 +38,7 @@ import {
   type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { firstViewPlace } from "../onboard/place";
+import { alertView } from "../onboard/suggest"; // [ux ws3]
 import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, stepOneKind, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
 import { InvitePanel } from "./Invite";
@@ -1765,6 +1766,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               others: fnSplit.others.length,
               onOutside: () => setFitOnly(false),
               onOthers: () => setAllFns(true),
+              onAlert: () => { const a = alertView(hireFn, me.icp ?? null); const had = views.find((v) => v.place === a.place); const cap = me.plan?.limits.savedViews; if (had) return had.email ? toast(`You get new ${hireFn} roles by email already.`) : emailView(had, true); if (cap != null && views.length >= cap) return openPlans("views"); void act({ type: "savedView", op: "save", ...a, email: true }); }, // [ux ws3] Get alerts for new roles
             }
           : null
       }
@@ -2767,7 +2769,7 @@ function Empty({
    * roles the profile keeps out ("Only my profile" is on). `others`: rows in other functions,
    * offered as a link, never listed by default.
    */
-  hiring?: { fn: string; outside: number; outsideText: string; others: number; onOutside: () => void; onOthers: () => void } | null;
+  hiring?: { fn: string; outside: number; outsideText: string; others: number; onOutside: () => void; onOthers: () => void; onAlert?: () => void } | null;
   q: string;
   tab: Tab;
   noun: string;
@@ -2804,7 +2806,8 @@ function Empty({
       { label: `Search all ${noun}`, go: onSearchAll, kind: "pine" },
       { label: "Clear search", go: onClearSearch },
     ];
-  } else if (hired && !q) {
+  } else if (hired && !q && !(hiring && tab === "hiring")) {
+    // On Hiring now, what is open comes first: Recently hired is about past hires, not open roles.
     h = `No ${noun} here hired ${hired.words}`;
     p = "Try a longer window or any function. Your profile and the other filters still apply.";
     actions = [
@@ -2818,14 +2821,16 @@ function Empty({
       h = `None of the ${hiring.outsideText} fit your profile right now`;
       p = "They're all at companies outside your Ideal Fractional Profile.";
       actions = [{ label: `Show all ${hiring.outside}`, go: hiring.onOutside, kind: "pine" }, ...others];
-    } else if (filtered) {
+    } else if (filtered && !hired) {
       h = `No open ${hiring.fn} roles match these filters`;
       p = "Take a filter off, or see what's open in other functions.";
       actions = [{ label: "Clear filters", go: onClearFilters }, ...others];
     } else {
+      // Recently hired's own filters (the hire's function and window) aren't what keeps open roles out here.
       h = `No open ${hiring.fn} roles right now`;
-      p = `We check job boards every week. New ${hiring.fn} roles show up here as we find them.`;
-      actions = others.length ? [{ ...others[0], kind: "pine" }] : [{ label: "See all companies", go: onBrowse }];
+      p = "We check job boards every week. We'll email you when one opens in your profile.";
+      const alert = hiring.onAlert ? [{ label: `Get alerts for new ${hiring.fn} roles`, go: hiring.onAlert }] : [];
+      actions = others.length ? [{ ...others[0], kind: "pine" }, ...alert] : alert.length ? [{ ...alert[0], kind: "pine" }, { label: "See all companies", go: onBrowse }] : [{ label: "See all companies", go: onBrowse }];
     }
   } else if (q) {
     // Search reads what the member can see. A company's exact name or website finds a locked one.
