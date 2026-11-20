@@ -655,9 +655,18 @@
   font-weight: 700;
 }
 .bm-table tr.bm-inline-share td {
+  height: auto;
   padding: 4px 16px 16px;
   text-align: left;
+  white-space: normal;
   background: var(--row-on);
+}
+.bm-table td.bm-ownempty {
+  white-space: normal;
+}
+.bm-inline-share .tp-bm-fields,
+.bm-inline-share .tp-form-row {
+  min-width: 0;
 }
 .bm-inline-share .tp-bm-share {
   max-width: 720px;

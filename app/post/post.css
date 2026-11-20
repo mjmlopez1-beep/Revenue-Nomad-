@@ -7258,3 +7258,34 @@ div.tp-pcard-when {
   margin-top: 8px;
   min-height: 40px;
 }
+/* [ux ws3] Tighter rhythm over the list, and cards about 120px (the top one keeps its unlock line). */
+.tp-phone .tp-pchips {
+  height: 52px;
+  margin-top: 4px;
+}
+.tp-phone .tp-presults {
+  padding-top: 8px;
+}
+.tp-phone .tp-pcard {
+  padding: 10px 14px 8px;
+}
+.tp-phone .tp-pcard-line,
+.tp-phone .tp-pcard-fns,
+.tp-phone .tp-pcard .hired-line,
+.tp-phone .tp-pcard-when,
+.tp-phone .tp-pcard-role {
+  margin-top: 4px;
+  line-height: 18px;
+}
+.tp-phone .tp-pcard-fns .chip {
+  min-height: 24px;
+  height: 24px;
+}
+.tp-phone .tp-pcard-hidden {
+  margin-top: 6px;
+  min-height: 32px;
+}
+/* On the list, the type switch is the bar's title: the mark gives it room (the menu and Back still lead home). */
+.tp-top-phone:has(.tp-ptype) .tp-brand-phone {
+  display: none;
+}

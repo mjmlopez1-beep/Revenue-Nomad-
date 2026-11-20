@@ -337,3 +337,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* [ux ws3] Phones: less room around the folded line. */
+.tp-main-phone > .hired.hired-fold {
+  margin: 8px 16px 0;
+}
