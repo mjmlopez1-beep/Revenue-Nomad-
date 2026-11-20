@@ -54,7 +54,15 @@ export interface RadarProfile {
   before: string[];
   /** `before` is the member's own answer (else the suggestion). */
   beforeFromMember: boolean;
+  /**
+   * [ux ws3] No Ideal Fractional Profile reads as any company (the page, radarView), so skipping the
+   * profile never switches Crystal Ball off. Left out (the morning run): no profile, nothing sent.
+   */
+  any?: boolean;
 }
+
+/** [ux ws3] The profile reads as any company: asked for (`any`) and nothing in it. */
+export const anyCompany = (p: Pick<RadarProfile, "any" | "icp">) => !!p.any && icpIsEmpty(p.icp);
 
 /** An open role in the member's function: the most direct signal there is. */
 export const ROLE_P = 1;
@@ -122,14 +130,17 @@ export const UNKNOWN_CAP = HIGH_AT * 0.99;
 
 /** Why a signal is for this member, or null when it isn't (the hard filters). */
 export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
-  if (!p.fn || p.fn === "Other" || !inIcp(p.icp, sig.co)) return null;
+  const any = anyCompany(p);
+  if (!p.fn || p.fn === "Other" || (!any && !inIcp(p.icp, sig.co))) return null;
+  // Any company (no profile yet): the reason says what happened, never "in your profile".
+  const where = any ? "" : ", at a company in your profile";
   switch (sig.kind) {
     case "role":
-      return sig.fn === p.fn ? `An open ${p.fn} role, at a company in your profile` : null;
+      return sig.fn === p.fn ? `An open ${p.fn} role${where}` : null;
     case "seat":
-      return sig.fn === p.fn ? `A ${p.fn} seat like yours, at a company in your profile` : null;
+      return sig.fn === p.fn ? `A ${p.fn} seat like yours${where}` : null;
     case "departure":
-      return sig.fn === p.fn ? `Their ${p.fn} seat may need cover, at a company in your profile` : null;
+      return sig.fn === p.fn ? `Their ${p.fn} seat may need cover${where}` : null;
     case "adjacent": {
       if (!sig.fn || sig.fn === p.fn || sig.hiredFns.includes(p.fn)) return null;
       const comes = p.before.includes(sig.fn) ? `${sig.fn} usually comes before ${p.fn}` : `A fractional ${sig.fn} hire`;
@@ -138,7 +149,7 @@ export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
     case "sales-build":
       return sig.hiredFns.includes(p.fn) ? null : `A sales team being built. ${leaderLine(sig, p.fn)}`;
     case "funding":
-      return "Money in usually means hiring, at a company in your profile";
+      return `Money in usually means hiring${where}`;
   }
 }
 
@@ -172,7 +183,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
   const why = matchWhy(sig, p);
   if (!why || !p.fn) return null;
   const nowMs = ctx.nowMs ?? Date.now();
-  const fit = fitOf(p.icp!, sig.co);
+  const fit = anyCompany(p) ? FIT_BASE : fitOf(p.icp!, sig.co);
   const stage = isStage(sig.stage) ? sig.stage : null;
   const owner = ownerOf(sig.owner);
   const know = knowOf(sig, p.fn);

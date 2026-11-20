@@ -2185,6 +2185,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           onMessages={() => (setEditor(null), setDrawer(null), setPage("messages"))}
           onMessagesPage={page === "messages"}
           unlockTip={unlockLimitLine(me, view.ledger)}
+          onRadar={() => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar"))} radarHere={page === "radar"} // [ux ws3] Crystal Ball in the bar
         />
         {me.asMember && (
           <div className="tp-asmember" role="status">

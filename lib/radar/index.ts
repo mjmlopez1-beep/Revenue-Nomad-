@@ -217,8 +217,9 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const c = ctxOf(seed, s, nowMs);
   const pro = isPro(s, m.id, nowMs);
   const fn = functionFor(s, m);
-  const p = profileOf(seed, s, m.id, fn);
-  const ready = !!p.fn && !icpIsEmpty(p.icp);
+  // [ux ws3] No Ideal Fractional Profile yet: the page reads it as any company (the morning run still needs one).
+  const p: RadarProfile = { ...profileOf(seed, s, m.id, fn), any: true };
+  const ready = !!p.fn;
   const list = Array.from({ length: RADAR_VIEW_DAYS }, (_, i) => dayOfMs(nowMs - i * DAY));
   const asked = typeof dayAsked === "string" && SIG_DAY_RE.test(dayAsked) && Number.isFinite(dayStart(dayAsked)) ? dayAsked : null;
   // A day asked for that is kept (an older email's link) is listed too.
@@ -244,6 +245,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   return {
     on: !s.profiles[m.id]?.radarOff,
     ready,
+    ...(ready && icpIsEmpty(p.icp) ? { anyCompany: true } : {}),
     function: p.fn,
     before: p.before,
     beforeFromMember: p.beforeFromMember,

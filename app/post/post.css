@@ -7120,3 +7120,44 @@ div.tp-pcard-when {
 .tp-main-phone:has(.nudge-step) .tp-fab {
   display: none;
 }
+
+/* [ux ws3] Crystal Ball in the bar (TopBar RadarBtn), with its new companies. Wide screens only: the menu has it everywhere. */
+.tp-radarbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-btn);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t);
+}
+.tp-radarbtn:hover,
+.tp-radarbtn.here {
+  background: rgba(255, 255, 255, 0.14);
+}
+.tp-radarbtn-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--volt);
+  color: var(--pine);
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 1179px) {
+  .tp-radarbtn {
+    display: none;
+  }
+}

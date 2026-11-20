@@ -115,8 +115,10 @@ export interface RadarRow {
 export interface RadarView {
   /** The member's radar is on (Your profile). */
   on: boolean;
-  /** They named a function and an Ideal Fractional Profile, which the radar needs. */
+  /** They named a function, which the page needs. */
   ready: boolean;
+  /** [ux ws3] Ready with no Ideal Fractional Profile: the page lists any company, and nothing goes by email or Slack until they set one. */
+  anyCompany?: boolean;
   function: string | null;
   /** The functions it watches for adjacent hires, and whether they came from the member's own answer. */
   before: string[];

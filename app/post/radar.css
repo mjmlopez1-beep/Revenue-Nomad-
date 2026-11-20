@@ -273,3 +273,51 @@
   gap: 6px;
   justify-items: start;
 }
+
+/* ---- [ux ws3] one line, then "How it ranks"; any company for now; the two questions inline ---- */
+.rd-lead {
+  margin-bottom: 8px;
+}
+.rd-how {
+  margin: 0 0 16px;
+  max-width: 70ch;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--muted);
+}
+.rd-how summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+}
+.rd-how p {
+  margin: 0 0 8px;
+}
+.rd-how .rd-legend {
+  margin: 0;
+}
+.rd-any {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--body-ink);
+}
+.rd-start {
+  gap: 16px;
+}
+.rd-start-q {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.rd-start .tp-fchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rd-start .tp-fchip {
+  min-height: 40px;
+}

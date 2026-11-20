@@ -18,6 +18,7 @@ import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
 import { PlanPill } from "./Billing";
+import { FEATURE_NAME, type RadarView } from "@/lib/radar/types";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
 export type Contact = View["contact"] | null;
@@ -537,6 +538,77 @@ function MessagesBtn({ unread, onClick, here }: { unread: number; onClick: () =>
   );
 }
 
+/* ---------- [ux ws3] Crystal Ball in the bar, with its new companies ---------- */
+
+const RADAR_SEEN = "tp_radar_seen";
+/** The day Crystal Ball was last opened on, kept in this browser. */
+const seenDay = () => {
+  try {
+    return localStorage.getItem(RADAR_SEEN);
+  } catch {
+    return null;
+  }
+};
+/**
+ * How many companies are new in Crystal Ball: its latest day's (today's, or yesterday's before the
+ * morning run), until the member opens it. Fetched once, after the page has settled.
+ */
+function useRadarNew(on: boolean, here: boolean) {
+  const [day, setDay] = useState<{ day: string; n: number } | null>(null);
+  const [seen, setSeen] = useState<string | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    setSeen(seenDay());
+    let gone = false;
+    const run = async () => {
+      try {
+        const r = await fetch("/api/table?radar=1", { cache: "no-store" });
+        const v = (await r.json().catch(() => null)) as RadarView | null;
+        if (gone || !r.ok || !v?.ready) return;
+        const latest = v.days.find((d) => d.companies > 0);
+        const fresh = latest && Date.parse(`${v.today}T00:00:00Z`) - Date.parse(`${latest.day}T00:00:00Z`) <= 86_400_000;
+        if (latest && fresh) setDay({ day: latest.day, n: latest.companies });
+      } catch {}
+    };
+    const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
+    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(() => void run(), { timeout: 4000 }) : void run()), 2500);
+    return () => {
+      gone = true;
+      clearTimeout(t);
+    };
+  }, [on]);
+  // Opening Crystal Ball sees the day's companies.
+  useEffect(() => {
+    if (!here || !day) return;
+    try {
+      localStorage.setItem(RADAR_SEEN, day.day);
+    } catch {}
+    setSeen(day.day);
+  }, [here, day]);
+  return day && seen !== day.day ? day.n : 0;
+}
+
+function RadarBtn({ onClick, here }: { onClick: () => void; here?: boolean }) {
+  const n = useRadarNew(true, !!here);
+  return (
+    <button
+      type="button"
+      className={`tp-radarbtn${here ? " here" : ""}`}
+      aria-current={here ? "page" : undefined}
+      aria-label={n ? `${FEATURE_NAME}, ${n} new ${n === 1 ? "company" : "companies"}` : FEATURE_NAME}
+      title={n ? `${n} new in ${FEATURE_NAME}` : FEATURE_NAME}
+      onClick={onClick}
+    >
+      <span>{FEATURE_NAME}</span>
+      {n > 0 && (
+        <span className="tp-radarbtn-n num" aria-hidden>
+          {n}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function TopBar({
   me,
   query,
@@ -560,6 +632,8 @@ export function TopBar({
   onMessages,
   onMessagesPage,
   unlockTip,
+  onRadar,
+  radarHere,
 }: {
   me: Me;
   query: string;
@@ -593,6 +667,9 @@ export function TopBar({
   onMessagesPage?: boolean;
   /** Why the day's unlock limit binds (ledger.ts unlockLimitLine), for the credits pill's tooltip. */
   unlockTip?: string | null;
+  /** [ux ws3] Open Crystal Ball. With it, wider screens have Crystal Ball in the bar, with its new companies. */
+  onRadar?: () => void;
+  radarHere?: boolean;
 }) {
   const msgBtn = !!onMessages;
   const [searchOpen, setSearchOpen] = useState(false);
@@ -683,6 +760,7 @@ export function TopBar({
         </span>
       </button>
       <div className="tp-top-mid">{search}</div>
+      {onRadar && <RadarBtn onClick={onRadar} here={radarHere} />}
       <div className="tp-top-right">
         {/* The meter's slot is first, so with nothing earned yet its room is the gap after the search, not a hole between the balance and Add. */}
         <EarnMeter me={me} onClick={onCredits} />
