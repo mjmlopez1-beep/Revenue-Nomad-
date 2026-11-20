@@ -39,6 +39,7 @@ import { forgetView, memberView, type MemberView } from "./view";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS } from "../tableFields";
+import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
 
 export interface Ctx {
   member: Member;
@@ -752,6 +753,8 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
         }
       : {}),
     weekly_email: emailNote(mv),
+    // [google network] one line, counts only: "Google connected: 12 companies you know people at". Never the people.
+    ...(await accountLine(ctx.member.id).catch(() => ({}))),
     // The app's public address (RN_PUBLIC_URL, once a custom domain is set), else the address the connector was reached on.
     invite_link: `${publicBase() ?? ctx.origin}/?ref=${inviteCode(ctx.member.id)}`,
   };
@@ -1121,4 +1124,26 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
     open_now: all.roles.slice(0, 5).map(({ i, e }) => roleOut(i, e)),
     delivery: emailNote(mv),
   };
+}
+
+/* ---------- [google network] the member's own network, from their own Claude (lib/google) ---------- */
+
+/** save_my_network: conclusions from the member's own inbox, read by their own Claude. Private, no credits. */
+export async function saveMyNetwork(ctx: Ctx, a: { entries: unknown }): Promise<ToolOut> {
+  try {
+    return await saveFromClaude(ctx.member, a.entries);
+  } catch (e) {
+    if (e instanceof NetworkProblem) throw new ToolProblem(e.message);
+    throw e;
+  }
+}
+
+/** my_network: the member's own network on Merlin, companies with warmth. Never anyone else's, never the people. */
+export async function myNetwork(ctx: Ctx): Promise<ToolOut> {
+  try {
+    return await myNetworkForClaude(ctx.member);
+  } catch (e) {
+    if (e instanceof NetworkProblem) throw new ToolProblem(e.message);
+    throw e;
+  }
 }

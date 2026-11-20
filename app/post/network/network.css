@@ -1,0 +1,555 @@
+/* Your network (nw-): the page, the record's Your way in, Crystal Ball's chip, the Google card, onboarding's prompt. */
+
+.nw-page {
+  max-width: 760px;
+}
+.nw-h1 {
+  margin: 6px 0 16px;
+  text-wrap: balance;
+}
+.nw-h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+}
+.nw-status {
+  display: block;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--volt-ink);
+}
+.nw-muted {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.nw-small {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.nw-body {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.nw-lead {
+  margin: 0 0 16px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--body-ink);
+  max-width: 620px;
+}
+.nw-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+.nw-wrap {
+  flex-wrap: wrap;
+}
+.nw-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.nw-link:hover {
+  color: var(--pine-hover);
+}
+
+/* ----- connect ----- */
+.nw-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 12px;
+}
+.nw-hero .nw-h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+}
+.nw-hero .nw-lead {
+  margin: 0;
+}
+.nw-new {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+.nw-reads {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  padding: 16px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  margin: 4px 0;
+}
+.nw-reads p {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 15px;
+  line-height: 21px;
+}
+.nw-reads-h {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.nw-reads-sep {
+  height: 1px;
+  background: var(--line);
+}
+.nw-tick {
+  flex: none;
+  margin-top: 1px;
+  color: var(--volt-ink);
+}
+.nw-cross {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ember-ink);
+}
+.btn.nw-connect {
+  min-height: 52px;
+  padding: 0 22px 0 12px;
+  font-size: 17px;
+  gap: 10px;
+}
+.nw-g {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.nw-g-lg {
+  width: 40px;
+  height: 40px;
+}
+.nw-claude {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #f4ede4;
+  color: #b0532c;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+/* ----- stats ----- */
+.nw-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.nw-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.nw-stat-n {
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 800;
+}
+.nw-stat-l {
+  font-size: 14px;
+  line-height: 19px;
+  color: var(--body-ink);
+}
+.nw-stat-pine {
+  background: var(--pine);
+  border-color: var(--pine);
+}
+.nw-stat-pine .nw-stat-n {
+  color: var(--volt);
+}
+.nw-stat-pine .nw-stat-l {
+  color: #fff;
+}
+.nw-reconnect {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: #fff1ea;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+
+/* ----- the list ----- */
+.nw-listhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 28px 0 10px;
+}
+.nw-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+}
+.nw-list li + li {
+  border-top: 1px solid var(--line);
+}
+.nw-co {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nw-co:hover {
+  background: var(--row-hover);
+}
+.nw-co:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.nw-ini {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-weight: 800;
+}
+.nw-co-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nw-co-name {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 22px;
+}
+.nw-co-who {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.nw-co-src {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.nw-warm,
+.nw-know {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.nw-l-hot {
+  background: var(--pine);
+  color: var(--volt);
+}
+.nw-l-warm {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+}
+.nw-l-fading {
+  background: #f3f5f4;
+  color: var(--muted);
+}
+.nw-l-cold {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line-strong);
+}
+.nw-more {
+  margin-top: 8px;
+}
+.btn.nw-wide {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 14px;
+  font-size: 16px;
+}
+.tp-card.nw-card {
+  margin-top: 20px;
+}
+.nw-seats {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.nw-seats li {
+  display: flex;
+  flex-direction: column;
+}
+.nw-seat-t {
+  font-weight: 700;
+}
+.nw-src {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+.nw-src-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+}
+.nw-keeps {
+  margin: 10px 0 0;
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+.nw-keeps div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+.nw-keeps dt {
+  color: var(--muted);
+}
+.nw-keeps dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.btn.nw-danger {
+  color: var(--ember-ink);
+}
+.btn.nw-danger-solid {
+  background: var(--ember-ink);
+  border-color: var(--ember-ink);
+  color: #fff;
+}
+.nw-confirm {
+  flex-basis: 100%;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: #fff1ea;
+}
+.nw-confirm p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.nw-prompt {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--volt);
+  background: var(--bg);
+  border-radius: 0 var(--r-btn) var(--r-btn) 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+/* Crystal Ball's action cell: the chip above Open, so the column stays one button wide. */
+.nw-act {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+/* On a phone's card the button stays full width, with the chip above it. */
+.rd-pcard-act .nw-act {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+}
+.rd-pcard-act .nw-act .btn {
+  align-self: stretch;
+}
+
+/* A company the member knows shows its full HQ ("Austin, TX, United States"): let it wrap so the action column stays in the frame. */
+.rd-table tr > td:nth-child(4),
+.rd-table tr > td:nth-child(4) * {
+  white-space: normal;
+}
+.rd-table th.w-hq {
+  width: 100px;
+}
+.rd-table .rd-w-what {
+  min-width: 236px;
+}
+
+/* ----- the record ----- */
+.nw-way-from {
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.nw-people {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.nw-people li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.nw-pn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--pine);
+  color: var(--volt);
+  font-size: 12px;
+  font-weight: 800;
+}
+.nw-pt {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.nw-pname {
+  font-weight: 700;
+  font-size: 15px;
+}
+.nw-dm {
+  font-weight: 600;
+  color: var(--volt-ink);
+}
+.nw-pw {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.nw-note {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  background: var(--volt-soft);
+}
+.nw-note-h {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+.nw-note p {
+  margin: 6px 0 0;
+  font-size: 15px;
+  line-height: 22px;
+  white-space: pre-line;
+}
+
+/* ----- onboarding ----- */
+.nw-onboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.nw-onboard-t {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nw-onboard .btn.nw-connect {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+@media (max-width: 720px) {
+  .nw-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nw-hero .nw-h1 {
+    font-size: 28px;
+    line-height: 32px;
+  }
+  .btn.nw-connect {
+    width: 100%;
+  }
+  .nw-src {
+    flex-wrap: wrap;
+  }
+  .nw-src-t {
+    flex: 1 1 calc(100% - 42px);
+  }
+  .nw-src .btn {
+    margin-left: 42px;
+  }
+}

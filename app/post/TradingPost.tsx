@@ -71,6 +71,8 @@ import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
 import { BillingPage, PlansHost, ProTag, TrialBanner, openPlans } from "./Billing";
 import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
+import { NetworkPage } from "./network/Network"; // [google network]
+import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./post.css";
 
 export interface TradingPostProps {
@@ -154,11 +156,12 @@ function previousVisit(): string | null {
 /** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
 type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
-type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar";
+// [google network] "network": Your network (app/post/network), only with RN_GOOGLE=1.
+type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network";
 
 /* ---------- the place in the address bar ---------- */
 
-const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners", "billing", "radar"];
+const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners", "billing", "radar", "network"];
 const PAGE_TITLE: Record<Page, string> = {
   table: "",
   seats: "Your seats",
@@ -170,6 +173,7 @@ const PAGE_TITLE: Record<Page, string> = {
   partners: "Referral partners",
   billing: "Plan and billing",
   radar: YOUR_FEATURE,
+  network: "Your network",
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -471,6 +475,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const seatN = seats.length;
   const seatMissing = useMemo(() => seatsMissing(seats), [seats]);
   const seatStats = useMemo(() => ({ n: seatN, missing: seatMissing }), [seatN, seatMissing]);
+  // [google network] null with RN_GOOGLE off: no menu entry, no page.
+  const network = useNetwork().view;
   /** What Get started step 1 can point at in the member's whole table, and whether the table already shows one they paid for (getStarted.ts). */
   const stepKind = useMemo(() => stepOneKind(infos), [infos]);
   const stepSeen = useMemo(() => holderSeen(infos) || (stepKind === "person" && personSeen(infos)), [infos, stepKind]);
@@ -2193,7 +2199,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           </main>
         ) : page === "integrations" ? (
           <main className="tp-main tp-main-page">
-            <Integrations onBack={() => setPage("table")} onCredits={() => setPage("credits")} section={claudeLink ? "claude" : undefined} />
+            <Integrations onBack={() => setPage("table")} onCredits={() => setPage("credits")} section={claudeLink ? "claude" : undefined} onNetwork={() => setPage("network")} />
           </main>
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
@@ -2233,6 +2239,20 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
             <Seats seats={seats} infos={infos} focus={seatFocus} onBack={() => setPage("table")} search={seatCtx.search} back={seatBack} />
+          </main>
+        ) : page === "network" ? (
+          // [google network] Your network: the member's own, from Google and their own Claude.
+          <main className="tp-main tp-main-page">
+            <NetworkPage
+              infos={infos}
+              me={me}
+              onBack={() => setPage("table")}
+              openCompany={openCompany}
+              onRadar={() => (setSigDay(null), setPage("radar"))}
+              onSeats={() => openSeats()}
+              onClaude={() => (setPage("integrations"), setTimeout(() => document.getElementById("claude-network")?.scrollIntoView({ block: "start" }), 400))}
+              refresh={refresh}
+            />
           </main>
         ) : phone ? (
           <main className="tp-main tp-main-phone">
@@ -2586,6 +2606,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               ...(phone ? [{ group: "You", label: "Add what you know", onClick: () => openAdd() }] : []),
               { group: "You", label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
               { group: "You", label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} to fill in` : undefined, onClick: () => openSeats() },
+              // [google network] only with RN_GOOGLE=1.
+              ...(network
+                ? [{ group: "You", label: "Your network", hint: network.companies.length ? String(network.companies.length) : undefined, current: page === "network", onClick: () => (setEditor(null), setDrawer(null), setPage("network")) }]
+                : []),
               { group: "You", label: "Your credits", current: page === "credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { group: "You", label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },
               { group: "Settings", label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },

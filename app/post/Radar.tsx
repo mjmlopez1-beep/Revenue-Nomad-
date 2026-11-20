@@ -27,6 +27,7 @@ import { CardList } from "./Cards";
 import { UnlockCompany } from "./Drawer";
 import { plural } from "./hooks";
 import { ProRow, planDay } from "./Billing";
+import { KnowChip } from "./network/Network"; // [google network]
 import "./radar.css";
 
 let openedSent = false;
@@ -125,9 +126,13 @@ export function RadarPage({
       i.c.hidden ? (
         <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
       ) : (
-        <button type="button" className="btn rd-open" onClick={() => open(i.c.id)}>
-          Open<span className="sr-only"> {i.c.name}</span>
-        </button>
+        <span className="nw-act">
+          {/* [google network] "You know someone · Warm" (nothing with RN_GOOGLE off). */}
+          <KnowChip companyId={i.c.id} />
+          <button type="button" className="btn rd-open" onClick={() => open(i.c.id)}>
+            Open<span className="sr-only"> {i.c.name}</span>
+          </button>
+        </span>
       ),
     [open],
   );

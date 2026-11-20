@@ -16,6 +16,7 @@ import { upgradeUrl } from "../plan";
 import { BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
 import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
+import { networkOn } from "../google/types"; // [google network]
 
 export const PER_MINUTE = 60;
 export const PER_DAY = 2000;
@@ -321,6 +322,48 @@ export function makeServer(ctx: T.Ctx): McpServer {
     },
     (a) => run(ctx, () => T.alerts(ctx, a)),
   );
+
+  // [google network] Only with RN_GOOGLE=1 (lib/google). The member's own network, never anyone else's.
+  if (networkOn()) {
+    server.registerTool(
+      "save_my_network",
+      {
+        title: "Save my network",
+        description:
+          "Save who the member already knows at companies, from what you found in their own Gmail (or another inbox you can read for them), so Merlin can show them where they have a way in. Only when the member asks you to. Send conclusions only, never email text: for each company the website domain (best) or its exact name, and for a person their name and title, about how many emails went back and forth, the last (and first) contact date, whether replies go both ways, and the relationship. NEVER send subjects, bodies, snippets, quotes or any other field: an entry with anything else is refused and nothing is saved. Skip newsletters, notifications, automated senders and personal addresses (gmail.com and the like). Up to 200 entries a call, 5 calls a day. It is private to the member: other members and admins never see it, it earns and costs no credits, and the member can delete it on Merlin. A company they know someone at is named for them free. Returns counts (matched, not_on_merlin, skipped) and the top warm matches to tell the member.",
+        inputSchema: {
+          entries: z
+            .array(
+              z.looseObject({
+                company: z.string().describe("The company's website domain (acme.com), or its exact name."),
+                person_name: z.string().optional().describe("Their name, as in the From line."),
+                person_title: z.string().optional().describe("Their job title, from a signature, if one is clear."),
+                emails: z.number().optional().describe("About how many emails were exchanged with them."),
+                last_contact: z.string().optional().describe("YYYY-MM-DD (or YYYY-MM) of the last email."),
+                first_contact: z.string().optional().describe("YYYY-MM-DD (or YYYY-MM) of the first email."),
+                both_ways: z.boolean().optional().describe("true when both sides wrote, not only one."),
+                relationship: z.enum(["client", "former client", "referral partner", "prospect", "peer", "other"]).optional(),
+              }),
+            )
+            .describe("Up to 200 entries, warmest first. Only the fields listed: anything else refuses the call."),
+        },
+        annotations: { title: "Save my network", ...WRITE },
+      },
+      (a) => run(ctx, () => T.saveMyNetwork(ctx, a)),
+    );
+
+    server.registerTool(
+      "my_network",
+      {
+        title: "My network",
+        description:
+          "The member's own network on Merlin: the companies they know someone at (from their Google Calendar and Contacts, Gmail for test members, and what they saved through save_my_network), warmest first, with warmth (Hot, Warm, Fading, Cold), the last contact, how many people and where it came from. Only ever the member's own. It doesn't list the people's names or emails: those stay on Merlin's Your network page.",
+        inputSchema: {},
+        annotations: { title: "My network", ...READ },
+      },
+      () => run(ctx, () => T.myNetwork(ctx)),
+    );
+  }
 
   return server;
 }
