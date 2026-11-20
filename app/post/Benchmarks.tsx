@@ -23,7 +23,7 @@ import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import { IconChevron, IconLock, IconPlus, Num, post, useToast } from "../ui/shared";
 import { earnNote, useUi } from "./ui";
-import { ProTag, UpgradeNote, openPlans, planDay } from "./Billing";
+import { ProTag, UpgradeNote, openPlans } from "./Billing";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
 
@@ -371,12 +371,10 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
         </>
       ) : (
         <>
-        {ui.me.plan?.name === "trial" && (
-          <UpgradeNote from="bench" trial={`The ranges and the rows by client size are Pro, yours in the trial until ${planDay(ui.me.plan.trialEndsAt)}. On Free you see the median for each function.`} />
-        )}
         <div className="tp-bm-tools">
+          {/* [ux ws3] In the trial, a quiet Pro tag where Pro is in use (its title says until when), not a Keep Pro box. */}
           <span className="tp-flabel" id="tp-bm-band">
-            Client revenue
+            Client revenue {ui.me.plan?.name === "trial" && <ProTag plan={ui.me.plan} />}
           </span>
           <div className="tp-fchips" role="group" aria-labelledby="tp-bm-band">
             {["All", ...RN_REVENUE].map((s) => (

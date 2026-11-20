@@ -1273,7 +1273,6 @@ const WAY_IN_MAX = 3;
  */
 function YourWayIn({ i, seats, children }: { i: CoInfo; seats: EngagementRec[]; children?: ReactNode }) {
   const ui = useUi();
-  const env = useEnv();
   const [adding, setAdding] = useState<string | null>(null);
   const hidden = !!i.c.hidden;
   const mine = ui.me.function;
@@ -1324,7 +1323,6 @@ function YourWayIn({ i, seats, children }: { i: CoInfo; seats: EngagementRec[]; 
           </div>
         );
       })}
-      {env.hidden && seats.length > 0 && <p className="tp-dsec-note">Who held each seat opens after the company, 1 credit each.</p>}
     </section>
   );
 }

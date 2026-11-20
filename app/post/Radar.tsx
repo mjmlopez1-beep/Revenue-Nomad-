@@ -166,7 +166,7 @@ export function RadarPage({
       <h1 className="tp-page-h">{YOUR_FEATURE}</h1>
       {/* [ux ws3] One line, then the rest behind "How it ranks". */}
       <p className="rd-lead">
-        Companies {view?.anyCompany ? "" : "in your profile "}most likely to hire a fractional {fn ?? "leader like you"} next.
+        Companies {view?.anyCompany || !view?.ready ? "" : "in your profile "}most likely to hire a fractional {fn ?? "leader like you"} next.
       </p>
       {view?.ready && (
         <details className="rd-how">
@@ -324,7 +324,7 @@ function StartRadar({ reload }: { reload: () => void }) {
       </div>
       <div className="rd-start-q">
         <span className="tp-flabel" id="rd-start-ind">
-          Who you want to work with <span className="muted">optional</span>
+          Who you want to work with <span className="muted">· optional</span>
         </span>
         <div className="tp-fchips" role="group" aria-labelledby="rd-start-ind">
           {START_INDUSTRIES.map((x) => {
