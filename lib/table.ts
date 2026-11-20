@@ -2747,13 +2747,137 @@ export const contactInfo = (): NonNullable<View["contact"]> => ({ support: addre
  * metrics. It changes nothing for anyone who is not an admin. Actions still run as the admin.
  * Company About texts are left out (ABOUT_LATER): aboutCells reads them, a few companies at a time.
  */
-export async function buildView(token: string | null, opts: { asMember?: boolean } = {}): Promise<View> {
+export async function buildView(token: string | null, opts: { asMember?: boolean; fresh?: boolean } = {}): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
+  // A member's table from the shared part and their own companies (sharedView). Admins, and `fresh` (the checks compare the two), build it whole.
+  if (me && !opts.fresh && !isAdmin(me)) return memberView(seed, s, me);
   if (me) return fullView(seed, s, me, !!opts.asMember && isAdmin(me));
   if (statsCache && statsCache.seed === seed && Date.now() - statsCache.at < ANON_FRESH)
     return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled(), contact: contactInfo(), version: viewVersion(statsCache.s) };
   return anonView(seed, s);
+}
+
+/* ---------- a member's table: the shared part, and their own companies ---------- */
+
+/**
+ * Nobody: a member with nothing on file, who added, paid for, confirmed, reported, follows and
+ * holds nothing, and whose name is no seat holder's. Every company reads the same to every member
+ * who has nothing to do with it, and that is how it reads to Nobody, so the shared part of every
+ * member's table is built once, for Nobody. It never goes out as anyone's Me.
+ */
+const NOBODY: Member = { id: "\u0000nobody", name: "\u0000", email: "", title: "", token: "\u0000" };
+/**
+ * How long the shared part serves while the state is the one it was built on: a few of its
+ * values move with the clock (when a role was last seen, a leaders' read), so it is built again
+ * after this, and on a new UTC day. Any change to the state builds it again.
+ */
+export const SHARED_KEEP_MS = 5 * 60_000;
+interface SharedPart {
+  seed: Seed;
+  s: State;
+  at: number;
+  day: string;
+  /** Nobody's record of each company, by internal id, in the graph's order (fullView's before it sorts). */
+  recs: Map<string, CompanyRec>;
+  /** Nobody's stats (their facts count every company's known and locked facts). */
+  stats: View["stats"];
+}
+let shared: { seed: Seed; s: State; at: number; day: string; p: Promise<SharedPart> } | null = null;
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+let sharedBuilds = 0;
+/** For the checks: how many times the shared part was built. */
+export const sharedViewStats = () => ({ builds: sharedBuilds });
+
+/** The shared part for this state, built once however many members ask for it at the same time. */
+function sharedPart(seed: Seed, s: State): Promise<SharedPart> {
+  const nowMs = Date.now();
+  const day = utcDay(nowMs);
+  if (shared && shared.seed === seed && shared.s === s && shared.day === day && nowMs - shared.at < SHARED_KEEP_MS) return shared.p;
+  const p = (async (): Promise<SharedPart> => {
+    sharedBuilds++;
+    const v = await fullView(seed, s, NOBODY, false, null, false);
+    const g = viewGraph(seed, s);
+    const byPub = new Map(v.companies.map((c) => [c.id, c]));
+    const recs = new Map<string, CompanyRec>();
+    for (const id of g.companies.keys()) {
+      const rec = byPub.get(pubId(id));
+      if (rec) recs.set(id, rec);
+    }
+    return { seed, s, at: nowMs, day, recs, stats: v.stats };
+  })();
+  // Only the committed state is kept (a draft inside mutate() changes in place), and a build that failed is not.
+  if (s === stateCache) {
+    const entry = { seed, s, at: nowMs, day, p };
+    shared = entry;
+    p.catch(() => shared === entry && (shared = null));
+  }
+  return p;
+}
+
+/**
+ * The companies whose record reads differently for `me` than for Nobody: any they know
+ * (knownCompanies: added to, paid for, held a seat at, know through their network), follow, have
+ * confirmed or reported a fact at, asked to claim a seat at, invited a seat holder from, wrote a
+ * seat's "Who introduced you" at, said who leads a function at, or have a line in their credit
+ * history about. More than that is only slower: each one is built for `me` alone, exactly as
+ * their whole table would build it.
+ */
+function ownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<string> {
+  const out = new Set(knownCompanies(g, s, idx, me));
+  const coOf = (nodeId: string) => (g.companies.has(nodeId) ? nodeId : (g.engagements.get(nodeId)?.companyId ?? g.contacts.get(nodeId)?.companyId));
+  const add = (nodeId: string | null | undefined) => {
+    const c = nodeId ? coOf(nodeId) : undefined;
+    if (c) out.add(c);
+  };
+  const nodeOfKey = (k: string) => (k.includes(".") ? k.slice(0, k.lastIndexOf(".")) : k);
+  for (const id of s.follows[me.id] ?? []) add(id);
+  for (const k in s.values) {
+    const v = s.values[k];
+    if (v.by === me.id || v.reportedBy === me.id || v.reporters?.includes(me.id)) add(nodeOfKey(k));
+  }
+  for (const k in s.verifications) if (s.verifications[k].includes(me.id)) add(nodeOfKey(k));
+  for (const k in s.unlocks) if (s.unlocks[k].includes(me.id)) add(nodeOfKey(k));
+  for (const c of s.names?.claims ?? []) if (c.memberId === me.id) add(c.engagementId);
+  for (const x of s.seatInvites ?? []) if (x.by === me.id) add(x.engagementId);
+  for (const [engId, note] of Object.entries(s.seatPrivate ?? {})) if (note.by === me.id) add(engId);
+  for (const [co, byFn] of Object.entries(s.leaderReports ?? {})) if (Object.values(byFn).some((list) => (list ?? []).some((x) => x.by === me.id))) add(co);
+  for (const r of s.reportLog) if (r.memberId === me.id) add(nodeOfKey(r.ref));
+  for (const l of s.ledger) if (l.memberId === me.id) add(nodeOfKey(l.ref));
+  for (const e of s.engagements) if (e.by === me.id) add(e.id);
+  for (const c of s.companies) if (c.by === me.id) out.add(c.id);
+  for (const b of s.benchRates) if (b.by === me.id) add(b.engagementId);
+  return out;
+}
+
+/**
+ * A member's table (not an admin's): Nobody's record of every company they have nothing to do
+ * with (sharedPart), and their own companies (ownCompanies) built for them, with their Me,
+ * credit history, benchmarks and scan summary, in the table's order. The counts that depend on
+ * the viewer (facts) are Nobody's with their own companies' swapped in. The same view fullView
+ * builds whole: scripts/test-viewcache.mts compares the two for every member it can.
+ */
+async function memberView(seed: Seed, s: State, me: Member): Promise<View> {
+  const part = await sharedPart(seed, s);
+  const g = viewGraph(seed, s);
+  const own = ownCompanies(g, s, memberIndex(seed, s), me);
+  const v = await fullView(seed, s, me, false, own);
+  const mine = new Map(v.companies.map((c) => [c.id, c]));
+  const companies: CompanyRec[] = [];
+  let facts = part.stats.facts;
+  for (const [id, rec] of part.recs) {
+    const r = own.has(id) ? mine.get(pubId(id)) : undefined;
+    if (!r) {
+      companies.push(rec);
+      continue;
+    }
+    facts += r.facts.known + r.facts.locked - rec.facts.known - rec.facts.locked;
+    companies.push(r);
+  }
+  companies.sort(companyOrder);
+  // fullView's facts for `only` count its companies and the facts hidden only for this viewer (they reported them): the latter stay.
+  const hiddenForMe = v.stats.facts - v.companies.reduce((n, c) => n + c.facts.known + c.facts.locked, 0);
+  return { ...v, companies, stats: { ...part.stats, facts: facts + hiddenForMe, openedWeek: v.stats.openedWeek } };
 }
 
 /** The most companies one GET /api/table?about= answers for. */
@@ -2909,6 +3033,14 @@ function belowLead(title: string | null): boolean {
   }
   return v;
 }
+
+/**
+ * The table's order: the friendliest first; locked companies after the named ones of the same
+ * score, in the order of their public ids (an order by the real name, or the seed's, which is
+ * close to it, would say where each name falls); named ones by name.
+ */
+const companyOrder = (a: CompanyRec, b: CompanyRec) =>
+  b.friendly.score - a.friendly.score || Number(!!a.hidden) - Number(!!b.hidden) || (a.hidden && b.hidden ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.name.localeCompare(b.name));
 
 /**
  * The table as `me` sees it. `only`: build just these companies (internal ids), for an action's
@@ -3160,9 +3292,7 @@ async function fullView(
   }
   // Locked companies after the named ones of the same score, in the order of their public ids: an
   // order by the real name (or the seed's, which is close to it) would say where each name falls.
-  companies.sort(
-    (a, b) => b.friendly.score - a.friendly.score || Number(!!a.hidden) - Number(!!b.hidden) || (a.hidden && b.hidden ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.name.localeCompare(b.name)),
-  );
+  companies.sort(companyOrder);
 
   const nameOf = new Map<string, string>();
   for (const m of seed.members) nameOf.set(m.id, m.name);
