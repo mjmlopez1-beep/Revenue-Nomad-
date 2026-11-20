@@ -7237,7 +7237,8 @@ div.tp-pcard-when {
   padding: 12px 14px 10px;
   contain-intrinsic-size: auto 150px;
 }
-.tp-phone .tp-pcard .tp-co-hidden .tp-co-dom {
+/* The site line is left off the card (the record has it): a locked company's is made up, and a known one's repeats its name. */
+.tp-phone .tp-pcard .tp-co-dom {
   display: none;
 }
 .tp-phone .tp-pcard .tp-co-name {
