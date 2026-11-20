@@ -1,14 +1,22 @@
 "use client";
 
 /**
- * Merlin landing page (signed out). In order: the warm intro and what it costs (hero, with
- * the join form), "Try it" with the visitor's own function (real counts and sample rows from
- * GET /api/table?preview=1), the numbers, what you can do with it (a tabbed showcase of real
- * screenshots, Showcase.tsx), how it works (credits, with the free and locked fields folded
- * away), questions, and the join form again. The hero's record is a real company from the same
- * preview answer. Nothing on the page is blurred.
+ * Merlin landing page (signed out). In order: the hero (the live signal, the headline, one line,
+ * the join form, and one real record, beside the form on a wide screen and peeking up from the
+ * bottom of the first screen on a phone), "What are you looking for?" (Finder.tsx: the visitor's
+ * function and a question, answered with real counts and rows from GET /api/table?preview=1),
+ * the numbers across every function in one band, what members say (Quotes.tsx, drawn only once
+ * quotes.ts has a real one), what you can do with it (Features.tsx: four tinted panels, each
+ * with a picture drawn in HTML and CSS), how it works (credits, with the free and locked fields
+ * folded away), questions, and the join form again. The hero's record is a real company from the
+ * same preview answer. Nothing on the page is blurred but the rows past the named ones.
+ *
+ * Merlin covers every fractional function, so nothing here speaks to one: the page's own words
+ * say "your function", and a function is named only where the visitor picked it (or in the
+ * answer shown as an example, which changes each day and says it is one).
+ *
  * One display heading. One volt button in view at a time: the join form's when a form is on
- * screen, Try it's button when only that is, the nav's when none is.
+ * screen, the Finder's button when only that is, the nav's when none is.
  *
  * It renders before the view arrives (`view` null): everything but the counts is fixed copy,
  * so the page is up at once and the counts fill in when the view lands.
@@ -16,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
 import { Brand, IconLock, Num, type View } from "../ui/shared";
-import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
+import { EARN_CAP, FUNCTIONS, REFERRAL_BONUS } from "@/lib/tableFields";
 import { TRIAL_DAYS } from "@/lib/billing/rules";
 import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
@@ -24,8 +32,9 @@ import { Questions } from "./Questions";
 import { priceMatrix } from "./prices";
 import { contactOf, mailto, signInFailText } from "./contact";
 import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
-import TryIt, { type PreviewExample } from "./TryIt";
-import Showcase from "./Showcase";
+import Finder, { type PreviewExample, type Totals } from "./Finder";
+import Features from "./Features";
+import Quotes from "./Quotes";
 
 export interface LandingProps {
   /**
@@ -48,6 +57,11 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 /** Revenue Nomad's network, as the page says it. */
 const NETWORK = "500+";
+
+/** Every function Merlin covers (lib/preview.ts PREVIEW_FUNCTIONS: all but "Other"), named under the numbers. */
+const COVERED = FUNCTIONS.filter((f) => f !== "Other");
+/** Questions shown before "Show all". */
+const FAQ_FIRST = 6;
 
 /** Free and locked fields, one locked chip per purchase (prices.ts). */
 const MATRIX = priceMatrix();
@@ -128,10 +142,12 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   // Roles first seen in the last 7 days. A server that predates the count falls back to what is open now.
   const opened = s?.openedWeek ?? 0;
   const inviter = useInviter();
-  const tryCta = useRef<HTMLDivElement>(null);
-  /** The hero's real example record: undefined until Try it's first answer lands. */
+  const findCta = useRef<HTMLDivElement>(null);
+  /** The hero's real example record: undefined until the Finder's first answer lands. */
   const [example, setExample] = useState<PreviewExample | null | undefined>(undefined);
-  const [heroIn, finalIn, tryIn] = useInView(heroForm, finalForm, tryCta);
+  /** Counts across every function, from the same answer. */
+  const [totals, setTotals] = useState<Totals | null>(null);
+  const [heroIn, finalIn, findIn] = useInView(heroForm, finalForm, findCta);
   const formInView = heroIn || finalIn;
 
   // A failed ?k= link that arrives after the page is up opens Sign in with the message too.
@@ -151,14 +167,14 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   const openSignIn = useCallback((note: string | null = null) => setSignIn({ open: true, note, tone: "info" }), []);
   const closeSignIn = useCallback(() => setSignIn({ open: false, note: null, tone: "info" }), []);
 
-  const proof: [number | undefined, string][] = [
-    [s?.companies, "companies"],
+  // All four are counted across every function. The first comes with the preview answer.
+  const figures: [number | undefined, string][] = [
+    [totals?.anyHire, "companies have hired a fractional"],
     [s?.engagements, "seats on file"],
-    [s?.people, "hiring contacts"],
-    [s?.members, "members"],
+    [s?.openRoles, s?.openRoles === 1 ? "open role now" : "open roles now"],
+    [totals?.functions ?? COVERED.length, "functions covered"],
   ];
 
-  const joinHint = "Add something you know and you earn a credit. Spend a credit to see something another member added, like who held a seat.";
   const supportHref = support ? mailto(support, "Merlin question") : null;
 
   return (
@@ -169,8 +185,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             <Brand kind="lockup" dark size={54} />
           </a>
           <nav className="lp-nav-links" aria-label="Sections">
-            <a href="#try">Try it</a>
-            <a href="#uses">What you can do</a>
+            <a href="#find">Explore</a>
+            <a href="#features">What you can do</a>
             <a href="#how">How it works</a>
             <a href="#faq">Questions</a>
           </nav>
@@ -178,7 +194,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             <button type="button" className="lp-nav-signin" onClick={() => openSignIn()}>
               Sign in
             </button>
-            <button type="button" className={`btn num lp-nav-get${formInView || tryIn ? "" : " btn-primary"}`} onClick={toJoin}>
+            <button type="button" className={`btn num lp-nav-get${formInView || findIn ? "" : " btn-primary"}`} onClick={toJoin}>
               Get {starter} credits
             </button>
           </div>
@@ -207,11 +223,10 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
               ) : (
                 <p className="lp-live lp-live-quiet">The data exchange for fractional operators</p>
               )}
-              <h1 className="lp-h1">Find your next client and the fractional who can introduce you</h1>
-              <p className="lp-hero-sub">
-                Merlin is a data exchange for fractional operators. Share what you know about fractional work to earn credits, and see which companies
-                hire fractionals, what they&apos;ve paid, which roles are open now and who held the seat before you.
-              </p>
+              <h1 className="lp-h1">
+                Find your next client and <em>your way in</em>
+              </h1>
+              <p className="lp-hero-sub">See which companies hire fractionals, what they pay and who held the seat before you.</p>
               {inviter ? (
                 <div className="lp-invited">
                   <p>
@@ -220,10 +235,12 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                   <p className="lp-invited-small">The bonus doesn&apos;t apply when you join from the same internet connection as {inviter}.</p>
                 </div>
               ) : null}
-              <p className="lp-hero-free num">Free plan, {starter} credits to start. {TRIAL_DAYS}-day Pro trial, no card.</p>
               <div className="lp-hero-form" ref={heroForm}>
-                <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" hint={joinHint} />
+                <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" />
               </div>
+              <p className="lp-hero-free num">
+                Free plan, {starter} credits to start. {TRIAL_DAYS}-day Pro trial, no card.
+              </p>
               <p className="lp-hero-member">
                 Already a member?{" "}
                 <button type="button" className="lp-linkbtn" onClick={() => openSignIn()}>
@@ -238,47 +255,55 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
           </div>
         </section>
 
-        {/* ---------- try it: the visitor's own function, real numbers ---------- */}
-        <TryIt onJoin={toJoin} primary={!formInView} ctaRef={tryCta} onExample={setExample} />
+        {/* ---------- what are you looking for: the visitor's function and a question, real numbers ---------- */}
+        <Finder onJoin={toJoin} primary={!formInView} ctaRef={findCta} onExample={setExample} onTotals={setTotals} />
 
-        {/* ---------- proof ---------- */}
-        <section className="lp-proof" aria-label="Merlin in numbers" aria-busy={!s}>
+        {/* ---------- the numbers, across every function ---------- */}
+        <section className="lp-stats" aria-labelledby="stats-h" aria-busy={!s}>
           <div className="lp-wrap">
-            <dl className="lp-proof-grid">
-              {proof.map(([n, label]) => (
-                <div key={label} className="lp-proof-item">
-                  <dt className="lp-proof-label">{label}</dt>
-                  <dd className="lp-proof-num">
-                    <Count n={n} />
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <p className="lp-proof-note">
-              It starts from fractional work members published on Revenue Nomad, member success stories and a weekly check for open roles. Members add the rest.
-            </p>
-          </div>
-        </section>
-
-        {/* ---------- what you can do ---------- */}
-        <section className="lp-sec lp-sec-tint" id="uses">
-          <div className="lp-wrap">
-            <div className="lp-sec-head">
-              <h2 className="lp-h2">What you can do with it</h2>
-              <p className="lp-lead">Screens from Merlin as it works today.</p>
+            <div className="lp-stats-band">
+              <h2 className="sr-only" id="stats-h">
+                Merlin in numbers
+              </h2>
+              <dl className="lp-stats-grid">
+                {figures.map(([n, label]) => (
+                  <div key={label} className="lp-stat">
+                    <dt>{label}</dt>
+                    <dd>
+                      <Count n={n} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <ul className="lp-stats-fns" aria-label="Functions covered">
+                {COVERED.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+              <p className="lp-stats-note">
+                Counted across every function. It starts from fractional work members published on Revenue Nomad, member success stories and a weekly
+                check for open roles. Members add the rest.
+              </p>
             </div>
-            <Showcase intro={!!intro} />
           </div>
         </section>
+
+        {/* ---------- what members say: nothing until quotes.ts has a real one ---------- */}
+        <Quotes />
+
+        {/* ---------- what you can do: four panels ---------- */}
+        <Features onJoin={toJoin} starter={starter} />
 
         {/* ---------- how it works: credits, with the free and locked fields folded away ---------- */}
-        <section className="lp-sec" id="how">
+        <section className="lp-sec lp-how" id="how" aria-labelledby="how-h">
           <div className="lp-wrap">
-            <div className="lp-sec-head">
-              <h2 className="lp-h2">How it works</h2>
+            <div className="lp-sec-head lp-sec-head-c">
+              <span className="lp-pill lp-pill-pine">How it works</span>
+              <h2 className="lp-h2" id="how-h">
+                Share what you know, see what others know
+              </h2>
               <p className="lp-lead">
-                You start with <span className="num">{starter}</span> credits. Add something you know and you earn a credit. Spend a credit to see
-                something another member added.
+                You start with <span className="num">{starter}</span> credits. Add a fact and you earn one. Spend one to see a fact another member added.
               </p>
             </div>
             <ul className="lp-steps">
@@ -287,8 +312,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 <div className="lp-step-body">
                   <h3>Add what you know</h3>
                   <p>
-                    Add a seat you held, with its rate and hours a week, or something missing on a company, like its HQ or size. Each one earns a credit, up
-                    to <span className="num">{EARN_CAP}</span> a day.
+                    A seat you held, or something missing on a company. Each one earns a credit, up to <span className="num">{EARN_CAP}</span> a day.
                   </p>
                 </div>
               </li>
@@ -296,14 +320,14 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 <DemoUnlock />
                 <div className="lp-step-body">
                   <h3>Spend a credit to see one</h3>
-                  <p>One credit opens one answer, like who held a seat and the role they held, or what a seat paid. It stays open for you.</p>
+                  <p>One credit opens one answer, like who held a seat and the role they held. It stays open for you.</p>
                 </div>
               </li>
               <li className="lp-step">
                 <DemoConfirm />
                 <div className="lp-step-body">
                   <h3>Confirm or report</h3>
-                  <p>Confirm what you know is right. Report what is wrong and we review it. If we remove something you unlocked, your credit comes back.</p>
+                  <p>Confirm what is right. Report what is wrong and we review it. If we remove something you unlocked, your credit comes back.</p>
                 </div>
               </li>
             </ul>
@@ -372,20 +396,28 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         </section>
 
         {/* ---------- FAQ ---------- */}
-        <section className="lp-sec lp-sec-tint" id="faq">
+        <section className="lp-sec lp-faq-sec" id="faq" aria-labelledby="faq-h">
           <div className="lp-wrap lp-faq-wrap">
-            <h2 className="lp-h2">Questions</h2>
-            <Questions starter={starter} support={support} intro={!!intro} />
+            <h2 className="lp-h2" id="faq-h">
+              Questions
+            </h2>
+            <Questions starter={starter} support={support} intro={!!intro} first={FAQ_FIRST} />
           </div>
         </section>
 
         {/* ---------- final CTA ---------- */}
-        <section className="lp-final">
-          <div className="lp-wrap lp-final-in">
-            <h2 className="lp-h2">Find the companies that hire your function</h2>
-            <p className="lp-final-sub num">It takes your email. Free plan, {starter} credits to start, and a {TRIAL_DAYS}-day Pro trial with no card.</p>
-            <div className="lp-final-form" ref={finalForm}>
-              <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
+        <section className="lp-final" aria-labelledby="final-h">
+          <div className="lp-wrap">
+            <div className="lp-final-in">
+              <h2 className="lp-h2" id="final-h">
+                Find the companies that hire <em>your function</em>
+              </h2>
+              <p className="lp-final-sub num">
+                Free plan, {starter} credits to start. {TRIAL_DAYS}-day Pro trial, no card.
+              </p>
+              <div className="lp-final-form" ref={finalForm}>
+                <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
+              </div>
             </div>
           </div>
         </section>

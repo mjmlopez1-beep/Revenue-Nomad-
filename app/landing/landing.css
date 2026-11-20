@@ -1,24 +1,37 @@
 /*
  * Merlin landing page, join and sign-in. Classes are prefixed lp-.
- * Pine bands for the nav, hero and closing call to action; white and off-white between.
  *
- * Type (Schibsted Grotesk), on the scale at the top of globals.css: display 44/48 fluid down
- * to 32, h2 26, card title 17/24, lead 18/28, reading text 15/24, captions and labels 13/20.
- * Weights 400, 700 and 800, with chips and labels at 600. Numbers use the text face with
- * tabular figures (.num). Mono is only on domains, links and email addresses.
+ * Shape: big type with tight leading, a lot of air, very round corners. Pine for the nav, the
+ * hero and the two bands (numbers, closing call to action); the page between is off-white with
+ * white cards. Each feature panel has its own tint (mint, sand, pale blue, ember) and a solid
+ * pill label, and picks out one phrase of its headline in that tint's ink.
  *
- * Color: volt fills the one primary button in view and "+1". Ember appears twice on the
- * page and nowhere else: the live dot in the hero and the "Hiring now" chip on the example
- * record (Try it's open roles read in ink). Red is for errors.
+ * Type (Schibsted Grotesk): display 40 to 64, section heading 30 to 48, panel heading 26 to 40,
+ * lead 18/28, reading text 16/24, captions and labels 13/20. Weights 400, 600, 700 and 800: only
+ * headings, numbers and names are heavy. Numbers use the text face with tabular figures (.num).
+ * Mono is only on domains, links and email addresses.
  *
- * Spacing steps: 4, 8, 12, 16, 24, 32, then 48, 64 and 96 between sections.
+ * Color: volt fills the one primary button in view, "+1", and the phrase picked out on pine.
+ * Ember is the live dot, "Hiring now" on the example record and the open roles panel. Red is
+ * for errors. Every text color here is 4.5:1 or better on what it sits on (the tints included).
+ *
+ * Radii: 32 panels and bands (24 on phones), 24 the big box, 20 cards, 999 pills. Spacing steps:
+ * 4, 8, 12, 16, 24, 32, 48, then 104 between sections (64 on phones).
+ *
+ * Motion is small and optional: the example question in the empty box fades in, and nothing
+ * else moves. None of it runs under prefers-reduced-motion.
  */
 
 .lp {
   /* Text on pine. All three pass 4.5:1 on #073f2f. */
-  --on-pine: rgba(255, 255, 255, 0.84);
-  --on-pine-quiet: rgba(255, 255, 255, 0.66);
+  --on-pine: rgba(255, 255, 255, 0.86);
+  --on-pine-quiet: rgba(255, 255, 255, 0.68);
   --on-pine-line: rgba(255, 255, 255, 0.16);
+  --nav-h: 64px;
+  --r-panel: 32px;
+  --r-big: 24px;
+  --r-soft: 20px;
+  --card-shadow: 0 1px 2px rgba(10, 26, 19, 0.04), 0 16px 40px rgba(10, 26, 19, 0.08);
   min-height: 100vh;
   background: var(--bg);
   font-size: 16px;
@@ -35,12 +48,11 @@
 .lp a {
   text-decoration: none;
 }
-/* One offset for every section link: the sticky nav (64px and its 1px edge) and 24px of air. No section sets its own. */
+/* One offset for every section link: the sticky nav and 24px of air. No section sets its own. */
 html:has(.lp) {
   scroll-behavior: smooth;
   scroll-padding-top: calc(65px + 24px);
 }
-/* Focus: 2px volt with offset everywhere. On white a pine edge sits under it so the ring reads. */
 .lp :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -49,28 +61,54 @@ html:has(.lp) {
 /* ---------- type ---------- */
 .lp-h1 {
   color: #fff;
-  font-size: clamp(32px, 23px + 2.4vw, 44px);
-  line-height: 1.09;
-  letter-spacing: -0.03em;
-  max-width: 13em;
+  font-size: clamp(40px, 26px + 2.7vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  max-width: 11em;
 }
 .lp-h2 {
-  font-size: 26px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
+  font-size: clamp(30px, 22px + 1.9vw, 48px);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+}
+/* The one phrase a heading picks out: color, never a second weight or a slant. */
+.lp-h1 em,
+.lp-h2 em,
+.lp-feat-h em {
+  font-style: normal;
+}
+.lp-h1 em {
+  color: var(--volt);
 }
 .lp h3 {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 24px;
   letter-spacing: -0.01em;
 }
 .lp-lead {
-  margin-top: 8px;
-  max-width: 38em;
+  margin-top: 16px;
+  max-width: 34em;
   font-size: 18px;
   line-height: 28px;
   color: var(--muted);
+  text-wrap: pretty;
+}
+/* A small label over a heading: solid, uppercase, round. Each feature panel sets its own color. */
+.lp-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--pill-bg, var(--pine));
+  color: var(--pill-ink, #fff);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* ---------- link-style buttons ---------- */
@@ -117,7 +155,7 @@ html:has(.lp) {
   display: flex;
   align-items: center;
   gap: 24px;
-  height: 64px;
+  height: var(--nav-h);
 }
 .lp-nav-brand {
   display: flex;
@@ -127,15 +165,6 @@ html:has(.lp) {
   color: #fff;
   min-width: 0;
   border-radius: 4px;
-}
-.lp-nav-product {
-  padding: 2px 0 0 12px;
-  border-left: 1px solid rgba(255, 255, 255, 0.24);
-  font-weight: 500;
-  font-size: 13.5px;
-  line-height: 20px;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.78);
 }
 .lp-nav-links {
   display: flex;
@@ -147,11 +176,11 @@ html:has(.lp) {
   align-items: center;
   min-height: 36px;
   padding: 0 12px;
-  border-radius: var(--r-btn);
+  border-radius: 999px;
   color: var(--on-pine);
   font-size: 14px;
   line-height: 20px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   transition: background 0.12s, color 0.12s;
 }
@@ -173,7 +202,7 @@ html:has(.lp) {
   padding: 0 12px;
   white-space: nowrap;
   border: 0;
-  border-radius: var(--r-btn);
+  border-radius: 999px;
   background: transparent;
   color: #fff;
   font-weight: 700;
@@ -189,6 +218,7 @@ html:has(.lp) {
 /* Quiet while a join form is on screen (that form's button is the primary); volt when none is. */
 .lp-nav-get.btn {
   min-height: 44px;
+  border-radius: 999px;
   background: transparent;
   border-color: rgba(255, 255, 255, 0.4);
   color: #fff;
@@ -208,44 +238,49 @@ html:has(.lp) {
 }
 
 /* ---------- hero ---------- */
+/* Pine with a soft volt light in one corner, and round bottom corners where it meets the page. */
 .lp-hero {
-  background: var(--pine);
+  background: radial-gradient(720px 480px at 88% 0%, rgba(46, 229, 157, 0.18), rgba(46, 229, 157, 0) 70%), var(--pine);
   color: #fff;
-  padding: 64px 0;
+  padding: 64px 0 72px;
+  border-radius: 0 0 40px 40px;
 }
 /*
  * Both columns hang from the top, so the join form can grow a line (the name step, an error)
- * without moving the headline or the example card. The copy starts a little lower so it sits
- * level with the card's first section, as it did when it was centered.
+ * without moving the headline or the example record.
  */
 .lp-hero-in {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
-  gap: 64px;
+  gap: 72px;
   align-items: start;
 }
 .lp-hero-copy {
-  padding-top: 24px;
+  padding-top: 16px;
 }
-/* The one live signal: how many roles are open right now. */
+/* The one live signal: how many roles opened this week. */
 .lp-live {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 6px 14px 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--on-pine-line);
+  background: rgba(255, 255, 255, 0.06);
   font-size: 14px;
   line-height: 20px;
-  font-weight: 700;
+  font-weight: 600;
   color: #fff;
 }
 .lp-live-quiet {
   color: var(--on-pine-quiet);
 }
 .lp-hero-sub {
-  margin-top: 16px;
-  max-width: 31em;
-  font-size: 18px;
-  line-height: 28px;
+  margin-top: 20px;
+  max-width: 26em;
+  font-size: 20px;
+  line-height: 30px;
   color: var(--on-pine);
   text-wrap: pretty;
 }
@@ -258,7 +293,7 @@ html:has(.lp) {
   max-width: 520px;
   margin-top: 24px;
   padding: 12px 16px;
-  border-radius: var(--r-btn);
+  border-radius: 16px;
   background: var(--volt-soft);
   color: var(--volt-ink);
   font-size: 14px;
@@ -274,6 +309,33 @@ html:has(.lp) {
 .lp-invited + .lp-hero-form {
   margin-top: 16px;
 }
+/* What joining costs, right under the form's button. */
+.lp-hero-free {
+  margin-top: 16px;
+  max-width: 520px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: #fff;
+}
+.lp-hero-member {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--on-pine-quiet);
+}
+.lp-hero-member .lp-linkbtn {
+  color: #fff;
+}
+.lp-hero-by {
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--on-pine-line);
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--on-pine-quiet);
+}
 /* A count on its way: a quiet bar the height of the figure, replaced by the number. */
 .lp-skel {
   display: inline-block;
@@ -283,17 +345,26 @@ html:has(.lp) {
   background: var(--line);
   vertical-align: baseline;
 }
-.lp-hero-member {
-  margin-top: 12px;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--on-pine-quiet);
+.lp-skel-logo {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--line);
 }
-.lp-hero-member .lp-linkbtn {
-  color: #fff;
+.lp-skel-line {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.lp-skel-short {
+  max-width: 110px;
 }
 
-/* ---------- join form ---------- */
+/* ---------- join form: one white field with its button inside ---------- */
 .lp-join-label {
   display: block;
   margin-bottom: 8px;
@@ -304,26 +375,37 @@ html:has(.lp) {
 }
 .lp-join-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 18px;
+  background: #fff;
+}
+/* The ring goes around the whole field, which is what the eye reads as the input. */
+.lp-join-row:has(.lp-join-input:focus) {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.lp-join-row:has(.lp-join-input[aria-invalid="true"]) {
+  box-shadow: inset 0 0 0 2px var(--red);
 }
 .lp-join-input.input {
   flex: 1;
   color: var(--ink);
   min-width: 0;
-  min-height: 52px;
-  padding: 0 16px;
+  min-height: 48px;
+  padding: 0 12px;
   font-size: 16px;
-  border-color: transparent;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
 }
 .lp-join-input.input:focus {
-  border-color: transparent;
-}
-.lp-join-input.input[aria-invalid="true"] {
-  border-color: var(--red);
+  outline: 0;
 }
 .lp-join-btn.btn-lg {
-  min-height: 52px;
-  padding: 0 24px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
 }
 .lp-join-help {
   margin-top: 12px;
@@ -358,7 +440,7 @@ html:has(.lp) {
   gap: 0 12px;
   margin-top: 8px;
   padding: 8px 12px;
-  border-radius: var(--r-btn);
+  border-radius: 12px;
   background: #fff1f3;
   color: #9e1c33;
   font-size: 14px;
@@ -369,7 +451,7 @@ html:has(.lp) {
 }
 .lp-join-sent {
   padding: 16px 24px;
-  border-radius: var(--r-card);
+  border-radius: var(--r-soft);
   border: 1px solid var(--on-pine-line);
   background: rgba(255, 255, 255, 0.06);
   color: var(--on-pine);
@@ -390,13 +472,16 @@ html:has(.lp) {
   line-height: 24px;
   letter-spacing: -0.01em;
 }
+.lp-join-code {
+  margin-top: 12px;
+}
 .lp-join-sent .lp-linkbtn {
   margin-top: 4px;
   font-size: 14px;
   color: #fff;
 }
 
-/* ---------- hero visual: an example record ---------- */
+/* ---------- hero visual: one real record ---------- */
 .lp-hero-visual {
   min-width: 0;
 }
@@ -406,35 +491,23 @@ html:has(.lp) {
 .lp-rec {
   background: var(--surface);
   color: var(--body-ink);
-  border-radius: var(--r-card);
+  border-radius: var(--r-soft);
   overflow: hidden;
   font-size: 14px;
   line-height: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
 }
 .lp-rec-head {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 20px 24px 16px;
 }
-.lp-mark {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: hsl(200 50% 92%);
-  color: hsl(200 45% 26%);
-  font-size: 14px;
-  font-weight: 800;
-}
-/* A locked company, as the app draws one: a blurred tile, name and site (globals.css .locked-*). */
 .lp-rec-head > .logo-lg {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
 }
 .lp-rec-site {
   display: block;
@@ -448,12 +521,16 @@ html:has(.lp) {
 }
 /* The chip sits in the corner beside the name; the line under the name runs the full width. */
 .lp-rec-name {
-  padding-right: 96px;
+  padding-right: 0;
+  overflow-wrap: anywhere;
   font-weight: 700;
-  font-size: 17px;
+  font-size: 18px;
   line-height: 24px;
   letter-spacing: -0.01em;
   color: var(--ink);
+}
+.lp-rec-name.lp-rec-name-chip {
+  padding-right: 96px;
 }
 .lp-rec-meta {
   font-size: 13px;
@@ -463,8 +540,9 @@ html:has(.lp) {
 /* The page's one solid ember chip (.chip-ember), in the corner of the example record. */
 .lp-hiring {
   position: absolute;
-  top: 16px;
+  top: 20px;
   right: 24px;
+  border-radius: 999px;
 }
 .lp-rec-sec {
   padding: 12px 24px;
@@ -511,6 +589,10 @@ html:has(.lp) {
   font-weight: 700;
   white-space: nowrap;
 }
+.lp-val-wrap {
+  white-space: normal;
+  text-align: right;
+}
 /*
  * The three states of a fact are the app's own pieces (globals.css): .lock-rest with .lock-mask
  * for a locked one at rest, .lock-cta for what the pointer shows, .add for a missing one.
@@ -527,27 +609,6 @@ html:has(.lp) {
   font-weight: 600;
   color: var(--volt-ink);
 }
-.lp-person {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-}
-.lp-avatar {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--surface-2);
-  color: var(--muted);
-}
-.lp-person-title {
-  flex: 1;
-  min-width: 0;
-  color: var(--ink);
-}
 .lp-visual-cap {
   margin-top: 12px;
   font-size: 13px;
@@ -560,90 +621,1180 @@ html:has(.lp) {
   place-items: center;
   height: 24px;
   padding: 0 8px;
-  border-radius: var(--r-chip);
+  border-radius: 999px;
   background: var(--volt);
   color: var(--pine);
   font-size: 13px;
   line-height: 20px;
   font-weight: 700;
 }
-
-/* ---------- proof ---------- */
-.lp-proof {
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  padding: 32px 0;
-}
-.lp-proof-grid {
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.lp-proof-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 24px;
-  border-left: 1px solid var(--line);
-}
-.lp-proof-item:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-.lp-proof-num {
-  order: -1;
-  margin: 0;
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 36px;
-  letter-spacing: -0.02em;
+/* A seat holder who is on Merlin. Outline means attribute. */
+.lp-member.chip {
+  height: 22px;
+  padding: 0 6px;
+  font-size: 12px;
   color: var(--pine);
+  border-color: rgba(7, 63, 47, 0.2);
 }
-.lp-proof-label {
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted);
-  font-weight: 600;
+/* The two ways to reach a seat holder. Real buttons: each takes the visitor to the join form. */
+.lp-reach-wrap {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
 }
-.lp-proof-note {
-  margin-top: 24px;
-  font-size: 13px;
-  line-height: 20px;
+.lp-reach-k {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
   color: var(--muted);
+}
+.lp-reach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.lp-fake-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.lp-fake-btn-pine {
+  background: var(--pine);
+  border-color: var(--pine);
+  color: #fff;
+}
+button.lp-fake-btn {
+  font-family: inherit;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+@media (hover: hover) {
+  button.lp-fake-btn:hover {
+    border-color: var(--pine);
+  }
+  button.lp-fake-btn-pine:hover {
+    background: var(--pine-hover);
+  }
+}
+/* The record's Unlock: the app's label, as a button that goes to the join form. */
+.lp-rec-btn {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--r-chip);
+}
+/* A 44px target on a touch screen without making the label bigger. */
+.lp-rec-btn::after {
+  content: "";
+  position: absolute;
+  inset: -9px -4px;
+}
+@media (hover: hover) {
+  .lp-rec-btn:hover .lock-cta {
+    background: var(--pine-hover);
+  }
+}
+@media (pointer: coarse), (max-width: 640px) {
+  button.lp-fake-btn {
+    height: 44px;
+  }
+}
+.lp-rec-loading .lp-rec-sec,
+.lp-rec-loading .lp-rec-id {
+  display: grid;
+  gap: 8px;
+}
+.lp-rec-skel-logo {
+  width: 44px;
+  height: 44px;
+}
+.lp-rec-skel-name {
+  max-width: 55%;
+  height: 16px;
 }
 
 /* ---------- sections ---------- */
 .lp-sec {
-  padding: 64px 0;
-  background: var(--surface);
-}
-.lp-sec-tint {
-  background: var(--bg);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  padding: 104px 0 0;
 }
 .lp-sec-head {
-  margin-bottom: 32px;
+  margin-bottom: 40px;
+}
+.lp-sec-head .lp-pill {
+  margin-bottom: 20px;
+}
+/* A centered heading over a section. */
+.lp-sec-head-c {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
-/* what you can look up */
-.lp-cost {
-  align-self: flex-start;
-  margin-top: auto;
+/* ---------- what are you looking for: the box ---------- */
+.lp-ask {
+  max-width: 880px;
+  margin: 0 auto;
+}
+/* It reads as one large search field: the question, then the visitor's function at its end. */
+.lp-ask-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 10px 10px 10px 24px;
+  border-radius: var(--r-big);
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  transition: border-color 0.15s;
+}
+.lp-ask-box:focus-within,
+.lp-ask-box.is-asked {
+  border-color: var(--pine);
+}
+.lp-ask-icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--pine);
+}
+.lp-ask-q {
+  flex: 1;
+  min-width: 0;
+  font-size: 20px;
+  line-height: 28px;
+  letter-spacing: -0.01em;
+}
+.lp-ask-text {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* An example question in the empty box: placeholder gray (4.9:1 on white), a new one every few seconds. */
+.lp-ask-ph {
+  color: var(--faint);
+  animation: lp-ask-in 0.4s ease-out;
+}
+@keyframes lp-ask-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.lp-ask-clear {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
   color: var(--muted);
 }
-.lp-cost-locked,
+.lp-ask-clear:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+/* The visitor's function: a real select, drawn as a pine pill inside the box. */
+.lp-ask-fn {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
+}
+.lp-ask-fn > svg {
+  position: absolute;
+  right: 16px;
+  pointer-events: none;
+}
+.lp-ask-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 56px;
+  max-width: 100%;
+  padding: 0 44px 0 20px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--pine);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lp-ask-select:hover {
+  background: var(--pine-hover);
+}
+/* The list the browser opens is its own: dark on white. */
+.lp-ask-select option,
+.lp-ask-select optgroup {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 400;
+}
+.lp-ask-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+}
+.lp-ask-sug {
+  flex: 1;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lp-sug,
+.lp-refine-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+@media (hover: hover) {
+  .lp-sug:hover,
+  .lp-refine-btn:hover {
+    border-color: var(--pine);
+  }
+}
+.lp-sug.is-on {
+  background: var(--pine);
+  border-color: var(--pine);
+  color: #fff;
+}
+.lp-refine-btn {
+  flex: none;
+  border-color: transparent;
+  background: transparent;
+  color: var(--pine);
+  font-weight: 700;
+}
+.lp-refine-btn.is-open {
+  background: var(--pine-8);
+}
+.lp-refine-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pine);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.lp-refine {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: var(--r-soft);
+  background: var(--surface-2);
+}
+.lp-refine[hidden] {
+  display: none;
+}
+.lp-refine-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lp-refine-label {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.lp-refine-select.select {
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+/* ---------- what are you looking for: the answer ---------- */
+.lp-res {
+  max-width: 1040px;
+  margin: 40px auto 0;
+  padding: 28px 32px 32px;
+  border-radius: var(--r-panel);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+/* What the answer is for: the function, the industry and the country, as quiet tags. */
+.lp-res-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.lp-res-scope > span {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--body-ink);
+  font-weight: 600;
+}
+.lp-res-scope > .lp-res-fn {
+  background: var(--pine);
+  color: #fff;
+}
+.lp-res-scope > .lp-res-eg {
+  padding: 2px 4px;
+  background: none;
+  color: var(--muted);
+  font-weight: 400;
+}
+.lp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+.lp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 8px 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--body-ink);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+@media (hover: hover) {
+  .lp-tab:not(.is-on):hover {
+    background: var(--line);
+  }
+}
+.lp-tab.is-on {
+  background: var(--pine);
+  color: #fff;
+}
+.lp-tab-n {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 700;
+  text-align: center;
+}
+.lp-tab-n.lp-skel {
+  width: 28px;
+  height: 28px;
+  background: var(--line);
+}
+.lp-tab.is-on .lp-tab-n {
+  background: var(--volt);
+  color: var(--pine);
+}
+/* With a country picked: how many of the tab's count are in it, and how many have no country on file yet. */
+.lp-res-split,
+.lp-res-held {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--muted);
+}
+.lp-res-held .num {
+  font-weight: 700;
+  color: var(--ink);
+}
+/* Asked for: who held the seat. The line that answers it stands out. */
+.lp-res-held.is-on {
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+}
+.lp-res-held.is-on .num {
+  color: var(--volt-ink);
+}
+.lp-res-empty {
+  margin-top: 20px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--muted);
+}
+.lp-res-note {
+  margin-top: 20px;
+  padding: 24px;
+  border-radius: var(--r-soft);
+  background: var(--surface-2);
+}
+.lp-res-note p {
+  margin-top: 8px;
+  max-width: 40em;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+/* The rows: a company, what is happening there, and its free facts. A tap goes to the join form. */
+.lp-rws {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  transition: opacity 0.15s;
+}
+.lp-res[aria-busy="true"] .lp-rws {
+  opacity: 0.55;
+}
+.lp-rw {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 24px;
+  min-height: 64px;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.lp-rw:first-child {
+  border-top: 0;
+}
+@media (hover: hover) {
+  .lp-rw:hover {
+    background: var(--row-hover);
+    border-radius: 12px;
+  }
+}
+.lp-rw-co {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.lp-rw-co .logo {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+.lp-rw-cotext {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lp-rw-name {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A blurred name's cloud spills soft past its letters (.locked-blur in globals.css): nothing clips it here. */
+.lp-rw-name:has(> .locked-name) {
+  overflow: visible;
+}
+.lp-rw-dom {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-rw-dom.locked-site {
+  text-overflow: clip;
+}
+/* A company with an open role kept back (lib/preview.ts names only PREVIEW_OPEN_NAMED of them): plain words, never a blur. */
+.lp-rw-logo-kept {
+  display: inline-grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: transparent;
+}
+.lp-rw-name-kept.lp-rw-name {
+  font-size: 13.5px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: normal;
+}
+.lp-rw-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lp-rw-title,
+.lp-rw-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-rw-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+.lp-rw-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+.lp-rw-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 420px;
+}
+.lp-rw-facts > span {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--body-ink);
+  font-size: 12.5px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.lp-rw-skel {
+  cursor: default;
+}
+.lp-res-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 16px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.lp-res-cta.btn-lg {
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: 999px;
+}
+.lp-res-fine {
+  flex: 1 1 320px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* ---------- the numbers: one pine band ---------- */
+.lp-stats {
+  padding: 104px 0 0;
+}
+.lp-stats-band {
+  padding: 56px 56px 48px;
+  border-radius: var(--r-panel);
+  background: radial-gradient(640px 360px at 0% 100%, rgba(46, 229, 157, 0.16), rgba(46, 229, 157, 0) 70%), var(--pine);
+  color: #fff;
+}
+.lp-stats-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 32px;
+}
+.lp-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lp-stat dd {
+  order: -1;
+  margin: 0;
+  font-size: clamp(44px, 24px + 3.2vw, 72px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #fff;
+}
+.lp-stat dd .lp-skel {
+  background: var(--on-pine-line);
+}
+.lp-stat dt {
+  max-width: 12em;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--on-pine);
+}
+/* Every function, named: the figures above count all of them. */
+.lp-stats-fns {
+  list-style: none;
+  margin: 40px 0 0;
+  padding: 32px 0 0;
+  border-top: 1px solid var(--on-pine-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lp-stats-fns li {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--on-pine-line);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--on-pine);
+}
+.lp-stats-note {
+  margin-top: 20px;
+  max-width: 56em;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--on-pine-quiet);
+}
+
+/* ---------- what members say (drawn only when quotes.ts has one) ---------- */
+.lp-quote-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.lp-quote {
+  padding: 32px;
+  border-radius: var(--r-big);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.lp-quote figure,
+.lp-quote blockquote {
+  margin: 0;
+}
+.lp-quote blockquote p {
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.lp-quote figcaption {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.lp-quote-name {
+  font-weight: 700;
+  color: var(--ink);
+}
+.lp-quote-title {
+  color: var(--muted);
+}
+
+/* ---------- what you can do: four tinted panels ---------- */
+.lp-feat-list {
+  display: grid;
+  gap: 24px;
+}
+/*
+ * Each tint with its ink (the phrase picked out, the link) and its solid label. Every ink is
+ * 5:1 or better on its tint; body text and captions on the tints are 4.9:1 or better.
+ */
+.lp-feat-mint {
+  --tint: #e2f7ec;
+  --tint-ink: #0b6b45;
+  --pill-bg: var(--volt);
+  --pill-ink: var(--pine);
+}
+.lp-feat-sand {
+  --tint: #f5ecd9;
+  --tint-ink: #85560f;
+  --pill-bg: #f0b84a;
+  --pill-ink: #2e2004;
+}
+.lp-feat-sky {
+  --tint: #e3edfb;
+  --tint-ink: #1d4f91;
+  --pill-bg: #2563c9;
+  --pill-ink: #fff;
+}
+.lp-feat-ember {
+  --tint: #ffe8dd;
+  --tint-ink: var(--ember-ink);
+  --pill-bg: var(--ember);
+  --pill-ink: var(--ink);
+}
+.lp-feat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 64px;
+  padding: 64px;
+  border-radius: var(--r-panel);
+  background: var(--tint);
+}
+/* Every other panel leads with its picture. */
+.lp-feat:nth-child(even) .lp-feat-copy {
+  order: 2;
+}
+.lp-feat-h.lp-feat-h {
+  margin-top: 20px;
+  font-size: clamp(26px, 20px + 1.4vw, 40px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  max-width: 13em;
+}
+.lp-feat-h em {
+  color: var(--tint-ink);
+}
+.lp-feat-p {
+  margin-top: 16px;
+  max-width: 28em;
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--body-ink);
+  text-wrap: pretty;
+}
+.lp-feat-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--tint-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lp-feat-cta:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.lp-feat-fig {
+  margin: 0;
+  min-width: 0;
+}
+.lp-feat-fig figcaption {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* The pictures: a white card each, drawn with the app's own shapes. Nothing in them is real data. */
+.lp-v {
+  padding: 20px 24px;
+  border-radius: var(--r-soft);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(10, 26, 19, 0.05), 0 20px 48px rgba(10, 26, 19, 0.1);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.lp-v-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.lp-v-h {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.lp-v-quiet {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.lp-v-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.lp-v-tile {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.lp-v-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lp-v-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.lp-v-line {
+  font-size: 13.5px;
+  color: var(--body-ink);
+}
+.lp-v-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+/* The likelihood, as the app's Crystal Ball draws it: a word, never a percentage. */
+.lp-v-band {
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.lp-v-band-high {
+  background: var(--pine);
+  color: #fff;
+}
+.lp-v-band-medium {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+}
+/* warm paths */
+.lp-v-cohead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+.lp-v-sec {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.lp-v-way-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px dashed var(--line);
+}
+.lp-v-sec > .lp-v-h + .lp-v-way-row {
+  border-top: 0;
+}
+.lp-v-way-row:last-child {
+  padding-bottom: 0;
+}
+.lp-v-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.lp-v-who.lp-v-quiet {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.lp-v-tag {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+}
+.lp-v-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.lp-v-btn-pine {
+  background: var(--pine);
+  border-color: var(--pine);
+  color: #fff;
+}
+.lp-v-unlock {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px 0 8px;
+  border-radius: 6px;
+  background: var(--pine);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.lp-v-unlock .num {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.8);
+}
+/* rates */
+.lp-v-sample {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fdf0cf;
+  color: #5c4000;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lp-v-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.lp-v-seg > span {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--pine);
+  color: #fff;
+}
+.lp-v-seg > .is-off {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.lp-v-seg > .lp-v-seg-gap {
+  flex: 1;
+  padding: 0;
+  background: none;
+}
+.lp-v-rate {
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+}
+.lp-v-rate-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lp-v-rate-med {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.lp-v-track {
+  position: relative;
+  height: 10px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.lp-v-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: #9bbff0;
+}
+.lp-v-mid {
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 18px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: #1d4f91;
+}
+.lp-v-rate-ends {
+  position: relative;
+  height: 20px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.lp-v-rate-ends > span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+/* the alert in Slack */
+.lp-v-slack-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lp-v-app {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--pine);
+  color: var(--volt);
+  font-size: 17px;
+  font-weight: 800;
+}
+.lp-v-apptag {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 700;
+}
+.lp-v-slack-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 4px 0 0 44px;
+}
+.lp-v-slack-h {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.lp-v-slack-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding-left: 12px;
+  border-left: 3px solid var(--line-strong);
+}
+.lp-v-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ember);
+  vertical-align: middle;
+}
+.lp-v-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--body-ink);
+}
+.lp-v-facts > span {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+/* everything else, named */
+.lp-also {
+  margin-top: 48px;
+  text-align: center;
+}
+.lp-also-h.lp-also-h {
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.lp-also-list {
+  list-style: none;
+  margin: 16px auto 0;
+  padding: 0;
+  max-width: 900px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.lp-also-list li {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 14.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+
+/* ---------- how it works: credits ---------- */
 .lp-chip-locked {
   border-color: transparent;
   background: var(--pine-8);
   color: var(--pine);
 }
-.lp-cost.chip,
 .lp-chip-locked.chip {
   gap: 6px;
 }
-
-/* how credits work */
 .lp-steps {
   list-style: none;
   margin: 0;
@@ -656,12 +1807,12 @@ html:has(.lp) {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
-  border-radius: var(--r-card);
+  border-radius: var(--r-big);
   background: var(--surface);
   overflow: hidden;
 }
 .lp-step-body {
-  padding: 24px;
+  padding: 24px 28px 28px;
 }
 .lp-step p {
   margin-top: 8px;
@@ -672,21 +1823,23 @@ html:has(.lp) {
 .lp-demo {
   display: flex;
   align-items: center;
+  align-content: center;
   flex-wrap: wrap;
   gap: 8px;
-  min-height: 72px;
-  padding: 16px 24px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  min-height: 96px;
+  padding: 16px 28px;
+  background: var(--surface-2);
   font-size: 13px;
   line-height: 20px;
 }
+/* The label takes its own line, so what you do and what you get stay together on the next one (no lone "+1"). */
 .lp-demo-k {
+  flex-basis: 100%;
   font-weight: 700;
   color: var(--muted);
 }
 .lp-demo-arrow {
-  color: var(--faint);
+  color: var(--muted);
 }
 .lp-demo-v {
   padding: 2px 8px;
@@ -716,17 +1869,57 @@ html:has(.lp) {
 .lp-invite {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 32px;
   font-size: 15px;
   line-height: 24px;
   color: var(--body-ink);
 }
 
-/* free vs locked: a small table, one row per record type */
+/* the fields, folded: a small table, one row per record type */
+.lp-free {
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.lp-free summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 16px 0;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+  border-radius: 4px;
+}
+.lp-free summary::-webkit-details-marker {
+  display: none;
+}
+.lp-free summary:hover {
+  color: var(--pine);
+}
+.lp-free[open] .lp-qa-icon::after {
+  transform: rotate(0deg);
+}
+.lp-free-in {
+  padding-bottom: 24px;
+}
+.lp-free-lead {
+  margin-bottom: 16px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--muted);
+}
 .lp-matrix {
   border: 1px solid var(--line);
-  border-radius: var(--r-card);
+  border-radius: var(--r-soft);
   background: var(--surface);
   overflow: hidden;
 }
@@ -788,29 +1981,64 @@ html:has(.lp) {
   margin-top: 12px;
 }
 
-/* FAQ */
+/* ---------- questions: one column, one answer open at a time ---------- */
 .lp-faq-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
-  gap: 48px;
+  max-width: 860px;
 }
-/* final CTA */
+.lp-faq-wrap .lp-h2 {
+  margin-bottom: 32px;
+  text-align: center;
+}
+.lp-faq-sec .lp-qa summary {
+  min-height: 64px;
+  font-size: 18px;
+}
+.lp-faq-all {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 24px auto 0;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.lp-faq-all:hover {
+  border-color: var(--pine);
+}
+.lp-faq-sec .lp-faq-more {
+  text-align: center;
+}
+
+/* ---------- final call to action: a pine band with the join form ---------- */
 .lp-final {
-  background: var(--pine);
-  color: #fff;
-  padding: 64px 0;
+  padding: 104px 0 64px;
 }
 .lp-final-in {
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding: 80px 32px;
+  border-radius: var(--r-panel);
+  background: radial-gradient(640px 400px at 100% 0%, rgba(46, 229, 157, 0.18), rgba(46, 229, 157, 0) 70%), var(--pine);
+  color: #fff;
   text-align: center;
 }
 .lp-final .lp-h2 {
+  max-width: 14em;
   color: #fff;
 }
+.lp-final .lp-h2 em {
+  color: var(--volt);
+}
 .lp-final-sub {
-  margin-top: 8px;
+  margin-top: 16px;
   font-size: 18px;
   line-height: 28px;
   color: var(--on-pine);
@@ -822,7 +2050,7 @@ html:has(.lp) {
   text-align: left;
 }
 
-/* footer */
+/* ---------- footer ---------- */
 .lp-foot {
   background: var(--surface);
   border-top: 1px solid var(--line);
@@ -1010,6 +2238,12 @@ html:has(.lp) {
     transform: translateY(8px);
   }
 }
+@keyframes lp-sheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
 
 /* ---------- responsive ---------- */
 @media (max-width: 1100px) {
@@ -1020,12 +2254,25 @@ html:has(.lp) {
     gap: 48px;
     grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
   }
+  .lp-feat {
+    gap: 40px;
+    padding: 48px;
+  }
   .lp-mx-head,
   .lp-mx-row {
     grid-template-columns: 168px minmax(0, 1.5fr) minmax(0, 1fr);
   }
+  .lp-rw {
+    grid-template-columns: minmax(0, 220px) minmax(0, 1fr) auto;
+  }
+  .lp-rw-facts {
+    max-width: 300px;
+  }
 }
 @media (max-width: 960px) {
+  .lp-hero {
+    padding: 56px 0 64px;
+  }
   .lp-hero-in {
     grid-template-columns: minmax(0, 1fr);
     gap: 48px;
@@ -1037,6 +2284,21 @@ html:has(.lp) {
     max-width: 520px;
     width: 100%;
   }
+  .lp-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 40px 32px;
+  }
+  /* The panels stack: the words, then the picture. */
+  .lp-feat {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .lp-feat:nth-child(even) .lp-feat-copy {
+    order: 0;
+  }
+  .lp-feat-fig {
+    max-width: 560px;
+  }
   .lp-steps {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1045,20 +2307,15 @@ html:has(.lp) {
   }
   .lp-step .lp-demo {
     flex: 0 0 360px;
-    border-bottom: 0;
-    border-right: 1px solid var(--line);
   }
-  .lp-faq-wrap {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
+  /* The rows stack: the company, what is happening there, then its facts. */
+  .lp-rw {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-  .lp-proof-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    row-gap: 24px;
-  }
-  .lp-proof-item:nth-child(3) {
-    padding-left: 0;
-    border-left: 0;
+  .lp-rw-facts {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    max-width: none;
   }
 }
 @media (max-width: 760px) {
@@ -1067,8 +2324,6 @@ html:has(.lp) {
   }
   .lp-step .lp-demo {
     flex: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
   }
   /* The table stacks: one block per record type, each column named inside it. */
   .lp-mx-head {
@@ -1098,11 +2353,15 @@ html:has(.lp) {
   }
 }
 @media (max-width: 640px) {
+  .lp {
+    --nav-h: 56px;
+    --r-panel: 24px;
+    --r-big: 20px;
+  }
   .lp-wrap {
     padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   }
   .lp-nav-in {
-    height: 56px;
     gap: 8px;
   }
   /* The logo keeps its own shape: it never shrinks to make room for the buttons. */
@@ -1115,9 +2374,6 @@ html:has(.lp) {
     max-width: none;
     flex: none;
   }
-  .lp-nav-product {
-    display: none;
-  }
   .lp-nav-cta {
     gap: 4px;
   }
@@ -1127,25 +2383,61 @@ html:has(.lp) {
   .lp-nav-get.btn {
     padding: 0 12px;
   }
+  /*
+   * The first screen on a phone: the words and the form fill it down to where the real record
+   * starts, so the top of the record peeks up from the bottom edge before anything is read. On a
+   * screen too short for that, the record simply follows the form.
+   */
   .lp-hero {
-    padding: 32px 0 48px;
+    padding: 0 0 40px;
+    border-radius: 0 0 28px 28px;
+  }
+  .lp-hero-in {
+    gap: 0;
+  }
+  .lp-hero-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: calc(100vh - var(--nav-h) - 176px);
+    min-height: calc(100svh - var(--nav-h) - 176px);
+    padding: 24px 0;
+  }
+  .lp-hero-copy > * {
+    width: 100%;
+  }
+  .lp-hero-copy > .lp-live {
+    width: auto;
+  }
+  .lp-live {
+    margin-bottom: 16px;
+    font-size: 13.5px;
   }
   .lp-hero-sub {
     margin-top: 12px;
     font-size: 17px;
-    line-height: 26px;
+    line-height: 25px;
   }
   .lp-hero-form {
-    margin-top: 24px;
+    margin-top: 20px;
   }
-  .lp-join-row {
-    flex-direction: column;
+  .lp-hero-free {
+    margin-top: 12px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .lp-hero-member {
+    margin-top: 0;
+  }
+  .lp-hero-by {
+    margin-top: 4px;
+    padding-top: 12px;
+    font-size: 13.5px;
   }
   .lp-join-btn.btn-lg {
-    width: 100%;
-  }
-  .lp-hero-in {
-    gap: 32px;
+    padding: 0 16px;
+    font-size: 15px;
   }
   .lp-rec-head,
   .lp-rec-sec {
@@ -1161,59 +2453,175 @@ html:has(.lp) {
   .lp-join-err .lp-linkbtn {
     min-height: 44px;
   }
-  .lp-proof {
-    padding: 24px 0;
-  }
-  .lp-proof-item {
-    padding: 0 16px;
-  }
-  .lp-proof-num {
-    font-size: 28px;
-    line-height: 32px;
-  }
-  .lp-proof-note {
-    margin-top: 16px;
-  }
-  .lp-sec {
-    padding: 48px 0;
+  .lp-sec,
+  .lp-stats {
+    padding-top: 64px;
   }
   .lp-sec-head {
-    margin-bottom: 24px;
-  }
-  .lp-h2 {
-    font-size: 24px;
-    line-height: 30px;
+    margin-bottom: 28px;
   }
   .lp-lead,
-  .lp-final-sub {
+  .lp-final-sub,
+  .lp-feat-p {
     font-size: 16px;
     line-height: 24px;
+  }
+  .lp-lead {
+    margin-top: 12px;
+  }
+  /* The box: the question on its own line, the function under it, full width. */
+  .lp-ask-box {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    min-height: 0;
+    padding: 14px;
+  }
+  .lp-ask-q {
+    display: flex;
+    align-items: center;
+    flex-basis: 0;
+    min-height: 52px;
+    font-size: 18px;
+    line-height: 26px;
+  }
+  .lp-ask-fn {
+    flex: 1 0 100%;
+  }
+  .lp-ask-select {
+    width: 100%;
+    min-height: 52px;
+  }
+  .lp-ask-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lp-sug,
+  .lp-refine-btn {
+    font-size: 14px;
+  }
+  .lp-refine-btn {
+    padding: 0 12px;
+    margin-left: -12px;
+  }
+  .lp-refine-select.select {
+    font-size: 16px;
+  }
+  .lp-res {
+    margin-top: 28px;
+    padding: 20px 16px 24px;
+  }
+  /* The tabs stay on one row and scroll. */
+  .lp-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 16px -16px 0;
+    padding: 4px 16px;
+  }
+  .lp-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .lp-tab {
+    flex: none;
+  }
+  /* A short list on a phone: four named rows and the blurred ones, each a company, a line and its facts on one row. */
+  .lp-rw {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 14px 12px;
+  }
+  .lp-rw:nth-child(n + 5):not(.is-blur) {
+    display: none;
+  }
+  .lp-rw-what {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 8px;
+  }
+  .lp-rw-title,
+  .lp-rw-sub {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .lp-rw-facts {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .lp-res-cta.btn-lg {
+    width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+  .lp-stats-band {
+    padding: 40px 24px 32px;
+  }
+  .lp-stats-grid {
+    gap: 32px 16px;
+  }
+  .lp-stat dt {
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .lp-stats-fns {
+    margin-top: 32px;
+    padding-top: 24px;
+    gap: 6px;
+  }
+  .lp-stats-fns li {
+    padding: 3px 10px;
+    font-size: 13px;
+  }
+  .lp-feat-list {
+    gap: 16px;
+  }
+  .lp-feat {
+    gap: 24px;
+    padding: 32px 20px 24px;
+  }
+  .lp-v {
+    padding: 16px;
+  }
+  .lp-v-slack-body {
+    margin-left: 0;
+  }
+  .lp-v-way-row {
+    flex-wrap: wrap;
+  }
+  .lp-also {
+    margin-top: 32px;
+  }
+  .lp-also-list li {
+    font-size: 14px;
   }
   .lp-steps {
     gap: 12px;
   }
   .lp-step-body {
-    padding: 24px 16px;
+    padding: 20px;
   }
   .lp-demo {
-    padding: 16px;
-  }
-  /* The label takes its own line, so what you do and what you get stay together on the next one (no lone "+1"). */
-  .lp-demo-k {
-    flex-basis: 100%;
+    padding: 16px 20px;
   }
   .lp-mx-row {
     padding: 24px 16px;
   }
   .lp-invite {
     align-items: flex-start;
+    justify-content: flex-start;
+  }
+  .lp-faq-wrap .lp-h2 {
+    margin-bottom: 20px;
+    text-align: left;
+  }
+  .lp-faq-sec .lp-qa summary {
+    font-size: 16.5px;
   }
   .lp-final {
-    padding: 48px 0;
+    padding: 64px 0 40px;
   }
   .lp-final-in {
-    align-items: stretch;
-    text-align: left;
+    padding: 48px 20px;
   }
   .lp-scrim {
     place-items: end stretch;
@@ -1243,14 +2651,8 @@ html:has(.lp) {
     gap: 4px;
   }
 }
-@keyframes lp-sheet {
-  from {
-    transform: translateY(24px);
-    opacity: 0;
-  }
-}
 @media (max-width: 380px) {
-  /* Too narrow for the whole logo beside Sign in and the button: the mark alone, as in the app's top bar, never a squashed logo. */
+  /* Too narrow for the whole logo beside Sign in and the button: a smaller one, never a squashed one. */
   .lp-nav-brand img {
     height: 34px !important;
   }
@@ -1262,14 +2664,39 @@ html:has(.lp) {
   .lp-rec-meta-x {
     display: none;
   }
+  .lp-h1 {
+    font-size: 36px;
+  }
+}
+/* Too narrow for the field and its button side by side: the button goes under it. */
+@media (max-width: 350px) {
+  .lp-join-row {
+    flex-direction: column;
+  }
+  .lp-join-btn.btn-lg {
+    width: 100%;
+  }
+  .lp-stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-refine {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   html:has(.lp) {
     scroll-behavior: auto;
   }
   .lp-scrim,
-  .lp-dialog {
+  .lp-dialog,
+  .lp-ask-ph {
     animation: none;
+  }
+  .lp-rws,
+  .lp-sug,
+  .lp-tab,
+  .lp-ask-box {
+    transition: none;
   }
 }
 
@@ -1277,962 +2704,5 @@ html:has(.lp) {
 @media (pointer: coarse) {
   .lp-dialog-input.input {
     font-size: 16px;
-  }
-}
-
-/* ---------- hero: the free line and who built it ---------- */
-.lp-hero-free {
-  margin-top: 24px;
-  font-size: 15px;
-  line-height: 24px;
-  font-weight: 700;
-  color: #fff;
-}
-.lp-hero-free + .lp-hero-form {
-  margin-top: 12px;
-}
-.lp-hero-by {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--on-pine-line);
-  max-width: 520px;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--on-pine-quiet);
-}
-/* A seat holder who is on Merlin. Outline means attribute. */
-.lp-member.chip {
-  height: 22px;
-  padding: 0 6px;
-  font-size: 12px;
-  color: var(--pine);
-  border-color: var(--pine-20, rgba(7, 63, 47, 0.2));
-}
-/* The two ways to reach a seat holder. Real buttons: each takes the visitor to the join form. */
-.lp-reach {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-.lp-fake-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  white-space: nowrap;
-}
-.lp-fake-btn-pine {
-  background: var(--pine);
-  border-color: var(--pine);
-  color: #fff;
-}
-button.lp-fake-btn {
-  font-family: inherit;
-  line-height: 20px;
-  cursor: pointer;
-  transition: background-color 0.12s, border-color 0.12s;
-}
-@media (hover: hover) {
-  button.lp-fake-btn:hover {
-    border-color: var(--pine);
-  }
-  button.lp-fake-btn-pine:hover {
-    background: var(--pine-hover);
-  }
-}
-/* The record's Unlock: the app's label, as a button that goes to the join form. */
-.lp-rec-btn {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  cursor: pointer;
-  border-radius: var(--r-chip);
-}
-/* A 44px target on a touch screen without making the label bigger. */
-.lp-rec-btn::after {
-  content: "";
-  position: absolute;
-  inset: -9px -4px;
-}
-@media (hover: hover) {
-  .lp-rec-btn:hover .lock-cta {
-    background: var(--pine-hover);
-  }
-}
-@media (pointer: coarse), (max-width: 640px) {
-  button.lp-fake-btn {
-    height: 44px;
-  }
-}
-
-/* ---------- try it ---------- */
-/* It hangs off the hero: the pine runs on behind the top of the card. */
-.lp-try {
-  position: relative;
-  padding: 0 0 64px;
-  background: linear-gradient(to bottom, var(--pine) 0, var(--pine) 48px, var(--bg) 48px);
-}
-.lp-try-card {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  padding: 32px;
-}
-.lp-try-head .lp-lead {
-  margin-top: 4px;
-}
-.lp-try-pick {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.lp-try-fns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.lp-try-chip.chip {
-  height: 36px;
-  padding: 0 12px;
-  font-size: 14px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-/* Hover only where there is a pointer, so a tap on a phone leaves no half-selected chip behind. */
-@media (hover: hover) {
-  .lp-try-chip.chip:not(.chip-on):hover {
-    border-color: var(--pine);
-    color: var(--pine);
-  }
-}
-.lp-try-more.is-on .select {
-  background-color: var(--pine);
-  border-color: var(--pine);
-  color: #fff;
-}
-.lp-try-filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 260px));
-  gap: 12px;
-}
-.lp-try-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.lp-try-label {
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.lp-try-select.select {
-  width: 100%;
-}
-.lp-try-body {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
-  transition: opacity 0.15s;
-}
-.lp-try-body[aria-busy="true"] {
-  opacity: 0.6;
-}
-.lp-try-counts {
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-.lp-try-count {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px;
-  border-radius: var(--r-card);
-  background: var(--bg);
-}
-.lp-try-count dt {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--body-ink);
-  text-wrap: pretty;
-}
-.lp-try-count dd {
-  order: -1;
-  margin: 0;
-  font-size: 32px;
-  line-height: 36px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--pine);
-}
-/* With a country picked: how many of the count are in it, and how many have no country on file yet. */
-.lp-try-split {
-  display: block;
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--muted);
-}
-.lp-try-holders {
-  margin-top: 16px;
-  font-size: 15px;
-  line-height: 24px;
-  color: var(--body-ink);
-}
-.lp-try-holders .num {
-  font-weight: 700;
-}
-.lp-try-empty {
-  margin-top: 16px;
-  font-size: 15px;
-  line-height: 24px;
-  color: var(--muted);
-}
-.lp-try-skel-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--line);
-}
-.lp-try-skel-line {
-  height: 12px;
-  border-radius: 4px;
-  background: var(--line);
-}
-.lp-try-skel-short {
-  width: 70%;
-}
-.lp-try-foot {
-  margin-top: 16px;
-  padding: 20px;
-  border-radius: var(--r-card);
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-}
-.lp-try-note {
-  flex: 1 1 280px;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--muted);
-}
-
-/* ---------- try it: the table (styled like the app's companies table) ---------- */
-.lp-tt-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 24px;
-  border-bottom: 1px solid var(--line);
-}
-.lp-tt-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  margin-bottom: -1px;
-  padding: 0 12px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  font: inherit;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
-  color: var(--muted);
-  cursor: pointer;
-  border-radius: 6px 6px 0 0;
-  transition: color 0.15s, border-color 0.15s;
-}
-.lp-tt-tab:hover {
-  color: var(--pine);
-}
-.lp-tt-tab.is-on {
-  color: var(--ink);
-  border-bottom-color: var(--pine);
-}
-.lp-tt-tab-n {
-  min-width: 22px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: var(--surface-2);
-  font-size: 12.5px;
-  line-height: 20px;
-  font-weight: 700;
-  color: var(--body-ink);
-  text-align: center;
-}
-.lp-tt-tab.is-on .lp-tt-tab-n {
-  background: var(--pine);
-  color: #fff;
-}
-.lp-tt-scroll {
-  margin-top: 16px;
-  max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-}
-.lp-tt-scroll:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-.lp-tt {
-  width: 100%;
-  min-width: 860px;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 13px;
-  line-height: 20px;
-}
-.lp-tt th {
-  height: 36px;
-  padding: 0 12px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 600;
-  color: var(--muted);
-  text-align: left;
-  white-space: nowrap;
-}
-.lp-tt td {
-  height: 56px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  white-space: nowrap;
-  vertical-align: middle;
-}
-.lp-tt tbody tr:last-child td {
-  border-bottom: 0;
-}
-.lp-tt .num {
-  font-variant-numeric: tabular-nums;
-}
-@media (hover: hover) {
-  .lp-tt tbody tr:hover td {
-    background: var(--row-hover);
-  }
-}
-/* The company column stays put while the rest scrolls under it on a narrow screen. */
-.lp-tt .lp-tt-co {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  min-width: 220px;
-  max-width: 220px;
-  border-right: 1px solid var(--line);
-}
-.lp-tt th.lp-tt-co {
-  z-index: 2;
-}
-.lp-tt-cobox {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.lp-tt-cobox .logo {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-}
-.lp-tt-cotext {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.lp-tt-name {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 700;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-tt-dom {
-  font-size: 12.5px;
-  line-height: 18px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-tt-what {
-  max-width: 280px;
-}
-.lp-tt-ind {
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.lp-tt-dom.locked-site {
-  text-overflow: clip;
-}
-/* A blurred name's cloud spills soft past its letters (.locked-blur in globals.css): nothing clips it here. */
-.lp-tt-name:has(> .locked-name) {
-  overflow: visible;
-}
-.lp-tt-title,
-.lp-tt-sub {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-tt-title {
-  font-weight: 600;
-}
-.lp-tt-sub {
-  font-size: 12.5px;
-  line-height: 18px;
-  color: var(--muted);
-}
-.lp-tt-none {
-  color: var(--faint, var(--muted));
-}
-/* Past the first 10 rows: the company is blurred (made-up letters), the free facts stay. */
-.lp-tt tr.is-blur .lp-tt-title,
-.lp-tt tr.is-blur td:not(.lp-tt-co) {
-  color: var(--body-ink);
-}
-.lp-tt-skel td .lp-try-skel-line {
-  display: block;
-  width: 120px;
-}
-.lp-tt-skel td.lp-tt-co {
-  display: table-cell;
-}
-.lp-tt-skel .lp-tt-co .lp-try-skel-logo {
-  display: inline-block;
-  width: 28px;
-  height: 28px;
-  margin-right: 10px;
-  vertical-align: middle;
-}
-.lp-tt-skel .lp-tt-co .lp-try-skel-line {
-  display: inline-block;
-  width: 130px;
-  vertical-align: middle;
-}
-/* ---------- what you can do: the showcase (Showcase.tsx) ---------- */
-.lp-cost-earn.chip {
-  border-color: transparent;
-  background: var(--volt-soft);
-  color: var(--volt-ink);
-}
-
-/* ---------- how it works: the fields, folded ---------- */
-.lp-free {
-  margin-top: 32px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.lp-free summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 56px;
-  padding: 16px 0;
-  font-weight: 700;
-  font-size: 17px;
-  line-height: 24px;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-  cursor: pointer;
-  list-style: none;
-}
-.lp-free summary::-webkit-details-marker {
-  display: none;
-}
-.lp-free summary:hover {
-  color: var(--pine);
-}
-.lp-free[open] .lp-qa-icon::after {
-  transform: rotate(0deg);
-}
-.lp-free-in {
-  padding-bottom: 24px;
-}
-.lp-free-lead {
-  margin-bottom: 16px;
-  font-size: 15px;
-  line-height: 24px;
-  color: var(--muted);
-}
-
-@media (max-width: 960px) {
-  .lp-try-counts {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-  .lp-try-count {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 12px;
-    padding: 12px 16px;
-  }
-  .lp-try-count dd {
-    flex: none;
-    min-width: 2.6em;
-    font-size: 26px;
-    line-height: 32px;
-  }
-}
-@media (max-width: 640px) {
-  .lp-try {
-    padding-bottom: 48px;
-    background: linear-gradient(to bottom, var(--pine) 0, var(--pine) 32px, var(--bg) 32px);
-  }
-  .lp-try .lp-wrap {
-    padding-left: max(8px, env(safe-area-inset-left));
-    padding-right: max(8px, env(safe-area-inset-right));
-  }
-  .lp-try-card {
-    padding: 24px 16px;
-  }
-  .lp-try-chip.chip {
-    height: 44px;
-  }
-  .lp-try-filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 8px;
-  }
-  .lp-try-filters .lp-try-more {
-    grid-column: 1 / -1;
-  }
-  .lp-try-select.select {
-    min-height: 44px;
-    font-size: 16px;
-  }
-  .lp-tt-tab {
-    min-height: 44px;
-  }
-  .lp-tt th.lp-tt-co,
-  .lp-tt td.lp-tt-co {
-    min-width: 168px;
-    max-width: 168px;
-  }
-  .lp-tt-what {
-    min-width: 220px;
-  }
-  .lp-try-cta.btn-lg {
-    width: 100%;
-  }
-  .lp-hero-by {
-    margin-top: 12px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .lp-try-body,
-  .lp-try-chip.chip {
-    transition: none;
-  }
-}
-
-/* ---------- try it: a kept-back open role ---------- */
-/* A company with an open role kept back (lib/preview.ts names only PREVIEW_OPEN_NAMED of them): plain words, never a blur. */
-.lp-try-logo-kept {
-  display: inline-grid;
-  place-items: center;
-  background: var(--surface-2);
-  color: var(--muted);
-  border-color: transparent;
-}
-.lp-try-name-kept.lp-tt-name {
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
-  color: var(--muted);
-  white-space: normal;
-}
-/* A row is one tap to the join form. */
-.lp-tt tbody tr.lp-tt-go {
-  cursor: pointer;
-}
-/* On a phone the table scrolls sideways: a fade at the right edge and a line above say so. */
-.lp-tt-frame {
-  position: relative;
-}
-.lp-tt-frame::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  bottom: 1px;
-  width: 20px;
-  border-radius: 0 var(--r-card) var(--r-card) 0;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0), var(--surface));
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.lp-tt-swipe {
-  display: none;
-  margin-top: 12px;
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted);
-}
-@media (max-width: 640px) {
-  .lp-tt-frame:not(.is-end)::after {
-    opacity: 1;
-  }
-  .lp-tt-swipe {
-    display: block;
-  }
-  .lp-tt-swipe + .lp-tt-scroll {
-    margin-top: 8px;
-  }
-  /* The tabs stay on one row and scroll, each at least 44px wide. */
-  .lp-tt-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .lp-tt-tabs::-webkit-scrollbar {
-    display: none;
-  }
-  .lp-tt-tab {
-    flex: none;
-    min-width: 44px;
-    justify-content: center;
-    white-space: nowrap;
-  }
-}
-/* A small phone: a narrow company column (names wrap to two lines) so the role and its date read without a swipe. */
-@media (max-width: 480px) {
-  .lp-tt {
-    min-width: 0;
-  }
-  .lp-tt th.lp-tt-co,
-  .lp-tt td.lp-tt-co {
-    min-width: 124px;
-    max-width: 124px;
-    width: 124px;
-    padding-left: 10px;
-    padding-right: 8px;
-  }
-  .lp-tt-cobox {
-    gap: 8px;
-  }
-  .lp-tt-cobox .logo {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-  }
-  .lp-tt-name {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    font-size: 13px;
-    line-height: 18px;
-  }
-  .lp-tt-dom {
-    display: none;
-  }
-  /* The rest of the screen, so the first swipe shows industry. */
-  .lp-tt td.lp-tt-what,
-  .lp-tt th.lp-tt-what {
-    width: calc(100vw - 172px);
-    min-width: calc(100vw - 172px);
-    max-width: 260px;
-  }
-  .lp-tt-title,
-  .lp-tt-sub {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-  .lp-tt td:not(.lp-tt-co):not(.lp-tt-what) {
-    white-space: nowrap;
-  }
-}
-@media (max-width: 360px) {
-  .lp-try-filters {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ---------- hero record: a real company ---------- */
-.lp-rec-name {
-  padding-right: 0;
-  overflow-wrap: anywhere;
-}
-.lp-rec-name.lp-rec-name-chip {
-  padding-right: 96px;
-}
-.lp-val-wrap {
-  white-space: normal;
-  text-align: right;
-}
-.lp-reach-wrap {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--line);
-}
-.lp-reach-k {
-  display: block;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 700;
-  color: var(--muted);
-}
-.lp-reach-wrap .lp-reach {
-  margin-top: 8px;
-}
-.lp-rec-loading .lp-rec-sec,
-.lp-rec-loading .lp-rec-id {
-  display: grid;
-  gap: 8px;
-}
-.lp-rec-skel-logo {
-  flex: none;
-  width: 40px;
-  height: 40px;
-}
-.lp-rec-skel-name {
-  width: 55%;
-  height: 16px;
-}
-
-/* ---------- what you can do: tabs over a swipeable track of real screens ---------- */
-.lp-show-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-/* One row of tabs. Where it doesn't fit, it scrolls sideways rather than leave one tab on a row of its own. */
-.lp-show-tabs {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  gap: 6px;
-  /* Room for the focus ring, which the scroller would clip. */
-  padding: 4px;
-  margin: -4px;
-}
-.lp-show-tabs::-webkit-scrollbar {
-  display: none;
-}
-.lp-show-tab {
-  position: relative;
-  flex: none;
-  overflow: hidden;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-size: 13.5px;
-  line-height: 20px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background var(--t), border-color var(--t), color var(--t);
-}
-.lp-show-tab:hover {
-  border-color: var(--pine);
-}
-.lp-show-tab.is-on {
-  background: var(--pine);
-  border-color: var(--pine);
-  color: #fff;
-}
-/* The time left on the slide in view, as a thin line along the bottom of its tab. */
-.lp-show-tick {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 3px;
-  width: 100%;
-  background: var(--volt);
-  transform-origin: left;
-  transform: scaleX(0);
-}
-.lp-show.is-running .lp-show-tick {
-  animation: lp-show-tick 6s linear forwards;
-}
-@keyframes lp-show-tick {
-  to {
-    transform: scaleX(1);
-  }
-}
-/* Under the slides: which one is showing, and Pause or Play. It stays, so a paused showcase can run again. */
-.lp-show-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 8px;
-}
-.lp-show-at {
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted);
-}
-.lp-show-pause {
-  flex: none;
-  min-width: 64px;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--pine);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.lp-show-track {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  border-radius: var(--r-card);
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-.lp-show-track::-webkit-scrollbar {
-  display: none;
-}
-.lp-show-slide {
-  flex: 0 0 100%;
-  min-width: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  display: grid;
-  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-  gap: 32px;
-  align-items: center;
-  padding: 32px;
-}
-.lp-show-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.lp-show-copy h3 {
-  font-size: 22px;
-  line-height: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-  color: var(--ink);
-}
-.lp-show-copy p {
-  font-size: 16px;
-  line-height: 26px;
-  color: var(--body-ink);
-}
-.lp-show-copy .lp-cost {
-  margin-top: 4px;
-}
-.lp-show-shot {
-  min-width: 0;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(10, 26, 19, 0.04), 0 8px 24px rgba(10, 26, 19, 0.06);
-}
-.lp-show-shot img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.lp-show-more {
-  margin-top: 16px;
-  font-size: 14px;
-  line-height: 22px;
-  color: var(--muted);
-}
-.lp-show-more-k {
-  font-weight: 700;
-  color: var(--ink);
-}
-@media (max-width: 960px) {
-  .lp-show-slide {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
-    align-items: start;
-    /* Slides share the tallest one's height: keep the picture right under its copy. */
-    align-content: start;
-    padding: 24px;
-  }
-}
-@media (max-width: 640px) {
-  /* One row of tabs that scrolls sideways, so the slide stays near the top of the screen. */
-  .lp-show-bar {
-    margin: 0 -16px 12px;
-  }
-  .lp-show-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    margin: 0;
-    padding: 4px 16px;
-    scroll-padding: 0 16px;
-  }
-  .lp-show-tabs::-webkit-scrollbar {
-    display: none;
-  }
-  .lp-show-tab {
-    flex: none;
-  }
-  .lp-show-slide {
-    padding: 20px 16px;
-  }
-  .lp-show-copy h3 {
-    font-size: 19px;
-    line-height: 25px;
-  }
-  .lp-show-copy p {
-    font-size: 15px;
-    line-height: 24px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .lp-show-tab {
-    transition: none;
-  }
-  .lp-show.is-running .lp-show-tick {
-    animation: none;
   }
 }

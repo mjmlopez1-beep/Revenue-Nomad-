@@ -12,6 +12,20 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 const DAY_ONE_UNLOCKS = 25;
 const DAILY_UNLOCKS = 100;
 
+/**
+ * The questions a visitor asks before joining, in the order the landing page leads with them
+ * (Questions.tsx `first`). The rest follow in the order below. A title that no longer matches a
+ * question is skipped.
+ */
+export const FAQ_LEAD = [
+  "What does it cost?",
+  "Which functions does it cover?",
+  "Where does all of this come from?",
+  "How do I reach the fractional who held a seat?",
+  "What will other members see about me?",
+  "What happens to a rate I share?",
+];
+
 /** The questions and answers, with the starter balance the server actually gives. `scanRoleFree`: lib/tableFields SEAT_SCAN_ROLE_FREE. */
 export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROLE_FREE): [string, string][] {
   return [
@@ -33,7 +47,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does an open role cost?",
-      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Your first company each day is free. The people there, and who held its seats, open after the company. Try it on the homepage names a few hiring companies as a sample.",
+      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Your first company each day is free. The people there, and who held its seats, open after the company. The preview on the homepage names a few hiring companies as a sample.",
     ],
     [
       "What does a seat cost to see?",

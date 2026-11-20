@@ -84,7 +84,7 @@ function writeSaved(s: Saved | null) {
     else sessionStorage.removeItem(SAVE_KEY);
   } catch {}
 }
-/** The function a visitor picked in "Try it" on the landing page (localStorage, see app/landing/TryIt.tsx), or null. */
+/** The function a visitor picked in "What are you looking for?" on the landing page (localStorage, see app/landing/Finder.tsx), or null. */
 const TRY_FN_KEY = "tp_try_fn";
 function triedFn(): string | null {
   try {
@@ -176,7 +176,7 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
     const a: Saved = newerAnswers(tab, server) ?? { id: me.id };
     const known = new Set(view.companies.map((c) => c.id));
     const saved = new Set((me.savedViews ?? []).map((v) => v.id));
-    // A function picked on the landing page's "Try it" comes before one guessed from the title.
+    // A function picked on the landing page comes before one guessed from the title.
     const picked = a.function ?? a.fn;
     const fn = (picked && FUNCTIONS.includes(picked) ? picked : null) ?? triedFn() ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
     // No title yet means an empty field with the placeholder showing, never a stored "Member".

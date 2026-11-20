@@ -15,7 +15,7 @@
  */
 import type { ReactNode } from "react";
 import { CompanyLogo, IconCheck, IconLock } from "../ui/shared";
-import type { PreviewExample } from "./TryIt";
+import type { PreviewExample } from "./Finder";
 
 /** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. Drawn with the app's own classes. */
 function Locked({ w = 72 }: { w?: number }) {
@@ -112,17 +112,17 @@ function RecordLoading() {
   return (
     <div className="lp-rec lp-rec-loading" aria-hidden>
       <div className="lp-rec-head">
-        <span className="lp-try-skel-logo lp-rec-skel-logo" />
+        <span className="lp-skel-logo lp-rec-skel-logo" />
         <div className="lp-rec-id">
-          <span className="lp-try-skel-line lp-rec-skel-name" />
-          <span className="lp-try-skel-line lp-try-skel-short" />
+          <span className="lp-skel-line lp-rec-skel-name" />
+          <span className="lp-skel-line lp-skel-short" />
         </div>
       </div>
       {[0, 1].map((n) => (
         <div key={n} className="lp-rec-sec">
-          <span className="lp-try-skel-line" />
-          <span className="lp-try-skel-line lp-try-skel-short" />
-          <span className="lp-try-skel-line" />
+          <span className="lp-skel-line" />
+          <span className="lp-skel-line lp-skel-short" />
+          <span className="lp-skel-line" />
         </div>
       ))}
     </div>
@@ -143,7 +143,7 @@ export function HeroRecord({ example, onJoin }: { example: PreviewExample | null
     return (
       <figure className="lp-visual">
         <RecordLoading />
-        <figcaption className="lp-visual-cap">A real record from the table.</figcaption>
+        <figcaption className="lp-visual-cap">A real record on Merlin today.</figcaption>
       </figure>
     );
   const { company: co, open, seat } = example;
@@ -202,9 +202,8 @@ export function HeroRecord({ example, onJoin }: { example: PreviewExample | null
         </div>
       </div>
       <figcaption className="lp-visual-cap">
-        {open
-          ? `A real record from the table. ${co.name} is hiring for ${open.function} now, and the fractional who held its ${seat.function} seat is on file. Ask them how it went before you pitch.`
-          : `A real record from the table. The fractional who held ${co.name}'s ${seat.function} seat is on file. Ask them how it went before you pitch for the next one.`}
+        A real record on Merlin today. {co.name}
+        {open ? ` is hiring for ${open.function}, and whoever held its ${seat.function} seat is on file.` : `: whoever held its ${seat.function} seat is on file.`}
       </figcaption>
     </figure>
   );
@@ -230,7 +229,7 @@ export function DemoUnlock() {
       <span className="lp-demo-k">Seat holder</span>
       <Unlock />
       <span className="lp-demo-arrow">→</span>
-      <span className="lp-demo-v">Dana Whitfield</span>
+      <span className="lp-demo-v">Alex Sample</span>
     </div>
   );
 }
@@ -239,7 +238,7 @@ export function DemoConfirm() {
   return (
     <div className="lp-demo" aria-hidden>
       <span className="lp-demo-k">Role</span>
-      <span className="lp-demo-v">Fractional VP Sales</span>
+      <span className="lp-demo-v">Fractional COO</span>
       <Confirmed n={3} />
       <span className="lp-demo-btn">Confirm</span>
       <span className="lp-demo-btn lp-demo-btn-quiet">Report</span>

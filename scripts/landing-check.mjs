@@ -2,12 +2,13 @@
 /**
  * The signed-out landing page, checked in a real browser on a made-up seed: screenshots (full
  * page and first screen, phone and desktop), first paint on a throttled iPhone 13, the words in
- * the first phone screen, page weight, no sideways scroll at five widths, and the page's words
- * with a few functions picked (nothing may say one function unless the visitor chose it).
+ * the first phone screen, page weight, no sideways scroll at five widths, the page's words
+ * with a few functions picked (nothing may say one function unless the visitor chose it), and
+ * the page working: the function, the questions, the tabs, Refine, Sign in and joining.
  *
  *   npm run build
  *   TAG=after node scripts/landing-check.mjs          everything (OUT=<folder> for the screenshots)
- *   ONLY=paint|shots|words|weight|scroll|functions    one part
+ *   ONLY=paint|shots|words|weight|scroll|functions|flow   one part (or several, comma separated)
  *
  * It writes its own made-up seed (fake companies at .example addresses, fake people, nobody
  * real) into a temporary data folder, starts `next start` on PORT (5940 by default) with the test
@@ -83,7 +84,7 @@ companies.forEach((c, k) => {
     id: `e_lp${k}_a`,
     companyId: c.id,
     verified: false,
-    fields: { source: "Seat scan", ...(k % 3 === 0 ? { operator: person(k) } : {}), role: TITLE[fn], function: fn, type: "Fractional", start: monthAgo(3 + (k % 14)), status: "Active", end: "Ongoing", rate: "$8k/mo" },
+    fields: { source: "Seat scan", ...(k % 3 === 0 || k % 12 === 1 ? { operator: person(k) } : {}), role: TITLE[fn], function: fn, type: "Fractional", start: monthAgo(3 + (k % 14)), status: "Active", end: "Ongoing", rate: "$8k/mo" },
   });
   // A second seat in another function at every other company: repeat hirers.
   if (k % 2 === 1) {
@@ -343,10 +344,79 @@ async function functions() {
   console.log("functions", JSON.stringify(out, null, 1));
 }
 
-const parts = { shots, paint, words, weight, scroll, functions };
+/** The page works: the function, the questions, the tabs, Refine, Sign in, and joining from the hero form. */
+async function flow() {
+  let fails = 0;
+  const check = (name, ok, got) => {
+    if (!ok) fails++;
+    console.log(`${ok ? "ok  " : "FAIL"} ${name}${ok || got === undefined ? "" : ` (${JSON.stringify(got).slice(0, 200)})`}`);
+  };
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const asked = [];
+  page.on("request", (r) => r.url().includes("preview=1") && asked.push(new URL(r.url()).searchParams));
+  await page.goto(`${BASE}/`);
+  await settle(page);
+  const box = page.locator(".lp-ask-box");
+  const sel = page.locator(".lp-ask-select");
+  check("no function is picked at first", (await sel.inputValue()) === "");
+  check("the answer says it is an example", (await page.locator(".lp-res-eg").count()) === 1);
+  check("the empty box shows an example question as a placeholder", (await page.locator(".lp-ask-ph").count()) === 1);
+  check("an example is never kept for onboarding", (await page.evaluate(() => localStorage.getItem("tp_try_fn"))) === null);
+  await sel.selectOption("Finance");
+  await page.waitForFunction(() => document.querySelector(".lp-res-fn")?.textContent === "Finance" && document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
+  check("picking Finance asks the preview for Finance", asked.at(-1)?.get("fn") === "Finance", asked.at(-1)?.toString());
+  check("the pick is kept for onboarding", (await page.evaluate(() => localStorage.getItem("tp_try_fn"))) === "Finance");
+  check("the example note is gone", (await page.locator(".lp-res-eg").count()) === 0);
+  check("the third tab names the function's seat", /No fractional CFO yet/.test(await page.locator(".lp-tab").nth(2).innerText()));
+  await page.getByRole("button", { name: "Companies hiring a fractional CFO now" }).click();
+  await page.waitForFunction(() => document.querySelector(".lp-tab.is-on")?.textContent?.startsWith("Hiring now") && document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
+  check("the suggestion fills the box", /Companies hiring a fractional CFO now/.test(await box.innerText()));
+  check("and asks for the Hiring now tab", asked.at(-1)?.get("view") === "hiring", asked.at(-1)?.toString());
+  const rowsN = await page.locator(".lp-rw:not(.lp-rw-skel)").count();
+  check("the list is short (8 rows at most)", rowsN <= 8, rowsN);
+  await page.getByRole("button", { name: "Who held the Finance seat before me" }).click();
+  await page.waitForFunction(() => document.querySelector(".lp-tab.is-on")?.textContent?.startsWith("All") && document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
+  check("who held the seat reads the All tab, and its line stands out", (await page.locator(".lp-res-held.is-on").count()) === 1);
+  await page.getByRole("button", { name: "What a fractional CFO charges" }).click();
+  const note = await page.locator(".lp-res").innerText();
+  check("rates has no public answer: no figure, no table", (await page.locator(".lp-rw").count()) === 0 && !/[$€£]\s?\d/.test(note), note.slice(0, 160));
+  await page.getByRole("button", { name: "Clear the question" }).click();
+  check("clearing the box brings the placeholder back", (await page.locator(".lp-ask-ph").count()) === 1);
+  await page.getByRole("button", { name: /^Refine/ }).click();
+  const ind = page.locator(".lp-refine-select").first();
+  const firstInd = await ind.locator("option").nth(1).getAttribute("value");
+  await ind.selectOption(firstInd);
+  await page.waitForFunction(() => document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
+  check("Refine holds the industry and country, and filters the answer", asked.at(-1)?.get("ind") === firstInd && (await page.locator(".lp-refine-n").innerText()) === "1", asked.at(-1)?.toString());
+  // The page's own words: nobody's name, no email, no rate.
+  const text = await page.locator(".lp").innerText();
+  const people = seed.engagements.map((e) => e.fields.operator).concat(seed.contacts.map((c) => c.fields.name)).filter(Boolean);
+  check("no seat holder or hiring contact from the seed is on the page", !people.some((n) => text.includes(n)), people.filter((n) => text.includes(n)).slice(0, 3));
+  check("no rate from the seed and no posting link is on the page", !/\$[89]k\/mo|\/jobs/.test(await page.content()));
+  // Sign in opens and closes.
+  await page.locator(".lp-nav-signin").click();
+  check("Sign in opens its dialog", (await page.locator(".lp-dialog").count()) === 1);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  check("Escape closes it", (await page.locator(".lp-dialog").count()) === 0);
+  // Joining from the hero form: email, then name, then the member is in (onboarding).
+  const hero = page.locator(".lp-hero-form");
+  await hero.locator("input[type=email]").fill(`lp-check-${Date.now()}@example.com`);
+  await hero.getByRole("button", { name: "Get 25 credits" }).click();
+  await hero.locator("input[name=name]").fill("Casey Lander");
+  await hero.locator("button[type=submit]").click();
+  await page.waitForFunction(() => !document.querySelector(".lp"), null, { timeout: 30_000 }).catch(() => {});
+  check("joining from the hero form signs the visitor in", (await page.locator(".lp").count()) === 0);
+  await ctx.close();
+  results.flow = { fails };
+  if (fails) process.exitCode = 1;
+}
+
+const parts = { shots, paint, words, weight, scroll, functions, flow };
 for (const [name, run] of Object.entries(parts)) if (ONLY === "all" || ONLY.split(",").includes(name)) await run();
 writeFileSync(path.join(OUT, `${TAG}-results.json`), JSON.stringify(results, null, 2));
 console.log(`results in ${path.join(OUT, `${TAG}-results.json`)}`);
 await browser.close();
 stop();
-process.exit(0);
+process.exit(process.exitCode ?? 0);
