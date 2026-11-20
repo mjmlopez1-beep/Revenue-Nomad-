@@ -333,6 +333,10 @@ section("remove", async () => {
   });
   const sid = add.json?.id;
   if (add.status !== 200 || !sid) return fail("remove: add a seat", add.json);
+  // A seat at a company new to Merlin earns once it is confirmed: another member confirms a fact on it.
+  check("at a company new to Merlin the seat's credits wait", /\+\d+ when confirmed/.test(add.json?.message ?? "") && (await A.credits()) === STARTER, add.json?.message);
+  const conf = await B.act({ type: "verify", entity: "engagement", id: sid, field: "function" });
+  check("another member confirming a fact on it pays them", conf.status === 200 && (await A.credits()) > STARTER, conf.json);
   const a1 = await A.credits();
   check("the seat earned for each answer", a1 > STARTER, a1);
   // B and C unlock the company first: it is locked for them.
@@ -369,7 +373,12 @@ section("remove", async () => {
   const p0 = await A.credits();
   const pRm = await A.act({ type: "notMine", engagementId: priv.json?.id });
   const pv = await A.view();
-  check("the private rate shared for it comes out of the benchmarks, with its credit", bench.status === 200 && pRm.status === 200 && !pv.me.benchRates.some((r) => r.engagementId === priv.json?.id) && pv.me.credits === p0 - 4, { bench: bench.json?.message, rm: pRm.json?.message, credits: [p0, pv.me.credits] });
+  // (The seat's own 3 answers were still waiting to be confirmed, so only the rate's credit was paid, and only it comes off.)
+  check(
+    "the private rate shared for it comes out of the benchmarks, with its credit",
+    bench.status === 200 && pRm.status === 200 && !pv.me.benchRates.some((r) => r.engagementId === priv.json?.id) && pv.me.credits === p0 - 1 && !pv.me.pending,
+    { bench: bench.json?.message, rm: pRm.json?.message, credits: [p0, pv.me.credits] },
+  );
 });
 
 section("names", async () => {

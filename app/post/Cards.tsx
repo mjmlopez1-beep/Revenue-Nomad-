@@ -19,6 +19,7 @@ import { cardSeat, coverOf, hireOfRow, isOpenRole, personBothLocked, personCover
 import { YourSeat, earnNote, useCellUi } from "./ui";
 import { Fit, FnChips, HeldBy, HireLine, LOCKED_TIP, RowFact, SignalLines, UnlockedTag, type SignalRows } from "./Tables";
 import { RoleDate } from "./RoleDate";
+import { freeCompanyNow } from "./display";
 import { useFitWhy } from "./Hunt";
 
 /**
@@ -41,7 +42,7 @@ function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (
             <h3 className="tp-pcard-h">
               <button type="button" className="tp-pcard-open tp-co-name" onClick={open} title={LOCKED_TIP}>
                 <span className="tp-hidden-name">
-                  <LockedName seed={i.c.id} />
+                  <LockedName seed={i.c.id} shown={i.c.shownName} />
                 </span>
                 <span className="sr-only">. Open the record to see what unlocking it shows.</span>
               </button>
@@ -94,12 +95,15 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
  * here, whose job posting comes with the company.
  */
 function HiddenLine({ rate, roles = true }: { rate: boolean; roles?: boolean }) {
+  // The free company of the day: the card says so, and the record's button spends nothing.
+  const free = freeCompanyNow(useCellUi().me);
   // The rate only when the posting gave one: a card never promises a rate that isn't there (C49).
   return (
     <div className="tp-pcard-hidden">
       <IconLock />
       <span>
-        {!roles ? "Unlock company" : rate ? "Company, posting and rate" : "Company and posting"} <span className="tp-pcard-hidden-cost">· {COMPANY_PRICE_SAY}{roles ? " together" : ""}</span>
+        {!roles ? "Unlock company" : rate ? "Company, posting and rate" : "Company and posting"}{" "}
+        <span className="tp-pcard-hidden-cost">· {free ? "free · 1 left today" : `${COMPANY_PRICE_SAY}${roles ? " together" : ""}`}</span>
       </span>
     </div>
   );

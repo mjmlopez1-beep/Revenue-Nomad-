@@ -351,7 +351,15 @@ export const LOCKED_SAY = "Company locked, 2 credits to unlock";
  * A locked company's name: made-up letters, blurred, that nobody can select or read aloud,
  * and a visually hidden label for screen readers. `seed` is the company's public id.
  */
-export function LockedName({ seed, className }: { seed: string; className?: string }) {
+export function LockedName({ seed, className, shown }: { seed: string; className?: string; shown?: string }) {
+  // Trial and Pro on the Crystal Ball day: the name is free to read there (CompanyRec.shownName), the company still locked.
+  if (shown)
+    return (
+      <span className={`locked-name locked-name-shown${className ? ` ${className}` : ""}`}>
+        {shown}
+        <span className="sr-only">. Named free on Pro. Unlock it to make it yours.</span>
+      </span>
+    );
   return (
     <span className={`locked-name${className ? ` ${className}` : ""}`}>
       <span className="locked-blur" aria-hidden>

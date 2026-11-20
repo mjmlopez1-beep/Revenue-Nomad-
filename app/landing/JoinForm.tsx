@@ -22,6 +22,15 @@ function readRef(): string | undefined {
   }
 }
 
+/** The discount code the visitor arrived with (?code=RN-SURVEY10, kept by Root as tp_code), so checkout can apply it later. */
+function readCode(): string | undefined {
+  try {
+    return new URLSearchParams(window.location.search).get("code") || localStorage.getItem("tp_code") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface JoinFormProps {
   /** Email sign-in is on: joining emails a link instead of signing in here. */
   emailOn: boolean;
@@ -75,7 +84,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
     }
     setBusy(true);
     setError(null);
-    const r = await post<{ ok?: boolean; sent?: boolean }>({ join: { name: n, email, ref: readRef() } });
+    const r = await post<{ ok?: boolean; sent?: boolean }>({ join: { name: n, email, ref: readRef(), code: readCode() } });
     if (r.error) {
       setBusy(false);
       const member = MEMBER_RE.test(r.error);

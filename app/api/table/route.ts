@@ -170,7 +170,7 @@ async function viewAnswer(view: Built, enc: Enc | null, key?: string): Promise<N
  * shows, or answer with what they changed themselves (messages), or change too much (an admin
  * removing everything a member added: the page loads the table again).
  */
-const NO_PATCH = new Set(["scanNow", "aboutNow", "leadersNow", "adminRemoveMember"]);
+const NO_PATCH = new Set(["scanNow", "aboutNow", "leadersNow", "adminRemoveMember", "lockedView", "promoCode"]);
 /** Actions that can move the rate benchmarks. */
 const BENCH_ACTIONS = new Set(["benchRate", "benchRateRemove", "fill", "retract", "review", "adminRemove", "report"]);
 /** The public ids of the records an action touched: what it named, what it made, and the cells it changed. */
@@ -359,7 +359,7 @@ function sound<T>(x: T, depth = 0): T {
  * POST { signInCode: { email, code } } sign in with the 6-digit code from that email.
  * POST { emailMe: true }              signed in: email myself a one-time link (another device).
  * POST { rotateLink: true }           signed in: "Sign out on other devices" (a new personal token, set here).
- * POST { join: { name, email, ref } } join. With email switched on, we email a sign-in link
+ * POST { join: { name, email, ref, code } } join (code: a discount code from ?code=, kept for checkout). With email switched on, we email a sign-in link
  *                                     (that's the email check); without it, you're in at once,
  *                                     except with an address in RN_ADMIN_EMAILS, which then needs
  *                                     the header x-cron-secret: RN_CRON_SECRET.
@@ -442,7 +442,7 @@ export const POST = guarded(async (req: NextRequest) => {
       return err("We've sent 3 links to that email in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
     try {
       // x-cron-secret: only so whoever runs the server can create the first admin while email is off (see joinMember).
-      const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip, req.headers.get("x-cron-secret"));
+      const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip, req.headers.get("x-cron-secret"), body.join.code);
       if (emailEnabled()) {
         // A one-time link to finish joining (using it proves the address), or for a member, to sign in. Same answer either way.
         sendOneTime(req, m, m.existing ? "signin" : "join");

@@ -36,11 +36,15 @@ run() {
 }
 
 # serve <name> <command...>: the same, against a server started for this suite alone.
+# The free company of the day (one free company unlock a member a day) is off on these servers
+# (RN_FREE_COMPANY=off, honoured only with RN_SCAN_TEST=1), so their checks of what unlocks cost
+# stay exact. FREE_COMPANY=on serve ... keeps it on: credits-free checks it over HTTP, and the
+# in-process suites (lock, radar, invites, econ, billing) run with it on.
 serve() {
   local name=$1
   shift
   mkdir -p "$TMP/data-$name"
-  RN_DATA_DIR="$TMP/data-$name" RN_STARTER_CREDITS=25 RN_ADMIN_EMAILS=admin-qa@example.com RN_SCAN_TEST=1 RN_CRON_SECRET=qa-cron RN_LOGO_LOOKUP=off \
+  RN_DATA_DIR="$TMP/data-$name" RN_STARTER_CREDITS=25 RN_ADMIN_EMAILS=admin-qa@example.com RN_SCAN_TEST=1 RN_CRON_SECRET=qa-cron RN_LOGO_LOOKUP=off RN_FREE_COMPANY="${FREE_COMPANY:-off}" \
     RN_SUPPORT_EMAIL="$SUPPORT_EMAIL" RN_INTRO_EMAIL="$INTRO_EMAIL" \
     node node_modules/next/dist/bin/next start -p "$PORT" > "$TMP/$name.server.log" 2>&1 &
   local pid=$!
@@ -48,7 +52,7 @@ serve() {
     curl -s -o /dev/null "http://localhost:$PORT/api/health" && break
     sleep 0.5
   done
-  run "$name" env BASE="http://localhost:$PORT" STARTER=25 SUPPORT_EMAIL="$SUPPORT_EMAIL" INTRO_EMAIL="$INTRO_EMAIL" "$@"
+  run "$name" env BASE="http://localhost:$PORT" STARTER=25 SUPPORT_EMAIL="$SUPPORT_EMAIL" INTRO_EMAIL="$INTRO_EMAIL" FREE_COMPANY="${FREE_COMPANY:-off}" "$@"
   kill "$pid" 2> /dev/null
   wait "$pid" 2> /dev/null
   rm -rf "$TMP/data-$name"
@@ -58,6 +62,8 @@ run types npx tsc --noEmit -p .
 serve server node scripts/test-server.mjs
 serve rules node scripts/test-rules.mjs
 serve credits node scripts/test-credits.mjs
+# The free company of the day over HTTP: 0 credits, its ledger line, then 2 credits, and the day's limit.
+FREE_COMPANY=on serve credits-free env ONLY=freeco node scripts/test-credits.mjs
 serve integration node scripts/test-integration.mjs
 # What members add stays honest: a seat already found is claimed, not added twice; a person already on file is added to; Not my seat takes back what it earned; example names; contact details only after the name.
 serve integrity node scripts/test-integrity.mjs

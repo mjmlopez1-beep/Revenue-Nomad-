@@ -177,6 +177,11 @@ export interface CompanyRec {
    * That one credit also opens the role, the posting and the posted rate of each open role there.
    */
   hidden?: boolean;
+  /**
+   * Client only, on the Crystal Ball day's rows: a locked company's name shown there free for a
+   * trial or Pro member (RadarRow.name). The company stays locked and unbought everywhere else.
+   */
+  shownName?: string;
   /** Domain to draw the logo from (Website, or a looked-up domain). */
   iconDomain: string | null;
   /** Keyed by company field: website, industry, employees, revenue, hq, linkedin, about. */
@@ -244,6 +249,12 @@ export interface Me {
    */
   unlocksLeft?: number | null;
   /**
+   * The free company of the day is still left: one company a UTC day unlocks for no credits, on
+   * any plan. It counts toward the day's unlocks like a paid one (a company is 2 of them), so it
+   * is usable only while unlocksLeft allows a company. It doesn't roll over.
+   */
+  freeCompany?: boolean;
+  /**
    * Company pick-list answers (industry, employees, revenue and the four under "How they sell")
    * that can still earn a credit today: 5 a day. Not counted on a company the member added or
    * holds a seat at.
@@ -256,6 +267,12 @@ export interface Me {
   earnResetsAt: string | null;
   /** Bonus credits earned at the cap and waiting for room under it (paid automatically). */
   held: number;
+  /**
+   * Credits waiting for a seat of theirs to be confirmed: facts they added at a company that was
+   * new to Merlin with their own seat in it. Paid once another member confirms a fact on that seat,
+   * or an admin does ("+4 when confirmed"). 0 or left out when none.
+   */
+  pending?: number;
   /** An admin (RN_ADMIN_EMAILS). False while an admin sees the table as a member (`asMember`). */
   admin: boolean;
   /**
@@ -379,6 +396,17 @@ export interface PlanView {
   /** The annual plan framed by their own rate ("Less than an hour of your time a month."), when they have a rate. */
   annualLine: string | null;
   prices: { month: number; year: number; topup: number; topupCredits: number; proCredits: number };
+  /**
+   * The survey code the member arrived with (?code=RN-SURVEY10, kept from the landing page
+   * through joining), when checkout applies it for them: "RN-SURVEY10 applied: 10% off". Null otherwise.
+   */
+  code: { code: string; off: string } | null;
+  /**
+   * The value receipt before the trial ends (its last 3 days, from day 18 of 21): what the trial
+   * gave them, as lines ("12 unlocks used"), counts only. Empty when nothing happened yet. Left out
+   * outside those days.
+   */
+  receipt?: string[];
   /** What Free allows now (null: no limit, on Pro). */
   limits: { savedViews: number | null; claudePerDay: number | null };
 }
@@ -535,6 +563,8 @@ export interface LedgerRow {
   reason: string;
   company: string;
   field: string;
+  /** A fact on a seat the member added that waits to be confirmed: it earns its credit then ("+1 when confirmed"). */
+  pending?: true;
 }
 
 /**
@@ -737,6 +767,17 @@ export interface AdminStats {
    */
   firmReview?: { companyId: string; company: string; reason: string; at: string }[];
   walls: { members: number; hits: number };
+  /**
+   * Demand for locked companies, as counts only (never which company a member looked at): a view
+   * is one member opening one locked company's record (or its card) on one UTC day. `unlocked`:
+   * of those views, how many the same member then unlocked. Over the last 7 and 30 days.
+   */
+  lockedViews?: { views7: number; members7: number; unlocked7: number; views30: number; members30: number; unlocked30: number };
+  /**
+   * Members' own seats at companies new to Merlin, waiting to be confirmed so their credits are
+   * paid (confirmSeat). Oldest first. `credits`: what it pays. Public ids.
+   */
+  pendingSeats?: { memberId: string; name: string; company: string; engagementId: string; at: string; credits: number }[];
   /** Pro waitlist: who asked, who saw the offer, and where they clicked. */
   pro: { interested: number; views: number; byWhere: Record<string, number> };
   /**
@@ -824,6 +865,12 @@ export type Action =
   /** `memberId` (seat holder only): the member picked from the search, which links the seat to them. */
   | { type: "fill"; entity: Entity; id: string; field: string; value: string; memberId?: string }
   | { type: "unlock"; entity: Entity; id: string; field: string }
+  /** Admins: confirm a member's own seat at a company that was new to Merlin, so its credits are paid (AdminStats.pendingSeats). */
+  | { type: "confirmSeat"; engagementId: string }
+  /** A locked company's record was opened, or its card expanded: counted for Pilot metrics (once a member, company and day). */
+  | { type: "lockedView"; companyId: string }
+  /** The discount code the member arrived with (?code=), kept for checkout. Billing live only. */
+  | { type: "promoCode"; code: string }
   /**
    * Unlock several facts in one go (e.g. a whole engagement). Costs 1 credit each. A hidden
    * company is one purchase with the role, posting and rate of each open role there: asking for

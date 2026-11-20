@@ -506,7 +506,8 @@ if (up) {
   await invite(quinn, "e_pt_quinn", "Hi Quinn");
   const quinnCode = (await quinn.view()).me.inviteCode;
   r = await quinn.names({ op: "claim", t: claimTok("e_pt_quinn"), ref: quinnCode });
-  check("a self-invite claims the seat but connects nobody and pays nothing", r.status === 200 && /It's yours/.test(r.json?.message ?? "") && !/conversation|credits/.test(r.json?.message ?? "") && (await quinn.credits()) === 25 - 2 - 1 && (await quinn.messages()).conversations.length === 0, r.json);
+  // (The company was her free company of the day, so only who held the seat cost a credit.)
+  check("a self-invite claims the seat but connects nobody and pays nothing", r.status === 200 && /It's yours/.test(r.json?.message ?? "") && !/conversation|credits/.test(r.json?.message ?? "") && (await quinn.credits()) === 25 - 1 && (await quinn.messages()).conversations.length === 0, r.json);
 
   /* REFERRAL_LIMIT: 6 invitees, the inviter is paid for 5 */
   const kit = await join("Kit Kinvite", "kit-pt@example.com");
@@ -523,8 +524,8 @@ if (up) {
   check("six invitees claimed their seats through the links", larks.length === 6);
   check("each invitee gets the bonus", (await Promise.all(larks.map((w) => w.credits()))).every((c) => c === 35));
   const kv = (await kit.view()).me;
-  // (Kit paid 2 for the company first, then 1 for each of the six seat holders.)
-  check("the inviter is paid for 5 invitees in 30 days (REFERRAL_LIMIT), within the daily cap (the rest held)", kv.invitesPaid === 5 && kv.credits === 25 - 2 - 6 + 25 && kv.held === 25, { paid: kv.invitesPaid, credits: kv.credits, held: kv.held });
+  // (The company was Kit's free company of the day, then 1 for each of the six seat holders.)
+  check("the inviter is paid for 5 invitees in 30 days (REFERRAL_LIMIT), within the daily cap (the rest held)", kv.invitesPaid === 5 && kv.credits === 25 - 6 + 25 && kv.held === 25, { paid: kv.invitesPaid, credits: kv.credits, held: kv.held });
   check("and a conversation opened with each of them", (await kit.messages()).conversations.length === 6 && (await kit.messages()).unread === 6);
 
   /* a claim that waits for an admin, then approved */

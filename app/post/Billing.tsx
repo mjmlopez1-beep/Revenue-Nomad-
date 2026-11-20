@@ -44,12 +44,12 @@ export function openPlans(from: PlansFrom, extra: { caught?: number } = {}) {
 }
 
 const CODE_KEY = "tp_code";
-/** A code that came in the address (?code=RN-SURVEY10), kept for this tab so checkout can apply it. */
+/** A code that came in the address (?code=RN-SURVEY10), kept in this browser (Root keeps it from the landing page on) so checkout can apply it. */
 function codeNow(): string {
   try {
     const q = new URLSearchParams(window.location.search).get("code");
-    if (q) sessionStorage.setItem(CODE_KEY, q.slice(0, 40));
-    return sessionStorage.getItem(CODE_KEY) ?? "";
+    if (q) localStorage.setItem(CODE_KEY, q.slice(0, 40));
+    return localStorage.getItem(CODE_KEY) ?? "";
   } catch {
     return "";
   }
@@ -177,8 +177,10 @@ function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansFrom; on
   const { busy, run } = useBilling();
   const [code, setCode] = useState("");
   const [codeOpen, setCodeOpen] = useState(false);
-  useEffect(() => setCode(codeNow()), []);
+  // The code they arrived with: the one the server kept for them (PlanView.code), else this browser's.
+  useEffect(() => setCode(plan.code?.code ?? codeNow()), [plan.code?.code]);
   const go = (interval: "month" | "year") => run("checkout", { interval, code: code.trim() || undefined, from }, onDone);
+  const applied = !!plan.code && code.trim().toUpperCase() === plan.code.code;
   return (
     <>
       <div className="bl-plans">
@@ -215,7 +217,11 @@ function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansFrom; on
         </p>
       )}
       <div className="bl-code">
-        {codeOpen || code ? (
+        {applied ? (
+          <p className="bl-code-on" role="status">
+            <IconCheck size={14} /> {plan.code!.code} applied: {plan.code!.off}
+          </p>
+        ) : codeOpen || code ? (
           <label className="bl-code-l">
             <span>Code</span>
             <input className="input bl-code-in" value={code} maxLength={40} autoComplete="off" onChange={(e) => setCode(e.target.value)} placeholder="RN-SURVEY10" />
@@ -253,7 +259,8 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
   // The plans show on the trial too, any day of it: bought then, nothing is charged until it ends (PlanView.firstChargeAt).
   const onPro = plan.name === "pro";
   const trial = plan.name === "trial";
-  const title = plan.notLooking && a.from === "trial" ? "Your trial ends soon" : trial && a.from === "billing" ? "Keep Pro" : TITLE[a.from];
+  // "Your trial ends soon" only in the trial's last 3 days: on day 1 it would read as a countdown.
+  const title = plan.notLooking && a.from === "trial" ? (plan.ending ? "Your trial ends soon" : "Merlin Pro") : trial && a.from === "billing" ? "Keep Pro" : TITLE[a.from];
   return (
     <Sheet title={title} onClose={onClose} dialog className="bl-sheet">
       <div className="bl-sheet-in">
@@ -353,23 +360,29 @@ const PhoneWords = () => (
 /* ---------- the trial banner ---------- */
 
 const BANNER_KEY = "tp_trial_banner";
-/** The trial's last 3 days, over the table. Closed for this tab with the X. */
+/** "12 unlocks used and 3 conversations opened": the receipt's lines in one sentence. */
+const receiptWords = (lines: string[]) => (lines.length > 1 ? `${lines.slice(0, -1).join(", ")} and ${lines[lines.length - 1]}` : lines[0] ?? "");
+/**
+ * The trial's last 3 days (from day 18 of 21), over the table: the value receipt, what the trial
+ * gave them so far, with Keep Pro. Closed with the X, it stays closed for that trial (one time).
+ */
 export function TrialBanner({ plan }: { plan?: PlanView }) {
   const end = plan?.trialEndsAt ?? "";
   const [closed, setClosed] = useState(false);
   useEffect(() => {
     try {
-      setClosed(sessionStorage.getItem(BANNER_KEY) === end);
+      setClosed(localStorage.getItem(BANNER_KEY) === end || sessionStorage.getItem(BANNER_KEY) === end);
     } catch {}
   }, [end]);
   if (!plan || !plan.ending || closed) return null;
   const close = () => {
     setClosed(true);
     try {
-      sessionStorage.setItem(BANNER_KEY, end);
+      localStorage.setItem(BANNER_KEY, end);
     } catch {}
   };
   const when = plan.trialDaysLeft === 1 ? "ends tomorrow" : `ends in ${plan.trialDaysLeft} days`;
+  const got = plan.receipt?.length ? ` So far: ${receiptWords(plan.receipt)}.` : "";
   return (
     <div className="tp-strip bl-banner" role="status">
       <span className="bl-banner-tag" aria-hidden>
@@ -380,7 +393,7 @@ export function TrialBanner({ plan }: { plan?: PlanView }) {
           <>Your Pro trial {when}. Nothing to do: you stay on Free, with no charge.</>
         ) : (
           <>
-            Your Pro trial {when}. Then you&apos;re on Free, unless you keep Pro.
+            Your Pro trial {when}.{got} Then you&apos;re on Free, unless you keep Pro.
           </>
         )}
       </span>
@@ -526,6 +539,19 @@ function Status({ plan }: { plan: PlanView }) {
           {plan.trialExtended ? " We added a week because you were in the middle of something." : ""}
           {plan.firstChargeAt && !plan.notLooking ? ` Keep Pro now and nothing is charged until ${day(plan.firstChargeAt)}.` : ""}
         </p>
+        {/* The value receipt before the decision (the trial's last 3 days): what it gave them so far. */}
+        {!!plan.receipt?.length && (
+          <>
+            <p className="bl-status-p">
+              <strong>What your trial gave you so far:</strong>
+            </p>
+            <ul className="bl-receipt">
+              {plan.receipt.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+          </>
+        )}
       </>
     );
   if (plan.name === "pro") {

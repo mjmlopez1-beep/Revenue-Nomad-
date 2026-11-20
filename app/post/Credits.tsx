@@ -14,6 +14,7 @@ import { COMPANY_PRICE, EARN_CAP, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } fro
 import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
+import { FREE_COMPANY_TODAY, freeCompanyNow } from "./display";
 import { Pro, useUi } from "./ui";
 import { MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
 import { ReportedMessages } from "./Messages";
@@ -281,9 +282,9 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
     [String(starter), "flat", `You start with ${starter} credits.`],
     ["+1", "plus", "You add a fact that's missing. Every answer on a seat you held earns 1, and so do company facts like the HQ or size, or a hiring contact."],
     ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on."],
-    [`−${COMPANY_PRICE}`, "minus", "You unlock a company: its name and website, with the job posting of each open role there. Who held each seat is 1 more."],
+    [`−${COMPANY_PRICE}`, "minus", "You unlock a company: its name and website, with the job posting of each open role there. Who held each seat is 1 more. Your first company each day is free."],
     ["+1", "plus", "Two other members confirm a fact you added."],
-    [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company or a seat. They get ${REFERRAL_BONUS} too.`],
+    [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company already on Merlin. They get ${REFERRAL_BONUS} too.`],
   ];
 
   const tiles = (
@@ -292,6 +293,8 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
         <div className={`tp-stat-n num${me.credits <= 3 ? " ember" : ""}`}>{me.credits}</div>
         <div className="tp-stat-l">{me.credits === 1 ? "Credit to spend" : "Credits to spend"}</div>
         {me.credits <= 3 && !owed && <div className="cr-stat-sub">{capped ? `You can earn again ${atTime(me.earnResetsAt)}.` : "Add a fact you know and you earn one."}</div>}
+        {freeCompanyNow(me) && <div className="cr-stat-sub">Plus {FREE_COMPANY_TODAY}: unlock one company for no credits.</div>}
+        {!!me.pending && <div className="cr-stat-sub">+{me.pending} when confirmed: facts on a seat of yours at a company new to Merlin.</div>}
       </div>
       <div className="tp-stat">
         <div className="tp-stat-n num">

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
 import { Brand, IconLock, Num, type View } from "../ui/shared";
 import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
+import { TRIAL_DAYS } from "@/lib/billing/rules";
 import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
 import { Questions } from "./Questions";
@@ -214,12 +215,12 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
               {inviter ? (
                 <div className="lp-invited">
                   <p>
-                    {inviter} invited you. Add one fact to a company or a seat and you both get <span className="num">{REFERRAL_BONUS}</span> credits.
+                    {inviter} invited you. Add one fact to a company on Merlin and you both get <span className="num">{REFERRAL_BONUS}</span> credits.
                   </p>
                   <p className="lp-invited-small">The bonus doesn&apos;t apply when you join from the same internet connection as {inviter}.</p>
                 </div>
               ) : null}
-              <p className="lp-hero-free num">Free pilot. {starter} credits to start.</p>
+              <p className="lp-hero-free num">Free plan, {starter} credits to start. {TRIAL_DAYS}-day Pro trial, no card.</p>
               <div className="lp-hero-form" ref={heroForm}>
                 <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" hint={joinHint} />
               </div>
@@ -264,7 +265,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
           <div className="lp-wrap">
             <div className="lp-sec-head">
               <h2 className="lp-h2">What you can do with it</h2>
-              <p className="lp-lead">Screens from the pilot as it works today.</p>
+              <p className="lp-lead">Screens from Merlin as it works today.</p>
             </div>
             <Showcase intro={!!intro} />
           </div>
@@ -382,7 +383,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         <section className="lp-final">
           <div className="lp-wrap lp-final-in">
             <h2 className="lp-h2">Find the companies that hire your function</h2>
-            <p className="lp-final-sub num">It takes your email. Free pilot. {starter} credits to start.</p>
+            <p className="lp-final-sub num">It takes your email. Free plan, {starter} credits to start, and a {TRIAL_DAYS}-day Pro trial with no card.</p>
             <div className="lp-final-form" ref={finalForm}>
               <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
             </div>

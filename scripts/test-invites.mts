@@ -270,10 +270,36 @@ async function main() {
   check("a new invitee is told who invited them, and that they both get the bonus", deeView.me?.invitedBy?.first === "Ivy" && deeView.me.invitedBy.both === true && deeView.me.onboarded === false, deeView.me?.invitedBy);
   check("onboarding's line reads", fmt.invitedLine(deeView.me!.invitedBy!.first, deeView.me!.invitedBy!.both, REFERRAL_BONUS) === "Ivy invited you. You both get 10 credits when you add your first fact.");
   check("it names the inviter by first name, never their email", !JSON.stringify(deeView.me?.invitedBy).includes("ivy.inviter") && !JSON.stringify(deeView.me?.invitedBy).includes("Inviter"));
-  // Her first fact: a client of hers she adds (every company on file is locked for her until she unlocks it or knows it).
-  const fill = await t.perform(dee.token, { type: "add", company: "Deeclient Works", companyFields: { hq: "Austin, TX" } }, "https://post.example.com");
+  // A client of hers new to Merlin is not it: the bonus waits for a fact on a company that was on file before she joined.
+  const own = await t.perform(dee.token, { type: "add", company: "Deeclient Works", companyFields: { hq: "Austin, TX" } }, "https://post.example.com");
+  const deeOwn = await t.buildView(dee.token);
+  check("a company she adds herself doesn't pay the invite bonus", !/invite bonus/.test(own.message) && !!deeOwn.me?.invitedBy && deeOwn.me?.invitePending === true, own.message);
+  // Her own seat at a company new to Merlin: its credits wait until it is confirmed, and it pays no invite bonus either.
+  const c0 = deeOwn.me!.credits;
+  const seatAdd = await t.perform(
+    dee.token,
+    { type: "add", company: "Madeup Clientco", newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Sales", type: "Fractional", operator: "Dee Newcomer", start: "2025-01" } },
+    "https://post.example.com",
+  );
+  const deeSeat = await t.buildView(dee.token);
+  check(
+    "a seat she adds at a company new to Merlin earns nothing yet: +4 when confirmed, and no invite bonus",
+    /\+4 when confirmed/.test(seatAdd.message) && !/You earned|invite bonus/.test(seatAdd.message) && deeSeat.me!.credits === c0 && deeSeat.me!.pending === 4 && deeSeat.me!.invitePending === true,
+    { message: seatAdd.message, credits: deeSeat.me?.credits, pending: deeSeat.me?.pending },
+  );
+  check("her credit history says what waits", deeSeat.ledger.filter((l) => l.pending && l.delta === 0).length === 4);
+  // Another member confirms a fact on that seat: it is confirmed, and its 4 credits are paid (still no invite bonus).
+  const conf = await t.perform(IVY, { type: "verify", entity: "engagement", id: seatAdd.id!, field: "function" }, "https://post.example.com");
+  const deePaid = await t.buildView(dee.token);
+  check(
+    "another member confirming a fact on the seat pays its 4 credits",
+    /^Confirmed/.test(conf.message) && deePaid.me!.credits === c0 + 4 && !deePaid.me!.pending && deePaid.me!.invitePending === true && !deePaid.ledger.some((l) => l.pending),
+    { message: conf.message, credits: deePaid.me?.credits, pending: deePaid.me?.pending },
+  );
+  // Her first fact on a company already on Merlin (typed by its exact name): that one pays it.
+  const fill = await t.perform(dee.token, { type: "add", company: "Invitewell Labs", companyFields: { hq: "Denver, CO" } }, "https://post.example.com");
   const deeAfter = await t.buildView(dee.token);
-  check("once their first fact pays the bonus, the mention is gone", /invite bonus/.test(fill.message) && !deeAfter.me?.invitedBy && deeAfter.me?.invitePending === false, fill.message);
+  check("once their first fact on a company already on file pays the bonus, the mention is gone", /invite bonus/.test(fill.message) && !deeAfter.me?.invitedBy && deeAfter.me?.invitePending === false, fill.message);
   const ivyHad = await t.buildView(IVY);
   check("a member who joined on their own is told nothing", !(await t.buildView(self.token)).me?.invitedBy && !ivyHad.me?.joined?.some((j) => j.first === "Ivy"));
   const ivyLine = (await t.buildView(IVY)).me?.joined ?? [];

@@ -125,9 +125,12 @@ const ctxOf = (seed: Seed, s: State, nowMs: number): Ctx => ({ seed, s, g: T.gra
 
 /** A member's cards for one UTC day: every link opens that day's companies. */
 function cardContext(c: Ctx, m: Member, day: string): CardContext {
+  // Trial and Pro: every card names its company, free. Naming it on the card doesn't make it theirs
+  // or charge: the table keeps it locked, and its people and seat holders still need their own unlocks.
+  const pro = isPro(c.s, m.id, c.nowMs);
   return {
-    // The member's own table, as a member: a company locked for them stays unnamed (an admin's too).
-    visible: (companyId) => !T.identityHidden(c.g, c.s, c.idx, c.tracks, m, companyId, true),
+    // The member's own table, as a member: a company locked for them stays unnamed (an admin's too), unless they are on Pro.
+    visible: (companyId) => pro || !T.identityHidden(c.g, c.s, c.idx, c.tracks, m, companyId, true),
     cardId: (key) => cardId(m.id, key),
     coId: (companyId) => coId(m.id, companyId),
     url: radarPath(day),
@@ -211,6 +214,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const nowMs = Date.parse(nowIso ?? "") || Date.now();
   const today = dayOfMs(nowMs);
   const c = ctxOf(seed, s, nowMs);
+  const pro = isPro(s, m.id, nowMs);
   const fn = functionFor(s, m);
   const p = profileOf(seed, s, m.id, fn);
   const ready = !!p.fn && !icpIsEmpty(p.icp);
@@ -245,7 +249,15 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     today,
     ...(dayAsked != null && dayAsked !== "" && !inKeep ? { expired: true } : {}),
     days: list.map((d) => ({ day: d, companies: count(d) })),
-    rows: rowsOf(byDay.get(day) ?? [], T.pubId).map(({ id, kinds, lines, notes, band }) => ({ id, kinds, lines, ...(notes.some(Boolean) ? { notes } : {}), ...(band ? { band } : {}) })),
+    rows: rowsOf(byDay.get(day) ?? [], T.pubId).map(({ id, c: co, kinds, lines, notes, band }) => ({
+      id,
+      kinds,
+      lines,
+      ...(notes.some(Boolean) ? { notes } : {}),
+      ...(band ? { band } : {}),
+      // Trial and Pro see each company named here, free (the table still keeps it locked and theirs to unlock).
+      ...(pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {}),
+    })),
     email: emailEnabled() && EMAIL_RE.test(m.email),
     slack: hasDest(s, m.id),
   };

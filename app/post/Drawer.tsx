@@ -37,7 +37,7 @@ import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "
 import { checkedWords, isFractionalLead, leadItems, ledFullTimeWords } from "@/lib/leaders/types";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
-import { UNLOCKS_LEFT_TIP, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
+import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
 
 /**
  * Who leads each function, from the company's own website (lib/leaders): "Sales: full-time CRO
@@ -725,6 +725,8 @@ interface Plan {
   facts: number;
   /** Credits it costs: each hidden company and each open role (its role, posting and rate) is one purchase. */
   cost: number;
+  /** It buys the company (the free company of the day can pay for that part). */
+  company: boolean;
   what: string;
 }
 function planOf(i: CoInfo): Plan {
@@ -764,7 +766,7 @@ function planOf(i: CoInfo): Plan {
     return n === 1 ? `${/^[aeiou]/i.test(one) ? "an" : "a"} ${one}` : `${n} ${many}`;
   });
   const what = parts.length ? `${listOf(parts)}.` : "";
-  return { items, facts: items.length, cost, what: what.charAt(0).toUpperCase() + what.slice(1) };
+  return { items, facts: items.length, cost, company, what: what.charAt(0).toUpperCase() + what.slice(1) };
 }
 
 /**
@@ -788,10 +790,11 @@ function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
   useEscape(ask && !inSheet, cancel);
   useEscape(ask && inSheet, cancel, sheetRef);
   if (!plan.items.length) return null;
-  const { facts, cost } = plan;
+  const { facts } = plan;
   const left = ui.me.unlocksLeft ?? Infinity;
-  const can = Math.min(ui.me.credits, left);
-  if (cost > can)
+  // The free company of the day pays for the company: those credits aren't needed, though it still counts toward the day's unlocks.
+  const cost = plan.cost - (plan.company && freeCompanyNow(ui.me) ? COMPANY_PRICE : 0);
+  if (cost > ui.me.credits || plan.cost > left)
     return (
       <span className="tp-unlockall tp-unlock-short tp-small muted">
         {left === 0 && ui.me.credits > 0
@@ -1356,10 +1359,12 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const busy = ui.busy.has(cellKey(id, "identity"));
-  const broke = ui.me.credits < COMPANY_PRICE;
-  // Today's unlocks are used up (a company counts as COMPANY_PRICE of them) and credits are left: the button says when, and spends nothing.
-  const later = !broke && (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE;
-  const label = UNLOCK_COMPANY;
+  // The free company of the day (any plan): no credits needed while it is left and the day's limit has room.
+  const free = freeCompanyNow(ui.me);
+  const broke = !free && ui.me.credits < COMPANY_PRICE;
+  // Today's unlocks are used up (a company counts as COMPANY_PRICE of them, the free one too): the button says when, and spends nothing.
+  const later = (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || !!ui.me.freeCompany);
+  const label = free ? UNLOCK_FREE : UNLOCK_COMPANY;
   const included = !roles ? "Name, website and logo" : rate ? "Job posting and rate included" : "Job posting included";
   const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? "Earn credits to unlock" : label;
   return (
@@ -1370,9 +1375,9 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
         className={`btn btn-pine${bar ? " tp-uc-bar" : ""}`}
         disabled={busy || later}
         aria-busy={busy}
-        aria-label={busy || later || broke ? text : `${UNLOCK_ROLE_SAY}. ${included}.`}
+        aria-label={busy || later || broke ? text : `${free ? "Unlock company free, your 1 free company today" : UNLOCK_ROLE_SAY}. ${included}.`}
         onClick={() => {
-          if (ui.me.credits >= COMPANY_PRICE) return ui.unlock({ entity: "company", id, field: "identity" }, { onWall: () => setZero(true) });
+          if (free || ui.me.credits >= COMPANY_PRICE) return ui.unlock({ entity: "company", id, field: "identity" }, { onWall: () => setZero(true) });
           sendSignal("wall", "identity");
           setZero(true);
         }}
@@ -1380,7 +1385,7 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
         {bar && !busy && !later && !broke ? (
           // A phone's sticky bar: the price on one line, what comes with it on a small second line.
           <span className="tp-ua-two">
-            <span>{UNLOCK_ROLE_SHORT}</span>
+            <span>{free ? UNLOCK_FREE : UNLOCK_ROLE_SHORT}</span>
             <span className="tp-ua-cost">{included}</span>
           </span>
         ) : (
@@ -1460,6 +1465,11 @@ export function Drawer({
     hidden: !!c.hidden,
     exempt: pickExempt(i),
   };
+
+  // A locked company's record opened: counted for Pilot metrics' demand (once a member, company and day; counts only).
+  useEffect(() => {
+    if (c.hidden && !c.found) void post({ action: { type: "lockedView", companyId: c.id } });
+  }, [c.id, c.hidden, c.found]);
 
   // Where focus goes back to when the record closes: its row, else whatever opened it.
   const last = useRef({ focus, id: c.id, phone });

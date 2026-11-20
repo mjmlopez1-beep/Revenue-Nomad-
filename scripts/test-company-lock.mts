@@ -133,8 +133,9 @@ writeFileSync(
       { memberId: "m_olga", delta: -1, reason: "unlock", ref: `${CO.elm.id}.identity`, at: ago(30) },
       { memberId: "m_olga", delta: -1, reason: "unlock", ref: "e_fox_open.posting", at: ago(30) },
       { memberId: "m_olga", delta: -1, reason: "unlock", ref: "p_gran_ceo.name", at: ago(30) },
-      // Pete has 1 credit left, Zed none.
+      // Pete has 1 credit left, Zed none. Pete used today's free company already (on a company gone since).
       { memberId: "m_pete", delta: -24, reason: "reversal", ref: "x.y", at: ago(30) },
+      { memberId: "m_pete", delta: 0, reason: "unlock", ref: "c_gone_free.identity", at: ago(0), why: "free" },
       { memberId: "m_zed", delta: -25, reason: "reversal", ref: "x.y", at: ago(30) },
       { memberId: "m_cap", delta: 100, reason: "plan", ref: "plan", at: ago(0.1) },
       ...capRows,
@@ -330,7 +331,8 @@ async function main() {
   }
   check("nor can get_company take its name", /No company with that id or name/.test(byName), byName);
   const dry = await tools.unlock(ctx, { entity: "company", id: pub(CO.acme.id), field: "identity" });
-  check("the connector's unlock asks first and says it costs 2 credits", dry.confirmed === false && dry.would_spend === 2 && leaks(dry, ALL).length === 0, dry);
+  check("the connector's unlock asks first, and says the free company of the day costs nothing", dry.confirmed === false && dry.would_spend === 0 && /free company of the day/.test(String(dry.message)) && leaks(dry, ALL).length === 0, dry);
+  check("my_account says the free company is left today", /^1 left/.test(String((await tools.myAccount(ctx)).free_company_today)));
   check("and spent nothing", (await view("tok-nora-lock")).me!.credits === 25);
 
   /* ---------- who held a seat waits for the company ---------- */
@@ -340,7 +342,11 @@ async function main() {
   const endEarly = await act("tok-nora-lock", { type: "unlock", entity: "engagement", id: pub("e_acme_sales"), field: "end" });
   check("so does any other paid fact there (a 1-credit unlock would open the company)", !endEarly.ok && endEarly.error === T.COMPANY_FIRST && coOf(await view("tok-nora-lock"), CO.acme.id)!.hidden === true, endEarly);
   const un = await act("tok-nora-lock", { type: "unlock", entity: "company", id: pub(CO.acme.id), field: "identity" });
-  check("Unlock company costs 2 credits and names it", un.ok && un.r.me?.credits === 23 && /^Unlocked Acmeworks Robotics for 2 credits\.$/.test(un.r.message), un.ok ? un.r.message : un);
+  check(
+    "the first company of the day is free, names it, and says so",
+    un.ok && un.r.me?.credits === 25 && un.r.me?.freeCompany === false && un.r.message === `Unlocked Acmeworks Robotics. ${T.FREE_COMPANY_USED}`,
+    un.ok ? un.r.message : un,
+  );
   const v1 = await view("tok-nora-lock");
   const a1 = coOf(v1, CO.acme.id)!;
   const ab1 = await T.aboutCells("tok-nora-lock", [pub(CO.acme.id)]);
@@ -350,18 +356,19 @@ async function main() {
     !a1.hidden && a1.name === CO.acme.name && a1.cells.website?.s === "value" && a1.cells.linkedin?.s === "value" && a1.cells.about?.s === "value" && a1.cells.hq?.s === "value" && a1.cells.hq.v === "Austin, TX" && !!a1.unlocked,
     a1,
   );
-  const rows = (await view("tok-nora-lock")).ledger.filter((l) => l.reason === "unlock");
-  check("one ledger row of 2 credits, read as Unlocked a company", rows.length === 1 && rows[0].delta === -2 && L.ledgerLine(rows[0], 25).text === `Unlocked a company: ${CO.acme.name}`, rows);
+  const rows = (await view("tok-nora-lock")).ledger.filter((l) => l.reason === "unlock" || l.reason === T.FREE_COMPANY_LINE);
+  check("one ledger row of 0 credits, read as Free company of the day", rows.length === 1 && rows[0].delta === 0 && L.ledgerLine(rows[0], 25).text === `Free company of the day: ${CO.acme.name}`, rows);
+  check("my_account says it is used today", /^used today/.test(String((await tools.myAccount(ctx)).free_company_today)));
   const again = await act("tok-nora-lock", { type: "unlock", entity: "company", id: pub(CO.acme.id), field: "identity" });
-  check("asking again spends nothing", !again.ok && /Nothing here is locked/.test(again.error) && (await view("tok-nora-lock")).me!.credits === 23, again);
+  check("asking again spends nothing", !again.ok && /Nothing here is locked/.test(again.error) && (await view("tok-nora-lock")).me!.credits === 25, again);
   const held2 = await act("tok-nora-lock", { type: "unlock", entity: "engagement", id: pub("e_acme_sales"), field: "operator" });
-  check("then who held the seat is 1 credit", held2.ok && held2.r.me?.credits === 22, held2.ok ? held2.r.message : held2);
+  check("then who held the seat is 1 credit", held2.ok && held2.r.me?.credits === 24, held2.ok ? held2.r.message : held2);
   check("the other companies stay locked", leaks(await view("tok-nora-lock"), ALL.filter((x) => x !== CO.acme.id)).length === 0);
   const ub = await act("tok-nora-lock", { type: "unlock", entity: "company", id: pub(CO.blue.id), field: "identity" });
   const b1 = coOf(await view("tok-nora-lock"), CO.blue.id)!;
   check(
-    "a hiring company comes with its open role's job posting and posted rate",
-    ub.ok && ub.r.me?.credits === 20 && b1.engagements[0].cells.posting?.s === "value" && b1.engagements[0].cells.rate?.s === "value",
+    "the next company the same day costs 2 credits: a hiring company comes with its open role's job posting and posted rate",
+    ub.ok && ub.r.me?.credits === 22 && / for 2 credits\.$/.test(ub.r.message) && b1.engagements[0].cells.posting?.s === "value" && b1.engagements[0].cells.rate?.s === "value",
     ub.ok ? ub.r.message : ub,
   );
   const mcpAfter = await tools.searchCompanies(ctx, {});
@@ -373,8 +380,10 @@ async function main() {
   const pete = await act("tok-pete-lock", { type: "unlock", entity: "company", id: pub(CO.acme.id), field: "identity" });
   check("with 1 credit, a company is refused and nothing is spent", (!pete.ok && /needs 2 credits and you have 1/.test(pete.error)) || (pete.ok && pete.r.message === "" && (await view("tok-pete-lock")).me!.credits === 1), pete);
   check("Pete still has 1 credit and the company stays locked", (await view("tok-pete-lock")).me!.credits === 1 && coOf(await view("tok-pete-lock"), CO.acme.id)!.hidden === true);
-  const zed = await act("tok-zed-lock", { type: "unlock", entity: "company", id: pub(CO.acme.id), field: "identity" });
-  check("at 0 credits it is the wall", (!zed.ok && /out of credits/.test(zed.error)) || (zed.ok && zed.r.message === ""), zed);
+  const zedFree = await act("tok-zed-lock", { type: "unlock", entity: "company", id: pub(CO.acme.id), field: "identity" });
+  check("at 0 credits the free company of the day still opens one", zedFree.ok && zedFree.r.me?.credits === 0 && coOf(await view("tok-zed-lock"), CO.acme.id)!.hidden === false, zedFree);
+  const zed = await act("tok-zed-lock", { type: "unlock", entity: "company", id: pub(CO.blue.id), field: "identity" });
+  check("then at 0 credits it is the wall", (!zed.ok && /out of credits/.test(zed.error)) || (zed.ok && zed.r.message === ""), zed);
   const capV = await view("tok-cara-lock");
   check("the daily limit counts in credits: 1 unlock left today", capV.me!.unlocksLeft === 1, capV.me!.unlocksLeft);
   const cap = await act("tok-cara-lock", { type: "unlock", entity: "company", id: pub(CO.acme.id), field: "identity" });
@@ -479,7 +488,11 @@ async function main() {
   const fc = await find("tok-finn-lock", CO.cobalt.name);
   const keep = await act("tok-finn-lock", { type: "unlock", entity: "company", id: pub(CO.cobalt.id), field: "identity" });
   const finnV2 = await view("tok-finn-lock");
-  check("Unlock company from the search costs 2 credits and keeps it named in the tables", fc.ok && keep.ok && keep.r.me?.credits === credits0 - 4 && coOf(finnV2, CO.cobalt.id)!.hidden === false && coOf(finnV2, CO.cobalt.id)!.name === CO.cobalt.name, keep.ok ? keep.r.message : keep);
+  check(
+    "Unlock company from the search (here the free company of the day) keeps it named in the tables",
+    fc.ok && keep.ok && keep.r.me?.credits === credits0 - 2 && /free company today/.test(keep.r.message) && coOf(finnV2, CO.cobalt.id)!.hidden === false && coOf(finnV2, CO.cobalt.id)!.name === CO.cobalt.name,
+    keep.ok ? keep.r.message : keep,
+  );
   const fe = await find("tok-finn-lock", CO.dun.site);
   const fill = await act("tok-finn-lock", { type: "fill", entity: "company", id: pub(CO.dun.id), field: "employees", value: "11–50" });
   check("adding a fact from the search makes it theirs: named in the tables", fe.ok && fill.ok && coOf(await view("tok-finn-lock"), CO.dun.id)!.hidden === false, fill.ok ? fill.r.message : fill);

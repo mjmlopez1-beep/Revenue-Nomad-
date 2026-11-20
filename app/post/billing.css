@@ -137,6 +137,22 @@
   font-weight: 400;
   color: var(--muted);
 }
+/* The survey code the member arrived with, applied for them at checkout. */
+.bl-code-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--pine);
+}
+/* The trial's value receipt (its last 3 days): what it gave them so far. */
+.bl-receipt {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 22px;
+}
 .bl-topup {
   display: flex;
   align-items: center;

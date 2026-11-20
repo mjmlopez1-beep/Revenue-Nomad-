@@ -18,6 +18,9 @@
  *   owed      a balance below zero shows as 0 credits and credits owed
  *   picker    the seat-holder search lists only members who have signed in, 30 searches a minute
  *   admin     an admin address can't be claimed in the join form, and what the admin export holds
+ *   freeco    the free company of the day: 0 credits, its ledger line, then 2 credits, and the day's limit
+ *   pending   a seat at a company new to Merlin: +N when confirmed, an admin confirms it, then facts earn at once
+ *   lockedviews  Pilot metrics counts locked companies opened and then unlocked, counts only
  *
  * Optional environment:
  *   ADMIN_EMAIL   the address in the server's RN_ADMIN_EMAILS (default admin-qa@example.com)
@@ -250,6 +253,18 @@ async function openSame(m, ids) {
   for (const id of ids) await m.act({ type: "unlock", entity: "company", id, field: "identity" });
 }
 
+/**
+ * A fact on a company that was on Merlin before the member joined (what the invite bonus waits
+ * for): an HQ on a company with none, typed by its exact name. Each call takes another company.
+ */
+let onFileN = 0;
+async function factOnFile(who) {
+  shared.noHq ??= (await (await admin()).view()).companies.filter((c) => c.cells.hq?.s === "empty" && c.friendly.open === 0 && !/^Qa /.test(c.name));
+  const c = shared.noHq[onFileN++];
+  if (!c) throw new Error("no company without an HQ left");
+  return who.act({ type: "add", company: c.name, companyFields: { hq: "Austin, TX" } });
+}
+
 /* ---------- sections ---------- */
 
 const sections = {};
@@ -473,8 +488,9 @@ section("invites", async () => {
   const INV = await member("Ina Inviter");
   const iv = await INV.view();
   const code = iv.me.inviteCode;
-  // Each invitee's first fact: a client of theirs they add (every company on file is locked for a new member).
-  const firstFact = (who) => ownCompany(who, { hq: "Austin, TX" });
+  // Each invitee's first fact: an HQ on a company already on Merlin, typed by its exact name (every company on file is locked for a new member).
+  // The bonus waits for a fact on a company that was on file before they joined: a client they add themselves is not one.
+  const firstFact = (who) => factOnFile(who);
   let last;
   const paidAfter = [];
   for (let i = 1; i <= 6; i++) {
@@ -681,6 +697,85 @@ section("picker", async () => {
   for (let i = 0; i < 31; i++) codes.push((await R.people("una")).status);
   check("the 31st search in a minute gets 429", codes.slice(0, 30).every((c) => c === 200) && codes[30] === 429, codes.filter((c) => c !== 200).length);
   check("the limit is per member", (await U.people("theo")).status === 200);
+});
+
+section("freeco", async () => {
+  if (process.env.FREE_COMPANY === "off") return skip("the free company of the day", "this server runs with RN_FREE_COMPANY=off (scripts/test-all.sh checks it in credits-free)");
+  // The free company of the day: one company unlock a UTC day for no credits, on any plan. It counts toward the day's unlocks.
+  const f = await member("Fran Freeday");
+  const v0 = await f.view();
+  check("a new member has today's free company", v0.me?.freeCompany === true, v0.me?.freeCompany);
+  const two = v0.companies.filter((c) => c.hidden && c.friendly.open === 0).slice(0, 2);
+  if (two.length < 2) return skip("free company", "fewer than 2 locked companies");
+  const first = await f.act({ type: "unlock", entity: "company", id: two[0].id, field: "identity" });
+  check(
+    "the first company of the day costs nothing, says so, and is theirs",
+    first.status === 200 && first.json?.me?.credits === STARTER && first.json?.me?.freeCompany === false && /free company today/.test(first.json?.message ?? ""),
+    first.json,
+  );
+  const v1 = await f.view();
+  check("its line in the credit history: Free company of the day, 0", v1.ledger.some((l) => l.reason === "Free company of the day" && l.delta === 0) && v1.companies.find((c) => c.id === two[0].id)?.hidden === false, v1.ledger.slice(0, 3));
+  const second = await f.act({ type: "unlock", entity: "company", id: two[1].id, field: "identity" });
+  check("the next one the same day is 2 credits", second.status === 200 && second.json?.me?.credits === STARTER - PRICE && /for 2 credits/.test(second.json?.message ?? ""), second.json);
+  check("both count toward the day-one limit, 2 each", second.json?.me?.unlocksLeft === 25 - 2 * PRICE, second.json?.me?.unlocksLeft);
+});
+
+section("pending", async () => {
+  // A member's own seat at a company new to Merlin: its credits wait until the seat is confirmed (FAKE-SEATS).
+  const p = await member("Pat Pendingly");
+  const add = await p.act({
+    type: "add",
+    company: `Qa Pending ${RUN} Clientco`,
+    website: `qa-pending-${RUN}.example.com`,
+    newEngagement: true,
+    operatorMemberId: "me",
+    engagementFields: { function: "Sales", type: "Fractional", operator: "Pat Pendingly", start: "2024-03" },
+  });
+  check(
+    "a seat at a company new to Merlin earns nothing yet: +5 when confirmed",
+    add.status === 200 && /\+5 when confirmed/.test(add.json?.message ?? "") && !/You earned/.test(add.json?.message ?? "") && add.json?.me?.credits === STARTER && add.json?.me?.pending === 5,
+    add.json,
+  );
+  const more = await p.act({ type: "fill", entity: "engagement", id: add.json?.id, field: "hours", value: "10" });
+  check("a fact added on it later waits too", more.status === 200 && more.json?.me?.credits === STARTER && more.json?.me?.pending === 6 && /\+1 when confirmed/.test(more.json?.message ?? ""), more.json);
+  const pv = await p.view();
+  check("the credit history marks each one as waiting", pv.ledger.filter((l) => l.pending && l.delta === 0).length === 6, pv.ledger.slice(0, 7));
+  const notAdmin = await p.act({ type: "confirmSeat", engagementId: add.json?.id });
+  check("only an admin confirms a seat", notAdmin.status === 400 && /Only admins/.test(notAdmin.json?.error ?? ""), notAdmin.json);
+  const adm = await admin();
+  if (!adm) return skip("confirming a seat", "no admin account on this server");
+  const list = (await adm.view()).admin?.pendingSeats ?? [];
+  const row = list.find((x) => x.engagementId === add.json?.id);
+  check("Pilot metrics lists it with what it pays", !!row && row.credits === 6 && /Qa Pending/.test(row.company), list.slice(-3));
+  const ok = await adm.act({ type: "confirmSeat", engagementId: add.json?.id });
+  const after = await p.view();
+  check("confirmed: the 6 credits are paid, and nothing waits", ok.status === 200 && after.me?.credits === STARTER + 6 && !after.me?.pending && !after.ledger.some((l) => l.pending), { ok: ok.json, credits: after.me?.credits });
+  check("it leaves the list", !((await adm.view()).admin?.pendingSeats ?? []).some((x) => x.engagementId === add.json?.id));
+  const next = await p.act({ type: "fill", entity: "engagement", id: add.json?.id, field: "sourced", value: "Referral" });
+  check("from then on a fact there earns at once", next.status === 200 && next.json?.me?.credits === STARTER + 7, next.json);
+  // A seat at a company already on file earns at once, as always.
+  const host = (await hostsOf())[hostN++];
+  const real = await p.act({ type: "add", company: host.name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Marketing", type: "Fractional", operator: "Pat Pendingly", start: "2023-01" } });
+  check("a seat at a company already on Merlin earns at once", real.status === 200 && /You earned \d+ credits?/.test(real.json?.message ?? "") && !/when confirmed/.test(real.json?.message ?? ""), real.json);
+});
+
+section("lockedviews", async () => {
+  // Pilot metrics counts locked companies opened (once a member, company and day) and how many were then unlocked. Counts only.
+  const adm = await admin();
+  if (!adm) return skip("locked company views", "no admin account on this server");
+  const before = (await adm.view()).admin?.lockedViews;
+  const w = await member("Wren Window");
+  const c = (await w.view()).companies.find((x) => x.hidden);
+  if (!c || !before) return skip("locked company views", "no locked company, or no counts");
+  await w.act({ type: "lockedView", companyId: c.id });
+  await w.act({ type: "lockedView", companyId: c.id });
+  const mid = (await adm.view()).admin?.lockedViews;
+  check("opening a locked company counts once a day", mid?.views7 === before.views7 + 1 && mid?.members7 === before.members7 + 1 && mid.unlocked7 === before.unlocked7, { before, mid });
+  await w.act({ type: "unlock", entity: "company", id: c.id, field: "identity" });
+  await w.act({ type: "lockedView", companyId: c.id });
+  const end = (await adm.view()).admin?.lockedViews;
+  check("an unlock after the view counts toward view to unlock, and a company they know is not a view", end?.views7 === mid.views7 && end.unlocked7 === mid.unlocked7 + 1, { mid, end });
+  check("only counts reach admins: no company or member ids", Object.values(end ?? {}).every((x) => typeof x === "number"), end);
 });
 
 /* ---------- run ---------- */

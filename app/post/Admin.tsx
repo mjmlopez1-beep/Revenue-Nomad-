@@ -638,6 +638,54 @@ function RoleClaims({ rows, seats = false }: { rows: RoleClaim[]; seats?: boolea
 type NameClaim = NonNullable<AdminStats["names"]>["claims"][number];
 
 /** One claim waiting: who says the seat is theirs, the name on file, and the four answers. */
+/**
+ * Members' own seats at companies new to Merlin, waiting to be confirmed. Their credits wait too
+ * ("+4 when confirmed"); Confirm pays them. Another member confirming a fact on the seat does the same.
+ */
+function PendingSeats({ rows, refresh }: { rows: NonNullable<AdminStats["pendingSeats"]>; refresh: () => Promise<void> }) {
+  const ui = useUi();
+  const [busy, setBusy] = useState<string | null>(null);
+  const confirm = async (id: string) => {
+    if (busy) return;
+    setBusy(id);
+    const r = await ui.act({ type: "confirmSeat", engagementId: id });
+    if (r.ok) await refresh();
+    setBusy(null);
+  };
+  return (
+    <Card title="Seats waiting to be confirmed" span={6}>
+      <p className="tp-small muted">
+        A member&apos;s own seat at a company that wasn&apos;t on Merlin. What they added there earns once it is confirmed: another member confirms a fact on the seat, or you do here.
+      </p>
+      {rows.length === 0 ? (
+        <p className="tp-small muted">Nothing is waiting.</p>
+      ) : (
+        <ul className="tp-pm-list">
+          {rows.map((c) => (
+            <li key={c.engagementId} className="tp-pm-item tp-pm-claim">
+              <div className="tp-pm-item-h">
+                {c.name}
+                <span className="tp-pm-item-at">
+                  {" "}
+                  added a seat at {c.company || "a company"} · {stamp(c.at, "–")}
+                </span>
+              </div>
+              <div className="tp-pm-item-l">
+                {c.credits} {c.credits === 1 ? "credit waits" : "credits wait"} for it.
+              </div>
+              <div className="tp-pm-ask-acts">
+                <button type="button" className="btn btn-sm btn-pine" disabled={!!busy} aria-busy={busy === c.engagementId} onClick={() => void confirm(c.engagementId)}>
+                  Confirm the seat
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function NameClaimRow({ c }: { c: NameClaim }) {
   const ui = useUi();
   const [busy, setBusy] = useState<string | null>(null);
@@ -810,6 +858,46 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
           />
           <p className="tp-small muted tp-pm-foot">A member with no credits tapped a lock. This is demand the credits did not cover.</p>
         </Card>
+        {a.lockedViews && (
+          <Card title="Locked companies opened" span={3}>
+            <table className="tp-pm-table">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span className="sr-only">Measure</span>
+                  </th>
+                  <th scope="col" className="num">
+                    Last 7 days
+                  </th>
+                  <th scope="col" className="num">
+                    Last 30 days
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [
+                    ["Views", n0(a.lockedViews.views7), n0(a.lockedViews.views30)],
+                    ["Members who looked", n0(a.lockedViews.members7), n0(a.lockedViews.members30)],
+                    ["Unlocked after a view", n0(a.lockedViews.unlocked7), n0(a.lockedViews.unlocked30)],
+                    ["View to unlock", pct(a.lockedViews.unlocked7, a.lockedViews.views7), pct(a.lockedViews.unlocked30, a.lockedViews.views30)],
+                  ] as const
+                ).map(([label, w, m]) => (
+                  <tr key={label}>
+                    <th scope="row">{label}</th>
+                    <td className="num">
+                      <Num>{w}</Num>
+                    </td>
+                    <td className="num">
+                      <Num>{m}</Num>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="tp-small muted tp-pm-foot">A view is one member opening one locked company&apos;s record on one day. Counts only: never which company.</p>
+          </Card>
+        )}
 
         <Card title="Added and unlocked" span={3}>
           <table className="tp-pm-table">
@@ -884,6 +972,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
         {a.roleClaims && <RoleClaims rows={a.roleClaims} />}
         {a.seatClaims && <RoleClaims rows={a.seatClaims.map((c) => ({ ...c, closed: false }))} seats />}
         {a.names && <PublicNames n={a.names} refresh={refresh} />}
+        {a.pendingSeats && <PendingSeats rows={a.pendingSeats} refresh={refresh} />}
 
         <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
         {a.about && <AboutFill a={a} refresh={refresh} />}

@@ -777,6 +777,10 @@ section("admin", async () => {
     people: [{ name: "Pat Junk", title: "CEO" }],
   });
   if (add.status !== 200) return fail("admin: add a made-up company", add.json);
+  // A seat at a company new to Merlin earns once it is confirmed: here an admin confirms it, so the removal below takes back credits that were paid.
+  check("its credits wait to be confirmed", /\+\d+ when confirmed/.test(add.json?.message ?? "") && add.json?.me?.credits === STARTER, add.json);
+  const conf = await adm.act({ type: "confirmSeat", engagementId: add.json.id });
+  check("an admin confirms the seat, and they are paid", conf.status === 200 && (await J.view()).me.credits === STARTER + 10, conf.json);
   // A fact at a real company too (unlocked first, for PRICE credits).
   const elsewhere = await seedFill(J);
   await J.act(elsewhere);
@@ -1185,7 +1189,8 @@ section("retract", async () => {
   const I = await member("Ivo Inviter");
   const code = (await I.view()).me.inviteCode;
   const J = await member("Jem Invitee", { ref: code });
-  const jf = await freeFill(J);
+  // The bonus waits for a fact on a company that was on Merlin before they joined (a client they add is not one).
+  const jf = await seedFill(J);
   const jadd = await J.act(jf);
   const r8 = await back(J, jf);
   check("the fact that paid the invite bonus can't be taken back", /Your invite bonus added 10 more/.test(jadd.json?.message ?? "") && r8.status === 400 && r8.json?.error === "This fact paid your invite bonus, so it stays. You can still edit it.", [jadd.json?.message, r8.json]);
