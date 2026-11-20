@@ -9,14 +9,16 @@
  * are tried again after 30 days; a filled text is read again after 90 days and replaced only when
  * the site's text changed. One run at a time per process: a second call joins the first.
  *
- * Started by the admin button in Pilot metrics (action "aboutNow") and after each weekly scan,
- * both only with RN_ABOUT=1. scripts/about-run.mts runs it once against a data folder.
+ * Started on its schedule (maybeAbout: at most DAILY_LIMIT companies, each day by default), by
+ * "Run now" in Pilot metrics (action "aboutNow") and after each weekly scan, all only with
+ * RN_ABOUT=1. scripts/about-run.mts runs it once against a data folder.
  */
 import { createHash } from "node:crypto";
-import { saveAbout, aboutTargets, type AboutSaved } from "../table";
+import { saveAbout, aboutTargets, loadState, type AboutSaved } from "../table";
 import { extractAbout } from "./extract";
 import { fetchHomepage, type FetchOpts, type Page } from "./fetch";
-import { aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutTarget } from "./types";
+import { aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutTarget } from "./types";
+import { isDue, settingOf } from "../schedule";
 
 export const CONCURRENCY = 4;
 /** Pause between one worker's companies. */
@@ -141,4 +143,27 @@ export function runAbout(o: RunOpts = {}): Promise<AboutRunSummary> {
     }
   })();
   return flight.__merlinAboutFlight;
+}
+
+/* ---------- the scheduled read ---------- */
+
+/** Companies one scheduled run reads at most: the never-read first, then the longest ago (aboutTargets). */
+export const DAILY_LIMIT = 500;
+let dailyTriedAt = 0;
+
+/**
+ * Start a run of at most DAILY_LIMIT companies in the background when the schedule says so
+ * (lib/schedule.ts: each UTC day from 09:00 UTC by default): companies with no About yet, and
+ * those whose last read is old (aboutTargets: skips and failures after RETRY_DAYS, filled texts
+ * after REFRESH_DAYS). Only with RN_ABOUT=1. Called by the scheduler and on page loads, so it
+ * stays cheap: at most one look every 10 minutes, nothing while a run goes on. `run` is for tests.
+ */
+export async function maybeAbout(o: { nowMs?: number; run?: RunOpts } = {}): Promise<boolean> {
+  const nowMs = o.nowMs ?? Date.now();
+  if (!aboutEnabled() || flight.__merlinAboutFlight || nowMs - dailyTriedAt < 10 * 60_000) return false;
+  const s = await loadState();
+  if (!isDue(settingOf(s.schedule, "about"), Date.parse(s.about?.lastRun?.startedAt ?? ""), nowMs)) return false;
+  dailyTriedAt = nowMs;
+  void runAbout({ limit: DAILY_LIMIT, ...o.run }).catch((e) => console.error("about scheduled run failed", e));
+  return true;
 }

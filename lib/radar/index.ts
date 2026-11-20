@@ -4,9 +4,10 @@
  * connected) and email, and the app lists each day's companies. See lib/radar/types.ts for the
  * signals and lib/radar/present.ts for what a card reveals.
  *
- * When it runs: once a UTC day, on the first page load after 13:00 UTC (maybeRadar, called where
- * the weekly scan's maybeScan is), and when an admin presses "Send now" on Pilot metrics (runRadar
- * with force). RN_RADAR=0 turns the daily run off. A run looks back to the last run (at most 7
+ * When it runs: on its schedule (lib/schedule.ts; once a UTC day from 13:00 UTC by default, the
+ * owner can change it in Pilot metrics), started by the scheduler's timer or a page load
+ * (maybeRadar), and when an admin presses "Run now" on Pilot metrics (runRadar with force).
+ * RN_RADAR=0 turns the scheduled run off. A run looks back to the last run (at most 7
  * days), and a day with no signal for a member sends that member nothing.
  *
  * Every member gets every signal: a company's name is locked for everyone until they unlock it,
@@ -50,6 +51,7 @@ import { networkWarmth } from "../google/types"; // [google network]
 import { dayOf, rowsOf, viewLine, type CardContext, type MemberSignal } from "./present";
 import { renderRadarEmail } from "./format";
 import { fundingSource, type FundingSource } from "./sources/funding";
+import { isDue, settingOf } from "../schedule";
 import {
   RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarPath, type RadarDay, type RadarSentRow, type RadarState, type RadarView,
 } from "./types";
@@ -440,18 +442,21 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   return out;
 }
 
+/** Whether a run is going in this process (Pilot metrics' Automatic jobs). */
+export const radarRunning = () => flight !== null;
+
 /**
- * Start the daily run in the background when it is due: after 13:00 UTC and not yet today.
- * Called on page loads, so it stays cheap: at most one look every 10 minutes. RN_RADAR=0 turns it off.
+ * Start the run in the background when its schedule says it is due (lib/schedule.ts: each day
+ * from RADAR_HOUR_UTC, 13:00 UTC, by default; not twice in a UTC day). Called by the scheduler
+ * and on page loads, so it stays cheap: at most one look every 10 minutes. RN_RADAR=0 turns it off.
  */
-export async function maybeRadar(origin?: string): Promise<void> {
-  if (process.env.RN_RADAR === "0" || flight || Date.now() - triedAt < 10 * 60_000) return;
-  const now = new Date();
-  if (now.getUTCHours() < RADAR_HOUR_UTC) return;
-  triedAt = Date.now();
+export async function maybeRadar(origin?: string, nowMs = Date.now()): Promise<boolean> {
+  if (process.env.RN_RADAR === "0" || flight || nowMs - triedAt < 10 * 60_000) return false;
   const s = await loadState();
-  if (s.radar?.lastRunDay === now.toISOString().slice(0, 10)) return;
+  if (!isDue(settingOf(s.schedule, "radar"), Date.parse(s.radar?.lastRunAt ?? ""), nowMs)) return false;
+  triedAt = nowMs;
   void runRadar({ origin }).catch((e) => console.error("radar failed", e));
+  return true;
 }
 
 /* ---------- instant, for Pro ---------- */

@@ -27,7 +27,8 @@
 import { hostGates } from "../about/run";
 import { pageJunk } from "../about/extract";
 import { fetchHomepage, fetchPageAt, fetchRobotsTxt, fetchXmlAt, registrable, robotsAllowsPath, startUrl, testAllowance, Refused, type FetchOpts, type Page } from "../about/fetch";
-import { claimLeadersDay, leadersTargets, saveLeaders } from "../table";
+import { claimLeadersDay, leadersTargets, loadState, saveLeaders } from "../table";
+import { isDue, settingOf } from "../schedule";
 import { extractLeaders, linkKind, linksOf, nameTokens, normUrl, sitemapLocs, type Candidate, type LinkKind } from "./extract";
 import { pickFunctions } from "./pick";
 import { DAILY_BATCH, leadersEnabled, leadersProgress, NEXT_BATCH, type LeaderFn, type LeadersOutcome, type LeadersRunSummary, type LeadersTarget } from "./types";
@@ -243,23 +244,25 @@ const kindCounts = (fns: Record<string, LeaderFn>) => {
 
 /* ---------- the daily background read ---------- */
 
-/** The daily read starts on the first page load after this hour (UTC), apart from the radar's 13:00. */
+/** The daily read's default hour (UTC), apart from the radar's 13:00 (lib/schedule.ts JOB_DEFAULTS). */
 export const DAILY_HOUR_UTC = 6;
 let dailyTriedAt = 0;
 
 /**
- * Read DAILY_BATCH companies a UTC day in the background, the most useful first (lib/table.ts
+ * Read DAILY_BATCH companies in the background on the schedule (lib/schedule.ts: each UTC day
+ * from DAILY_HOUR_UTC by default; never twice in a UTC day), the most useful first (lib/table.ts
  * leadersTargets: a company on a member's Crystal Ball, one members said has a full-time leader,
  * one in a member's Ideal Fractional Profile, then the rest, never read before ahead of read
  * longest ago), each re-read after REFRESH_DAYS. The same polite reading as the admin's run
- * (four at a time, one request per host, the pauses, robots.txt, every fetch check). Called on
- * page loads, so it stays cheap: at most one look every 10 minutes. Only with RN_LEADERS=1;
- * RN_LEADERS_DAILY=0 keeps the admin button and turns the schedule off.
+ * (four at a time, one request per host, the pauses, robots.txt, every fetch check). Called by the
+ * scheduler and on page loads, so it stays cheap: at most one look every 10 minutes. Only with
+ * RN_LEADERS=1; RN_LEADERS_DAILY=0 keeps the admin button and turns the schedule off.
  */
 export async function maybeLeaders(nowMs = Date.now()): Promise<boolean> {
   if (!leadersEnabled() || process.env.RN_LEADERS_DAILY === "0" || flight.__merlinLeadersFlight || nowMs - dailyTriedAt < 10 * 60_000) return false;
   const now = new Date(nowMs);
-  if (now.getUTCHours() < DAILY_HOUR_UTC) return false;
+  const s = await loadState();
+  if (!isDue(settingOf(s.schedule, "leaders"), Date.parse(s.leadersDaily?.at ?? ""), nowMs)) return false;
   dailyTriedAt = nowMs;
   if (!(await claimLeadersDay(now.toISOString()))) return false;
   void runLeaders({ scope: "next", limit: DAILY_BATCH }).catch((e) => console.error("leaders daily run failed", e));

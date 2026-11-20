@@ -2,9 +2,10 @@
  * The daily funding run (server only): SEC Form D filings matched to companies on Merlin, kept as
  * funding events for Crystal Ball (lib/radar/sources/funding.ts reads them back).
  *
- * When it runs: with RN_FUNDING=1, once a UTC day, on the first page load after FUNDING_HOUR_UTC
- * (maybeFunding, called where the weekly scan's maybeScan and the radar's maybeRadar are), before
- * the radar's morning run at 13:00 UTC. A run that stopped on an error is tried again after 6 hours.
+ * When it runs: with RN_FUNDING=1, on its schedule (lib/schedule.ts; once a UTC day from
+ * FUNDING_HOUR_UTC by default, before the radar's run at 13:00 UTC), started by the scheduler's
+ * timer or a page load (maybeFunding), and by "Run now" in Pilot metrics. A run that stopped on an
+ * error is tried again after 6 hours.
  *
  * What a run does:
  *   1. the filing days of the last FUNDING_LOOKBACK_DAYS not read yet: each day's EDGAR daily form
@@ -27,6 +28,7 @@ import {
 } from "./types";
 import { aboutAmount, amountBand, dayIndexUrl, eftsUrl, parseEfts, parseFormD, parseFormIndex, primaryDocUrl, roundOf, secFetcher, SecRefused, type FormDListing, type SecFetch } from "./sec";
 import { candidateFor, confirmMatch, fundingIndex, type FundingTarget } from "./match";
+import { isDue, settingOf } from "../schedule";
 
 const DAY = 86_400_000;
 /** Filing documents fetched in one run, at most (a few a day is normal: most names match nothing). */
@@ -241,20 +243,25 @@ async function run(opts: { fetch?: SecFetch; now?: string; dryRun?: boolean; loo
   return { ran: true, counts, events };
 }
 
+/** Whether a run is going in this process (Pilot metrics' Automatic jobs). */
+export const fundingRunning = () => flight !== null;
+
 /**
- * Start the daily run in the background when it is due: RN_FUNDING=1, after FUNDING_HOUR_UTC,
- * not run yet today (or the last run stopped on an error over 6 hours ago). Called on page loads:
- * at most one try an hour.
+ * Start the run in the background when it is due: RN_FUNDING=1 and its schedule says so
+ * (lib/schedule.ts: each day from FUNDING_HOUR_UTC by default), or the last run stopped on an error
+ * over 6 hours ago. Called by the scheduler and on page loads: at most one try an hour.
  */
-export async function maybeFunding(): Promise<void> {
-  if (!fundingEnabled() || flight || Date.now() - triedAt < 60 * 60_000) return;
-  const now = new Date();
-  if (now.getUTCHours() < FUNDING_HOUR_UTC) return;
-  const f = (await loadState()).funding;
-  const today = now.toISOString().slice(0, 10);
-  if (f?.lastRunDay === today && !(f.last?.error && Date.now() - Date.parse(f.lastRunAt ?? "") > 6 * 60 * 60_000)) return;
-  triedAt = Date.now();
+export async function maybeFunding(nowMs = Date.now()): Promise<boolean> {
+  if (!fundingEnabled() || flight || nowMs - triedAt < 60 * 60_000) return false;
+  const s = await loadState();
+  const f = s.funding;
+  const st = settingOf(s.schedule, "funding");
+  const last = Date.parse(f?.lastRunAt ?? "");
+  const retry = st.every !== "off" && !!f?.last?.error && nowMs - last > 6 * 60 * 60_000 && new Date(nowMs).getUTCHours() >= st.hourUtc;
+  if (!retry && !isDue(st, last, nowMs)) return false;
+  triedAt = nowMs;
   void runFunding().catch((e) => console.error("funding run failed", e));
+  return true;
 }
 
 /**
