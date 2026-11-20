@@ -1,43 +1,45 @@
 "use client";
 
 /**
- * First run, about two minutes, and it ends on the member's first saved view. One calm card, and
- * the value comes before the ask:
- *   1. What Merlin is and what a credit buys, then their function and the title they go by, how
- *      many clients they have now and whether they're looking for a new one (both optional; the
- *      plans read the second to keep the pitch soft for someone who isn't). A
- *      member with seats on file hears where those came from and who can see their name, since
- *      most of them arrive by personal link and skip the landing page.
- *   2. Their Ideal Fractional Profile: the companies they want as clients (industries, size,
- *      revenue, where). Every part optional.
- *   3. "Which fractional usually gets hired before you?": up to 3 functions, suggested first
- *      (firstView.ts beforeOrder), or "Not sure". Stored as Me.before.
- *   4. Their first view: companies in their profile that hired a fractional in those functions in
+ * First run, three steps, and it ends on the member's first saved view and Today. One calm card,
+ * and the value comes before the ask:
+ *   1. "What do you do?": what Merlin is and what a credit buys, then their function, with the
+ *      titles for it as chips under it. A member with seats on file hears where those came from and
+ *      who can see their name, since most of them arrive by personal link and skip the landing page.
+ *   2. "Who you want to work with": the fractionals usually hired before them, the suggested ones
+ *      already ticked (firstView.ts beforeOrder), or "Not sure", stored as Me.before; then the
+ *      companies they want as clients, industry and size only (their Ideal Fractional Profile).
+ *      Where defaults to the member's own country, one tap to Anywhere. Every part optional.
+ *   3. "Your first view": companies in their profile that hired a fractional in those functions in
  *      the last 12 months and have no fractional in theirs yet (widened until it shows enough), the
- *      top 3 rows, and one button, "Save this view", with the weekly email on. "Also show open
- *      <function> roles" saves the open roles in their function as a second view.
- *   5. Find your seats: they type past and current clients and claim the seats we found there, or
- *      add one we don't have. Each answer they add earns a credit.
- *   6. Keep your sign-in link (only for members who joined here while email sign-in is off).
+ *      top 3 rows. The view saves itself, with the weekly email on, and "Also show open <function>
+ *      roles" saves the open roles in their function as a second view. One button, "Open Today".
+ *      A member who joined here while email sign-in is off keeps their sign-in link inline, above
+ *      it. A member with seats on file under their name gets "Fill in your seats" here.
+ * What it no longer asks moved out: Find your seats is the nudge after the first unlock (Today and
+ * the table), and how many clients they have and whether they're looking are left unanswered (the
+ * plans read an unanswered "looking" as yes; Your profile keeps it).
  * Each step is a history entry, so back steps back and forward steps forward. The answers are
  * kept for the tab (a reload comes back to the same step) and on the server after each step (a
  * new tab or another device picks up there too). Finishing sends the profile, which marks the
- * member onboarded with their first view, and the table opens on that view. A member with seats
- * on file under their name also gets "Fill in your seats" (Root opens the app there).
+ * member onboarded with their first view, and the app opens on Today. A member with seats on file
+ * under their name who picks "Fill in your seats" opens on those (Root).
+ *
+ * `viewReady` false: the join answer is in but the full view is still on its way (Root, WS2).
+ * Steps 1 and 2 need no companies; step 3 shows skeleton rows and saves once the view is there.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./onboard.css";
 import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, LockedName, post, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
-import type { CompanyRec, Icp, OnboardDraft } from "@/lib/tableTypes";
+import type { Icp, OnboardDraft } from "@/lib/tableTypes";
 import { CLIENT_COUNTS } from "@/lib/tableTypes";
-import { countryOf, deriveAll, hireLine, hireOfRow, icpEmpty, type Filters, type Row } from "@/app/post/model";
+import { countryKey, countryOf, deriveAll, hireLine, hireOfRow, icpEmpty, type Filters, type Row } from "@/app/post/model";
 import { EMPTY_ICP, IcpFields, countriesByCount, industriesByCount } from "@/app/post/Hunt";
 import { alertView, named, realTitle, titlesFor } from "./suggest";
-import { FindSeats, SEAT_YIELD, seatsFound } from "./FindSeats";
 import {
   BEFORE_MAX, PREVIEW_ROWS, andList, beforeOrder, firstView, firstViewLine, goalFor, guessLine, holderOnFile, holdersLine, newerAnswers, openRolesCount, resumeStep, toggleBefore,
-  widenLine, type FirstView,
+  STEPS, widenLine, type FirstView,
 } from "./firstView";
 import { ICP_SKIPPED } from "@/app/post/getStarted";
 import { contactOf, mailto } from "../landing/contact";
@@ -51,15 +53,20 @@ export interface OnboardingProps {
   /** Call when the member finishes (after the profile action marks them onboarded). */
   onDone: () => Promise<void> | void;
   /**
-   * Called first when the member picks "Skip to the table", before the profile action reloads
-   * the view: the app then opens on the table, not on their seats.
+   * Called first when the member picks "Skip to the table" or "Open Today", before the profile
+   * action reloads the view: the app then opens there, not on their seats.
    */
   onSkip?: () => void;
+  /**
+   * The full view is in (default). False while only the join answer is (`view.companies` empty):
+   * steps 1 and 2 work without companies, and the first view waits for them.
+   */
+  viewReady?: boolean;
 }
 
 /* ---------- where the member is: history entry, tab storage and the server's draft ---------- */
 
-/** The tab keeps the answers (sessionStorage), so a reload on step 4 still has the answers it needs. */
+/** The tab keeps the answers (sessionStorage), so a reload on the first view still has the answers it needs. */
 const SAVE_KEY = "tp_ob";
 /** The answers as this tab keeps them: a draft (OnboardDraft) with the member's id. `fn` is how a tab from before kept the function. */
 type Saved = Partial<OnboardDraft> & { id: string; fn?: string | null };
@@ -87,6 +94,23 @@ function triedFn(): string | null {
     return null;
   }
 }
+/**
+ * The member's own country, from the browser's language ("en-GB" is the United Kingdom), spelled
+ * as the company records spell it. Null when the browser doesn't say. Their Ideal Fractional
+ * Profile starts there; one tap makes it Anywhere.
+ */
+export function localCountry(): string | null {
+  try {
+    const langs = [...(navigator.languages ?? []), navigator.language];
+    const tag = langs.find((l) => /-[a-z]{2}$/i.test(l ?? ""));
+    const code = tag?.slice(-2).toUpperCase();
+    if (!code) return null;
+    const name = new Intl.DisplayNames(["en"], { type: "region" }).of(code);
+    return name && name !== code ? name : null;
+  } catch {
+    return null;
+  }
+}
 /** The step this history entry holds, or 0 when it holds none. */
 function entryStep(): number {
   const n = Number(window.history.state?.ob);
@@ -97,19 +121,19 @@ function entryBase(): number {
   const n = Number(window.history.state?.obBase);
   return Number.isInteger(n) && n >= 1 ? n : 1;
 }
-/** The table opens on the member's first view: the address keeps no other place (a company link stays). */
-function clearPlace() {
+/** The app opens on Today (or on the table, `table`): the address keeps no other place (a company link stays). */
+function clearPlace(table = false) {
   try {
     const u = new URL(window.location.href);
     for (const k of ["v", "t", "s", "f", "q", "af", "p"]) u.searchParams.delete(k);
+    if (table) u.searchParams.set("p", "table");
     window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
   } catch {}
 }
 
 /**
  * For a member with seats on file under their name: what is waiting and why it is worth doing,
- * with "Fill in your seats" (the main button opens the table). Shown on the last step above the
- * list, so it is the first thing they read there. Nothing for everyone else.
+ * with "Fill in your seats". Shown on the last step above its button. Nothing for everyone else.
  */
 function SeatsNext({ n, busy, onFill }: { n: number; busy?: boolean; onFill?: () => void }) {
   if (!n) return null;
@@ -137,12 +161,12 @@ function SeatsNext({ n, busy, onFill }: { n: number; busy?: boolean; onFill?: ()
 const signature = (fv: FirstView, roles: boolean, email: boolean, fn: string | null, icp: Icp) =>
   JSON.stringify({ p: fv.place, n: fv.name, r: roles && named(fn) ? alertView(fn, icpEmpty(icp) ? null : icp).place : null, e: email });
 
-export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProps) {
+export default function Onboarding({ view, act, onDone, onSkip, viewReady = true }: OnboardingProps) {
   const me = view.me!;
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
+  // Joined here with email sign-in off: the sign-in link is kept on the last step (with it on, it comes by email).
   const linkStep = me.id.startsWith("j_") && !view.email;
-  // 1 who you are, 2 your Ideal Fractional Profile, 3 who gets hired before you, 4 your first view, 5 find your seats, 6 keep your link.
-  const total = linkStep ? 6 : 5;
+  const total = STEPS;
   const { support } = contactOf(view);
 
   // Answers from this tab (a reload) or the server (another tab or device), whichever is newer, else what the server already knows.
@@ -157,19 +181,21 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     const fn = (picked && FUNCTIONS.includes(picked) ? picked : null) ?? triedFn() ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
     // No title yet means an empty field with the placeholder showing, never a stored "Member".
     const title = typeof a.title === "string" ? a.title : realTitle(me.title);
-    const icp = a.icp ?? me.icp ?? EMPTY_ICP;
-    // Their own function can't come before them. An answer left with nothing once it is taken off is unanswered, not "Not sure".
+    // Nothing picked yet anywhere: the profile starts in the member's own country.
+    const here = a.icp || me.icp ? null : localCountry();
+    const icp = a.icp ?? me.icp ?? (here ? { ...EMPTY_ICP, countries: [here] } : EMPTY_ICP);
+    // Their own function can't come before them. An answer left with nothing once it is taken off is unanswered (the suggestion), not "Not sure".
     const raw = Array.isArray(a.before) ? a.before : Array.isArray(me.before) ? me.before : null;
     const kept = raw ? raw.filter((f) => FUNCTIONS.includes(f) && f !== fn).slice(0, BEFORE_MAX) : null;
     const before = raw && raw.length && kept && !kept.length ? null : kept;
-    const clients = Array.isArray(a.clients) ? a.clients.filter((id) => id.startsWith("name:") || known.has(id)).slice(0, 20) : [];
+    // Kept from earlier answers (a draft from the longer flow): sent on as they were, never asked again here.
+    const clients = Array.isArray(a.clients) ? a.clients.filter((id) => id.startsWith("name:") || known.has(id) || !view.companies.length).slice(0, 20) : [];
     const views = Array.isArray(a.views) ? a.views.filter((id) => saved.has(id)) : [];
     const step = resumeStep(entryStep() || a.step || 1, { fn, before }, total);
-    // "How many clients do you have now?" and "Are you looking for a new client?": optional, null until answered.
     const clientCount = typeof a.clientCount === "string" && (CLIENT_COUNTS as readonly string[]).includes(a.clientCount) ? a.clientCount : me.clientCount ?? null;
     const looking = typeof a.looking === "boolean" ? a.looking : me.looking ?? null;
     return {
-      fn, title, icp, before, clients, views, step, clientCount, looking,
+      fn, title, icp, here, before, clients, views, step, clientCount, looking,
       roles: a.roles !== false,
       email: a.email !== false,
       saved: views.length && typeof a.saved === "string" ? a.saved : null,
@@ -178,24 +204,25 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   const [step, setStep] = useState(init.step);
   const [fn, setFn] = useState<string | null>(init.fn);
   const [title, setTitle] = useState(init.title);
-  const [clientCount, setClientCount] = useState<string | null>(init.clientCount);
-  const [looking, setLooking] = useState<boolean | null>(init.looking);
   const [icp, setIcp] = useState<Icp>(init.icp);
+  /** The member's answer: null not given yet (the suggested ones show ticked), [] Not sure. */
   const [before, setBefore] = useState<string[] | null>(init.before);
   const [roles, setRoles] = useState(init.roles);
   const [email, setEmail] = useState(init.email);
-  const [clients, setClients] = useState<string[]>(init.clients);
   /** The saved views the first view step made (the first view, then the open roles), and what they were saved as. */
   const [views, setViews] = useState<string[]>(init.views);
   const [saved, setSaved] = useState<string | null>(init.saved);
-  /** The first view was saved on this visit: Find your seats says so at its top. */
-  const [justSaved, setJustSaved] = useState(false);
+  /** A save that failed, for these answers: it isn't tried again by itself. */
+  const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  /** The sign-in link was copied, emailed or shared (only asked of a member with no email to sign in by). */
+  const [linkKept, setLinkKept] = useState(false);
   const rewinding = useRef(false);
   /** The first step this tab's history holds. Back from it steps back in place rather than leaving the page. */
   const base = useRef(1);
   const cardRef = useRef<HTMLDivElement>(null);
-  // Seats on file that carry this member's name. When there are any, that is where they go next.
+  // Seats on file that carry this member's name. When there are any, that is where they can go next.
   const mySeats = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours).length, 0), [view.companies]);
   // Of those, the ones we matched to work they published with us, and the ones Revenue Nomad's own seat scan found (the rest a member added with their name on it).
   const published = useMemo(
@@ -204,27 +231,29 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   );
   const scanned = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours && e.source === "Seat scan").length, 0), [view.companies]);
   const emailOn = !!view.scan?.digest;
-  // Credits earned on the way (a seat added on Find your seats): "+4" beside the balance for a moment.
-  const [bump, setBump] = useState(0);
-  const prevCredits = useRef(me.credits);
-  useEffect(() => {
-    const d = me.credits - prevCredits.current;
-    prevCredits.current = me.credits;
-    if (d <= 0) return;
-    setBump(d);
-    const t = setTimeout(() => setBump(0), 2400);
-    return () => clearTimeout(t);
-  }, [me.credits]);
 
   /* ----- the first view, from the answers ----- */
   const infos = useMemo(() => deriveAll(view.companies), [view.companies]);
   const order = useMemo(() => beforeOrder(infos, fn), [infos, fn]);
-  const fv = useMemo(() => (before === null ? null : firstView(infos, me, { fn, icp: icpEmpty(icp) ? null : icp, before, suggested: order.suggested })), [infos, me, fn, icp, before, order]);
+  /** What the before question reads as now: the answer, else the suggestion, ticked. */
+  const beforeNow = before ?? order.suggested;
+  const ready = viewReady && view.companies.length > 0;
+  const fv = useMemo(
+    () => (before === null || !ready ? null : firstView(infos, me, { fn, icp: icpEmpty(icp) ? null : icp, before, suggested: order.suggested })),
+    [infos, me, fn, icp, before, order, ready],
+  );
   // Open roles in their function that fit their profile now, for "Also show open <function> roles" (counted when the first view shows).
-  const openRoles = useMemo(() => (step === 4 ? openRolesCount(infos, me, fn, icpEmpty(icp) ? null : icp) : 0), [step, infos, me, fn, icp]);
+  const openRoles = useMemo(() => (step === 3 && ready ? openRolesCount(infos, me, fn, icpEmpty(icp) ? null : icp) : 0), [step, ready, infos, me, fn, icp]);
   const sig = fv ? signature(fv, roles, email, fn, icp) : null;
   /** The views saved on the first view step still say what the answers say now. */
   const savedNow = !!views.length && saved === sig;
+
+  // The country the profile started in, once the companies are in: one we have no company in narrows to nothing, so it goes.
+  useEffect(() => {
+    if (!ready || !init.here || icp.countries.length !== 1 || icp.countries[0] !== init.here) return;
+    if (!countriesByCount(view.companies).some((c) => countryKey(c.name) === countryKey(init.here!))) setIcp((x) => ({ ...x, countries: [] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // A step needs the answers before it. If they are missing (storage was cleared), ask again.
   const shown = resumeStep(step, { fn, before }, total);
@@ -241,7 +270,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   }, []);
 
   useEffect(() => {
-    // A reload keeps this tab's entries (and the first one they hold). A new tab that picks up at step 4 has none behind it.
+    // A reload keeps this tab's entries (and the first one they hold). A new tab that picks up at step 3 has none behind it.
     const had = entryStep();
     base.current = had ? Math.min(entryBase(), init.step) : init.step;
     if (had !== init.step || entryBase() !== base.current) window.history.replaceState({ ob: init.step, obBase: base.current }, "");
@@ -263,16 +292,16 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     before,
     roles,
     email,
-    clientCount,
-    looking,
-    clients,
+    clientCount: init.clientCount,
+    looking: init.looking,
+    clients: init.clients,
     views,
     saved,
     at: new Date().toISOString(),
   });
   const latest = useRef(answers);
   latest.current = answers;
-  useEffect(() => writeSaved(latest.current(step)), [me.id, step, fn, title, icp, before, roles, email, clients, views, saved, clientCount, looking]);
+  useEffect(() => writeSaved(latest.current(step)), [me.id, step, fn, title, icp, before, roles, email, views, saved]);
 
   // Each new step goes to the server too, so a new tab or another device picks up here (the step it opened on is already there).
   const opened = useRef(true);
@@ -321,21 +350,22 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
       window.history.go(-k);
     });
 
-  /* ----- saving the first view ----- */
+  /* ----- the first view saves itself ----- */
 
   /**
-   * "Save this view": the first view (and the open roles in their function, when that's on), with
-   * the weekly email as ticked. Saved again after a change of answer, in place of the ones before.
+   * The first view (and the open roles in their function, when that's on), with the weekly email as
+   * ticked. It saves as soon as the step shows, and again after a change of answer, in place of the
+   * ones before. Nothing to press.
    */
   const saveFirst = async () => {
-    if (!fv || busy) return;
-    if (savedNow) return forward(5);
+    if (!fv || !sig || busy) return;
     setBusy(true);
     for (const id of views) await act({ type: "savedView", op: "delete", id }, { quiet: true, silentError: true });
     setViews([]);
     setSaved(null);
     const r = await act({ type: "savedView", op: "save", name: fv.name, place: fv.place, criteria: fv.criteria, email }, { quiet: true });
     if (!r.ok || !r.id) {
+      setSaveFailed(sig);
       setBusy(false);
       return;
     }
@@ -347,24 +377,31 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
     }
     setViews(ids);
     setSaved(sig);
-    setJustSaved(true);
     setBusy(false);
-    forward(5);
   };
+  useEffect(() => {
+    if (shown !== 3 || !fv || !sig || savedNow || busy || finishing || saveFailed === sig) return;
+    // A switch flipped twice in a row saves once.
+    const t = setTimeout(() => void saveFirst(), 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, sig, savedNow, busy, finishing, saveFailed]);
 
   /**
-   * Finish with what is answered so far. `skip`: "Skip to the table", from any step. The profile
+   * Finish with what is answered so far. `skip`: "Skip to the table", from step 1 or 2. The profile
    * action marks the member onboarded either way, so a reload never brings them back here.
    */
-  const finish = async (skip = false, to: "table" | "seats" = "table") => {
-    if (busy) return;
-    setBusy(true);
-    // The app opens on the table their answers built, unless they asked for their seats.
+  const finish = async (skip = false, to: "today" | "seats" = "today") => {
+    if (finishing) return;
+    setFinishing(true);
+    // The app opens on Today (or the table, skipped), unless they asked for their seats.
     if (skip || to !== "seats") onSkip?.();
     await rewind();
     window.scrollTo(0, 0);
-    // With a first view saved, the table opens on it.
-    if (views[0]) clearPlace();
+    if (skip) clearPlace(true);
+    else if (views[0] || to === "today") clearPlace();
+    // Not answered yet when they skip: the suggestion stands in, as it did on screen.
+    const beforeSent = before ?? (fn ? order.suggested : null);
     const r = await act(
       {
         type: "profile",
@@ -372,15 +409,16 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
         ...(fn ? { goal: goalFor(fn) } : {}),
         ...(title.trim() !== realTitle(me.title) ? { title: title.trim() } : {}),
         icp: icpEmpty(icp) ? null : icp,
-        ...(before !== null ? { before } : {}),
+        ...(beforeSent !== null ? { before: beforeSent } : {}),
         ...(views[0] ? { firstView: views[0] } : {}),
-        ...(clientCount !== null ? { clientCount } : {}),
-        ...(looking !== null ? { looking } : {}),
+        ...(init.clientCount !== null ? { clientCount: init.clientCount } : {}),
+        // "Are you looking for a new client?" isn't asked here any more: unanswered reads as yes (the plans' softer pitch is only for "Not now").
+        ...(init.looking !== null ? { looking: init.looking } : {}),
       },
       { quiet: true },
     );
     if (!r.ok) {
-      setBusy(false);
+      setFinishing(false);
       if (step > base.current && entryStep() !== step) window.history.pushState({ ob: step, obBase: base.current }, "");
       return;
     }
@@ -392,8 +430,6 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
       } catch {}
     await onDone();
   };
-
-  const afterSeats = () => (linkStep ? forward(6) : finish(false, "table"));
 
   return (
     <div className="ob">
@@ -408,11 +444,6 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
           <span>
             <strong>{me.credits}</strong> credits
           </span>
-          {bump > 0 ? (
-            <span className="ob-credits-bump" aria-hidden>
-              +{bump}
-            </span>
-          ) : null}
         </span>
       </header>
 
@@ -441,16 +472,16 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
             <span className="ob-step num" aria-hidden>
               Step {shown} of {total}
             </span>
-            {/* Not on the sign-in link step: leaving there without the link is the one thing to avoid. */}
-            {shown === 6 ? null : (
-              <button type="button" className="ob-skip" onClick={() => finish(true)} disabled={busy}>
+            {/* Not on the last step: its own button opens the app, with the first view saved. */}
+            {shown === total ? null : (
+              <button type="button" className="ob-skip" onClick={() => finish(true)} disabled={finishing}>
                 Skip to the table
               </button>
             )}
           </div>
 
           {shown === 1 ? (
-            <StepQuestions
+            <StepYou
               first={first}
               seats={mySeats}
               published={published}
@@ -460,7 +491,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               fn={fn}
               setFn={(f) => {
                 setFn(f);
-                // Their own function can't come before them. Taking off their only pick leaves the question unanswered, not "Not sure".
+                // Their own function can't come before them. Taking off their only pick leaves the question unanswered (the suggestion), not "Not sure".
                 setBefore((b) => {
                   if (!b || !b.includes(f)) return b;
                   const rest = b.filter((x) => x !== f);
@@ -469,17 +500,27 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               }}
               title={title}
               setTitle={setTitle}
-              clientCount={clientCount}
-              setClientCount={setClientCount}
-              looking={looking}
-              setLooking={setLooking}
               onNext={() => forward(2)}
             />
           ) : shown === 2 ? (
-            <StepClients companies={view.companies} icp={icp} setIcp={setIcp} onBack={back} onNext={() => forward(3)} />
-          ) : shown === 3 ? (
-            <StepBefore fn={fn} order={order.order} suggested={order.suggested} before={before} setBefore={setBefore} onBack={back} onNext={() => forward(4)} />
-          ) : shown === 4 && fv ? (
+            <StepWho
+              fn={fn}
+              order={order.order}
+              suggested={order.suggested}
+              before={before}
+              beforeNow={beforeNow}
+              setBefore={setBefore}
+              icp={icp}
+              setIcp={setIcp}
+              here={init.here}
+              industries={industriesByCount(view.companies)}
+              onBack={back}
+              onNext={() => {
+                setBefore(beforeNow);
+                forward(3);
+              }}
+            />
+          ) : (
             <StepFirstView
               fv={fv}
               fn={fn}
@@ -491,37 +532,22 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
               setEmail={setEmail}
               emailOn={emailOn}
               savedNow={savedNow}
-              busy={busy}
+              saving={busy}
+              failed={!!sig && saveFailed === sig}
+              onRetry={() => setSaveFailed(null)}
+              finishing={finishing}
               onBack={back}
-              onSave={saveFirst}
-            />
-          ) : shown === 5 ? (
-            <StepSeats
-              companies={view.companies}
-              fn={fn}
-              title={title}
-              name={me.name}
-              credits={me.credits}
-              clients={clients}
-              setClients={setClients}
-              act={act}
-              savedLine={justSaved && savedNow ? (email && emailOn ? "Your first view is saved. New ones come in your weekly email." : "Your first view is saved under Saved views.") : null}
+              link={linkStep ? <LinkInline token={me.token} email={me.email} support={support} onKept={() => setLinkKept(true)} /> : null}
+              needLink={linkStep && !linkKept}
               handoff={
-                linkStep ? null : (
-                  <>
-                    <SeatsNext n={mySeats} busy={busy} onFill={() => finish(false, "seats")} />
-                    {/* [google network] optional and skippable: Next skips it (nothing with RN_GOOGLE off). */}
-                    <OnboardGoogle onConnect={() => void finish(false, "table").then(() => startGoogle("onboard"))} />
-                  </>
-                )
+                <>
+                  <SeatsNext n={mySeats} busy={finishing} onFill={() => finish(false, "seats")} />
+                  {/* [google network] optional and skippable (nothing with RN_GOOGLE off). */}
+                  <OnboardGoogle onConnect={() => void finish(false, "today").then(() => startGoogle("onboard"))} />
+                </>
               }
-              nextLabel={linkStep ? "Get my sign-in link" : "Open my table"}
-              busy={busy}
-              onBack={back}
-              onNext={afterSeats}
+              onOpen={() => finish(false, "today")}
             />
-          ) : (
-            <StepLink token={me.token} email={me.email} support={support} emailOn={view.email} busy={busy} nextLabel="Open my table" seats={mySeats} onDone={(to) => finish(false, to)} />
           )}
         </div>
       </main>
@@ -529,7 +555,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   );
 }
 
-/* ---------- step 1: what this is, then who you are ---------- */
+/* ---------- step 1: what this is, then what you do ---------- */
 
 /**
  * Where the seats with their name came from: work they published on Revenue Nomad, Revenue
@@ -546,8 +572,8 @@ function seatsLine(seats: number, published: number, scanned: number): string {
   return `${seats} seats already carry your name: ${said}.`;
 }
 
-function StepQuestions({
-  first, seats, published, scanned, credits, invited, fn, setFn, title, setTitle, clientCount, setClientCount, looking, setLooking, onNext,
+function StepYou({
+  first, seats, published, scanned, credits, invited, fn, setFn, title, setTitle, onNext,
 }: {
   first: string;
   /** Seats on file that carry the member's name. */
@@ -563,12 +589,9 @@ function StepQuestions({
   setFn: (f: string) => void;
   title: string;
   setTitle: (t: string) => void;
-  clientCount: string | null;
-  setClientCount: (c: string | null) => void;
-  looking: boolean | null;
-  setLooking: (l: boolean | null) => void;
   onNext: () => void;
 }) {
+  const picks = titlesFor(fn);
   return (
     <form
       onSubmit={(e) => {
@@ -577,11 +600,10 @@ function StepQuestions({
       }}
     >
       <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Welcome, {first}
+        Welcome, {first}. What do you do?
       </h1>
       <p className="ob-sub">
-        Merlin is a data exchange for fractional operators. Share what you know about fractional work to earn credits, and see which companies hire
-        fractionals, what they&apos;ve paid and which roles are open now.
+        Merlin shows you which companies hire fractionals, who held each seat and which roles are open now. Share what you know to earn credits.
         {seats ? ` ${seatsLine(seats, published, scanned)} Other members see your name on a seat only after they spend 1 credit.` : null}
       </p>
       <p className="ob-credit-note">
@@ -589,7 +611,7 @@ function StepQuestions({
           <IconCoin size={13} />
         </span>
         <span>
-          {/* Joined from an invite: who sent it, and the credits it brings once they add a first fact. One note with the credits, so the first question stays near the top on a phone. */}
+          {/* Joined from an invite: who sent it, and the credits it brings once they add a first fact. */}
           {invited ? (
             <>
               <strong>{invited[0]}</strong> {invited[1]}{" "}
@@ -599,12 +621,12 @@ function StepQuestions({
           <strong className="num">
             {credits} {credits === 1 ? "credit" : "credits"}
           </strong>
-          . A credit shows you one thing another member added, like who held a seat. A company, with the job posting of each open role there, is 2 credits, and your first company each day is free. Adding what you know earns credits back.
+          . A company is 2 credits, and your first one each day is free. One more credit shows who held a seat there.
         </span>
       </p>
 
       <fieldset className="ob-q">
-        <legend className="ob-h">Which function do you work in?</legend>
+        <legend className="ob-h">Your function</legend>
         <div className="ob-chips" role="radiogroup" aria-label="Your function">
           {FUNCTIONS.map((f) => (
             <button key={f} type="button" role="radio" aria-checked={fn === f} className={`ob-chip${fn === f ? " ob-chip-on" : ""}`} onClick={() => setFn(f)}>
@@ -612,59 +634,34 @@ function StepQuestions({
             </button>
           ))}
         </div>
-        <p className="ob-hint">We use it to find companies that haven&apos;t hired a fractional in your function yet, and open roles in it.</p>
       </fieldset>
 
-      <div className="ob-q">
-        <label className="ob-h" htmlFor="ob-title">
-          Your title
-        </label>
-        <input
-          id="ob-title"
-          className="input ob-title-input"
-          value={title}
-          maxLength={80}
-          placeholder={titlesFor(fn)[0] ?? "Fractional VP Sales"}
-          onChange={(e) => setTitle(e.target.value)}
-          autoComplete="organization-title"
-        />
-        {!title.trim() && titlesFor(fn).length ? (
-          <div className="ob-title-picks" aria-label="Titles to pick from">
-            {titlesFor(fn).map((t) => (
-              <button key={t} type="button" className="ob-title-pick" onClick={() => setTitle(t)}>
-                {t}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <p className="ob-hint">Members see it when you message them.</p>
-      </div>
-
-      <fieldset className="ob-q">
-        <legend className="ob-h">How many clients do you have now?</legend>
-        <div className="ob-chips" role="radiogroup" aria-label="Clients now">
-          {CLIENT_COUNTS.map((c) => (
-            <button key={c} type="button" role="radio" aria-checked={clientCount === c} className={`ob-chip${clientCount === c ? " ob-chip-on" : ""}`} onClick={() => setClientCount(clientCount === c ? null : c)}>
-              {c}
-            </button>
-          ))}
+      {fn ? (
+        <div className="ob-q ob-q-tight">
+          <label className="ob-h" htmlFor="ob-title">
+            Your title
+          </label>
+          {picks.length ? (
+            <div className="ob-title-picks" role="radiogroup" aria-label="Titles to pick from">
+              {picks.map((t) => (
+                <button key={t} type="button" role="radio" aria-checked={title === t} className={`ob-title-pick${title === t ? " ob-title-pick-on" : ""}`} onClick={() => setTitle(t)}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <input
+            id="ob-title"
+            className="input ob-title-input"
+            value={title}
+            maxLength={80}
+            placeholder={picks.length ? "Or type your own" : "Fractional VP Sales"}
+            onChange={(e) => setTitle(e.target.value)}
+            autoComplete="organization-title"
+          />
+          <p className="ob-hint">Members see it when you message them.</p>
         </div>
-      </fieldset>
-
-      <fieldset className="ob-q">
-        <legend className="ob-h">Are you looking for a new client?</legend>
-        <div className="ob-chips" role="radiogroup" aria-label="Looking for a new client">
-          {([
-            [true, "Yes"],
-            [false, "Not now"],
-          ] as const).map(([v, label]) => (
-            <button key={label} type="button" role="radio" aria-checked={looking === v} className={`ob-chip${looking === v ? " ob-chip-on" : ""}`} onClick={() => setLooking(looking === v ? null : v)}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="ob-hint">Both are optional. They help us show you what fits where your book is.</p>
-      </fieldset>
+      ) : null}
 
       <div className="ob-grow" />
       <div className="ob-foot">
@@ -672,62 +669,41 @@ function StepQuestions({
           {fn ? "" : "Pick your function"}
         </span>
         <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!fn}>
-          Next: your profile
+          Next
         </button>
       </div>
     </form>
   );
 }
 
-/* ---------- step 2: your Ideal Fractional Profile, the companies you want as clients (optional) ---------- */
+/* ---------- step 2: who you want to work with ---------- */
 
-function StepClients({ companies, icp, setIcp, onBack, onNext }: { companies: CompanyRec[]; icp: Icp; setIcp: (v: Icp) => void; onBack: () => void; onNext: () => void }) {
-  const industries = useMemo(() => industriesByCount(companies), [companies]);
-  const countries = useMemo(() => countriesByCount(companies), [companies]);
-  return (
-    <div>
-      <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Your Ideal Fractional Profile
-      </h1>
-      <p className="ob-sub">The companies you want as clients. Your first view shows companies like these. Pick as many as fit, or skip it.</p>
-      <IcpFields value={icp} onChange={setIcp} industries={industries} countries={countries} headingClass="ob-h" />
-      <div className="ob-grow" />
-      <div className="ob-foot ob-foot-follow">
-        <button type="button" className="ob-back" onClick={onBack}>
-          Back
-        </button>
-        <span className="ob-foot-note" aria-live="polite">
-          {icpEmpty(icp) ? "You can skip this and pick later" : ""}
-        </span>
-        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onNext}>
-          Next: who comes before you
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- step 3: which fractional usually gets hired before you ---------- */
-
-function StepBefore({
-  fn, order, suggested, before, setBefore, onBack, onNext,
+function StepWho({
+  fn, order, suggested, before, beforeNow, setBefore, icp, setIcp, here, industries, onBack, onNext,
 }: {
   fn: string | null;
   /** Every function it offers, the suggested ones first (beforeOrder). */
   order: string[];
   suggested: string[];
-  /** The answer: null not yet, [] Not sure. */
+  /** The answer: null not given yet, [] Not sure. */
   before: string[] | null;
+  /** What shows ticked: the answer, else the suggestion. */
+  beforeNow: string[];
   setBefore: (b: string[] | null) => void;
+  icp: Icp;
+  setIcp: (v: Icp) => void;
+  /** The member's own country, where the profile started (null: the browser didn't say). */
+  here: string | null;
+  industries: { name: string; n: number }[];
   onBack: () => void;
   onNext: () => void;
 }) {
   const nfn = named(fn);
-  const picked = before ?? [];
   const unsure = before !== null && before.length === 0;
-  const full = picked.length >= BEFORE_MAX;
+  const full = beforeNow.length >= BEFORE_MAX;
+  const [more, setMore] = useState(() => beforeNow.some((f) => !suggested.includes(f)));
   const chip = (f: string) => {
-    const on = picked.includes(f);
+    const on = !unsure && beforeNow.includes(f);
     return (
       <button
         key={f}
@@ -735,46 +711,66 @@ function StepBefore({
         aria-pressed={on}
         aria-disabled={!on && full}
         className={`ob-chip${on ? " ob-chip-on" : ""}${!on && full ? " ob-chip-full" : ""}`}
-        onClick={() => setBefore(toggleBefore(before, f))}
+        onClick={() => setBefore(toggleBefore(unsure ? [] : beforeNow, f))}
       >
+        {on ? <IconCheck size={11} /> : null}
         {f}
       </button>
     );
   };
   const rest = order.filter((f) => !suggested.includes(f));
+  const country = icp.countries.length === 1 ? icp.countries[0] : null;
+  const where = here ?? country;
   return (
     <div>
       <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Which fractional usually gets hired before you?
+        Who you want to work with
       </h1>
       <p className="ob-sub">
-        Pick up to {BEFORE_MAX}. A company that just hired one of them often needs {nfn ? `a fractional ${nfn} leader` : "you"} next, and the fractional who held that seat is a natural referral partner.
+        A company that just hired one of these often needs {nfn ? `a fractional ${nfn} leader` : "you"} next, and the fractional who held that seat is a natural referral partner.
       </p>
       <fieldset className="ob-q">
-        <legend className="ob-label">{nfn ? `Usually before ${nfn}` : "Hired most often"}</legend>
-        <div className="ob-chips" role="group" aria-label={nfn ? `Usually before ${nfn}` : "Hired most often"}>
+        <legend className="ob-h">{nfn ? `Who's hired before ${nfn}` : "Who's hired before you"}</legend>
+        <div className="ob-chips" role="group" aria-label={nfn ? `Who's hired before ${nfn}` : "Who's hired before you"}>
           {suggested.map(chip)}
+          {more ? rest.map(chip) : null}
           <button type="button" aria-pressed={unsure} className={`ob-chip ob-chip-unsure${unsure ? " ob-chip-on" : ""}`} onClick={() => setBefore(unsure ? null : [])}>
             Not sure
           </button>
         </div>
+        {more ? null : (
+          <button type="button" className="ob-linkbtn ob-more" onClick={() => setMore(true)}>
+            Other functions
+          </button>
+        )}
       </fieldset>
-      <fieldset className="ob-q ob-q-tight">
-        <legend className="ob-label">Every other function</legend>
-        <div className="ob-chips" role="group" aria-label="Every other function">
-          {rest.map(chip)}
-        </div>
-      </fieldset>
-      <p className="ob-hint">You can change this later in Your profile.</p>
+      {/* The Ideal Fractional Profile, industry and size only here: revenue and the rest wait for Your profile (onboard.css .ob-icp-short). */}
+      <div className="ob-icp-short">
+        <IcpFields value={icp} onChange={setIcp} industries={industries} countries={[]} headingClass="ob-h" />
+      </div>
+      {where ? (
+        <fieldset className="ob-q ob-q-tight">
+          <legend className="ob-h">Where</legend>
+          <div className="ob-chips" role="group" aria-label="Where">
+            <button type="button" aria-pressed={country === where} className={`ob-chip${country === where ? " ob-chip-on" : ""}`} onClick={() => setIcp({ ...icp, countries: [where] })}>
+              {where}
+            </button>
+            <button type="button" aria-pressed={!icp.countries.length} className={`ob-chip${!icp.countries.length ? " ob-chip-on" : ""}`} onClick={() => setIcp({ ...icp, countries: [] })}>
+              Anywhere
+            </button>
+          </div>
+        </fieldset>
+      ) : null}
+      <p className="ob-hint">All optional. You can change any of it later in Your profile.</p>
       <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">
         <button type="button" className="ob-back" onClick={onBack}>
           Back
         </button>
         <span className="ob-foot-note num" aria-live="polite">
-          {unsure ? `We'll start with ${andList(suggested)}` : picked.length ? (full ? `${BEFORE_MAX} picked, the most` : `${picked.length} of ${BEFORE_MAX} picked`) : `Pick up to ${BEFORE_MAX}, or Not sure`}
+          {unsure ? `We'll start with ${andList(suggested)}` : full ? `${BEFORE_MAX} picked, the most` : ""}
         </span>
-        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={before === null} onClick={onNext}>
+        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onNext}>
           Show my first view
         </button>
       </div>
@@ -782,7 +778,7 @@ function StepBefore({
   );
 }
 
-/* ---------- step 4: your first view ---------- */
+/* ---------- step 3: your first view ---------- */
 
 /** One row of the first view, free facts only: the company (or that it's hiring now), the hire, and that its seat holder is on file. */
 function FirstRow({ r, f }: { r: Row; f: Filters }) {
@@ -819,9 +815,10 @@ function FirstRow({ r, f }: { r: Row; f: Filters }) {
 }
 
 function StepFirstView({
-  fv, fn, icp, openRoles, roles, setRoles, email, setEmail, emailOn, savedNow, busy, onBack, onSave,
+  fv, fn, icp, openRoles, roles, setRoles, email, setEmail, emailOn, savedNow, saving, failed, onRetry, finishing, onBack, link, needLink, handoff, onOpen,
 }: {
-  fv: FirstView;
+  /** Null until the companies are in: skeleton rows meanwhile. */
+  fv: FirstView | null;
   fn: string | null;
   icp: Icp;
   /** Open roles in their function that fit their profile now. */
@@ -832,44 +829,75 @@ function StepFirstView({
   setEmail: (v: boolean) => void;
   /** The weekly email can go out (email is set up). Otherwise the views are still saved. */
   emailOn: boolean;
-  /** Saved already, as it is now: the button moves on. */
+  /** Saved, as the answers are now. */
   savedNow: boolean;
-  busy: boolean;
+  saving: boolean;
+  /** The save failed for these answers. */
+  failed: boolean;
+  onRetry: () => void;
+  finishing: boolean;
   onBack: () => void;
-  onSave: () => void;
+  /** The sign-in link, for a member who has no email to sign in by. */
+  link: React.ReactNode;
+  /** It isn't kept yet: the first press of Open Today asks once. */
+  needLink: boolean;
+  /** For a member with seats on file: where they can go instead. */
+  handoff: React.ReactNode;
+  onOpen: () => void;
 }) {
   const nfn = named(fn);
-  const notes = [widenLine(fv, fn), guessLine(fv, fn)].filter(Boolean) as string[];
-  const top = fv.rows.slice(0, PREVIEW_ROWS);
-  const more = fv.rows.length - top.length;
-  const partners = holdersLine(fv);
+  const notes = fv ? ([widenLine(fv, fn), guessLine(fv, fn)].filter(Boolean) as string[]) : [];
+  const top = fv ? fv.rows.slice(0, PREVIEW_ROWS) : [];
+  const more = fv ? fv.rows.length - top.length : 0;
+  const partners = fv ? holdersLine(fv) : null;
+  const [asked, setAsked] = useState(false);
   return (
     <div>
       <h1 className="ob-title" tabIndex={-1} data-step-h>
         Your first view
       </h1>
-      <p className="ob-fv-lead">{firstViewLine(fv, fn)}</p>
-      {notes.map((n) => (
-        <p key={n} className="ob-hint ob-fv-note">
-          {n}
-        </p>
-      ))}
-      {top.length ? (
-        <ul className="ob-fv-rows" aria-label="The first companies in your first view">
-          {top.map((r) => (
-            <FirstRow key={r.key} r={r} f={fv.f} />
+      {fv ? (
+        <>
+          <p className="ob-fv-lead">{firstViewLine(fv, fn)}</p>
+          {notes.map((n) => (
+            <p key={n} className="ob-hint ob-fv-note">
+              {n}
+            </p>
           ))}
-        </ul>
-      ) : null}
-      {more > 0 ? <p className="ob-fv-more num">And {more === 1 ? "1 more" : `${more.toLocaleString("en-US")} more`}, the most recent hire first.</p> : null}
-      {partners ? (
-        <p className="ob-fv-partners num">
-          <span className="ob-fv-lock" aria-hidden>
-            <IconLock size={12} />
-          </span>
-          <span>{partners}</span>
-        </p>
-      ) : null}
+          {top.length ? (
+            <ul className="ob-fv-rows" aria-label="The first companies in your first view">
+              {top.map((r) => (
+                <FirstRow key={r.key} r={r} f={fv.f} />
+              ))}
+            </ul>
+          ) : null}
+          {more > 0 ? <p className="ob-fv-more num">And {more === 1 ? "1 more" : `${more.toLocaleString("en-US")} more`}, the most recent hire first.</p> : null}
+          {partners ? (
+            <p className="ob-fv-partners num">
+              <span className="ob-fv-lock" aria-hidden>
+                <IconLock size={12} />
+              </span>
+              <span>{partners}</span>
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <div role="status" aria-busy>
+          <span className="sr-only">Finding the companies for your first view</span>
+          <ul className="ob-fv-rows" aria-hidden>
+            {Array.from({ length: PREVIEW_ROWS }, (_, k) => (
+              <li key={k} className="ob-fv-row ob-fv-skel">
+                <span className="ob-skel ob-skel-logo" />
+                <span className="ob-fv-id">
+                  <span className="ob-skel" style={{ width: "45%" }} />
+                  <span className="ob-skel" style={{ width: "70%" }} />
+                  <span className="ob-skel" style={{ width: "55%" }} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="ob-alerts ob-fv-opts">
         <label className="ob-alerts-opt">
@@ -889,14 +917,19 @@ function StepFirstView({
             <span className="ob-alerts-text">
               <span className="ob-alerts-label">Also show open {nfn} roles</span>
               <span className="ob-alerts-hint num">
-                {openRoles > 0
-                  ? `${openRoles === 1 ? "1 is" : `${openRoles} are`} open${icpEmpty(icp) ? "" : " in your profile"} now. They get a view of their own.`
-                  : `None open${icpEmpty(icp) ? "" : " in your profile"} right now. They get a view of their own for when one opens.`}
+                {!fv
+                  ? "They get a view of their own."
+                  : openRoles > 0
+                    ? `${openRoles === 1 ? "1 is" : `${openRoles} are`} open${icpEmpty(icp) ? "" : " in your profile"} now. They get a view of their own.`
+                    : `None open${icpEmpty(icp) ? "" : " in your profile"} right now. They get a view of their own for when one opens.`}
               </span>
             </span>
           </button>
         ) : null}
       </div>
+
+      {handoff}
+      {link}
 
       <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">
@@ -904,111 +937,43 @@ function StepFirstView({
           Back
         </button>
         <span className="ob-foot-note" aria-live="polite">
-          {savedNow ? "Saved under Saved views" : ""}
+          {asked && needLink ? (
+            <strong className="ob-link-warn">Copy your sign-in link first. Without it you can&apos;t sign back in.</strong>
+          ) : failed ? (
+            <button type="button" className="ob-linkbtn" onClick={onRetry}>
+              Your view didn&apos;t save. Try again
+            </button>
+          ) : savedNow ? (
+            <span className="ob-saved">
+              <IconCheck size={13} /> Saved under Saved views
+            </span>
+          ) : saving || !fv ? (
+            "Saving your view"
+          ) : (
+            ""
+          )}
         </span>
-        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={busy} aria-busy={busy} onClick={onSave}>
-          {busy ? "Saving" : savedNow ? "Next: find your seats" : "Save this view"}
+        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={finishing || saving} aria-busy={finishing} onClick={() => (needLink && !asked ? setAsked(true) : onOpen())}>
+          {finishing ? "Opening" : asked && needLink ? "Open Today without it" : "Open Today"}
         </button>
       </div>
     </div>
   );
 }
 
-/* ---------- step 5: find your seats (optional) ---------- */
+/* ---------- the sign-in link, inline on the last step ---------- */
 
-function StepSeats({
-  companies, fn, title, name, credits, clients, setClients, act, savedLine, handoff, nextLabel, busy, onBack, onNext,
-}: {
-  companies: CompanyRec[];
-  fn: string | null;
-  title: string;
-  name: string;
-  /** The balance now, so a seat added here can say what it earned. */
-  credits: number;
-  clients: string[];
-  setClients: (f: (c: string[]) => string[]) => void;
-  act: OnboardingProps["act"];
-  /** The first view was just saved: one line at the top says so. */
-  savedLine: string | null;
-  /** For a member with seats on file: where they go next. */
-  handoff: ReactNode;
-  nextLabel: string;
-  busy: boolean;
-  onBack: () => void;
-  onNext: () => void;
-}) {
-  // Seats added here, by client: the balance before each, so the card says what the seat earned.
-  const [added, setAdded] = useState<Record<string, number>>({});
-  const claimedN = seatsFound(companies, clients, added);
-  return (
-    <div>
-      {savedLine ? (
-        <p className="ob-seat-ok ob-fv-saved" role="status">
-          <IconCheck size={13} />
-          <span>{savedLine}</span>
-        </p>
-      ) : null}
-      <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Find your seats
-      </h1>
-      <p className="ob-sub">
-        Type the clients you work with now or worked with before. We list the seats we found there in your function. Claim yours and you see everything on it free, and each answer
-        you add earns a credit, {SEAT_YIELD}.
-      </p>
-      {handoff}
-      <FindSeats companies={companies} fn={fn} title={title} name={name} credits={credits} clients={clients} setClients={setClients} act={act} added={added} setAdded={setAdded} />
-
-      <div className="ob-grow" />
-      <div className="ob-foot ob-foot-follow">
-        <button type="button" className="ob-back" onClick={onBack}>
-          Back
-        </button>
-        <span className="ob-foot-note num" aria-live="polite">
-          {claimedN ? `${claimedN} ${claimedN === 1 ? "seat is" : "seats are"} yours` : "You can skip this and add seats later"}
-        </span>
-        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={busy} aria-busy={busy} onClick={onNext}>
-          {busy ? "Opening" : nextLabel}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- step 6: keep your sign-in link ---------- */
-
-function StepLink({
-  token, email, support, emailOn, seats, busy, nextLabel, onDone,
-}: {
-  token: string;
-  email: string;
-  /** Where a member asks for a new link (View.contact.support), or null. */
-  support: string | null;
-  /** Email sign-in is on: a lost link is never the end, a new one comes by email. */
-  emailOn: boolean;
-  /** Seats on file under their name ("Fill in your seats"). */
-  seats: number;
-  busy: boolean;
-  nextLabel: string;
-  onDone: (to: "table" | "seats") => void;
-}) {
+/**
+ * "Your sign-in link · Copy (there's no password, keep it)": only for a member who joined here
+ * while email sign-in is off. Email it to themselves or share it to Notes, too.
+ */
+function LinkInline({ token, email, support, onKept }: { token: string; email: string; support: string | null; onKept: () => void }) {
   const [link, setLink] = useState("");
   const [copied, setCopied] = useState(false);
-  // Copied, emailed or shared: until then, saving the link is the main action and moving on asks first.
-  const [kept, setKept] = useState(false);
-  // Where they tried to go without saving the link: the check before leaving shows.
-  const [leaving, setLeaving] = useState<"table" | "seats" | null>(null);
   const [canShare, setCanShare] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const askRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLSpanElement>(null);
   useEffect(() => setLink(`${window.location.origin}/?k=${token}`), [token]);
   useEffect(() => setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function"), []);
-  useEffect(() => {
-    if (!leaving) return;
-    // On a phone the main button sits in the sticky footer, far below: bring the check into view.
-    askRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-    askRef.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
-  }, [leaving]);
-
   /** Select the link text, so it can be copied by hand if the clipboard is blocked. */
   const selectLink = () => {
     const el = boxRef.current;
@@ -1029,107 +994,54 @@ function StepLink({
       } catch {}
     }
     setCopied(true);
-    setKept(true);
+    onKept();
     setTimeout(() => setCopied(false), 2400);
   };
-  /** Phones: the share sheet, so the link can go to Notes, Messages or a password manager. */
   const share = async () => {
     try {
       await navigator.share({ title: "Merlin sign-in link", text: "My Merlin sign-in link", url: link });
-      setKept(true);
+      onKept();
     } catch {}
   };
   const mailMe = `mailto:${encodeURIComponent(email)}?subject=Merlin%20sign-in%20link&body=${encodeURIComponent(link)}`;
   const supportHref = support ? mailto(support, "Merlin sign-in link") : null;
-  /** Leave for the app, but not without the link unless they say so (email sign-in on: no need). */
-  const leave = (to: "table" | "seats") => (kept || emailOn ? onDone(to) : setLeaving(to));
-
   return (
-    <div>
-      <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Keep your sign-in link
-      </h1>
-      <p className="ob-sub">
-        {emailOn
-          ? "This link signs you straight in. Save it for next time. If you lose it, you can always get a new one by email."
-          : "This link is how you sign in. There is no password, so save it where you'll find it again."}
+    <div className="ob-link-inline">
+      <p className="ob-link-h">
+        <strong>Your sign-in link</strong> <span className="ob-hint-i">There&apos;s no password, so keep it.</span>
       </p>
-
       <div className="ob-linkbox">
-        <div ref={boxRef} className="ob-linkbox-text mono" aria-label="Your sign-in link" tabIndex={0} onFocus={selectLink}>
+        <span ref={boxRef} className="ob-linkbox-text mono" aria-label="Your sign-in link" tabIndex={0} onFocus={selectLink}>
           {link}
-        </div>
-        <button type="button" className={`btn ob-copy${copied ? " ob-copy-done" : kept ? "" : " btn-pine"}`} onClick={copy}>
+        </span>
+        <button type="button" className={`btn ob-copy${copied ? " ob-copy-done" : ""}`} onClick={copy}>
           {copied ? <IconCheck size={14} /> : null}
-          {copied ? "Copied" : "Copy link"}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
       <p className="ob-keep-ways">
-        <a className="ob-mailme" href={mailMe} onClick={() => setKept(true)}>
+        <a className="ob-mailme" href={mailMe} onClick={onKept}>
           Email it to myself
         </a>
         {canShare ? (
           <button type="button" className="ob-linkbtn ob-mailme" onClick={share}>
-            Share it to Notes or Messages
+            Share it to Notes
           </button>
         ) : null}
-      </p>
-      <p className="ob-hint ob-hint-flush">Anyone with this link can sign in as you. Keep it to yourself.</p>
-      {emailOn ? null : (
-        <p className="ob-hint">
-          {support ? (
-            <>
-              Without it you can&apos;t sign back in on your own. If you lose it, email{" "}
-              {supportHref ? (
-                <a className="mono ob-help-link" href={supportHref}>
-                  {support}
-                </a>
-              ) : (
-                <span className="mono">{support}</span>
-              )}{" "}
-              and we&apos;ll send you a new one.
-            </>
-          ) : (
-            "Without it there is no way back in, so save it before you go on."
-          )}
-        </p>
-      )}
-
-      {leaving ? (
-        <div className="ob-leave" role="alertdialog" aria-labelledby="ob-leave-h" ref={askRef}>
-          <p id="ob-leave-h">
-            <strong>You haven&apos;t saved your link.</strong> {support ? "Without it, signing back in means emailing us for a new one." : "Without it you can't sign back in."}
-          </p>
-          <span className="ob-leave-acts">
-            <button
-              type="button"
-              className="btn btn-pine"
-              disabled={busy}
-              onClick={async () => {
-                await copy();
-                onDone(leaving);
-              }}
-            >
-              Copy link and go on
-            </button>
-            <button type="button" className="btn" disabled={busy} onClick={() => onDone(leaving)}>
-              Go on without it
-            </button>
+        {support ? (
+          <span className="ob-hint-i">
+            Lost it? Email{" "}
+            {supportHref ? (
+              <a className="mono ob-help-link" href={supportHref}>
+                {support}
+              </a>
+            ) : (
+              <span className="mono">{support}</span>
+            )}
+            .
           </span>
-        </div>
-      ) : null}
-
-      <SeatsNext n={seats} busy={busy} onFill={() => leave("seats")} />
-
-      <div className="ob-grow" />
-      <div className="ob-foot">
-        <span className="ob-foot-note" aria-live="polite">
-          {kept || emailOn ? "" : "Save your link first"}
-        </span>
-        <button type="button" className={`btn btn-lg ob-next${kept || emailOn ? " btn-pine" : ""}`} onClick={() => leave("table")} disabled={busy} aria-busy={busy}>
-          {busy ? "Opening" : nextLabel}
-        </button>
-      </div>
+        ) : null}
+      </p>
     </div>
   );
 }

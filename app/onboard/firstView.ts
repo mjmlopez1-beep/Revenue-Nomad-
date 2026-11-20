@@ -265,6 +265,9 @@ export function openRolesCount(infos: CoInfo[], me: Me, fn: string | null, icp: 
   return applyFilters(rowsFor("engagements", infos), { ...EMPTY_FILTERS, fn: [nfn], icp: !icpEmpty(icp) }, "hiring", "", asMember(me, fn, icp), true).rows.length;
 }
 
+/** Onboarding's steps: 1 what you do, 2 who you want to work with (the before answer and the profile), 3 the first view. */
+export const STEPS = 3;
+
 /* ---------- picking up where the member left off ---------- */
 
 /**
@@ -283,11 +286,12 @@ export function newerAnswers<T extends { at?: string | null }>(tab: T | null | u
 
 /**
  * The step to open on: the one asked for, inside the flow, but never past an answer it needs.
- * Everything after the first step needs the function, and the first view needs the "before" answer.
+ * Everything after the first step needs the function, and the first view (step 3) needs the
+ * "before" answer, given on step 2. A draft from the six-step flow lands inside the three steps.
  */
 export function resumeStep(want: number, a: { fn: string | null; before: string[] | null }, total: number): number {
   const s = Math.min(Math.max(1, Math.round(want) || 1), total);
   if (!a.fn) return 1;
-  if (s > 3 && a.before === null) return 3;
+  if (s > 2 && a.before === null) return 2;
   return s;
 }
