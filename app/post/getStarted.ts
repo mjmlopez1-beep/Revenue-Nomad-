@@ -12,6 +12,7 @@
 import type { EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, PERSON_BUNDLE } from "@/lib/tableFields";
 import { checkSteps, shown, type CheckStep, type CoInfo, type FactRef, type Row } from "./model";
+import { CRYSTAL_FREE_TODAY } from "@/lib/radar/types";
 
 /** A seat holder the member can pay to see: a locked holder, on a seat that isn't theirs, at a company they can see. */
 export const lockedHolder = (i: CoInfo, e: EngagementRec) => !i.c.hidden && !e.yours && e.cells.operator?.s === "locked";
@@ -173,14 +174,15 @@ export type StepAction = "unlock" | "seats" | "fillSeats" | "holder" | "invite";
  * still locked), then the first step not done, then nothing.
  */
 export function startSteps(
-  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid"> & Partial<Pick<Me, "freeCompany" | "unlocksLeft">>,
+  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid"> & Partial<Pick<Me, "freeCompany" | "unlocksLeft" | "crystal">>,
   o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string>; seen?: boolean; stepOne?: StepOne },
 ): { steps: CheckStep[]; next: { label: string; hint: string; action: StepAction } | null } {
   const base = checkSteps(me, { ...o, stepOne: "holder" });
   const holders = me.holdersUnlocked ?? 0;
   const opened = holders + (me.companiesUnlocked ?? 0) > 0 || !!o.seen || !!o.stuck?.has("unlock");
   const free = !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE;
-  const one: CheckStep = { key: "unlock", done: opened, label: "Unlock a company", hint: free ? "1 free company today" : `costs ${COMPANY_PRICE_SAY}` };
+  // On Free (billing live) the free one a day is Crystal Ball's: the step says so, and opens Crystal Ball (TradingPost stepOne).
+  const one: CheckStep = { key: "unlock", done: opened, label: "Unlock a company", hint: free ? "1 free company today" : me.crystal === "one" ? CRYSTAL_FREE_TODAY : `costs ${COMPANY_PRICE_SAY}` };
   // Every company is open already and none was unlocked: nothing for step 1 to point at, so it is left out.
   const steps = [...(!opened && o.stepOne === "none" ? [] : [one]), ...base.steps.filter((x) => x.key !== "unlock")];
   const act: Record<CheckStep["key"], StepAction> = { unlock: "unlock", seat: "seats", invite: "invite" };

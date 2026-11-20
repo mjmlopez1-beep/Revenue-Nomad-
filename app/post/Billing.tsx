@@ -29,7 +29,7 @@ import { useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
 
 /** Where the plans were opened from: an upgrade moment. */
-export type PlansFrom = "trial" | "views" | "bench" | "credits" | "slack" | "claude" | "radar" | "billing";
+export type PlansFrom = "trial" | "views" | "bench" | "credits" | "slack" | "claude" | "radar" | "crystal" | "billing";
 type Ask = { from: PlansFrom; caught?: number };
 
 let asked: Ask | null = null;
@@ -100,7 +100,7 @@ function useBilling() {
 const ROWS: [string, string, string][] = [
   ["Open roles", "In your weekly email", "As soon as they open"],
   ["Saved views", "1, with the weekly email", "As many as you want, with alerts"],
-  [FEATURE_NAME, "Every signal, each morning", "Every signal, in Slack as it happens"],
+  [FEATURE_NAME, "Every signal each morning, one company a day fully open", "Every company in it open free, signals in Slack as they happen"],
   ["Rate benchmarks", "Medians by function", "Ranges by function and client size"],
   ["Slack", "The weekly roles post", "Every alert"],
   ["Claude", "20 requests a day", "No daily cap"],
@@ -149,6 +149,7 @@ const TITLE: Record<PlansFrom, string> = {
   slack: "Every alert in Slack",
   claude: "Claude without the daily cap",
   radar: `${FEATURE_NAME} as it happens`,
+  crystal: `Every ${FEATURE_NAME} company open`,
   billing: "Merlin Pro",
 };
 export const VALUE_LINE = "See who's hiring before it's posted, the hiring exec and the warm path, instantly.";
@@ -170,7 +171,8 @@ function leadFor(plan: PlanView, a: Ask): string {
   if (a.from === "credits") return `Buy ${plan.prices.topupCredits} credits once, or get Pro: ${plan.prices.proCredits} credits each paid month, on top of what you earn.`;
   if (a.from === "slack") return "Free posts the weekly roles to Slack. Pro posts every alert: messages, your seats, and new roles as they open.";
   if (a.from === "claude") return "Free gives Claude 20 requests a day. Pro has no daily cap.";
-  if (a.from === "radar") return `Everyone gets every ${FEATURE_NAME} signal each morning. Pro posts them to Slack as they happen.`;
+  if (a.from === "radar") return `Everyone gets every ${FEATURE_NAME} signal each morning, and Free opens one of its companies a day, fully. Pro opens every company in your ${FEATURE_NAME} free, and posts signals to Slack as they happen.`;
+  if (a.from === "crystal") return `Free opens one ${FEATURE_NAME} company a day, with everything on it. Pro opens every company in your ${FEATURE_NAME} free.`;
   return VALUE_LINE;
 }
 
@@ -301,7 +303,7 @@ export function PlansHost({ me }: { me: Me }) {
     const q = new URLSearchParams(window.location.search);
     if (q.get("plans") === "1") {
       const from = q.get("from") ?? "";
-      openPlans((["trial", "views", "bench", "credits", "slack", "claude", "radar"] as string[]).includes(from) ? (from as PlansFrom) : me.plan.name === "trial" ? "trial" : "billing");
+      openPlans((["trial", "views", "bench", "credits", "slack", "claude", "radar", "crystal"] as string[]).includes(from) ? (from as PlansFrom) : me.plan.name === "trial" ? "trial" : "billing");
       try {
         const u = new URL(window.location.href);
         u.searchParams.delete("plans");
@@ -590,7 +592,7 @@ function Status({ plan }: { plan: PlanView }) {
     <>
       <p className="bl-status-h">Free</p>
       <p className="bl-status-p">
-        {plan.hadTrial ? "Your trial is over. " : ""}You earn a credit for each fact you add, keep 1 saved view with the weekly email, and see the median rates.
+        {plan.hadTrial ? "Your trial is over. " : ""}You earn a credit for each fact you add, keep 1 saved view with the weekly email, see the median rates, and open one {FEATURE_NAME} company a day, fully.
       </p>
     </>
   );

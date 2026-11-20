@@ -12,6 +12,7 @@
 import type { LedgerRow, Me } from "@/lib/tableTypes";
 import { ALL_FIELDS, HIDDEN_COMPANY } from "@/lib/tableFields";
 import { fieldText } from "./hooks";
+import { FEATURE_NAME } from "@/lib/radar/types";
 
 /** A field's label to how it reads in a sentence: "the role", "a person's email". */
 const SAY = new Map<string, string>();
@@ -30,6 +31,9 @@ const PICK_LABELS = new Set(ALL_FIELDS.filter(({ entity, f }) => entity === "com
 const PRIVATE_RATE = "Private rate";
 /** The free company of the day's row (lib/table.ts FREE_COMPANY_LINE). */
 const FREE_COMPANY = "Free company of the day";
+/** A company opened free from Crystal Ball on Trial or Pro, and Free's one a day (lib/table.ts CRYSTAL_LINE, CRYSTAL_FULL_LINE). */
+const CRYSTAL = `Opened free from ${FEATURE_NAME}`;
+const CRYSTAL_FULL = `Free ${FEATURE_NAME} company of the day`;
 const thing = (label: string) => SAY.get(label) ?? `the ${fieldText(label)}`;
 
 /** `note` explains an amount of 0. */
@@ -40,8 +44,10 @@ export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?
   const priv = l.field === PRIVATE_RATE;
   switch (l.reason) {
     case FREE_COMPANY:
-      // The free company of the day: no credits, and the company is theirs like a paid one.
-      return { text: `${FREE_COMPANY}${l.company && !locked ? `: ${l.company}` : ""}` };
+    case CRYSTAL:
+    case CRYSTAL_FULL:
+      // The free company of the day, or one opened free from Crystal Ball: no credits, and the company is theirs like a paid one.
+      return { text: `${l.reason}${l.company && !locked ? `: ${l.company}` : ""}` };
     case "fill":
       return {
         text: priv ? "Shared a rate privately" : `Added ${thing(l.field)}${at}`,

@@ -15,6 +15,7 @@ import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { FREE_COMPANY_TODAY, freeCompanyNow } from "./display";
+import { CRYSTAL_FREE_TODAY, FEATURE_NAME } from "@/lib/radar/types";
 import { Pro, useUi } from "./ui";
 import { MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
 import { ReportedMessages } from "./Messages";
@@ -282,7 +283,16 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
     [String(starter), "flat", `You start with ${starter} credits.`],
     ["+1", "plus", "You add a fact that's missing. Every answer on a seat you held earns 1, and so do company facts like the HQ or size, or a hiring contact."],
     ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on."],
-    [`−${COMPANY_PRICE}`, "minus", "You unlock a company: its name and website, with the job posting of each open role there. Who held each seat is 1 more. Your first company each day is free."],
+    [
+      `−${COMPANY_PRICE}`,
+      "minus",
+      `You unlock a company: its name and website, with the job posting of each open role there. Who held each seat is 1 more. ${
+        // Free (billing live): the free one a day is Crystal Ball's, with everything on it. Trial and Pro: the first anywhere, and Crystal Ball's are free.
+        me.crystal === "one" || me.crystal === "used"
+          ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it.`
+          : `Your first company each day is free.${me.crystal === "all" ? ` Every company in your ${FEATURE_NAME} opens free.` : ""}`
+      }`,
+    ],
     ["+1", "plus", "Two other members confirm a fact you added."],
     [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company already on Merlin. They get ${REFERRAL_BONUS} too.`],
   ];
@@ -294,6 +304,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
         <div className="tp-stat-l">{me.credits === 1 ? "Credit to spend" : "Credits to spend"}</div>
         {me.credits <= 3 && !owed && <div className="cr-stat-sub">{capped ? `You can earn again ${atTime(me.earnResetsAt)}.` : "Add a fact you know and you earn one."}</div>}
         {freeCompanyNow(me) && <div className="cr-stat-sub">Plus {FREE_COMPANY_TODAY}: unlock one company for no credits.</div>}
+        {me.crystal === "one" && <div className="cr-stat-sub">Plus {CRYSTAL_FREE_TODAY}: open one company there with everything on it.</div>}
         {!!me.pending && <div className="cr-stat-sub">+{me.pending} when confirmed: facts on a seat of yours at a company new to Merlin.</div>}
       </div>
       <div className="tp-stat">

@@ -39,6 +39,7 @@ import { forgetView, memberView, type MemberView } from "./view";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS } from "../tableFields";
+import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
 
 export interface Ctx {
@@ -169,13 +170,18 @@ function companyBundle(i: CoInfo): { what: string; rate: boolean } {
   return { what: `its name, website, logo and LinkedIn${roles}`, rate: has("rate") };
 }
 
-function companySummary(i: CoInfo): ToolOut {
+/** `mv`: the member's view, so a company in their Crystal Ball on Trial or Pro says it opens free. */
+function companySummary(i: CoInfo, mv?: MemberView): ToolOut {
   const c = i.c;
   const missing = c.hidden ? notOnFile(i) : undefined;
   return {
     id: c.id,
     name: c.name,
-    ...(c.hidden ? { hidden: true, hidden_note: `Locked. Unlock the company for ${COMPANY_PRICE_SAY} to see ${companyBundle(i).what}. Until then it is known by its id and the free facts here.` } : {}),
+    ...(c.hidden
+      ? mv && inBall(i, mv)
+        ? { hidden: true, hidden_note: ballNote(i), in_crystal_ball: true }
+        : { hidden: true, hidden_note: `Locked. Unlock the company for ${COMPANY_PRICE_SAY} to see ${companyBundle(i).what}. Until then it is known by its id and the free facts here.` }
+      : {}),
     ...readAll(c.cells, { industry: "industry", employees: "employees", revenue: "revenue", hq: "hq" }),
     ...(missing ? { not_on_file: missing } : {}),
     ...(c.country ? { country: c.country } : {}),
@@ -356,11 +362,19 @@ async function aboutOf(ctx: Ctx, i: CoInfo | undefined): Promise<Cell | undefine
 }
 
 /** One company for get_company. `about`: its About cell with the text (aboutOf). */
+/** A company locked for the member that is in their Crystal Ball on Trial or Pro: it opens free (0 credits). */
+const inBall = (i: CoInfo, mv: MemberView) => !!i.c.hidden && mv.ball.has(i.c.id);
+/** What get_company says about such a company. */
+const ballNote = (i: CoInfo) =>
+  `Locked, and in the member's ${FEATURE_NAME}: on their plan it opens free (0 credits) with unlock, field identity, which shows ${companyBundle(i).what}. Its people and who held its seats then cost what they cost.`;
+
 function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? "", about?: Cell): ToolOut {
   const c = i.c;
+  const ball = inBall(i, mv);
+  const most = purchaseCredits(i) - (ball ? COMPANY_PRICE : 0);
   const facts = readAll(about ? { ...c.cells, about } : c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin"].includes(f) ? `locked until you unlock the company (${COMPANY_PRICE_SAY})` : LOCKED));
   return {
-    ...companySummary(i),
+    ...companySummary(i, mv),
     ...facts,
     // A locked company's About reads without its name, web address, links and emails (lib/scan/clean.ts aboutWithout).
     ...(c.hidden && facts.about ? { about_note: `The company's name, web address, links and emails are left out of this About until the member unlocks the company (${COMPANY_PRICE_SAY}).` } : {}),
@@ -369,7 +383,7 @@ function companyOut(i: CoInfo, mv: MemberView, base = publicBase() ?? "", about?
     ...(c.people.length ? { people: c.people.map((p) => personOut(p, null, !!c.hidden)) } : {}),
     warm_paths: warmPaths(i, mv, base),
     locked: purchases(i)
-      ? { purchases: purchases(i), note: `Up to ${purchaseCredits(i)} credit${purchaseCredits(i) > 1 ? "s" : ""} to unlock everything here. Call unlock with field "everything" (without confirm) for the exact cost.` }
+      ? { purchases: purchases(i), note: `Up to ${most} credit${most === 1 ? "" : "s"} to unlock everything here${ball ? `, the company itself free from the member's ${FEATURE_NAME}` : ""}. Call unlock with field "everything" (without confirm) for the exact cost.` }
       : "Nothing here is locked for you.",
   };
 }
@@ -549,7 +563,7 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
         : r.i.c.leads?.teamAt
           ? `No ${notYet} leader on their team page (checked ${monthYear(r.i.c.leads.teamAt)})`
           : `No fractional ${notYet} leader on Merlin. We haven't checked their team page yet`;
-      return { ...companySummary(r.i), ...(e ? { recent_hire: recentHireOut(r.i, e) } : {}), ...(notYet ? { no_function_yet_note: note } : {}) };
+      return { ...companySummary(r.i, mv), ...(e ? { recent_hire: recentHireOut(r.i, e) } : {}), ...(notYet ? { no_function_yet_note: note } : {}) };
     }),
     ...(rows.length === 0
       ? {
@@ -637,7 +651,7 @@ function openRoles(mv: MemberView, a: RoleArgs) {
   return { roles: out, criteria, days };
 }
 
-function roleOut(i: CoInfo, e: EngagementRec): ToolOut {
+function roleOut(i: CoInfo, e: EngagementRec, mv?: MemberView): ToolOut {
   const lockedRole = i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE;
   const facts = readAll(e.cells, { function: "function", role: "role", type: "type", status: "status", posted_rate: "rate", posted_hours: "hours", posting: "posting" }, (f) =>
     ROLE_BUNDLE.includes(f) ? lockedRole : LOCKED,
@@ -660,7 +674,11 @@ function roleOut(i: CoInfo, e: EngagementRec): ToolOut {
     company_fit: fitOf(i),
     fit_reason: fitWhy(i),
     unlock: i.c.hidden
-      ? { cost: `${COMPANY_PRICE_SAY} open the company: ${companyBundle(i).what}`, call: { entity: "company", id: i.c.id, field: "identity" } }
+      ? {
+          // Trial and Pro: a company in the member's Crystal Ball opens free.
+          cost: mv && inBall(i, mv) ? `0 credits: it's in the member's ${FEATURE_NAME}, so the company opens free on their plan: ${companyBundle(i).what}` : `${COMPANY_PRICE_SAY} open the company: ${companyBundle(i).what}`,
+          call: { entity: "company", id: i.c.id, field: "identity" },
+        }
       : lead
         ? {
             cost: `1 credit opens ${e.cells.posting?.s === "locked" ? "the job posting" : "what the posting gave"}${rate ? " and the posted rate" : ". No rate was posted"}`,
@@ -678,7 +696,7 @@ export async function listOpenRoles(ctx: Ctx, a: RoleArgs): Promise<ToolOut> {
     total: roles.length,
     showing: Math.min(limit, roles.length),
     ...(days ? { opened_in_the_last_days: days } : {}),
-    roles: roles.slice(0, limit).map(({ i, e }) => roleOut(i, e)),
+    roles: roles.slice(0, limit).map(({ i, e }) => roleOut(i, e, mv)),
     ...(mv.view.scan?.lastOkAt ? { last_scan: dayOfIso(mv.view.scan.lastOkAt) } : {}),
   };
 }
@@ -739,14 +757,25 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     earned_today: `${me.earned24h} of ${me.earnCap}`,
     ...(me.earnResetsAt ? { earning_opens_again_at: me.earnResetsAt } : {}),
     ...(me.unlocksLeft !== null && me.unlocksLeft !== undefined ? { unlocks_left_today: me.unlocksLeft } : {}),
-    // One company a UTC day unlocks free, on any plan (it counts toward the day's unlocks).
-    free_company_today: me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE ? "1 left: the next company unlock today costs no credits" : "used today: the next one is free tomorrow (UTC)",
+    // Trial and Pro (and everyone while billing is off): one company a UTC day unlocks free, anywhere (it counts toward the day's unlocks).
+    // Free (trial over): none here. Its free one a day opens in full from Crystal Ball in the Merlin app only.
+    free_company_today:
+      me.crystal === "one" || me.crystal === "used"
+        ? `none on the Free plan: every company unlock here costs ${COMPANY_PRICE_SAY}. Free opens one company a day from the member's ${FEATURE_NAME} in the Merlin app, with everything on it (${me.crystal === "one" ? "today's is left" : "today's is used"}). Pro opens every company in their ${FEATURE_NAME} free.`
+        : me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE
+          ? "1 left: the next company unlock today costs no credits"
+          : "used today: the next one is free tomorrow (UTC)",
+    ...(me.crystal === "all" ? { crystal_ball: `Every company in the member's ${FEATURE_NAME} opens free (0 credits) on their plan: unlock quotes 0 for it. Its people and who held its seats cost what they cost.` } : {}),
     ...(me.pending ? { credits_waiting: `${me.pending}, paid when the member's seat at a company new to Merlin is confirmed` } : {}),
     ...(me.sellEarnLeft !== undefined ? { pick_list_answers_that_still_earn_today: me.sellEarnLeft } : {}),
     facts_added: me.added,
     facts_unlocked: me.unlocked,
     how_credits_work:
-      `Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1: who held a seat comes with the role they held, and a person's name with their title, for that one credit. A company is ${COMPANY_PRICE_SAY}, and the first company each day is free. A fractional you invite earns you both 10 credits when they add their first fact to a company already on Merlin. Your own seats are free to you. A seat you add at a company new to Merlin earns once another member or an admin confirms it.`,
+      `Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1: who held a seat comes with the role they held, and a person's name with their title, for that one credit. A company is ${COMPANY_PRICE_SAY}, ${
+        me.crystal === "one" || me.crystal === "used"
+          ? `and on Free one company a day from ${FEATURE_NAME} opens in full, free, in the Merlin app`
+          : `and the first company each day is free${me.crystal === "all" ? `, and every company in ${FEATURE_NAME} opens free` : ""}`
+      }. A fractional you invite earns you both 10 credits when they add their first fact to a company already on Merlin. Your own seats are free to you. A seat you add at a company new to Merlin earns once another member or an admin confirms it.`,
     seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.filter((f) => f !== "introducedBy").map((f) => outKey(SEAT_KEYS, f)) })),
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
     saved_searches: alerts.length,
@@ -863,7 +892,10 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
   const { items, what, target } = unlockItems(mv, String(a.entity ?? ""), String(a.id ?? ""), String(a.field ?? ""));
   if (!items.length) return { spent: 0, message: `Nothing to unlock: you can already see ${what}, or nobody has added it yet.`, credits: me.credits };
   const capped = items.slice(0, 60);
-  const action: Action = capped.length === 1 ? { type: "unlock", ...capped[0] } : { type: "unlockMany", items: capped };
+  // Trial and Pro: a company in the member's Crystal Ball opens free. The server checks it against their Crystal Ball again.
+  const ball = capped.some((t) => t.entity === "company" && t.field === "identity" && mv.ball.has(t.id));
+  const action: Action = capped.length === 1 ? { type: "unlock", ...capped[0], ...(ball ? { from: "crystal" as const } : {}) } : { type: "unlockMany", items: capped, ...(ball ? { from: "crystal" as const } : {}) };
+  const ballSay = ball ? ` The company is in the member's ${FEATURE_NAME}, so on their plan it opens free (0 credits).` : "";
   const more = items.length > capped.length ? ` This covers the first 60 of ${items.length}. Unlock again for the rest.` : "";
   try {
     if (!a.confirm) {
@@ -874,7 +906,7 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
         would_spend: cost,
         credits_now: me.credits,
         would_open: what,
-        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : ""} Nothing was spent.${more}`,
+        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : ""}${ballSay} Nothing was spent.${more}`,
         next: "Ask the member if they want to spend this. Only if they say yes, call unlock again with the same arguments and confirm: true.",
       };
     }
@@ -1132,7 +1164,7 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
   return {
     message: `Saved "${saved.name}".`,
     saved_search: show(saved),
-    open_now: all.roles.slice(0, 5).map(({ i, e }) => roleOut(i, e)),
+    open_now: all.roles.slice(0, 5).map(({ i, e }) => roleOut(i, e, mv)),
     delivery: emailNote(mv),
   };
 }

@@ -251,10 +251,18 @@ export interface Me {
   unlocksLeft?: number | null;
   /**
    * The free company of the day is still left: one company a UTC day unlocks for no credits, on
-   * any plan. It counts toward the day's unlocks like a paid one (a company is 2 of them), so it
-   * is usable only while unlocksLeft allows a company. It doesn't roll over.
+   * Trial and Pro (and every plan while billing is off). It counts toward the day's unlocks like a
+   * paid one (a company is 2 of them), so it is usable only while unlocksLeft allows a company. It
+   * doesn't roll over. Never on Free while billing is live: there the free one is Crystal Ball's (`crystal`).
    */
   freeCompany?: boolean;
+  /**
+   * How a company in their Crystal Ball opens from Crystal Ball and the Today card, while billing
+   * is live (left out otherwise: the 2-credit unlock, as anywhere). "all": Trial and Pro, every
+   * Crystal Ball company opens free (people there still cost what they cost). "one": Free, one
+   * Crystal Ball company a UTC day opens in full, free, and today's is left. "used": Free, today's is used.
+   */
+  crystal?: "all" | "one" | "used";
   /**
    * Company pick-list answers (industry, employees, revenue and the four under "How they sell")
    * that can still earn a credit today: 5 a day. Not counted on a company the member added or
@@ -876,7 +884,12 @@ export type Action =
   /** Add a missing fact to a company, engagement or person. */
   /** `memberId` (seat holder only): the member picked from the search, which links the seat to them. */
   | { type: "fill"; entity: Entity; id: string; field: string; value: string; memberId?: string }
-  | { type: "unlock"; entity: Entity; id: string; field: string }
+  /**
+   * `from: "crystal"` (a company's own unlock, field identity, from Crystal Ball or the Today card):
+   * the server checks the company is in the member's Crystal Ball. Trial and Pro open it for 0
+   * credits; Free opens one a UTC day in full (Me.crystal). Refused for a company not in it.
+   */
+  | { type: "unlock"; entity: Entity; id: string; field: string; from?: "crystal" }
   /** Admins: confirm a member's own seat at a company that was new to Merlin, so its credits are paid (AdminStats.pendingSeats). */
   | { type: "confirmSeat"; engagementId: string }
   /** A locked company's record was opened, or its card expanded: counted for Pilot metrics (once a member, company and day). */
@@ -889,7 +902,8 @@ export type Action =
    * the company (`identity`), or such a role, posting or rate, buys all of them for 1 credit. At a
    * company the member can see, an open role's role, posting and rate are one purchase too.
    */
-  | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[] }
+  /** `from: "crystal"`: Trial and Pro only, the company in it opens for 0 credits when it is in their Crystal Ball (the rest costs what it costs). */
+  | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[]; from?: "crystal" }
   /**
    * Add a company (one click from a URL) and optionally an engagement and people there.
    * A company is never duplicated: same website, else same name, is the same company.

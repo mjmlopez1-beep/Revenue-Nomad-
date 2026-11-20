@@ -65,13 +65,15 @@ const capFirst = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
  * One card as a Slack entry: the company in bold (linked to its record only when the card names
  * it), what happened under it, its band, why now and timing, and the free facts as fields, the
  * logo on the right only for a company the member's table shows, and one button: Open for a known
- * company, else Open in Merlin (a Trial or Pro name to its record, a locked one to the day's
- * companies, where it unlocks). A locked card carries no name, no link to its record, no logo.
+ * company, else Open in Merlin to the day's companies (where a locked one unlocks, and where a Trial
+ * or Pro name opens free: such a card says so, and links to the day, not its record). A locked
+ * card carries no name, no link to its record, no logo. Its note says how it opens (openLine).
  */
 export function radarEntry(c: RadarCard, base: string): AlertEntry {
   const abs = (u: string | undefined) => (!u ? "" : /^https?:\/\//i.test(u) ? u : base && u.startsWith("/") ? `${base}${u}` : "");
   const named = !c.locked && !!c.company;
-  const record = named ? abs(c.place) : "";
+  // Trial and Pro: a company named here but not theirs yet opens free from Crystal Ball (the day's companies), not on its record.
+  const record = named && c.opens !== "free" ? abs(c.place) : "";
   const [now, ...next] = (c.whyNow ?? "").split(" · ");
   const a = c.about;
   return {
@@ -90,7 +92,7 @@ export function radarEntry(c: RadarCard, base: string): AlertEntry {
           ]
         : [{ label: "About", value: c.facts.join(" · ") }]),
     ],
-    note: c.locked ? `${c.why}. ${lockedLine}` : c.why,
+    note: openLine(c) ? `${c.why}. ${openLine(c)}` : c.why,
     ...(named && c.known && c.logo ? { image: { url: c.logo, alt: `${c.company} logo` } } : {}),
     button: named && c.known && record ? { text: "Open", url: record } : { text: "Open in Merlin", url: record || abs(c.url) },
   };
@@ -130,6 +132,13 @@ export interface RadarMail {
 }
 
 const lockedLine = `Locked for you: unlock it in Merlin for ${COMPANY_PRICE_SAY}.`;
+/** Trial and Pro: a Crystal Ball company opens free. */
+export const OPEN_FREE_LINE = `Open it in Merlin, free from your ${FEATURE_NAME}.`;
+/** Free: one Crystal Ball company a day opens in full. */
+export const OPEN_ONE_LINE = `Locked for you: open it in Merlin, free from your ${FEATURE_NAME} (one company a day, everything on it).`;
+/** What a card says about opening its company: null for one the member knows. */
+export const openLine = (c: Pick<RadarCard, "locked" | "opens">): string | null =>
+  c.opens === "free" ? OPEN_FREE_LINE : c.opens === "one" ? OPEN_ONE_LINE : c.locked ? lockedLine : null;
 
 export function renderRadarEmail(m: RadarMail): { subject: string; text: string; html: string } {
   // Low never goes by email (it is on the page). The day passed in is cut already; this keeps it so.
@@ -151,7 +160,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
     "",
     lead,
     "",
-    ...shown.flatMap((c) => [c.headline, `  ${c.facts.join(" · ")}`, ...(likelyLine(c) ? [`  ${likelyLine(c)}`] : []), `  ${c.why}`, ...(c.locked ? [`  ${lockedLine}`] : []), ""]),
+    ...shown.flatMap((c) => [c.headline, `  ${c.facts.join(" · ")}`, ...(likelyLine(c) ? [`  ${likelyLine(c)}`] : []), `  ${c.why}`, ...(openLine(c) ? [`  ${openLine(c)}`] : []), ""]),
     ...(rest > 0 ? [moreWords(rest), ""] : []),
     button,
     d.url,
@@ -171,7 +180,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
 <br><span style="${small};color:${MAIL.muted}">${esc(c.facts.join(" · "))}</span>${
     c.band && c.whyNow ? `<br><span style="${small};color:${MAIL.ink}"><b style="font-weight:700">${esc(c.band)} likelihood</b> · ${esc(c.whyNow)}</span>` : ""
   }
-<br><span style="${small};color:${MAIL.body}">${esc(c.why)}</span>${c.locked ? `<br><span style="${small};color:${MAIL.muted}">${esc(lockedLine)}</span>` : ""}
+<br><span style="${small};color:${MAIL.body}">${esc(c.why)}</span>${openLine(c) ? `<br><span style="${small};color:${MAIL.muted}">${esc(openLine(c)!)}</span>` : ""}
 </td></tr>`;
   const list = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border-bottom:1px solid ${MAIL.line}">
 ${shown.map(card).join("\n")}

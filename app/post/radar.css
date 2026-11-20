@@ -368,3 +368,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Free, after today's free company: one quiet line under the heading. */
+.rd-used {
+  margin: 0 0 16px;
+}

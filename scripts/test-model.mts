@@ -575,6 +575,11 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("  and it is the next thing to do", fresh.next?.action === "unlock" && fresh.next.label === "Unlock a company", fresh.next);
   const paid = startSteps({ ...base, freeCompany: false }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
   check("after the free one, it costs 2 credits", paid.steps[0].hint === "costs 2 credits", paid.steps[0].hint);
+  // Free with billing live: no free company of the day, the free one a day is Crystal Ball's (Me.crystal "one").
+  const onFree = startSteps({ ...base, freeCompany: false, crystal: "one" }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
+  check("on Free, step 1 says the free one is in Crystal Ball today", onFree.steps[0].hint === "1 free in Crystal Ball today" && onFree.next?.action === "unlock", onFree.steps[0]);
+  const freeUsed = startSteps({ ...base, freeCompany: false, crystal: "used" }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
+  check("  and once it is used, 2 credits", freeUsed.steps[0].hint === "costs 2 credits", freeUsed.steps[0].hint);
   // A company unlock ticks step 1, and its label stays (it used to turn into See who held a seat).
   const one = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "holder" });
   check("any company unlock ticks step 1, and the label stays the same", one.steps[0].done && one.steps[0].label === "Unlock a company" && one.steps.length === 3, one.steps[0]);
