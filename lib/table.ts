@@ -1140,6 +1140,8 @@ interface Graph {
   engagements: Map<string, EngNode>;
   contacts: Map<string, PersonNode>;
 }
+/** Everyone on file at a person's company (graph() fills it, putPerson adds to it): one list a company, the person included. */
+const personPeers = new WeakMap<Node, PersonNode[]>();
 
 /** Placeholder company names (isPlaceholderCompany), remembered by name: the graph is built on every view and action. */
 const placeholderNames = new Map<string, boolean>();
@@ -1197,6 +1199,14 @@ function graph(seed: Seed, s: State): Graph {
   for (const p of s.contacts) {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
     if (companyId && !out.has(companyId) && !g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, companyId, engagementId: p.engagementId ?? null, source: "Member added" });
+  }
+  // Everyone on file at each company, for the same person on two records there (samePersonHeld).
+  const atCompany = new Map<string, PersonNode[]>();
+  for (const p of g.contacts.values()) {
+    let list = atCompany.get(p.companyId);
+    if (!list) atCompany.set(p.companyId, (list = []));
+    list.push(p);
+    personPeers.set(p, list);
   }
   // The switch: unverified names from public profiles show only while the table is under the
   // threshold and the admins' switch is on. Off, those seats read as unnamed everywhere (their role
@@ -2159,7 +2169,10 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   const from = v.by === "seed" ? ({ from: node!.research?.has(key) || v.pub ? "research" : "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
   // A person's title comes with their name, and the name with the title (PERSON_BUNDLE). A seat's role comes with who held it, and the other way round (SEAT_BUNDLE).
   const paid =
-    !!me && !mine && !!f.gated && ((s.unlocks[k] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key) || holdsSeatPartner(s, me, node, entity, key));
+    !!me &&
+    !mine &&
+    !!f.gated &&
+    ((s.unlocks[k] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key) || holdsSeatPartner(s, me, node, entity, key) || samePersonHeld(s, me, node, entity, key));
   if (!f.gated || mine || free || paid) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
     // Only to a viewer who sees the name: it is from public profiles and nobody has verified it yet (the Verify button).
@@ -2544,6 +2557,48 @@ function holdsPersonPartner(s: State, me: Member | null, node: Node | undefined,
   const v = valueOf(node, s, other);
   if (!v || v.status === "removed") return false;
   return (s.unlocks[fkey(node.id, other)] ?? []).includes(me.id) || (other === "name" && v.by === me.id);
+}
+/** The member paid for this person's name and title (either half): an add of their own does not count here. */
+const paidForName = (s: State, me: Member, q: Node) =>
+  (s.unlocks[fkey(q.id, "name")] ?? []).includes(me.id) || (!!valueOf(q, s, "title") && (s.unlocks[fkey(q.id, "title")] ?? []).includes(me.id));
+/** A contact detail as two records are compared: an email or a LinkedIn address in any case, a phone by its digits. */
+const detailKey = (key: string, v: string) =>
+  key === "phone"
+    ? v.replace(/\D/g, "")
+    : key === "linkedin"
+      ? v.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#]+$/, "")
+      : v.trim().toLowerCase();
+/**
+ * The same person on two records at one company (a person is kept per company or per seat, so one
+ * decision maker can be on file twice). Two records are the same person when they are at the same
+ * company and their names match by sameName (lib/personName.ts). Once a member has paid for one
+ * record's name and title, every same-person record there shows its name and title to them at no
+ * charge. A contact detail (LinkedIn, email, phone) comes over only when the other record's value
+ * is the one the member paid for on the first. A name that doesn't match leaves the record locked
+ * as it was. Read from the names on file now, for this member's own purchases only, so it covers
+ * unlocks made before this rule and never reaches another member. True when `me` sees `key` on
+ * `node` this way.
+ */
+function samePersonHeld(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): boolean {
+  if (!me || !node || entity !== "contact") return false;
+  const bundle = PERSON_BUNDLE.includes(key);
+  if (!bundle && !PERSON_DETAILS.includes(key)) return false;
+  const peers = personPeers.get(node);
+  if (!peers || peers.length < 2) return false;
+  const p = node as PersonNode;
+  const name = valueOf(p, s, "name");
+  if (!name || name.status !== "live") return false;
+  const own = bundle ? null : valueOf(p, s, key);
+  if (!bundle && (!own || own.status !== "live" || !detailKey(key, own.value))) return false;
+  for (const q of peers) {
+    if (q === p || q.companyId !== p.companyId) continue;
+    const qn = valueOf(q, s, "name");
+    if (!qn || qn.status !== "live" || qn.reporters?.includes(me.id) || !paidForName(s, me, q) || !sameName(name.value, qn.value)) continue;
+    if (bundle) return true;
+    const qv = valueOf(q, s, key);
+    if (qv && qv.status === "live" && !qv.reporters?.includes(me.id) && (s.unlocks[fkey(q.id, key)] ?? []).includes(me.id) && detailKey(key, qv.value) === detailKey(key, own!.value)) return true;
+  }
+  return false;
 }
 /**
  * An open role, read from its status (what cellOf can tell without the scan's tracks; the scan
@@ -4479,7 +4534,7 @@ export async function perform(
      * role they hold, and (SEAT_SCAN_ROLE_FREE) the role of a found seat nobody is named on.
      */
     const freeFor = (entity: Entity, id: string, field: string) =>
-      (entity === "contact" && holdsPersonPartner(s, me, g.contacts.get(id), entity, field)) ||
+      (entity === "contact" && (holdsPersonPartner(s, me, g.contacts.get(id), entity, field) || samePersonHeld(s, me, g.contacts.get(id), entity, field))) ||
       (entity === "engagement" &&
         ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) ||
           (field === "role" && (roleFree(g.engagements.get(id), s, tracks()) || scanRoleFree(g.engagements.get(id), s))) ||
@@ -4496,7 +4551,14 @@ export async function perform(
     const knowsPerson = (node: Node) =>
       PERSON_BUNDLE.every((f) => {
         const v = valueOf(node, s, f);
-        return !v || v.status !== "live" || v.by === me.id || (s.unlocks[fkey(node.id, f)] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, "contact", f);
+        return (
+          !v ||
+          v.status !== "live" ||
+          v.by === me.id ||
+          (s.unlocks[fkey(node.id, f)] ?? []).includes(me.id) ||
+          holdsPersonPartner(s, me, node, "contact", f) ||
+          samePersonHeld(s, me, node, "contact", f)
+        );
       });
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
     const mustSee = (companyId: string) => {
@@ -4864,6 +4926,9 @@ export async function perform(
         s.contacts.push({ id: pid, engagementId, companyId, by: me.id, at: now });
         const node: PersonNode = { id: pid, seedFields: {}, companyId, engagementId, source: "Member added" };
         g.contacts.set(pid, node); // a second person with this name in the same Add is a repeat
+        const peers = [...g.contacts.values()].map((x) => personPeers.get(x)).find((l) => l?.[0]?.companyId === companyId);
+        if (peers) peers.push(node);
+        personPeers.set(node, peers ?? [node]);
         for (const [k, v] of fields) earned += setValue(node, "contact", k, v);
         return { node: node as Node, earned, merged: false, kept: 0, typed };
       }
@@ -4920,7 +4985,10 @@ export async function perform(
             const seesName =
               nv.status === "live" &&
               !nv.reporters?.includes(me.id) &&
-              (nv.by === me.id || (s.unlocks[fkey(node.id, "name")] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, "contact", "name"));
+              (nv.by === me.id ||
+                (s.unlocks[fkey(node.id, "name")] ?? []).includes(me.id) ||
+                holdsPersonPartner(s, me, node, "contact", "name") ||
+                samePersonHeld(s, me, node, "contact", "name"));
             if (!seesName) throw new ActionError(FILL_NAME_FIRST);
           }
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
@@ -5569,7 +5637,7 @@ export async function perform(
           const paid =
             (s.unlocks[k] ?? []).includes(me.id) ||
             paidRole ||
-            (a.entity === "contact" && holdsPersonPartner(s, me, node, a.entity, f.key)) ||
+            (a.entity === "contact" && (holdsPersonPartner(s, me, node, a.entity, f.key) || samePersonHeld(s, me, node, a.entity, f.key))) ||
             (a.entity === "engagement" && holdsSeatPartner(s, me, node, a.entity, f.key));
           const own = a.entity === "engagement" && ownSeat(node.id);
           const canSee = !f.gated || paid || freeFor(a.entity, node.id, f.key);
