@@ -378,6 +378,42 @@ export function timing(t: number, gap: Gap): number {
   return t <= Math.max(TIMING_TAIL_MONTHS, b + 6) ? TIMING_TAIL : 0;
 }
 
+/** Every month a hire's window can open at (the rules' and the fallback's earliest, above 0): where a re-surfaced hire is looked for. */
+export const GAP_STARTS: readonly number[] = [...new Set([...RULES.filter((r) => !r.inactive).map((r) => r.gap[0]), FALLBACK_GAP[0]])].filter((a) => a > 0).sort((a, b) => a - b);
+
+/** When the window `a` months after a hire's start month opens: the first of that month (UTC). */
+export function windowOpensMs(ym: string, a: number): number {
+  const m = monthIndex(ym);
+  if (m === null) return NaN;
+  const k = m + a;
+  return Date.UTC(Math.floor(k / 12), k % 12, 1);
+}
+
+/* ---------- functions with thin priors ---------- */
+
+/**
+ * A function the research's rules seldom name as the next seat (Growth, Customer Success,
+ * Partnerships, AI GTM, Product…) has a small likelihood from every hire before it, so its
+ * members got no adjacent signal at all, or only Low ones. Its likelihood is read against the
+ * best its own priors ever reach: lifted by THIN_REF over that ceiling, at most THIN_MAX_LIFT
+ * times, and never past Medium on the lift alone (a lifted score stays under HIGH_AT).
+ */
+export const THIN_REF = 0.05;
+export const THIN_MAX_LIFT = 4;
+const ceilingMemo = new Map<string, number>();
+/** The highest prior any other function's hire gives `fn` (stage and ownership unknown). */
+export function priorCeiling(fn: string): number {
+  let c = ceilingMemo.get(fn);
+  if (c === undefined) {
+    c = 0;
+    for (const from of Object.values(FAMILY_FUNCTIONS).flatMap((x) => Object.keys(x))) if (from !== fn) c = Math.max(c, prior(from, fn, null, null).p);
+    ceilingMemo.set(fn, c);
+  }
+  return c;
+}
+/** How much `fn`'s likelihoods are lifted: 1 for a function the rules name often, up to THIN_MAX_LIFT. */
+export const thinLift = (fn: string) => Math.min(THIN_MAX_LIFT, Math.max(1, THIN_REF / Math.max(1e-6, priorCeiling(fn))));
+
 /* ---------- bands ---------- */
 
 export type Band = "High" | "Medium" | "Low";
@@ -428,8 +464,20 @@ export const agoWords = (months: number) => (months <= 0 ? "this month" : months
 /** "in 4–9 months", "within 3 months". */
 export const gapWords = (g: Gap) => (g[0] <= 0 ? `within ${g[1]} months` : `in ${g[0]}–${g[1]} months`);
 
-/** The why-now line for an adjacent hire: "Fractional CMO hired 5 months ago · Sales usually follows in 4–9 months". */
+/** After a window closes, a hire still says something for this many months (timing's fall); past that it says nothing on a card. */
+export const WINDOW_GRACE = 3;
+/** The window has passed: more months since the hire than its window's end. */
+export const windowPassed = (months: number, gap: Gap) => months > gap[1];
+/** Too long past the window for a card at all. */
+export const windowGone = (months: number, gap: Gap) => months > gap[1] + WINDOW_GRACE;
+
+/**
+ * The why-now line for an adjacent hire: "Fractional CMO hired 5 months ago · Sales usually follows
+ * in 4–9 months". Once the window has passed it says so ("… · the usual 3–12 month window for
+ * Sales has passed"), never "16 months ago, can follow in 3–12".
+ */
 export function hireWhyNow(from: string, to: string, months: number, l: Pick<Likelihood, "gap" | "rule">): string {
   const lead = `Fractional ${leadWord(from)} hired ${agoWords(months)}`;
+  if (windowPassed(months, l.gap)) return `${lead} · the usual ${l.gap[0] <= 0 ? `0–${l.gap[1]}` : `${l.gap[0]}–${l.gap[1]}`} month window for ${to} has passed`;
   return l.rule ? `${lead} · ${to} usually follows ${gapWords(l.gap)}` : `${lead} · ${to} can follow ${gapWords(l.gap)}`;
 }

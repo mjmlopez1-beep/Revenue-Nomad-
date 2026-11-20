@@ -33,7 +33,8 @@ import { titleWithout } from "../scan/clean";
 import { siteKey } from "../tableFields";
 import type { RadarKind } from "./types";
 import type { FundingCompany, FundingEvent } from "./sources/funding";
-import { countTransitions, isStage, type SeatPoint, type TransitionCounts } from "./predict";
+import { GAP_STARTS, countTransitions, isStage, windowOpensMs, type SeatPoint, type TransitionCounts } from "./predict";
+import { fnKnow, teamReadAt } from "../leaders/types";
 
 /** An adjacent hire is news while its start is at most this many months ago (the longest timing window, lib/radar/predict.ts). */
 export const HIRE_FRESH_MONTHS = 18;
@@ -89,6 +90,27 @@ export interface RawSignal {
   build?: { from: number; to: number };
   /** departure: who was on file (full-time, fractional; the level). Never a name. */
   gone?: { kind: string; level: string };
+  /**
+   * What we know about who leads each function there (lib/leaders/types.ts fnKnow): when a team
+   * page there was last read (in the last KNOWN_DAYS, else null: we haven't checked), and each
+   * function with a full-time leader on its website or one members say is in place. Left out: unknown.
+   */
+  lead?: SignalLeads;
+  /** adjacent: when the seat came into Merlin (the original signal's time). */
+  addedMs?: number;
+  /**
+   * adjacent, re-surfaced: the hire came in earlier (its first signal, `of`, read Low because its
+   * timing window hadn't opened), and a window may open in (from, to]. Scored per member
+   * (lib/radar/match.ts): kept only when that member's window opens then and it reads Medium or High.
+   */
+  reopen?: { from: number; to: number };
+  of?: string;
+}
+
+/** RawSignal.lead. */
+export interface SignalLeads {
+  teamAt: string | null;
+  ft: Record<string, { how: string; level: string; since?: string; role?: string; confirmed: boolean }>;
 }
 
 type G = ReturnType<typeof T.graph>;
@@ -214,6 +236,21 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
       })
       .sort((a, b) => a.ym.localeCompare(b.ym));
   const out: RawSignal[] = [];
+  const leadsMemo = new Map<string, SignalLeads>();
+  const leadsOf = (companyId: string): SignalLeads => {
+    let l = leadsMemo.get(companyId);
+    if (!l) {
+      const rec = s.leaders?.[companyId] ?? null;
+      const said = s.leaderReports?.[companyId] ?? {};
+      const ft: SignalLeads["ft"] = {};
+      for (const fn of new Set([...Object.keys(rec?.functions ?? {}), ...Object.keys(said)])) {
+        const k = fnKnow(rec, said[fn], fn, nowMs);
+        if (k.s === "full-time") ft[fn] = { how: k.how, level: k.level, ...(k.since ? { since: k.since } : {}), ...(k.role ? { role: k.role } : {}), confirmed: k.confirmed };
+      }
+      leadsMemo.set(companyId, (l = { teamAt: teamReadAt(rec, nowMs), ft }));
+    }
+    return l;
+  };
   const push = (x: Omit<RawSignal, "co" | "hiredFns" | "atMs"> & { atMs?: number }) => {
     if (firms.has(x.companyId)) return;
     const co = companyFacts(g, s, x.companyId);
@@ -226,6 +263,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
       co,
       hiredFns: hiredFns(x.companyId),
       ...(ft.length ? { ledFullTime: Object.fromEntries(ft.map(([fn, l]) => [fn, l.since?.slice(0, 4) ?? ""])) } : {}),
+      lead: leadsOf(x.companyId),
       stage: stageOf(s, e, co.revenue),
       owner: ownershipOf(s, x.companyId, byCompany.get(x.companyId) ?? []),
       recent: recentOf(x.companyId),
@@ -241,7 +279,23 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
     const ym = hireMonth(T.live(e, s, "start"));
     if (!ym || monthsAgo(ym, nowMs) > HIRE_FRESH_MONTHS) continue;
-    push({ key: `hire:${T.pubId(e.id)}`, kind: "adjacent", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, ym });
+    push({ key: `hire:${T.pubId(e.id)}`, kind: "adjacent", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: at });
+  }
+
+  // 1b. Adjacent hires that came in earlier, whose timing window may open in this window: each once more (key "…:open"),
+  // scored per member (lib/radar/match.ts keeps it only when their window opens now and it reads Medium or High).
+  for (const e of g.engagements.values()) {
+    const at = added.get(T.pubId(e.id));
+    if (at === undefined || !Number.isFinite(at) || at > sinceMs) continue;
+    const ym = hireMonth(T.live(e, s, "start"));
+    if (!ym || monthsAgo(ym, nowMs) > HIRE_FRESH_MONTHS || monthsAgo(ym, nowMs) < 0) continue;
+    const opens = GAP_STARTS.map((a) => windowOpensMs(ym, a)).filter((ms) => inWindow(ms) && ms > at);
+    if (!opens.length) continue;
+    const fn = named(T.fnOf(e, s));
+    if (!fn || !isLeaderRaw(e, s, tracks)) continue;
+    const key = `hire:${T.pubId(e.id)}`;
+    const first = Math.min(...opens);
+    push({ key: `${key}:open`, of: key, kind: "adjacent", at: new Date(first).toISOString(), atMs: first, companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: at, reopen: { from: sinceMs, to: nowMs } });
   }
 
   // 2. Open roles the scan first saw in the window.

@@ -34,7 +34,8 @@ import {
 import { FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
-import { checkedWords, isFractionalLead, leadItems, ledFullTimeWords } from "@/lib/leaders/types";
+import { checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
+import { LeaderReport } from "./LeaderReport";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
@@ -49,11 +50,13 @@ export function LeadsLine({ c }: { c: CompanyRec }) {
   const leads = c.leads;
   if (!leads?.fns.length) return null;
   const url = c.hidden ? null : leads.fns.map((l) => l.url).find((u): u is string => !!u && /^https?:\/\//i.test(u));
+  // Only members' word on file ("Sales: full-time CRO (members say)"): no website to name as the source.
+  const site = leads.fns.some((l) => l.how !== "members");
   return (
     <p className="tp-dleads">
       <span className="tp-dleads-h">Who leads each function</span>{" "}
       <span className="tp-dleads-t">{leadItems(leads).join(" · ")}</span>
-      <span className="tp-dleads-src">
+      {site && <span className="tp-dleads-src">
         {" · from "}
         {url ? (
           <a className="tp-link" href={url} target="_blank" rel="noreferrer nofollow">
@@ -63,7 +66,7 @@ export function LeadsLine({ c }: { c: CompanyRec }) {
           "the company's website"
         )}
         , checked {checkedWords(leads.checkedAt)}
-      </span>
+      </span>}
     </p>
   );
 }
@@ -1793,17 +1796,23 @@ export function Drawer({
                 {teamLeads.map((l) => (
                   <OnTheTeam key={l.fn} l={l} />
                 ))}
-                {gap && mine && <NoSeatYet fn={mine} led={fg.led} />}
+                {gap && mine && <NoSeatYet fn={mine} led={fg.led} teamAt={c.leads?.teamAt} />}
               </div>
               {gap &&
                 mine &&
                 (fg.led ? (
                   <p className="tp-dsec-note tp-mt8">
-                    {ledFullTimeWords(mine, fg.led)}, from the company&apos;s website. No fractional {mine} seat is on file.
+                    {ledFullTimeWords(mine, fg.led)}
+                    {fg.led.how === "members" ? "" : ", from the company's website"}. No fractional {mine} seat is on file.
                   </p>
                 ) : (
-                  <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No fractional ${mineNamed} seat` : "No fractional seat in your function"} is on file yet.</p>
+                  <p className="tp-dsec-note tp-mt8">
+                    They hired fractionals in other functions. {mineNamed ? `No fractional ${mineNamed} seat` : "No fractional seat in your function"} is on file yet.{" "}
+                    {/* Never "no Sales leader" unless their team page was read (lib/leaders/types.ts noLeaderWords). */}
+                    {c.leads?.teamAt ? `Their team page names no ${mine} leader (checked ${monthYear(c.leads.teamAt)}).` : "We haven't checked their team page yet."}
+                  </p>
                 ))}
+              {gap && mine && !c.hidden && !(fg.led && fg.led.how !== "members") && <LeaderReport companyId={c.id} fn={mine} leads={c.leads} from="record" />}
               {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked full-time or posting closed are a full-time hire, or a job posting that came down with nobody named. Their seats are listed below but aren&apos;t counted as fractional hires.</p>}
             </section>
           )}

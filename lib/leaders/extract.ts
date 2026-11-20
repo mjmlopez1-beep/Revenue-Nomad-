@@ -47,6 +47,10 @@ function spellOut(t: string): string {
       .replace(/\bchief\s+([a-z][a-z ]*?)\s*(?:&|\+|\/|\band\b)\s*([a-z][a-z ]*?)\s+officer\b/gi, "Chief $1 Officer & Chief $2 Officer")
       .replace(/\bcgo\b/gi, "Chief Growth Officer")
       .replace(/\bchief customer officer\b/gi, "Chief Customer Success Officer")
+      // A CPTO leads Product and Technology; a CPO-and-CTO in one, as a team page spells it.
+      .replace(/\bcpto\b/gi, "Chief Product Officer & Chief Technology Officer")
+      // A Chief Business Officer (CBO) and a bare CCO run the commercial side: Sales, as a Chief Commercial Officer does.
+      .replace(/\b(?:chief business officer|cbo|cco)\b/gi, "Chief Commercial Officer")
   );
 }
 
@@ -122,6 +126,44 @@ function linesOf(html: string, splitInline: boolean): string[] {
     .split(/\n+/)
     .map((x) => cleanText(x))
     .filter(Boolean);
+}
+
+/** Photo cards' alt text that names a person and a title: "Jane Doe, Chief Revenue Officer at Acme", "Jane Doe | CRO". [name, title] pairs, never kept. */
+function altCards(html: string): [string, string][] {
+  const out: [string, string][] = [];
+  const re = /<img\b[^>]*?\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+  const body = bodyOf(html);
+  for (let m: RegExpExecArray | null; (m = re.exec(body)) && out.length < 200; ) {
+    const alt = cleanText(m[1] ?? m[2] ?? "");
+    const split = /^(.{4,40}?)\s*(?:,|\s[–—|·-]\s|:)\s*(.{2,90}?)(?:\s+(?:at|@)\s+[^,]{1,60})?$/.exec(alt);
+    if (split) out.push([split[1], split[2]]);
+  }
+  return out;
+}
+
+/**
+ * A page drawn by script keeps its team in the data it renders from: {"name":"Jane Doe","title":
+ * "Chief Revenue Officer"} (or jobTitle, position, role, designation), in either order, in one
+ * object. [name, title] pairs, never kept. JSON-LD is read on its own (jsonLd).
+ */
+function scriptCards(html: string): [string, string][] {
+  const out: [string, string][] = [];
+  const re = /<script\b(?![^>]*application\/ld\+json)[^>]*>([\s\S]*?)<\/script\s*>/gi;
+  let budget = 600_000;
+  const KEY = String.raw`"(?:jobTitle|job_title|title|position|role|designation)"\s*:\s*"([^"\\]{2,90})"`;
+  const NAME = String.raw`"(?:name|fullName|full_name)"\s*:\s*"([^"\\]{4,40})"`;
+  const pairs = [new RegExp(`${NAME}[^{}]{0,300}?${KEY}`, "g"), new RegExp(`${KEY}[^{}]{0,300}?${NAME}`, "g")];
+  for (let m: RegExpExecArray | null; (m = re.exec(html)) && budget > 0 && out.length < 200; ) {
+    // A Next.js page escapes its data inside a string: read it unescaped.
+    const body = m[1].slice(0, budget).replace(/\\"/g, '"');
+    budget -= m[1].length;
+    if (!/"(?:jobTitle|job_title|title|position|role|designation)"/.test(body)) continue;
+    pairs.forEach((p, n) => {
+      p.lastIndex = 0;
+      for (let x: RegExpExecArray | null; (x = p.exec(body)) && out.length < 200; ) out.push(n === 0 ? [x[1], x[2]] : [x[2], x[1]]);
+    });
+  }
+  return out;
 }
 
 /** JSON-LD blocks, parsed. */
@@ -266,13 +308,36 @@ function pressIn(text: string, url: string, date: string | null, names?: Set<str
 
 /* ---------- a page ---------- */
 
+/** A line that reads as anyone's title on a team card, a CEO's or a founder's too (they lead no function here). */
+const ANY_TITLE = /\b(?:chief|officer|c[a-z]{1,3}o|president|chair(?:man|woman|person)?|founder|co-founder|partner|vp|vice president|svp|evp|head|director|lead|manager|general counsel|principal)\b/i;
+const anyTitle = (s: string) => s.length <= 90 && s.split(/\s+/).length <= 10 && !/[.!?]\s*\S/.test(s) && ANY_TITLE.test(s);
+
+/** Name-and-title cards on a page (a name line beside a title line, or "Jane Doe, CEO"), counted only. */
+export function personCards(html: string): number {
+  const lines = linesOf(html, true);
+  let n = 0;
+  for (let k = 0; k < lines.length; k++) {
+    const l = lines[k];
+    if (anyTitle(l) && !looksLikeName(l) && ((k > 0 && looksLikeName(lines[k - 1])) || (k + 1 < lines.length && looksLikeName(lines[k + 1])))) n++;
+    else {
+      const split = /^(.{4,40}?)\s*(?:,|\s[–—|·-]\s|:)\s*(.{2,90})$/.exec(l);
+      if (split && looksLikeName(split[1]) && anyTitle(split[2])) n++;
+    }
+  }
+  // A photo grid whose text is drawn by script still has its alt text: the larger count stands (the same card is never two).
+  const alts = altCards(html).filter(([name, title]) => looksLikeName(name) && anyTitle(title)).length;
+  return Math.max(n, alts);
+}
+
 /**
  * Every leader on a page. `release`: the page is one press release, so its own date dates every
  * appointment on it; on any other page (a press index, a team page) a line's date is the one
  * nearest it. Team cards and JSON-LD give "team page"; appointment lines give "press release".
  */
-export function extractLeaders(html: string, url: string, release = false, names?: Set<string>): Candidate[] {
+export function extractLeaders(html: string, url: string, release = false, names?: Set<string>, stats?: { cards: number }): Candidate[] {
   const out: Candidate[] = [];
+  // Person cards of any title (a CEO and a founder too): two or more make the page a team page, whatever its address says.
+  if (stats) stats.cards += personCards(html);
   // JSON-LD Person: a name and a jobTitle.
   for (const d of jsonLd(html)) {
     walk(d, (o) => {
@@ -310,6 +375,19 @@ export function extractLeaders(html: string, url: string, release = false, names
     }
     for (const c of found) out.push({ ...c, ...(since ? { since } : {}), how: "team page", url });
   }
+  // A photo grid's alt text: "Jane Doe, Chief Revenue Officer at Acme", "Jane Doe - CRO" (it often says it where the text is drawn by script).
+  // And a JS-light page's data: {"name": "Jane Doe", "title": "Chief Revenue Officer"} in a script the page renders from.
+  // Each counts only where the cards' text gave nothing for that function, so one leader is never read twice.
+  const fromText = new Set(out.map((c) => c.fn));
+  const extra = (title: string, name: string) => {
+    if (!looksLikeName(name)) return;
+    const found = titleLine(title);
+    if (!found.length) return;
+    addNames(names, name);
+    for (const c of found) if (!fromText.has(c.fn) && !out.some((x) => x.fn === c.fn && x.how === "team page" && x.level === c.level)) out.push({ ...c, how: "team page", url });
+  };
+  for (const [name, title] of altCards(html)) extra(title, name);
+  for (const [name, title] of scriptCards(html)) extra(title, name);
   // Press lines, in running text (inline tags joined back).
   const text = linesOf(html, false);
   if (release) {

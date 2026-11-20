@@ -30,7 +30,7 @@ import {
   fractionalLeadFns, fullTimeLead,
   type CoInfo, type FactRef, type Filters, type SortKey,
 } from "@/app/post/model";
-import { LEADERS_SOURCE, checkedWords, leadItems, ledFullTimeWords } from "../leaders/types";
+import { LEADERS_SOURCE, checkedWords, leadItems, ledFullTimeWords, monthYear } from "../leaders/types";
 import { cleanWindow } from "../hired";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
 import { sameView } from "../hunt";
@@ -188,7 +188,9 @@ function companySummary(i: CoInfo): ToolOut {
     ...(repeatHirer(i) ? { repeat_hirer: true } : {}),
     ...(i.fnState.hiring.length ? { hiring_now: i.fnState.hiring } : {}),
     // Who leads each function, from the company's own website: roles only, never a person.
-    ...(c.leads?.fns.length ? { who_leads: leadItems(c.leads), who_leads_source: `${LEADERS_SOURCE}, checked ${checkedWords(c.leads.checkedAt)}` } : {}),
+    ...(c.leads?.fns.length
+      ? { who_leads: leadItems(c.leads), who_leads_source: c.leads.fns.some((l) => l.how !== "members") ? `${LEADERS_SOURCE}, checked ${checkedWords(c.leads.checkedAt)}` : "Members say" }
+      : {}),
     seats: i.engs.length,
     ...(c.friendly.open ? { open_roles: c.friendly.open } : {}),
     ...(c.friendly.operators ? { fellow_fractionals: c.friendly.operators } : {}),
@@ -540,7 +542,13 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
     companies: page.map((r) => {
       const e = hire ? hireOfRow(r, hire.fns, hire.within) : null;
       const led = notYet ? fullTimeLead(r.i, notYet) : null;
-      return { ...companySummary(r.i), ...(e ? { recent_hire: recentHireOut(r.i, e) } : {}), ...(led ? { no_function_yet_note: `${ledFullTimeWords(notYet!, led)} (company website)` } : {}) };
+      // Never "no Sales leader" unless their team page was read: the note says only what Merlin knows.
+      const note = led
+        ? `${ledFullTimeWords(notYet!, led)}${led.how === "members" ? "" : " (company website)"}`
+        : r.i.c.leads?.teamAt
+          ? `No ${notYet} leader on their team page (checked ${monthYear(r.i.c.leads.teamAt)})`
+          : `No fractional ${notYet} leader on Merlin. We haven't checked their team page yet`;
+      return { ...companySummary(r.i), ...(e ? { recent_hire: recentHireOut(r.i, e) } : {}), ...(notYet ? { no_function_yet_note: note } : {}) };
     }),
     ...(rows.length === 0
       ? {

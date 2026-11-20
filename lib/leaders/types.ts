@@ -13,14 +13,24 @@ export const LEADERS_SOURCE = "Company website";
 
 /** A company is tried again this long after a skip or a failure (or a read that found nobody). */
 export const RETRY_DAYS = 30;
-/** A company with leaders on file is read again after this long. */
-export const REFRESH_DAYS = 90;
+/** A company read OK is read again after this long (before what we read goes stale at KNOWN_DAYS). */
+export const REFRESH_DAYS = 75;
+/**
+ * The reader's version, kept on each record (LeadersRecord.v). A record read by an older reader
+ * is due again at once, whatever its age, so a better reader's first daily batches re-read what
+ * the old one read instead of waiting REFRESH_DAYS. Bump it when extract.ts or run.ts read better.
+ * 2: an About page holding the team grid counts as a team page; CPTO, CBO and a bare CCO; photo alt text; script data.
+ */
+export const READER_VERSION = 2;
+/** A read is what we know about a company's leadership for this long. After that, or with no read, its leadership is unknown. */
+export const KNOWN_DAYS = 90;
 
 /** Levels kept, most senior first. Below Director is not a function's leader. */
 export const LEADER_LEVELS = ["C-level", "VP", "Head", "Director"] as const;
 export type LeaderLevel = (typeof LEADER_LEVELS)[number];
 export type LeaderKind = "full-time" | "fractional" | "interim" | "advisor" | "part-time";
-export type LeaderHow = "team page" | "press release";
+/** Where a leader on file came from: the company's own team page or a press release, or members ("Members say: full-time CRO"). */
+export type LeaderHow = "team page" | "press release" | "members";
 
 /** One function's leader on file. `since`: "2024" or "2024-11". `url`: the page on the company's own site. `seenAt`: when it was read there. */
 export interface LeaderFn {
@@ -50,6 +60,12 @@ export interface LeadersRecord {
   team?: boolean;
   press?: boolean;
   robots?: number;
+  /** The reader version that made this record (READER_VERSION). Missing: the first reader (1). */
+  v?: number;
+  /** The last read that reached the site (found or none), kept through a later failure. */
+  readAt?: string;
+  /** The last read that reached a team or leadership page, kept through a later failure. "Nobody leads X" is said only from one in the last KNOWN_DAYS. */
+  teamAt?: string;
 }
 
 /** A run's counts (State.leadersRun, and the run under way). */
@@ -107,12 +123,19 @@ export interface LeadLine {
   since?: string;
   how: LeaderHow;
   url?: string;
+  /** how "members": the title they picked ("CRO", "VP Sales"), and whether two members or the website agree. */
+  role?: string;
+  confirmed?: boolean;
+  /** how "members": the viewer is one of the members who said it. */
+  mine?: boolean;
 }
 
 /** CompanyRec.leads: the functions with a leader on file, and when the site was read. */
 export interface CompanyLeads {
   checkedAt: string;
   fns: LeadLine[];
+  /** The last read of a team or leadership page there, in the last KNOWN_DAYS. Absent: we haven't checked their team page. */
+  teamAt?: string;
 }
 
 /** The run under way in this process (one at a time), for Pilot metrics. */
@@ -121,11 +144,17 @@ export const leadersProgress: { running: boolean; run: LeadersRunSummary | null 
   run: null,
 });
 
-/** On when RN_LEADERS=1: the admin button works. Nothing reads leadership pages otherwise. */
+/** On when RN_LEADERS=1: the admin button works, and the daily background read runs. Nothing reads leadership pages otherwise. */
 export const leadersEnabled = () => process.env.RN_LEADERS === "1";
 
 /** How many companies "the next 200" is. */
 export const NEXT_BATCH = 200;
+/**
+ * Companies the daily background read takes (lib/leaders/run.ts maybeLeaders): Crystal Ball's and
+ * members' companies first, then the rest. At 4 at a time with the 300 ms pauses and up to 6 pages
+ * each, 400 companies is about an hour of polite reading a day.
+ */
+export const DAILY_BATCH = 400;
 
 /* ---------- words ---------- */
 
@@ -182,16 +211,18 @@ export function checkedWords(iso: string, now = new Date()): string {
   return d.getUTCFullYear() === now.getUTCFullYear() ? day : `${day}, ${d.getUTCFullYear()}`;
 }
 
-/** "Sales: full-time CRO since 2024": one line per function, in the order given. */
-export const leadItems = (leads: CompanyLeads) => leads.fns.map((l) => `${l.fn}: ${leadPhrase(l)}`);
+/** "Sales: full-time CRO since 2024", "Sales: full-time CRO (members say)": one line per function, in the order given. */
+export const leadItems = (leads: CompanyLeads) => leads.fns.map((l) => `${l.fn}: ${l.how === "members" ? membersSay(l) : leadPhrase(l)}`);
 
 /** The whole line: "Sales: full-time CRO since 2024 · Marketing: fractional CMO · from the company's website, checked Nov 18". */
 export function leadsLine(leads: CompanyLeads, now = new Date()): string {
-  return [...leadItems(leads), `from the company's website, checked ${checkedWords(leads.checkedAt, now)}`].join(" · ");
+  const site = leads.fns.some((l) => l.how !== "members");
+  return [...leadItems(leads), ...(site ? [`from the company's website, checked ${checkedWords(leads.checkedAt, now)}`] : [])].join(" · ");
 }
 
-/** In place of "No fractional Sales yet" when a full-time leader is on file: "FT Sales Leader since 2024". */
-export function ledFullTimeWords(fn: string, l: Pick<LeadLine, "since">): string {
+/** In place of "No fractional Sales yet" when a full-time leader is on file: "FT Sales Leader since 2024", or "Members say: full-time CRO". */
+export function ledFullTimeWords(fn: string, l: Pick<LeadLine, "since"> & Partial<Pick<LeadLine, "how" | "role" | "confirmed" | "level">>): string {
+  if (l.how === "members") return membersSayWords(fn, l);
   const y = sinceYear(l.since);
   return `FT ${fn} Leader${y ? ` since ${y}` : ""}`;
 }
@@ -199,4 +230,114 @@ export function ledFullTimeWords(fn: string, l: Pick<LeadLine, "since">): string
 export function onTheTeamWords(l: Pick<LeadLine, "fn" | "level" | "kind">): string {
   const w = KIND_WORD[l.kind];
   return `${w[0].toUpperCase()}${w.slice(1)} ${roleLabel(l.fn, l.level)} on the team`;
+}
+
+/* ---------- what we know about who leads a function ---------- */
+
+/** A member's word that a company has a full-time leader in a function (State.leaderReports[companyId][fn]). No name, only the title picked. */
+export interface LeaderReport {
+  by: string;
+  /** One of memberRoles(fn). */
+  role: string;
+  at: string;
+  /** The member unlocked this company in the LEADER_BACK_DAYS before saying it: 2 credits back once the website agrees (lib/table.ts). */
+  backDue?: true;
+  /** When those credits were given back. */
+  paidBack?: string;
+}
+
+/** The titles a member picks from for a function's full-time leader. */
+export function memberRoles(fn: string): string[] {
+  if (fn === "Sales") return ["CRO", "CCO", "VP Sales", "Head of Sales", "Other"];
+  return [roleLabel(fn, "C-level"), `VP ${fn}`, `Head of ${fn}`, "Other"];
+}
+/** The level a picked title reads as ("Other" is Head: a leader, level unknown). */
+export function roleLevel(role: string): LeaderLevel {
+  if (/^VP /.test(role)) return "VP";
+  if (/^Head /.test(role) || role === "Other") return "Head";
+  return "C-level";
+}
+
+/** Two members saying the same, or the company's website agreeing, confirms a members' report. */
+export const CONFIRM_MEMBERS = 2;
+
+/**
+ * What Merlin knows about who leads one function at a company:
+ *   full-time   a full-time leader: on the company's website, or members say so (`how` "members",
+ *               `confirmed` once two members or the website agree)
+ *   fractional  a fractional or interim leader on the company's website
+ *   none        a team or leadership page there was read in the last KNOWN_DAYS and names nobody in the function
+ *   unknown     no such read: we haven't checked their team page, so nothing is said about who leads it
+ */
+export type FnKnow =
+  | { s: "full-time"; how: LeaderHow; level: LeaderLevel; since?: string; role?: string; confirmed: boolean }
+  | { s: "fractional"; level: LeaderLevel; kind: LeaderKind }
+  | { s: "none"; teamAt: string }
+  | { s: "unknown" };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** When a team page there was last read, if in the last KNOWN_DAYS; else null. A record from before teamAt was kept reads its team flag. */
+export function teamReadAt(rec: Pick<LeadersRecord, "teamAt" | "team" | "checkedAt" | "status" | "ok"> | null | undefined, nowMs: number): string | null {
+  if (!rec) return null;
+  const at = rec.teamAt ?? (rec.team && rec.ok !== false && (rec.status === "found" || rec.status === "none") ? rec.checkedAt : undefined);
+  if (!at) return null;
+  const age = nowMs - Date.parse(at);
+  return Number.isFinite(age) && age <= KNOWN_DAYS * DAY_MS ? at : null;
+}
+
+/** The reports that stand for a function: one per member (their newest), newest first. */
+export function reportsOf(list: LeaderReport[] | undefined): LeaderReport[] {
+  const seen = new Set<string>();
+  const out: LeaderReport[] = [];
+  for (const r of [...(list ?? [])].sort((a, b) => b.at.localeCompare(a.at))) {
+    if (seen.has(r.by)) continue;
+    seen.add(r.by);
+    out.push(r);
+  }
+  return out;
+}
+
+/** What we know about who leads `fn` at a company, from its leadership record and members' reports. */
+export function fnKnow(rec: LeadersRecord | null | undefined, reports: LeaderReport[] | undefined, fn: string, nowMs: number): FnKnow {
+  const site = rec?.functions?.[fn];
+  if (site && site.kind === "full-time") return { s: "full-time", how: site.how, level: site.level, ...(site.since ? { since: site.since } : {}), confirmed: true };
+  const said = reportsOf(reports);
+  const teamAt = teamReadAt(rec, nowMs);
+  // One member's word stands until a team page read after it names nobody in the function; two members' always stands.
+  const stands = said.length >= CONFIRM_MEMBERS || (said.length === 1 && !(teamAt && !site && teamAt > said[0].at));
+  if (stands) return { s: "full-time", how: "members", level: roleLevel(said[0].role), role: said[0].role, confirmed: said.length >= CONFIRM_MEMBERS };
+  if (site && (site.kind === "fractional" || site.kind === "interim")) return { s: "fractional", level: site.level, kind: site.kind };
+  return teamAt ? { s: "none", teamAt } : { s: "unknown" };
+}
+
+/** "Nov 2026". */
+export function monthYear(iso: string): string {
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : "";
+}
+
+const memberRole = (fn: string, l: { role?: string; level?: LeaderLevel }) => (l.role && l.role !== "Other" ? l.role : l.role === "Other" ? `${fn} leader` : roleLabel(fn, l.level ?? "Head"));
+/** A members' line on the record: "full-time CRO (members say)", "full-time CRO (confirmed by members)". */
+export function membersSay(l: Pick<LeadLine, "fn" | "level"> & { role?: string; confirmed?: boolean }): string {
+  return `full-time ${memberRole(l.fn, l)} (${l.confirmed ? "confirmed by members" : "members say"})`;
+}
+/** "Members say: full-time CRO", "Confirmed by members: full-time CRO". */
+export function membersSayWords(fn: string, l: { role?: string; confirmed?: boolean; level?: LeaderLevel }): string {
+  return `${l.confirmed ? "Confirmed by members" : "Members say"}: full-time ${memberRole(fn, l)}`;
+}
+
+/**
+ * What a line may say about nobody leading `fn` there. Never "no Sales leader" unless a team page
+ * said so: "No fractional Sales leader on Merlin. We haven't checked their team page yet" or
+ * "No Sales leader on their team page (checked Nov 2026)". Null when someone leads it.
+ */
+export function noLeaderWords(fn: string, k: FnKnow): string | null {
+  if (k.s === "unknown") return `No fractional ${fn} leader on Merlin. We haven't checked their team page yet`;
+  if (k.s === "none") return `No ${fn} leader on their team page (checked ${monthYear(k.teamAt)})`;
+  return null;
+}
+/** A full-time leader in place, in words: "FT Sales Leader since 2024", "Members say: full-time CRO". Null otherwise. */
+export function fullTimeWords(fn: string, k: FnKnow): string | null {
+  if (k.s !== "full-time") return null;
+  return k.how === "members" ? membersSayWords(fn, k) : ledFullTimeWords(fn, k);
 }

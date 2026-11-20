@@ -815,6 +815,13 @@ export interface AdminStats {
     run: LeadersRunSummary | null;
     onFile: { companies: number; read: number; pages: number; team: number; press: number; functions: number; fractional: number; fullTime: number; none: number; failed: number; robots: number; skipped: number };
     due: number;
+    /**
+     * Coverage: companies with a site of their own to read, read OK in the last 90 days, with a
+     * team page read then, the last read, members' reports of a full-time leader, the daily
+     * background batch, how many days it takes to read every company due at that batch, and the
+     * UTC day it last ran.
+     */
+    coverage?: { sites: number; known: number; withTeam: number; lastReadAt: string | null; reports: number; dailyBatch: number; daysToCover: number; lastDaily: string | null };
     reasons: { why: string; n: number }[];
   };
 }
@@ -858,6 +865,13 @@ export type Action =
   /** Add a person at a company, optionally tied to one engagement. */
   | { type: "addPerson"; companyId: string; engagementId?: string | null; person: Record<string, string> }
   | { type: "follow"; companyId: string; on: boolean }
+  /**
+   * "They have a full-time Sales leader": a member's fact about who leads a function at a company
+   * they can see, with a title from the pick list (lib/leaders/types.ts memberRoles). It earns 1
+   * credit like any fact, and Crystal Ball stops pointing at that function there for everyone.
+   * `from`: the Crystal Ball page or the record.
+   */
+  | { type: "leaderReport"; companyId: string; fn: string; role: string; from?: "radar" | "record" }
   /**
    * Onboarding answers, and Your profile. `before`: up to BEFORE_MAX functions, `[]` for "Not
    * sure" (left out: unchanged). `firstView`: the id of the saved view onboarding made (null takes

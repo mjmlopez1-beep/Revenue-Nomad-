@@ -18,8 +18,15 @@
  *               open role or an ended seat in their function is direct: near the top (ROLE_P, SEAT_P).
  *   timing      the rule's gap window over the months since the seat started (predict.ts timing).
  *   fit         FIT_BASE to 1, by how many parts the profile asks about are on file and match.
- *   penalties   a full-time leader of the member's function on the company's website: x FT_PENALTY;
- *               an ended seat that went to a full-time hire: x FT_PENALTY.
+ *   penalties   a full-time leader of the member's function known there (its website, or members say so,
+ *               lib/leaders/types.ts fnKnow): x FT_PENALTY and capped under Medium (the page only);
+ *               nobody has read their team page in 90 days (leadership unknown): capped under High, and
+ *               the line says only what we know ("No fractional Sales leader on Merlin. We haven't checked
+ *               their team page yet"); an ended seat that went to a full-time hire: x FT_PENALTY.
+ *   adjacent    scored on the card's own seat (the headline's, the why-now line's); dropped once past its
+ *               window by WINDOW_GRACE months; a thin-prior function's likelihood lifted (thinLift, to
+ *               Medium at most) with its floor lowered by the same; a hire that read Low when it came in
+ *               comes back once (`reopen`) when its window opens and it reads Medium or High.
  *   The member's own "usually hired before you" answer (Profile.before) no longer decides who gets
  *   a hire: a pair they named is boosted (BEFORE_BOOST: they know their market).
  * Cards rank by score. Each carries a band (High, Medium, Low) and a why-now line.
@@ -33,8 +40,9 @@ import type { CompanyFacts, RawSignal } from "./signals";
 import { isLeaderRaw } from "./signals";
 import type { RadarBand } from "./types";
 import {
-  SCORE_FLOOR, SIGNAL_PRIORS, agoWords, bandOf, gapWords, hireWhyNow, isStage, leadWord, likelihood, ownerOf, timing, type TransitionCounts,
+  HIGH_AT, MEDIUM_AT, SCORE_FLOOR, SIGNAL_PRIORS, agoWords, bandOf, gapWords, hireWhyNow, isStage, leadWord, likelihood, ownerOf, thinLift, timing, windowGone, windowOpensMs, type TransitionCounts,
 } from "./predict";
+import { fullTimeWords, noLeaderWords, type FnKnow, type LeaderHow, type LeaderLevel } from "../leaders/types";
 import { hireMonth, monthsAgo } from "../hired";
 
 export interface RadarProfile {
@@ -87,6 +95,30 @@ export function fitOf(icp: Icp, co: CompanyFacts): number {
   return parts.length ? FIT_BASE + (1 - FIT_BASE) * (yes / parts.length) : FIT_BASE;
 }
 
+/**
+ * What we know about who leads `fn` at the signal's company (lib/leaders/types.ts fnKnow, as
+ * detectSignals read it): a full-time leader on its website or one members say is in place, a
+ * team page read in the last 90 days that names nobody in it, or nothing (unknown). A signal with
+ * no `lead` at all is unknown too: never "nobody leads it" unless a team page said so.
+ */
+export function knowOf(sig: Pick<RawSignal, "lead" | "ledFullTime" | "hiredFns">, fn: string): FnKnow {
+  const ft = sig.lead?.ft[fn];
+  if (ft) return { s: "full-time", how: ft.how as LeaderHow, level: ft.level as LeaderLevel, ...(ft.since ? { since: ft.since } : {}), ...(ft.role ? { role: ft.role } : {}), confirmed: ft.confirmed };
+  if (sig.ledFullTime && fn in sig.ledFullTime) return { s: "full-time", how: "team page", level: "Head", ...(sig.ledFullTime[fn] ? { since: sig.ledFullTime[fn] } : {}), confirmed: true };
+  if (sig.lead?.teamAt) return { s: "none", teamAt: sig.lead.teamAt };
+  return { s: "unknown" };
+}
+/** The honest words about who leads `fn` there: "FT Sales Leader since 2024", "Members say: full-time CRO", "No Sales leader on their team page (checked Nov 2026)", or "No fractional Sales leader on Merlin. We haven't checked their team page yet". */
+export const leaderLine = (sig: Pick<RawSignal, "lead" | "ledFullTime" | "hiredFns">, fn: string) => {
+  const k = knowOf(sig, fn);
+  return fullTimeWords(fn, k) ?? noLeaderWords(fn, k) ?? `No fractional ${fn} leader on Merlin`;
+};
+
+/** A full-time leader of the member's function is known there: the signal stays on the page only, under Medium (FT_PENALTY, then capped). */
+export const FT_CAP = MEDIUM_AT * 0.99;
+/** Nobody has read their team page: never High on "nobody leads it yet" alone (capped under HIGH_AT). */
+export const UNKNOWN_CAP = HIGH_AT * 0.99;
+
 /** Why a signal is for this member, or null when it isn't (the hard filters). */
 export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
   if (!p.fn || p.fn === "Other" || !inIcp(p.icp, sig.co)) return null;
@@ -100,12 +132,10 @@ export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
     case "adjacent": {
       if (!sig.fn || sig.fn === p.fn || sig.hiredFns.includes(p.fn)) return null;
       const comes = p.before.includes(sig.fn) ? `${sig.fn} usually comes before ${p.fn}` : `A fractional ${sig.fn} hire`;
-      // A full-time leader of the member's function on the company's website: said in place of "no fractional yet".
-      if (sig.ledFullTime && p.fn in sig.ledFullTime) return `${comes}. FT ${p.fn} Leader${sig.ledFullTime[p.fn] ? ` since ${sig.ledFullTime[p.fn]}` : ""}`;
-      return `${comes}, and they have no fractional ${p.fn} yet`;
+      return `${comes}. ${leaderLine(sig, p.fn)}`;
     }
     case "sales-build":
-      return sig.hiredFns.includes(p.fn) ? null : `A sales team being built, and they have no fractional ${p.fn} yet`;
+      return sig.hiredFns.includes(p.fn) ? null : `A sales team being built. ${leaderLine(sig, p.fn)}`;
     case "funding":
       return "Money in usually means hiring, at a company in your profile";
   }
@@ -136,9 +166,14 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
   const fit = fitOf(p.icp!, sig.co);
   const stage = isStage(sig.stage) ? sig.stage : null;
   const owner = ownerOf(sig.owner);
-  const ftLed = !!sig.ledFullTime && p.fn in sig.ledFullTime;
+  const know = knowOf(sig, p.fn);
+  const ftLed = know.s === "full-time";
   let score: number;
   let whyNow: string;
+  /** A re-surfaced hire: the time its window opened for this member (the card's time). */
+  let openedMs: number | null = null;
+  /** Adjacent, for a thin-prior function: its floor is lowered by its lift. */
+  let floorLift = 1;
   switch (sig.kind) {
     case "role":
       score = ROLE_P * fit;
@@ -176,26 +211,45 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       break;
     }
     case "adjacent": {
-      // Each recent fractional leadership seat (this hire first) says something: the strongest one leads.
-      const seats = [{ fn: sig.fn!, ym: sig.ym ?? hireMonth(sig.at.slice(0, 7))! }, ...(sig.recent ?? []).filter((x) => !(x.fn === sig.fn && x.ym === sig.ym))];
-      let best: { s: number; line: string } | null = null;
-      for (const x of seats) {
-        if (!x.ym || x.fn === p.fn) continue;
-        const l = likelihood(x.fn, p.fn, stage, owner, { employees: sig.co.employees, businessModel: sig.co.model ?? null }, ctx.counts);
-        const named = p.beforeFromMember && p.before.includes(x.fn);
-        const lp = named ? 1 - (1 - l.p) * (1 - BEFORE_BOOST) : l.p;
-        const t = Math.max(0, monthsAgo(x.ym, nowMs));
-        const s = lp * timing(t, l.gap);
-        if (!best || s > best.s) best = { s, line: hireWhyNow(x.fn, p.fn, t, l) };
+      // The card's own seat, and only it: the headline, the why-now line and the score are about the same hire.
+      const x = { fn: sig.fn!, ym: sig.ym ?? hireMonth(sig.at.slice(0, 7)) };
+      if (!x.ym || x.fn === p.fn) return null;
+      const l = likelihood(x.fn, p.fn, stage, owner, { employees: sig.co.employees, businessModel: sig.co.model ?? null }, ctx.counts);
+      const named = p.beforeFromMember && p.before.includes(x.fn);
+      const lp = named ? 1 - (1 - l.p) * (1 - BEFORE_BOOST) : l.p;
+      const t = Math.max(0, monthsAgo(x.ym, nowMs));
+      // Long past its window: nothing to say on a card.
+      if (windowGone(t, l.gap)) return null;
+      // A function the rules seldom name (Growth, Customer Success, Partnerships, AI GTM, Product) is read against its own ceiling, at most to Medium.
+      const raw = lp * timing(t, l.gap);
+      const lift = thinLift(p.fn);
+      floorLift = lift;
+      score = (lift > 1 ? Math.min(raw * lift, Math.max(raw, UNKNOWN_CAP)) : raw) * fit;
+      whyNow = hireWhyNow(x.fn, p.fn, t, l);
+      if (sig.reopen) {
+        // Re-surfaced once: this member's window opens in this run's window, after the hire came in.
+        const open = windowOpensMs(x.ym, l.gap[0]);
+        if (!(l.gap[0] > 0 && open > sig.reopen.from && open <= sig.reopen.to && open > (sig.addedMs ?? 0))) return null;
+        openedMs = open;
       }
-      if (!best) return null;
-      score = best.s * fit * (ftLed ? FT_PENALTY : 1);
-      whyNow = best.line;
       break;
     }
   }
-  if (!(score >= SCORE_FLOOR)) return null;
-  return { ...sig, why, score, band: bandOf(score), whyNow };
+  // Who leads the member's function there: a full-time leader known (website or members) keeps it on the page only;
+  // nobody has read their team page: never High on "nobody leads it yet" alone.
+  if (sig.kind === "adjacent" || sig.kind === "sales-build") {
+    if (ftLed) score = Math.min(score * (sig.kind === "adjacent" ? FT_PENALTY : 1), FT_CAP);
+    else if (know.s === "unknown") score = Math.min(score, UNKNOWN_CAP);
+  }
+  // A thin-prior function's adjacent hires keep a floor lowered by the same lift, so its members get them at all (Low, on the page).
+  if (!(score >= SCORE_FLOOR / floorLift)) return null;
+  const band = bandOf(score);
+  // A re-surfaced hire goes out only when it now reads Medium or High (Low never goes by email).
+  if (openedMs !== null) {
+    if (band === "Low") return null;
+    return { ...sig, at: new Date(openedMs).toISOString(), atMs: openedMs, why, score, band, whyNow };
+  }
+  return { ...sig, why, score, band, whyNow };
 }
 
 /** The months-ago words, for lines that are not a hire's ("this month", "2 months ago"). */

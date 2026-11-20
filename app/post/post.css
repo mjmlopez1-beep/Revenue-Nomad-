@@ -6990,3 +6990,49 @@ div.tp-pcard-when {
   line-height: 20px;
   color: var(--body-ink);
 }
+
+/* "They have a full-time Sales leader" (app/post/LeaderReport.tsx): a link, then a small form. */
+.lr-open {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: 24px;
+}
+.lr-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  max-width: 360px;
+}
+.lr-field {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--body-ink);
+}
+.lr-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lr-note,
+.lr-err {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.lr-err {
+  color: var(--ember);
+}
+.tp-dsec .lr-open {
+  margin-top: 8px;
+}

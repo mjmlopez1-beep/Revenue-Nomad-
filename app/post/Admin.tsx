@@ -404,6 +404,23 @@ function LeadersRead({ a, refresh }: { a: AdminStats; refresh: () => Promise<voi
           ["Due for a read", n0(x.due)],
         ]}
       />
+      {x.coverage && (
+        <>
+          <h3 className="tp-pm-h3">Coverage</h3>
+          <Rows
+            items={[
+              ["Companies with a website to read", n0(x.coverage.sites)],
+              ["Read in the last 90 days", n0(x.coverage.known)],
+              ["With a team page read then", n0(x.coverage.withTeam)],
+              ["Last read", x.coverage.lastReadAt ? stamp(x.coverage.lastReadAt, "Not yet") : "Not yet"],
+              ["Members said a full-time leader is in place", n0(x.coverage.reports)],
+              ["Read each day in the background", x.enabled ? `${n0(x.coverage.dailyBatch)} companies` : "Off"],
+              ["Days to read every company due", x.enabled ? n0(x.coverage.daysToCover) : "Off"],
+              ["Last daily read", x.coverage.lastDaily ?? "Not yet"],
+            ]}
+          />
+        </>
+      )}
       {x.reasons.length > 0 && (
         <>
           <h3 className="tp-pm-h3">Why some were not read</h3>

@@ -328,7 +328,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       const last = s0.radar?.members?.[m.id]?.lastAt;
       if (!pro && last && last.slice(0, 10) === today && Date.parse(last) < nowMs) continue;
       const sent = sentKeys(s0, m.id);
-      const mine = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key]);
+      const mine = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
       // High and Medium go out; Low stays on the page (kept with the day's companies below).
       const out_ = deliverable(mine);
       const day = dayOf(out_, cardContext(c, m, today), "daily", today);
@@ -416,7 +416,7 @@ export async function radarInstant(nowIso?: string): Promise<number> {
     const p = readyProfile(c, m);
     if (!p) continue;
     const sent = sentKeys(s, m.id);
-    const mine: Scored[] = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key]);
+    const mine: Scored[] = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
     const out_ = deliverable(mine);
     const day = dayOf(out_, cardContext(c, m, now.slice(0, 10)), "instant", now.slice(0, 10));
     if (!day) continue;

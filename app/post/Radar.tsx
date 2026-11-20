@@ -25,6 +25,7 @@ import { useUi } from "./ui";
 import { DataTable, type SignalRows } from "./Tables";
 import { CardList } from "./Cards";
 import { UnlockCompany } from "./Drawer";
+import { LeaderReport } from "./LeaderReport";
 import { plural } from "./hooks";
 import { ProRow, planDay } from "./Billing";
 import "./radar.css";
@@ -119,17 +120,22 @@ export function RadarPage({
     [openCompany],
   );
   const openRow = useCallback((r: Row) => open(r.i.c.id), [open]);
+  const fnMine = view?.function ?? me.function ?? null;
   // One button a company: Unlock company for a locked one (the record's own), Open for one the member knows.
   const action = useCallback(
     (i: CoInfo) =>
       i.c.hidden ? (
         <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
       ) : (
-        <button type="button" className="btn rd-open" onClick={() => open(i.c.id)}>
-          Open<span className="sr-only"> {i.c.name}</span>
-        </button>
+        <span className="rd-acts">
+          <button type="button" className="btn rd-open" onClick={() => open(i.c.id)}>
+            Open<span className="sr-only"> {i.c.name}</span>
+          </button>
+          {/* Crystal Ball got it wrong: they already have a full-time leader in the member's function (a fact, 1 credit). */}
+          <LeaderReport companyId={i.c.id} fn={fnMine} leads={i.c.leads} from="radar" />
+        </span>
       ),
-    [open],
+    [open, fnMine],
   );
   const signals = useMemo<SignalRows>(
     () => ({ lines: new Map((view?.rows ?? []).map((x) => [x.id, x.lines])), notes: new Map((view?.rows ?? []).flatMap((x) => (x.notes ? [[x.id, x.notes] as const] : []))), action }),
@@ -153,7 +159,7 @@ export function RadarPage({
       </button>
       <h1 className="tp-page-h">{YOUR_FEATURE}</h1>
       <p className="rd-lead">
-        Companies in your Ideal Fractional Profile that just moved
+        Companies in your Ideal Fractional Profile with something new on Merlin
         {fn ? (
           <>
             : a new open {fn} role, a {fn} seat that just ended or a {fn} leader who left, a fractional hire in another function, or a first sales team. Most likely to hire a

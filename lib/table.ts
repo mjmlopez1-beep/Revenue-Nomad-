@@ -108,8 +108,8 @@ import { FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStat
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import {
-  REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, leadersEnabled, leadersProgress,
-  type CompanyLeads, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
+  REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, KNOWN_DAYS as LEADERS_KNOWN_DAYS, DAILY_BATCH as LEADERS_DAILY_BATCH, READER_VERSION as LEADERS_READER_VERSION, leadersEnabled, leadersProgress, fnKnow, memberRoles, reportsOf, teamReadAt, CONFIRM_MEMBERS,
+  type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
 } from "./leaders/types";
 import { mergeFunctions } from "./leaders/pick";
 
@@ -226,8 +226,9 @@ export interface LedgerEntry {
    * retract (reversals): the member took back a fact they had added. name (refunds): the seat
    * holder's name from public profiles it bought came off the seat (This is wrong, Remove my name).
    * duplicate (refunds): the member had bought two listings of one role, merged into one (mergeDuplicateRoles).
+   * leader (refunds): the member said a company they had just unlocked has a full-time leader, and its website then showed one (payLeaderBack).
    */
-  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate";
+  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -396,6 +397,14 @@ export interface State extends MessagingState {
   leaders?: Record<string, LeadersRecord>;
   /** The last run that read leadership pages (lib/leaders/run.ts). */
   leadersRun?: LeadersRunSummary | null;
+  /** The daily background read (lib/leaders/run.ts maybeLeaders): the UTC day it last started. */
+  leadersDaily?: { day: string; at: string } | null;
+  /**
+   * Members saying a company has a full-time leader in a function, by internal company id, then
+   * function: who said it, the title they picked, when (lib/leaders/types.ts LeaderReport). A fact
+   * like any other (it earns 1 credit), never a name. It cuts Crystal Ball's signal there for everyone.
+   */
+  leaderReports?: Record<string, Record<string, LeaderReport[]>>;
   /** Seat-holder names from public profiles: claims waiting for an admin, names an admin verified, names taken off, the switch. See publicName. */
   names?: NamesState;
   /** Invite to connect: which member sent which seat's holder their claim link, and what came of it. See connectInvite. */
@@ -2962,7 +2971,7 @@ async function fullView(
     }
     // The About is the longest text on a record and only an open record shows it: the table carries a marker, GET ?about= the text.
     if (!withAbout && cells.about?.s === "value") cells.about = ABOUT_LATER();
-    const leads = leadsOf(s, c.id, hidden);
+    const leads = leadsOf(s, c.id, hidden, me?.id);
     const rec: CompanyRec = {
       id: pubId(c.id),
       name: hidden ? HIDDEN_COMPANY : c.name,
@@ -3114,6 +3123,11 @@ async function fullView(
         ledger.push({ at: l.at, delta: l.delta, reason: NAME_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
+      // Credits back for a full-time leader the member told us about, that the company's website then showed (payLeaderBack).
+      if (l.reason === "refund" && l.why === "leader") {
+        ledger.push({ at: l.at, delta: l.delta, reason: LEADER_REFUND, company: companyNameOf(id), field: "" });
+        continue;
+      }
       // A credit back for one of two listings of the same role the member had both bought (mergeDuplicateRoles).
       if (l.reason === "refund" && l.why === "duplicate") {
         ledger.push({ at: l.at, delta: l.delta, reason: DUPLICATE_REFUND, company: companyNameOf(id), field: "" });
@@ -3242,6 +3256,8 @@ const BENCH_LABEL = "Private rate";
 const CLOSED_REFUND = "Refund for a role that had closed";
 /** The ledger line for a credit back when a member had bought two listings of one role (mergeDuplicateRoles). */
 const DUPLICATE_REFUND = "Refund for the same role listed twice";
+/** Credits back for a full-time leader a member told us about, which the company's website then showed (payLeaderBack). */
+const LEADER_REFUND = "You were right: credits back";
 /** A role the scan took off the table: a full-time job an older screen had let in (lib/scan/remove.ts). */
 const REMOVED_REFUND = "Refund for a full-time job we took off the list";
 /** A role the scan took off the table because it is outside GTM and below Director (lib/seniority.ts). */
@@ -3254,7 +3270,11 @@ const NAME_REFUND = "Refund for a seat holder's name that came off";
 const PERSON_PAIR_LABEL = "Person name and title";
 const SEAT_PAIR_LABEL = "Seat holder and role";
 const fieldLabel = (entity: Entity, field: string) =>
-  entity === "company" && field === "identity" ? HIDDEN_COMPANY : fieldDef(entity, field)?.label ?? field;
+  entity === "company" && field === "identity"
+    ? HIDDEN_COMPANY
+    : entity === "company" && field.startsWith(FT_LEADER_REF)
+      ? `Full-time ${field.slice(FT_LEADER_REF.length)} leader`
+      : fieldDef(entity, field)?.label ?? field;
 /** The same for a row in the credit history. A person's fields say so: "Person email", not "Email". */
 const ledgerLabel = (entity: Entity, field: string) => (entity === "contact" ? `Person ${lower(fieldLabel(entity, field))}` : fieldLabel(entity, field));
 
@@ -4855,6 +4875,38 @@ export async function perform(
             ids: hits.map((c) => pubId(c.id)),
             found: opened ? "new" : "again",
             findsLeft: Math.max(0, revealCap(s, me.id, nowMs) - revealsToday(s, me.id, nowMs)),
+          };
+        }
+        case "leaderReport": {
+          // "They have a full-time Sales leader": a fact like any other (1 credit, the daily limits), at a company the member can see.
+          const c = g.companies.get(fromPub.get(String(a.companyId)) ?? "");
+          if (!c) throw new ActionError(gone("company"));
+          mustSee(c.id);
+          const fn = String(a.fn ?? "");
+          if (!FUNCTIONS.includes(fn) || fn === "Other" || fn === "Executive") throw new ActionError("Pick the function they have a full-time leader in.");
+          const role = String(a.role ?? "");
+          if (!memberRoles(fn).includes(role)) throw new ActionError(`Pick their title: ${memberRoles(fn).join(", ")}.`);
+          const site = s.leaders?.[c.id]?.functions[fn];
+          if (site?.kind === "full-time") return { message: `Their website already shows a full-time ${fn} leader. Nothing to add.` };
+          const byCo = ((s.leaderReports ??= {})[c.id] ??= {});
+          const list = (byCo[fn] ??= []);
+          const had = list.find((r) => r.by === me.id);
+          if (had) {
+            had.role = role;
+            return { message: `Updated. Crystal Ball shows ${fn} there as led by a full-time ${role === "Other" ? `${fn} leader` : role}.` };
+          }
+          // Credits back later (payLeaderBack) only when the member unlocked this company in the last LEADER_BACK_DAYS, from a Crystal Ball card.
+          const recent = (iso: string) => nowMs - Date.parse(iso) <= LEADER_BACK_DAYS * DAY_MS;
+          const unlockedLately = s.ledger.some((l) => l.memberId === me.id && l.reason === "unlock" && l.ref === `${c.id}.identity` && recent(l.at));
+          const onCard = Object.entries(s.radar?.members?.[me.id]?.days ?? {}).some(([day, rows]) => recent(`${day}T23:59:59.000Z`) && rows.some((x) => x.c === c.id));
+          list.push({ by: me.id, role, at: now, ...(unlockedLately && onCard ? { backDue: true as const } : {}) });
+          const earned = awardFill(`${c.id}.${FT_LEADER_REF}${fn}`);
+          const confirmed = reportsOf(list).length >= CONFIRM_MEMBERS;
+          return {
+            message: `Thanks. Crystal Ball stops pointing at ${fn} there for everyone${confirmed ? ", and it's confirmed: another member said the same" : ""}.${credits(earned)}${capNote()}${
+              unlockedLately && onCard ? ` If their website shows it too, you get ${LEADER_BACK} credits back.` : ""
+            }`,
+            capped,
           };
         }
         case "follow": {
@@ -7629,6 +7681,8 @@ function leadersDue(s: State, node: CompanyNode, nowMs: number): { domain: strin
   if (!domain || domain.includes("/")) return null;
   const prev = s.leaders?.[node.id] ?? null;
   if (!prev) return { domain, prev };
+  // Read by an older reader (lib/leaders/types.ts READER_VERSION): due again now, whatever its age.
+  if ((prev.v ?? 1) < LEADERS_READER_VERSION) return { domain, prev };
   const age = nowMs - Date.parse(prev.checkedAt);
   if (!Number.isFinite(age)) return { domain, prev };
   return age >= (prev.status === "found" ? LEADERS_REFRESH_DAYS : LEADERS_RETRY_DAYS) * DAY ? { domain, prev } : null;
@@ -7653,13 +7707,42 @@ function leadersWeights(seed: Seed, s: State, g: Graph): Map<string, number> {
   for (const list of Object.values(s.follows)) for (const id of list) bump(id, 1);
   for (const [k, who] of Object.entries(s.unlocks)) if (who.length) bump(companyOf(k.slice(0, k.lastIndexOf("."))), 1);
   for (const [k, v] of Object.entries(s.values)) if (!isSystem(v.by)) bump(companyOf(k.slice(0, k.lastIndexOf("."))), 1);
+  // Crystal Ball first: a company on a member's Crystal Ball (the days kept, LEADERS_CB_WEIGHT), one members said has a
+  // full-time leader (the read confirms it), then one in a member's Ideal Fractional Profile (LEADERS_ICP_WEIGHT).
+  for (const m of Object.values(s.radar?.members ?? {})) for (const rows of Object.values(m.days ?? {})) for (const x of rows) bump(x.c, LEADERS_CB_WEIGHT);
+  for (const id of Object.keys(s.leaderReports ?? {})) bump(id, LEADERS_CB_WEIGHT);
+  const icps = Object.values(s.profiles)
+    .map((p) => p.icp)
+    .filter((x): x is Icp => !!x && !!(x.industries?.length || x.employees?.length || x.revenue?.length || x.countries?.length));
+  if (icps.length)
+    for (const node of g.companies.values()) {
+      const geo = geoOf(node, s);
+      const facts = { industry: live(node, s, "industry"), employees: live(node, s, "employees"), revenue: live(node, s, "revenue"), country: geo.country };
+      if (icps.some((icp) => icpFits(icp, facts))) bump(node.id, LEADERS_ICP_WEIGHT);
+    }
   return w;
 }
 
+/** Weights for the order the leadership reader goes in: a company on a member's Crystal Ball, and one in a member's Ideal Fractional Profile. */
+const LEADERS_CB_WEIGHT = 6;
+const LEADERS_ICP_WEIGHT = 3;
+/** The profile's rule (lib/radar/match.ts inIcp) on a company's free facts: nothing on file conflicts, and one asked part matches. */
+function icpFits(icp: Icp, co: { industry: string | null; employees: string | null; revenue: string | null; country: string | null }): boolean {
+  const key = (v: string) => v.trim().toLowerCase();
+  const parts = [
+    icp.industries?.length ? (co.industry ? icp.industries.map(key).includes(key(co.industry)) : null) : undefined,
+    icp.employees?.length ? (co.employees ? icp.employees.includes(co.employees) : null) : undefined,
+    icp.revenue?.length ? (co.revenue ? icp.revenue.includes(co.revenue) : null) : undefined,
+    icp.countries?.length ? (co.country ? icp.countries.map(key).includes(key(co.country)) : null) : undefined,
+  ].filter((x) => x !== undefined);
+  return !parts.includes(false) && parts.includes(true);
+}
+
 /**
- * Companies due a read of their leadership pages, the most useful first: companies with an open
- * role or member activity (the busiest first), then the rest; inside each, never read before
- * ahead of read longest ago.
+ * Companies due a read of their leadership pages, the most useful first: a company read by an
+ * older reader (READER_VERSION), then companies on a member's Crystal Ball, with members' reports,
+ * an open role, member activity or in a member's profile (the heaviest first), then the rest;
+ * inside each, never read before ahead of read longest ago.
  */
 export async function leadersTargets(nowIso?: string): Promise<LeadersTarget[]> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
@@ -7671,8 +7754,11 @@ export async function leadersTargets(nowIso?: string): Promise<LeadersTarget[]> 
     const due = leadersDue(s, node, nowMs);
     if (due && !isFirmNode(node, s)) out.push({ companyId: node.id, name: node.name, domain: due.domain, prev: due.prev, w: w.get(node.id) ?? 0 });
   }
+  const oldRead = (t: LeadersTarget) => !!t.prev && (t.prev.v ?? 1) < LEADERS_READER_VERSION;
   out.sort(
     (a, b) =>
+      // Read by an older reader first (a better reader re-reads what the old one read, in the first daily batch), then by weight.
+      Number(oldRead(b)) - Number(oldRead(a)) ||
       Number(b.w > 0) - Number(a.w > 0) ||
       b.w - a.w ||
       Number(!!a.prev) - Number(!!b.prev) ||
@@ -7680,6 +7766,16 @@ export async function leadersTargets(nowIso?: string): Promise<LeadersTarget[]> 
       a.companyId.localeCompare(b.companyId),
   );
   return out.map(({ w: _w, ...t }) => t);
+}
+
+/** The daily leadership read claims its UTC day (State.leadersDaily): true once a day, false when today's has started. */
+export function claimLeadersDay(nowIso: string): Promise<boolean> {
+  return mutate((s) => {
+    const day = nowIso.slice(0, 10);
+    if (s.leadersDaily?.day === day) return false;
+    s.leadersDaily = { day, at: nowIso };
+    return true;
+  });
 }
 
 const leadersHash = (fns: LeadersRecord["functions"]) =>
@@ -7715,12 +7811,23 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
         if (prev && leadersReadOk(prev) && (!prev.team || o.team))
           for (const [fn, l] of Object.entries(prev.functions))
             if (!functions[fn] && FUNCTIONS.includes(fn) && fn !== "Other") s.leaderDepartures.push({ companyId: o.companyId, fn, kind: l.kind, level: l.level, at: now });
-        all[o.companyId] = { status: found ? "found" : "none", checkedAt: now, ok: true, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts };
+        const teamAt = o.team ? now : prev?.teamAt;
+        all[o.companyId] = {
+          status: found ? "found" : "none", checkedAt: now, ok: true, v: LEADERS_READER_VERSION, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts, readAt: now, ...(teamAt ? { teamAt } : {}),
+        };
+        payLeaderBack(s, o.companyId, functions, now);
       } else {
-        // The site could not be read this time: what is on file stays.
+        // The site could not be read this time: what is on file stays, and when it was last read.
         const functions = prev?.functions ?? {};
         const kept = Object.keys(functions).length > 0;
-        all[o.companyId] = { status: kept ? "found" : o.status, checkedAt: now, ok: false, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts };
+        // A record from before readAt and teamAt were kept: its own read stands for them.
+        const wasOk = !!prev && leadersReadOk(prev);
+        const readAt = prev?.readAt ?? (wasOk ? prev!.checkedAt : undefined);
+        const teamAt = prev?.teamAt ?? (wasOk && prev!.team ? prev!.checkedAt : undefined);
+        all[o.companyId] = {
+          status: kept ? "found" : o.status, checkedAt: now, ok: false, v: LEADERS_READER_VERSION, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts,
+          ...(readAt ? { readAt } : {}), ...(teamAt ? { teamAt } : {}),
+        };
       }
       n++;
     }
@@ -7736,14 +7843,52 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
 const leadersReadOk = (r: LeadersRecord) => r.ok ?? ((r.status === "found" || r.status === "none") && (!r.why || r.why === "no leaders found"));
 
 /** CompanyRec.leads: the functions with a leader on file, in the order functions are listed. The page's address stays out at a hidden company. */
-function leadsOf(s: State, companyId: string, hidden: boolean): CompanyLeads | undefined {
+function leadsOf(s: State, companyId: string, hidden: boolean, viewer?: string, nowMs = Date.now()): CompanyLeads | undefined {
   const r = s.leaders?.[companyId];
-  if (!r) return undefined;
-  const fns = FUNCTIONS.filter((f) => r.functions[f]).map((fn) => {
-    const l = r.functions[fn];
-    return { fn, level: l.level, kind: l.kind, ...(l.since ? { since: l.since } : {}), how: l.how, ...(hidden ? {} : { url: l.url }) };
+  const said = s.leaderReports?.[companyId] ?? {};
+  const fns = FUNCTIONS.flatMap((fn): LeadLine[] => {
+    const l = r?.functions[fn];
+    if (l) return [{ fn, level: l.level, kind: l.kind, ...(l.since ? { since: l.since } : {}), how: l.how, ...(hidden ? {} : { url: l.url }) }];
+    // Members say a full-time leader is in place there (the website names nobody in the function): "Members say: full-time CRO".
+    const k = fnKnow(r, said[fn], fn, nowMs);
+    if (k.s !== "full-time" || k.how !== "members") return [];
+    const mine = !!viewer && reportsOf(said[fn]).some((x) => x.by === viewer);
+    return [{ fn, level: k.level, kind: "full-time", how: "members", role: k.role, confirmed: k.confirmed, ...(mine ? { mine: true } : {}) }];
   });
-  return fns.length ? { checkedAt: r.checkedAt, fns } : undefined;
+  const teamAt = teamReadAt(r, nowMs);
+  if (!fns.length && !teamAt) return undefined;
+  return { checkedAt: r?.checkedAt ?? "", fns, ...(teamAt ? { teamAt } : {}) };
+}
+
+/** A members' leader report's ledger ref: "<companyId>.ftLeader:Sales" (the credit history reads "Full-time Sales leader"). */
+const FT_LEADER_REF = "ftLeader:";
+/**
+ * Credits back for a members' report, the rule kept simple so it can't be farmed: the member
+ * unlocked the company (2 credits) in the LEADER_BACK_DAYS before saying it, the company was on
+ * their Crystal Ball in those days, and the company's own website later shows a full-time leader
+ * in that function (the reader, not another member, confirms it). Then LEADER_BACK once, ever,
+ * per member and company. Never at the time of the report, and never for a report nobody checks.
+ */
+const LEADER_BACK = 2;
+const LEADER_BACK_DAYS = 7;
+/**
+ * A read that found a full-time leader in a function members had reported: each report that was
+ * due credits back (backDue: the member had unlocked the company in the 7 days before saying it)
+ * gets LEADER_BACK once ("You were right: credits back"). Once per member and company, ever.
+ */
+function payLeaderBack(s: State, companyId: string, functions: LeadersRecord["functions"], now: string) {
+  const said = s.leaderReports?.[companyId];
+  if (!said) return;
+  const ref = `${companyId}.leader`;
+  for (const [fn, list] of Object.entries(said)) {
+    if (functions[fn]?.kind !== "full-time") continue;
+    for (const r of list) {
+      if (!r.backDue || r.paidBack) continue;
+      r.paidBack = now;
+      if (s.ledger.some((l) => l.memberId === r.by && l.ref === ref && l.why === "leader")) continue;
+      s.ledger.push({ memberId: r.by, delta: LEADER_BACK, reason: "refund", ref, at: now, why: "leader" });
+    }
+  }
 }
 
 /** Pilot metrics: the run under way (or the last one), and what is on file. */
@@ -7771,13 +7916,28 @@ function leadersStats(s: State, g: Graph, nowMs: number): NonNullable<AdminStats
     }
   }
   let due = 0;
-  for (const node of g.companies.values()) if (leadersDue(s, node, nowMs) && !isFirmNode(node, s)) due++;
+  // Coverage: companies with a site of their own to read, read OK in the last KNOWN_DAYS, with a team page read then, and the last read.
+  const coverage = { sites: 0, known: 0, withTeam: 0, lastReadAt: null as string | null, reports: 0 };
+  for (const node of g.companies.values()) {
+    const domain = siteKey(live(node, s, "website"));
+    if (!domain || domain.includes("/") || isFirmNode(node, s)) continue;
+    coverage.sites++;
+    if (leadersDue(s, node, nowMs)) due++;
+    const r = s.leaders?.[node.id];
+    if (!r) continue;
+    const readAt = r.readAt ?? (leadersReadOk(r) ? r.checkedAt : undefined);
+    if (readAt && nowMs - Date.parse(readAt) <= LEADERS_KNOWN_DAYS * DAY) coverage.known++;
+    if (teamReadAt(r, nowMs)) coverage.withTeam++;
+    if (readAt && (!coverage.lastReadAt || readAt > coverage.lastReadAt)) coverage.lastReadAt = readAt;
+  }
+  for (const [id, byFn] of Object.entries(s.leaderReports ?? {})) if (g.companies.has(id)) for (const list of Object.values(byFn)) coverage.reports += reportsOf(list).length;
   return {
     enabled: leadersEnabled(),
     running: leadersProgress.running,
     run: leadersProgress.run ?? s.leadersRun ?? null,
     onFile,
     due,
+    coverage: { ...coverage, dailyBatch: LEADERS_DAILY_BATCH, daysToCover: Math.ceil(due / LEADERS_DAILY_BATCH), lastDaily: s.leadersDaily?.day ?? null },
     reasons: [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([why, n]) => ({ why, n })),
   };
 }

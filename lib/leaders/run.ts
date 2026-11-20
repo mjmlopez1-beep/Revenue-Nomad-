@@ -17,15 +17,20 @@
  * leaders are on file. One run at a time per process: a second call joins the first.
  *
  * Off unless RN_LEADERS=1: started by the admin button in Pilot metrics (action "leadersNow", the
- * next 200 companies or all). Not part of the weekly scan.
+ * next 200 companies or all), and once a UTC day in the background (maybeLeaders: DAILY_BATCH
+ * companies, Crystal Ball's first). Not part of the weekly scan.
+ *
+ * A page counts as a team page by its address and words (a leadership or team page), or by what
+ * it holds: two or more name-and-title cards (an About page holding the team grid). Crystal Ball
+ * says "nobody leads Sales there" only from a team page read in the last KNOWN_DAYS.
  */
 import { hostGates } from "../about/run";
 import { pageJunk } from "../about/extract";
 import { fetchHomepage, fetchPageAt, fetchRobotsTxt, fetchXmlAt, registrable, robotsAllowsPath, startUrl, testAllowance, Refused, type FetchOpts, type Page } from "../about/fetch";
-import { leadersTargets, saveLeaders } from "../table";
+import { claimLeadersDay, leadersTargets, saveLeaders } from "../table";
 import { extractLeaders, linkKind, linksOf, nameTokens, normUrl, sitemapLocs, type Candidate, type LinkKind } from "./extract";
 import { pickFunctions } from "./pick";
-import { leadersProgress, NEXT_BATCH, type LeaderFn, type LeadersOutcome, type LeadersRunSummary, type LeadersTarget } from "./types";
+import { DAILY_BATCH, leadersEnabled, leadersProgress, NEXT_BATCH, type LeaderFn, type LeadersOutcome, type LeadersRunSummary, type LeadersTarget } from "./types";
 
 export const CONCURRENCY = 4;
 /** Pause between requests on one company, and between a worker's companies. */
@@ -43,6 +48,7 @@ const SAVE_EVERY_MS = 15_000;
 const GUESSES: { path: string; kind: Exclude<LinkKind, "release">; p: number }[] = [
   { path: "/leadership", kind: "team", p: 45 },
   { path: "/team", kind: "team", p: 44 },
+  { path: "/our-team", kind: "team", p: 43 },
   { path: "/about", kind: "about", p: 35 },
   { path: "/press", kind: "press", p: 33 },
   { path: "/about-us", kind: "about", p: 25 },
@@ -114,7 +120,11 @@ export async function leadersOne(t: LeadersTarget, o: OneOpts = {}): Promise<Lea
 
   // Names seen on the pages, only to keep them out of the addresses stored (a press release's address often spells one).
   const names = new Set<string>();
-  const cands: Candidate[] = [...extractLeaders(home.html, home.url, false, names)];
+  // Two or more name-and-title cards on one page make it a team page, whatever its address says (an About page holding the team grid).
+  const TEAM_CARDS = 2;
+  const homeCards = { cards: 0 };
+  const cands: Candidate[] = [...extractLeaders(home.html, home.url, false, names, homeCards)];
+  if (homeCards.cards >= TEAM_CARDS) res.team = true;
   /** Each page found, by the page it was found on. */
   const via = new Map<string, string>();
   const seen = new Set<string>([normUrl(new URL(home.url))]);
@@ -158,7 +168,7 @@ export async function leadersOne(t: LeadersTarget, o: OneOpts = {}): Promise<Lea
     for (const g of GUESSES) if (!linked.has(g.kind)) push(new URL(g.path, home.url).href, g.kind, "guess", g.p);
 
     let budget = PAGE_CAP;
-    const st = { team: false, press: false };
+    const st = { team: res.team, press: false };
     while (budget > 0 && queue.length) {
       queue.sort((a, b) => priority(b, st) - priority(a, st));
       if (priority(queue[0], st) < MIN_PRIORITY) break;
@@ -178,7 +188,9 @@ export async function leadersOne(t: LeadersTarget, o: OneOpts = {}): Promise<Lea
       if (it.kind === "team") st.team = res.team = true;
       if (it.kind === "press" || it.kind === "release") st.press = res.press = true;
       if (normUrl(new URL(page.url)) !== normUrl(new URL(it.url))) via.set(normUrl(new URL(page.url)), via.get(normUrl(new URL(it.url))) ?? home.url);
-      cands.push(...extractLeaders(page.html, page.url, it.kind === "release", names));
+      const cards = { cards: 0 };
+      cands.push(...extractLeaders(page.html, page.url, it.kind === "release", names, cards));
+      if (cards.cards >= TEAM_CARDS && it.kind !== "release") st.team = res.team = true;
       for (const l of linksOf(page.html, page.url, sameSite)) push(l.url, l.kind, "link", undefined, page.url);
     }
   } catch (e) {
@@ -228,6 +240,31 @@ const kindCounts = (fns: Record<string, LeaderFn>) => {
   const all = Object.values(fns);
   return { functions: all.length, fractional: all.filter((l) => l.kind === "fractional" || l.kind === "interim").length, fullTime: all.filter((l) => l.kind === "full-time").length };
 };
+
+/* ---------- the daily background read ---------- */
+
+/** The daily read starts on the first page load after this hour (UTC), apart from the radar's 13:00. */
+export const DAILY_HOUR_UTC = 6;
+let dailyTriedAt = 0;
+
+/**
+ * Read DAILY_BATCH companies a UTC day in the background, the most useful first (lib/table.ts
+ * leadersTargets: a company on a member's Crystal Ball, one members said has a full-time leader,
+ * one in a member's Ideal Fractional Profile, then the rest, never read before ahead of read
+ * longest ago), each re-read after REFRESH_DAYS. The same polite reading as the admin's run
+ * (four at a time, one request per host, the pauses, robots.txt, every fetch check). Called on
+ * page loads, so it stays cheap: at most one look every 10 minutes. Only with RN_LEADERS=1;
+ * RN_LEADERS_DAILY=0 keeps the admin button and turns the schedule off.
+ */
+export async function maybeLeaders(nowMs = Date.now()): Promise<boolean> {
+  if (!leadersEnabled() || process.env.RN_LEADERS_DAILY === "0" || flight.__merlinLeadersFlight || nowMs - dailyTriedAt < 10 * 60_000) return false;
+  const now = new Date(nowMs);
+  if (now.getUTCHours() < DAILY_HOUR_UTC) return false;
+  dailyTriedAt = nowMs;
+  if (!(await claimLeadersDay(now.toISOString()))) return false;
+  void runLeaders({ scope: "next", limit: DAILY_BATCH }).catch((e) => console.error("leaders daily run failed", e));
+  return true;
+}
 
 /** Run once over the companies that are due. A second call while one runs gets the same run. */
 export function runLeaders(o: RunOpts = {}): Promise<LeadersRunSummary> {

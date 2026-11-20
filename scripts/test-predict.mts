@@ -161,7 +161,7 @@ async function main() {
   const icp = { industries: ["SaaS"], employees: [], revenue: [], countries: [] };
   const co = (o: Record<string, unknown> = {}) => ({ name: "X Co", industry: "SaaS", employees: "51–200", revenue: "$5M–$20M", country: "United States", region: null, model: "B2B", ...o });
   const raw = (o: Record<string, unknown>) =>
-    ({ key: String(o.key), kind: "adjacent", at: new Date().toISOString(), atMs: Date.now(), companyId: "c_x", engagementId: null, fn: "Sales", title: null, co: co(), hiredFns: [], stage: "$5M–$20M", owner: null, ym: monthAgo(2), recent: [], ...o }) as import("../lib/radar/signals").RawSignal;
+    ({ key: String(o.key), kind: "adjacent", at: new Date().toISOString(), atMs: Date.now(), companyId: "c_x", engagementId: null, fn: "Sales", title: null, co: co(), hiredFns: [], stage: "$5M–$20M", owner: null, ym: monthAgo(2), recent: [], lead: { teamAt: new Date().toISOString(), ft: {} }, ...o }) as import("../lib/radar/signals").RawSignal;
   const revops = { memberId: "m", fn: "RevOps", icp, before: [], beforeFromMember: false };
   const croRevops = raw({ key: "hire:cro", fn: "Sales", ym: monthAgo(2) });
   const weak = raw({ key: "hire:weak", fn: "Legal", ym: monthAgo(2), atMs: Date.now() + 1 });
@@ -174,7 +174,11 @@ async function main() {
   check("open roles and ended seats stay near the top, in one ranked list", all3[0].key === "role:r" && all3[1].key === "end:s" && all3[2].key === "hire:cro", all3.map((x) => x.key));
   const ft = M.scoreFor(raw({ key: "hire:ft", ledFullTime: { RevOps: "2023" } }), revops)!;
   const noFt = M.scoreFor(raw({ key: "hire:noft" }), revops)!;
-  check("a full-time leader of the member's function on file cuts the score hard", near(ft.score, noFt.score * M.FT_PENALTY) && /FT RevOps Leader since 2023/.test(ft.why), [ft.score, noFt.score, ft.why]);
+  check(
+    "a full-time leader of the member's function on file cuts the score hard, to Low (the page only)",
+    ft.score <= noFt.score * M.FT_PENALTY + 1e-9 && ft.band === "Low" && /FT RevOps Leader since 2023/.test(ft.why),
+    [ft.score, noFt.score, ft.why],
+  );
   check("a fractional already in the member's function: no signal", M.scoreFor(raw({ key: "hire:x", hiredFns: ["RevOps"] }), revops) === null);
   const fullTimeEnd = M.scoreFor(raw({ key: "end:ft", kind: "seat", fn: "RevOps", endReason: "Replaced by full-time hire" }), revops)!;
   check("an ended seat that went to a full-time hire is weaker", fullTimeEnd.score < M.scoreFor(ended, revops)!.score / 2 && /full-time/.test(fullTimeEnd.whyNow));
@@ -348,6 +352,129 @@ async function main() {
   const forSales = M.scoreFor(hire!, { memberId: "m", fn: "Marketing", icp, before: [], beforeFromMember: false }, { counts: S.observedTransitions(seed3, s5) });
   check("a bootstrapped $1M–$5M company's CFO, 5 months in: Marketing follows (rule 4), Medium or better", !!forSales && forSales.band !== "Low" && /Fractional CFO hired 5 months ago · Marketing usually follows in 3–9 months/.test(forSales.whyNow), forSales && [forSales.band, forSales.whyNow]);
   check("a seat's 'PE deal' reads the company as PE-backed when nothing else is on file", S.ownershipOf({ values: {} } as never, "c_x", []) === null);
+
+  /* ---------- who leads it: never claimed unless checked ---------- */
+  console.log("\nNever 'no Sales leader' unless their team page was checked");
+  const L = await import("../lib/leaders/types");
+  const Pr = await import("../lib/radar/present");
+  const nowMs = Date.now();
+  const unknownSig = raw({ key: "hire:unk", lead: undefined });
+  const unk = M.scoreFor(unknownSig, revops)!;
+  const checkedSig = raw({ key: "hire:chk", lead: { teamAt: "2026-11-02T10:00:00.000Z", ft: {} } });
+  const chk = M.scoreFor(checkedSig, revops)!;
+  check("leadership unknown: never High on 'nobody leads it yet' alone", !!unk && unk.band !== "High" && chk.band === "High", [unk?.band, chk?.band]);
+  check("and it says only what we know", /No fractional RevOps leader on Merlin\. We haven't checked their team page yet$/.test(unk.why) && !/no RevOps leader/i.test(unk.why.replace("No fractional RevOps leader", "")), unk.why);
+  check("a team page read with nobody in the function says so, with the month", /No RevOps leader on their team page \(checked Nov 2026\)$/.test(chk.why), chk.why);
+  const old = M.scoreFor(raw({ key: "hire:old", lead: { teamAt: null, ft: {} } }), revops)!;
+  check("no team page read in the last 90 days is unknown too", /haven't checked their team page/.test(old.why) && old.band !== "High", old.why);
+  const memSig = raw({ key: "hire:mem", lead: { teamAt: null, ft: { RevOps: { how: "members", level: "Head", role: "Head of RevOps", confirmed: false } } } });
+  const mem = M.scoreFor(memSig, revops)!;
+  check("members say a full-time leader is in place: Low (the page only), said as 'Members say'", mem.band === "Low" && /Members say: full-time Head of RevOps$/.test(mem.why), [mem.band, mem.why]);
+  const bsUnknown = M.scoreFor({ ...build, lead: undefined, atMs: Date.now() - 4 * 30 * DAY }, sales);
+  check("a sales build at a company nobody checked: never High, honest words", !!bsUnknown && bsUnknown.band !== "High" && /^A sales team being built\. No fractional Sales leader on Merlin/.test(bsUnknown.why), bsUnknown && [bsUnknown.band, bsUnknown.why]);
+  check("no line says 'they have no fractional … yet' any more", ![unk, chk, old, mem, bsUnknown!].some((x) => /have no fractional/.test(x.why)));
+  const rec = (o: Record<string, unknown> = {}) => ({ status: "none", checkedAt: "2026-11-02T10:00:00.000Z", ok: true, functions: {}, team: true, teamAt: "2026-11-02T10:00:00.000Z", ...o }) as import("../lib/leaders/types").LeadersRecord;
+  check("fnKnow: a team page read in 90 days, nobody in Sales: none", L.fnKnow(rec(), undefined, "Sales", nowMs).s === "none");
+  check("fnKnow: no record: unknown; a read 4 months ago: unknown", L.fnKnow(null, undefined, "Sales", nowMs).s === "unknown" && L.fnKnow(rec({ teamAt: new Date(nowMs - 120 * DAY).toISOString() }), undefined, "Sales", nowMs).s === "unknown");
+  check("fnKnow: a read that reached no team page is unknown", L.fnKnow(rec({ team: false, teamAt: undefined }), undefined, "Sales", nowMs).s === "unknown");
+  const one = [{ by: "m1", role: "CRO", at: new Date(nowMs - 10 * DAY).toISOString() }];
+  const k1 = L.fnKnow(null, one, "Sales", nowMs);
+  check("fnKnow: one member's word: full-time, unconfirmed", k1.s === "full-time" && k1.how === "members" && !k1.confirmed && k1.role === "CRO", k1);
+  const k2 = L.fnKnow(null, [...one, { by: "m2", role: "CRO", at: new Date(nowMs - DAY).toISOString() }, { by: "m1", role: "VP Sales", at: new Date(nowMs - 5 * DAY).toISOString() }], "Sales", nowMs);
+  check("fnKnow: two members: confirmed (one member counts once)", k2.s === "full-time" && k2.confirmed, k2);
+  check("fnKnow: one member's word, then a team page read after it naming nobody: it no longer stands", L.fnKnow(rec({ teamAt: new Date(nowMs - DAY).toISOString() }), one, "Sales", nowMs).s === "none");
+  check("fnKnow: the website's full-time leader wins", L.fnKnow(rec({ status: "found", functions: { Sales: { level: "C-level", kind: "full-time", how: "team page", url: "u", seenAt: "x" } } }), one, "Sales", nowMs).s === "full-time");
+  check("the words: members, confirmed", L.membersSayWords("Sales", { role: "CRO" }) === "Members say: full-time CRO" && L.membersSayWords("Sales", { role: "CRO", confirmed: true }) === "Confirmed by members: full-time CRO");
+
+  console.log("\nCrystal Ball's dates");
+  const oldHire = raw({ key: "hire:o14", fn: "Marketing", ym: monthAgo(14), addedMs: nowMs - DAY, atMs: nowMs - DAY });
+  check("an old hire new to Merlin: its own start and 'newly added to Merlin', never 'just hired'", Pr.hiredWords(oldHire, nowMs) === `hired a fractional Marketing leader in ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(monthAgo(14).slice(5, 7)) - 1]} ${monthAgo(14).slice(0, 4)} · newly added to Merlin`, Pr.hiredWords(oldHire, nowMs));
+  check("a hire this month: just hired", Pr.hiredWords(raw({ key: "h", fn: "Marketing", ym: monthAgo(0) }), nowMs) === "just hired a fractional Marketing leader");
+  const card14 = Pr.cardOf({ ...oldHire, why: "why" }, { visible: () => false, cardId: (k) => k, coId: (c) => c, url: "/x" });
+  check("the card's headline says it too", /hired a fractional Marketing leader in \w{3} \d{4} · newly added to Merlin/.test(card14.headline) && !/just hired/.test(card14.headline), card14.headline);
+  const sameSeat = M.scoreFor(raw({ key: "hire:same", fn: "Marketing", ym: monthAgo(2), recent: [{ fn: "Sales", ym: monthAgo(2) }] }), revops)!;
+  check("the why-now line is about the card's own seat, not a stronger one beside it", /^Fractional CMO hired 2 months ago/.test(sameSeat.whyNow) && !/CRO/.test(sameSeat.whyNow), sameSeat.whyNow);
+  const gone = M.scoreFor(raw({ key: "hire:g", fn: "Legal", ym: monthAgo(16) }), revops);
+  check("16 months after a hire whose window is 3–12: no card at all", gone === null, gone?.whyNow);
+  const passed = M.scoreFor(raw({ key: "hire:p", fn: "Legal", ym: monthAgo(14) }), { ...fin, before: ["Legal"], beforeFromMember: true });
+  check("just past the window: it says the window has passed", !passed || (/window for Finance has passed/.test(passed.whyNow) && !/can follow in/.test(passed.whyNow)), passed?.whyNow);
+  check("hireWhyNow never says 'N months ago, can follow in' past the window", !/can follow/.test(P.hireWhyNow("Legal", "RevOps", 14, { gap: [3, 12], rule: null })) && /has passed/.test(P.hireWhyNow("Legal", "RevOps", 14, { gap: [3, 12], rule: null })));
+
+  console.log("\nAdjacent hires re-sent when their window opens");
+  // A profile asking for the country too, with none on file: fit under 1, so the hire reads Low when it comes in at its start month.
+  const mktSales = { memberId: "m", fn: "Sales", icp: { ...icp, countries: ["United States"] }, before: [], beforeFromMember: false };
+  const ym4 = monthAgo(4);
+  const open = P.windowOpensMs(ym4, 4);
+  const arrived = P.windowOpensMs(ym4, 0) + DAY;
+  const pend = raw({ key: "hire:pend:open", of: "hire:pend", fn: "Marketing", ym: ym4, stage: "$1M–$5M", co: co({ country: null }), addedMs: arrived, reopen: { from: open - DAY, to: Math.max(nowMs, open + 1) } });
+  const atArrival = M.scoreFor({ ...pend, key: "hire:pend", reopen: undefined, of: undefined }, mktSales, { nowMs: arrived })!;
+  const re = M.scoreFor(pend, mktSales, { nowMs: Math.max(nowMs, open + 1) });
+  check("a CMO hire read Low when it came in, its window still months off", !!atArrival && atArrival.band === "Low", atArrival && [atArrival.band, atArrival.score]);
+  check("it comes back once its window opens, Medium or better, dated the day it opened", !!re && re.band !== "Low" && re.atMs === open && /Sales usually follows in 4–9 months/.test(re.whyNow), re && [re.band, re.whyNow, re.at]);
+  check("not when its window opened before this run's window", M.scoreFor({ ...pend, reopen: { from: open + 1, to: open + 2 * DAY } }, mktSales, { nowMs: open + DAY }) === null);
+  check("not when the window was already open when it came in", M.scoreFor({ ...pend, addedMs: open + 1 }, mktSales, { nowMs: Math.max(nowMs, open + 1) }) === null);
+  check("windows open at whole months", P.GAP_STARTS.includes(4) && P.GAP_STARTS.every((a) => a > 0));
+  // In the table: a CMO seat a member added 100 days ago, started 3 months ago: a window opens this month.
+  await T.mutate((d) => {
+    d.engagements.push({ id: "e_three_mkt", companyId: "c_three", by: "mem_pia", at: new Date(nowMs - 100 * DAY).toISOString() });
+    for (const [f, v] of Object.entries({ role: "Fractional CMO", function: "Marketing", type: "Fractional", start: monthAgo(3), status: "Active", end: "Ongoing" }))
+      d.values[`e_three_mkt.${f}`] = { value: v, by: "mem_pia", at: new Date(nowMs - 100 * DAY).toISOString(), status: "live" };
+  });
+  const open3 = P.windowOpensMs(monthAgo(3), 3);
+  const sigs3 = S.detectSignals(seed3, await t.loadState(), open3 - DAY, Math.max(nowMs, open3 + 1));
+  const back = sigs3.find((x) => x.key === `hire:${pub("e_three_mkt")}:open`);
+  check("detectSignals keeps it pending and offers it again the month a window opens, keyed once", !!back && back.of === `hire:${pub("e_three_mkt")}` && back.atMs === open3 && !sigs3.some((x) => x.key === `hire:${pub("e_three_mkt")}`), back && { key: back.key, of: back.of });
+  check("not in a window when none opens", !S.detectSignals(seed3, await t.loadState(), open3 + DAY, open3 + 2 * DAY).some((x) => x.key.endsWith(":open") && x.engagementId === "e_three_mkt"));
+  const cs = { memberId: "m", fn: "Customer Success", icp, before: [], beforeFromMember: false };
+  const prod = M.scoreFor(raw({ key: "hire:prod", fn: "Product", ym: monthAgo(4) }), cs);
+  check("Customer Success gets adjacent signals at all now, never High on the lift", !!prod && prod.band !== "High", prod && [prod.band, prod.score]);
+  check("thin functions are lifted, the core ones are not", P.thinLift("Customer Success") > 1 && P.thinLift("Partnerships") > 1 && P.thinLift("Product") > 1 && P.thinLift("Growth") > 1 && P.thinLift("AI GTM") > 1 && P.thinLift("Sales") === 1 && P.thinLift("Finance") === 1);
+  for (const f of ["Growth", "Partnerships", "AI GTM", "Product"]) {
+    const best = ["Marketing", "Sales", "Technology", "Finance", "RevOps", "Operations"].map((from) => M.scoreFor(raw({ key: `h:${f}:${from}`, fn: from, ym: monthAgo(5), stage: null }), { ...cs, fn: f })).filter(Boolean);
+    check(`${f} gets an adjacent signal from some hire`, best.length > 0, f);
+  }
+
+  console.log("\n'They have a full-time Sales leader': members correct Crystal Ball");
+  const credits = async (tok: string) => (await view(tok)).me!.credits;
+  const c2 = pub("c_one");
+  const b0 = await credits("tok-sal-0001");
+  const lr1 = await t.perform("tok-sal-0001", { type: "leaderReport", companyId: c2, fn: "Finance", role: "CFO", from: "record" }, "https://post.example.com");
+  check("a member's report is a fact: 1 credit", /Crystal Ball stops pointing at Finance there/.test(lr1.message) && (await credits("tok-sal-0001")) - b0 === 1, [lr1.message]);
+  const lr2 = await t.perform("tok-sal-0001", { type: "leaderReport", companyId: c2, fn: "Finance", role: "VP Finance" }, "https://post.example.com");
+  check("saying it again updates the title, no second credit", /^Updated/.test(lr2.message) && (await credits("tok-sal-0001")) - b0 === 1, lr2.message);
+  const badRole = await t.perform("tok-sal-0001", { type: "leaderReport", companyId: c2, fn: "Finance", role: "Wizard" }, "https://post.example.com").catch((e: Error) => e.message);
+  check("only the pick list's titles", typeof badRole === "string" && /Pick their title/.test(badRole), badRole);
+  const sAfter = await t.loadState();
+  const reportSig = S.detectSignals(seed3, sAfter, 0, Date.now() + 5000).find((x) => x.companyId === "c_one");
+  check("everyone's signal there now knows: a full-time Finance leader, members say", !!reportSig && reportSig.lead?.ft.Finance?.how === "members" && !reportSig.lead.ft.Finance.confirmed, reportSig?.lead);
+  const rec2 = (await view("tok-sal-0001")).companies.find((x) => x.id === c2);
+  const line = rec2?.leads?.fns.find((l) => l.fn === "Finance");
+  check("the record shows 'Members say: full-time VP Finance'", !!line && line.how === "members" && !!line.mine && L.ledFullTimeWords("Finance", line) === "Members say: full-time VP Finance", line);
+  const lr3 = await t.perform("tok-ada-0001", { type: "leaderReport", companyId: c2, fn: "Finance", role: "CFO" }, "https://post.example.com");
+  check("a second member agreeing makes it confirmed", /confirmed/.test(lr3.message) && (await view("tok-ada-0001")).companies.find((x) => x.id === c2)?.leads?.fns.find((l) => l.fn === "Finance")?.confirmed === true, lr3.message);
+  // The give-back: Sal unlocked c_three in the last 7 days, from a Crystal Ball card, and said it has a full-time Sales leader.
+  const today = new Date().toISOString().slice(0, 10);
+  await T.mutate((d) => {
+    d.ledger.push({ memberId: "mem_sal", delta: -2, reason: "unlock", ref: "c_three.identity", at: new Date(Date.now() - DAY).toISOString() });
+    d.unlocks["c_three.identity"] = ["mem_sal"];
+    d.radar ??= { lastRunAt: null, lastRunDay: null, members: {}, stats: { runs: 0, sent: 0, emails: 0, slack: 0, instant: 0 } };
+    d.radar.members.mem_sal = { sent: {}, days: { [today]: [{ k: "hire:x", c: "c_three", kind: "adjacent", l: "x" }] } };
+  });
+  const b1 = await credits("tok-sal-0001");
+  const lr4 = await t.perform("tok-sal-0001", { type: "leaderReport", companyId: pub("c_three"), fn: "Sales", role: "CRO", from: "radar" }, "https://post.example.com");
+  check("unlocked from a card in the last 7 days: told the credits come back if the website agrees", /2 credits back/.test(lr4.message) && (await credits("tok-sal-0001")) - b1 === 1, lr4.message);
+  check("no credits back at the time of the report", !(await t.loadState()).ledger.some((l) => l.why === "leader"));
+  const site = { Sales: { level: "C-level" as const, kind: "full-time" as const, how: "team page" as const, url: "https://juniper.example/about", seenAt: new Date().toISOString() } };
+  const outcome = { companyId: "c_three", status: "found" as const, functions: site, pages: 1, team: true, press: false, robots: 0 };
+  await t.saveLeaders([outcome], null);
+  const b2 = await credits("tok-sal-0001");
+  check("the website then shows a full-time CRO: 2 credits back, 'You were right'", b2 - b1 === 3 && (await view("tok-sal-0001")).me!.ledger?.some((l: { reason: string }) => l.reason === "You were right: credits back") !== false, [b1, b2]);
+  await t.saveLeaders([outcome], null);
+  check("once only", (await credits("tok-sal-0001")) === b2 && (await t.loadState()).ledger.filter((l) => l.why === "leader").length === 1);
+  const lr5 = await t.perform("tok-pia-0001", { type: "leaderReport", companyId: c2, fn: "Sales", role: "CRO" }, "https://post.example.com").catch((e: Error) => e.message);
+  check("a company the member can't see: nothing to say about it", typeof lr5 === "string", lr5);
+  const lst = await t.loadState();
+  check("no name stored with a report", !JSON.stringify(lst.leaderReports).match(/Seller|Profit|Admin/), lst.leaderReports);
 }
 
 main()

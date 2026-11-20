@@ -51,6 +51,32 @@ export function safeTitle(title: string | null, companyName: string, fn: string 
   return nameWords(companyName).some((w) => new RegExp(`(^|[^a-z0-9])${w}($|[^a-z0-9])`).test(t)) ? fallback : title;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** A hire this many months old or more is no "just hired". */
+export const JUST_MONTHS = 2;
+/** Months from a start month ("2025-11") to a time, in UTC. */
+const monthsSince = (ym: string, ms: number) => {
+  const d = new Date(ms);
+  return d.getUTCFullYear() * 12 + d.getUTCMonth() - (Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7)) - 1);
+};
+
+/**
+ * An adjacent hire's own date, honestly: "just hired a fractional Marketing leader" only when it
+ * started in the last JUST_MONTHS; else "hired a fractional Marketing leader in Dec 2025", with
+ * "· newly added to Merlin" when the seat is old but came into Merlin in the last 30 days.
+ */
+export function hiredWords(sig: Pick<MemberSignal, "fn" | "ym" | "addedMs" | "atMs" | "reopen">, nowMs = Date.now()): string {
+  const fn = sig.fn ?? "";
+  const ym = sig.ym && /^\d{4}-\d{2}$/.test(sig.ym) ? sig.ym : null;
+  if (!ym) return `hired a fractional ${fn} leader`;
+  const ago = monthsSince(ym, nowMs);
+  if (ago < JUST_MONTHS && !sig.reopen) return `just hired a fractional ${fn} leader`;
+  const when = `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+  const added = sig.addedMs ?? (sig.reopen ? undefined : sig.atMs);
+  const fresh = added !== undefined && nowMs - added <= 30 * 24 * 60 * 60 * 1000;
+  return `hired a fractional ${fn} leader in ${when}${fresh && ago >= JUST_MONTHS ? " · newly added to Merlin" : ""}`;
+}
+
 export interface CardContext {
   /** The member's table shows this company (identityHidden is false for them). */
   visible: (companyId: string) => boolean;
@@ -73,7 +99,7 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
   let headline: string;
   switch (sig.kind) {
     case "adjacent":
-      headline = `${cap(who)} just hired a fractional ${fn} leader`;
+      headline = `${cap(who)} ${hiredWords(sig)}`;
       break;
     case "role":
       headline = `New open role: ${title}, at ${who}`;
@@ -115,8 +141,10 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
 export function viewLine(sig: MemberSignal): string {
   const fn = sig.fn ?? "";
   switch (sig.kind) {
-    case "adjacent":
-      return `Hired a fractional ${fn} leader · ${sig.why}`;
+    case "adjacent": {
+      const h = hiredWords(sig);
+      return `${h.charAt(0).toUpperCase()}${h.slice(1)} · ${sig.why}`;
+    }
     case "role":
       return `New open role: ${safeTitle(sig.title, sig.co.name, sig.fn)} · In your function`;
     case "seat":

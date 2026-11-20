@@ -304,6 +304,8 @@ export const GET = guarded(async (req: NextRequest) => {
   void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
   // The next-client radar's daily run, on the first page load after 13:00 UTC (lib/radar).
   void maybeRadar(origin(req)).catch((e) => console.error("radar check failed", e));
+  // Who leads each function: the daily background read of company websites (RN_LEADERS=1 only, lib/leaders/run.ts maybeLeaders).
+  if (process.env.RN_LEADERS === "1") void import("@/lib/leaders/run").then((m) => m.maybeLeaders()).catch((e) => console.error("leaders check failed", e));
   // Signed out: the counts only, kept for a few minutes (buildView), so the landing page never waits in line behind members' tables.
   if (!token || !(await memberForToken(token))) {
     const view = await buildView(null);

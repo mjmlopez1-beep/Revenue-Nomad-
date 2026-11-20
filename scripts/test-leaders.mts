@@ -269,6 +269,44 @@ const sites: Record<string, Record<string, string | ((r: ServerResponse) => void
   },
   "bigco.test": { "*": html(`<div><h3>Zed Zeller</h3><p>Chief Revenue Officer</p></div>`) },
   "open.test": { "/": html(`<main><div><h3>Zed Zeller</h3><p>VP Sales</p></div></main>`) },
+  // Shaped like the owner's example: the nav links "About" only, and the About page holds a photo grid, each card a photo,
+  // a name line and an uppercase title line ("CHIEF REVENUE OFFICER", "CPTO, CO-FOUNDER"). Synthetic: made-up names.
+  "photogrid.test": {
+    "/": html(`<nav><a href="/">Home</a><a href="/platform">Platform</a><a href="/about">About</a><a href="/insights">Insights</a><a href="/talk-to-us">Contact Us</a></nav><main><h1>The platform for project development</h1></main>`),
+    "/about": html(
+      `<main><section><h1>Our Vision</h1><p>We help teams build faster.</p></section><section><div class="grid">${[
+        ["Quinn Rayburn", "CHAIRMAN, CO-FOUNDER"],
+        ["Dana Linwick", "CEO, CO-FOUNDER"],
+        ["Pat Kimbrough", "CPTO, CO-FOUNDER"],
+        ["Tia Mossbank", "CHIEF REVENUE OFFICER"],
+        ["Sam Hillcrest", "HEAD OF ENGINEERING"],
+        ["Max Itoyama", "HEAD OF PRODUCT DESIGN"],
+      ]
+        .map(([n, t]) => `<div class="text-center"><div class="avatar"><img src="/team/${n.split(" ")[0]}.jpg" alt="${n}, ${t} at Photo Grid" loading="lazy"></div><h3 class="text-xl">${n}</h3><p class="uppercase tracking-wide">${t}</p></div>`)
+        .join("")}</div></section></main>`,
+    ),
+  },
+  // Name and title in sibling divs, a Chief Commercial Officer, an SVP, a fractional CMO.
+  "siblings.test": {
+    "/": html(`<header><a href="/company">Company</a></header>`),
+    "/company": html(
+      `<main><div class="person"><div class="name">Ray Foxworthy</div><div class="title">Chief Commercial Officer</div></div><div class="person"><div class="name">Lia Ortizabal</div><div class="title">SVP, Sales</div></div><div class="person"><div class="name">Kim Farrowdale</div><div class="title">Fractional CMO</div></div></main>`,
+    ),
+  },
+  // A page drawn by script: the team is in the data it renders from, and only there.
+  "scripted.test": {
+    "/": html(`<nav><a href="/our-team">Our team</a></nav>`),
+    "/our-team": html(
+      `<div id="root"></div><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"team":[{"name":"Lu Wendmere","title":"Chief Business Officer","photo":"/a.jpg"},{"position":"VP Marketing","name":"Al Gorrington"},{"name":"Ann Quigley","title":"Office Manager"}]}}}</script>`,
+    ),
+  },
+  // A leadership page that names nobody in Sales: a team page was read, so "nobody leads Sales" may be said.
+  "nosales.test": {
+    "/": html(`<nav><a href="/leadership">Leadership</a></nav>`),
+    "/leadership": html(`<main><div><h3>John Pemberton</h3><p>Chief Executive Officer</p></div><div><h3>Bo Ashcombe</h3><p>Chief Technology Officer</p></div></main>`),
+  },
+  // A homepage with no team on it and no team page anywhere: nothing may be said about who leads Sales.
+  "noteam.test": { "/": html(`<main><h1>We make things.</h1><p>Contact us.</p></main>`) },
 };
 function send(r: ServerResponse, body: string, status = 200, type = "text/html; charset=utf-8") {
   r.writeHead(status, { "content-type": type });
@@ -341,6 +379,40 @@ check("  the addresses kept spell no name", Object.values(o.functions).every((l)
 
 o = await one("c_moved", "moved.test");
 eq("a homepage that moved to another company's site is skipped", [o.status, o.why, Object.keys(o.functions)], ["skipped", "redirects to another site", []]);
+
+console.log("\nTeam page layouts");
+eq(
+  "titles map to functions: CRO, CCO, CSO, CBO, CPTO, SVP/VP/Head of Sales, VP Revenue, President & CRO, CGO, CMO, CFO",
+  ["Chief Revenue Officer", "CHIEF REVENUE OFFICER", "Chief Commercial Officer", "Chief Sales Officer", "Chief Business Officer", "CCO", "CRO", "CBO", "SVP Sales", "VP of Sales", "Head of Sales", "VP Revenue", "President & Chief Revenue Officer", "Chief Growth Officer", "CMO", "CFO", "CPTO, CO-FOUNDER", "Fractional CRO", "Interim CFO", "Acting CMO"].map((x) => fl(x).join("+")),
+  [
+    "Sales/C-level/full-time", "Sales/C-level/full-time", "Sales/C-level/full-time", "Sales/C-level/full-time", "Sales/C-level/full-time", "Sales/C-level/full-time", "Sales/C-level/full-time", "Sales/C-level/full-time",
+    "Sales/VP/full-time", "Sales/VP/full-time", "Sales/Head/full-time", "Sales/VP/full-time", "Sales/C-level/full-time", "Growth/C-level/full-time", "Marketing/C-level/full-time", "Finance/C-level/full-time",
+    "Product/C-level/full-time+Technology/C-level/full-time", "Sales/C-level/fractional", "Finance/C-level/interim", "Marketing/C-level/interim",
+  ],
+);
+o = await one("c_grid", "photogrid.test");
+eq("the owner's example's shape: an About page's photo grid with uppercase titles finds the full-time CRO (and the CPTO)", summary(o.functions), sorted({ Sales: "C-level/full-time/-/team page", Product: "C-level/full-time/-/team page", Technology: "C-level/full-time/-/team page" }));
+check("  the About page counts as a team page (its cards), found through the nav", o.team && pagesAt("photogrid.test")[0]?.path === "/about", [o.team, pagesAt("photogrid.test").map((s) => s.path)]);
+o = await one("c_sib", "siblings.test");
+eq("name and title in sibling elements, a Company page linked from the header", summary(o.functions), sorted({ Sales: "C-level/full-time/-/team page", Marketing: "C-level/fractional/-/team page" }));
+o = await one("c_js", "scripted.test");
+eq("a page drawn by script: the team in its data (a Chief Business Officer, a VP Marketing)", summary(o.functions), sorted({ Sales: "C-level/full-time/-/team page", Marketing: "VP/full-time/-/team page" }));
+const alt = extractLeaders(page(`<div><img src="/a.jpg" alt="Zed Zeller, Chief Revenue Officer at Acme"><img src="/b.jpg" alt="Lee Manyard - VP Marketing"></div>`), "https://x.test/team");
+eq("a photo grid's alt text alone", alt.map((x) => `${x.fn}/${x.level}`), ["Sales/C-level", "Marketing/VP"]);
+const twice = extractLeaders(page(`<div><img alt="Zed Zeller, Chief Revenue Officer at Acme"><h3>Zed Zeller</h3><p>Chief Revenue Officer</p></div>`), "https://x.test/team");
+eq("  never the same leader twice (alt and text)", twice.length, 1);
+const ns = await one("c_ns", "nosales.test");
+check("a leadership page with nobody in Sales: read, a team page", ns.team && !ns.functions.Sales && !!ns.functions.Technology, ns);
+const nt = await one("c_nt", "noteam.test");
+check("a site with no team page anywhere: not a team page read", !nt.team, nt);
+eq("the layouts store no names", nameHits([o, ns, nt, alt]), []);
+const readRec = (x: typeof ns, t: string) => ({ status: x.status === "found" ? "found" : "none", checkedAt: t, ok: true, functions: x.functions, team: x.team, ...(x.team ? { teamAt: t } : {}) }) as import("../lib/leaders/types").LeadersRecord;
+const nowT = at(0)();
+eq(
+  "what Crystal Ball may say: nobody in Sales only after a team page read",
+  [types.noLeaderWords("Sales", types.fnKnow(readRec(ns, nowT), undefined, "Sales", NOW0)), types.noLeaderWords("Sales", types.fnKnow(readRec(nt, nowT), undefined, "Sales", NOW0))],
+  [`No Sales leader on their team page (checked ${types.monthYear(nowT)})`, "No fractional Sales leader on Merlin. We haven't checked their team page yet"],
+);
 
 /* ---------- the run and storage ---------- */
 console.log("\nRun and storage");
@@ -430,9 +502,9 @@ const sigOf = (key: string, extra: Record<string, unknown> = {}) =>
   ({ key, kind: "adjacent", companyId: "c", at: at(0)(), atMs: NOW0, fn: "Finance", title: null, co: { name: "x", industry: "Software", employees: null, revenue: null, country: null, region: null }, hiredFns: ["Finance"], ...extra }) as unknown as Parameters<typeof matchWhy>[0];
 const prof = { memberId: "m2", fn: "Sales", icp: { industries: ["Software"], employees: [], revenue: [], countries: [] }, before: ["Finance"], beforeFromMember: true };
 eq(
-  "radar: a full-time leader on the site is said in place of no fractional Sales yet, and comes after",
+  "radar: a full-time leader on the site is said in place of the no-leader line, and comes after; nobody checked: only what we know",
   [matchWhy(sigOf("a"), prof), matchWhy(sigOf("b", { ledFullTime: { Sales: "2024" } }), prof), matchWhy(sigOf("c", { hiredFns: ["Finance", "Sales"] }), prof), signalsFor([sigOf("b", { ledFullTime: { Sales: "2024" }, atMs: NOW0 + 1 }), sigOf("a")], prof).map((x) => x.key)],
-  ["Finance usually comes before Sales, and they have no fractional Sales yet", "Finance usually comes before Sales. FT Sales Leader since 2024", null, ["a", "b"]],
+  ["Finance usually comes before Sales. No fractional Sales leader on Merlin. We haven't checked their team page yet", "Finance usually comes before Sales. FT Sales Leader since 2024", null, ["a", "b"]],
 );
 
 /* ---------- Pilot metrics ---------- */

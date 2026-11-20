@@ -266,3 +266,10 @@
     transition: none;
   }
 }
+
+/* Open, and "They have a full-time Sales leader" under it (app/post/LeaderReport.tsx). */
+.rd-acts {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}

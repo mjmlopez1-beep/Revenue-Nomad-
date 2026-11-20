@@ -365,7 +365,7 @@ async function main() {
   const sm3 = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
   check(
     "only the new signal goes out, nothing sent before",
-    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /just hired a fractional Growth leader/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
+    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /hired a fractional Growth leader in \w{3} \d{4} · newly added to Merlin/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
     { run3, subject: sm3?.subject },
   );
   check("its link opens that day", !!sm3 && sm3.text.includes(encodeURIComponent(types.radarPath(day2))));
@@ -415,7 +415,7 @@ async function main() {
   const ids = (page?.rows ?? []).map((x) => x.id);
   check("the email's day lists exactly the companies the email named, open role first", ids.join() === [pub("c_beta"), pub("c_acme")].join(), { ids, want: [pub("c_beta"), pub("c_acme")] });
   check("every one of its signals is a line", (page?.rows[0]?.lines.length ?? 0) === 2 && page?.rows[1]?.lines.length === 1, page?.rows);
-  check("a line says what happened and why", page?.rows[1]?.lines[0] === "Hired a fractional Marketing leader · Marketing usually comes before Sales, and they have no fractional Sales yet", page?.rows[1]?.lines);
+  check("a line says what happened and why", page?.rows[1]?.lines[0] === "Just hired a fractional Marketing leader · Marketing usually comes before Sales. No fractional Sales leader on Merlin. We haven't checked their team page yet", page?.rows[1]?.lines);
   check("the view names no company and no person", !named(page).length, named(page));
   check("and carries only the public ids of the member's own signal companies", pubLeaks(page).every((x) => x === pub("c_beta") || x === pub("c_acme")), pubLeaks(page));
   check("the days: the last 7, today first, each with its companies", page?.days.length === 7 && page.days[0].day === page.today && page.days.find((d) => d.day === day0)?.companies === 2 && page.days.find((d) => d.day === day2)?.companies === 1, page?.days);

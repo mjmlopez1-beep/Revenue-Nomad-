@@ -32,7 +32,7 @@ import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
 import { VerifyName } from "./Verify";
 import { fnChipPlan } from "./display";
-import { leadPhrase, type LeadLine } from "@/lib/leaders/types";
+import { leadPhrase, monthYear, type LeadLine } from "@/lib/leaders/types";
 
 /**
  * How fractional friendly a company is, as a plain label. Hover for the reason and the score.
@@ -100,7 +100,7 @@ export function FnChips({ i, mine, max = 3, gap = true, total }: { i: CoInfo; mi
         </span>
       )}
       {team && <OnTheTeam l={team} />}
-      {showGap && mine && <NoSeatYet fn={mine} led={led} />}
+      {showGap && mine && <NoSeatYet fn={mine} led={led} teamAt={i.c.leads?.teamAt} />}
     </span>
   );
 }
@@ -120,17 +120,22 @@ export const storyTag = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "postin
 const storyWhy = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "from a posting that came down" : "a full-time hire");
 
 /** They hired fractionals in other functions, not the member's yet. Dashed, like anything missing. */
-export function NoSeatYet({ fn, led }: { fn: string; led?: LeadLine | null }) {
+export function NoSeatYet({ fn, led, teamAt }: { fn: string; led?: LeadLine | null; teamAt?: string | null }) {
   const named = namedFn(fn);
-  // A full-time leader of the function is on the company's website: no opening to point at, and it says so.
+  // A full-time leader of the function is on the company's website (or members say so): no opening to point at, and it says so.
   if (led)
     return (
-      <span className="chip tp-fn tp-fn-story tp-fn-led" title={`From the company's website: a ${leadPhrase(led)} leads ${fn}. No fractional ${fn} seat is on file.`}>
+      <span
+        className="chip tp-fn tp-fn-story tp-fn-led"
+        title={led.how === "members" ? `${gapWords(fn, led)}. No fractional ${fn} seat is on file.` : `From the company's website: a ${leadPhrase(led)} leads ${fn}. No fractional ${fn} seat is on file.`}
+      >
         {gapWords(fn, led)}
       </span>
     );
+  // Never "no Sales leader" unless their team page was read: only what we know.
+  const checked = teamAt ? ` Their team page names no ${named ?? fn} leader (checked ${monthYear(teamAt)}).` : " We haven't checked their team page yet.";
   return (
-    <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other functions. ${named ? `No fractional ${named} seat` : "No fractional seat in your function"} is on file yet.`}>
+    <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other functions. ${named ? `No fractional ${named} seat` : "No fractional seat in your function"} is on file yet.${checked}`}>
       {named ? `No fractional ${named} yet` : "No fractional in your function yet"}
     </span>
   );
