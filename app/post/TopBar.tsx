@@ -18,7 +18,7 @@ import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
 import { PlanPill } from "./Billing";
-import { FEATURE_NAME, type RadarView } from "@/lib/radar/types";
+import { FEATURE_NAME } from "@/lib/radar/types";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
 export type Contact = View["contact"] | null;
@@ -381,6 +381,8 @@ export interface MenuItem {
   checked?: boolean;
   /** A count that needs the member (unread messages). Shown as a badge when above 0. */
   badge?: number;
+  /** What the badge counts, for screen readers ("unread" unless said). */
+  badgeOf?: string;
   /** The section it sits in. A small heading shows where the section changes. */
   group?: string;
   /** The one item in the action color (Upgrade to Pro, at the top while on the trial or Free). */
@@ -475,7 +477,7 @@ export function AvatarMenu({
               <span>{it.label}</span>
               {it.hint && <span className="tp-menu-hint num">{it.hint}</span>}
               {!!it.badge && (
-                <span className="tp-badge num" aria-label={`${it.badge} unread`}>
+                <span className="tp-badge num" aria-label={`${it.badge} ${it.badgeOf ?? "unread"}`}>
                   {it.badge}
                 </span>
               )}
@@ -551,32 +553,13 @@ const seenDay = () => {
 };
 /**
  * How many companies are new in Crystal Ball: its latest day's (today's, or yesterday's before the
- * morning run), until the member opens it. Fetched once, after the page has settled.
+ * morning run), until the member opens it. `latest` is that day and its count, from Today's data
+ * (GET ?today=1, useTodayData in Today.tsx), the one request the bar's count and the menu's share.
  */
-function useRadarNew(on: boolean, here: boolean) {
-  const [day, setDay] = useState<{ day: string; n: number } | null>(null);
-  const [seen, setSeen] = useState<string | null>(null);
-  useEffect(() => {
-    if (!on) return;
-    setSeen(seenDay());
-    let gone = false;
-    const run = async () => {
-      try {
-        const r = await fetch("/api/table?radar=1", { cache: "no-store" });
-        const v = (await r.json().catch(() => null)) as RadarView | null;
-        if (gone || !r.ok || !v?.ready) return;
-        const latest = v.days.find((d) => d.companies > 0);
-        const fresh = latest && Date.parse(`${v.today}T00:00:00Z`) - Date.parse(`${latest.day}T00:00:00Z`) <= 86_400_000;
-        if (latest && fresh) setDay({ day: latest.day, n: latest.companies });
-      } catch {}
-    };
-    const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
-    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(() => void run(), { timeout: 4000 }) : void run()), 2500);
-    return () => {
-      gone = true;
-      clearTimeout(t);
-    };
-  }, [on]);
+export function useRadarNew(latest: { day: string; n: number } | null, here: boolean) {
+  const [seen, setSeen] = useState<string | null>(seenDay);
+  const fresh = !!latest && Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) - Date.parse(`${latest.day}T00:00:00Z`) <= 86_400_000;
+  const day = fresh ? latest : null;
   // Opening Crystal Ball sees the day's companies.
   useEffect(() => {
     if (!here || !day) return;
@@ -588,8 +571,7 @@ function useRadarNew(on: boolean, here: boolean) {
   return day && seen !== day.day ? day.n : 0;
 }
 
-function RadarBtn({ onClick, here }: { onClick: () => void; here?: boolean }) {
-  const n = useRadarNew(true, !!here);
+function RadarBtn({ onClick, here, n }: { onClick: () => void; here?: boolean; n: number }) {
   return (
     <button
       type="button"
@@ -634,6 +616,7 @@ export function TopBar({
   unlockTip,
   onRadar,
   radarHere,
+  radarNew = 0,
 }: {
   me: Me;
   query: string;
@@ -670,6 +653,8 @@ export function TopBar({
   /** [ux ws3] Open Crystal Ball. With it, wider screens have Crystal Ball in the bar, with its new companies. */
   onRadar?: () => void;
   radarHere?: boolean;
+  /** Crystal Ball's new companies (useRadarNew), for its button. */
+  radarNew?: number;
 }) {
   const msgBtn = !!onMessages;
   const [searchOpen, setSearchOpen] = useState(false);
@@ -759,7 +744,7 @@ export function TopBar({
         </span>
       </button>
       <div className="tp-top-mid">{search}</div>
-      {onRadar && <RadarBtn onClick={onRadar} here={radarHere} />}
+      {onRadar && <RadarBtn onClick={onRadar} here={radarHere} n={radarNew} />}
       <div className="tp-top-right">
         {/* The meter's slot is first, so with nothing earned yet its room is the gap after the search, not a hole between the balance and Add. */}
         <EarnMeter me={me} onClick={onCredits} />

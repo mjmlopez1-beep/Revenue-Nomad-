@@ -74,11 +74,13 @@ export function useTodayData(
         newCount: radar,
         since: sinceIso ? { radar, roles: localRef.current.roles, follows: localRef.current.follows, sinceIso } : null,
         from: "radar",
+        latest: v.ready ? ((d) => (d ? { day: d.day, n: d.companies } : null))(v.days.find((d) => d.companies > 0)) : null,
       };
     };
     const viaToday = async (): Promise<TodayData | null> => {
       const ctl = new AbortController();
-      const r = await fetch("/api/table?today=1", { cache: "no-store", signal: ctl.signal });
+      // With the previous visit, the server counts "Since Tuesday" on the whole table.
+      const r = await fetch(`/api/table?today=1${sinceIso ? `&since=${encodeURIComponent(sinceIso)}` : ""}`, { cache: "no-store", signal: ctl.signal });
       const size = Number(r.headers.get("content-length") ?? 0);
       if (!r.ok || size > TODAY_MAX_BYTES) {
         ctl.abort();
@@ -115,6 +117,7 @@ function todayFrom(j: TodayAnswer, sinceIso: string | null, local: { roles: numb
     newCount: j.radar.newCount,
     since: s ?? (sinceIso ? { radar: j.radar.newCount, roles: local.roles, follows: local.follows, sinceIso } : null),
     from: "today",
+    latest: j.radar.ready !== false && j.radar.day && j.radar.newCount > 0 ? { day: j.radar.day, n: j.radar.newCount } : null,
   };
 }
 

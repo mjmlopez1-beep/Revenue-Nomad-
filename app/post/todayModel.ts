@@ -12,7 +12,7 @@ export interface TodayAnswer {
   me: Me;
   plan?: PlanView;
   freeCompany?: boolean;
-  radar: { day: string; fn: string | null; rows: RadarRow[]; newCount: number };
+  radar: { day: string; fn: string | null; rows: RadarRow[]; newCount: number; ready?: boolean };
   since?: { radar: number; roles: number; follows: number; sinceIso: string };
 }
 /** What Today draws from, whichever way it came. */
@@ -23,6 +23,12 @@ export interface TodayData {
   newCount: number;
   since: { radar: number; roles: number; follows: number; sinceIso: string } | null;
   from: "today" | "radar";
+  /**
+   * Crystal Ball's latest day with companies and how many it has: the count of new companies on
+   * its menu item and in the bar (useRadarNew in TopBar.tsx). Null when it has none, or isn't
+   * ready (no function yet).
+   */
+  latest: { day: string; n: number } | null;
 }
 /** The rows Today keeps from the radar. */
 export const TODAY_ROWS = 4;

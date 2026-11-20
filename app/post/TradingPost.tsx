@@ -46,7 +46,7 @@ import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } 
 import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
 import { Seats } from "./Seats";
 import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
-import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
+import { AvatarMenu, CreditsPopover, TopBar, useRadarNew } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
 import { Partners } from "./Partners";
 import { RadarPage, radarRows, useRadarDay } from "./Radar";
@@ -740,8 +740,22 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   useEffect(() => {
     if (page === "today") setTodayShown(true);
   }, [page]);
+  /*
+   * Today's data serves Crystal Ball's count too (its menu item, and its button in the bar): asked
+   * for once (GET ?today=1), when Today shows, or once the page has settled when it opened elsewhere.
+   */
+  const [countWanted, setCountWanted] = useState(false);
+  useEffect(() => {
+    if (todayShown) return;
+    const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
+    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(() => setCountWanted(true), { timeout: 4000 }) : setCountWanted(true)), 2500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const rolesNew = useMemo(() => (todayShown ? rolesSince(infos, me.function, since.at) : 0), [todayShown, infos, me.function, since.at]);
-  const today = useTodayData(todayShown, since.at, { roles: rolesNew, follows: since.n }, partial?.today);
+  const today = useTodayData(todayShown || countWanted, since.at, { roles: rolesNew, follows: since.n }, partial?.today);
+  const radarLatest = today.data?.latest ?? null;
+  const radarNew = useRadarNew(useMemo(() => radarLatest, [radarLatest?.day, radarLatest?.n]), page === "radar"); // eslint-disable-line react-hooks/exhaustive-deps
   const [trialSeen, setTrialSeen] = useState(false);
   // The invite loop: who joined from this member's invite and wasn't shown yet (Me.joined). Closed here, it goes at once.
   const [joinedOff, setJoinedOff] = useState<string[]>([]);
@@ -2204,7 +2218,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           onMessages={() => (setEditor(null), setDrawer(null), setPage("messages"))}
           onMessagesPage={page === "messages"}
           unlockTip={unlockLimitLine(me, view.ledger)}
-          onRadar={() => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar"))} radarHere={page === "radar"} // [ux ws3] Crystal Ball in the bar
+          onRadar={() => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar"))} radarHere={page === "radar"} radarNew={radarNew} // [ux ws3] Crystal Ball in the bar
         />
         {me.asMember && (
           <div className="tp-asmember" role="status">
@@ -2652,7 +2666,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               { group: "Find", label: "All companies", current: page === "table" && !currentView, onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               // Saved views: one entry. Its sheet lists every view to open, rename or remove; the filter rail lists them too.
               ...(views.length ? [{ group: "Find", label: "Saved views", hint: String(views.length), current: page === "table" && !!currentView, onClick: () => setViewsOpen(true) }] : []),
-              { group: "Find", label: FEATURE_NAME, current: page === "radar", onClick: () => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar")) },
+              { group: "Find", label: FEATURE_NAME, badge: radarNew, badgeOf: "new", current: page === "radar", onClick: () => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar")) },
               { group: "Find", label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },
               { group: "Find", label: "Rate benchmarks", current: page === "rates", onClick: () => (setDrawer(null), setPage("rates")) },
               ...(phone ? [{ group: "You", label: "Add what you know", onClick: () => openAdd() }] : []),
