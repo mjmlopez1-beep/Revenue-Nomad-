@@ -147,7 +147,8 @@ async function main() {
   const mo = (await todayView("tok-mo-today"))!;
   check("another member gets their own Me and nothing Sal unlocked", mo.me.id === "mem_mo" && mo.companies.every((c) => c.hidden) && !named(mo).length, named(mo));
   const ned = (await todayView("tok-noicp-today"))!;
-  check("without a profile: no rows, not ready", ned.radar.rows.length === 0 && !ned.radar.ready && ned.companies.length === 0, ned.radar);
+  // A function but no Ideal Fractional Profile: Crystal Ball looks at any company (lib/radar anyCompany), still capped at 4 here and still locked.
+  check("without a profile: ready, any company, still locked", ned.radar.ready && ned.radar.rows.length <= 4 && ned.companies.every((c) => c.hidden), ned.radar);
 
   // Since Tuesday: Sal follows a company, Mo adds a fact there.
   const follow = today.radar.rows[1].id;
