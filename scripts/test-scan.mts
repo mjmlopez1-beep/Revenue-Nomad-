@@ -16,7 +16,7 @@ import { atsSources, boardFromUrl, careersLink, discover, discoverOne, dueForDis
 import { parseJobFeed } from "../lib/scan/sources/findfractionaljobs";
 import { parseFreehire } from "../lib/scan/sources/freehire";
 import { webLink } from "../lib/links";
-import { collectOpenRoles, dedupeRoles, gtmByTitle, MAX_ROLES, roleFunction, rolesFromRaw, roleType, scanSources, screenJob, type ScanRawJob } from "../lib/scan/collect";
+import { collectOpenRoles, dedupeRoles, gtmByTitle, leadershipWork, MAX_ROLES, roleFunction, rolesFromRaw, roleType, scanSources, screenJob, type ScanRawJob } from "../lib/scan/collect";
 import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
 import { renderDigest } from "../lib/digest";
 import { signInEmail } from "../lib/email";
@@ -776,6 +776,63 @@ const budget = await checkPostings(Array.from({ length: 400 }, (_, i) => ({ key:
 eq("at most 300 fetches a run, the first in line first", [manyWeb.calls.length, budget.length, budget.some((o) => o.key === "k0"), budget.some((o) => o.key === "k399")], [300, 300, true, false]);
 check("  and never more than 4 at once", manyWeb.peak() <= 4, manyWeb.peak());
 
+/* ---------- part-time, temporary and outsourced leadership ---------- */
+console.log("\nLeadership seats by another name");
+
+const lw = (title: string, employment?: string, description = "", hoursPerWeek?: number) => leadershipWork({ title, employment, description, hoursPerWeek });
+eq("a leadership title that says part-time, temporary or outsourced", [
+  lw("Part-time VP of Marketing"),
+  lw("Part Time Head of Sales"),
+  lw("Outsourced CFO"),
+  lw("On-demand CMO"),
+  lw("Virtual Chief Revenue Officer"),
+  lw("vCFO for a SaaS startup"),
+  lw("Temporary Director of Customer Success"),
+], [
+  { type: "Fractional", where: "title" },
+  { type: "Fractional", where: "title" },
+  { type: "Fractional", where: "title" },
+  { type: "Fractional", where: "title" },
+  { type: "Fractional", where: "title" },
+  { type: "Fractional", where: "title" },
+  { type: "Interim", where: "title" },
+]);
+eq("  but never below Director, nor a 40-hour week", [lw("Part-time Marketing Coordinator"), lw("Part-time Sales Manager"), lw("Outsourced bookkeeper"), lw("Part-time VP Sales", undefined, "", 40), lw("Virtual Assistant to the CEO")], [null, null, null, null, null]);
+eq("a leadership seat the board's own field calls part-time, contract, freelance or interim", [
+  lw("Head of Marketing", "Part-time"),
+  lw("VP Sales", "Contract"),
+  lw("Director of RevOps", "freelance"),
+  lw("Chief Revenue Officer", "Interim"),
+  lw("VP Partnerships", "PartTime"),
+], [
+  { type: "Fractional", where: "body" },
+  { type: "Project", where: "body" },
+  { type: "Project", where: "body" },
+  { type: "Interim", where: "body" },
+  { type: "Fractional", where: "body" },
+]);
+eq("  but not when the field or the posting says full-time, and never below Director", [
+  lw("Head of Marketing", "Full-time"),
+  lw("Head of Marketing", "Full-time or part-time"),
+  lw("VP Sales", "Contract", "This is a full-time role with benefits."),
+  lw("Sales Manager", "Contract"),
+  lw("Account Executive", "Part-time"),
+], [null, null, null, null, null]);
+const widened = [
+  screenJob(job({ title: "Part-time VP of Marketing", description: "Lead our marketing team." }), NOW),
+  screenJob(job({ title: "Outsourced CFO", description: "Run our finance function." }), NOW),
+  screenJob(job({ title: "Head of Sales", employment: "Contract", description: "Build the sales team." }), NOW),
+  screenJob(job({ title: "Part-time Marketing Coordinator", description: "Help with social posts." }), NOW),
+  screenJob(job({ title: "Sales Manager", employment: "Part-time", description: "Manage a sales pod." }), NOW),
+];
+eq("the screen takes them, and still leaves out the seats below the bar", widened.map((r) => r.role ? [r.role.title, r.role.type] : r.skip), [
+  ["Part-time VP of Marketing", "Fractional"],
+  ["Outsourced CFO", "Fractional"],
+  ["Head of Sales", "Project"],
+  "full-time",
+  "full-time",
+]);
+
 /* ---------- career pages of companies on Merlin ---------- */
 console.log("\nCareer feeds");
 
@@ -837,6 +894,75 @@ eq(
 );
 check("  and each is filed under the company's own domain", feedRoles.every((r) => r.domain === "acmerobotics.example"), feedRoles.map((r) => r.domain));
 
+eq(
+  "boards from links on Recruitee, Personio, Breezy HR and Teamtailor",
+  [
+    boardFromUrl("https://acme.recruitee.com/o/fractional-cmo"),
+    boardFromUrl("https://acme-gmbh.jobs.personio.de/job/123"),
+    boardFromUrl("https://acme.jobs.personio.com/"),
+    boardFromUrl("https://acme.breezy.hr/p/abc-fractional-cro"),
+    boardFromUrl("https://acme.teamtailor.com/jobs/1-interim-cmo"),
+    boardFromUrl("https://www.recruitee.com/"),
+    boardFromUrl("https://app.breezy.hr/signin"),
+    boardFromUrl("https://career.teamtailor.com/"),
+  ],
+  [
+    { ats: "recruitee", slug: "acme" },
+    { ats: "personio", slug: "acme-gmbh" },
+    { ats: "personio", slug: "acme" },
+    { ats: "breezy", slug: "acme" },
+    { ats: "teamtailor", slug: "acme" },
+    null,
+    null,
+    null,
+  ],
+);
+eq("  and their feeds", (["recruitee", "personio", "breezy", "teamtailor"] as const).map((ats) => feedUrl({ ats, slug: "acme" })), [
+  "https://acme.recruitee.com/api/offers/",
+  "https://acme.jobs.personio.de/xml?language=en",
+  "https://acme.breezy.hr/json",
+  "https://acme.teamtailor.com/jobs.rss",
+]);
+const recruiteeFeed = { offers: [
+  { title: "Head of Growth", careers_url: "https://acme.recruitee.com/o/head-of-growth", published_at: `${daysAgo(2).slice(0, 10)} 09:00:00 UTC`, description: "<p>Lead growth two days a week.</p>", employment_type_code: "parttime", department: "Marketing", city: "Berlin", country: "Germany", company_name: "Acme Robotics", status: "published", max_hours: 16 },
+  { title: "Account Executive", careers_url: "https://acme.recruitee.com/o/ae", published_at: `${daysAgo(2).slice(0, 10)} 09:00:00 UTC`, description: "<p>Full-time.</p>", employment_type_code: "fulltime", company_name: "Acme Robotics", status: "published" },
+] };
+const personioXml = `<?xml version="1.0" encoding="UTF-8"?>
+<workzag-jobs>
+  <position><id>4411</id><subcompany>Acme Robotics GmbH</subcompany><office>Munich</office><department>Sales</department><name>VP Sales</name>
+    <jobDescriptions><jobDescription><name>Your role</name><value><![CDATA[<p>Build our sales team for six months.</p>]]></value></jobDescription></jobDescriptions>
+    <employmentType>freelance</employmentType><seniority>executive</seniority><schedule>part-time</schedule><createdAt>${daysAgo(3)}</createdAt></position>
+  <position><id>4412</id><office>Munich</office><department>Engineering</department><name>Backend Engineer</name>
+    <jobDescriptions><jobDescription><name>Role</name><value><![CDATA[<p>Python.</p>]]></value></jobDescription></jobDescriptions>
+    <employmentType>permanent</employmentType><schedule>full-time</schedule><createdAt>${daysAgo(3)}</createdAt></position>
+</workzag-jobs>`;
+const breezyFeed = [{ id: "b1", name: "Director of Marketing", url: "https://acme.breezy.hr/p/b1-director-of-marketing", published_date: daysAgo(1), type: { id: "contract", name: "Contract" }, location: { name: "Remote", is_remote: true }, department: "Marketing", company: { name: "Acme Robotics" } }];
+const teamtailorRss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:tt="https://teamtailor.com/locations"><channel><title>Acme Robotics</title><link>https://acme.teamtailor.com/jobs</link>
+<item><title>Interim CMO</title><description><![CDATA[<p>Cover our marketing for a quarter.</p>]]></description><pubDate>${new Date(NOW - 4 * 86_400_000).toUTCString()}</pubDate><link>https://acme.teamtailor.com/jobs/77-interim-cmo</link><tt:department>Marketing</tt:department><tt:locations><tt:location><tt:city>Stockholm</tt:city><tt:country>Sweden</tt:country></tt:location></tt:locations></item>
+</channel></rss>`;
+const parsed4 = [
+  parseFeed({ ats: "recruitee", slug: "acme" }, recruiteeFeed, co),
+  parseFeed({ ats: "personio", slug: "acme" }, personioXml, co),
+  parseFeed({ ats: "breezy", slug: "acme" }, breezyFeed, co),
+  parseFeed({ ats: "teamtailor", slug: "acme" }, teamtailorRss, co),
+];
+eq("the four new feeds are read", parsed4.map((p) => p?.length), [2, 2, 1, 1]);
+eq("  with the posting's link, its date and the board's employment type", parsed4.map((p) => [p?.[0]?.url, !!p?.[0]?.postedAt, p?.[0]?.employment ?? null, p?.[0]?.source]), [
+  ["https://acme.recruitee.com/o/head-of-growth", true, "parttime", "careers:recruitee"],
+  ["https://acme.jobs.personio.de/job/4411", true, "freelance, part-time", "careers:personio"],
+  ["https://acme.breezy.hr/p/b1-director-of-marketing", true, "Contract", "careers:breezy"],
+  ["https://acme.teamtailor.com/jobs/77-interim-cmo", true, null, "careers:teamtailor"],
+]);
+eq("  a Personio position's title is its own, not its description's", parsed4[1]?.map((j) => j.title), ["VP Sales", "Backend Engineer"]);
+eq("  and a body that is not the feed is not read", [parseFeed({ ats: "personio", slug: "x" }, "<html></html>", co), parseFeed({ ats: "teamtailor", slug: "x" }, "{}", co), parseFeed({ ats: "recruitee", slug: "x" }, { nope: 1 }, co)], [null, null, null]);
+const newFeedRoles = rolesFromRaw(parsed4.flatMap((p) => p ?? []), NOW);
+eq(
+  "their leadership seats that the board calls part-time, freelance or contract pass the screen; the full-time ones don't",
+  newFeedRoles.map((r) => [r.title, r.type]).sort(),
+  [["Director of Marketing", "Project"], ["Head of Growth", "Fractional"], ["Interim CMO", "Interim"], ["VP Sales", "Fractional"]],
+);
+
 /** A fake set of feeds and sites for discovery. */
 function fakeFeeds(feeds: Record<string, { status: number; body?: unknown }>, sites: Record<string, string> = {}) {
   const calls: string[] = [];
@@ -863,15 +989,15 @@ const guessed = fakeFeeds({ "https://boards-api.greenhouse.io/v1/boards/acmerobo
 eq("a guessed Greenhouse board counts when its name is the company's", (await discoverOne(co, guessed.feed, guessed.site))?.board, { ats: "greenhouse", slug: "acmerobotics" });
 const wrong = fakeFeeds({ "https://boards-api.greenhouse.io/v1/boards/acmerobotics": { status: 200, body: { name: "Acme Robotics Plumbing of Ohio" } }, "https://api.lever.co/v0/postings/acmerobotics?mode=json": { status: 200, body: [{ text: "Plumber", hostedUrl: "https://jobs.lever.co/acmerobotics/1", descriptionPlain: "Fix pipes." }] } });
 eq("  and not when it belongs to someone else", await discoverOne(co, wrong.feed, wrong.site), null);
-check("  a guess tries at most 2 names on 5 systems, plus the site", wrong.calls.length <= 11, wrong.calls);
-const cos = Array.from({ length: 50 }, (_, i) => ({ name: `Co ${i}`, domain: `co${i}.example.com` }));
+check("  a guess tries at most 2 names on 8 systems (Teamtailor only from a link), plus the site", wrong.calls.length <= 17 && !wrong.calls.some((u) => u.includes("teamtailor")), wrong.calls);
+const cos = Array.from({ length: 200 }, (_, i) => ({ name: `Co ${i}`, domain: `co${i}.example.com` }));
 const cache = {
   "co0.example.com": { at: new Date(NOW - 5 * 86_400_000).toISOString() },
   "co1.example.com": { at: new Date(NOW - 40 * 86_400_000).toISOString() },
   "co2.example.com": { at: new Date(NOW - 90 * 86_400_000).toISOString(), board: { ats: "lever" as const, slug: "co2" } },
 };
 const due = dueForDiscovery(cos, cache, NOW);
-eq("discovery: at most 30 a run, new ones first, a miss again only after 30 days, a found board never", [due.length, due.some((c) => c.domain === "co0.example.com"), due.some((c) => c.domain === "co2.example.com"), due[0]?.domain], [30, false, false, "co3.example.com"]);
+eq("discovery: at most 150 a run, new ones first, a miss again only after 30 days, a found board never", [due.length, due.some((c) => c.domain === "co0.example.com"), due.some((c) => c.domain === "co2.example.com"), due[0]?.domain], [150, false, false, "co3.example.com"]);
 const due2 = dueForDiscovery(cos.slice(0, 3), cache, NOW);
 eq("  the month-old miss is tried again", due2.map((c) => c.domain), ["co1.example.com"]);
 const disc = fakeFeeds({ "https://boards-api.greenhouse.io/v1/boards/co5": { status: 200, body: { name: "Co 5" } } });

@@ -14,7 +14,7 @@
  *               scan, and posted in the last 14 days when the board says (the weekly email's "new").
  *   seat        a seat's end month was recorded in the window (a member added or corrected it), or
  *               its status became Ended, and it ended in the last 6 months. Leadership seats only.
- *   funding     an event from lib/radar/sources/funding.ts (none until a provider is added).
+ *   funding     an event from lib/radar/sources/funding.ts (SEC Form D filings with RN_FUNDING=1, lib/funding).
  *   sales-build the company's career feed went from no full-time sales hires (AE, SDR, BDR) to some,
  *               or rose by two or more in 30 days (State.salesBuild, lib/table.ts noteSalesHires).
  *   departure   a leader the company's own website listed for a function is gone from it, read OK
@@ -67,9 +67,10 @@ export interface RawSignal {
   fn: string | null;
   /** An open role's title without the company's name or site in it. */
   title: string | null;
-  /** Funding only. */
+  /** Funding only. `fundNote`: the source and month a filing gives ("SEC filing, Oct 2026"). */
   round?: string | null;
   amount?: string | null;
+  fundNote?: string | null;
   co: CompanyFacts;
   /** Functions the company has a fractional hire in (any time), for "no fractional in your function yet". A fractional or interim leader on its website (lib/leaders) counts. */
   hiredFns: string[];
@@ -279,11 +280,11 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     push({ key: `end:${T.pubId(e.id)}`, kind: "seat", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, endReason: T.live(e, s, "endReason") });
   }
 
-  // 4. Funding, from the source (nothing until a provider is added).
+  // 4. Funding, from the source (SEC filings with RN_FUNDING=1, else nothing).
   for (const f of funding) {
     const at = Date.parse(f.at);
     if (!inWindow(at) || !g.companies.has(f.companyId)) continue;
-    push({ key: `fund:${T.pubId(f.companyId)}:${f.at.slice(0, 10)}`, kind: "funding", at: new Date(at).toISOString(), atMs: at, companyId: f.companyId, engagementId: null, fn: null, title: null, round: f.round, amount: f.amount });
+    push({ key: `fund:${T.pubId(f.companyId)}:${f.at.slice(0, 10)}`, kind: "funding", at: new Date(at).toISOString(), atMs: at, companyId: f.companyId, engagementId: null, fn: null, title: null, round: f.round, amount: f.amount, ...(f.note ? { fundNote: f.note } : {}) });
   }
 
   // 5. First sales hires posted, or a jump in them (the career feeds' counts).

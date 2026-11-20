@@ -74,6 +74,8 @@ run lock npx tsx scripts/test-company-lock.mts
 # Onboarding: suggestions and their heading, Find your seats cards, a new member's title, the weekly email offered at the end.
 serve onboard npx tsx scripts/test-onboard.mts
 run scan npx tsx scripts/test-scan.mts
+# Funding from SEC Form D filings (lib/funding): the EDGAR listings and Form D parsed from fixtures, fair access (User-Agent, spacing, backoff, stop on 403), the conservative match, the daily run on a made-up seed (never a person, never twice, never a new company, counts by reason), the radar's funding source and card. No network.
+run funding npx tsx scripts/test-funding.mts
 run seniority npx tsx scripts/test-seniority.mts
 run digest npx tsx scripts/test-digest.ts
 run messages npx tsx scripts/test-messages.mjs

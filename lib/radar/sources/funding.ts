@@ -1,11 +1,13 @@
 /**
  * Funding and growth events for the radar: a company in a member's Ideal Fractional Profile raised
- * money (or grew in a way a provider reports). THERE IS NO DATA SOURCE YET.
+ * money (or grew in a way a provider reports). The provider is SEC Form D filings (lib/funding),
+ * on with RN_FUNDING=1: the daily funding run matches each filing to a company on file and keeps
+ * the event, and this source gives back the ones recorded in the radar's window. Off, the source
+ * returns nothing, so no funding signal is ever made. Nothing here is made up.
  *
  * The radar asks `fundingSource()` for events between its last run and now, about the companies on
  * Merlin, and turns each one that matches a member's profile into a "funding" signal (every
- * function: a raise is news for any fractional). Until a provider is added, the source returns
- * nothing, so no funding signal is ever made. Nothing here is made up.
+ * function: a raise is news for any fractional).
  *
  * To add a provider: write a FundingSource whose `events` fetches from it (with a timeout, and an
  * empty list on any failure: a down provider must never stop the radar), and return it from
@@ -33,6 +35,8 @@ export interface FundingEvent {
   amount: string | null;
   /** The provider's name, for the pilot metrics and the record. */
   source: string;
+  /** Where and when, as the card says it after the amount: "SEC filing, Oct 2026". Then `amount` reads "about $5M". */
+  note?: string | null;
 }
 
 export interface FundingSource {
@@ -47,7 +51,20 @@ export const NO_FUNDING: FundingSource = {
   events: async () => [],
 };
 
-/** The source the radar reads. No provider is configured yet, so it is always NO_FUNDING. */
+/** SEC Form D filings, as the daily funding run kept them (lib/funding/run.ts). Never throws. */
+export const SEC_FILINGS: FundingSource = {
+  name: "SEC filings",
+  events: async (opts) => {
+    try {
+      return await (await import("../../funding/run")).storedFundingEvents(opts);
+    } catch (e) {
+      console.error("funding events not read", e);
+      return [];
+    }
+  },
+};
+
+/** The source the radar reads: SEC filings with RN_FUNDING=1, else NO_FUNDING. */
 export function fundingSource(): FundingSource {
-  return NO_FUNDING;
+  return process.env.RN_FUNDING === "1" ? SEC_FILINGS : NO_FUNDING;
 }
