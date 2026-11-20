@@ -31,10 +31,13 @@ export const TODAY_MAX_BYTES = 200_000;
 
 const dayOf = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : null);
 
-/** The answer is the small one the contract describes, not a full view or an error. */
+/**
+ * The answer is the small one the contract describes, not a full view or an error. It carries its
+ * rows' companies (TodayView in lib/viewWire.ts); a view carries its stats, and never a radar.
+ */
 export function isTodayAnswer(j: unknown): j is TodayAnswer {
-  const x = j as Partial<TodayAnswer> & { companies?: unknown };
-  return !!x && typeof x === "object" && !x.companies && !!x.radar && Array.isArray(x.radar.rows) && typeof x.radar.newCount === "number";
+  const x = j as Partial<TodayAnswer> & { stats?: unknown };
+  return !!x && typeof x === "object" && !x.stats && !!x.radar && Array.isArray(x.radar.rows) && typeof x.radar.newCount === "number";
 }
 
 /** Companies in the radar's days after the last visit (the latest day with any, on a first visit). */

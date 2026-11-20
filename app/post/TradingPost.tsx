@@ -37,7 +37,7 @@ import {
   icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
-import { firstViewPlace } from "../onboard/place";
+import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, listKeyOf, parsePlace, placeDefaults, placeSortDefault, presetFacets, weekN, type FirstList } from "./place";
 import { alertView } from "../onboard/suggest"; // [ux ws3]
 import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, startSteps, stepOneKind, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
@@ -65,6 +65,7 @@ import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViewList, SavedViews,
 import { HiredButton, HiredSentence } from "./Hired";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/lib/hired";
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
+import type { TodayView } from "@/lib/viewWire";
 import { fmtStamp } from "./RoleDate";
 import { Strip, sinceText } from "./Guide";
 import { TodayPage, rolesSince, useTodayData } from "./Today";
@@ -85,6 +86,14 @@ export interface TradingPostProps {
   signOut: () => Promise<void>;
   /** Where the app opens, read once on mount. "seats" straight after onboarding, when a seat on file carries the member's name. */
   start?: "seats";
+  /**
+   * The whole table hasn't arrived yet (app/Root.tsx): `view` holds the first screen's companies
+   * only, from GET ?first=1 (the list's first rows, with `first` its counts on the whole table) or
+   * GET ?today=1 (Today's companies, with `today` its answer). Null once the whole table is here.
+   */
+  partial?: { first?: FirstList; today?: TodayView } | null;
+  /** Called once the first screen is drawn (Root asks for the full view then). */
+  onDrawn?: () => void;
 }
 
 const PAGE = 50;
@@ -165,7 +174,7 @@ type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "mes
 
 /* ---------- the place in the address bar ---------- */
 
-const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners", "billing", "radar", "network"];
+const PAGES: Page[] = [...PLACE_PAGES];
 const PAGE_TITLE: Record<Page, string> = {
   today: "Today",
   table: "",
@@ -193,80 +202,18 @@ function chipEdges(el: HTMLElement) {
 /* The address helpers (encodeFilters, decodeFilters, absolutePlace, TYPE_PARAM) are in model.ts: the server and onboarding read places too. */
 
 /**
- * Filters an onboarding answer turns on ("No Sales seat yet" for a member after adjacent seats,
- * "Seat holder on file" for one after an intro). They narrow the All view only: the other views
- * and their counts ignore them, so Hiring now never reads 0 because of an answer given once.
- */
-const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
-/**
  * An onboarding preset the member took off (its chip, its switch, Clear all) stays off on their
  * next visit too: remembered in this browser, per member and goal.
  */
 const presetOffKey = (me: Me) => `tp_preset_off_${me.id}_${me.goal ?? ""}`;
 const presetsOff = (me: Me) => new Set((store.get(presetOffKey(me)) ?? "").split(",").filter(Boolean));
 
-/**
- * Where a member lands with nothing in the address bar: their first view (the saved view
- * onboarding ended on) while it is saved, else what their onboarding answer (Me.goal) set. "No
- * fractional <fn> yet" from either is the onboarding preset (PRESET_KEYS): it narrows All only,
- * and once taken off it stays off.
- */
-function defaultsFor(me: Me) {
-  const off = presetsOff(me);
-  const first = firstViewPlace(me);
-  const home = first ? placeFilters(first) : null;
-  if (home?.t && home.v) {
-    const s = SORTS.find((x) => x.key === new URLSearchParams(first!).get("s"))?.key;
-    return {
-      t: home.t,
-      v: home.v,
-      s: (s ?? (hiredOn(home.f) ? "hired" : !icpEmpty(me.icp) || namedFn(me.function) ? "best" : "fit")) as SortKey,
-      f: { ...home.f, notMine: home.f.notMine && !off.has("notMine") } as Filters,
-    };
-  }
-  return {
-    t: (me.goal === "intro" || me.goal === "roles" ? "engagements" : "companies") as RecordType,
-    // The goal key "friendly" is stored on profiles, so it stays. It opens on Repeat hirers now.
-    v: (me.goal === "friendly" ? "repeat" : me.goal === "roles" ? "hiring" : "all") as Tab,
-    // With an ideal client or a function on file, the best fit for them comes first (seats in their own function lead). Open roles read best newest first.
-    s: (!icpEmpty(me.icp) || (namedFn(me.function) && me.goal !== "roles") ? "best" : me.goal === "roles" ? "newest" : "fit") as SortKey,
-    // The table opens on their ideal client (the Ideal Fractional Profile pill).
-    f: {
-      ...EMPTY_FILTERS,
-      notMine: me.goal === "adjacent" && !!me.function && !off.has("notMine"),
-      fractionalNamed: me.goal === "intro" && !off.has("fractionalNamed"),
-      icp: !icpEmpty(me.icp),
-    } as Filters,
-  };
-}
-/**
- * The sort a view opens on until the member picks one: Hiring now reads newest first (their
- * function first), Recently hired the most recent hire first.
- */
-const sortDefault = (me: Me, v: Tab, f?: Filters): SortKey => (v === "hiring" ? "newest" : f && hiredOn(f) ? "hired" : defaultsFor(me).s);
-
+/* Where a member lands, the sort a view opens on and a place from the address: place.ts (GET ?first=1 reads them too). */
+const defaultsFor = (me: Me) => placeDefaults(me, presetsOff(me));
+const sortDefault = (me: Me, v: Tab, f?: Filters): SortKey => placeSortDefault(me, v, f, presetsOff(me));
 /** A place as an address query: the URL's own (read on mount and on Back and Forward), or a saved view's. */
-function readPlace(me: Me, from?: string) {
-  const d = defaultsFor(me);
-  const q = new URLSearchParams(from ?? (typeof window === "undefined" ? "" : window.location.search));
-  const t = (Object.keys(TYPE_PARAM) as RecordType[]).find((k) => TYPE_PARAM[k] === q.get("t")) ?? d.t;
-  // An old link's v=friendly opens Repeat hirers, the tab that replaced it.
-  const v = tabOf(q.get("v")) ?? d.v;
-  // Null: the member hasn't picked a sort, so the view's own default applies.
-  const s = SORTS.find((x) => x.key === q.get("s"))?.key ?? null;
-  const f = q.has("f") ? decodeFilters(q.get("f") === "-" ? "" : q.get("f")!) : d.f;
-  // An old "Use it in Claude" link (p=claude) opens Integrations at its Claude section.
-  // A day of the radar (?sig=2026-11-19, the email's and Slack's links, lib/radar radarPath) opens that day's companies,
-  // and so does an older email's "See who" (?upgrade=radar).
-  const sig = SIG_DAY_RE.test(q.get("sig") ?? "") ? q.get("sig") : null;
-  const p = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PAGES.find((x) => x === q.get("p")) ?? null;
-  // Nothing in the address that names a place (?c=, ?p=, ?v= and the rest): Today, the home. "?p=table" is the table at its defaults.
-  const home = !from && !PLACE_KEYS.some((k) => q.has(k));
-  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, home };
-}
+const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "undefined" ? "" : window.location.search, presetsOff(me), from);
 
-/** The address keys that name a place in the app. With none of them, / opens Today. */
-const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade", "plans"];
 /** The address is Today's: no place in it. */
 const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
 
@@ -300,8 +247,17 @@ const entryDepth = () => {
 const here = () => window.location.pathname + window.location.search;
 
 
-export default function TradingPost({ view, act, refresh, signOut, start }: TradingPostProps) {
+export default function TradingPost({ view, act, refresh, signOut, start, partial = null, onDrawn }: TradingPostProps) {
   const me = view.me!;
+  /** The whole table is still on its way: what needs it waits ("Loading all companies"), the first screen draws from what is here. */
+  const waiting = !!partial;
+  /** The first page's counts on the whole table (GET ?first=1), whichever list they were for. */
+  const pf = partial?.first ?? null;
+  // The first screen is drawn: the whole table can come now.
+  useEffect(() => {
+    onDrawn?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const layout = useLayout();
   const phone = layout === "phone";
   const touch = useMedia("(hover: none) and (pointer: coarse)");
@@ -485,22 +441,22 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     const e = ownerOf.get(t.id)?.engs.find((x) => x.id === t.id);
     return e?.yours ? { pricing: shown(e.cells.pricing) ?? null } : undefined;
   };
-  const hasIndustry = useMemo(() => infos.some((i) => i.c.cells.industry?.s === "value"), [infos]);
-  const hasRoles = useMemo(() => infos.some(hasRoleDates), [infos]);
+  const hasIndustry = useMemo(() => pf?.has.industry ?? infos.some((i) => i.c.cells.industry?.s === "value"), [infos, pf]);
+  const hasRoles = useMemo(() => pf?.has.roles ?? infos.some(hasRoleDates), [infos, pf]);
   const totals = useMemo(
-    () => ({ companies: infos.length, engagements: infos.reduce((n, i) => n + i.engs.length, 0), people: infos.reduce((n, i) => n + i.people.length, 0) }),
-    [infos],
+    () => pf?.totals ?? { companies: infos.length, engagements: infos.reduce((n, i) => n + i.engs.length, 0), people: infos.reduce((n, i) => n + i.people.length, 0) },
+    [infos, pf],
   );
   // The member's own seats (they are the linked seat holder) and what is missing on them.
   const seats = useMemo(() => mySeats(infos, me), [infos, me]);
   const seatN = seats.length;
   const seatMissing = useMemo(() => seatsMissing(seats), [seats]);
-  const seatStats = useMemo(() => ({ n: seatN, missing: seatMissing }), [seatN, seatMissing]);
+  const seatStats = useMemo(() => pf?.steps.seats ?? { n: seatN, missing: seatMissing }, [seatN, seatMissing, pf]);
   // [google network] null with RN_GOOGLE off: no menu entry, no page.
   const network = useNetwork().view;
   /** What Get started step 1 can point at in the member's whole table, and whether the table already shows one they paid for (getStarted.ts). */
-  const stepKind = useMemo(() => stepOneKind(infos), [infos]);
-  const stepSeen = useMemo(() => holderSeen(infos) || (stepKind === "person" && personSeen(infos)), [infos, stepKind]);
+  const stepKind = useMemo(() => pf?.steps.kind ?? stepOneKind(infos), [infos, pf]);
+  const stepSeen = useMemo(() => pf?.steps.seen ?? (holderSeen(infos) || (stepKind === "person" && personSeen(infos))), [infos, stepKind, pf]);
   const allRows = useMemo(() => rowsFor(recordType, infos), [recordType, infos]);
   /* The onboarding preset (PRESET_KEYS) narrows the All view only. */
   const [preset, setPreset] = useState<ToggleKey[]>(() => {
@@ -559,19 +515,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     () => (presetOn.length && !wide ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, cellMe).facets : null),
     [presetOn, wide, allRows, tab, unpreset, filters, q, cellMe],
   );
-  const facets = useMemo(() => {
-    if (!otherFacets) return facets0;
-    const o = otherFacets.tabs;
-    return tab === "all"
-      ? {
-          ...facets0,
-          tabs: { ...o, all: facets0.tabs.all },
-          hiringMine: otherFacets.hiringMine,
-          // Open now counts what picking it lists (the preset steps aside for it), the Hiring now count.
-          lists: { ...facets0.lists, roleState: { ...facets0.lists.roleState, "Open now": otherFacets.lists.roleState["Open now"] } },
-        }
-      : { ...facets0, tabs: { ...facets0.tabs, all: o.all } };
-  }, [facets0, otherFacets, tab]);
+  const facetsLive = useMemo(() => presetFacets(facets0, otherFacets, tab), [facets0, otherFacets, tab]);
   /** Filters changed from a view the preset doesn't narrow: the preset stays for All, unless the member set that filter here themselves. */
   const setEff = (nf: Filters) => {
     if (wide) {
@@ -615,9 +559,17 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   /** What Hiring now lists while it leads with the member's function. Null: every function (Show all functions), or a search. */
   const hireList: Row[] | null = hireFn && fnSplit && !allFns && !q.trim() ? (fnSplit.mine.length ? fnSplit.mine : lifted ? liftRows! : NO_ROWS) : null;
   const fnOnly = !!hireList;
-  /** Rows with a role new this week (in `fn`, when given): the "4 new this week" on Hiring now. */
-  const weekN = (rows: Row[], fn: string | null) =>
-    rows.filter((r) => (r.e ? [r.e] : r.i.engs).some((e) => newThisWeek(e) && (!fn || shown(e.cells.function) === fn))).length;
+  /*
+   * Before the whole table is here: the first page's counts, when they are for the list on screen
+   * (the same list key). Another list (a filter, a view or a search picked since) waits for the
+   * whole table: its rows and counts aren't here (listWaits).
+   */
+  const listKey0 = listKeyOf({ t: recordType, tab, sort, q, eff, filters, presetOn, all: allFns, fitOnly, wide });
+  const first = pf && pf.key === listKey0 ? pf : null;
+  const listWaits = waiting && !first;
+  const facets = first?.facets ?? (waiting && pf ? pf.facets : facetsLive);
+  /** Hiring now's own numbers: the first page's, worked out on the whole table, until it is here. */
+  const hireN = first?.hire ?? null;
   /** What Hiring now counts, in the list's own noun: "7 open Sales roles", "7 companies hiring Sales". */
   const hireWords = (n: number, fn: string | null) =>
     recordType === "companies"
@@ -632,7 +584,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    * Search reads only what the member can see, never a locked value (applyFilters). On Hiring
    * now they count what it lists: the member's function, with the profile lifted when it is.
    */
-  const typeCounts = useMemo(() => {
+  const typeCountsLive = useMemo(() => {
     const out = {} as Record<RecordType, number>;
     const f = lifted ? { ...eff, icp: false } : eff;
     for (const t of RECORD_TYPES) {
@@ -644,13 +596,15 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     }
     return out;
   }, [recordType, filtered, hireList, hireFn, lifted, infos, eff, tab, q, cellMe]);
+  const typeCounts = first?.typeCounts ?? typeCountsLive;
   const searchCounts = q.trim() ? typeCounts : null;
   /** While a search is narrowed by the profile or filters: the matches they keep out ("3 more outside your filters · Show them"). */
   const narrowedBy = !wide && q.trim() ? { icp: icpApplies(eff, tab, me), filters: activeCount(eff) > 0 } : null;
-  const outside = useMemo(() => {
+  const outsideLive = useMemo(() => {
     if (!narrowedBy || !(narrowedBy.icp || narrowedBy.filters)) return 0;
     return Math.max(0, applyFilters(allRows, EMPTY_FILTERS, tab, q, cellMe, true).rows.length - filtered.length);
   }, [narrowedBy?.icp, narrowedBy?.filters, allRows, tab, q, cellMe, filtered]); // eslint-disable-line react-hooks/exhaustive-deps
+  const outside = first ? first.outside : outsideLive;
   // Name matches come first while searching (decision 13).
   const sortedLive = useMemo(
     () => sortRows(hireList ?? filtered, sort, tab === "needs", q, { me: cellMe, fnFirst: hireFn, hire: hireCtx }),
@@ -676,6 +630,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       .map((x) => x.r);
   }, [sortedLive, frozenAt]);
   const visible = useMemo(() => sorted.slice(0, limit), [sorted, limit]);
+  /** How many rows the list has: the whole table's count while only its first page is here. */
+  const listN = first ? first.n : sorted.length;
   /*
    * The radar's day (page "radar", Radar.tsx): one day's companies from the member's signals, the
    * page the email's and Slack's links open. `sigDay` null: the latest day with something in it.
@@ -689,7 +645,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // Counts and sheets update on the next frame; the long list behind them follows when it can.
   // The record type travels with its rows, so a deferred list never renders rows of another type.
   const listData = useMemo(() => ({ type: recordType, rows: visible }), [recordType, visible]);
-  const list = useDeferredValue(listData);
+  // The first screen (before the whole table is here): the rows above the fold paint first, the rest of the page right after.
+  const list = useDeferredValue(listData, waiting ? { type: recordType, rows: visible.slice(0, phone ? 6 : 20) } : undefined);
   const nFilters = activeCount(eff);
   // While the Recently hired sentence is up it shows its own filters (the functions, the window, "No fractional Sales yet"), so the chips leave them out.
   const chips = activeChips(eff).filter((c) => !(hiredActive && (c.id === "hired" || (c.id === "notMine" && !!namedFn(me.function)))));
@@ -756,17 +713,27 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
 
   // Followed companies with news since the last visit (frozen at load).
   // Bonuses paid since then (an invite, two confirmations): nothing else says they came (WORD-9).
-  const [since] = useState(() => {
+  // Counted on the whole table: before it lands (waiting), counted again when it does.
+  const sinceOf = (v: View) => {
     const prev = previousVisit();
     if (!prev) return { at: null as string | null, n: 0, invite: 0, confirm: 0 };
-    const paid = (r: string) => view.ledger.filter((l) => l.reason === r && l.delta > 0 && l.at > prev);
+    const paid = (r: string) => v.ledger.filter((l) => l.reason === r && l.delta > 0 && l.at > prev);
     return {
       at: prev,
-      n: view.companies.filter((c) => c.following && c.updatedAt && c.updatedAt > prev).length,
+      // Before the whole table is here, the first page's count of them (on the whole table).
+      n: v === view && pf?.follows !== undefined ? pf.follows : v.companies.filter((c) => c.following && c.updatedAt && c.updatedAt > prev).length,
       invite: paid("referral").reduce((n, l) => n + l.delta, 0),
       confirm: paid("confirm").length,
     };
-  });
+  };
+  const [since, setSince] = useState(() => sinceOf(view));
+  const waitedFor = useRef(waiting);
+  useEffect(() => {
+    if (!waitedFor.current || waiting) return;
+    waitedFor.current = false;
+    setSince(sinceOf(view));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting]);
   const [bonusOff, setBonusOff] = useState(false);
   /* Today: its data once it has shown on this visit, and the trial-ended card closed here. */
   const [todayShown, setTodayShown] = useState(page === "today");
@@ -774,7 +741,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     if (page === "today") setTodayShown(true);
   }, [page]);
   const rolesNew = useMemo(() => (todayShown ? rolesSince(infos, me.function, since.at) : 0), [todayShown, infos, me.function, since.at]);
-  const today = useTodayData(todayShown, since.at, { roles: rolesNew, follows: since.n });
+  const today = useTodayData(todayShown, since.at, { roles: rolesNew, follows: since.n }, partial?.today);
   const [trialSeen, setTrialSeen] = useState(false);
   // The invite loop: who joined from this member's invite and wasn't shown yet (Me.joined). Closed here, it goes at once.
   const [joinedOff, setJoinedOff] = useState<string[]>([]);
@@ -1566,7 +1533,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    */
   const nudgeFor = (where: "today" | "table") => {
     const m = where === "today" ? me : slotMe;
-    const next = checkOff || (where === "today" && steps.next?.action === "unlock") ? null : steps.next;
+    const next = checkOff || (where === "today" && steps.next?.action === "unlock") || (waiting && !pf) ? null : steps.next;
     return pickNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined });
   };
   /** What a nudge's button does. Unknown actions open the page of that name, or do nothing. */
@@ -1707,12 +1674,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    * functions' roles by default, so its count is that. On Hiring now itself, the list's own length.
    */
   const myFn = namedFn(me.function);
-  const hiringLift = useMemo(() => {
-    if (tab === "hiring" || !myFn || allFns || searching || facets.hiringMine > 0 || !icpApplies(unpreset, "hiring", me)) return 0;
+  const hiringLiftLive = useMemo(() => {
+    if (waiting || tab === "hiring" || !myFn || allFns || searching || facets.hiringMine > 0 || !icpApplies(unpreset, "hiring", me)) return 0;
     return splitByFn(applyFilters(allRows, { ...unpreset, icp: false }, "hiring", q, cellMe, true).rows, myFn).mine.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, myFn, allFns, searching, facets.hiringMine, unpreset, me.icp, allRows, q, cellMe]);
-  const hiringN = !myFn || allFns || searching ? facets.tabs.hiring : tab === "hiring" ? sorted.length : facets.hiringMine || hiringLift;
+  }, [waiting, tab, myFn, allFns, searching, facets.hiringMine, unpreset, me.icp, allRows, q, cellMe]);
+  const hiringLift = first ? first.hiringLift : hiringLiftLive;
+  const hiringN = !myFn || allFns || searching ? facets.tabs.hiring : tab === "hiring" ? listN : facets.hiringMine || hiringLift;
   const tabCount = (t: Tab) => (t === "hiring" ? hiringN : facets.tabs[t]);
   const viewButtons = TABS.map((t) => (
         <button
@@ -1757,7 +1725,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
 
   const qt = q.trim();
   // Nothing on screen matches the search: the text is looked up as a company's exact name or website.
-  const localNone = !!qt && RECORD_TYPES.every((t) => !typeCounts[t.key]) && outside === 0;
+  const localNone = !!qt && !listWaits && RECORD_TYPES.every((t) => !typeCounts[t.key]) && outside === 0;
   useEffect(() => setFindLocalNone(localNone), [localNone]);
   /** Companies found by exact name that the list doesn't show already, on top of the results. */
   const foundRows = foundInfos.filter((i) => !sorted.some((r) => r.i.c.id === i.c.id));
@@ -1777,7 +1745,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       ))}
     </ul>
   );
-  const empty = sorted.length === 0 && (foundRows.length ? <></> : (
+  const empty = !listWaits && sorted.length === 0 && (foundRows.length ? <></> : (
     <Empty
       q={qt}
       find={found && !found.recs.length ? { none: !!found.none, error: found.error ?? null } : null}
@@ -1810,9 +1778,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         hireList && hireFn && fnSplit
           ? {
               fn: hireFn,
-              outside: fitOnly && liftRows ? liftRows.length : 0,
-              outsideText: liftRows ? hireWords(liftRows.length, hireFn) : "",
-              others: fnSplit.others.length,
+              outside: fitOnly && liftRows ? (hireN ? hireN.lift : liftRows.length) : 0,
+              outsideText: liftRows ? hireWords(hireN ? hireN.lift : liftRows.length, hireFn) : "",
+              others: hireN ? hireN.others : fnSplit.others.length,
               onOutside: () => setFitOnly(false),
               onOthers: () => setAllFns(true),
               onAlert: () => { const a = alertView(hireFn, me.icp ?? null); const had = views.find((v) => v.place === a.place); const cap = me.plan?.limits.savedViews; if (had) return had.email ? toast(`You get new ${hireFn} roles by email already.`) : emailView(had, true); if (cap != null && views.length >= cap) return openPlans("views"); void act({ type: "savedView", op: "save", ...a, email: true }); }, // [ux ws3] Get alerts for new roles
@@ -1830,7 +1798,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       }
     />
   ));
-  const more = sorted.length > limit && (
+  const more = !waiting && sorted.length > limit && (
     <button type="button" className="tp-more-btn" onClick={() => setLimit((l) => l + PAGE)}>
       Show {Math.min(PAGE, sorted.length - limit)} more{" "}
       <span className="num tp-more-of">
@@ -1857,14 +1825,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    * week · 25 in other functions". The tab's count, the list switch and the toolbar count say the
    * same 7. While none of their function's roles fit the profile, the line says so and lists them all.
    */
-  const othersN = fnSplit?.others.length ?? 0;
+  const othersN = hireN ? hireN.others : fnSplit?.others.length ?? 0;
   const hireLine = (() => {
     if (!hireFn || !fnSplit || qt) return null;
     if (lifted)
       return (
         <>
           <span>
-            None of the <b className="num">{hireWords(liftRows!.length, hireFn)}</b> fit your profile right now. Here they all are.
+            None of the <b className="num">{hireWords(hireN ? hireN.lift : liftRows!.length, hireFn)}</b> fit your profile right now. Here they all are.
           </span>
           <button type="button" className="tp-flink" onClick={() => setFitOnly(true)}>
             Only my profile
@@ -1877,12 +1845,12 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         </>
       );
     if (allFns) {
-      const fresh = weekN(sorted, null);
+      const fresh = hireN ? hireN.freshAll : weekN(sorted, null);
       return (
         <>
           <span>
-            <b className="num">{hireWords(sorted.length, null)}</b>
-            {fresh > 0 && <span className="num">, {fresh} new this week</span>} · <span className="num">{fnSplit.mine.length}</span> in {hireFn}
+            <b className="num">{hireWords(listN, null)}</b>
+            {fresh > 0 && <span className="num">, {fresh} new this week</span>} · <span className="num">{hireN ? hireN.mine : fnSplit.mine.length}</span> in {hireFn}
           </span>
           <button type="button" className="tp-flink" onClick={() => setAllFns(false)}>
             Only {hireFn}
@@ -1891,11 +1859,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       );
     }
     if (!hireList?.length) return null;
-    const fresh = weekN(hireList, hireFn);
+    const fresh = hireN ? hireN.fresh : weekN(hireList, hireFn);
     return (
       <>
         <span>
-          <b className="num">{hireWords(hireList.length, hireFn)}</b>
+          <b className="num">{hireWords(listN, hireFn)}</b>
           {fresh > 0 && <span className="num">, {fresh} new this week</span>}
           {othersN > 0 && (
             <>
@@ -1926,13 +1894,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const icpOn = icpApplies(eff, tab, me);
   // Confirmed matches and maybes (a part the profile asks for isn't on file), so the count says what it mixes (C17).
   // Counted on the rows listed (Hiring now lists the member's function alone), so the pill never counts rows the list doesn't show.
-  const icpSplit = useMemo(() => {
+  const icpSplitLive = useMemo(() => {
     if (!icpOn) return null;
     const listed = hireList ?? filtered;
     let match = 0;
     for (const r of listed) if (icpMatch(me.icp, r.i.c) === "match") match++;
     return { match, maybe: listed.length - match };
   }, [icpOn, hireList, filtered, me.icp]);
+  const icpSplit = first ? first.icpSplit : icpSplitLive;
   /*
    * The pill stays up while it narrows the list, a search included. It goes only where the profile
    * doesn't apply: a search widened to everything, the member's own lists (Following, Unlocked),
@@ -1945,7 +1914,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       icp={me.icp}
       on={icpOn}
       everyone={facets.everyone}
-      shownN={sorted.length}
+      shownN={listN}
       split={icpSplit}
       noun={noun as [string, string]}
       onEdit={() => setIcpOpen(true)}
@@ -1962,7 +1931,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       type={recordType}
       tab={tab}
       icpOn={icpOn}
-      shownN={sorted.length}
+      shownN={listN}
       sort={sort}
       onEditIcp={() => setIcpOpen(true)}
       onOff={stopHired}
@@ -2144,14 +2113,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </div>
   );
   // Following counts companies. On the seats or people list, say how many rows that is ("5 seats at 1 company").
-  const followCos = tab === "following" && recordType !== "companies" ? new Set(sorted.map((r) => r.i.c.id)).size : 0;
+  const followCos = !waiting && tab === "following" && recordType !== "companies" ? new Set(sorted.map((r) => r.i.c.id)).size : 0;
   const followLine = followCos > 0 && (
     <p className="tp-scanline">
-      {plural(sorted.length, noun[0], noun[1])} at {plural(followCos, "company", "companies")}
+      {plural(listN, noun[0], noun[1])} at {plural(followCos, "company", "companies")}
     </p>
   );
   /** "72 companies", said again to screen readers when it changes. */
-  const countText = `${plural(sorted.length, noun[0], noun[1])}${qt ? ` matching ${qt}` : ""}`;
+  const countText = `${plural(listN, noun[0], noun[1])}${qt ? ` matching ${qt}` : ""}`;
   const skip = (e: React.MouseEvent) => {
     // Move focus without a hash in the address bar (it would be a history entry of its own).
     e.preventDefault();
@@ -2252,7 +2221,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               me={me}
               infos={infos}
               byId={byId}
-              firstRow={sorted[0] ?? null}
+              firstRow={listWaits ? null : sorted[0] ?? null}
+              waiting={listWaits}
               data={today.data}
               failed={today.failed}
               sinceAt={since.at}
@@ -2270,6 +2240,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               onFollows={() => (setDrawer(null), setPage("table"), setTabPicked("following"), setRecordType("companies"))}
               openCompany={(id) => openCompany(id)}
             />
+          </main>
+        ) : waiting && page !== "table" ? (
+          <main className="tp-main tp-main-page">
+            <AllLoading />
           </main>
         ) : page === "credits" ? (
           <main className="tp-main tp-main-page">
@@ -2375,13 +2349,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             )}
             {qt && (
               <div className="tp-pcount">
-                {!sorted.length && foundRows.length ? (
+                {!listN && foundRows.length ? (
                   <span>
                     <b className="num">{foundRows.length}</b> found by its exact name
                   </span>
                 ) : (
                 <span>
-                  <b className="num">{sorted.length}</b>
+                  <b className="num">{listN}</b>
                   {tab !== "all" ? (
                     <>
                       {" "}
@@ -2391,7 +2365,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                   matching <span className="tp-q">{qt}</span>
                 </span>
                 )}
-                {tab !== "all" && sorted.length > 0 && (
+                {tab !== "all" && listN > 0 && (
                   <button type="button" className="tp-flink" onClick={() => setTab("all")}>
                     Show all
                   </button>
@@ -2406,7 +2380,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             {followLine}
             <div id="tp-results" tabIndex={-1} className="tp-presults">
               {foundStrip}
-              {empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
+              {listWaits ? <AllLoading phone /> : empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
             </div>
             {more}
             {scanNote}
@@ -2457,13 +2431,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 {hiredBtn}
                 <span className="tp-toolbar-sp" />
                 <span className="tp-count" aria-live="polite" aria-atomic="true">
-                  {!sorted.length && foundRows.length ? (
+                  {!listN && foundRows.length ? (
                     <>
                       <b className="num">{foundRows.length}</b> found by its exact name
                     </>
                   ) : (
                     <>
-                      <b className="num">{sorted.length}</b> {sorted.length === 1 ? noun[0] : noun[1]}
+                      <b className="num">{listN}</b> {listN === 1 ? noun[0] : noun[1]}
                       {qt && (
                         <>
                           {" "}
@@ -2486,7 +2460,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               <div className="tp-frame-box" ref={frameBoxRef}>
                 <div className="tp-frame" ref={frameRef} id="tp-results" tabIndex={-1}>
                   {foundStrip}
-                  {empty || (
+                  {listWaits ? <AllLoading /> : empty || (
                     <>
                       <DataTable
                         type={list.type}
@@ -2547,7 +2521,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                   </button>
                 )}
                 <button type="button" className="btn btn-pine btn-lg tp-grow" onClick={() => setSideOverlay(false)}>
-                  Show {plural(sorted.length, noun[0], noun[1])}
+                  Show {plural(listN, noun[0], noun[1])}
                 </button>
               </div>
             }
@@ -2812,6 +2786,27 @@ function CreditLine({ me, onShowAdd, label, inCard }: { me: Me; onShowAdd: () =>
     >
       {text}
     </Strip>
+  );
+}
+
+/**
+ * Before the whole table is here (only the first screen's companies are): a list or a page that
+ * needs all of them says so, in the shape of what is coming. It lands in a second or two.
+ */
+function AllLoading({ phone }: { phone?: boolean }) {
+  return (
+    <div className="tp-allwait" role="status" aria-busy>
+      <p className="tp-allwait-t">Loading all companies…</p>
+      {phone
+        ? [0, 1].map((k) => (
+            <div key={k} className="tp-allwait-card" aria-hidden>
+              <span className="td-skel" style={{ width: "55%", height: 16 }} />
+              <span className="td-skel" style={{ width: "80%" }} />
+              <span className="td-skel" style={{ width: "65%" }} />
+            </div>
+          ))
+        : null}
+    </div>
   );
 }
 

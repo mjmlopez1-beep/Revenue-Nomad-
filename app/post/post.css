@@ -7290,3 +7290,24 @@ div.tp-pcard-when {
 .tp-top-phone:has(.tp-ptype) .tp-brand-phone {
   display: none;
 }
+/* Before the whole table is here (TradingPost AllLoading): a list or page that needs it says so. */
+.tp-allwait {
+  display: grid;
+  gap: 12px;
+  padding: 24px 16px;
+}
+.tp-allwait-t {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.tp-allwait-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  height: 150px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}

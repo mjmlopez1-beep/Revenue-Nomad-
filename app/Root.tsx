@@ -22,7 +22,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
-import { ToastProvider, calmRefusal, fetchView, patchView, post, useToast, type Act, type ActPatch, type View, type ViewResult } from "./ui/shared";
+import { ToastProvider, calmRefusal, fetchFirst, fetchView, patchView, post, useToast, type Act, type ActPatch, type FirstResult, type View, type ViewResult } from "./ui/shared";
 import type { TradingPostProps } from "./post/TradingPost";
 import type { OnboardingProps } from "./onboard/Onboarding";
 import type { Me } from "@/lib/tableTypes";
@@ -163,16 +163,32 @@ let onboardingNow: React.ComponentType<OnboardingProps & { viewReady?: boolean }
  * The app reads it once, when it mounts.
  */
 const TradingPost = dynamic<TradingPostProps>(() => import("./post/TradingPost"), { ssr: false, loading: appLoading });
+/** The app's own component once its code is here, drawn as it is (as onboardingNow): the first screen shows the moment it can. */
+let tradingPostNow: React.ComponentType<TradingPostProps> | null = null;
+const loadTradingPost = () =>
+  import("./post/TradingPost").then(
+    (m) => (tradingPostNow = m.default),
+    () => null,
+  );
 
 /*
  * Start the view and the likely next chunk as soon as this file runs, not after the first
  * render: they download side by side. A sign-in link (?k=) signs in first, so it waits.
+ *
+ * A member (as far as this browser knows) gets the first screen first: GET ?first=1 (fetchFirst),
+ * a few KB, Today's answer on Today's address and the list's first rows elsewhere. The app draws
+ * from it, and the full view (megabytes of JSON to read and work through on a phone) is asked for
+ * once that is on screen. Anyone else gets the view at once (signed out it is the counts only).
  */
 let early: Promise<ViewResult> | null = null;
+let earlyFirst: Promise<FirstResult | null> | null = null;
 if (typeof window !== "undefined") {
   const q = new URLSearchParams(window.location.search);
-  if (!q.has("k")) early = fetchView();
-  if (readHint()) void import("./post/TradingPost");
+  if (!q.has("k")) {
+    if (readHint()) earlyFirst = fetchFirst(window.location.search);
+    else early = fetchView();
+  }
+  if (readHint()) void loadTradingPost();
   else void import("./landing/Landing");
 }
 
@@ -201,6 +217,18 @@ const othersChanged = (known: string | null, answer: string | null | undefined) 
   const k = parseVersion(known);
   return !a || !k || a.boot !== k.boot || a.n > k.n + 1;
 };
+
+/** Run `f` once the page has painted what was just set (a frame, then a task), or after half a second at most (a hidden tab has no frames). */
+function afterPaint(f: () => void) {
+  let done = false;
+  const go = () => {
+    if (done) return;
+    done = true;
+    f();
+  };
+  requestAnimationFrame(() => setTimeout(go, 0));
+  setTimeout(go, 500);
+}
 
 /** Sign in's note for a visitor who followed a message email's link while signed out. */
 const MESSAGE_NOTE = "Sign in to read your message.";
@@ -277,9 +305,51 @@ function App() {
   const syncRef = useRef<() => void>(() => {});
   /** A view with companies reached this page (deriveInSlices ran for it). */
   const hadTable = useRef(false);
+  /**
+   * The view on screen is the first screen only (GET ?first=1: Today's companies, or the list's
+   * first rows' companies), and the full view is on its way. TradingPost draws from it, and waits
+   * for the full view for anything else.
+   */
+  const [partial, setPartial] = useState<Pick<FirstResult, "first" | "today"> | null>(null);
+  /** The app's component as first drawn (tradingPostNow or the dynamic wrapper), kept so it never mounts twice. */
+  const postRef = useRef<React.ComponentType<TradingPostProps> | null>(null);
+  /** What to do once TradingPost has drawn the first screen (ask for the full view). */
+  const drawnThen = useRef<(() => void) | null>(null);
+  const onDrawn = useCallback(() => {
+    const f = drawnThen.current;
+    drawnThen.current = null;
+    f?.();
+  }, []);
 
   const refresh = useCallback(async () => {
     const g = ++gen.current;
+    const firstScreen = earlyFirst;
+    earlyFirst = null;
+    if (firstScreen) {
+      // With the app's code, so it draws the moment the answer is set (not behind the dynamic wrapper's loading frame).
+      const [f] = await Promise.all([firstScreen.catch(() => null), tradingPostNow ?? loadTradingPost()]);
+      if (f?.view.me && g === gen.current && !loaded.current) {
+        loaded.current = true;
+        writeHint(true);
+        setFailed(null);
+        version.current = f.view.version ?? null;
+        // The full view is owed at once, even when an action overtakes its download (see below).
+        waitingView.current = true;
+        setViewReady(false);
+        // Onboarding opens on Me alone, as after joining: its first view waits for the full table.
+        const onboarded = !!f.view.me.onboarded;
+        setView(onboarded ? f.view : { ...f.view, companies: [] });
+        setPartial(onboarded ? { first: f.first, today: f.today } : null);
+        // The full view once the first screen is on screen (TradingPost's onDrawn), so reading it never holds up that paint.
+        // Onboarding asks for it at once, as after joining.
+        if (onboarded) {
+          drawnThen.current = () => afterPaint(() => syncRef.current());
+          // Should it never draw (a chunk that failed to load), the full view comes all the same.
+          setTimeout(onDrawn, 3000);
+        } else syncRef.current();
+        return;
+      }
+    }
     let r: ViewResult;
     try {
       const pending = early;
@@ -324,8 +394,9 @@ function App() {
     stale.current = false;
     waitingView.current = false;
     setViewReady(true);
+    setPartial(null);
     setView((prev) => reuse(prev, v));
-  }, [toast]);
+  }, [toast, onDrawn]);
   refreshRef.current = refresh;
 
   /**
@@ -538,11 +609,14 @@ function App() {
     const Ob = onboardingNow ?? Onboarding;
     return <Ob view={view} act={act} onDone={onboarded} onSkip={onSkip} viewReady={viewReady} />;
   }
-  // Done with onboarding before its first table landed: the app's frame until it does.
-  if (!viewReady) return <Skeleton member />;
+  // Done with onboarding before its first table landed: the app's frame until it does. The first screen draws without it.
+  if (!viewReady && !partial) return <Skeleton member />;
   // Straight from onboarding, a member with seats under their name starts on those seats.
   const start = firstRun.current && !skipped.current && view.companies.some((c) => c.engagements.some((e) => e.yours)) ? "seats" : undefined;
-  return <TradingPost view={view} act={act} refresh={refresh} signOut={signOut} start={start} />;
+  // Picked once: switching from the dynamic wrapper to the component itself later would mount the app again.
+  postRef.current ??= tradingPostNow ?? TradingPost;
+  const Post = postRef.current;
+  return <Post view={view} act={act} refresh={refresh} signOut={signOut} start={start} partial={partial} onDrawn={partial ? onDrawn : undefined} />;
 }
 
 export default function Root() {

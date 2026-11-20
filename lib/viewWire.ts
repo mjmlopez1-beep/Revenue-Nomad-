@@ -43,6 +43,15 @@ export interface TodayView {
    * the table shows them. Some are left off when they would take the answer past its size.
    */
   companies: CompanyRec[];
+  /**
+   * What the page needs besides to draw the app before the full view (app/Root.tsx makes a View of
+   * this answer until it lands): the credits a new member starts with (View.stats.starter),
+   * whether email is on (View.email), the help addresses (View.contact) and the table's version.
+   */
+  starter?: number;
+  email?: boolean;
+  contact?: View["contact"];
+  version?: string;
 }
 
 /** The cells the view sends for each record: every field but the identity ones (see fullView in lib/table.ts). */

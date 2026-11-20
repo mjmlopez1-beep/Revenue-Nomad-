@@ -33,7 +33,7 @@ import { freeCompanyNow } from "./display";
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
 import { plural } from "./hooks";
-import { TODAY_MAX_BYTES, TODAY_ROWS, isTodayAnswer, radarSince, sinceWords, type TodayData } from "./todayModel";
+import { TODAY_MAX_BYTES, TODAY_ROWS, isTodayAnswer, radarSince, sinceWords, type TodayAnswer, type TodayData } from "./todayModel";
 import "./today.css";
 
 export { rolesSince, type TodayData } from "./todayModel";
@@ -43,16 +43,26 @@ export { rolesSince, type TodayData } from "./todayModel";
 /**
  * Today's data: ?today=1 when the server has it, else the radar's own day (?radar=1) with the
  * since counts worked out here. `local` gives the counts the page can work out itself. Nothing is
- * asked for until `active` (Today has shown on this visit), and then once.
+ * asked for until `active` (Today has shown on this visit), and then once. `initial`: the ?today=1
+ * answer the page opened with (app/Root.tsx asks for it before the whole table), read instead of
+ * asking again.
  */
-export function useTodayData(active: boolean, sinceIso: string | null, local: { roles: number; follows: number }): { data: TodayData | null; failed: boolean } {
-  const [data, setData] = useState<TodayData | null>(null);
+export function useTodayData(
+  active: boolean,
+  sinceIso: string | null,
+  local: { roles: number; follows: number },
+  initial?: unknown,
+): { data: TodayData | null; failed: boolean } {
+  // The answer the page opened with is read at once, so Today draws on its first render.
+  const [data, setData] = useState<TodayData | null>(() => (active && isTodayAnswer(initial) ? todayFrom(initial, sinceIso, local) : null));
   const [failed, setFailed] = useState(false);
   const localRef = useRef(local);
   localRef.current = local;
+  const opened = useRef(data !== null);
   useEffect(() => {
-    if (!active) return;
+    if (!active || opened.current) return;
     let gone = false;
+    const fromAnswer = (j: TodayAnswer) => todayFrom(j, sinceIso, localRef.current);
     const viaRadar = async (): Promise<TodayData | null> => {
       const r = await fetch("/api/table?radar=1", { cache: "no-store" });
       const v = (await r.json().catch(() => null)) as RadarView | null;
@@ -75,16 +85,7 @@ export function useTodayData(active: boolean, sinceIso: string | null, local: { 
         return null;
       }
       const j = await r.json().catch(() => null);
-      if (!isTodayAnswer(j)) return null;
-      const s = j.since ?? null;
-      return {
-        day: j.radar.day,
-        rows: j.radar.rows.slice(0, TODAY_ROWS),
-        newCount: j.radar.newCount,
-        // The server's counts, else the ones worked out here.
-        since: s ?? (sinceIso ? { radar: j.radar.newCount, roles: localRef.current.roles, follows: localRef.current.follows, sinceIso } : null),
-        from: "today",
-      };
+      return isTodayAnswer(j) ? fromAnswer(j) : null;
     };
     (async () => {
       let d: TodayData | null = null;
@@ -103,6 +104,18 @@ export function useTodayData(active: boolean, sinceIso: string | null, local: { 
     };
   }, [active, sinceIso]);
   return { data, failed };
+}
+
+/** Today's data from GET ?today=1's answer: the server's since counts, else the ones the page works out (`local`). */
+function todayFrom(j: TodayAnswer, sinceIso: string | null, local: { roles: number; follows: number }): TodayData {
+  const s = j.since ?? null;
+  return {
+    day: j.radar.day,
+    rows: j.radar.rows.slice(0, TODAY_ROWS),
+    newCount: j.radar.newCount,
+    since: s ?? (sinceIso ? { radar: j.radar.newCount, roles: local.roles, follows: local.follows, sinceIso } : null),
+    from: "today",
+  };
 }
 
 /* ---------- words ---------- */
@@ -129,6 +142,8 @@ export interface TodayProps {
   byId: Map<string, CoInfo>;
   /** The top row of the member's first view: the lead when the Crystal Ball has nothing. */
   firstRow: Row | null;
+  /** The member's whole table is still on its way (only Today's companies are here): with no Crystal Ball lead, the card waits for it. */
+  waiting?: boolean;
   data: TodayData | null;
   failed: boolean;
   /** The previous visit (ISO), null on a first visit. */
@@ -158,7 +173,7 @@ export function TodayPage(p: TodayProps) {
     }
     return null;
   }, [data, byId]);
-  const loading = !data && !p.failed;
+  const loading = (!data && !p.failed) || (!!p.waiting && !radarLead);
   // While the Crystal Ball is on its way the card waits (a skeleton), so it never swaps one company for another under the pointer.
   const lead = radarLead ?? (!loading && firstRow ? { i: byId.get(firstRow.i.c.id) ?? firstRow.i, row: null } : null);
   const more = Math.max(0, (data?.newCount ?? 0) - (radarLead ? 1 : 0));

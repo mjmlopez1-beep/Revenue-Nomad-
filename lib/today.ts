@@ -7,7 +7,8 @@
  * outside the view queue. Server side only.
  */
 import { radarView } from "./radar";
-import { todayCounts, viewPatch } from "./table";
+import { STARTER_CREDITS, contactInfo, todayCounts, viewPatch } from "./table";
+import { emailEnabled } from "./email";
 import { packCompany, type TodayView } from "./viewWire";
 
 /** The most Today's answer carries: past it, its companies are left off from the last. */
@@ -38,6 +39,10 @@ export async function todayView(token: string | null, sinceRaw?: string | null, 
       ? { since: { radar: r.days.filter((d) => d.day >= sinceIso.slice(0, 10)).reduce((n, d) => n + d.companies, 0), roles: counts.roles, follows: counts.follows, sinceIso } }
       : {}),
     companies: [],
+    starter: STARTER_CREDITS,
+    email: emailEnabled(),
+    contact: contactInfo(),
+    ...(patch.version ? { version: patch.version } : {}),
   };
   // The rows' records in the rows' order, as many as fit.
   let size = JSON.stringify(out).length;

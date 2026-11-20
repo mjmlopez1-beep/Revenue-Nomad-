@@ -909,7 +909,9 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
 {
   const small = { me: {}, freeCompany: true, radar: { day: "2026-11-20", fn: "Sales", rows: [], newCount: 3 } };
   check("?today=1's small answer is read", isTodayAnswer(small));
-  check("a full view (a server without ?today=1) or an error is not: Today falls back to ?radar=1", !isTodayAnswer({ me: {}, companies: [], radar: small.radar }) && !isTodayAnswer({ me: {}, companies: [] }) && !isTodayAnswer({ error: "x" }) && !isTodayAnswer(null));
+  // TodayView (lib/viewWire.ts) carries its rows' companies: the answer as the server sends it is read too.
+  check("?today=1's answer with its rows' companies is read", isTodayAnswer({ ...small, companies: [{ id: "c_1" }] }));
+  check("a full view (a server without ?today=1) or an error is not: Today falls back to ?radar=1", !isTodayAnswer({ me: {}, companies: [], stats: {}, radar: small.radar }) && !isTodayAnswer({ me: {}, companies: [] }) && !isTodayAnswer({ error: "x" }) && !isTodayAnswer(null));
   const days = [
     { day: "2026-11-20", companies: 2 },
     { day: "2026-11-19", companies: 0 },

@@ -91,6 +91,8 @@ run notify npx tsx scripts/test-notify.mts
 run radar npx tsx scripts/test-radar.mts
 # Today before the table (GET ?today=1, lib/today.ts): the view's own Me, Crystal Ball's top 4 with records exactly as the table builds them (its locks with them), under 20 KB, the "Since Tuesday" counts. In process.
 run today npx tsx scripts/test-today.mts
+# The table's first page before the full view (GET ?first=1, lib/firstPage.ts, app/post/place.ts): each company exactly the full view's record (a member with unlocks, one without, no profile, an admin), only the first 50 rows' companies, the same first rows in the same order on the page, the whole table's counts. In process.
+run first npx tsx scripts/test-first.mts
 # The shared table (lib/table.ts memberView): every member's table, admins' included, the same JSON as the table built whole after each kind of action; nothing one member did in another's; a change in everyone's next table; built once per state. In process.
 run viewcache npx tsx scripts/test-viewcache.mts
 # Crystal Ball's likelihood and timing (lib/radar/predict.ts): the rules by stage and ownership, the unknown-type blend, the Beta update, the timing curve, the ranking, Low off the email, the new seat and company facts (who introduced you stays the seat holder's), first sales hires and departed leaders. In process, fetch replaced.

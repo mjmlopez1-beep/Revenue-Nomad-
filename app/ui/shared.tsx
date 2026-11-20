@@ -9,6 +9,7 @@ import type { Action, Cell, CompanyRec, LedgerRow, Me, PersonRec, View } from "@
 import { fieldDef, type Entity } from "@/lib/tableFields";
 import { webLink } from "@/lib/links";
 import { unpackCompany, unpackView, type TodayView } from "@/lib/viewWire";
+import type { FirstList } from "@/app/post/place";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
 export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean };
@@ -172,6 +173,44 @@ export async function fetchToday(since?: string | null): Promise<TodayView | nul
     if (!r.ok || !j?.me || !j.radar) return null;
     j.companies = (j.companies ?? []).map(unpackCompany);
     return j;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /api/table?first=1 (lib/firstPage.ts): the first screen before the full view. `search` is
+ * the address's query: Today's address gets Today's answer, any other the list's first rows' companies
+ * with `first`, the counts the table's first screen shows. Either way a View the app can draw from
+ * until the full view lands (only the first screen's companies in it). Null on any answer without
+ * one (signed out, busy, offline, an older server): the page then waits for the full view.
+ */
+export type FirstResult = { view: View; first?: FirstList; today?: TodayView };
+export async function fetchFirst(search: string): Promise<FirstResult | null> {
+  try {
+    const q = new URLSearchParams({ first: "1", place: search });
+    try {
+      // The onboarding presets taken off in this browser (TradingPost presetsOff), and the previous visit ("since your last visit").
+      const off = new Set<string>();
+      for (let k = 0; k < localStorage.length; k++) {
+        const key = localStorage.key(k);
+        if (key?.startsWith("tp_preset_off_")) for (const x of (localStorage.getItem(key) ?? "").split(",")) if (x) off.add(x);
+      }
+      if (off.size) q.set("off", [...off].join(","));
+      const since = localStorage.getItem("tp_last_visit");
+      if (since) q.set("since", since);
+    } catch {}
+    const r = await fetch(`/api/table?${q}`, { cache: "no-store" });
+    const j = (await r.json().catch(() => null)) as { today?: TodayView; view?: View; first?: FirstList } | null;
+    if (!r.ok || !j) return null;
+    const t = j.today;
+    if (t?.me && t.radar) {
+      const companies = (t.companies ?? []).map(unpackCompany);
+      const stats = { companies: 0, engagements: 0, people: 0, fractionalFriendly: 0, openRoles: 0, members: 0, facts: 0, starter: t.starter ?? 0 };
+      return { today: { ...t, companies }, view: { demo: false, me: t.me, companies, stats, ledger: [], reported: [], email: !!t.email, contact: t.contact, version: t.version } };
+    }
+    if (j.view?.me && Array.isArray(j.view.companies) && j.first) return { view: unpackView(j.view), first: j.first };
+    return null;
   } catch {
     return null;
   }

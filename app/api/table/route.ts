@@ -12,6 +12,10 @@ import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
 import { packedViewJson } from "@/lib/viewWire";
 import { todayView } from "@/lib/today";
+import { firstPage } from "@/lib/firstPage";
+import { isHome } from "@/app/post/place";
+import { inSlot } from "@/lib/viewQueue";
+import type { View } from "@/lib/tableTypes";
 import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
@@ -122,9 +126,27 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
 type Built = { body: string; packed: Map<Enc, Promise<Uint8Array<ArrayBuffer>>>; version: string };
 const viewFlights = new Map<string, { p: Promise<Built>; started: number | null }>();
 const viewKey = (token: string | null, asMember = false, packed = false) => `${token ?? ""}${asMember ? "|member" : ""}${packed ? "|packed" : ""}`;
+/**
+ * The member's whole view that GET ?first=1 just built for its first page: the page asks for the
+ * full view right after it, so that answer starts from this one instead of building it again,
+ * while the state is the one it was built on and for FIRST_KEEP_MS at most.
+ */
+const FIRST_KEEP_MS = 30_000;
+const firstBuilt = new Map<string, { view: View; version: number; at: number }>();
+function keepFirst(key: string, view: View) {
+  firstBuilt.delete(key);
+  firstBuilt.set(key, { view, version: stateVersion(), at: Date.now() });
+  while (firstBuilt.size > VIEW_KEEP_MAX) firstBuilt.delete(firstBuilt.keys().next().value!);
+}
+function takeFirst(key: string): View | null {
+  const k = firstBuilt.get(key);
+  firstBuilt.delete(key);
+  return k && k.version === stateVersion() && Date.now() - k.at < FIRST_KEEP_MS && utcDayOf(k.at) === utcDayOf(Date.now()) ? k.view : null;
+}
+const utcDayOf = (ms: number) => Math.floor(ms / 86_400_000);
 const builtView = (token: string | null, enc: Enc | null, asMember = false, packed = false) =>
   shared(viewFlights, viewKey(token, asMember, packed), stateVersion, async (): Promise<Built> => {
-    const view = await buildView(token, { asMember });
+    const view = takeFirst(viewKey(token, asMember)) ?? (await buildView(token, { asMember }));
     // Packed: each company's JSON is kept with its record, and most records are shared between members (packedViewJson).
     const body = packed ? packedViewJson(view) : JSON.stringify(view);
     const built: Built = { body, packed: new Map(), version: view.version ?? "" };
@@ -207,6 +229,10 @@ const patchless = (a: Action) =>
  * GET ?radar=1[&day=YYYY-MM-DD]  RadarView: one day's companies from the member's radar (lib/radar radarView), the list its email and Slack links open. 401 signed out.
  * GET ?today=1[&since=ISO]  TodayView (lib/viewWire.ts, lib/today.ts): what Today draws before the table, under 20 KB: me,
  *                  plan, the free company, Crystal Ball's top 4 with their records, and "Since Tuesday" counts. 401 signed out.
+ * GET ?first=1&place=QUERY[&off=a,b][&since=ISO]  the first screen before the full view (lib/firstPage.ts): for Today's
+ *                  address (QUERY names no place) { today: TodayView }, else { view, first }: the member's view with the
+ *                  companies of the list's first 50 rows only (and the one ?c= opens), exactly as the full view has them,
+ *                  and `first`, the counts the table's first screen shows on the whole table. 401 signed out.
  * GET ?export=1   admins: download the runtime state (a backup).
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
@@ -323,6 +349,16 @@ export const GET = guarded(async (req: NextRequest) => {
   }
   // Plans (only while billing is live): a trial due to start, or a month's Pro credits, lands before the view is built. Nothing to do costs nothing.
   await billingVisit(token, origin(req)).catch((e) => console.error("plan visit failed", e));
+  // The first screen before the full view (lib/firstPage.ts): Today's answer for Today's address, else the list's first page.
+  // The list's first page builds the member's whole table, so it waits in the view queue like the view.
+  if (req.nextUrl.searchParams.get("first") !== null) {
+    const q = req.nextUrl.searchParams;
+    const place = q.get("place") ?? "";
+    const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || q.get("as") === "member";
+    const opts = { off: q.get("off"), since: q.get("since"), asMember, built: (v: View) => keepFirst(viewKey(token, asMember), v) };
+    const f = isHome(place) ? await firstPage(token, place, opts) : await inSlot(() => firstPage(token, place, opts));
+    return f ? sendJson(req, f, "view" in f ? { "x-view-version": f.view.version ?? "" } : {}) : err("You're signed out. Sign in again to see your table.", 401);
+  }
   // Today, before the full view (TodayView in lib/viewWire.ts): not in the view queue, a few milliseconds.
   if (req.nextUrl.searchParams.get("today") !== null) {
     const t = await todayView(token, req.nextUrl.searchParams.get("since"));
