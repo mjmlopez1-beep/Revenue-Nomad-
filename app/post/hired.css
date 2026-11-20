@@ -326,3 +326,18 @@
     transition: none;
   }
 }
+
+/* [ux ws3] Phones: the folded line is one line, whatever it holds; its full words are in its label. */
+.tp-phone .hired-fold-b {
+  min-height: 44px;
+  padding: 4px 6px 4px 14px;
+}
+.tp-phone .hired-fold-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* [ux ws3] Phones: less room around the folded line. */
+.tp-main-phone > .hired.hired-fold {
+  margin: 8px 16px 0;
+}

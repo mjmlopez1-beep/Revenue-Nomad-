@@ -23,7 +23,7 @@ import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import { IconChevron, IconLock, IconPlus, Num, post, useToast } from "../ui/shared";
 import { earnNote, useUi } from "./ui";
-import { ProTag, UpgradeNote, openPlans, planDay } from "./Billing";
+import { ProTag, UpgradeNote, openPlans } from "./Billing";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
 
@@ -97,10 +97,15 @@ function Stat({ s, side, rangeN, locked }: { s: RateStat; side: "m" | "h"; range
   );
 }
 
-/** Function, pricing model, rate and (optionally) client revenue. Sends benchRate and shows what the server says. */
-function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
+/**
+ * Function, pricing model, rate and (optionally) client revenue. Sends benchRate and shows what the server says.
+ * [ux ws3] `inline`: the same form opened in place under the member's own empty function, its ids
+ * prefixed so the full form further down keeps its own. `onDone` after a rate is shared.
+ */
+function ShareRate({ refresh, inline, onDone }: { refresh: () => Promise<void>; inline?: boolean; onDone?: () => void }) {
   const ui = useUi();
   const toast = useToast();
+  const idp = inline ? "tp-bmi" : "tp-bm";
   const [fn, setFn] = useState(ui.me.function && FUNCTIONS.includes(ui.me.function) ? ui.me.function : "");
   const [pricing, setPricing] = useState<Pricing>("Monthly retainer");
   const [rate, setRate] = useState("");
@@ -126,6 +131,7 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
     toast(r.message || "Added to the benchmarks. Your rate is never shown with your name or the seat.");
     await refresh();
     setBusy(false);
+    onDone?.();
   };
 
   return (
@@ -136,17 +142,23 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
         void submit();
       }}
     >
+      {inline ? (
+        <p className="tp-bm-share-lead">Never shown with your name or the seat. It counts once 5 people have shared one in this group.</p>
+      ) : (
+        <>
       <h2 className="tp-card-h">Share a rate privately</h2>
       <p className="tp-bm-share-lead">
         Add a rate to the benchmarks without putting it on a seat. It counts in the medians and earns 1 credit. It is never shown with your name or the seat. Your rate joins a
         group&apos;s number once 5 people have shared one privately in that group.
       </p>
+        </>
+      )}
       <div className="tp-bm-fields">
         <div className="tp-form-row">
-          <label className="tp-lbl" htmlFor="tp-bm-fn">
+          <label className="tp-lbl" htmlFor={`${idp}-fn`}>
             Function
           </label>
-          <select id="tp-bm-fn" className="select" value={fn} onChange={(e) => (setFn(e.target.value), setErr(null))}>
+          <select id={`${idp}-fn`} className="select" value={fn} onChange={(e) => (setFn(e.target.value), setErr(null))}>
             {!fn && <option value="">Pick one</option>}
             {FUNCTIONS.map((f) => (
               <option key={f} value={f}>
@@ -156,10 +168,10 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
           </select>
         </div>
         <div className="tp-form-row">
-          <span className="tp-lbl" id="tp-bm-pricing">
+          <span className="tp-lbl" id={`${idp}-pricing`}>
             Pricing model
           </span>
-          <div className="tp-seg" role="radiogroup" aria-labelledby="tp-bm-pricing">
+          <div className="tp-seg" role="radiogroup" aria-labelledby={`${idp}-pricing`}>
             {PRICING.map((p) => (
               <button key={p} type="button" role="radio" aria-checked={pricing === p} className={`tp-seg-b${pricing === p ? " on" : ""}`} onClick={() => (setPricing(p), setErr(null))}>
                 {p}
@@ -168,26 +180,26 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
           </div>
         </div>
         <div className="tp-form-row">
-          <label className="tp-lbl" htmlFor="tp-bm-rate">
+          <label className="tp-lbl" htmlFor={`${idp}-rate`}>
             Rate
           </label>
           <input
-            id="tp-bm-rate"
+            id={`${idp}-rate`}
             className="input"
             autoComplete="off"
             maxLength={60}
             placeholder={pricing === "Hourly" ? "$150/hr" : "$8k/mo"}
             value={rate}
             aria-invalid={!!err}
-            aria-describedby={err ? "tp-bm-err" : undefined}
+            aria-describedby={err ? `${idp}-err` : undefined}
             onChange={(e) => (setRate(e.target.value), setErr(null))}
           />
         </div>
         <div className="tp-form-row">
-          <label className="tp-lbl" htmlFor="tp-bm-rev">
+          <label className="tp-lbl" htmlFor={`${idp}-rev`}>
             Client revenue <span className="tp-bm-opt">optional</span>
           </label>
-          <select id="tp-bm-rev" className="select" value={revenue} onChange={(e) => setRevenue(e.target.value)}>
+          <select id={`${idp}-rev`} className="select" value={revenue} onChange={(e) => setRevenue(e.target.value)}>
             <option value="">Not sure</option>
             {RN_REVENUE.map((r) => (
               <option key={r} value={r}>
@@ -198,7 +210,7 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
         </div>
       </div>
       {err && (
-        <p className="tp-ed-err" id="tp-bm-err" role="alert">
+        <p className="tp-ed-err" id={`${idp}-err`} role="alert">
           {err}
         </p>
       )}
@@ -307,6 +319,7 @@ function MyRates({ rates, view }: { rates: BenchRate[]; view: View }) {
 export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () => Promise<void>; onBack: () => void }) {
   const ui = useUi();
   const [band, setBand] = useState("All");
+  const [sharing, setSharing] = useState(false);
   const b = view.benchmarks;
   if (!b) return null;
   const rangeN = b.rangeN ?? 10;
@@ -358,12 +371,10 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
         </>
       ) : (
         <>
-        {ui.me.plan?.name === "trial" && (
-          <UpgradeNote from="bench" trial={`The ranges and the rows by client size are Pro, yours in the trial until ${planDay(ui.me.plan.trialEndsAt)}. On Free you see the median for each function.`} />
-        )}
         <div className="tp-bm-tools">
+          {/* [ux ws3] In the trial, a quiet Pro tag where Pro is in use (its title says until when), not a Keep Pro box. */}
           <span className="tp-flabel" id="tp-bm-band">
-            Client revenue
+            Client revenue {ui.me.plan?.name === "trial" && <ProTag plan={ui.me.plan} />}
           </span>
           <div className="tp-fchips" role="group" aria-labelledby="tp-bm-band">
             {["All", ...RN_REVENUE].map((s) => (
@@ -425,10 +436,32 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
                     </span>
                   )}
                 </th>
-                <Stat s={r.monthly} side="m" rangeN={rangeN} locked={b.limited} />
-                <Stat s={r.hourly} side="h" rangeN={rangeN} locked={b.limited} />
+                {r.function === mine && !figure(r) ? (
+                  // [ux ws3] The member's own function with no figure yet: how far it is, and their own rate one tap away, in place.
+                  <td colSpan={6} className="bm-ownempty">
+                    <span className="num">
+                      {Math.max(r.monthly.n, r.hourly.n)} of {Math.min(r.monthly.min, r.hourly.min)} so far
+                    </span>{" "}
+                    ·{" "}
+                    <button type="button" className="tp-flink bm-ownempty-go" aria-expanded={sharing} aria-controls="tp-bmi-form" onClick={() => setSharing((x) => !x)}>
+                      Share yours privately <span className="plus1">+1 credit</span>
+                    </button>
+                  </td>
+                ) : (
+                  <>
+                    <Stat s={r.monthly} side="m" rangeN={rangeN} locked={b.limited} />
+                    <Stat s={r.hourly} side="h" rangeN={rangeN} locked={b.limited} />
+                  </>
+                )}
               </tr>
             ))}
+            {sharing && (
+              <tr className="bm-inline-share">
+                <td colSpan={7} id="tp-bmi-form">
+                  <ShareRate refresh={refresh} inline onDone={() => setSharing(false)} />
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -449,7 +482,8 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
           </button>
         </p>
       )}
-      <div className="tp-bm-note">
+      <details className="tp-bm-note">
+        <summary>How these figures work</summary>
         <p>
           A group shows a median once {b.minN} different people have a rate in it, and the range at {rangeN}. The middle half is where the middle half of them fall. Amounts are rounded to the
           nearest $250 a month or $5 an hour, and to the nearest $1,000 or $25 while fewer than {rangeN} people are in a figure.
@@ -457,7 +491,7 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
         {indexShown && <p>Figures marked Rate Index include our survey and contract data. They show once 20 people are in them.</p>}
         <p>Where we know the hours, an hourly rate also counts in the monthly figures (the rate times the hours a month), and a monthly retainer counts in the hourly ones.</p>
         {withoutYours && <p>Your rate is left out of what you see here, so nothing you share can move a number you read. Other members see it in the figure.</p>}
-      </div>
+      </details>
 
       <section className="tp-card tp-bm-sharecard" id="tp-bm-share">
         <ShareRate refresh={refresh} />

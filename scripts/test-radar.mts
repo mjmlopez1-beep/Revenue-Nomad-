@@ -277,6 +277,13 @@ async function main() {
   );
   check("a member with no function gets nothing", !match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_nofn", null)).length);
   check("a member with no profile gets nothing", !match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_noicp", "Sales")).length);
+  // [ux ws3] The page asks for any company (RadarProfile.any): every company counts, at the profile's lowest fit, and the reason never says "in your profile".
+  const anyP = { ...match.profileOf(seedLoaded, s1, "mem_noicp", "Sales"), any: true };
+  const anySigs = match.signalsFor(all, anyP);
+  check("read as any company, a member with no profile gets signals", anySigs.length > 0, anySigs.length);
+  check("their reasons never say 'in your profile'", anySigs.every((x) => !/in your profile/i.test(x.why)), anySigs.map((x) => x.why));
+  check("any company never reaches past a profile that matches", anySigs.every((x) => x.score <= match.ROLE_P * match.FIT_BASE + 1e-9 || x.kind !== "role"), anySigs.map((x) => [x.kind, x.score]));
+  check("any is ignored once a profile is set", match.anyCompany({ any: true, icp: { industries: ["Software"], employees: [], revenue: [], countries: [] } }) === false && match.anyCompany({ any: true, icp: null }) === true && match.anyCompany({ icp: null }) === false);
 
   /* ---------- the morning run: every member gets every signal ---------- */
   console.log("\nThe morning run (billing off: nobody is on Pro, and nothing is held back)");
@@ -430,7 +437,14 @@ async function main() {
   const ottoPage = await radar.radarView("tok-off-0001", day0, nowIso());
   check("a member nothing went out to still sees the signals of each day", (ottoPage?.days ?? []).some((d) => d.companies > 0) && named(ottoPage).length === 0, ottoPage?.days);
   const noProfile = await radar.radarView("tok-noicp-0001", day0, nowIso());
-  check("a member without a profile is told what it needs", noProfile?.ready === false && noProfile.rows.length === 0);
+  // [ux ws3] Skipping the profile never switches Crystal Ball off: a function and no profile lists any company.
+  check("a member with a function and no profile sees Crystal Ball, at any company", noProfile?.ready === true && !!noProfile.anyCompany && noProfile.function === "Sales" && (noProfile.days ?? []).some((d) => d.companies > 0), noProfile);
+  check("any company lists at most the day's 20 most likely companies", (noProfile?.days ?? []).every((d) => d.companies <= radar.ANY_COMPANY_MAX) && (noProfile?.rows.length ?? 0) <= radar.ANY_COMPANY_MAX, noProfile?.days);
+  check("and no line of theirs says 'in your profile'", (noProfile?.rows ?? []).every((x) => x.lines.every((l) => !/in your profile/i.test(l))), noProfile?.rows);
+  check("and the view names no company and no person", !named(noProfile).length, named(noProfile));
+  check("a member with a profile is not 'any company'", page?.anyCompany === undefined);
+  const noFn = await radar.radarView("tok-nofn-0001", day0, nowIso());
+  check("a member with no function is told what it needs", noFn?.ready === false && noFn.rows.length === 0 && !noFn.anyCompany, noFn);
   check("signed out: nothing", (await radar.radarView(null)) === null);
   // Unlock from the view: the same unlock as anywhere, 2 credits, and the company is named for them from then on.
   const before = (await t.buildView("tok-sal-0001")).me!.credits;

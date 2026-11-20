@@ -7086,3 +7086,207 @@ div.tp-pcard-when {
 .tp-dsec .lr-open {
   margin-top: 8px;
 }
+
+/* ---------- [ux ws3] the nudge slot: one line, one thing to do (nudges.ts NudgeSlot) ---------- */
+.nudge {
+  min-height: 44px;
+}
+.nudge-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nudge-go {
+  flex: none;
+}
+/* On a phone the slot takes one line: the text gives way (its full words are its title), the button stays. */
+.tp-phone .nudge {
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 4px 4px 4px 12px;
+}
+.tp-phone .nudge-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  font-size: 14px;
+}
+.tp-phone .nudge-go {
+  min-height: 36px;
+}
+/* [ux ws3] The floating Add steps out on an empty list (the empty state has its own way on) and in the first session (while Get started shows). */
+.tp-main-phone:has(.tp-noresults) .tp-fab,
+.tp-main-phone:has(.tp-check-line) .tp-fab,
+.tp-main-phone:has(.nudge-step) .tp-fab {
+  display: none;
+}
+
+/* [ux ws3] Crystal Ball in the bar (TopBar RadarBtn), with its new companies. Wide screens only: the menu has it everywhere. */
+.tp-radarbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-btn);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t);
+}
+.tp-radarbtn:hover,
+.tp-radarbtn.here {
+  background: rgba(255, 255, 255, 0.14);
+}
+.tp-radarbtn-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--volt);
+  color: var(--pine);
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 1179px) {
+  .tp-radarbtn {
+    display: none;
+  }
+}
+
+/* ---------- [ux ws3] the record: Your way in, the row's "⋯" menu, nobody named ---------- */
+.tp-wayin-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.tp-wayin-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.tp-wayin-what {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.tp-wayin-what.mine {
+  color: var(--body-ink);
+  font-weight: 600;
+}
+.tp-wayin-who {
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tp-wayin .tp-reach {
+  padding: 4px 0 0;
+}
+.tp-wayin-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.tp-wayin .tp-addlink,
+.tp-heldby-add {
+  min-height: 36px;
+}
+.tp-heldby-add {
+  margin-left: 8px;
+}
+.tp-rowmore {
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+.tp-menu-red {
+  color: var(--red);
+}
+.tp-wayin .plus1,
+.tp-heldby-add .plus1 {
+  margin-left: 2px;
+  color: var(--volt-ink);
+  font-weight: 700;
+}
+
+/* ---------- [ux ws3] a phone's first screen shows records (3 or more cards above the fold) ---------- */
+/* Search is the top bar's icon: the field over the list gives way. */
+.tp-phone .tp-search.tp-search-list {
+  display: none;
+}
+.tp-phone .tp-banners {
+  padding: 8px 16px 0;
+}
+/* Cards about 150px: tighter padding, and the locked company's made-up site line is left off (the name says it is locked). */
+.tp-phone .tp-cards {
+  gap: 10px;
+}
+.tp-phone .tp-pcard {
+  padding: 12px 14px 10px;
+  contain-intrinsic-size: auto 150px;
+}
+/* The site line is left off the card (the record has it): a locked company's is made up, and a known one's repeats its name. */
+.tp-phone .tp-pcard .tp-co-dom {
+  display: none;
+}
+.tp-phone .tp-pcard .tp-co-name {
+  font-size: 16px;
+  line-height: 22px;
+}
+.tp-phone .tp-pcard-line,
+.tp-phone .tp-pcard-fns {
+  margin-top: 6px;
+}
+.tp-phone .tp-pcard .tp-pfacts {
+  margin-top: 8px;
+}
+.tp-phone .tp-pcard .tp-pfact {
+  min-height: 40px;
+}
+.tp-phone .tp-pcard-hidden {
+  margin-top: 8px;
+  min-height: 40px;
+}
+/* [ux ws3] Tighter rhythm over the list, and cards about 120px (the top one keeps its unlock line). */
+.tp-phone .tp-pchips {
+  height: 52px;
+  margin-top: 4px;
+}
+.tp-phone .tp-presults {
+  padding-top: 8px;
+}
+.tp-phone .tp-pcard {
+  padding: 10px 14px 8px;
+}
+.tp-phone .tp-pcard-line,
+.tp-phone .tp-pcard-fns,
+.tp-phone .tp-pcard .hired-line,
+.tp-phone .tp-pcard-when,
+.tp-phone .tp-pcard-role {
+  margin-top: 4px;
+  line-height: 18px;
+}
+.tp-phone .tp-pcard-fns .chip {
+  min-height: 24px;
+  height: 24px;
+}
+.tp-phone .tp-pcard-hidden {
+  margin-top: 6px;
+  min-height: 32px;
+}
+/* On the list, the type switch is the bar's title: the mark gives it room (the menu and Back still lead home). */
+.tp-top-phone:has(.tp-ptype) .tp-brand-phone {
+  display: none;
+}

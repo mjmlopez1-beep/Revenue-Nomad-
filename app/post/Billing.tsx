@@ -25,6 +25,7 @@ import { IconCheck, IconChevron, IconLock, IconX, useToast } from "../ui/shared"
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
+import { useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
 
 /** Where the plans were opened from: an upgrade moment. */
@@ -322,8 +323,11 @@ export function PlansHost({ me }: { me: Me }) {
  * (desktop only). Phones get a short "Upgrade" chip. Nothing while billing is off.
  */
 export function PlanPill({ plan, phone }: { plan?: PlanView; phone?: boolean }) {
+  // One nudge at a time: while the trial's own line is on screen (the trial nudge or banner), it carries Keep Pro and the pill steps back.
+  const trialLine = useTrialShowing();
   if (!plan) return null;
   if (plan.name === "pro") return phone ? null : <span className="tp-plan tp-plan-pro">Pro</span>;
+  if (plan.name === "trial" && trialLine) return null;
   if (plan.name === "trial") {
     const left = plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`;
     const cls = `tp-plan tp-plan-trial${plan.ending ? " end" : ""}`;
@@ -374,6 +378,7 @@ export function TrialBanner({ plan }: { plan?: PlanView }) {
       setClosed(localStorage.getItem(BANNER_KEY) === end || sessionStorage.getItem(BANNER_KEY) === end);
     } catch {}
   }, [end]);
+  useMarkTrialShowing(!!plan?.ending && !closed);
   if (!plan || !plan.ending || closed) return null;
   const close = () => {
     setClosed(true);
@@ -424,6 +429,13 @@ export function UpgradeNote({ from, children, trial, inTrial = true }: { from: P
   const ui = useUi();
   const plan = ui.me.plan;
   if (!plan || plan.name === "pro") return null;
+  // In the trial, where Pro is in use: a quiet "Pro" tag, its end day in the title. No box and no Keep Pro (one nudge at a time).
+  if (plan.name === "trial" && inTrial)
+    return (
+      <p className="bl-quiet" data-upgrade={from} data-plan="trial">
+        <ProTag plan={plan} />
+      </p>
+    );
   if (plan.name === "trial")
     return (
       <div className="bl-note bl-note-trial" data-upgrade={from} data-plan="trial">
@@ -456,7 +468,7 @@ export function ProTag({ plan }: { plan?: PlanView }) {
   if (plan.name === "trial")
     return (
       <span className="bl-tag bl-tag-trial" title={trialTitle(plan)}>
-        Pro · in your trial
+        Pro
       </span>
     );
   return (
@@ -495,13 +507,7 @@ export function ProRow({ from, title, desc, free }: { from: PlansFrom; title: st
         </span>
         <span className="bl-row-d">{onFree && free ? free : desc}</span>
       </div>
-      {onFree ? (
-        <ProLock from={from} what={title} />
-      ) : plan.name === "trial" ? (
-        <button type="button" className="btn btn-sm" onClick={() => openPlans(from)}>
-          {plan.notLooking ? "See plans" : "Keep Pro"}
-        </button>
-      ) : null}
+      {onFree ? <ProLock from={from} what={title} /> : null}
     </div>
   );
 }

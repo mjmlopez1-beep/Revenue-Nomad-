@@ -123,6 +123,8 @@ run views npx tsx scripts/test-views.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
 run invites npx tsx scripts/test-invites.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts
+# [ux ws3] One nudge at a time (app/post/nudges.ts): which one shows, its words, and two toasts from one action as one sentence.
+run nudges npx tsx scripts/test-nudges.mts
 # 20 members acting at once on their own server: every answer carries the member's numbers and the table version, no server errors, at most one table a minute each.
 run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs
 

@@ -651,3 +651,8 @@ button.tp-plan:hover {
     display: none;
   }
 }
+
+/* [ux ws3] In the trial, where Pro is in use (Rates, Integrations): a quiet "Pro" tag, no box and no Keep Pro. */
+.bl-quiet {
+  margin: 0 0 12px;
+}

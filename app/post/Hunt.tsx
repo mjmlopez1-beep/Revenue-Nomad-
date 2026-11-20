@@ -15,7 +15,7 @@ import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } f
 import { IconCheck, IconSearch } from "../ui/shared";
 import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
-import { Sheet } from "./ui";
+import { Sheet, UiCtx } from "./ui";
 import { PartnersSwitch, RadarSwitch } from "./PartnersSwitch";
 import "./hunt.css";
 
@@ -392,6 +392,7 @@ export function IcpSheet({
         )}
       </div>
       <IcpFields value={v} onChange={setV} industries={industries} countries={countries} />
+      <LookingSwitch />
       <RadarSwitch />
       <PartnersSwitch />
       {views ? (
@@ -402,6 +403,42 @@ export function IcpSheet({
         </div>
       ) : null}
     </Sheet>
+  );
+}
+
+/**
+ * [ux ws3] "Are you looking for a new client?", now that onboarding no longer asks it: Yes or Not
+ * now, saved at once where onboarding kept it (profile.looking). Not now is the softer pitch on Pro
+ * (PlanView.notLooking), never a hard sell.
+ */
+function LookingSwitch() {
+  const ui = useContext(UiCtx);
+  const [busy, setBusy] = useState(false);
+  if (!ui) return null;
+  const now = ui.me.looking ?? null;
+  const set = async (v: boolean) => {
+    if (v === now) return;
+    setBusy(true);
+    await ui.act({ type: "profile", looking: v }, { quiet: true });
+    setBusy(false);
+  };
+  return (
+    <div className="hunt-sub">
+      <div className="hunt-h" id="hunt-looking">
+        Are you looking for a new client?
+      </div>
+      <div className="hunt-chips" role="radiogroup" aria-labelledby="hunt-looking">
+        {([
+          [true, "Yes"],
+          [false, "Not now"],
+        ] as const).map(([v, label]) => (
+          <button key={label} type="button" role="radio" aria-checked={now === v} disabled={busy} className={`chip hunt-chip${now === v ? " chip-on" : ""}`} onClick={() => void set(v)}>
+            {now === v && <IconCheck size={11} />}
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

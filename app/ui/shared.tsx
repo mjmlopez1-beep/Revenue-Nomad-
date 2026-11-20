@@ -190,6 +190,9 @@ export async function post<T = Record<string, unknown>>(body: unknown): Promise<
 
 /* ---------- toasts ---------- */
 
+import { useRef } from "react"; // [ux ws3] toasts from one action merge
+import { TOAST_MERGE_MS, mergeToastText } from "../post/nudges"; // [ux ws3]
+
 /**
  * A toast can carry one action ("Undo") and its own time on screen. The action closes the
  * toast when tapped. Without opts a toast is text only, as before.
@@ -210,9 +213,21 @@ export const toastMs = (text: string, err?: boolean) =>
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const drop = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  /** The last plain toast (no error, no action) and when it came: the next one within TOAST_MERGE_MS joins it (one action, one sentence). */
+  const lastPlain = useRef<{ id: number; text: string; at: number } | null>(null);
   const push = useCallback<ToastFn>(
     (text, err, opts) => {
       const id = Date.now() + Math.random();
+      const plain = !err && !opts?.action;
+      const prev = lastPlain.current;
+      if (plain && prev && Date.now() - prev.at < TOAST_MERGE_MS) {
+        const merged = mergeToastText(prev.text, text);
+        lastPlain.current = { id, text: merged, at: Date.now() };
+        setToasts((t) => [...t.filter((x) => x.id !== prev.id).slice(-1), { id, text: merged }]);
+        setTimeout(() => drop(id), opts?.ms ?? toastMs(merged));
+        return;
+      }
+      lastPlain.current = plain ? { id, text, at: Date.now() } : null;
       setToasts((t) => [...t.slice(-1), { id, text, err, action: opts?.action }]);
       setTimeout(() => drop(id), opts?.ms ?? toastMs(text, err));
     },

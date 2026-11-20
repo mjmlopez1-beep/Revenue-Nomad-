@@ -109,11 +109,11 @@ export const UNLOCKS_LEFT_TIP = "New accounts can unlock 25 facts on their first
 
 /**
  * Recently hired on a phone, folded to one line once it has done its job: "Finance hires ·
- * 6 months · in my profile · no Sales yet". Its parts: who was hired, how recently, which
+ * 6 mo · in my profile · no Sales yet". Its parts: who was hired, how recently, which
  * companies (`scope`, as the sentence names them), and "no Sales yet" while that switch is on.
  */
 export function foldParts(o: { fns: string[]; within: number; scope: string; mine: string | null; notMine: boolean }): string[] {
   const who = !o.fns.length ? "Hires in any function" : o.fns.length <= 2 ? `${o.fns.join(" or ")} hires` : `Hires in ${o.fns.length} functions`;
-  const when = o.within > 0 ? `${o.within} months` : "any time";
+  const when = o.within > 0 ? `${o.within} mo` : "any time";
   return [who, when, o.scope, ...(o.mine && o.notMine ? [`no ${o.mine} yet`] : [])];
 }

@@ -18,6 +18,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
+import { FUNCTIONS, RN_INDUSTRIES } from "@/lib/tableFields";
 import { YOUR_FEATURE, FEATURE_NAME, yourFeature, type RadarView } from "@/lib/radar/types";
 import { IconChevron, IconCheck, IconX, post } from "../ui/shared";
 import { isOpenRole, type CoInfo, type Row } from "./model";
@@ -163,22 +164,29 @@ export function RadarPage({
         <IconChevron dir="left" /> All companies
       </button>
       <h1 className="tp-page-h">{YOUR_FEATURE}</h1>
+      {/* [ux ws3] One line, then the rest behind "How it ranks". */}
       <p className="rd-lead">
-        Companies in your Ideal Fractional Profile with something new on Merlin
-        {fn ? (
-          <>
-            : a new open {fn} role, a {fn} seat that just ended or a {fn} leader who left, a fractional hire in another function, or a first sales team. Most likely to hire a
-            fractional {fn} next comes first, each with why now
-            {view?.beforeFromMember && before.length ? `, and the functions you said come before yours (${before.join(", ")}) count for more` : ""}.
-          </>
-        ) : (
-          "."
-        )}{" "}
-        Unlock any of them right here.
+        Companies {view?.anyCompany || !view?.ready ? "" : "in your profile "}most likely to hire a fractional {fn ?? "leader like you"} next.
       </p>
       {view?.ready && (
-        <p className="rd-legend">
-          <span className="rd-band rd-band-high">High</span> <span className="rd-band rd-band-medium">Medium</span> come by email. <span className="rd-band rd-band-low">Low</span> is only here.
+        <details className="rd-how">
+          <summary>How it ranks</summary>
+          <p>
+            Each company has something new on Merlin: a new open {fn} role, a {fn} seat that just ended or a {fn} leader who left, a fractional hire in another function, or a first
+            sales team. Most likely comes first, each with why now
+            {view.beforeFromMember && before.length ? `, and the functions you said come before yours (${before.join(", ")}) count for more` : ""}. Unlock any of them right here.
+          </p>
+          <p className="rd-legend">
+            <span className="rd-band rd-band-high">High</span> <span className="rd-band rd-band-medium">Medium</span> come by email. <span className="rd-band rd-band-low">Low</span> is only here.
+          </p>
+        </details>
+      )}
+      {view?.anyCompany && (
+        <p className="rd-any" role="note">
+          <span>Any company for now. Set your profile to narrow it and get it by email.</span>{" "}
+          <button type="button" className="rd-link" onClick={onProfile}>
+            Set your profile
+          </button>
         </p>
       )}
 
@@ -223,14 +231,7 @@ export function RadarPage({
           Looking at what moved
         </p>
       ) : !view.ready ? (
-        <section className="tp-card rd-empty">
-          <p className="rd-note">
-            {YOUR_FEATURE} needs your function and your Ideal Fractional Profile, the companies you want as clients.
-          </p>
-          <button type="button" className="btn btn-primary rd-btn" onClick={onProfile}>
-            Open Your profile
-          </button>
-        </section>
+        <StartRadar reload={reload} />
       ) : !n ? (
         <section className="tp-card rd-empty">
           <p className="rd-note">
@@ -255,6 +256,8 @@ export function RadarPage({
           <p className="rd-note">
             {!view.on
               ? `${YOUR_FEATURE} is off. This page still lists what moved.`
+              : view.anyCompany
+                ? `Set your profile to get ${yourFeature} by email each morning. Until then it is here.`
               : view.email && view.slack
                 ? `${YOUR_FEATURE} comes by email and in Slack, on mornings when something moved.`
                 : view.email
@@ -279,5 +282,64 @@ export function RadarPage({
         </section>
       )}
     </div>
+  );
+}
+
+/** [ux ws3] The functions to pick from (not Other), and the industries most members pick first. */
+const START_FNS = FUNCTIONS.filter((f) => f !== "Other");
+const START_INDUSTRIES = RN_INDUSTRIES.slice(0, 9);
+
+/**
+ * [ux ws3] No function yet: the two questions inline, so Crystal Ball starts here. Your function
+ * (one), and the industries you want (any, optional: none is any company), then "Show my Crystal Ball".
+ */
+function StartRadar({ reload }: { reload: () => void }) {
+  const ui = useUi();
+  const [fn, setFn] = useState<string | null>(null);
+  const [ind, setInd] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    if (!fn) return;
+    setBusy(true);
+    const r = await ui.act({ type: "profile", function: fn, ...(ind.length ? { icp: { industries: ind, employees: [], revenue: [], countries: [] } } : {}) }, { quiet: true });
+    setBusy(false);
+    if (r.ok) reload();
+  };
+  return (
+    <section className="tp-card rd-empty rd-start" aria-labelledby="rd-start-h">
+      <h2 className="tp-card-h" id="rd-start-h">
+        Start {yourFeature}
+      </h2>
+      <div className="rd-start-q">
+        <span className="tp-flabel" id="rd-start-fn">
+          What do you do?
+        </span>
+        <div className="tp-fchips" role="radiogroup" aria-labelledby="rd-start-fn">
+          {START_FNS.map((f) => (
+            <button key={f} type="button" role="radio" aria-checked={fn === f} className={`chip tp-fchip${fn === f ? " chip-on" : ""}`} onClick={() => setFn(f)}>
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="rd-start-q">
+        <span className="tp-flabel" id="rd-start-ind">
+          Who you want to work with <span className="muted">· optional</span>
+        </span>
+        <div className="tp-fchips" role="group" aria-labelledby="rd-start-ind">
+          {START_INDUSTRIES.map((x) => {
+            const on = ind.includes(x);
+            return (
+              <button key={x} type="button" aria-pressed={on} className={`chip tp-fchip${on ? " chip-on" : ""}`} onClick={() => setInd(on ? ind.filter((y) => y !== x) : [...ind, x])}>
+                {x}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <button type="button" className="btn btn-primary rd-btn" disabled={!fn || busy} aria-busy={busy} onClick={() => void go()}>
+        {busy ? "Starting" : "Show my Crystal Ball"}
+      </button>
+    </section>
   );
 }
