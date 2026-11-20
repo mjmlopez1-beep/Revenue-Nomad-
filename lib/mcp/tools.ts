@@ -265,7 +265,7 @@ export function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView, base = publ
   const holder = e.cells.operator;
   if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Merlin${holder.member.title ? `, ${holder.member.title}` : ""})`;
   // A seat Revenue Nomad found with no name on file: its fractional can claim it.
-  if (e.claimable && (!holder || holder.s === "empty")) facts.seat_holder = "Not on Merlin yet";
+  if (e.claimable && (!holder || holder.s === "empty")) facts.seat_holder = "Nobody named yet";
   if (open && facts.rate) (facts.posted_rate = facts.rate), delete facts.rate;
   if (open && facts.hours) (facts.posted_hours = facts.hours), delete facts.hours;
   return {

@@ -231,7 +231,7 @@ const coPub = (name: string) => T.tableInternals.pubId(s1.companies.find((c: { f
 await T.perform(sm.token, { type: "unlock", entity: "company", id: coPub("Bluefin Analytics"), field: "identity" });
 const g1 = (await MCP.getCompany(ctx, { company: "Bluefin Analytics" })) as { seats?: { id: string; seat_holder?: string; claimable?: string }[] };
 const mseat = g1.seats?.find((x) => x.claimable);
-check("get_company: the seat says nobody holds it yet, and how to claim it", !!mseat && mseat.seat_holder === "Not on Merlin yet", g1.seats);
+check("get_company: the seat says nobody holds it yet, and how to claim it", !!mseat && mseat.seat_holder === "Nobody named yet", g1.seats);
 check("get_company: no name", !leaks(JSON.stringify(g1)).length);
 let refused = "";
 try {

@@ -104,8 +104,8 @@ async function main() {
   check("an end month that only says the seat is going shows free, as the server sends it", sGoing.end === "Ongoing" && sGoing.seat_holder === T.LOCKED_SEAT, sGoing);
   const sFoundL = T.seatOut(foundLocked, io, mv);
   const sFoundF = T.seatOut(foundFree, io, mv);
-  check("a seat found on LinkedIn with nobody named: no holder to unlock, its role a credit of its own (SEAT_SCAN_ROLE_FREE false)", sFoundL.seat_holder === "Not on Merlin yet" && sFoundL.role === T.LOCKED && !!sFoundL.claimable, sFoundL);
-  check("the same seat with the role free (SEAT_SCAN_ROLE_FREE true) shows the role", sFoundF.role === "Fractional Head of RevOps" && sFoundF.seat_holder === "Not on Merlin yet", sFoundF);
+  check("a seat found on LinkedIn with nobody named: no holder to unlock, its role a credit of its own (SEAT_SCAN_ROLE_FREE false)", sFoundL.seat_holder === "Nobody named yet" && sFoundL.role === T.LOCKED && !!sFoundL.claimable, sFoundL);
+  check("the same seat with the role free (SEAT_SCAN_ROLE_FREE true) shows the role", sFoundF.role === "Fractional Head of RevOps" && sFoundF.seat_holder === "Nobody named yet", sFoundF);
   const pUnseen = T.personOut(unseen);
   check("a person's name and title read as one purchase", pUnseen.name === T.LOCKED_PERSON && pUnseen.title === T.LOCKED_PERSON && pUnseen.relationship === "Decision maker", pUnseen);
   check("their LinkedIn and email read 'opens after the name'", pUnseen.email === T.AFTER_NAME && pUnseen.linkedin === T.AFTER_NAME && /^opens after the name/.test(T.AFTER_NAME), pUnseen);

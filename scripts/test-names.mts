@@ -274,7 +274,7 @@ const named0 = g0.seats.find((x) => typeof x.seat_holder === "string" && x.seat_
 check("connector: a named seat's holder is locked with its role, 1 credit for both", !!named0 && /opens who held this seat and the role they held together/.test(named0.seat_holder ?? "") && /locked/.test(String(named0.role ?? "")), g0.seats);
 check("connector: no name before the unlock", !leaksIn(JSON.stringify(g0)).length, leaksIn(JSON.stringify(g0)));
 check("connector: a named seat nobody claimed can still be claimed", typeof named0?.claimable === "string");
-check("connector: a seat with nobody named says Not on Merlin yet", g0.seats.some((x) => x.seat_holder === "Not on Merlin yet"));
+check("connector: a seat with nobody named says Nobody named yet", g0.seats.some((x) => x.seat_holder === "Nobody named yet"));
 await T.perform(sm.token, { type: "unlock", entity: "engagement", id: named0!.id, field: "operator" });
 MV.forgetView(sm.id);
 const g1 = (await MCP.getCompany(ctx, { company: "Alpha Fixture Co" })) as { seats: { id: string; seat_holder?: string; holder_verified?: boolean }[]; warm_paths: { name?: string; holder_verified?: boolean }[] };
