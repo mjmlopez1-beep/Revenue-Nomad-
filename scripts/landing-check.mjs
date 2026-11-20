@@ -152,6 +152,11 @@ async function shots() {
   for (const [name, opts] of [
     ["390", { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: iphone.userAgent }],
     ["1440", { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }],
+    // EXTRA=320,768,1024: more widths, for a look at the layout between the two.
+    ...(process.env.EXTRA ?? "")
+      .split(",")
+      .filter(Boolean)
+      .map((w) => [w, { viewport: { width: Number(w), height: 900 }, deviceScaleFactor: 1, isMobile: Number(w) < 768, hasTouch: Number(w) < 768 }]),
   ]) {
     const ctx = await browser.newContext(opts);
     const page = await ctx.newPage();
@@ -375,12 +380,15 @@ async function flow() {
   check("and asks for the Hiring now tab", asked.at(-1)?.get("view") === "hiring", asked.at(-1)?.toString());
   const rowsN = await page.locator(".lp-rw:not(.lp-rw-skel)").count();
   check("the list is short (8 rows at most)", rowsN <= 8, rowsN);
+  await page.locator("#find").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(OUT, `${TAG}-finder-picked.png`) });
   await page.getByRole("button", { name: "Who held the Finance seat before me" }).click();
   await page.waitForFunction(() => document.querySelector(".lp-tab.is-on")?.textContent?.startsWith("All") && document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
   check("who held the seat reads the All tab, and its line stands out", (await page.locator(".lp-res-held.is-on").count()) === 1);
   await page.getByRole("button", { name: "What a fractional CFO charges" }).click();
   const note = await page.locator(".lp-res").innerText();
-  check("rates has no public answer: no figure, no table", (await page.locator(".lp-rw").count()) === 0 && !/[$€£]\s?\d/.test(note), note.slice(0, 160));
+  await page.screenshot({ path: path.join(OUT, `${TAG}-finder-rates.png`) });
+  check("rates has no public answer: no figure, no table",(await page.locator(".lp-rw").count()) === 0 && !/[$€£]\s?\d/.test(note), note.slice(0, 160));
   await page.getByRole("button", { name: "Clear the question" }).click();
   check("clearing the box brings the placeholder back", (await page.locator(".lp-ask-ph").count()) === 1);
   await page.getByRole("button", { name: /^Refine/ }).click();

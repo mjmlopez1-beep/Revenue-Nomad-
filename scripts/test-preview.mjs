@@ -313,6 +313,8 @@ async function main() {
   check("the example record is a real company with a seat holder on file, nobody named", ex === null || (typeof ex?.company?.name === "string" && typeof ex.seat?.function === "string" && !("holder" in ex.seat) && !("name" in ex.seat)), JSON.stringify(ex)?.slice(0, 200));
 
   // Every function alone, with each country, and with each industry, and each function's other two tabs.
+  /** What the page's band of numbers shows as counted across every function, from each function's own answer with nothing else picked. */
+  const acrossAll = new Set();
   for (const fn of opts.functions) {
     const qs = [{ fn }, { fn, view: "hiring" }, { fn, view: "notyet" }, ...opts.countries.map((country) => ({ fn, country })), ...opts.industries.map((ind) => ({ fn, ind }))];
     for (let i = 0; i < qs.length; i += 16) {
@@ -323,10 +325,16 @@ async function main() {
         const label = `${q.fn}/${q.country ?? q.ind ?? "any"}${q.view ? `/${q.view}` : ""}`;
         if (r.status !== 200) return shape.push(`${label}: status ${r.status}`);
         if (r.json.fn !== q.fn) shape.push(`${label}: answered for ${r.json.fn}`);
+        if (!q.country && !q.ind) acrossAll.add([r.json.counts?.anyHire, r.json.counts?.repeat, r.json.options?.functions?.length].join("/"));
         inspect(label, r.json, r.text);
       });
     }
   }
+  check(
+    "the counts the page shows across every function (any fractional hire, repeat hirers, functions) are the same whichever function is picked",
+    acrossAll.size === 1 && /^\d+\/\d+\/\d+$/.test([...acrossAll][0]),
+    [...acrossAll].join(" | "),
+  );
   /**
    * The cap of 3 is for the whole preview, not one answer: every function with the other two tabs
    * in each country; every withheld open role asked about with its own industry and country (the

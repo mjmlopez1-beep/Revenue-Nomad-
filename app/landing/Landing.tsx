@@ -426,7 +426,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
       <footer className="lp-foot">
         <div className="lp-wrap lp-foot-in">
           <div className="lp-foot-brand">
-            <Brand kind="lockup" size={64} />
+            <Brand kind="lockup" size={64} lazy />
             <span>Merlin is a data exchange for fractional operators, built by Revenue Nomad, the network of {NETWORK} fractionals.</span>
           </div>
           <div className="lp-foot-links">

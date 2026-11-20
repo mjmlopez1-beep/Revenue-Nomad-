@@ -624,7 +624,7 @@ export function AddPill({ onAdd, label = "Add", earn = true, what }: { onAdd: ()
  * icon (the tightest phone bar). `dark` is the all-white version for pine. `size` is the CSS height.
  */
 const BRAND_RATIO = { wordmark: 811 / 240, lockup: 811 / 240, mark: 1 } as const;
-export function Brand({ dark, size = 28, kind = "wordmark", className }: { dark?: boolean; size?: number; kind?: keyof typeof BRAND_RATIO; className?: string }) {
+export function Brand({ dark, size = 28, kind = "wordmark", className, lazy }: { dark?: boolean; size?: number; kind?: keyof typeof BRAND_RATIO; className?: string; lazy?: boolean }) {
   const src = kind === "mark" ? "/brand/merlin-icon-512.png" : `/brand/merlin-${kind}${dark ? "-on-dark" : ""}.png`;
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -634,6 +634,9 @@ export function Brand({ dark, size = 28, kind = "wordmark", className }: { dark?
       alt="Merlin by Revenue Nomad"
       width={Math.round(size * BRAND_RATIO[kind])}
       height={size}
+      // `lazy`: far down a long page (the landing's footer), so it loads when the visitor gets near it.
+      loading={lazy ? "lazy" : undefined}
+      decoding={lazy ? "async" : undefined}
       style={{ height: size, width: "auto", display: "block" }}
     />
   );
