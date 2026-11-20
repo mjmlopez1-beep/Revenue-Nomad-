@@ -9,8 +9,10 @@
  *
  * What a run does:
  *   1. the filing days of the last FUNDING_LOOKBACK_DAYS not read yet: each day's EDGAR daily form
- *      index (one request), or EDGAR full-text search when the index can't be read. A day with no
- *      index is done when it is a weekend or over 3 days old (a holiday), else tried next run;
+ *      index (one request), or EDGAR full-text search when the index can't be read (EDGAR answers
+ *      403 for a missing file, so a 403 on the index alone doesn't stop the run). Weekends are
+ *      skipped without a request. A day with no index is done when it is over 3 days old (a
+ *      holiday), else tried next run;
  *   2. each Form D's name against the companies on Merlin (lib/funding/match.ts candidateFor):
  *      only a filing whose name is exactly one company's is fetched (its primary_doc.xml), at most
  *      MAX_DOCS_PER_RUN a run;
@@ -69,7 +71,15 @@ const weekend = (day: string) => [0, 6].includes(new Date(`${day}T12:00:00Z`).ge
 
 /** One day's Form D listings: the daily index, else full-text search. `done` false: try the day again next run. */
 async function listDay(day: string, fetch: SecFetch, nowMs: number): Promise<{ listings: FormDListing[]; done: boolean; failed: boolean }> {
-  const idx = await fetch(dayIndexUrl(day));
+  // EDGAR posts no daily index on a weekend, so there is nothing to ask for.
+  if (weekend(day)) return { listings: [], done: true, failed: false };
+  // EDGAR's archive answers 403, not 404, for a file that isn't there (a holiday, or a day not
+  // posted yet). So a 403 on the index alone doesn't mean SEC refuses us: full-text search for the
+  // day decides, and a 403 there does stop the run.
+  const idx = await fetch(dayIndexUrl(day)).catch((e) => {
+    if (e instanceof SecRefused) return { status: 403, text: "" };
+    throw e;
+  });
   if (idx.status === 200) return { listings: parseFormIndex(idx.text), done: true, failed: false };
   // No index (yet): a weekend or a holiday has none; a recent weekday may not be posted yet.
   if (idx.status === 404) {
@@ -91,6 +101,9 @@ async function listDay(day: string, fetch: SecFetch, nowMs: number): Promise<{ l
     listings.push(...parsed.listings);
     if ((page + 1) * 100 >= parsed.total || !parsed.listings.length) break;
   }
+  // Nothing found for a weekday whose index is missing: a holiday when it's over 3 days old,
+  // else maybe not posted yet, so try the day again next run.
+  if (!listings.length && nowMs - Date.parse(`${day}T12:00:00Z`) <= 3 * DAY) return { listings, done: false, failed: false };
   return { listings, done: true, failed: false };
 }
 

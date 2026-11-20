@@ -327,6 +327,19 @@ eq("totals add up over runs", [s3.funding!.totals.filings, s3.funding!.totals.ma
 const refusing = async () => ({ status: 403, text: "" });
 const r4 = await run.runFunding({ fetch: sec.secFetcher({ raw: refusing, gapMs: 0 }), now: "2026-11-24T08:00:00.000Z" });
 check("SEC refusing stops the run and says so", !!r4.counts?.error && /403/.test(r4.counts.error), r4.counts);
+// EDGAR answers 403 for a missing file: a weekend is never asked for, and a weekday whose index
+// answers 403 is read through full-text search instead of stopping the run.
+const asked: string[] = [];
+const missingIndex = async (u: string) => {
+  asked.push(u);
+  if (u.includes("/daily-index/")) return { status: 403, text: "" };
+  if (u.startsWith("https://efts.sec.gov/")) return { status: 200, text: JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }) };
+  return { status: 404, text: "" };
+};
+const r5 = await run.runFunding({ fetch: sec.secFetcher({ raw: missingIndex, gapMs: 0 }), now: "2026-12-01T08:00:00.000Z" });
+check("a 403 on a day's index alone doesn't stop the run", !r5.counts?.error, r5.counts);
+check("a weekend is never asked for", !asked.some((u) => /form\.2026112[89]\.idx/.test(u)), asked.filter((u) => u.includes("daily-index")));
+check("a weekday with no index is searched instead", asked.some((u) => u.includes("efts.sec.gov") && u.includes("2026-11-30")), asked.length);
 
 /* ---------- Pilot metrics ---------- */
 
