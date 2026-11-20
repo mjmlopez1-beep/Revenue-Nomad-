@@ -7220,3 +7220,41 @@ div.tp-pcard-when {
   color: var(--volt-ink);
   font-weight: 700;
 }
+
+/* ---------- [ux ws3] a phone's first screen shows records (3 or more cards above the fold) ---------- */
+/* Search is the top bar's icon: the field over the list gives way. */
+.tp-phone .tp-search.tp-search-list {
+  display: none;
+}
+.tp-phone .tp-banners {
+  padding: 8px 16px 0;
+}
+/* Cards about 150px: tighter padding, and the locked company's made-up site line is left off (the name says it is locked). */
+.tp-phone .tp-cards {
+  gap: 10px;
+}
+.tp-phone .tp-pcard {
+  padding: 12px 14px 10px;
+  contain-intrinsic-size: auto 150px;
+}
+.tp-phone .tp-pcard .tp-co-hidden .tp-co-dom {
+  display: none;
+}
+.tp-phone .tp-pcard .tp-co-name {
+  font-size: 16px;
+  line-height: 22px;
+}
+.tp-phone .tp-pcard-line,
+.tp-phone .tp-pcard-fns {
+  margin-top: 6px;
+}
+.tp-phone .tp-pcard .tp-pfacts {
+  margin-top: 8px;
+}
+.tp-phone .tp-pcard .tp-pfact {
+  min-height: 40px;
+}
+.tp-phone .tp-pcard-hidden {
+  margin-top: 8px;
+  min-height: 40px;
+}

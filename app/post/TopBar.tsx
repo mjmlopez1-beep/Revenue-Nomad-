@@ -714,7 +714,8 @@ export function TopBar({
     </label>
   );
   if (phone) {
-    const open = !searchInList && (searchOpen || !!query);
+    // [ux ws3] Search is the bar's icon on every page, the list included (the field over the list gave way to records).
+    const open = searchOpen || !!query;
     return (
       <header className="tp-top tp-top-phone">
         {open ? (
@@ -732,11 +733,9 @@ export function TopBar({
             </button>
             {listSwitch}
             <div className="tp-top-right">
-              {!searchInList && (
-                <button type="button" className="tp-iconbtn" aria-label="Search" onClick={() => setSearchOpen(true)}>
-                  <IconSearch size={18} />
-                </button>
-              )}
+              <button type="button" className={`tp-iconbtn${searchInList ? " tp-search-icon-list" : ""}`} aria-label="Search" onClick={() => setSearchOpen(true)}>
+                <IconSearch size={18} />
+              </button>
               <PlanPill plan={me.plan} phone />
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
               {msgBtn && unread > 0 && <MessagesBtn unread={unread} onClick={onMessages!} here={onMessagesPage} />}

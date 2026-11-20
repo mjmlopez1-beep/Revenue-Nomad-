@@ -869,7 +869,7 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   // Recently hired on a phone, folded to one line.
   check(
     "the folded line reads like the owner's example",
-    foldParts({ fns: ["Finance"], within: 6, scope: "in my profile", mine: "Sales", notMine: true }).join(" · ") === "Finance hires · 6 months · in my profile · no Sales yet",
+    foldParts({ fns: ["Finance"], within: 6, scope: "in my profile", mine: "Sales", notMine: true }).join(" · ") === "Finance hires · 6 mo · in my profile · no Sales yet",
   );
   check("two functions, any time, all companies, no gap switch", foldParts({ fns: ["Finance", "Marketing"], within: 0, scope: "all companies", mine: "Sales", notMine: false }).join(" · ") === "Finance or Marketing hires · any time · all companies");
   check("three functions, and none picked", foldParts({ fns: ["Finance", "Marketing", "RevOps"], within: 12, scope: "in my profile", mine: null, notMine: true })[0] === "Hires in 3 functions" && foldParts({ fns: [], within: 3, scope: "x", mine: "Sales", notMine: false })[0] === "Hires in any function");

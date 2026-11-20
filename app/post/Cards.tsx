@@ -141,7 +141,7 @@ const SignalCard = memo(function SignalCard({ r, onOpen, lines, notes, action }:
 });
 const NO_LINES: string[] = [];
 
-const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, hire }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean; hire?: HireCtx | null }) {
+const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, hire, top }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean; hire?: HireCtx | null; top: boolean }) {
   const ui = useCellUi();
   const i = r.i;
   const c = i.c;
@@ -185,8 +185,8 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, h
         when && <div className="tp-pcard-when num">{when}</div>
       )}
       {c.hidden && hired ? (
-        // A locked company that hired: who held the seat opens after the company, in its record.
-        <HiddenLine rate={i.engs.some((x) => isOpenRole(x) && (x.cells.rate?.s === "locked" || x.cells.rate?.s === "value"))} roles={i.engs.some(isOpenRole)} />
+        // A locked company that hired: who held the seat opens after the company, in its record. [ux ws3] The unlock line on the top card only.
+        top && <HiddenLine rate={i.engs.some((x) => isOpenRole(x) && (x.cells.rate?.s === "locked" || x.cells.rate?.s === "value"))} roles={i.engs.some(isOpenRole)} />
       ) : c.hidden ? (
         <>
           {e && isOpenRole(e) && e.cells.role?.s === "value" && (
@@ -202,7 +202,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, h
               </Fact>
             </div>
           )}
-          <HiddenLine rate={!!e && isOpenRole(e) && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} roles={!!e && isOpenRole(e)} />
+          {top && <HiddenLine rate={!!e && isOpenRole(e) && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} roles={!!e && isOpenRole(e)} />}
         </>
       ) : (
         <div className="tp-pfacts">
@@ -243,7 +243,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss, h
   );
 });
 
-const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpen: (r: Row) => void }) {
+const EngCard = memo(function EngCard({ r, me, onOpen, top }: { r: Row; me: Me; onOpen: (r: Row) => void; top: boolean }) {
   const e = r.e!;
   const i = r.i;
   const at = i.c.hidden ? "this company" : i.c.name;
@@ -278,7 +278,7 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
               </Fact>
             </div>
           )}
-          <HiddenLine rate={openRole && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} roles={openRole} />
+          {top && <HiddenLine rate={openRole && (e.cells.rate?.s === "locked" || e.cells.rate?.s === "value")} roles={openRole} />}
           {e.cells.rate?.s === "value" && (
             <div className="tp-pfacts">
               <Fact label="Posted rate">
@@ -370,13 +370,14 @@ export function CardList({
   const miss = !tab || tab === "needs";
   return (
     <div className="tp-cards">
-      {rows.map((r) =>
+      {/* [ux ws3] The unlock line (and the free company of the day) on the top card only: the record has it for every company. */}
+      {rows.map((r, k) =>
         type === "companies" && signals ? (
           <SignalCard key={r.key} r={r} onOpen={onOpen} lines={signals.lines.get(r.i.c.id) ?? NO_LINES} notes={signals.notes?.get(r.i.c.id)} action={signals.action} />
         ) : type === "companies" ? (
-          <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} miss={miss} hire={hire} />
+          <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} miss={miss} hire={hire} top={k === 0} />
         ) : type === "engagements" ? (
-          <EngCard key={r.key} r={r} me={me} onOpen={onOpen} />
+          <EngCard key={r.key} r={r} me={me} onOpen={onOpen} top={k === 0} />
         ) : (
           <PersonCard key={r.key} r={r} onOpen={onOpen} />
         ),
