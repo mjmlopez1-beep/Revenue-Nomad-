@@ -1,0 +1,818 @@
+/* Home (app/post/Home.tsx): calm and white, everything one click away. Classes are prefixed hm-; the lead card is Today's (today.css). */
+
+.tp-app .tp-main-page.hm-page {
+  background: var(--surface);
+  padding: 32px 40px 72px;
+}
+.hm {
+  max-width: 1040px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+}
+.hm > * {
+  min-width: 0;
+}
+.hm-nudge .tp-strip {
+  margin: 0;
+}
+
+/* The greeting and the search. */
+.hm-hello {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.hm-h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.hm-sub {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--muted);
+}
+.hm-ask {
+  position: relative;
+}
+.hm-hello + .hm-ask {
+  margin-top: -12px;
+}
+.hm-ask-f {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: 0 1px 2px rgba(10, 26, 19, 0.04);
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.hm-ask-f:focus-within {
+  border-color: var(--pine);
+  box-shadow: 0 0 0 3px var(--pine-14);
+}
+.hm-ask-in {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+}
+.hm-ask-in::placeholder {
+  color: var(--faint);
+}
+.hm-ask-in::-webkit-search-cancel-button {
+  display: none;
+}
+.hm-ask-x {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+}
+.hm-ask-x:hover {
+  background: var(--surface-2);
+}
+.hm-ask-go {
+  min-height: 42px;
+}
+.hm-ask-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--overlay-shadow);
+}
+.hm-ask-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--body-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.hm-ask-row:hover,
+.hm-ask-row:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+.hm-ask-row b {
+  color: var(--ink);
+}
+.hm-ask-row > svg {
+  flex: none;
+  color: var(--muted);
+}
+.hm-ask-co {
+  display: grid;
+  min-width: 0;
+}
+.hm-ask-facts {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.hm-ask-all {
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  margin-top: 2px;
+}
+.hm-ask-all > span {
+  flex: 1;
+}
+.hm-kbd {
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+/* The four quick actions. */
+.hm-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.hm-cards > li {
+  display: flex;
+}
+.hm-card {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  width: 100%;
+  min-height: 124px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: var(--body-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t), box-shadow var(--t);
+}
+.hm-card:hover {
+  border-color: var(--line-strong);
+  background: var(--row-hover);
+}
+.hm-card:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.hm-card-ico {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--pine-8);
+  color: var(--pine);
+}
+.hm-card-ico .tp-nav-ico {
+  color: var(--pine);
+}
+.hm-card-ico-earn {
+  background: var(--volt-soft);
+}
+.hm-card-ico-earn .tp-nav-ico {
+  color: var(--volt-ink);
+}
+.hm-card-t {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.hm-card-n {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--pine);
+  color: #fff;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+.hm-card-p {
+  font-size: 13.5px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.hm-card-wait {
+  cursor: default;
+}
+.hm-card-wait:hover {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.hm-card-wait .hm-card-ico {
+  background: var(--surface-2);
+}
+
+/* Sections. */
+.hm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.hm-sec {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.hm-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+.hm-h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 750;
+  color: var(--ink);
+}
+.hm-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: none;
+  cursor: pointer;
+}
+.hm-more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hm-quiet {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--muted);
+}
+
+/* The next three leads, under the card. */
+.hm-leadrows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.hm-lrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 10px;
+}
+.hm-lrow + .hm-lrow {
+  border-top: 1px solid var(--line);
+}
+.hm-lrow-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.hm-lrow-open:hover .hm-lrow-n {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hm-lrow-open:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+.hm-lrow-id {
+  display: grid;
+  min-width: 0;
+}
+.hm-lrow-n {
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-lrow-p {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-lrow-act {
+  flex: none;
+}
+.td-row-go {
+  white-space: nowrap;
+}
+
+/* Since your last visit. */
+.hm-slist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.hm-slist li + li {
+  border-top: 1px solid var(--line);
+}
+.hm-srow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+.hm-srow:hover {
+  background: var(--row-hover);
+}
+.hm-srow:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.hm-srow-ico {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--pine-8);
+}
+.hm-srow-ico .tp-nav-ico {
+  color: var(--pine);
+}
+.hm-srow-t {
+  flex: 1;
+  font-weight: 600;
+}
+.hm-srow > svg:last-child {
+  color: var(--faint);
+}
+
+/* Your saved views: a small table, like a file list. */
+.hm-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.hm-tab {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.hm-tab.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(10, 26, 19, 0.08);
+}
+.hm-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.hm-tablewrap {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow-x: auto;
+}
+.hm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 20px;
+}
+.hm-table thead th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+}
+.hm-table td,
+.hm-table tbody th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: 400;
+  vertical-align: middle;
+}
+.hm-table tbody tr:last-child td,
+.hm-table tbody tr:last-child th {
+  border-bottom: 0;
+}
+.hm-table tbody tr:hover {
+  background: var(--row-hover);
+}
+.hm-table .hm-num {
+  text-align: right;
+}
+.hm-vname {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  color: var(--ink);
+  font-weight: 650;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.hm-vname .tp-nav-ico {
+  color: var(--muted);
+}
+.hm-vname span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-vname:hover span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hm-vname:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.hm-fresh {
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+.hm-zero,
+.hm-muted {
+  color: var(--faint);
+}
+.hm-skel-n {
+  display: inline-block;
+  width: 28px;
+  height: 10px;
+  vertical-align: middle;
+}
+.hm-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.hm-switch-k {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--line-strong);
+  transition: background var(--t);
+}
+.hm-switch-k::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--t);
+}
+.hm-switch.on .hm-switch-k {
+  background: var(--pine);
+}
+.hm-switch.on .hm-switch-k::after {
+  transform: translateX(14px);
+}
+.hm-switch.on {
+  color: var(--ink);
+}
+.hm-switch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.hm-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-card);
+  font-size: 14px;
+  color: var(--muted);
+}
+.hm-empty p {
+  margin: 0;
+}
+
+/* Get started: its steps, then one line once they are done. */
+.hm-gs {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--bg);
+}
+.hm-gs-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hm-gs-n {
+  font-size: 13px;
+  color: var(--muted);
+}
+.hm-gs-bar {
+  flex: 1;
+  max-width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.hm-gs-bar span {
+  display: block;
+  height: 100%;
+  background: var(--volt);
+  border-radius: 3px;
+}
+.hm-gs-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.hm-gs-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.hm-gs-step:hover {
+  border-color: var(--line-strong);
+}
+.hm-gs-step:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.hm-gs-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.hm-gs-step.done .hm-gs-dot {
+  border-color: var(--volt);
+  background: var(--volt);
+  color: var(--pine);
+}
+.hm-gs-t {
+  display: grid;
+  min-width: 0;
+}
+.hm-gs-l {
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.hm-gs-step.done .hm-gs-l {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--line-strong);
+}
+.hm-gs-hint {
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--muted);
+}
+.hm-gs-done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.hm-gs-done > span:nth-child(2) {
+  flex: 1;
+}
+.hm-gs-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--volt);
+  color: var(--pine);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Narrower screens: two cards a row, the sections one under the other. */
+@media (max-width: 1199px) {
+  .hm-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 899px) {
+  .hm-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tp-app .tp-main-page.hm-page {
+    padding: 24px 24px 64px;
+  }
+}
+@media (max-width: 767px) {
+  .tp-app .tp-main-page.hm-page {
+    padding: 8px 16px 40px;
+  }
+  .hm {
+    gap: 22px;
+  }
+  .hm-h1 {
+    font-size: 25px;
+    line-height: 31px;
+    margin-top: 10px;
+  }
+  .hm-sub {
+    font-size: 15px;
+    line-height: 22px;
+  }
+  .hm-hello + .hm-ask {
+    margin-top: -8px;
+  }
+  .hm-gs {
+    gap: 6px;
+    padding: 12px 12px 6px;
+  }
+  .hm-gs-head {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .hm-gs-bar {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .hm-gs-steps {
+    gap: 0;
+  }
+  .hm-gs-step {
+    min-height: 48px;
+    padding: 6px 2px;
+    border: 0;
+    background: none;
+  }
+  .hm-gs-steps li + li .hm-gs-step {
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+  }
+  .hm-ask-go {
+    display: none;
+  }
+  .hm-cards {
+    gap: 8px;
+  }
+  .hm-card {
+    min-height: 0;
+    padding: 12px;
+  }
+  .hm-card-ico {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 4px;
+  }
+  .hm-card-p {
+    font-size: 12.5px;
+    line-height: 17px;
+  }
+  .hm-lrow {
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+  .hm-lrow-act {
+    margin-left: 52px;
+  }
+  .hm-col-opened {
+    display: none;
+  }
+  .hm-table td,
+  .hm-table tbody th,
+  .hm-table thead th {
+    padding: 10px;
+  }
+  .hm-gs-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 359px) {
+  .hm-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

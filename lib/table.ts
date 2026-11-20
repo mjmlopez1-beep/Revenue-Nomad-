@@ -6227,7 +6227,7 @@ export async function perform(
             return {
               message: a.radar
                 ? `${YOUR_FEATURE} is on. When a company like your clients moves, you hear about it the next morning.`
-                : `${YOUR_FEATURE} is off. We won't send it by email or Slack. ${FEATURE_NAME} in the menu still lists what's new.`,
+                : `${YOUR_FEATURE} is off. We won't send it by email or Slack. ${FEATURE_NAME} in the app still lists what's new.`,
             };
           }
           if (typeof a.partners === "boolean") {

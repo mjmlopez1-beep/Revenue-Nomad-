@@ -37,7 +37,7 @@ import {
   icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
-import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, listKeyOf, parsePlace, placeDefaults, placeSortDefault, presetFacets, weekN, type FirstList } from "./place";
+import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, weekN, type FirstList } from "./place";
 import { alertView } from "../onboard/suggest"; // [ux ws3]
 import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, startSteps, stepOneKind, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
@@ -45,7 +45,7 @@ import { InvitePanel } from "./Invite";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
 import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
 import { Seats } from "./Seats";
-import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
+import { earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar, useRadarNew } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
 import { Partners } from "./Partners";
@@ -68,7 +68,10 @@ import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import type { TodayView } from "@/lib/viewWire";
 import { fmtStamp } from "./RoleDate";
 import { Strip, sinceText } from "./Guide";
-import { TodayPage, rolesSince, useTodayData } from "./Today";
+import { rolesSince, useTodayData } from "./Today";
+import { HomePage, type HomeView } from "./Home";
+import { MoreSheet, Sidebar, TabBar } from "./Sidebar";
+import { navItems, type AppPageKey, type NavItem } from "./navModel";
 import { NudgeSlot, pickNudge } from "./nudges";
 import { COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
@@ -78,6 +81,7 @@ import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { NetworkPage } from "./network/Network"; // [google network]
 import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./post.css";
+import "./nav.css";
 
 export interface TradingPostProps {
   view: View;
@@ -245,6 +249,14 @@ const entryDepth = () => {
   return typeof d === "number" ? d : 0;
 };
 const here = () => window.location.pathname + window.location.search;
+/**
+ * What an address opens over the table: its page (?p=), else a record (?c=), else nothing. Two
+ * entries at depth 1 with different ones are two places (one record to the next, J and K, is not).
+ */
+const pageOf = (search: string) => {
+  const q = new URLSearchParams(search);
+  return q.get("p") ?? (q.get("c") ? "record" : "");
+};
 
 
 export default function TradingPost({ view, act, refresh, signOut, start, partial = null, onDrawn }: TradingPostProps) {
@@ -352,6 +364,15 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [saveOpen, setSaveOpen] = useState(false);
   /** "Manage saved views" from the account menu. */
   const [viewsOpen, setViewsOpen] = useState(false);
+  /** The way around: a sidebar from 1024px (collapsed to icons when the member says so, remembered here), else the tab bar and its More sheet. */
+  const navSide = useMedia("(min-width: 1024px)") && !phone;
+  const [navCollapsed, setNavCollapsed] = useState(() => store.get("tp_nav_collapsed") === "1");
+  const collapseNav = (on: boolean) => {
+    store.set("tp_nav_collapsed", on ? "1" : "0");
+    setNavCollapsed(on);
+  };
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const creditsRef = useRef<HTMLButtonElement>(null);
@@ -1153,6 +1174,13 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           replaceSoon.current = null;
         }
         window.history.pushState({ tpd: 0 }, "", urlRef.current);
+      } else if (want === 1 && pageOf(window.location.search) !== pageOf(urlRef.current.split("?")[1] ?? "")) {
+        // From one page or record to another (the sidebar): an entry of its own, so Back returns to the one before.
+        if (replaceSoon.current) {
+          clearTimeout(replaceSoon.current);
+          replaceSoon.current = null;
+        }
+        window.history.pushState({ tpd: 1 }, "", urlRef.current);
       } else if (here() !== urlRef.current && !replaceSoon.current) {
         // Typing in search changes the place on every key: write it once the typing pauses.
         replaceSoon.current = setTimeout(() => {
@@ -1228,6 +1256,18 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       const home = atHome();
       if (home && page === "table") setPage("today");
       else if (!home && page === "today") setPage("table");
+    } else if (d === depth && d === 1 && !overlayOpen) {
+      // Back or Forward from one page or record to another, both above the table (the sidebar's entries).
+      const x = readPlace(me);
+      const p = x.p && (x.p !== "metrics" || view.admin) ? x.p : null;
+      if (p && p !== page) {
+        setDrawer(null);
+        if (p === "radar") setSigDay(x.sig);
+        setPage(p);
+      } else if (!p && x.c && byId.has(x.c) && (page !== "table" || drawer?.id !== x.c)) {
+        setDrawer({ id: x.c, rowKey: sorted.find((r) => r.i.c.id === x.c)?.key ?? x.c, focus: null });
+        setPage("table");
+      }
     } else if (d > depth) {
       // Forward onto a record or a page.
       const x = readPlace(me);
@@ -1545,9 +1585,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * pointer. Today has no rows to push: it reads the balance now, and leaves out the unlock step,
    * which its own card is.
    */
+  /** Home shows Get started itself (its steps, then one line once they are done), so its nudge never repeats the next step. */
+  const homeSteps = !checkOff && !(waiting && !pf) && steps.steps.length > 0;
   const nudgeFor = (where: "today" | "table") => {
     const m = where === "today" ? me : slotMe;
-    const next = checkOff || (where === "today" && steps.next?.action === "unlock") || (waiting && !pf) ? null : steps.next;
+    const next = checkOff || (where === "today" && (homeSteps || steps.next?.action === "unlock")) || (waiting && !pf) ? null : steps.next;
     return pickNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined });
   };
   /** What a nudge's button does. Unknown actions open the page of that name, or do nothing. */
@@ -1996,29 +2038,27 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const spelled = withIcpSpelled(eff, me.icp);
   const herePlace = absolutePlace({ t: recordType, v: tab, s: sortPicked, f: wide ? filters : eff, q, all: allFns });
   const currentView = views.find((v) => v.place === herePlace)?.id ?? null;
+  /** When each saved view was last on screen, in this browser (Home's "Last opened" and its Recent tab). */
+  const openedKey = `tp_view_opened_${me.id}`;
+  const [viewOpened, setViewOpened] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(store.get(openedKey) ?? "{}") as Record<string, string>;
+    } catch {
+      return {};
+    }
+  });
+  const openedView = page === "table" ? currentView : null;
+  useEffect(() => {
+    if (!openedView) return;
+    setViewOpened((o) => {
+      const next = { ...o, [openedView]: new Date().toISOString() };
+      store.set(openedKey, JSON.stringify(next));
+      return next;
+    });
+  }, [openedView, openedKey]);
   const openView = (v: SavedViewRec) => {
-    const c = v.criteria;
-    // A search saved in Claude has no place: open its open roles from what it looks for.
-    const x = v.place
-      ? readPlace(me, v.place)
-      : {
-          t: "engagements" as RecordType,
-          v: "hiring" as Tab,
-          s: null,
-          q: "",
-          all: true,
-          f: {
-            ...EMPTY_FILTERS,
-            fn: c.functions ?? (c.function ? [c.function] : []),
-            industry: c.industry ?? [],
-            employees: c.employees ?? [],
-            revenue: c.revenue ?? [],
-            country: c.country ?? [],
-            hq: c.hq ? [c.hq] : [],
-            hiredFn: c.hiredFn ?? [],
-            hiredWithin: c.hiredWithin ?? 0,
-          } as Filters,
-        };
+    // A search saved in Claude has no place: open its open roles from what it looks for (place.ts savedViewPlace).
+    const x = savedViewPlace(me, v, presetsOff(me));
     setPage("table");
     setDrawer(null);
     setPop(null);
@@ -2100,6 +2140,124 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   // A view past Free's one is Pro's: on Free the save is locked (it opens the plans), in the trial it says it's in the trial. Billing live only.
   const saveTag = me.plan && me.plan.name !== "pro" && me.onboarded && !currentView && views.length >= FREE_SAVED_VIEWS ? <ProTag plan={me.plan} /> : null;
   const savedViews = <SavedViews views={views} current={currentView} onOpen={openView} onSave={askSave} saveTag={saveTag} {...viewActs} />;
+
+  /*
+   * ----- the way around: the sidebar, the tab bar and More (navModel.ts) -----
+   * Every place is a link to the address the app writes for it (placeUrl), so a middle-click opens
+   * it in a new tab and a reload lands there. Counts need the whole table: until it is here they
+   * stay off (Crystal Ball's and unread messages come with Today's answer and Me).
+   */
+  const navOff = presetsOff(me);
+  const tableHref = (t: RecordType, v: Tab, f: Filters = filters, s: SortKey | null = sortPicked, all = allFns) => placeUrl(me, { t, v, s, f, q: "", c: null, p: "table", all });
+  const listTab: Tab = tabPicked === "hiring" || tabPicked === "following" ? "all" : tabPicked;
+  const hiringFilters = useMemo(() => ({ ...EMPTY_FILTERS, icp: filters.icp }) as Filters, [filters.icp]);
+  const pageHref = (p: AppPageKey) => (p === "today" ? placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p: "today" }) : placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p, all: allFns }));
+  const viewHref = (v: SavedViewRec) => {
+    const x = savedViewPlace(me, v, navOff);
+    return placeUrl(me, { t: x.t, v: x.v, s: x.s, f: x.f, q: x.q, c: null, p: "table", all: x.all });
+  };
+  const hiringNav = useMemo(
+    () => (waiting ? null : placeRows(infos, cellMe, { t: "engagements", v: "hiring", s: null, f: hiringFilters, q: "", c: null, p: null, all: false, sig: null, home: false }, presetsOff(cellMe)).length),
+    [waiting, infos, cellMe, hiringFilters],
+  );
+  const followingNav = useMemo(() => (waiting ? null : infos.filter((i) => i.c.following).length), [waiting, infos]);
+  /** Each saved view's matches and what is new in it since the last visit, on the whole table. */
+  const viewCounts = useMemo(() => {
+    const m = new Map<string, { matches: number; fresh: number }>();
+    if (waiting) return m;
+    for (const v of views) {
+      const rows = placeRows(infos, cellMe, savedViewPlace(cellMe, v, presetsOff(cellMe)), presetsOff(cellMe));
+      m.set(v.id, { matches: rows.length, fresh: freshCount(rows, since.at) });
+    }
+    return m;
+  }, [waiting, views, infos, cellMe, since.at]);
+  const nav = navItems({
+    page,
+    recordType,
+    tab,
+    currentView,
+    hrefs: {
+      today: pageHref("today"),
+      companies: tableHref("companies", listTab),
+      engagements: tableHref("engagements", listTab),
+      people: tableHref("people", listTab),
+      hiring: tableHref("engagements", "hiring", hiringFilters, null, false),
+      following: tableHref("companies", "following"),
+      page: pageHref,
+    },
+    admin: !!me.admin && !!view.admin,
+    plan: me.plan,
+    network: !!network,
+    networkN: network ? network.companies.length : null,
+    unread,
+    radarNew,
+    totals: waiting && !pf ? null : totals,
+    hiringN: hiringNav,
+    followingN: followingNav,
+    seatsMissing: waiting && !pf ? null : seatStats.missing,
+    credits: me.credits,
+    views: views.map((v) => ({ id: v.id, name: v.name, href: viewHref(v), fresh: viewCounts.get(v.id)?.fresh ?? null })),
+    inviteBonus: REFERRAL_BONUS,
+  });
+  /** Where an item goes, on a plain click (the link's own href is the same place). */
+  const navTo = useStable((it: NavItem) => {
+    setEditor(null);
+    setPop(null);
+    setMoreOpen(false);
+    setSideOverlay(false);
+    const k = it.key;
+    if (k === "today") return goHome();
+    if (k === "add") return openAdd();
+    if (k === "invite") return invite();
+    if (k === "seats") return openSeats();
+    if (k === "hiring") return seeOpenRoles();
+    if (k.startsWith("view:")) {
+      const v = views.find((x) => `view:${x.id}` === k);
+      return v ? openView(v) : undefined;
+    }
+    setDrawer(null);
+    if (k === "companies" || k === "engagements" || k === "people" || k === "following") {
+      setQuery("");
+      setSearchTab(null);
+      setRecordType(k === "following" ? "companies" : k);
+      setTabPicked(k === "following" ? "following" : listTab);
+      setPage("table");
+      return;
+    }
+    if (k === "radar") setSigDay(null);
+    if (it.page && it.page !== "table" && (it.page !== "metrics" || view.admin)) setPage(it.page);
+  });
+
+  /* ----- Home's pieces ----- */
+  const homeViews: HomeView[] = views.map((v) => {
+    const c = viewCounts.get(v.id);
+    return { v, href: viewHref(v), matches: c ? c.matches : null, fresh: c ? (since.at ? c.fresh : null) : null, opened: viewOpened[v.id] ?? null };
+  });
+  const seatsCard = (() => {
+    if (waiting && !pf) return null;
+    if (seatStats.missing > 0) {
+      const earn = Math.min(seatStats.missing, earnRoom(me));
+      return { kind: "fill" as const, title: "Fill in your seats", line: earn > 0 ? `${plural(seatStats.missing, "fact")} to add, earn up to ${plural(earn, "credit")}.` : `${plural(seatStats.missing, "fact")} to add on your seats.`, go: () => openSeats() };
+    }
+    if (seatStats.n === 0) return { kind: "find" as const, title: "Find your seats", line: "Claim a seat you held and earn up to ~12 credits a seat.", go: () => openSeatSearch() };
+    return { kind: "invite" as const, title: "Invite a fractional", line: `You both get ${REFERRAL_BONUS} credits when they add a first fact.`, go: () => invite() };
+  })();
+  const firstViewHref = placeUrl(me, { ...defaultsFor(me), q: "", c: null, p: "table", all: false });
+  /** "Find companies": the table on the member's first view (their defaults). */
+  const openFirstView = () => {
+    const d = defaultsFor(me);
+    setDrawer(null);
+    setQuery("");
+    setSearchTab(null);
+    setRecordType(d.t);
+    setTabPicked(d.v);
+    setSort(null);
+    setFilters(d.f);
+    setAllFns(false);
+    setPage("table");
+  };
+  const radarGo = { href: pageHref("radar"), go: () => (setDrawer(null), setSigDay(null), setPage("radar")) };
+  const stepAction: Record<"unlock" | "seat" | "invite", string> = { unlock: "unlock", seat: "seats", invite: "invite" };
   /*
    * Every filter on, as a chip that takes it off, on phones too: an onboarding answer's filter
    * ("No fractional Sales yet") is never only a number on the Filters button (C47).
@@ -2186,12 +2344,27 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     <UiCtx.Provider value={ui}>
       <CellUiCtx.Provider value={cellUi}>
       <FitWhyCtx.Provider value={fitWhy}>
-      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}`}>
+      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}`}>
         {page === "table" && (
           <a href="#tp-results" className="tp-skip" onClick={skip}>
             Skip to the {phone ? "list" : "table"}
           </a>
         )}
+        {navSide && (
+          <Sidebar
+            items={nav}
+            me={me}
+            collapsed={navCollapsed}
+            onCollapse={collapseNav}
+            onNav={navTo}
+            onManageViews={() => setViewsOpen(true)}
+            onUpgrade={() => openPlans(me.plan?.name === "trial" ? "trial" : "billing")}
+            onAccount={() => setPop((p) => (p === "menu" ? null : "menu"))}
+            accountRef={menuRef}
+            onHome={goHome}
+          />
+        )}
+        <div className="tp-col">
         <TopBar
           me={me}
           query={query}
@@ -2202,11 +2375,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           onSearchEnter={() => setFindNow(Date.now())}
           searchRef={searchRef}
           phone={phone}
+          brand={!navSide}
           onCredits={() => setPop((p) => (p === "credits" ? null : "credits"))}
           creditsRef={creditsRef}
           onAdd={() => openAdd()}
-          onMenu={() => setPop((p) => (p === "menu" ? null : "menu"))}
-          menuRef={menuRef}
           onHome={goHome}
           quietCredits={!!move && page === "table"}
           contact={contact}
@@ -2215,10 +2387,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           listSwitch={typeSwitch}
           searchInList={phone && page === "table"}
           unread={unread}
-          onMessages={() => (setEditor(null), setDrawer(null), setPage("messages"))}
+          onMessages={navSide ? () => (setEditor(null), setDrawer(null), setPage("messages")) : undefined}
           onMessagesPage={page === "messages"}
           unlockTip={unlockLimitLine(me, view.ledger)}
-          onRadar={() => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar"))} radarHere={page === "radar"} radarNew={radarNew} // [ux ws3] Crystal Ball in the bar
         />
         {me.asMember && (
           <div className="tp-asmember" role="status">
@@ -2230,17 +2401,18 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         )}
 
         {page === "today" ? (
-          <main className="tp-main tp-main-page td-page">
-            <TodayPage
+          <main className="tp-main tp-main-page td-page hm-page">
+            <HomePage
               me={me}
               infos={infos}
               byId={byId}
               firstRow={listWaits ? null : sorted[0] ?? null}
-              waiting={listWaits}
+              waiting={waiting}
               data={today.data}
               failed={today.failed}
               sinceAt={since.at}
-              nudge={<NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} />}
+              unread={unread}
+              nudge={nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null}
               events={events}
               trialEnded={!!me.plan?.trialEnded && !trialSeen}
               onTrialSeen={() => {
@@ -2248,11 +2420,30 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                 void act({ type: "noticeSeen", kind: "trialEnded" }, { quiet: true, silentError: true });
               }}
               onSeePro={() => openPlans("billing")}
-              onRadar={() => (setSigDay(null), setPage("radar"))}
-              onBrowse={() => (setDrawer(null), setPage("table"))}
-              onRoles={seeOpenRoles}
-              onFollows={() => (setDrawer(null), setPage("table"), setTabPicked("following"), setRecordType("companies"))}
+              steps={homeSteps ? steps.steps : null}
+              onStep={(k) => runNudge(stepAction[k])}
+              onHideSteps={hideCheck}
+              find={{ href: firstViewHref, go: openFirstView }}
+              radar={radarGo}
+              onAdd={() => openAdd()}
+              seats={seatsCard}
+              roles={{ href: tableHref("engagements", "hiring", hiringFilters, null, false), go: seeOpenRoles }}
+              follows={{ href: tableHref("companies", "following"), go: () => navTo(nav.find((x) => x.key === "following")!) }}
+              messages={{ href: pageHref("messages"), go: () => (setDrawer(null), setPage("messages")) }}
+              views={homeViews}
+              onOpenView={openView}
+              onEmailView={emailView}
+              table={{ href: firstViewHref, go: openFirstView }}
               openCompany={(id) => openCompany(id)}
+              onSearch={(text) => {
+                setDrawer(null);
+                setSearchTab(null);
+                setQuery(text);
+                setPage("table");
+                setFindNow(Date.now());
+              }}
+              nav={nav}
+              onNav={navTo}
             />
           </main>
         ) : waiting && page !== "table" ? (
@@ -2431,14 +2622,17 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               </h1>
               {banners}
               <div ref={listTopRef} className="tp-listtop" aria-hidden />
-              <div className="tp-head">
-                {!(layout === "desktop" && sideDocked) && (
-                  <button type="button" className={`btn tp-filterbtn${nFilters ? " on" : ""}`} onClick={toggleFilters} title="Show filters (F)">
-                    <IconFilter size={14} /> Filters{nFilters ? <span className="num tp-filterbtn-n">{nFilters}</span> : null}
-                  </button>
-                )}
-                {recordSwitch}
-              </div>
+              {/* With the sidebar, what to list is its Companies, Seats and People: the switch here comes back only while searching (each list's matches). */}
+              {(!(layout === "desktop" && sideDocked) || !navSide || searchCounts) && (
+                <div className="tp-head">
+                  {!(layout === "desktop" && sideDocked) && (
+                    <button type="button" className={`btn tp-filterbtn${nFilters ? " on" : ""}`} onClick={toggleFilters} title="Show filters (F)">
+                      <IconFilter size={14} /> Filters{nFilters ? <span className="num tp-filterbtn-n">{nFilters}</span> : null}
+                    </button>
+                  )}
+                  {(!navSide || searchCounts) && recordSwitch}
+                </div>
+              )}
               {hiredSentence || pill}
               <div className="tp-toolbar">
                 {tabs}
@@ -2499,6 +2693,23 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               {scanNote}
             </main>
           </div>
+        )}
+        </div>
+        {!navSide && <TabBar items={nav} onNav={navTo} onMore={() => (setPop(null), setMoreOpen((x) => !x))} moreRef={moreRef} moreOpen={moreOpen} />}
+        {moreOpen && !navSide && (
+          <MoreSheet
+            items={nav}
+            me={me}
+            onNav={navTo}
+            onClose={() => setMoreOpen(false)}
+            onManageViews={() => setViewsOpen(true)}
+            onUpgrade={() => openPlans(me.plan?.name === "trial" ? "trial" : "billing")}
+            onAccount={() => {
+              setMoreOpen(false);
+              // The account menu opens over the More tab once the sheet has gone.
+              setTimeout(() => setPop("menu"), 60);
+            }}
+          />
         )}
 
         {/* filters as an overlay (tablet) or bottom sheet (phone) */}
@@ -2641,80 +2852,39 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             onSeeAll={() => (setPop(null), setDrawer(null), setPage("credits"))}
           />
         )}
-        {pop === "menu" && menuRef.current && (
+        {pop === "menu" && (navSide ? menuRef.current : moreRef.current) && (
           <AvatarMenu
             me={me}
-            anchor={menuRef.current}
+            anchor={(navSide ? menuRef.current : moreRef.current)!}
             onClose={() => setPop(null)}
             // Sign out asks first while email sign-in is off: the link is then the only way back.
             onSignOut={signOut}
             emailOn={view.email}
             contact={contact}
+            // The account only: every page is in the sidebar (or the tab bar and More).
             items={[
-              // On the trial or Free (billing live only): Upgrade to Pro first, above the sections. Plan and billing stays in Settings.
-              ...(me.plan && me.plan.name !== "pro"
-                ? [
-                    {
-                      label: "Upgrade to Pro",
-                      accent: true,
-                      hint: me.plan.name === "trial" ? (me.plan.trialDaysLeft === 1 ? "Trial, last day" : `Trial, ${me.plan.trialDaysLeft} days left`) : undefined,
-                      onClick: () => openPlans(me.plan!.name === "trial" ? "trial" : "billing"),
-                    },
-                  ]
-                : []),
-              // Four short sections. Find: where the member looks. You: what is theirs. Settings. Admin.
-              { group: "Find", label: "All companies", current: page === "table" && !currentView, onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
-              // Saved views: one entry. Its sheet lists every view to open, rename or remove; the filter rail lists them too.
-              ...(views.length ? [{ group: "Find", label: "Saved views", hint: String(views.length), current: page === "table" && !!currentView, onClick: () => setViewsOpen(true) }] : []),
-              { group: "Find", label: FEATURE_NAME, badge: radarNew, badgeOf: "new", current: page === "radar", onClick: () => (setEditor(null), setDrawer(null), setSigDay(null), setPage("radar")) },
-              { group: "Find", label: "Referral partners", current: page === "partners", onClick: () => (setEditor(null), setDrawer(null), setPage("partners")) },
-              { group: "Find", label: "Rate benchmarks", current: page === "rates", onClick: () => (setDrawer(null), setPage("rates")) },
-              ...(phone ? [{ group: "You", label: "Add what you know", onClick: () => openAdd() }] : []),
-              { group: "You", label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
-              { group: "You", label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} to fill in` : undefined, onClick: () => openSeats() },
-              // [google network] only with RN_GOOGLE=1.
-              ...(network
-                ? [{ group: "You", label: "Your network", hint: network.companies.length ? String(network.companies.length) : undefined, current: page === "network", onClick: () => (setEditor(null), setDrawer(null), setPage("network")) }]
-                : []),
-              { group: "You", label: "Your credits", current: page === "credits", onClick: () => (setDrawer(null), setPage("credits")) },
-              { group: "You", label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },
-              { group: "Settings", label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
-              // Only while billing is live (Me.plan): the plan, the trial's days left, renew, cancel, pause, the top-up.
-              ...(me.plan
-                ? [
-                    {
-                      group: "Settings",
-                      label: "Plan and billing",
-                      hint: me.plan.name === "trial" ? `Trial, ${me.plan.trialDaysLeft === 1 ? "last day" : `${me.plan.trialDaysLeft} days`}` : me.plan.name === "pro" ? "Pro" : "Free",
-                      current: page === "billing",
-                      onClick: () => (setEditor(null), setDrawer(null), setPage("billing")),
-                    },
-                  ]
-                : []),
-              { group: "Settings", label: "Integrations", hint: "Slack, Claude", current: page === "integrations", onClick: () => (setDrawer(null), setPage("integrations")) },
+              { label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
               // One way to get signed in elsewhere: emailed when email is on, else the link copied.
               view.email
-                ? { group: "Settings", label: "Email me a sign-in link", onClick: () => void emailMeLink(toast) }
-                : { group: "Settings", label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
+                ? { label: "Email me a sign-in link", onClick: () => void emailMeLink(toast) }
+                : { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
               // Single-letter shortcuts can be switched off (speech input, stray keys). Not offered on touch screens, which have none.
               ...(!touch
                 ? [
                     {
-                      group: "Settings",
                       label: keysOff ? "Turn on keyboard shortcuts" : "Turn off keyboard shortcuts",
                       hint: "/ F A J K",
                       onClick: () => {
                         const off = !keysOff;
                         store.set("tp_keys_off", off ? "1" : "0");
                         setKeysOff(off);
-                        toast(off ? "Keyboard shortcuts are off. Turn them on again from this menu." : "Keyboard shortcuts are on. Press / to search, F for filters, A to add, J and K to step through records.");
+                        toast(off ? "Keyboard shortcuts are off. Turn them on again from your account menu." : "Keyboard shortcuts are on. Press / to search, F for filters, A to add, J and K to step through records.");
                       },
                     },
                   ]
                 : []),
-              ...(me.admin && view.admin ? [{ group: "Admin", label: "Pilot metrics", current: page === "metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
               // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
-              ...(me.admin || me.asMember ? [{ group: "Admin", label: "See it as a member", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
+              ...(me.admin || me.asMember ? [{ group: "Admin", label: "See what members see", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
             ]}
           />
         )}

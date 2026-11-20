@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Pine top bar: brand, search, the plan pill (billing live only), credits pill, earn meter, "Add what you know", avatar menu.
+ * The top bar (light, over the content): search, the credits pill, "Add what you know", Messages. The account menu (AvatarMenu) opens from the sidebar's foot.
  * Every number here (the balance, "Earned 11 of 25 today", the ledger) is the text face with
  * tabular figures, never mono.
  *
@@ -10,15 +10,13 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject, Fragment } from "react";
 import type { LedgerRow, Me, View } from "@/lib/tableTypes";
-import { Brand, IconCoin, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo, useToast } from "../ui/shared";
+import { Brand, IconCoin, IconPlus, IconSearch, IconX, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
-import { PlanPill } from "./Billing";
-import { FEATURE_NAME } from "@/lib/radar/types";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
 export type Contact = View["contact"] | null;
@@ -264,7 +262,7 @@ export function HelpSheet({ me, contact, emailOn, starter, onClose }: { me: Me; 
   };
   return (
     // Opened from the account menu, whose item is gone by now: focus goes back to the menu button.
-    <Sheet title="Questions and feedback" onClose={onClose} dialog className="tp-help" restore={() => document.querySelector<HTMLElement>(".tp-avatar, .tp-top [aria-label='Menu']")}>
+    <Sheet title="Questions and feedback" onClose={onClose} dialog className="tp-help" restore={() => document.querySelector<HTMLElement>(".tp-nav-me, .tp-tabbar [data-nav='more']")}>
       <section className="tp-help-sec" aria-labelledby="tp-help-q">
         <h3 id="tp-help-q" className="tp-help-h">
           Questions
@@ -571,26 +569,12 @@ export function useRadarNew(latest: { day: string; n: number } | null, here: boo
   return day && seen !== day.day ? day.n : 0;
 }
 
-function RadarBtn({ onClick, here, n }: { onClick: () => void; here?: boolean; n: number }) {
-  return (
-    <button
-      type="button"
-      className={`tp-radarbtn${here ? " here" : ""}`}
-      aria-current={here ? "page" : undefined}
-      aria-label={n ? `${FEATURE_NAME}, ${n} new ${n === 1 ? "company" : "companies"}` : FEATURE_NAME}
-      title={n ? `${n} new in ${FEATURE_NAME}` : FEATURE_NAME}
-      onClick={onClick}
-    >
-      <span>{FEATURE_NAME}</span>
-      {n > 0 && (
-        <span className="tp-radarbtn-n num" aria-hidden>
-          {n}
-        </span>
-      )}
-    </button>
-  );
-}
-
+/**
+ * The top bar, light, over the content (the sidebar or the tab bar is the way around): search
+ * (/ or Ctrl K), the balance, "Add what you know" and Messages. The brand sits here only where
+ * there is no sidebar (under 1024px). Phones: the brand, what the list shows (on the table), the
+ * search icon and the balance; Messages and the rest are in the tab bar.
+ */
 export function TopBar({
   me,
   query,
@@ -598,11 +582,10 @@ export function TopBar({
   onSearchEnter,
   searchRef,
   phone,
+  brand,
   onCredits,
   creditsRef,
   onAdd,
-  onMenu,
-  menuRef,
   onHome,
   quietCredits,
   contact,
@@ -614,9 +597,6 @@ export function TopBar({
   onMessages,
   onMessagesPage,
   unlockTip,
-  onRadar,
-  radarHere,
-  radarNew = 0,
 }: {
   me: Me;
   query: string;
@@ -625,11 +605,11 @@ export function TopBar({
   onSearchEnter?: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
   phone: boolean;
+  /** No sidebar on this screen: the bar carries the brand (a link Home). */
+  brand: boolean;
   onCredits: () => void;
   creditsRef: RefObject<HTMLButtonElement | null>;
   onAdd: () => void;
-  onMenu: () => void;
-  menuRef: RefObject<HTMLButtonElement | null>;
   onHome: () => void;
   /** The next-move card is on the page: a low balance stays in the bar's own colors. */
   quietCredits?: boolean;
@@ -642,21 +622,15 @@ export function TopBar({
   listSwitch?: ReactNode;
   /** Phones, on the table: the search is a field at the top of the list, so the bar has no search of its own. */
   searchInList?: boolean;
-  /** Conversations with something unread: the count on the Messages button (or on the avatar, without one). */
+  /** Conversations with something unread: the count on the Messages button. */
   unread?: number;
-  /** Open Messages. With it the bar has its own Messages button. */
+  /** Open Messages. With it the bar has its own Messages button (not on phones: the tab bar has it). */
   onMessages?: () => void;
   /** The Messages page is open. */
   onMessagesPage?: boolean;
   /** Why the day's unlock limit binds (ledger.ts unlockLimitLine), for the credits pill's tooltip. */
   unlockTip?: string | null;
-  /** [ux ws3] Open Crystal Ball. With it, wider screens have Crystal Ball in the bar, with its new companies. */
-  onRadar?: () => void;
-  radarHere?: boolean;
-  /** Crystal Ball's new companies (useRadarNew), for its button. */
-  radarNew?: number;
 }) {
-  const msgBtn = !!onMessages;
   const [searchOpen, setSearchOpen] = useState(false);
   const hosts = (
     <>
@@ -698,6 +672,20 @@ export function TopBar({
         ))}
     </label>
   );
+  const home = (cls: string, children: ReactNode) => (
+    <a
+      href="/"
+      className={cls}
+      aria-label="Merlin home"
+      onClick={(e) => {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        onHome();
+      }}
+    >
+      {children}
+    </a>
+  );
   if (phone) {
     // [ux ws3] Search is the bar's icon on every page, the list included (the field over the list gave way to records).
     const open = searchOpen || !!query;
@@ -712,23 +700,19 @@ export function TopBar({
           </>
         ) : (
           <>
-            <button type="button" className="tp-brand tp-brand-phone" onClick={onHome} aria-label="Merlin home">
-              <Brand dark size={32} className="tp-brand-wm" />
-              <Brand dark size={30} kind="mark" className="tp-brand-mark" />
-            </button>
+            {home(
+              "tp-brand tp-brand-phone",
+              <>
+                <Brand size={32} className="tp-brand-wm" />
+                <Brand size={30} kind="mark" className="tp-brand-mark" />
+              </>,
+            )}
             {listSwitch}
             <div className="tp-top-right">
               <button type="button" className={`tp-iconbtn${searchInList ? " tp-search-icon-list" : ""}`} aria-label="Search" onClick={() => setSearchOpen(true)}>
                 <IconSearch size={18} />
               </button>
-              <PlanPill plan={me.plan} phone />
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
-              {msgBtn && unread > 0 && <MessagesBtn unread={unread} onClick={onMessages!} here={onMessagesPage} />}
-              {/* The main action on a phone is the labeled "Add what you know" at the foot of the list, in thumb reach. Pages reach it from the menu. */}
-              <button ref={menuRef} type="button" className="tp-iconbtn tp-has-badge" aria-label={unread ? `Menu, ${unread} unread` : "Menu"} aria-haspopup="menu" aria-expanded={false} onClick={onMenu}>
-                <IconMenu />
-                {unread > 0 && !msgBtn && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
-              </button>
             </div>
           </>
         )}
@@ -738,37 +722,15 @@ export function TopBar({
   }
   return (
     <header className="tp-top">
-      <button type="button" className="tp-brand" onClick={onHome} aria-label="Merlin home">
-        <span className="tp-brand-logo">
-          <Brand dark size={36} />
-        </span>
-      </button>
+      {brand && home("tp-brand", <span className="tp-brand-logo"><Brand size={32} /></span>)}
       <div className="tp-top-mid">{search}</div>
-      {onRadar && <RadarBtn onClick={onRadar} here={radarHere} n={radarNew} />}
       <div className="tp-top-right">
-        {/* The meter's slot is first, so with nothing earned yet its room is the gap after the search, not a hole between the balance and Add. */}
-        <EarnMeter me={me} onClick={onCredits} />
-        {/* Only while billing is live (Me.plan): the trial's days with Upgrade, or Upgrade to Pro. */}
-        <PlanPill plan={me.plan} />
         <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
         <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>
         </button>
-        {msgBtn && <MessagesBtn unread={unread} onClick={onMessages!} here={onMessagesPage} />}
-        <button
-          ref={menuRef}
-          type="button"
-          className="tp-avatar tp-has-badge"
-          aria-label={unread && !msgBtn ? `Your account, ${unread} unread` : "Your account"}
-          aria-haspopup="menu"
-          aria-expanded={false}
-          title="Your account"
-          onClick={onMenu}
-        >
-          {initials(me.name)}
-          {unread > 0 && !msgBtn && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
-        </button>
+        {onMessages && <MessagesBtn unread={unread} onClick={onMessages} here={onMessagesPage} />}
       </div>
       {hosts}
     </header>
