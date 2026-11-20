@@ -8,7 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Action, Cell, CompanyRec, LedgerRow, Me, PersonRec, View } from "@/lib/tableTypes";
 import { fieldDef, type Entity } from "@/lib/tableFields";
 import { webLink } from "@/lib/links";
-import { unpackView } from "@/lib/viewWire";
+import { unpackCompany, unpackView, type TodayView } from "@/lib/viewWire";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
 export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean };
@@ -158,6 +158,23 @@ export async function fetchView(): Promise<ViewResult> {
     status: r.status,
     retryAfter: Number.isFinite(wait) && wait > 0 ? wait : null,
   };
+}
+
+/**
+ * GET /api/table?today=1 (TodayView in lib/viewWire.ts): what Today draws before the full view,
+ * its companies' empty cells put back. `since`: the previous visit (ISO), for the "Since Tuesday"
+ * counts. Null on any answer without it (signed out, busy, offline): Today then waits for the view.
+ */
+export async function fetchToday(since?: string | null): Promise<TodayView | null> {
+  try {
+    const r = await fetch(`/api/table?today=1${since ? `&since=${encodeURIComponent(since)}` : ""}`, { cache: "no-store" });
+    const j = (await r.json().catch(() => null)) as TodayView | null;
+    if (!r.ok || !j?.me || !j.radar) return null;
+    for (const c of j.companies ?? []) unpackCompany(c);
+    return j;
+  } catch {
+    return null;
+  }
 }
 
 /** POST to /api/table. Returns the JSON body, with `error` set on failure. */

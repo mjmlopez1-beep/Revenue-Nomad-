@@ -11,6 +11,7 @@ import { clientIp, limited } from "@/lib/rateLimit";
 import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
 import { packView } from "@/lib/viewWire";
+import { todayView } from "@/lib/today";
 import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
@@ -200,7 +201,9 @@ const patchless = (a: Action) =>
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
  * GET ?radar=1[&day=YYYY-MM-DD]  RadarView: one day's companies from the member's radar (lib/radar radarView), the list its email and Slack links open. 401 signed out.
- * GET ?export=1    admins: download the runtime state (a backup).
+ * GET ?today=1[&since=ISO]  TodayView (lib/viewWire.ts, lib/today.ts): what Today draws before the table, under 20 KB: me,
+ *                  plan, the free company, Crystal Ball's top 4 with their records, and "Since Tuesday" counts. 401 signed out.
+ * GET ?export=1   admins: download the runtime state (a backup).
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
  *                  Anyone else gets their own view, as without it.
@@ -316,6 +319,11 @@ export const GET = guarded(async (req: NextRequest) => {
   }
   // Plans (only while billing is live): a trial due to start, or a month's Pro credits, lands before the view is built. Nothing to do costs nothing.
   await billingVisit(token, origin(req)).catch((e) => console.error("plan visit failed", e));
+  // Today, before the full view (TodayView in lib/viewWire.ts): not in the view queue, a few milliseconds.
+  if (req.nextUrl.searchParams.get("today") !== null) {
+    const t = await todayView(token, req.nextUrl.searchParams.get("since"));
+    return t ? sendJson(req, t) : err("You're signed out. Sign in again to see Today.", 401);
+  }
   const enc = encodingFor(req);
   // An admin's "See it as a member". buildView ignores it for anyone who is not an admin.
   const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || req.nextUrl.searchParams.get("as") === "member";

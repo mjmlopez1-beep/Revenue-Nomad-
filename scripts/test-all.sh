@@ -89,6 +89,8 @@ run messages npx tsx scripts/test-messages.mjs
 run notify npx tsx scripts/test-notify.mts
 # The radar (lib/radar; FEATURE_NAME to members): each signal, the profile and before-function matching, never twice, every signal for every member with nothing locked named, links to the day's companies, the day's view and its 2-credit unlock, instant for Pro, no nothing-days, opt-out and unsubscribe, Slack and email. Fetch replaced: nothing leaves the machine.
 run radar npx tsx scripts/test-radar.mts
+# Today before the table (GET ?today=1, lib/today.ts): the view's own Me, Crystal Ball's top 4 with records exactly as the table builds them (its locks with them), under 20 KB, the "Since Tuesday" counts. In process.
+run today npx tsx scripts/test-today.mts
 # Crystal Ball's likelihood and timing (lib/radar/predict.ts): the rules by stage and ownership, the unknown-type blend, the Beta update, the timing curve, the ranking, Low off the email, the new seat and company facts (who introduced you stays the seat holder's), first sales hires and departed leaders. In process, fetch replaced.
 run predict npx tsx scripts/test-predict.mts
 # Recently hired (lib/hired.ts): the filter, its counts and sort, the address and saved views, the weekly email's line, the post in Slack and the connector's params, on a made-up seed with fetch replaced.

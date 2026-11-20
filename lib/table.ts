@@ -2855,6 +2855,46 @@ export async function viewPatch(
 }
 
 /**
+ * GET /api/table?today=1&since=ISO: what changed for the member since `sinceIso` (their previous
+ * visit), as Today's "Since Tuesday" line counts it, without the full view. `roles`: open roles
+ * first seen since then, in `fn` when they have one (as the scan summary counts them: not one a
+ * clean scan no longer saw, not one below the seniority bar). `follows`: companies they follow
+ * with a fact newer than then (the table's updatedAt, as "since your last visit" reads it). Counts
+ * only, nothing that names a company. Null when the token is nobody's.
+ */
+export async function todayCounts(token: string | null, sinceIso: string, fn: string | null): Promise<{ roles: number; follows: number } | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return null;
+  const g = viewGraph(seed, s);
+  const tracks = tracksOf(seed, s);
+  const madeBy = new Map(s.engagements.map((e) => [e.id, e.by]));
+  let roles = 0;
+  for (const e of g.engagements.values()) {
+    const t = tracks.get(e.id);
+    if (!t || t.closedAt || isUnseen(t) || t.firstSeen <= sinceIso || !isOpenRole(e, s, tracks)) continue;
+    if (offBarRole(e, s, tracks, madeBy.get(e.id) === "scan") || (fn && fnOf(e, s) !== fn)) continue;
+    roles++;
+  }
+  // Each followed company, its seats (as the table lists them) and its people: the records whose facts date the company.
+  const followed = new Set((s.follows[me.id] ?? []).filter((id) => g.companies.has(id)));
+  const coOfNode = new Map<string, string>();
+  for (const c of followed) coOfNode.set(c, c);
+  for (const e of g.engagements.values()) if (followed.has(e.companyId) && !offBarRole(e, s, tracks, madeBy.get(e.id) === "scan")) coOfNode.set(e.id, e.companyId);
+  for (const p of g.contacts.values()) if (followed.has(p.companyId)) coOfNode.set(p.id, p.companyId);
+  const changed = new Set<string>();
+  if (coOfNode.size)
+    for (const k in s.values) {
+      const v = s.values[k];
+      if (v.status !== "live" || v.at <= sinceIso) continue;
+      const dot = k.indexOf(".");
+      const co = coOfNode.get(k.slice(0, dot));
+      if (co && FIELD_KEYS.has(k.slice(dot + 1))) changed.add(co);
+    }
+  return { roles, follows: changed.size };
+}
+
+/**
  * Seat titles that read below Lead (isBelowLead in lib/seniority.ts), remembered by title: every
  * view build and the Referral partners page read every seat's, and titles rarely change.
  */
