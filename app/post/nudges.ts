@@ -43,12 +43,12 @@ export function pickNudge(x: NudgeInput): Nudge | null {
   if (x.page === "today" && plan?.name === "trial" && plan.ending && plan.trialDaysLeft != null) {
     const when = plan.trialDaysLeft <= 1 ? "ends tomorrow" : `ends in ${plan.trialDaysLeft} days`;
     return plan.notLooking
-      ? { kind: "trial", text: `Your Pro trial ${when}. Nothing to do: you stay on Free, with no charge.`, cta: "See plans", action: "plans:trial" }
-      : { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans:trial" };
+      ? { kind: "trial", text: `Your Pro trial ${when}. Nothing to do: you stay on Free, with no charge.`, cta: "See plans", action: "plans" }
+      : { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans" };
   }
   if (x.credits <= LOW_CREDITS) {
     const left = x.credits <= 0 ? "You're out of credits." : `${credits(x.credits)} left.`;
-    return { kind: "credits", text: `${left} Add a fact you know and earn one.`, cta: "Add what you know", action: "add" };
+    return { kind: "credits", text: `${left} Add a fact you know and earn one.`, cta: "Earn credits", action: "earn" };
   }
   if (x.profileEmpty) return { kind: "profile", text: "Tell us who you want to work with, and we rank companies for you.", cta: "Set your profile", action: "profile" };
   if (x.nextStep) {
@@ -83,7 +83,7 @@ export function useMarkTrialShowing(on: boolean) {
 
 /**
  * The one nudge, as one calm line: what is true and one thing to do about it. Nothing when
- * `nudge` is null. `onAction` gets the nudge's action ("plans:trial", "add", "profile", or the
+ * `nudge` is null. `onAction` gets the nudge's action (WS1's set: "plans", "earn", "profile", or the
  * Get started step's own). `onClose`: a way to put it away, where the caller keeps that.
  */
 export function NudgeSlot({ nudge, onAction, onClose }: { nudge: Nudge | null; onAction: (action: string) => void; onClose?: () => void }) {
