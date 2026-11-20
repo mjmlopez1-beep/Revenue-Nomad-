@@ -638,3 +638,48 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
+
+/* [ux ws3] Rates: the member's own empty function says how far it is and opens the share form in place; the footnotes fold. */
+.bm-table td.bm-ownempty {
+  font-size: 14px;
+  color: var(--body-ink);
+  text-align: left;
+}
+.bm-ownempty-go {
+  min-height: 36px;
+  font-weight: 600;
+}
+.bm-ownempty-go .plus1 {
+  margin-left: 4px;
+  color: var(--volt-ink);
+  font-weight: 700;
+}
+.bm-table tr.bm-inline-share td {
+  padding: 4px 16px 16px;
+  text-align: left;
+  background: var(--row-on);
+}
+.bm-inline-share .tp-bm-share {
+  max-width: 720px;
+}
+details.tp-bm-note > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+}
+@media (max-width: 899px) {
+  .bm-table td.bm-ownempty {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .bm-table tr.bm-inline-share {
+    display: block;
+    padding: 0;
+  }
+  .bm-table tr.bm-inline-share td {
+    padding: 12px 16px 16px;
+  }
+}
