@@ -308,7 +308,10 @@ async function shots() {
   await settle(page);
   await page.waitForTimeout(800);
   await shot(page, "home-trial-member-1440");
-  await page.screenshot({ path: path.join(OUT, "home-trial-member-1440-full.png"), fullPage: true });
+  // The page scrolls inside its own column: the lower half, with the next leads and the saved views.
+  await page.evaluate(() => document.querySelector(".tp-main-page")?.scrollTo(0, 99999));
+  await page.waitForTimeout(400);
+  await shot(page, "home-trial-member-1440-lower");
   // The table with the sidebar and the filter rail.
   await page.goto(`${BASE}/?p=table`);
   await settle(page);

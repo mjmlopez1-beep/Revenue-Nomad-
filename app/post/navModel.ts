@@ -124,7 +124,7 @@ export function navItems(x: NavInput): NavItem[] {
     { key: "add", label: "Add what you know", group: "earn", icon: "add" },
     { key: "partners", label: "Referral partners", group: "earn", icon: "partners", href: x.hrefs.page("partners"), page: "partners" },
     { key: "rates", label: "Rate benchmarks", group: "earn", icon: "rates", href: x.hrefs.page("rates"), page: "rates" },
-    { key: "invite", label: "Invite a fractional", group: "earn", icon: "invite", hint: `+${x.inviteBonus} each` },
+    { key: "invite", label: "Invite a fractional", group: "earn", icon: "invite", hint: `+${x.inviteBonus}` },
     { key: "integrations", label: "Integrations", group: "foot", icon: "integrations", href: x.hrefs.page("integrations"), page: "integrations" },
     ...(x.plan ? [{ key: "billing", label: "Plan and billing", group: "foot" as const, icon: "billing" as const, href: x.hrefs.page("billing"), page: "billing" as const, hint: x.plan.name === "pro" ? "Pro" : undefined }] : []),
     { key: "credits", label: "Credits", group: "foot", icon: "credits", href: x.hrefs.page("credits"), page: "credits", count: x.credits },

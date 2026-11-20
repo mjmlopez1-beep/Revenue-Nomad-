@@ -21,20 +21,19 @@
  * the answer) the same comes from what the page has: the radar's own GET ?radar=1 for the rows and
  * the day counts, the free company from Me, and the since counts from the view.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
-import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
+import { CRYSTAL_USED_LINE, FEATURE_NAME } from "@/lib/radar/types";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY } from "@/lib/tableFields";
-import { CompanyLogo, IconChevron, IconLock, LockedName, val } from "../ui/shared";
-import { countryOf, hireLine, isOpenRole, namedFn, shown, type CoInfo, type Row } from "./model";
+import { CompanyLogo, IconLock, LockedName, val } from "../ui/shared";
+import { countryOf, hireLine, isOpenRole, shown, type CoInfo } from "./model";
 import { useUi, ZeroCredits } from "./ui";
 import { freeCompanyNow } from "./display";
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
 import { CrystalOpen } from "./CrystalOpen";
-import { plural } from "./hooks";
-import { TODAY_MAX_BYTES, TODAY_ROWS, isTodayAnswer, radarSince, sinceWords, type TodayAnswer, type TodayData } from "./todayModel";
+import { TODAY_MAX_BYTES, TODAY_ROWS, isTodayAnswer, radarSince, type TodayAnswer, type TodayData } from "./todayModel";
 import "./today.css";
 
 export { rolesSince, type TodayData } from "./todayModel";

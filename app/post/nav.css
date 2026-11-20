@@ -160,9 +160,14 @@
   cursor: pointer;
   transition: background var(--t), color var(--t);
 }
-.tp-nav-i:hover {
-  background: var(--surface-2);
-  color: var(--ink);
+@media (hover: hover) {
+  .tp-nav-i:hover {
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+  .tp-nav-i:hover .tp-nav-ico {
+    color: var(--pine);
+  }
 }
 .tp-nav-i.on {
   background: var(--pine-8);
@@ -173,8 +178,7 @@
   flex: none;
   color: var(--muted);
 }
-.tp-nav-i.on .tp-nav-ico,
-.tp-nav-i:hover .tp-nav-ico {
+.tp-nav-i.on .tp-nav-ico {
   color: var(--pine);
 }
 .tp-nav-l {

@@ -4,8 +4,11 @@
  * Merlin, signed in. The shared record of fractional GTM work: who hired, for which
  * seat, who held it, at what rate.
  *
- *   top bar     search, credits, earn meter, "Add what you know", account menu
- *   sidebar     filters with counts (overlay under 1280px, bottom sheet on phones)
+ *   way around  the sidebar from 1024px (Sidebar.tsx, navModel.ts: every page one click away, the
+ *               account menu in its foot), the tab bar and its More sheet under 1024px
+ *   top bar     search, credits, "Add what you know", Messages
+ *   home        Home.tsx (page "today"): greeting, search, quick actions, best leads, saved views
+ *   filter rail filters with counts beside the table (overlay under 1280px, bottom sheet on phones)
  *   content     the next-move card or Get started, record type, views, active filter chips, the table (cards on phones)
  *   pages       Your seats, Your credits, Rate benchmarks (each replaces the table)
  *   overlays    record drawer, add modal, inline fact editor, credits popover
@@ -50,7 +53,7 @@ import { earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar, useRadarNew } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
 import { RadarPage, radarRows, useRadarDay } from "./Radar";
-import { FEATURE_NAME, SIG_DAY_RE, YOUR_FEATURE } from "@/lib/radar/types";
+import { SIG_DAY_RE, YOUR_FEATURE } from "@/lib/radar/types";
 import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
