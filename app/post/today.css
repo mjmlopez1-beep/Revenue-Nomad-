@@ -218,3 +218,9 @@
   order: 0;
   width: auto;
 }
+/* Free, after today's free Crystal Ball company: why the button says Upgrade. */
+.td-used {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}

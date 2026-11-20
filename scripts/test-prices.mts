@@ -207,6 +207,13 @@ async function main() {
   check("a locked company's people and seat holders open after the company", /Its people and who held its seats open after that/.test(row(paid, "company").note ?? ""));
   const faq = (free: boolean) => new Map(faqItems(25, true, free));
   const fq = faq(false);
+  // Free's free company a day is Crystal Ball's, fully open; Pro opens every company in it free.
+  const cost = fq.get("What does it cost?") ?? "";
+  check(
+    "Questions: Free opens one Crystal Ball company a day, Pro every company in it",
+    /open one company a day from your Crystal Ball for free, with everything on it/.test(cost) && /Pro opens every company in your Crystal Ball free/.test(cost) && !/unlock one company a day for free/.test(cost),
+    cost,
+  );
   check("Questions: who held a seat comes with the role they held, for 1 credit", /1 credit shows who held the seat and the role they held/.test(fq.get("How do I reach the fractional who held a seat?") ?? ""));
   check("Questions: a seat's end month is free while it is going", /end month while the seat is still going/.test(fq.get("What does a seat cost to see?") ?? ""));
   check("Questions: contact details open after the name", /LinkedIn, email and phone open after that, 1 credit each/.test(fq.get("What does a hiring contact cost?") ?? ""));

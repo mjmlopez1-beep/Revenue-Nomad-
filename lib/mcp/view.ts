@@ -18,6 +18,11 @@ export interface MemberView {
   bySeat: Map<string, CoInfo>;
   /** Person id -> its company's info. */
   byPerson: Map<string, CoInfo>;
+  /**
+   * Trial and Pro (Me.crystal "all"): the public ids of the companies in the member's Crystal Ball,
+   * each of which opens free (lib/radar crystalCompanyIds; the server checks it again on the unlock). Empty otherwise.
+   */
+  ball: Set<string>;
 }
 
 const KEEP_MS = 15_000;
@@ -40,7 +45,9 @@ export async function memberView(member: Member): Promise<MemberView> {
       for (const e of i.engs) bySeat.set(e.id, i);
       for (const { p } of i.people) byPerson.set(p.id, i);
     }
-    const mv = { view, infos, byId, bySeat, byPerson };
+    // Loaded here, so the connector and the radar don't import each other at start.
+    const ball = view.me?.crystal === "all" ? await (await import("../radar")).crystalPublicIds(member.token) : new Set<string>();
+    const mv = { view, infos, byId, bySeat, byPerson, ball };
     kept.set(member.id, { version, at: Date.now(), mv });
     if (kept.size > 200) kept.delete(kept.keys().next().value!);
     return mv;

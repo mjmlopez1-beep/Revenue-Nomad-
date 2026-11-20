@@ -53,8 +53,12 @@ export interface Ui {
   readonly busy: Set<string>;
   readonly flash: Set<string>;
   readonly pulse: string | null;
-  /** `onWall` runs instead of an error toast when the server answers that the member is out of credits. */
-  unlock: (t: FactRef, opts?: { onWall?: () => void }) => void;
+  /**
+   * `onWall` runs instead of an error toast when the server answers that the member is out of
+   * credits. `from: "crystal"`: a company opened from Crystal Ball or the Today card (Me.crystal);
+   * the server checks it is in their Crystal Ball. Resolves true when it worked.
+   */
+  unlock: (t: FactRef, opts?: { onWall?: () => void; from?: "crystal" }) => Promise<boolean> | void;
   unlockMany: (items: FactRef[]) => Promise<boolean>;
   /** Open the fact editor on an element. With `initial`, it edits the member's own value. */
   edit: (el: HTMLElement, t: FactRef, initial?: string) => void;

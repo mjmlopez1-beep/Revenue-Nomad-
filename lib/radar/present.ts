@@ -97,6 +97,11 @@ export interface CardContext {
   place?: (companyId: string) => string | null;
   /** A public https logo for a known company, or null. Only asked for a company the member's table shows. */
   logo?: (companyId: string) => string | null;
+  /**
+   * How a company the member doesn't know yet opens from Crystal Ball: "free" (Trial and Pro, any
+   * Crystal Ball company), "one" (Free: one a day, in full), null (2 credits, as anywhere). Left out: null.
+   */
+  opens?: (companyId: string) => "free" | "one" | null;
 }
 
 /** "a Software company", "an E-commerce company", or "a company in your profile". */
@@ -138,6 +143,7 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
   const known = seen && (ctx.known ? ctx.known(sig.companyId) : true);
   const place = seen ? ctx.place?.(sig.companyId) ?? null : null;
   const logo = known ? ctx.logo?.(sig.companyId) ?? null : null;
+  const opens = known ? null : ctx.opens?.(sig.companyId) ?? null;
   return {
     id: ctx.cardId(sig.key),
     co: ctx.coId(sig.companyId),
@@ -156,6 +162,7 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
     about: aboutOf(sig.co),
     ...(place ? { place } : {}),
     ...(known ? { known: true } : {}),
+    ...(opens ? { opens } : {}),
     ...(logo && /^https:\/\/[^\s<>|]+$/.test(logo) ? { logo } : {}),
   };
 }

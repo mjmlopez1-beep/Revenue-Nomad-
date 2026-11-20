@@ -6,6 +6,7 @@
 import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
 import { PRICES, TOPUP_CREDITS, TRIAL_DAYS } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
+import { FEATURE_NAME } from "@/lib/radar/types";
 
 /** Unlocks an account gets in its first 24 hours, then in any 24 hours after (the server's limits). */
 const DAY_ONE_UNLOCKS = 25;
@@ -86,7 +87,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does it cost?",
-      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and unlock one company a day for free. Pro starts with a ${TRIAL_DAYS}-day trial, no card needed. After that Pro is $${PRICES.month} a month or $${PRICES.year} a year. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
+      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Pro opens every company in your ${FEATURE_NAME} free, and starts with a ${TRIAL_DAYS}-day trial, no card needed. After that Pro is $${PRICES.month} a month or $${PRICES.year} a year. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
     ],
   ];
 }
