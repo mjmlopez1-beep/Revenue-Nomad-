@@ -14,6 +14,7 @@ import type { AdminStats, View } from "@/lib/tableTypes";
 import { IconChevron, Num, useToast } from "../ui/shared";
 import { useUi } from "./ui";
 import { FEATURE_NAME } from "@/lib/radar/types";
+import { FUNDING_SKIP_WORDS, type FundingSkip } from "@/lib/funding/types";
 import "./pages.css";
 import "./verify.css";
 
@@ -329,6 +330,44 @@ function AboutFill({ a, refresh }: { a: AdminStats; refresh: () => Promise<void>
           : running
             ? "Reading company websites, four at a time. This page updates as it goes."
             : "Reads the homepage of each company with no About yet. Nobody earns credits for these texts."}
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * Funding from SEC Form D filings (lib/funding): the last daily run and all runs, counts only:
+ * filings read, matched to a company on file, and unmatched by reason. Never a company or a person.
+ */
+function FundingFilings({ a }: { a: AdminStats }) {
+  const x = a.funding!;
+  const last = x.last;
+  const reasons = (Object.entries(x.totals.unmatched) as [FundingSkip, number][]).filter(([, n]) => n > 0).sort((p, q) => q[1] - p[1]);
+  return (
+    <Card title="Funding from SEC filings" span={3}>
+      <Rows
+        items={[
+          ["Daily run", <span key="f" className={`tp-pm-flag${x.enabled ? " on" : ""}`}>{x.enabled ? "On" : "Off"}</span>],
+          ["Last run", stamp(x.lastRunAt, "Not yet")],
+          ["Filings read, last run", last ? `${n0(last.filings)} (${n0(last.read)} documents)` : "Not yet"],
+          ["Matched, last run", n0(last?.matched ?? 0)],
+          ["Filings read, all runs", n0(x.totals.filings)],
+          ["Matched, all runs", n0(x.totals.matched)],
+          ["Events, last 30 days", `${n0(x.events30)} at ${n0(x.companies30)} companies`],
+        ]}
+      />
+      {reasons.length > 0 && (
+        <>
+          <h3 className="tp-pm-h3">Unmatched, all runs</h3>
+          <Rows items={reasons.map(([k, n]) => [FUNDING_SKIP_WORDS[k] ? FUNDING_SKIP_WORDS[k][0].toUpperCase() + FUNDING_SKIP_WORDS[k].slice(1) : k, n0(n)] as [string, string])} />
+        </>
+      )}
+      <p className="tp-small muted tp-pm-foot" role="status">
+        {!x.enabled
+          ? "Off. It starts once RN_FUNDING=1 is set on the server: then it reads EDGAR once a day and Crystal Ball shows each raise."
+          : last?.error
+            ? `The last run stopped: ${last.error}. It tries again in 6 hours.`
+            : "Reads each day's Form D filings and keeps a raise only for a company already on file whose exact name, place and industry agree. No person's name is kept."}
       </p>
     </Card>
   );
@@ -905,6 +944,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
         <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
         {a.about && <AboutFill a={a} refresh={refresh} />}
         {a.leaders && <LeadersRead a={a} refresh={refresh} />}
+        {a.funding && <FundingFilings a={a} />}
 
         <Card title="Weekly email">
           <Rows

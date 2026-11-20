@@ -1,16 +1,18 @@
 /**
  * Career pages of companies already on Merlin, read from the public job feeds of the applicant
- * tracking systems they post on: Greenhouse, Lever, Ashby, Workable and SmartRecruiters.
+ * tracking systems they post on: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Recruitee,
+ * Personio, Breezy HR and Teamtailor (Personio's and Teamtailor's feeds are XML, the rest JSON).
  *
  * Discovery finds which feed a company posts on, a few companies a run (DISCOVER_PER_RUN), and the
  * scan keeps what it found, and what it didn't, in its state (lib/table.ts), so the work is spread
  * across runs and a company with no feed is tried again at most once a month (RETRY_MISS_DAYS):
  *  1. its own home page, and its careers page when the home page links one: a link to a board on
- *     one of the five systems names the board. Found this way, the board is the company's.
+ *     one of the systems names the board. Found this way, the board is the company's.
  *  2. else the board names a company would pick: its domain's name ("acme" for acme.com) and its
  *     squeezed name ("acmerobotics"). A guessed board counts only when the feed shows it is this
  *     company's: the board's own name matches (Greenhouse, Workable, SmartRecruiters), or a
- *     posting names the company or its domain (Lever, Ashby, which give no board name).
+ *     posting names the company or its domain (Lever, Ashby, Personio, which give no board name).
+ *     Teamtailor is never guessed: its feed names nothing to confirm it by, so only a link counts.
  *
  * Each feed's postings go through the scan's usual screen (lib/scan/collect.ts): fractional or
  * interim work, GTM at any level or Director and above outside GTM, posted in the last 60 days.
@@ -22,8 +24,14 @@ import { fetchWithTimeout } from "../../crawler/fetch";
 import { cleanCompany, plain, squeeze } from "../clean";
 import type { ScanRawJob, ScanSource } from "../collect";
 
-export type AtsKind = "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters";
-export const ATS_KINDS: AtsKind[] = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"];
+export type AtsKind = "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters" | "recruitee" | "personio" | "breezy" | "teamtailor";
+export const ATS_KINDS: AtsKind[] = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters", "recruitee", "personio", "breezy", "teamtailor"];
+/** Systems a guessed board name is tried on (Teamtailor only from a link: see the file's note). */
+const GUESS_KINDS: AtsKind[] = ATS_KINDS.filter((k) => k !== "teamtailor");
+/** Feeds that are XML, read as text. */
+const XML_FEEDS = new Set<AtsKind>(["personio", "teamtailor"]);
+/** Systems whose board is the company's subdomain (acme.recruitee.com). */
+const SUBDOMAIN_KINDS = new Set<AtsKind>(["recruitee", "personio", "breezy", "teamtailor"]);
 
 export interface AtsBoard {
   ats: AtsKind;
@@ -47,8 +55,8 @@ export interface AtsCompany {
 /** A GET that never throws: the status (0 on a network error or timeout) and the body. */
 export type FeedFetch = (url: string) => Promise<{ status: number; text: string }>;
 
-/** Companies looked up for the first time (or again) in one run. */
-export const DISCOVER_PER_RUN = 30;
+/** Companies looked up for the first time (or again) in one run. At 30 a weekly run, the 6,000-odd companies with a site took years to cover; 150 takes under a year. */
+export const DISCOVER_PER_RUN = 150;
 /** A company with no feed found is looked up again after this long. */
 export const RETRY_MISS_DAYS = 30;
 /** Feeds read in one run, at most. */
@@ -56,7 +64,7 @@ export const FEEDS_PER_RUN = 400;
 const CONCURRENCY = 4;
 const TIMEOUT_MS = 8_000;
 /** Discovery stops starting new companies after this long in one run; the rest wait for the next. */
-export const DISCOVER_BUDGET_MS = 90_000;
+export const DISCOVER_BUDGET_MS = 300_000;
 /** A page or feed larger than this is cut there (a home page, or a feed of thousands of jobs). */
 const MAX_BYTES = 3_000_000;
 const UA = "Mozilla/5.0 (compatible; JobFeedReader/1.0)";
@@ -101,7 +109,7 @@ const json = (text: string): unknown => {
 const SLUG = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 const RESERVED = new Set(["embed", "api", "v1", "jobs", "job", "careers", "search", "static", "assets", "j", "widget", "accounts", "en", "about", "privacy", "terms"]);
 
-/** The board a link points at, on one of the five systems, or null. "https://jobs.lever.co/acme/123" -> lever "acme". */
+/** The board a link points at, on one of the systems, or null. "https://jobs.lever.co/acme/123" -> lever "acme". */
 export function boardFromUrl(raw: string): AtsBoard | null {
   let u: URL;
   try {
@@ -128,6 +136,19 @@ export function boardFromUrl(raw: string): AtsBoard | null {
   if (/^[a-z0-9-]+\.workable\.com$/.test(host) && !["www", "apply", "jobs", "resources", "help"].includes(host.split(".")[0])) return pick("workable", host.split(".")[0]);
   if (host === "jobs.smartrecruiters.com" || host === "careers.smartrecruiters.com") return pick("smartrecruiters", seg[0]);
   if (host === "api.smartrecruiters.com") return seg[0] === "v1" && seg[1] === "companies" ? pick("smartrecruiters", seg[2]) : null;
+  // Systems that give each company a subdomain: acme.recruitee.com, acme.jobs.personio.de, acme.breezy.hr, acme.teamtailor.com.
+  const sub = (re: RegExp, skip: string[]) => {
+    const m = host.match(re);
+    return m && !skip.includes(m[1]) ? m[1] : null;
+  };
+  const recruitee = sub(/^([a-z0-9-]+)\.recruitee\.com$/, ["www", "app", "api", "support", "blog", "help", "careers"]);
+  if (recruitee) return pick("recruitee", recruitee);
+  const personio = sub(/^([a-z0-9-]+)\.jobs\.personio\.(?:de|com)$/, ["www"]);
+  if (personio) return pick("personio", personio);
+  const breezy = sub(/^([a-z0-9-]+)\.breezy\.hr$/, ["www", "app", "api", "help", "marketing", "developer"]);
+  if (breezy) return pick("breezy", breezy);
+  const teamtailor = sub(/^([a-z0-9-]+)\.teamtailor\.com$/, ["www", "app", "api", "support", "career", "careers", "help", "partners", "assets"]);
+  if (teamtailor) return pick("teamtailor", teamtailor);
   return null;
 }
 
@@ -203,8 +224,19 @@ export function feedUrl(b: AtsBoard): string {
       return `https://apply.workable.com/api/v1/widget/accounts/${s}?details=true`;
     case "smartrecruiters":
       return `https://api.smartrecruiters.com/v1/companies/${s}/postings?limit=100`;
+    case "recruitee":
+      return `https://${s}.recruitee.com/api/offers/`;
+    case "personio":
+      return `https://${s}.jobs.personio.de/xml?language=en`;
+    case "breezy":
+      return `https://${s}.breezy.hr/json`;
+    case "teamtailor":
+      return `https://${s}.teamtailor.com/jobs.rss`;
   }
 }
+
+/** A feed's body as parseFeed reads it: the text for an XML feed, else parsed JSON (null when it isn't). */
+export const feedBody = (b: AtsBoard, text: string): unknown => (XML_FEEDS.has(b.ats) ? text : json(text));
 
 type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj => (x && typeof x === "object" && !Array.isArray(x) ? (x as Obj) : {});
@@ -217,11 +249,23 @@ const date = (x: unknown): string | undefined => {
 /** Greenhouse sends its HTML escaped ("&lt;p&gt;"). */
 const unescape = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
 
+/* XML feeds (Personio, Teamtailor): a few flat elements, read without a parser. */
+const cdata = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+/** The text of the first element named `name` (any namespace prefix), or "". */
+const xmlTag = (xml: string, name: string): string => {
+  const m = xml.match(new RegExp(`<(?:[\\w-]+:)?${name}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[\\w-]+:)?${name}>`, "i"));
+  return m ? unescape(cdata(m[1])).trim() : "";
+};
+/** Every element named `name`, tags and all. */
+const xmlAll = (xml: string, name: string): string[] => [...xml.matchAll(new RegExp(`<(?:[\\w-]+:)?${name}(?:\\s[^>]*)?>[\\s\\S]*?</(?:[\\w-]+:)?${name}>`, "gi"))].map((m) => m[0]);
+
 /** The board's own name, where the feed gives one (Greenhouse's board, Workable's account, SmartRecruiters' company). */
 export function boardName(b: AtsBoard, body: unknown): string | null {
   const o = obj(body);
   if (b.ats === "workable") return str(o.name) || null;
   if (b.ats === "smartrecruiters") return str(obj(obj(arr(o.content)[0]).company).name) || null;
+  if (b.ats === "recruitee") return str(obj(arr(o.offers)[0]).company_name) || null;
+  if (b.ats === "breezy") return str(obj(obj(arr(body)[0]).company).name) || null;
   return null;
 }
 
@@ -257,6 +301,7 @@ export function parseFeed(b: AtsBoard, body: unknown, c: AtsCompany): ScanRawJob
           description: [str(j.descriptionPlain) || str(j.description), lists, str(j.additionalPlain) || str(j.additional), str(cat.commitment)].filter(Boolean).join(" "),
           location: str(cat.location) || "Unspecified",
           functionHint: str(cat.team) || str(cat.department) || undefined,
+          employment: str(cat.commitment) || undefined,
         });
       }
       return out;
@@ -272,6 +317,7 @@ export function parseFeed(b: AtsBoard, body: unknown, c: AtsCompany): ScanRawJob
           description: str(j.descriptionPlain) || str(j.descriptionHtml),
           location: str(j.location) || "Unspecified",
           functionHint: str(j.department) || str(j.team) || undefined,
+          employment: str(j.employmentType) || undefined,
         });
       }
       return out;
@@ -286,6 +332,7 @@ export function parseFeed(b: AtsBoard, body: unknown, c: AtsCompany): ScanRawJob
           description: [str(j.description), str(j.employment_type)].filter(Boolean).join(" "),
           location: [str(j.city), str(j.state), str(j.country)].filter(Boolean).join(", ") || (j.telecommuting ? "Remote" : "Unspecified"),
           functionHint: str(j.function) || str(j.department) || undefined,
+          employment: str(j.employment_type) || undefined,
         });
       return out;
     }
@@ -302,6 +349,78 @@ export function parseFeed(b: AtsBoard, body: unknown, c: AtsCompany): ScanRawJob
           description: [str(obj(j.typeOfEmployment).label), str(obj(j.experienceLevel).label)].filter(Boolean).join(". "),
           location: [str(loc.city), str(loc.region), str(loc.country)].filter(Boolean).join(", ") || "Unspecified",
           functionHint: str(obj(j.function).label) || str(obj(j.department).label) || undefined,
+          employment: str(obj(j.typeOfEmployment).label) || undefined,
+        });
+      }
+      return out;
+    }
+    case "recruitee": {
+      if (!Array.isArray(o.offers)) return null;
+      for (const j of o.offers.map(obj)) {
+        if (j.status && str(j.status) !== "published") continue;
+        const hours = Number(j.max_hours ?? j.min_hours);
+        push({
+          title: str(j.title),
+          url: str(j.careers_url) || str(j.url),
+          postedAt: date(str(j.published_at).replace(" UTC", "Z").replace(" ", "T")) ?? date(j.created_at),
+          description: [str(j.description), str(j.requirements)].filter(Boolean).join(" "),
+          location: [str(j.city), str(j.country)].filter(Boolean).join(", ") || str(j.location) || (j.remote ? "Remote" : "Unspecified"),
+          functionHint: str(j.department) || undefined,
+          employment: str(j.employment_type_code) || undefined,
+          ...(Number.isFinite(hours) && hours > 0 ? { hoursPerWeek: hours } : {}),
+        });
+      }
+      return out;
+    }
+    case "breezy": {
+      if (!Array.isArray(body)) return null;
+      for (const j of body.map(obj)) {
+        const loc = obj(j.location);
+        push({
+          title: str(j.name),
+          url: str(j.url),
+          postedAt: date(j.published_date),
+          description: [str(j.description), str(obj(j.type).name)].filter(Boolean).join(" "),
+          location: str(loc.name) || (loc.is_remote ? "Remote" : "Unspecified"),
+          functionHint: str(j.department) || undefined,
+          employment: str(obj(j.type).name) || str(obj(j.type).id) || undefined,
+          ...(str(j.salary) ? { salary: str(j.salary) } : {}),
+        });
+      }
+      return out;
+    }
+    case "personio": {
+      const text = typeof body === "string" ? body : "";
+      if (!/<workzag-jobs\b/i.test(text)) return null;
+      for (const pos of xmlAll(text, "position")) {
+        // The position's own fields, without its descriptions (each has a <name> of its own).
+        const p = pos.replace(/<jobDescriptions\b[\s\S]*?<\/jobDescriptions>/i, "");
+        const id = xmlTag(p, "id");
+        const descriptions = xmlAll(pos, "jobDescription").map((d) => `${xmlTag(d, "name")} ${xmlTag(d, "value")}`).join(" ");
+        push({
+          title: xmlTag(p, "name"),
+          url: id ? `https://${encodeURIComponent(b.slug)}.jobs.personio.de/job/${encodeURIComponent(id)}` : "",
+          postedAt: date(xmlTag(p, "createdAt")),
+          description: descriptions,
+          location: xmlTag(p, "office") || "Unspecified",
+          functionHint: xmlTag(p, "department") || undefined,
+          employment: [xmlTag(p, "employmentType"), xmlTag(p, "schedule")].filter(Boolean).join(", ") || undefined,
+        });
+      }
+      return out;
+    }
+    case "teamtailor": {
+      const text = typeof body === "string" ? body : "";
+      if (!/<rss\b/i.test(text) || !/<channel\b/i.test(text)) return null;
+      for (const it of xmlAll(text, "item")) {
+        push({
+          title: xmlTag(it, "title"),
+          url: xmlTag(it, "link"),
+          postedAt: date(xmlTag(it, "pubDate")),
+          description: xmlTag(it, "description"),
+          location: [xmlTag(it, "city"), xmlTag(it, "country")].filter(Boolean).join(", ") || "Unspecified",
+          functionHint: xmlTag(it, "department") || undefined,
+          employment: xmlTag(it, "employmentType") || xmlTag(it, "employment_type") || undefined,
         });
       }
       return out;
@@ -320,7 +439,7 @@ async function confirmGuess(b: AtsBoard, c: AtsCompany, fetch: FeedFetch): Promi
   }
   const r = await fetch(feedUrl(b));
   if (r.status !== 200) return false;
-  const body = json(r.text);
+  const body = feedBody(b, r.text);
   const name = boardName(b, body);
   if (name !== null) return nameMatches(name, c);
   const jobs = parseFeed(b, body, c) ?? [];
@@ -330,7 +449,7 @@ async function confirmGuess(b: AtsBoard, c: AtsCompany, fetch: FeedFetch): Promi
 /** The feed answers as that system's feed (any number of postings). */
 async function feedAnswers(b: AtsBoard, c: AtsCompany, fetch: FeedFetch): Promise<boolean> {
   const r = await fetch(feedUrl(b));
-  return r.status === 200 && parseFeed(b, json(r.text), c) !== null;
+  return r.status === 200 && parseFeed(b, feedBody(b, r.text), c) !== null;
 }
 
 /**
@@ -358,7 +477,9 @@ export async function discoverOne(c: AtsCompany, fetch: FeedFetch, site: SiteFet
   }
   for (const b of linked.slice(0, 2)) if (await feedAnswers(b, c, fetch)) return { board: b, via: "site" };
   for (const slug of slugCandidates(c).slice(0, 2))
-    for (const ats of ATS_KINDS) {
+    for (const ats of GUESS_KINDS) {
+      // A board that is a subdomain needs a name a hostname can carry.
+      if (SUBDOMAIN_KINDS.has(ats) && !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) continue;
       const b = { ats, slug };
       if (await confirmGuess(b, c, fetch)) return { board: b, via: "guess" };
     }
@@ -439,7 +560,7 @@ export function atsSources(
         const r = await fetch(feedUrl(board));
         if (r.status === 404 || r.status === 410) opts.gone?.(company.domain.toLowerCase());
         if (r.status !== 200) return [];
-        const parsed = parseFeed(board, json(r.text), company);
+        const parsed = parseFeed(board, feedBody(board, r.text), company);
         if (parsed) ok++;
         // Only a feed that answered and read counts: a failure is never read as no sales hires.
         if (parsed) opts.salesCount?.(company.domain.toLowerCase(), salesHireCount(parsed));

@@ -308,7 +308,9 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   const src = opts.funding ?? fundingSource();
   const funding = await src.events({ sinceMs, nowMs, companies: fundingCompanies(seed, s0) }).catch((e) => (console.error("funding source failed", e), []));
   // A company that raised a round is VC-backed, unless a member said otherwise (the only ownership Merlin infers).
-  if (funding.length) await T.mutate((d) => void inferVcBacked(d, funding, nowIso));
+  // Not from an SEC filing: a Form D is any private raise (angels, debt, friends and family), not proof of VC.
+  const rounds = funding.filter((f) => f.source !== "SEC filing");
+  if (rounds.length) await T.mutate((d) => void inferVcBacked(d, rounds, nowIso));
   const all = detectSignals(seed, s0, sinceMs, nowMs, funding);
   const out: RadarRun = { ran: true, signals: all.length, members: 0, emails: 0, slack: 0 };
   if (!all.length) return out;

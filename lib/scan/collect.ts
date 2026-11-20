@@ -8,8 +8,12 @@
  *  - work that is itself fractional, interim, freelance or contract: the title says so (or names
  *    an advisor seat), the board lists only fractional work, or a sentence in the body says the
  *    role itself is, with no full-time tell in the posting (workSignal in lib/crawler/score.ts).
- *    Remote, "trusted advisor", "consultative", part-time, days or hours a week, an hourly rate
- *    and "contract" about customers never count on their own.
+ *    A leadership seat (Director and above, lib/seniority.ts) counts too when its title says
+ *    part-time, temporary, outsourced, on-demand or virtual C-level ("Part-time VP Marketing",
+ *    "Outsourced CFO", "vCMO"), or when the board's own employment type says part-time, contract,
+ *    freelance, temporary or interim (leadershipWork). Remote, "trusted advisor", "consultative",
+ *    part-time in a body, days or hours a week, an hourly rate and "contract" about customers
+ *    never count on their own, and part-time below Director never counts.
  *  - GTM seats at any level, and seats outside GTM (a fractional CFO, CTO or Head of People) at
  *    Director and above only: a title outside GTM below Director ("School Staffing Coordinator")
  *    is left out even when its posting mentions sales
@@ -44,6 +48,8 @@ export interface ScanRawJob extends RawJob {
   hoursPerWeek?: number;
   /** The board's own function label for the listing ("Sales", "Marketing"). */
   functionHint?: string;
+  /** The board's own employment type for the listing ("Part-time", "Contract", "freelance, part-time"). */
+  employment?: string;
 }
 
 export interface ScanSource {
@@ -81,17 +87,49 @@ const DAY = 24 * 3600 * 1000;
 
 /* ---------- the fractional signal ---------- */
 
+/** "Part-time", "Temporary" or "Temp" in a title: fractional or interim work when the seat is a leader's. */
+const TITLE_PART_TIME = /\bpart[\s-]?time\b/i;
+const TITLE_TEMPORARY = /\b(?:temporary|temp)\b/i;
+/** Fractional by another name: "Outsourced CFO", "On-demand CMO", "Virtual CFO", "vCFO", "Outsourced VP of Sales". */
+const TITLE_OUTSOURCED = /\b(?:outsourced|on[\s-]demand|virtual)\s+(?:c[a-z]{1,3}o|chief|vp|vice president|head of|director)\b|\bvc(?:fo|mo|ro|to|oo|io|so)\b/i;
+/** A board's employment type that says the work is not a full-time job. "Full-time or part-time" says nothing. */
+const FIELD_PART_TIME = /\bpart[\s_-]?time\b|\bparttime\b/i;
+const FIELD_CONTRACT = /\b(?:contract(?:or)?|freelance(?:r)?|temporary|temp|interim|fractional|1099|consult(?:ant|ing)?|project[\s_-]?based)\b/i;
+const FIELD_FULL_TIME = /\bfull[\s_-]?time\b|\bfulltime\b|\bpermanent\b|\bregular\b/i;
+
+/**
+ * A leadership seat whose wording or board field says the work is part-time, temporary or
+ * outsourced (see the file's note), as its type. Null below Director, or for a 38+ hour week.
+ */
+export function leadershipWork(raw: Pick<ScanRawJob, "title" | "employment" | "hoursPerWeek"> & { description?: string }): WorkSignal | null {
+  const title = plain(raw.title);
+  if (raw.hoursPerWeek != null && raw.hoursPerWeek >= 38) return null;
+  // Its pattern names the leader's seat itself ("Outsourced CFO", "vCMO").
+  if (TITLE_OUTSOURCED.test(title)) return { type: "Fractional", where: "title" };
+  if (!isDirectorPlus(title)) return null;
+  if (TITLE_PART_TIME.test(title)) return { type: "Fractional", where: "title" };
+  if (TITLE_TEMPORARY.test(title)) return { type: "Interim", where: "title" };
+  const field = plain(raw.employment ?? "");
+  if (!field) return null;
+  // "Full-time, part-time" or "permanent, contract": the board doesn't say which. Nor when the posting itself says full-time.
+  if (FIELD_FULL_TIME.test(field) || /\bfull[\s-]?time\b/i.test(plain(raw.description ?? ""))) return null;
+  if (/\binterim\b|\btemp(?:orary)?\b/i.test(field)) return { type: "Interim", where: "body" };
+  if (/\bfractional\b/i.test(field) || FIELD_PART_TIME.test(field)) return { type: "Fractional", where: "body" };
+  if (FIELD_CONTRACT.test(field)) return { type: "Project", where: "body" };
+  return null;
+}
+
 /**
  * The work itself is fractional, interim, freelance or contract, and which type that makes it.
  * The title decides first. A fractional-only board's listing counts unless it is a 38+ hour week.
  * Otherwise a sentence in the body has to say the role itself is, with no full-time tell.
  */
-export function workOf(raw: Pick<ScanRawJob, "title" | "description" | "fractionalBoard" | "hoursPerWeek">): WorkSignal | { type: "Fractional"; where: "board" } | null {
+export function workOf(raw: Pick<ScanRawJob, "title" | "description" | "fractionalBoard" | "hoursPerWeek" | "employment">): WorkSignal | { type: "Fractional"; where: "board" } | null {
   const title = plain(raw.title);
   const signal = workSignal(title, String(raw.description ?? ""));
   if (signal?.where === "title") return signal;
   if (raw.fractionalBoard) return raw.hoursPerWeek != null && raw.hoursPerWeek >= 38 ? null : signal ?? { type: "Fractional", where: "board" };
-  return signal;
+  return signal ?? leadershipWork(raw);
 }
 
 /* ---------- function and type ---------- */

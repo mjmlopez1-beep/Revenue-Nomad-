@@ -17,6 +17,7 @@ import { listConversations, unreadFor } from "@/lib/messages";
 import { PreviewError, preview } from "@/lib/preview";
 import { maybeRadar, radarView, returnQuery } from "@/lib/radar";
 import { yourFeature } from "@/lib/radar/types";
+import { maybeFunding } from "@/lib/funding/run";
 
 export const dynamic = "force-dynamic";
 
@@ -306,6 +307,8 @@ export const GET = guarded(async (req: NextRequest) => {
   void maybeRadar(origin(req)).catch((e) => console.error("radar check failed", e));
   // Who leads each function: the daily background read of company websites (RN_LEADERS=1 only, lib/leaders/run.ts maybeLeaders).
   if (process.env.RN_LEADERS === "1") void import("@/lib/leaders/run").then((m) => m.maybeLeaders()).catch((e) => console.error("leaders check failed", e));
+  // Funding from SEC Form D filings, once a UTC day after 06:00 UTC (only with RN_FUNDING=1, lib/funding).
+  void maybeFunding().catch((e) => console.error("funding check failed", e));
   // Signed out: the counts only, kept for a few minutes (buildView), so the landing page never waits in line behind members' tables.
   if (!token || !(await memberForToken(token))) {
     const view = await buildView(null);

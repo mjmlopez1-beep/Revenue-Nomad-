@@ -5,6 +5,7 @@
 import type { Entity } from "./tableFields";
 import type { RadarStats } from "./radar/types";
 import type { CompanyLeads, LeadersRunSummary } from "./leaders/types";
+import type { FundingAdminStats } from "./funding/types";
 
 /**
  * What one field looks like to the viewer.
@@ -824,6 +825,8 @@ export interface AdminStats {
     coverage?: { sites: number; known: number; withTeam: number; lastReadAt: string | null; reports: number; dailyBatch: number; daysToCover: number; lastDaily: string | null };
     reasons: { why: string; n: number }[];
   };
+  /** Funding events from SEC Form D filings (lib/funding), counts only: the last run, all runs, events in the last 30 days. `enabled`: RN_FUNDING=1. */
+  funding?: FundingAdminStats;
 }
 
 export type Action =

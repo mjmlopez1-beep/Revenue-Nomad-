@@ -8,7 +8,7 @@
  *   adjacent  it just got a fractional leadership hire in a function that usually comes before theirs
  *   role      an open role in their function, new since the last radar
  *   seat      a seat in their function just ended (the end was recorded since the last radar)
- *   funding   it raised money (no source yet: lib/radar/sources/funding.ts returns nothing)
+ *   funding   it raised money (SEC Form D filings with RN_FUNDING=1: lib/funding, lib/radar/sources/funding.ts)
  *   sales-build  its career feed posted its first full-time sales hires (AE, SDR, BDR), or a jump in them
  *   departure    a leader its own website listed for the member's function is gone from it
  *

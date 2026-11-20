@@ -91,6 +91,12 @@ export interface CardContext {
 /** "a Software company", "an E-commerce company", or "a company in your profile". */
 const someCompany = (industry: string | null) => (industry ? `${an(industry)} ${industry} company` : "a company in your profile");
 
+/** "raised a Series A ($12M)", or from a filing "raised about $5M (SAFE, SEC filing, Oct 2026)". */
+const raised = (sig: MemberSignal) =>
+  sig.fundNote
+    ? `raised ${sig.amount ?? "money"} (${[sig.round, sig.fundNote].filter(Boolean).join(", ")})`
+    : `raised ${sig.round ? `a ${sig.round}` : "money"}${sig.amount ? ` (${sig.amount})` : ""}`;
+
 export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
   const seen = ctx.visible(sig.companyId);
   const who = seen ? sig.co.name : sig.kind === "role" ? "a company that's hiring now" : someCompany(sig.co.industry);
@@ -108,7 +114,7 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
       headline = `A fractional ${fn} seat just ended at ${who}`;
       break;
     case "funding":
-      headline = `${cap(who)} raised ${sig.round ? `a ${sig.round}` : "money"}${sig.amount ? ` (${sig.amount})` : ""}`;
+      headline = `${cap(who)} ${raised(sig)}`;
       break;
     case "sales-build":
       headline = sig.build && sig.build.from > 0 ? `${cap(who)} posted ${sig.build.to} full-time sales roles` : `${cap(who)} posted its first full-time sales roles`;
@@ -150,7 +156,7 @@ export function viewLine(sig: MemberSignal): string {
     case "seat":
       return `A fractional ${fn} seat just ended · A seat like yours`;
     case "funding":
-      return `Raised ${sig.round ? `a ${sig.round}` : "money"}${sig.amount ? ` (${sig.amount})` : ""} · Money in usually means hiring`;
+      return `${cap(raised(sig))} · Money in usually means hiring`;
     case "sales-build":
       return `${sig.build && sig.build.from > 0 ? `Posted ${sig.build.to} full-time sales roles` : "Posted its first full-time sales roles"} · ${sig.why}`;
     case "departure":

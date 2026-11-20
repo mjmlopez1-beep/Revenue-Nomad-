@@ -112,6 +112,7 @@ import {
   type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
 } from "./leaders/types";
 import { mergeFunctions } from "./leaders/pick";
+import { fundingAdminStats, type FundingState } from "./funding/types";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -442,6 +443,8 @@ export interface State extends MessagingState {
   leaderDepartures?: { companyId: string; fn: string; kind: string; level: string; at: string }[];
   /** Each company's employee band as it changed (oldest first), so a crossing of 25 or 50 can be read later. */
   headcount?: Record<string, { band: string; at: string }[]>;
+  /** Funding events from SEC Form D filings, matched to companies on file, and each run's counts (lib/funding). No person's name. */
+  funding?: FundingState;
 }
 
 /** State.salesBuild[companyId]. */
@@ -3461,6 +3464,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     benchmarks: { memberRates, privateRates: s.benchRates.length, indexRates: seed.rateIndex?.length ?? 0 },
     about: aboutStats(s, g, nowMs),
     leaders: leadersStats(s, g, nowMs),
+    funding: fundingAdminStats(s.funding, nowMs),
     radar: radarStats(
       s.radar,
       s.signals,
