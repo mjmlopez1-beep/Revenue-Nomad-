@@ -595,7 +595,7 @@ const DEMO_SEED: Seed = {
   ],
 };
 
-let seedCache: { seed: Seed; at: number } | null = null;
+let seedCache: { seed: Seed; at: number; fp: string } | null = null;
 /** RN_REQUIRE_SEED=1 (set in the Dockerfile): refuse to run on the demo seed. A deploy with a missing or wrong seed key then fails its health check instead of serving sample data. */
 const REQUIRE_SEED = process.env.RN_REQUIRE_SEED === "1";
 let seedDown: { error: Unavailable; until: number } | null = null;
@@ -603,22 +603,52 @@ let seedNoted = false;
 export async function loadSeed(): Promise<Seed> {
   if (seedCache && Date.now() - seedCache.at < 60_000) return seedCache.seed;
   if (seedDown && Date.now() < seedDown.until) throw seedDown.error;
+  /*
+   * The seed is read again each minute, and kept as the same object while what was read is the
+   * same (SeedCache.fp): everything worked out from it (the graph, the member index, the shared
+   * table) stays worked out, and it isn't parsed again for nothing.
+   */
+  const same = (fp: string) => {
+    if (seedCache?.fp !== fp) return false;
+    seedCache.at = Date.now();
+    seedDown = null;
+    return true;
+  };
+  const fpOf = (where: string, text: string) => `${where}:${text.length}:${createHash("sha1").update(text).digest("base64")}`;
   let seed: Seed | null = null;
+  let fp = "demo";
   for (const p of SEED_CANDIDATES) {
-    seed = await readJson<Seed>(p);
-    if (seed && Array.isArray(seed.members) && Array.isArray(seed.engagements)) break;
+    const text = await fs.readFile(p, "utf8").catch(() => null);
+    if (text === null) continue;
+    const at = fpOf(p, text);
+    if (same(at)) return seedCache!.seed;
+    try {
+      seed = JSON.parse(text) as Seed;
+    } catch {
+      seed = null;
+    }
+    if (seed && Array.isArray(seed.members) && Array.isArray(seed.engagements)) {
+      fp = at;
+      break;
+    }
     seed = null;
   }
   // Hosted deploys: the encrypted seed that ships with the code (data/intel-seed.enc),
   // opened with RN_INTEL_SEED_KEY. See scripts/seal-intel-seed.mjs.
   if (!seed && process.env.RN_INTEL_SEED_KEY) {
     try {
-      const raw = Buffer.from(await fs.readFile(path.join(process.cwd(), "data", "intel-seed.enc"), "utf8"), "base64");
+      const text = await fs.readFile(path.join(process.cwd(), "data", "intel-seed.enc"), "utf8");
+      const at = fpOf("enc", text);
+      if (same(at)) return seedCache!.seed;
+      const raw = Buffer.from(text, "base64");
       const decipher = createDecipheriv("aes-256-gcm", Buffer.from(process.env.RN_INTEL_SEED_KEY, "base64"), raw.subarray(0, 12));
       decipher.setAuthTag(raw.subarray(12, 28));
       const plain = Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]);
       const s = JSON.parse(gunzipSync(plain).toString("utf8")) as Seed;
-      if (Array.isArray(s.members) && Array.isArray(s.engagements)) seed = s;
+      if (Array.isArray(s.members) && Array.isArray(s.engagements)) {
+        seed = s;
+        fp = at;
+      }
     } catch {
       console.error("RN_INTEL_SEED_KEY is set but data/intel-seed.enc could not be opened; trying other sources.");
     }
@@ -626,9 +656,14 @@ export async function loadSeed(): Promise<Seed> {
   // Older option: the seed as gzip+base64 variables, split across RN_INTEL_SEED_B64, _2, _3 …
   const b64 = [process.env.RN_INTEL_SEED_B64 ?? "", ...[2, 3, 4, 5, 6, 7, 8, 9].map((i) => process.env[`RN_INTEL_SEED_B64_${i}`] ?? "")].join("");
   if (!seed && b64) {
+    const at = fpOf("b64", b64);
+    if (same(at)) return seedCache!.seed;
     try {
       const s = JSON.parse(gunzipSync(Buffer.from(b64, "base64")).toString("utf8")) as Seed;
-      if (Array.isArray(s.members) && Array.isArray(s.engagements)) seed = s;
+      if (Array.isArray(s.members) && Array.isArray(s.engagements)) {
+        seed = s;
+        fp = at;
+      }
     } catch {
       console.error("RN_INTEL_SEED_B64 is set but could not be decoded; falling back to demo data.");
     }
@@ -650,6 +685,7 @@ export async function loadSeed(): Promise<Seed> {
           "Give RN_ID_SECRET the seed key's current value, so no id or link already sent changes, and keep it when the seed key is replaced.",
       );
   }
+  if (!seed && same("demo")) return seedCache!.seed;
   const out = seed ?? DEMO_SEED;
   // Industry, employees and revenue are always one of the standard values (lib/industryMap.ts): the
   // closest one, or none when nothing fits ("< $1M" is Under $1M, "51-200" is 51–200).
@@ -662,7 +698,7 @@ export async function loadSeed(): Promise<Seed> {
     }
   }
   for (const x of out.rateIndex ?? []) if (x.revenue) x.revenue = currentValue("revenue", x.revenue);
-  seedCache = { seed: out, at: Date.now() };
+  seedCache = { seed: out, at: Date.now(), fp };
   return seedCache.seed;
 }
 
@@ -2770,14 +2806,16 @@ export async function buildView(token: string | null, opts: { asMember?: boolean
  */
 const NOBODY: Member = { id: "\u0000nobody", name: "\u0000", email: "", title: "", token: "\u0000" };
 /**
- * How long the shared part serves while the state is the one it was built on: a few of its
- * values move with the clock (when a role was last seen, a leaders' read), so it is built again
- * after this, and on a new UTC day. Any change to the state builds it again.
+ * How long the shared part serves after it was built whole: a few of its values move with the
+ * clock (when a role was last seen, a leaders' read), so it is built whole again after this, and
+ * on a new UTC day. Until then a change to the state builds again only the companies it reached
+ * (nobodyChanges), or the whole part when it reached more than facts and confirmations.
  */
 export const SHARED_KEEP_MS = 5 * 60_000;
 interface SharedPart {
   seed: Seed;
   s: State;
+  /** When it was last built whole: built from the one before, it keeps that time, so it is built whole again SHARED_KEEP_MS after. */
   at: number;
   day: string;
   /** Nobody's record of each company, by internal id, in the graph's order (fullView's before it sorts). */
@@ -2788,8 +2826,9 @@ interface SharedPart {
 let shared: { seed: Seed; s: State; at: number; day: string; p: Promise<SharedPart> } | null = null;
 const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 let sharedBuilds = 0;
-/** For the checks: how many times the shared part was built. */
-export const sharedViewStats = () => ({ builds: sharedBuilds });
+let sharedPatches = 0;
+/** For the checks: how many times the shared part was built whole, and from the one before. */
+export const sharedViewStats = () => ({ builds: sharedBuilds, patches: sharedPatches });
 
 /** When a member's table last read the shared part: warming it after a change is worth it only while members load tables. */
 let sharedAskedAt = 0;
@@ -2813,15 +2852,131 @@ function warmShared() {
   warmTimer.unref?.();
 }
 
+/*
+ * What a change can do to Nobody's records. Most of the state never reaches them: Nobody paid for,
+ * follows, confirmed, claimed and invited nothing, has no credits, plan, saved views or messages,
+ * and the counts by member never show. Those parts (NOBODY_BLIND) can change at will. A fact or a
+ * confirmation changes the records of its own company only. Who has signed in matters only by who
+ * (a seat holder on Merlin reads as a member). Anything else that changed, and any part of the
+ * state this list doesn't know, builds the shared part whole again.
+ */
+const NOBODY_BLIND = new Set([
+  "ledger", "held", "unlocks", "follows", "referralPaid", "reportLog", "signals", "lockedViews", "digest", "connector", "integrations", "radar", "inviteJoins",
+  "billing", "found", "findMisses", "seatInvites", "seatPrivate", "benchRates", "n", "at", "firstAt", "hist",
+]);
+/** Per fact or confirmation: these change the records of the company they are at. */
+const BY_RECORD = new Set(["values", "verifications"]);
+/** Only who is in them matters (signedIn): a timestamp moving changes nothing Nobody sees. */
+const BY_WHO = new Set(["seen", "profiles", "ips"]);
+const sameJson = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+/** Two facts the same, field by field (a fact is a small flat record; its reporters a list). */
+const sameFact = (a: Record<string, unknown> | undefined, b: Record<string, unknown> | undefined) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  for (const k of ka) {
+    const x = a[k];
+    const y = b[k];
+    if (x === y) continue;
+    if (Array.isArray(x) && Array.isArray(y) && x.length === y.length && x.every((v, i) => v === y[i])) continue;
+    if (x && y && typeof x === "object" && typeof y === "object" && sameJson(x, y)) continue;
+    return false;
+  }
+  return true;
+};
+/** Who is in one of the BY_WHO parts: signedIn reads seen and profiles by key, ips by a non-empty list. */
+const whoIn = (key: string, x: unknown) =>
+  Object.entries((x ?? {}) as Record<string, unknown>)
+    .filter(([, v]) => (key === "ips" ? Array.isArray(v) && v.length > 0 : v !== undefined && v !== null))
+    .map(([k]) => k)
+    .sort()
+    .join("\u0000");
+/**
+ * The companies whose Nobody record may read differently on `b` than on `a`, both committed
+ * states with the same seed: the companies of the facts and confirmations that changed. Null when
+ * anything else changed that Nobody can see, or the companies themselves changed: build it whole.
+ */
+function nobodyChanges(a: State, b: State, ga: Graph, gb: Graph): Set<string> | null {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const out = new Set<string>();
+  const coOf = (nodeId: string) => {
+    for (const g of [gb, ga]) {
+      const c = g.companies.has(nodeId) ? nodeId : (g.engagements.get(nodeId)?.companyId ?? g.contacts.get(nodeId)?.companyId);
+      if (c) return c;
+    }
+    return null;
+  };
+  for (const key of keys) {
+    if (NOBODY_BLIND.has(key)) continue;
+    const x = (a as unknown as Record<string, unknown>)[key];
+    const y = (b as unknown as Record<string, unknown>)[key];
+    if (BY_WHO.has(key)) {
+      if (whoIn(key, x) !== whoIn(key, y)) return null;
+      continue;
+    }
+    if (BY_RECORD.has(key)) {
+      const xa = (x ?? {}) as Record<string, Record<string, unknown> | string[]>;
+      const ya = (y ?? {}) as Record<string, Record<string, unknown> | string[]>;
+      for (const k of new Set([...Object.keys(xa), ...Object.keys(ya)])) {
+        const u = xa[k];
+        const v = ya[k];
+        const same = Array.isArray(u) || Array.isArray(v) ? Array.isArray(u) && Array.isArray(v) && u.length === v.length && u.every((m, i) => m === v[i]) : sameFact(u as Record<string, unknown>, v as Record<string, unknown>);
+        if (same) continue;
+        const c = coOf(k.slice(0, k.lastIndexOf(".")));
+        if (!c) return null;
+        out.add(c);
+      }
+      continue;
+    }
+    if (!sameJson(x, y)) return null;
+  }
+  // The same companies, seats and people in both, in the same order (the table's order breaks ties by it).
+  if (ga.companies.size !== gb.companies.size || ga.engagements.size !== gb.engagements.size || ga.contacts.size !== gb.contacts.size) return null;
+  const ia = ga.companies.keys();
+  for (const id of gb.companies.keys()) if (ia.next().value !== id) return null;
+  // And each seat and person still at the company it was at.
+  for (const e of gb.engagements.values()) if (ga.engagements.get(e.id)?.companyId !== e.companyId) return null;
+  for (const c of gb.contacts.values()) if (ga.contacts.get(c.id)?.companyId !== c.companyId || ga.contacts.get(c.id)?.engagementId !== c.engagementId) return null;
+  return out;
+}
+/** Past this many companies to build again, building the shared part whole is about as quick. */
+const NOBODY_PATCH_MAX = 400;
+
 /** The shared part for this state, built once however many members ask for it at the same time. */
 function sharedPart(seed: Seed, s: State): Promise<SharedPart> {
   const nowMs = Date.now();
   const day = utcDay(nowMs);
   if (shared && shared.seed === seed && shared.s === s && shared.day === day && nowMs - shared.at < SHARED_KEEP_MS) return shared.p;
+  // The one before, still fresh by the clock: build only the companies a change reached (nobodyChanges).
+  const before = shared && shared.seed === seed && shared.day === day && nowMs - shared.at < SHARED_KEEP_MS ? shared : null;
   const p = (async (): Promise<SharedPart> => {
+    const g = viewGraph(seed, s);
+    const prev = before ? await before.p.catch(() => null) : null;
+    const changed = prev && prev.s !== s ? nobodyChanges(prev.s, s, viewGraph(seed, prev.s), g) : null;
+    if (prev && changed && changed.size <= NOBODY_PATCH_MAX) {
+      sharedPatches++;
+      const v = await fullView(seed, s, NOBODY, false, changed, false);
+      const fresh = new Map(v.companies.map((c) => [c.id, c]));
+      const recs = new Map<string, CompanyRec>();
+      let people = 0;
+      let friendly = 0;
+      let open = 0;
+      let facts = 0;
+      for (const id of g.companies.keys()) {
+        const rec = changed.has(id) ? fresh.get(pubId(id)) : prev.recs.get(id);
+        if (!rec) continue;
+        recs.set(id, rec);
+        if (rec.friendly.tier === "High" || rec.friendly.tier === "Medium") friendly++;
+        open += rec.friendly.open;
+        facts += rec.facts.known + rec.facts.locked;
+      }
+      for (const c of g.contacts.values()) if (g.companies.has(c.companyId)) people++;
+      // fullView's stats for a few companies count those only: the whole table's are worked out here, as fullView counts them.
+      return { seed, s, at: prev.at, day, recs, stats: { ...v.stats, people, fractionalFriendly: friendly, openRoles: open, facts } };
+    }
     sharedBuilds++;
     const v = await fullView(seed, s, NOBODY, false, null, false);
-    const g = viewGraph(seed, s);
     const byPub = new Map(v.companies.map((c) => [c.id, c]));
     const recs = new Map<string, CompanyRec>();
     for (const id of g.companies.keys()) {
@@ -2832,9 +2987,10 @@ function sharedPart(seed: Seed, s: State): Promise<SharedPart> {
   })();
   // Only the committed state is kept (a draft inside mutate() changes in place), and a build that failed is not.
   if (s === stateCache) {
-    const entry = { seed, s, at: nowMs, day, p };
+    // Built from the one before, it is as old as that one was (SharedPart.at) once it is done.
+    const entry = { seed, s, at: before ? before.at : nowMs, day, p };
     shared = entry;
-    p.catch(() => shared === entry && (shared = null));
+    p.then((part) => shared === entry && (entry.at = part.at), () => shared === entry && (shared = null));
   }
   return p;
 }

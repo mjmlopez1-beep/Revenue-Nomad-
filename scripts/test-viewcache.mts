@@ -11,8 +11,9 @@
  * added, a follow, a confirmation, a report, a claim, an invite, a leader report, a private rate);
  * what one member did never shows in another's table (their unlock, their name on a fact, their
  * follow, their report, their confirmation); a change to a company shows in every member's next
- * table; the shared part is built once for many members, again after any change and after
- * SHARED_KEEP_MS; and a seat holder sees their seat as theirs.
+ * table, from the shared part built from the one before (only the companies a change reached)
+ * or whole (a member joining, the clock); the shared part is built once for many members; and a
+ * seat holder sees their seat as theirs.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -131,11 +132,13 @@ async function main() {
   const bobOwn = (await rec(TOK.bob, "c_alpha")).cells.ownership;
   check("and a fact like any other in Bob's: not his, not hers", bobOwn?.s === "value" && !(bobOwn as { mine?: boolean }).mine, bobOwn);
 
-  const bob1 = t.sharedViewStats().builds;
+  const built = () => t.sharedViewStats().builds + t.sharedViewStats().patches;
   await t.buildView(TOK.bob);
+  const bob1 = t.sharedViewStats();
   await act(TOK.ann, { type: "follow", companyId: pub("c_delta"), on: true });
+  await t.buildView(TOK.bob);
+  check("a follow (nothing Nobody sees) builds no company of the shared part again", t.sharedViewStats().builds === bob1.builds && t.sharedViewStats().patches === bob1.patches + 1, t.sharedViewStats());
   await parity("after Ann follows a company");
-  check("a change builds the shared part again", t.sharedViewStats().builds > bob1);
   check("Ann follows it, Bob doesn't", (await rec(TOK.ann, "c_delta")).following && !(await rec(TOK.bob, "c_delta")).following);
 
   await act(TOK.ann, { type: "verify", entity: "company", id: pub("c_cobra"), field: "industry" });
@@ -156,26 +159,44 @@ async function main() {
   await tried("a claim on that seat", { type: "claimSeat", engagementId: pub("e_echo") });
   await parity("after Cal's unlock, rate, leader report and claim");
 
-  // A change to a company shows in every member's next table.
+  // A change to a company shows in every member's next table: that company built again, not the whole shared part.
   await t.buildView(TOK.bob);
+  const before = t.sharedViewStats();
   await act(TOK.cal, { type: "fill", entity: "company", id: pub("c_fable"), field: "employees", value: "51–200" });
   const bobFable = (await rec(TOK.bob, "c_fable")).cells.employees;
   check("a fact Cal adds shows in Bob's next table", bobFable?.s === "value" && (bobFable as { v: string }).v === "51–200", bobFable);
+  check("built from the one before, not whole", t.sharedViewStats().builds === before.builds && t.sharedViewStats().patches === before.patches + 1, t.sharedViewStats());
   await parity("after Cal adds a fact Bob can see");
+  // Two members report the same fact: hidden for everyone, at once.
+  // (Reporting opens once a member added a fact: Bob adds one first.)
+  await act(TOK.bob, { type: "unlock", entity: "company", id: pub("c_delta"), field: "identity" });
+  await act(TOK.bob, { type: "fill", entity: "company", id: pub("c_delta"), field: "ownership", value: "Bootstrapped" });
+  await act(TOK.ann, { type: "report", entity: "company", id: pub("c_fable"), field: "employees" });
+  await act(TOK.bob, { type: "report", entity: "company", id: pub("c_fable"), field: "employees" });
+  const halFable = (await rec(TOK.hal, "c_fable")).cells.employees;
+  check("a fact two members reported is hidden in a third member's next table", halFable?.s === "reported", halFable);
+  await parity("after a fact is reported twice");
+  // A new member joining (who is on Merlin changes): the shared part is built whole.
+  const whole0 = t.sharedViewStats().builds;
+  const nia = await t.joinMember("Nia Newcomer", "nia@example.com", "", "10.1.2.3");
+  await t.buildView(TOK.bob);
+  check("a member joining builds the shared part whole", t.sharedViewStats().builds === whole0 + 1, t.sharedViewStats());
+  await parity("after a new member joins", [...Object.values(TOK), nia.token]);
 
-  // The clock: the shared part is built again after SHARED_KEEP_MS.
+  // The clock: the shared part is built whole again after SHARED_KEEP_MS, even from changes since.
   await t.buildView(TOK.bob);
   const k0 = t.sharedViewStats().builds;
   await t.buildView(TOK.bob);
-  check("the shared part serves again on the same state", t.sharedViewStats().builds === k0);
-  skew += t.SHARED_KEEP_MS + 1000;
+  check("the shared part serves again on the same state", built() === k0 + t.sharedViewStats().patches);
+  skew += t.SHARED_KEEP_MS / 2;
+  await act(TOK.cal, { type: "fill", entity: "company", id: pub("c_fable"), field: "revenue", value: "$5M–$20M" });
   await t.buildView(TOK.bob);
-  check("and is built again once it is SHARED_KEEP_MS old", t.sharedViewStats().builds === k0 + 1);
+  check("half way, a change builds from the one before", t.sharedViewStats().builds === k0, { k0, now: t.sharedViewStats() });
+  skew += t.SHARED_KEEP_MS / 2 + 1000;
+  await act(TOK.cal, { type: "fill", entity: "company", id: pub("c_fable"), field: "ownership", value: "Bootstrapped" });
+  await t.buildView(TOK.bob);
+  check("and once the whole build is SHARED_KEEP_MS old, it is built whole", t.sharedViewStats().builds === k0 + 1, t.sharedViewStats());
   await parity("later on");
-
-  // A member who just joined.
-  const nu = await t.joinMember("Nia Newcomer", "nia@example.com", "", "10.1.2.3");
-  await parity("after a new member joins", [...Object.values(TOK), nu.token]);
 }
 
 try {
