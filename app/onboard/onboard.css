@@ -1143,3 +1143,120 @@
 .ob-fv-name:has(> .locked-name) {
   overflow: visible;
 }
+
+/* ---------- three steps (UX round, WS1) ---------- */
+
+/* The button that moves on stays in sight on every screen: sticky at the card's bottom on desktop too (phones above). */
+@media (min-width: 641px) {
+  .ob-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 32px -32px -32px;
+    padding: 16px 32px;
+    background: var(--surface);
+    border-radius: 0 0 var(--r-card) var(--r-card);
+  }
+}
+/* Step 1: the titles for the function, as chips, the one picked in pine. */
+.ob-title-picks + .ob-title-input {
+  margin-top: 12px;
+}
+.ob-title-pick-on,
+.ob-title-pick-on:hover {
+  border: 1px solid var(--pine);
+  background: var(--pine);
+  color: #fff;
+}
+/* Step 2: the Ideal Fractional Profile asks industry and size only here (revenue and Where are IcpFields' 3rd and 4th parts). */
+.ob-icp-short .hunt-q:nth-of-type(n + 3) {
+  display: none;
+}
+.ob-chip .ob-chip-tick,
+.ob-chip > svg {
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.ob-more {
+  margin-top: 12px;
+  min-height: 32px;
+  font-size: 14px;
+}
+/* Step 3: saved, said quietly in the footer. */
+.ob-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pine);
+  font-weight: 600;
+}
+.ob-link-warn {
+  color: var(--ink);
+  font-weight: 700;
+}
+/* Skeleton rows while the companies are on their way. */
+.ob-fv-skel .ob-fv-id {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+}
+.ob-skel {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--line);
+  animation: ob-skel 1.6s ease-in-out infinite;
+}
+.ob-skel-logo {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+@keyframes ob-skel {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-skel {
+    animation: none;
+  }
+}
+/* The sign-in link, one line in the sticky footer above Open Today (email sign-in off only). */
+.ob-link-line {
+  flex: 1 0 100%;
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  border-radius: var(--r-btn);
+  background: var(--pine-8);
+  font-size: 14px;
+  line-height: 20px;
+}
+.ob-link-text {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ob-hint-i {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.ob-foot:has(.ob-link-line) {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+@media (max-width: 640px) {
+  .ob-link-text {
+    display: none;
+  }
+}

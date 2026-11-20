@@ -19,7 +19,7 @@ import { alertView, metaOf, pillPlace, realTitle, seatState, seatsAt, titlesFor 
 import { firstViewPlace } from "../app/onboard/place";
 import {
   BEFORE_DEFAULTS, BEFORE_MAX, ENOUGH, FIRST_WINDOW, WIDER_WINDOW, beforeOptions, beforeOrder, firstView, firstViewLine, goalFor, guessLine, holdersLine, newerAnswers, openRolesCount,
-  resumeStep, toggleBefore, widenLine,
+  resumeStep, STEPS, toggleBefore, widenLine,
 } from "../app/onboard/firstView";
 import { applyFilters, deriveAll, hireOfRow, placeFilters, rowsFor, sortRows, type Row } from "../app/post/model";
 import { FUNCTIONS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
@@ -256,8 +256,11 @@ console.log("\nPicking up where they left off");
 check("the newer copy of the answers wins: this tab's or the server's", newerAnswers({ at: "2026-11-18T10:00:00Z", step: 2 }, { at: "2026-11-18T09:00:00Z", step: 4 })?.step === 2 && newerAnswers({ at: "2026-11-18T08:00:00Z", step: 2 }, { at: "2026-11-18T09:00:00Z", step: 4 })?.step === 4);
 check("with one copy, that one", newerAnswers(null, { at: "x", step: 3 })?.step === 3 && newerAnswers({ at: "2026-11-18T08:00:00Z", step: 2 }, null)?.step === 2 && newerAnswers(null, null) === null);
 check("a copy with no time loses to one with a time", newerAnswers({ step: 2 }, { at: "2026-11-18T09:00:00Z", step: 4 })?.step === 4 && newerAnswers({ at: "2026-11-18T09:00:00Z", step: 2 }, { step: 4 })?.step === 2);
-check("it opens on the step it left, inside the flow", resumeStep(5, { fn: "Sales", before: ["Marketing"] }, 5) === 5 && resumeStep(9, { fn: "Sales", before: [] }, 6) === 6 && resumeStep(0, { fn: "Sales", before: null }, 5) === 1);
-check("never past an answer it needs: the function, then the before answer", resumeStep(4, { fn: null, before: ["Marketing"] }, 5) === 1 && resumeStep(5, { fn: "Sales", before: null }, 5) === 3 && resumeStep(3, { fn: "Sales", before: null }, 5) === 3);
+// Three steps now (STEPS): 1 what you do, 2 who you want to work with (the before answer and the profile), 3 the first view.
+check("it opens on the step it left, inside the flow", resumeStep(3, { fn: "Sales", before: ["Marketing"] }, STEPS) === 3 && resumeStep(9, { fn: "Sales", before: [] }, STEPS) === 3 && resumeStep(0, { fn: "Sales", before: null }, STEPS) === 1);
+check("never past an answer it needs: the function, then the before answer (step 2)", resumeStep(3, { fn: null, before: ["Marketing"] }, STEPS) === 1 && resumeStep(3, { fn: "Sales", before: null }, STEPS) === 2 && resumeStep(2, { fn: "Sales", before: null }, STEPS) === 2);
+check("a draft from the six-step flow lands inside the three", resumeStep(5, { fn: "Sales", before: ["Marketing"] }, STEPS) === 3 && resumeStep(6, { fn: "Sales", before: [] }, STEPS) === 3 && resumeStep(4, { fn: "Sales", before: null }, STEPS) === 2);
+check("onboarding is three steps", STEPS === 3);
 check("a new member's goal: no fractional in their function yet, or repeat hirers for a catch-all", goalFor("Sales") === "adjacent" && goalFor("Other") === "friendly" && goalFor("Executive") === "friendly" && goalFor(null) === "friendly");
 const views = [{ id: "al_1", place: "v=hiring&t=seats&f=fn:Sales" }, { id: "al_2", place: fv1.place }];
 check("the table opens on the first view while it is saved", firstViewPlace({ firstView: "al_2", savedViews: views }) === fv1.place);

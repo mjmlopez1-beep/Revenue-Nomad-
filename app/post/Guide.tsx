@@ -5,8 +5,8 @@ import { useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { IconCheck, IconChevron, IconX } from "../ui/shared";
 import { plural, store } from "./hooks";
-import { checkSteps, type CheckStep } from "./model";
-import type { StepOne } from "./getStarted";
+import type { CheckStep } from "./model";
+import { startSteps, type StepOne } from "./getStarted";
 
 export function Checklist({
   me,
@@ -50,11 +50,12 @@ export function Checklist({
   // A done step stays done in this browser, so the count never goes backwards (a refund, a removed fact).
   const doneKey = `tp_check_done_${me.id}`;
   const stuck = new Set((store.get(doneKey) ?? "").split(",").filter(Boolean));
-  const plan = checkSteps(me, { seatsHeld: onSeats ? seatsHeld ?? 0 : 0, seatsLeft: seatsLeft ?? 0, earn: seats ?? 0, stuck, seen, stepOne });
+  // Step 1 is "Unlock a company" and stays that once done (startSteps): "See who held a seat" is only ever the next nudge.
+  const plan = startSteps(me, { seatsHeld: onSeats ? seatsHeld ?? 0 : 0, seatsLeft: seatsLeft ?? 0, earn: seats ?? 0, stuck, seen, stepOne });
   const go: Record<CheckStep["key"], () => void> = { unlock: onUnlock, seat: onAdd, invite: onInvite };
   const steps = plan.steps.map((x) => ({ ...x, go: go[x.key], open: x.key === "invite" }));
   // "Fill in your seats" takes the place of the done step 2, so the strip never holds four items.
-  const nudge = plan.nudge;
+  const nudge = plan.next?.action === "fillSeats" ? plan.next : null;
   const nowDone = steps.filter((x) => x.done).map((x) => x.key);
   if (nowDone.some((k) => !stuck.has(k))) store.set(doneKey, nowDone.join(","));
   const n = steps.filter((s) => s.done).length;

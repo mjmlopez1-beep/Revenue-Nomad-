@@ -378,6 +378,10 @@ async function main() {
   check("after the trial: Free, quietly, with the limits, charged at checkout", cy.plan?.name === "free" && cy.plan.hadTrial && cy.plan.firstChargeAt === null && cy.plan.limits.savedViews === 1 && cy.plan.limits.claudePerDay === 20, cy.plan);
   const ed = await meOf(ED);
   check("the last 3 days: the trial-ending moment; 2 days left, so buying now is charged at once", ed.plan?.ending === true && ed.plan.firstChargeAt === null && ed.plan.trialDaysLeft === 2 && ed.plan.notLooking);
+  // Today's one-time trial-ended card (UX round, WS1): on until closed, then kept closed with the plan's notices.
+  check("the trial ended: Today's card is due", cy.plan?.trialEnded === true && !ed.plan?.trialEnded, { cy: cy.plan?.trialEnded, ed: ed.plan?.trialEnded });
+  const seenCard = await act(CY, { type: "noticeSeen", kind: "trialEnded" });
+  check("Got it: the card is closed for good, kept in the plan's notices", seenCard.ok && !(await meOf(CY)).plan?.trialEnded && !!(await state()).billing!.members.mem_cy.notices?.trialEndedSeen, seenCard);
 
   console.log("\nFree's limits");
   const v4 = await save(CY, 4);

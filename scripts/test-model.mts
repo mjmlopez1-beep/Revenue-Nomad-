@@ -17,7 +17,8 @@ import {
   cardSeat, newRolesFor, newThisWeek, rolesThisWeek, personCoverOf, personNoun, personUnseen, PERSON_NO_ADD, seatBundled, seatBothLocked, seatNoun, seatWhat, waitWords, AFTER_NAME, AFTER_COMPANY,
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
-import { holderSeen, holderTarget, lockedHolder, personTarget, sameBuy, stepOneKind } from "../app/post/getStarted";
+import { holderSeen, holderTarget, lockedHolder, personTarget, sameBuy, startSteps, stepOneKind } from "../app/post/getStarted";
+import { isTodayAnswer, radarSince, rolesSince, sinceWords } from "../app/post/todayModel";
 import { SEAT_YIELD, inviteMailto, inviteMessage, tappedWhat, wallBack } from "../app/post/earnBack";
 import { UNLOCKS_LEFT_TIP, confirmedWords, fnChipPlan, foldParts, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "../app/post/display";
 
@@ -565,6 +566,34 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("looking for roles, step 1 stays See who is hiring", rolesNone.steps[0].label === "See who is hiring" && rolesNone.steps.length === 3);
 }
 
+/* ---------- Get started as the app shows it: step 1 stays "Unlock a company" (startSteps) ---------- */
+
+{
+  const base = { goal: "adjacent", added: 0, unlocked: 0, holdersUnlocked: 0, companiesUnlocked: 0, invited: 0, invitesPaid: 0, freeCompany: true, unlocksLeft: 25 } as const;
+  const fresh = startSteps(base, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
+  check("step 1 is Unlock a company, free while the company of the day is left", fresh.steps[0].label === "Unlock a company" && !fresh.steps[0].done && fresh.steps[0].hint === "1 free company today", fresh.steps[0]);
+  check("  and it is the next thing to do", fresh.next?.action === "unlock" && fresh.next.label === "Unlock a company", fresh.next);
+  const paid = startSteps({ ...base, freeCompany: false }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
+  check("after the free one, it costs 2 credits", paid.steps[0].hint === "costs 2 credits", paid.steps[0].hint);
+  // A company unlock ticks step 1, and its label stays (it used to turn into See who held a seat).
+  const one = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "holder" });
+  check("any company unlock ticks step 1, and the label stays the same", one.steps[0].done && one.steps[0].label === "Unlock a company" && one.steps.length === 3, one.steps[0]);
+  check("  Find your seats is next, as one line", one.next?.action === "seats" && one.next.label === "Find your seats" && one.next.hint === "up to ~12 credits a seat", one.next);
+  check("  See who held a seat is never a step", !one.steps.some((x) => x.label === "See who held a seat"));
+  const seated = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 0, earn: 0, stepOne: "holder" });
+  check("with a seat on file, See who held a seat is the next nudge", seated.next?.action === "holder" && seated.next.label === "See who held a seat", seated.next);
+  const filling = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 4, earn: 4, stepOne: "holder" });
+  check("seats still to fill in come before who held a seat", filling.next?.action === "fillSeats", filling.next);
+  const held = startSteps({ ...base, unlocked: 2, companiesUnlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 0, earn: 0, stepOne: "holder" });
+  check("once a seat holder is seen, the invite is next", held.next?.action === "invite", held.next);
+  const all = startSteps({ ...base, unlocked: 2, companiesUnlocked: 1, holdersUnlocked: 1, invitesPaid: 1, invited: 1 }, { seatsHeld: 1, seatsLeft: 0, earn: 0, stepOne: "holder" });
+  check("every step done: nothing next", all.next === null && all.steps.every((x) => x.done), all);
+  const none = startSteps(base, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "none" });
+  check("nothing locked to unlock and none unlocked: step 1 is left out", none.steps.map((x) => x.key).join() === "seat,invite", none.steps);
+  const roles = startSteps({ ...base, goal: "roles" }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
+  check("looking for roles reads the same", roles.steps[0].label === "Unlock a company", roles.steps[0]);
+}
+
 /* ---------- Get started step 1: who held a seat, and nothing else ---------- */
 
 {
@@ -873,6 +902,36 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   );
   check("two functions, any time, all companies, no gap switch", foldParts({ fns: ["Finance", "Marketing"], within: 0, scope: "all companies", mine: "Sales", notMine: false }).join(" · ") === "Finance or Marketing hires · any time · all companies");
   check("three functions, and none picked", foldParts({ fns: ["Finance", "Marketing", "RevOps"], within: 12, scope: "in my profile", mine: null, notMine: true })[0] === "Hires in 3 functions" && foldParts({ fns: [], within: 3, scope: "x", mine: "Sales", notMine: false })[0] === "Hires in any function");
+}
+
+/* ---------- Today: its data with or without GET ?today=1, and since your last visit ---------- */
+
+{
+  const small = { me: {}, freeCompany: true, radar: { day: "2026-11-20", fn: "Sales", rows: [], newCount: 3 } };
+  check("?today=1's small answer is read", isTodayAnswer(small));
+  check("a full view (a server without ?today=1) or an error is not: Today falls back to ?radar=1", !isTodayAnswer({ me: {}, companies: [], radar: small.radar }) && !isTodayAnswer({ me: {}, companies: [] }) && !isTodayAnswer({ error: "x" }) && !isTodayAnswer(null));
+  const days = [
+    { day: "2026-11-20", companies: 2 },
+    { day: "2026-11-19", companies: 0 },
+    { day: "2026-11-18", companies: 4 },
+    { day: "2026-11-17", companies: 1 },
+  ];
+  check("Crystal Ball since the last visit: the days after it", radarSince({ days }, "2026-11-17T15:00:00Z") === 6 && radarSince({ days }, "2026-11-20T08:00:00Z") === 0, radarSince({ days }, "2026-11-17T15:00:00Z"));
+  check("on a first visit, its latest day with any", radarSince({ days }, null) === 2 && radarSince({ days: [] }, null) === 0);
+  const at = "2026-11-17T12:00:00Z";
+  const opened = (fn: string, day: string, extra: Partial<EngagementRec> = {}) => eng({ function: val(fn), status: val("Open") }, { opened: day, openedAt: `${day}T09:00:00Z`, ...extra });
+  const roleInfos = deriveAll([co("Roles", [opened("Sales", "2026-11-19"), opened("Sales", "2026-11-10"), opened("Marketing", "2026-11-19"), opened("Sales", "2026-11-19", { closed: "2026-11-20" })])]);
+  check("roles opened since: the member's function, open now, after the visit", rolesSince(roleInfos, "Sales", at) === 1, rolesSince(roleInfos, "Sales", at));
+  check("  none on a first visit or with no function", rolesSince(roleInfos, "Sales", null) === 0 && rolesSince(roleInfos, null, at) === 0);
+  const now = new Date("2026-11-20T12:00:00");
+  check(
+    "Since Tuesday, yesterday, earlier today, or a date a week back",
+    sinceWords(new Date("2026-11-17T10:00:00").toISOString(), now) === "Since Tuesday" &&
+      sinceWords(new Date("2026-11-19T10:00:00").toISOString(), now) === "Since yesterday" &&
+      sinceWords(new Date("2026-11-20T07:00:00").toISOString(), now) === "Since earlier today" &&
+      sinceWords(new Date("2026-11-02T10:00:00").toISOString(), now) === "Since Nov 2",
+    [sinceWords(new Date("2026-11-17T10:00:00").toISOString(), now), sinceWords(new Date("2026-11-02T10:00:00").toISOString(), now)],
+  );
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

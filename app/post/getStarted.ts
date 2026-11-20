@@ -9,9 +9,9 @@
  * file). With no seat holder locked anywhere in the member's table, the step says what it points
  * at instead: a person's name and title, or nothing at all (stepOneKind).
  */
-import type { EngagementRec, PersonRec } from "@/lib/tableTypes";
-import { PERSON_BUNDLE } from "@/lib/tableFields";
-import { shown, type CoInfo, type FactRef, type Row } from "./model";
+import type { EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, PERSON_BUNDLE } from "@/lib/tableFields";
+import { checkSteps, shown, type CheckStep, type CoInfo, type FactRef, type Row } from "./model";
 
 /** A seat holder the member can pay to see: a locked holder, on a seat that isn't theirs, at a company they can see. */
 export const lockedHolder = (i: CoInfo, e: EngagementRec) => !i.c.hidden && !e.yours && e.cells.operator?.s === "locked";
@@ -157,4 +157,38 @@ export function sameBuy(t: FactRef): string[] {
   if (t.entity === "engagement" && t.field === "operator") return ["operator", "role"].map((f) => `${t.id}.${f}`);
   if (t.entity === "contact" && PERSON_BUNDLE.includes(t.field)) return [t.field, ...PERSON_BUNDLE.filter((f) => f !== t.field)].map((f) => `${t.id}.${f}`);
   return [`${t.id}.${t.field}`];
+}
+
+/* ---------- the steps, with a goalpost that stays put ---------- */
+
+/** What a Get started step or the next-step nudge runs. */
+export type StepAction = "unlock" | "seats" | "fillSeats" | "holder" | "invite";
+
+/**
+ * Get started as the app shows it. Step 1 is "Unlock a company" and ticks on any company unlock
+ * (or a seat holder seen, which needs one): it never turns into another step once the member did
+ * what it said. Steps 2 and 3 are checkSteps' (Find your seats, Invite a fractional). `next` is the
+ * one thing to do now, for the nudge slot: step 1 while it is open, then "Fill in your seats",
+ * then "See who held a seat" (only ever a nudge: a company is open and a seat holder at one is
+ * still locked), then the first step not done, then nothing.
+ */
+export function startSteps(
+  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid"> & Partial<Pick<Me, "freeCompany" | "unlocksLeft">>,
+  o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string>; seen?: boolean; stepOne?: StepOne },
+): { steps: CheckStep[]; next: { label: string; hint: string; action: StepAction } | null } {
+  const base = checkSteps(me, { ...o, stepOne: "holder" });
+  const holders = me.holdersUnlocked ?? 0;
+  const opened = holders + (me.companiesUnlocked ?? 0) > 0 || !!o.seen || !!o.stuck?.has("unlock");
+  const free = !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE;
+  const one: CheckStep = { key: "unlock", done: opened, label: "Unlock a company", hint: free ? "1 free company today" : `costs ${COMPANY_PRICE_SAY}` };
+  // Every company is open already and none was unlocked: nothing for step 1 to point at, so it is left out.
+  const steps = [...(!opened && o.stepOne === "none" ? [] : [one]), ...base.steps.filter((x) => x.key !== "unlock")];
+  const act: Record<CheckStep["key"], StepAction> = { unlock: "unlock", seat: "seats", invite: "invite" };
+  const up = steps.find((x) => !x.done);
+  if (up?.key === "unlock") return { steps, next: { label: up.label, hint: up.hint, action: "unlock" } };
+  const fill = base.nudge ? { ...base.nudge, action: "fillSeats" as const } : null;
+  const holder = opened && holders === 0 && !o.seen && o.stepOne === "holder" ? { label: "See who held a seat", hint: "1 credit", action: "holder" as const } : null;
+  // Find your seats is the step that pays: it comes before who held a seat.
+  const seats = up?.key === "seat" ? { label: up.label, hint: up.hint, action: "seats" as const } : null;
+  return { steps, next: fill ?? seats ?? holder ?? (up ? { label: up.label, hint: up.hint, action: act[up.key] } : null) };
 }

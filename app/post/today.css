@@ -1,0 +1,220 @@
+/* Today (app/post/Today.tsx): one card, two links, at most one nudge. Classes are prefixed td-. */
+
+.td {
+  max-width: 640px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.td > * {
+  min-width: 0;
+}
+.td-h1 {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 8px 0 0;
+}
+.td-card {
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.td-card-t {
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.td-co {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.td-co-id {
+  display: grid;
+  min-width: 0;
+}
+.td-co-name {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.td-co-facts {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.td-what {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.td-why {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink, #2b3631);
+}
+.td-warm {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink, #2b3631);
+}
+.td-warm-open {
+  display: block;
+  padding: 12px 16px;
+  border-radius: var(--r-btn);
+  background: var(--pine-8);
+}
+.td-warm-open strong {
+  color: var(--ink);
+}
+.td-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.td-quiet {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pine);
+  cursor: pointer;
+}
+.td-quiet:hover,
+.td-link:hover,
+.td-since-l:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.td-none {
+  color: var(--body-ink, #2b3631);
+}
+.td-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+}
+.td-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pine);
+  cursor: pointer;
+}
+.td-nudge .tp-strip {
+  margin: 0;
+}
+.td-since {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--muted);
+}
+.td-since-h {
+  font-weight: 700;
+  color: var(--ink);
+}
+.td-since-l {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+}
+.td-trial {
+  display: grid;
+  gap: 8px;
+  padding: 20px 24px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--pine);
+  background: var(--volt-soft);
+  font-size: 14px;
+  line-height: 20px;
+}
+.td-trial-h {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.td-skel {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--line);
+  animation: td-skel 1.6s ease-in-out infinite;
+}
+@keyframes td-skel {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .td-skel {
+    animation: none;
+  }
+}
+@media (max-width: 767px) {
+  .tp-main-page.td-page {
+    padding: 4px 16px 40px;
+  }
+  .td {
+    gap: 12px;
+  }
+  .td-h1 {
+    font-size: 24px;
+    line-height: 30px;
+    margin-top: 16px;
+  }
+  .td-card {
+    padding: 16px;
+  }
+  .td-co-name {
+    font-size: 19px;
+    line-height: 26px;
+  }
+  .td-main {
+    flex: 1 0 100%;
+  }
+}
+
+/* The one nudge stays one line on a phone too (until WS3's NudgeSlot styles its own). */
+.tp-phone .tp-nudge {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.tp-phone .tp-nudge .tp-strip-acts {
+  order: 0;
+  width: auto;
+}
