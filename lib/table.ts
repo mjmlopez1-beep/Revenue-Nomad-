@@ -5822,6 +5822,11 @@ export async function perform(
           }
           return { message: "Saved." };
         }
+        case "noticeSeen": { // [ux ws1] Today's one-time trial-ended card, closed: kept with the plan's notices.
+          const rec = s.billing?.members?.[me.id];
+          if (rec && a.kind === "trialEnded") (rec.notices ??= {}).trialEndedSeen = now; // [ux ws1]
+          return { message: "" }; // [ux ws1]
+        } // [ux ws1]
         case "joinedSeen": {
           // The invite loop: the inviter closed the line saying who joined from their invite. It doesn't come back.
           const ids = new Set((Array.isArray(a.ids) ? a.ids : []).slice(0, 50).map((x) => String(x)));
@@ -6491,6 +6496,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     annualLine: annualLine(hourlyOf(ownRate(s, memberId))),
     prices: { month: PRICES.month, year: PRICES.year, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
     limits: { savedViews: free ? FREE_SAVED_VIEWS : null, claudePerDay: free ? FREE_MCP_PER_DAY : null },
+    ...(free && rec?.trialStartedAt && !rec.paidSince && !rec.notices?.trialEndedSeen ? { trialEnded: true } : {}), // [ux ws1] Today's one-time trial-ended card
   };
 }
 

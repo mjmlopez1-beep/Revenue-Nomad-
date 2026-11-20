@@ -410,6 +410,8 @@ export interface PlanView {
   receipt?: string[];
   /** What Free allows now (null: no limit, on Pro). */
   limits: { savedViews: number | null; claudePerDay: number | null };
+  /** The trial ended without a paid plan and the member hasn't closed Today's trial-ended card yet (PlanRecord.notices.trialEndedSeen). */ // [ux ws1]
+  trialEnded?: boolean; // [ux ws1]
 }
 
 /** The most functions "Which fractional usually gets hired before you?" takes. */
@@ -997,6 +999,8 @@ export type Action =
   | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean; radar?: boolean }
   /** The invite loop: the inviter closed the line saying these fractionals joined from their invite (Me.joined ids). It doesn't come back. */
   | { type: "joinedSeen"; ids: string[] }
+  /** Today's one-time cards: the member closed it ("trialEnded": the trial-ended card), kept in PlanRecord.notices. */ // [ux ws1]
+  | { type: "noticeSeen"; kind: "trialEnded" } // [ux ws1]
   /**
    * Invite to connect (EngagementRec.invite): the member sent the seat holder a note with the seat's
    * claim link. One record per member and seat ("Invited Nov 18"): sending again keeps the first date

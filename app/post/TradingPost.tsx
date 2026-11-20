@@ -38,7 +38,7 @@ import {
   type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { firstViewPlace } from "../onboard/place";
-import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, stepOneKind, type StepTarget } from "./getStarted";
+import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, startSteps, stepOneKind, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
 import { InvitePanel } from "./Invite";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
@@ -65,7 +65,9 @@ import { HiredButton, HiredSentence } from "./Hired";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/lib/hired";
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
 import { fmtStamp } from "./RoleDate";
-import { Checklist, Strip, sinceText } from "./Guide";
+import { Strip, sinceText } from "./Guide";
+import { TodayPage, rolesSince, useTodayData } from "./Today";
+import { NudgeSlot, pickNudge } from "./nudges";
 import { COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
@@ -157,12 +159,14 @@ function previousVisit(): string | null {
 type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // [google network] "network": Your network (app/post/network), only with RN_GOOGLE=1.
-type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network";
+// "today": Today (Today.tsx), the home for / with no place in the address. It sits level with the table (no history entry above it).
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network";
 
 /* ---------- the place in the address bar ---------- */
 
 const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages", "integrations", "partners", "billing", "radar", "network"];
 const PAGE_TITLE: Record<Page, string> = {
+  today: "Today",
   table: "",
   seats: "Your seats",
   credits: "Your credits",
@@ -255,10 +259,17 @@ function readPlace(me: Me, from?: string) {
   // and so does an older email's "See who" (?upgrade=radar).
   const sig = SIG_DAY_RE.test(q.get("sig") ?? "") ? q.get("sig") : null;
   const p = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PAGES.find((x) => x === q.get("p")) ?? null;
-  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig };
+  // Nothing in the address that names a place (?c=, ?p=, ?v= and the rest): Today, the home. "?p=table" is the table at its defaults.
+  const home = !from && !PLACE_KEYS.some((k) => q.has(k));
+  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, home };
 }
 
-/** The address for a place, leaving out what the member's defaults already say. */
+/** The address keys that name a place in the app. With none of them, / opens Today. */
+const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade"];
+/** The address is Today's: no place in it. */
+const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
+
+/** The address for a place, leaving out what the member's defaults already say. Today's is / alone; the table's never is (?p=table at its defaults). */
 function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null }): string {
   const d = defaultsFor(me);
   const q = new URLSearchParams();
@@ -270,11 +281,14 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   if (f !== encodeFilters(d.f)) q.set("f", f || "-");
   if (x.all && x.v === "hiring") q.set("af", "1");
   if (x.p === "table" && x.c) q.set("c", x.c);
-  if (x.p !== "table") q.set("p", x.p);
+  if (x.p !== "table" && x.p !== "today") q.set("p", x.p);
   // The radar's day says which day, so a reload or a shared link opens the same companies.
   if (x.p === "radar" && x.sig) q.set("sig", x.sig);
+  const path = typeof window === "undefined" ? "/" : window.location.pathname;
+  if (x.p === "today") return path;
+  if (x.p === "table" && !q.toString()) q.set("p", "table");
   const s = q.toString();
-  return `${typeof window === "undefined" ? "/" : window.location.pathname}${s ? `?${s}` : ""}`;
+  return `${path}${s ? `?${s}` : ""}`;
 }
 
 /** How deep in this app's own history entries we are (0 is the table). */
@@ -332,7 +346,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   /** Hiring now leads with the member's function (theirs only, until "Show all functions"). */
   const hireFn = tab === "hiring" ? namedFn(me.function) : null;
   const [limit, setLimit] = useState(PAGE);
-  const [page, setPage] = useState<Page>(() => (start === "seats" ? "seats" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? "table"));
+  const [page, setPage] = useState<Page>(() => (start === "seats" ? "seats" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table")));
+  /** The page level with the table under a record or a page (Today or the table): where Back and a page's own Back go. */
+  const baseRef = useRef<"today" | "table">(page === "today" ? "today" : "table");
+  if (page === "today" || page === "table") baseRef.current = page;
+  const toBase = useStable(() => setPage(baseRef.current));
+  /** This visit opened on Today: the one-time lines (a bonus paid, who joined) are said there, not over the table too. */
+  const [openedToday] = useState(page === "today");
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
   /** Why Your seats is open: the fact the zero-credits wall was asked for (the way back once they earn), and whether its search comes first. */
   const [seatCtx, setSeatCtx] = useState<{ back: WallBack | null; search: boolean }>({ back: null, search: false });
@@ -747,6 +767,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     };
   });
   const [bonusOff, setBonusOff] = useState(false);
+  /* Today: its data once it has shown on this visit, and the trial-ended card closed here. */
+  const [todayShown, setTodayShown] = useState(page === "today");
+  useEffect(() => {
+    if (page === "today") setTodayShown(true);
+  }, [page]);
+  const rolesNew = useMemo(() => (todayShown ? rolesSince(infos, me.function, since.at) : 0), [todayShown, infos, me.function, since.at]);
+  const today = useTodayData(todayShown, since.at, { roles: rolesNew, follows: since.n });
+  const [trialSeen, setTrialSeen] = useState(false);
   // The invite loop: who joined from this member's invite and wasn't shown yet (Me.joined). Closed here, it goes at once.
   const [joinedOff, setJoinedOff] = useState<string[]>([]);
   const joined = (me.joined ?? []).filter((j) => !joinedOff.includes(j.id));
@@ -1091,7 +1119,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     else if (addOpts) setAddOpts(null);
     else if (drawer) closeDrawer();
     else if (sideOverlay) setSideOverlay(false);
-    else if (page !== "table") setPage("table");
+    else if (page !== "table" && page !== "today") setPage(baseRef.current);
   });
 
   /*
@@ -1100,7 +1128,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    * level is one history entry, so Back closes the top one and never leaves the app from inside.
    */
   const recordOpen = !!drawer && page === "table";
-  const navOpen = page !== "table" || !!drawer;
+  // Today sits level with the table: a page or a record is one entry above either.
+  const navOpen = (page !== "table" && page !== "today") || !!drawer;
   const overlayOpen = layout !== "desktop" && !!(editor || pop || sortOpen || addOpts || sideOverlay);
   const depth = (navOpen ? 1 : 0) + (overlayOpen ? 1 : 0);
   const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay ?? radar.stale?.day ?? null });
@@ -1108,6 +1137,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   urlRef.current = url;
   const depthRef = useRef(depth);
   depthRef.current = depth;
+  const pageNowRef = useRef(page);
+  pageNowRef.current = page;
   const goingBack = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replaceSoon = useRef<ReturnType<typeof setTimeout> | null>(null);
   const writeHistory = useStable(() => {
@@ -1133,6 +1164,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           } catch {}
         }, 800);
         window.history.go(want - cur);
+      } else if (want === 0 && atHome() !== (pageNowRef.current === "today")) {
+        // Today to the table (Browse all companies) or back (Home): an entry of its own, so Back returns to Today.
+        if (replaceSoon.current) {
+          clearTimeout(replaceSoon.current);
+          replaceSoon.current = null;
+        }
+        window.history.pushState({ tpd: 0 }, "", urlRef.current);
       } else if (here() !== urlRef.current && !replaceSoon.current) {
         // Typing in search changes the place on every key: write it once the typing pauses.
         replaceSoon.current = setTimeout(() => {
@@ -1202,7 +1240,12 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       // Back from a record opened from a page goes back to that page.
       const back = page === "table" ? drawer?.returnTo : undefined;
       setDrawer(null);
-      setPage(back ?? "table");
+      setPage(back ?? (atHome() ? "today" : "table"));
+    } else if (d === 0 && depth === 0) {
+      // Between Today and the table, both level: the address says which.
+      const home = atHome();
+      if (home && page === "table") setPage("today");
+      else if (!home && page === "today") setPage("table");
     } else if (d > depth) {
       // Forward onto a record or a page.
       const x = readPlace(me);
@@ -1377,7 +1420,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     void refresh();
   };
   const goHome = () => {
-    setPage("table");
+    setPage("today");
     setDrawer(null);
     setQuery("");
   };
@@ -1393,24 +1436,28 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   };
 
   /* ----- pieces ----- */
-  const checklist = (
-    <Checklist
-      me={me}
-      vertical={phone}
-      // Phones: one line, so the first record is on the first screen.
-      compact={phone}
-      onUnlock={() => showFact("locked")}
-      onAdd={openSeatSearch}
-      onInvite={invite}
-      onDismiss={hideCheck}
-      seats={Math.min(seatStats.missing, earnRoom(me))}
-      seatsHeld={seatStats.n}
-      seatsLeft={seatStats.missing}
-      onSeats={() => openSeats()}
-      stepOne={stepKind}
-      seen={stepSeen}
-    />
+  /*
+   * Get started as one line (getStarted.ts startSteps): the next step for the nudge slot. A step
+   * done stays done in this browser, so the count never goes backwards (a refund, a removed fact).
+   */
+  const doneKey = `tp_check_done_${me.id}`;
+  const steps = useMemo(
+    () =>
+      startSteps(me, {
+        seatsHeld: seatStats.n,
+        seatsLeft: seatStats.missing,
+        earn: Math.min(seatStats.missing, earnRoom(me)),
+        stuck: new Set((store.get(doneKey) ?? "").split(",").filter(Boolean)),
+        seen: stepSeen,
+        stepOne: stepKind,
+      }),
+    [me, seatStats, stepSeen, stepKind, doneKey],
   );
+  useEffect(() => {
+    const had = new Set((store.get(doneKey) ?? "").split(",").filter(Boolean));
+    const done = steps.steps.filter((x) => x.done).map((x) => x.key);
+    if (done.some((k) => !had.has(k))) store.set(doneKey, [...new Set([...had, ...done])].join(","));
+  }, [steps, doneKey]);
 
   /*
    * The slot above the list (Get started, the next-move card, the credit line) is chosen from
@@ -1444,7 +1491,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     return (i: CoInfo) => !isFirm(i.c) && (!fit || fit(i.c));
   }, [filters.icp, me.icp]);
   const newRoles = useMemo(() => newRolesFor(infos, namedFn(me.function), rolesKeep), [infos, me.function, rolesKeep]);
-  const picked = guide === "check" ? null : pickMove(slotMe, seatStats, newRoles.roles, moveOff);
+  // One nudge at a time (nudges.ts): the next-move card's place is the nudge slot's now.
+  const picked = null as ReturnType<typeof pickMove>;
   const move = picked === "roles" && tab === "hiring" ? null : picked;
   /*
    * Ember: at most two kinds on a screen. Who keeps it, in order: the next-move card, the solid
@@ -1508,53 +1556,44 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setEff({ ...eff, hiredFn: [], hiredWithin: 0, ...(off ? { notMine: false } : {}) });
   };
 
-  // Credits running low or out. With the roles card up, it is a line inside the card, not a second banner.
-  const creditLine = guide === "credits" && (move === "roles" || !move);
-  // CreditLine draws nothing once the balance is back above 3 (and earning is open): the card then has no last line.
-  const noteNow = creditLine && (capped || me.credits <= 3);
-  const banners = (
-    <div className="tp-banners">
-      <TrialBanner plan={me.plan} />
-      {move && (
-        <div className={`tp-move${noteNow ? " has-note" : ""}`}>
-          <NextMove
-            kind={move}
-            me={me}
-            seats={seatStats}
-            roles={{ n: newRoles.roles, hidden: newRoles.hidden }}
-            onSeats={() => openSeats()}
-            onRoles={seeOpenRoles}
-            onDismiss={dismissMove}
-          />
-          {creditLine && <CreditLine me={me} onShowAdd={() => showFact("empty")} label={addLabel} inCard />}
-        </div>
-      )}
-      {creditLine && !move ? (
-        <CreditLine me={me} onShowAdd={() => showFact("empty")} label={addLabel} />
-      ) : guide === "invite" ? (
-        <Strip
-          actions={
-            <button type="button" className="btn btn-sm" onClick={() => showFact("empty")}>
-              {addLabel}
-            </button>
-          }
-        >
-          Your {REFERRAL_BONUS} invite credits arrive when you add your first fact to a company or a seat.
-        </Strip>
-      ) : guide === "check" ? (
-        checklist
-      ) : (
-        guide === "intro" &&
-        !move && (
-          <Strip onClose={hideIntro}>
-            You have {plural(me.credits, "credit")}. Spend one to see a fact someone else added. Add a fact you know and you earn one, up to {me.earnCap} a day.
-          </Strip>
-        )
-      )}
+  /*
+   * One nudge at a time (nudges.ts pickNudge): the trial ending (Today only), credits at 3 or fewer,
+   * an empty profile, then the next Get started step as one line. On the table it reads the balance
+   * as it was when the list opened (slotMe), so an unlock never pushes the rows down under the
+   * pointer. Today has no rows to push: it reads the balance now, and leaves out the unlock step,
+   * which its own card is.
+   */
+  const nudgeFor = (where: "today" | "table") => {
+    const m = where === "today" ? me : slotMe;
+    const next = checkOff || (where === "today" && steps.next?.action === "unlock") ? null : steps.next;
+    return pickNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined });
+  };
+  /** What a nudge's button does. Unknown actions open the page of that name, or do nothing. */
+  const runNudge = useStable((action: string) => {
+    if (action === "plans" || action === "upgrade" || action === "trial" || action === "keepPro") return openPlans("trial");
+    if (action === "billing") return setPage("billing");
+    if (action === "earn" || action === "add" || action === "credits" || action === "addFact") return showFact("empty");
+    if (action === "profile") return setIcpOpen(true);
+    if (action === "unlock") return stepOne();
+    if (action === "holder") return stepHolder();
+    if (action === "seats" || action === "findSeats") return openSeatSearch();
+    if (action === "fillSeats") return openSeats();
+    if (action === "invite") return invite();
+    if ((PAGES as string[]).includes(action)) return openPage(action as AppPage);
+  });
+  // One-time lines (a bonus paid while away, who joined from an invite, news at followed companies): said on Today, or over the table on a visit that didn't open there.
+  const events = (
+    <>
       {(since.invite > 0 || since.confirm > 0) && !bonusOff && <Strip onClose={() => setBonusOff(true)}>{bonusText(since.invite, since.confirm)}</Strip>}
       {/* The invite loop: fractionals who joined from the member's invite, once each (closing it tells the server). */}
       {joined.length > 0 && <Strip onClose={closeJoined}>{joinedLine(joined, REFERRAL_BONUS)}</Strip>}
-      {since.n > 0 && !sinceOff && (
+    </>
+  );
+  const banners = (
+    <div className="tp-banners">
+      <NudgeSlot nudge={nudgeFor("table")} onAction={runNudge} />
+      {openedToday ? null : events}
+      {!openedToday && since.n > 0 && !sinceOff && (
         <Strip
           onClose={() => setSinceOff(true)}
           actions={
@@ -2125,7 +2164,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    */
   const fabRef = useRef<HTMLButtonElement>(null);
   const [fabAside, setFabAside] = useState(false);
-  const fabShown = phone && page === "table" && !recordOpen && !qt;
+  // Not over an empty list, and not in the first session (nothing added or unlocked yet): the list and the nudge say what to do then (item 4).
+  const fabShown = phone && page === "table" && !recordOpen && !qt && !empty && me.added + me.unlocked > 0;
   useEffect(() => {
     if (!fabShown) {
       setFabAside(false);
@@ -2203,25 +2243,50 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           </div>
         )}
 
-        {page === "credits" ? (
+        {page === "today" ? (
+          <main className="tp-main tp-main-page td-main">
+            <TodayPage
+              me={me}
+              infos={infos}
+              byId={byId}
+              firstRow={sorted[0] ?? null}
+              data={today.data}
+              failed={today.failed}
+              sinceAt={since.at}
+              nudge={<NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} />}
+              events={events}
+              trialEnded={!!me.plan?.trialEnded && !trialSeen}
+              onTrialSeen={() => {
+                setTrialSeen(true);
+                void act({ type: "noticeSeen", kind: "trialEnded" }, { quiet: true, silentError: true });
+              }}
+              onSeePro={() => openPlans("billing")}
+              onRadar={() => (setSigDay(null), setPage("radar"))}
+              onBrowse={() => (setDrawer(null), setPage("table"))}
+              onRoles={seeOpenRoles}
+              onFollows={() => (setDrawer(null), setPage("table"), setTabPicked("following"), setRecordType("companies"))}
+              openCompany={(id) => openCompany(id)}
+            />
+          </main>
+        ) : page === "credits" ? (
           <main className="tp-main tp-main-page">
-            <MyCredits view={view} onBack={() => setPage("table")} refresh={refresh} onUseInClaude={() => setPage("integrations")} />
+            <MyCredits view={view} onBack={toBase} refresh={refresh} onUseInClaude={() => setPage("integrations")} />
           </main>
         ) : page === "integrations" ? (
           <main className="tp-main tp-main-page">
-            <Integrations onBack={() => setPage("table")} onCredits={() => setPage("credits")} section={claudeLink ? "claude" : undefined} onNetwork={() => setPage("network")} />
+            <Integrations onBack={toBase} onCredits={() => setPage("credits")} section={claudeLink ? "claude" : undefined} onNetwork={() => setPage("network")} />
           </main>
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
-            <Benchmarks view={view} refresh={refresh} onBack={() => setPage("table")} />
+            <Benchmarks view={view} refresh={refresh} onBack={toBase} />
           </main>
         ) : page === "metrics" && view.admin ? (
           <main className="tp-main tp-main-page">
-            <Admin view={view} refresh={refresh} onBack={() => setPage("table")} />
+            <Admin view={view} refresh={refresh} onBack={toBase} />
           </main>
         ) : page === "messages" ? (
           <main className="tp-main tp-main-page">
-            <MessagesPage onBack={() => setPage("table")} openCompany={(id) => openCompany(id)} />
+            <MessagesPage onBack={toBase} openCompany={(id) => openCompany(id)} />
           </main>
         ) : page === "radar" ? (
           <main className="tp-main tp-main-page rd-main">
@@ -2232,7 +2297,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               rows={radar.data ? radarList : []}
               me={cellMe}
               phone={phone}
-              onBack={() => setPage("table")}
+              onBack={toBase}
               onProfile={() => setIcpOpen(true)}
               onDay={setSigDay}
               openCompany={openCompany}
@@ -2240,15 +2305,15 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           </main>
         ) : page === "billing" && me.plan ? (
           <main className="tp-main tp-main-page">
-            <BillingPage view={view} refresh={refresh} onBack={() => setPage("table")} />
+            <BillingPage view={view} refresh={refresh} onBack={toBase} />
           </main>
         ) : page === "partners" ? (
           <main className="tp-main tp-main-page">
-            <Partners infos={infos} onBack={() => setPage("table")} onProfile={() => setIcpOpen(true)} />
+            <Partners infos={infos} onBack={toBase} onProfile={() => setIcpOpen(true)} />
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
-            <Seats seats={seats} infos={infos} focus={seatFocus} onBack={() => setPage("table")} search={seatCtx.search} back={seatBack} />
+            <Seats seats={seats} infos={infos} focus={seatFocus} onBack={toBase} search={seatCtx.search} back={seatBack} />
           </main>
         ) : page === "network" ? (
           // [google network] Your network: the member's own, from Google and their own Claude.
@@ -2256,7 +2321,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             <NetworkPage
               infos={infos}
               me={me}
-              onBack={() => setPage("table")}
+              onBack={toBase}
               openCompany={openCompany}
               onRadar={() => (setSigDay(null), setPage("radar"))}
               onSeats={() => openSeats()}
