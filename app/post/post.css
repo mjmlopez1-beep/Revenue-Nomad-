@@ -5039,7 +5039,57 @@ button.tp-fsheet-row:disabled {
   background: rgba(255, 255, 255, 0.18);
 }
 .tp-ptype svg {
+  flex: none;
   color: rgba(255, 255, 255, 0.75);
+}
+/* Last to give way, so nothing ever leaves the screen: the list's title ends in "…" (its menu names it in full). */
+.tp-top-phone .tp-ptype {
+  flex: 0 1 auto;
+}
+/* The phone bar keeps its own 6px gaps: the wider bar's 12px (under 1100px, below) must not reach it. */
+.tp-top.tp-top-phone {
+  gap: 6px;
+}
+/* At 340 and under, a little less room around the list's title, so "Companies" stays whole beside a 4-digit balance. */
+@media (max-width: 340px) {
+  .tp-top.tp-top-phone {
+    gap: 4px;
+  }
+  .tp-top-phone .tp-ptype {
+    padding: 0 6px 0 8px;
+  }
+}
+/* "100 unlocks today" beside a 4-digit balance at 360: the pill's own margins make the room. */
+@media (max-width: 379px) {
+  .tp-top-phone .tp-credits.has-cap {
+    margin: 0 1px;
+  }
+}
+/* With the list's title beside it, the wordmark gives way to the square M up to 459px, not only under 400. */
+@media (max-width: 459px) {
+  .tp-top-phone:has(.tp-ptype) .tp-brand-phone .tp-brand-wm {
+    display: none !important;
+  }
+  .tp-top-phone:has(.tp-ptype) .tp-brand-phone .tp-brand-mark {
+    display: block !important;
+    border-radius: 7px;
+  }
+}
+/* Phones with unread messages: their button takes the room of the credits word and the unlock line (and of the Upgrade chip, billing.css). */
+@media (max-width: 459px) {
+  .tp-top-phone:has(.tp-msgbtn) .tp-credits-l,
+  .tp-top-phone:has(.tp-msgbtn) .tp-credits-cap {
+    display: none;
+  }
+  .tp-top-phone:has(.tp-msgbtn) .tp-credits-i {
+    display: inline-flex;
+    opacity: 0.8;
+  }
+}
+.tp-ptype > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /*
  * The view chips keep a 46px hit area: the scroller makes room for each chip's ::after above and
