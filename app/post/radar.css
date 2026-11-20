@@ -321,3 +321,14 @@
 .rd-start .tp-fchip {
   min-height: 40px;
 }
+/* [ux ws3] The pill fits a 320px phone: its words give way before the page widens. */
+.rd-pill {
+  max-width: 100%;
+  min-width: 0;
+}
+.rd-pill > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
