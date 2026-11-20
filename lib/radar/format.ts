@@ -5,12 +5,14 @@
  *
  * Both list the day's signals most likely first (the email up to EMAIL_CARDS, Slack up to
  * SLACK_CARDS, then "And N more"), each with its band and why-now line, and leave Low out (it stays
- * on the page). Every link, the cards' and the button's, opens the day's companies in the app,
- * where each locked one unlocks right on its row.
+ * on the page). Every link in the email, the cards' and the button's, opens the day's companies in
+ * the app, where each locked one unlocks right on its row. Slack lays the cards out one company a
+ * block (radarEntry): there a company the card names also links to its record, and one the member's
+ * table shows has its logo; a locked one has neither, and its button opens the day's companies.
  */
 import { MAIL, escHtml as esc, footerNote, mailButton, mailP, mailShell, oneLine } from "../email";
 import { COMPANY_PRICE_SAY } from "../tableFields";
-import type { Alert } from "../notify/format";
+import type { Alert, AlertEntry } from "../notify/format";
 import { FEATURE_NAME, YOUR_FEATURE, type RadarCard, type RadarDay, type RadarItem } from "./types";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -57,13 +59,61 @@ export function mergeDays(items: RadarItem[]): RadarDay | null {
   };
 }
 
-export function radarAlert(items: RadarItem[], _base: string): Alert | null {
+const capFirst = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
+
+/**
+ * One card as a Slack entry: the company in bold (linked to its record only when the card names
+ * it), what happened under it, its band, why now and timing, and the free facts as fields, the
+ * logo on the right only for a company the member's table shows, and one button: Open for a known
+ * company, else Open in Merlin (a Trial or Pro name to its record, a locked one to the day's
+ * companies, where it unlocks). A locked card carries no name, no link to its record, no logo.
+ */
+export function radarEntry(c: RadarCard, base: string): AlertEntry {
+  const abs = (u: string | undefined) => (!u ? "" : /^https?:\/\//i.test(u) ? u : base && u.startsWith("/") ? `${base}${u}` : "");
+  const named = !c.locked && !!c.company;
+  const record = named ? abs(c.place) : "";
+  const [now, ...next] = (c.whyNow ?? "").split(" · ");
+  const a = c.about;
+  return {
+    title: named ? c.subject || c.company! : c.subject || "A company in your profile",
+    ...(record ? { link: record } : {}),
+    text: c.signal || c.headline,
+    fields: [
+      { label: "Likelihood", value: c.band ?? null },
+      { label: "Why now", value: c.whyNow ? now : null },
+      { label: "Timing", value: next.length ? capFirst(next.join(" · ")) : null },
+      ...(a
+        ? [
+            { label: "Industry", value: a.industry },
+            { label: "Size", value: a.size },
+            { label: "HQ", value: a.hq },
+          ]
+        : [{ label: "About", value: c.facts.join(" · ") }]),
+    ],
+    note: c.locked ? `${c.why}. ${lockedLine}` : c.why,
+    ...(named && c.known && c.logo ? { image: { url: c.logo, alt: `${c.company} logo` } } : {}),
+    button: named && c.known && record ? { text: "Open", url: record } : { text: "Open in Merlin", url: record || abs(c.url) },
+  };
+}
+
+export function radarAlert(items: RadarItem[], base: string): Alert | null {
   const d = mergeDays(items);
   if (!d || !d.cards.length) return null;
   const shown = d.cards.slice(0, SLACK_CARDS);
   const lines = shown.map((c) => [`${c.headline}. ${c.why}`, likelyLine(c)].filter(Boolean).join(". "));
-  if (d.cards.length > shown.length) lines.push(moreWords(d.cards.length - shown.length));
-  return { kind: "radar", count: d.cards.length, headline: slackHeadline(d), lines, url: d.url, button: seeWords(d.companies), footer: RADAR_FOOTER };
+  const rest = d.cards.length - shown.length;
+  if (rest > 0) lines.push(moreWords(rest));
+  return {
+    kind: "radar",
+    count: d.cards.length,
+    headline: slackHeadline(d),
+    lines,
+    url: d.url,
+    button: seeWords(d.companies),
+    footer: RADAR_FOOTER,
+    entries: shown.map((c) => radarEntry(c, base.replace(/\/+$/, ""))),
+    ...(rest > 0 ? { after: [moreWords(rest)] } : {}),
+  };
 }
 
 /* ---------- the email ---------- */

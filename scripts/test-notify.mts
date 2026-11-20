@@ -107,6 +107,7 @@ const leaks = (x: unknown) => {
 };
 
 async function main() {
+  const bk = await import("./blockkit.mts");
   const t = await import("../lib/table");
   const n = await import("../lib/notify");
   const url = await import("../lib/notify/url");
@@ -238,9 +239,10 @@ async function main() {
   const welcome = to(SLACK)[0];
   check("connecting sends one test message first", to(SLACK).length === 1, to(SLACK).length);
   const blocks = (welcome?.body.blocks ?? []) as { type: string; elements?: { type: string; url?: string; text?: { text: string } }[] }[];
-  check("the test is Block Kit with a fallback text", typeof welcome?.body.text === "string" && blocks[0]?.type === "section", welcome?.body);
+  check("the test is Block Kit with a fallback text", typeof welcome?.body.text === "string" && blocks[0]?.type === "header" && blocks[1]?.type === "section", welcome?.body);
   const button = blocks.find((b) => b.type === "actions")?.elements?.[0];
   check("it has an Open in Merlin button", button?.type === "button" && button.text?.text === "Open in Merlin" && /^https:\/\/post\.example\.com\//.test(button.url ?? ""), button);
+  check("the test post is valid Block Kit: header, its line, the button, the footer", bk.blockKitProblems(welcome?.body as never).length === 0 && JSON.stringify(blocks.map((b) => b.type)) === JSON.stringify(["header", "section", "actions", "context"]), bk.blockKitProblems(welcome?.body as never));
   check("alert copy has no em dashes", !textOf(welcome!).includes("—"));
   const v1 = con.ok ? con.v.view : null;
   check("all three alerts are on after connecting", !!v1 && v1.alerts.roles && v1.alerts.message && v1.alerts.seat, v1);
@@ -294,8 +296,9 @@ async function main() {
   check("it has the sender's first name and the company", /Sal sent you a message about your seat at Acme Robotics/.test(msgText), msgText);
   check("it never has the sender's last name", !/Starter/.test(msgText), msgText);
   check("it never has an email address, even one typed in the message", !/@example\.com/.test(msgText) && /email hidden/.test(msgText), msgText);
-  const quoted = (msgPosts[0]?.body.blocks as { text?: { text: string } }[])?.[0]?.text?.text ?? "";
-  const snippet = quoted.split("\n")[1] ?? "";
+  const msgBlocks = (msgPosts[0]?.body.blocks ?? []) as { type: string; text?: { text: string } }[];
+  check("a single message: its headline as the header, the words under it", msgBlocks[0]?.type === "header" && /Sal sent you a message/.test(msgBlocks[0]?.text?.text ?? ""), msgBlocks);
+  const snippet = msgBlocks.find((b) => b.type === "section")?.text?.text.split("\n")[0] ?? "";
   check("it quotes at most the first 140 characters", [...snippet.replace(/^“|”$/g, "")].length <= 141 && snippet.endsWith("…”"), snippet);
   const convId = (start.ok && "id" in start ? String(start.id) : "") as string;
   check("it links to the conversation", msgText.includes(`p=messages&m=${convId}`), msgText);
@@ -324,8 +327,25 @@ async function main() {
   const mBatch = batch.find((x) => /new messages/.test(x)) ?? "";
   check("the message batch has a count", /2 new messages on Merlin/.test(mBatch), mBatch);
   check("the message batch names the sender and company", /Sal, about Acme Robotics/.test(mBatch), mBatch);
+  type Post = import("./blockkit.mts").SlackPost;
+  const mPost = to(SLACK).find((x) => /new messages/.test(textOf(x)))?.body as unknown as Post | undefined;
+  check("the message batch is valid Block Kit", !!mPost && bk.blockKitProblems(mPost).length === 0, mPost && bk.blockKitProblems(mPost));
+  const mSecs = mPost ? bk.sectionsOf(mPost) : [];
+  check(
+    "in Slack each message is its own block: the sender in bold, what it is about, the words quoted, Reply",
+    mSecs.length === 2 && mSecs.every((b) => /^\*Sal\*\nAbout your seat at Acme Robotics\n>“/.test(b.text?.text ?? "")) &&
+      (mPost?.blocks ?? []).filter((b) => b.type === "actions" && (b.elements?.[0]?.text as { text?: string } | undefined)?.text === "Reply").length === 2,
+    mPost?.blocks,
+  );
   const sBatch = batch.find((x) => /engaged your seats/.test(x)) ?? "";
-  check("the seat batch has a count and the facts", /2 times/.test(sBatch) && /unlocked the rate on your seat at Acme Robotics/.test(sBatch) && /how the seat was sourced/.test(sBatch), sBatch);
+  const sPost = to(SLACK).find((x) => /engaged your seats/.test(textOf(x)))?.body as unknown as Post | undefined;
+  const sSecs = sPost ? bk.sectionsOf(sPost) : [];
+  check(
+    "the seat batch is valid Block Kit, each event its own block: who in bold, what they unlocked",
+    !!sPost && bk.blockKitProblems(sPost).length === 0 && sSecs.length === 2 && sSecs.every((b) => /^\*A fractional VP Sales\*\nUnlocked /.test(b.text?.text ?? "")),
+    sSecs,
+  );
+  check("the seat batch has a count and the facts", /2 times/.test(sBatch) && /unlocked the rate on your seat at Acme Robotics/i.test(sBatch) && /how the seat was sourced/.test(sBatch), sBatch);
   check("the seat batch never names the member", !/\bSal\b|Starter/.test(sBatch), sBatch);
   clear();
   check("a batch goes out once", (await n.flushDue()) === 0 && outbox.length === 0);
@@ -384,6 +404,18 @@ async function main() {
   const hanaText = hanaPosts[0] ? textOf(hanaPosts[0]) : "";
   check("a member with only a function gets their function's roles", /2 new open Marketing roles in the latest scan/.test(hanaText), hanaText);
   check("several roles link to Hiring now", hanaText.includes("https://post.example.com/?v=hiring"), hanaText);
+  const moPost = moPosts[0]?.body as unknown as import("./blockkit.mts").SlackPost | undefined;
+  check("the roles post is valid Block Kit", !!moPost && bk.blockKitProblems(moPost).length === 0, moPost && bk.blockKitProblems(moPost));
+  check("its header is the count", moPost?.blocks[0]?.type === "header" && moPost.blocks[0].text?.text === "3 new open roles for you in the latest scan", moPost?.blocks[0]);
+  const moSecs = moPost ? bk.sectionsOf(moPost) : [];
+  const texas = moSecs.find((b) => (b.fields ?? []).some((f) => f.text === "*Where*\nTexas, US"));
+  check(
+    "each role is its own block: a locked company by its industry in bold, the role, its facts as fields",
+    moSecs.length === 3 && !!texas && /^\*A SaaS company\*\nFractional (Marketing|Sales) role$/.test(texas.text?.text ?? "") && (texas.fields ?? []).some((f) => f.text === "*Revenue*\n$5M–$20M"),
+    moSecs,
+  );
+  check("a locked company's role has no link to its record and no picture", moSecs.every((b) => !/<https?:/.test(b.text?.text ?? "") && !b.accessory) && !JSON.stringify(moSecs).includes("?c="), moSecs);
+  check("the saved view's match is a small line after the roles", (moPost?.blocks ?? []).some((b) => b.type === "context" && /1 matches your saved view “Sales at SaaS”/.test(String((b.elements?.[0] as { text?: string })?.text))), moPost?.blocks);
   clear();
   skew += 16 * MIN;
   const res2 = await t.applyScan({ roles: [...found.roles, role("Echo Energy", "Fractional Head of Marketing", "Marketing")], sources: [{ source: "board", fetched: 5, matched: 5 }] });

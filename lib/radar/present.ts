@@ -7,8 +7,10 @@
  * industry, state or region and country, the function hired or the role's title (with the
  * company's name and site cut out of it, and dropped for "Fractional <function> role" when a word
  * of the company's name is still in it), and the revenue band. No person is ever named: not the
- * seat holder, not anyone at the company. No record id either: every card links to the day's
- * companies in the app (radarPath), where each locked one unlocks right on its row.
+ * seat holder, not anyone at the company. Every card links to the day's companies in the app
+ * (radarPath), where each locked one unlocks right on its row. Only a card that names its company
+ * also carries its record (`place`, for Slack), and only one the member's table shows its logo: a
+ * locked company's card never has a record id, a link to it or a logo.
  */
 import type { RadarBand, RadarCard, RadarDay, RadarKind } from "./types";
 import type { RawSignal } from "./signals";
@@ -86,6 +88,15 @@ export interface CardContext {
   coId: (companyId: string) => string;
   /** The day's companies in the app (radarPath). */
   url: string;
+  /**
+   * The member's own table shows this company (not only a Trial or Pro name on the card). Left
+   * out: the same as `visible`.
+   */
+  known?: (companyId: string) => boolean;
+  /** A named company's record in the app ("/?c=<public id>"), or null. Only asked for a company the card names. */
+  place?: (companyId: string) => string | null;
+  /** A public https logo for a known company, or null. Only asked for a company the member's table shows. */
+  logo?: (companyId: string) => string | null;
 }
 
 /** "a Software company", "an E-commerce company", or "a company in your profile". */
@@ -123,6 +134,10 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
       headline = `${cap(who)} no longer lists a ${fn} leader`;
       break;
   }
+  // A locked company is never linked, never pictured: only a company the card names has a place, only one the member knows a logo.
+  const known = seen && (ctx.known ? ctx.known(sig.companyId) : true);
+  const place = seen ? ctx.place?.(sig.companyId) ?? null : null;
+  const logo = known ? ctx.logo?.(sig.companyId) ?? null : null;
   return {
     id: ctx.cardId(sig.key),
     co: ctx.coId(sig.companyId),
@@ -136,7 +151,47 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
     ...(seen ? {} : { locked: true }),
     url: ctx.url,
     at: sig.at,
+    subject: cap(who),
+    signal: signalWords(sig, title),
+    about: aboutOf(sig.co),
+    ...(place ? { place } : {}),
+    ...(known ? { known: true } : {}),
+    ...(logo && /^https:\/\/[^\s<>|]+$/.test(logo) ? { logo } : {}),
   };
+}
+
+/** The free facts on file, each by name: the card's `about`. */
+export function aboutOf(co: RawSignal["co"]): NonNullable<RadarCard["about"]> {
+  const place = placeWords(co);
+  return {
+    ...(co.industry ? { industry: co.industry } : {}),
+    ...(co.employees ? { size: `${co.employees} people` } : {}),
+    ...(place ? { hq: place } : {}),
+    ...(co.revenue ? { revenue: co.revenue } : {}),
+  };
+}
+
+/**
+ * What happened, as a sentence without the company (the post sets the company above it): "No
+ * longer lists a Sales leader", "New open role: Fractional VP Sales". `title` is the role's title
+ * as the card may show it (safeTitle for a company locked for the member).
+ */
+export function signalWords(sig: MemberSignal, title: string): string {
+  const fn = sig.fn ?? "";
+  switch (sig.kind) {
+    case "adjacent":
+      return cap(hiredWords(sig));
+    case "role":
+      return `New open role: ${title}`;
+    case "seat":
+      return `A fractional ${fn} seat just ended`;
+    case "funding":
+      return cap(raised(sig));
+    case "sales-build":
+      return sig.build && sig.build.from > 0 ? `Posted ${sig.build.to} full-time sales roles` : "Posted its first full-time sales roles";
+    case "departure":
+      return `No longer lists a ${fn} leader`;
+  }
 }
 
 /**

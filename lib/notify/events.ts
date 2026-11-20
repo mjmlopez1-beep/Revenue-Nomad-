@@ -110,22 +110,28 @@ async function scanAlerts(at: string): Promise<void> {
           functions: h.functions,
           inProfile: h.inProfile,
           place: h.place,
-          rows: h.rows.slice(0, 3).map((r) => ({ companyId: r.companyId, label: hireLabel(r) })),
+          rows: h.rows.slice(0, 3).map((r) => ({ companyId: r.companyId, label: hireLabel(r), company: r.company, function: r.function, start: r.start })),
         }));
       } catch (e) {
         console.error("new hires alert failed for one member", e);
       }
     }
     if (!all.length && !hires.length) continue;
-    const label = (x: (typeof facts)[number]) => {
+    /** The role in free facts (a locked company by its industry, never its name): the label, and the same in parts for Slack. */
+    const row = (x: (typeof facts)[number]) => {
       const f = seen(x);
       const hidden = hiddenFor(x.e.companyId);
-      const where = hidden ? (f.industry ? `at a ${f.industry} company` : "at a locked company") : `at ${g.companies.get(x.e.companyId)?.name || "a company"}`;
+      const name = hidden ? null : g.companies.get(x.e.companyId)?.name || "a company";
+      const where = hidden ? (f.industry ? `at a ${f.industry} company` : "at a locked company") : `at ${name}`;
       const size = f.revenue ? `, ${f.revenue} revenue` : f.employees ? `, ${f.employees} employees` : "";
       // Where, from the country and region on file ("Texas, US"), else the HQ as the member sees it.
       const country = f.country ? (countryKey(f.country) === "united states" ? "US" : countryKey(f.country) === "united kingdom" ? "UK" : f.country) : null;
       const place = f.country ? [f.region, country].filter(Boolean).join(", ") : f.hq;
-      return `${f.function ? `Fractional ${f.function}` : "Fractional"} role ${where}${size}${place ? `, ${place}` : ""}`;
+      return {
+        companyId: T.pubId(x.e.companyId),
+        label: `${f.function ? `Fractional ${f.function}` : "Fractional"} role ${where}${size}${place ? `, ${place}` : ""}`,
+        about: { name, function: f.function ?? null, industry: f.industry ?? null, employees: f.employees ?? null, revenue: f.revenue ?? null, place: place || null },
+      };
     };
     const item: AlertItem = {
       kind: "roles",
@@ -133,7 +139,7 @@ async function scanAlerts(at: string): Promise<void> {
       function: mine.length ? fn : null,
       total: all.length,
       mine: mine.length,
-      roles: all.slice(0, 3).map((x) => ({ companyId: T.pubId(x.e.companyId), label: label(x) })),
+      roles: all.slice(0, 3).map(row),
       alerts: alerts.map((a) => ({ name: a.name, n: a.hits.length })),
       ...(hires.length ? { hires } : {}),
     };

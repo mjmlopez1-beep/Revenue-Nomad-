@@ -79,7 +79,15 @@ export type AlertItem =
       total: number;
       /** In the member's function. */
       mine: number;
-      roles: { companyId: string; label: string }[];
+      /**
+       * Up to 3. `about`: the same free facts as the label, each by name, for Slack's fields. `name` is
+       * null while the company is locked for the member. Left out on items queued before it was added.
+       */
+      roles: {
+        companyId: string;
+        label: string;
+        about?: { name: string | null; function: string | null; industry: string | null; employees: string | null; revenue: string | null; place: string | null };
+      }[];
       alerts: { name: string; n: number }[];
       /**
        * Saved views that follow hires ("Recently hired"): the companies that newly match each one
@@ -100,8 +108,12 @@ export interface HireNews {
   inProfile: boolean;
   /** The view's place in the app (an address query), or null. */
   place: string | null;
-  /** Up to 3: the company's public id and "Acme Robotics, Finance, Mar 2026" (a locked company is never named). */
-  rows: { companyId: string; label: string }[];
+  /**
+   * Up to 3: the company's public id and "Acme Robotics, Finance, Mar 2026" (a locked company is never
+   * named), and the same in parts for Slack (`company` null while locked; all three left out on items
+   * queued before they were added).
+   */
+  rows: { companyId: string; label: string; company?: string | null; function?: string | null; start?: string | null }[];
 }
 
 export interface MemberIntegrations {
