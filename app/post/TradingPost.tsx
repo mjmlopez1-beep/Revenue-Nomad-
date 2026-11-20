@@ -60,7 +60,7 @@ import { DataTable } from "./Tables";
 import { CardList } from "./Cards";
 import { Drawer } from "./Drawer";
 import { MyCredits, signInLink, useCopy } from "./Credits";
-import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViewList, SavedViews, SavedViewsSheet, type ProfileEdit } from "./Hunt";
+import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViewList, SavedViewsSheet, type ProfileEdit } from "./Hunt";
 import { HiredButton, HiredSentence } from "./Hired";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, fnLeader, windowPhrase } from "@/lib/hired";
 import type { Icp, SavedViewRec } from "@/lib/tableTypes";
@@ -1911,7 +1911,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   );
 
   // On Hiring now the rail's "Open now" would only repeat the tab, so it steps out there (unless it is on).
-  const filterPanel = (head?: React.ReactNode, top: React.ReactNode = savedViews) => (
+  const filterPanel = (head?: React.ReactNode, top: React.ReactNode = null) => (
     <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles && tab !== "hiring"} top={top} />
   );
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
@@ -2179,7 +2179,6 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   }, [sort, cellMe]);
   // A view past Free's one is Pro's: on Free the save is locked (it opens the plans), in the trial it says it's in the trial. Billing live only.
   const saveTag = me.plan && me.plan.name !== "pro" && me.onboarded && !currentView && views.length >= FREE_SAVED_VIEWS ? <ProTag plan={me.plan} /> : null;
-  const savedViews = <SavedViews views={views} current={currentView} onOpen={openView} onSave={askSave} saveTag={saveTag} {...viewActs} />;
 
   /*
    * ----- the way around: the sidebar, the tab bar and More (navModel.ts) -----
@@ -2792,8 +2791,6 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               </div>
             }
           >
-            {/* Saved views first: one tap opens one. */}
-            {savedViews}
             {/* Sort and what to list sit here on phones, reachable from the sticky row at any scroll. */}
             <section className="tp-fgroup tp-psort">
               <h3 className="tp-fgroup-h">List</h3>
