@@ -549,15 +549,36 @@ const seenDay = () => {
     return null;
   }
 };
+const RADAR_LATEST = "tp_radar_latest";
+/** The latest day this browser last saw for this member, so the count is there before Today's data lands. */
+const keptLatest = (who: string): { day: string; n: number } | null => {
+  try {
+    const j = JSON.parse(localStorage.getItem(RADAR_LATEST) ?? "null") as { who?: string; day?: string; n?: number } | null;
+    return j && j.who === who && typeof j.day === "string" && typeof j.n === "number" && j.n > 0 ? { day: j.day, n: j.n } : null;
+  } catch {
+    return null;
+  }
+};
 /**
- * How many companies are new in Crystal Ball: its latest day's (today's, or yesterday's before the
- * morning run), until the member opens it. `latest` is that day and its count, from Today's data
- * (GET ?today=1, useTodayData in Today.tsx), the one request the bar's count and the menu's share.
+ * How many companies are new in Crystal Ball: its latest day's count (today's, or yesterday's
+ * before the morning run) until the member opens it. `latest` is that day and its count, from
+ * Today's data (GET ?today=1, useTodayData in Today.tsx). `loaded` says Today's data is here (so a null `latest` means there is none); until
+ * then the count is the one this browser last saw for the member, so it doesn't pop in late on a
+ * page that opened somewhere other than Home. A day older than yesterday never counts.
  */
-export function useRadarNew(latest: { day: string; n: number } | null, here: boolean) {
+export function useRadarNew(latest: { day: string; n: number } | null, here: boolean, who = "", loaded = true) {
   const [seen, setSeen] = useState<string | null>(seenDay);
-  const fresh = !!latest && Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) - Date.parse(`${latest.day}T00:00:00Z`) <= 86_400_000;
-  const day = fresh ? latest : null;
+  const [kept] = useState(() => (who ? keptLatest(who) : null));
+  useEffect(() => {
+    if (!loaded || !who) return;
+    try {
+      if (latest) localStorage.setItem(RADAR_LATEST, JSON.stringify({ who, day: latest.day, n: latest.n }));
+      else localStorage.removeItem(RADAR_LATEST);
+    } catch {}
+  }, [loaded, who, latest]);
+  const known = loaded ? latest : kept;
+  const fresh = !!known && Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`) - Date.parse(`${known.day}T00:00:00Z`) <= 86_400_000;
+  const day = fresh ? known : null;
   // Opening Crystal Ball sees the day's companies.
   useEffect(() => {
     if (!here || !day) return;

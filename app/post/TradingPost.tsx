@@ -787,13 +787,14 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   }, [page]);
   /*
    * Today's data serves Crystal Ball's count too (its menu item, and its button in the bar): asked
-   * for once (GET ?today=1), when Today shows, or once the page has settled when it opened elsewhere.
+   * for once (GET ?today=1), when Today shows, or just after the first screen is drawn when it opened
+   * elsewhere (the sidebar shows the count on every page, so it shouldn't arrive seconds late).
    */
   const [countWanted, setCountWanted] = useState(false);
   useEffect(() => {
     if (todayShown) return;
     const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
-    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(() => setCountWanted(true), { timeout: 4000 }) : setCountWanted(true)), 2500);
+    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(() => setCountWanted(true), { timeout: 600 }) : setCountWanted(true)), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -809,7 +810,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const rolesNew = useMemo(() => (todayShown ? rolesSince(infos, me.function, since.at) : 0), [todayShown, infos, me.function, since.at]);
   const today = useTodayData(todayShown || countWanted, since.at, { roles: rolesNew, follows: since.n }, partial?.today);
   const radarLatest = today.data?.latest ?? null;
-  const radarNew = useRadarNew(useMemo(() => radarLatest, [radarLatest?.day, radarLatest?.n]), page === "radar"); // eslint-disable-line react-hooks/exhaustive-deps
+  const radarNew = useRadarNew(useMemo(() => radarLatest, [radarLatest?.day, radarLatest?.n]), page === "radar", me.id, today.data !== null); // eslint-disable-line react-hooks/exhaustive-deps
   const [trialSeen, setTrialSeen] = useState(false);
   // The invite loop: who joined from this member's invite and wasn't shown yet (Me.joined). Closed here, it goes at once.
   const [joinedOff, setJoinedOff] = useState<string[]>([]);
