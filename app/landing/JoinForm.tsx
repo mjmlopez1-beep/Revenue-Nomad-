@@ -9,6 +9,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { post } from "../ui/shared";
 import { PERSON_NAME_RE } from "@/lib/tableFields";
+import type { Me } from "@/lib/tableTypes";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 /** Server errors that mean "this email already has an account, use your link". */
@@ -36,7 +37,8 @@ export interface JoinFormProps {
   emailOn: boolean;
   /** Credits a new member starts with (the server's stats.starter). */
   starter: number;
-  onSignedIn: () => Promise<void> | void;
+  /** Signed in. Joining passes the new member's Me (the join answer's), so onboarding can open before the table arrives. */
+  onSignedIn: (me?: Me) => Promise<void> | void;
   /** The email belongs to an existing member. Opens the sign-in panel. */
   onMember: (message: string) => void;
   /** Where the form sits (hero or the closing call to action). */
@@ -84,7 +86,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
     }
     setBusy(true);
     setError(null);
-    const r = await post<{ ok?: boolean; sent?: boolean }>({ join: { name: n, email, ref: readRef(), code: readCode() } });
+    const r = await post<{ ok?: boolean; sent?: boolean; me?: Me }>({ join: { name: n, email, ref: readRef(), code: readCode() } });
     if (r.error) {
       setBusy(false);
       const member = MEMBER_RE.test(r.error);
@@ -97,7 +99,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
       setStep("sent");
       return;
     }
-    await onSignedIn();
+    await onSignedIn(r.me);
     setBusy(false);
   };
 

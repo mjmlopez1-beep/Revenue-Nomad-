@@ -24,6 +24,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import dynamic from "next/dynamic";
 import { ToastProvider, calmRefusal, fetchView, patchView, post, useToast, type Act, type ActPatch, type View, type ViewResult } from "./ui/shared";
 import type { TradingPostProps } from "./post/TradingPost";
+import type { OnboardingProps } from "./onboard/Onboarding";
+import type { Me } from "@/lib/tableTypes";
 import { SIG_DAY_RE, yourFeature } from "@/lib/radar/types";
 
 /* ---------- loading: the shape of what is coming, not a line of gray text ---------- */
@@ -144,7 +146,11 @@ const appLoading = () => <Skeleton member />;
 const pageLoading = () => <Skeleton member={false} />;
 // Each screen is its own chunk: signed-out visitors never download the app, members never download the landing page.
 const Landing = dynamic(() => import("./landing/Landing"), { ssr: false, loading: pageLoading });
-const Onboarding = dynamic(() => import("./onboard/Onboarding"), { ssr: false, loading: pageLoading });
+/**
+ * `viewReady` false: onboarding opened from the join answer alone (its `me`), with no companies
+ * yet. The full table is on its way in the background, and the view is replaced when it lands.
+ */
+const Onboarding = dynamic<OnboardingProps & { viewReady?: boolean }>(() => import("./onboard/Onboarding"), { ssr: false, loading: pageLoading });
 /**
  * `start` is where the app opens when the member has just finished onboarding: "seats" when a
  * seat on file carries their name, so the first thing they see is what they can fill in.
@@ -259,6 +265,10 @@ function App() {
   const stale = useRef(false);
   const staleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markStaleRef = useRef<() => void>(() => {});
+  /** The view on screen is the join answer's Me with no companies (see joined): the table is still on its way. */
+  const [viewReady, setViewReady] = useState(true);
+  const waitingView = useRef(false);
+  const syncRef = useRef<() => void>(() => {});
 
   const refresh = useCallback(async () => {
     const g = ++gen.current;
@@ -291,10 +301,13 @@ function App() {
     writeHint(!!r.view.me);
     setFailed(null);
     const v = r.view;
-    // A refresh an action overtook is dropped (it may predate the action), so the table is still owed.
-    if (g !== gen.current) return markStaleRef.current();
+    // A refresh an action overtook is dropped (it may predate the action), so the table is still owed:
+    // at once while onboarding waits for its first table, else within the minute.
+    if (g !== gen.current) return waitingView.current ? syncRef.current() : markStaleRef.current();
     version.current = v.version ?? null;
     stale.current = false;
+    waitingView.current = false;
+    setViewReady(true);
     setView((prev) => reuse(prev, v));
   }, [toast]);
   refreshRef.current = refresh;
@@ -318,6 +331,23 @@ function App() {
       syncing.current = null;
     })();
   }, [refresh]);
+  syncRef.current = sync;
+
+  /**
+   * Signed in. Joining hands over the new member's Me (the join answer's): onboarding opens on it
+   * at once, with the counts the landing page already had and no companies, and the table
+   * downloads in the background (viewReady false until it lands). Otherwise, the table first.
+   */
+  const joined = useCallback(
+    async (me?: Me) => {
+      if (!me || me.onboarded) return refresh();
+      waitingView.current = true;
+      setViewReady(false);
+      setView((v) => ({ demo: v?.demo ?? false, me, companies: [], stats: v?.stats ?? { companies: 0, engagements: 0, people: 0, fractionalFriendly: 0, openRoles: 0, members: 0, facts: 0, starter: me.credits }, ledger: [], reported: [], email: v?.email ?? false, contact: v?.contact }));
+      sync();
+    },
+    [refresh, sync],
+  );
 
   /**
    * Other members changed the table since this page downloaded it: download it again a minute
@@ -482,12 +512,14 @@ function App() {
         </button>
       </Skeleton>
     ) : guest ? (
-      <Landing view={null} onSignedIn={refresh} signInNote={linkNote} />
+      <Landing view={null} onSignedIn={joined} signInNote={linkNote} />
     ) : (
       <Skeleton />
     );
-  if (!view.me) return <Landing view={view} onSignedIn={refresh} signInError={signInError} signInNote={linkNote} />;
-  if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} onSkip={onSkip} />;
+  if (!view.me) return <Landing view={view} onSignedIn={joined} signInError={signInError} signInNote={linkNote} />;
+  if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} onSkip={onSkip} viewReady={viewReady} />;
+  // Done with onboarding before its first table landed: the app's frame until it does.
+  if (!viewReady) return <Skeleton member />;
   // Straight from onboarding, a member with seats under their name starts on those seats.
   const start = firstRun.current && !skipped.current && view.companies.some((c) => c.engagements.some((e) => e.yours)) ? "seats" : undefined;
   return <TradingPost view={view} act={act} refresh={refresh} signOut={signOut} start={start} />;

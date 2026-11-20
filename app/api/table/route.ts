@@ -373,7 +373,8 @@ function sound<T>(x: T, depth = 0): T {
  * POST { emailMe: true }              signed in: email myself a one-time link (another device).
  * POST { rotateLink: true }           signed in: "Sign out on other devices" (a new personal token, set here).
  * POST { join: { name, email, ref, code } } join (code: a discount code from ?code=, kept for checkout). With email switched on, we email a sign-in link
- *                                     (that's the email check); without it, you're in at once,
+ *                                     (that's the email check); without it, you're in at once
+ *                                     (the answer carries `me`, so onboarding opens before the table),
  *                                     except with an address in RN_ADMIN_EMAILS, which then needs
  *                                     the header x-cron-secret: RN_CRON_SECRET.
  * POST { signOut: true }              sign out.
@@ -461,7 +462,11 @@ export const POST = guarded(async (req: NextRequest) => {
         sendOneTime(req, m, m.existing ? "signin" : "join");
         return NextResponse.json({ ok: true, sent: true });
       }
-      return withSession(req, NextResponse.json({ ok: true }), m.token);
+      // The member's Me with it (viewPatch of no records, a few milliseconds), so onboarding opens at once and the table follows in the background.
+      // A trial due to start lands first, as on the view's GET.
+      await billingVisit(m.token, origin(req)).catch((e) => console.error("plan visit failed", e));
+      const me = (await viewPatch(m.token, []).catch(() => null))?.me;
+      return withSession(req, NextResponse.json({ ok: true, ...(me ? { me } : {}) }), m.token);
     } catch (e) {
       if (e instanceof ActionError) return err(e.message);
       throw e;
