@@ -2244,7 +2244,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         )}
 
         {page === "today" ? (
-          <main className="tp-main tp-main-page td-main">
+          <main className="tp-main tp-main-page td-page">
             <TodayPage
               me={me}
               infos={infos}

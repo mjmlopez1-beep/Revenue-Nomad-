@@ -218,13 +218,16 @@ export function TodayPage(p: TodayProps) {
     }
     return null;
   }, [data, byId]);
-  const lead = radarLead ?? (firstRow ? { i: byId.get(firstRow.i.c.id) ?? firstRow.i, row: null } : null);
   const loading = !data && !p.failed;
+  // While the Crystal Ball is on its way the card waits (a skeleton), so it never swaps one company for another under the pointer.
+  const lead = radarLead ?? (!loading && firstRow ? { i: byId.get(firstRow.i.c.id) ?? firstRow.i, row: null } : null);
   const more = Math.max(0, (data?.newCount ?? 0) - (radarLead ? 1 : 0));
   const since = data?.since ?? null;
+  // The link under the card already says how many are new in the Crystal Ball since then: the line doesn't say it twice.
+  const saidNew = more > 0 && !!p.sinceAt;
   const parts: { n: number; text: string; go: () => void }[] = since
     ? [
-        { n: since.radar, text: `${since.radar} new in ${FEATURE_NAME}`, go: p.onRadar },
+        { n: saidNew ? 0 : since.radar, text: `${since.radar} new in ${FEATURE_NAME}`, go: p.onRadar },
         { n: since.roles, text: `${plural(since.roles, "role")} opened`, go: p.onRoles },
         { n: since.follows, text: `${since.follows} of your follows changed`, go: p.onFollows },
       ].filter((x) => x.n > 0)
@@ -287,7 +290,8 @@ function LeadCard({ i, row, me, onOpen }: { i: CoInfo; row: RadarRow | null; me:
   const facts = factsOf(i);
   // What happened there and why now: the Crystal Ball's lines, else the first view's hire.
   const hire = !row && i.latest ? hireLine(i.latest) : null;
-  const what = row?.lines[0] ?? (hire ? `${hire.what}${hire.when ? ` · ${hire.when}` : ""}` : null);
+  // The Crystal Ball's line up to its first " · " (what happened, when): why now is the next line.
+  const what = row?.lines[0]?.split(" · ")[0] ?? (hire ? `${hire.what}${hire.when ? ` · ${hire.when}` : ""}` : null);
   const why = row?.notes?.[0] ?? null;
   const seat = warmSeat(i, me);
   const seatFn = seat ? shown(seat.cells.function) : null;
@@ -352,7 +356,7 @@ function WarmPath({ i, seat, onOpen }: { i: CoInfo; seat: ReturnType<typeof warm
   let line: string;
   if (!seat) line = "No seat holder on file here yet. Open it to see who decides.";
   else if (op?.s === "locked") {
-    line = `Who held their ${fn ?? ""} seat is your warm way in.`.replace("  ", " ");
+    line = `The fractional who held their ${fn ?? ""} seat. See who, then message them or invite them.`.replace("  ", " ");
     action = (
       <button type="button" className="btn btn-pine btn-lg td-main" disabled={busy} aria-busy={busy} onClick={() => ui.unlock({ entity: "engagement", id: seat.id, field: "operator" })}>
         {busy ? "Unlocking" : "See who held it · 1 credit"}

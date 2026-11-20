@@ -4,7 +4,11 @@
   max-width: 640px;
   margin: 0 auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+}
+.td > * {
+  min-width: 0;
 }
 .td-h1 {
   font-size: 28px;
@@ -182,8 +186,10 @@
   }
 }
 @media (max-width: 767px) {
+  .tp-main-page.td-page {
+    padding: 4px 16px 40px;
+  }
   .td {
-    padding: 0 16px 24px;
     gap: 12px;
   }
   .td-h1 {
@@ -201,4 +207,14 @@
   .td-main {
     flex: 1 0 100%;
   }
+}
+
+/* The one nudge stays one line on a phone too (until WS3's NudgeSlot styles its own). */
+.tp-phone .tp-nudge {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.tp-phone .tp-nudge .tp-strip-acts {
+  order: 0;
+  width: auto;
 }

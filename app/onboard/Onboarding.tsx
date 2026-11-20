@@ -929,10 +929,10 @@ function StepFirstView({
       </div>
 
       {handoff}
-      {link}
 
       <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">
+        {link}
         <button type="button" className="ob-back" onClick={onBack}>
           Back
         </button>
@@ -1006,42 +1006,37 @@ function LinkInline({ token, email, support, onKept }: { token: string; email: s
   const mailMe = `mailto:${encodeURIComponent(email)}?subject=Merlin%20sign-in%20link&body=${encodeURIComponent(link)}`;
   const supportHref = support ? mailto(support, "Merlin sign-in link") : null;
   return (
-    <div className="ob-link-inline">
-      <p className="ob-link-h">
-        <strong>Your sign-in link</strong> <span className="ob-hint-i">There&apos;s no password, so keep it.</span>
-      </p>
-      <div className="ob-linkbox">
-        <span ref={boxRef} className="ob-linkbox-text mono" aria-label="Your sign-in link" tabIndex={0} onFocus={selectLink}>
-          {link}
-        </span>
-        <button type="button" className={`btn ob-copy${copied ? " ob-copy-done" : ""}`} onClick={copy}>
-          {copied ? <IconCheck size={14} /> : null}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-      <p className="ob-keep-ways">
-        <a className="ob-mailme" href={mailMe} onClick={onKept}>
-          Email it to myself
+    <div className="ob-link-line" role="group" aria-label="Your sign-in link">
+      <strong>Your sign-in link</strong>
+      <span ref={boxRef} className="ob-link-text mono" tabIndex={0} onFocus={selectLink} title={link}>
+        {link}
+      </span>
+      <button type="button" className={`btn btn-sm ob-copy-sm${copied ? " ob-copy-done" : " btn-pine"}`} onClick={copy}>
+        {copied ? <IconCheck size={13} /> : null}
+        {copied ? "Copied" : "Copy"}
+      </button>
+      <span className="ob-hint-i">
+        There&apos;s no password, keep it.{" "}
+        <a className="ob-help-link" href={mailMe} onClick={onKept}>
+          Email it to me
         </a>
         {canShare ? (
-          <button type="button" className="ob-linkbtn ob-mailme" onClick={share}>
-            Share it to Notes
-          </button>
+          <>
+            {" · "}
+            <button type="button" className="ob-linkbtn" onClick={share}>
+              Share
+            </button>
+          </>
         ) : null}
-        {support ? (
-          <span className="ob-hint-i">
-            Lost it? Email{" "}
-            {supportHref ? (
-              <a className="mono ob-help-link" href={supportHref}>
-                {support}
-              </a>
-            ) : (
-              <span className="mono">{support}</span>
-            )}
-            .
-          </span>
+        {support && supportHref ? (
+          <>
+            {" · Lost it? "}
+            <a className="ob-help-link" href={supportHref}>
+              Ask us
+            </a>
+          </>
         ) : null}
-      </p>
+      </span>
     </div>
   );
 }

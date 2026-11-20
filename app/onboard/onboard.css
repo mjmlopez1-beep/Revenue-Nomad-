@@ -1223,28 +1223,40 @@
     animation: none;
   }
 }
-/* The sign-in link, inline above Open Today (email sign-in off only). */
-.ob-link-inline {
-  margin-top: 24px;
-  padding: 16px;
+/* The sign-in link, one line in the sticky footer above Open Today (email sign-in off only). */
+.ob-link-line {
+  flex: 1 0 100%;
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 12px;
   border-radius: var(--r-btn);
   background: var(--pine-8);
-}
-.ob-link-h {
   font-size: 14px;
   line-height: 20px;
+}
+.ob-link-text {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--muted);
 }
 .ob-hint-i {
   font-size: 13px;
   color: var(--muted);
   font-weight: 400;
 }
-.ob-link-inline .ob-linkbox {
-  margin-top: 8px;
-}
-.ob-link-inline .ob-keep-ways {
-  display: flex;
+.ob-foot:has(.ob-link-line) {
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0 16px;
+  row-gap: 12px;
+}
+@media (max-width: 640px) {
+  .ob-link-text {
+    display: none;
+  }
 }
