@@ -7,7 +7,7 @@
  * `off` is the onboarding presets the member took off in this browser (presetsOff in
  * TradingPost.tsx); the server is told them with the request.
  */
-import type { Me } from "@/lib/tableTypes";
+import type { Me, SavedViewRec } from "@/lib/tableTypes";
 import { SIG_DAY_RE } from "@/lib/radar/types";
 import { firstViewPlace } from "../onboard/place";
 import {
@@ -150,30 +150,22 @@ export interface FirstList {
 export const weekN = (rows: Row[], fn: string | null) =>
   rows.filter((r) => (r.e ? [r.e] : r.i.engs).some((e) => newThisWeek(e) && (!fn || shown(e.cells.function) === fn))).length;
 
-/**
- * The list a place opens on, on the member's whole table, as TradingPost works it out when it
- * mounts there (no search widened, "Only my profile" off, no record frozen in place): its rows in
- * order and the counts the first screen shows.
- */
-export function listAt(infos: CoInfo[], me: Me, place: Place, off: Set<string>): { rows: Row[]; first: FirstList } {
+/** What listAt and placeRows share: the filters in play and the rows they keep. */
+function listCore(infos: CoInfo[], me: Me, place: Place, off: Set<string>) {
   const recordType = place.t;
   const filters = place.f;
   const q = place.q;
   const searching = !!q.trim();
   const tab: Tab = searching ? "all" : place.v;
-  const sort = sortFor(recordType, place.s ?? placeSortDefault(me, tab, filters, off));
   const allFns = place.all;
   const d = placeDefaults(me, off).f;
   const presetOn = PRESET_KEYS.filter((k) => d[k] && place.f[k]).filter((k) => filters[k]);
   const unpreset = presetOn.length ? ({ ...filters, ...Object.fromEntries(presetOn.map((k) => [k, false])) } as Filters) : filters;
   const presetHere = tab === "all" && !filters.roleState.includes("Open now");
   const eff = presetHere ? filters : unpreset;
-  const hireCtx: HireCtx | null = hiredOn(eff) ? { fns: eff.hiredFn, within: eff.hiredWithin } : null;
   const hireFn = tab === "hiring" ? namedFn(me.function) : null;
   const allRows = rowsFor(recordType, infos);
   const { rows: filtered, facets: facets0 } = applyFilters(allRows, eff, tab, q, me);
-  const other = presetOn.length ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, me).facets : null;
-  const facets = presetFacets(facets0, other, tab);
   const fnSplit = hireFn ? splitByFn(filtered, hireFn) : null;
   const hireIcp = icpApplies(eff, tab, me);
   let liftRows: Row[] | null = null;
@@ -183,6 +175,29 @@ export function listAt(infos: CoInfo[], me: Me, place: Place, off: Set<string>):
   }
   const lifted = !!liftRows;
   const hireList: Row[] | null = hireFn && fnSplit && !allFns && !q.trim() ? (fnSplit.mine.length ? fnSplit.mine : lifted ? liftRows! : []) : null;
+  return { recordType, filters, q, searching, tab, allFns, presetOn, unpreset, eff, hireFn, allRows, filtered, facets0, fnSplit, liftRows, lifted, hireList };
+}
+
+/**
+ * The rows a place lists, unsorted: what listAt's first.n counts, without its counts and sort.
+ * The sidebar's Hiring now count and each saved view's matches (TradingPost) are these.
+ */
+export function placeRows(infos: CoInfo[], me: Me, place: Place, off: Set<string>): Row[] {
+  const c = listCore(infos, me, place, off);
+  return c.hireList ?? c.filtered;
+}
+
+/**
+ * The list a place opens on, on the member's whole table, as TradingPost works it out when it
+ * mounts there (no search widened, "Only my profile" off, no record frozen in place): its rows in
+ * order and the counts the first screen shows.
+ */
+export function listAt(infos: CoInfo[], me: Me, place: Place, off: Set<string>): { rows: Row[]; first: FirstList } {
+  const { recordType, filters, q, searching, tab, allFns, presetOn, unpreset, eff, hireFn, allRows, filtered, facets0, fnSplit, liftRows, lifted, hireList } = listCore(infos, me, place, off);
+  const sort = sortFor(recordType, place.s ?? placeSortDefault(me, tab, filters, off));
+  const hireCtx: HireCtx | null = hiredOn(eff) ? { fns: eff.hiredFn, within: eff.hiredWithin } : null;
+  const other = presetOn.length ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, me).facets : null;
+  const facets = presetFacets(facets0, other, tab);
   const typeCounts = {} as Record<RecordType, number>;
   const f2 = lifted ? { ...eff, icp: false } : eff;
   for (const t of RECORD_TYPES) {
@@ -228,4 +243,58 @@ export function listAt(infos: CoInfo[], me: Me, place: Place, off: Set<string>):
           : null,
     },
   };
+}
+
+/**
+ * Where a saved view opens: its own place, or (a search saved in Claude, which has none) the open
+ * roles it looks for, in every function it names. TradingPost opens it there, and counts its
+ * matches (placeRows) the same way.
+ */
+export function savedViewPlace(me: Me, v: SavedViewRec, off: Set<string>): Place {
+  if (v.place) return parsePlace(me, "", off, v.place);
+  const c = v.criteria;
+  return {
+    t: "engagements",
+    v: "hiring",
+    s: null,
+    q: "",
+    c: null,
+    p: null,
+    all: true,
+    sig: null,
+    home: false,
+    f: {
+      ...EMPTY_FILTERS,
+      fn: c.functions ?? (c.function ? [c.function] : []),
+      industry: c.industry ?? [],
+      employees: c.employees ?? [],
+      revenue: c.revenue ?? [],
+      country: c.country ?? [],
+      hq: c.hq ? [c.hq] : [],
+      hiredFn: c.hiredFn ?? [],
+      hiredWithin: c.hiredWithin ?? 0,
+    } as Filters,
+  };
+}
+
+/**
+ * How many of a place's companies are new since the last visit (`since`, ISO): a fact added there
+ * since (its updatedAt), or a role that opened since. Each company once.
+ */
+export function freshCount(rows: Row[], since: string | null): number {
+  if (!since) return 0;
+  const at = Date.parse(since);
+  const seen = new Set<string>();
+  let n = 0;
+  for (const r of rows) {
+    const i = r.i;
+    if (seen.has(i.c.id)) continue;
+    seen.add(i.c.id);
+    const roleNew = i.engs.some((e) => {
+      const t = Date.parse(e.openedAt ?? (e.opened ? `${e.opened}T00:00:00Z` : ""));
+      return Number.isFinite(t) && t > at && !e.unseen;
+    });
+    if (roleNew || (!!i.c.updatedAt && i.c.updatedAt > since)) n++;
+  }
+  return n;
 }

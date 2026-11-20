@@ -1,20 +1,17 @@
 "use client";
 
 /**
- * Today (page "today"): the first screen for an onboarded member who opens / with no place in
- * the address (?c=, ?p=, ?v= and the rest still open the table, ?sig= the Crystal Ball day).
+ * Today's data and its lead card. Home (Home.tsx, page "today") draws them.
  *
- *   "Today", then one card, "Your best lead today": the top company of their Crystal Ball (already
- *   ranked), else the top row of their first view. Its free facts (industry, size, region), what
- *   happened there and why now, and a line on the warm path. One button:
+ *   "Your best lead today": the top company of the member's Crystal Ball (already ranked), else the
+ *   top row of their first view. Its free facts (industry, size, region), what happened there and
+ *   why now, and a line on the warm path. One action (LeadAction, the one place it is decided, used
+ *   by the card and by Home's next three rows):
  *     - "Unlock free · your company of the day" while the free one is left,
  *     - "Unlock · 2 credits" after it,
  *     - "Open" for a company the member already knows.
  *   Once the company is open the card becomes its warm path: who held a seat there (1 credit), then
- *   Message them on Merlin or Invite to connect.
- *   Under it two links: "{n} more new since {weekday}" (Crystal Ball) and "Browse all companies".
- *   Then one nudge at most (nudges.ts, TradingPost picks it), "Since {weekday}: ..." (each part a
- *   link), and the one-time trial-ended card.
+ *   Message them on Merlin or Invite to connect. And the one-time trial-ended card.
  *
  * Its data: GET /api/table?today=1 (me, plan, the top 4 radar rows, the free company, the since
  * counts) when the server has it. Without it (an older server: a 4xx, a full view, or no radar in
@@ -124,7 +121,7 @@ function todayFrom(j: TodayAnswer, sinceIso: string | null, local: { roles: numb
 /* ---------- words ---------- */
 
 /** The lead's free facts: industry, size and region. */
-const factsOf = (i: CoInfo) => {
+export const factsOf = (i: CoInfo) => {
   const emp = val(i.c.cells.employees);
   return [val(i.c.cells.industry), emp && `${emp} employees`, countryOf(i.c) ?? i.c.region].filter(Boolean).join(" · ");
 };
@@ -137,123 +134,23 @@ function warmSeat(i: CoInfo, me: Pick<Me, "before" | "function">) {
   return held.find((e) => before.has(shown(e.cells.function) ?? "")) ?? (i.latest && held.includes(i.latest) ? i.latest : held[0]);
 }
 
-/* ---------- the page ---------- */
-
-export interface TodayProps {
-  me: Me;
-  infos: CoInfo[];
-  byId: Map<string, CoInfo>;
-  /** The top row of the member's first view: the lead when the Crystal Ball has nothing. */
-  firstRow: Row | null;
-  /** The member's whole table is still on its way (only Today's companies are here): with no Crystal Ball lead, the card waits for it. */
-  waiting?: boolean;
-  data: TodayData | null;
-  failed: boolean;
-  /** The previous visit (ISO), null on a first visit. */
-  sinceAt: string | null;
-  /** The one nudge (NudgeSlot), or null. */
-  nudge: ReactNode;
-  /** One-time lines (an invite bonus paid, who joined from an invite). */
-  events?: ReactNode;
-  /** The trial-ended card shows (Me.plan.trialEnded, not closed yet on this page). */
-  trialEnded: boolean;
-  onTrialSeen: () => void;
-  onSeePro: () => void;
-  onRadar: () => void;
-  onBrowse: () => void;
-  onRoles: () => void;
-  onFollows: () => void;
-  openCompany: (id: string) => void;
-}
-
-export function TodayPage(p: TodayProps) {
-  const { data, byId, firstRow } = p;
-  // The lead: the Crystal Ball's top company still in the member's table, else the first view's top row.
-  const radarLead = useMemo(() => {
-    for (const r of data?.rows ?? []) {
-      const i = byId.get(r.id);
-      if (i) return { i, row: r };
-    }
-    return null;
-  }, [data, byId]);
-  const loading = (!data && !p.failed) || (!!p.waiting && !radarLead);
-  // While the Crystal Ball is on its way the card waits (a skeleton), so it never swaps one company for another under the pointer.
-  const lead = radarLead ?? (!loading && firstRow ? { i: byId.get(firstRow.i.c.id) ?? firstRow.i, row: null } : null);
-  const more = Math.max(0, (data?.newCount ?? 0) - (radarLead ? 1 : 0));
-  const since = data?.since ?? null;
-  // The link under the card already says how many are new in the Crystal Ball since then: the line doesn't say it twice.
-  const saidNew = more > 0 && !!p.sinceAt;
-  const parts: { n: number; text: string; go: () => void }[] = since
-    ? [
-        { n: saidNew ? 0 : since.radar, text: `${since.radar} new in ${FEATURE_NAME}`, go: p.onRadar },
-        { n: since.roles, text: `${plural(since.roles, "role")} opened`, go: p.onRoles },
-        { n: since.follows, text: `${since.follows} of your follows changed`, go: p.onFollows },
-      ].filter((x) => x.n > 0)
-    : [];
-  return (
-    <div className="td">
-      <h1 className="td-h1">Today</h1>
-      {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} /> : null}
-      {loading && !lead ? (
-        <section className="td-card td-card-skel" aria-busy>
-          <span className="sr-only">Finding your best lead today</span>
-          <span className="td-skel" style={{ width: "40%" }} />
-          <span className="td-skel" style={{ width: "70%", height: 20 }} />
-          <span className="td-skel" style={{ width: "55%" }} />
-          <span className="td-skel" style={{ width: "35%", height: 44 }} />
-        </section>
-      ) : lead ? (
-        <LeadCard key={lead.i.c.id} i={lead.i} row={lead.row} me={p.me} onOpen={() => p.openCompany(lead.i.c.id)} />
-      ) : (
-        <section className="td-card">
-          <p className="td-card-t">Your best lead today</p>
-          <p className="td-none">Nothing new in your profile today. Browse every company, or widen who you want to work with in Your profile.</p>
-        </section>
-      )}
-      <nav className="td-links" aria-label="More">
-        <button type="button" className="td-link" onClick={p.onRadar}>
-          {more > 0 ? (p.sinceAt ? `${more} more new ${sinceWords(p.sinceAt).replace(/^Since/, "since")}` : `${more} more in ${YOUR_FEATURE}`) : `See ${YOUR_FEATURE}`}
-          <IconChevron dir="right" size={13} />
-        </button>
-        <button type="button" className="td-link" onClick={p.onBrowse}>
-          Browse all companies
-          <IconChevron dir="right" size={13} />
-        </button>
-      </nav>
-      {p.nudge ? <div className="td-nudge">{p.nudge}</div> : null}
-      {p.sinceAt && parts.length ? (
-        <p className="td-since">
-          <span className="td-since-h">{sinceWords(p.sinceAt)}:</span>{" "}
-          {parts.map((x, k) => (
-            <span key={x.text}>
-              {k ? <span aria-hidden> · </span> : null}
-              <button type="button" className="td-since-l num" onClick={x.go}>
-                {x.text}
-              </button>
-            </span>
-          ))}
-        </p>
-      ) : null}
-      {p.events}
-    </div>
-  );
-}
-
-/** The best lead: locked with its one unlock, or open with its warm path. */
-function LeadCard({ i, row, me, onOpen }: { i: CoInfo; row: RadarRow | null; me: Me; onOpen: () => void }) {
+/**
+ * The one action on a Crystal Ball company, in one place (Home's card and its rows both use it):
+ * a locked company's unlock ("Unlock free · your company of the day" while the free one is left,
+ * "Unlock · 2 credits" after it, "Unlocks again tomorrow" when the day's limit binds), or "Open"
+ * for a company the member can see. With too few credits the zero-credits popover says what to add.
+ */
+export function LeadAction({ i, onOpen, compact }: { i: CoInfo; onOpen: () => void; compact?: boolean }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const c = i.c;
-  const facts = factsOf(i);
-  // What happened there and why now: the Crystal Ball's lines, else the first view's hire.
-  const hire = !row && i.latest ? hireLine(i.latest) : null;
-  // The Crystal Ball's line up to its first " · " (what happened, when): why now is the next line.
-  const what = row?.lines[0]?.split(" · ")[0] ?? (hire ? `${hire.what}${hire.when ? ` · ${hire.when}` : ""}` : null);
-  const why = row?.notes?.[0] ?? null;
-  const seat = warmSeat(i, me);
-  const seatFn = seat ? shown(seat.cells.function) : null;
-  const name = c.hidden ? row?.name ?? null : c.name;
+  if (!c.hidden)
+    return (
+      <button type="button" className={compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} onClick={onOpen}>
+        Open
+      </button>
+    );
   const busy = ui.busy.has(`${c.id}.identity`);
   const free = freeCompanyNow(ui.me);
   const later = (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || !!ui.me.freeCompany);
@@ -261,10 +158,37 @@ function LeadCard({ i, row, me, onOpen }: { i: CoInfo; row: RadarRow | null; me:
     if (free || ui.me.credits >= COMPANY_PRICE) return ui.unlock({ entity: "company", id: c.id, field: "identity" }, { onWall: () => setZero(true) });
     setZero(true);
   };
+  const label = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : free ? (compact ? "Unlock free" : "Unlock free · your company of the day") : `Unlock · ${COMPANY_PRICE_SAY}`;
+  return (
+    <>
+      <button ref={ref} type="button" className={compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} disabled={busy || later} aria-busy={busy} onClick={unlock}>
+        {label}
+      </button>
+      {zero && ui.me.credits < COMPANY_PRICE && ref.current && <ZeroCredits anchor={ref.current} id={c.id} need={COMPANY_PRICE} onClose={() => setZero(false)} />}
+    </>
+  );
+}
+
+/** What happened at a lead and when: the Crystal Ball's line up to its first " · ", else its latest hire. */
+export function leadWhat(i: CoInfo, row: RadarRow | null): string | null {
+  const hire = !row && i.latest ? hireLine(i.latest) : null;
+  return row?.lines[0]?.split(" · ")[0] ?? (hire ? `${hire.what}${hire.when ? ` · ${hire.when}` : ""}` : null);
+}
+
+/** The best lead: locked with its one unlock, or open with its warm path. */
+export function LeadCard({ i, row, me, onOpen, title = "Your best lead today" }: { i: CoInfo; row: RadarRow | null; me: Me; onOpen: () => void; title?: string }) {
+  const c = i.c;
+  const facts = factsOf(i);
+  // What happened there and why now: the Crystal Ball's lines, else the first view's hire.
+  const what = leadWhat(i, row);
+  const why = row?.notes?.[0] ?? null;
+  const seat = warmSeat(i, me);
+  const seatFn = seat ? shown(seat.cells.function) : null;
+  const name = c.hidden ? row?.name ?? null : c.name;
   return (
     <section className="td-card" aria-labelledby="td-lead">
       <p className="td-card-t" id="td-lead">
-        Your best lead today
+        {title}
       </p>
       <div className="td-co">
         <CompanyLogo name={c.hidden ? "" : c.name} domain={c.hidden ? null : c.iconDomain} hidden={c.hidden} seed={c.id} />
@@ -287,14 +211,11 @@ function LeadCard({ i, row, me, onOpen }: { i: CoInfo; row: RadarRow | null; me:
             )}
           </p>
           <div className="td-acts">
-            <button ref={ref} type="button" className="btn btn-pine btn-lg td-main" disabled={busy || later} aria-busy={busy} onClick={unlock}>
-              {busy ? "Unlocking" : later ? "Unlocks again tomorrow" : free ? "Unlock free · your company of the day" : `Unlock · ${COMPANY_PRICE_SAY}`}
-            </button>
+            <LeadAction i={i} onOpen={onOpen} />
             <button type="button" className="td-quiet" onClick={onOpen}>
               Look first
             </button>
           </div>
-          {zero && ui.me.credits < COMPANY_PRICE && ref.current && <ZeroCredits anchor={ref.current} id={c.id} need={COMPANY_PRICE} onClose={() => setZero(false)} />}
         </>
       ) : (
         <WarmPath i={i} seat={seat} onOpen={onOpen} />
@@ -343,7 +264,7 @@ function WarmPath({ i, seat, onOpen }: { i: CoInfo; seat: ReturnType<typeof warm
 }
 
 /** Once, after the trial ended without a paid plan: what they kept and what Pro adds. */
-function TrialEnded({ onSeePro, onSeen }: { onSeePro: () => void; onSeen: () => void }) {
+export function TrialEnded({ onSeePro, onSeen }: { onSeePro: () => void; onSeen: () => void }) {
   return (
     <section className="td-trial" aria-labelledby="td-trial-h">
       <p className="td-trial-h" id="td-trial-h">
