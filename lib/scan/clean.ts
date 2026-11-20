@@ -282,12 +282,44 @@ export function cleanTitle(raw: unknown, company?: string): string {
 const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * An open role's title as a member may see it while its company is locked: cleanTitle first,
- * then any name of the company or its domain still in it is cut out ("Fractional CMO, Acme
- * Health" -> "Fractional CMO"). When nothing is left, `fallback` ("Fractional Marketing role").
+ * One name of a company, as titleWithout cuts it out of a title: wherever it stands as a whole
+ * word, in any case. An ASCII name in an ASCII title (nearly every one) is found by its lower
+ * case; anything else by a Unicode pattern compiled the first time it is needed, since a Unicode
+ * case-insensitive pattern costs far more to compile than to run and a table view reads thousands
+ * of locked titles. Both find exactly what `(^|[^\p{L}\p{N}])name(?=$|[^\p{L}\p{N}])` with "giu" does.
  */
-export function titleWithout(raw: string, company: string, domain: string | null, fallback = "Fractional role"): string {
-  let s = cleanTitle(raw, company);
+type NameCut = { name: string; lower: string | null; re: RegExp | null };
+const ASCII = /^[\x00-\x7f]*$/;
+/** A letter or digit in ASCII: what \p{L} and \p{N} hold there. */
+const asciiWord = (c: number) => (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+/** `s` without each whole-word `lower` (both ASCII), the character before each kept, as the pattern's "$1" keeps it. */
+function cutAscii(s: string, lower: string): string {
+  const ls = s.toLowerCase();
+  const n = lower.length;
+  let out = "";
+  let last = 0;
+  let from = 0;
+  for (let at = ls.indexOf(lower, from); at >= 0; at = ls.indexOf(lower, at + 1)) {
+    // The pattern's match starts at the line's start (at 0, before anything was cut) or at the separator before the name, never before where the last match ended.
+    const starts = at === 0 ? from === 0 : at - 1 >= from && !asciiWord(ls.charCodeAt(at - 1));
+    if (!starts || (at + n < ls.length && asciiWord(ls.charCodeAt(at + n)))) continue;
+    out += s.slice(last, at);
+    last = from = at + n;
+    at = last - 1;
+  }
+  return last ? out + s.slice(last) : s;
+}
+function cutWord(s: string, c: NameCut): string {
+  if (c.lower !== null && ASCII.test(s)) return cutAscii(s, c.lower);
+  c.re ??= new RegExp(`(^|[^\\p{L}\\p{N}])${escRe(c.name)}(?=$|[^\\p{L}\\p{N}])`, "giu");
+  return s.replace(c.re, "$1");
+}
+/**
+ * The names titleWithout cuts out of a title: the company's full name, its name without "The" or
+ * a tail like "Labs", its domain and the domain's first label, longest first, so "Acme Health"
+ * goes before "Acme". Worked out once per company name and domain (nameCutters).
+ */
+function namePatterns(company: string, domain: string | null): NameCut[] {
   const names = new Set<string>();
   const full = plain(company).trim();
   if (full.length >= 3) names.add(full);
@@ -299,10 +331,69 @@ export function titleWithout(raw: string, company: string, domain: string | null
     const label = host.split(".")[0];
     if (label.length >= 4) names.add(label);
   }
-  // Longest first, so "Acme Health" goes before "Acme".
-  for (const n of [...names].sort((a, b) => b.length - a.length)) {
-    s = s.replace(new RegExp(`(^|[^\\p{L}\\p{N}])${escRe(n)}(?=$|[^\\p{L}\\p{N}])`, "giu"), "$1");
-  }
+  return [...names].sort((a, b) => b.length - a.length).map((name) => ({ name, lower: ASCII.test(name) ? name.toLowerCase() : null, re: null }));
+}
+
+/** A bounded map that forgets the entry used longest ago once it holds `max`. */
+function lru<V>(max: number) {
+  const m = new Map<string, V>();
+  return {
+    get(k: string): V | undefined {
+      const v = m.get(k);
+      if (v !== undefined) {
+        m.delete(k);
+        m.set(k, v);
+      }
+      return v;
+    },
+    set(k: string, v: V) {
+      m.delete(k);
+      m.set(k, v);
+      if (m.size > max) m.delete(m.keys().next().value!);
+    },
+    clear: () => m.clear(),
+    get size() {
+      return m.size;
+    },
+  };
+}
+/** The names to cut by company name and domain (a few thousand locked companies). */
+const cutters = lru<NameCut[]>(20_000);
+/** titleWithout's answers by everything it reads: it is pure, so an answer kept is the answer. */
+const titlesWithout = lru<string>(50_000);
+const nameCutters = (company: string, domain: string | null): NameCut[] => {
+  const k = `${company}\u0000${domain ?? ""}`;
+  let r = cutters.get(k);
+  if (!r) cutters.set(k, (r = namePatterns(company, domain)));
+  return r;
+};
+/** For tests: how many titles and companies are kept, and a way to start over. */
+export const titleCache = {
+  sizes: () => ({ titles: titlesWithout.size, companies: cutters.size }),
+  clear: () => {
+    titlesWithout.clear();
+    cutters.clear();
+  },
+};
+
+/**
+ * An open role's title as a member may see it while its company is locked: cleanTitle first,
+ * then any name of the company or its domain still in it is cut out ("Fractional CMO, Acme
+ * Health" -> "Fractional CMO"). When nothing is left, `fallback` ("Fractional Marketing role").
+ * Kept by its inputs (titlesWithout): the same title at the same company reads the same.
+ */
+export function titleWithout(raw: string, company: string, domain: string | null, fallback = "Fractional role"): string {
+  const key = `${raw}\u0000${company}\u0000${domain ?? ""}\u0000${fallback}`;
+  const kept = titlesWithout.get(key);
+  if (kept !== undefined) return kept;
+  const out = cutTitle(raw, company, domain, fallback);
+  titlesWithout.set(key, out);
+  return out;
+}
+
+function cutTitle(raw: string, company: string, domain: string | null, fallback: string): string {
+  let s = cleanTitle(raw, company);
+  for (const c of nameCutters(company, domain)) s = cutWord(s, c);
   // What a cut name leaves behind: "Fractional CMO,  " or "( ) Fractional CMO" or "CMO at".
   s = s
     .replace(/\(\s*\)|\[\s*\]/g, " ")

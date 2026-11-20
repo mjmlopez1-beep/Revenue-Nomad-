@@ -393,6 +393,13 @@ const withouts: [string, string, string | null, string][] = [
   ["Head of Growth (Fractional)", "Growthly", "growthly.io", "Head of Growth (Fractional)"],
 ];
 for (const [raw, co, dom, want] of withouts) eq(`a free title never names its locked company: "${raw}"`, titleWithout(raw, co, dom), want);
+// The same again from titleWithout's kept answers, and names beyond ASCII (cut by their Unicode pattern) the same way.
+for (const [raw, co, dom, want] of withouts) eq(`a kept title still never names its locked company: "${raw}"`, titleWithout(raw, co, dom), want);
+eq("a kept title is kept for its own company only", titleWithout("Fractional CMO at Northwind", "Acme Health", null), "Fractional CMO at Northwind");
+eq("a kept title, another fallback", titleWithout("Acme Health", "Acme Health", null, "Fractional Sales role"), "Fractional Sales role");
+eq("a name beyond ASCII is cut out", titleWithout("Fractional CMO, Ünïcorn Labs (Remote)", "Ünïcorn Labs", null), "Fractional CMO");
+eq("an ASCII name in a title beyond ASCII is cut out", titleWithout("Fractional CMO für ACME Health", "Acme Health", null), "Fractional CMO für");
+eq("a name inside a longer word stays", titleWithout("Fractional Acmeworks CMO", "Acme", "acme.io"), "Fractional Acmeworks CMO");
 
 eq("key squeezes everything but letters and digits", roleKey("Acme & Sons", "Fractional VP, Sales (EMEA)"), "acmesons::fractionalvpsalesemea");
 check("a real company name passes", isRealCompany("A Place for Mom") && isRealCompany("Acme Robotics") && isRealCompany("Fieldstone Talent"));
