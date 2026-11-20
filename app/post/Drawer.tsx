@@ -1306,7 +1306,8 @@ function YourWayIn({ i, seats, children }: { i: CoInfo; seats: EngagementRec[]; 
               hidden ? (
                 <QuietLock words={waitWords(AFTER_COMPANY) ?? "Opens after the company"} tip={AFTER_COMPANY} />
               ) : (
-                <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={op} noun="who held it" />
+                // The unlock in words ("Unlock who held it · 1 credit"), with the role when that is locked too: one purchase.
+                <PairLock id={e.id} hidden={false} fields={SEAT_BUNDLE.filter((f) => e.cells[f]?.s === "locked")} />
               )
             ) : adding === e.id ? (
               <AddPersonForm companyId={i.c.id} engagementId={e.id} onDone={() => setAdding(null)} />

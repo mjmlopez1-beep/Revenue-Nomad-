@@ -439,6 +439,7 @@ async function main() {
   const noProfile = await radar.radarView("tok-noicp-0001", day0, nowIso());
   // [ux ws3] Skipping the profile never switches Crystal Ball off: a function and no profile lists any company.
   check("a member with a function and no profile sees Crystal Ball, at any company", noProfile?.ready === true && !!noProfile.anyCompany && noProfile.function === "Sales" && (noProfile.days ?? []).some((d) => d.companies > 0), noProfile);
+  check("any company lists at most the day's 20 most likely companies", (noProfile?.days ?? []).every((d) => d.companies <= radar.ANY_COMPANY_MAX) && (noProfile?.rows.length ?? 0) <= radar.ANY_COMPANY_MAX, noProfile?.days);
   check("and no line of theirs says 'in your profile'", (noProfile?.rows ?? []).every((x) => x.lines.every((l) => !/in your profile/i.test(l))), noProfile?.rows);
   check("and the view names no company and no person", !named(noProfile).length, named(noProfile));
   check("a member with a profile is not 'any company'", page?.anyCompany === undefined);

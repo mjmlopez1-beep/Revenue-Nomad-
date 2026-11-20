@@ -200,6 +200,14 @@ function inferVcBacked(d: State, events: { companyId: string }[], nowIso: string
 
 /* ---------- the day's companies in the app ---------- */
 
+/** [ux ws3] A day read as any company lists at most this many companies. */
+export const ANY_COMPANY_MAX = 20;
+/** The rows of the first `n` companies, in order. */
+function firstCompanies(rows: RadarSentRow[], n: number): RadarSentRow[] {
+  const seen = new Set<string>();
+  return rows.filter((x) => (seen.has(x.c) ? true : seen.size < n ? (seen.add(x.c), true) : false));
+}
+
 /**
  * GET /api/table?radar=1[&day=YYYY-MM-DD]: one UTC day's companies for the member, the list the
  * email's and Slack's links open. A day something went out lists exactly what went out (kept with
@@ -236,7 +244,9 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     for (const d of wanted) {
       const rows = kept[d]?.length ? kept[d] : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
       // A company merged away or taken out since is no row.
-      byDay.set(d, rows.filter((x) => c.g.companies.has(x.c)));
+      const onFile = rows.filter((x) => c.g.companies.has(x.c));
+      // [ux ws3] Any company (no profile yet): the day's most likely companies, not every one (the rows come most likely first).
+      byDay.set(d, icpIsEmpty(p.icp) ? firstCompanies(onFile, ANY_COMPANY_MAX) : onFile);
     }
   }
   const count = (d: string) => new Set((byDay.get(d) ?? []).map((x) => x.c)).size;
