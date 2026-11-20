@@ -18,6 +18,7 @@ import {
   checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 import { holderSeen, holderTarget, lockedHolder, personTarget, sameBuy, startSteps, stepOneKind } from "../app/post/getStarted";
+import { isTodayAnswer, radarSince, rolesSince, sinceWords } from "../app/post/todayModel";
 import { SEAT_YIELD, inviteMailto, inviteMessage, tappedWhat, wallBack } from "../app/post/earnBack";
 import { UNLOCKS_LEFT_TIP, confirmedWords, fnChipPlan, foldParts, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "../app/post/display";
 
@@ -901,6 +902,36 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   );
   check("two functions, any time, all companies, no gap switch", foldParts({ fns: ["Finance", "Marketing"], within: 0, scope: "all companies", mine: "Sales", notMine: false }).join(" · ") === "Finance or Marketing hires · any time · all companies");
   check("three functions, and none picked", foldParts({ fns: ["Finance", "Marketing", "RevOps"], within: 12, scope: "in my profile", mine: null, notMine: true })[0] === "Hires in 3 functions" && foldParts({ fns: [], within: 3, scope: "x", mine: "Sales", notMine: false })[0] === "Hires in any function");
+}
+
+/* ---------- Today: its data with or without GET ?today=1, and since your last visit ---------- */
+
+{
+  const small = { me: {}, freeCompany: true, radar: { day: "2026-11-20", fn: "Sales", rows: [], newCount: 3 } };
+  check("?today=1's small answer is read", isTodayAnswer(small));
+  check("a full view (a server without ?today=1) or an error is not: Today falls back to ?radar=1", !isTodayAnswer({ me: {}, companies: [], radar: small.radar }) && !isTodayAnswer({ me: {}, companies: [] }) && !isTodayAnswer({ error: "x" }) && !isTodayAnswer(null));
+  const days = [
+    { day: "2026-11-20", companies: 2 },
+    { day: "2026-11-19", companies: 0 },
+    { day: "2026-11-18", companies: 4 },
+    { day: "2026-11-17", companies: 1 },
+  ];
+  check("Crystal Ball since the last visit: the days after it", radarSince({ days }, "2026-11-17T15:00:00Z") === 6 && radarSince({ days }, "2026-11-20T08:00:00Z") === 0, radarSince({ days }, "2026-11-17T15:00:00Z"));
+  check("on a first visit, its latest day with any", radarSince({ days }, null) === 2 && radarSince({ days: [] }, null) === 0);
+  const at = "2026-11-17T12:00:00Z";
+  const opened = (fn: string, day: string, extra: Partial<EngagementRec> = {}) => eng({ function: val(fn), status: val("Open") }, { opened: day, openedAt: `${day}T09:00:00Z`, ...extra });
+  const roleInfos = deriveAll([co("Roles", [opened("Sales", "2026-11-19"), opened("Sales", "2026-11-10"), opened("Marketing", "2026-11-19"), opened("Sales", "2026-11-19", { closed: "2026-11-20" })])]);
+  check("roles opened since: the member's function, open now, after the visit", rolesSince(roleInfos, "Sales", at) === 1, rolesSince(roleInfos, "Sales", at));
+  check("  none on a first visit or with no function", rolesSince(roleInfos, "Sales", null) === 0 && rolesSince(roleInfos, null, at) === 0);
+  const now = new Date("2026-11-20T12:00:00");
+  check(
+    "Since Tuesday, yesterday, earlier today, or a date a week back",
+    sinceWords(new Date("2026-11-17T10:00:00").toISOString(), now) === "Since Tuesday" &&
+      sinceWords(new Date("2026-11-19T10:00:00").toISOString(), now) === "Since yesterday" &&
+      sinceWords(new Date("2026-11-20T07:00:00").toISOString(), now) === "Since earlier today" &&
+      sinceWords(new Date("2026-11-02T10:00:00").toISOString(), now) === "Since Nov 2",
+    [sinceWords(new Date("2026-11-17T10:00:00").toISOString(), now), sinceWords(new Date("2026-11-02T10:00:00").toISOString(), now)],
+  );
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
