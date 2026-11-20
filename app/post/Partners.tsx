@@ -37,6 +37,8 @@ import "./partners.css";
 /** Cards a function shows before "Show all", and members before "Show more". */
 const SEATS_FIRST = 3;
 const MEMBERS_STEP = 12;
+/** [ux ws3] Phones: members before "Show more" (the page ran 12,000px). */
+const MEMBERS_STEP_PHONE = 4;
 
 function usePartners(deps: unknown[]) {
   const [data, setData] = useState<PartnersView | null>(null);
@@ -199,10 +201,55 @@ function Seats({ groups, fits, titles, onProfile }: { groups: PartnerGroup[]; fi
         </span>
       </div>
       {groups.length ? (
-        groups.map((g) => <Group key={g.fn} g={g} titles={titles} />)
+        ui.layout === "phone" && groups.length > 1 ? (
+          <FnTabs groups={groups} titles={titles} />
+        ) : (
+          groups.map((g) => <Group key={g.fn} g={g} titles={titles} />)
+        )
       ) : (
         <p className="pt-note">No seats in other functions at companies that fit your profile yet. As members add seats, they show here.</p>
       )}
+    </>
+  );
+}
+
+/**
+ * [ux ws3] Phones: one function at a time. A row of tabs (each with its count), and under it that
+ * function's 3 partners with Show all. Left and Right move between the tabs.
+ */
+function FnTabs({ groups, titles }: { groups: PartnerGroup[]; titles: Titles }) {
+  const [at, setAt] = useState(0);
+  const g = groups[Math.min(at, groups.length - 1)];
+  const keys = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = (at + d + groups.length) % groups.length;
+    setAt(next);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  };
+  return (
+    <>
+      <div className="pt-tabs" role="tablist" aria-label="Partners by function" onKeyDown={keys}>
+        {groups.map((x, k) => (
+          <button
+            key={x.fn}
+            type="button"
+            role="tab"
+            id={`pt-tab-${k}`}
+            aria-selected={k === at}
+            aria-controls="pt-tabpanel"
+            tabIndex={k === at ? 0 : -1}
+            className={`chip pt-tab${k === at ? " chip-on" : ""}`}
+            onClick={() => setAt(k)}
+          >
+            {x.fn} <span className="num pt-tab-n">{x.seats.length + x.unnamed}</span>
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="pt-tabpanel" aria-labelledby={`pt-tab-${at}`}>
+        <Group key={g.fn} g={g} titles={titles} />
+      </div>
     </>
   );
 }
@@ -359,7 +406,8 @@ function PartnerAction({ s, open, name }: { s: PartnerSeat; open: boolean; name:
 /* ---------- c. members on Merlin ---------- */
 
 function Members({ data, onProfile }: { data: PartnersView | null; onProfile: () => void }) {
-  const [n, setN] = useState(MEMBERS_STEP);
+  const step = useUi().layout === "phone" ? MEMBERS_STEP_PHONE : MEMBERS_STEP;
+  const [n, setN] = useState(step);
   if (!data)
     return (
       <p className="pt-note" role="status">
@@ -387,7 +435,7 @@ function Members({ data, onProfile }: { data: PartnersView | null; onProfile: ()
         <p className="pt-note">No other members are listed yet.</p>
       )}
       {data.members.length > n && (
-        <button type="button" className="btn pt-showmore" onClick={() => setN(n + MEMBERS_STEP)}>
+        <button type="button" className="btn pt-showmore" onClick={() => setN(n + step)}>
           Show more members
         </button>
       )}

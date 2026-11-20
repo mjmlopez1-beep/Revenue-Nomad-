@@ -452,3 +452,24 @@ button.pt-co svg {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
 }
+
+/* [ux ws3] Phones: one function at a time, as a row of tabs that scrolls sideways inside itself. */
+.pt-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 4px -16px 12px;
+  padding: 0 16px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pt-tabs::-webkit-scrollbar {
+  display: none;
+}
+.pt-tab {
+  flex: none;
+  min-height: 44px;
+}
+.pt-tab-n {
+  margin-left: 4px;
+  opacity: 0.75;
+}
