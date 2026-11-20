@@ -591,10 +591,15 @@ button.tp-plan:hover {
 }
 /*
  * Phones with the Upgrade chip: the credits word gives way to the coin (as it does under 340px
- * without the chip), never to a bare number, so the menu fits at 390. Under 370px the chip gives way instead.
+ * without the chip), never to a bare number, so the menu fits at 390. The day's unlock limit
+ * ("25 unlocks left today") leaves the bar too: the record's unlock line says it where unlocking
+ * happens, and the pill's spoken name and title still carry it. Under 370px the chip gives way instead,
+ * and so it does to the Messages button while something is unread (Upgrade stays first in the menu).
  */
 @media (min-width: 370px) and (max-width: 459px) {
-  .tp-top-phone:has(.tp-plan) .tp-credits-l {
+  .tp-top-phone:has(.tp-plan) .tp-credits-l,
+  .tp-top-phone:has(.tp-plan) .tp-credits-cap,
+  .tp-top-phone:has(.tp-msgbtn) .tp-plan-phone {
     display: none;
   }
   .tp-top-phone:has(.tp-plan) .tp-credits-i {

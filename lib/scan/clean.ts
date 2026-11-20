@@ -316,9 +316,21 @@ export function titleWithout(raw: string, company: string, domain: string | null
 }
 
 /** A legal suffix as it follows a name in running text ("Acme, Inc. builds"), cut with the name in aboutWithout. */
-const LEGAL_AFTER = String.raw`(?:,?\s+(?:inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|gmbh|plc|llp|pbc)\b\.?)?`;
+const LEGAL_AFTER = String.raw`(?:,?\s+(?:inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|co|gmbh|plc|llp|pbc|p\.c|sdn\s+bhd)\b(?!-)\.?)?`;
+/** A legal suffix's period that also ended the sentence stays: "made by Acme Inc. Its" reads "made by the company. Its". */
+const keepStop = (m: string, at: number, all: string) => (m.endsWith(".") && /^(?:\s*$|[ \t]*\n|\s+[\p{Lu}"“])/u.test(all.slice(at + m.length)) ? "." : "");
+/** Words that say what a company does right after its name ("Acme helps"): where a short form of the name stands for the company. */
+const NAME_VERB = String.raw`(?:is|was|has|helps|makes|provides|offers|builds|delivers|creates|develops|designs|runs|serves|sells|rents|operates|manufactures|produces|supports|partners|works|enables|empowers|connects|gives|lets|uses|combines|specializes|specialises|focuses|brings|invests|owns|manages|publishes|transforms|began|started|became|launched)\b`;
+/** Words that start many names and many sentences: never cut on their own as the company. */
+const COMMON_FIRST = new Set(
+  "global national american united first new digital smart data blue green red black white north south east west northern southern eastern western capital advanced general applied international modern open bright true pure prime total super great good big little royal pacific atlantic central metro city next future human health care home office business market media social local world premier pro elite summit peak core key one best direct simple clear rapid swift better".split(" "),
+);
+/** Words that end a run of capitalized words after the name ("Acme Health Helps"): never part of the name. */
+const RUN_STOP = /^(?:is|are|was|were|has|have|had|and|or|but|of|for|in|on|at|to|with|by|from|the|a|an|its|our|we|it|as|that|which|who|this|welcome|you|your|inc|incorporated|llc|ltd|limited|corp|corporation|co|gmbh|plc|llp|pbc|sdn|helps|makes|provides|offers|builds|delivers|creates|develops|enables|empowers|connects)$/i;
 /** Where a cut name goes while aboutWithout works: never in an About, and no name pattern matches it. */
 const CO_MARK = "\u0000co\u0000";
+/** Where a sentence ends in an About, but not after "Dr." or "Mr." before a name. */
+const SENTENCE_GAP = /(?<=(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|St))[.!?…]["')\]]*)[ \t]+/;
 /** Where a removed link or email was, until aboutWithout tidies the sentence it was in. */
 const LINK_MARK = "\u0001";
 /** The characters a web path in running text may hold, and the last one (never the sentence's own period or comma). */
@@ -342,8 +354,13 @@ const wordCount = (x: string) =>
  * was only there for it goes with it). `sites`: the company's website and its logo's domain.
  * The name's first part before a separator ("Terra Reporting | ESG Platform") counts as a way of
  * writing it, and so does the run of the name's words the About opens with ("Cygnet is a gin brand"
- * for "Cygnet Gin"), as written. `people`: names of the company's people and seat holders, which
- * are paid facts: a sentence with one in it goes. The rest is the company's own words, unchanged.
+ * for "Cygnet Gin"), as written. So do its short forms where they stand as the company: the first
+ * word in capitals or before "is", "helps" and the like ("Founded in 1914, Acme is"), and its
+ * initials ("CET") once given after the name or in that place. A longer name than the one on file
+ * goes whole ("Acme Technologies provides" reads "The company provides"), and the words around it
+ * read naturally: "At the company, we", "the company's", "Every bottle" for "Every Cygnet bottle".
+ * `people`: names of the company's people and seat holders, which are paid facts: a sentence with
+ * one in it goes. The rest is the company's own words, unchanged.
  */
 export function aboutWithout(text: string, company: string, sites: (string | null | undefined)[], people: (string | null | undefined)[] = []): string {
   let s = String(text ?? "");
@@ -378,15 +395,26 @@ export function aboutWithout(text: string, company: string, sites: (string | nul
   // "Terra Reporting │ ESG Platform", "Align - Football's AI", "Folia Health: The Home-Reported Outcomes Company".
   const head = cleanCompany(full.split(/\s+[|│–—-]\s+|\s*[|│:]\s*|\s+\(/)[0]).replace(/^the\s+/i, "").trim();
   for (const n of [full, bare, core, core.replace(NAME_TAIL, "").trim(), head, head.replace(NAME_TAIL, "").trim()]) if (n.length >= 3) names.add(n);
+  // A one-word short form ("Global" for "Global Labs") is cut where it is written as a name, never as a plain word ("a global leader").
+  const capOnly = new Set([...names].filter((n) => !/\s/.test(n) && ![full, bare, core].includes(n)));
   for (const l of labels) {
     names.add(l);
+    capOnly.delete(l);
     if (l.includes("-")) names.add(l.replace(/-/g, " "));
   }
-  const cutName = (n: string, flags: string) => {
-    const words = n.split(/\s+/).filter(Boolean).map(escRe).join(String.raw`[\s-]+`);
-    s = s.replace(new RegExp(`(^|[^\\p{L}\\p{N}\\u0000])(?:[Tt]he\\s+)?${words}${LEGAL_AFTER}(?=$|[^\\p{L}\\p{N}])`, flags), `$1${CO_MARK}`);
+  // The words of a name may run together or keep their hyphens in the text ("Acme Health" as "AcmeHealth", "Bo & Me" as
+  // "Bo&Me"), and "&" may be written "and".
+  const cutName = (n: string, flags: string, cap = false) => {
+    const words = n
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => (/^(?:&|and|\+)$/i.test(w) ? String.raw`(?:&|and|\+)` : escRe(w)))
+      .join(String.raw`[\s-]*`);
+    s = s.replace(new RegExp(`(^|[^\\p{L}\\p{N}\\u0000])(?:[Tt]he\\s+)?(${words})${LEGAL_AFTER}(?=$|[^\\p{L}\\p{N}])`, flags), (m, pre: string, w: string, at: number, all: string) =>
+      cap && !/\p{Lu}/u.test(w) ? m : `${pre}${CO_MARK}${keepStop(m, at, all)}`,
+    );
   };
-  for (const n of [...names].sort((a, b) => b.length - a.length)) cutName(n, "giu");
+  for (const n of [...names].sort((a, b) => b.length - a.length)) cutName(n, "giu", capOnly.has(n));
   // "Acmeworks" alone for "Acmeworks Robotics" at acmeworks-robotics.com, as written (so "global" stays for "Global Payments").
   const first = core.split(/\s+/)[0] ?? "";
   const firstToo =
@@ -399,11 +427,59 @@ export function aboutWithout(text: string, company: string, sites: (string | nul
   const lead = s.match(/^\s*(?:the\s+)?((?:[\p{L}\p{N}][\p{L}\p{N}&'’.-]*)(?:\s+[\p{L}\p{N}][\p{L}\p{N}&'’.-]*){0,5})/iu)?.[1] ?? "";
   const run: string[] = [];
   for (const w of lead.split(/\s+/)) {
-    if (!w || !nameWords.has(squeeze(w.replace(/['’]s$/i, "")))) break;
-    run.push(w.replace(/['’]s$/i, "").replace(/[.]+$/, ""));
+    // An initial counts as it is written in the name ("Barry E. Janay"), never a lone letter ("B Corp").
+    if (!w || !(nameWords.has(squeeze(w.replace(/['’]s$/i, ""))) || (/^\p{Lu}\.$/u.test(w) && full.includes(` ${w} `)))) break;
+    run.push(w.replace(/['’]s$/i, "").replace(/(?<!^\p{L})[.]+$/u, ""));
   }
   const opening = run.join(" ");
-  if (opening.length >= 4 && /\p{Lu}|\p{N}/u.test(opening) && !opening.includes("\u0000")) cutName(opening, "gu");
+  if (opening.length >= 4 && /\p{Lu}|\p{N}/u.test(opening) && !opening.includes("\u0000") && !(run.length === 1 && COMMON_FIRST.has(opening.toLowerCase()))) cutName(opening, "gu");
+  // Short forms, as written: the name's first word in capitals ("ACME" for "Acme Robotics"), and where it stands as
+  // the company, with the capitalized words after it ("Founded in 1914, Acme is", "Acme Environmental rents"), unless
+  // it is a common word or the About also uses it as a plain word.
+  const firstWord = first.replace(/['’]s$/i, "");
+  const plainToo = new RegExp(`(^|[^\\p{L}\\p{N}])${escRe(firstWord.toLowerCase())}(?=$|[^\\p{L}\\p{N}])`, "u").test(s);
+  if (core.includes(" ") && /^\p{Lu}[\p{L}\p{N}]{2,}$/u.test(firstWord) && !COMMON_FIRST.has(firstWord.toLowerCase()) && !plainToo) {
+    if (firstWord !== firstWord.toUpperCase()) cutName(firstWord.toUpperCase(), "gu");
+    if (firstWord.length >= 4)
+      s = s.replace(new RegExp(`(^|[^\\p{L}\\p{N}\\u0000-])${escRe(firstWord)}(?:[ \\t]+\\p{Lu}[\\p{L}\\p{N}&'’-]*){0,2}(?=[ \\t]+${NAME_VERB})`, "gu"), `$1${CO_MARK}`);
+  }
+  // The rest of a longer name the About uses goes with the name: "Acme" written "Acme Technologies", "Acme Bikes Co.",
+  // "Acme company", "Carroll Acme International, Inc.". It ends at a common word ("Acme Health helps") or punctuation.
+  s = s
+    .replace(new RegExp(`${CO_MARK}((?:[ \\t]+[^\\s\\u0000]+){1,4})`, "gu"), (_m, tail: string) => {
+      const parts = tail.match(/[ \t]+[^\s\u0000]+/g) ?? [];
+      const ok = (x: string | undefined) => !!x && /^\p{Lu}[\p{L}\p{N}'’-]*$/u.test(x) && !RUN_STOP.test(x) && !/['’]s$/i.test(x);
+      const split = (p: string) => p.trim().match(/^(.*?)((?:['’]s)?[,;:.!?)"”]*)$/u)!.slice(1) as [string, string];
+      let n = 0;
+      let after = "";
+      while (n < parts.length && !after) {
+        const [w, punct] = split(parts[n]);
+        const next = parts[n + 1] && split(parts[n + 1])[0];
+        // An initial inside the name: "Barry E. Janay".
+        if (/^\p{Lu}$/u.test(w) && punct === "." && ok(next)) {
+          n++;
+          continue;
+        }
+        if (ok(w) || (n === 0 && /^company$/i.test(w))) n++;
+        else if (/^[&+]$/.test(w) && !punct && ok(next)) n += 2;
+        else break;
+        after = split(parts[n - 1])[1];
+      }
+      return CO_MARK + after + parts.slice(n).join("");
+    })
+    .replace(new RegExp(`${CO_MARK}${LEGAL_AFTER}`, "giu"), (m, at: number, all: string) => CO_MARK + keepStop(m, at, all))
+    .replace(new RegExp(`(?<=\\p{Ll}[ \\t]+)\\p{Lu}[\\p{Ll}'’-]+[ \\t]+${CO_MARK}`, "gu"), (m) => (RUN_STOP.test(m.split(/[ \t]/)[0]) ? m : CO_MARK));
+  // Its initials in capitals ("Cobalt Energy Technologies" as "CET"): everywhere once the About gives them after the
+  // name ("Acme (CET)"), otherwise only where they stand as the company ("CET is"), so "CRM software" stays.
+  const sig = core.split(/\s+/).filter((w) => /^\p{L}/u.test(w) && !/^(?:and|of|the|for|a|an|in|on|at|to)$/i.test(w));
+  const initials = sig.length >= 3 ? sig.map((w) => w[0]).join("").toUpperCase() : "";
+  if (/^\p{Lu}{3,}$/u.test(initials)) {
+    const given = new RegExp(`${CO_MARK}\\s*\\(\\s*${initials}\\s*\\)`, "gu");
+    const everywhere = new RegExp(given.source, "u").test(s);
+    s = s
+      .replace(given, CO_MARK)
+      .replace(new RegExp(`(^|[^\\p{L}\\p{N}\\u0000-])${initials}(?=$|[^\\p{L}\\p{N}-])${everywhere ? "" : `(?:[ \\t]+\\p{Lu}[\\p{L}\\p{N}&'’-]*){0,2}(?=[ \\t]+${NAME_VERB}|['’]s\\b)`}`, "gu"), `$1${CO_MARK}`);
+  }
   s = s
     // "Acme (acme.com)" and "Acme, Acme Inc." read once.
     .replace(new RegExp(`${CO_MARK}\\s*\\(\\s*${CO_MARK}\\s*\\)`, "g"), CO_MARK)
@@ -414,7 +490,7 @@ export function aboutWithout(text: string, company: string, sites: (string | nul
     const named = new RegExp(`(^|[^\\p{L}\\p{N}])(?:${who.map((x) => x.split(/\s+/).map(escRe).join(String.raw`\s+`)).join("|")})(?=$|[^\\p{L}\\p{N}])`, "iu");
     s = s
       .split("\n")
-      .map((line) => line.split(/(?<=[.!?…]["')\]]*)[ \t]+/).filter((x) => !named.test(x)).join(" "))
+      .map((line) => line.split(SENTENCE_GAP).filter((x) => !named.test(x)).join(" "))
       .join("\n");
   }
   // A short sentence with a link or an email in it ("Visit acme.com/about.", "Email hello@acme.com.") was there
@@ -424,7 +500,7 @@ export function aboutWithout(text: string, company: string, sites: (string | nul
       .split("\n")
       .map((line) =>
         line
-          .split(/(?<=[.!?…]["')\]]*)[ \t]+/)
+          .split(SENTENCE_GAP)
           .filter((x) => !x.includes(LINK_MARK) || wordCount(x) > 8)
           .join(" "),
       )
@@ -435,12 +511,16 @@ export function aboutWithout(text: string, company: string, sites: (string | nul
     .replace(/\(\s*\)|\[\s*\]/g, " ")
     .replace(/[ \t]+(?:at|via|on|visit|see)[ \t]*(?=[.,;:!?)]|$)/gim, "")
     .replace(/[ \t]+([.,;:!?)])/g, "$1")
-    .replace(/([.!?])[ \t]*[.,;:]+/g, "$1")
+    // (Not "the U.S., and", "e.g., a", or an ellipsis.)
+    .replace(/(?<!\.)([.!?])(?:[ \t]+[.,;:]+|\.(?!\.))/g, "$1")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/^[ \t]+|[ \t]+$/gm, "");
-  // "the company" in running text, "The company" where a sentence starts.
+  // "the company" in running text, "The company" where a sentence starts (not after "U.S."). The name used as a
+  // word before a noun goes after "every" or "a": "Every Cygnet bottle" reads "Every bottle".
   s = s
-    .replace(new RegExp(`(^|[.!?…]["')\\]]*\\s+|\\n\\s*|^["'(\\[]+)${CO_MARK}`, "g"), "$1The company")
+    .replace(new RegExp(`\\bthe[ \\t]+${CO_MARK}`, "giu"), CO_MARK)
+    .replace(new RegExp(`\\b([Ee]very|[Ee]ach|[Aa]n?|[Oo]ur|[Ii]ts|[Tt]heir|[Aa]ll|[Aa]ny|[Nn]o)[ \\t]+${CO_MARK}(?=[ \\t]+(?!(?:and|or|but|of|in|to|for|with|at|by|on|is|was|has)\\b)\\p{Ll})`, "gu"), "$1")
+    .replace(new RegExp(`(^|(?<!(?:^|[^\\p{L}])\\p{L})[.!?…]["')\\]]*\\s+|\\n\\s*|^["'(\\[]+)${CO_MARK}`, "gu"), "$1The company")
     .replace(new RegExp(CO_MARK, "g"), "the company");
   return s.replace(/\n{3,}/g, "\n\n").trim();
 }

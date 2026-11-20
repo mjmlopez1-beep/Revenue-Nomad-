@@ -632,7 +632,23 @@ async function main() {
     ["Northwind sells tea. Its LinkedIn page is linkedin.com/company/northwind.", "Northwind Tea", ["linkedin.com/company/northwind"], "The company sells tea. Its LinkedIn page is linkedin.com/company/northwind."],
     // The name before a separator, and the run of the name's words the About opens with, as written.
     ["Terra Reporting offers an ESG platform. Terra Reporting is based in Oslo.", "Terra Reporting | ESG Platform | Cloud", [], "The company offers an ESG platform. The company is based in Oslo."],
-    ["Cygnet is a gin brand made in Wales. Every Cygnet bottle is hand-labelled. A cygnet is a young swan.", "Cygnet Gin", [], "The company is a gin brand made in Wales. Every the company bottle is hand-labelled. A cygnet is a young swan."],
+    ["Cygnet is a gin brand made in Wales. Every Cygnet bottle is hand-labelled. A cygnet is a young swan.", "Cygnet Gin", [], "The company is a gin brand made in Wales. Every bottle is hand-labelled. A cygnet is a young swan."],
+    // It reads as natural words: "At the company, we", "the company's", a capital where a sentence starts, never "the company Technologies".
+    ["At Zentrix, we help clinics. Zentrix's platform is HIPAA-ready.", "Zentrix Health, Inc.", ["zentrix.io"], "At the company, we help clinics. The company's platform is HIPAA-ready."],
+    ["Quillmark Technologies provides ledgers. Teams trust Quillmark Cloud.", "Quillmark", ["https://quillmark.com"], "The company provides ledgers. Teams trust the company."],
+    ["Orders ship from Brambleway Co. Each box is recycled. Brambleway Co. is based in Leeds.", "Brambleway", [], "Orders ship from the company. Each box is recycled. The company is based in Leeds."],
+    ["Fox and Finch builds furniture. TidalBloom grows kelp for it.", "Fox & Finch", [], "The company builds furniture. TidalBloom grows kelp for it."],
+    ["TidalBloom grows kelp. Tidal-Bloom ships it.", "Tidal Bloom", [], "The company grows kelp. The company ships it."],
+    // Its initials: everywhere once given after the name, otherwise only where they stand as the company.
+    ["Corvane Energy Technologies (CET) detects gas leaks. CET serves utilities.", "Corvane Energy Technologies", [], "The company detects gas leaks. The company serves utilities."],
+    ["Halverd Customer Metrics sells CRM software. HCM is based in Leeds.", "Halverd Customer Metrics", [], "The company sells CRM software. The company is based in Leeds."],
+    // A distinctive first word, and the name in capitals; a common one stays.
+    ["Founded in 1914, Quendry is one of the largest freight brokers. QUENDRY ships fast.", "Quendry Freight Partners", [], "Founded in 1914, the company is one of the largest freight brokers. The company ships fast."],
+    ["Global teams use Global Kite. Global Kite is based in Oslo.", "Global Kite", [], "Global teams use the company. The company is based in Oslo."],
+    ["Velo Labs is a bike maker. Every Velo frame is hand-built, and velo means bike.", "Velo Labs", [], "The company is a bike maker. Every frame is hand-built, and velo means bike."],
+    // "the U.S., and" keeps its comma; "Dr." before a person's name goes with their sentence.
+    ["Kestrelia helps founders expand into the U.S., Canada and Europe.", "Kestrelia", [], "The company helps founders expand into the U.S., Canada and Europe."],
+    ["Brightline builds maps. Its CEO is Dr. Dana Roe. It has 40 staff.", "Brightline Maps", [], "The company builds maps. It has 40 staff."],
     ["Elk Ridge Investments buys rental homes.", "Investments Elk Ridge", [], "The company buys rental homes."],
     // A sentence naming one of its people (a paid fact) goes.
     ["Brightline builds maps. Founded by Dana Roe and Sam Lee, it serves cities. It has 40 staff.", "Brightline Maps", [], "The company builds maps. It has 40 staff."],

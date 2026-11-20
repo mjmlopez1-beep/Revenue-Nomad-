@@ -40,7 +40,9 @@ export const lostLinkText = (support: string | null | undefined, emailOn: boolea
  *
  * When the day's unlock limit binds before the balance (Me.unlocksLeft below credits, an account's
  * first day most of all), a second line says so: "25 unlocks left today" ("25 unlocks today" on
- * the narrowest phones), so the wall is never a surprise. `unlockTip` says why, in its tooltip.
+ * the narrowest phones), so the wall is never a surprise. `unlockTip` says why, in its tooltip. On a
+ * phone beside the Upgrade chip or the Messages button the line gives way (billing.css, post.css): the
+ * record's unlock line says it, and so does the pill's spoken name.
  */
 export function CreditsPill({
   me,
