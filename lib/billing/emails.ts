@@ -9,6 +9,7 @@
 import { MAIL, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine } from "../email";
 import { PRICES, TOPUP_CREDITS } from "./rules";
 import { functionOf } from "../tableFields";
+import { FEATURE_NAME } from "../radar/types";
 
 /** What a member got in a period, as counts. */
 export interface ValueCounts {
@@ -125,7 +126,7 @@ export function trialEndedEmail(o: { first: string; counts: ValueCounts; notLook
   const lines = valueLines(o.counts);
   const subject = "Your Pro trial is over";
   const link = oneLine(o.link);
-  const lead = "You're on Free now. Your credits, your saved view and the weekly email stay. Nothing was charged.";
+  const lead = `You're on Free now. Your credits, your saved view and the weekly email stay, and one ${FEATURE_NAME} company a day opens free, with everything on it. Nothing was charged.`;
   const got = lines.length ? "In your trial:" : null;
   const offer = o.notLooking
     ? "Not looking for a client right now? Free is the right plan. Pro is here when you are."

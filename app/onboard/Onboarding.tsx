@@ -621,7 +621,7 @@ function StepYou({
           <strong className="num">
             {credits} {credits === 1 ? "credit" : "credits"}
           </strong>
-          . A company is 2 credits, and your first one each day is free. One more credit shows who held a seat there.
+          . A company is 2 credits, and one each day is free (on the Free plan, the one you pick in your Crystal Ball). One more credit shows who held a seat there.
         </span>
       </p>
 

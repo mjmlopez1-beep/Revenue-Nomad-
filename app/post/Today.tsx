@@ -7,7 +7,10 @@
  *   top row of their first view. Its free facts (industry, size, region), what happened there and
  *   why now, and a line on the warm path. One action (LeadAction, the one place it is decided, used
  *   by the card and by Home's next three rows):
- *     - "Unlock free · your company of the day" while the free one is left,
+ *     - a Crystal Ball company, while billing is live (CrystalOpen.tsx, Me.crystal): "Open" on Trial
+ *       and Pro (free, theirs from then on), "Open free · 1 left today" on Free (one a day, with
+ *       everything on it), then "Upgrade to open more" and the line that says why,
+ *     - else "Unlock free · your company of the day" while the free one is left,
  *     - "Unlock · 2 credits" after it,
  *     - "Open" for a company the member already knows.
  *   Once the company is open the card becomes its warm path: who held a seat there (1 credit), then
@@ -21,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
-import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
+import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY } from "@/lib/tableFields";
 import { CompanyLogo, IconChevron, IconLock, LockedName, val } from "../ui/shared";
 import { countryOf, hireLine, isOpenRole, namedFn, shown, type CoInfo, type Row } from "./model";
@@ -29,6 +32,7 @@ import { useUi, ZeroCredits } from "./ui";
 import { freeCompanyNow } from "./display";
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
+import { CrystalOpen } from "./CrystalOpen";
 import { plural } from "./hooks";
 import { TODAY_MAX_BYTES, TODAY_ROWS, isTodayAnswer, radarSince, sinceWords, type TodayAnswer, type TodayData } from "./todayModel";
 import "./today.css";
@@ -136,11 +140,12 @@ function warmSeat(i: CoInfo, me: Pick<Me, "before" | "function">) {
 
 /**
  * The one action on a Crystal Ball company, in one place (Home's card and its rows both use it):
- * a locked company's unlock ("Unlock free · your company of the day" while the free one is left,
+ * a Crystal Ball row by plan (CrystalOpen: Open, Open free · 1 left today, Upgrade to open more),
+ * else a locked company's unlock ("Unlock free · your company of the day" while the free one is left,
  * "Unlock · 2 credits" after it, "Unlocks again tomorrow" when the day's limit binds), or "Open"
  * for a company the member can see. With too few credits the zero-credits popover says what to add.
  */
-export function LeadAction({ i, onOpen, compact }: { i: CoInfo; onOpen: () => void; compact?: boolean }) {
+export function LeadAction({ i, row, onOpen, compact }: { i: CoInfo; row: RadarRow | null; onOpen: () => void; compact?: boolean }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
@@ -152,6 +157,9 @@ export function LeadAction({ i, onOpen, compact }: { i: CoInfo; onOpen: () => vo
       </button>
     );
   const busy = ui.busy.has(`${c.id}.identity`);
+  // A Crystal Ball row opens from here by plan (CrystalOpen), as on Crystal Ball. Not the first view's row.
+  const crystal = row ? ui.me.crystal ?? null : null;
+  if (crystal) return <CrystalOpen id={c.id} name={c.hidden ? row?.name ?? null : c.name} className={compact ? "btn-sm td-row-go" : "btn-lg td-main"} />;
   const free = freeCompanyNow(ui.me);
   const later = (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || !!ui.me.freeCompany);
   const unlock = () => {
@@ -185,6 +193,8 @@ export function LeadCard({ i, row, me, onOpen, title = "Your best lead today" }:
   const seat = warmSeat(i, me);
   const seatFn = seat ? shown(seat.cells.function) : null;
   const name = c.hidden ? row?.name ?? null : c.name;
+  // A Crystal Ball row opens by plan (LeadAction): its words say Open, and once today's free one is used, why not.
+  const crystal = row ? me.crystal ?? null : null;
   return (
     <section className="td-card" aria-labelledby="td-lead">
       <p className="td-card-t" id="td-lead">
@@ -207,11 +217,12 @@ export function LeadCard({ i, row, me, onOpen, title = "Your best lead today" }:
                 <IconLock size={12} /> The fractional who held their {seatFn ?? "last"} seat is on file: your warm way in.
               </>
             ) : (
-              "No seat holder on file yet. Unlock it to see what we have."
+              `No seat holder on file yet. ${crystal ? "Open" : "Unlock"} it to see what we have.`
             )}
           </p>
+          {crystal === "used" ? <p className="td-used">{CRYSTAL_USED_LINE}</p> : null}
           <div className="td-acts">
-            <LeadAction i={i} onOpen={onOpen} />
+            <LeadAction i={i} row={row} onOpen={onOpen} />
             <button type="button" className="td-quiet" onClick={onOpen}>
               Look first
             </button>
@@ -271,10 +282,10 @@ export function TrialEnded({ onSeePro, onSeen }: { onSeePro: () => void; onSeen:
         Your Pro trial ended.
       </p>
       <p>
-        <strong>You kept:</strong> your credits, 1 saved view with the weekly email, {FEATURE_NAME} each morning.
+        <strong>You kept:</strong> your credits, 1 saved view with the weekly email, {FEATURE_NAME} each morning with one company a day fully open.
       </p>
       <p>
-        <strong>Pro adds:</strong> open roles the moment they post, rate ranges, Slack alerts.
+        <strong>Pro adds:</strong> every {FEATURE_NAME} company open free, open roles the moment they post, rate ranges, Slack alerts.
       </p>
       <div className="td-acts">
         <button type="button" className="btn btn-pine" onClick={onSeePro}>

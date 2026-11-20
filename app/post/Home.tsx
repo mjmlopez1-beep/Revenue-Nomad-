@@ -272,7 +272,7 @@ export function HomePage(p: HomeProps) {
                     </span>
                   </button>
                   <span className="hm-lrow-act">
-                    <LeadAction i={i} onOpen={() => p.openCompany(i.c.id)} compact />
+                    <LeadAction i={i} row={row} onOpen={() => p.openCompany(i.c.id)} compact />
                   </span>
                 </li>
               ))}

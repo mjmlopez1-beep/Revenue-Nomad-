@@ -74,6 +74,7 @@ import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
 import { BillingPage, PlansHost, ProTag, TrialBanner, openPlans } from "./Billing";
 import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
+import { freeCompanyNow } from "./display";
 import { NetworkPage } from "./network/Network"; // [google network]
 import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./post.css";
@@ -836,16 +837,16 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const firstUnlock = me.unlocked === 0;
   const flagOn = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which], ...keys]) }));
   const flagOff = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which]].filter((k) => !keys.includes(k))) }));
-  const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void }) => {
+  const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void; from?: "crystal" }): Promise<boolean> => {
     const k = cellKey(t.id, t.field);
     flagOn("busy", [k]);
-    const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field }, { quiet: true, silentError: true });
+    const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field, ...(opts?.from ? { from: opts.from } : {}) }, { quiet: true, silentError: true });
     flagOff("busy", [k]);
     if (!r.ok) {
       // Out of credits on the server (the balance here was behind another tab): the zero-credits popover says what to add, not a red toast.
       if (opts?.onWall && /^You're out of credits/.test(r.message)) opts.onWall();
       else toast(r.message, !calmRefusal(r.message));
-      return;
+      return false;
     }
     // A plain unlock speaks through the cell. One that bought more (the company, the role, the posting and the rate) or cost nothing says so.
     const plain = /^Unlocked [^,]+ for 1 credit\.$/.test(r.message) && !/ and /.test(r.message);
@@ -854,6 +855,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     cellFlags.set((f) => (f.pulse === k ? { pulse: null } : {}));
     flagOn("flash", [k]);
     setTimeout(() => flagOff("flash", [k]), 2200);
+    return true;
   });
   const unlockMany = useStable(async (items: FactRef[]) => {
     const keys = items.map((t) => cellKey(t.id, t.field));
@@ -1008,8 +1010,14 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const shownSeat = (r: Row) => (r.p ? null : r.e ? r.e : phone ? cardSeat(r.i, me.function) : r.i.latest);
   /** Get started step 1, "Unlock a company" (getStarted.ts startSteps): a locked company, one hiring in their function first. */
   const stepOne = useStable(() => {
-    setPage("table");
     setDrawer(null);
+    // Free (billing live): the free company a day is Crystal Ball's, so "Unlock a company" opens Crystal Ball.
+    if (me.crystal === "one" && !freeCompanyNow(me)) {
+      setSigDay(null);
+      setPage("radar");
+      return;
+    }
+    setPage("table");
     const hit = roleTarget();
     if (!hit) {
       toast("You can already see every company.");
@@ -2813,6 +2821,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             pos={drawerPos >= 0 ? { n: drawerPos + 1, of: navRows.length } : null}
             phone={phone}
             contact={contact}
+            crystal={
+              (drawer.returnTo === "radar" && radarList.some((r) => r.i.c.id === drawerInfo.c.id)) ||
+              (drawer.returnTo === "today" && !!today.data?.rows.some((r) => r.id === drawerInfo.c.id))
+            }
           />
         )}
         {addOpts && <AddModal infos={shownInfos} opts={addOpts} onClose={() => setAddOpts(null)} />}

@@ -77,7 +77,7 @@ import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type F
 import {
   ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
-  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, type Entity,
+  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -106,7 +106,7 @@ import {
 } from "./billing/rules";
 import { surveyCode } from "./billing/stripe";
 import { valueCounts, valueLines } from "./billing/emails";
-import { FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStats } from "./radar/types";
+import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStats } from "./radar/types";
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import {
@@ -235,11 +235,14 @@ export interface LedgerEntry {
    * duplicate (refunds): the member had bought two listings of one role, merged into one (mergeDuplicateRoles).
    * leader (refunds): the member said a company they had just unlocked has a full-time leader, and its website then showed one (payLeaderBack).
    * free (company unlocks): the member's free company of the day (delta 0, see freeCompanyLeft). It
-   * counts as COMPANY_PRICE toward the day's unlock limit like a paid one. pending (fills): a fact
+   * counts as COMPANY_PRICE toward the day's unlock limit like a paid one. crystal (company unlocks):
+   * Trial or Pro opened a company in their Crystal Ball, free (delta 0, see crystalOf). crystalFull
+   * (company unlocks): Free's one Crystal Ball company a UTC day, opened in full (delta 0; every fact
+   * there is in State.unlocks with no line of its own). Neither counts toward the day's unlock limit. pending (fills): a fact
    * the member added at a company where their own new seat waits to be confirmed (pendingSeats):
    * it earns 0 until then, and is paid when the seat is confirmed (confirmSeat).
    */
-  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader" | "free" | "pending";
+  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader" | "free" | "crystal" | "crystalFull" | "pending";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -1861,26 +1864,52 @@ function pickExempt(s: State, memberId: string, seatAt: Set<string>): (companyId
 function unlockRoom(s: State, memberId: string, nowMs: number): { left: number; firstDay: boolean } {
   let used = 0;
   // Counted in credits: a company (COMPANY_PRICE) counts as that many unlocks, so day one's limit stays the starter credits.
-  // The free company of the day counts the same as a paid one.
-  for (const l of s.ledger) if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY) used += l.why === "free" ? COMPANY_PRICE : Math.max(1, -l.delta);
+  // The free company of the day counts the same as a paid one. A company opened free from Crystal Ball doesn't count (the member's own Crystal Ball bounds those).
+  for (const l of s.ledger)
+    if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY && !CRYSTAL_WHY.has(l.why ?? "")) used += l.why === "free" ? COMPANY_PRICE : Math.max(1, -l.delta);
   const joinedAt = s.members.find((m) => m.id === memberId)?.at;
   const firstDay = !!joinedAt && nowMs - Date.parse(joinedAt) < DAY;
   return { left: Math.max(0, (firstDay ? NEW_MEMBER_UNLOCK_MAX : UNLOCK_DAILY_MAX) - used), firstDay };
 }
 
 /**
- * The free company of the day: every member (Free, trial and Pro alike) unlocks one company a UTC
- * day for no credits. It makes the company theirs like a paid unlock and counts toward the day's
- * unlock limits (unlockRoom). It doesn't roll over. True while today's is still left.
+ * The free company of the day: a Trial or Pro member (and every member while billing is off)
+ * unlocks one company a UTC day for no credits, anywhere. It makes the company theirs like a paid
+ * unlock and counts toward the day's unlock limits (unlockRoom). It doesn't roll over. True while
+ * today's is still left. Never on Free while billing is live: there the free one a day is Crystal
+ * Ball's, opened in full from Crystal Ball only (crystalOf).
  */
 function freeCompanyLeft(s: State, memberId: string, nowMs: number): boolean {
   // A test server only (RN_SCAN_TEST=1): RN_FREE_COMPANY=off leaves it out, for the suites that check what paid unlocks cost.
   if (process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off") return false;
+  if (gated(planRec(s, memberId), nowMs)) return false;
   const today = new Date(nowMs).toISOString().slice(0, 10);
   return !s.ledger.some((l) => l.memberId === memberId && l.reason === "unlock" && l.why === "free" && l.at.slice(0, 10) === today);
 }
+/** Company unlocks from Crystal Ball (LedgerEntry.why): they cost nothing and the day's limit doesn't count them. */
+const CRYSTAL_WHY = new Set(["crystal", "crystalFull"]);
+/**
+ * How a company in the member's Crystal Ball opens from Crystal Ball and the Today card (Me.crystal):
+ * "all" on Trial and Pro (every one free, as radar names them: lib/radar isPro), "one" or "used" on
+ * Free while billing is live (one a UTC day, opened in full: the day boundary the free company of
+ * the day uses), null while billing is off (the 2-credit unlock and the free company of the day, as anywhere).
+ */
+function crystalOf(s: State, memberId: string, nowMs: number): "all" | "one" | "used" | null {
+  const rec = planRec(s, memberId);
+  if (hasPro(rec, nowMs)) return "all";
+  if (!gated(rec, nowMs)) return null;
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  return s.ledger.some((l) => l.memberId === memberId && l.reason === "unlock" && l.why === "crystalFull" && l.at.slice(0, 10) === today) ? "used" : "one";
+}
 /** The credit history's words for it (LedgerRow.reason). */
 export const FREE_COMPANY_LINE = "Free company of the day";
+/** The credit history's words for a company opened free from Crystal Ball (Trial and Pro), and for Free's one a day. */
+export const CRYSTAL_LINE = `Opened free from ${FEATURE_NAME}`;
+export const CRYSTAL_FULL_LINE = `Free ${FEATURE_NAME} company of the day`;
+/** Free, after today's Crystal Ball company: the refusal, and the line Crystal Ball shows. */
+export const CRYSTAL_USED = CRYSTAL_USED_LINE;
+/** A request to open free a company that isn't in the member's Crystal Ball. */
+export const CRYSTAL_NOT_IN = `That company isn't in your ${FEATURE_NAME}, so it doesn't open free. Unlock it for ${COMPANY_PRICE_SAY}.`;
 /** Said after the unlock that used it. */
 export const FREE_COMPANY_USED = "That was your free company today, so it cost no credits. The next one is free tomorrow.";
 
@@ -2096,6 +2125,8 @@ function selfHeld(s: State, engId: string): boolean {
 /** Empty fillable facts on an engagement (each earns its seat holder a credit). */
 const ENG_FILLABLE = FILLABLE.filter((x) => x.entity === "engagement").map((x) => x.f.key);
 const ENG_GATED = ALL_FIELDS.filter((x) => x.entity === "engagement" && x.f.gated).map((x) => x.f.key);
+/** A person's paid facts: name and title, then LinkedIn, email and phone. */
+const CONTACT_GATED = ALL_FIELDS.filter((x) => x.entity === "contact" && x.f.gated).map((x) => x.f.key);
 /** Every engagement field a member sees on a seat. */
 const ENG_KEYS = ALL_FIELDS.filter((x) => x.entity === "engagement" && !x.f.identity).map((x) => x.f.key);
 function missingOnSeat(e: Node, s: State): number {
@@ -3665,6 +3696,11 @@ async function fullView(
         ledger.push({ at: l.at, delta: l.delta, reason: FREE_COMPANY_LINE, company: companyNameOf(id), field: "" });
         continue;
       }
+      // Opened free from Crystal Ball (Trial and Pro), or Free's one Crystal Ball company of the day, then the company (theirs now).
+      if (l.reason === "unlock" && (l.why === "crystal" || l.why === "crystalFull")) {
+        ledger.push({ at: l.at, delta: l.delta, reason: l.why === "crystal" ? CRYSTAL_LINE : CRYSTAL_FULL_LINE, company: companyNameOf(id), field: "" });
+        continue;
+      }
       // A fact the member took back (retract): "Took back the HQ", then "at Acme".
       if (l.reason === "reversal" && l.why === "retract") {
         ledger.push({ at: l.at, delta: l.delta, reason: `Took back ${say(entityOf(id), field)}`, company: companyNameOf(id), field: "" });
@@ -3688,6 +3724,7 @@ async function fullView(
       ...shownBalance(balance(s, me.id)),
       unlocksLeft: unlockRoom(s, me.id, nowMs).left,
       freeCompany: freeCompanyLeft(s, me.id, nowMs),
+      ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)),
       sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, pickExempt(s, me.id, ownSeatAt)).earned),
       earned24h: earned,
       earnCap: EARN_CAP,
@@ -4469,6 +4506,8 @@ export async function perform(
   }
   // Messages between members live in lib/messages.ts (loaded here, so the two files don't import each other at start).
   if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
+  // From Crystal Ball (an unlock with from "crystal"): its companies are read in the action, from the action's own state (lib/radar, loaded here so the two files don't import each other at start).
+  const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
   const out = await mutate((s, seed): ActionResult & { refused?: string; connected?: string } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError("You're signed out. Sign in again to add, confirm or unlock.");
@@ -5013,6 +5052,59 @@ export async function perform(
         case "unlock":
         case "unlockMany": {
           const items = a.type === "unlock" ? [a] : (a.items ?? []).slice(0, 60);
+          /**
+           * Free's one Crystal Ball company a UTC day, opened in full: the company, and every fact on
+           * file there the member doesn't see yet (who held each seat and the role, people's names and
+           * titles and their LinkedIn, email and phone, rates, end months, postings), for 0 credits.
+           * Theirs for good, like paid unlocks, and nothing already paid comes back. One ledger line
+           * (the company's, why crystalFull) marks the day's; a company with nothing left to open doesn't use it.
+           */
+          const crystalFull = (co: CompanyNode, mode: "one" | "used"): ActionResult => {
+            if (mode === "used") throw new ActionError(CRYSTAL_USED);
+            const coLocked = lockedFor(co.id);
+            const sees = (entity: Entity, node: Node, field: string) => {
+              const v = valueOf(node, s, field);
+              return !v || v.status !== "live" || v.by === me.id || (s.unlocks[fkey(node.id, field)] ?? []).includes(me.id) || freeFor(entity, node.id, field);
+            };
+            const open: { entity: Entity; node: Node; field: string }[] = [];
+            for (const e of g.engagements.values()) if (e.companyId === co.id) for (const f of ENG_GATED) if (!sees("engagement", e, f)) open.push({ entity: "engagement", node: e, field: f });
+            for (const p of g.contacts.values()) if (p.companyId === co.id) for (const f of CONTACT_GATED) if (!sees("contact", p, f)) open.push({ entity: "contact", node: p, field: f });
+            if (!coLocked && !open.length) throw new ActionError(`You already see everything at ${co.name}, so your free ${FEATURE_NAME} company for today is still left.`);
+            const idK = fkey(co.id, "identity");
+            s.ledger.push({ memberId: me.id, delta: 0, reason: "unlock", ref: idK, at: now, why: "crystalFull" });
+            const give = (k: string) => {
+              if (!(s.unlocks[k] ?? []).includes(me.id)) s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
+            };
+            if (coLocked) give(idK);
+            for (const x of open) give(fkey(x.node.id, x.field));
+            return {
+              message: `Opened ${co.name} with everything on it, free: your ${FEATURE_NAME} company for today. Pro opens every company in your ${FEATURE_NAME}.`,
+              cells: [...open.map((x) => changed(x.entity, x.node, x.field)), ...(coLocked ? [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", co, field)) : [])],
+            };
+          };
+          /**
+           * From Crystal Ball (from "crystal", lib/radar crystalCompanyIds: the companies the member's
+           * own Crystal Ball lists, never what the client says). Trial and Pro: each company in it opens
+           * for 0 credits (crystalFree), its people and seat holders cost what they cost, and the free
+           * company of the day stays. Free: one a UTC day opens in full (crystalFull, above). Billing off: an ordinary unlock.
+           */
+          const crystalMode = crystalMod ? crystalOf(s, me.id, nowMs) : null;
+          const crystalFree = new Set<string>();
+          if (crystalMod && crystalMode) {
+            const ball = crystalMod.crystalCompanyIds(seed, s, me, nowMs);
+            if (a.type === "unlock") {
+              if (a.entity !== "company" || a.field !== "identity") throw new ActionError(`Only a company opens from your ${FEATURE_NAME}.`);
+              const co = nodeOf("company", a.id);
+              if (!ball.has(co.id)) throw new ActionError(CRYSTAL_NOT_IN);
+              if (crystalMode !== "all") return crystalFull(co as CompanyNode, crystalMode);
+              crystalFree.add(co.id);
+            } else if (crystalMode === "all")
+              for (const it of items) {
+                if (it.entity !== "company") continue;
+                const id = fromPub.get(String(it.id ?? ""));
+                if (id && ball.has(id)) crystalFree.add(id);
+              }
+          }
           /** `pair`: an open role's posting and rate. `seat`: who held a seat, with their role (SEAT_BUNDLE). */
           const todo: { k: string; node: Node; entity: Entity; field: string; pair?: boolean; seat?: boolean }[] = [];
           const hid = new Map<string, boolean>();
@@ -5135,10 +5227,12 @@ export async function perform(
             return { message: "You can already see all of these, so no credits were spent." };
           }
           // What this unlock costs: 1 credit per fact, with each open role one purchase, and COMPANY_PRICE for each company.
-          // The first company of the member's UTC day is free (freeCompanyLeft); it still counts toward the day's limit.
-          const freeK = freeCompanyLeft(s, me.id, nowMs) ? todo.find((t) => t.field === "identity")?.k ?? null : null;
-          const units = (t: { field: string }) => (t.field === "identity" ? COMPANY_PRICE : 1);
-          const cost = (t: { k: string; field: string }) => (t.k === freeK ? 0 : units(t));
+          // A company opened from Crystal Ball on Trial or Pro (crystalFree) costs nothing and isn't counted toward the day's limit.
+          const fromBall = (t: { field: string; node: Node }) => t.field === "identity" && crystalFree.has(t.node.id);
+          // The first other company of the member's UTC day is free (freeCompanyLeft); it still counts toward the day's limit.
+          const freeK = freeCompanyLeft(s, me.id, nowMs) ? todo.find((t) => t.field === "identity" && !fromBall(t))?.k ?? null : null;
+          const units = (t: { field: string; node: Node }) => (fromBall(t) ? 0 : t.field === "identity" ? COMPANY_PRICE : 1);
+          const cost = (t: { k: string; field: string; node: Node }) => (t.k === freeK ? 0 : units(t));
           const need = todo.reduce((n, t) => n + cost(t), 0);
           const room = todo.reduce((n, t) => n + units(t), 0);
           if (room) {
@@ -5168,7 +5262,7 @@ export async function perform(
             }
           }
           for (const t of todo) {
-            s.ledger.push({ memberId: me.id, delta: -cost(t), reason: "unlock", ref: t.k, at: now, ...(t.k === freeK ? { why: "free" as const } : {}) });
+            s.ledger.push({ memberId: me.id, delta: cost(t) ? -cost(t) : 0, reason: "unlock", ref: t.k, at: now, ...(t.k === freeK ? { why: "free" as const } : fromBall(t) ? { why: "crystal" as const } : {}) });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
           /** Open a fact at no further charge. False when there is nothing there. */
@@ -5204,7 +5298,8 @@ export async function perform(
           const others = todo.length - companies.length - paired.length;
           // "for 1 credit", or nothing when the member had already paid for part of an open role.
           const price = need ? ` for ${need} credit${need > 1 ? "s" : ""}` : "";
-          const noCharge = need || freeK ? "" : " You had already paid for this open role, so no credit was spent.";
+          const ballOpened = todo.filter(fromBall).length;
+          const noCharge = need || freeK || ballOpened ? "" : " You had already paid for this open role, so no credit was spent.";
           const companyName = (t: { node: Node }) => g.companies.get(t.node.id)?.name ?? "the company";
           // Each purchase is one fact: a person's name and title count once, and so do who held a seat and their role.
           let message =
@@ -5226,8 +5321,9 @@ export async function perform(
             const bought = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? `${todo.length} facts`;
             message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""},` : ""}${price}.${noCharge}`;
           } else if (todo.length === 1 && companies.length) message = `Unlocked ${companyName(todo[0])}${price}.`;
-          // The free company of the day: no credits for it, and it is said so.
+          // The free company of the day: no credits for it, and it is said so. So is a company opened from Crystal Ball.
           if (freeK) message += ` ${FREE_COMPANY_USED}`;
+          if (ballOpened) message += ` ${ballOpened === 1 ? "The company" : `${ballOpened} companies`} opened free from your ${FEATURE_NAME}.`;
           return {
             message,
             cells: [
@@ -6314,7 +6410,7 @@ export async function perform(
       ...out,
       me: {
         ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), pending: pendingFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
-        unlocksLeft: unlockRoom(s, me.id, nowMs).left, freeCompany: freeCompanyLeft(s, me.id, nowMs), sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
+        unlocksLeft: unlockRoom(s, me.id, nowMs).left, freeCompany: freeCompanyLeft(s, me.id, nowMs), ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)), sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
       },
     };
   }).catch((e) => {

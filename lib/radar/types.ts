@@ -35,6 +35,17 @@ export const YOUR_FEATURE = `Your ${FEATURE_NAME}`;
 /** "your Crystal Ball": in running text. */
 export const yourFeature = `your ${FEATURE_NAME}`;
 
+/**
+ * Opening a company from Crystal Ball (and the Today card, which shows its top row), by plan
+ * (Me.crystal, lib/table.ts crystalOf). Trial and Pro: every company in it opens free, "Open". Free
+ * (trial over): one a UTC day opens with everything on it, then "Upgrade to open more" and the line.
+ */
+export const CRYSTAL_OPEN_ONE = "Open free · 1 left today";
+export const CRYSTAL_UPGRADE = "Upgrade to open more";
+/** Get started's hint and the balance's line on Free while today's is left (the free company of the day is Crystal Ball's there). */
+export const CRYSTAL_FREE_TODAY = `1 free in ${FEATURE_NAME} today`;
+export const CRYSTAL_USED_LINE = `Your free ${FEATURE_NAME} company for today is used. Pro opens every company in your ${FEATURE_NAME}.`;
+
 export type RadarKind = "adjacent" | "role" | "seat" | "funding" | "sales-build" | "departure";
 export const RADAR_KINDS: RadarKind[] = ["role", "seat", "departure", "adjacent", "sales-build", "funding"];
 /** How likely, in a word: never a percentage. */
@@ -78,6 +89,12 @@ export interface RadarCard {
   place?: string;
   /** The member's own table shows the company (a known company: Open), not only a name on the card (Trial and Pro). */
   known?: boolean;
+  /**
+   * A company the member doesn't know yet, and how it opens from their Crystal Ball: "free" (Trial
+   * and Pro: Open, no credits), "one" (Free: one company a day opens in full, free). Absent: the
+   * 2-credit unlock, as anywhere (billing off).
+   */
+  opens?: "free" | "one";
   /** Only for a known company: a public https image of its logo (the icon service the app draws from). Never for a locked one. */
   logo?: string;
 }
@@ -120,8 +137,8 @@ export interface RadarRow {
   band?: RadarBand;
   /**
    * Trial and Pro only: the company's name, free on this view while the member's table still has
-   * it locked. It doesn't make the company theirs or cost a credit; its people and seat holders
-   * keep their own unlocks.
+   * it locked. Naming it doesn't make the company theirs; its Open here does, for 0 credits
+   * (Me.crystal "all"). Its people and seat holders keep their own unlocks.
    */
   name?: string;
 }

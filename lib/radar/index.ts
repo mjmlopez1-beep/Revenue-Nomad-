@@ -12,8 +12,10 @@
  *
  * Every member gets every signal: a company's name is locked for everyone until they unlock it,
  * so nothing here is held back by plan. Each card names the company only when the member's table
- * does, and every link (the cards' and the button) opens the day's companies in the app
- * (radarPath: /?p=table&sig=<day>), where each locked one unlocks on its row for COMPANY_PRICE.
+ * does (Trial and Pro aside: they see every name), and every link (the cards' and the button) opens
+ * the day's companies in the app (radarPath: /?p=table&sig=<day>), where each locked one opens on
+ * its row: free on Trial and Pro, one a day in full on Free, COMPANY_PRICE with billing off
+ * (crystalCompanyIds is what the server checks; lib/table.ts crystalOf the plan's rule).
  * In Slack a named company also links to its record, and one the member knows shows its logo.
  * Plans (lib/plan.ts) change delivery only: Pro (and the trial) get signals at once, when a scan or
  * a change to a seat makes one, in the next alert batch with Slack or a webhook (radarInstant);
@@ -43,7 +45,7 @@ import { siteKey } from "../tableFields";
 import { iconDomains } from "../companyIcons";
 import { logoSources } from "../logo";
 import { emailEnabled, sendEmail } from "../email";
-import { billingLive, hasPro, type PlanRecord } from "../plan";
+import { billingLive, gated, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
 import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, type RawSignal } from "./signals";
 import { deliverable, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
@@ -168,9 +170,13 @@ function cardContext(c: Ctx, m: Member, day: string, logos: Map<string, string> 
   // Trial and Pro: every card names its company, free. Naming it on the card doesn't make it theirs
   // or charge: the table keeps it locked, and its people and seat holders still need their own unlocks.
   const pro = isPro(c.s, m.id, c.nowMs);
+  // Free (trial over, billing live): one Crystal Ball company a day opens in full, free. Billing off: neither.
+  const free = gated(planRecord(c.s, m.id), c.nowMs);
   return {
     // The member's own table, as a member: a company locked for them stays unnamed (an admin's too), unless they are on Pro.
     visible: (companyId) => pro || knownTo(c, m, companyId),
+    // Trial and Pro open any Crystal Ball company free; Free opens one a day, in full.
+    opens: (companyId) => (knownTo(c, m, companyId) ? null : pro ? "free" : free ? "one" : null),
     cardId: (key) => cardId(m.id, key),
     coId: (companyId) => coId(m.id, companyId),
     url: radarPath(day),
@@ -250,6 +256,57 @@ function firstCompanies(rows: RadarSentRow[], n: number): RadarSentRow[] {
   return rows.filter((x) => (seen.has(x.c) ? true : seen.size < n ? (seen.add(x.c), true) : false));
 }
 
+/** A day the view still opens when asked for it: today or earlier, inside RADAR_KEEP_VIEW_DAYS. */
+const keptDay = (day: string, nowMs: number) => day <= dayOfMs(nowMs) && nowMs - dayStart(day) <= RADAR_KEEP_VIEW_DAYS * DAY;
+
+/**
+ * The member's Crystal Ball rows for these UTC days, as the day's view lists them: a day something
+ * went out lists exactly what went out (kept with the delivery); any other day lists the signals
+ * that happened that day and never went out. Only companies still on file.
+ */
+function dayRows(c: Ctx, m: Member, wanted: string[]): { p: RadarProfile; ready: boolean; byDay: Map<string, RadarSentRow[]> } {
+  const { seed, s, nowMs } = c;
+  // [ux ws3] No Ideal Fractional Profile yet: the page reads it as any company (the morning run still needs one).
+  const p: RadarProfile = { ...profileOf(seed, s, m.id, functionFor(s, m)), any: true };
+  const ready = !!p.fn;
+  const byDay = new Map<string, RadarSentRow[]>();
+  if (!ready || !wanted.length) return { p, ready, byDay };
+  const kept = s.radar?.members?.[m.id]?.days ?? {};
+  const keptKeys = new Set(Object.values(kept).flatMap((rows) => rows.map((x) => x.k)));
+  // Days nothing went out: the signals that happened that day (and never went out another day).
+  const fromMs = Math.min(...wanted.map(dayStart));
+  // [google network] the page ranks by who the member knows too (networkWarmth: nothing with RN_GOOGLE off).
+  const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p, { counts: observedTransitions(seed, s), nowMs, warmth: networkWarmth(s, m.id, nowMs) }).filter((x) => !keptKeys.has(x.key));
+  for (const d of wanted) {
+    const rows = kept[d]?.length ? kept[d] : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
+    // A company merged away or taken out since is no row.
+    const onFile = rows.filter((x) => c.g.companies.has(x.c));
+    // [ux ws3] Any company (no profile yet): the day's most likely companies, not every one (the rows come most likely first).
+    byDay.set(d, icpIsEmpty(p.icp) ? firstCompanies(onFile, ANY_COMPANY_MAX) : onFile);
+  }
+  return { p, ready, byDay };
+}
+
+/**
+ * The companies in the member's Crystal Ball (internal ids): every company a day of their view
+ * lists, any day it still opens (today back to RADAR_KEEP_VIEW_DAYS). What the server checks before
+ * a company opens free from Crystal Ball (lib/table.ts, the unlock with from "crystal"): a client
+ * can't claim one. Pure on the seed and state it is given, so an action reads it from its own draft.
+ */
+export function crystalCompanyIds(seed: Seed, s: State, m: Member, nowMs: number): Set<string> {
+  const days = Array.from({ length: RADAR_KEEP_VIEW_DAYS + 1 }, (_, i) => dayOfMs(nowMs - i * DAY)).filter((d) => keptDay(d, nowMs));
+  const { byDay } = dayRows(ctxOf(seed, s, nowMs), m, days);
+  return new Set([...byDay.values()].flatMap((rows) => rows.map((x) => x.c)));
+}
+
+/** The same, as the public ids the member's table and the connector use. Empty when the token is nobody's. */
+export async function crystalPublicIds(token: string | null, nowMs = Date.now()): Promise<Set<string>> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const m = memberByToken(seed, token, s);
+  if (!m) return new Set();
+  return new Set([...crystalCompanyIds(seed, s, m, nowMs)].map((id) => T.pubId(id)));
+}
+
 /**
  * GET /api/table?radar=1[&day=YYYY-MM-DD]: one UTC day's companies for the member, the list the
  * email's and Slack's links open. A day something went out lists exactly what went out (kept with
@@ -266,31 +323,11 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const today = dayOfMs(nowMs);
   const c = ctxOf(seed, s, nowMs);
   const pro = isPro(s, m.id, nowMs);
-  const fn = functionFor(s, m);
-  // [ux ws3] No Ideal Fractional Profile yet: the page reads it as any company (the morning run still needs one).
-  const p: RadarProfile = { ...profileOf(seed, s, m.id, fn), any: true };
-  const ready = !!p.fn;
   const list = Array.from({ length: RADAR_VIEW_DAYS }, (_, i) => dayOfMs(nowMs - i * DAY));
   const asked = typeof dayAsked === "string" && SIG_DAY_RE.test(dayAsked) && Number.isFinite(dayStart(dayAsked)) ? dayAsked : null;
   // A day asked for that is kept (an older email's link) is listed too.
-  const inKeep = !!asked && asked <= today && nowMs - dayStart(asked) <= RADAR_KEEP_VIEW_DAYS * DAY;
-  const byDay = new Map<string, RadarSentRow[]>();
-  if (ready) {
-    const kept = s.radar?.members?.[m.id]?.days ?? {};
-    const keptKeys = new Set(Object.values(kept).flatMap((rows) => rows.map((x) => x.k)));
-    const wanted = inKeep && !list.includes(asked!) ? [...list, asked!] : list;
-    // Days nothing went out: the signals that happened that day (and never went out another day).
-    const fromMs = Math.min(...wanted.map(dayStart));
-    // [google network] the page ranks by who the member knows too (networkWarmth: nothing with RN_GOOGLE off).
-    const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p, { counts: observedTransitions(seed, s), nowMs, warmth: networkWarmth(s, m.id, nowMs) }).filter((x) => !keptKeys.has(x.key));
-    for (const d of wanted) {
-      const rows = kept[d]?.length ? kept[d] : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
-      // A company merged away or taken out since is no row.
-      const onFile = rows.filter((x) => c.g.companies.has(x.c));
-      // [ux ws3] Any company (no profile yet): the day's most likely companies, not every one (the rows come most likely first).
-      byDay.set(d, icpIsEmpty(p.icp) ? firstCompanies(onFile, ANY_COMPANY_MAX) : onFile);
-    }
-  }
+  const inKeep = !!asked && keptDay(asked, nowMs);
+  const { p, ready, byDay } = dayRows(c, m, inKeep && !list.includes(asked!) ? [...list, asked!] : list);
   const count = (d: string) => new Set((byDay.get(d) ?? []).map((x) => x.c)).size;
   const latest = list.find((d) => count(d) > 0) ?? today;
   const day = inKeep ? asked! : latest;

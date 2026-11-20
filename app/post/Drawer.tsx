@@ -36,6 +36,7 @@ import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
 import { checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
 import { LeaderReport } from "./LeaderReport";
+import { CrystalOpen } from "./CrystalOpen";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
@@ -1565,6 +1566,7 @@ export function Drawer({
   pos,
   phone,
   contact,
+  crystal,
 }: {
   i: CoInfo;
   focus: string | null;
@@ -1574,9 +1576,16 @@ export function Drawer({
   phone: boolean;
   /** View.contact. Read from the Ui context too, so either way of passing it works. */
   contact?: Contact | null;
+  /**
+   * Opened from Crystal Ball (or the Today card) at a company it lists: a locked company opens here
+   * as it does there (CrystalOpen: free on Trial and Pro, today's free one on Free). After Free's is
+   * used, and anywhere else, the record keeps its own Unlock company.
+   */
+  crystal?: boolean;
 }) {
   const ui = useUi();
   const c = i.c;
+  const fromBall = !!crystal && (ui.me.crystal === "all" || ui.me.crystal === "one");
   const coarse = useMedia("(hover: none) and (pointer: coarse)");
   const touch = phone || coarse;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1755,7 +1764,7 @@ export function Drawer({
   const actions = (
     <div className="tp-dactions">
       {c.hidden ? (
-        <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} />
+        fromBall ? <CrystalOpen id={c.id} name={c.shownName} /> : <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} />
       ) : (
         <>
           {openPosting()}
@@ -2017,7 +2026,7 @@ export function Drawer({
             </span>
             {c.hidden ? (
               // One action while the name is hidden, as on desktop. The facts unlock after it.
-              <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} bar />
+              fromBall ? <CrystalOpen id={c.id} name={c.shownName} bar /> : <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} bar />
             ) : posting ? (
               // Unlocked and hiring: the job posting first, Add beside it (Unlock all is in the record, under its header).
               <>

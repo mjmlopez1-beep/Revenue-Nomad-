@@ -7,9 +7,12 @@
  * /api/table?radar=1&day=, lib/radar radarView: only the member's own signals); the rows are the
  * member's own table rows, so a company they don't know stays locked and named by nothing.
  *
- * Each row (desktop) and card (phones) says what happened there and has one button: Unlock
- * company · 2 credits for a locked company (the record's own UnlockCompany, so the zero-credit
- * wall and the daily limit work as everywhere), Open for one the member knows. The row or card
+ * Each row (desktop) and card (phones) says what happened there and has one button. For a locked
+ * company it goes by plan (Me.crystal, CrystalOpen.tsx): Trial and Pro "Open" (free, and the company
+ * is theirs), Free "Open free · 1 left today" (one a UTC day, with everything on it), then "Upgrade
+ * to open more" with the line under the heading; with billing off, Unlock company · 2 credits (the
+ * record's own UnlockCompany, so the zero-credit wall and the daily limit work as everywhere). Open
+ * for one the member knows. The server checks each free open is in their Crystal Ball. The row or card
  * itself opens the record, and closing it comes back here. A removable pill says what the list
  * is ("From your Crystal Ball · Nov 19 · 2 companies"); taking it off shows all companies. The
  * last 7 days are one tap each.
@@ -19,13 +22,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_INDUSTRIES } from "@/lib/tableFields";
-import { YOUR_FEATURE, FEATURE_NAME, yourFeature, type RadarView } from "@/lib/radar/types";
+import { CRYSTAL_USED_LINE, YOUR_FEATURE, FEATURE_NAME, yourFeature, type RadarView } from "@/lib/radar/types";
 import { IconChevron, IconCheck, IconX, post } from "../ui/shared";
 import { isOpenRole, type CoInfo, type Row } from "./model";
 import { useUi } from "./ui";
 import { DataTable, type SignalRows } from "./Tables";
 import { CardList } from "./Cards";
 import { UnlockCompany } from "./Drawer";
+import { CrystalOpen } from "./CrystalOpen";
 import { LeaderReport } from "./LeaderReport";
 import { plural } from "./hooks";
 import { ProRow, planDay } from "./Billing";
@@ -77,7 +81,7 @@ export function useRadarDay(active: boolean, day: string | null, again: unknown[
 export function radarRows(view: RadarView | null, rows: Row[]): Row[] {
   if (!view?.rows.length) return [];
   const by = new Map(rows.map((r) => [r.i.c.id, r]));
-  // Trial and Pro: a locked company reads by its name here, free (RadarRow.name). It stays locked, with its own Unlock company.
+  // Trial and Pro: a locked company reads by its name here (RadarRow.name). It stays locked until its Open (free from here, CrystalOpen).
   const named = (r: Row, name?: string): Row => (name && r.i.c.hidden ? { ...r, i: { ...r.i, c: { ...r.i.c, shownName: name } } } : r);
   return view.rows.map((x) => (by.has(x.id) ? named(by.get(x.id)!, x.name) : undefined)).filter((r): r is Row => !!r);
 }
@@ -125,11 +129,18 @@ export function RadarPage({
   );
   const openRow = useCallback((r: Row) => open(r.i.c.id), [open]);
   const fnMine = view?.function ?? me.function ?? null;
-  // One button a company: Unlock company for a locked one (the record's own), Open for one the member knows.
+  const crystal = me.crystal ?? null;
+  // One button a company: a locked one opens from here by plan (CrystalOpen), else Unlock company (the record's own); Open for one the member knows.
   const action = useCallback(
     (i: CoInfo) =>
       i.c.hidden ? (
-        <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
+        crystal ? (
+          <span className="rd-acts">
+            <CrystalOpen id={i.c.id} name={i.c.shownName} className="rd-open" onOpened={() => open(i.c.id)} />
+          </span>
+        ) : (
+          <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
+        )
       ) : (
         <span className="rd-acts nw-act">
           {/* [google network] "You know someone · Warm" (nothing with RN_GOOGLE off). */}
@@ -141,7 +152,7 @@ export function RadarPage({
           <LeaderReport companyId={i.c.id} fn={fnMine} leads={i.c.leads} from="radar" />
         </span>
       ),
-    [open, fnMine],
+    [open, fnMine, crystal],
   );
   const signals = useMemo<SignalRows>(
     () => ({ lines: new Map((view?.rows ?? []).map((x) => [x.id, x.lines])), notes: new Map((view?.rows ?? []).flatMap((x) => (x.notes ? [[x.id, x.notes] as const] : []))), action }),
@@ -174,7 +185,8 @@ export function RadarPage({
           <p>
             Each company has something new on Merlin: a new open {fn} role, a {fn} seat that just ended or a {fn} leader who left, a fractional hire in another function, or a first
             sales team. Most likely comes first, each with why now
-            {view.beforeFromMember && before.length ? `, and the functions you said come before yours (${before.join(", ")}) count for more` : ""}. Unlock any of them right here.
+            {view.beforeFromMember && before.length ? `, and the functions you said come before yours (${before.join(", ")}) count for more` : ""}.{" "}
+            {me.crystal === "all" ? "Open any of them right here, free." : me.crystal ? "Open one a day right here, free, with everything on it." : "Unlock any of them right here."}
           </p>
           <p className="rd-legend">
             <span className="rd-band rd-band-high">High</span> <span className="rd-band rd-band-medium">Medium</span> come by email. <span className="rd-band rd-band-low">Low</span> is only here.
@@ -211,6 +223,13 @@ export function RadarPage({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Free, after today's free company: the rest wait for tomorrow, or Pro. */}
+      {view?.ready && me.crystal === "used" && (
+        <p className="rd-note rd-used" role="status">
+          {CRYSTAL_USED_LINE}
+        </p>
       )}
 
       {view?.expired && (

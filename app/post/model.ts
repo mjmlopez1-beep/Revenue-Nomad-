@@ -14,6 +14,7 @@ import {
 import { normalizeHq } from "@/lib/geo";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startWords, windowPhrase, windowWords } from "@/lib/hired";
 import { isFractionalLead, isFullTimeLead, ledFullTimeWords, onTheTeamWords, type LeadLine } from "@/lib/leaders/types";
+import { CRYSTAL_FREE_TODAY } from "@/lib/radar/types";
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "repeat" | "hiring" | "following" | "unlocked" | "needs";
@@ -1705,7 +1706,7 @@ export interface CheckStep {
  * the strip, so it never holds more than three items.
  */
 export function checkSteps(
-  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid"> & Partial<Pick<Me, "freeCompany" | "unlocksLeft">>,
+  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid"> & Partial<Pick<Me, "freeCompany" | "unlocksLeft" | "crystal">>,
   o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string>; seen?: boolean; stepOne?: "holder" | "person" | "company" | "none" },
 ): { steps: CheckStep[]; nudge: { label: string; hint: string } | null } {
   const paid = me.invitesPaid ?? 0;
@@ -1721,8 +1722,15 @@ export function checkSteps(
       key: "unlock",
       done: unlockDone,
       label: roles ? "See who is hiring" : company ? "Unlock a company" : person ? "See who decides at a company" : "See who held a seat",
-      // The free company of the day, while it is left (and the day's limit has room for it), instead of the price.
-      hint: roles || company ? (me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE ? "1 free company today" : `costs ${COMPANY_PRICE_SAY}`) : "costs 1 credit",
+      // The free company of the day, while it is left (and the day's limit has room for it), instead of the price. On Free it is Crystal Ball's.
+      hint:
+        roles || company
+          ? me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE
+            ? "1 free company today"
+            : me.crystal === "one"
+              ? CRYSTAL_FREE_TODAY
+              : `costs ${COMPANY_PRICE_SAY}`
+          : "costs 1 credit",
     },
     // A seat is worth up to about 12 credits: claimed or added, then each answer on it earns one.
     { key: "seat", done: o.seatsHeld > 0, label: "Find your seats", hint: "up to ~12 credits a seat" },
