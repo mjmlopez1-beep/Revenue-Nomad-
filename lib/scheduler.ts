@@ -4,7 +4,7 @@
  * the test sets RN_SCHEDULER=1, off with RN_SCHEDULER=0; lib/schedule.ts schedulerShouldStart).
  *
  * Every TICK_MS it asks this same server, over loopback, to run each job's due check
- * (POST /api/jobs with the x-merlin-tick header, app/api/jobs/route.ts -> lib/jobs.ts runDueJobs).
+ * (POST /api/table/jobs with the x-merlin-tick header, app/api/table/jobs/route.ts -> lib/jobs.ts runDueJobs).
  * Going through the server keeps the checks in the app's own copy of lib/table.ts, whose state is
  * in memory: the timer's own module copy never loads or writes the state. The header carries a
  * random key made here and kept on globalThis, so only this process's timer gets in. A check
@@ -21,7 +21,7 @@ function selfUrl(): string {
   const port = process.env.PORT || "3000";
   const h = process.env.HOSTNAME;
   const host = !h || h === "0.0.0.0" || h === "::" || h === "[::]" || h === "localhost" ? "127.0.0.1" : h.includes(":") && !h.startsWith("[") ? `[${h}]` : h;
-  return `http://${host}:${port}/api/jobs`;
+  return `http://${host}:${port}/api/table/jobs`;
 }
 
 /** One look: ask the server to run whatever is due. Never throws. */

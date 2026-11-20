@@ -1,5 +1,5 @@
 /**
- * Checks of the automatic jobs (lib/schedule.ts, lib/scheduler.ts, lib/jobs.ts, app/api/jobs,
+ * Checks of the automatic jobs (lib/schedule.ts, lib/scheduler.ts, lib/jobs.ts, app/api/table/jobs,
  * instrumentation.ts): when each cadence is due and when it runs next, across day and week
  * boundaries; env switches that keep a job off; a job running is never started twice; cadence
  * changes only by an admin, checked on the server; the timer never starts during a build or on a
@@ -284,11 +284,11 @@ async function main() {
   check("RN_ABOUT off: never", !(await maybeAbout({ nowMs: mon9 + 4 * DAY })));
 
   /* ---------- the admin's changes, through the route ---------- */
-  console.log("\nChanges only by an admin, through /api/jobs");
+  console.log("\nChanges only by an admin, through /api/table/jobs");
   const { NextRequest } = await import("next/server");
-  const route = await import("../app/api/jobs/route");
+  const route = await import("../app/api/table/jobs/route");
   const req = (method: "GET" | "POST", token: string | null, body?: unknown, headers: Record<string, string> = {}) =>
-    new NextRequest("https://post.example.com/api/jobs", {
+    new NextRequest("https://post.example.com/api/table/jobs", {
       method,
       headers: { "content-type": "application/json", ...(token ? { cookie: `rn_table=${token}` } : {}), ...headers },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),

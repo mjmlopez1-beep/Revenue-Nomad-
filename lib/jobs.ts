@@ -46,7 +46,7 @@ export async function runDueJobs(origin?: string, nowMs = Date.now()): Promise<R
   return out;
 }
 
-/** The scheduler's look (POST /api/jobs from its own timer): run the due checks, with the address saved from members' visits. */
+/** The scheduler's look (POST /api/table/jobs from its own timer): run the due checks, with the address saved from members' visits. */
 export async function schedulerTick(nowMs = Date.now()): Promise<Record<JobId, boolean>> {
   jobsRuntime.checkedAt = nowMs;
   const s = await loadState();

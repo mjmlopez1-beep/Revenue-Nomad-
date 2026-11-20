@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Pilot metrics: the Automatic jobs card (lib/jobs.ts jobsPanel, GET /api/jobs). One row per
+ * Pilot metrics: the Automatic jobs card (lib/jobs.ts jobsPanel, GET /api/table/jobs). One row per
  * background job: what it does, how often it runs (a select the owner changes, saved on the
  * server), how the last run went, when the next one starts, and "Run now". A job its env switch
  * keeps off says which switch, and can't be scheduled. Times are in the viewer's time zone; the
@@ -42,7 +42,7 @@ async function runNow(job: JobId, act: (a: Action) => Promise<{ ok: boolean }>, 
   if (job === "scan") return (await act({ type: "scanNow" })).ok;
   if (job === "about") return (await act({ type: "aboutNow" })).ok;
   if (job === "leaders") return (await act({ type: "leadersNow", scope: "next" })).ok;
-  const [url, body] = job === "radar" ? ["/api/radar", { op: "send" }] : ["/api/jobs", { op: "run", job }];
+  const [url, body] = job === "radar" ? ["/api/radar", { op: "send" }] : ["/api/table/jobs", { op: "run", job }];
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
@@ -135,7 +135,7 @@ export function AutoJobs({ refresh }: { refresh: () => Promise<void> }) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/jobs", { cache: "no-store" });
+      const res = await fetch("/api/table/jobs", { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       setPanel((await res.json()) as JobsPanel);
       setFailed(false);
@@ -162,7 +162,7 @@ export function AutoJobs({ refresh }: { refresh: () => Promise<void> }) {
   const change = async (r: JobRow, every: Cadence, hourUtc: number) => {
     setBusy(r.id);
     try {
-      const res = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "cadence", job: r.id, every, hourUtc }) });
+      const res = await fetch("/api/table/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "cadence", job: r.id, every, hourUtc }) });
       const j = (await res.json().catch(() => ({}))) as { job?: JobRow; error?: string };
       if (!res.ok || !j.job) toast(j.error || "That didn't save. Try again.", true);
       else {
