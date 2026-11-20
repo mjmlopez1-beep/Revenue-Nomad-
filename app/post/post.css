@@ -7161,3 +7161,62 @@ div.tp-pcard-when {
     display: none;
   }
 }
+
+/* ---------- [ux ws3] the record: Your way in, the row's "⋯" menu, nobody named ---------- */
+.tp-wayin-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.tp-wayin-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.tp-wayin-what {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.tp-wayin-what.mine {
+  color: var(--body-ink);
+  font-weight: 600;
+}
+.tp-wayin-who {
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tp-wayin .tp-reach {
+  padding: 4px 0 0;
+}
+.tp-wayin-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.tp-wayin .tp-addlink,
+.tp-heldby-add {
+  min-height: 36px;
+}
+.tp-heldby-add {
+  margin-left: 8px;
+}
+.tp-rowmore {
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+.tp-menu-red {
+  color: var(--red);
+}
+.tp-wayin .plus1,
+.tp-heldby-add .plus1 {
+  margin-left: 2px;
+  color: var(--volt-ink);
+  font-weight: 700;
+}

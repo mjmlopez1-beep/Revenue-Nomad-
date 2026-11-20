@@ -153,11 +153,11 @@ export function OnTheTeam({ l }: { l: LeadLine }) {
 /** Who held the seat. An open role has nobody yet, so it never asks for a name. */
 export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }) {
   if (e.yours) return <YourSeat id={e.id} />;
-  // A seat Revenue Nomad found with nobody named: its holder isn't a member yet, so there is no name to add or unlock. They claim it in the record.
+  // A seat Revenue Nomad found with nobody named: no name to unlock. [ux ws3] "Nobody named yet" (Not on Merlin yet is for a name that isn't a member).
   if (e.claimable && (!e.cells.operator || e.cells.operator.s === "empty"))
     return (
-      <span className="tp-notyet" title="The seat holder isn't on Merlin yet. If it's your seat, claim it in the record.">
-        Not on Merlin yet
+      <span className="tp-notyet" title="Nobody named yet. Know who held it? Add them in the record and earn a credit. If it's your seat, claim it there.">
+        Nobody named yet
       </span>
     );
   // A name from public profiles nobody has verified: the name, with Verify beside it (no "not verified" label).

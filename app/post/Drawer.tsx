@@ -31,7 +31,7 @@ import {
   AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
   seatMissingCount, shown, waitWords, fnGap, type CoInfo, type FactRef,
 } from "./model";
-import { FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
+import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
 import { checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
@@ -279,8 +279,66 @@ function RowAsk({ t, f, step, onDone }: { t: FactRef; f: FactInfo; step: Exclude
   );
 }
 
-/** Desktop: "You added this · Edit", and Confirm and Report on the row's hover and focus. */
-function Meta({ t, cell, f, step, setStep }: { t: FactRef; cell: Cell; f: FactInfo; step: Step; setStep: (s: Step) => void }) {
+/**
+ * [ux ws3] Confirm and Report (and an admin's Remove) in one "⋯" menu at the end of the row: one
+ * button a row instead of two or three, a real menu (Up, Down, Esc), and a tap opens it the same.
+ */
+function RowMore({ t, cell, f, label, setStep }: { t: FactRef; cell: Cell; f: FactInfo; label: string; setStep: (s: Step) => void }) {
+  const ui = useUi();
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  // The menu hands focus back to ⋯ as it closes; the step it opened takes it after that.
+  const pick = (go: () => void) => {
+    setOpen(false);
+    setTimeout(go);
+  };
+  const what = `${label}: confirm or report`;
+  const confirmed = cell.s === "value" && !!cell.iv;
+  return (
+    <>
+      <button ref={btn} type="button" className="tp-tbtn tp-rowmore" aria-haspopup="menu" aria-expanded={false} aria-label={what} title="Confirm or report" onClick={() => setOpen((x) => !x)}>
+        <span aria-hidden>⋯</span>
+      </button>
+      {open && btn.current && (
+        <Anchored anchor={btn.current} onClose={() => setOpen(false)} width={260} className="tp-menu tp-rowmore-menu" align="end" label={what}>
+          {f.canCheck &&
+            (confirmed ? (
+              <div className="tp-menu-group" role="presentation">
+                You confirmed this
+              </div>
+            ) : (
+              <button type="button" role="menuitem" className="tp-menu-item" title={f.confirmHelp} onClick={() => pick(() => void ui.act({ type: "verify", ...t }))}>
+                <span>Confirm</span>
+                <span className="tp-menu-hint">It&apos;s right</span>
+              </button>
+            ))}
+          {f.canCheck && (
+            <button
+              type="button"
+              role="menuitem"
+              className="tp-menu-item"
+              aria-disabled={f.reportBlocked || undefined}
+              title={f.reportBlocked ? REPORT_BLOCKED : undefined}
+              onClick={() => pick(() => setStep(f.reportBlocked ? "blocked" : "report"))}
+            >
+              <span>Report</span>
+              <span className="tp-menu-hint">It&apos;s wrong</span>
+            </button>
+          )}
+          {f.admin && (
+            <button type="button" role="menuitem" className="tp-menu-item tp-menu-red" onClick={() => pick(() => setStep("remove"))}>
+              <span>Remove</span>
+              <span className="tp-menu-hint">Admins</span>
+            </button>
+          )}
+        </Anchored>
+      )}
+    </>
+  );
+}
+
+/** Desktop: "You added this · Edit", and the row's "⋯" (Confirm and Report) on its hover and focus. */
+function Meta({ t, cell, f, step, setStep, label }: { t: FactRef; cell: Cell; f: FactInfo; step: Step; setStep: (s: Step) => void; label: string }) {
   const ui = useUi();
   if (cell.s !== "value" || cell.system) return null;
   // Where the fact came from and Confirm and Report share one place at the end of the row: in the
@@ -298,30 +356,7 @@ function Meta({ t, cell, f, step, setStep }: { t: FactRef; cell: Cell; f: FactIn
       )}
       {(f.canCheck || f.admin) && (
         <span className={`tp-meta-acts${step ? " off" : ""}`}>
-          {f.canCheck &&
-            (cell.iv ? (
-              <span className="tp-yours">You confirmed this</span>
-            ) : (
-              <button type="button" className="tp-tbtn" title={`${f.source}. You know this is right? ${f.confirmHelp}`} onClick={() => ui.act({ type: "verify", ...t })}>
-                Confirm
-              </button>
-            ))}
-          {f.canCheck && (
-            <button
-              type="button"
-              className={`tp-tbtn${f.reportBlocked ? " tp-tbtn-off" : ""}`}
-              aria-disabled={f.reportBlocked || undefined}
-              title={f.reportBlocked ? REPORT_BLOCKED : "You know this is wrong"}
-              onClick={() => setStep(f.reportBlocked ? "blocked" : "report")}
-            >
-              Report
-            </button>
-          )}
-          {f.admin && (
-            <button type="button" className="tp-tbtn tp-tbtn-red" title="Admins: take this fact off the record" onClick={() => setStep("remove")}>
-              Remove
-            </button>
-          )}
+          <RowMore t={t} cell={cell} f={f} label={label} setStep={setStep} />
         </span>
       )}
     </span>
@@ -524,7 +559,7 @@ function FieldRow({
         {value}
         {note}
       </span>
-      <Meta t={t} cell={cell} f={f} step={step} setStep={open} />
+      <Meta t={t} cell={cell} f={f} step={step} setStep={open} label={label} />
       {step && <RowAsk t={t} f={f} step={step} onDone={done} />}
     </div>
   );
@@ -1047,7 +1082,7 @@ function safeHref(build: () => string): string | null {
  *  - A name the claim link can't bring in: find them on LinkedIn.
  * Then a link to Referral partners, for more fractionals at companies like this one.
  */
-function Reach({ e, name, member, emailTo }: { e: EngagementRec; name: string; member: boolean; emailTo: string | null }) {
+function Reach({ e, name, member, emailTo, more = true }: { e: EngagementRec; name: string; member: boolean; emailTo: string | null; more?: boolean }) {
   const ui = useUi();
   const env = useEnv();
   const first = name.trim().split(/\s+/)[0] || name;
@@ -1057,7 +1092,11 @@ function Reach({ e, name, member, emailTo }: { e: EngagementRec; name: string; m
       {member ? (
         <MessageButton engagementId={e.id} name={name} company={env.company} role={shown(e.cells.role)} fn={shown(e.cells.function)} />
       ) : e.invite ? (
-        <InviteConnect e={e} name={name} company={env.company} emailTo={emailTo} />
+        <>
+          {/* [ux ws3] One meaning: named, and not a member yet. */}
+          <span className="tp-notyet">Not on Merlin yet</span>
+          <InviteConnect e={e} name={name} company={env.company} emailTo={emailTo} />
+        </>
       ) : (
         li && (
           <a className="btn btn-sm btn-primary" href={li} target="_blank" rel="noreferrer">
@@ -1070,13 +1109,15 @@ function Reach({ e, name, member, emailTo }: { e: EngagementRec; name: string; m
           {e.invite
             ? e.invite.at
               ? `Once ${first} claims their seat through your link, you're connected on Merlin.`
-              : `${first} isn't on Merlin yet. Invite them, and once they claim their seat you're connected there.`
+              : `Invite ${first}, and once they claim their seat you're connected on Merlin.`
             : `${first} isn't on Merlin yet, so you can't message them here.`}
         </span>
       )}
-      <button type="button" className="tp-intro tp-reach-more" onClick={() => ui.openPage("partners")}>
-        More referral partners at companies like yours
-      </button>
+      {more && (
+        <button type="button" className="tp-intro tp-reach-more" onClick={() => ui.openPage("partners")}>
+          More referral partners at companies like yours
+        </button>
+      )}
     </div>
   );
 }
@@ -1210,7 +1251,6 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
     );
   return (
     <div className="tp-claim">
-      <span className="tp-small muted">Not on Merlin yet.</span>
       <button ref={btn} type="button" className="btn btn-sm" onClick={check}>
         Is this your seat? Claim it
       </button>
@@ -1220,7 +1260,75 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
 
 const ENG_ROWS = ["function", "type", ...ENG_FIELDS];
 
-function EngagementCard({ e, companyId, company, focus, coPeople = [] }: { e: EngagementRec; companyId: string; company: string; focus: boolean; coPeople?: PersonRec[] }) {
+/** [ux ws3] Someone held this seat (named, locked, or found with nobody named yet), so the record's "Your way in" lists it. Not an open role, not the member's own. */
+const wayInSeat = (e: EngagementRec) => !openRole(e) && !e.yours && (!!e.cells.operator && e.cells.operator.s !== "empty" ? true : !!e.claimable);
+/** How many seats "Your way in" lists. */
+const WAY_IN_MAX = 3;
+
+/**
+ * [ux ws3] Your way in: right under the record's header and its one action, the people who held
+ * its seats and the next step with each. Named and on Merlin: Message. Named, not a member: Not
+ * on Merlin yet · Invite to connect. Locked: who held it, 1 credit (after the company at a locked
+ * one). Nobody named: Know who held it? Add them, +1. Then the seats, people and details.
+ */
+function YourWayIn({ i, seats, children }: { i: CoInfo; seats: EngagementRec[]; children?: ReactNode }) {
+  const ui = useUi();
+  const env = useEnv();
+  const [adding, setAdding] = useState<string | null>(null);
+  const hidden = !!i.c.hidden;
+  const mine = ui.me.function;
+  if (!seats.length) return <>{children}</>;
+  return (
+    <section className="tp-dsec tp-wayin" aria-labelledby="tp-wayin-h">
+      <h3 className="tp-dsec-h" id="tp-wayin-h">
+        Your way in
+      </h3>
+      {children}
+      {seats.map((e, k) => {
+        const op = e.cells.operator;
+        const name = op?.s === "value" ? op.v : null;
+        const role = shown(e.cells.role);
+        const fn = shown(e.cells.function);
+        const start = shown(e.cells.start);
+        const what = [role ?? (fn ? `${fn} seat` : "A fractional seat"), start && fmtMonth(start)].filter(Boolean).join(" · ");
+        const member = op?.s === "value" && !!op.member;
+        return (
+          <div key={e.id} className="tp-wayin-row">
+            <span className={`tp-wayin-what${fn && fn === mine ? " mine" : ""}`}>{what}</span>
+            {name ? (
+              <>
+                <span className="tp-wayin-who">{name}</span>
+                {!(op?.s === "value" && op.member?.you) && (
+                  <Reach e={e} name={name} member={member} emailTo={e.invite ? emailOnFile([...e.people, ...i.c.people], name) : null} more={k === seats.length - 1} />
+                )}
+              </>
+            ) : op?.s === "locked" ? (
+              hidden ? (
+                <QuietLock words={waitWords(AFTER_COMPANY) ?? "Opens after the company"} tip={AFTER_COMPANY} />
+              ) : (
+                <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={op} noun="who held it" />
+              )
+            ) : adding === e.id ? (
+              <AddPersonForm companyId={i.c.id} engagementId={e.id} onDone={() => setAdding(null)} />
+            ) : (
+              <span className="tp-wayin-none">
+                <span className="tp-notyet">Nobody named yet</span>
+                {!hidden && (
+                  <button type="button" className="btn btn-sm btn-ghost tp-addlink" onClick={() => setAdding(e.id)}>
+                    Know who held it? Add them <span className="plus1">+1</span>
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
+        );
+      })}
+      {env.hidden && seats.length > 0 && <p className="tp-dsec-note">Who held each seat opens after the company, 1 credit each.</p>}
+    </section>
+  );
+}
+
+function EngagementCard({ e, companyId, company, focus, coPeople = [], wayIn = false }: { e: EngagementRec; companyId: string; company: string; focus: boolean; coPeople?: PersonRec[]; wayIn?: boolean }) {
   const ui = useUi();
   const [adding, setAdding] = useState(false);
   const op = shown(e.cells.operator);
@@ -1236,7 +1344,8 @@ function EngagementCard({ e, companyId, company, focus, coPeople = [] }: { e: En
   const closed = !!e.closed && posting?.s === "value";
   const fnRender = (v: string) => <span className={`chip tp-fn${v === ui.me.function ? " tp-fn-me" : ""}`}>{v}</span>;
   // Nobody reaches out to themselves, and a hidden company's seat holders open after the company. Nobody named: no next step here (the claim below stays).
-  const reach = op && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
+  // [ux ws3] A seat listed under Your way in has its next step there.
+  const reach = !wayIn && op && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
     <Reach e={e} name={op} member={!!(opCell?.s === "value" && opCell.member)} emailTo={e.invite ? emailOnFile([...e.people, ...coPeople], op) : null} />
   );
   // Anything paid on a seat at a locked company opens after the company (an open role's posting and rate come with it).
@@ -1274,6 +1383,22 @@ function EngagementCard({ e, companyId, company, focus, coPeople = [] }: { e: En
         waits={waits}
         nouns={{ operator: "who held it" }}
       />
+      {/* [ux ws3] Nobody named on a past seat: the row says so, a locked company's record too (it used to leave Held by out). */}
+      {!open && !e.yours && (!opCell || opCell.s === "empty") && (
+        <div className="tp-flist-d">
+          <div className="tp-frow">
+            <span className="tp-frow-l">Held by</span>
+            <span className="tp-frow-v">
+              <span className="tp-notyet">Nobody named yet</span>
+              {!hidden && !adding && (
+                <button type="button" className="tp-tbtn tp-heldby-add" onClick={() => setAdding(true)}>
+                  Know who held it? Add them <span className="plus1">+1</span>
+                </button>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
       {/* The member named themselves on this seat and nobody has confirmed it yet (see Your seats). */}
       {!e.yours && opCell?.s === "value" && opCell.member?.you && (
         <p className="tp-claim-wait">{open ? "Claimed by you. Others still see the role as open until your claim is confirmed." : "You're named on this seat. It opens for you once another member confirms it."}</p>
@@ -1587,6 +1712,9 @@ export function Drawer({
   const sources = [...new Set(i.engs.map((e) => SOURCE_SAY[e.source] ?? (SOURCE_LABEL[e.source] ?? e.source).toLowerCase()))];
   const follow = () => ui.act({ type: "follow", companyId: c.id, on: !c.following });
   const plan = planOf(i);
+  // [ux ws3] Your way in: the seats someone held, the member's function first, then a name they can see, then a lock.
+  const rankWay = (e: EngagementRec) => (shown(e.cells.function) === ui.me.function ? 0 : 4) + (e.cells.operator?.s === "value" ? 0 : e.cells.operator?.s === "locked" ? 1 : 2);
+  const wayInSeats = i.engs.filter(wayInSeat).sort((a, b) => rankWay(a) - rankWay(b)).slice(0, WAY_IN_MAX);
   // The website is stored as its host (a LinkedIn, Google Sites or Notion page keeps its path).
   const site = website?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
   // The company's own facts as rows. Missing ones are added in the header while it has no summary line,
@@ -1769,8 +1897,11 @@ export function Drawer({
               <Pro where="hidden_company" variant="line" />
             </div>
           )}
-          {/* [google network] Your way in: who the member knows here, above the seats and people (nothing with RN_GOOGLE off). */}
-          {!c.hidden && <WayIn companyId={c.id} company={c.name} />}
+          {/* [ux ws3] Your way in: who held the seats here and the next step with each, before About, seats and people. */}
+          <YourWayIn i={i} seats={wayInSeats}>
+            {/* [google network] who the member knows here (nothing with RN_GOOGLE off). */}
+            {!c.hidden && <WayIn companyId={c.id} company={c.name} />}
+          </YourWayIn>
           {/* About: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
           {(!c.hidden || c.cells.about?.s === "value") && (
             <section className="tp-dsec">
@@ -1836,7 +1967,7 @@ export function Drawer({
             {notHires > 0 && <p className="tp-dsec-note">{seatSplit(i.engs)}</p>}
             {i.engs.length === 0 && <p className="tp-dsec-note">No seats on file here yet. Add one you know and earn a credit for each fact.</p>}
             {i.engs.map((e) => (
-              <EngagementCard key={e.id} e={e} companyId={c.id} company={c.hidden ? "this company" : c.name} focus={focus === e.id} coPeople={c.people} />
+              <EngagementCard key={e.id} e={e} companyId={c.id} company={c.hidden ? "this company" : c.name} focus={focus === e.id} coPeople={c.people} wayIn={wayInSeats.includes(e)} />
             ))}
             {/* Nothing can be added to a hidden company until it is unlocked, so nothing offers to. */}
             {!c.hidden && (
