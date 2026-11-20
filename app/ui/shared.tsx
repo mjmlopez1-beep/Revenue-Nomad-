@@ -170,7 +170,7 @@ export async function fetchToday(since?: string | null): Promise<TodayView | nul
     const r = await fetch(`/api/table?today=1${since ? `&since=${encodeURIComponent(since)}` : ""}`, { cache: "no-store" });
     const j = (await r.json().catch(() => null)) as TodayView | null;
     if (!r.ok || !j?.me || !j.radar) return null;
-    for (const c of j.companies ?? []) unpackCompany(c);
+    j.companies = (j.companies ?? []).map(unpackCompany);
     return j;
   } catch {
     return null;
