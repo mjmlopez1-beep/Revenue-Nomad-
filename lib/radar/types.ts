@@ -65,6 +65,21 @@ export interface RadarCard {
   url: string;
   /** When it happened (ISO). */
   at: string;
+  /**
+   * For a post laid out one company a block (Slack): who, in words ("Acme Robotics", or "A SaaS
+   * company" for one locked for the member), and what happened, without the company ("No longer
+   * lists a Sales leader"). Cards kept from before these were added have neither: read `headline`.
+   */
+  subject?: string;
+  signal?: string;
+  /** The free facts on file, each by name (`facts` has the same values, unlabeled). */
+  about?: { industry?: string; size?: string; hq?: string; revenue?: string };
+  /** Only when the card names the company: its record in the app ("/?c=<public id>"). A path, or absolute once tracked. */
+  place?: string;
+  /** The member's own table shows the company (a known company: Open), not only a name on the card (Trial and Pro). */
+  known?: boolean;
+  /** Only for a known company: a public https image of its logo (the icon service the app draws from). Never for a locked one. */
+  logo?: string;
 }
 
 /** One member's radar for one delivery: every signal, and the day's companies to open. */

@@ -318,8 +318,8 @@ async function main() {
   check("the email counts opens with a pixel", /\/api\/radar\/open\?m=/.test(sm?.html ?? ""));
   const salPost = radarPosts(SLACK_SAL);
   check("Sal gets one post in Slack", salPost.length === 1, outbox.filter((x) => x.url === SLACK_SAL).map((x) => x.raw));
-  const sp = salPost[0]?.body as { blocks: { type: string; elements?: { text: { text: string }; url: string }[] }[] };
-  const button = sp?.blocks?.find((b) => b.type === "actions")?.elements?.[0];
+  const sp = salPost[0]?.body as { blocks: { type: string; elements?: { text: { text: string }; url: string; action_id?: string }[] }[] };
+  const button = sp?.blocks?.flatMap((b) => (b.type === "actions" ? b.elements ?? [] : [])).find((e) => e.action_id === "open");
   check("the Slack post's button opens the day's companies", button?.text.text === "See the 2 companies" && button.url.includes(encodeURIComponent(dayPath)), button);
   check("the Slack post names the feature and lists all three", (salPost[0]?.raw ?? "").includes(`${types.YOUR_FEATURE} · 2 companies moved`) && /Fractional VP Sales/.test(salPost[0].raw) && /seat just ended/.test(salPost[0].raw) && /Marketing leader/.test(salPost[0].raw), salPost[0]?.raw);
   check("the Slack post names no company, no person, no record", !named(salPost[0]?.raw ?? "").length && !pubLeaks(salPost[0]?.raw ?? "").length, salPost[0]?.raw);
@@ -488,6 +488,21 @@ async function main() {
   // Pia unlocked Fox Freight before: a company a member unlocked stays theirs, a new open role there too.
   check("the company of a new open role is named for a member who unlocked it before", /Fox Freight/.test(proPosts[0]?.raw ?? ""), proPosts[0]?.raw);
   check("its button opens that day's companies", (proPosts[0]?.raw ?? "").includes(encodeURIComponent(types.radarPath(instantAt.slice(0, 10)))), proPosts[0]?.raw);
+  // In Slack: a known company is its own block, named in bold and linked to its record (tracked), its logo on the right, Open.
+  type Blk = { type: string; text?: { text: string }; fields?: { text: string }[]; accessory?: { type: string; image_url: string }; elements?: { text: { text: string }; url: string; action_id?: string }[] };
+  const proBlocks = ((proPosts[0]?.body as { blocks?: Blk[] })?.blocks ?? []) as Blk[];
+  const foxAt = proBlocks.findIndex((b) => b.type === "section" && /Fox Freight/.test(b.text?.text ?? ""));
+  const fox = proBlocks[foxAt];
+  const foxButton = proBlocks.slice(foxAt + 1).find((b) => b.type === "actions")?.elements?.[0];
+  check(
+    "a known company in Slack: bold name linked to its record, the signal under it, its band as a field",
+    !!fox && (fox.text?.text ?? "").startsWith("*<https://post.example.com/api/radar/go?") && (fox.text?.text ?? "").includes(encodeURIComponent(`/?c=${pub("c_fox")}`)) && (fox.text?.text ?? "").includes("|Fox Freight>*\nNew open role: Fractional Finance Director") && (fox.fields ?? []).some((f) => /^\*Likelihood\*\n(High|Medium)$/.test(f.text)),
+    fox,
+  );
+  check("its logo is the public icon service's, from its website", fox?.accessory?.type === "image" && fox.accessory.image_url === "https://www.google.com/s2/favicons?domain=fox.example&sz=64", fox?.accessory);
+  check("its own button says Open and opens its record", foxButton?.text.text === "Open" && foxButton.url.includes(encodeURIComponent(`/?c=${pub("c_fox")}`)), foxButton);
+  const otherSections = proBlocks.filter((b, i) => b.type === "section" && i !== foxAt);
+  check("a company Pia's table keeps locked gets no logo in Slack", otherSections.every((b) => !b.accessory), otherSections);
   check("a member not on Pro gets nothing at once", radarPosts(SLACK_SAL).length === sal0);
   check("radar_sent where instant", (await state()).signals.some((x) => x.memberId === "mem_pro" && x.name === "radar_sent" && x.where === "instant"));
   check("the instant signal is in that day's companies", (await radar.radarView("tok-pro-0001", instantAt.slice(0, 10), nowIso()))?.rows.some((x) => x.id === pub("c_fox")));
@@ -524,6 +539,69 @@ async function main() {
   check("in Slack: every card, the button and the feature's footer", /See the 2 companies/.test(JSON.stringify(body)) && JSON.stringify(body).includes(fmt.RADAR_FOOTER) && !/See who|more today/.test(JSON.stringify(body)), body);
   check("Slack mrkdwn is escaped", !/<script>/.test(JSON.stringify((nfmt.slackBody({ ...fa, headline: "<script>" }) as { blocks: unknown }).blocks)));
   check("other webhooks get the same words", (nfmt.webhookBody(fa, nowIso()) as { event: string; lines: string[] }).event === "radar");
+
+  /* ---------- Slack's Block Kit: one company a block, inside the limits ---------- */
+  console.log("\nSlack Block Kit");
+  type B = import("./blockkit.mts").Block;
+  const { blockKitProblems, sectionsOf } = await import("./blockkit.mts");
+  check(
+    "the Block Kit check itself catches a bad post",
+    blockKitProblems({ text: "", blocks: [{ type: "image" }, { type: "header", text: { type: "plain_text", text: "x".repeat(151) } }, { type: "section", fields: Array.from({ length: 11 }, () => ({ type: "mrkdwn", text: "x" })) }] }).length === 4,
+  );
+  const BASE_URL = "https://post.example.com";
+  const namedCard = (i: number, o: Partial<import("../lib/radar/types").RadarCard> = {}) =>
+    card(i, {
+      company: `Named Co ${i}`, locked: undefined, known: true, subject: `Named Co ${i}`, signal: "No longer lists a Sales leader", headline: `Named Co ${i} no longer lists a Sales leader`,
+      band: "High", whyNow: "CRO gone from its website · interim or fractional cover usually follows within 2 months", why: "Their Sales seat may need cover, at a company in your profile",
+      about: { industry: "SaaS", size: "51–200 people", hq: "Texas, US" }, place: `/?c=c_named${i}`, logo: `https://www.google.com/s2/favicons?domain=named${i}.example&sz=64`, ...o,
+    });
+  // A locked card that somehow carries a name, a record and a logo: none of them may reach Slack.
+  const lockedLeaky = card(9, { subject: "A SaaS company", signal: "No longer lists a Sales leader", band: "Medium", whyNow: "CRO gone from its website · cover usually follows within 2 months", about: { industry: "SaaS", size: "11–50 people" }, company: "Secret Sauce Inc", place: "/?c=c_secret", logo: "https://www.google.com/s2/favicons?domain=secret.example&sz=64" });
+  const mixed = nfmt.alertFor([{ kind: "radar", at: nowIso(), day: dayOf([namedCard(1), lockedLeaky, namedCard(2, { known: undefined, logo: undefined }), ...Array.from({ length: 5 }, (_, i) => card(20 + i))]) }], BASE_URL)!;
+  const mb = nfmt.slackBody(mixed) as unknown as { text: string; blocks: B[] };
+  check("the Crystal Ball post is valid Block Kit, inside every limit", blockKitProblems(mb).length === 0, blockKitProblems(mb));
+  check("it opens with a header: the feature and how many companies moved", mb.blocks[0]?.type === "header" && mb.blocks[0].text?.text === `${types.YOUR_FEATURE} · 8 companies moved`, mb.blocks[0]);
+  check("its fallback text is the headline and the first card", mb.text.startsWith(`${types.YOUR_FEATURE} · 8 companies moved. Named Co 1`), mb.text);
+  const secs = sectionsOf(mb);
+  check("five companies, each its own section after a divider", secs.length === 5 && mb.blocks.filter((b) => b.type === "divider").length === 6, mb.blocks.map((b) => b.type));
+  const n1 = secs[0];
+  check("a known company: its name in bold, linked to its record, the signal under it", n1?.text?.text === `*<${BASE_URL}/?c=c_named1|Named Co 1>*\nNo longer lists a Sales leader`, n1?.text);
+  check(
+    "its fields: Likelihood, Why now, Timing and the free facts",
+    JSON.stringify(n1?.fields?.map((f) => f.text)) === JSON.stringify(["*Likelihood*\nHigh", "*Why now*\nCRO gone from its website", "*Timing*\nInterim or fractional cover usually follows within 2 months", "*Industry*\nSaaS", "*Size*\n51–200 people", "*HQ*\nTexas, US"]),
+    n1?.fields,
+  );
+  check("its logo on the right", n1?.accessory?.type === "image" && n1.accessory.image_url === "https://www.google.com/s2/favicons?domain=named1.example&sz=64" && n1.accessory.alt_text === "Named Co 1 logo", n1?.accessory);
+  const btnAfter = (sec: B | undefined) => mb.blocks.slice(mb.blocks.indexOf(sec!) + 1).find((b) => b.type === "actions")?.elements?.[0] as { text: { text: string }; url: string } | undefined;
+  check("its own button: Open, to its record", btnAfter(n1)?.text.text === "Open" && btnAfter(n1)?.url === `${BASE_URL}/?c=c_named1`, btnAfter(n1));
+  const lk = secs[1];
+  const lkAll = JSON.stringify(mb.blocks.slice(mb.blocks.indexOf(lk!), mb.blocks.indexOf(secs[2]!)));
+  check("a locked company reads by its free facts, never a name", lk?.text?.text === "*A SaaS company*\nNo longer lists a Sales leader" && !/Secret Sauce/.test(JSON.stringify(mb)), lk?.text);
+  check("a locked company has no logo, no link to a record, no website", !lk?.accessory && !/c_secret|secret\.example/.test(JSON.stringify(mb)) && !/<https?:/.test(lk?.text?.text ?? ""), lkAll);
+  check("its note says why, and that it unlocks in Merlin", /Locked for you: unlock it in Merlin for 2 credits/.test(lkAll), lkAll);
+  check("its button opens the day's companies, never its record", btnAfter(lk)?.text.text === "Open in Merlin" && btnAfter(lk)?.url === VIEW, btnAfter(lk));
+  const n2 = secs[2];
+  check("a company named only on the card (Trial, Pro): linked, but no logo, and Open in Merlin", !!n2 && /^\*<https:\/\/post\.example\.com\/\?c=c_named2\|Named Co 2>\*/.test(n2.text?.text ?? "") && !n2.accessory && btnAfter(n2)?.text.text === "Open in Merlin", n2);
+  const ctxTexts = mb.blocks.filter((b) => b.type === "context").map((b) => String((b.elements?.[0] as { text: string }).text));
+  check("then And N more, the main button and the footer, small", ctxTexts.includes("And 3 more signals.") && ctxTexts[ctxTexts.length - 1] === fmt.RADAR_FOOTER && mb.blocks[mb.blocks.length - 2]?.type === "actions", ctxTexts);
+  const mainBtn = mb.blocks[mb.blocks.length - 2]?.elements?.[0] as { text: { text: string }; url: string; style?: string };
+  check("the main button: See the 8 companies, to the day", mainBtn?.text.text === "See the 8 companies" && mainBtn.url === VIEW && mainBtn.style === "primary", mainBtn);
+  check("the webhook still gets the lines, untouched", (nfmt.webhookBody(mixed, nowIso()) as { lines: string[] }).lines.length === 6 && !("entries" in (nfmt.webhookBody(mixed, nowIso()) as object)));
+  // A card from before the new fields (kept in a batch over a deploy): its headline, its facts in one field.
+  const oldBody = nfmt.slackBody(fmt.radarAlert([{ kind: "radar", at: nowIso(), day: dayOf([card(1)]) }], BASE_URL)!) as unknown as { text: string; blocks: B[] };
+  check("an older card still posts, valid, by its headline", blockKitProblems(oldBody).length === 0 && sectionsOf(oldBody)[0]?.text?.text === "*A company in your profile*\nA SaaS company just hired a fractional Marketing leader 1", sectionsOf(oldBody)[0]);
+  // Escaping: nothing from a card can @channel or hide a link, and an image is https only.
+  const evil = nfmt.slackBody(fmt.radarAlert([{ kind: "radar", at: nowIso(), day: dayOf([namedCard(1, { subject: "<!channel> Co", signal: "<https://evil.example|click>", logo: "javascript:alert(1)", place: "javascript:alert(1)" })]) }], BASE_URL)!) as unknown as { blocks: B[] };
+  check("names and lines are escaped, a bad logo or link is dropped", !/<!channel>|<https:\/\/evil|javascript:/.test(JSON.stringify(evil.blocks)) && !sectionsOf(evil)[0]?.accessory, sectionsOf(evil)[0]);
+  // The limits, pushed: many entries, long words, many fields.
+  const long = "x".repeat(5000);
+  const huge: import("../lib/notify/format").Alert = {
+    kind: "roles", count: 40, headline: `A headline ${long}`, lines: [long], url: `${BASE_URL}/`, after: [long, long],
+    entries: Array.from({ length: 40 }, (_, i) => ({ title: `T${i} ${long}`, link: `${BASE_URL}/?c=${i}`, text: long, quote: long, note: long, fields: Array.from({ length: 15 }, (_, k) => ({ label: `L${k}`, value: long })), image: { url: "https://img.example/x.png", alt: long }, button: { text: long, url: `${BASE_URL}/x` } })),
+  };
+  const hb = nfmt.slackBody(huge) as unknown as { text: string; blocks: B[] };
+  check("pushed past every limit, the post still fits Block Kit", blockKitProblems(hb).length === 0 && hb.blocks.length <= 50 && hb.text.length <= 300, blockKitProblems(hb));
+  check("and keeps its main button and footer", hb.blocks[hb.blocks.length - 1]?.type === "context" && hb.blocks[hb.blocks.length - 2]?.type === "actions", hb.blocks.slice(-2).map((b) => b.type));
   const twelve = fmt.renderRadarEmail({ name: "Sal Starter", day: dayOf(Array.from({ length: 12 }, (_, i) => card(i))), unsubscribeUrl: "https://post.example.com/u", appUrl: "https://post.example.com" });
   check("the email lists 10, then 'And 2 more' to the day's companies", (twelve.html.match(/fractional Marketing leader \d+/g) ?? []).length === 10 && twelve.html.includes(`<a href="${VIEW}" style="color:#`) && /And 2 more signals\./.test(twelve.text), twelve.text);
   const hrefs = [...new Set((twelve.html.match(/<a href="[^"]*"/g) ?? []).map((x) => x.slice(9, -1)))];

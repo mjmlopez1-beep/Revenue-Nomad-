@@ -453,7 +453,20 @@ async function main() {
   const text = JSON.stringify(posts[0]?.body ?? {});
   check("a scan with no new roles still posts the week's new hires", posts.length === 1, posts.length);
   check("the post's headline is the owner's line", text.includes("4 companies in your profile hired a fractional Finance leader this week"), text.slice(0, 400));
-  check("the post lists companies in free facts, a locked one unnamed", text.includes(`Beta Labs · Finance · ${H.startWords(ym(1))}`) && text.includes("A locked company · Finance"), text);
+  check("the post lists companies in free facts, a locked one unnamed", text.includes("Beta Labs") && text.includes("A locked company") && text.includes("Hired a fractional Finance leader"), text);
+  // In Slack, a company a block: the name in bold (linked only when the member can see it), the hire, when it started.
+  const hireBlocks = (posts[0]?.body.blocks ?? []) as { type: string; text?: { text: string }; fields?: { text: string }[] }[];
+  const hireProblems = posts[0] ? (await import("./blockkit.mts")).blockKitProblems(posts[0].body as never) : ["no post"];
+  check("the hires post is valid Block Kit", hireProblems.length === 0, hireProblems);
+  const sections = hireBlocks.filter((b) => b.type === "section");
+  const beta = sections.find((b) => /Beta Labs/.test(b.text?.text ?? ""));
+  const lockedBlock = sections.find((b) => /A locked company/.test(b.text?.text ?? ""));
+  check(
+    "in Slack each company is its own block, the hire and its start as a field",
+    hireBlocks[0]?.type === "header" && !!beta && /\*<https:[^|]+\|Beta Labs>\*/.test(beta.text!.text) && /Hired a fractional Finance leader/.test(beta.text!.text) && (beta.fields ?? []).some((f) => f.text.includes(H.startWords(ym(1)))),
+    sections,
+  );
+  check("a locked company in Slack has no link and no picture", !!lockedBlock && !/<https?:/.test(lockedBlock.text!.text) && !("accessory" in lockedBlock), lockedBlock);
   check("the post opens the saved view", text.includes(`${BASE}/?${salPlace}`), text);
   check("the post never names a seat holder or a locked company", !text.includes(HOLDER) && !text.includes(HIDDEN_NAME));
   check("the post leaves seats below Lead out, and never carries a locked title", !text.includes("Kestrel Ledger") && !text.includes("Larch Books") && !text.includes("Juniper Content") && !text.includes(JUNIOR_TITLE) && !text.includes(JUNIOR_HOLDER));

@@ -13,6 +13,7 @@
  * so nothing here is held back by plan. Each card names the company only when the member's table
  * does, and every link (the cards' and the button) opens the day's companies in the app
  * (radarPath: /?p=table&sig=<day>), where each locked one unlocks on its row for COMPANY_PRICE.
+ * In Slack a named company also links to its record, and one the member knows shows its logo.
  * Plans (lib/plan.ts) change delivery only: Pro (and the trial) get signals at once, when a scan or
  * a change to a seat makes one, in the next alert batch with Slack or a webhook (radarInstant);
  * everyone else gets one radar a UTC day. With billing off nobody is on Pro.
@@ -37,6 +38,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { publicBase } from "../links";
+import { siteKey } from "../tableFields";
+import { iconDomains } from "../companyIcons";
+import { logoSources } from "../logo";
 import { emailEnabled, sendEmail } from "../email";
 import { billingLive, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
@@ -108,7 +112,7 @@ export const radarUnsubscribeUrl = (base: string, memberId: string) => `${base}/
 function tracked(day: RadarDay, base: string, memberId: string, w: "email" | "slack"): RadarDay {
   const q = `m=${encodeURIComponent(T.pubId(memberId))}&s=${radarSig(memberId)}&w=${w}`;
   const go = (path: string) => `${base}/api/radar/go?${q}&to=${encodeURIComponent(path)}`;
-  return { ...day, url: go(day.url), cards: day.cards.map((c) => ({ ...c, url: go(c.url) })) };
+  return { ...day, url: go(day.url), cards: day.cards.map((c) => ({ ...c, url: go(c.url), ...(c.place ? { place: go(c.place) } : {}) })) };
 }
 
 /* ---------- who has a radar ---------- */
@@ -124,17 +128,53 @@ interface Ctx {
 }
 const ctxOf = (seed: Seed, s: State, nowMs: number): Ctx => ({ seed, s, g: T.graph(seed, s), idx: T.memberIndex(seed, s), tracks: T.tracksOf(seed, s), nowMs });
 
-/** A member's cards for one UTC day: every link opens that day's companies. */
-function cardContext(c: Ctx, m: Member, day: string): CardContext {
+/** The member's own table shows the company (as a member: an admin's locked companies stay locked here too). */
+const knownTo = (c: Ctx, m: Member, companyId: string) => !T.identityHidden(c.g, c.s, c.idx, c.tracks, m, companyId, true);
+
+/**
+ * Logos for a delivery's companies that the member's table shows, by internal id: the public
+ * https address of the icon service the app's CompanyLogo draws from (lib/logo.ts logoSources), for
+ * Slack to fetch itself. The domain the way GET /api/logo reads it (lib/table.ts logoDomain): the
+ * website's host, else one looked up from the name earlier, never a shared host's. A company locked
+ * for the member gets none: an icon's address carries its domain.
+ */
+async function logosFor(c: Ctx, m: Member, sigs: MemberSignal[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const nodes = [...new Set(sigs.map((x) => x.companyId))].filter((id) => knownTo(c, m, id)).flatMap((id) => {
+    const n = c.g.companies.get(id);
+    return n ? [n] : [];
+  });
+  const named: { id: string; name: string; website: null }[] = [];
+  const put = (id: string, domain: unknown) => {
+    const host = siteKey(domain);
+    if (host && !host.includes("/")) out.set(id, logoSources(host)[0]);
+  };
+  for (const n of nodes) {
+    const site = siteKey(T.live(n, c.s, "website"));
+    if (site) put(n.id, site);
+    else named.push({ id: n.id, name: n.name, website: null });
+  }
+  if (named.length) {
+    const icons = await iconDomains(named, { lookup: false }).catch(() => ({}) as Record<string, string>);
+    for (const [id, d] of Object.entries(icons)) put(id, d);
+  }
+  return out;
+}
+
+/** A member's cards for one UTC day: every link opens that day's companies; a named one also links to its record. */
+function cardContext(c: Ctx, m: Member, day: string, logos: Map<string, string> = new Map()): CardContext {
   // Trial and Pro: every card names its company, free. Naming it on the card doesn't make it theirs
   // or charge: the table keeps it locked, and its people and seat holders still need their own unlocks.
   const pro = isPro(c.s, m.id, c.nowMs);
   return {
     // The member's own table, as a member: a company locked for them stays unnamed (an admin's too), unless they are on Pro.
-    visible: (companyId) => pro || !T.identityHidden(c.g, c.s, c.idx, c.tracks, m, companyId, true),
+    visible: (companyId) => pro || knownTo(c, m, companyId),
     cardId: (key) => cardId(m.id, key),
     coId: (companyId) => coId(m.id, companyId),
     url: radarPath(day),
+    known: (companyId) => knownTo(c, m, companyId),
+    place: (companyId) => `/?c=${encodeURIComponent(T.pubId(companyId))}`,
+    logo: (companyId) => logos.get(companyId) ?? null,
   };
 }
 
@@ -359,7 +399,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       const mine = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
       // High and Medium go out; Low stays on the page (kept with the day's companies below).
       const out_ = deliverable(mine);
-      const day = dayOf(out_, cardContext(c, m, today), "daily", today);
+      const day = dayOf(out_, cardContext(c, m, today, slack ? await logosFor(c, m, out_) : undefined), "daily", today);
       if (!day) continue;
       // Someone may have turned it off while the run was going.
       const s1 = await loadState();
@@ -446,7 +486,7 @@ export async function radarInstant(nowIso?: string): Promise<number> {
     const sent = sentKeys(s, m.id);
     const mine: Scored[] = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
     const out_ = deliverable(mine);
-    const day = dayOf(out_, cardContext(c, m, now.slice(0, 10)), "instant", now.slice(0, 10));
+    const day = dayOf(out_, cardContext(c, m, now.slice(0, 10), await logosFor(c, m, out_)), "instant", now.slice(0, 10));
     if (!day) continue;
     await T.mutate((d) => {
       markSent(d, m.id, out_, now, "instant", mine);
