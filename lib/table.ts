@@ -115,6 +115,7 @@ import {
 } from "./leaders/types";
 import { mergeFunctions } from "./leaders/pick";
 import { fundingAdminStats, type FundingState } from "./funding/types";
+import { inSlot } from "./viewQueue";
 // [google network] companies a member knows someone at are named for them free (lib/google/types.ts).
 import { networkKnown, type NetworkState } from "./google/types";
 
@@ -1071,6 +1072,7 @@ async function flush(): Promise<void> {
         stateCache = draft;
         commits++;
         stateVersions.set(draft, commits);
+        warmShared();
         await snapshot(DATA_DIR, json);
       } catch (e) {
         dirReady = false;
@@ -2789,6 +2791,28 @@ let sharedBuilds = 0;
 /** For the checks: how many times the shared part was built. */
 export const sharedViewStats = () => ({ builds: sharedBuilds });
 
+/** When a member's table last read the shared part: warming it after a change is worth it only while members load tables. */
+let sharedAskedAt = 0;
+/** After a change, the shared part is built again in the background once the state has been quiet this long... */
+const WARM_AFTER_MS = 750;
+/** ...while a member's table was built in the last this long. */
+const WARM_WHILE_MS = 10 * 60_000;
+let warmTimer: ReturnType<typeof setTimeout> | null = null;
+/** A change was committed: build the shared part for it in the background (in the view queue), so the next member's table is ready sooner. */
+function warmShared() {
+  if (warmTimer) clearTimeout(warmTimer);
+  warmTimer = null;
+  if (!sharedAskedAt || Date.now() - sharedAskedAt > WARM_WHILE_MS) return;
+  warmTimer = setTimeout(() => {
+    warmTimer = null;
+    void inSlot(async () => {
+      const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+      await sharedPart(seed, s);
+    }).catch(() => {});
+  }, WARM_AFTER_MS);
+  warmTimer.unref?.();
+}
+
 /** The shared part for this state, built once however many members ask for it at the same time. */
 function sharedPart(seed: Seed, s: State): Promise<SharedPart> {
   const nowMs = Date.now();
@@ -2858,6 +2882,7 @@ function ownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<str
  * builds whole: scripts/test-viewcache.mts compares the two for every member it can.
  */
 async function memberView(seed: Seed, s: State, me: Member): Promise<View> {
+  sharedAskedAt = Date.now();
   const part = await sharedPart(seed, s);
   const g = viewGraph(seed, s);
   const own = ownCompanies(g, s, memberIndex(seed, s), me);

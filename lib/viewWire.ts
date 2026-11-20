@@ -99,6 +99,28 @@ export function packView(v: View): View {
   return { ...v, companies: v.companies.map(packCompany), packed: true } as View;
 }
 
+/**
+ * Each company's packed JSON, kept with the record. Members' tables share most of their records
+ * (lib/table.ts memberView), and a record is never changed once built, so each is turned into
+ * JSON once for every member who gets it.
+ */
+const packedJson = new WeakMap<CompanyRec, string>();
+/** Where the companies go in packedViewJson: the key with a value nothing else in a view holds (made up per process). */
+const SLOT = `\u0000companies:${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}\u0000`;
+/** JSON.stringify(packView(v)), byte for byte, from each company's kept JSON. Server side. */
+export function packedViewJson(v: View): string {
+  const parts = v.companies.map((c) => {
+    let j = packedJson.get(c);
+    if (j === undefined) packedJson.set(c, (j = JSON.stringify(packCompany(c))));
+    return j;
+  });
+  const head = JSON.stringify({ ...v, companies: SLOT, packed: true });
+  // The key with that value, unescaped: inside a string its quotes would be escaped, so this is the companies key itself.
+  const slot = `"companies":${JSON.stringify(SLOT)}`;
+  const at = head.indexOf(slot);
+  return `${head.slice(0, at)}"companies":[${parts.join(",")}]${head.slice(at + slot.length)}`;
+}
+
 /** A packed company with its empty cells back, in place (it was just parsed). */
 export function unpackCompany(c: CompanyRec): CompanyRec {
   c.cells = fill("company", c.cells);

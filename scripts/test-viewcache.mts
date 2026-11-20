@@ -7,7 +7,7 @@
  *   npx tsx scripts/test-viewcache.mts      exits 1 on any failure
  *
  * Covered: every member's table, admins' and "See it as a member" included, is the table built
- * whole (byte for byte, as JSON), after each kind of thing a member does (Unlock company, a fact
+ * whole (byte for byte, as JSON, and packed as the route sends it), after each kind of thing a member does (Unlock company, a fact
  * added, a follow, a confirmation, a report, a claim, an invite, a leader report, a private rate);
  * what one member did never shows in another's table (their unlock, their name on a fact, their
  * follow, their report, their confirmation); a change to a company shows in every member's next
@@ -81,6 +81,7 @@ const check = (name: string, ok: boolean, detail?: unknown) => {
 
 async function main() {
   const t = await import("../lib/table");
+  const W = await import("../lib/viewWire");
   const TOK = Object.fromEntries(seed.members.map((m) => [m.id.slice(2), m.token])) as Record<"ann" | "bob" | "cal" | "hal" | "adm", string>;
   const pub = t.tableInternals.pubId;
   const act = (tok: string, a: unknown) => t.perform(tok, a as Parameters<typeof t.perform>[1], BASE);
@@ -89,9 +90,13 @@ async function main() {
     const bad: string[] = [];
     for (const tok of toks) {
       for (const asMember of [false, true]) {
-        const a = JSON.stringify(await t.buildView(tok, { asMember }));
+        const v = await t.buildView(tok, { asMember });
+        const a = JSON.stringify(v);
         const b = JSON.stringify(await t.buildView(tok, { asMember, fresh: true }));
         if (a !== b) bad.push(`${tok}${asMember ? " as member" : ""}`);
+        // The packed JSON from each record's kept JSON (the route's answer), twice: built, then kept.
+        const want = JSON.stringify(W.packView(v));
+        if (W.packedViewJson(v) !== want || W.packedViewJson(v) !== want) bad.push(`${tok}${asMember ? " as member" : ""} packed`);
       }
     }
     check(`${label}: every member's table is the one built whole`, !bad.length, bad);

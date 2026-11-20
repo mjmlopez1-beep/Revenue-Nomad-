@@ -10,7 +10,7 @@ import { emailEnabled, sendEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
-import { packView } from "@/lib/viewWire";
+import { packedViewJson } from "@/lib/viewWire";
 import { todayView } from "@/lib/today";
 import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
@@ -125,7 +125,8 @@ const viewKey = (token: string | null, asMember = false, packed = false) => `${t
 const builtView = (token: string | null, enc: Enc | null, asMember = false, packed = false) =>
   shared(viewFlights, viewKey(token, asMember, packed), stateVersion, async (): Promise<Built> => {
     const view = await buildView(token, { asMember });
-    const body = JSON.stringify(packed ? packView(view) : view);
+    // Packed: each company's JSON is kept with its record, and most records are shared between members (packedViewJson).
+    const body = packed ? packedViewJson(view) : JSON.stringify(view);
     const built: Built = { body, packed: new Map(), version: view.version ?? "" };
     if (enc && body.length > MIN_COMPRESS) {
       const p = compress(body, enc);
@@ -137,11 +138,13 @@ const builtView = (token: string | null, enc: Enc | null, asMember = false, pack
 
 /**
  * A member's table as sent last, compressed, kept while the state is the one it was built from
- * (any change by anyone makes a new one) and for VIEW_KEEP_MS at most, since a few of its numbers
- * move with the clock. A tab that loads twice, or two tabs, cost one build. Only the compressed
- * bytes are kept (about a third of a megabyte each), for the VIEW_KEEP_MAX members who loaded last.
+ * (any change by anyone makes a new one) and for VIEW_KEEP_MS at most, and never past the end of
+ * the UTC day it was built on, since a few of its numbers move with the clock (the unlocks left in
+ * the last 24 hours, the free company of the day, the trial's days). A tab that loads twice, or two
+ * tabs, cost one build. Only the compressed bytes are kept (about a third of a megabyte each), for
+ * the VIEW_KEEP_MAX members who loaded last.
  */
-const VIEW_KEEP_MS = 30_000;
+const VIEW_KEEP_MS = 5 * 60_000;
 const VIEW_KEEP_MAX = 64;
 const keptViews = new Map<string, { version: string; at: number; enc: Enc; bytes: Uint8Array<ArrayBuffer> }>();
 function keepView(key: string, version: string, enc: Enc, bytes: Uint8Array<ArrayBuffer>) {
@@ -151,7 +154,8 @@ function keepView(key: string, version: string, enc: Enc, bytes: Uint8Array<Arra
 }
 function keptView(key: string, enc: Enc | null): NextResponse | null {
   const k = keptViews.get(key);
-  if (!k || !enc || k.enc !== enc || k.version !== viewVersion() || Date.now() - k.at > VIEW_KEEP_MS) return null;
+  const now = Date.now();
+  if (!k || !enc || k.enc !== enc || k.version !== viewVersion() || now - k.at > VIEW_KEEP_MS || Math.floor(now / 86_400_000) !== Math.floor(k.at / 86_400_000)) return null;
   return new NextResponse(k.bytes, { headers: { ...JSON_HEADERS, "content-encoding": enc, "x-view-version": k.version } });
 }
 
