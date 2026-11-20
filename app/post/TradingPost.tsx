@@ -946,18 +946,28 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   });
   /** The seat a row shows its holder for: a seat row its own, a company row its latest seat (a phone card the one cardSeat picks), a person row none. */
   const shownSeat = (r: Row) => (r.p ? null : r.e ? r.e : phone ? cardSeat(r.i, me.function) : r.i.latest);
-  /**
-   * Get started step 1. Looking for roles: who is hiring. Otherwise who held a seat, and nothing
-   * else: never a role, a rate or an end month (getStarted.ts). With no seat holder locked anywhere,
-   * the step names a person's name and title instead.
-   */
+  /** Get started step 1, "Unlock a company" (getStarted.ts startSteps): a locked company, one hiring in their function first. */
   const stepOne = useStable(() => {
     setPage("table");
     setDrawer(null);
-    const hit =
-      me.goal === "roles" || stepKind === "company" ? roleTarget() : stepKind === "person" ? personTarget(sorted, infos) : holderTarget(sorted, infos, namedFn(me.function), shownSeat);
+    const hit = roleTarget();
     if (!hit) {
-      toast(me.goal === "roles" || stepKind === "company" ? "You can already see every company." : "There's nothing locked for you to see right now.");
+      toast("You can already see every company.");
+      return;
+    }
+    pointAt("locked", hit);
+  });
+  /**
+   * The nudge after a company is open, "See who held a seat": a locked seat holder, and nothing
+   * else, never a role, a rate or an end month (getStarted.ts). With no seat holder locked anywhere,
+   * a person's name and title instead.
+   */
+  const stepHolder = useStable(() => {
+    setPage("table");
+    setDrawer(null);
+    const hit = stepKind === "person" ? personTarget(sorted, infos) : holderTarget(sorted, infos, namedFn(me.function), shownSeat);
+    if (!hit) {
+      toast("There's nothing locked for you to see right now.");
       return;
     }
     pointAt("locked", hit);
