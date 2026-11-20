@@ -265,7 +265,7 @@ function readPlace(me: Me, from?: string) {
 }
 
 /** The address keys that name a place in the app. With none of them, / opens Today. */
-const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade"];
+const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade", "plans"];
 /** The address is Today's: no place in it. */
 const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
 

@@ -768,7 +768,7 @@ function StepWho({
           Back
         </button>
         <span className="ob-foot-note num" aria-live="polite">
-          {unsure ? `We'll start with ${andList(suggested)}` : full ? `${BEFORE_MAX} picked, the most` : ""}
+          {unsure ? `We'll start with ${andList(suggested)}` : before !== null && full ? `${BEFORE_MAX} picked, the most` : ""}
         </span>
         <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onNext}>
           Show my first view
