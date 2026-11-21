@@ -298,15 +298,20 @@ async function main() {
   const salMail = mails("sal.starter@example.com");
   check("Sal gets one email", salMail.length === 1, mails().map((x) => x.body.to));
   const sm = salMail[0]?.body as { subject: string; text: string; html: string; headers?: Record<string, string> };
-  check("its subject names the feature and counts the companies", sm?.subject === `${types.YOUR_FEATURE}: 2 companies in your profile moved`, sm?.subject);
-  check("the email's heading says the same", (sm?.html ?? "").includes(`>${types.YOUR_FEATURE}: 2 companies in your profile moved</p>`));
+  check("its subject names the feature and counts the companies", sm?.subject === `${types.YOUR_FEATURE}: 2 companies leaning your way`, sm?.subject);
+  check("the email's headline counts them, with the date and the count by kind", (sm?.html ?? "").includes(">2 companies are leaning your way today</h1>") && /2 new since yesterday/.test(sm?.html ?? "") && (sm?.text ?? "").includes(`${fmt.dayWords(day0)} · 2 new since yesterday`), sm?.text.slice(0, 200));
   check(
-    "every signal of the day is listed, each anonymous",
-    /New open role: Fractional VP Sales, at a company that's hiring now/.test(sm?.text ?? "") && /A fractional Sales seat just ended at a SaaS company/.test(sm.text) && /A SaaS company just hired a fractional Marketing leader/.test(sm.text),
+    "every signal of the day is listed, each anonymous, by its label and what happened",
+    /Open role · High likelihood\nA SaaS company in Colorado\nNew open role: Fractional VP Sales\n/.test(sm?.text ?? "") && /Fractional seat ended · \w+ likelihood\nA SaaS company in Colorado\nA fractional Sales seat just ended\n/.test(sm.text) && /Hired a fractional · \w+ likelihood\nA SaaS company in \w+\nJust hired a fractional Marketing leader\n/.test(sm.text),
     sm?.text,
   );
-  check("a card has the size band, industry, region and revenue band", /11–50 people · SaaS · Colorado, US · \$1M–\$5M revenue/.test(sm?.text ?? ""), sm?.text);
-  check("each locked one says it unlocks for 2 credits", (sm?.text.match(/unlock it in Merlin for 2 credits/g) ?? []).length === 3, sm?.text);
+  check("a card has the facts the company line doesn't say (size band, revenue band)", /A SaaS company in Colorado\n[^\n]+\n[^\n]+\n11–50 people · \$1M–\$5M revenue\n/.test(sm?.text ?? ""), sm?.text);
+  check("how a locked company unlocks is said once, at the top (2 credits)", (sm?.text.match(/unlocks in Merlin for 2 credits/g) ?? []).length === 1 && (sm?.html.match(/unlocks in Merlin for 2 credits/g) ?? []).length === 1, sm?.text);
+  check("each card has its icon: an absolute PNG on the site's public path, its size and alt text", (() => {
+    const imgs = sm?.html.match(/<img [^>]*>/g) ?? [];
+    const icons = imgs.filter((x) => x.includes("/email/crystal-ball/icon-"));
+    return icons.length === 4 && icons.every((x) => /src="https:\/\/post\.example\.com\/email\/crystal-ball\/icon-[a-z]+@2x\.png\?v=\d+"/.test(x) && /width="\d+" height="\d+"/.test(x) && /alt=""/.test(x));
+  })(), sm?.html.match(/<img [^>]*>/g));
   const salLinks = (sm?.html.match(/<a href="[^"]*"/g) ?? []).filter((x) => x.includes("/api/radar/go"));
   check("the cards and the button all open the day's companies (tracked)", salLinks.length === 4 && salLinks.every((x) => x.includes(encodeURIComponent(dayPath))), salLinks);
   check("the button says how many companies", /See the 2 companies/.test(sm?.html ?? "") && /See the 2 companies/.test(sm.text));
@@ -327,15 +332,19 @@ async function main() {
   const moMail = mails("mo.marketer@example.com")[0]?.body as { subject: string; html: string; text: string } | undefined;
   check(
     "Mo's email has his Marketing role, and not the Low Sales hire (it stays on the page)",
-    !!moMail && moMail.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /Fractional Head of Marketing/.test(moMail.text) && !/fractional Sales leader/.test(moMail.text),
+    !!moMail && moMail.subject === `${types.YOUR_FEATURE}: 1 company leaning your way` && /Fractional Head of Marketing/.test(moMail.text) && !/fractional Sales leader/.test(moMail.text),
     moMail?.subject,
   );
   check("a Low signal is never marked sent", !Object.keys((await state()).radar?.members.mem_mo?.sent ?? {}).includes(k("hire", "e_fox_sales")));
   check("but the day's companies keep it", ((await state()).radar?.members.mem_mo?.days?.[day0] ?? []).some((x) => x.k === k("hire", "e_fox_sales") && x.b === "Low"));
-  check("the email shows each card's band and why now", /High likelihood · Open now/.test(sm?.text ?? "") && /Medium likelihood · Fractional CMO hired/.test(sm?.text ?? "") && /<b style="font-weight:700">High likelihood<\/b>/.test(sm?.html ?? ""), sm?.text);
+  check(
+    "the email shows each card's band as a chip and its reason, split from the why-now",
+    /Open role · High likelihood\n[^\n]+\n[^\n]+\nA direct opening in Sales\.\n/.test(sm?.text ?? "") && /Marketing leader\n(Sales|RevOps|\w+)[^\n]* usually follows in [^\n]+\.\n/.test(sm?.text ?? "") && />High<span class="cb-wide"> likelihood<\/span><\/td>/.test(sm?.html ?? "") && !/Open now/.test(sm?.text ?? ""),
+    sm?.text,
+  );
   check("Mo's email names nothing", !named(moMail).length && !pubLeaks(moMail).length, named(moMail));
   const piaMail = mails("pia.profit@example.com")[0]?.body as { subject: string; html: string; text: string } | undefined;
-  check("a company the member already unlocked is named, with nothing to unlock", !!piaMail && /Fox Freight just hired a fractional Sales leader/.test(piaMail.text) && (piaMail.text.match(/unlock it in Merlin/g) ?? []).length === 1, piaMail?.text);
+  check("a company the member already unlocked is named, with nothing to unlock", !!piaMail && /Hired a fractional · \w+ likelihood\nFox Freight\nJust hired a fractional Sales leader\n/.test(piaMail.text) && (piaMail.text.match(/unlocks in Merlin/g) ?? []).length === 1, piaMail?.text);
   check("Pia's email names no company she can't see", !named(piaMail, NAMES.filter((x) => x !== "Fox Freight")).length, named(piaMail));
   check("a member who turned it off gets nothing", !mails("otto.off@example.com").length);
   check("no function or no profile: nothing", !mails("nora.none@example.com").length && !mails("ned.noprofile@example.com").length);
@@ -361,7 +370,7 @@ async function main() {
   const quietMail = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
   check(
     "the next morning with nothing new: a standing state fills the day, labelled 'Still a good time', never an empty email",
-    quiet.ran && quiet.signals === 0 && mails().length === 1 && !!quietMail && /Still a good time: Fractional Sales seat started Jan 2025/.test(quietMail.text) && /based on typical tenure/.test(quietMail.text),
+    quiet.ran && quiet.signals === 0 && mails().length === 1 && !!quietMail && quietMail.subject === `${types.YOUR_FEATURE}: 1 company still worth a look` && /\nSTILL A GOOD TIME\n/.test(quietMail.text) && !/NEW SINCE YESTERDAY/.test(quietMail.text) && /Seat at \d+ months · \w+ likelihood\n[^\n]+\nIts fractional Sales seat is \d+ months in\nBased on typical tenure/.test(quietMail.text),
     { quiet, text: quietMail?.text.slice(0, 600) },
   );
   check("and it is remembered as sent, with the company, so it is not offered again", !!(await state()).radar?.members.mem_sal?.sent[`still:tenure:${pub("e_echo_sales")}`] && !!(await state()).radar?.members.mem_sal?.shown?.c_echo);
@@ -379,7 +388,7 @@ async function main() {
   const sm3 = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
   check(
     "only the new signal goes out, nothing sent before",
-    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company in your profile moved` && /hired a fractional Growth leader in \w{3} \d{4} · newly added to Merlin/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
+    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company leaning your way` && /Hired a fractional Growth leader in \w{3} \d{4} · newly added to Merlin/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
     { run3, subject: sm3?.subject },
   );
   check("its link opens that day", !!sm3 && sm3.text.includes(encodeURIComponent(types.radarPath(day2))));
@@ -610,10 +619,43 @@ async function main() {
   check("pushed past every limit, the post still fits Block Kit", blockKitProblems(hb).length === 0 && hb.blocks.length <= 50 && hb.text.length <= 300, blockKitProblems(hb));
   check("and keeps its main button and footer", hb.blocks[hb.blocks.length - 1]?.type === "context" && hb.blocks[hb.blocks.length - 2]?.type === "actions", hb.blocks.slice(-2).map((b) => b.type));
   const twelve = fmt.renderRadarEmail({ name: "Sal Starter", day: dayOf(Array.from({ length: 12 }, (_, i) => card(i))), unsubscribeUrl: "https://post.example.com/u", appUrl: "https://post.example.com" });
-  check("the email lists 10, then 'And 2 more' to the day's companies", (twelve.html.match(/fractional Marketing leader \d+/g) ?? []).length === 10 && twelve.html.includes(`<a href="${VIEW}" style="color:#`) && /And 2 more signals\./.test(twelve.text), twelve.text);
+  check("the email lists 10, then 'And 2 more' to the day's companies", (twelve.html.match(/class="cb-btn"/g) ?? []).length === 10 && (twelve.text.match(/fractional Marketing leader \d+\n/g) ?? []).length === 10 && twelve.html.includes(`<a class="cb-ink" href="${VIEW}" style="color:#`) && /And 2 more signals\./.test(twelve.text), twelve.text);
   const hrefs = [...new Set((twelve.html.match(/<a href="[^"]*"/g) ?? []).map((x) => x.slice(9, -1)))];
   check("every link in the email is the day's companies, the unsubscribe link or the app", hrefs.every((h) => h === VIEW || h === "https://post.example.com/u" || h === "https://post.example.com"), hrefs);
   check("the email is escaped", !/<b>x<\/b>/.test(fmt.renderRadarEmail({ name: "<b>x</b>", day: dayOf([card(1)]), unsubscribeUrl: "u", appUrl: "" }).html));
+
+  /* ---------- the email's build: pictures, links, width, dark mode ---------- */
+  console.log("\nThe email's build");
+  const STILL = `${types.RADAR_STILL} Fractional Marketing seat started Aug 2025, 15 months ago · based on typical tenure: ended fractional seats last a median 12 months`;
+  const kinds: import("../lib/radar/types").RadarKind[] = ["adjacent", "role", "seat", "funding", "sales-build", "departure", "tenure", "rehire", "arrival", "team-build", "headcount", "gap"];
+  const every = kinds.map((k, i) => card(40 + i, { kind: k, co: `co${40 + i}`, band: i % 2 ? "Medium" : "High", whyNow: k === "tenure" || k === "gap" ? STILL : `Something happened · the reason ${i}`, signal: `Signal ${i}`, about: { industry: "SaaS", size: "11–50 people", hq: "Texas, US", revenue: "$1M–$5M" } }));
+  const full = fmt.renderRadarEmail({ name: "Sal Starter", day: dayOf(every.slice(0, 10)), unsubscribeUrl: "https://post.example.com/api/table/unsubscribe?m=x&s=y&r=radar", openPixel: "https://post.example.com/api/radar/open?m=x&s=y", appUrl: "https://post.example.com" });
+  const imgs = full.html.match(/<img [^>]*>/g) ?? [];
+  const attr = (tag: string, k: string) => new RegExp(`\\s${k}="([^"]*)"`).exec(tag)?.[1];
+  check("the unsubscribe link and the open pixel are there, as they were", full.html.includes('href="https://post.example.com/api/table/unsubscribe?m=x&amp;s=y&amp;r=radar"') && full.html.includes('<img src="https://post.example.com/api/radar/open?m=x&amp;s=y" width="1" height="1" alt=""'), imgs.slice(-1));
+  check("every picture has alt text (empty only for the pixel and the icons beside their labels)", imgs.length > 3 && imgs.every((x) => attr(x, "alt") !== undefined) && imgs.filter((x) => /hero-|merlin@2x/.test(x)).every((x) => (attr(x, "alt") ?? "").length > 3), imgs.map((x) => attr(x, "alt")));
+  check("every picture has an absolute https address, a width and a height", imgs.every((x) => /^https:\/\//.test(attr(x, "src") ?? "") && /^\d+$/.test(attr(x, "width") ?? "") && /^\d+$/.test(attr(x, "height") ?? "")), imgs);
+  check("the pictures are PNGs on the site's own /email/ path", imgs.filter((x) => !x.includes("/api/radar/open")).every((x) => /^https:\/\/post\.example\.com\/email\/crystal-ball\/[a-z-]+@2x\.png\?v=\d+$/.test(attr(x, "src")!.replace(/&amp;/g, "&"))), imgs.map((x) => attr(x, "src")));
+  check("600 wide, fluid down to a phone", /<table role="presentation" width="600"[^>]*style="width:100%;max-width:600px/.test(full.html) && /<meta name="viewport" content="width=device-width,initial-scale=1">/.test(full.html));
+  check("no SVG, no script, layout in tables and inline styles (the <style> only adds dark mode and phone gutters)", !/<svg|<script|<div class="cb-(card|quiet)/i.test(full.html) && (full.html.match(/<style>[\s\S]*?<\/style>/)?.[0] ?? "").split("\n").filter((l) => /\{[^}]*:[^}]*\}/.test(l)).every((l) => l.includes("!important") || l.startsWith(":root")) && /prefers-color-scheme:dark/.test(full.html), full.html.match(/<style>[\s\S]*?<\/style>/)?.[0]);
+  check("dark-mode safe: it says it supports both schemes, and every icon has its own solid tile behind it", /<meta name="color-scheme" content="light dark">/.test(full.html) && imgs.filter((x) => x.includes("/icon-")).every((x) => /background-color:#[0-9A-Fa-f]{6}/.test(x)));
+  check("every kind has its label and icon", kinds.every((k) => fmt.kindLabel({ kind: k, headline: "", signal: "Its fractional Sales seat is 15 months in" }).length > 3) && fmt.kindLabel({ kind: "tenure", headline: "", signal: "Its fractional Sales seat is 15 months in" }) === "Seat at 15 months" && new Set(kinds.map(fmt.kindIcon)).size === 11, kinds.map(fmt.kindIcon));
+  check("new events first, then Still a good time, quieter", full.text.indexOf("NEW SINCE YESTERDAY") < full.text.indexOf("STILL A GOOD TIME") && full.text.indexOf("STILL A GOOD TIME") < full.text.indexOf("Seat at 12 months") && /class="cb-quiet"/.test(full.html), full.text.slice(0, 300));
+  check("each card: a label, a likelihood chip (never a percentage), the company, one short why-now and one button", (full.html.match(/class="cb-btn"/g) ?? []).length === 10 && (full.html.match(/<span class="cb-wide"> likelihood<\/span>/g) ?? []).length === 10 && !/\d+\s*%/.test(full.text) && /A SaaS company in Texas/.test(full.text) && /\nSignal 1\nThe reason 1\.\n/.test(full.text), full.text.slice(0, 600));
+  check("no exclamation marks, and never LinkedIn or Sales Navigator", !/!(?!important)/.test(full.html.replace(/<!doctype html>|<!--[\s\S]*?-->/gi, "")) && !/!/.test(full.text + full.subject) && !/linkedin|sales navigator/i.test(full.text + full.html));
+  const { statSync } = await import("node:fs");
+  const used = [...new Set(imgs.map((x) => attr(x, "src")!).filter((s) => s.includes("/email/")).map((s) => new URL(s.replace(/&amp;/g, "&")).pathname))];
+  const kb = (f: string) => statSync(path.join(process.cwd(), "public", f)).size / 1024;
+  const weight = used.reduce((n, f) => n + kb(f), 0);
+  const heroes = ["/email/crystal-ball/hero-morning@2x.png", "/email/crystal-ball/hero-quiet@2x.png"];
+  check("the pictures weigh under 200 KB an email, a hero under 80 KB", weight < 200 && heroes.every((h) => kb(h) < 80), { weight: weight.toFixed(1), used });
+  const pubUrl = process.env.RN_PUBLIC_URL;
+  delete process.env.RN_PUBLIC_URL;
+  const bare = fmt.renderRadarEmail({ name: "Sal", day: dayOf([card(1)]), unsubscribeUrl: "u", appUrl: "" });
+  if (pubUrl !== undefined) process.env.RN_PUBLIC_URL = pubUrl;
+  check("with no site to load them from, the email leaves the pictures out (no broken images) and names Merlin in text", !/<img /.test(bare.html) && bare.html.includes(">Merlin</td>"), bare.html.match(/<img [^>]*>/g));
+  const quietDay = fmt.renderRadarEmail({ name: "Sal", day: dayOf([card(70, { kind: "tenure", whyNow: STILL, band: "Medium" })]), unsubscribeUrl: "u", appUrl: "https://post.example.com" });
+  check("a day with only Still a good time: its own subject, headline and the night hero", quietDay.subject === `${types.YOUR_FEATURE}: 1 company still worth a look` && quietDay.html.includes(">1 company is still worth a look</h1>") && quietDay.html.includes("hero-quiet@2x.png") && !quietDay.html.includes("hero-morning"), quietDay.subject);
 
   console.log("\nFunding: the source and its plumbing");
   check("no provider: no events", (await funding.fundingSource().events({ sinceMs: 0, nowMs: Date.now(), companies: [] })).length === 0 && funding.fundingSource().name === "none");

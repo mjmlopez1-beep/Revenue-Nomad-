@@ -447,6 +447,10 @@ async function main() {
   check("a workflow webhook gets flat text fields", JSON.stringify(Object.keys(fmt.workflowBody(fmt.testAlert("https://x.example")))) === JSON.stringify(["event", "title", "text", "url", "count"]));
   const esc = fmt.slackBody({ kind: "message", count: 1, headline: "<!channel> hi & bye", lines: ["<https://evil.example|click>"], url: "https://post.example.com/" });
   check("Slack text is escaped so a message can't @channel or hide a link", !JSON.stringify(esc.blocks).includes("<!channel>") && !JSON.stringify(esc.blocks).includes("<https://evil"), esc.blocks);
+  // The Crystal Ball email has its own cards and pictures now (lib/radar/format.ts, lib/emailArt.ts); its post in Slack is unchanged.
+  const rCard = { id: "r1", co: "c1", kind: "role" as const, headline: "New open role: Fractional CMO", facts: ["SaaS"], why: "An open Marketing role", band: "High" as const, whyNow: "Open now · a direct opening in Marketing", company: null, locked: true, url: "https://post.example.com/?p=table&sig=2026-11-21", at: new Date().toISOString(), subject: "A SaaS company", signal: "New open role: Fractional CMO", about: { industry: "SaaS" } };
+  const rPost = fmt.slackBody(fmt.alertFor([{ kind: "radar", at: new Date().toISOString(), day: { cards: [rCard], total: 1, companies: 1, day: "2026-11-21", url: rCard.url, mode: "daily" } }], "https://post.example.com")!) as unknown as import("./blockkit.mts").SlackPost;
+  check("the Crystal Ball post in Slack is valid Block Kit, with no email markup or email pictures in it", bk.blockKitProblems(rPost).length === 0 && !/<(table|td|img|style)\b|\/email\/crystal-ball|cb-/.test(JSON.stringify(rPost)) && /\*A SaaS company\*\\nNew open role: Fractional CMO/.test(JSON.stringify(rPost)), rPost);
 
   /* ---------- a URL that stops working ---------- */
   console.log("\nA webhook that stops working");
