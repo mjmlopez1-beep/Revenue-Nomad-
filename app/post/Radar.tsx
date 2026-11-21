@@ -35,6 +35,7 @@ import { plural } from "./hooks";
 import { ProRow, planDay } from "./Billing";
 import { KnowChip } from "./network/Network"; // [google network]
 import "./radar.css";
+import { Bleed, Prop, Spot } from "../ui/fractions/art";
 
 let openedSent = false;
 const signal = (name: "radar_opened" | "radar_clicked", where: string) => void post({ action: { type: "signal", name, where } });
@@ -174,6 +175,10 @@ export function RadarPage({
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> All companies
       </button>
+      {/* The header card: the words first, the ball at its far end on a nested corner. With nothing today, the empty state's picture is the page's one. */}
+      <header className="rd-head">
+      <Bleed kind="BR" on="white" className="rd-head-bleed" />
+      {view?.ready && !n ? null : <Prop name={n > 0 && day === view?.today ? "ballGlow" : "ballPlain"} height={n > 0 && day === view?.today ? 92 : 64} className="rd-head-ball" />}
       <h1 className="tp-page-h">{YOUR_FEATURE}</h1>
       {/* [ux ws3] One line, then the rest behind "How it ranks". */}
       <p className="rd-lead">
@@ -182,6 +187,7 @@ export function RadarPage({
       {view?.ready && (
         <details className="rd-how">
           <summary>How it ranks</summary>
+          <Prop name="compass" height={56} className="rd-how-art" />
           <p>
             Each company has something new on Merlin: a new open {fn} role, a {fn} seat that just ended or a {fn} leader who left, a fractional hire in another function, or a first
             sales team. Most likely comes first, each with why now
@@ -193,6 +199,7 @@ export function RadarPage({
           </p>
         </details>
       )}
+      </header>
       {view?.anyCompany && (
         <p className="rd-any" role="note">
           <span>Any company for now. Set your profile to narrow it and get it by email.</span>{" "}
@@ -252,7 +259,8 @@ export function RadarPage({
       ) : !view.ready ? (
         <StartRadar reload={reload} />
       ) : !n ? (
-        <section className="tp-card rd-empty">
+        <section className="tp-card rd-empty rd-empty-pic">
+          <Spot name="ballEmpty" size={104} />
           <p className="rd-note">
             Nothing moved at companies in your profile {day === view.today ? "today" : `on ${shortDay(day!)}`}. We never send a day with nothing in it.
           </p>

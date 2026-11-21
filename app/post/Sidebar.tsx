@@ -18,6 +18,7 @@ import { Sheet } from "./ui";
 import { plural } from "./hooks";
 import { TAB_KEYS, moreOn, planLine, type NavIcon as NavIconName, type NavItem } from "./navModel";
 import type { Me, PlanView } from "@/lib/tableTypes";
+import { Divider } from "../ui/fractions/art";
 
 /* ---------- icons: simple line icons, 18px, currentColor ---------- */
 
@@ -315,6 +316,8 @@ export function Sidebar({
         <NavLists items={items.filter((it) => it.group !== "foot")} onNav={onNav} compact={collapsed} onManageViews={onManageViews} />
       </div>
       <div className="tp-nav-foot">
+        {/* The trail's steps, the thread between screens, where the hairline was. */}
+        <Divider kind="steps" on="bg" className="tp-nav-thread" />
         <ul className="tp-nav-ul" aria-label="Settings">
           {foot.map((it) => (
             <li key={it.key}>

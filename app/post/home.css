@@ -2,7 +2,7 @@
 
 .tp-app .tp-main-page.hm-page {
   background: var(--surface);
-  padding: 32px 40px 72px;
+  padding: 16px 40px 72px;
 }
 .hm {
   max-width: 1040px;
@@ -19,10 +19,30 @@
 }
 
 /* The greeting and the search. */
+/* The greeting's band: mint tint, the words first, a small scene at its far end (art.tsx Strip, the quiet register on mint). */
 .hm-hello {
+  position: relative;
   display: grid;
   gap: 6px;
-  margin-top: 8px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--volt-soft);
+  overflow: hidden;
+}
+.hm-hello > :not(.fx) {
+  position: relative;
+}
+/* The scene stands on the band's bottom edge, as tall as the band. Shown only where the band is wide enough to keep it clear of the words. */
+.hm-hello-art {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  width: auto;
+  aspect-ratio: 3 / 1;
+}
+.hm-hello-corner {
+  display: none;
 }
 .hm-h1 {
   margin: 0;
@@ -42,7 +62,7 @@
   position: relative;
 }
 .hm-hello + .hm-ask {
-  margin-top: -12px;
+  margin-top: -8px;
 }
 .hm-ask-f {
   display: flex;
@@ -196,6 +216,15 @@
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+/* A quick action's prop, small, in the corner the words never reach. */
+.hm-card {
+  position: relative;
+}
+.hm-card-art {
+  position: absolute;
+  top: 16px;
+  right: 14px;
+}
 .hm-card-ico {
   display: grid;
   place-items: center;
@@ -301,6 +330,16 @@
   font-size: 14px;
   line-height: 21px;
   color: var(--muted);
+}
+
+/* Nothing new: the Nomad rests beside the line. */
+.hm-quiet-art {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.hm-quiet-nomad {
+  flex: none;
 }
 
 /* The next three leads, under the card. */
@@ -592,6 +631,12 @@
 }
 .hm-empty p {
   margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
+.hm-empty-art {
+  flex: none;
+  margin: -8px 0;
 }
 
 /* Get started: its steps, then one line once they are done. */
@@ -625,6 +670,14 @@
   height: 100%;
   background: var(--volt);
   border-radius: 3px;
+}
+/* The trail takes the bar's place: the bar stays in the page for a browser with no SVG, out of sight. */
+.hm-gs-bar {
+  display: none;
+}
+.hm-gs-trail {
+  margin: -10px 0 -6px auto;
+  flex: none;
 }
 .hm-gs-steps {
   list-style: none;
@@ -730,13 +783,21 @@
   .hm-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* The band is too narrow for the scene beside the longest greeting: a plain corner instead. */
+  .hm-hello-art {
+    display: none;
+  }
+  .hm-hello-corner {
+    display: block;
+    max-width: 40%;
+  }
 }
 @media (max-width: 899px) {
   .hm-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .tp-app .tp-main-page.hm-page {
-    padding: 24px 24px 64px;
+    padding: 16px 24px 64px;
   }
 }
 @media (max-width: 767px) {
@@ -746,10 +807,12 @@
   .hm {
     gap: 22px;
   }
+  .hm-hello {
+    padding: 8px 14px 10px;
+  }
   .hm-h1 {
     font-size: 25px;
     line-height: 31px;
-    margin-top: 10px;
   }
   .hm-sub {
     font-size: 15px;
@@ -769,6 +832,18 @@
   .hm-gs-bar {
     flex-basis: 100%;
     max-width: none;
+  }
+  /* The trail keeps to the title's line, so the card is no taller than it was with the bar. */
+  .hm-gs-trail {
+    height: 26px;
+    width: auto;
+    margin: -4px 0 -2px auto;
+  }
+  .hm-card-art {
+    top: 12px;
+    right: 10px;
+    transform: scale(0.85);
+    transform-origin: top right;
   }
   .hm-gs-steps {
     gap: 0;

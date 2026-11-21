@@ -162,6 +162,27 @@
   font-size: 14px;
   line-height: 20px;
 }
+/* With its picture (the trial-ending scene, square): it stands on the card's bottom edge at the far end, clear of the words. */
+.td-trial-pic {
+  position: relative;
+  overflow: hidden;
+  padding-right: 176px;
+}
+.td-trial-art {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 148px;
+  height: 148px;
+}
+@media (max-width: 767px) {
+  .td-trial-pic {
+    padding-right: 24px;
+  }
+  .td-trial-art {
+    display: none;
+  }
+}
 .td-trial-h {
   font-size: 17px;
   line-height: 24px;

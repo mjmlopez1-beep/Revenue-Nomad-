@@ -33,6 +33,7 @@ import { holderIsMember, partnerGroups, seatLead, type PartnerGroup, type Partne
 import { useUi } from "./ui";
 import { plural } from "./hooks";
 import "./partners.css";
+import { Prop } from "../ui/fractions/art";
 
 /** Cards a function shows before "Show all", and members before "Show more". */
 const SEATS_FIRST = 3;
@@ -68,6 +69,7 @@ export function Partners({ infos, onBack, onProfile }: { infos: CoInfo[]; onBack
   const { groups, fits } = useMemo(() => partnerGroups(infos, me, titles), [infos, me, titles]);
   return (
     <div className="tp-page pt-page">
+      <Prop name="trailWinding" height={84} on="bg" className="tp-page-art tp-page-art-tall tp-page-art-wide" />
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> Back to the table
       </button>

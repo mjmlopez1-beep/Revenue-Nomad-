@@ -274,9 +274,10 @@ function WarmPath({ i, seat, onOpen }: { i: CoInfo; seat: ReturnType<typeof warm
 }
 
 /** Once, after the trial ended without a paid plan: what they kept and what Pro adds. */
-export function TrialEnded({ onSeePro, onSeen }: { onSeePro: () => void; onSeen: () => void }) {
+export function TrialEnded({ onSeePro, onSeen, art }: { onSeePro: () => void; onSeen: () => void; /** The card's picture (Home passes the trial-ending scene). */ art?: ReactNode }) {
   return (
-    <section className="td-trial" aria-labelledby="td-trial-h">
+    <section className={`td-trial${art ? " td-trial-pic" : ""}`} aria-labelledby="td-trial-h">
+      {art}
       <p className="td-trial-h" id="td-trial-h">
         Your Pro trial ended.
       </p>

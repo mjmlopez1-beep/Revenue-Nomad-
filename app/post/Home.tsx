@@ -11,6 +11,12 @@
  *   Since your last visit: each count a row that opens it
  *   Your saved views: a small table (matches, new, the weekly email, last opened)
  *
+ * Pictures (Fractions, the quiet register: app/ui/fractions/art.tsx). The greeting sits in a mint
+ * band with a small scene at its far end (morning when something is new, night when nothing is);
+ * each quick action has its prop in a corner; Get started draws its progress as a trail. Home
+ * shows the Nomad once, where the moment is: knocking in the trial-ended card, else resting by
+ * "Nothing new since", else walking the Get started trail.
+ *
  * It paints from GET ?today=1 before the whole table is here (Today.tsx useTodayData): what needs
  * the whole table (the saved views' counts, the seats card, the search's matches) waits a moment
  * in its own place, at its own size, so nothing moves when it lands.
@@ -25,6 +31,7 @@ import { LeadAction, LeadCard, TrialEnded, factsOf, leadWhat, type TodayData } f
 import { sinceWords } from "./todayModel";
 import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
+import { Bleed, NomadArt, Prop, Scene, Spot, Strip, Trail } from "../ui/fractions/art";
 import "./home.css";
 
 /** A place on Home: a link where it is one (middle-click opens a new tab), else a button. */
@@ -171,21 +178,29 @@ export function HomePage(p: HomeProps) {
     { key: "unread", n: p.unread, text: (n: number) => `${plural(n, "unread conversation")}`, to: p.messages, icon: "messages" as NavIconName },
   ];
   const sinceRows = rows.filter((r) => r.n > 0 && (r.key === "unread" || p.sinceAt));
+  // A quiet day: the day's numbers are here and nothing in them is new for this member.
+  const quietDay = !!data && !loading && !!me.function && dayN === 0 && !(since && p.sinceAt && since.radar > 0);
+  // The one Nomad on Home (art.tsx: at most one a screen), once the day's numbers are here.
+  const nomadAt = !data ? null : p.trialEnded ? "trial" : !sinceRows.length && p.sinceAt ? "since" : p.steps && p.steps.some((s) => !s.done) ? "steps" : null;
 
   return (
     <div className="hm">
       {p.nudge ? <div className="hm-nudge">{p.nudge}</div> : null}
       <header className="hm-hello">
+        {/* The band's picture: a scene at the far end on a wide screen, a plain corner on a narrow one. Never under the words. */}
+        <Strip kind={quietDay ? "night" : "morning"} on="mint" className="hm-hello-art" />
+        <Bleed kind="BR" on="mint" className="hm-hello-corner" />
         <h1 className="hm-h1">Hey {firstName(me.name)}</h1>
         <p className="hm-sub">{sub}</p>
       </header>
-      {p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} />}
-      {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} /> : null}
+      {p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} walker={nomadAt === "steps"} />}
+      {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} art={<Scene kind="trialEnding" square pro on="mint" className="td-trial-art" />} /> : null}
       <AskBox {...p} />
 
       <ul className="hm-cards" aria-label="Start here">
         <li>
           <GoLink to={p.find} className="hm-card">
+            <Prop name="doorRow" height={34} className="hm-card-art" />
             <span className="hm-card-ico" aria-hidden>
               <NavIcon name="companies" size={20} />
             </span>
@@ -195,6 +210,7 @@ export function HomePage(p: HomeProps) {
         </li>
         <li>
           <GoLink to={p.radar} className="hm-card">
+            <Prop name={dayN > 0 ? "ballGlow" : "ballPlain"} height={dayN > 0 ? 40 : 30} className="hm-card-art" />
             <span className="hm-card-ico" aria-hidden>
               <NavIcon name="radar" size={20} />
             </span>
@@ -207,6 +223,7 @@ export function HomePage(p: HomeProps) {
         </li>
         <li>
           <button type="button" className="hm-card" onClick={p.onAdd}>
+            <Prop name="ledger" height={32} className="hm-card-art" />
             <span className="hm-card-ico hm-card-ico-earn" aria-hidden>
               <NavIcon name="add" size={20} />
             </span>
@@ -217,6 +234,7 @@ export function HomePage(p: HomeProps) {
         <li>
           {p.seats ? (
             <button type="button" className="hm-card" onClick={p.seats.go}>
+              <Prop name={p.seats.kind === "invite" ? "envelope" : "seatEmpty"} height={p.seats.kind === "invite" ? 30 : 38} className="hm-card-art" />
               <span className="hm-card-ico hm-card-ico-earn" aria-hidden>
                 <NavIcon name={p.seats.kind === "invite" ? "invite" : "yourseats"} size={20} />
               </span>
@@ -300,7 +318,10 @@ export function HomePage(p: HomeProps) {
               ))}
             </ul>
           ) : (
-            <p className="hm-quiet">{p.sinceAt ? `Nothing new ${sinceLow}. No new companies, roles or messages.` : "This is your first visit. New companies, roles and messages show here next time."}</p>
+            <p className={`hm-quiet${nomadAt === "since" ? " hm-quiet-art" : ""}`}>
+              {nomadAt === "since" ? <NomadArt pose="rest" height={52} className="hm-quiet-nomad" /> : null}
+              <span>{p.sinceAt ? `Nothing new ${sinceLow}. No new companies, roles or messages.` : "This is your first visit. New companies, roles and messages show here next time."}</span>
+            </p>
           )}
         </section>
         )}
@@ -421,7 +442,7 @@ function AskBox(p: HomeProps) {
 
 /* ---------- Get started ---------- */
 
-function GetStarted({ steps, onStep, onHide }: { steps: CheckStep[]; onStep: (k: CheckStep["key"]) => void; onHide: () => void }) {
+function GetStarted({ steps, onStep, onHide, walker }: { steps: CheckStep[]; onStep: (k: CheckStep["key"]) => void; onHide: () => void; walker: boolean }) {
   const done = steps.filter((s) => s.done).length;
   const all = done === steps.length;
   if (all)
@@ -448,6 +469,8 @@ function GetStarted({ steps, onStep, onHide }: { steps: CheckStep[]; onStep: (k:
         <span className="hm-gs-bar" aria-hidden>
           <span style={{ width: `${(done / steps.length) * 100}%` }} />
         </span>
+        {/* The same progress as a trail: a step done is a step walked. */}
+        <Trail done={done} total={steps.length} walker={walker} on="bg" height={36} className="hm-gs-trail" />
       </div>
       <ol className="hm-gs-steps">
         {steps.map((s, k) => (
@@ -499,6 +522,7 @@ function SavedViewsTable({ views, onOpen, onEmail, table, waiting }: { views: Ho
       </div>
       {views.length === 0 ? (
         <div className="hm-empty">
+          <Spot name="noViews" size={64} className="hm-empty-art" />
           <p>Save a view of the table to get it here and by email each week.</p>
           <GoLink to={table} className="btn">
             Open the table

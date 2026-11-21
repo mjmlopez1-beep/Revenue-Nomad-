@@ -360,6 +360,9 @@
   border-radius: var(--r-card);
   background: var(--surface);
 }
+.ms-empty-art {
+  margin: -12px 0 8px;
+}
 .ms-empty h2 {
   margin: 0 0 8px;
   font-size: 22px;

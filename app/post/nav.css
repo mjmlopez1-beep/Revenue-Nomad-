@@ -291,8 +291,7 @@
 /* The foot: Integrations, Plan and billing, Credits, the plan's line and the member. */
 .tp-nav-foot {
   flex: none;
-  padding: 6px 10px 8px;
-  border-top: 1px solid var(--line);
+  padding: 0 10px 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 4px;
@@ -364,13 +363,24 @@
   flex: none;
   color: var(--faint);
 }
+/* The trail's steps where the hairline was (art.tsx Divider): the same thread on every screen. */
+.tp-nav-thread {
+  height: 12px;
+  margin: 0 -10px 3px;
+  width: calc(100% + 20px);
+}
+.tp-nav.collapsed .tp-nav-thread {
+  margin: 0 -8px 3px;
+  width: calc(100% + 16px);
+}
+/* The member's own avatar is a leaf (Fractions' avatar frames: never a circle). */
 .tp-nav-av {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   flex: none;
-  border-radius: 50%;
+  border-radius: 50% 0 50% 0;
   background: var(--pine);
   color: #fff;
   font-size: 12px;

@@ -27,6 +27,7 @@ import { RateWho, shortLabel, splitPicks, useUi, type RateChoice } from "./ui";
 import { FindSeats, seatsFound } from "../onboard/FindSeats";
 import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
+import { Prop, Spot } from "../ui/fractions/art";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
 interface Saved {
@@ -933,6 +934,8 @@ export function Seats({
   const find = infos && <FindSeatsHere infos={infos} autoFocus={search} empty={empty} />;
   return (
     <div className="tp-page ys-page">
+      {/* With seats: the Nomad on its seat. With none, the empty state's own picture is the page's one. */}
+      {!empty && <Prop name="seatYours" height={62} on="bg" ember className="tp-page-art" />}
       {/* From the zero-credits wall, the way out leads back to the record they were unlocking. */}
       <button type="button" className="tp-back" onClick={back ? back.go : onBack}>
         <IconChevron dir="left" /> {back ? `Back to ${back.name}` : "Back to the table"}
@@ -955,6 +958,7 @@ export function Seats({
       <div className={empty ? "ys-empty" : "ys-find-top"}>
         {empty && (
           <>
+            <Spot name="noSeats" size={112} ember className="ys-empty-art" />
             <h2 className="ys-empty-h">{waiting.length ? "No seat is confirmed as yours yet" : "We don't have a seat under your name yet"}</h2>
             <p>
               Type a client you worked with and we list the seats we found there. Claim yours, or add the one you held, and each answer you add earns a credit, {SEAT_YIELD}.

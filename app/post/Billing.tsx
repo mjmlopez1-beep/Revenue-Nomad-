@@ -27,6 +27,7 @@ import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
 import { useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
+import { NomadArt, Prop } from "../ui/fractions/art";
 
 /** Where the plans were opened from: an upgrade moment. */
 export type PlansFrom = "trial" | "views" | "bench" | "credits" | "slack" | "claude" | "radar" | "crystal" | "billing";
@@ -267,7 +268,9 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
   return (
     <Sheet title={title} onClose={onClose} dialog className="bl-sheet">
       <div className="bl-sheet-in">
-        <p className="bl-lead">
+        <p className={`bl-lead${onPro ? " bl-lead-pic" : ""}`}>
+          {/* On Pro: the Nomad celebrates, once, beside the line that says so. */}
+          {onPro ? <NomadArt pose="celebrate" height={64} className="bl-lead-art" /> : null}
           {onPro ? (plan.proStartsAt ? `You're on Pro. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.` : "You're on Pro. Everything here is yours.") : leadFor(plan, a)}
         </p>
         {!plan.notLooking && !onPro && a.from !== "billing" && a.from !== "trial" && <p className="bl-value">{VALUE_LINE}</p>}
@@ -623,6 +626,8 @@ export function BillingPage({ view, refresh, onBack }: { view: View; refresh: ()
   const paidPlan = plan.subscribed && (plan.name === "pro" || plan.pause === "now");
   return (
     <div className="tp-page bl-page">
+      {/* Pro is the door with the saffron lining; a trial is its calendar. */}
+      {plan.name === "pro" ? <Prop name="doorOpen" pro height={62} on="bg" className="tp-page-art" /> : plan.name === "trial" ? <Prop name="calendar" height={58} on="bg" ember={!plan.ending} className="tp-page-art" /> : <Prop name="doorAjar" pro height={60} on="bg" className="tp-page-art" />}
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> Back to the table
       </button>
@@ -633,6 +638,8 @@ export function BillingPage({ view, refresh, onBack }: { view: View; refresh: ()
           <Status plan={plan} />
         </div>
         <div className="bl-status-acts">
+          {/* The trial's last days: the Nomad knocks. It holds the page's ember, so the calendar above is drawn calm. */}
+          {plan.name === "trial" && plan.ending ? <NomadArt pose="knock" height={52} className="bl-status-art" /> : null}
           {plan.name === "free" && plan.pause !== "now" && (
             <button type="button" className={`btn${plan.notLooking ? "" : " btn-pine"}`} onClick={() => openPlans("billing")}>
               See Pro

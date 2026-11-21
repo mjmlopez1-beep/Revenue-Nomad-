@@ -17,6 +17,7 @@ import { Anchored, Sheet, UndoHost, owedText } from "./ui";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
+import { Glyph } from "../ui/fractions/art";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
 export type Contact = View["contact"] | null;
@@ -99,7 +100,8 @@ export function CreditsPill({
         {/* One line: the balance. With the day's limit binding, a second line under it (the pill then stacks the two). */}
         <span className="tp-credits-top">
           <span className="tp-credits-i" aria-hidden>
-            <IconCoin size={14} />
+            {/* A credit is a coin seen edge on: the ball stays the only circle. */}
+            <Glyph name="credit" size={14} />
           </span>
           <span className="num tp-credits-n">{me.credits}</span>
           <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>

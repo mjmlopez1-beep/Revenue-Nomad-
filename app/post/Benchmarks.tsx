@@ -26,6 +26,7 @@ import { earnNote, useUi } from "./ui";
 import { ProTag, UpgradeNote, openPlans } from "./Billing";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
+import { Prop } from "../ui/fractions/art";
 
 /** Whole dollars with separators ("$7,500", "$205"). Amounts arrive rounded to $250 or $5, so nothing is rounded again here. */
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -338,6 +339,7 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
   const withoutYours = stats.some((s) => s.withoutYours);
   return (
     <div className="tp-page bm-page">
+      <Prop name="bars" height={84} on="bg" ember className="tp-page-art tp-page-art-tall" />
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> Back to the table
       </button>

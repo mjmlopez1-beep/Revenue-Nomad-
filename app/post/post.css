@@ -2,7 +2,12 @@
  * Merlin app (signed in). Uses the tokens in app/globals.css.
  * Pine navigates and spends, volt earns and adds, ember only for urgency.
  * No shadows except overlays (drawer, popovers, sheets, modal).
+ *
+ * Pictures are Fractions in its quiet register (app/ui/fractions/art.tsx): present on every page,
+ * calm, and never behind or touching a table, a row or a record's content.
  */
+/* The illustration kit's colours, in this one stylesheet. */
+@import "../ui/fractions/fractions.css";
 
 /* ---------- shell ---------- */
 .tp-app {
@@ -2185,6 +2190,15 @@ body:has(.tp-drawer) .pro-foot {
   padding: 72px 24px;
   text-align: center;
 }
+/* The state's picture, centred above the heading (art.tsx Spot). */
+.tp-noresults-art {
+  margin: -12px 0 6px;
+}
+.tp-phone .tp-noresults-art {
+  width: 88px;
+  height: 88px;
+  margin-top: -8px;
+}
 .tp-noresults h3 {
   font-size: 19px;
   line-height: 26px;
@@ -3850,6 +3864,20 @@ button.tp-fs-row:active {
   font-size: 15px;
   font-weight: 700;
   color: var(--ink);
+}
+/* The fact is in: its picture at the far end of the line. */
+.am-done-pic .am-done-t {
+  flex: 1;
+  min-width: 0;
+}
+.am-done-art {
+  flex: none;
+  align-self: center;
+  margin: -8px -4px -8px 0;
+}
+.tp-phone .am-done-art {
+  width: 56px;
+  height: 56px;
 }
 .tp-done-panel .am-h3 {
   margin-top: 4px;
@@ -7312,4 +7340,43 @@ div.tp-pcard-when {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
+}
+
+/*
+ * ---------- pictures on the pages (Fractions, the quiet register: app/ui/fractions/art.tsx) ----------
+ * A page's one lead prop floats at the far end of its header (the back link and the title), so the
+ * words wrap beside it and never run under it. It ends 24px or more above the page's first card.
+ * A taller one (tp-page-art-tall) is for a page whose header has a paragraph under the title.
+ */
+.tp-page-art {
+  float: right;
+  margin: 2px 0 0 20px;
+}
+.tp-page-art-tall {
+  margin-top: 6px;
+}
+/* Phones: small beside a short title, and none where the title or the prop is long. */
+.tp-phone .tp-page-art {
+  height: 44px;
+  width: auto;
+  margin: 4px 0 0 12px;
+}
+.tp-phone .tp-page-art-tall {
+  height: 52px;
+}
+.tp-phone .tp-page-art-wide {
+  display: none;
+}
+
+/* The record's locked prompt: the door beside the words (the only picture in the record). */
+.tp-hidden-pic {
+  display: flow-root;
+}
+.tp-hidden-art {
+  float: left;
+  margin: 2px 12px 0 0;
+}
+/* People in a conversation are an arch, never a circle (Fractions' avatar frames). */
+.tp-app .ms-av {
+  border-radius: 50% 50% 0 0;
 }

@@ -21,6 +21,7 @@ import { ClaudeNetworkPrompt, GoogleSection } from "./network/Network"; // [goog
 import "./connect.css";
 import "./pages.css";
 import "./integrations.css";
+import { Prop } from "../ui/fractions/art";
 
 const WEBHOOK_EXAMPLE = JSON.stringify(
   {
@@ -402,6 +403,7 @@ export function Integrations({ onBack, onCredits, section, onNetwork }: { onBack
 
   return (
     <div className="tp-page in-page">
+      <Prop name="join" height={72} on="bg" className="tp-page-art tp-page-art-tall" />
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> Back to the table
       </button>

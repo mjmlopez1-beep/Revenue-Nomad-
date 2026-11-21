@@ -18,6 +18,7 @@ import { Sheet, useUi } from "./ui";
 import { useLayout } from "./hooks";
 import { partnerOpener, seatOpener } from "@/lib/partners";
 import "./messages.css";
+import { Prop, Spot } from "../ui/fractions/art";
 
 const MAX = 2000;
 
@@ -271,6 +272,7 @@ export function MessagesPage({ onBack, openCompany }: { onBack: () => void; open
 
   const empty = (
     <div className="ms-empty">
+      <Spot name="noMessages" size={112} ember className="ms-empty-art" />
       <h2>No messages yet</h2>
       <p>When you unlock who held a seat and they&apos;re a member, you can write to them from the record. Their replies land here.</p>
       <button type="button" className="btn btn-pine" onClick={onBack}>
@@ -281,6 +283,7 @@ export function MessagesPage({ onBack, openCompany }: { onBack: () => void; open
 
   return (
     <div className="tp-page ms-page">
+      {list?.length ? <Prop name="bubbles" height={56} on="bg" className="tp-page-art" /> : null}
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> Back to the table
       </button>

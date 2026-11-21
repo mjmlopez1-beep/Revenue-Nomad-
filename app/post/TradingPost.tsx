@@ -106,6 +106,7 @@ const preloadLater = (admin: boolean) => {
   for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadPartners, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
 };
 import "./nav.css";
+import { Spot, type SpotKind } from "../ui/fractions/art";
 
 export interface TradingPostProps {
   view: View;
@@ -854,8 +855,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     }
     // A plain unlock speaks through the cell. One that bought more (the company, the role, the posting and the rate) or cost nothing says so.
     const plain = /^Unlocked [^,]+ for 1 credit\.$/.test(r.message) && !/ and /.test(r.message);
-    if (t.field === "identity" || (/^Unlocked/.test(r.message) && !plain)) toast(r.message);
-    else if (firstUnlock) toast("Unlocked, and it stays unlocked for you. Add a fact you know and you earn the credit back.");
+    // A member's first unlock is a moment: its toast carries the open lock (Fractions, quiet on a dark surface).
+    const first = firstUnlock ? { art: <Spot name="unlocked" size={44} on="pine" ember /> } : undefined;
+    if (t.field === "identity" || (/^Unlocked/.test(r.message) && !plain)) toast(r.message, false, first);
+    else if (firstUnlock) toast("Unlocked, and it stays unlocked for you. Add a fact you know and you earn the credit back.", false, first);
     cellFlags.set((f) => (f.pulse === k ? { pulse: null } : {}));
     flagOn("flash", [k]);
     setTimeout(() => flagOff("flash", [k]), 2200);
@@ -3079,6 +3082,8 @@ function Empty({
   onBrowse: () => void;
 }) {
   const narrowed = filtered || tab !== "all";
+  // The state's picture: the empty seat for no open roles, the first stone for no follows, else the lantern on bare ground.
+  const art: SpotKind | null = !q && hiring && !(hired && tab !== "hiring") ? "noRoles" : !q && !filtered && !hired ? (tab === "following" ? "noFollows" : tab === "hiring" ? "noRoles" : tab === "needs" || tab === "unlocked" ? null : "noResults") : "noResults";
   let h: string;
   let p: string;
   let actions: { label: string; go: () => void; kind?: "pine" | "add" }[];
@@ -3172,6 +3177,8 @@ function Empty({
   }
   return (
     <div className="tp-noresults">
+      {/* Drawn calm (no ember): the tabs above may show Hiring now's ember count. */}
+      {art ? <Spot name={art} size={112} className="tp-noresults-art" /> : null}
       <h3>{h}</h3>
       <p>{p}</p>
       <div className="tp-noresults-acts">

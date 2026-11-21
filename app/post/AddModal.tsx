@@ -27,6 +27,7 @@ import { MissingFacts, claimLine } from "./Drawer";
 import { MonthYear } from "./MonthYear";
 import { RateWho, reasonsFor, type RateChoice } from "./Seats";
 import { BENCH_RATE_HELP, atTime, plural, useDebounced } from "./hooks";
+import { Spot } from "../ui/fractions/art";
 
 interface Lookup {
   domain: string;
@@ -1323,7 +1324,8 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
           </div>
           {done ? (
             <div className="tp-done-panel">
-              <div className={`tp-done${nothingNew ? " am-done-same" : ""}`} role="status">
+              <div className={`tp-done${nothingNew ? " am-done-same" : " am-done-pic"}`} role="status">
+                {nothingNew ? null : <Spot name="factAdded" size={72} on="mint" ember className="am-done-art" />}
                 <span className="am-done-check" aria-hidden>
                   <IconCheck size={13} />
                 </span>

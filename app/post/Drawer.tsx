@@ -41,6 +41,7 @@ import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
 import { WayIn } from "./network/Network"; // [google network]
+import { Prop } from "../ui/fractions/art";
 
 /**
  * Who leads each function, from the company's own website (lib/leaders): "Sales: full-time CRO
@@ -1881,7 +1882,9 @@ export function Drawer({
             <span className="tp-dfit-r num">{fitReason(i)}</span>
           </div>
           {c.hidden && (
-            <p className="tp-hidden-note">
+            <p className="tp-hidden-note tp-hidden-pic">
+              {/* The locked prompt's picture: the door, closed. The only art in the record. */}
+              <Prop name="doorClosed" height={44} className="tp-hidden-art" />
               {hiringHere
                 ? `Unlock to see the company's name, website and job postings${postedRate ? ", with the posted rate" : ""}. Its open roles are free to read. Who held each seat opens after that, 1 credit each.`
                 : "Unlock to see the company's name, website and job postings. Who held each seat opens after that, 1 credit each."}

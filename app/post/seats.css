@@ -30,6 +30,9 @@
   line-height: 24px;
   color: var(--body-ink);
 }
+.ys-empty-art {
+  margin: -12px 0 0;
+}
 .ys-empty-h {
   font-size: 19px;
   line-height: 26px;

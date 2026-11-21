@@ -24,6 +24,7 @@ import { inviteMessage, inviteUrl } from "./earnBack";
 import { fmtStamp } from "./RoleDate";
 import { Sheet, useUi } from "./ui";
 import "./partners.css";
+import { Spot } from "../ui/fractions/art";
 
 /** The device has a share sheet (phones and some tablets). */
 const canShareNow = () => typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -65,7 +66,7 @@ export function ShareButtons({
   const shown = ways.filter((w) => (w === "share" ? canShare : w === "linkedin" ? !!linkedin : true));
   const copy = async (done = copied) => {
     const ok = await copyText(text);
-    toast(ok ? done : "That didn't copy. Select the message and copy it yourself.", !ok);
+    toast(ok ? done : "That didn't copy. Select the message and copy it yourself.", !ok, ok ? { art: <Spot name="inviteSent" size={44} on="pine" /> } : undefined);
     return ok;
   };
   const run: Record<Way, () => void> = {

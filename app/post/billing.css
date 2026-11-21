@@ -656,3 +656,22 @@ button.tp-plan:hover {
 .bl-quiet {
   margin: 0 0 12px;
 }
+
+/* Pictures (Fractions, quiet): the Nomad knocking beside Keep Pro in a trial's last days, and celebrating in the plans sheet once on Pro. */
+.bl-status-acts {
+  align-items: center;
+}
+.bl-status-art {
+  flex: none;
+}
+.bl-lead-pic {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.bl-lead-art {
+  flex: none;
+}
+.tp-phone .bl-status-art {
+  display: none;
+}
