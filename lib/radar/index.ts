@@ -59,8 +59,6 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { publicBase } from "../links";
 import { siteKey } from "../tableFields";
-import { iconDomains } from "../companyIcons";
-import { logoSources } from "../logo";
 import { emailEnabled, sendEmail } from "../email";
 import { billingLive, gated, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
@@ -160,31 +158,21 @@ const ctxOf = (seed: Seed, s: State, nowMs: number): Ctx => ({ seed, s, g: T.gra
 const knownTo = (c: Ctx, m: Member, companyId: string) => !T.identityHidden(c.g, c.s, c.idx, c.tracks, m, companyId, true);
 
 /**
- * Logos for a delivery's companies that the member's table shows, by internal id: the public
- * https address of the icon service the app's CompanyLogo draws from (lib/logo.ts logoSources), for
- * Slack to fetch itself. The domain the way GET /api/logo reads it (lib/table.ts logoDomain): the
- * website's host, else one looked up from the name earlier, never a shared host's. A company locked
- * for the member gets none: an icon's address carries its domain.
+ * Logos for a delivery's companies that the member's table shows, by internal id: the https
+ * address of our own GET /api/logo/<public id> (lib/logo.ts), for Slack to fetch. The icon comes
+ * from the company's own website through our server: Slack is never pointed at an icon service, and
+ * the address names no domain. Only for a company with a website of its own (not a shared host),
+ * and only when the public address is https. A company locked for the member gets none.
  */
 async function logosFor(c: Ctx, m: Member, sigs: MemberSignal[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const nodes = [...new Set(sigs.map((x) => x.companyId))].filter((id) => knownTo(c, m, id)).flatMap((id) => {
+  const base = (publicBase() || "").replace(/\/+$/, "");
+  if (!/^https:\/\//.test(base)) return out;
+  for (const id of new Set(sigs.map((x) => x.companyId))) {
+    if (!knownTo(c, m, id)) continue;
     const n = c.g.companies.get(id);
-    return n ? [n] : [];
-  });
-  const named: { id: string; name: string; website: null }[] = [];
-  const put = (id: string, domain: unknown) => {
-    const host = siteKey(domain);
-    if (host && !host.includes("/")) out.set(id, logoSources(host)[0]);
-  };
-  for (const n of nodes) {
-    const site = siteKey(T.live(n, c.s, "website"));
-    if (site) put(n.id, site);
-    else named.push({ id: n.id, name: n.name, website: null });
-  }
-  if (named.length) {
-    const icons = await iconDomains(named, { lookup: false }).catch(() => ({}) as Record<string, string>);
-    for (const [id, d] of Object.entries(icons)) put(id, d);
+    const site = n ? siteKey(T.live(n, c.s, "website")) : null;
+    if (site && !site.includes("/")) out.set(id, `${base}/api/logo/${encodeURIComponent(T.pubId(id))}`);
   }
   return out;
 }

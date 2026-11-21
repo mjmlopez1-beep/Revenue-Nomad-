@@ -15,6 +15,7 @@ import { normalizeHq } from "@/lib/geo";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startMs, startWords, windowPhrase, windowWords } from "@/lib/hired";
 import { isFractionalLead, isFullTimeLead, ledFullTimeWords, onTheTeamWords, type LeadLine } from "@/lib/leaders/types";
 import { CRYSTAL_FREE_TODAY } from "@/lib/radar/types";
+import { rememberLogo } from "@/app/ui/logoIds";
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "repeat" | "hiring" | "following" | "unlocked" | "needs";
@@ -412,6 +413,8 @@ export function suggestHiredFn(infos: CoInfo[], mine: string | null, keep: (i: C
 function infoOf(c: CompanyRec): CoInfo {
   const website = shown(c.cells.website);
   const domain = website ? hostOf(website) : c.iconDomain;
+  // Its logo by domain comes from our own route (app/ui/logoIds.ts). Only a company the member can name.
+  if (!c.hidden) (rememberLogo(c.iconDomain, c.id), rememberLogo(domain, c.id));
   const engs = engagementsNewest(c);
   const f = c.friendly;
   // What is on file for each function. The server sends open-role functions apart (friendly.hiring)

@@ -100,6 +100,7 @@ import { cleanNote, connectText, notePitch } from "./partners";
 import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
+import { healthStats } from "./health";
 import {
   ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
   type BillingState,
@@ -3459,7 +3460,7 @@ export async function aboutCells(token: string | null, ids: string[], opts: { as
 
 /**
  * The domain a company's logo is drawn from, for GET /api/logo/<id> (lib/logo.ts): its website's
- * host, else a domain looked up from its name earlier (lib/companyIcons.ts; this starts no lookup).
+ * host, nothing else (the icon is read from the company's own site).
  * `publicId` is a company's own public id. Null for anything else, a company with neither, or a
  * website on a shared host (a LinkedIn page, a job board), whose icon is not the company's. Server
  * side only: the domain never goes to the page of a member the company is locked for.
@@ -3473,10 +3474,7 @@ export async function logoDomain(publicId: string): Promise<string | null> {
   const node = cid ? g.companies.get(cid) : undefined;
   if (!node || pubId(node.id) !== id) return null;
   const site = siteKey(live(node, s, "website"));
-  if (site) return site.includes("/") ? null : site;
-  const icon = (await iconDomains([{ id: node.id, name: node.name, website: null }], { lookup: false }))[node.id];
-  const host = siteKey(icon);
-  return host && !host.includes("/") ? host : null;
+  return site && !site.includes("/") ? site : null;
 }
 
 /** The most companies an action's answer carries (an Unlock all on one record touches one). Past it, the page loads the table again. */
@@ -4393,6 +4391,16 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     about: aboutStats(s, g, nowMs),
     leaders: leadersStats(s, g, nowMs),
     funding: fundingAdminStats(s.funding, nowMs),
+    // Health (lib/health.ts): the funnel, retention, facts, credits, invites and plans, counts only.
+    health: healthStats({
+      s,
+      nowMs,
+      starter: STARTER_CREDITS,
+      entityOf,
+      isMember: (id) => idx.byId.has(id),
+      billing: billingLive(),
+      seatImports: seed.engagements.filter((e) => e.addedAt).map((e) => ({ at: e.addedAt!, facts: Object.values(e.fields).filter(Boolean).length })),
+    }),
     radar: radarStats(
       s.radar,
       s.signals,

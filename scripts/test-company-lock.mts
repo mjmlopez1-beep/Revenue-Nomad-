@@ -18,10 +18,13 @@
  * landing page's preview still names companies; who held a seat opens after the company; Add by
  * name opens only with something added; a removed company is paid back in full.
  *
- * The logo and the About: the route sends image bytes (Google's service first, DuckDuckGo's after a
- * blank 16px icon), never a redirect or the service's headers, 404 for an unknown id, a seat's id,
- * no domain or no icon (an SVG included), from memory the second time, 429 past its per-address
- * limit; the page's markup for a locked company points at /api/logo/<public id> and holds no icon
+ * The logo and the About: the route reads the icon from the company's own website only (a mock
+ * server on 127.0.0.1 for every company's host: its <link rel="icon">, else /favicon.ico, robots.txt
+ * first, never a link to another site, never Google, DuckDuckGo or Clearbit) and sends image bytes,
+ * never a redirect or the site's headers, 404 for an unknown id, a seat's id, no website or no icon
+ * (an SVG included), from memory and then from the data volume without asking again, nothing
+ * fetched with RN_LOGO_LOOKUP=off, 429 past its per-address limit; every logo the page draws is our
+ * own /api/logo/<public id>, a named company with no id gets its letters; the page's markup for a locked company points at /api/logo/<public id> and holds no icon
  * service address, domain or name; the plain tile has no letters. A locked company's About (GET
  * ?about=, get_company) reads "the company" for its name and drops its links and emails, the
  * unlocked and the found-by-name record get it whole, and aboutWithout's cases one by one.
@@ -34,6 +37,7 @@
  * company and a fact added there keep it named; a repeat the same day is free; the limits (25 new
  * a day on Free, 100 on Pro, 50 misses); the connector's find_company; Pilot metrics' counts.
  */
+import http from "node:http";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -188,24 +192,60 @@ const png = (w: number) => {
 const ico = (w: number) => Uint8Array.from([0, 0, 1, 0, 1, 0, w, w, 0, 0, 1, 0, 32, 0, 9, 9, 9, 9, 22, 0, 0, 0]);
 /** Every request the code made, with how it asked to treat redirects. */
 const fetched: { url: string; redirect?: string }[] = [];
-/**
- * The icon services, replaced: Acmeworks has a 64px icon at Google's; Bluefin only Google's blank
- * 16px stand-in, and a 32px icon at DuckDuckGo's; Dunmorely an SVG (never sent on); anything else
- * 404. Each answer carries headers that name the domain, which must never reach the page.
- */
+/** fetch, replaced: nothing leaves the machine. The logo never uses it (it reads sites through lib/about/fetch.ts), so any icon service here is a failure. */
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
   fetched.push({ url, redirect: init?.redirect });
-  const google = url.startsWith("https://www.google.com/s2/favicons?");
-  const ddg = url.startsWith("https://icons.duckduckgo.com/ip3/");
-  if (!google && !ddg) return new Response("ok", { status: 200 });
-  const dom = google ? new URL(url).searchParams.get("domain") ?? "" : decodeURIComponent(url.slice(url.indexOf("/ip3/") + 5).replace(/\.ico$/, ""));
-  const leaky = { "x-upstream-domain": dom, "content-disposition": `inline; filename="${dom}.png"`, etag: `"${dom}"`, "x-company": "Acmeworks Robotics" };
-  if (dom === CO.acme.site && google) return new Response(png(64), { headers: { "content-type": "image/png", ...leaky } });
-  if (dom === CO.blue.site) return google ? new Response(png(16), { headers: { "content-type": "image/png", ...leaky } }) : new Response(ico(32), { headers: { "content-type": "image/vnd.microsoft.icon", ...leaky } });
-  if (dom === CO.dun.site) return new Response("<svg xmlns='http://www.w3.org/2000/svg'/>", { headers: { "content-type": "image/svg+xml", ...leaky } });
-  return new Response("not found", { status: 404, headers: leaky });
+  return new Response("ok", { status: 200 });
 }) as typeof fetch;
+
+/**
+ * Every company's own website, on one mock server on 127.0.0.1 (lib/logo.ts is pointed at it with a
+ * resolver that answers 127.0.0.1 for every name, and this port). By the Host it was asked for:
+ * Acmeworks links a 64px icon on its homepage, beside an SVG one and one on another site (both
+ * passed over), and keeps an icon under /private that robots.txt disallows; Bluefin links none and
+ * has a 32px /favicon.ico; Dunmorely links only an SVG and sends SVG for /favicon.ico; Irisdale's
+ * robots.txt disallows everything; Granitepeak's homepage redirects to another site; the rest 404.
+ * Each image carries headers that name the domain, which must never reach the page.
+ */
+const ICON_PORT = 6781;
+const siteAsked: { host: string; path: string }[] = [];
+const sites = http.createServer((req, res) => {
+  const host = String(req.headers.host ?? "").replace(/:\d+$/, "");
+  const p = req.url ?? "/";
+  siteAsked.push({ host, path: p });
+  const leaky = { "x-upstream-domain": host, "content-disposition": `inline; filename="${host}.png"`, etag: `"${host}"`, "x-company": "Acmeworks Robotics" };
+  const send = (status: number, type: string, body: string | Uint8Array, extra: Record<string, string> = {}) => {
+    res.writeHead(status, { "content-type": type, ...extra });
+    res.end(body);
+  };
+  if (p === "/robots.txt") {
+    if (host === CO.iris.site) return send(200, "text/plain", "User-agent: *\nDisallow: /\n");
+    if (host === CO.acme.site) return send(200, "text/plain", "User-agent: *\nDisallow: /private/\n");
+    return send(404, "text/plain", "none");
+  }
+  if (host === CO.acme.site) {
+    if (p === "/")
+      return send(
+        200,
+        "text/html",
+        `<html><head><link rel="icon" type="image/svg+xml" href="/icon.svg"><link rel="apple-touch-icon" href="https://cdn.elsewhere.example/acme.png"><link rel="icon" href="/private/secret.png" sizes="128x128"><link rel="shortcut icon" href="/static/icon-64.png" sizes="64x64"></head><body>Acmeworks</body></html>`,
+      );
+    if (p === "/static/icon-64.png") return send(200, "image/png", png(64), leaky);
+    return send(404, "text/plain", "no");
+  }
+  if (host === CO.blue.site) {
+    if (p === "/") return send(200, "text/html", "<html><head><title>Bluefin</title></head></html>");
+    if (p === "/favicon.ico") return send(200, "image/vnd.microsoft.icon", ico(32), leaky);
+    return send(404, "text/plain", "no");
+  }
+  if (host === CO.dun.site) {
+    if (p === "/") return send(200, "text/html", `<html><head><link rel="icon" href="/logo.svg"></head></html>`);
+    return send(200, "image/svg+xml", "<svg xmlns='http://www.w3.org/2000/svg'/>", leaky);
+  }
+  if (host === CO.gran.site && p === "/") return send(302, "text/plain", "", { location: "http://other-brand.example/" });
+  return send(404, "text/plain", "not found");
+});
 
 let passes = 0;
 let failures = 0;
@@ -541,57 +581,97 @@ async function main() {
   check("the Add form's lookup by an exact website names it (a lookup by name, counted)", siteLook?.name === CO.elm.name && coOf(await view("tok-finn-lock"), CO.elm.id)!.hidden === true, siteLook);
   const adm = (await view("tok-admin-lock")).admin as { finds?: { today: number; members: number; atCap: number; misses: number; missCap: number } } | undefined;
   check("Pilot metrics counts lookups today and members at the limits", !!adm?.finds && adm.finds.today >= 24 + 99 && adm.finds.members >= 3 && adm.finds.atCap === 2 && adm.finds.missCap === 1, adm?.finds);
+  // Health (lib/health.ts, its numbers in scripts/test-health.mts): in an admin's view, counts only.
+  const hl = ((await view("tok-admin-lock")).admin as { health?: { funnel: { n: number }[]; weeks: unknown[]; credits: unknown[]; insights: unknown } } | undefined)?.health;
+  const memberWords = [...seed.members.flatMap((m) => [m.name, m.email]), "Cara Capped", "cara@example.com"];
+  check(
+    "Pilot metrics carries Health: the funnel from members who joined, 12 weeks of facts and credits, no name or email",
+    !!hl && hl.funnel.length === 5 && hl.funnel[0].n >= 1 && hl.weeks.length === 12 && hl.credits.length === 12 && !memberWords.some((x) => JSON.stringify(hl).includes(x)),
+    hl?.funnel,
+  );
+  const memberHl = ((await view("tok-finn-lock")).admin as unknown) ?? null;
+  check("and a member's view has none of it", memberHl === null);
 
   /* ---------- the logo (GET /api/logo/<id>, lib/logo.ts) ---------- */
   console.log("\nThe logo");
   const Lg = await import("../lib/logo");
+  await new Promise<void>((done) => sites.listen(ICON_PORT, "127.0.0.1", done));
+  const iconDir = path.join(dir, "icons-test");
+  Lg.iconTest.opts = { resolve: async () => ["127.0.0.1"], allow: { loopback: true, port: ICON_PORT } };
+  Lg.iconTest.dir = iconDir;
+  process.env.RN_LOGO_LOOKUP = "on";
   const ask = (id: string, ip = "198.51.100.7") => Lg.logoResponse(new Request(`${BASE}/api/logo/${encodeURIComponent(id)}`, { headers: { "x-forwarded-for": ip } }), id);
   const headersOf = (r: Response) => Object.fromEntries(r.headers.entries());
-  let from = fetched.length;
+  const ownSites = new Set(Object.values(CO).map((c) => c.site));
+  const fetchedBefore = fetched.length;
+  let from = siteAsked.length;
   const lg1 = await ask(pub(CO.acme.id));
   const lgBytes = new Uint8Array(await lg1.arrayBuffer());
-  const lgAsked = fetched.slice(from);
+  const lgAsked = siteAsked.slice(from);
   check(
     "a locked company's id gives its icon as image bytes, kept by browsers for a day",
     lg1.status === 200 && lg1.headers.get("content-type") === "image/png" && lgBytes.length === 40 && lgBytes[0] === 0x89 && lg1.headers.get("cache-control") === "public, max-age=86400",
     { status: lg1.status, headers: headersOf(lg1), n: lgBytes.length },
   );
   check(
-    "never a redirect, and none of the icon service's headers: no domain and no name in them",
+    "never a redirect, and none of the site's headers: no domain and no name in them",
     lg1.status < 300 && !lg1.headers.has("location") && ["etag", "content-disposition", "x-upstream-domain", "x-company"].every((k) => !lg1.headers.has(k)) && leaks(headersOf(lg1), ALL).length === 0,
     headersOf(lg1),
   );
   check(
-    "the server asked Google's service at 64px first, following its redirects itself",
-    lgAsked.length === 1 && lgAsked[0].url === `https://www.google.com/s2/favicons?domain=${CO.acme.site}&sz=64` && lgAsked[0].redirect === "follow",
+    "the server read the company's own site: robots.txt, the homepage, then the icon its homepage links",
+    lgAsked.map((x) => `${x.host}${x.path}`).join(" ") === `${CO.acme.site}/robots.txt ${CO.acme.site}/ ${CO.acme.site}/robots.txt ${CO.acme.site}/static/icon-64.png`,
     lgAsked,
   );
-  from = fetched.length;
+  check("it passed over the SVG icon, the icon on another site and the one robots.txt disallows", !lgAsked.some((x) => /svg|secret|acme\.png/.test(x.path) || x.host !== CO.acme.site), lgAsked);
+  from = siteAsked.length;
   const lg2 = await ask(pub(CO.acme.id));
-  check("a second ask comes from memory, without asking the service again", lg2.status === 200 && fetched.length === from, fetched.slice(from));
-  from = fetched.length;
+  check("a second ask comes from memory, without asking the site again", lg2.status === 200 && siteAsked.length === from, siteAsked.slice(from));
+  Lg.forgetIcons();
+  const lg3 = await ask(pub(CO.acme.id));
+  check("after a restart it comes from the data volume, still without asking the site", lg3.status === 200 && siteAsked.length === from && new Uint8Array(await lg3.arrayBuffer()).length === 40, siteAsked.slice(from));
+  from = siteAsked.length;
   const lgBlue = await ask(pub(CO.blue.id));
-  const blueAsked = fetched.slice(from).map((x) => x.url.split("?")[0].split("/ip3/")[0]);
   check(
-    "Google's blank 16px stand-in is no logo: then DuckDuckGo's, as the app does",
-    lgBlue.status === 200 && lgBlue.headers.get("content-type") === "image/x-icon" && blueAsked.join() === "https://www.google.com/s2/favicons,https://icons.duckduckgo.com",
-    { status: lgBlue.status, type: lgBlue.headers.get("content-type"), blueAsked },
+    "a homepage that links no icon: its /favicon.ico",
+    lgBlue.status === 200 && lgBlue.headers.get("content-type") === "image/x-icon" && siteAsked.slice(from).at(-1)?.path === "/favicon.ico" && siteAsked.slice(from).every((x) => x.host === CO.blue.site),
+    { status: lgBlue.status, type: lgBlue.headers.get("content-type"), asked: siteAsked.slice(from) },
   );
   const lgNone = await ask(pub(CO.cobalt.id));
-  check("no icon at either service: 404, with no body", lgNone.status === 404 && (await lgNone.text()) === "" && leaks(headersOf(lgNone), ALL).length === 0, { status: lgNone.status, headers: headersOf(lgNone) });
+  check("no icon on the site: 404, with no body", lgNone.status === 404 && (await lgNone.text()) === "" && leaks(headersOf(lgNone), ALL).length === 0, { status: lgNone.status, headers: headersOf(lgNone) });
   const lgSvg = await ask(pub(CO.dun.id));
   check("an SVG is never sent on (it can carry script): 404", lgSvg.status === 404, lgSvg.status);
-  from = fetched.length;
+  from = siteAsked.length;
+  const lgRobots = await ask(pub(CO.iris.id));
+  check("a site whose robots.txt says no is left alone after reading it: 404", lgRobots.status === 404 && siteAsked.slice(from).every((x) => x.path === "/robots.txt"), siteAsked.slice(from));
+  from = siteAsked.length;
+  const lgAway = await ask(pub(CO.gran.id));
+  check("a homepage that redirects to another site is not followed there", lgAway.status === 404 && siteAsked.slice(from).every((x) => x.host === CO.gran.site), siteAsked.slice(from));
+  check(
+    "every request went to a company's own site: none to Google, DuckDuckGo, Clearbit or any other host, and fetch was never used",
+    siteAsked.every((x) => ownSites.has(x.host)) && fetched.length === fetchedBefore && !fetched.some((x) => /google|duckduckgo|clearbit/i.test(x.url)),
+    { hosts: [...new Set(siteAsked.map((x) => x.host))], fetched: fetched.slice(fetchedBefore) },
+  );
+  from = siteAsked.length;
   const odd = await Promise.all(["c_madeupmadeup1", "../../etc/passwd", "", CO.acme.id, pub("e_acme_sales"), pub(NOSITE.id)].map((id) => ask(id)));
   check(
-    "an unknown id, a made-up one, a seat's id, an internal id, a company with no domain: 404, and nothing is fetched",
-    odd.every((r) => r.status === 404) && fetched.length === from,
-    { status: odd.map((r) => r.status), fetched: fetched.slice(from) },
+    "an unknown id, a made-up one, a seat's id, an internal id, a company with no website: 404, and nothing is fetched",
+    odd.every((r) => r.status === 404) && siteAsked.length === from,
+    { status: odd.map((r) => r.status), asked: siteAsked.slice(from) },
   );
+  process.env.RN_LOGO_LOOKUP = "off";
+  Lg.forgetIcons();
+  from = siteAsked.length;
+  const offKept = await ask(pub(CO.acme.id));
+  const offNew = await ask(pub(CO.elm.id));
+  check("RN_LOGO_LOOKUP=off: an icon already kept still shows, nothing new is fetched (a 404 and the tile)", offKept.status === 200 && offNew.status === 404 && siteAsked.length === from, { kept: offKept.status, fresh: offNew.status, asked: siteAsked.slice(from) });
   const burst: number[] = [];
   for (let k = 0; k <= Lg.LOGO_PER_MINUTE; k++) burst.push((await ask("c_madeupmadeup2", "198.51.100.99")).status);
   const other = await ask(pub(CO.acme.id), "198.51.100.100");
   check("past LOGO_PER_MINUTE a minute from one address: 429, other addresses unaffected", burst.at(-1) === 429 && burst.slice(0, -1).every((s) => s === 404) && other.status === 200, { last: burst.at(-1), other: other.status });
+  await new Promise<void>((done) => sites.close(() => done()));
+  const linkOrder = Lg.iconLinks(`<link rel="icon" href="/a.png" sizes="16x16"><link rel="apple-touch-icon" href="/t.png"><link rel="icon" href="/b.png" sizes="32x32"><link rel="icon" href="/c.svg"><link rel="icon" href="data:image/png;base64,AA">`, "https://x.example/");
+  check("icon links best first: apple-touch-icon, then the largest, never SVG or data", linkOrder.join() === "https://x.example/t.png,https://x.example/b.png,https://x.example/a.png", linkOrder);
 
   /* ---------- the page: what it draws for a locked company ---------- */
   console.log("\nThe page");
@@ -630,8 +710,23 @@ async function main() {
   check("nor does the view the page is built from", !/google\.com\/s2|duckduckgo|favicon/i.test(JSON.stringify(vLock)) && leaks(vLock, lockedIds).filter((x) => x.toLowerCase() !== "irisdale").length === 0, { ids: lockedIds, leaks: leaks(vLock, lockedIds), icon: JSON.stringify(vLock).match(/.{40}(favicon|duckduckgo).{40}/i)?.[0] });
   const tile = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: "", domain: null, hidden: true, seed: "Zq3-preview-seed", noLogo: true }));
   check("with no logo, a plain soft tile: a building, never made-up letters", /class="logo logo-locked"/.test(tile) && /<svg/.test(tile) && !/>[A-Z?]{1,2}</.test(tile) && !tile.includes("/api/logo"), tile);
-  const namedLogo = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: CO.acme.name, domain: CO.acme.site }));
-  check("a company the member can name keeps its icon from the services directly, as before", namedLogo.includes(`https://www.google.com/s2/favicons?domain=${CO.acme.site}&amp;sz=64`), namedLogo);
+  const noService = (h: string) => !/google|duckduckgo|clearbit|favicon|https?:\/\//i.test(h);
+  const namedBare = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: CO.acme.name, domain: CO.acme.site }));
+  check("a company the member can name, with no id the page knows: its letters, and no icon service", /class="logo"/.test(namedBare) && />AR</.test(namedBare) && !namedBare.includes("<img") && noService(namedBare), namedBare);
+  const namedSeed = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: CO.acme.name, domain: CO.acme.site, seed: pub(CO.acme.id) }));
+  check("with its id: our own /api/logo/<id>, no icon service and no domain in the markup", namedSeed.includes(`src="/api/logo/${pub(CO.acme.id)}"`) && noService(namedSeed) && !namedSeed.includes(CO.acme.site), namedSeed);
+  // The table the page loads fills the domain-to-id map in the browser (app/post/model.ts), so a logo drawn from a domain alone uses our route too.
+  const LI = await import("../app/ui/logoIds");
+  const g0 = globalThis as { window?: unknown };
+  g0.window = globalThis;
+  LI.rememberLogo(`www.${CO.blue.site}`, pub(CO.blue.id));
+  delete g0.window;
+  LI.rememberLogo(CO.cobalt.site, pub(CO.cobalt.id)); // on the server: kept nowhere
+  const namedDomain = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: CO.blue.name, domain: CO.blue.site }));
+  const serverSide = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: CO.cobalt.name, domain: CO.cobalt.site }));
+  check("a domain the member's table named maps to our route by its id; the server keeps no such map", namedDomain.includes(`src="/api/logo/${pub(CO.blue.id)}"`) && noService(namedDomain) && !serverSide.includes("<img"), { namedDomain, serverSide });
+  const lockedNoMap = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: "", domain: CO.blue.site, hidden: true }));
+  check("a locked logo never uses the domain map", !lockedNoMap.includes("/api/logo/"), lockedNoMap);
 
   /* ---------- the About, read without the company ---------- */
   console.log("\nThe About without the company");

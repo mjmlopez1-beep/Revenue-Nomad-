@@ -32,6 +32,21 @@ export async function emailMeLink(toast: (text: string, err?: boolean) => void) 
   toast(r.error ?? r.message ?? "Sent. Check your email.", !!r.error);
 }
 
+/** A link to the public "Where Merlin's data goes" page (app/data). */
+export function DataLink() {
+  return (
+    <section className="tp-card tp-set">
+      <div className="tp-set-t">
+        <h2 className="tp-card-h">Where your data goes</h2>
+        <p className="cr-note">What leaves Merlin, who receives it and why, and how to switch each part off.</p>
+      </div>
+      <a className="btn btn-sm" href="/data">
+        Read it
+      </a>
+    </section>
+  );
+}
+
 /**
  * The sign-in link card's actions: send a new one-time link by email (email on), and sign out
  * on other devices (a new personal link: the old one stops working everywhere). Asks first.

@@ -19,6 +19,7 @@ import "./pages.css";
 import "./verify.css";
 import { NetworkMetrics } from "./network/Network"; // [google network]
 import { AutoJobs } from "./AdminJobs";
+import { Health } from "./AdminHealth";
 
 const n0 = (n: number) => n.toLocaleString("en-US");
 /** Facts added for each fact unlocked, to two places. No unlocks yet reads as a dash. */
@@ -778,7 +779,9 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
           Download backup
         </a>
       </div>
-      {/* The background jobs first: what runs on its own, how often, and Run now. */}
+      {/* Health first: what's working, what isn't, and the numbers behind it (lib/health.ts). */}
+      {a.health && <Health h={a.health} />}
+      {/* Then the background jobs: what runs on its own, how often, and Run now. */}
       <div className="tp-pm-grid tp-pm-jobs-top">
         <AutoJobs refresh={refresh} />
       </div>
@@ -787,7 +790,11 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
         <Tile value={n0(a.members.active7)} label="Members active this week" sub={`${n0(a.members.active30)} in the last 30 days`} />
         <Tile value={ratio(act.adds, act.unlocks)} label="Facts added per unlock" sub={`${n0(act.adds)} added, ${n0(act.unlocks)} unlocked`} />
         <Tile value={n0(a.credits.atZero)} label={a.credits.atZero === 1 ? "Member out of credits" : "Members out of credits"} sub={`${n0(a.credits.low)} more with 1 to 3 left`} />
-        <Tile value={n0(a.pro.interested)} label="On the Pro waitlist" sub={`${n0(a.pro.views)} saw the offer`} />
+        {a.billing ? (
+          <Tile value={n0(a.billing.pro)} label={a.billing.pro === 1 ? "Member on Pro" : "Members on Pro"} sub={`${n0(a.billing.trial)} on the trial`} />
+        ) : (
+          <Tile value={n0(a.pro.interested)} label="On the Pro waitlist" sub={`${n0(a.pro.views)} saw the offer`} />
+        )}
       </div>
 
       <div className="tp-pm-grid">
@@ -909,21 +916,24 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
             </tbody>
           </table>
         </Card>
-        <Card title="Pro waitlist" span={3}>
-          <Rows
-            items={[
-              ["Asked to hear about Pro", n0(a.pro.interested)],
-              ["Saw the offer", n0(a.pro.views)],
-              ["Asked, out of those who saw it", pct(a.pro.interested, a.pro.views)],
-            ]}
-          />
-          <h3 className="tp-pm-h3">Where they asked</h3>
-          {places.length ? (
-            <Rows items={places.map(([k, n]) => [placeName(k), n0(n)])} />
-          ) : (
-            <p className="tp-small muted">Nobody has asked yet.</p>
-          )}
-        </Card>
+        {/* The waitlist from before billing: gone once billing is on. */}
+        {!a.billing && (
+          <Card title="Pro waitlist" span={3}>
+            <Rows
+              items={[
+                ["Asked to hear about Pro", n0(a.pro.interested)],
+                ["Saw the offer", n0(a.pro.views)],
+                ["Asked, out of those who saw it", pct(a.pro.interested, a.pro.views)],
+              ]}
+            />
+            <h3 className="tp-pm-h3">Where they asked</h3>
+            {places.length ? (
+              <Rows items={places.map(([k, n]) => [placeName(k), n0(n)])} />
+            ) : (
+              <p className="tp-small muted">Nobody has asked yet.</p>
+            )}
+          </Card>
+        )}
 
         <Card title="What members unlock most" span={3}>
           <Bars items={a.topUnlocked} tone="pine" unit="unlocks" empty="Nothing has been unlocked yet." />
