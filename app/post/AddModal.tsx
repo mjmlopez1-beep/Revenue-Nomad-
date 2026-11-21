@@ -27,7 +27,7 @@ import { MissingFacts, claimLine } from "./Drawer";
 import { MonthYear } from "./MonthYear";
 import { RateWho, reasonsFor, type RateChoice } from "./Seats";
 import { BENCH_RATE_HELP, atTime, plural, useDebounced } from "./hooks";
-import { Spot } from "../ui/fractions/art";
+import { Spot } from "../ui/fractions/lazy";
 
 interface Lookup {
   domain: string;

@@ -26,7 +26,7 @@ import { earnNote, useUi } from "./ui";
 import { ProTag, UpgradeNote, openPlans } from "./Billing";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
-import { Prop } from "../ui/fractions/art";
+import { Prop } from "../ui/fractions/lazy";
 
 /** Whole dollars with separators ("$7,500", "$205"). Amounts arrive rounded to $250 or $5, so nothing is rounded again here. */
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;

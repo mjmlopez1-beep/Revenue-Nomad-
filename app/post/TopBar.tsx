@@ -10,14 +10,14 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject, Fragment } from "react";
 import type { LedgerRow, Me, View } from "@/lib/tableTypes";
-import { Brand, IconCoin, IconPlus, IconSearch, IconX, timeAgo, useToast } from "../ui/shared";
+import { Brand, IconPlus, IconSearch, IconX, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
-import { Glyph } from "../ui/fractions/art";
+import { Glyph } from "../ui/fractions/lazy";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
 export type Contact = View["contact"] | null;

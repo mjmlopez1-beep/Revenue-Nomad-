@@ -11,7 +11,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { IconX, post } from "../ui/shared";
 import { mailto, signInFailText } from "./contact";
-import { Doorway, NomadArt } from "../ui/fractions/art";
+import { Doorway, NomadArt } from "../ui/fractions/lazy";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 

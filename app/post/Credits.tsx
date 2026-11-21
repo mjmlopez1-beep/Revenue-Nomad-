@@ -21,7 +21,7 @@ import { MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
 import { ReportedMessages } from "./Messages";
 import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
-import { Prop } from "../ui/fractions/art";
+import { Prop, Spot } from "../ui/fractions/lazy";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
 export const signInLink = (token: string) => `${window.location.origin}/?k=${token}`;
@@ -435,7 +435,8 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
 
   return (
     <div className="tp-page cr-page">
-      <Prop name="coinStack" height={60} on="bg" className="tp-page-art" />
+      {/* The balance as coins seen edge on; at zero, the empty stack with one coin to earn. Drawn calm: a low balance is already ember. */}
+      {me.credits <= 0 ? <Spot name="noCredits" size={64} on="bg" className="tp-page-art" /> : <Prop name="coinStack" height={60} on="bg" className="tp-page-art" />}
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> Back to the table
       </button>

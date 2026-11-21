@@ -35,7 +35,7 @@ import { plural } from "./hooks";
 import { ProRow, planDay } from "./Billing";
 import { KnowChip } from "./network/Network"; // [google network]
 import "./radar.css";
-import { Bleed, Prop, Spot } from "../ui/fractions/art";
+import { Bleed, Prop, Spot } from "../ui/fractions/lazy";
 
 let openedSent = false;
 const signal = (name: "radar_opened" | "radar_clicked", where: string) => void post({ action: { type: "signal", name, where } });

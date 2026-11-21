@@ -27,7 +27,7 @@ import { RateWho, shortLabel, splitPicks, useUi, type RateChoice } from "./ui";
 import { FindSeats, seatsFound } from "../onboard/FindSeats";
 import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
-import { Prop, Spot } from "../ui/fractions/art";
+import { Prop, Spot } from "../ui/fractions/lazy";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
 interface Saved {

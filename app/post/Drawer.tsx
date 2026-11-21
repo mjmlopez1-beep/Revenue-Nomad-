@@ -41,7 +41,7 @@ import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
 import { WayIn } from "./network/Network"; // [google network]
-import { Prop } from "../ui/fractions/art";
+import { Prop } from "../ui/fractions/lazy";
 
 /**
  * Who leads each function, from the company's own website (lib/leaders): "Sales: full-time CRO

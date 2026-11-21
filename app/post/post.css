@@ -3871,6 +3871,7 @@ button.tp-fs-row:active {
   min-width: 0;
 }
 .am-done-art {
+  order: 3;
   flex: none;
   align-self: center;
   margin: -8px -4px -8px 0;

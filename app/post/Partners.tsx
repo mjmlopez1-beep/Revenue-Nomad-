@@ -33,7 +33,7 @@ import { holderIsMember, partnerGroups, seatLead, type PartnerGroup, type Partne
 import { useUi } from "./ui";
 import { plural } from "./hooks";
 import "./partners.css";
-import { Prop } from "../ui/fractions/art";
+import { Prop } from "../ui/fractions/lazy";
 
 /** Cards a function shows before "Show all", and members before "Show more". */
 const SEATS_FIRST = 3;

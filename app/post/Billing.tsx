@@ -27,7 +27,7 @@ import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
 import { useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
-import { NomadArt, Prop } from "../ui/fractions/art";
+import { NomadArt, Prop, Scene } from "../ui/fractions/lazy";
 
 /** Where the plans were opened from: an upgrade moment. */
 export type PlansFrom = "trial" | "views" | "bench" | "credits" | "slack" | "claude" | "radar" | "crystal" | "billing";
@@ -268,9 +268,9 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
   return (
     <Sheet title={title} onClose={onClose} dialog className="bl-sheet">
       <div className="bl-sheet-in">
-        <p className={`bl-lead${onPro ? " bl-lead-pic" : ""}`}>
-          {/* On Pro: the Nomad celebrates, once, beside the line that says so. */}
-          {onPro ? <NomadArt pose="celebrate" height={64} className="bl-lead-art" /> : null}
+        {/* The Pro welcome: The keep (Fractions, quiet), the trail ending at its door. The scene's one home in the app. */}
+        {onPro ? <Scene kind="castle" pro on="white" className="bl-welcome-art" /> : null}
+        <p className="bl-lead">
           {onPro ? (plan.proStartsAt ? `You're on Pro. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.` : "You're on Pro. Everything here is yours.") : leadFor(plan, a)}
         </p>
         {!plan.notLooking && !onPro && a.from !== "billing" && a.from !== "trial" && <p className="bl-value">{VALUE_LINE}</p>}

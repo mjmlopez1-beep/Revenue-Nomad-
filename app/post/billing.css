@@ -657,20 +657,20 @@ button.tp-plan:hover {
   margin: 0 0 12px;
 }
 
-/* Pictures (Fractions, quiet): the Nomad knocking beside Keep Pro in a trial's last days, and celebrating in the plans sheet once on Pro. */
+/* Pictures (Fractions, quiet): the Nomad knocking beside Keep Pro in a trial's last days, and The keep in the plans sheet once on Pro. */
 .bl-status-acts {
   align-items: center;
 }
 .bl-status-art {
   flex: none;
 }
-.bl-lead-pic {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.bl-lead-art {
-  flex: none;
+/* The Pro welcome's scene: as wide as the sheet's text up to 400px, never over 225px tall, on a hairline card. */
+.bl-welcome-art {
+  width: min(100%, 400px);
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
 }
 .tp-phone .bl-status-art {
   display: none;

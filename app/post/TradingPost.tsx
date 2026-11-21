@@ -106,7 +106,7 @@ const preloadLater = (admin: boolean) => {
   for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadPartners, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
 };
 import "./nav.css";
-import { Spot, type SpotKind } from "../ui/fractions/art";
+import { Spot, type SpotKind } from "../ui/fractions/lazy";
 
 export interface TradingPostProps {
   view: View;

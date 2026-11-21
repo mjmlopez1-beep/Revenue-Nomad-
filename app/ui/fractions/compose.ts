@@ -11,6 +11,7 @@
  *   notFound     the not-found page
  *   wayIn        the first unlock (not placed yet)
  *   doorway      sign-in, beside the form
+ *   castle       the Pro welcome: the plans sheet once the member is on Pro (The keep)
  *   allQuiet     (its parts, without the Nomad, are Home's band on a quiet day: stripNight)
  *
  * In the loud register a scene has its own field; in the quiet one it has none and sits on the
@@ -21,7 +22,7 @@
  * to three sparks). They hold no Nomad and no ember.
  */
 import { q, h, s, g, place, U } from "./lib";
-import { nomad, spark, dot, type NomadOpt, type Pose } from "./nomad";
+import { nomad, spark, dot, orb, type NomadOpt, type Pose } from "./nomad";
 import { tent, arch, steps, walk, calendar, signpost, key, doorAjar } from "./props";
 import type { Way } from "./ways";
 
@@ -122,7 +123,84 @@ const welcome: SceneFn = (m, sq) =>
         spark(560, 60, 10, m.spark),
       ];
 
-export const SCENES = { wayIn, trialEnding, allQuiet, notFound, welcome };
+/**
+ * The keep, on its own: a castle's plan in plain blocks (wall, gatehouse, keep, towers), the ball
+ * rising behind it. Local coordinates: x = 0 the centre line, y = 0 the ground, up is negative;
+ * 30.5U wide, 20U tall. No battlements, flags or banners: every tower is one block with one roof
+ * piece, windows are arch cuts.
+ */
+export const keep = (m: Way): string => {
+  const b = (x0: number, x1: number, hh: number, c: string) => s(x0 * U, -hh * U, (x1 - x0) * U, hh * U, c);
+  const dome = (x0: number, x1: number, base: number, c: string) => h(x0 * U, -(base + (x1 - x0) / 2) * U, ((x1 - x0) / 2) * U, "u", c);
+  const roof = (cx: number, base: number, r: number, c: string) => tent(cx * U, -base * U, r * U, c, null);
+  const cut = (cx: number, y: number, r: number, hh: number, c: string) => arch((cx - r) * U, -y * U, r * U, hh * U, c);
+  const bright = m.quiet ? m.light : "white";
+  const soft = m.quiet ? m.tone : "sandd";
+  const inner = m.quiet ? m.bg : m.light;
+  return (
+    orb(0, -14.5 * U, 5.25 * U, m.acc, m.acchi) +
+    b(-15.25, -12.75, 6.5, m.hill2) +
+    dome(-15.25, -12.75, 6.5, m.hill2) +
+    b(12.75, 15.25, 6.5, m.hill2) +
+    dome(12.75, 15.25, 6.5, m.hill2) +
+    b(-3, 3, 14, m.paper) +
+    roof(0, 14, 4, m.pop) +
+    cut(-1.2, 8.6, 0.55, 3, m.dark) +
+    cut(1.2, 8.6, 0.55, 3, m.dark) +
+    b(-8.25, -5.25, 10.5, bright) +
+    roof(-6.75, 10.5, 2.4, m.hill) +
+    cut(-6.75, 6, 0.5, 2.4, soft) +
+    b(5.25, 8.25, 10.5, bright) +
+    roof(6.75, 10.5, 2.4, m.hill) +
+    cut(6.75, 6, 0.5, 2.4, soft) +
+    b(-12.25, -9.5, 7, m.hill) +
+    dome(-12.25, -9.5, 7, m.hill) +
+    b(9.5, 12.25, 7, m.pop) +
+    dome(9.5, 12.25, 7, m.pop) +
+    b(-12.25, 12.25, 4.5, m.paper) +
+    [-10.2, -8.2, 8.2, 10.2].map((x) => cut(x, 0, 0.6, 2.6, soft)).join("") +
+    b(-4, 4, 6.5, bright) +
+    q(-4 * U, -7.5 * U, U, "br", bright) +
+    s(-3 * U, -7.5 * U, 6 * U, U, bright) +
+    q(3 * U, -7.5 * U, U, "bl", bright) +
+    arch(-2.5 * U, 0, 2.5 * U, 5.75 * U, m.dark) +
+    arch(-1.9 * U, 0, 1.9 * U, 5.05 * U, m.lining) +
+    arch(-1.3 * U, 0, 1.3 * U, 4.35 * U, inner)
+  );
+};
+/** The keep: the company you are trying to get into, and the way in. The trail ends at its door. */
+const castle: SceneFn = (m, sq) =>
+  sq
+    ? [
+        q(0, 0, 200, "tl", m.tone),
+        h(-30, 180, 300, "u", m.tone),
+        q(420, 0, 120, "tr", m.pop),
+        place(keep(m), 270, G, 0.5),
+        s(0, G, 540, 60, m.hill),
+        q(380, G - 60, 160, "br", m.hill2),
+        steps(walk([20, G + 26], [["L", 110, G + 26]], 30), 8, m.dark),
+        N(m, "walk", 160, 0.3, {}, false, G + 52),
+        spark(70, 110, 12, m.spark),
+        spark(470, 190, 10, m.spark),
+      ]
+    : [
+        q(0, 0, 220, "tl", m.tone),
+        h(170, 150, 330, "u", m.tone),
+        q(800, 0, 160, "tr", m.pop),
+        place(keep(m), 500, G, 0.52),
+        s(0, G, 960, 60, m.hill),
+        q(0, G - 100, 160, "bl", m.hill),
+        q(760, G - 80, 200, "br", m.hill2),
+        steps(walk([40, G + 26], [["L", 290, G + 26]], 30), 8, m.dark),
+        N(m, "walk", 350, 0.3, {}, false, G + 52),
+        tent(880, G + 54, 40, m.dark, m.paper),
+        spark(200, 120, 20, m.spark),
+        spark(330, 60, 10, m.spark),
+        spark(720, 80, 10, m.spark),
+        spark(880, 250, 14, m.acc),
+      ];
+
+export const SCENES = { wayIn, trialEnding, allQuiet, notFound, welcome, castle };
 
 /**
  * Welcome as a banner (960 by 226, the first-run card's top): the same parts as the scene, set
@@ -146,18 +224,18 @@ export const welcomeBanner = (m: Way): string =>
 
 /**
  * The doorway (320 by 520, upright, beside the sign-in form): the door ajar, the Nomad waving you
- * in. No field: it sits on the panel it is given.
+ * in. No field: it sits on the panel it is given. The panel is narrower than the box and crops
+ * its sides, so the door and the Nomad keep to the middle 200.
  */
 export const doorway = (m: Way): string =>
   [
     q(0, 0, 200, "tl", m.tone),
     h(140, 300, 180, "u", m.hill),
     s(0, 480, 320, 40, m.ground),
-    place(doorAjar(m), 226, 480, 1.05),
-    place(nomad("wave", { cloak: m.cloak, face: m.face, eye: m.eye, mark: m.spark }), 96, 480, 0.42),
-    steps([[24, 468], [48, 468]], 6, m.ink2),
-    spark(60, 250, 12, m.acc),
-    spark(250, 120, 8, m.spark),
+    place(doorAjar(m), 210, 480, 0.82),
+    place(nomad("wave", { cloak: m.cloak, face: m.face, eye: m.eye, mark: m.spark }), 118, 480, 0.36),
+    spark(84, 250, 12, m.acc),
+    spark(236, 120, 8, m.spark),
     spark(150, 60, 6, m.spark),
   ].join("");
 export type SceneKind = keyof typeof SCENES;

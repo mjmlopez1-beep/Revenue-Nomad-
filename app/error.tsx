@@ -7,7 +7,7 @@
  */
 import { useEffect } from "react";
 import "./ui/fractions/fractions.css";
-import { Spot } from "./ui/fractions/art";
+import { Spot } from "./ui/fractions/lazy";
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {

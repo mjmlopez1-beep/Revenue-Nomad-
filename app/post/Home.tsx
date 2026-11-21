@@ -31,7 +31,7 @@ import { LeadAction, LeadCard, TrialEnded, factsOf, leadWhat, type TodayData } f
 import { sinceWords } from "./todayModel";
 import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
-import { Bleed, NomadArt, Prop, Scene, Spot, Strip, Trail } from "../ui/fractions/art";
+import { Bleed, NomadArt, Prop, Scene, Spot, Strip, Trail } from "../ui/fractions/lazy";
 import "./home.css";
 
 /** A place on Home: a link where it is one (middle-click opens a new tab), else a button. */

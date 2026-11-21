@@ -24,7 +24,7 @@ import { inviteMessage, inviteUrl } from "./earnBack";
 import { fmtStamp } from "./RoleDate";
 import { Sheet, useUi } from "./ui";
 import "./partners.css";
-import { Spot } from "../ui/fractions/art";
+import { Spot } from "../ui/fractions/lazy";
 
 /** The device has a share sheet (phones and some tablets). */
 const canShareNow = () => typeof navigator !== "undefined" && typeof navigator.share === "function";

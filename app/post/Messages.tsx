@@ -18,7 +18,7 @@ import { Sheet, useUi } from "./ui";
 import { useLayout } from "./hooks";
 import { partnerOpener, seatOpener } from "@/lib/partners";
 import "./messages.css";
-import { Prop, Spot } from "../ui/fractions/art";
+import { Prop, Spot } from "../ui/fractions/lazy";
 
 const MAX = 2000;
 

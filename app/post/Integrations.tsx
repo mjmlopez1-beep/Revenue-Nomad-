@@ -21,7 +21,7 @@ import { ClaudeNetworkPrompt, GoogleSection } from "./network/Network"; // [goog
 import "./connect.css";
 import "./pages.css";
 import "./integrations.css";
-import { Prop } from "../ui/fractions/art";
+import { Prop } from "../ui/fractions/lazy";
 
 const WEBHOOK_EXAMPLE = JSON.stringify(
   {

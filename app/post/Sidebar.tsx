@@ -18,7 +18,7 @@ import { Sheet } from "./ui";
 import { plural } from "./hooks";
 import { TAB_KEYS, moreOn, planLine, type NavIcon as NavIconName, type NavItem } from "./navModel";
 import type { Me, PlanView } from "@/lib/tableTypes";
-import { Divider } from "../ui/fractions/art";
+import { Divider } from "../ui/fractions/lazy";
 
 /* ---------- icons: simple line icons, 18px, currentColor ---------- */
 

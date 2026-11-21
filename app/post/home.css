@@ -789,6 +789,9 @@
   }
   .hm-hello-corner {
     display: block;
+    top: auto;
+    bottom: 0;
+    height: 62%;
     max-width: 40%;
   }
 }
