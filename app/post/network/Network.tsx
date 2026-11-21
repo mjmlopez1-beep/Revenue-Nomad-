@@ -9,13 +9,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IconChevron, initials, timeAgo, useToast } from "../../ui/shared";
 import { useCopy } from "../Credits";
-import { icpEmpty, icpTest, type CoInfo } from "../model";
+import type { CoInfo } from "../model";
 import type { Me } from "@/lib/tableTypes";
-import { SOURCE_WORDS, knowWords, type LinkView, type NetCompanyView, type NetPersonView, type NetSource, type NetworkView, type Warmth } from "@/lib/google/types";
+import { SOURCE_WORDS, WARMTH_RULES, knowWords, type LinkView, type NetCompanyView, type NetPersonView, type NetSource, type NetworkView } from "@/lib/google/types";
 import { NOTICE_WORDS, countsLine, daysAgo, firstName, load, monthYear, netAct, takeNotice, useNetCompany, useNetwork, type GoogleNotice } from "./useNetwork";
 import { useUi } from "../ui";
 import { WarmthChip } from "./parts";
 import { Found, Mapping, ReadFailed } from "./Found";
+import { Clients, Everyone, Introducers, TopNumbers, WarmPaths } from "./Paths";
+import { NO_FILTER, setWords, topNumbers, type EveryoneFilter } from "./model";
 import "./network.css";
 
 const START = "/api/integrations/google/start";
@@ -157,25 +159,32 @@ function DeleteAll({ busy, onDone }: { busy: boolean; onDone?: () => void }) {
 
 /* ---------- the Your network page ---------- */
 
+/**
+ * Your network answers "what do I do with this?", in this order: warm paths into companies likely
+ * to hire you, your clients, people who can introduce you, then everyone (Paths.tsx). The four
+ * numbers at the top are those four lists' lengths, and each opens its list.
+ */
 export function NetworkPage({
-  infos, me, onBack, openCompany, onRadar, onSeats, onClaude, refresh,
+  infos, me, onBack, openCompany, onSeats, onClaude, onProfile, refresh, section,
 }: {
   infos: CoInfo[];
   me: Me;
   onBack: () => void;
   openCompany: (id: string) => void;
-  /** Crystal Ball; `know`: cut to the companies where the member knows someone. */
-  onRadar: (know?: boolean) => void;
   onSeats: () => void;
   onClaude: () => void;
+  /** The member's profile (function, Ideal Fractional Profile). */
+  onProfile: () => void;
   refresh: () => void;
+  /** Opened at one of its parts (Crystal Ball's "Where you know someone", Home): its element id. */
+  section?: string | null;
 }) {
   const { view, off, failed } = useNetwork();
   const ui = useUi();
   const toast = useToast();
-  const [all, setAll] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<GoogleNotice | null>(null);
+  const [filter, setFilter] = useState<EveryoneFilter>(NO_FILTER);
   useEffect(() => setNotice(takeNotice()), []);
   /**
    * The connect moment (Found.tsx): "auto" the one time after connecting, until the member has
@@ -197,14 +206,27 @@ export function NetworkPage({
     marked.current = true;
     void netAct("seen-found");
   }, [moment, read, view?.syncing]);
-  const leave = () => {
+  const go = (id: string) => {
+    if (id === "nw-everyone") setFilter(NO_FILTER);
+    // After the page has drawn: the part's heading at the top of the page's own scroll.
+    setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
+  };
+  const leave = (to?: string) => {
     left.current = true;
     setMoment(null);
-    window.scrollTo(0, 0);
+    if (to) go(to);
+    else window.scrollTo(0, 0);
   };
   useEffect(() => {
     if (off) onBack();
   }, [off, onBack]);
+  // Opened at a part: go there once the network is here.
+  const went = useRef(false);
+  useEffect(() => {
+    if (!section || !view || went.current || (moment && !left.current)) return;
+    went.current = true;
+    go(section);
+  }, [section, view, moment]);
   // When a read finishes, the table picks up the companies it named for you.
   const wasSyncing = useRef(false);
   useEffect(() => {
@@ -212,13 +234,11 @@ export function NetworkPage({
     wasSyncing.current = !!view?.syncing;
   }, [view, refresh]);
 
-  const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
-  const fitTest = useMemo(() => (icpEmpty(me.icp) ? null : icpTest(me.icp!)), [me.icp]);
   const companies = view?.companies ?? [];
-  const fit = fitTest ? companies.filter((c) => byId.get(c.id) && fitTest(byId.get(c.id)!.c)).length : null;
-  // The server's own list: without a seat that is already theirs, or one they said was "Not a seat".
-  const seats = view?.seats ?? [];
-  const people = view ? Math.max(view.stats.real, companies.reduce((a, c) => a + c.people.filter((p) => p.meetings >= 2 || p.both).length, 0)) : 0;
+  const nums = view ? topNumbers(view) : { warm: 0, clients: 0, intros: 0, people: 0 };
+  // The seats that ended (an active one is under Your clients): confirmed in Your seats.
+  const past = (view?.seats ?? []).filter((g) => !g.active);
+  const people = nums.people;
 
   const run = async (key: string, op: Parameters<typeof netAct>[0]) => {
     setBusy(key);
@@ -228,12 +248,11 @@ export function NetworkPage({
   };
 
   const g = view?.google ?? null;
-  const shown = all ? companies : companies.slice(0, 12);
   // The moment is on screen: while the first read runs, when it failed, or its result.
   const inMoment = !!view && connected && moment !== null;
   return (
     <div className={`tp-page nw-page${inMoment ? " nw-page-found" : ""}`}>
-      <button type="button" className="tp-back" onClick={inMoment && moment === "again" ? leave : onBack}>
+      <button type="button" className="tp-back" onClick={inMoment && moment === "again" ? () => leave() : onBack}>
         <IconChevron dir="left" /> {inMoment && moment === "again" ? "Your network" : "All companies"}
       </button>
       {/* "Google is connected" is the moment's own first line. */}
@@ -247,7 +266,7 @@ export function NetworkPage({
       ) : inMoment && view.syncing && (moment === "auto" || !read) ? (
         <Mapping view={view} />
       ) : inMoment && !read ? (
-        <ReadFailed busy={busy === "sync"} onRetry={() => void run("sync", "sync")} onStay={leave} />
+        <ReadFailed busy={busy === "sync"} onRetry={() => void run("sync", "sync")} onStay={() => leave()} />
       ) : inMoment ? (
         <Found
           view={view}
@@ -255,90 +274,61 @@ export function NetworkPage({
           fn={me.function}
           people={people}
           again={moment === "again"}
-          onCrystal={() => (leave(), onRadar(true))}
-          onStart={() => (leave(), onRadar())}
-          onStay={leave}
-          onSeats={() => (leave(), onSeats())}
+          onWarm={() => leave("nw-warm")}
+          onStay={() => leave()}
+          onClients={() => leave("nw-clients")}
+          onProfile={() => (leave(), onProfile())}
           onAdd={() => (leave(), ui.openAdd())}
         />
       ) : (
         <>
           <span className="nw-status">
             {view.syncing ? "Mapping who you know…" : g ? `Google connected · read-only · ${updated(g)}` : `Saved from your Gmail via Claude · ${timeAgo(view.claude!.at)}`}
+            {g?.syncedAt && g.status !== "reconnect" ? (
+              <>
+                {" · "}
+                <button type="button" className="nw-link nw-link-sm" onClick={() => (setMoment("again"), window.scrollTo(0, 0))}>
+                  What Merlin found
+                </button>
+              </>
+            ) : null}
           </span>
           <h1 className="tp-page-h nw-h1">
             {companies.length
-              ? `You already know someone at ${companies.length} ${companies.length === 1 ? "company" : "companies"} on Merlin`
+              ? "Where you have a way in"
               : view.syncing
                 ? "Your network"
                 : "No one you know is at a company on Merlin yet"}
           </h1>
+          {companies.length > 0 && (
+            <p className="nw-lead">
+              From your {g ? "calendar and contacts" : "Gmail, via your Claude"}: you know someone at {companies.length} {companies.length === 1 ? "company" : "companies"} on Merlin. Only you see this.
+            </p>
+          )}
           {g?.status === "reconnect" && (
             <Reconnect what="Google" note={`What Merlin found stays, last updated ${g.syncedAt ? timeAgo(g.syncedAt) : "before"}.`} href={START} />
           )}
           {view.gmail?.status === "reconnect" && (
             <Reconnect what="Gmail" label="Reconnect Gmail (test access lasts 7 days)" note={`What Gmail showed stays, last updated ${view.gmail.syncedAt ? timeAgo(view.gmail.syncedAt) : "before"}.`} href={`${START}?gmail=1`} />
           )}
-          <div className="nw-stats">
-            {g?.syncedAt && g.status !== "reconnect" ? (
-              // The numbers lead back to the result Merlin showed after connecting.
-              <button type="button" className="nw-stat nw-stat-pine nw-stat-b" onClick={() => (setMoment("again"), window.scrollTo(0, 0))}>
-                <span className="nw-stat-n num">{fit ?? companies.length}</span>
-                <span className="nw-stat-l">{fit === null ? "companies on Merlin you know someone at" : "fit your Ideal Fractional Profile"}</span>
-                <span className="nw-stat-go">
-                  See what Merlin found <IconChevron dir="right" size={12} />
-                </span>
-              </button>
-            ) : (
-              <div className="nw-stat nw-stat-pine">
-                <span className="nw-stat-n num">{fit ?? companies.length}</span>
-                <span className="nw-stat-l">{fit === null ? "companies on Merlin you know someone at" : "fit your Ideal Fractional Profile"}</span>
-              </div>
-            )}
-            <div className="nw-stat">
-              <span className="nw-stat-n num">{people}</span>
-              <span className="nw-stat-l">people you really meet with</span>
-            </div>
-            <div className="nw-stat">
-              <span className="nw-stat-n num">{seats.length}</span>
-              <span className="nw-stat-l">{seats.length === 1 ? "seat you might have held" : "seats you might have held"}</span>
-            </div>
-            <div className="nw-stat">
-              <span className="nw-stat-n num">{view.stats.unmatched}</span>
-              <span className="nw-stat-l">people at companies not on Merlin yet</span>
-            </div>
-          </div>
-
-          {companies.length > 0 && (
+          {(companies.length > 0 || view.loose.length > 0) && (
             <>
-              <div className="nw-listhead">
-                <h2 className="nw-h2">Warmest first</h2>
-                <span className="nw-muted">Named for you free: you already know them</span>
-              </div>
-              <ul className="nw-list">
-                {shown.map((c) => (
-                  <CompanyRow key={c.id} c={c} onOpen={() => openCompany(c.id)} />
-                ))}
-              </ul>
-              {companies.length > shown.length && (
-                <button type="button" className="btn btn-ghost nw-more" onClick={() => setAll(true)}>
-                  Show all {companies.length}
-                </button>
-              )}
-              <button type="button" className="btn btn-primary nw-wide" onClick={() => onRadar(true)}>
-                See them in your Crystal Ball
-              </button>
+              <TopNumbers n={nums} go={go} />
+              <WarmPaths view={view} infos={infos} me={me} openCompany={openCompany} onProfile={onProfile} onClaude={onClaude} onEveryone={() => go("nw-everyone")} />
+              <Clients view={view} infos={infos} me={me} refresh={refresh} />
+              <Introducers view={view} me={me} onClaude={onClaude} />
+              <Everyone view={view} openCompany={openCompany} filter={filter} setFilter={setFilter} />
             </>
           )}
 
-          {seats.length > 0 && (
+          {past.length > 0 && (
             <section className="tp-card nw-card" aria-labelledby="nw-seats-h">
               <h2 className="tp-card-h" id="nw-seats-h">
-                {seats.length === 1 ? "A seat you might have held" : `${seats.length} seats you might have held`}
+                {past.length === 1 ? "A seat you might have held" : `${past.length} seats you might have held`}
               </h2>
-              <p className="nw-muted">You met with these companies over months. If it was a seat, confirm it in Your seats in one click. Nothing is added until you do.</p>
+              <p className="nw-muted">Months of regular meetings that ended. If one was a seat, confirm it in Your seats in one click. Nothing is added until you do.</p>
               <ul className="nw-seats">
-                {seats.slice(0, 6).map((c) => (
+                {past.slice(0, 6).map((c) => (
                   <li key={c.id}>
                     <span className="nw-seat-t">{c.name}</span>
                     <span className="nw-muted">
@@ -357,12 +347,20 @@ export function NetworkPage({
 
           <section className="tp-card nw-card" aria-labelledby="nw-keeps-h">
             <h2 className="tp-card-h" id="nw-keeps-h">
-              What Merlin keeps
+              What Merlin keeps, and how it judges
             </h2>
             {companies[0]?.people[0] ? <Keeps c={companies[0]} p={companies[0].people[0]} /> : null}
             <p className="nw-body">
               That&apos;s all of it: conclusions, never a meeting title, a note or the text of an email. Only you see your network. Other members never learn who you know,
               and it never feeds anyone else&apos;s counts.
+            </p>
+            <p className="nw-body">
+              <b>Warmth.</b> {WARMTH_RULES}
+            </p>
+            <p className="nw-body">
+              <b>Set aside.</b> A company is set aside when a title on your contacts reads like sales or recruiting, when it is a software company of over 1,000 people, when they
+              sent every invite for a short burst of meetings with several of their people, or when it is a staffing firm or an investor (investors are under People who can introduce
+              you). Each one says why, and Undo puts it back.
             </p>
             <div className="nw-row nw-wrap">
               {g && g.status !== "reconnect" && (
@@ -398,8 +396,7 @@ function ConnectHero({ view, onClaude }: { view: NetworkView; onClaude: () => vo
       <span className="nw-new">New · Your network</span>
       <h1 className="tp-page-h nw-h1">See where you already have a way in</h1>
       <p className="nw-lead">
-        Connect your Google account and Merlin matches the people you meet with and the contacts you keep against every company on Merlin. Your Crystal Ball then leads with
-        companies where you know someone.
+        Connect your Google account and Merlin shows your warm paths into companies likely to hire you, the clients your calendar shows, and the people who can introduce you.
       </p>
       <ReadsList />
       {view.configured ? <ConnectButton /> : <p className="nw-muted">Google isn&apos;t set up on Merlin yet. Ask us to switch it on.</p>}
@@ -408,34 +405,6 @@ function ConnectHero({ view, onClaude }: { view: NetworkView; onClaude: () => vo
         Rather keep it in Claude? Use your own Claude instead
       </button>
     </div>
-  );
-}
-
-function CompanyRow({ c, onOpen }: { c: NetCompanyView; onOpen: () => void }) {
-  const p = c.people[0];
-  const who = p ? [firstName(p.name) ?? "Someone", p.title].filter(Boolean).join(", ") : "Someone";
-  const counts = countsLine({ meetings: p?.meetings ?? c.meetings, emails: p?.emails ?? c.emails });
-  return (
-    <li>
-      <button type="button" className="nw-co" onClick={onOpen}>
-        <span className="nw-ini" aria-hidden>
-          {initials(c.name)}
-        </span>
-        <span className="nw-co-t">
-          <span className="nw-co-name">{c.name}</span>
-          <span className="nw-co-who">
-            {who}
-            {counts ? ` · ${counts}` : ""}
-            {c.last ? ` · last ${daysAgo(c.last)}` : ""}
-          </span>
-          <span className="nw-co-src">
-            {c.next ? `Meeting ${daysAgo(c.next)} · ` : ""}
-            {c.people.length + c.more > 1 ? `${c.people.length + c.more} people · ` : ""}From {sources(c.src)}
-          </span>
-        </span>
-        <WarmthChip w={c.warmth} />
-      </button>
-    </li>
   );
 }
 
@@ -573,7 +542,30 @@ export const wayInFrom = (c: NetCompanyView) => `from your ${sources(c.src).toLo
 export function WayInPeople({ c, company }: { c: NetCompanyView; company: string }) {
   const copy = useCopy();
   const [draft, setDraft] = useState<number | null>(null);
-  const people = c.people.slice(0, 4);
+  const [undoing, setUndoing] = useState(false);
+  const people = c.people.filter((p) => !p.hidden).slice(0, 4);
+  // Set aside (someone selling to them, a recruiter, an investor, or what they said): not a way in, said with why, and Undo.
+  if (c.set)
+    return (
+      <div className="nw-wayin">
+        <p className="nw-set" role="note">
+          {setWords(c)}{" "}
+          <button
+            type="button"
+            className="nw-link"
+            disabled={undoing}
+            onClick={async () => {
+              setUndoing(true);
+              await netAct("mark", { company: c.id, as: c.set!.by === "merlin" ? "rel" : "undo" });
+              setUndoing(false);
+            }}
+          >
+            {c.set.by === "merlin" ? "Undo: it is a relationship" : "Undo"}
+          </button>
+        </p>
+        <p className="nw-small">You met {people.map((p) => p.name).filter(Boolean).slice(0, 2).join(" and ") || "people"} here ({c.touch}). Only you see this.</p>
+      </div>
+    );
   const p = draft !== null ? people[draft] : null;
   const note = p ? noteFor(p, company) : "";
   return (
@@ -591,7 +583,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
                 {x.dm && <span className="nw-dm"> · Decision maker</span>}
               </span>
               <span className="nw-muted">
-                {[countsLine(x), x.both ? "replies both ways" : "", x.last ? `last ${daysAgo(x.last)}` : "", x.next ? `meeting ${daysAgo(x.next)}` : ""].filter(Boolean).join(" · ") || `From ${sources(x.src)}`}
+                {x.why || [countsLine(x), x.both ? "replies both ways" : "", x.last ? `last ${daysAgo(x.last)}` : "", x.next ? `meeting ${daysAgo(x.next)}` : ""].filter(Boolean).join(" · ") || `From ${sources(x.src)}`}
               </span>
               <span className="nw-pw">
                 <WarmthChip w={x.warmth} />
@@ -634,7 +626,8 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
 /** Crystal Ball's row and card: "You know someone · Warm". The warmth is printed; the colour says it a second time. */
 export function KnowChip({ companyId }: { companyId: string }) {
   const c = useNetCompany(companyId);
-  if (!c) return null;
+  // Someone selling to them, a recruiter or an investor isn't "someone you know" for a client.
+  if (!c || c.set) return null;
   return (
     <span className={`nw-know nw-l-${c.warmth.toLowerCase()}`} data-warmth={c.warmth} aria-label={`You know someone here: ${c.warmth}`} title={`${c.warmth}, from your ${sources(c.src)}`}>
       {knowWords(c.warmth)}

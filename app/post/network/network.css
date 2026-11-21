@@ -1146,3 +1146,275 @@
   flex: none;
   margin-top: 4px;
 }
+
+/* ----- Your network's four parts (Paths.tsx): warm paths, clients, introducers, everyone ----- */
+.np-stats {
+  margin: 4px 0 8px;
+}
+.np-stats .nw-stat-b:not(.nw-stat-pine):hover {
+  background: var(--row-hover);
+}
+.np-stats .nw-stat-b:not(.nw-stat-pine) .nw-stat-go {
+  color: var(--pine);
+}
+.np-sec {
+  margin-top: 36px;
+  scroll-margin-top: 16px;
+}
+.np-sec-h {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.np-n {
+  margin-left: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.np-h3 {
+  margin: 20px 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.np-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.np-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.np-list > li + li {
+  border-top: 1px solid var(--line);
+}
+.np-row,
+.np-client,
+.np-every-co {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+.np-co {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+.np-co-t {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.np-co-name {
+  justify-self: start;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+button.np-co-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.np-co-static {
+  cursor: default;
+}
+.np-why {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.np-why .rd-band {
+  margin-right: 2px;
+}
+.np-person {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.np-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #f3f5f4;
+  color: var(--body-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.np-p-t {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.np-p-name {
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 600;
+}
+.np-p-why {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.np-opens {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--body-ink);
+}
+.np-kind {
+  margin-left: 4px;
+  font-size: 11px;
+  vertical-align: 1px;
+}
+.np-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.np-noone {
+  margin: 0;
+}
+.np-empty {
+  padding: 16px;
+  border-radius: var(--r-card);
+  border: 1px dashed var(--line-strong);
+  background: var(--surface);
+}
+.np-empty .nw-body {
+  margin: 0;
+}
+.np-tag {
+  flex: none;
+}
+.np-client-p {
+  margin: 0;
+}
+.np-offers ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.np-offers li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.np-sel {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+.np-sel-btn {
+  color: var(--body-ink);
+}
+.np-filters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.np-q {
+  width: 100%;
+  box-sizing: border-box;
+}
+.np-co-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.np-set,
+.nw-set {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f3f5f4;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--body-ink);
+}
+.np-every .np-people,
+.np-loose {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.np-every .np-people li,
+.np-loose li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.np-loose {
+  padding: 14px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.np-loose li + li {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.np-hide {
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.nw-link-sm {
+  font-size: inherit;
+}
+.rd-know-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+@media (max-width: 720px) {
+  .np-acts .btn {
+    flex: 1 1 auto;
+  }
+  .np-co .nw-warm {
+    align-self: flex-start;
+  }
+}
+.np-fit {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}

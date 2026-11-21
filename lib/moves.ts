@@ -62,6 +62,8 @@ export interface MovesWire {
   month: number;
   /** The Google connector: off for everyone, on and not connected by this member, or connected. */
   google: "off" | "connect" | "on";
+  /** Connected: how many warm paths Your network lists (companies they know that are likely to hire them), for Home's link to them. */
+  warm?: number;
 }
 
 /** How many moves Home shows, and how many of the day's companies are looked at to pick them. */

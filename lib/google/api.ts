@@ -115,7 +115,7 @@ export async function revoke(token: string): Promise<boolean> {
 
 const PAGES_MAX = 20;
 const CALENDARS_MAX = 10;
-const EVENT_FIELDS = "nextPageToken,items(status,eventType,start,attendees(email,displayName,self,resource,responseStatus))";
+const EVENT_FIELDS = "nextPageToken,items(status,eventType,start,attendees(email,displayName,self,resource,responseStatus,organizer))";
 
 /** The member's own calendars: the primary, and others they own (with the calendar list scope). */
 export async function ownedCalendars(access: string, withList: boolean): Promise<string[]> {

@@ -59,6 +59,11 @@ const companies = [
   co("c_north", "Northwind Supply", "northwind.example", "$20M–$50M"),
   co("c_bram", "Bramblewood Labs", "bramblewood.example"),
   ...fillers,
+  // Cy's network (section 8): a big software vendor, a staffing firm, a client met every week, a prospect with a fresh hire.
+  { id: "c_vend", fields: { name: "Vendorly", website: "vendorly.example", industry: "SaaS", employees: "1,001+", revenue: "$50M+", hq: "Austin, TX" } },
+  { id: "c_staff", fields: { name: "Hirewell Staffing", website: "hirewell.example", industry: "Staffing & Recruiting", employees: "11–50", revenue: "$1M–$5M", hq: "Austin, TX" } },
+  co("c_quarry", "Quarry Labs", "quarrylabs.example"),
+  co("c_birch", "Birchway Apps", "birchway.example"),
 ];
 const seat = (id: string, companyId: string, fields: Record<string, string>) => ({ id, companyId, verified: false, fields });
 const engagements = [
@@ -68,12 +73,14 @@ const engagements = [
   // Northwind: Revenue Nomad already found a RevOps seat there that nobody holds. Confirm claims it.
   seat("e_north_rev", "c_north", { source: "Seat scan", function: "RevOps", role: "Fractional Head of RevOps", type: "Fractional" }),
   ...fillers.map((f, i) => seat(`e_fill${i}`, f.id, { source: "Seat scan", function: "Finance", role: "Fractional CFO", type: "Fractional", start: "2025-01" })),
+  // Birchway hired a fractional Sales leader two months ago: RevOps usually follows (Crystal Ball's likelihood).
+  seat("e_birch_sales", "c_birch", { source: "Seat scan", function: "Sales", role: "Fractional CRO", type: "Fractional", start: new Date(Date.UTC(new Date(NOW).getUTCFullYear(), new Date(NOW).getUTCMonth() - 2, 15)).toISOString().slice(0, 7), status: "Active", end: "Ongoing" }),
 ];
 const mem = (id: string, name: string, title = "Fractional Head of RevOps") => ({ id, name, email: `${id.slice(4)}@${id.slice(4)}co.example`, title, token: `tok-${id.slice(4)}-pages` });
 const RATERS = Array.from({ length: 16 }, (_, k) => mem(`mem_r${k}`, `Rater ${k}`, "Fractional Leader"));
 const seed = {
   builtAt: ago(60),
-  members: [mem("mem_ana", "Ana Member"), mem("mem_bo", "Bo Other"), mem("mem_sam", "Sam Small"), mem("mem_zed", "Zed Zero"), mem("mem_nia", "Nia None"), mem("mem_fre", "Fen Free"), mem("mem_fin", "Fin Finance", "Fractional CFO"), ...RATERS],
+  members: [mem("mem_ana", "Ana Member"), mem("mem_bo", "Bo Other"), mem("mem_sam", "Sam Small"), mem("mem_zed", "Zed Zero"), mem("mem_nia", "Nia None"), mem("mem_cy", "Cy Client"), mem("mem_fre", "Fen Free"), mem("mem_fin", "Fin Finance", "Fractional CFO"), ...RATERS],
   companies,
   engagements,
   contacts: [],
@@ -132,6 +139,7 @@ writeFileSync(
         mem_zed: ballOf("mem_zed", ["c_lark"]),
         // Nia knows people, none of them at a company in her Crystal Ball.
         mem_nia: ballOf("mem_nia", ["c_fill1", "c_fill2"]),
+        mem_cy: ballOf("mem_cy", ["c_birch"]),
       },
       stats: { runs: 0, sent: 0, emails: 0, slack: 0, instant: 0 },
     },
@@ -171,7 +179,22 @@ const N = account("nia@niaco.example");
 N.meet([-300, -310], P("Lena Voss", "lena@fadeaway.example"));
 N.connections.push(contact("Omar Haddad", "omar@pinecrest.example", "Pinecrest Logistics", "Director of Sales"));
 const B = account("bo@boco.example");
-const ACCOUNTS: Record<string, ReturnType<typeof account>> = { ana: A, sam: S, zed: Z, nia: N, bo: B };
+// Cy: a fractional's calendar as it really is. A vendor's sales calls, a recruiter, an investor and another fractional (at no company on Merlin), a client every week, a prospect, a friend on personal email.
+const C = account("cy@cyco.example");
+C.meet([-24, -17, -10], P("Kyle Seller", "kyle@vendorly.example"), P("Mia Engineer", "mia@vendorly.example"));
+C.meet([-70, -30], P("Tess Morgan", "tess@hirewell.example"));
+C.connections.push(contact("Tess Morgan", "tess@hirewell.example", "Hirewell Staffing", "Senior Recruiter"));
+C.meet([...Array.from({ length: 28 }, (_, i) => -(3 + i * 7)), 4], P("Nora Vance", "nora@quarrylabs.example"));
+C.connections.push(contact("Nora Vance", "nora@quarrylabs.example", "Quarry Labs", "CEO"));
+C.meet([-40, -95, -130], P("Rosa Lin", "rosa@birchway.example"));
+C.connections.push(contact("Rosa Lin", "rosa@birchway.example", "Birchway Apps", "Founder and CEO"));
+C.meet([-60, -150], P("Ben Cole", "ben@ridgelinecapital.example"));
+C.connections.push(contact("Ben Cole", "ben@ridgelinecapital.example", "Ridgeline Capital", "Managing Partner"));
+C.meet([-14, -45, -100], P("Idris Vane", "idris@vanefinance.example"));
+C.connections.push(contact("Idris Vane", "idris@vanefinance.example", "Vane Finance", "Fractional CFO"));
+C.meet([-8, -15], P("Chris Friend", "chris.friend@gmail.com"));
+C.meet([-30, -60, -90], P("Pat Colleague", "pat@cyco.example"));
+const ACCOUNTS: Record<string, ReturnType<typeof account>> = { ana: A, sam: S, zed: Z, nia: N, bo: B, cy: C };
 
 const GRANT = "openid email https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly";
 const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -311,27 +334,29 @@ async function main() {
     const view = await net(TOK(who));
     const ball = (await radar.radarView(TOK(who)))!;
     const table = await t.buildView(TOK(who));
-    const nums = types.foundNumbers(view.companies, ball.ready ? ball.rows : null);
     const html = renderToStaticMarkup(
-      React.createElement(Found, { view, infos: deriveAll(table.companies), fn: table.me!.function, people: view.stats.real, again: false, onCrystal: noop, onStart: noop, onStay: noop, onSeats: noop, onAdd: noop, crystal: ball }),
+      React.createElement(Found, { view, infos: deriveAll(table.companies), fn: table.me!.function, people: PM.peopleCount(view), again: false, onWarm: noop, onStay: noop, onClients: noop, onProfile: noop, onAdd: noop }),
     );
-    return { view, ball, table, nums, html, text: text(html) };
+    return { view, ball, table, html, text: text(html) };
   };
+  const PM = await import("../app/post/network/model.ts");
   const fa = await found("ana");
   const anaIds = new Set(fa.view.companies.map((c) => c.id));
-  check("Ana: N is Your network's count (8 companies), the same count my_account gives", fa.nums.n === 8 && fa.nums.n === fa.view.companies.length && (await tools.myAccount({ member: (await t.memberById("mem_ana"))!, origin: ORIGIN })).your_network === "Google connected: 8 companies you know people at", fa.view.companies.map((c) => c.name));
-  check("Ana: M is how many of those are in her Crystal Ball's day (2 of its 3 rows)", fa.ball.rows.length === 3 && fa.nums.m === 2 && fa.nums.m === fa.ball.rows.filter((r) => anaIds.has(r.id)).length, { rows: fa.ball.rows.length, m: fa.nums.m });
-  check("Ana's page says both numbers, and one next button to Crystal Ball", fa.text.includes("We found 8 companies where you know someone.") && fa.text.includes("2 of them are likely to hire a fractional RevOps leader soon.") && /See the 2 in your Crystal Ball/.test(fa.text), fa.text.slice(0, 400));
+  const byName = (v: NetworkView, n: string) => v.companies.find((c) => c.name === n);
+  check("Ana: N is Your network's count (8 companies), the same count my_account gives", fa.view.companies.length === 8 && (await tools.myAccount({ member: (await t.memberById("mem_ana"))!, origin: ORIGIN })).your_network === "Google connected: 8 companies you know people at", fa.view.companies.map((c) => c.name));
+  const W = fa.view.warm.length;
+  check("Ana's warm paths: the two in her Crystal Ball lead, scored live for every company she knows; a saved contact alone (Pinecrest, Cold) isn't one", W >= 2 && fa.view.warm.slice(0, 2).every((id) => byName(fa.view, "Larkfield Robotics")!.id === id || byName(fa.view, "Corvid Health")!.id === id) && !fa.view.warm.includes(byName(fa.view, "Pinecrest Logistics")!.id) && fa.view.companies.filter((c) => c.ball).every((c) => fa.view.warm.includes(c.id)), fa.view.warm.map((id) => fa.view.companies.find((c) => c.id === id)!.name));
+  check("each warm path has Crystal Ball's own likelihood for her function, in words, never a percentage", fa.view.warm.every((id) => { const c = fa.view.companies.find((x) => x.id === id)!; return !!c.odds && ["High", "Medium", "Low"].includes(c.odds.band) && !/%/.test(c.odds.why); }) && /RevOps usually follows|No hiring sign|RevOps can follow|window/.test(byName(fa.view, "Larkfield Robotics")!.odds!.why), byName(fa.view, "Larkfield Robotics")!.odds);
+  check("Ana's page says both numbers, and one next button to exactly that many warm paths", fa.text.includes("We found 8 companies where you know someone.") && fa.text.includes(`${W} are warm paths into companies likely to hire a fractional RevOps leader.`) && fa.text.includes(`See your ${W} warm paths`), fa.text.slice(0, 400));
   check("the time on it is the measured one, in whole seconds", new RegExp(`mapped in ${types.tookWords(fa.view.first!.ms!)}`).test(fa.text), fa.text.slice(0, 120));
-  check("the companies on it are hers, the two in Crystal Ball first", /Larkfield Robotics[\s\S]*Corvid Health|Corvid Health[\s\S]*Larkfield Robotics/.test(fa.text) && fa.html.indexOf("Larkfield Robotics") < fa.html.indexOf("Tallgrass Analytics") && fa.html.indexOf("Corvid Health") < fa.html.indexOf("Tallgrass Analytics"));
+  check("the companies on it are hers, the warm paths first", fa.html.indexOf("Larkfield Robotics") > 0 && fa.html.indexOf("Corvid Health") > 0 && (fa.html.indexOf("Pinecrest Logistics") === -1 || fa.html.indexOf("Larkfield Robotics") < fa.html.indexOf("Pinecrest Logistics")) && fa.view.companies.every((c) => anaIds.has(c.id)));
   const fs = await found("sam");
-  check("a small network says so plainly: 2 companies, 1 of them likely to hire", fs.nums.n === 2 && fs.nums.m === 1 && fs.text.includes("We found 2 companies where you know someone.") && fs.text.includes("1 of them is likely to hire a fractional RevOps leader soon.") && /See it in your Crystal Ball/.test(fs.text), fs.text.slice(0, 300));
+  check("a small network says so plainly: 2 companies, 1 warm path, and the button says it", fs.view.companies.length === 2 && fs.view.warm.length === 1 && fs.text.includes("We found 2 companies where you know someone.") && fs.text.includes("1 is a warm path into a company likely to hire a fractional RevOps leader.") && /See your warm path/.test(fs.text), fs.text.slice(0, 300));
   const fz = await found("zed");
-  check("nobody at a company on Merlin: said plainly, with what to do next, and no number invented", fz.nums.n === 0 && fz.nums.m === 0 && fz.text.includes("We didn't find anyone at a company on Merlin yet.") && /Add a company you know/.test(fz.text) && !/We found/.test(fz.text) && !/likely to hire/.test(fz.text), fz.text.slice(0, 300));
-  const fn = await found("nia");
-  check("people known, none in Crystal Ball: M is 0, no 'likely to hire', the button goes to Your network", fn.nums.n === 2 && fn.nums.m === 0 && fn.text.includes("We found 2 companies where you know someone.") && !/likely to hire/.test(fn.text) && /None of them is in your Crystal Ball today/.test(fn.text) && !/in your Crystal Ball\s*<\/button>/.test(fn.html) && /Open Your network/.test(fn.text), fn.text.slice(0, 300));
-  check("M is never printed while Crystal Ball isn't known", types.foundNumbers(fa.view.companies, null).m === null && types.foundNumbers(fa.view.companies, null).n === 8);
-  check("no duration is printed without a measured one", !/mapped in/.test(text(renderToStaticMarkup(React.createElement(Found, { view: { ...fa.view, first: { ms: null, seen: true } }, infos: [], fn: "RevOps", people: 0, again: false, onCrystal: noop, onStart: noop, onStay: noop, onSeats: noop, onAdd: noop, crystal: fa.ball })))));
+  check("nobody at a company on Merlin: said plainly, with what to do next, and no number invented", fz.view.companies.length === 0 && fz.text.includes("We didn't find anyone at a company on Merlin yet.") && /Add a company you know/.test(fz.text) && !/We found/.test(fz.text) && !/likely to hire/.test(fz.text), fz.text.slice(0, 300));
+  const none = text(renderToStaticMarkup(React.createElement(Found, { view: { ...fa.view, warm: [] }, infos: [], fn: "RevOps", people: 0, again: false, onWarm: noop, onStay: noop, onClients: noop, onProfile: noop, onAdd: noop })));
+  check("companies known, no warm path: it says so, with no button promising any, and the next step is Your network", /None of them fits your profile or shows a sign of hiring a fractional RevOps leader yet/.test(none) && !/See your/.test(none) && /Open Your network/.test(none), none.slice(0, 300));
+  check("no duration is printed without a measured one", !/mapped in/.test(text(renderToStaticMarkup(React.createElement(Found, { view: { ...fa.view, first: { ms: null, seen: true } }, infos: [], fn: "RevOps", people: 0, again: false, onWarm: noop, onStay: noop, onClients: noop, onProfile: noop, onAdd: noop })))));
 
   /* ---------- the app's own store, primed with what the server sends Ana ---------- */
   const realFetch = globalThis.fetch;
@@ -538,6 +563,99 @@ async function main() {
   // Disconnect and delete everything: what this page kept goes too. The seats she confirmed are hers and stay.
   const gone = (await G.disconnectAll(TOK("sam"))) as NetworkView;
   check("Disconnect and delete everything erases the first read and the dismissals with the rest", gone.first === null && gone.seats.length === 0 && !(await t.loadState()).network?.mem_sam && !!(await t.loadState()).network?.mem_ana?.notSeats);
+
+  /* ---------- 8. accuracy and the four parts, on Cy's network ---------- */
+  console.log("\nVendors, recruiters and investors set aside with why; Not a relationship kept; warm paths, clients, introducers, everyone");
+  const CY = TOK("cy");
+  await connect("cy");
+  await idle("cy");
+  const boCy0 = await others(BO);
+  let cv = await net(CY);
+  const cy = (n: string) => cv.companies.find((c) => c.name === n)!;
+  check("Cy's own firm (her email's domain) and personal email are never a company", !cv.companies.some((c) => /cyco|gmail/.test(c.site ?? "")) && cv.companies.length === 4, cv.companies.map((c) => c.name));
+  check("the big software company's sales calls are set aside as someone selling to her, with Merlin's reason", cy("Vendorly").set?.kind === "vendor" && cy("Vendorly").set?.by === "merlin" && /1,001\+ people/.test(cy("Vendorly").set!.why), cy("Vendorly").set);
+  check("three calls in two weeks never read Hot", cy("Vendorly").warmth !== "Hot");
+  check("the staffing firm is set aside as a recruiter", cy("Hirewell Staffing").set?.kind === "recruiter");
+  check("neither is a warm path, a chip on Crystal Ball, or a way in on Home's moves", !cv.warm.includes(cy("Vendorly").id) && !cv.warm.includes(cy("Hirewell Staffing").id) && types.networkWarmth(await t.loadState(), "mem_cy")("c_vend") === null && types.networkWarmth(await t.loadState(), "mem_cy")("c_birch") !== null);
+  check("the prospect with a fresh Sales hire is a warm path, with Crystal Ball's reason and the person to write to", cv.warm[0] === cy("Birchway Apps").id && /RevOps (usually|can) follow/.test(cy("Birchway Apps").odds!.why) && PM.bestPerson(cy("Birchway Apps"))!.name === "Rosa Lin", cy("Birchway Apps").odds);
+  // Undo what Merlin set aside, and back.
+  await G.markNetwork(CY, { company: cy("Vendorly").id, as: "rel" });
+  cv = await net(CY);
+  check("Undo on Merlin's judgement: it is a relationship again, and stays so on the next read", cy("Vendorly").set === null && (await G.syncMember("mem_cy"), (await net(CY)).companies.find((c) => c.name === "Vendorly")!.set === null));
+  await G.markNetwork(CY, { company: cy("Vendorly").id, as: "undo" });
+  cv = await net(CY);
+  check("and Undo of that puts Merlin's judgement back", cy("Vendorly").set?.by === "merlin");
+  // Not a relationship, remembered across reads.
+  await G.markNetwork(CY, { company: cy("Birchway Apps").id, as: "oneoff" });
+  await G.markNetwork(CY, { person: "chris.friend@gmail.com", as: "other" });
+  await G.syncMember("mem_cy");
+  cv = await net(CY);
+  check("Not a relationship on a company and on a person survive the next read", cy("Birchway Apps").set?.by === "you" && cy("Birchway Apps").set?.kind === "oneoff" && cv.loose.find((p) => p.key === "chris.friend@gmail.com")!.hidden === true && !cv.warm.includes(cy("Birchway Apps").id));
+  check("what she set aside is under Everyone's Set aside, and out of the default list", PM.everyone(cv).companies.every((x) => x.c.name !== "Birchway Apps") && PM.everyone(cv, { ...PM.NO_FILTER, hidden: true }).companies.some((x) => x.c.name === "Birchway Apps") && PM.everyone(cv, { ...PM.NO_FILTER, hidden: true }).loose.some((p) => p.key === "chris.friend@gmail.com"));
+  check("only a company or person in her own network can be marked", (await G.markNetwork(CY, { company: "not-a-company", as: "vendor" }).then(() => false, (e) => e instanceof t.ActionError)) && (await G.markNetwork(BO, { company: cy("Vendorly").id, as: "vendor" }).then(() => false, (e) => e instanceof t.ActionError)) && (await G.markNetwork(CY, { company: cy("Vendorly").id, as: "nonsense" }).then(() => false, (e) => e instanceof t.ActionError)));
+  await G.markNetwork(CY, { company: cy("Birchway Apps").id, as: "undo" });
+  cv = await net(CY);
+  // The warm-path list is never empty when its count says otherwise, and the button leads to that many rows.
+  const me8 = (await t.buildView(CY)).me!;
+  const infos8 = deriveAll((await t.buildView(CY)).companies);
+  const PT = await import("../app/post/network/Paths.tsx");
+  served = cv;
+  await store.load(true);
+  const warmHtml = render(me8, React.createElement(PT.WarmPaths, { view: cv, infos: infos8, me: me8, openCompany: noop, onProfile: noop, onClaude: noop, onEveryone: noop }));
+  check("Warm paths draws as many rows as its count says (count above zero, never an empty list)", cv.warm.length > 0 && count(warmHtml, "data-warm=") === Math.min(10, cv.warm.length) && text(warmHtml).includes(`Warm paths into companies likely to hire you ${cv.warm.length}`), text(warmHtml).slice(0, 300));
+  const f8 = text(renderToStaticMarkup(React.createElement(Found, { view: cv, infos: infos8, fn: "RevOps", people: PM.peopleCount(cv), again: false, onWarm: noop, onStay: noop, onClients: noop, onProfile: noop, onAdd: noop })));
+  check("the result's button names the same number of warm paths the list draws", f8.includes(cv.warm.length === 1 ? "See your warm path" : `See your ${cv.warm.length} warm paths`), f8.slice(0, 300));
+  const empty = render(me8, React.createElement(PT.WarmPaths, { view: { ...cv, warm: [] }, infos: infos8, me: me8, openCompany: noop, onProfile: noop, onClaude: noop, onEveryone: noop }));
+  check("with none it says so plainly, and offers the next step", /None of the companies you know/.test(text(empty)) && /See everyone you know/.test(text(empty)) && !empty.includes("data-warm="));
+  // Crystal Ball's Where you know someone with nobody known leads to the warm paths, never a blank page.
+  const niaBall = (await radar.radarView(TOK("nia"), null, undefined, "today"))!;
+  const niaT = await t.buildView(TOK("nia"));
+  served = await net(TOK("nia"));
+  await store.load(true);
+  const niaPage = text(render(niaT.me, React.createElement(RP.RadarPage, { view: niaBall, failed: null, reload: noop, rows: RP.radarRows(niaBall, rowsFor("companies", deriveAll(niaT.companies))), me: niaT.me!, phone: true, onBack: noop, onProfile: noop, onRange: noop, openCompany: noop, know: true, onKnow: noop, onWarm: noop })));
+  check("Crystal Ball cut to where she knows someone, with nobody there: it says so and leads to her warm paths", /Nobody you know is at a company in your Crystal Ball today/.test(niaPage) && /See your warm paths/.test(niaPage) && /Show all 2 here/.test(niaPage), niaPage.slice(0, 500));
+  served = cv;
+  await store.load(true);
+  // The people number leads to the people.
+  const nums8 = PM.topNumbers(cv);
+  const top = text(render(me8, React.createElement(PT.TopNumbers, { n: nums8, go: noop })));
+  const every = render(me8, React.createElement(PT.Everyone, { view: cv, openCompany: noop, filter: PM.NO_FILTER, setFilter: noop }));
+  const rowsDrawn = count(every, "np-p-name");
+  check("the people number at the top is the Everyone list's own count, and every one of them is drawn", nums8.people === PM.peopleCount(cv) && top.includes(`${nums8.people} people you know, searchable`) && text(every).includes(`Everyone you know ${nums8.people}`) && rowsDrawn === nums8.people, { people: nums8.people, rowsDrawn });
+  check("people at no company on Merlin are listed (a friend on personal email, the investor, the fractional), her colleague is not", cv.loose.some((p) => p.name === "Chris Friend" && !p.domain) && cv.loose.some((p) => p.name === "Ben Cole") && !cv.loose.some((p) => /cyco/.test(p.email ?? "")));
+  // People who can introduce you.
+  const ben = cv.intros.find((p) => p.name === "Ben Cole");
+  const idris = cv.intros.find((p) => p.name === "Idris Vane");
+  check("introducers: the investor and the other fractional, each with what they can open said honestly; nobody else", !!ben && ben.kind === "investor" && !!idris && idris.kind === "fractional" && cv.intros.length === 2 && /Merlin doesn't know/.test(ben.opens) && /Merlin doesn't know/.test(idris.opens), cv.intros.map((p) => [p.name, p.kind]));
+  const ask = PT.askNote(ben!, me8);
+  const MN = await import("../lib/moveNote.ts");
+  const askText = MN.draftNote(ask.facts).body;
+  check("Ask for an intro drafts a note in her voice that asks, and claims nothing Merlin doesn't know", /introduction/.test(askText) && /^Hi Ben,/.test(askText) && !/Ridgeline Capital backs|portfolio company [A-Z]/.test(askText) && !askText.includes("Birchway"), askText);
+  // Your clients: confirm with her click only, then what her meetings can add, each with her click only.
+  const quarry = cy("Quarry Labs");
+  const s8 = await t.loadState();
+  check("the client every week is under Your clients, not confirmed, and nothing is on Merlin for it yet", !!quarry.client && quarry.client.seat === null && quarry.client.active && !s8.engagements.some((e) => e.companyId === "c_quarry") && !cv.warm.includes(quarry.id));
+  const cardsHtml = render(me8, React.createElement(PT.Clients, { view: cv, infos: infos8, me: me8, refresh: noop }));
+  check("its card offers Confirm this seat and Not a seat, and nothing else is added by showing it", /Confirm this seat/.test(text(cardsHtml)) && /Not a seat/.test(text(cardsHtml)) && (await t.loadState()).engagements.length === s8.engagements.length);
+  const guessQ = cv.seats.find((g) => g.id === quarry.id)!;
+  const boAfterMarks = await others(BO);
+  const conf = await t.perform(CY, { type: "add", company: "Quarry Labs", newEngagement: true, engagementFields: types.seatConfirmFields({ ...guessQ, active: true }, "Cy Client", guessQ.role), operatorMemberId: "me" });
+  cv = await net(CY);
+  const seatId = cy("Quarry Labs").client!.seat;
+  check("Confirm adds her seat by the existing Add, as active from the first month", /Added a seat at Quarry Labs/.test(conf.message) && !!seatId && (await t.loadState()).engagements.filter((e) => e.companyId === "c_quarry").length === 1, conf.message);
+  const t8 = await t.buildView(CY);
+  const quarryInfo = deriveAll(t8.companies).find((i) => i.c.id === quarry.id)!;
+  const offerHtml = text(render(t8.me, React.createElement(PT.Clients, { view: cv, infos: deriveAll(t8.companies), me: t8.me!, refresh: noop })));
+  check("her confirmed seat offers who she works with there, as contributions she chooses, and Nora is not on the record before the click", /Add Nora Vance \(CEO\) as/.test(offerHtml) && /credits/.test(offerHtml) && !quarryInfo.people.some(({ p }) => p.cells.name?.s === "value" && p.cells.name.v === "Nora Vance") && !JSON.stringify((await t.loadState()).values).includes("Nora Vance"), offerHtml.slice(0, 400));
+  const added = await t.perform(CY, { type: "addPerson", companyId: quarry.id, engagementId: seatId, person: { name: "Nora Vance", title: "CEO", relationship: "Reported to" } });
+  check("her click adds Nora as who she reports to, with the usual credits", /Added Nora Vance at Quarry Labs/.test(added.message) && /You earned/.test(added.message), added.message);
+  check("other members see only what she added, by the usual locks; Bo's network is untouched", !JSON.stringify(await G.networkView(BO)).includes("Nora") && !JSON.stringify((await t.buildView(BO, { fresh: true })).companies.find((c) => c.id === quarry.id)).includes("Nora Vance"));
+  // Privacy: nothing of Cy's network in another member's view, the export or the connector beyond what it allows.
+  check("another member's table, network and Crystal Ball: the same bytes after all of Cy's marks and reads (before her own Add)", boCy0 === boAfterMarks);
+  const exp8 = JSON.stringify(await t.exportState());
+  check("the export leaves her network out: no person, no judgement", !exp8.includes("ben@ridgelinecapital") && !exp8.includes("Chris Friend") && !exp8.includes('"notRel"') && !exp8.includes('"loose"'));
+  const mine8 = JSON.stringify(await tools.myNetwork({ member: (await t.memberById("mem_cy"))!, origin: ORIGIN }));
+  check("the connector lists her warm paths and what is set aside, never a person from her Google account", /warm_paths/.test(mine8) && /looks like someone selling to the member/.test(mine8) && !/Kyle|Rosa|Ben Cole|Idris|Chris|Nora|Tess|@/.test(mine8), mine8.slice(0, 600));
 
   /* ---------- off ---------- */
   console.log("\nRN_GOOGLE off");

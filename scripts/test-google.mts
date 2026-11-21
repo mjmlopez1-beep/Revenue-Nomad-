@@ -216,6 +216,37 @@ async function main() {
   check("one meeting years ago: Cold", types.warmthOf(s4) === "Cold", s4);
   check("a meeting coming up warms it", types.warmthScore({ meetings: 1, upcoming: 1, last: ago(300).slice(0, 10) }, NOW) > types.warmthScore({ meetings: 1, last: ago(300).slice(0, 10) }, NOW));
   check("nothing at all is 0", types.warmthScore({}, NOW) === 0);
+
+  console.log("\nWarmth reads true (the grade's own rules, warmthFor)");
+  const d = (n: number) => ago(n).slice(0, 10);
+  const wf = (x: Parameters<typeof types.warmthFor>[0]) => types.warmthFor(x, NOW);
+  check("a single 30-minute call two months ago is not Warm: Fading", wf({ meetings: 1, first: d(60), last: d(60) }) === "Fading");
+  check("a single call last week is not Warm either", wf({ meetings: 1, first: d(7), last: d(7) }) === "Fading");
+  check("a saved contact alone is Cold", wf({ saved: true }) === "Cold");
+  check("three calls in two weeks is Warm, never Hot (a burst, not a relationship)", wf({ meetings: 3, first: d(24), last: d(10) }) === "Warm");
+  check("weekly for months, the last this week: Hot", wf({ meetings: 30, first: d(240), last: d(2), months: 8 }) === "Hot");
+  check("4 meetings over months, the last 8 months ago: Warm; the last 15 months ago: Fading", wf({ meetings: 4, first: d(360), last: d(245) }) === "Warm" && wf({ meetings: 4, first: d(600), last: d(450) }) === "Fading");
+  check("one meeting, then one on the calendar: Warm", wf({ meetings: 1, first: d(30), last: d(30), upcoming: 1, next: ago(-6).slice(0, 10) }) === "Warm");
+  check("emails both ways in the past 6 months: Warm", wf({ emails: 12, both: true, last: d(40) }) === "Warm");
+  check("the reason in words: 4 meetings, the last month named", /^4 meetings, last (in [A-Z][a-z]+( \d{4})?|[A-Z][a-z]{2} \d+)$/.test(types.touchWords({ meetings: 4, first: d(300), last: d(245) }, NOW)) && types.touchWords({ saved: true }, NOW) === "In your contacts", types.touchWords({ meetings: 4, last: d(245) }, NOW));
+
+  console.log("\nVendors, recruiters, investors (lib/google/judge.ts): set aside with why, never from a title of a meeting");
+  const J = await import("../lib/google/judge.ts");
+  const nco = (x: Partial<import("../lib/google/types.ts").NetCompany>) => ({ people: [], ...x }) as import("../lib/google/types.ts").NetCompany;
+  const pp = (title: string, meetings = 2) => ({ key: `${title}@x.example`, email: `${title.replace(/\W/g, "")}@x.example`, name: "Kit Example", title, meetings, src: ["calendar"] as ("calendar")[] });
+  const j = (c: import("../lib/google/types.ts").NetCompany, f: { industry: string | null; employees: string | null }, mine = false) => J.judgeCompany(c, f, { mine, nowMs: NOW });
+  const big = j(nco({ meetings: 3, first: d(24), last: d(10), people: [pp("", 3)] }), { industry: "Fintech", employees: "1,001+" });
+  check("a big software company's sales calls: set aside as selling to you, with why", big?.kind === "vendor" && /1,001\+ people/.test(big.why), big);
+  check("the same company where the member holds a seat: never set aside", j(nco({ meetings: 3, people: [pp("", 3)] }), { industry: "Fintech", employees: "1,001+" }, true) === null);
+  check("an account executive's title: selling to you", j(nco({ meetings: 2, people: [pp("Senior Account Executive")] }), { industry: "Health Care", employees: "51–200" })?.kind === "vendor");
+  check("the shape of a sales process (they sent every invite, 3 meetings in 2 weeks, 2 of their people, a 201+ company): selling to you", j(nco({ meetings: 3, invitedBy: 3, side: 2, first: d(24), last: d(10), people: [pp("", 3)] }), { industry: "Industrial Manufacturing", employees: "201–500" })?.kind === "vendor");
+  check("the same shape at a 51-200 company is a prospect, not a vendor", j(nco({ meetings: 3, invitedBy: 3, side: 2, first: d(24), last: d(10), people: [pp("", 3)] }), { industry: "SaaS", employees: "51–200" }) === null);
+  check("a staffing firm or a recruiter's title: a recruiter", j(nco({ meetings: 2, people: [pp("")] }), { industry: "Staffing & Recruiting", employees: "11–50" })?.kind === "recruiter" && j(nco({ meetings: 2, people: [pp("Senior Recruiter")] }), { industry: "SaaS", employees: "11–50" })?.kind === "recruiter");
+  check("a VC or PE firm: an investor (kept, under People who can introduce you)", j(nco({ meetings: 2, people: [pp("Partner")] }), { industry: "Private Equity & Venture Capital", employees: "11–50" })?.kind === "investor");
+  check("a CEO at a 51-200 SaaS company: a relationship", j(nco({ meetings: 4, people: [pp("CEO", 4)] }), { industry: "SaaS", employees: "51–200" }) === null);
+  check("people: another fractional by their title, an investor by title and firm, a seller", J.personKind({ title: "Fractional CFO" }) === "fractional" && J.personKind({ title: "Managing Partner", org: "Ridgeline Capital" }) === "investor" && J.personKind({ title: "Partner", org: "Smith & Jones Law" }) === null && J.personKind({ title: "Account Executive" }) === "seller");
+  const months = (n: number) => Array.from({ length: n }, (_, i) => new Date(NOW - (n - 1 - i) * 30.44 * DAY).toISOString().slice(0, 7));
+  check("a client: weekly for 8 months, still going; a prospect's 6 calls over 7 months is not one", !!J.seatPattern({ months: months(8), meetings: 34, last: d(3) }, NOW)?.active && J.seatPattern({ months: months(7), meetings: 6, last: d(30) }, NOW) === null);
   check("decision makers: CEO, Founder, CRO, VP Sales, Head of Growth; not an assistant", ["CEO", "Co-founder", "CRO", "VP Sales", "Head of Growth", "Chief Financial Officer"].every(types.isDecisionMaker) && !types.isDecisionMaker("Executive Assistant to the CEO") && !types.isDecisionMaker("Account Executive"));
 
   console.log("\nDomains and matching");
@@ -327,7 +358,7 @@ async function main() {
   check("Lee too, with his display name", acme?.people.some((p) => p.name === "Lee Example" && p.meetings === 1));
   check("Cedar, one meeting 13 months ago: Cold or Fading", ["Cold", "Fading"].includes(byName("Cedar Health")!.warmth), byName("Cedar Health"));
   check("warmest first", v.companies[0].name === "Acme Robotics");
-  check("Acme over many months: a seat you might have held, nothing added", !!acme?.seat && acme.seat.from < acme.seat.to && (await t.loadState()).engagements.length === 0, acme?.seat);
+  check("Acme, ten meetings spread over ten months: not the regular meetings of a seat (fewer than 1.4 a month), and nothing added", acme?.seat === null && (await t.loadState()).engagements.length === 0, acme?.seat);
   check("counts only for what matched nothing (a friend on free mail, a colleague)", v.stats.unmatched >= 1 && v.stats.real >= 1, v.stats);
   const file = stateFile();
   check("no event title, description or guest list is kept", !file.includes(SECRET_TITLE) && !file.includes("Notes we must never keep") && !file.includes("friend@gmail.com") && !file.includes("colleague@anaco.example") && !file.includes("p3@bigroom.example"));

@@ -50,7 +50,9 @@ export async function movesFor(token: string | null, opts: { rv?: RadarView | nu
   const know = new Map<string, KnowPerson>();
   if (net && net.on)
     for (const c of net.companies) {
-      const p = knowFrom(c.people);
+      // Someone selling to them, a recruiter or an investor, and anyone they said is not a relationship, is not a way in.
+      if (c.set) continue;
+      const p = knowFrom(c.people.filter((x) => !x.hidden));
       if (p) know.set(c.id, p);
     }
   const byId = new Map((patch.companies ?? []).map((c) => [c.id, c]));
@@ -65,6 +67,7 @@ export async function movesFor(token: string | null, opts: { rv?: RadarView | nu
       month: st.month,
       // Off for everyone, or on with nothing to connect to (no Google client set up): no mention on Home.
       google: !net || !net.on ? "off" : net.google ? "on" : net.configured ? "connect" : "off",
+      ...(net && net.on && net.google ? { warm: net.warm.length } : {}),
     },
     moves: picked.map((x) => x.move),
     companies: picked.map((x) => byId.get(x.wire.id)!),

@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow } from "@/lib/radar/types";
 import { knowLine, type Move } from "@/lib/moves";
-import { draftNote, gmailLink, mailtoLink, noteFacts } from "@/lib/moveNote";
+import { draftNote, gmailLink, mailtoLink, noteFacts, type NoteFacts } from "@/lib/moveNote";
 import { firstOf } from "@/lib/partners";
 import { IconExternal, initials, useToast } from "../ui/shared";
 import { copyText } from "./hooks";
@@ -27,10 +27,23 @@ import "./movenote.css";
 
 const MAX = 2000;
 
-export function NoteSheet({ m, row, me, onClose, onSent, onClaude }: { m: Move; row: RadarRow; me: Me; onClose: () => void; onSent: () => void; onClaude: () => void }) {
+export function NoteSheet({
+  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent",
+}: {
+  m: Move;
+  row: RadarRow;
+  me: Me;
+  onClose: () => void;
+  onSent: () => void;
+  onClaude: () => void;
+  /** Your network: the note's facts as that page has them (an "ask" for an introduction), instead of the move's. */
+  facts?: NoteFacts | null;
+  /** The last button's words (Your network has no move to mark done). */
+  sentLabel?: string;
+}) {
   const ui = useUi();
   const toast = useToast();
-  const facts = useMemo(() => noteFacts(m, row, me, typeof window === "undefined" ? "" : window.location.origin), [m, row, me]);
+  const facts = useMemo(() => given ?? noteFacts(m, row, me, typeof window === "undefined" ? "" : window.location.origin), [given, m, row, me]);
   const voice = me.voice ?? null;
   const draft = useMemo(() => (facts ? draftNote(facts, voice) : null), [facts, voice]);
   const [subject, setSubject] = useState(draft?.subject ?? "");
@@ -128,7 +141,7 @@ export function NoteSheet({ m, row, me, onClose, onSent, onClaude }: { m: Move; 
             </span>
           </p>
             <button type="button" className={`btn${used ? " btn-pine" : ""} mn-done`} onClick={onSent}>
-              Mark as sent
+              {sentLabel}
             </button>
           </div>
         </div>

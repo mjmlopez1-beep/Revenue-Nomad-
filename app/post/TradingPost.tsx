@@ -692,6 +692,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const radar = useRadarDay(page === "radar", sigDay, radarRange, [me.function, me.icp, me.before]);
   // [google network] Crystal Ball cut to the companies where the member knows someone (the connect moment's button).
   const [radarKnow, setRadarKnow] = useState(false);
+  // [google network] Your network opened at one of its parts (Crystal Ball's "Where you know someone" leads to its warm paths), for that visit.
+  const [netSection, setNetSection] = useState<string | null>(null);
+  useEffect(() => {
+    if (page !== "network") setNetSection(null);
+  }, [page]);
   // It lasts for that visit to Crystal Ball (a record opened from it comes back to the same list), not for the next one.
   const fromRadar = drawer?.returnTo === "radar";
   useEffect(() => {
@@ -2575,6 +2580,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               openCompany={openCompany}
               know={radarKnow}
               onKnow={setRadarKnow}
+              onWarm={() => (setNetSection("nw-warm"), setPage("network"))}
             />
           </main>
         ) : page === "billing" && me.plan ? (
@@ -2597,7 +2603,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               me={me}
               onBack={toBase}
               openCompany={openCompany}
-              onRadar={(know) => (setSigDay(null), setRadarKnow(!!know), setPage("radar"))}
+              onProfile={() => setIcpOpen(true)}
+              section={netSection}
               onSeats={() => openSeats()}
               onClaude={() => (setPage("integrations"), setTimeout(() => document.getElementById("claude-network")?.scrollIntoView({ block: "start" }), 400))}
               refresh={refresh}
