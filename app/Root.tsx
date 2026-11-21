@@ -51,6 +51,21 @@ const lastSawVisitor = () => {
     return false;
   }
 };
+/**
+ * The page's own answer said this browser holds a sign-in cookie (middleware.ts sets rn_in=1 on
+ * the page while rn_table is there): a member as far as the server can tell, even on the first
+ * visit in this browser, before any view has set the hint. The sign-in cookie itself stays out of
+ * the page's reach; this one only says it is there.
+ */
+const signedInHere = () => {
+  try {
+    return /(?:^|;\s*)rn_in=1(?:;|$)/.test(document.cookie);
+  } catch {
+    return false;
+  }
+};
+/** Draw and load the member's app first: the hint says so, or the server saw the sign-in cookie. */
+const likelyMember = () => readHint() || signedInHere();
 const writeHint = (member: boolean) => {
   try {
     window.localStorage.setItem(HINT, member ? "1" : "0");
@@ -94,7 +109,7 @@ const SKELETON_CSS = `
 const noSubscribe = () => () => {};
 function Skeleton({ member, children }: { member?: boolean; children?: React.ReactNode }) {
   // The server's HTML can't read the hint, so it draws the landing's bar; the browser corrects it as it hydrates.
-  const hinted = useSyncExternalStore(noSubscribe, readHint, () => false);
+  const hinted = useSyncExternalStore(noSubscribe, likelyMember, () => false);
   const app = member ?? hinted;
   const bars = (n: number, cls: string) =>
     Array.from({ length: n }, (_, k) => (
@@ -175,20 +190,22 @@ const loadTradingPost = () =>
  * Start the view and the likely next chunk as soon as this file runs, not after the first
  * render: they download side by side. A sign-in link (?k=) signs in first, so it waits.
  *
- * A member (as far as this browser knows) gets the first screen first: GET ?first=1 (fetchFirst),
- * a few KB, Today's answer on Today's address and the list's first rows elsewhere. The app draws
- * from it, and the full view (megabytes of JSON to read and work through on a phone) is asked for
- * once that is on screen. Anyone else gets the view at once (signed out it is the counts only).
+ * A member (as far as this browser knows, or the page's answer said it holds a sign-in cookie:
+ * likelyMember) gets the first screen first: GET ?first=1 (fetchFirst), a few KB, Today's answer
+ * on Today's address and the list's first rows elsewhere. The app draws from it, and the full view
+ * (megabytes of JSON to read and work through on a phone) is asked for once that is on screen.
+ * Anyone else gets the view at once (signed out it is the counts only).
  */
 let early: Promise<ViewResult> | null = null;
 let earlyFirst: Promise<FirstResult | null> | null = null;
 if (typeof window !== "undefined") {
   const q = new URLSearchParams(window.location.search);
+  const member = likelyMember();
   if (!q.has("k")) {
-    if (readHint()) earlyFirst = fetchFirst(window.location.search);
+    if (member) earlyFirst = fetchFirst(window.location.search);
     else early = fetchView();
   }
-  if (readHint()) void loadTradingPost();
+  if (member) void loadTradingPost();
   else void import("./landing/Landing");
 }
 
@@ -325,6 +342,7 @@ function App() {
     const g = ++gen.current;
     const firstScreen = earlyFirst;
     earlyFirst = null;
+    let signedOut: View | null = null;
     if (firstScreen) {
       // With the app's code, so it draws the moment the answer is set (not behind the dynamic wrapper's loading frame).
       const [f] = await Promise.all([firstScreen.catch(() => null), tradingPostNow ?? loadTradingPost()]);
@@ -349,12 +367,14 @@ function App() {
         } else syncRef.current();
         return;
       }
+      // Signed out after all (a sign-in cookie that is nobody's): that answer is the signed-out view itself, not asked for again.
+      if (f && !f.view.me) signedOut = f.view;
     }
     let r: ViewResult;
     try {
       const pending = early;
       early = null;
-      r = await (pending ?? fetchView());
+      r = signedOut ? { view: signedOut } : await (pending ?? fetchView());
     } catch {
       r = { view: null, error: NETWORK, status: 0, retryAfter: null };
     }
@@ -487,18 +507,27 @@ function App() {
           localStorage.setItem("tp_code", code.slice(0, 40));
         } catch {}
       }
-      if (!k && lastSawVisitor()) setGuest(true);
+      if (!k && lastSawVisitor() && !signedInHere()) setGuest(true);
+      let signedInNow = false;
       if (k) {
         const r = await post({ signIn: k });
         const toThread = url.searchParams.get("p") === "messages";
         // A message email's link lasts 7 days, not the 20 minutes a sign-in email's link does.
         if (r.error) setSignInError(toThread && /expired or was already used/.test(r.error) ? MESSAGE_LINK_USED : r.error);
-        else if (toThread) fromMessageLink.current = true;
+        else {
+          signedInNow = true;
+          if (toThread) fromMessageLink.current = true;
+        }
       }
       if (k || ref) {
         url.searchParams.delete("k");
         url.searchParams.delete("ref");
         window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
+      // Just signed in by the link (often the first visit in this browser): the first screen first, as for any member.
+      if (signedInNow && !earlyFirst && !early) {
+        earlyFirst = fetchFirst(window.location.search);
+        void loadTradingPost();
       }
       await load();
     })();

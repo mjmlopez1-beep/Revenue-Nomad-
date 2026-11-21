@@ -183,8 +183,10 @@ export async function fetchToday(since?: string | null): Promise<TodayView | nul
  * GET /api/table?first=1 (lib/firstPage.ts): the first screen before the full view. `search` is
  * the address's query: Today's address gets Today's answer, any other the list's first rows' companies
  * with `first`, the counts the table's first screen shows. Either way a View the app can draw from
- * until the full view lands (only the first screen's companies in it). Null on any answer without
- * one (signed out, busy, offline, an older server): the page then waits for the full view.
+ * until the full view lands (only the first screen's companies in it). Signed out (a sign-in cookie
+ * that is nobody's) the server answers with the signed-out view itself, as GET /api/table does: it
+ * comes back as `view`, its `me` null, so the page need not ask again. Null on any other answer
+ * without one (busy, offline, an older server): the page then waits for the full view.
  */
 export type FirstResult = { view: View; first?: FirstList; today?: TodayView };
 export async function fetchFirst(search: string): Promise<FirstResult | null> {
@@ -202,8 +204,12 @@ export async function fetchFirst(search: string): Promise<FirstResult | null> {
       if (since) q.set("since", since);
     } catch {}
     const r = await fetch(`/api/table?${q}`, { cache: "no-store" });
-    const j = (await r.json().catch(() => null)) as { today?: TodayView; view?: View; first?: FirstList } | null;
+    const j = (await r.json().catch(() => null)) as { today?: TodayView; view?: View; first?: FirstList; stats?: View["stats"]; me?: null } | null;
     if (!r.ok || !j) return null;
+    if (j.stats && j.me === null) {
+      const v = j as unknown as View;
+      return { view: Array.isArray(v.companies) ? unpackView(v) : v };
+    }
     const t = j.today;
     if (t?.me && t.radar) {
       const companies = (t.companies ?? []).map(unpackCompany);
