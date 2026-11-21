@@ -102,15 +102,18 @@ function Stat({ s, side, rangeN, locked }: { s: RateStat; side: "m" | "h"; range
  * Function, pricing model, rate and (optionally) client revenue. Sends benchRate and shows what the server says.
  * [ux ws3] `inline`: the same form opened in place under the member's own empty function, its ids
  * prefixed so the full form further down keeps its own. `onDone` after a rate is shared.
+ * On a company's record ("What to charge them", Charge.tsx) it is the same form again: its own id
+ * prefix (`idp`), the company's revenue band picked to start with (`revenue`), and no `refresh`
+ * (the action goes through the app's own act, which brings the new benchmarks back with it).
  */
-function ShareRate({ refresh, inline, onDone }: { refresh: () => Promise<void>; inline?: boolean; onDone?: () => void }) {
+export function ShareRate({ refresh, inline, onDone, idp: idpGiven, revenue: revenueGiven }: { refresh?: () => Promise<void>; inline?: boolean; onDone?: () => void; idp?: string; revenue?: string }) {
   const ui = useUi();
   const toast = useToast();
-  const idp = inline ? "tp-bmi" : "tp-bm";
+  const idp = idpGiven ?? (inline ? "tp-bmi" : "tp-bm");
   const [fn, setFn] = useState(ui.me.function && FUNCTIONS.includes(ui.me.function) ? ui.me.function : "");
   const [pricing, setPricing] = useState<Pricing>("Monthly retainer");
   const [rate, setRate] = useState("");
-  const [revenue, setRevenue] = useState("");
+  const [revenue, setRevenue] = useState(revenueGiven && RN_REVENUE.includes(revenueGiven) ? revenueGiven : "");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const capped = earnNote(ui.me).capped;
@@ -122,6 +125,14 @@ function ShareRate({ refresh, inline, onDone }: { refresh: () => Promise<void>; 
     if (!readRate(rate, pricing)) return setErr(BENCH_RATE_HELP);
     setErr(null);
     setBusy(true);
+    if (!refresh) {
+      // On a record: the app's own act (its toast, the member's numbers and the benchmarks come back with the answer).
+      const a = await ui.act({ type: "benchRate", function: fn, pricing, rate: rate.trim(), ...(revenue ? { revenue } : {}) });
+      setBusy(false);
+      if (!a.ok) return setErr(a.message);
+      setRate("");
+      return onDone?.();
+    }
     const r = await post<ActionResult>({ action: { type: "benchRate", function: fn, pricing, rate: rate.trim(), ...(revenue ? { revenue } : {}) } });
     // The server's refusals (5 a day, 3 not tied to a seat, a rate it can't read) are said as they come.
     if (r.error) {

@@ -1,0 +1,222 @@
+/* "What to charge them" on a company's record (Charge.tsx). The app's own tokens; no shadows, no art. */
+.ch {
+  display: grid;
+  gap: 8px;
+}
+.ch .tp-dsec-h {
+  margin-bottom: 0;
+}
+.ch-unit {
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.ch-muted {
+  color: var(--muted);
+}
+.ch-for {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ch-for b {
+  color: var(--ink);
+}
+.ch-big {
+  margin: 2px 0 0;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.ch-per {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.ch-sub {
+  margin: -4px 0 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ch-sub b {
+  color: var(--ink);
+}
+.ch-none {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--body-ink);
+}
+.ch-range {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+  overflow: visible;
+}
+.ch-range-track {
+  fill: var(--surface-2);
+}
+.ch-range-mid {
+  fill: #9fb5ad;
+}
+.ch-range-med {
+  fill: var(--pine);
+}
+.ch-range-you {
+  fill: var(--volt);
+  stroke: #fff;
+  stroke-width: 2.5;
+}
+.ch-range-lbl {
+  font-family: var(--font-num);
+  font-size: 12.5px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+.ch-range-tick {
+  font-family: var(--font-num);
+  font-size: 12px;
+  fill: var(--muted);
+}
+.ch-key {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ch-key li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.ch-key b {
+  color: var(--ink);
+}
+.ch-keymark {
+  flex: none;
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  margin: 5px 2px 0 0;
+  border-radius: 3px;
+}
+.ch-keymark-mid {
+  background: #9fb5ad;
+}
+.ch-keymark-you {
+  width: 10px;
+  margin: 5px 4px 0 2px;
+  border-radius: 50%;
+  background: var(--volt);
+  box-shadow: 0 0 0 1px var(--volt-ink);
+}
+.ch-say {
+  margin: 4px 0 2px;
+  padding: 10px 14px;
+  border-radius: var(--r-btn);
+  background: var(--pine-8);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.ch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-height: 36px;
+  padding: 6px 0;
+  border-top: 1px solid var(--surface-2);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ch-row + .ch-row {
+  margin-top: -8px;
+}
+.ch-sp {
+  flex: 1;
+}
+.ch-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+}
+.ch-lock:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ch-lock:focus-visible,
+.ch-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.ch-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.ch-share-go .plus1 {
+  color: var(--volt-ink);
+  font-weight: 700;
+}
+.ch-share-form {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.ch-share-form .tp-bm-fields {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ch-fine {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.ch-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ch .bl-note,
+.ch .bl-quiet {
+  margin: 2px 0;
+}
+.ch-share-form .tp-bm-share {
+  margin: 0;
+  padding: 0;
+}
+.ch-share-form .tp-bm-share-lead {
+  margin-top: 0;
+}
