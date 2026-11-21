@@ -8,7 +8,9 @@
  *
  * Covered: every member's table, admins' and "See it as a member" included, is the table built
  * whole (byte for byte, as JSON, and packed as the route sends it), after each kind of thing a member does (Unlock company, a fact
- * added, a follow, a confirmation, a report, a claim, an invite, a leader report, a private rate);
+ * added, a follow, a confirmation, a report, a claim, an invite, a leader report, a private rate),
+ * and the same again with every fact, confirmation and unlock read by its key instead of through
+ * the committed state's index (lib/table.ts byRecord);
  * what one member did never shows in another's table (their unlock, their name on a fact, their
  * follow, their report, their confirmation); a change to a company shows in every member's next
  * table, from the shared part built from the one before (only the companies a change reached)
@@ -98,6 +100,8 @@ async function main() {
         const a = JSON.stringify(v);
         const b = JSON.stringify(await t.buildView(tok, { asMember, fresh: true }));
         if (a !== b) bad.push(`${tok}${asMember ? " as member" : ""}`);
+        // The facts, confirmations and unlocks read through the committed state's index (lib/table.ts byRecord) are the ones read by their keys.
+        if (JSON.stringify(await t.readingByKey(() => t.buildView(tok, { asMember, fresh: true }))) !== b) bad.push(`${tok}${asMember ? " as member" : ""} read by key`);
         // The packed JSON from each record's kept JSON (the route's answer), twice: built, then kept.
         const want = JSON.stringify(W.packView(v));
         if (W.packedViewJson(v) !== want || W.packedViewJson(v) !== want) bad.push(`${tok}${asMember ? " as member" : ""} packed`);
@@ -207,6 +211,14 @@ async function main() {
   await t.buildView(TOK.bob);
   check("a seed member's first visit builds the shared part whole", t.sharedViewStats().builds === sid0 + 1, t.sharedViewStats());
   await parity("after a seed member's first visit", [...Object.values(TOK), "tok-sid-cache"]);
+
+  // The graph other modules read (Crystal Ball, alerts, messages: tableInternals.graph): the committed state's is built once and shared; a draft's is its own.
+  const [seedNow, sNow] = await Promise.all([t.loadSeed(), t.loadState()]);
+  const g1 = t.tableInternals.graph(seedNow, sNow);
+  check("the committed state's graph is built once for every reader", g1 === t.tableInternals.graph(seedNow, sNow) && g1.companies.size > 0);
+  const draft = structuredClone(sNow);
+  const gd = t.tableInternals.graph(seedNow, draft);
+  check("a draft's graph is its own, built from it", gd !== g1 && gd !== t.tableInternals.graph(seedNow, draft) && gd.companies.size === g1.companies.size);
 }
 
 try {

@@ -7,6 +7,7 @@
  *   npm run build
  *   node scripts/nav-check.mjs                  everything (OUT=<folder> for the screenshots)
  *   ONLY=paint node scripts/nav-check.mjs       Home's first paint only (RUNS=5 by default)
+ *   ONLY=first node scripts/nav-check.mjs       what a first visit asks for first (member, admin, returning, signed out)
  *
  * It writes its own made-up seed (fake companies, fake people, nobody real) into a temporary data
  * folder, starts `next start` on PORT (5930 by default) with the test helpers' switches
@@ -291,6 +292,73 @@ async function firstPaint() {
   console.log("first paint", JSON.stringify(results.paint));
 }
 
+/**
+ * What the page asks for first, on a phone (app/Root.tsx, middleware.ts): a member's first visit in
+ * this browser (the sign-in cookie, nothing remembered) asks for Home's small first screen
+ * (?first=1) and paints Home before the whole table is asked for, as a returning member's visit
+ * does; an admin's the same; a signed-out visitor asks for the table (the counts) as before and
+ * gets the landing page; a sign-in cookie that is nobody's gets the landing page from the one
+ * answer. PASS or FAIL per check, and exit 1 on a failure.
+ */
+async function firstVisit() {
+  const out = [];
+  const check = (name, ok, detail) => {
+    out.push(ok);
+    console.log(`${ok ? "PASS" : "FAIL"} ${name}${ok || detail === undefined ? "" : `: ${JSON.stringify(detail).slice(0, 300)}`}`);
+  };
+  /** Open Home on a phone and note each table request, when it was sent against when Home painted (or the landing page showed). */
+  const visit = async ({ token, hint }) => {
+    const ctx = await browser.newContext({ ...iphone, deviceScaleFactor: 2 });
+    if (token) await ctx.addCookies([{ name: "rn_table", value: token, url: BASE }]);
+    if (hint) await ctx.addInitScript(() => localStorage.setItem("tp_member", "1"));
+    const page = await ctx.newPage();
+    await page.addInitScript(() => {
+      window.__reqs = [];
+      const f = window.fetch;
+      window.fetch = (u, o) => {
+        const s = String(u);
+        if (s.includes("/api/table")) window.__reqs.push({ at: performance.now(), u: s.replace(location.origin, "") });
+        return f(u, o);
+      };
+      const mo = new MutationObserver(() => {
+        if (window.__home == null && document.querySelector(".mv-card:not(.mv-skel), .td-card:not(.td-card-skel)")) window.__home = performance.now();
+        if (window.__landing == null && document.querySelector(".lp")) window.__landing = performance.now();
+      });
+      mo.observe(document, { childList: true, subtree: true });
+    });
+    const res = await page.goto(`${BASE}/`, { waitUntil: "commit" });
+    const setCookie = (await res.allHeaders())["set-cookie"] ?? "";
+    await page.waitForSelector(".mv-card:not(.mv-skel), .td-card:not(.td-card-skel), .lp", { timeout: 30_000 });
+    await page.waitForTimeout(3000);
+    const r = await page.evaluate(() => ({ reqs: window.__reqs, home: window.__home ?? null, landing: window.__landing ?? null }));
+    await ctx.close();
+    const firsts = r.reqs.filter((x) => x.u.includes("first=1"));
+    const fulls = r.reqs.filter((x) => /compact=1/.test(x.u));
+    return { ...r, setCookie, firsts, fulls, shown: r.home ?? r.landing };
+  };
+  for (const [who, member] of [
+    ["a member's first visit", MEMBERS.trial],
+    ["an admin's first visit", MEMBERS.admin],
+  ]) {
+    const v = await visit({ token: member.token });
+    check(`${who}: the page says a sign-in cookie is there`, /rn_in=1/.test(v.setCookie), v.setCookie);
+    check(`${who}: Home's small first screen is asked for first`, v.firsts.length === 1 && r0(v.reqs)?.u.includes("first=1"), v.reqs);
+    check(`${who}: Home paints before the whole table is asked for`, v.home != null && v.fulls.length >= 1 && v.fulls[0].at > v.home, { home: v.home, fulls: v.fulls });
+    check(`${who}: no landing page on the way`, v.landing == null, v.landing);
+  }
+  const back = await visit({ token: MEMBERS.trial.token, hint: true });
+  check("a returning member: the same, as before", back.firsts.length === 1 && back.home != null && back.fulls[0]?.at > back.home && back.landing == null, back.reqs);
+  const anon = await visit({});
+  check("signed out: the table's counts are asked for at once, as before, and never the first screen", anon.firsts.length === 0 && anon.fulls.length === 1 && r0(anon.reqs)?.u.includes("compact=1"), anon.reqs);
+  check("signed out: the landing page, no cookie set", anon.landing != null && anon.home == null && !/rn_in/.test(anon.setCookie), { landing: anon.landing, setCookie: anon.setCookie });
+  const stale = await visit({ token: "tok-nobody-has-this" });
+  check("a sign-in cookie that is nobody's: the landing page from the one answer", stale.landing != null && stale.home == null && stale.firsts.length === 1 && stale.fulls.length === 0, stale.reqs);
+  results.first = { passed: out.filter(Boolean).length, failed: out.filter((x) => !x).length };
+  console.log("first visit", JSON.stringify(results.first));
+  if (results.first.failed) process.exitCode = 1;
+}
+const r0 = (reqs) => reqs.slice().sort((a, b) => a.at - b.at)[0];
+
 async function shots() {
   // (a) A new member mid-onboarding, Home at 1440 by 900.
   let ctx = await context(MEMBERS.fresh, { viewport: { width: 1440, height: 900 } });
@@ -434,6 +502,7 @@ try {
     console.log(out.join("\n"));
     await ctx.close();
   }
+  if (ONLY === "first" || ONLY === "all") await firstVisit();
   if (ONLY === "paint" || ONLY === "all") await firstPaint();
   if (ONLY === "shots" || ONLY === "all") await shots();
   if (ONLY === "clicks" || ONLY === "all") await clicks();
