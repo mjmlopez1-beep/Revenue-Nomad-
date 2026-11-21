@@ -1,0 +1,72 @@
+/* The Privacy Policy and Terms of Service (app/legal): the data page's look, with a date line, contents and footer links. */
+.lg-card {
+  scroll-margin-top: 16px;
+}
+.lg-meta {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.lg-sec {
+  scroll-margin-top: 16px;
+}
+.lg-sec .df-bullets a,
+.lg-sec .df-list a,
+.lg-toc a,
+.lg-foot a {
+  color: var(--pine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+.lg-toc {
+  padding: 14px 16px;
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
+}
+.lg-toc ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 15px;
+  line-height: 22px;
+}
+.lg-toc li {
+  padding: 4px 0;
+}
+.lg-toc li::marker {
+  font-variant-numeric: tabular-nums;
+}
+.lg-key {
+  margin: 0;
+  padding: 14px 16px;
+  border-left: 3px solid var(--pine);
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 24px;
+}
+.lg-key a {
+  color: var(--pine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.lg-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+}
+.lg-foot a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

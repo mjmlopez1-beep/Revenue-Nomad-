@@ -105,6 +105,15 @@ function ConnectButton({ label = "Connect Google", href = START, onClick }: { la
   );
 }
 
+/** The one line under each Connect Google: how Merlin uses Google data (the Privacy Policy's Google part). */
+export function GooglePolicyLink() {
+  return (
+    <a className="nw-policy" href="/privacy#google">
+      How Merlin uses your Google data
+    </a>
+  );
+}
+
 function Notice({ n, onClose }: { n: GoogleNotice | null; onClose: () => void }) {
   if (!n) return null;
   return (
@@ -411,6 +420,7 @@ function ConnectHero({ view, onClaude }: { view: NetworkView; onClaude: () => vo
       <ReadsList />
       {view.configured ? <ConnectButton /> : <p className="nw-muted">Google isn&apos;t set up on Merlin yet. Ask us to switch it on.</p>}
       <p className="nw-small">Read-only. Takes a minute or two to map. Disconnect and delete everything any time.</p>
+      <GooglePolicyLink />
       <button type="button" className="nw-link" onClick={onClaude}>
         Rather keep it in Claude? Use your own Claude instead
       </button>
@@ -704,6 +714,7 @@ export function GoogleSection({ onNetwork }: { onNetwork: () => void }) {
           <>
             <ReadsList />
             {view.configured ? <ConnectButton /> : <p className="nw-muted">Google isn&apos;t set up on Merlin yet.</p>}
+            <GooglePolicyLink />
           </>
         )}
       </section>
@@ -757,6 +768,7 @@ export function OnboardGoogle({ onConnect }: { onConnect: () => void }) {
       <span className="nw-onboard-t">
         <strong>Connect Google to see who you already know</strong>
         <span className="nw-muted">Your calendar and contacts, read-only. Merlin shows you which companies you have a way into. Only you see it. Optional: skip it for now.</span>
+        <GooglePolicyLink />
       </span>
       <ConnectButton label="Connect Google" onClick={onConnect} />
     </div>

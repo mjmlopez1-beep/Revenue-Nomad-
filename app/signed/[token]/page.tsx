@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { signedCopy } from "@/lib/proposals/store";
 import type { SignedCopy } from "@/lib/proposals/types";
-import { SignTop } from "../../sign/Sign";
+import { SignLegal, SignTop } from "../../sign/Sign";
 import { DocBlocks, EVENT_SAY, dayOf, stamp } from "../../sign/doc";
 import { PrintButton } from "../Print";
 import "../../sign/sign.css";
@@ -32,6 +32,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
             <h1 className="sg-h">This link doesn&#39;t work</h1>
             <p className="sg-p">Check that the whole link was copied, or ask the sender for the signed copy.</p>
           </div>
+          <SignLegal />
         </main>
       </div>
     );
@@ -137,6 +138,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
 
         <footer className="sg-foot">
           <p>Sent by {d.from.name} with Merlin, from Revenue Nomad.</p>
+          <SignLegal />
         </footer>
       </main>
     </div>

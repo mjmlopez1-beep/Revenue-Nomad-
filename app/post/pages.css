@@ -650,6 +650,17 @@
 .tp-set .tp-card-h {
   margin-bottom: 2px;
 }
+.tp-legal {
+  margin-top: 4px;
+}
+.tp-legal a {
+  display: inline-block;
+  padding: 6px 0;
+  color: var(--pine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .tp-switch {
   flex: none;
   display: inline-flex;
