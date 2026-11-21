@@ -47,7 +47,7 @@ export interface Way {
 const nomadYou = { cloak: "ember", face: "sand", eye: "pine", lining: "acc" };
 const loudBase = { pop: "ember", hot: "ember", acc: "acc", acchi: "acchi", dark: "pine", ...nomadYou };
 
-export const LOUD: Record<"pine" | "mint" | "sand" | "white" | "bg" | "mints", Way> = {
+export const LOUD: Record<"pine" | "mint" | "sand" | "white" | "bg" | "mints" | "dusk", Way> = {
   pine: { ...loudBase, bg: "pine", tone: "pine2", hill: "mint", hill2: "mintd", light: "mints", ground: "sand", ink: "sand", ink2: "mint", paper: "sand", spark: "sand" },
   mint: { ...loudBase, bg: "mint", tone: "mintd", hill: "mints", hill2: "mintd", light: "mints", ground: "pine", ink: "pine", ink2: "sand", paper: "sand", spark: "pine" },
   sand: { ...loudBase, bg: "sand", tone: "sandd", hill: "mint", hill2: "sandd", light: "mints", ground: "pine", ink: "pine", ink2: "mint", paper: "white", spark: "pine" },
@@ -55,6 +55,8 @@ export const LOUD: Record<"pine" | "mint" | "sand" | "white" | "bg" | "mints", W
   white: { ...loudBase, bg: "white", tone: "mints", hill: "mint", hill2: "mintd", light: "mints", ground: "pine", ink: "pine", ink2: "mint", paper: "sand", spark: "pine" },
   bg: { ...loudBase, bg: "bgf", tone: "sand", hill: "mint", hill2: "mintd", light: "mints", ground: "pine", ink: "pine", ink2: "mint", paper: "sand", spark: "pine" },
   mints: { ...loudBase, bg: "mints", tone: "mint", hill: "mint", hill2: "mintd", light: "white", ground: "pine", ink: "pine", ink2: "sand", paper: "sand", spark: "pine" },
+  // The violet dusk: pine's colourway under a violet sky. Violet's rule: one showpiece scene (The keep), never an everyday screen.
+  dusk: { ...loudBase, bg: "violetd", tone: "violet2", hill: "mint", hill2: "mintd", light: "mints", ground: "sand", ink: "sand", ink2: "mint", paper: "sand", spark: "sand" },
 };
 
 /** The quiet register. One map for every surface: the surface's own tints come from the CSS variable set <Fx on> picks. */

@@ -11,7 +11,7 @@
  *   notFound     the not-found page
  *   wayIn        the first unlock (not placed yet)
  *   doorway      sign-in, beside the form
- *   castle       the Pro welcome: the plans sheet once the member is on Pro (The keep)
+ *   castle       the Pro welcome: the plans sheet once the member is on Pro (The keep, with its violets)
  *   allQuiet     (its parts, without the Nomad, are Home's band on a quiet day: stripNight)
  *
  * In the loud register a scene has its own field; in the quiet one it has none and sits on the
@@ -23,7 +23,7 @@
  */
 import { q, h, s, g, place, U } from "./lib";
 import { nomad, spark, dot, orb, type NomadOpt, type Pose } from "./nomad";
-import { tent, arch, steps, walk, calendar, signpost, key, doorAjar } from "./props";
+import { tent, arch, steps, walk, calendar, signpost, key, doorAjar, violetDrift } from "./props";
 import type { Way } from "./ways";
 
 const G = 480; // a scene's ground line
@@ -168,9 +168,16 @@ export const keep = (m: Way): string => {
     arch(-1.3 * U, 0, 1.3 * U, 4.35 * U, inner)
   );
 };
-/** The keep: the company you are trying to get into, and the way in. The trail ends at its door. */
-const castle: SceneFn = (m, sq) =>
-  sq
+/**
+ * The keep: the company you are trying to get into, and the way in. The trail ends at its door.
+ * Violets grow on the right-hand hill: specks near the crest, a few in the middle, big blooms
+ * close to us (Violet's rule: rare, and only on something beautiful). In the loud register it is
+ * the one scene under the violet dusk (LOUD.dusk); in the quiet one it keeps its white field and
+ * the violets stay in full violet.
+ */
+const castle: SceneFn = (m, sq) => {
+  const leaf = m.quiet ? m.ink : "pine";
+  return sq
     ? [
         q(0, 0, 200, "tl", m.tone),
         h(-30, 180, 300, "u", m.tone),
@@ -178,6 +185,7 @@ const castle: SceneFn = (m, sq) =>
         place(keep(m), 270, G, 0.5),
         s(0, G, 540, 60, m.hill),
         q(380, G - 60, 160, "br", m.hill2),
+        violetDrift([[512, 442, 3], [494, 454, 3.6, 1], [470, 474, 5.5], [506, 488, 7, 1], [448, 506, 11], [502, 524, 15, 1]], leaf),
         steps(walk([20, G + 26], [["L", 110, G + 26]], 30), 8, m.dark),
         N(m, "walk", 160, 0.3, {}, false, G + 52),
         spark(70, 110, 12, m.spark),
@@ -191,14 +199,16 @@ const castle: SceneFn = (m, sq) =>
         s(0, G, 960, 60, m.hill),
         q(0, G - 100, 160, "bl", m.hill),
         q(760, G - 80, 200, "br", m.hill2),
+        violetDrift([[930, 414, 3], [912, 426, 3.6, 1], [944, 432, 4], [884, 452, 6], [924, 468, 7.5, 1], [848, 492, 12], [904, 514, 16, 1], [800, 520, 9.5]], leaf),
+        violetDrift([[640, G + 34, 6]], leaf),
         steps(walk([40, G + 26], [["L", 290, G + 26]], 30), 8, m.dark),
         N(m, "walk", 350, 0.3, {}, false, G + 52),
-        tent(880, G + 54, 40, m.dark, m.paper),
         spark(200, 120, 20, m.spark),
         spark(330, 60, 10, m.spark),
         spark(720, 80, 10, m.spark),
         spark(880, 250, 14, m.acc),
       ];
+};
 
 export const SCENES = { wayIn, trialEnding, allQuiet, notFound, welcome, castle };
 

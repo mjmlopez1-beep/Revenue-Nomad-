@@ -67,6 +67,23 @@
   fill: #fff;
   stroke: #fff;
 }
+/* Violet's rule (globals.css): the flower and the dusk sky, in The keep and nowhere else. */
+.fxc-violet {
+  fill: var(--violet);
+  stroke: var(--violet);
+}
+.fxc-violetb {
+  fill: var(--violet-light);
+  stroke: var(--violet-light);
+}
+.fxc-violetd {
+  fill: var(--violet-dusk);
+  stroke: var(--violet-dusk);
+}
+.fxc-violet2 {
+  fill: var(--violet-dusk-2);
+  stroke: var(--violet-dusk-2);
+}
 .fxc-bgf {
   fill: var(--bg);
   stroke: var(--bg);

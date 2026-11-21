@@ -268,7 +268,7 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
   return (
     <Sheet title={title} onClose={onClose} dialog className="bl-sheet">
       <div className="bl-sheet-in">
-        {/* The Pro welcome: The keep (Fractions, quiet), the trail ending at its door. The scene's one home in the app. */}
+        {/* The Pro welcome: The keep (Fractions, quiet, on its white field), the trail ending at its door, violets on the hill. The scene's one home, and the only violet in the app. */}
         {onPro ? <Scene kind="castle" pro on="white" className="bl-welcome-art" /> : null}
         <p className="bl-lead">
           {onPro ? (plan.proStartsAt ? `You're on Pro. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.` : "You're on Pro. Everything here is yours.") : leadFor(plan, a)}

@@ -166,7 +166,7 @@ export function NomadArt({ pose, height = 56, on = "white", flip, className, tit
  * A scene. Quiet by default (no field: it sits on `on`); with `loud` it paints its own pine, mint
  * or sand field. `square` is the 1:1 crop. CSS sizes it (240px tall at most when quiet).
  */
-export function Scene({ kind, on = "white", loud, square, ember = true, pro, className, title, fit, style }: Common & { kind: SceneKind; loud?: "pine" | "mint" | "sand"; square?: boolean; pro?: boolean; fit?: string; style?: CSSProperties }) {
+export function Scene({ kind, on = "white", loud, square, ember = true, pro, className, title, fit, style }: Common & { kind: SceneKind; loud?: "pine" | "mint" | "sand" | "dusk"; square?: boolean; pro?: boolean; fit?: string; style?: CSSProperties }) {
   const html = once(`scene:${kind}:${loud ?? "q"}:${!!square}:${!!ember}:${!!pro}`, () => {
     const base = loud ? LOUD[loud] : way(ember);
     return scene(kind, pro ? proDoor(base) : base, !!square, !!loud);

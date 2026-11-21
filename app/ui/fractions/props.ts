@@ -190,6 +190,24 @@ export const crown: PropFn = (m) => s(-3 * U, -1.25 * U, 6 * U, 1.25 * U, m.ink)
 // ---------- 24. two halves meeting: integrations, a claimed invite ----------
 export const join: PropFn = (m) => h(-2.75 * U, -5 * U, 2.25 * U, "l", m.ink) + h(0.5 * U, -4 * U, 2.25 * U, "r", m.ink2) + s(-0.5 * U, -3.25 * U, U, 0.4 * U, m.ink) + s(-0.5 * U, -2.25 * U, U, 0.4 * U, m.ink);
 
+/* ---------- the violet (rare: Violet's rule, globals.css) ---------- */
+/**
+ * A violet: four half-circle petals round a square, a sand heart, a stem and one leaf. The
+ * bloom's centre is (cx, cy), its petal radius r; `stem` is the stem's length in r (0 for a
+ * far-off bloom). Always violet or its light tone: the flower keeps its colour in both registers.
+ */
+export const violetFlower = (cx: number, cy: number, r: number, stem = 2.4, c: Tok = "violet", leaf: Tok = "pine"): string =>
+  (stem ? s(cx - Math.max(1.5, r * 0.22), cy + r, Math.max(3, r * 0.44), stem * r, leaf) + q(cx + Math.max(1.5, r * 0.22), cy + r * 1.9, r * 1.3, "bl", leaf) : "") +
+  h(cx - r, cy - 2 * r, r, "u", c) +
+  h(cx - r, cy + r, r, "d", c) +
+  h(cx - 2 * r, cy - r, r, "l", c) +
+  h(cx + r, cy - r, r, "r", c) +
+  s(cx - r, cy - r, 2 * r, 2 * r, c) +
+  s(cx - r * 0.45, cy - r * 0.45, r * 0.9, r * 0.9, "sand");
+/** A drift of violets: [x, y, r, light?]. A few, placed by eye, never a pattern. Blooms under 7px have no stem (they are far away). */
+export const violetDrift = (list: [number, number, number, number?][], leaf: Tok = "pine"): string =>
+  list.map(([x, y, r, light]) => violetFlower(x, y, r, r >= 7 ? (r > 16 ? 3.4 : 2.3) : 0, light ? "violetb" : "violet", leaf)).join("");
+
 /** Each prop's bounding box in grid units (40px). float: it sits above the ground. dx: its centre is off the centre line. */
 export const PROP_BOX: Record<string, { w: number; h: number; float?: boolean; dx?: number }> = {
   ballPlain: { w: 4, h: 4 },

@@ -43,6 +43,15 @@
   --saffron-hi: #ffe39a;
   --sand: #f5ecd9;
   --sand-deep: #ead9b6;
+  /*
+   * Violet's rule. Illustration only, and the rarest colour here: a flower, or a dusk sky, on
+   * something meant to be beautiful (Fractions: The keep). Never a working colour: no buttons,
+   * labels, charts, states or cloaks, and nowhere else in the app.
+   */
+  --violet: #a05ce6;
+  --violet-light: #c08cf5;
+  --violet-dusk: #2f1a52;
+  --violet-dusk-2: #45277a;
   --red: #d12f4a;
   --bg: #fafaf7;
   --surface: #ffffff;
