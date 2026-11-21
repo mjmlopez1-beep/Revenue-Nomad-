@@ -177,6 +177,89 @@ async function main() {
   check("a since in the future or past the window is left out", !("since" in (await todayView(SAL, new Date(Date.now() + DAY).toISOString()))!) && !("since" in (await todayView(SAL, "2001-01-01"))!) && !("since" in (await todayView(SAL, "nonsense"))!));
   const moSince = (await todayView("tok-mo-today", since))!;
   check("Mo's roles count is in Marketing (none open), and Mo follows nothing", (await todayView("tok-mo-today", ago(31 * DAY)))?.since?.roles === 0 && moSince.since?.follows === 0, moSince.since);
+
+  await firstSession(t, radar, SAL, BASE);
+}
+
+/**
+ * A new member's first session (app/post/todayModel.ts, Moves.tsx, CrystalOpen.tsx, Home.tsx): the
+ * Crystal Ball button by plan and balance, a click on a row, the trial's card and pill, the
+ * directory question held back, the ranges, the search's names, and an open role in their function
+ * showing its title, posted rate and the posting once its company is open.
+ */
+async function firstSession(t: typeof import("../lib/table"), radar: typeof import("../lib/radar"), SAL: string, BASE: string) {
+  const m = await import("../app/post/todayModel");
+  const gs = await import("../app/post/getStarted");
+  const moves = await import("../lib/moves");
+  const me = (o: Partial<{ crystal: "all" | "one" | "used"; credits: number; freeCompany: boolean; unlocksLeft: number }>) => ({ crystal: undefined, credits: 25, freeCompany: false, unlocksLeft: undefined, ...o });
+
+  // The Crystal Ball button: Free after today's free one is the ordinary unlock, with Pro beside it, never only an upgrade.
+  check("Trial and Pro: Open", JSON.stringify(m.crystalButton(me({ crystal: "all" }))) === JSON.stringify({ kind: "crystal", label: "Open", pro: false }));
+  check("Free with today's left: Open free · 1 left today", m.crystalButton(me({ crystal: "one" }))?.label === "Open free · 1 left today" && m.crystalButton(me({ crystal: "one" }))?.kind === "crystal");
+  const used = m.crystalButton(me({ crystal: "used", credits: 25 }));
+  check("Free, today's used, credits in hand: Unlock · 2 credits, the ordinary unlock, with the Pro link", used?.kind === "unlock" && used.label === "Unlock · 2 credits" && used.pro && m.CRYSTAL_PRO_LINK === "Pro opens all of these free", used);
+  const broke = m.crystalButton(me({ crystal: "used", credits: 1 }));
+  check("Free, today's used, short of credits: the same words, and the zero-credit wall on a click", broke?.kind === "wall" && broke.label === "Unlock · 2 credits", broke);
+  check("Free, today's used, at 0 credits: the wall too", m.crystalButton(me({ crystal: "used", credits: 0 }))?.kind === "wall");
+  check("the day's unlock limit binds: Unlocks again tomorrow", m.crystalButton(me({ crystal: "used", credits: 25, unlocksLeft: 1 }))?.kind === "later");
+  check("billing off: no Crystal Ball button (the record's own Unlock company)", m.crystalButton(me({})) === null);
+  check("the used line states the cost", m.CRYSTAL_USED_UNLOCK.includes("2 credits") && !/Upgrade/.test(m.CRYSTAL_USED_UNLOCK), m.CRYSTAL_USED_UNLOCK);
+  // A click on the row opens free only where the plan does; never a credit on a row click.
+  check("a row click opens free on Trial, Pro and Free's one a day", m.rowOpensFree({ crystal: "all" }) && m.rowOpensFree({ crystal: "one" }));
+  check("a row click spends nothing after Free's is used, or with billing off (the record states the cost)", !m.rowOpensFree({ crystal: "used" }) && !m.rowOpensFree({}));
+
+  // The trial's one-time card and the phone's pill.
+  check("the trial card's line", m.trialCardLine(21, 14) === "For 21 days every Crystal Ball company opens free (14 today). Open as many as you like.", m.trialCardLine(21, 14));
+  check("with nothing today it leaves the count out", m.trialCardLine(20, 0) === "For 20 days every Crystal Ball company opens free. Open as many as you like.", m.trialCardLine(20, 0));
+  check("the phone's trial pill", m.trialPillWords({ name: "trial", trialDaysLeft: 18 }) === "Pro trial · 18 days left" && m.trialPillWords({ name: "trial", trialDaysLeft: 1 }) === "Pro trial · last day");
+  check("no pill off the trial", m.trialPillWords({ name: "free", trialDaysLeft: null }) === null && m.trialPillWords({ name: "pro", trialDaysLeft: null }) === null && m.trialPillWords(undefined) === null);
+
+  // "Show you in the Fractionals directory?" waits for a first unlock or a second visit.
+  const fresh = { fractionals: null, unlocked: 0, companiesUnlocked: 0, holdersUnlocked: 0 };
+  check("the directory question waits on a first visit with nothing opened", !m.showMeDue(fresh, null));
+  check("it comes after the first unlock", m.showMeDue({ ...fresh, companiesUnlocked: 1 }, null) && m.showMeDue({ ...fresh, unlocked: 1 }, null));
+  check("or on the second visit", m.showMeDue(fresh, ago(DAY)));
+  check("and never once answered", !m.showMeDue({ ...fresh, fractionals: false, unlocked: 3 }, ago(DAY)) && !m.showMeDue({ ...fresh, fractionals: true }, ago(DAY)));
+
+  // Crystal Ball's ranges stay out of the way when all three count the same.
+  check("three equal counts: no ranges", !m.rangesWorthShowing([{ companies: 6 }, { companies: 6 }, { companies: 6 }]));
+  check("different counts: the ranges", m.rangesWorthShowing([{ companies: 2 }, { companies: 6 }, { companies: 6 }]));
+  check("Home's line for tomorrow", m.TOMORROW_LINE === "Tomorrow: 3 new moves.");
+  check("Get started on the trial says Crystal Ball opens free", gs.startSteps({ goal: null, added: 0, unlocked: 0, holdersUnlocked: 0, companiesUnlocked: 0, invited: 0, invitesPaid: 0, crystal: "all", freeCompany: true } as never, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" }).steps[0].hint === gs.CRYSTAL_ALL_FREE);
+
+  // Home's search: names the member can see, Crystal Ball's names on their plan included, at the start of a word.
+  const list = [
+    { id: "a", name: "Acme Robotics" },
+    { id: "b", name: "Beta Labs" },
+    { id: "c", name: "Northwind Acme" },
+    { id: "a", name: "Acme Robotics" },
+  ];
+  check("a name's start matches first, then a word's start, each company once", m.nameMatches("acme", list).map((x) => x.id).join() === "a,c", m.nameMatches("acme", list));
+  check("the middle of a word doesn't match, and one letter is nothing", !m.nameMatches("cme", list).length && !m.nameMatches("a", list).length);
+  check("a word later in the name matches", m.nameMatches("labs", list).map((x) => x.id).join() === "b");
+  const data = { rows: [{ id: "r1", kinds: [], lines: [], name: "Row Named" }, { id: "r2", kinds: [], lines: [] }], moves: { list: [{ id: "m1", row: { id: "m1", kinds: [], lines: [], name: "Move Named" } }], month: 0, google: "off" as const } };
+  check("the Crystal Ball names Today carries (moves first), and only named ones", JSON.stringify(m.crystalNames(data as never)) === JSON.stringify([{ id: "m1", name: "Move Named" }, { id: "r1", name: "Row Named" }]), m.crystalNames(data as never));
+  check("no Today data: no names", m.crystalNames(null).length === 0);
+
+  // An open role in their function: once its company is open, the move carries the role, its posting and its posted rate.
+  const before = await t.buildView(SAL);
+  const rv = await radar.radarView(SAL);
+  const beta = before.companies.find((c) => c.engagements.some((e) => moves.openRoleSeat(e) && e.cells.function?.s === "value" && (e.cells.function as { v: string }).v === "Sales"));
+  const row = beta ? rv!.rows.find((r) => r.id === beta.id) : undefined;
+  check("the company hiring a Sales role is in Sal's Crystal Ball", !!beta && !!row, { beta: beta?.id, rows: rv?.rows.map((r) => r.id) });
+  if (!beta || !row) return;
+  const meSal = { name: "Sal Starter", function: "Sales" };
+  const locked = moves.buildMove(beta, row, undefined, meSal);
+  // (Sal may have opened it in the checks above: then it is the open company already.)
+  check("Hiring now, with the open role in their function", locked.hiring && !!locked.open && (beta.hidden ? locked.do === "open" && locked.open.posting === "locked" : locked.do === "reply"), locked);
+  if (beta.hidden) await t.perform(SAL, { type: "unlock", entity: "company", id: beta.id, field: "identity" }, BASE);
+  const after = (await t.buildView(SAL)).companies.find((c) => c.id === beta.id)!;
+  const open = moves.buildMove(after, row, undefined, meSal);
+  const seatRec = after.engagements.find((e) => e.id === open.open?.seatId);
+  check("open: the role's posting is a link the move can open", !after.hidden && !!open.open && open.open.posting === "https://beta.example/jobs/vp-sales", open.open);
+  check("open: the role's title shows", open.open?.title === "Fractional VP Sales at Beta Labs", open.open?.title);
+  check("open: the posted rate shows, with no hours posted", !!seatRec && m.roleTermsLine(seatRec.cells as never) === "$9k/mo", seatRec && m.roleTermsLine(seatRec.cells as never));
+  check("the terms line: hours too, no rate posted, and nothing while the rate is locked", m.roleTermsLine({ hours: { s: "value", v: "20" } }) === "No rate posted · 20 hours a week" && m.roleTermsLine({ rate: { s: "locked" } }) === null);
 }
 
 try {

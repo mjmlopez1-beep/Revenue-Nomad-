@@ -194,8 +194,11 @@ function previousVisit(): string | null {
   return lastVisit;
 }
 
-/** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
-type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
+/**
+ * `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there.
+ * `over`: opened from Home or Crystal Ball, the record opens over that page (in Crystal Ball's context), not over the table and its saved view.
+ */
+type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page; over?: "radar" | "today" };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // [google network] "network": Your network (app/post/network), only with RN_GOOGLE=1.
 // "today": Today (Today.tsx), the home for / with no place in the address. It sits level with the table (no history entry above it).
@@ -693,7 +696,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [radarRange, setRadarRange] = useState<RadarRange | null>(place0.range ?? null);
   /** A day, or none (the range picked, or the default): picking one clears the other. */
   const setSigDay = useCallback((d: string | null, r: RadarRange | null = null) => (setSigDayRaw(d), setRadarRange(d ? null : r)), []);
-  const radar = useRadarDay(page === "radar", sigDay, radarRange, [me.function, me.icp, me.before]);
+  /** The page on screen: the table's own place, except under a record opened from Home or Crystal Ball, which opens over that page. */
+  const onScreen: Page = page === "table" && drawer?.over ? drawer.over : page;
+  const radar = useRadarDay(onScreen === "radar", sigDay, radarRange, [me.function, me.icp, me.before]);
   // [google network] Crystal Ball cut to the companies where the member knows someone (the connect moment's button).
   const [radarKnow, setRadarKnow] = useState(false);
   // [google network] Your network opened at one of its parts (Crystal Ball's "Where you know someone" leads to its warm paths), for that visit.
@@ -707,8 +712,6 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     if (page !== "radar" && !fromRadar) setRadarKnow(false);
   }, [page, fromRadar]);
   const radarList = useMemo(() => radarRows(radar.stale, rowsFor("companies", infos)), [radar.stale, infos]);
-  /** The rows the open record steps through (J and K, "1 of 7"): the radar's day when it was opened from there. */
-  const navRows = drawer?.returnTo === "radar" ? radarList : sorted;
   // Counts and sheets update on the next frame; the long list behind them follows when it can.
   // The record type travels with its rows, so a deferred list never renders rows of another type.
   const listData = useMemo(() => ({ type: recordType, rows: visible }), [recordType, visible]);
@@ -754,7 +757,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /* ----- a page opens at its top; the table comes back where it was ----- */
   // Where the table was scrolled to, while this load has seen it. Null after a reload on a page: then the table's own history entry says (tpY).
   const tableY = useRef<number | null>(page === "table" ? 0 : null);
-  const pageNow = useRef(page);
+  const pageNow = useRef(onScreen);
   useEffect(() => {
     try {
       window.history.scrollRestoration = "manual";
@@ -766,17 +769,17 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
   useLayoutEffect(() => {
-    if (pageNow.current === page) return;
-    pageNow.current = page;
+    if (pageNow.current === onScreen) return;
+    pageNow.current = onScreen;
     const saved = typeof window.history.state?.tpY === "number" ? (window.history.state.tpY as number) : 0;
-    window.scrollTo(0, page === "table" ? tableY.current ?? saved : 0);
+    window.scrollTo(0, onScreen === "table" ? tableY.current ?? saved : 0);
     // Say where we are: the page's own heading takes focus, and the tab title follows.
-    const h = document.querySelector<HTMLElement>(page === "table" ? "#tp-h1" : ".tp-main-page h1");
+    const h = document.querySelector<HTMLElement>(onScreen === "table" ? "#tp-h1" : ".tp-main-page h1");
     if (h) {
       if (!h.hasAttribute("tabindex")) h.setAttribute("tabindex", "-1");
       h.focus({ preventScroll: true });
     }
-  }, [page]);
+  }, [onScreen]);
 
   // Followed companies with news since the last visit (frozen at load).
   // Bonuses paid since then (an invite, two confirmations): nothing else says they came (WORD-9).
@@ -832,8 +835,18 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const rolesNew = useMemo(() => (todayShown ? rolesSince(infos, me.function, since.at) : 0), [todayShown, infos, me.function, since.at]);
   const today = useTodayData(todayShown || countWanted, since.at, { roles: rolesNew, follows: since.n }, partial?.today);
   const radarLatest = today.data?.latest ?? null;
-  const radarNew = useRadarNew(useMemo(() => radarLatest, [radarLatest?.day, radarLatest?.n]), page === "radar", me.id, today.data !== null); // eslint-disable-line react-hooks/exhaustive-deps
+  const radarNew = useRadarNew(useMemo(() => radarLatest, [radarLatest?.day, radarLatest?.n]), onScreen === "radar", me.id, today.data !== null); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Home's Crystal Ball companies (today's moves, then the day's top rows): a record opened from Home opens them as Crystal Ball does, and steps through them. */
+  const todayIds = useMemo(() => new Set([...(today.data?.moves?.list.map((w) => w.id) ?? []), ...(today.data?.rows.map((r) => r.id) ?? [])]), [today.data]);
+  const todayList = useMemo(() => {
+    if (!todayIds.size) return [];
+    const by = new Map(rowsFor("companies", infos).map((r) => [r.i.c.id, r]));
+    return [...todayIds].map((id) => by.get(id)).filter((r): r is Row => !!r);
+  }, [todayIds, infos]);
+  /** The rows the open record steps through (J and K, "1 of 7"): Crystal Ball's list or Home's when it was opened from there, else the table's. */
+  const navRows = drawer?.returnTo === "radar" ? radarList : drawer?.over === "today" && todayList.some((r) => r.i.c.id === drawer.id) ? todayList : sorted;
   const [trialSeen, setTrialSeen] = useState(false);
+  const [trialStartSeen, setTrialStartSeen] = useState(false);
   // The one-time Pro welcome on Home, closed here, and the way back from checkout (?paid=1): say thanks once, and load the plan the payment just made.
   const [proSeen, setProSeen] = useState(false);
   const planNow = useRef(me.plan?.name);
@@ -944,7 +957,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const openCompany = useStable((id: string, focus?: string) => {
     const row = sorted.find((r) => r.i.c.id === id && (!focus || r.key === focus)) ?? sorted.find((r) => r.i.c.id === id);
     // Opened from a page (the review queue, Your seats): closing the record goes back to it.
-    setDrawer({ id, rowKey: row?.key ?? id, focus: focus ?? null, returnTo: page !== "table" ? page : drawer?.returnTo });
+    // From Home or Crystal Ball (or a record opened over one of them): the record opens over that page, in Crystal Ball's context.
+    const over = page === "radar" || page === "today" ? page : page === "table" ? drawer?.over : undefined;
+    setDrawer({ id, rowKey: row?.key ?? id, focus: focus ?? null, returnTo: page !== "table" ? page : drawer?.returnTo, ...(over ? { over } : {}) });
     setPage("table");
   });
   /** Close the record, back to the page it was opened from, if any. */
@@ -1066,8 +1081,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /** Get started step 1, "Unlock a company" (getStarted.ts startSteps): a locked company, one hiring in their function first. */
   const stepOne = useStable(() => {
     setDrawer(null);
-    // Free (billing live): the free company a day is Crystal Ball's, so "Unlock a company" opens Crystal Ball.
-    if (me.crystal === "one" && !freeCompanyNow(me)) {
+    // Free (billing live): the free company a day is Crystal Ball's, so "Unlock a company" opens Crystal Ball. Trial and Pro: every company there opens free.
+    if ((me.crystal === "one" && !freeCompanyNow(me)) || me.crystal === "all") {
       setSigDay(null);
       setPage("radar");
       return;
@@ -1379,7 +1394,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       el.focus();
       el.select();
     };
-    if (page !== "table" || (phone && drawer)) {
+    if (page !== "table" || (phone && drawer) || drawer?.over) {
       setDrawer(null);
       setPage("table");
       setTimeout(go, 60);
@@ -1449,7 +1464,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   }, [layout]);
 
   // A fade on the table's right edge while columns remain to the right.
-  const showTable = page === "table" && !phone;
+  const showTable = onScreen === "table" && !phone;
   const noRows = sorted.length === 0;
   useEffect(() => {
     const el = frameRef.current;
@@ -1617,7 +1632,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    */
   const recordHot = recordOpen && !!drawerInfo && drawerInfo.c.friendly.open > 0;
   // A phone record covers the page: only its own chip and its own balance are on screen.
-  const cardShown = !!move && page === "table" && !(phone && recordOpen);
+  const cardShown = !!move && onScreen === "table" && !(phone && recordOpen);
   const lowShown = me.credits <= 3 && !cardShown;
   const emberTaken = (cardShown ? 1 : 0) + (recordHot ? 1 : 0) + (lowShown ? 1 : 0);
   const seeOpenRoles = () => {
@@ -1788,7 +1803,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     </div>
   );
   /** The search as a field at the top of the list on phones. */
-  const listSearch = phone && page === "table" && (
+  const listSearch = phone && onScreen === "table" && (
     <label className="tp-search tp-search-list">
       <IconSearch size={16} />
       <input
@@ -1846,7 +1861,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       ));
   // Phones: what to list (Companies, Seats or People, a short menu) is the list's title in the top bar, so it needs no row of its own (decision 16).
   const typeSwitch =
-    phone && page === "table" ? (
+    phone && onScreen === "table" ? (
       <button
         ref={typeRef}
         type="button"
@@ -2322,7 +2337,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /* ----- Home's pieces ----- */
   const homeViews: HomeView[] = views.map((v) => {
     const c = viewCounts.get(v.id);
-    return { v, href: viewHref(v), matches: c ? c.matches : null, fresh: c ? (since.at ? c.fresh : null) : null, opened: viewOpened[v.id] ?? null };
+    // What the view follows in full, under a short name (onboarding's "Likely to need Sales next").
+    const x = v.place ? savedViewPlace(me, v, presetsOff(me)) : null;
+    const full = x ? viewName(x.f, x.v, x.t, null, me.function) : null;
+    return { v, href: viewHref(v), matches: c ? c.matches : null, fresh: c ? (since.at ? c.fresh : null) : null, opened: viewOpened[v.id] ?? null, about: full && full !== v.name ? full : null };
   });
   const seatsCard = (() => {
     if (waiting && !pf) return null;
@@ -2401,7 +2419,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const fabRef = useRef<HTMLButtonElement>(null);
   const [fabAside, setFabAside] = useState(false);
   // Not over an empty list, and not in the first session (nothing added or unlocked yet): the list and the nudge say what to do then (item 4).
-  const fabShown = phone && page === "table" && !recordOpen && !qt && !empty && me.added + me.unlocked > 0;
+  const fabShown = phone && onScreen === "table" && !recordOpen && !qt && !empty && me.added + me.unlocked > 0;
   useEffect(() => {
     if (!fabShown) {
       setFabAside(false);
@@ -2437,7 +2455,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     <UiCtx.Provider value={ui}>
       <CellUiCtx.Provider value={cellUi}>
       <FitWhyCtx.Provider value={fitWhy}>
-      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${page === "today" ? " tp-on-home" : ""}`}>
+      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
         {/* The first Tab stop: past the sidebar, to the list or the page. */}
         <a href={page === "table" ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
           {page === "table" ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
@@ -2463,6 +2481,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           setQuery={(v) => {
             setQuery(v);
             if (page !== "table") setPage("table");
+            // A search lists in the table: a record opened over Home or Crystal Ball closes first.
+            if (drawer?.over) setDrawer(null);
           }}
           onSearchEnter={() => setFindNow(Date.now())}
           searchRef={searchRef}
@@ -2472,12 +2492,12 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           creditsRef={creditsRef}
           onAdd={() => openAdd()}
           onHome={goHome}
-          quietCredits={!!move && page === "table"}
+          quietCredits={!!move && onScreen === "table"}
           contact={contact}
           emailOn={view.email}
           starter={view.stats?.starter}
           listSwitch={typeSwitch}
-          searchInList={phone && page === "table"}
+          searchInList={phone && onScreen === "table"}
           unread={unread}
           onMessages={navSide ? () => (setEditor(null), setDrawer(null), setPage("messages")) : undefined}
           onMessagesPage={page === "messages"}
@@ -2492,7 +2512,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </div>
         )}
 
-        {page === "today" ? (
+        {onScreen === "today" ? (
           <main className="tp-main tp-main-page td-page hm-page">
             <HomePage
               me={me}
@@ -2506,6 +2526,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               unread={unread}
               nudge={nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null}
               events={events}
+              trialStarted={!!me.plan?.trialStarted && !trialStartSeen}
+              onTrialStartSeen={() => {
+                setTrialStartSeen(true);
+                void act({ type: "noticeSeen", kind: "trialStarted" }, { quiet: true, silentError: true });
+              }}
               trialEnded={!!me.plan?.trialEnded && !trialSeen}
               onTrialSeen={() => {
                 setTrialSeen(true);
@@ -2537,6 +2562,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               onSearch={(text) => {
                 setDrawer(null);
                 setSearchTab(null);
+                // Home's search reads every company: the saved view, the profile and the filters are off for it (they come back when it is cleared).
+                setSearchWide(true);
                 setQuery(text);
                 setPage("table");
                 setFindNow(Date.now());
@@ -2545,7 +2572,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               onNav={navTo}
             />
           </main>
-        ) : waiting && page !== "table" ? (
+        ) : waiting && onScreen !== "table" ? (
           <main className="tp-main tp-main-page">
             <AllLoading />
           </main>
@@ -2569,7 +2596,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           <main className="tp-main tp-main-page">
             <MessagesPage onBack={toBase} openCompany={(id) => openCompany(id)} />
           </main>
-        ) : page === "radar" ? (
+        ) : onScreen === "radar" ? (
           <main className="tp-main tp-main-page rd-main">
             <RadarPage
               view={radar.data}
@@ -2816,7 +2843,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         )}
 
         {/* filters as an overlay (tablet) or bottom sheet (phone) */}
-        {sideOverlay && page === "table" && !phone && (
+        {sideOverlay && onScreen === "table" && !phone && (
           <SidePanel onClose={() => setSideOverlay(false)}>
             {filterPanel(
                 <div className="tp-filters-head">
@@ -2888,7 +2915,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             mySeats={seats}
             crystal={
               (drawer.returnTo === "radar" && radarList.some((r) => r.i.c.id === drawerInfo.c.id)) ||
-              (drawer.returnTo === "today" && !!today.data?.rows.some((r) => r.id === drawerInfo.c.id))
+              (drawer.returnTo === "today" && todayIds.has(drawerInfo.c.id))
             }
           />
         )}

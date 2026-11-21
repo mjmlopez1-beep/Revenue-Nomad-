@@ -18,6 +18,7 @@ import type { RadarRow } from "@/lib/radar/types";
 import { knowLine, type Move } from "@/lib/moves";
 import { draftNote, gmailLink, mailtoLink, noteFacts, type NoteFacts } from "@/lib/moveNote";
 import { firstOf } from "@/lib/partners";
+import { webLink } from "@/lib/links";
 import { IconExternal, initials, useToast } from "../ui/shared";
 import { copyText } from "./hooks";
 import { Sheet, useUi } from "./ui";
@@ -99,6 +100,8 @@ export function NoteSheet({
     onSent();
   };
   const title = facts.kind === "roleCold" ? "A note for the open role" : `A note to ${first ?? "them"}`;
+  // An open role's note says "I've applied": the posting comes first, then the note.
+  const posting = m.do === "reply" && m.open?.posting && m.open.posting !== "locked" ? webLink(m.open.posting) : null;
   const len = [...body].length;
   return (
     <Sheet
@@ -109,12 +112,17 @@ export function NoteSheet({
       footer={
         <div className="mn-foot">
           <div className="mn-acts">
+            {posting && (
+              <a className="btn btn-primary mn-go" href={posting} target="_blank" rel="noreferrer">
+                <IconExternal size={14} /> Open the posting
+              </a>
+            )}
             {onMerlin && (
               <button type="button" className="btn btn-primary mn-go" disabled={busy || !body.trim() || len > MAX} aria-busy={busy} onClick={() => void sendOnMerlin()}>
                 {busy ? "Sending" : "Message on Merlin"}
               </button>
             )}
-            <a className={`btn${onMerlin ? "" : " btn-primary"} mn-go`} href={gmailLink(to?.email, subject, body)} target="_blank" rel="noreferrer" onClick={record}>
+            <a className={`btn${onMerlin || posting ? "" : " btn-primary"} mn-go`} href={gmailLink(to?.email, subject, body)} target="_blank" rel="noreferrer" onClick={record}>
               <IconExternal size={14} /> Open in Gmail
             </a>
             <button type="button" className="btn mn-go" onClick={() => void copy()}>

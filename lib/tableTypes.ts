@@ -436,6 +436,8 @@ export interface PlanView {
   trialEnded?: boolean; // [ux ws1]
   /** The member is on paid Pro and hasn't closed Home's one-time Pro welcome yet (PlanRecord.notices.proWelcomeSeen). */
   proWelcome?: boolean;
+  /** The trial started in the last few days and the member hasn't closed Home's one-time trial card yet (PlanRecord.notices.trialStartedSeen). */
+  trialStarted?: boolean;
 }
 
 /** The most functions "Which fractional usually gets hired before you?" takes. */
@@ -1044,7 +1046,7 @@ export type Action =
   /** The invite loop: the inviter closed the line saying these fractionals joined from their invite (Me.joined ids). It doesn't come back. */
   | { type: "joinedSeen"; ids: string[] }
   /** Today's one-time cards: the member closed it ("trialEnded": the trial-ended card), kept in PlanRecord.notices. */ // [ux ws1]
-  | { type: "noticeSeen"; kind: "trialEnded" | "proWelcome" } // [ux ws1]
+  | { type: "noticeSeen"; kind: "trialEnded" | "proWelcome" | "trialStarted" } // [ux ws1]
   /**
    * Your three moves today (lib/moves.ts): the member did the move at this company (it leaves the
    * list for DONE_DAYS and counts for the month), snoozed it (hidden for SNOOZE_DAYS), or took

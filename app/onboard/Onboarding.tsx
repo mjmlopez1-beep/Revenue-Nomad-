@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * First run, three steps, and it ends on the member's first saved view and Today. One calm card,
- * and the value comes before the ask:
+ * First run, three steps, and it ends on the member's Crystal Ball (else their first saved view)
+ * and Home. One calm card, and the value comes before the ask:
  *   1. "What do you do?": what Merlin is and what a credit buys, then their function, with the
  *      titles for it as chips under it. A member with seats on file hears where those came from and
  *      who can see their name, since most of them arrive by personal link and skip the landing page.
@@ -10,10 +10,16 @@
  *      already ticked (firstView.ts beforeOrder), or "Not sure", stored as Me.before; then the
  *      companies they want as clients, industry and size only (their Ideal Fractional Profile).
  *      Where defaults to the member's own country, one tap to Anywhere. Every part optional.
- *   3. "Your first view": companies in their profile that hired a fractional in those functions in
+ *   3. "Your Crystal Ball", for a member the trial is about to start for (billing live): the profile
+ *      goes in as the step shows, which ends onboarding on the server and starts the trial (Root holds
+ *      this page until "Open Home"), and the top 3 companies of their Crystal Ball show, named, each
+ *      with why now: on the trial each opens free. With an empty Crystal Ball (or billing off), "Your
+ *      first view" as before: companies in their profile that hired a fractional in those functions in
  *      the last 12 months and have no fractional in theirs yet (widened until it shows enough), the
- *      top 3 rows. The view saves itself, with the weekly email on, and "Also show open <function>
- *      roles" saves the open roles in their function as a second view. One button, "Open Today".
+ *      top 3 rows. Either way the first view saves itself in the background, short name and all
+ *      ("Likely to need Sales next"), with the weekly email on, and the open roles in their function
+ *      as a second view. "New moves every morning, by email" is Crystal Ball's own email (on unless
+ *      they untick it). One button, "Open Home".
  *      A member who joined here while email sign-in is off keeps their sign-in link inline, above
  *      it. A member with seats on file under their name gets "Fill in your seats" here.
  * What it no longer asks moved out: Find your seats is the nudge after the first unlock (Today and
@@ -45,6 +51,9 @@ import { ICP_SKIPPED } from "@/app/post/getStarted";
 import { contactOf, mailto } from "../landing/contact";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { invitedParts } from "@/lib/notify/format";
+import { TRIAL_DAYS } from "@/lib/billing/rules";
+import { moveWhy } from "@/lib/moves";
+import type { RadarRow } from "@/lib/radar/types";
 import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
 import { Glyph, Trail, WelcomeBanner } from "../ui/fractions/art";
 
@@ -63,6 +72,11 @@ export interface OnboardingProps {
    * steps 1 and 2 work without companies, and the first view waits for them.
    */
   viewReady?: boolean;
+  /**
+   * The last step sends the profile as it shows (that starts the trial, so Crystal Ball names its
+   * companies): Root keeps this page up, though the member reads as onboarded, until onDone.
+   */
+  onHold?: () => void;
 }
 
 /* ---------- where the member is: history entry, tab storage and the server's draft ---------- */
@@ -162,7 +176,7 @@ function SeatsNext({ n, busy, onFill }: { n: number; busy?: boolean; onFill?: ()
 const signature = (fv: FirstView, roles: boolean, email: boolean, fn: string | null, icp: Icp) =>
   JSON.stringify({ p: fv.place, n: fv.name, r: roles && named(fn) ? alertView(fn, icpEmpty(icp) ? null : icp).place : null, e: email });
 
-export default function Onboarding({ view, act, onDone, onSkip, viewReady = true }: OnboardingProps) {
+export default function Onboarding({ view, act, onDone, onSkip, viewReady = true, onHold }: OnboardingProps) {
   const me = view.me!;
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
   // Joined here with email sign-in off: the sign-in link is kept on the last step (with it on, it comes by email).
@@ -202,6 +216,11 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
       saved: views.length && typeof a.saved === "string" ? a.saved : null,
     };
   });
+  // The trial starts when onboarding ends (billing live, never had one): every Crystal Ball company opens free on it.
+  const plan = me.plan;
+  const trialAhead = !!plan && (plan.name === "trial" || (plan.name === "free" && !plan.hadTrial));
+  /** "New moves every morning, by email": Crystal Ball's own email (Me.radar), on unless they untick it. */
+  const [radarEmail, setRadarEmail] = useState(me.radar !== false);
   const [step, setStep] = useState(init.step);
   const [fn, setFn] = useState<string | null>(init.fn);
   const [title, setTitle] = useState(init.title);
@@ -235,6 +254,15 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
 
   /* ----- the first view, from the answers ----- */
   const infos = useMemo(() => deriveAll(view.companies), [view.companies]);
+  /** A company's free facts (industry, size, country) by id, for the Crystal Ball rows. */
+  const factsById = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const i of infos) {
+      const emp = val(i.c.cells.employees);
+      out.set(i.c.id, [val(i.c.cells.industry), emp && `${emp} employees`, countryOf(i.c) ?? val(i.c.cells.hq)].filter(Boolean).join(" · "));
+    }
+    return out;
+  }, [infos]);
   const order = useMemo(() => beforeOrder(infos, fn), [infos, fn]);
   /** What the before question reads as now: the answer, else the suggestion, ticked. */
   const beforeNow = before ?? order.suggested;
@@ -388,6 +416,58 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, sig, savedNow, busy, finishing, saveFailed]);
 
+  /** The profile action with the answers as they are now (and the first view, once it is saved). */
+  const profileAct = (withView: boolean) => {
+    // Not answered yet when they skip: the suggestion stands in, as it did on screen.
+    const beforeSent = before ?? (fn ? order.suggested : null);
+    return {
+      type: "profile" as const,
+      function: fn ?? undefined,
+      ...(fn ? { goal: goalFor(fn) } : {}),
+      ...(title.trim() !== realTitle(me.title) ? { title: title.trim() } : {}),
+      icp: icpEmpty(icp) ? null : icp,
+      ...(beforeSent !== null ? { before: beforeSent } : {}),
+      ...(withView && views[0] ? { firstView: views[0] } : {}),
+      ...(init.clientCount !== null ? { clientCount: init.clientCount } : {}),
+      // "Are you looking for a new client?" isn't asked here any more: unanswered reads as yes (the plans' softer pitch is only for "Not now").
+      ...(init.looking !== null ? { looking: init.looking } : {}),
+    };
+  };
+
+  /* ----- the last step: their Crystal Ball, named on the trial ----- */
+
+  /**
+   * For a member the trial starts for: the profile goes in as the last step shows (onboarding is
+   * done on the server then, and the trial starts), and their Crystal Ball's top companies come,
+   * named. Again after a change of answer (Back, then Next). Nothing named (an empty Crystal Ball, a
+   * failure): the first view shows instead.
+   */
+  const ballWanted = trialAhead && !!named(fn);
+  const ballSig = JSON.stringify({ fn, t: title.trim(), icp: icpEmpty(icp) ? null : icp, b: before });
+  const [ball, setBall] = useState<{ sig: string; rows: RadarRow[] } | null>(null);
+  const ballAsked = useRef<string | null>(null);
+  useEffect(() => {
+    if (shown !== 3 || !ballWanted || finishing || ball?.sig === ballSig || ballAsked.current === ballSig) return;
+    ballAsked.current = ballSig;
+    void (async () => {
+      onHold?.();
+      const r = await act(profileAct(false), { quiet: true, silentError: true });
+      let rows: RadarRow[] = [];
+      if (r.ok)
+        try {
+          const res = await fetch("/api/table?radar=1&range=auto", { cache: "no-store" });
+          const j = (await res.json().catch(() => null)) as { rows?: RadarRow[] } | null;
+          if (res.ok && Array.isArray(j?.rows)) rows = j.rows.filter((x) => !!x.name);
+        } catch {}
+      if (ballAsked.current !== ballSig) return;
+      ballAsked.current = null;
+      setBall({ sig: ballSig, rows });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, ballWanted, ballSig, finishing]);
+  /** "loading" while it comes, the rows once named, else null (the first view shows). */
+  const ballNow: RadarRow[] | "loading" | null = !ballWanted ? null : ball?.sig === ballSig ? (ball.rows.length ? ball.rows : null) : "loading";
+
   /**
    * Finish with what is answered so far. `skip`: "Skip to the table", from step 1 or 2. The profile
    * action marks the member onboarded either way, so a reload never brings them back here.
@@ -401,28 +481,14 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
     window.scrollTo(0, 0);
     if (skip) clearPlace(true);
     else if (views[0] || to === "today") clearPlace();
-    // Not answered yet when they skip: the suggestion stands in, as it did on screen.
-    const beforeSent = before ?? (fn ? order.suggested : null);
-    const r = await act(
-      {
-        type: "profile",
-        function: fn ?? undefined,
-        ...(fn ? { goal: goalFor(fn) } : {}),
-        ...(title.trim() !== realTitle(me.title) ? { title: title.trim() } : {}),
-        icp: icpEmpty(icp) ? null : icp,
-        ...(beforeSent !== null ? { before: beforeSent } : {}),
-        ...(views[0] ? { firstView: views[0] } : {}),
-        ...(init.clientCount !== null ? { clientCount: init.clientCount } : {}),
-        // "Are you looking for a new client?" isn't asked here any more: unanswered reads as yes (the plans' softer pitch is only for "Not now").
-        ...(init.looking !== null ? { looking: init.looking } : {}),
-      },
-      { quiet: true },
-    );
+    const r = await act(profileAct(true), { quiet: true });
     if (!r.ok) {
       setFinishing(false);
       if (step > base.current && entryStep() !== step) window.history.pushState({ ob: step, obBase: base.current }, "");
       return;
     }
+    // "New moves every morning, by email" unticked on the last step: Crystal Ball's email goes off (Your profile turns it back on).
+    if (!skip && !radarEmail && me.radar !== false) await act({ type: "settings", radar: false }, { quiet: true, silentError: true });
     writeSaved(null);
     // No Ideal Fractional Profile picked: the table doesn't ask for one again in this visit (app/post/TradingPost.tsx).
     if (icpEmpty(icp))
@@ -475,6 +541,7 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
               published={published}
               scanned={scanned}
               credits={me.credits}
+              trial={trialAhead}
               invited={me.invitedBy ? invitedParts(me.invitedBy.first, me.invitedBy.both, REFERRAL_BONUS) : null}
               fn={fn}
               setFn={(f) => {
@@ -510,6 +577,11 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
             />
           ) : (
             <StepFirstView
+              ball={ballNow}
+              trialDays={plan?.name === "trial" ? plan.trialDaysLeft ?? TRIAL_DAYS : TRIAL_DAYS}
+              facts={factsById}
+              radarEmail={radarEmail}
+              setRadarEmail={setRadarEmail}
               fv={fv}
               fn={fn}
               icp={icp}
@@ -561,8 +633,10 @@ function seatsLine(seats: number, published: number, scanned: number): string {
 }
 
 function StepYou({
-  first, seats, published, scanned, credits, invited, fn, setFn, title, setTitle, onNext,
+  first, seats, published, scanned, credits, trial, invited, fn, setFn, title, setTitle, onNext,
 }: {
+  /** The Pro trial starts when they finish here (billing live): what a company costs reads for it. */
+  trial: boolean;
   first: string;
   /** Seats on file that carry the member's name. */
   seats: number;
@@ -609,7 +683,9 @@ function StepYou({
           <strong className="num">
             {credits} {credits === 1 ? "credit" : "credits"}
           </strong>
-          . A company is 2 credits, and one each day is free (on the Free plan, the one you pick in your Crystal Ball). One more credit shows who held a seat there.
+          {trial
+            ? `. A company is 2 credits. Your ${TRIAL_DAYS}-day Pro trial starts when you finish here, no card, and on it every company in your Crystal Ball opens free. One more credit shows who held a seat there.`
+            : ". A company is 2 credits, and one each day is free (on the Free plan, the one you pick in your Crystal Ball). One more credit shows who held a seat there."}
         </span>
       </p>
 
@@ -802,9 +878,44 @@ function FirstRow({ r, f }: { r: Row; f: Filters }) {
   );
 }
 
+/** One company of their Crystal Ball, named on the trial: its free facts, how likely and why now, and that it opens free. */
+function BallRow({ r, facts }: { r: RadarRow; facts: string | null }) {
+  const why = moveWhy(r);
+  return (
+    <li className="ob-fv-row">
+      <CompanyLogo name="" domain={null} hidden seed={r.id} />
+      <div className="ob-fv-id">
+        <span className="ob-fv-name">{r.name}</span>
+        {facts ? <span className="ob-fv-meta">{facts}</span> : null}
+        {why || r.band ? (
+          <span className="ob-fv-hire">
+            {r.band ? <span className={`ob-band ob-band-${r.band.toLowerCase()}`}>{r.band}</span> : null}
+            {why}
+          </span>
+        ) : null}
+        <span className="ob-fv-holder">
+          <span className="ob-fv-lock ob-fv-free" aria-hidden>
+            <IconCheck size={12} />
+          </span>
+          <span>Opens free on your trial</span>
+        </span>
+      </div>
+    </li>
+  );
+}
+
 function StepFirstView({
+  ball, trialDays, facts, radarEmail, setRadarEmail,
   fv, fn, icp, openRoles, roles, setRoles, email, setEmail, emailOn, savedNow, saving, failed, onRetry, finishing, onBack, link, needLink, handoff, onOpen,
 }: {
+  /** Their Crystal Ball, named on the trial: "loading" while it comes; null shows the first view instead. */
+  ball: RadarRow[] | "loading" | null;
+  trialDays: number;
+  /** Free facts by company id. */
+  facts: Map<string, string>;
+  /** "New moves every morning, by email" (Crystal Ball's email). */
+  radarEmail: boolean;
+  setRadarEmail: (v: boolean) => void;
   /** Null until the companies are in: skeleton rows meanwhile. */
   fv: FirstView | null;
   fn: string | null;
@@ -827,7 +938,7 @@ function StepFirstView({
   onBack: () => void;
   /** The sign-in link, for a member who has no email to sign in by. */
   link: React.ReactNode;
-  /** It isn't kept yet: the first press of Open Today asks once. */
+  /** It isn't kept yet: the first press of Open Home asks once. */
   needLink: boolean;
   /** For a member with seats on file: where they can go instead. */
   handoff: React.ReactNode;
@@ -839,12 +950,42 @@ function StepFirstView({
   const more = fv ? fv.rows.length - top.length : 0;
   const partners = fv ? holdersLine(fv) : null;
   const [asked, setAsked] = useState(false);
+  const rows = Array.isArray(ball) ? ball : null;
+  const ballTop = rows ? rows.slice(0, PREVIEW_ROWS) : [];
   return (
     <div>
       <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Your first view
+        {ball ? "Your Crystal Ball" : "Your first view"}
       </h1>
-      {fv ? (
+      {rows ? (
+        <>
+          <p className="ob-fv-lead">
+            Companies most likely to hire {nfn ? `a fractional ${nfn} leader` : "you"} next, and why now. Your {trialDays}-day Pro trial is on, so each one opens free.
+          </p>
+          <ul className="ob-fv-rows" aria-label="The top companies in your Crystal Ball">
+            {ballTop.map((r) => (
+              <BallRow key={r.id} r={r} facts={facts.get(r.id) ?? null} />
+            ))}
+          </ul>
+          {rows.length > ballTop.length ? <p className="ob-fv-more num">And {rows.length - ballTop.length} more in your Crystal Ball on Home.</p> : null}
+        </>
+      ) : ball === "loading" ? (
+        <div role="status" aria-busy>
+          <p className="ob-fv-lead">Finding the companies most likely to hire {nfn ? `a fractional ${nfn} leader` : "you"} next.</p>
+          <ul className="ob-fv-rows" aria-hidden>
+            {Array.from({ length: PREVIEW_ROWS }, (_, k) => (
+              <li key={k} className="ob-fv-row ob-fv-skel">
+                <span className="ob-skel ob-skel-logo" />
+                <span className="ob-fv-id">
+                  <span className="ob-skel" style={{ width: "45%" }} />
+                  <span className="ob-skel" style={{ width: "70%" }} />
+                  <span className="ob-skel" style={{ width: "55%" }} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : fv ? (
         <>
           <p className="ob-fv-lead">{firstViewLine(fv, fn)}</p>
           {notes.map((n) => (
@@ -889,6 +1030,22 @@ function StepFirstView({
 
       <div className="ob-alerts ob-fv-opts">
         <label className="ob-alerts-opt">
+          <input type="checkbox" checked={radarEmail} onChange={(e) => setRadarEmail(e.target.checked)} />
+          <span className="ob-alerts-text">
+            <span className="ob-alerts-label">New moves every morning, by email</span>
+            <span className="ob-alerts-hint">
+              {emailOn ? "Three companies from your Crystal Ball, and your best way in to each, on mornings when something moved." : "Email starts once it's switched on for the pilot. Your moves are on Home either way."}
+            </span>
+          </span>
+        </label>
+        {ball ? (
+          // Their first view saves itself in the background, with its weekly email, as before: a line says so.
+          <p className="ob-hint ob-fv-quiet">
+            {fv ? `Your first view, "${fv.name}", is saved too${email ? ", with a weekly email" : ""}.` : "Your first view saves too, with a weekly email."}
+          </p>
+        ) : (
+        <>
+        <label className="ob-alerts-opt">
           <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />
           <span className="ob-alerts-text">
             <span className="ob-alerts-label">Email me new ones each week</span>
@@ -914,6 +1071,8 @@ function StepFirstView({
             </span>
           </button>
         ) : null}
+        </>
+        )}
       </div>
 
       {handoff}
@@ -942,7 +1101,7 @@ function StepFirstView({
           )}
         </span>
         <button type="button" className="btn btn-pine btn-lg ob-next" disabled={finishing || saving} aria-busy={finishing} onClick={() => (needLink && !asked ? setAsked(true) : onOpen())}>
-          {finishing ? "Opening" : asked && needLink ? "Open Today without it" : "Open Today"}
+          {finishing ? "Opening" : asked && needLink ? "Open Home without it" : "Open Home"}
         </button>
       </div>
     </div>

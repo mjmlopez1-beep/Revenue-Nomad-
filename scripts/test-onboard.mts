@@ -18,7 +18,7 @@ import type { Cell, CompanyRec, EngagementRec, Icp, Me, View } from "../lib/tabl
 import { alertView, metaOf, pillPlace, realTitle, seatState, seatsAt, titlesFor } from "../app/onboard/suggest";
 import { firstViewPlace } from "../app/onboard/place";
 import {
-  BEFORE_DEFAULTS, BEFORE_MAX, ENOUGH, FIRST_WINDOW, WIDER_WINDOW, beforeOptions, beforeOrder, firstView, firstViewLine, goalFor, guessLine, holdersLine, newerAnswers, openRolesCount,
+  BEFORE_DEFAULTS, BEFORE_MAX, ENOUGH, FIRST_WINDOW, WIDER_WINDOW, beforeOptions, beforeOrder, firstView, firstViewLine, firstViewName, goalFor, guessLine, holdersLine, newerAnswers, openRolesCount,
   resumeStep, STEPS, toggleBefore, widenLine,
 } from "../app/onboard/firstView";
 import { applyFilters, deriveAll, hireOfRow, placeFilters, rowsFor, sortRows, type Row } from "../app/post/model";
@@ -160,7 +160,9 @@ check("one company reads as one", firstViewLine({ f: fv1.f, rows: fv1.rows.slice
 check("no widening, no line about it", widenLine(fv1, "Sales") === null);
 const place1 = new URLSearchParams(fv1.place);
 check("its place: All companies with the recently hired keys, the pill and no fractional Sales yet (not the profile spelled out)", place1.get("v") === "all" && place1.get("t") === "companies" && place1.get("f") === "hiredFn:Marketing~hiredWithin:12~notMine~icp" && !place1.has("s"), fv1.place);
-check("its name says what it follows", fv1.name === "Hired a fractional Marketing leader in the last 12 months, in my profile, no fractional Sales yet", fv1.name);
+check("its name is short and says what it is for", fv1.name === "Likely to need Sales next", fv1.name);
+check("its subtitle says what it follows in full", fv1.about === "Hired a fractional Marketing leader in the last 12 months, in my profile, no fractional Sales yet", fv1.about);
+check("with no function named, a short name too", firstViewName(null) === "Recently hired a fractional" && firstViewName("Other") === "Recently hired a fractional" && firstViewName("Finance") === "Likely to need Finance next");
 check("its weekly email follows hires in those functions, with the profile spelled out", JSON.stringify(fv1.criteria.hiredFn) === '["Marketing"]' && fv1.criteria.hiredWithin === 12 && fv1.criteria.country?.[0] === "United States" && !fv1.criteria.function, fv1.criteria);
 const order1 = fv1.rows.map((r) => hireOfRow(r, fv1.f.hiredFn, fv1.f.hiredWithin)).map((e) => val(e?.cells.start));
 check("the most recent hire first", order1.every((m, k) => k === 0 || (order1[k - 1] ?? "") >= (m ?? "")), order1);

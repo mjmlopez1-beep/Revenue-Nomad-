@@ -4,10 +4,12 @@
  * Home (page "today", the address / with no place in it): always a next click.
  *
  *   the one nudge (nudges.ts)
- *   "Good morning, Jordan" and one line on the day, then the one-time cards (the trial ended, the Pro welcome)
+ *   "Good morning, Jordan" and one line on the day (on a phone, the trial and its days left under it),
+ *   then the one-time cards (the trial started, the trial ended, the Pro welcome)
  *   Your three moves today (Moves.tsx): a company from Crystal Ball, the way in, and the move, three times
  *   Get started, while a new member has steps left (one line once they are done)
- *   one search box (Enter opens the table on that text)
+ *   one search box: companies by the names the member can see (Crystal Ball's names on their plan too); Enter
+ *   searches the whole table, every company, with the profile and filters off for that search
  *   four quick actions: Find companies, Your Crystal Ball, Add what you know, Fill in your seats
  *   Since your last visit: each count a row that opens it
  *   Your saved views: a small table (matches, new, the weekly email, last opened)
@@ -25,7 +27,7 @@
 import { useContext, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { FractionalsHome, Me, SavedViewRec } from "@/lib/tableTypes";
 import { UiCtx } from "./ui";
-import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
+import { FEATURE_NAME, YOUR_FEATURE, yourFeature } from "@/lib/radar/types";
 import { CompanyLogo, IconChevron, IconSearch, IconX, timeAgo } from "../ui/shared";
 import { EMPTY_FILTERS, RECORD_TYPES, applyFilters, rowsFor, type CheckStep, type CoInfo, type RecordType, type Row } from "./model";
 import { plural, useMedia } from "./hooks";
@@ -33,7 +35,8 @@ import { LeadCard, TrialEnded, factsOf, type TodayData } from "./Today";
 import { MovesSection } from "./Moves";
 import { ProWelcome } from "./Billing";
 import type { MovesWire } from "@/lib/moves";
-import { sinceWords } from "./todayModel";
+import { crystalNames, nameMatches, showMeDue, trialCardLine, trialPillWords, sinceWords } from "./todayModel";
+import { openPlans } from "./Billing";
 import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
 import { Bleed, NomadArt, Prop, Scene, Spot, Strip } from "../ui/fractions/lazy";
@@ -125,6 +128,8 @@ export interface HomeView {
   fresh: number | null;
   /** Last opened in this browser (ISO), or null. */
   opened: string | null;
+  /** What it follows in full, when its name is short (the first view's "Likely to need Sales next"). */
+  about?: string | null;
 }
 
 export interface HomeProps {
@@ -144,6 +149,9 @@ export interface HomeProps {
   trialEnded: boolean;
   onTrialSeen: () => void;
   onSeePro: () => void;
+  /** The one-time card when the trial started (Me.plan.trialStarted), and its "Got it". */
+  trialStarted: boolean;
+  onTrialStartSeen: () => void;
   /** The one-time Pro welcome, right after the plan became Pro (Me.plan.proWelcome), and its "Got it". */
   proWelcome: boolean;
   onProSeen: () => void;
@@ -279,7 +287,14 @@ export function HomePage(p: HomeProps) {
           {hello}, {firstName(me.name)}
         </h1>
         <p className="hm-sub">{sub}</p>
+        {/* A phone keeps the top bar's trial pill in its More sheet: the trial and its days left show here. */}
+        {trialPillWords(me.plan) ? (
+          <button type="button" className="hm-trialpill" onClick={() => openPlans("trial")}>
+            {trialPillWords(me.plan)}
+          </button>
+        ) : null}
       </header>
+      {p.trialStarted && me.plan?.name === "trial" ? <TrialStarted days={me.plan.trialDaysLeft} today={dayN} radar={p.radar} onSeen={p.onTrialStartSeen} /> : null}
       {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} art={<Scene kind="trialEnding" square pro on="mint" className="td-trial-art" />} /> : null}
       {p.proWelcome && me.plan ? <ProWelcome plan={me.plan} onSeen={p.onProSeen} /> : null}
 
@@ -310,7 +325,8 @@ export function HomePage(p: HomeProps) {
 
       {/* Fractionals: one quiet line when fractionals who serve the member's kind of client joined this week, and the one-time question. */}
       {rest && <FractionalsJoined />}
-      {rest && me.fractionals == null && <ShowMeAsk />}
+      {/* The directory question waits for the member's first unlock, or their second visit. */}
+      {rest && showMeDue(me, p.sinceAt) && <ShowMeAsk />}
 
       {rest && p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} />}
       {rest && <AskBox {...p} />}
@@ -405,6 +421,28 @@ export function HomePage(p: HomeProps) {
   );
 }
 
+/* ---------- the trial's one-time card ---------- */
+
+/** Once, when the trial starts: every Crystal Ball company opens free for its days, and the way there. */
+function TrialStarted({ days, today, radar, onSeen }: { days: number | null; today: number; radar: Go; onSeen: () => void }) {
+  return (
+    <section className="td-trial hm-trialcard" aria-labelledby="hm-trialcard-h">
+      <p className="td-trial-h" id="hm-trialcard-h">
+        Your Pro trial is on.
+      </p>
+      <p>{trialCardLine(days, today)}</p>
+      <div className="td-acts">
+        <GoLink to={{ href: radar.href, go: () => (onSeen(), radar.go()) }} className="btn btn-pine">
+          Open {FEATURE_NAME}
+        </GoLink>
+        <button type="button" className="btn" onClick={onSeen}>
+          Got it
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /* ---------- the search box ---------- */
 
 const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["person", "people"] };
@@ -414,7 +452,7 @@ function AskBox(p: HomeProps) {
   const narrow = useMedia("(max-width: 599px)");
   const q = useDeferredValue(text.trim());
   const [open, setOpen] = useState(false);
-  // What the table would list for it: the same search as the top bar's (what the member can see, never a locked value).
+  // What the table would list for it, every company and no filter: the same search as the top bar's (what the member can see, never a locked value).
   const found = useMemo(() => {
     if (q.length < 2 || p.waiting) return null;
     const counts = {} as Record<RecordType, number>;
@@ -426,6 +464,12 @@ function AskBox(p: HomeProps) {
     }
     return { counts, top };
   }, [q, p.infos, p.me, p.waiting]);
+  // The Crystal Ball companies their plan names (Trial and Pro), still locked in the table: found by those names too, first.
+  const named = useMemo(() => {
+    const list = crystalNames(p.data).filter((x) => p.byId.get(x.id)?.c.hidden);
+    return nameMatches(q, list, 4).map((x) => ({ ...x, i: p.byId.get(x.id)! }));
+  }, [q, p.data, p.byId]);
+  const tableTop = (found?.top ?? []).filter((r) => !named.some((x) => x.id === r.i.c.id)).slice(0, Math.max(0, 4 - named.length));
   const pages = useMemo(() => navMatches(q, p.nav), [q, p.nav]);
   const shown = open && q.length >= 2;
   const submit = () => {
@@ -448,7 +492,7 @@ function AskBox(p: HomeProps) {
           type="search"
           value={text}
           enterKeyHint="search"
-          placeholder={narrow ? "Search, or ask Merlin…" : "Search companies, seats and people, or ask Merlin…"}
+          placeholder={narrow ? "Search companies, people…" : "Search companies, seats and people"}
           aria-label="Search companies, seats and people"
           aria-expanded={shown}
           aria-controls="hm-ask-list"
@@ -477,7 +521,16 @@ function AskBox(p: HomeProps) {
               </span>
             </button>
           ))}
-          {found?.top.map((r) => (
+          {named.map((x) => (
+            <button key={`cb-${x.id}`} type="button" className="hm-ask-row" onClick={() => p.openCompany(x.id)}>
+              <CompanyLogo name="" domain={null} hidden seed={x.id} />
+              <span className="hm-ask-co">
+                <b>{x.name}</b>
+                <span className="hm-ask-facts">{[`In ${yourFeature}`, factsOf(x.i)].filter(Boolean).join(" · ")}</span>
+              </span>
+            </button>
+          ))}
+          {tableTop.map((r) => (
             <button key={r.key} type="button" className="hm-ask-row" onClick={() => p.openCompany(r.i.c.id)}>
               <CompanyLogo name={r.i.c.name} domain={r.i.c.iconDomain} />
               <span className="hm-ask-co">
@@ -634,6 +687,7 @@ function SavedViewsTable({ views, onOpen, onEmail, table, waiting }: { views: Ho
                       <NavIcon name="view" size={15} />
                       <span>{x.v.name}</span>
                     </GoLink>
+                    {x.about ? <span className="hm-vabout">{x.about}</span> : null}
                   </th>
                   <td className="hm-num num">{n(x.matches)}</td>
                   <td className="hm-num num">{x.fresh === null ? n(null) : x.fresh > 0 ? <span className="hm-fresh">{x.fresh} new</span> : <span className="hm-zero">0</span>}</td>

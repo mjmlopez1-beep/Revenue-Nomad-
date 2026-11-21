@@ -13,18 +13,26 @@
  * on the server (the "move" action), which answers with the next best in place.
  *
  * A locked company opens here exactly as it does from Crystal Ball (Today.tsx LeadAction: by plan,
- * Free's one a day, then "Upgrade to open more"). People cost what they cost.
+ * Free's one a day, then the ordinary "Unlock · 2 credits"), and so does a click on its name. People
+ * cost what they cost.
+ *
+ * An open role in the member's function shows itself once its company is open: "Your move" names the
+ * role with its posted rate and hours, and "Open the posting" is the button. Opening the posting (or
+ * "Then: …") moves the card on to the next step, the move lib/moves.ts picks (remembered in this
+ * browser, per role).
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import type { Me } from "@/lib/tableTypes";
-import { CRYSTAL_USED_LINE, FEATURE_NAME } from "@/lib/radar/types";
+import { FEATURE_NAME } from "@/lib/radar/types";
 import { MOVES_MAX, buildMove, holderOnFile, knowLine, postedWords, type Move, type MoveWire, type MovesWire } from "@/lib/moves";
 import { webLink } from "@/lib/links";
 import { CompanyLogo, IconBriefcase, IconChevron, IconExternal, IconLock, IconPencil, LockedName, initials, useToast } from "../ui/shared";
 import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { LeadAction } from "./Today";
+import { useCrystalClick } from "./CrystalOpen";
+import { CRYSTAL_USED_UNLOCK, roleTermsLine, TOMORROW_LINE } from "./todayModel";
 import "./moves.css";
 
 /*
@@ -41,6 +49,29 @@ interface Go {
 }
 
 const COUNT_WORD = ["", "", "two ", "three "];
+
+/** The open roles whose posting the member opened from a move, in this browser: the card moves on to its next step. */
+const POSTING_SEEN = "tp_posting_seen";
+function readSeen(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(POSTING_SEEN) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(-50) : [];
+  } catch {
+    return [];
+  }
+}
+function usePostingSeen(seatId: string | null): [boolean, () => void] {
+  const [seen, setSeen] = useState(false);
+  useEffect(() => setSeen(!!seatId && readSeen().includes(seatId)), [seatId]);
+  const mark = useCallback(() => {
+    if (!seatId) return;
+    setSeen(true);
+    try {
+      localStorage.setItem(POSTING_SEEN, JSON.stringify([...readSeen().filter((x) => x !== seatId), seatId].slice(-50)));
+    } catch {}
+  }, [seatId]);
+  return [seen, mark];
+}
 
 /** The section's title for this many moves: "Your three moves today", "Your move today". */
 export const movesTitle = (n: number) => (n === 1 ? "Your move today" : `Your ${COUNT_WORD[Math.min(n, MOVES_MAX)] ?? ""}moves today`);
@@ -179,8 +210,9 @@ export function MovesSection({
       )}
       {/* A phone keeps its first screen for the first move: the link to the whole day sits under the moves there. */}
       {dayN > 0 && <div className="mv-all mv-all-foot">{all}</div>}
-      {(month > 0 || now?.google === "connect" || !!now?.warm) && (
+      {(month > 0 || now?.google === "connect" || !!now?.warm || (fn && (n > 0 || month > 0))) && (
         <div className="mv-foot">
+          {fn && (n > 0 || month > 0) && <p className="mv-tally mv-tomorrow">{TOMORROW_LINE}</p>}
           {month > 0 && (
             <p className="mv-tally num">
               This month: <b>{month}</b> {month === 1 ? "move" : "moves"} done
@@ -271,12 +303,37 @@ function MoveCard({
 }) {
   const ui = useUi();
   const c = i.c;
+  const crystalClick = useCrystalClick();
+  /*
+   * The open role in their function, once the company is open: its title, posted rate and hours, and
+   * "Open the posting" lead, until the member opens it (or skips to the next step).
+   */
+  const role = m.open && !m.hidden ? m.open : null;
+  const roleSeat = role ? i.engs.find((e) => e.id === role.seatId) ?? null : null;
+  const roleTerms = roleSeat ? roleTermsLine(roleSeat.cells) : null;
+  const roleLink = role && role.posting && role.posting !== "locked" ? webLink(role.posting) : null;
+  const [roleSeen, markRoleSeen] = usePostingSeen(role ? role.seatId : null);
+  const roleStep = !!role && !roleSeen && (!!roleLink || role.posting === "locked");
+  const roleBusy = !!role && ["posting", "rate", "hours"].some((f) => ui.busy.has(`${role.seatId}.${f}`));
+  // What comes after the posting: the note for it, or the move at the company (its seat holder, someone they know).
+  const nextTitle = m.do === "reply" ? "Draft your note" : m.do === "seePosting" ? null : m.title;
   const seatBusy = m.way.kind === "holder" && (ui.busy.has(`${m.way.seatId}.operator`) || ui.busy.has(`${m.way.seatId}.role`));
   const postBusy = m.way.kind === "role" && ["posting", "rate", "hours"].some((f) => ui.busy.has(`${(m.way as { seatId: string }).seatId}.${f}`));
   const posting = m.open && m.open.posting && m.open.posting !== "locked" ? webLink(m.open.posting) : null;
   // The one button.
   let main: ReactNode;
-  if (m.do === "open") main = <LeadAction i={i} row={w.row} onOpen={onOpen} cls="mv-main" />;
+  if (roleStep && role)
+    main = roleLink ? (
+      <a className="btn btn-pine mv-main" href={roleLink} target="_blank" rel="noreferrer" onClick={markRoleSeen}>
+        Open the posting <IconExternal size={12} />
+        <span className="sr-only"> (opens in a new tab)</span>
+      </a>
+    ) : (
+      <button type="button" className="btn btn-pine mv-main" disabled={roleBusy} aria-busy={roleBusy} onClick={() => void ui.unlock({ entity: "engagement", id: role.seatId, field: "posting" })}>
+        {roleBusy ? "Unlocking" : "See the posting · 1 credit"}
+      </button>
+    );
+  else if (m.do === "open") main = <LeadAction i={i} row={w.row} onOpen={onOpen} cls="mv-main" />;
   else if (m.do === "record")
     main = (
       <button type="button" className="btn btn-pine mv-main" onClick={onOpen}>
@@ -320,7 +377,7 @@ function MoveCard({
             </>
           )}
         </span>
-        <button type="button" className="mv-co-open" onClick={onOpen} aria-label={m.name ? `Open ${m.name}` : "Look at this company"}>
+        <button type="button" className="mv-co-open" onClick={() => void crystalClick(c.id, !!c.hidden, onOpen)} aria-label={m.name ? `Open ${m.name}` : "Look at this company"}>
           <CompanyLogo name={c.hidden ? "" : c.name} domain={c.hidden ? null : c.iconDomain} hidden={c.hidden} seed={c.id} size="lg" />
           <span className="mv-co-id">
             <span className="mv-name">{m.name ?? <LockedName seed={c.id} />}</span>
@@ -334,8 +391,20 @@ function MoveCard({
       </div>
       <div className="mv-do">
         <span className="mv-label">Your move</span>
-        <span className="mv-do-t">{m.title}</span>
-        <p className="mv-do-p">{m.do === "open" && me.crystal === "used" ? CRYSTAL_USED_LINE : m.line}</p>
+        {roleStep && role ? (
+          <>
+            <span className="mv-do-t">Reply to the open role</span>
+            <p className="mv-role">
+              <span className="mv-role-t">{role.title}</span>
+              {roleTerms ? <span className="mv-role-f num">{roleTerms}</span> : null}
+            </p>
+          </>
+        ) : (
+          <>
+            <span className="mv-do-t">{m.title}</span>
+            <p className="mv-do-p">{m.do === "open" && me.crystal === "used" ? CRYSTAL_USED_UNLOCK : m.line}</p>
+          </>
+        )}
         <div className="mv-acts">
           {main}
           {/* Done and Snooze stay side by side, under a long button when the row is too narrow for all three. */}
@@ -348,7 +417,12 @@ function MoveCard({
             </button>
           </span>
         </div>
-        {posting && m.do === "reply" ? (
+        {roleStep && nextTitle ? (
+          <button type="button" className="mv-link mv-post" onClick={markRoleSeen}>
+            Then: {nextTitle}
+          </button>
+        ) : null}
+        {!roleStep && posting && m.do === "reply" ? (
           <a className="mv-link mv-post" href={posting} target="_blank" rel="noreferrer">
             Open the posting <IconExternal size={11} />
           </a>

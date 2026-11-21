@@ -482,3 +482,21 @@
     min-height: 44px;
   }
 }
+
+/* An open role in their function, once its company is open: its title and posted terms lead "Your move". */
+.mv-role {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.mv-role-t {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.mv-role-f {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}

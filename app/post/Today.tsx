@@ -10,7 +10,7 @@
  *   (LeadAction, the one place it is decided, used by the card and by each move at a locked company):
  *     - a Crystal Ball company, while billing is live (CrystalOpen.tsx, Me.crystal): "Open" on Trial
  *       and Pro (free, theirs from then on), "Open free · 1 left today" on Free (one a day, with
- *       everything on it), then "Upgrade to open more" and the line that says why,
+ *       everything on it), then "Unlock · 2 credits" with "Pro opens all of these free" beside it,
  *     - else "Unlock free · your company of the day" while the free one is left,
  *     - "Unlock · 2 credits" after it,
  *     - "Open" for a company the member already knows.
@@ -25,7 +25,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
-import { CRYSTAL_USED_LINE, FEATURE_NAME } from "@/lib/radar/types";
+import { FEATURE_NAME } from "@/lib/radar/types";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY } from "@/lib/tableFields";
 import { CompanyLogo, IconLock, LockedName, val } from "../ui/shared";
 import { countryOf, hireLine, isOpenRole, shown, type CoInfo } from "./model";
@@ -34,7 +34,7 @@ import { freeCompanyNow } from "./display";
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
 import { CrystalOpen } from "./CrystalOpen";
-import { TODAY_MAX_BYTES, TODAY_ROWS, isTodayAnswer, radarSince, type TodayAnswer, type TodayData } from "./todayModel";
+import { CRYSTAL_USED_UNLOCK, TODAY_MAX_BYTES, TODAY_ROWS, isTodayAnswer, radarSince, type TodayAnswer, type TodayData } from "./todayModel";
 import "./today.css";
 
 export { rolesSince, type TodayData } from "./todayModel";
@@ -142,7 +142,7 @@ function warmSeat(i: CoInfo, me: Pick<Me, "before" | "function">) {
 
 /**
  * The one action on a Crystal Ball company, in one place (Home's card and its rows both use it):
- * a Crystal Ball row by plan (CrystalOpen: Open, Open free · 1 left today, Upgrade to open more),
+ * a Crystal Ball row by plan (CrystalOpen: Open, Open free · 1 left today, then Unlock · 2 credits),
  * else a locked company's unlock ("Unlock free · your company of the day" while the free one is left,
  * "Unlock · 2 credits" after it, "Unlocks again tomorrow" when the day's limit binds), or "Open"
  * for a company the member can see. With too few credits the zero-credits popover says what to add.
@@ -219,10 +219,10 @@ export function LeadCard({ i, row, me, onOpen, title = "Your best lead today" }:
                 <IconLock size={12} /> The fractional who held their {seatFn ?? "last"} seat is on file: your warm way in.
               </>
             ) : (
-              `No seat holder on file yet. ${crystal ? "Open" : "Unlock"} it to see what we have.`
+              `No seat holder on file yet. ${crystal && crystal !== "used" ? "Open" : "Unlock"} it to see what we have.`
             )}
           </p>
-          {crystal === "used" ? <p className="td-used">{CRYSTAL_USED_LINE}</p> : null}
+          {crystal === "used" ? <p className="td-used">{CRYSTAL_USED_UNLOCK}</p> : null}
           <div className="td-acts">
             <LeadAction i={i} row={row} onOpen={onOpen} />
             <button type="button" className="td-quiet" onClick={onOpen}>

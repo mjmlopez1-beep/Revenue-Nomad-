@@ -153,11 +153,16 @@ export interface FirstView {
   rows: Row[];
   /** Of those, the companies whose hire has its seat holder on file (behind a lock): potential referral partners. */
   holders: number;
-  /** The saved view: its place (the table's address), name and what the weekly email follows. */
+  /** The saved view: its place (the table's address), a short name ("Likely to need Sales next") and what the weekly email follows. */
   place: string;
   name: string;
+  /** What it follows in full ("Hired a fractional Marketing leader in the last 12 months, …"): its subtitle under the name. */
+  about: string;
   criteria: SavedViewCriteria;
 }
+
+/** The first view's short name: "Likely to need Sales next" (its criteria in full are its subtitle). */
+export const firstViewName = (fn: string | null) => (namedFn(fn) ? `Likely to need ${namedFn(fn)} next` : "Recently hired a fractional");
 
 /** The member as the table filters for them, with onboarding's answers in place of what is saved. */
 const asMember = (me: Me, fn: string | null, icp: Icp | null): Me => ({ ...me, function: fn, icp });
@@ -206,7 +211,8 @@ export function firstView(infos: CoInfo[], me: Me, a: { fn: string | null; icp: 
     rows: sortRows(rows, "hired", false, "", { me: who, hire: { fns: f.hiredFn, within: f.hiredWithin } }),
     holders: rows.filter((r) => holderOnFile(hireOfRow(r, f.hiredFn, f.hiredWithin))).length,
     place: absolutePlace({ t: "companies", v: "all", s: null, f, q: "" }),
-    name: viewName(f, "all", "companies", null, a.fn),
+    name: firstViewName(a.fn),
+    about: viewName(f, "all", "companies", null, a.fn),
     criteria: criteriaOf(withIcpSpelled(f, a.icp), null),
   };
 }

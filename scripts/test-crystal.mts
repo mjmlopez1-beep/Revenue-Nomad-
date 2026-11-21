@@ -42,6 +42,8 @@ const companies = [
   co("c_ball1", "Orbweaver Analytics", "orbweaver.example"),
   co("c_ball2", "Quillmark Studios", "quillmark.example"),
   co("c_ball3", "Ravenmoor Supply", "ravenmoor.example"),
+  // In Fen's Crystal Ball only, and locked for her: what Free unlocks for 2 credits once today's free one is used.
+  co("c_ball4", "Tidewater Goods", "tidewater.example"),
   co("c_out", "Sablecrest Partners", "sablecrest.example"),
 ];
 const seat = (id: string, companyId: string, fields: Record<string, string>) => ({ id, companyId, verified: false, fields });
@@ -55,6 +57,7 @@ const engagements = [
   seat("e_b2_open", "c_ball2", { source: "Demand scan", role: "Fractional Head of Sales", function: "Sales", status: "Open role", posting: "https://quillmark.example/careers/sales" }),
   // Ball 3: one seat with nothing on it that costs (no holder, no role, an ongoing end): only the company is paid there.
   seat("e_b3_mkt", "c_ball3", { source: "Member success story", function: "Marketing", type: "Fractional", start: "2023-01", status: "Active", end: "Ongoing" }),
+  seat("e_b4_mkt", "c_ball4", { source: "Member success story", function: "Marketing", type: "Fractional", start: "2023-05", status: "Active", end: "Ongoing" }),
   // Out: in nobody's Crystal Ball.
   seat("e_out_ops", "c_out", { source: "Member success story", operator: "Odile Varga", role: "Fractional COO", function: "Operations", type: "Fractional", start: "2023-04", status: "Ended", end: "2023-10" }),
 ];
@@ -64,7 +67,7 @@ const contacts = [
   { id: "p_b2_ceo", companyId: "c_ball2", fields: { name: "Philippa Strand", title: "Founder Heron", relationship: "Decision maker", email: "philippa@quillmark.example", phone: "512.555.0177" } },
   { id: "p_out_ceo", companyId: "c_out", fields: { name: "Casimir Dunmore", title: "Owner Ibis", relationship: "Decision maker", email: "casimir@sablecrest.example" } },
 ];
-const NAMES = ["Orbweaver", "Quillmark", "Ravenmoor", "Sablecrest", "orbweaver.example", "quillmark.example", "Wren Holloway", "Ivo Castellan", "Tamsin Okafor", "Marisol", "Achterberg", "Bastian Quell", "Philippa", "Casimir"];
+const NAMES = ["Orbweaver", "Quillmark", "Ravenmoor", "Tidewater", "Sablecrest", "orbweaver.example", "quillmark.example", "Wren Holloway", "Ivo Castellan", "Tamsin Okafor", "Marisol", "Achterberg", "Bastian Quell", "Philippa", "Casimir"];
 
 const member = (id: string, name: string) => ({ id, name, email: `${id.slice(4)}.crystal@example.com`, title: "Fractional VP Sales", token: `tok-${id.slice(4)}-crystal` });
 const seed = {
@@ -109,7 +112,7 @@ writeFileSync(
       members: {
         mem_tri: ballOf("mem_tri", ["c_ball1", "c_ball2"]),
         mem_pro: ballOf("mem_pro", ["c_ball1", "c_ball2"]),
-        mem_free: ballOf("mem_free", ["c_ball1", "c_ball2", "c_ball3"]),
+        mem_free: ballOf("mem_free", ["c_ball1", "c_ball2", "c_ball3", "c_ball4"]),
         // Oto's Crystal Ball has Quillmark only: Orbweaver is outside it for him.
         mem_oth: ballOf("mem_oth", ["c_ball2"]),
       },
@@ -357,6 +360,15 @@ async function main() {
   check("its full open costs 0 and opens the rest", free.me!.credits === f2 && lockedOn(company(free, B2)).length === 0, lockedOn(company(free, B2)));
   check("and refunds nothing paid before", !(await ledgerOf("mem_free")).some((l) => l.reason === "refund"));
   check("one more today is refused", (await refused(open(FREE, B3))) === types.CRYSTAL_USED_LINE);
+  // With today's used, Free unlocks a Crystal Ball company the ordinary way (the button reads "Unlock · 2 credits"): 2 credits, as anywhere.
+  const B4 = idOf("Tidewater Goods");
+  const f4 = await credits(FREE);
+  check("Tidewater is locked for Fen and in her Crystal Ball", company(await view(FREE), B4).hidden === true && (await radar.crystalPublicIds(FREE)).has(B4));
+  check("its free open is refused today", (await refused(open(FREE, B4))) === types.CRYSTAL_USED_LINE && (await credits(FREE)) === f4);
+  const paid4 = await unlock(FREE, "company", B4, "identity");
+  free = await view(FREE);
+  check("its ordinary unlock opens it for 2 credits, named", !company(free, B4).hidden && company(free, B4).name === "Tidewater Goods" && (await credits(FREE)) === f4 - 2 && free.me!.crystal === "used", paid4.message);
+  check("and its ledger line is an ordinary 2-credit company unlock", (await ledgerOf("mem_free")).some((l) => l.ref === "c_ball4.identity" && l.delta === -2 && !l.why), (await ledgerOf("mem_free")).filter((l) => l.ref === "c_ball4.identity"));
 
   /* ---------- the connector ---------- */
   console.log("\nThe connector");

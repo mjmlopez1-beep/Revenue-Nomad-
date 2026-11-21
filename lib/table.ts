@@ -6659,6 +6659,8 @@ export async function perform(
           if (rec && a.kind === "trialEnded") (rec.notices ??= {}).trialEndedSeen = now; // [ux ws1]
           // Home's one-time Pro welcome, closed.
           if (rec && a.kind === "proWelcome") (rec.notices ??= {}).proWelcomeSeen = now;
+          // Home's one-time card when the trial started, closed.
+          if (rec && a.kind === "trialStarted") (rec.notices ??= {}).trialStartedSeen = now;
           return { message: "" }; // [ux ws1]
         } // [ux ws1]
         case "move": {
@@ -7646,6 +7648,11 @@ const proWelcomeDue = (rec: PlanRecord | undefined, name: PlanView["name"], nowM
   if (rec.paidSince) return nowMs - Date.parse(rec.paidSince) < PRO_WELCOME_DAYS * DAY_MS;
   return !!rec.proStartsAt;
 };
+/** Home's one-time trial card shows for this long after the trial started (a member mid-trial when the card came gets none). */
+export const TRIAL_CARD_DAYS = 3;
+/** Home's one-time trial card is due: on the trial, started in the last TRIAL_CARD_DAYS, and not closed (PlanRecord.notices.trialStartedSeen). */
+const trialCardDue = (rec: PlanRecord | undefined, name: PlanView["name"], nowMs: number): boolean =>
+  name === "trial" && !!rec?.trialStartedAt && !rec.notices?.trialStartedSeen && nowMs - Date.parse(rec.trialStartedAt) < TRIAL_CARD_DAYS * DAY_MS;
 /** Me.plan: what the Plan and billing page, the banner and the upgrade moments read. */
 function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: Tracks; fnOfEng: (engId: string) => string | null }): PlanView {
   const rec = planRec(s, memberId);
@@ -7683,6 +7690,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     limits: { savedViews: free ? FREE_SAVED_VIEWS : null, claudePerDay: free ? FREE_MCP_PER_DAY : null },
     ...(free && rec?.trialStartedAt && !rec.paidSince && !rec.notices?.trialEndedSeen ? { trialEnded: true } : {}), // [ux ws1] Today's one-time trial-ended card
     ...(proWelcomeDue(rec, name, nowMs) ? { proWelcome: true } : {}),
+    ...(trialCardDue(rec, name, nowMs) ? { trialStarted: true } : {}),
   };
 }
 
