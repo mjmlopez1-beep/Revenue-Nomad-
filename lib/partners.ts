@@ -127,9 +127,25 @@ export function inviteNote(o: SeatWords & { icp?: Icp | null; link: string }): s
 }
 
 /** The first message to a member listed in Referral partners ("Connect"), about no seat. */
-export function partnerOpener(o: { first: string; myTitle?: string | null; myFn?: string | null; icp?: Icp | null }): string {
+export function partnerOpener(o: { first: string; myTitle?: string | null; myFn?: string | null; icp?: Icp | null; shared?: SharedCompanies | null }): string {
   const kinds = clientKinds(o.icp);
-  return `Hi ${o.first}, I'm ${myWords(o.myTitle, o.myFn)}${kinds ? ` working with ${kinds}` : ""}. I found you in Merlin's Fractionals directory. Open to swapping notes and referrals?`;
+  const shared = o.shared ? ` ${sharedLine(o.shared)}` : "";
+  return `Hi ${o.first}, I'm ${myWords(o.myTitle, o.myFn)}${kinds ? ` working with ${kinds}` : ""}. I found you in Merlin's Fractionals directory.${shared} Open to swapping notes and referrals?`;
+}
+
+/** Companies in the member's Crystal Ball that a fractional serves: the ones the member may name (unlocked), and whether any seat there is current. */
+export interface SharedCompanies {
+  names: string[];
+  now?: boolean;
+}
+/**
+ * The line a message to that fractional says about them: the companies by name only when the
+ * member has them unlocked (FractionalRec.ball.names), else a line that names none.
+ */
+export function sharedLine(x: SharedCompanies): string {
+  const names = x.names.slice(0, 3);
+  if (!names.length) return "It looks like we work around some of the same companies.";
+  return `I see you've worked with ${listOf(names)}${x.names.length > 3 ? " and others" : ""}, which ${names.length === 1 ? "is" : "are"} on my list too.`;
 }
 
 /** A note as it is kept: line breaks kept, control characters and runs of blank lines gone, at most NOTE_MAX characters. */

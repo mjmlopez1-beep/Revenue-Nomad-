@@ -12,7 +12,7 @@
  * Pure: no I/O and relative imports only.
  */
 import type { RadarKind, RadarRow } from "./radar/types";
-import { clientKinds, firstOf, myWords, seatWords } from "./partners";
+import { clientKinds, firstOf, myWords, seatWords, sharedLine, type SharedCompanies } from "./partners";
 import { NEUTRAL_VOICE, asSentence, expandContractions, phraseSlot, styleOf, type VoiceFormality, type VoiceProfile, type VoiceStyle } from "./voice";
 import { hiredWords, sinceMonth, type BuyerCtx, type Move, type MoveMe } from "./moves";
 
@@ -48,6 +48,8 @@ export interface NoteFacts {
   pattern?: BuyerCtx | null;
   /** "knowHolder": the seat their own contact holds there ("the Marketing seat"), and whether it is still going. */
   held?: { seat: string; now: boolean } | null;
+  /** "peerInvite": they serve companies in the member's Crystal Ball, named only where the member has them unlocked (lib/partners sharedLine). */
+  shared?: SharedCompanies | null;
 }
 
 /** "SaaS", "software", "manufacturing": the industry as a note says it before "company". Null when it reads badly there. */
@@ -326,11 +328,13 @@ function template(f: NoteFacts): Template {
         subject: "Comparing notes on clients",
         sentences: [
           { casual: `I'm ${me} working with ${kinds}.`, neutral: `I'm ${me} and I work with ${kinds}.`, formal: `I'm ${me} and I work with ${kinds}.` },
-          {
-            casual: `Looks like you serve the same kind of clients${side}.`,
-            neutral: `It looks like you serve the same kind of clients${side}.`,
-            formal: `It appears you serve the same kind of clients${side}.`,
-          },
+          f.shared
+            ? { casual: sharedLine(f.shared), neutral: sharedLine(f.shared), formal: sharedLine(f.shared) }
+            : {
+                casual: `Looks like you serve the same kind of clients${side}.`,
+                neutral: `It looks like you serve the same kind of clients${side}.`,
+                formal: `It appears you serve the same kind of clients${side}.`,
+              },
           {
             casual: "I'd love to compare notes on who we each work with and where we could bring each other in.",
             neutral: "I'd like to compare notes on who we each work with and where we could bring each other in.",

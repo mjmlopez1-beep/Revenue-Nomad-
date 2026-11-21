@@ -26,6 +26,7 @@ import { claimToken } from "./claimToken";
 import { fractionalInternals as F, inviteCode, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import { clientsFromIcp, clientsFromSeats, clientsLine, fitsIcp, levelOf, levelRank, shortName, type ClientCo, type Clients, type Level } from "./fractionalsCore";
 import { functionOf } from "./tableFields";
+import { crystalCompanyIds } from "./radar";
 import type { FractionalRec, FractionalsHome, FractionalsView } from "./tableTypes";
 
 /** What is the same for every viewer, built once per state: each record's seats in order, function and level, clients from seats. */
@@ -125,13 +126,23 @@ const initialsOf = (name: string) =>
 /** Out of the directory: they said no, or turned Referral partners off. */
 const hiddenMember = (s: State, id: string) => s.profiles[id]?.fractionals === false || (s.profiles[id]?.fractionals === undefined && !!s.profiles[id]?.partnersOff);
 
+/** The viewer's Crystal Ball companies (internal ids, every day it keeps). Empty when it can't be read. */
+function ballOf(seed: Seed, s: State, me: Member, nowMs: number): Set<string> {
+  try {
+    return crystalCompanyIds(seed, s, me, nowMs);
+  } catch {
+    return new Set();
+  }
+}
+
 /** Every record as `me` may see it. */
-function recordsFor(seed: Seed, s: State, me: Member): FractionalRec[] {
+function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): FractionalRec[] {
   const g = F.viewGraph(seed, s);
   const idx = T.memberIndex(seed, s);
   const base = baseOf(seed, s);
   const icp = s.profiles[me.id]?.icp ?? null;
   const known = F.knownCompanies(g, s, idx, me);
+  const ball = ballOf(seed, s, me, nowMs);
   const code = inviteCode(me.id);
   const myInvites = new Map((s.seatInvites ?? []).filter((x) => x.by === me.id).map((x) => [x.engagementId, x.at] as const));
   const blocks = (a: string, b: string) => (s.blocks?.[a] ?? []).includes(b);
@@ -181,6 +192,20 @@ function recordsFor(seed: Seed, s: State, me: Member): FractionalRec[] {
       clients: clients ? { ...clients, line: clientsLine(clients) } : null,
       fits: fitsIcp(icp, stated, b.cos),
     };
+    // "Serves 2 of your Crystal Ball companies": counted from the seats the record already lists; named only where the viewer sees the company's name.
+    if (!you && ball.size) {
+      const cos = new Map<string, boolean>();
+      for (const e of engs) if (ball.has(e.companyId)) cos.set(e.companyId, (cos.get(e.companyId) ?? false) || b.current.has(e.id));
+      if (cos.size)
+        rec.ball = {
+          n: cos.size,
+          now: [...cos.values()].some(Boolean),
+          names: [...cos.keys()]
+            .filter((id) => known.has(id))
+            .map((id) => g.companies.get(id)?.name ?? "")
+            .filter(Boolean),
+        };
+    }
     if (b.member && b.on && !you) {
       rec.memberId = T.pubId(b.member.id);
       const conv = lastWith.get(b.member.id);

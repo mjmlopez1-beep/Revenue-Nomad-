@@ -160,6 +160,16 @@ export function headline(records: FractionalRec[], hasIcp: boolean): string {
   return `${lead} ${on.toLocaleString("en-US")} ${on === 1 ? "is" : "are"} on Merlin.`;
 }
 
+/**
+ * The chip on a record that serves companies in the member's Crystal Ball: "Serves 2 of your
+ * Crystal Ball companies" (a current seat at one of them), else "Served 1 of …". Null at none.
+ */
+export function ballChip(r: Pick<FractionalRec, "ball">): string | null {
+  const b = r.ball;
+  if (!b || b.n < 1) return null;
+  return `${b.now ? "Serves" : "Served"} ${b.n} of your Crystal Ball ${b.n === 1 ? "company" : "companies"}`;
+}
+
 /** "C-level · Finance". */
 export const levelLine = (r: Pick<FractionalRec, "level" | "fn">) => [r.level, r.fn && r.fn !== "Other" ? r.fn : null].filter(Boolean).join(" · ");
 
