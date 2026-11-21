@@ -39,6 +39,8 @@ try {
   /* no seed here */
 }
 const secretWords = new Set();
+/** Words the product says about itself. A company in the seed can share one (a company named Merlin), so they are never a leak. */
+const PRODUCT_WORDS = new Set(["Merlin", "Revenue Nomad", "Crystal Ball"]);
 /**
  * Which of many words occur in a text, in one pass. The seed's tens of thousands of names and titles checked one by one
  * against a view of many megabytes took most of an hour; this indexes the words by their first 6 characters and looks
@@ -467,7 +469,9 @@ async function main() {
       ...(seedFile.contacts ?? []).flatMap((p) => [p.fields.name, p.fields.email, p.fields.phone, p.fields.linkedin]),
       // A title that is only a word and a function ("Fractional Marketing", from the seat scan) says nothing, and the tools write such words themselves (an alert's name).
       ...seedFile.engagements.flatMap((e) => [e.fields.operator, e.fields.rate, e.fields.posting, /^(Fractional|Interim)\s+[A-Za-z&/-]+$/i.test(e.fields.role ?? "") ? null : e.fields.role]),
-    ].filter((w) => typeof w === "string" && w.length >= 6);
+    ]
+      // The product's own name is in every tool's words ("Your profile on Merlin"), whatever company shares it.
+      .filter((w) => typeof w === "string" && w.length >= 6 && !PRODUCT_WORDS.has(w));
     // Every string the app view shows, to skip the slow substring search for most words (a seed of a few thousand companies).
     const shownStrings = new Set();
     const walk = (x) => {
@@ -594,7 +598,9 @@ async function main() {
     const cc = await connect(C, { name: "Reader" });
     const cJson = JSON.stringify(await C.view());
     const banned = new Set([personName, personEmail, bRate, hiddenName, hiddenSite, "$9,876/mo", C.token, A.token, B.token]);
-    for (const w of seedWords) if (!cJson.includes(w) && !cJson.includes(JSON.stringify(w).slice(1, -1))) banned.add(w);
+    const escW = (w) => JSON.stringify(w).slice(1, -1);
+    const inC = wordFinder(seedWords.flatMap((w) => [w, escW(w)]))(cJson);
+    for (const w of seedWords) if (!inC.has(w) && !inC.has(escW(w))) banned.add(w);
     const texts = [];
     // A locked company's About shows too, without its own name, web address, links, emails or people (lib/scan/clean.ts
     // aboutWithout). Its own words may name other companies or a title ("built on Microsoft", "Founder-led"): those
@@ -619,7 +625,9 @@ async function main() {
     const all = texts.join("\n");
     const aboutAll = abouts.join("\n");
     const naturalWords = new Set([...(seedFile?.companies ?? []).map((c) => c.fields.name), ...(seedFile?.engagements ?? []).map((e) => e.fields.role)]);
-    const leaks = [...banned].filter((w) => all.includes(w) || (!naturalWords.has(w) && aboutAll.includes(w)));
+    const inAll50 = wordFinder([...banned])(all);
+    const inAbout = wordFinder([...banned].filter((w) => !naturalWords.has(w)))(aboutAll);
+    const leaks = [...banned].filter((w) => inAll50.has(w) || inAbout.has(w));
     check(`a member reading ${uniq.length} company records and every open role sees no locked value or hidden name (${banned.size} values checked)`, uniq.length >= 20 && leaks.length === 0, leaks.length ? `${leaks.length} leaked` : uniq.length);
   }
 
