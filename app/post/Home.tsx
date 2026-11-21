@@ -13,9 +13,9 @@
  *
  * Pictures (Fractions, the quiet register: app/ui/fractions/art.tsx). The greeting sits in a mint
  * band with a small scene at its far end (morning when something is new, night when nothing is);
- * each quick action has its prop in a corner; the Nomad walks Get started's progress bar. Home
- * shows the Nomad once, where the moment is: knocking in the trial-ended card, else resting by
- * "Nothing new since", else walking the Get started bar (wide screens).
+ * each quick action has its prop in a corner. Home shows the Nomad at most once, and only where
+ * the moment is: knocking in the trial-ended card, else resting by "Nothing new since". Get
+ * started keeps its plain progress bar (a figure small enough to stand on it was too small to read).
  *
  * It paints from GET ?today=1 before the whole table is here (Today.tsx useTodayData): what needs
  * the whole table (the saved views' counts, the seats card, the search's matches) waits a moment
@@ -181,7 +181,7 @@ export function HomePage(p: HomeProps) {
   // A quiet day: the day's numbers are here and nothing in them is new for this member.
   const quietDay = !!data && !loading && !!me.function && dayN === 0 && !(since && p.sinceAt && since.radar > 0);
   // The one Nomad on Home (art.tsx: at most one a screen), once the day's numbers are here.
-  const nomadAt = !data ? null : p.trialEnded ? "trial" : !sinceRows.length && p.sinceAt ? "since" : p.steps && p.steps.some((s) => !s.done) ? "steps" : null;
+  const nomadAt = !data ? null : p.trialEnded ? "trial" : !sinceRows.length && p.sinceAt ? "since" : null;
 
   return (
     <div className="hm">
@@ -193,7 +193,7 @@ export function HomePage(p: HomeProps) {
         <h1 className="hm-h1">Hey {firstName(me.name)}</h1>
         <p className="hm-sub">{sub}</p>
       </header>
-      {p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} walker={nomadAt === "steps"} />}
+      {p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} />}
       {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} art={<Scene kind="trialEnding" square pro on="mint" className="td-trial-art" />} /> : null}
       <AskBox {...p} />
 
@@ -442,7 +442,7 @@ function AskBox(p: HomeProps) {
 
 /* ---------- Get started ---------- */
 
-function GetStarted({ steps, onStep, onHide, walker }: { steps: CheckStep[]; onStep: (k: CheckStep["key"]) => void; onHide: () => void; walker: boolean }) {
+function GetStarted({ steps, onStep, onHide }: { steps: CheckStep[]; onStep: (k: CheckStep["key"]) => void; onHide: () => void }) {
   const done = steps.filter((s) => s.done).length;
   const all = done === steps.length;
   if (all)
@@ -466,16 +466,8 @@ function GetStarted({ steps, onStep, onHide, walker }: { steps: CheckStep[]; onS
         <span className="hm-gs-n num">
           {done} of {steps.length} done
         </span>
-        {/* The bar is the trail: on a wide screen the Nomad walks it and stands where the member has got to. */}
-        <span className="hm-gs-track" aria-hidden>
-          <span className="hm-gs-bar">
-            <span style={{ width: `${(done / steps.length) * 100}%` }} />
-          </span>
-          {walker ? (
-            <span className="hm-gs-walker" style={{ left: `calc(${done / steps.length} * (100% - 30px))` }}>
-              <NomadArt pose="walk" height={26} on="bg" />
-            </span>
-          ) : null}
+        <span className="hm-gs-bar" aria-hidden>
+          <span style={{ width: `${(done / steps.length) * 100}%` }} />
         </span>
       </div>
       <ol className="hm-gs-steps">

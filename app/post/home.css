@@ -657,13 +657,9 @@
   font-size: 13px;
   color: var(--muted);
 }
-.hm-gs-track {
-  position: relative;
+.hm-gs-bar {
   flex: 1;
   max-width: 200px;
-}
-.hm-gs-bar {
-  display: block;
   height: 6px;
   border-radius: 3px;
   background: var(--line);
@@ -675,12 +671,7 @@
   background: var(--volt);
   border-radius: 3px;
 }
-/* The Nomad walks the bar and stands on it where the member has got to (art.tsx NomadArt, 26px: one figure on one line). */
-.hm-gs-walker {
-  position: absolute;
-  bottom: 5px;
-  line-height: 0;
-}
+
 .hm-gs-steps {
   list-style: none;
   margin: 0;
@@ -834,13 +825,9 @@
     flex-wrap: wrap;
     gap: 4px 10px;
   }
-  .hm-gs-track {
+  .hm-gs-bar {
     flex-basis: 100%;
     max-width: none;
-  }
-  /* The bar runs under the title here: the Nomad would stand on the words, so the bar goes alone. */
-  .hm-gs-walker {
-    display: none;
   }
   .hm-card-art {
     top: 12px;
