@@ -111,6 +111,12 @@ const P: Record<NavIconName, ReactNode> = {
     </>
   ),
   metrics: <path d="M4 19h16M6 15l4-5 3 3 5-7" />,
+  proposals: (
+    <>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4M9 12h6M9 15.5h6M9 19h3" />
+    </>
+  ),
   fractionals: (
     <>
       <circle cx="8" cy="8.5" r="3" />

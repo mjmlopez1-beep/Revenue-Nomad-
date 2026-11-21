@@ -489,7 +489,7 @@ export async function sendProposal(
       hash: hashDoc(doc),
       sentAt: now,
       expiresAt: new Date(nowMs + SIGN_DAYS * DAY).toISOString(),
-      events: [{ kind: "sent", at: now, note: `To ${signer.email}` }],
+      events: [{ kind: "sent", at: now, note: signer.email }],
     };
     p.sends.push(x);
     p.updatedAt = now;
@@ -605,7 +605,7 @@ export async function requestCode(token: unknown, who: Client, nowMs = Date.now(
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     f.x.code = { hash: mac(`rn-pcode:${f.x.id}:${code}`), at: now, tries: 0 };
     f.x.codesSent = [...recent, now];
-    ev(f.x, "code_sent", now, { ...who, note: `To ${emailHint(f.x.signer.email)}` });
+    ev(f.x, "code_sent", now, { ...who, note: emailHint(f.x.signer.email) });
     return { code, email: f.x.signer.email, member: f.x.doc.from.name, title: f.x.doc.title };
   });
   const mail = codeEmail({ member: out.member, title: out.title, code: out.code });
@@ -656,7 +656,7 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
     if (typeof a.hash !== "string" || !same(a.hash, f.x.hash) || hashDoc(f.x.doc) !== f.x.hash) throw new ProposalProblem("This page is out of date. Reload it to read the proposal again before you sign.", 409);
     const consent = consentText(f.x.doc.from.name || "the sender");
     f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email };
-    ev(f.x, "signed", now, { ...who, note: `Signed as ${name}` });
+    ev(f.x, "signed", now, { ...who, note: `typed name "${name}"` });
     f.p.updatedAt = now;
     pipelineEvent(s, f.p.memberId, f.p.companyId, "signed", now);
     return { x: structuredClone(f.x), memberId: f.p.memberId, proposalId: f.p.id, view: viewOf(f, nowMs, origin) };
@@ -673,7 +673,7 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
   if (sent.length)
     await T.mutate((s) => {
       const f = findSend(s, out.x.id);
-      if (f) ev(f.x, "copy_sent", new Date().toISOString(), { note: `Signed copy emailed to ${sent.join(" and ")}` });
+      if (f) ev(f.x, "copy_sent", new Date().toISOString(), { note: `to ${sent.join(" and ")}` });
     });
   return out.view;
 }

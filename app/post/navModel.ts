@@ -12,13 +12,13 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
-export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "partners", "billing", "radar", "network", "fractionals"] as const;
+export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "partners", "billing", "radar", "network", "fractionals", "proposals"] as const;
 export type AppPageKey = (typeof APP_PAGES)[number];
 
 export type NavGroup = "home" | "find" | "community" | "yours" | "earn" | "foot";
 export type NavIcon =
   | "home" | "companies" | "seats" | "people" | "radar" | "hiring" | "views" | "view" | "following" | "yourseats" | "messages" | "network"
-  | "add" | "partners" | "rates" | "invite" | "integrations" | "billing" | "credits" | "metrics" | "fractionals";
+  | "add" | "partners" | "rates" | "invite" | "integrations" | "billing" | "credits" | "metrics" | "fractionals" | "proposals";
 
 export interface NavItem {
   /** "today", "companies", "radar", "view:<id>" and the rest: data-nav in the page, and the key the tests use. */
@@ -125,6 +125,8 @@ export function navItems(x: NavInput): NavItem[] {
     ...x.views.map((v) => ({ key: `view:${v.id}`, label: v.name, group: "yours" as const, icon: "view" as const, href: v.href, page: "table" as const, badge: v.fresh ?? 0, badgeOf: "new since your last visit" })),
     { key: "following", label: "Following", group: "yours", icon: "following", href: x.hrefs.following, page: "table", count: x.followingN },
     { key: "seats", label: "Your seats", group: "yours", icon: "yourseats", href: x.hrefs.page("seats"), page: "seats", hint: x.seatsMissing ? `${x.seatsMissing} to fill in` : undefined },
+    // Proposals (Proposals.tsx): the member's own, written from templates that won and sent for signature.
+    { key: "proposals", label: "Proposals", group: "yours", icon: "proposals", href: x.hrefs.page("proposals"), page: "proposals" },
     ...(x.network ? [{ key: "network", label: "Your network", group: "yours" as const, icon: "network" as const, href: x.hrefs.page("network"), page: "network" as const, count: x.networkN ?? null }] : []),
     { key: "add", label: "Add what you know", group: "earn", icon: "add" },
     { key: "rates", label: "Rate benchmarks", group: "earn", icon: "rates", href: x.hrefs.page("rates"), page: "rates" },

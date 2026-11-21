@@ -44,6 +44,7 @@ import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingT
 import { WayInPeople, wayInFrom } from "./network/Network"; // [google network]
 import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { Charge } from "./Charge";
+import { WriteProposal } from "./WriteProposal";
 import { Prop } from "../ui/fractions/lazy";
 
 /**
@@ -1929,6 +1930,7 @@ export function Drawer({
           <YourWayIn i={i} seats={wayInSeats} />
           {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
           <Charge i={i} benchmarks={benchmarks} seats={mySeats} />
+          <WriteProposal i={i} />
           {/* About: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
           {(!c.hidden || c.cells.about?.s === "value") && (
             <section className="tp-dsec">

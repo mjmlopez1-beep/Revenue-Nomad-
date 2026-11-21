@@ -101,6 +101,8 @@ const Integrations = dynamic(() => loadIntegrations().then((m) => m.Integrations
 const Benchmarks = dynamic(() => loadBenchmarks().then((m) => m.Benchmarks), { ssr: false, loading: pageWait });
 const Fractionals = dynamic(() => loadFractionals().then((m) => m.Fractionals), { ssr: false, loading: pageWait });
 const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
+// Proposals (Proposals.tsx), loaded when opened.
+const ProposalsPage = dynamic(() => import("./Proposals").then((m) => m.ProposalsPage), { ssr: false, loading: pageWait });
 /** Fetch them while the member reads (the Add form first): opening one is then instant. */
 const preloadLater = (admin: boolean) => {
   for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadFractionals, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
@@ -200,7 +202,8 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // [google network] "network": Your network (app/post/network), only with RN_GOOGLE=1.
 // "today": Today (Today.tsx), the home for / with no place in the address. It sits level with the table (no history entry above it).
 // "fractionals": Fractionals (Fractionals.tsx). "partners", Referral partners' old address, opens it with Different from yours.
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network" | "fractionals";
+// "proposals": Proposals (Proposals.tsx), the member's own.
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network" | "fractionals" | "proposals";
 
 /* ---------- the place in the address bar ---------- */
 
@@ -219,6 +222,7 @@ const PAGE_TITLE: Record<Page, string> = {
   billing: "Plan and billing",
   radar: YOUR_FEATURE,
   network: "Your network",
+  proposals: "Proposals",
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -2598,6 +2602,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
             <Seats seats={seats} infos={infos} focus={seatFocus} onBack={toBase} search={seatCtx.search} back={seatBack} />
+          </main>
+        ) : page === "proposals" ? (
+          <main className="tp-main tp-main-page">
+            <ProposalsPage view={view} infos={infos} onBack={toBase} />
           </main>
         ) : page === "network" ? (
           // [google network] Your network: the member's own, from Google and their own Claude.
