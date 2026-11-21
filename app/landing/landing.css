@@ -29,6 +29,9 @@
  * else moves (the pictures are still). None of it runs under prefers-reduced-motion.
  */
 
+/* The illustration kit's colours (fractions/kit.tsx). */
+@import "./fractions/fractions.css";
+
 .lp {
   /* Text on pine. All three pass 4.5:1 on #073f2f. */
   --on-pine: rgba(255, 255, 255, 0.86);
@@ -2949,9 +2952,17 @@ button.lp-fake-btn {
 }
 /* Too narrow for the field and its button side by side: the button goes under it. */
 @media (max-width: 350px) {
-  /* The record takes nearly all of the door, so a company's name keeps its room. */
+  /* The record takes nearly all of the door, so a company's name and each row's label keep their room. */
   .lp-hero-door {
     padding: 0 8px;
+  }
+  .lp-rec-head,
+  .lp-rec-sec {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .lp-hiring {
+    right: 12px;
   }
   .lp-join-row {
     flex-direction: column;

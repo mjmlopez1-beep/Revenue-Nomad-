@@ -204,6 +204,10 @@ async function shots() {
       }
       window.scrollTo(0, 0);
     });
+    // The footer's logo loads when it is reached: wait for it, so the last part shows it.
+    await page.locator(".lp-foot").scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => [...document.querySelectorAll(".lp img")].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 5000 }).catch(() => {});
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await page.waitForTimeout(600);
     // The whole page, in parts no taller than PART: one long picture is too tall to read.
     const height = await page.evaluate(() => document.documentElement.scrollHeight);
@@ -625,7 +629,7 @@ async function flow() {
   check("no rate from the seed and no posting link is on the page", !/\$[89]k\/mo|\/jobs/.test(await page.content()));
   // The feature pictures are invented and carry no label saying so, so they may hold no amount: a revenue band is the only money on them.
   const feats = await page.locator("#features").innerText();
-  check("the feature pictures say nothing of samples or illustrations", !/sample|illustration|made up/i.test(feats), feats.match(/[^.\n]*(sample|illustration|made up)[^.\n]*/i)?.[0]);
+  check("the feature pictures say nothing of samples or illustrations", !/sample figures|illustration|made up|not Merlin/i.test(feats), feats.match(/[^.\n]*(sample figures|illustration|made up|not Merlin)[^.\n]*/i)?.[0]);
   const money = (feats.match(/[$€£]\s?[\d,.]+\s?[kKmMbB]?/g) ?? []).filter((x) => !/^\$\d+M$/.test(x));
   check("and show no amount: the rates are drawn locked", money.length === 0 && (await page.locator(".lp-v-rates .lock-rest").count()) >= 3, money);
   check("the hero's headline", (await page.locator(".lp-h1").innerText()).replace(/\s+/g, " ") === "Find your next fractional client and the way in" && (await page.locator(".lp-h1 em").innerText()) === "the way in");

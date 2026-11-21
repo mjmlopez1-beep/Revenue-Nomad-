@@ -10,12 +10,13 @@
  * its frame. No words inside a picture. The Nomad is always ember, always front on, never
  * rotated and never on an ember field.
  *
- * Colours come from the brand tokens through the classes in fractions.css (`Tone`). Nothing here
- * has state, effects or handlers, so it renders the same on the server and in the browser.
+ * Colours come from the brand tokens through the classes in fractions.css (`Tone`), which the
+ * stylesheet of a page that draws pictures imports (landing.css does), so the page still loads
+ * one stylesheet. Nothing here has state, effects or handlers, so it renders the same on the
+ * server and in the browser.
  * A picture is decoration unless it is given a `title`.
  */
 import type { ReactNode } from "react";
-import "./fractions.css";
 import { arch, half, offcut, quarter, seat, spark, square, steps, tent, type Pt } from "./shapes";
 
 /** A colour of the system. pine2, mintd and sandd are the tones for shape on shape; acc is the crystal ball's saffron. */
