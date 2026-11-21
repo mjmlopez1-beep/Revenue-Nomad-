@@ -418,7 +418,10 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   if (rounds.length) await T.mutate((d) => void inferVcBacked(d, rounds, nowIso));
   const all = detectSignals(seed, s0, sinceMs, nowMs, funding);
   const out: RadarRun = { ran: true, signals: all.length, members: 0, emails: 0, slack: 0 };
-  if (!all.length) return out;
+  if (!all.length) {
+    console.log("radar: 0 signals since the last run, nothing to send");
+    return out;
+  }
   const c = ctxOf(seed, s0, nowMs);
   const counts = observedTransitions(seed, s0);
   const mailOn = emailEnabled();
@@ -475,7 +478,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       console.error("radar failed for one member", e);
     }
   }
-  if (out.members) console.log(`radar: ${all.length} signals, sent to ${out.members} members (${out.emails} emails, ${out.slack} Slack)`);
+  console.log(`radar: ${all.length} signals, sent to ${out.members} members (${out.emails} emails, ${out.slack} Slack)`);
   return out;
 }
 
