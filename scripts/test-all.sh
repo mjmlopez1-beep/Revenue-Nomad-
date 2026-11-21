@@ -140,6 +140,8 @@ run billing npx tsx scripts/test-billing.mts
 run google npx tsx scripts/test-google.mts
 # What a member sees with Google connected (app/post/network, Charge.tsx): a record's Your way in once with the people they know first, Crystal Ball's chip with its warmth printed, the connect moment's numbers against Your network and Crystal Ball (many, 2, none), What to charge them by the Rate benchmarks' own floors on Free and Pro with the member's own rate for them alone, Confirm and Not a seat on the seats their calendar suggests (credits, the claim, when confirmed), and another member's table, network and Crystal Ball unchanged. Rendered in process; a fake Google server on 127.0.0.1.
 run google-pages npx tsx scripts/test-google-pages.mts
+# Smart ways in (lib/paths): the member's own LinkedIn Connections.csv (its notes, quotes, dates), matching precisely (weak matches refused), each kind of path found and ranked, the words (no locked name, the member's voice), Your hidden paths, privacy (another member, the table, the export, the connector by count only, never a person key), the daily upload limit, and delete removing everything from the file. A made-up seed and file.
+run paths npx tsx scripts/test-paths.mts
 # Saved views: rename, the same view twice, remove and Undo, on the server and through the connector, on a made-up seed.
 run views npx tsx scripts/test-views.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.

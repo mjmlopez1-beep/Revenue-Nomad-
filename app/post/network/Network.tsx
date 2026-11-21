@@ -18,6 +18,7 @@ import { WarmthChip } from "./parts";
 import { Found, Mapping, ReadFailed } from "./Found";
 import { Clients, Everyone, Introducers, TopNumbers, WarmPaths } from "./Paths";
 import { NO_FILTER, setWords, topNumbers, type EveryoneFilter } from "./model";
+import { HiddenPaths, LinkedInImport } from "./SmartPaths"; // [smart ways in]
 import "./network.css";
 
 const START = "/api/integrations/google/start";
@@ -262,7 +263,12 @@ export function NetworkPage({
           {failed ? "We couldn't load your network. Refresh the page to try again." : "Loading your network…"}
         </p>
       ) : !g && !view.claude ? (
-        <ConnectHero view={view} onClaude={onClaude} />
+        <>
+          <ConnectHero view={view} onClaude={onClaude} />
+          {/* [smart ways in] the member's own LinkedIn connections work without Google too. */}
+          <HiddenPaths infos={infos} openCompany={openCompany} google={false} />
+          <LinkedInImport />
+        </>
       ) : inMoment && view.syncing && (moment === "auto" || !read) ? (
         <Mapping view={view} />
       ) : inMoment && !read ? (
@@ -320,6 +326,10 @@ export function NetworkPage({
               <Everyone view={view} openCompany={openCompany} filter={filter} setFilter={setFilter} />
             </>
           )}
+
+          {/* [smart ways in] Your hidden paths, then the member's own LinkedIn connections (SmartPaths.tsx). */}
+          <HiddenPaths infos={infos} openCompany={openCompany} google={!!g} />
+          <LinkedInImport />
 
           {past.length > 0 && (
             <section className="tp-card nw-card" aria-labelledby="nw-seats-h">

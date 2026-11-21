@@ -1,0 +1,161 @@
+/* Smart ways in (SmartPaths.tsx): the LinkedIn import, Your hidden paths, the record's block and Crystal Ball's chip. */
+
+/* ----- one way in ----- */
+.sp-path {
+  display: grid;
+  gap: 8px;
+}
+.sp-path-c + .sp-path-c {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.sp-line {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink);
+}
+.sp-do {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.sp-str {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.sp-str-s {
+  background: var(--pine);
+  color: var(--volt);
+}
+.sp-str-g {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+}
+.sp-str-w {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.sp-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sp-note {
+  margin-top: 4px;
+}
+
+/* ----- the LinkedIn import ----- */
+.sp-card-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sp-card-h .tp-card-h {
+  margin: 0;
+}
+.sp-in {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #0a66c2;
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  font-family: Arial, Helvetica, sans-serif;
+}
+.sp-steps {
+  margin: 12px 0 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.sp-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.sp-err {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--r-card);
+  background: #fff1ea;
+  color: var(--ember-ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+.sp-row .btn {
+  min-height: 44px;
+}
+
+/* ----- Your hidden paths ----- */
+.sp-target .np-co-t {
+  gap: 2px;
+}
+.sp-count {
+  flex: none;
+}
+
+/* ----- the record ----- */
+.sp-way-n {
+  margin-left: 8px;
+  font-weight: 400;
+}
+.sp-way-list {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.sp-way-more {
+  margin-top: 8px;
+}
+
+/* ----- Crystal Ball ----- */
+.sp-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--pine);
+  color: var(--volt);
+}
+
+@media (max-width: 640px) {
+  .sp-way-list {
+    padding: 12px;
+  }
+  .sp-chip {
+    white-space: normal;
+  }
+  .sp-row .btn {
+    flex: 1 1 100%;
+  }
+}

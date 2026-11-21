@@ -50,6 +50,7 @@ import { ProRow, openPlans, planDay } from "./Billing";
 import { radarDelivery } from "./PartnersSwitch";
 import { KnowChip } from "./network/Network"; // [google network]
 import { useNetwork } from "./network/useNetwork"; // [google network]
+import { PathsChip, usePathIds } from "./network/SmartPaths"; // [smart ways in]
 import "./radar.css";
 import { Bleed, Prop, Spot } from "../ui/fractions/lazy";
 
@@ -145,7 +146,9 @@ export function RadarPage({
   const ui = useUi();
   // [google network] the member's own network: which of the day's companies they know someone at.
   const net = useNetwork().view;
-  const knownIds = useMemo(() => new Set((net?.companies ?? []).map((c) => c.id)), [net]);
+  // [smart ways in] ...and where they have a way in through someone they know (LinkedIn, contacts, messages).
+  const pathIds = usePathIds();
+  const knownIds = useMemo(() => new Set([...(net?.companies ?? []).map((c) => c.id), ...pathIds]), [net, pathIds]);
   const knownN = useMemo(() => dayRows.filter((r) => knownIds.has(r.i.c.id)).length, [dayRows, knownIds]);
   const knowOn = know && !!net;
   const rows = useMemo(() => (knowOn ? dayRows.filter((r) => knownIds.has(r.i.c.id)) : dayRows), [knowOn, dayRows, knownIds]);
@@ -187,15 +190,21 @@ export function RadarPage({
       i.c.hidden ? (
         crystal ? (
           <span className="rd-acts">
+            {/* [smart ways in] "2 ways in through people you know" (nothing without any). */}
+            <PathsChip companyId={i.c.id} />
             <CrystalOpen id={i.c.id} name={i.c.shownName} className="rd-open" onOpened={() => open(i.c.id)} noPro />
           </span>
         ) : (
-          <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
+          <span className="rd-acts">
+            <PathsChip companyId={i.c.id} />
+            <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
+          </span>
         )
       ) : (
         <span className="rd-acts nw-act">
           {/* [google network] "You know someone · Warm" (nothing with RN_GOOGLE off). */}
           <KnowChip companyId={i.c.id} />
+          <PathsChip companyId={i.c.id} />
           <button type="button" className="btn rd-open" onClick={() => open(i.c.id)}>
             Open<span className="sr-only"> {i.c.name}</span>
           </button>

@@ -42,6 +42,7 @@ import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
 import { WayInPeople, wayInFrom } from "./network/Network"; // [google network]
+import { SmartWaysIn } from "./network/SmartPaths"; // [smart ways in]
 import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { Charge } from "./Charge";
 import { Prop } from "../ui/fractions/lazy";
@@ -1925,6 +1926,8 @@ export function Drawer({
               <Pro where="hidden_company" variant="line" />
             </div>
           )}
+          {/* [smart ways in] the member's best ways in through people they know (SmartPaths.tsx), above Your way in. */}
+          <SmartWaysIn i={i} />
           {/* [ux ws3] Your way in: who held the seats here and the next step with each, before About, seats and people. */}
           <YourWayIn i={i} seats={wayInSeats} />
           {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
