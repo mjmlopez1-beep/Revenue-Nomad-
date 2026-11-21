@@ -6987,8 +6987,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // Admins never read members' conversations: they leave without their texts (the volume's daily
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
-  // A member's writing voice and what they did with their moves are theirs alone too.
-  const { signins: _signins, network: _network, voice: _voice, moves: _moves, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
+  const { signins: _signins, network: _network, voice: _voice, moves: _moves, paths: _paths, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars

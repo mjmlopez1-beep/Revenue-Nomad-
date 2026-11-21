@@ -41,6 +41,7 @@ import { firstOf, inviteNote, seatOpener } from "../partners";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS } from "../tableFields";
 import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
+import { accountPathsLine, pathsLine } from "../paths"; // [smart ways in] counts only, never who
 // Today's moves and the voice their notes are written in (lib/moves.ts, lib/voice.ts): the member's own.
 import { movesFor } from "../movesView";
 import { knowLine, moveWithoutPerson } from "../moves";
@@ -623,7 +624,8 @@ export async function findCompanyByName(ctx: Ctx, a: { name: string }): Promise<
 export async function getCompany(ctx: Ctx, a: { company: string }): Promise<ToolOut> {
   const mv = await memberView(ctx.member);
   const i = companyInfo(mv, a.company);
-  return companyOut(i, mv, publicBase() ?? ctx.origin, await aboutOf(ctx, i));
+  // [smart ways in] how many ways in through people the member knows, never who: the app shows them.
+  return { ...companyOut(i, mv, publicBase() ?? ctx.origin, await aboutOf(ctx, i)), ...(await pathsLine(ctx.member, i.c.id).catch(() => ({}))) };
 }
 
 export interface RoleArgs {
@@ -801,6 +803,8 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     weekly_email: emailNote(mv),
     // [google network] one line, counts only: "Google connected: 12 companies you know people at". Never the people.
     ...(await accountLine(ctx.member.id).catch(() => ({}))),
+    // [smart ways in] one line, counts only.
+    ...(await accountPathsLine(ctx.member).catch(() => ({}))),
     // The app's public address (RN_PUBLIC_URL, once a custom domain is set), else the address the connector was reached on.
     invite_link: `${publicBase() ?? ctx.origin}/?ref=${inviteCode(ctx.member.id)}`,
   };
