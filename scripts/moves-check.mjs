@@ -337,6 +337,13 @@ async function shots() {
       await ctx.close();
     }
 
+  // In between: a tablet and a small laptop, where a move's three parts fold to two rows.
+  for (const w of [768, 1024]) {
+    const { ctx, page } = await home(MEMBERS.morgan, { viewport: { width: w, height: 900 } });
+    await shot(page, `home-trial-google-${w}`);
+    await ctx.close();
+  }
+
   // The drafted note: someone you know, the seat holder, an open role.
   for (const [who, title, name] of [["morgan", "Message Dana", "note-someone-you-know"], ["tess", "Message the seat holder", "note-seat-holder"], ["tess", "Reply to the open role", "note-open-role"], ["tess", "Invite them to connect", "note-invite"]])
     for (const [w, opts] of SIZES) {
