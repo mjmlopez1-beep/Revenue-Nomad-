@@ -28,7 +28,15 @@
  * apart. A twice-a-week or weekly email waits for its day (radarEmailDue), and what moved meanwhile
  * stays unsent, so its email rolls it up (up to RADAR_ROLLUP_MAX companies). Slack keeps its own pace.
  * Nothing goes out, by email or Slack, on a day with no new company for the member: a day with only
- * standing states ("still a good time") is kept for the page, not sent (keepForView).
+ * standing states ("still a good time") is kept for the page, not sent (keepForView). One exception,
+ * the email only: follow-ups due in Your pipeline are a reason to come back, so a day with a
+ * follow-up that came due since the member's last email still sends one, about the follow-ups alone.
+ *
+ * Follow-ups due (lib/pipelineActions.ts followUpsOf): above the companies in the email, at most
+ * EMAIL_FOLLOW_UPS, the most overdue first, each linking to the company's record (signed in, through
+ * /api/radar/go like the cards). A company is named only when the member's table shows it (as a
+ * member, as the cards), and a person from the member's Google account never is ("the person you
+ * know there"). Never in Slack, a channel being shared.
  *
  * The day's view (radarView): the companies that went out that UTC day, as kept with the delivery
  * (State.radar.members[id].days, RADAR_KEEP_VIEW_DAYS: 31 days), so the email's link opens exactly
@@ -66,7 +74,8 @@ import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, 
 import { deliverable, pickDaily, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
 import { networkWarmth } from "../google/types"; // [google network]
 import { dayOf, rowsOf, viewLine, type CardContext, type MemberSignal } from "./present";
-import { renderRadarEmail } from "./format";
+import { EMAIL_FOLLOW_UPS, renderRadarEmail, type EmailFollowUp } from "./format";
+import { followUpsOf } from "../pipelineActions";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import { isDue, settingOf } from "../schedule";
 import {
@@ -176,6 +185,18 @@ async function logosFor(c: Ctx, m: Member, sigs: MemberSignal[]): Promise<Map<st
   }
   return out;
 }
+
+/**
+ * The email's follow-ups for a member (paths, not yet tracked): every one due, so the email can say
+ * how many more there are, each linking to the company's record. A company the member's table
+ * doesn't show is "a company in your pipeline", and a person from their Google account is never named.
+ */
+function emailFollowUps(c: Ctx, m: Member): (Omit<EmailFollowUp, "url"> & { path: string; due: string })[] {
+  if (!c.s.pipeline?.[m.id]?.entries?.length) return [];
+  return followUpsOf(c.seed, c.s, m, c.nowMs, "merlin", (id) => knownTo(c, m, id)).map((f) => ({ title: f.title, line: f.line, due: f.due, path: `/?c=${encodeURIComponent(f.companyPub)}` }));
+}
+/** Your pipeline in the app: the button of an email about follow-ups alone. */
+const PIPELINE_PATH = "/?p=pipeline";
 
 /** A member's cards for one UTC day: every link opens that day's companies; a named one also links to its record. */
 function cardContext(c: Ctx, m: Member, day: string, logos: Map<string, string> = new Map()): CardContext {
@@ -493,7 +514,9 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   // What is still true today (a window open, a gap still there): only for a member's day with few fresh events.
   const standing = standingSignals(seed, s0, nowMs);
   const out: RadarRun = { ran: true, signals: fresh, members: 0, emails: 0, slack: 0 };
-  if (!all.length && !standing.length) {
+  // Follow-ups due in someone's pipeline are a reason for their email even on a day with no signal.
+  const anyFollowUp = Object.values(s0.pipeline ?? {}).some((log) => log?.entries?.some((e) => !!e.due && e.due <= today));
+  if (!all.length && !standing.length && !anyFollowUp) {
     console.log("radar: 0 signals since the last run and nothing standing, nothing to send");
     return out;
   }
@@ -514,45 +537,57 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       const email = emailOn && radarEmailDue(every, mem?.lastMailAt, nowMs);
       const slack = hasDest(s0, m.id) && prefs.slack;
       if (!email && !slack) continue;
+      // Follow-ups due in Your pipeline: the email's alone (never Slack). Those that came due since the last email
+      // went out are a reason to send one even with no new company; one already listed doesn't send another.
+      const ups = email ? emailFollowUps(c, m) : [];
+      const lastMailDay = mem?.lastMailAt?.slice(0, 10) ?? "";
+      const upsNew = ups.some((f) => f.due > lastMailDay);
       const p = readyProfile(c, m);
-      if (!p) continue;
+      if (!p && !upsNew) continue;
       const pro = isPro(s0, m.id, nowMs);
       // A free member gets one radar a UTC day, even when an admin sends one again.
       const last = mem?.lastAt;
       if (!pro && last && last.slice(0, 10) === today && Date.parse(last) < nowMs) continue;
       const sent = sentKeys(s0, m.id);
-      const mine = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
+      const mine = p ? signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of])) : [];
       // The day (pickDaily): High and Medium events, at most RADAR_DAY_MAX companies (a roll-up email more, RADAR_ROLLUP_MAX),
       // filled with standing states to RADAR_DAY_MIN when fewer fresh events reach them; no company twice inside 30 days unless something new happened.
-      const still = signalsFor(standing, p, { counts, nowMs });
+      const still = p ? signalsFor(standing, p, { counts, nowMs }) : [];
       const picked = pickDaily(mine, still, { sent, shown: mem?.shown }, nowMs, RADAR_ROLLUP_MAX[email ? every : "daily"]);
-      const out_ = picked.send;
+      // Nothing new for them (only companies that are still a good time): no post, and no email unless a follow-up came due.
+      // The page still lists the companies today; an email about follow-ups alone lists no company.
+      const upsOnly = !picked.fromEvents;
+      const out_ = upsOnly ? [] : picked.send;
       // Low stays on the page: the day's companies keep what went out and this run's other events.
-      const rows = [...out_, ...mine.filter((x) => x.atMs > sinceMs && !out_.includes(x))];
-      // Nothing new for them (only companies that are still a good time): no email and no post. The page still lists them today.
-      if (!picked.fromEvents) {
-        if (out_.length) await T.mutate((d) => keepForView(d, m.id, rows, nowIso));
-        continue;
+      const rows = upsOnly ? [...picked.send, ...mine.filter((x) => x.atMs > sinceMs && !picked.send.includes(x))] : [...out_, ...mine.filter((x) => x.atMs > sinceMs && !out_.includes(x))];
+      if (upsOnly) {
+        if (rows.length) await T.mutate((d) => keepForView(d, m.id, rows, nowIso));
+        if (!upsNew) continue;
       }
-      const day = dayOf(out_, cardContext(c, m, today, slack ? await logosFor(c, m, out_) : undefined), "daily", today);
+      const day: RadarDay | null = upsOnly ? { cards: [], total: 0, companies: 0, day: today, url: radarPath(today), mode: "daily" } : dayOf(out_, cardContext(c, m, today, slack ? await logosFor(c, m, out_) : undefined), "daily", today);
       if (!day) continue;
       // Someone may have turned it off while the run was going.
       const now1 = radarPrefs((await loadState()).profiles[m.id]);
       const via: string[] = [];
       if (email && now1.email !== "off") {
         const unsubscribeUrl = radarUnsubscribeUrl(base, m.id);
+        const grant = (path: string) => grantQuery(seed, s0, m.id, path, nowMs);
+        const go = (path: string) => `${base}/api/radar/go?m=${encodeURIComponent(T.pubId(m.id))}&s=${radarSig(m.id)}&w=email&${grant(path)}&to=${encodeURIComponent(path)}`;
         const mail = renderRadarEmail({
           name: m.name,
-          day: tracked(day, base, m.id, "email", (path) => grantQuery(seed, s0, m.id, path, nowMs)),
+          day: tracked(day, base, m.id, "email", grant),
           unsubscribeUrl,
           settingsUrl: emailLinker(seed, s0, m.id, base, nowMs)(NOTIFICATIONS_PATH),
           openPixel: `${base}/api/radar/open?m=${encodeURIComponent(T.pubId(m.id))}&s=${radarSig(m.id)}`,
           appUrl: base,
           every,
+          // Every follow-up due counts for "And N more"; the email lists EMAIL_FOLLOW_UPS, each tracked and signed in.
+          followUps: ups.map((f, i) => ({ title: f.title, line: f.line, url: i < EMAIL_FOLLOW_UPS ? go(f.path) : "" })),
+          pipelineUrl: go(PIPELINE_PATH),
         });
         if (await sendEmail(m.email, mail.subject, mail.text, mail.html, { unsubscribeUrl })) (via.push("email"), out.emails++);
       }
-      if (slack && now1.slack) {
+      if (slack && now1.slack && !upsOnly) {
         await deliver(m.id, { kind: "radar", at: nowIso, day: tracked(day, base, m.id, "slack") });
         via.push("slack");
         out.slack++;
@@ -563,7 +598,9 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       fromStanding += out_.filter((x) => x.standing).length;
       const where = via.join("+");
       await T.mutate((d) => {
-        markSent(d, m.id, out_, nowIso, where, rows);
+        // An email about follow-ups alone marks no company sent (the free member's one radar a day is still theirs).
+        if (upsOnly) (radarOf(d).members[m.id] ??= { sent: {} }).lastMailAt = nowIso;
+        else markSent(d, m.id, out_, nowIso, where, rows);
         if (via.includes("email")) radarOf(d).members[m.id].lastMailAt = nowIso;
         const r = radarOf(d);
         r.stats.sent++;

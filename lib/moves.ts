@@ -583,6 +583,32 @@ export function buyerNoteMove(c: CompanyRec, b: BuyerOnFile, me: MoveMe, row: Ra
   return { id: c.id, name: c.hidden ? null : c.name, hidden: !!c.hidden, facts: moveFacts(c), hiring: false, open: null, band: row.band ?? null, why, way, do: "buyer", title: "", line: "", find: null };
 }
 
+/** The hiring team an open role went to, when nobody there is on file: "Follow up with the hiring team at …". */
+export const HIRING_TEAM = "hiring team";
+
+/**
+ * What a sent move tells Your pipeline (Mark as sent, or the note used: the "sent" move op and
+ * pipeline.sent): the channel, who it went to as the move shows them, and whether it asked for an
+ * intro. Someone they know (with whether they came from the member's Google account), the seat
+ * holder, the buyer (named only once the member unlocked their name and title), and a reply to an
+ * open role with nobody on file its hiring team. Nothing the member can't see.
+ */
+export function moveSent(m: Pick<Move, "way" | "do">): { channel: "email" | "merlin" | "intro"; to: { name?: string | null; role?: string | null; google?: boolean }; intro?: boolean } {
+  const w = m.way;
+  const to =
+    w.kind === "know"
+      ? { name: w.person.name, role: w.person.title, google: w.person.google }
+      : w.kind === "holder"
+        ? { name: w.name, role: w.role ?? (w.fn ? `fractional ${w.fn} lead` : null) }
+        : w.kind === "buyer"
+          ? { name: w.name, role: w.name ? w.title : null }
+          : w.kind === "role"
+            ? { role: HIRING_TEAM }
+            : {};
+  if (m.do === "intro") return { channel: "intro", to, intro: true };
+  return { channel: m.do === "holderMessage" && w.kind === "holder" && w.member ? "merlin" : "email", to };
+}
+
 /** "You know Pat (Hot), who holds their Marketing seat." */
 export function knowSeatLine(p: Pick<KnowPerson, "name" | "warmth" | "seat">): string {
   const s = p.seat;

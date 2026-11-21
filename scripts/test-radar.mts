@@ -17,7 +17,12 @@
  * card only), every email link signing the member in once (lib/emailIn.ts: spent, expired, forged,
  * moved or rotated links refused), how often the email comes (daily, twice a week, weekly roll-ups),
  * no email or post on a day with nothing new, Slack apart from the email, and the unsubscribe
- * link's Send it weekly instead and Turn it off (the email only).
+ * link's Send it weekly instead and Turn it off (the email only). And follow-ups due in Your pipeline
+ * (lib/pipelineActions.ts followUpsOf): above the companies, at most 3 and "And N more", each linking
+ * to the company's record signed in, a locked company and a person from the member's Google account
+ * never named, never a note; a day with follow-ups due and no new company (or no profile) still sends
+ * the email, about them alone, once: the same follow-ups don't send another, a newly due one does;
+ * never in Slack.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -854,6 +859,92 @@ async function main() {
   await radar.runRadar({ now: nowIso() });
   await settle();
   check("with the email off, Crystal Ball still posts to Slack, and sends no email", radarPosts(SLACK_SAL).length === 1 && /Fractional CRO/.test(radarPosts(SLACK_SAL)[0].raw) && !mails("sal.starter@example.com").length, { posts: radarPosts(SLACK_SAL).length, mails: mails().map((x) => x.body.to) });
+
+  /* ---------- follow-ups due in Your pipeline ---------- */
+  console.log("\nFollow-ups due, in the morning email");
+  // The words, pure: above the companies, at most 3 and "And N more", each its own link.
+  const up = (i: number) => ({ title: `Follow up with the CEO at Co ${i}`, line: `Sent ${i} days ago by email.`, url: `https://post.example.com/api/radar/go?f${i}` });
+  const withUps = fmt.renderRadarEmail({ name: "Sal", day: dayOf([card(1), card(2)]), followUps: [1, 2, 3, 4].map(up), unsubscribeUrl: "u", appUrl: "https://post.example.com" });
+  check(
+    "Follow-ups due comes above the companies, 3 of them, then And 1 more",
+    withUps.text.indexOf("FOLLOW-UPS DUE") >= 0 && withUps.text.indexOf("FOLLOW-UPS DUE") < withUps.text.indexOf("NEW SINCE YESTERDAY") && (withUps.text.match(/\nOpen it: /g) ?? []).length === 3 && !withUps.text.includes("Co 4") && withUps.text.includes("And 1 follow-up more in Your pipeline.") && withUps.html.indexOf("Follow-ups due") < withUps.html.indexOf('class="cb-btn"'),
+    withUps.text.slice(0, 700),
+  );
+  check("each links where it says, in the HTML too", [1, 2, 3].every((i) => withUps.html.includes(`href="https://post.example.com/api/radar/go?f${i}"`)) && !withUps.html.includes("?f4"));
+  check("with companies, the subject and headline are the companies' as before", withUps.subject === `${types.YOUR_FEATURE}: 2 companies leaning your way`, withUps.subject);
+  const upsAlone = fmt.renderRadarEmail({ name: "Sal", day: { cards: [], total: 0, companies: 0, day: day0, url: VIEW, mode: "daily" }, followUps: [1, 2].map(up), pipelineUrl: "https://post.example.com/api/radar/go?pipe", unsubscribeUrl: "u", appUrl: "https://post.example.com" });
+  check(
+    "a day with follow-ups and no companies: its own subject and headline, and the button opens Your pipeline",
+    upsAlone.subject === `${types.YOUR_FEATURE}: 2 follow-ups due` && upsAlone.html.includes(">You have 2 follow-ups due</h1>") && upsAlone.html.includes('href="https://post.example.com/api/radar/go?pipe"') && upsAlone.text.includes("Open your pipeline\nhttps://post.example.com/api/radar/go?pipe") && !/0 compan/.test(upsAlone.text + upsAlone.html),
+    upsAlone.text.slice(0, 500),
+  );
+
+  // The run. Ned has no Ideal Fractional Profile, so Crystal Ball has nothing for him: four follow-ups due are his reason to come back.
+  // He knows Fox Freight (unlocked); Acme, Beta and Echo are locked for him. The Fox deal went to someone from his Google account.
+  skew += DAY;
+  const todayF = nowIso().slice(0, 10);
+  const dayAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
+  const deal = (i: number, companyId: string, stage: string, due: string, to: Record<string, unknown>) => ({
+    id: `pl_t${i}`, companyId, stage, channel: "email", to, source: "move", dates: { sent: new Date(Date.now() - 5 * DAY).toISOString(), ...(stage !== "sent" ? { [stage]: new Date(Date.now() - 3 * DAY).toISOString() } : {}) },
+    via: { sent: "note" }, due, follow: 0, lastOut: new Date(Date.now() - 5 * DAY).toISOString(), seen: {}, notes: [{ at: nowIso(), text: "Private note about the deal" }], log: [],
+    createdAt: new Date(Date.now() - 5 * DAY).toISOString(), updatedAt: new Date(Date.now() - 3 * DAY).toISOString(),
+  });
+  await T.mutate((d) => {
+    (d.unlocks["c_fox.identity"] ??= []).push("mem_noicp");
+    (d as unknown as { pipeline: Record<string, unknown> }).pipeline = {
+      ...(d.pipeline ?? {}),
+      mem_noicp: {
+        entries: [
+          deal(1, "c_fox", "sent", dayAgo(2), { role: "VP Finance", name: "Gail Googleperson", google: true }),
+          deal(2, "c_acme", "replied", dayAgo(1), { role: "CFO" }),
+          deal(3, "c_beta", "proposal", dayAgo(1), { role: "CEO" }),
+          deal(4, "c_echo", "sent", todayF, { role: "COO" }),
+        ],
+        intros: [],
+      },
+    };
+  });
+  const pa = await import("../lib/pipelineActions");
+  const due4 = await pa.dueFollowUpsFor("mem_noicp", Date.now(), "merlin");
+  check("four follow-ups are due for Ned (the most overdue first)", due4.length === 4 && due4[0].companyId === "c_fox", due4.map((f) => [f.companyId, f.due, f.title]));
+  clear();
+  await radar.runRadar({ now: nowIso(), force: true });
+  await settle();
+  const ned = mails("ned.noprofile@example.com");
+  const nm = ned[0]?.body as { subject: string; text: string; html: string } | undefined;
+  check("no new company and no profile, but follow-ups came due: the email still goes, once", ned.length === 1 && nm?.subject === `${types.YOUR_FEATURE}: 4 follow-ups due`, { n: ned.length, subject: nm?.subject });
+  check("it lists 3, the most overdue first, then And 1 more", !!nm && (nm.text.match(/\nOpen it: /g) ?? []).length === 3 && nm.text.includes("And 1 follow-up more in Your pipeline.") && nm.text.indexOf("Fox Freight") < nm.text.indexOf("Book a meeting"), nm?.text.slice(0, 900));
+  check("a company the member knows is named; the person from his Google account never is", !!nm && nm.text.includes("Follow up with the person you know there at Fox Freight") && !/Gail|Googleperson|VP Finance/.test(nm.text + nm.html), nm?.text.slice(0, 600));
+  check("a company locked for him is never named (nor any other name on the seed)", !!nm && nm.text.includes("Book a meeting with the CFO at a company in your pipeline") && named(outsideLinks(nm.text + nm.html + nm.subject)).every((x) => x === "Fox Freight"), named(outsideLinks(nm?.text ?? "")));
+  check("never a note's text", !!nm && !/Private note/.test(nm.text + nm.html));
+  check(
+    "each links to the company's record through the tracked link, signed in once (lib/emailIn.ts)",
+    !!nm && ["c_fox", "c_acme", "c_beta"].every((id) => new RegExp(`/api/radar/go\\?m=[^&\\s]+&s=[^&\\s]+&w=email&x=[0-9a-z]+&t=[^&\\s]+&to=${encodeURIComponent(`/?c=${pub(id)}`).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(nm.text)) && !nm.text.includes(encodeURIComponent(`/?c=${pub("c_echo")}`)),
+    nm?.text.slice(0, 900),
+  );
+  check("its button opens Your pipeline, signed in", !!nm && new RegExp(`Open your pipeline\\nhttps://post\\.example\\.com/api/radar/go\\?[^\\s]*&x=[0-9a-z]+&t=[^&\\s]+&to=${encodeURIComponent("/?p=pipeline").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(nm.text), nm?.text.slice(-700));
+  const nedLink = /https:\/\/post\.example\.com\/api\/radar\/go\?[^\s]*to=%2F%3Fc%3D[^\s]+/.exec(nm?.text ?? "")?.[0];
+  const ein2 = await import("../lib/emailIn");
+  const landing = nedLink ? await ein2.emailLanding(Object.fromEntries(new URL(nedLink).searchParams) as { m: string; x: string; t: string; to: string }, null) : null;
+  check("and opening one signs him in to that record", !!landing && /^\/\?k=[^&]+&c=/.test(landing), landing);
+  const nedR = (await state()).radar?.members.mem_noicp;
+  check("it marks no company sent, and keeps when the email went", !Object.keys(nedR?.sent ?? {}).length && !!nedR?.lastMailAt && !nedR.lastAt, nedR);
+  check("radar_sent says email", (await state()).signals.filter((x) => x.memberId === "mem_noicp" && x.name === "radar_sent").slice(-1)[0]?.where === "email");
+  // The next morning nothing new came due: the same follow-ups don't send another email.
+  skew += DAY;
+  clear();
+  await radar.runRadar({ now: nowIso(), force: true });
+  await settle();
+  check("the next morning, with only the same follow-ups due: no email", !mails("ned.noprofile@example.com").length, mails().map((x) => x.body.to));
+  // A follow-up comes due today (Merlin moved its day after a follow-up went out): that is a reason again.
+  await T.mutate((d) => void ((d.pipeline!.mem_noicp.entries.find((e) => e.id === "pl_t4")!.due = nowIso().slice(0, 10)), undefined));
+  skew += HOUR;
+  clear();
+  await radar.runRadar({ now: nowIso(), force: true });
+  await settle();
+  check("a follow-up that came due since the last email sends one again", mails("ned.noprofile@example.com").length === 1, mails().map((x) => x.body.to));
+  // A member with Slack gets no follow-ups there: Slack is a shared channel.
+  check("never in Slack", !outbox.some((x) => x.url.startsWith("https://hooks.slack.com") && /follow-up|Follow up with/i.test(x.raw)));
 }
 
 main()

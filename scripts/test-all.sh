@@ -77,7 +77,7 @@ RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 run prices npx tsx scripts/test-prices.mts
 # The company lock: every company's name, website and LinkedIn locked for a member until they unlock it (2 credits) or already know it, its About without its name or links, its logo through /api/logo read from the company's own site (a mock server on 127.0.0.1:6781, never an icon service), on a made-up seed in process.
 run lock npx tsx scripts/test-company-lock.mts
-# Health at the top of Pilot metrics (lib/health.ts) on a made-up state with known counts: the funnel, retention by month, facts and credits a week, invites, plans, the outcomes slot, What's working and What isn't (20 members a group), CSV; and the public data page (app/data). In process.
+# Health at the top of Pilot metrics (lib/health.ts) on a made-up state with known counts: the funnel, retention by month, facts and credits a week, invites, plans, the outcomes from members' pipelines (outcomeStats as rows, replies and wins through Merlin at 20 members a group), What's working and What isn't (20 members a group), CSV; and the public data page (app/data). In process.
 run health npx tsx scripts/test-health.mts
 # Onboarding: suggestions and their heading, Find your seats cards, a new member's title, the weekly email offered at the end.
 serve onboard npx tsx scripts/test-onboard.mts
@@ -89,7 +89,7 @@ run digest npx tsx scripts/test-digest.ts
 run messages npx tsx scripts/test-messages.mjs
 # Alerts in Slack and webhooks (lib/notify), with fetch and name lookups replaced: nothing leaves the machine.
 run notify npx tsx scripts/test-notify.mts
-# The radar (lib/radar; FEATURE_NAME to members): each signal, the profile and before-function matching, never twice, every signal for every member with nothing locked named, links to the day's companies, the day's view and its 2-credit unlock, instant for Pro, no nothing-days, opt-out and unsubscribe, Slack and email. Fetch replaced: nothing leaves the machine.
+# The radar (lib/radar; FEATURE_NAME to members): each signal, the profile and before-function matching, never twice, every signal for every member with nothing locked named, links to the day's companies, the day's view and its 2-credit unlock, instant for Pro, no nothing-days, opt-out and unsubscribe, Slack and email, follow-ups due from Your pipeline (above the companies, a day with only follow-ups still emails once, nothing locked or from Google named). Fetch replaced: nothing leaves the machine.
 run radar npx tsx scripts/test-radar.mts
 # Crystal Ball's ranges (lib/radar radarView with &range=): Today, Last 7 days, Last 30 days, each company once at its latest day, most likely first; the default (Today, else 7, else 30); an email's day link opens that day alone, one past the keep the default range; "new" counted as before; Trial names, Free one a day across 30 days, the server's check; the 31-day keep and the state's cost. In process, billing live with made-up Stripe settings.
 run radar-ranges npx tsx scripts/test-radar-ranges.mts

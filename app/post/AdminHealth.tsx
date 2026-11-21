@@ -215,16 +215,20 @@ export function Health({ h }: { h: Health }) {
           </HCard>
           <HCard title="Outcomes" span={6}>
             {h.outcomes ? (
-              <dl className="tp-pm-rows">
-                {h.outcomes.map((x) => (
-                  <div key={x.label}>
-                    <dt>{x.label}</dt>
-                    <dd>
-                      <Num>{n0(x.n)}</Num>
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+              <>
+                {/* Every member's pipeline in counts and sums (lib/health.ts outcomeRows): never whose. */}
+                <dl className="tp-pm-rows">
+                  {h.outcomes.map((x) => (
+                    <div key={x.label}>
+                      <dt>{x.label}</dt>
+                      <dd>
+                        <Num>{x.unit === "$" ? `$${n0(x.n)}` : x.unit === "%" ? `${x.n}%` : n0(x.n)}</Num>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                {!h.outcomes.some((x) => x.label === "Deals" && x.n > 0) && <p className="tp-small muted">No deals in anyone&apos;s pipeline yet.</p>}
+              </>
             ) : (
               <p className="tp-small muted">Deal tracking not live yet.</p>
             )}

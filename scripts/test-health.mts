@@ -10,9 +10,12 @@
  * pixel not a visit), facts a week split by members and scanned or imported (undone, bench rates,
  * a fact counted twice and removed values left out, 12 weeks only), the share confirmed by a second
  * member, credits earned and spent a week by source and by use, invites, trial to paid and paid now,
- * the outcomes slot, What's working and What isn't (the numbers and group sizes in each, 20 members
+ * the outcomes from every member's pipeline (lib/pipeline.ts outcomeStats as rows: deals by how far
+ * they got, Won and through Merlin, the month's value, follow-ups due, what the stages were seen
+ * from, intros; replies and wins through Merlin said only with 20 members a group), What's working and What isn't (the numbers and group sizes in each, 20 members
  * a group or "not enough members yet", ranked by effect, at most 5), CSV for every table, the Health
- * block's markup (counts only, every table's Copy as CSV, "Deal tracking not live yet"), and the
+ * block's markup (counts only, every table's Copy as CSV, the outcomes in counts, dollars and
+ * shares, "No deals in anyone's pipeline yet"), and the
  * data page (the four questions, every outside service, no "To confirm", no LinkedIn).
  */
 process.env.RN_BILLING = "1";
@@ -186,7 +189,12 @@ async function main() {
   console.log("\nInvites, plans, outcomes");
   check("invites: 3 sent, 2 joined through one, 1 bonus paid, 5 bonus credits", same(h.invites, { sent: 3, joined: 2, bonusMembers: 1, bonusCredits: 5 }), h.invites);
   check("plans: 25 trials ended, 3 paid, 3 paid now", same(h.plans, { billing: true, trialsEnded: 25, trialsPaid: 3, paidNow: 3 }), h.plans);
-  check("outcomes: not wired yet", h.outcomes === null, h.outcomes);
+  const row = (rows: { label: string; n: number; unit?: string }[] | null, label: string) => rows?.find((x) => x.label === label);
+  check(
+    "outcomes: wired, every count 0 with nobody's pipeline, no share with nothing to divide by",
+    Array.isArray(h.outcomes) && h.outcomes.length === 15 && h.outcomes.every((x) => x.n === 0) && !h.outcomes.some((x) => x.unit === "%") && row(h.outcomes, "Deals")?.n === 0,
+    h.outcomes,
+  );
 
   console.log("\nWhat's working, what isn't");
   const w = h.insights.working;
@@ -225,8 +233,11 @@ async function main() {
   check("ranked by effect", [w, nw].every((l) => l.every((x, i) => i === 0 || l[i - 1].effect >= x.effect)), [w.map((x) => x.effect), nw.map((x) => x.effect)]);
   const wait = h.insights.waiting;
   check(
-    "groups under 20 members are not compared: onboarding, Google, the connector, Slack, invites, the last funnel step, invites taken up",
-    wait.length === 7 &&
+    "groups under 20 members are not compared: onboarding, Google, the connector, Slack, invites, a deal in Your pipeline, the last funnel step, invites taken up, replies, wins through Merlin",
+    wait.length === 10 &&
+      wait.includes("Coming back in week 4, with and without a deal in Your pipeline: not enough members yet (0 and 60, 20 needed in each).") &&
+      wait.includes("Replies to what members sent: not enough members yet (0 have a deal at Sent, 20 needed).") &&
+      wait.includes("Wins through Merlin: not enough members yet (0 won a deal, 20 needed).") &&
       wait[0] === "Coming back in week 4, with and without onboarding: not enough members yet (60 and 0, 20 needed in each)." &&
       wait.some((x) => x.startsWith("Coming back in week 4, with and without Google: not enough members yet (0 and 60")) &&
       wait.includes("Sent a first message or invite: not enough members yet (10 reached the step before, 20 needed).") &&
@@ -239,6 +250,96 @@ async function main() {
   check("at most 5 of each", h5.insights.working.length <= 5 && h5.insights.notWorking.length <= 5);
   check("never a name or an email anywhere in Health", !/Name m|@example\.com|tok-/.test(JSON.stringify(h)));
 
+  console.log("\nOutcomes from members' pipelines");
+  // m0..m24 each have one deal sent from a move (a note used). m0..m20 won it (replied from Gmail, met on
+  // the calendar, Won marked by the member, $5,000 a month), m0..m14 through Merlin by their own answer;
+  // m0's win became a seat and came through an intro that was made; m0 asked for another one. m21..m24
+  // are still at Sent with a follow-up due yesterday. m25..m59 have no pipeline.
+  const won = (i: number) => i <= 20;
+  const pipeline = Object.fromEntries(
+    range(0, 24).map((id, i) => [
+      id,
+      {
+        entries: [
+          {
+            id: `pl_${i}`,
+            companyId: `c_p${i}`,
+            stage: won(i) ? "won" : "sent",
+            channel: "email",
+            to: { role: "CEO", name: i === 1 ? "Private Person" : null, google: i === 1 },
+            source: "move",
+            dates: won(i) ? { sent: at(10), replied: at(12), meeting: at(14), won: at(20) } : { sent: "2026-11-17T10:00:00.000Z" },
+            via: won(i) ? { sent: "note", replied: "gmail", meeting: "calendar", won: "you" } : { sent: "note" },
+            due: won(i) ? null : "2026-11-20",
+            follow: 0,
+            lastOut: won(i) ? at(10) : "2026-11-17T10:00:00.000Z",
+            seen: {},
+            notes: [{ at: at(10), text: "Private note text" }],
+            log: [],
+            ...(won(i) ? { won: { pricing: "monthly", rate: 5000, hours: null, start: null, months: null, merlin: i < 15, at: at(20) } } : {}),
+            ...(i === 0 ? { seatId: "e_won0", introId: "in_0" } : {}),
+            createdAt: at(10),
+            updatedAt: at(20),
+          },
+        ],
+        intros: i === 0 ? [{ id: "in_0", companyId: "c_p0", introducer: { name: "Intro Person" }, status: "made", askedAt: at(8), madeAt: at(9) }, { id: "in_1", companyId: null, introducer: { role: "Investor" }, status: "asked", askedAt: at(9) }] : [],
+      },
+    ]),
+  );
+  const hp = H.healthStats({ s: { ...state, pipeline } as unknown as State, nowMs: NOW, starter: 25, entityOf, isMember: (id) => isMember.has(id), billing: true });
+  check(
+    "the rows: 25 members, 25 deals, how far they got, 21 won and 15 through Merlin, 1 a seat, $105,000 and $75,000 a month, 4 follow-ups due",
+    same(hp.outcomes?.slice(0, 12), [
+      { label: "Members with a deal", n: 25 },
+      { label: "Deals", n: 25 },
+      { label: "Reached Sent", n: 25 },
+      { label: "Reached Replied", n: 21 },
+      { label: "Reached Meeting", n: 21 },
+      { label: "Reached Proposal", n: 21 },
+      { label: "Won", n: 21 },
+      { label: "Won through Merlin", n: 15 },
+      { label: "Won that became a seat", n: 1 },
+      { label: "Won, a month", n: 105000, unit: "$" },
+      { label: "Won through Merlin, a month", n: 75000, unit: "$" },
+      { label: "Follow-ups due now", n: 4 },
+    ]),
+    hp.outcomes,
+  );
+  check(
+    "then the shares, what the stages were seen from, and the intros",
+    same(hp.outcomes?.slice(12), [
+      { label: "Sent to Replied", n: 84, unit: "%" },
+      { label: "Replied to Meeting", n: 100, unit: "%" },
+      { label: "Meeting to Won", n: 100, unit: "%" },
+      { label: "Sent to Won", n: 84, unit: "%" },
+      { label: "Stages seen from a note used or Mark as sent", n: 25 },
+      { label: "Stages seen from Gmail", n: 21 },
+      { label: "Stages seen from the calendar", n: 21 },
+      { label: "Stages seen from the member", n: 21 },
+      { label: "Intros asked", n: 2 },
+      { label: "Intros made", n: 1 },
+      { label: "Intros that led to a win", n: 1 },
+    ]),
+    hp.outcomes?.slice(12),
+  );
+  const pw = [...hp.insights.working, ...hp.insights.notWorking];
+  const reply = pw.find((x) => x.text.includes("gets a reply"));
+  const viaM = pw.find((x) => x.text.includes("came through Merlin"));
+  const comeBack = pw.find((x) => x.text.startsWith("Members who have a deal in Your pipeline"));
+  check("with 25 members at Sent: 84% of what members send gets a reply, working, with its numbers", hp.insights.working.includes(reply!) && reply?.text === "84% of what members send gets a reply." && reply.detail === "21 of 25 deals sent, from 25 members. Merlin moves a deal to Replied when it sees the reply.", reply);
+  check("with 21 members who won: 71% came through Merlin, working", hp.insights.working.includes(viaM!) && viaM?.text === "71% of the deals members win came through Merlin." && viaM.detail === "15 of 21 won deals, from 21 members. Through Merlin is the member's own answer when they mark it Won.", viaM);
+  check(
+    "with 25 and 35: members with a deal come back in week 4 6 times as often (96% vs 17%)",
+    comeBack?.text === "Members who have a deal in Your pipeline come back in week 4 6 times as often (96% vs 17%)." && comeBack.detail === "24 of 25 members vs 6 of 35 who don't. Members who joined at least 5 weeks ago.",
+    comeBack ?? pw.map((x) => x.text),
+  );
+  check("none of the three is waiting any more", !hp.insights.waiting.some((x) => /Replies to|Wins through Merlin|a deal in Your pipeline/.test(x)), hp.insights.waiting);
+  // 19 members who won: the wins share waits (20 needed), the reply rate (25 at Sent) still says.
+  const p19 = Object.fromEntries(Object.entries(pipeline).map(([id, log], i) => [id, i < 19 || i > 20 ? log : { ...log, entries: log.entries.map((e) => ({ ...e, stage: "proposal", won: undefined, dates: { ...e.dates, won: undefined, proposal: at(18) } })) }]));
+  const h19 = H.healthStats({ s: { ...state, pipeline: p19 } as unknown as State, nowMs: NOW, starter: 25, entityOf, isMember: (id) => isMember.has(id), billing: true });
+  check("19 members who won: wins through Merlin waits, replies still said", h19.insights.waiting.includes("Wins through Merlin: not enough members yet (19 won a deal, 20 needed).") && [...h19.insights.working, ...h19.insights.notWorking].some((x) => x.text.includes("gets a reply")), h19.insights.waiting);
+  check("never a name, a company, a note or a title from a pipeline in Health", !/Private Person|Intro Person|Private note|c_p\d|pl_\d|in_\d|CEO|Investor/.test(JSON.stringify(hp)));
+
   console.log("\nThe Health block and the data page");
   const React = await import("react");
   (globalThis as { React?: unknown }).React = React;
@@ -247,7 +348,11 @@ async function main() {
   const html = renderToStaticMarkup(React.createElement(AH.Health, { h }));
   check("it renders: What's working, What isn't, and each table", ["What&#x27;s working", "What isn&#x27;t", "Activation", "Coming back, by month joined", "Facts added, last 12 weeks", "Credits earned, last 12 weeks", "Credits spent, last 12 weeks", "Invites", "Plans", "Outcomes"].every((t) => html.includes(t)), html.slice(0, 400));
   check("every table has its Copy as CSV (5)", (html.match(/>Copy as CSV</g) ?? []).length === 5);
-  check("the outcomes slot reads Deal tracking not live yet", html.includes("Deal tracking not live yet."));
+  check("the outcomes slot is live: its rows, and No deals in anyone's pipeline yet while there are none", html.includes("Members with a deal") && html.includes("No deals in anyone&#x27;s pipeline yet.") && !html.includes("Deal tracking not live yet."));
+  const hpHtml = renderToStaticMarkup(React.createElement(AH.Health, { h: hp }));
+  check("with deals: dollars a month and shares as such, and no empty note", hpHtml.includes("$105,000") && hpHtml.includes("84%") && !hpHtml.includes("No deals in anyone") && !/Private Person|Private note/.test(hpHtml));
+  const notLive = renderToStaticMarkup(React.createElement(AH.Health, { h: { ...h, outcomes: null } }));
+  check("a state without the pipeline at all reads Deal tracking not live yet", notLive.includes("Deal tracking not live yet."));
   check("the statements and their numbers are on it", html.includes("80% vs 20%") && html.includes("24 of 30 members vs 6 of 30"));
   check("the cohort cells say the share and the counts", html.includes("50% (30/60)") && html.includes("Sep 2026"));
   check("no name or email in the markup", !/Name m|@example\.com/.test(html));

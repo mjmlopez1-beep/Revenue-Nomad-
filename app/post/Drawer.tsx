@@ -50,7 +50,8 @@ import { Charge } from "./Charge";
 import { PipelineBlock } from "./PipelineBlock";
 import { Prop } from "../ui/fractions/lazy";
 import dynamic from "next/dynamic";
-import { bestBuyer, buyerNoteMove, buyersOf, buyerWhat, findBuyer, knowSeatLine, type BuyerOnFile } from "@/lib/moves";
+import { bestBuyer, buyerNoteMove, buyersOf, buyerWhat, findBuyer, knowSeatLine, moveSent, type BuyerOnFile } from "@/lib/moves";
+import { pipelineAct } from "./pipelineStore";
 
 // The note's sheet and its templates load the first time a note is drafted from the record.
 const NoteSheet = dynamic(() => import("./MoveNote").then((m) => m.NoteSheet), { ssr: false });
@@ -1545,9 +1546,12 @@ export function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
           m={move}
           row={{ id: i.c.id, kinds: [], lines: [] }}
           me={ui.me}
-          sentLabel="Done"
+          sentLabel="Mark as sent"
           onClose={() => setDraft(null)}
-          onSent={() => setDraft(null)}
+          // The buyer's note used (Gmail, another mail app, Copy) or marked sent: the company goes into Your pipeline at
+          // Sent, to the buyer as the member sees them (lib/moves.ts moveSent). The same note twice in half an hour is one send.
+          onUsed={() => void pipelineAct({ type: "pipeline.sent", companyId: i.c.id, from: "record", ...moveSent(move) })}
+          onSent={() => (void pipelineAct({ type: "pipeline.sent", companyId: i.c.id, from: "record", ...moveSent(move) }), setDraft(null))}
           onClaude={() => setDraft(null)}
         />
       )}

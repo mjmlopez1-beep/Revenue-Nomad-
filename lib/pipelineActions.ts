@@ -268,14 +268,26 @@ export async function pipelineViewFor(token: string | null, nowMs = Date.now()):
  * the member's Google account is named, since the email goes to the member alone; pass
  * names "merlin" to leave those names out. Writes nothing.
  */
-export async function dueFollowUpsFor(memberId: string, nowMs = Date.now(), names: "all" | "merlin" = "all"): Promise<(P.FollowUpItem & { company: string | null; companyPub: string; title: string; line: string })[]> {
+export async function dueFollowUpsFor(memberId: string, nowMs = Date.now(), names: "all" | "merlin" = "all"): Promise<DueFollowUp[]> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = T.memberIndex(seed, s).byId.get(memberId);
   if (!me) return [];
+  return followUpsOf(seed, s, me, nowMs, names);
+}
+
+export type DueFollowUp = P.FollowUpItem & { company: string | null; companyPub: string; title: string; line: string };
+
+/**
+ * dueFollowUpsFor on a seed and state already read (the morning email's run has them). `named`:
+ * whether the member may see the company's name (default: their table shows it); a company it
+ * refuses is "a company in your pipeline". Writes nothing.
+ */
+export function followUpsOf(seed: Seed, s: State, me: Member, nowMs: number, names: "all" | "merlin" = "all", named?: (companyId: string) => boolean): DueFollowUp[] {
+  if (!s.pipeline?.[me.id]?.entries?.length) return [];
   const nameOf = nameFor(seed, s, me);
-  const items = P.dueFollowUps(s, memberId, nowMs, { signals: signalsFor(seed, s, me), replies: repliesFor(s, memberId) });
+  const items = P.dueFollowUps(s, me.id, nowMs, { signals: signalsFor(seed, s, me), replies: repliesFor(s, me.id) });
   return items.map((f) => {
-    const company = nameOf(f.companyId);
+    const company = !named || named(f.companyId) ? nameOf(f.companyId) : null;
     return { ...f, company, companyPub: T.pubId(f.companyId), ...P.followUpWords(f, company, names) };
   });
 }

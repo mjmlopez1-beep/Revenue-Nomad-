@@ -17,11 +17,14 @@
  *    Seed records with no date are not in any week. Confirmed: member-added facts on file now that a
  *    second member confirmed.
  *  - credits: credits earned and spent per week, by source and by use.
- *  - invites, plans, and outcomes (deal tracking, not live yet).
+ *  - invites, plans, and outcomes: every member's pipeline in counts and sums (outcomeStats in
+ *    lib/pipeline.ts): deals by how far they got, Won and Won through Merlin, the month's value of
+ *    Won, follow-ups due, what Merlin detected the stages from, intros. Never whose.
  *  - insights: "What's working" and "What isn't", plain sentences from the numbers above (insights()).
  */
 import type { State } from "./table";
 import { planOf } from "./plan";
+import { outcomeStats, reached as reachedStage, type OutcomeStats, type PipelineLog, type Via } from "./pipeline";
 
 export const WEEKS = 12;
 /** A comparison or a rate is said only when each group has at least this many members. */
@@ -57,11 +60,18 @@ export interface HealthStats {
   invites: { sent: number; joined: number; bonusMembers: number; bonusCredits: number };
   plans: { billing: boolean; trialsEnded: number; trialsPaid: number; paidNow: number };
   /**
-   * Deal tracking (outcomeStats in lib/pipeline.ts, from another build). Null until it is wired:
-   * the panel reads "Deal tracking not live yet".
+   * Deal tracking (outcomeStats in lib/pipeline.ts) as rows for the Outcomes card: a count, a share
+   * in percent ("%") or dollars a month ("$"). Null only for a state without the pipeline at all:
+   * the panel then reads "Deal tracking not live yet".
    */
-  outcomes: { label: string; n: number }[] | null;
+  outcomes: OutcomeRow[] | null;
   insights: { working: Insight[]; notWorking: Insight[]; waiting: string[] };
+}
+
+export interface OutcomeRow {
+  label: string;
+  n: number;
+  unit?: "%" | "$";
 }
 
 export interface HealthInput {
@@ -267,12 +277,53 @@ export function healthStats(o: HealthInput): HealthStats {
     credits,
     invites,
     plans: { billing: o.billing, trialsEnded, trialsPaid, paidNow },
-    // TODO(pipeline): at merge, set this from outcomeStats(s) in lib/pipeline.ts, mapped to { label, n } rows.
-    outcomes: null,
+    outcomes: outcomeRows(outcomeStats(s, nowMs)),
     insights: { working: [], notWorking: [], waiting: [] },
   };
   out.insights = insights(o, out, joined, times, firstFill, firstUnlock);
   return out;
+}
+
+/* ---------- outcomes ---------- */
+
+const VIA_ROWS: [Via, string][] = [
+  ["note", "a note used or Mark as sent"],
+  ["message", "Merlin messages"],
+  ["gmail", "Gmail"],
+  ["calendar", "the calendar"],
+  ["proposal", "a proposal tool"],
+  ["seat", "a seat added"],
+  ["auto", "time passing"],
+  ["you", "the member"],
+];
+const pctOf = (share: number | null) => (share === null ? null : Math.round(share * 100));
+
+/** The Outcomes card's rows from outcomeStats: counts and sums only. A share shows once it has something to divide by. */
+export function outcomeRows(o: OutcomeStats): OutcomeRow[] {
+  const rows: OutcomeRow[] = [
+    { label: "Members with a deal", n: o.members },
+    { label: "Deals", n: o.entries },
+    { label: "Reached Sent", n: o.reached.sent },
+    { label: "Reached Replied", n: o.reached.replied },
+    { label: "Reached Meeting", n: o.reached.meeting },
+    { label: "Reached Proposal", n: o.reached.proposal },
+    { label: "Won", n: o.won },
+    { label: "Won through Merlin", n: o.wonThroughMerlin },
+    { label: "Won that became a seat", n: o.wonSeats },
+    { label: "Won, a month", n: o.monthlyValue, unit: "$" },
+    { label: "Won through Merlin, a month", n: o.monthlyValueThroughMerlin, unit: "$" },
+    { label: "Follow-ups due now", n: o.followUpsDue },
+  ];
+  const shares: [string, number | null][] = [
+    ["Sent to Replied", pctOf(o.conversion.sentToReplied)],
+    ["Replied to Meeting", pctOf(o.conversion.repliedToMeeting)],
+    ["Meeting to Won", pctOf(o.conversion.meetingToWon)],
+    ["Sent to Won", pctOf(o.conversion.sentToWon)],
+  ];
+  for (const [label, n] of shares) if (n !== null) rows.push({ label, n, unit: "%" });
+  for (const [via, words] of VIA_ROWS) if (o.detected[via]) rows.push({ label: `Stages seen from ${words}`, n: o.detected[via] });
+  rows.push({ label: "Intros asked", n: o.intros.asked + o.intros.made + o.intros.declined }, { label: "Intros made", n: o.intros.made }, { label: "Intros that led to a win", n: o.intros.won });
+  return rows;
 }
 
 /* ---------- what's working, what isn't ---------- */
@@ -302,6 +353,7 @@ function insights(
   const back4 = (id: string, at: string) => activeIn(times.get(id), Date.parse(at), 28, 35);
   const google = new Set(Object.entries(s.network ?? {}).filter(([, n]) => !!n?.google).map(([id]) => id));
   const connector = new Set((s.connector?.grants ?? []).map((g) => g.memberId));
+  const pipelines: Record<string, PipelineLog | undefined> = s.pipeline ?? {};
   const slack = new Set(Object.entries(s.integrations?.members ?? {}).filter(([, x]) => !!x?.slack).map(([id]) => id));
   const within = (m: Map<string, number>, id: string, at: string) => {
     const t = m.get(id);
@@ -315,6 +367,7 @@ function insights(
     { label: "the Claude connector", who: "add the Claude connector", whoNot: "don't", inGroup: (m) => connector.has(m.id) },
     { label: "Slack alerts", who: "turn on Slack alerts", whoNot: "don't", inGroup: (m) => slack.has(m.id) },
     { label: "an invite", who: "joined through an invite", whoNot: "didn't", inGroup: (m) => !!m.referredBy },
+    { label: "a deal in Your pipeline", who: "have a deal in Your pipeline", whoNot: "don't", inGroup: (m) => !!pipelines[m.id]?.entries?.length },
   ];
   for (const g of groups) {
     const a = ripe.filter(g.inGroup);
@@ -437,6 +490,37 @@ function insights(
     const x: Insight = { text: `${p}% of invites to connect are taken up.`, detail: `${claimed} of ${plural(h.invites.sent, "invite", "invites")} from ${plural(inviters, "member", "members")} ended with the seat claimed.`, effect: Math.abs(p - 12) };
     if (p >= 20) working.push(x);
     else if (p < 5) notWorking.push(x);
+  }
+
+  // Your pipeline: replies to what members sent, and wins through Merlin. A rate only when MIN_GROUP
+  // members are in its group (members with a deal at Sent, members with a win), counted per member.
+  const sentBy: string[] = [];
+  const wonBy: string[] = [];
+  let sentDeals = 0;
+  let repliedDeals = 0;
+  for (const [id, log] of Object.entries(pipelines)) {
+    if (!o.isMember(id)) continue;
+    const entries = log?.entries ?? [];
+    const sent = entries.filter((e) => reachedStage(e, "sent"));
+    if (sent.length) sentBy.push(id);
+    if (entries.some((e) => e.stage === "won")) wonBy.push(id);
+    sentDeals += sent.length;
+    repliedDeals += sent.filter((e) => reachedStage(e, "replied")).length;
+  }
+  if (sentBy.length < MIN_GROUP) waiting.push(`Replies to what members sent: not enough members yet (${sentBy.length.toLocaleString("en-US")} have a deal at Sent, ${MIN_GROUP} needed).`);
+  else {
+    const p = pct(repliedDeals, sentDeals);
+    const x: Insight = { text: `${p}% of what members send gets a reply.`, detail: `${repliedDeals} of ${plural(sentDeals, "deal", "deals")} sent, from ${plural(sentBy.length, "member", "members")}. Merlin moves a deal to Replied when it sees the reply.`, effect: Math.abs(p - 20) };
+    if (p >= 30) working.push(x);
+    else if (p < 10) notWorking.push(x);
+  }
+  if (wonBy.length < MIN_GROUP) waiting.push(`Wins through Merlin: not enough members yet (${wonBy.length.toLocaleString("en-US")} won a deal, ${MIN_GROUP} needed).`);
+  else {
+    const won = outcomeStats({ pipeline: Object.fromEntries(wonBy.map((id) => [id, pipelines[id]!])) }, nowMs);
+    const p = pct(won.wonThroughMerlin, won.won);
+    const x: Insight = { text: `${p}% of the deals members win came through Merlin.`, detail: `${won.wonThroughMerlin} of ${plural(won.won, "won deal", "won deals")}, from ${plural(wonBy.length, "member", "members")}. Through Merlin is the member's own answer when they mark it Won.`, effect: Math.abs(p - 40) };
+    if (p >= 50) working.push(x);
+    else if (p < 20) notWorking.push(x);
   }
 
   const top = (l: Insight[]) => l.sort((a, b) => b.effect - a.effect).slice(0, 5);

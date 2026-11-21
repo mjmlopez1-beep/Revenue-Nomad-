@@ -13,7 +13,7 @@
  *     Went quiet (after the follow-ups, and after 30 days), corrections, reopen, the proposal hook,
  *     due follow-ups and their words, the month's value, the seat's answers, outcomeStats;
  *   - Mark as sent: the move leaves today's moves, the company is in the pipeline at Sent with a
- *     follow-up in 3 business days, Undo takes both back; Merlin's own messages and invites open
+ *     follow-up in 3 business days, Undo takes both back; from every kind of move (moveSent: the buyer way in, named only once unlocked, a reply to an open role to the buyer, someone they know or its hiring team), today's moves and the record's buyer note alike; Merlin's own messages and invites open
  *     entries, a reply on Merlin moves to Replied;
  *   - detection from fake Google metadata: a new email out to a Crystal Ball company opens an entry
  *     (one outside it doesn't), an email in after Sent is Replied, a meeting booked ahead is Meeting,
@@ -362,6 +362,35 @@ async function main() {
   await act(ANA, { type: "move", id: pub("c_corv"), op: "sent", channel: "email", to: { name: "Priya Raman", role: "Director of Operations", google: true } });
   check("Done is still Done: no entry", (await act(ANA, { type: "move", id: pub("c_copp"), op: "done" }), !(await at(ANA, "c_copp"))));
   await act(ANA, { type: "move", id: pub("c_copp"), op: "undo" });
+
+  // Mark as sent from every kind of move (lib/moves.ts moveSent, what Moves.tsx and the record's buyer note send):
+  // the buyer way in (named once unlocked), a reply to an open role (to the buyer, someone they know, or its hiring team).
+  const MV = await import("../lib/moves");
+  const ctx = { hired: null, gap: false } as never;
+  const buyerWay = (name: string | null, title: string | null) => ({ kind: "buyer", personId: "p1", seatId: null, rel: "Decision maker", fn: null, seatRole: null, name, title, email: null, ctx }) as never;
+  const words = (o: ReturnType<typeof MV.moveSent>) => {
+    const log = P.emptyPipeline();
+    const { entry } = P.openEntry(log, { id: "x", companyId: "c_x", channel: o.channel, to: P.cleanTo(o.to), source: "move", via: "note", nowMs: Date.now() });
+    return P.followUpWords({ ...entry, days: 3, stageDays: 3 }, "Larkfield Robotics", "merlin").title;
+  };
+  const sBuyer = MV.moveSent({ do: "buyer", way: buyerWay("Dana Whitfield", "CEO") });
+  check("a buyer's drafted note, marked sent: by email, to the buyer by name and title", sBuyer.channel === "email" && sBuyer.to.name === "Dana Whitfield" && sBuyer.to.role === "CEO" && !sBuyer.intro && words(sBuyer) === "Follow up with Dana at Larkfield Robotics", [sBuyer, words(sBuyer)]);
+  const sLocked = MV.moveSent({ do: "seeBuyer", way: buyerWay(null, null) });
+  check("a buyer still locked is never named or titled", !sLocked.to.name && !sLocked.to.role && words(sLocked) === "Follow up with them at Larkfield Robotics", sLocked);
+  const sRole = MV.moveSent({ do: "reply", way: { kind: "role", seatId: "e1", title: "Fractional CRO", fn: "Sales", since: null, posting: "https://jobs.example/x" } });
+  check("Reply to the open role with nobody on file: to its hiring team", sRole.channel === "email" && sRole.to.role === MV.HIRING_TEAM && !sRole.to.name && words(sRole) === "Follow up with the hiring team at Larkfield Robotics", [sRole, words(sRole)]);
+  const sRoleBuyer = MV.moveSent({ do: "reply", way: buyerWay("Dana Whitfield", "CEO") });
+  check("Reply to the open role beside a buyer: to the buyer", sRoleBuyer.to.name === "Dana Whitfield" && words(sRoleBuyer) === "Follow up with Dana at Larkfield Robotics", sRoleBuyer);
+  const sRoleKnow = MV.moveSent({ do: "reply", way: { kind: "know", person: { name: "Kit Example", title: "VP Sales", google: true } } as never });
+  check("Reply to the open role through someone from her Google account: never named outside her screens", sRoleKnow.to.google === true && words(sRoleKnow) === "Follow up with the person you know there at Larkfield Robotics", words(sRoleKnow));
+  // The real action: a buyer's note marked sent from today's moves, then taken back.
+  r = await act(ANA, { type: "move", id: pub("c_copp"), op: "sent", ...sBuyer });
+  const coppSent = await at(ANA, "c_copp");
+  check("the move op puts it in the pipeline to the buyer", /In your pipeline/.test(r.message) && coppSent?.stage === "sent" && coppSent.to.name === "Dana Whitfield" && coppSent.to.role === "CEO" && coppSent.channel === "email", coppSent);
+  await act(ANA, { type: "move", id: pub("c_copp"), op: "undo" });
+  check("and Undo takes it back", !(await at(ANA, "c_copp")));
+  const src = (f: string) => readFileSync(path.join(process.cwd(), f), "utf8");
+  check("today's moves and the record's buyer note both send moveSent (Mark as sent, or the note used)", /moveSent\(m\)/.test(src("app/post/Moves.tsx")) && /type: "pipeline\.sent", companyId: i\.c\.id, from: "record", \.\.\.moveSent\(move\)/.test(src("app/post/Drawer.tsx")) && /onUsed=\{\(\) => void pipelineAct/.test(src("app/post/Drawer.tsx")));
 
   console.log("\nreplies and meetings, from fake Google metadata");
   await sync("mem_ana");

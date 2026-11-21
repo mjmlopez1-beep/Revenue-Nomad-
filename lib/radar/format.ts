@@ -180,7 +180,27 @@ export interface RadarMail {
   openPixel?: string;
   /** The app: the site the pictures load from (else RN_PUBLIC_URL). */
   appUrl: string;
+  /**
+   * Follow-ups due in Your pipeline (lib/pipelineActions.ts followUpsOf), most overdue first, in the
+   * words the run made: a company named only when the member's table shows it, never a person from
+   * their Google account. The email lists at most EMAIL_FOLLOW_UPS, above the companies.
+   */
+  followUps?: EmailFollowUp[];
+  /** Your pipeline in the app, signed in: the button of an email with follow-ups and no companies. */
+  pipelineUrl?: string;
 }
+
+/** One follow-up as the email lists it: "Follow up with the CEO at Larkfield Robotics", "Sent 3 days ago by email.", and its link. */
+export interface EmailFollowUp {
+  title: string;
+  line: string;
+  /** The company's record (or Your pipeline while the company is locked), tracked and signed in. */
+  url: string;
+}
+/** How many follow-ups the email lists. */
+export const EMAIL_FOLLOW_UPS = 3;
+export const FOLLOW_UPS_TITLE = "Follow-ups due";
+const followUps = (n: number) => plural(n, "follow-up");
 
 const lockedLine = `Locked for you: unlock it in Merlin for ${COMPANY_PRICE_SAY}.`;
 /** Trial and Pro: a Crystal Ball company opens free. */
@@ -311,8 +331,13 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
   const kept = m.day.cards.filter(sendable);
   const d: RadarDay = kept.length === m.day.cards.length ? m.day : { ...m.day, cards: kept, total: kept.length, companies: new Set(kept.map((c) => c.co)).size };
   const first = oneLine(m.name).split(" ")[0].slice(0, 40) || "there";
-  const subject = oneLine(radarSubject(d));
   const n = d.cards.length;
+  // Follow-ups due, above the companies. A day with follow-ups and no companies still sends (the run
+  // decides): the email is then about them alone, and its button opens Your pipeline.
+  const ups = (m.followUps ?? []).slice(0, EMAIL_FOLLOW_UPS);
+  const upsOnly = !n && ups.length > 0;
+  const upsAll = m.followUps?.length ?? 0;
+  const subject = oneLine(upsOnly ? `${YOUR_FEATURE}: ${followUps(upsAll)} due` : radarSubject(d));
   // New events first, then the standing states, each most likely first as the run ranked them.
   const ordered = [...d.cards.filter((c) => !isStill(c)), ...d.cards.filter(isStill)];
   const shown = ordered.slice(0, EMAIL_CARDS);
@@ -320,9 +345,10 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
   const still = shown.filter(isStill);
   const rest = n - shown.length;
   const every = m.every ?? "daily";
-  const button = seeAllWords(d.companies);
-  const hero = heroWords(d, every);
-  const count = countWords(d, every);
+  const button = upsOnly ? "Open your pipeline" : seeAllWords(d.companies);
+  const buttonUrl = upsOnly ? (m.pipelineUrl ?? d.url) : d.url;
+  const hero = upsOnly ? `You have ${followUps(upsAll)} due` : heroWords(d, every);
+  const count = upsOnly ? `${countWords(d, every)} at your companies` : countWords(d, every);
   const date = dayWords(d.day);
   const freshTitle = `New ${sinceWords(every)}`;
   // Free: only the first card that opens as today's free one says so.
@@ -333,7 +359,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
   const why = `You get this when a company in your Ideal Fractional Profile moves.${settingsUrl ? " Choose how often in Notifications, or turn it off with the link below." : " Turn it off with the link below."}`;
   const note = footerNote();
   const stillIntro = "Nothing new happened at these, and the timing still fits.";
-  const lead = shown[0] ? `${companyLine(shown[0])}: ${lowerFirst(cardLines(shown[0]).fact)}` : "";
+  const lead = shown[0] ? `${companyLine(shown[0])}: ${lowerFirst(cardLines(shown[0]).fact)}` : ups[0] ? ups[0].title : "";
   const preheader = `${count}.${lead ? ` First up: ${lead}` : ""}`;
 
   // How the companies open: once, when every card that needs it says the same.
@@ -361,11 +387,12 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
     [date, count].filter(Boolean).join(" · "),
     ...(oneNote ? [oneNote] : []),
     "",
+    ...(ups.length ? [FOLLOW_UPS_TITLE.toUpperCase(), "", ...ups.flatMap((f) => [oneLine(f.title), oneLine(f.line), `Open it: ${f.url}`, ""]), ...(upsAll > ups.length ? [`And ${followUps(upsAll - ups.length)} more in Your pipeline.`, ""] : [])] : []),
     ...(fresh.length ? [freshTitle.toUpperCase(), "", ...fresh.flatMap(textCard)] : []),
     ...(still.length ? ["STILL A GOOD TIME", stillIntro, "", ...still.flatMap(textCard)] : []),
     ...(rest > 0 ? [moreWords(rest), ""] : []),
     button,
-    d.url,
+    buttonUrl,
     "",
     "--",
     why,
@@ -437,7 +464,25 @@ ${how ? `<td class="cb-muted" style="padding-left:12px;font-family:${F};font-siz
 </tr></table>${sub ? `\n<p class="cb-muted" style="margin:6px 0 0;font-family:${F};font-size:14px;line-height:20px;color:${MAIL.muted}">${esc(sub)}</p>` : ""}
 </td></tr>`;
   };
+  // A follow-up: what to do, when it went out, and a link to the company's record.
+  const upRow = (f: EmailFollowUp) => `<tr><td style="padding:0 0 10px">
+<table role="presentation" class="cb-card" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border:1px solid ${MAIL.line};border-radius:12px;border-collapse:separate">
+<tr><td class="cb-pad" style="padding:14px 16px">
+<p class="cb-ink" style="margin:0 0 2px;font-family:${F};font-size:16px;line-height:22px;font-weight:800;color:${MAIL.ink}"><a href="${esc(f.url)}" style="color:${MAIL.ink};text-decoration:none">${esc(oneLine(f.title))}</a></p>
+<p class="cb-muted" style="margin:0;font-family:${F};font-size:14px;line-height:20px;color:${MAIL.muted}">${esc(oneLine(f.line))} <a href="${esc(f.url)}" style="color:${MAIL.pine};font-weight:700;text-decoration:underline">Open it</a></p>
+</td></tr>
+</table>
+</td></tr>`;
+  const upRows = ups.length
+    ? [
+        group("new", FOLLOW_UPS_TITLE, null),
+        ...ups.map(upRow),
+        ...(upsAll > ups.length ? [`<tr><td style="padding:0 0 10px;font-family:${F};font-size:14px;line-height:20px;color:${MAIL.muted}">And ${esc(followUps(upsAll - ups.length))} more in Your pipeline.</td></tr>`] : []),
+        ...(n ? [`<tr><td style="padding:6px 0 0"></td></tr>`] : []),
+      ]
+    : [];
   const cards = [
+    ...upRows,
     ...(fresh.length ? [group("new", freshTitle, null), ...fresh.map((c) => card(c, false))] : []),
     ...(still.length ? [`<tr><td style="padding:${fresh.length ? 16 : 0}px 0 0"></td></tr>`, group("still", "Still a good time", stillIntro), ...still.map((c) => card(c, true))] : []),
   ].join("\n");
@@ -447,7 +492,7 @@ ${oneNote ? `<p class="cb-muted" style="margin:0 0 22px;font-family:${F};font-si
 ${cards}
 </table>
 ${rest > 0 ? `<p style="margin:4px 0 20px;font-family:${F};font-size:15px;line-height:22px"><a class="cb-ink" href="${esc(d.url)}" style="color:${MAIL.ink};font-weight:700;text-decoration:underline">${esc(moreWords(rest))}</a></p>` : ""}
-${mailButton(d.url, button, "margin:12px 0 28px")}
+${mailButton(buttonUrl, button, "margin:12px 0 28px")}
 <div class="cb-line" style="border-top:1px solid ${MAIL.line};height:1px;line-height:1px;font-size:1px">&nbsp;</div>
 ${m.openPixel ? `<img src="${esc(m.openPixel)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">` : ""}
 </td></tr>`;

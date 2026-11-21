@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import dynamic from "next/dynamic";
 import type { Me } from "@/lib/tableTypes";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { MOVES_MAX, buildMove, buyerWhat, holderOnFile, knowLine, postedWords, type Move, type MoveWire, type MovesWire } from "@/lib/moves";
+import { MOVES_MAX, buildMove, buyerWhat, holderOnFile, knowLine, moveSent, postedWords, type Move, type MoveWire, type MovesWire } from "@/lib/moves";
 import { webLink } from "@/lib/links";
 import { CompanyLogo, IconBriefcase, IconChevron, IconExternal, IconLock, IconPencil, LockedName, initials, useToast } from "../ui/shared";
 import type { CoInfo } from "./model";
@@ -265,13 +265,8 @@ export function MovesSection({
   );
 }
 
-/** What a sent move tells the pipeline: the channel, who it went to (as the move shows them), and whether it asked for an intro. */
-function sentOf(m: Move): { channel: "email" | "merlin" | "intro"; to: { name?: string | null; role?: string | null; google?: boolean }; intro?: boolean } {
-  const w = m.way;
-  const to = w.kind === "know" ? { name: w.person.name, role: w.person.title, google: w.person.google } : w.kind === "holder" ? { name: w.name, role: w.role ?? (w.fn ? `fractional ${w.fn} lead` : null) } : {};
-  if (m.do === "intro") return { channel: "intro", to, intro: true };
-  return { channel: m.do === "holderMessage" && w.kind === "holder" && w.member ? "merlin" : "email", to };
-}
+/** What a sent move tells the pipeline (lib/moves.ts moveSent): someone they know, the seat holder, the buyer, or an open role's hiring team. */
+const sentOf = (m: Move) => moveSent(m);
 
 const ownClick = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 function GoLink({ to, children }: { to: Go; children: ReactNode }) {
