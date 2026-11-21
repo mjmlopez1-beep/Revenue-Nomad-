@@ -852,7 +852,7 @@ async function main() {
   nk = await netKit();
   const coppNet = nk.companies.find((c) => c.id === P.copp);
   const pella = coppNet?.people.find((p) => p.name === "Pella Quist");
-  check("seen by name: her Hot contact with a fractional title is the seat holder, and the company joins her network", !!pella && same(pella.seat, { id: pub("e_copp_cmo"), fn: "Marketing", now: true }) && pella.warmth === "Hot" && pella.email === "pella@quistco.example", coppNet);
+  check("seen by name: her Hot contact with a fractional title is the seat holder, and the company joins her network", !!pella && same(pella.seat, { id: pub("e_copp_cmo"), fn: "Marketing", now: true }) && pella.warmth === "Hot" && pella.email === "pella@quistco.example" && pella.dm === false, coppNet);
   check("so it is in Crystal Ball's Where you know someone (the page cuts the day to her network's companies)", nk.companies.some((c) => c.id === P.copp && c.ball));
   check("and she is no longer listed at companies not on Merlin yet", !nk.loose.some((p) => p.name === "Pella Quist"));
   const kitHome = await homeMoves(KIT);

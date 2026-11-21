@@ -619,7 +619,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
           <span className="nw-small">Merlin never sends for you. You review and send it yourself.</span>
         </div>
       )}
-      <p className="nw-small">Named for you free: you already know someone here. Only you see this.</p>
+      <p className="nw-small">{c.people.every((x) => x.seat) ? "From your own contacts. Only you see this." : "Named for you free: you already know someone here. Only you see this."}</p>
     </div>
   );
 }

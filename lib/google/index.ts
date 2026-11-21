@@ -550,7 +550,8 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
     const people = all
       .map((p) => ({ p, sc: warmthScore(p, nowMs), w: warmthFor(p, nowMs) }))
       .sort((a, b) => WARMTH_RANK[a.w] - WARMTH_RANK[b.w] || b.sc - a.sc || (b.p.last ?? "").localeCompare(a.p.last ?? ""))
-      .map(({ p }) => ({ ...personView(p, hiddenPeople, c.domain, nowMs), ...(seatOf.has(p.key) ? { seat: seatOf.get(p.key)! } : {}) }));
+      // A seat holder is the fractional there, not someone who decides: a "Fractional CMO" title is no decision maker's.
+      .map(({ p }) => ({ ...personView(p, hiddenPeople, c.domain, nowMs), ...(seatOf.has(p.key) ? { seat: seatOf.get(p.key)!, dm: false } : {}) }));
     const facts = { industry: T.live(node, s, "industry"), employees: T.live(node, s, "employees") };
     const mine = held.get(id);
     const said = n.notRel?.[id];
