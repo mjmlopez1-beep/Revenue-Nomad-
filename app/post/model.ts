@@ -12,7 +12,7 @@ import {
   REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, standardIndustries, standardList, COMPANY_PRICE, COMPANY_PRICE_SAY,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
-import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startWords, windowPhrase, windowWords } from "@/lib/hired";
+import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startMs, startWords, windowPhrase, windowWords } from "@/lib/hired";
 import { isFractionalLead, isFullTimeLead, ledFullTimeWords, onTheTeamWords, type LeadLine } from "@/lib/leaders/types";
 import { CRYSTAL_FREE_TODAY } from "@/lib/radar/types";
 
@@ -313,6 +313,13 @@ export const isHire = (e: EngagementRec) => {
  * still a hire for Functions hired, repeat hirers, fractional friendly and the benchmarks (isHire).
  */
 export const isLeaderHire = (e: EngagementRec) => isHire(e) && !e.belowLead;
+/** A seat whose status is Ended (a free fact). */
+export const isEndedSeat = (e: EngagementRec) => shown(e.cells.status) === "Ended";
+/**
+ * A hire Recently hired counts: a leadership hire (isLeaderHire) that hasn't ended. A fractional
+ * who has left is no recent hire, whenever the seat started (lib/hired.ts).
+ */
+export const isRecentHire = (e: EngagementRec) => isLeaderHire(e) && !isEndedSeat(e);
 
 /* ---------- recently hired (the rules are in lib/hired.ts) ---------- */
 
@@ -323,11 +330,11 @@ interface HireAt {
   ym: string | null;
 }
 const hireCache = new WeakMap<CoInfo, HireAt[]>();
-/** A company's leadership hires (isLeaderHire), the most recent start first, one with no start on file last. Worked out once per company. */
+/** A company's leadership hires that haven't ended (isRecentHire), the most recent start first, one with no start on file last. Worked out once per company. */
 function hiresAt(i: CoInfo): HireAt[] {
   let h = hireCache.get(i);
   if (!h) {
-    h = i.engs.filter(isLeaderHire).map((e) => ({ e, fn: fnOfSeat(e), ym: hireMonth(shown(e.cells.start)) }));
+    h = i.engs.filter(isRecentHire).map((e) => ({ e, fn: fnOfSeat(e), ym: hireMonth(shown(e.cells.start)) }));
     h.sort((a, b) => (b.ym ?? "").localeCompare(a.ym ?? ""));
     hireCache.set(i, h);
   }
@@ -335,7 +342,7 @@ function hiresAt(i: CoInfo): HireAt[] {
 }
 /** The leadership hires a row reads: a seat row its own seat (when it is one), a company or person row the company's. */
 const hiresOfRow = (r: Row): HireAt[] => {
-  if (r.e && !r.p) return isLeaderHire(r.e) ? [{ e: r.e, fn: fnOfSeat(r.e), ym: hireMonth(shown(r.e.cells.start)) }] : [];
+  if (r.e && !r.p) return isRecentHire(r.e) ? [{ e: r.e, fn: fnOfSeat(r.e), ym: hireMonth(shown(r.e.cells.start)) }] : [];
   return hiresAt(r.i);
 };
 /** In one of the functions picked, or any function when none is. */
@@ -517,15 +524,16 @@ export function deriveAll(companies: CompanyRec[]): CoInfo[] {
 export const isOpenSeat = (e: EngagementRec) => !e.closed && (e.source === "Demand scan" || shown(e.cells.status) === "Open role");
 
 /**
- * Fractional seats (open roles included) that started in the last two years. The server sends
- * this as friendly.recent; until it does, it is worked out here from the free start and type.
+ * Fractional seats (open roles included) that started in the last two years and haven't ended. The
+ * server sends this as friendly.recent; until it does, it is worked out here from the free start,
+ * status and type. A start with only a year reads as its December (lib/hired.ts startMs), as on the server.
  */
 export function recentSeats(i: CoInfo): number {
   if (typeof i.c.friendly.recent === "number") return i.c.friendly.recent;
   const cutoff = Date.now() - 2 * 365 * 86_400_000;
   return i.engs.filter((e) => {
-    const start = shown(e.cells.start);
-    if (!start || Date.parse(`${start}-01`) < cutoff) return false;
+    const started = startMs(shown(e.cells.start));
+    if (!Number.isFinite(started) || started < cutoff || isEndedSeat(e)) return false;
     const type = shown(e.cells.type);
     return isOpenSeat(e) || e.source === "Published engagement" || (!!type && FRACTIONAL_TYPES.includes(type));
   }).length;

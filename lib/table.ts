@@ -88,7 +88,7 @@ import type {
 } from "./tableTypes";
 import { BEFORE_MAX, CLIENT_COUNTS, type PlanView } from "./tableTypes";
 import type { DigestData, DigestHires, PostingCheckResult, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
-import { followsHires } from "./hired";
+import { followsHires, hireMonth, startMs } from "./hired";
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
 import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
@@ -139,6 +139,12 @@ export interface Member {
 export interface SeedCompany {
   id: string;
   fields: Record<string, string>;
+  /**
+   * A private import mark (scripts/add-past-seats.mjs): which match gave the company its facts and
+   * which fields it filled, so a wrong best-guess match can be found and undone. Server only: never
+   * copied into the graph, a view or an export.
+   */
+  enrichedBy?: { by: string; match: string; fields: string[]; also?: string[] };
 }
 interface SeedEngagement {
   id: string;
@@ -2809,8 +2815,9 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
     if (!type || FRACTIONAL_TYPES.includes(type)) {
       fractional++;
       if (fn) functions.add(fn);
-      const start = live(e, s, "start");
-      if (start && now - Date.parse(`${start}-01`) < 2 * 365 * DAY) recent++;
+      // A recent seat started in the last two years and hasn't ended. A start with only a year reads as its December (lib/hired.ts startMs), as in the app.
+      const started = startMs(live(e, s, "start"));
+      if (Number.isFinite(started) && now - started < 2 * 365 * DAY && live(e, s, "status") !== "Ended") recent++;
     } else stories++;
   }
   // An open role is the strongest signal there is: on its own it makes a company Medium. So does a
@@ -6636,7 +6643,8 @@ export async function claimPathFor(engagementPubId: string): Promise<string | nu
  */
 export interface ClaimPage {
   status: "invalid" | "open" | "held" | "yours" | "waiting" | "signin";
-  seat: { role: string | null; fn: string | null; company: string | null; start: string | null; named: boolean } | null;
+  /** `ended`: the seat's status is Ended, and `end` its end month or year when on file (the page reads "2023 to 2025", not "since 2023"). */
+  seat: { role: string | null; fn: string | null; company: string | null; start: string | null; end?: string | null; ended?: boolean; named: boolean } | null;
   me: { first: string } | null;
   /** Sign-in links go by email (an email provider is set up). */
   email: boolean;
@@ -6677,6 +6685,7 @@ export async function claimPage(token: unknown, memberToken: string | null, ref?
       fn: fnOf(e, s),
       company: locked ? null : g.companies.get(e.companyId)?.name ?? null,
       start: live(e, s, "start"),
+      ...(live(e, s, "status") === "Ended" ? { ended: true, end: hireMonth(live(e, s, "end")) ? live(e, s, "end") : null } : {}),
       named: !!publicName(e, s) || !!seedPublicName(seed, s, e.id),
     },
   };

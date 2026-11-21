@@ -404,7 +404,7 @@ export function FilterPanel({
       <Group title="Recently hired">
         <Hired f={f} setF={setF} facets={facets} />
         <p className="tp-fnote">
-          A hire is a fractional leader&apos;s seat on file that started in the window. Full-time seats, open roles and titles below Lead, like Finance Manager, don&apos;t count. A start with only a year counts as December of that year.
+          A hire is a fractional leader&apos;s seat on file that started in the window. Full-time seats, open roles, seats that have ended and titles below Lead, like Finance Manager, don&apos;t count. A start with only a year counts as December of that year.
         </p>
       </Group>
       <Group title="Shortcuts">

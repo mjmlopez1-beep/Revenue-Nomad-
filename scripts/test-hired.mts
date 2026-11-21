@@ -265,6 +265,17 @@ async function main() {
   const sorted = M.sortRows(M.applyFilters(M.rowsFor("companies", infos), f({ hiredFn: ["Finance"], hiredWithin: 0 }), "all", "", me, true).rows, "hired", false, "", { me, hire: { fns: ["Finance"], within: 0 } });
   const order = sorted.map((r) => letter.get(r.i.c.id)).join("");
   check("sorted by the most recent hire, a hire with no start last", order.startsWith("D") && order.endsWith("J") && order.indexOf("L") < order.indexOf("A") && order.indexOf("A") < order.indexOf("G") && order.indexOf("G") < order.indexOf("H") && order.indexOf("H") < order.indexOf("E"), order);
+  {
+    // A seat that ended is no recent hire, whenever it started: the filter, a seat row and the hire alerts' reader leave it out.
+    const ended = co("Endedfixture Co", [hire("Finance", "2026", { status: val("Ended"), end: val("2026") })]);
+    const both = co("Bothfixture Co", [hire("Finance", "2025", { status: val("Ended"), end: val("2026") }), hire("Finance", "2026-05")]);
+    const [ie, ib] = M.deriveAll([ended, both]);
+    check(
+      "an ended seat is no recent hire (any window), and a current one next to it still is",
+      M.hiresOf(ie, ["Finance"], 0).length === 0 && M.hiresOf(ie, [], 3).length === 0 && M.hiresOf(ib, ["Finance"], 6).length === 1 && M.hiresOf(ib, ["Finance"], 6)[0].cells.status?.s === "value" && (M.hiresOf(ib, ["Finance"], 6)[0].cells.status as { v: string }).v === "Active" && M.isHire(ie.engs[0]) && !M.isRecentHire(ie.engs[0]),
+    );
+    check("an ended seat still counts as a hire for Repeat hirers and Functions hired", M.isHire(ib.engs[0]) && M.isLeaderHire(ib.engs[0]));
+  }
   check("Most recent hire is a sort on every list", ["companies", "engagements", "people"].every((t) => M.sortsFor(t as "companies").some((s) => s.key === "hired")));
   check("the filter is one active filter and one chip", M.activeCount(f({ hiredFn: ["Finance", "Sales"], hiredWithin: 6 })) === 1 && M.activeCount(f({ hiredWithin: 6 })) === 1 && M.activeCount(f({})) === 0);
   const chip = M.activeChips(f({ hiredFn: ["Finance"], hiredWithin: 6, notMine: true }));

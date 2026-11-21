@@ -14,9 +14,10 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import "./claim.css";
-import { Brand, IconCheck, fmtMonth, post } from "../ui/shared";
+import { Brand, IconCheck, post } from "../ui/shared";
 import type { ClaimPage } from "@/lib/table";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
+import { seatLine } from "./seatLine";
 
 type Done = { title: string; text: string; seats?: boolean; messages?: boolean };
 /** A claim's answer from the server: claimed now, or waiting for an admin (the name on the seat isn't theirs). */
@@ -51,15 +52,6 @@ function settled(r: ClaimAnswer, fresh: ClaimPage | null): Done {
   return { title: "It's yours", text, seats: fresh?.status === "yours" && !messages, messages };
 }
 
-/**
- * "Fractional VP Sales at Acme since Mar 2024". While the company is locked it reads "at a company
- * that's hiring now, since Mar 2024": the comma keeps "since" with the seat, not the hiring.
- */
-function seatLine(seat: NonNullable<ClaimPage["seat"]>): string {
-  const what = seat.role || (seat.fn ? `A fractional ${seat.fn} seat` : "A fractional seat");
-  const where = seat.company ? seat.company : "a company that's hiring now";
-  return `${what} at ${where}${seat.start ? `${seat.company ? "" : ","} since ${fmtMonth(seat.start)}` : ""}`;
-}
 
 export function ClaimView({ token, initial, refCode, support, starter }: { token: string; initial: ClaimPage | null; refCode: string | null; support: string | null; starter: number }) {
   const [info, setInfo] = useState<ClaimPage | null>(initial);
