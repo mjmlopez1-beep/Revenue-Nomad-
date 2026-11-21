@@ -384,6 +384,19 @@ async function main() {
   const r3 = await save(anaM, [{ company: "cedar.example", person_title: "Hi Ana,\nhere is what we discussed about pricing" }]);
   const r4 = await save(anaM, [{ company: "cedar.example", snippet: "quoted text" }]);
   check("a body, a snippet or text in a field: refused too", !r2.ok && !r3.ok && !r4.ok && stateFile() === before, [r2, r3, r4]);
+  // A reply or forward prefix is a line of mail, however it is spelled; the same letters inside a word are not.
+  const { looksLikeText } = await import("../lib/google/compute");
+  const mailLines = ["Re: next steps", "RE:pricing", "re: your note", "Fwd: intro to Dana", "FW: the deck", "Fw: hello", "Fw : hello", "Pat Example Re: Q3 plan", "(fwd: see below)", "On Tuesday Pat wrote", "Subject line here", "click to unsubscribe"];
+  check("a reply or forward prefix reads like email text", mailLines.every((v) => looksLikeText(v, 200)), mailLines.filter((v) => !looksLikeText(v, 200)));
+  const fine = [
+    "cedar.example", "https://brightline.example", "Cedar Health", "Acme Robotics, Inc.", "Pat Example", "Rae O'Example-Smith", "COO", "VP, Infrastructure: Cloud", "Head of Core: Platform", "Director of Reporting",
+    "Chief Revenue Officer", "Refresh Labs", "Pre: Seed Ventures", "Software: Research and Development", "Forward Networks", "Fwd Logistics", "Rewrote Labs", "Foreword Books", "VP Sales (West)", "re-insurance lead",
+  ];
+  check("names, titles and domains still pass", fine.every((v) => !looksLikeText(v, 200)), fine.filter((v) => looksLikeText(v, 200)));
+  const mail1 = await save(anaM, [{ company: "cedar.example", person_name: "Re: pricing follow-up" }]);
+  const mail2 = await save(anaM, [{ company: "cedar.example", person_name: "Pat Example", person_title: "Fwd: intro" }]);
+  const mail3 = await save(anaM, [{ company: "FW: Cedar Health renewal" }]);
+  check("so save_my_network refuses one in a name, a title or a company, and nothing is saved", !mail1.ok && /reads like email text/.test(mail1.error) && !mail2.ok && !mail3.ok && stateFile() === before, [mail1, mail2, mail3]);
   check("more than 200 entries: refused", !(await save(anaM, Array.from({ length: 201 }, () => ({ company: "cedar.example" })))).ok);
   check("those refusals didn't use up a save", (await anaView()).claudeLeft === 5);
   const ok1 = await save(anaM, [

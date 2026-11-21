@@ -366,8 +366,16 @@ export function cleanDate(v: unknown, nowMs: number): string | undefined {
   return d;
 }
 
+/** Words a line of mail carries and a name, a title or a domain doesn't. */
+const MAIL_WORDS = /\b(wrote|subject|unsubscribe)\b/i;
+/**
+ * A reply or forward prefix at the start of a word: "Re: next steps", "RE:pricing", "Fwd: intro",
+ * "FW: deck", "Fw :". (The colon can't end a `\b...\b` group before a space, which is how "Re: "
+ * used to get through.) Inside a word it is not one: "Infrastructure: Cloud", "Core: Platform".
+ */
+const MAIL_PREFIX = /(^|[^a-z0-9])(re|fwd?|fw)\s?:/i;
 /** A value that reads like email text rather than a name, a title or a domain. */
-export const looksLikeText = (v: string, max: number) => v.length > max || /[\r\n]/.test(v) || /\b(wrote|subject|re:|fwd?:|unsubscribe)\b/i.test(v);
+export const looksLikeText = (v: string, max: number) => v.length > max || /[\r\n]/.test(v) || MAIL_WORDS.test(v) || MAIL_PREFIX.test(v);
 
 export { isDecisionMaker };
 export type { NetSource };
