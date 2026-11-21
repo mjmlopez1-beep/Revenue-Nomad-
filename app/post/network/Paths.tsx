@@ -572,6 +572,7 @@ export function Everyone({ view, openCompany, filter, setFilter }: { view: Netwo
                       <span className="np-p-name">
                         {p.name ?? p.email ?? "Someone"}
                         {p.title ? `, ${p.title}` : ""}
+                        {p.seat ? ` · ${p.seat.now ? "holds" : "held"} their ${p.seat.fn && p.seat.fn !== "Other" ? `${p.seat.fn} ` : ""}seat` : ""}
                       </span>
                       <span className="np-p-why">
                         <WarmthChip w={p.warmth} /> {p.why}

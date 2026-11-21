@@ -380,10 +380,41 @@ async function main() {
   const larkSeats = D.wayInSeatsOf(lark, fa.table.me!.function);
   const way = render(fa.table.me, React.createElement(D.YourWayIn, { i: lark, seats: larkSeats }));
   check("with Google connected and seats on file, the heading is printed once, in one section", larkSeats.length === 2 && count(text(way), "Your way in") === 1 && count(way, "<h3") === 1 && count(way, "<section") === 1, text(way).slice(0, 300));
-  check("the people the member knows come first, then the seats someone held", way.indexOf("Dana Whitfield") > 0 && way.indexOf("Dana Whitfield") < way.indexOf("tp-wayin-row") && count(way, "tp-wayin-row") === 2 && /from your calendar, contacts/.test(text(way)));
+  check("the people the member knows come first, then the seats someone held", way.indexOf("Dana Whitfield") > 0 && way.indexOf("Dana Whitfield") < way.indexOf("tp-wayin-row") && count(way, 'class="tp-wayin-row"') === 2 && /from your calendar, contacts/.test(text(way)));
   const tall0 = anaInfos.find((i) => i.c.name === "Tallgrass Analytics")!;
   const wayNoSeats = render(fa.table.me, React.createElement(D.YourWayIn, { i: tall0, seats: D.wayInSeatsOf(tall0, "RevOps") }));
   check("people known and no seat on file: still one heading", count(text(wayNoSeats), "Your way in") === 1 && /Marcus Bell/.test(wayNoSeats));
+  // The buyer on the record: a seat's hirer is a decision maker (counted at the company too), its unlock priced before the click.
+  const hirer = (cells: Record<string, unknown>) => ({ id: "p_made_hirer", engagementId: lark.c.engagements[0].id, source: "Member added", cells: { relationship: { s: "value", v: "Hiring for the seat", ver: 0 }, ...cells } });
+  const withSeatHirer = (cells: Record<string, unknown>) => {
+    const engs = lark.c.engagements.map((e, k) => (k === 0 ? { ...e, people: [...e.people, hirer(cells)] } : e));
+    return deriveAll([{ ...lark.c, people: [], engagements: engs } as never])[0];
+  };
+  const lockedHirer = withSeatHirer({ name: { s: "locked", ver: 0 }, title: { s: "locked", ver: 0 }, email: { s: "locked", ver: 0 } });
+  const wayLocked = text(render(fa.table.me, React.createElement(D.YourWayIn, { i: lockedHirer, seats: D.wayInSeatsOf(lockedHirer, "RevOps") })));
+  check("the record's way in lists who hired the seat, its name and title one purchase at 1 credit", /Hired their fractional/.test(wayLocked) && /1 credit/.test(wayLocked) && !/Find who runs/.test(wayLocked), wayLocked.slice(0, 500));
+  const namedHirer = withSeatHirer({ name: { s: "value", v: "Gale Hirer", ver: 0 }, title: { s: "value", v: "CEO", ver: 0 }, email: { s: "locked", ver: 0 } });
+  const wayNamed = text(render(fa.table.me, React.createElement(D.YourWayIn, { i: namedHirer, seats: D.wayInSeatsOf(namedHirer, "RevOps") })));
+  check("named: a drafted note to them, and their email at 1 credit", /Gale Hirer · CEO/.test(wayNamed) && /Draft a note to Gale/.test(wayNamed) && /Their email · 1 credit/.test(wayNamed), wayNamed.slice(0, 500));
+  const { CellUiCtx } = await import("../app/post/ui.tsx");
+  const drawerText = (i: unknown) =>
+    text(renderToStaticMarkup(React.createElement(UiCtx.Provider, { value: uiFor(fa.table.me) as never }, React.createElement(CellUiCtx.Provider, { value: uiFor(fa.table.me) as never }, React.createElement(D.Drawer, { i, focus: null, onClose: noop, onStep: noop, pos: null, phone: false } as never)))));
+  const dr = drawerText(lockedHirer);
+  check("and the record's decision makers count them: no more 0 · Nobody is on file here yet", /Decision makers at Larkfield Robotics\s*1/.test(dr) && !/Nobody is on file here yet/.test(dr), dr.match(/Decision makers at[^.]{0,80}/)?.[0]);
+  // Nobody who decides on file: where to look, as links out.
+  const noBuyer = deriveAll([{ ...lark.c, people: [], engagements: lark.c.engagements.map((e) => ({ ...e, people: [] })) } as never])[0];
+  const findHtml = render(fa.table.me, React.createElement(D.YourWayIn, { i: noBuyer, seats: D.wayInSeatsOf(noBuyer, "RevOps") }));
+  check("nobody who decides on file: Find who runs RevOps, a LinkedIn search and their site, and Add them +1 credit", /Find who runs RevOps at Larkfield Robotics/.test(text(findHtml)) && findHtml.includes("https://www.linkedin.com/search/results/people/?keywords=") && /Their (website|team page)/.test(text(findHtml)) && /Add them\s*\+1 credit/.test(text(findHtml)) && !/LinkedIn data|from LinkedIn/i.test(text(findHtml)), text(findHtml).slice(0, 500));
+  // A seat holder in the member's own contacts: the record says so, and the invite uses the address they have.
+  const larkHeld = deriveAll([{ ...lark.c, engagements: lark.c.engagements.map((e) => (e.id === larkSeats[0].id ? { ...e, cells: { ...e.cells, operator: { s: "value", v: "Dana Whitfield", ver: 0 } }, invite: undefined } : e)) } as never])[0];
+  served = { ...fa.view, companies: fa.view.companies.map((c) => (c.id === lark.c.id ? { ...c, people: c.people.map((p) => (p.name === "Dana Whitfield" ? { ...p, seat: { id: larkSeats[0].id, fn: "Marketing", now: true } } : p)) } : c)) };
+  await store.load(true);
+  const knownWay = text(render(fa.table.me, React.createElement(D.YourWayIn, { i: larkHeld, seats: D.wayInSeatsOf(larkHeld, "RevOps") })));
+  const danaW = fa.view.companies.find((c) => c.id === lark.c.id)!.people.find((p) => p.name === "Dana Whitfield")!.warmth;
+  check("a seat holder she knows: You know Dana (Warm), who holds their Marketing seat, and Email Dana, not Find them on LinkedIn", knownWay.includes(`You know Dana (${danaW}), who holds their Marketing seat. Only you see this.`) && /Email Dana/.test(knownWay) && /The address is from your own contacts/.test(knownWay) && !/Find them on LinkedIn/.test(knownWay), knownWay.slice(0, 700));
+  served = fa.view;
+  await store.load(true);
+
   const boTable0 = await t.buildView(BO);
   const boLark = deriveAll(boTable0.companies).find((i) => i.c.id === lark.c.id)!;
   check("a member who knows nobody there sees no people, whatever the store holds for someone else", !boTable0.companies.find((c) => c.id === lark.c.id)!.name.includes("Larkfield") && !JSON.stringify(boTable0).includes("Dana Whitfield") && !!boLark);
@@ -664,7 +695,7 @@ async function main() {
   served = { on: false };
   await store.load(true);
   const offWay = render(a3.me, React.createElement(D.YourWayIn, { i: deriveAll(a3.companies).find((i) => i.c.id === lark.c.id) ?? lark, seats: [] }));
-  check("and the pages draw nothing of it", offWay === "" && renderToStaticMarkup(React.createElement(N2.KnowChip, { companyId: lark.c.id })) === "");
+  check("and the pages draw nothing of it", !/Dana Whitfield|from your|You know/.test(offWay) && !offWay.includes("nw-wayin") && renderToStaticMarkup(React.createElement(N2.KnowChip, { companyId: lark.c.id })) === "");
   globalThis.fetch = realFetch;
 }
 

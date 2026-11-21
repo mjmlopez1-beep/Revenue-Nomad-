@@ -1318,7 +1318,7 @@ function WayInBuyer({ i, b, onDraft }: { i: CoInfo; b: BuyerOnFile; onDraft: (b:
   const nameLocked = ["name", "title"].filter((f) => b.p.cells[f]?.s === "locked");
   const emailBusy = ui.busy.has(cellKey(b.p.id, "email"));
   return (
-    <div className="tp-wayin-row">
+    <div className="tp-wayin-row tp-wayin-buyer">
       <span className="tp-wayin-what">{buyerLabel(b)}</span>
       {name ? (
         <>

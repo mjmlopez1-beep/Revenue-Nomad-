@@ -119,6 +119,8 @@ const members = [
   member("mem_oth", "Oto Other"),
   member("mem_few", "Finn Few"),
   member("mem_han", "Hana Holder", "Fractional CRO"),
+  // Kit's own contacts hold seats: Pella by name (a fractional title), Hana by email (a member).
+  member("mem_kit", "Kit Known"),
   { id: "mem_ada", name: "Ada Admin", email: "admin-moves@example.com", title: "Admin", token: "tok-ada-moves" },
 ];
 const seed = { builtAt: iso(-60 * DAY), members, companies, engagements, contacts };
@@ -176,6 +178,21 @@ const network = {
     },
   },
   // Oto knows someone at Northwind. Nobody else may ever see her.
+  // Kit's contacts at no company on Merlin (their own firms): two hold seats there, one shares a seat holder's name and isn't them.
+  mem_kit: {
+    google: link("kit@kitknown.example"),
+    con: {
+      at: iso(-HOUR),
+      unmatched: 3,
+      real: 3,
+      companies: {},
+      loose: [
+        { key: "pella@quistco.example", email: "pella@quistco.example", name: "Pella Quist", title: "Fractional CMO", meetings: 5, last: iso(-9 * DAY).slice(0, 10), first: dayMonthsAgo(10), src: ["calendar", "contacts"], domain: "quistco.example" },
+        { key: "han.moves@example.com", email: "han.moves@example.com", name: "Hana H", saved: true, src: ["contacts"] },
+        { key: "ivo@castellan.example", email: "ivo@castellan.example", name: "Ivo Castellan", title: "Office Manager", meetings: 3, last: dayMonthsAgo(2), src: ["calendar"], domain: "castellan.example" },
+      ],
+    },
+  },
   mem_oth: { google: link("oto@otherco.example"), cal: { at: iso(-HOUR), unmatched: 0, real: 1, companies: { c_nort: netCo("northwind.example", person("zelda@northwind.example", "Zelda Quince", "Chief Operating Officer", 6, dayMonthsAgo(1))) } } },
 };
 
@@ -196,6 +213,7 @@ writeFileSync(
         mem_oth: trial,
         mem_few: trial,
         mem_han: trial,
+        mem_kit: trial,
         mem_fre: { trialStartedAt: iso(-30 * DAY), trialEndsAt: iso(-9 * DAY) },
         // Paid yesterday: the welcome is due. Paid 100 days ago: it isn't. Bought in the trial, first charge still to come: due.
         mem_pro: { trialStartedAt: iso(-22 * DAY), trialEndsAt: iso(-1 * DAY), proUntil: iso(29 * DAY), interval: "month", paidSince: iso(-1 * DAY), subscriptionId: "sub_pro" },
@@ -215,6 +233,7 @@ writeFileSync(
         mem_fre: ballOf("mem_fre"),
         mem_pro: ballOf("mem_pro"),
         mem_oth: ballOf("mem_oth"),
+        mem_kit: ballOf("mem_kit"),
         mem_old: ballOf("mem_old", ballOld("mem_old")),
         // Finn's Crystal Ball has two companies today.
         mem_few: ballOf("mem_few", [hired("mem_few", "c_nort", "High"), hired("mem_few", "c_salt", "Medium")]),
@@ -818,6 +837,56 @@ async function main() {
   check("Free opens one from a move, with everything on it, for no credits", !opened.hidden && opened.name === "Tallgrass Analytics" && opened.do === "reply" && (await credits(FRE)) === freCredits, opened);
   check("then today's is used: the others stay locked and unnamed, and say so", fre2.today.me.crystal === "used" && fre2.moves.filter((m) => m.id !== P.tall).every((m) => m.hidden && m.name === null && m.do === "open" && /is used/.test(m.line)), fre2.moves.map((m) => m.line));
   check("a second one is refused, as from Crystal Ball", !!(await refused(act(FRE, { type: "unlock", entity: "company", id: P.salt, field: "identity", from: "crystal" }))));
+
+  /* ================= "You know this person": their own contacts who hold a seat ================= */
+  console.log("\nyou know this person");
+  const KIT = "tok-kit-moves";
+  const netKit = async () => (await G.networkView(KIT)) as import("../lib/google/types").NetworkView;
+  check("the name key folds case and accents and keeps first and last", G.nameMatchKey("Pélla  QUIST") === "pella quist" && G.nameMatchKey("Pella J. Quist") === "pella quist" && G.nameMatchKey("Pella") === null && G.nameMatchKey("Pella Q") === null);
+  let nk = await netKit();
+  check("a locked company: nobody matched, the contact stays under people at companies not on Merlin", !nk.companies.some((c) => c.id === P.copp) && nk.loose.some((p) => p.name === "Pella Quist"), nk.companies.map((c) => c.name));
+  await act(KIT, { type: "unlock", entity: "company", id: P.copp, field: "identity", from: "crystal" });
+  nk = await netKit();
+  check("the company open, its seat holder still locked: no match (a paid fact isn't given away)", !nk.companies.some((c) => c.id === P.copp));
+  await act(KIT, { type: "unlock", entity: "engagement", id: pub("e_copp_cmo"), field: "operator" });
+  nk = await netKit();
+  const coppNet = nk.companies.find((c) => c.id === P.copp);
+  const pella = coppNet?.people.find((p) => p.name === "Pella Quist");
+  check("seen by name: her Hot contact with a fractional title is the seat holder, and the company joins her network", !!pella && same(pella.seat, { id: pub("e_copp_cmo"), fn: "Marketing", now: true }) && pella.warmth === "Hot" && pella.email === "pella@quistco.example", coppNet);
+  check("so it is in Crystal Ball's Where you know someone (the page cuts the day to her network's companies)", nk.companies.some((c) => c.id === P.copp && c.ball));
+  check("and she is no longer listed at companies not on Merlin yet", !nk.loose.some((p) => p.name === "Pella Quist"));
+  const kitHome = await homeMoves(KIT);
+  const kCopp = kitHome.moves.find((m) => m.id === P.copp);
+  check("the move: You know Pella (Hot), who holds their Marketing seat", !!kCopp && kCopp.way.kind === "know" && kCopp.title === "Message Pella" && kCopp.line === "You know Pella (Hot), who holds their Marketing seat. Ask who decides on RevOps there." && M.knowSeatLine(kCopp.way.person) === "You know Pella (Hot), who holds their Marketing seat.", kCopp && [kCopp.title, kCopp.line]);
+  const kFacts = kCopp ? M.noteFacts(kCopp, rowOf0(kitHome, P.copp), kitHome.today.me, BASE) : null;
+  const kDraft = kFacts ? M.draftNote(kFacts, null) : null;
+  check("the draft goes to her, with her address from Kit's own contacts", kFacts?.kind === "knowHolder" && kFacts.to?.email === "pella@quistco.example" && kFacts.to.from === "your own contacts" && /^Hi Pella,\n\n/.test(kDraft!.body) && /I know you hold the Marketing seat there/.test(kDraft!.body) && /Who decides on RevOps there/.test(kDraft!.body), kDraft?.body);
+  check("the note has no address in its words and no rate", !!kDraft && !/@/.test(kDraft.body) && !RATE.test(kDraft.body));
+  // The decoy: a contact with a seat holder's name and a title that isn't a fractional's, nor the seat's function.
+  await act(KIT, { type: "unlock", entity: "company", id: P.blue, field: "identity", from: "crystal" });
+  await act(KIT, { type: "unlock", entity: "engagement", id: pub("e_blue_cro"), field: "operator" });
+  nk = await netKit();
+  check("a name alone never matches: Ivo the office manager isn't the fractional CRO", !nk.companies.some((c) => c.id === P.blue) && nk.loose.some((p) => p.name === "Ivo Castellan"));
+  // By email: Hana is a member; her seat is at Saltmarsh, which Kit hasn't opened.
+  check("by email, a locked company: no match yet", !nk.companies.some((c) => c.id === P.salt));
+  await act(KIT, { type: "unlock", entity: "company", id: P.salt, field: "identity", from: "crystal" });
+  check("by email, the seat holder still locked: no match yet", !(await netKit()).companies.some((c) => c.id === P.salt));
+  await act(KIT, { type: "unlock", entity: "engagement", id: pub("e_salt_cro"), field: "operator" });
+  nk = await netKit();
+  const hana = nk.companies.find((c) => c.id === P.salt)?.people.find((p) => p.email === "han.moves@example.com");
+  check("by email: her contact is Hana, a member, so the seat joins though the names differ", !!hana && hana.seat?.id === pub("e_salt_cro") && !nk.loose.some((p) => p.email === "han.moves@example.com"), nk.companies.find((c) => c.id === P.salt));
+  // Theirs alone.
+  for (const [who, tok] of [["Morgan", MOR], ["Tess", TES], ["Oto", OTH]] as const) {
+    const other = await G.networkView(tok);
+    check(`${who}'s network has none of Kit's contacts`, !found(other, ["quistco", "pella@", "han.moves@", "castellan.example"]).length);
+  }
+  const tmKit = (await tools.todaysMoves(await ctxOf(KIT))) as { moves: Record<string, unknown>[] };
+  check("the connector never names a person from her Google account, seat or not", !found(tmKit, ["Pella", "quistco", "han.moves", "Hana H"]).length && (tmKit.moves.find((m) => m.company_id === P.copp)?.your_move ?? "Message the person you know there") === "Message the person you know there", tmKit.moves.map((m) => m.your_move));
+  check("nor does my_network", !found(await G.myNetworkForClaude((await T.memberForToken(KIT))!), ["Pella", "quistco", "Hana H", "han.moves"]).length);
+  const hanM = (await T.memberForToken("tok-han-moves"))!;
+  const seedS = { seed: await T.loadSeed(), s: await T.loadState() };
+  const hanOwn = G.seatMatchesOf(seedS.seed, seedS.s, hanM, { con: { at: iso(0), unmatched: 0, real: 1, companies: {}, loose: [{ key: "han.moves@example.com", email: "han.moves@example.com", name: "Hana Holder", title: "Fractional CRO", src: ["contacts"] }] } });
+  check("a member's own seat never matches their own contact", hanOwn.length === 0, hanOwn);
 }
 
 try {
