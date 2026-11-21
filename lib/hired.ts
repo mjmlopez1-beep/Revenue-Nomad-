@@ -7,6 +7,9 @@
  * - A hire is any seat that counts as one: a fractional, interim, advisory or project seat, or one
  *   with no type on file. Not a full-time seat, not an open role, and not a job posting that came
  *   down with nobody named in the seat (isHire in app/post/model.ts).
+ * - Recently hired leaves out a seat whose status is Ended (isRecentHire in app/post/model.ts): the
+ *   fractional has left, so it is no recent hire, whenever it started. It still counts everywhere
+ *   else a hire does (Functions hired, repeat hirers, fractional friendly, the benchmarks).
  * - Only a fractional leader's seat counts here: C-level, VP, Head, Director, Lead, or a title that
  *   shows no level. A seat whose title reads below Lead ("Fractional Finance Manager", "Fractional
  *   Content Engineer") doesn't (isLeaderHire in app/post/model.ts). The server reads the stored
@@ -41,7 +44,9 @@ export const windowPhrase = (months: number) => (months > 0 ? `in the last ${win
 
 /**
  * The month a start stands for, as "YYYY-MM": "2025-03" stays, a year alone ("2025") is its
- * December ("2025-12"). Null for anything else.
+ * December ("2025-12"). Null for anything else. The one reading of a start everywhere a seat's
+ * recency counts: Recently hired here, and the "Recent seat" tag on the server (lib/table.ts
+ * friendliness) and in the app (app/post/model.ts recentSeats), through startMs below.
  */
 export function hireMonth(start: string | null | undefined): string | null {
   const m = /^\s*(\d{4})(?:-(\d{1,2}))?\s*$/.exec(String(start ?? ""));
@@ -49,6 +54,12 @@ export function hireMonth(start: string | null | undefined): string | null {
   const mo = m[2] === undefined ? 12 : Number(m[2]);
   if (mo < 1 || mo > 12) return null;
   return `${m[1]}-${String(mo).padStart(2, "0")}`;
+}
+
+/** The first day of the month a start stands for (a year alone is its December), in ms, or NaN. */
+export function startMs(start: string | null | undefined): number {
+  const ym = hireMonth(start);
+  return ym ? Date.parse(`${ym}-01T00:00:00Z`) : NaN;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

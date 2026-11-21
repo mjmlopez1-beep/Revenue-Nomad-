@@ -76,6 +76,71 @@ export function personKey(key, personId) {
   return id ? `p_${createHmac("sha256", key).update(`person:${id}`).digest("hex").slice(0, 20)}` : null;
 }
 
+/* ---------- seat-scan seat ids ---------- */
+
+/** A seat-scan seat's id: "e_ss_" + the first 20 hex of HMAC-SHA256(seed key, "seat-scan:" + its key). */
+export const scanSeatId = (key, seatKeyText) => `e_ss_${createHmac("sha256", key).update(`seat-scan:${seatKeyText}`).digest("hex").slice(0, 20)}`;
+/** The id the first batch gave a seat (the seat_id's letters and digits). Kept for the seats it added. */
+export const scanLegacyId = (seatId) => `e_ss_${seatId.replace(/[^A-Za-z0-9]/g, "")}`;
+/** The company a seat-scan row names, as its seat key reads it: the file's company id, else its name. */
+const rowCompany = (r) => String(r.company_sales_nav_id ?? "").trim() || `name:${companyKey(companyName(r.company_name))}`;
+
+/**
+ * Each seat-scan row's seat id. The file's seat_id is one per person, not per seat, so a person
+ * with seats at two clients has two rows under one seat_id. One row of a seat_id keeps the id the
+ * seat_id gives (HMAC of "seat-scan:" + seat_id, or the first batch's legacy id): the row whose
+ * company is the seat's on the seed, if one is (so a claim on it never moves), else the first. Each
+ * other row at another company gets its own: the HMAC of "seat-scan:" + seat_id + ":" + the company's
+ * key (company_sales_nav_id, else "name:" + its name); another title at a company the person already
+ * has a row at adds ":" + the title. The same person, company and title twice is one seat (`dup`).
+ * Returns, per row object: { hashed, legacy } (legacy null for a further seat), or { dup: true }.
+ */
+export function seatScanIds(rows, seed, key) {
+  const engs = new Map(seed.engagements.map((e) => [e.id, e]));
+  const cos = new Map(seed.companies.map((c) => [c.id, c]));
+  const groups = new Map();
+  for (const r of rows) {
+    const sid = String(r.seat_id ?? "").trim();
+    if (!sid) continue;
+    if (!groups.has(sid)) groups.set(sid, []);
+    groups.get(sid).push(r);
+  }
+  const plan = new Map();
+  for (const [sid, rs] of groups) {
+    const base = { hashed: scanSeatId(key, sid), legacy: scanLegacyId(sid) };
+    if (rs.length === 1) {
+      plan.set(rs[0], base);
+      continue;
+    }
+    // The row the seat on the seed came from: its company by name, LinkedIn page or website, else its title.
+    const onSeed = engs.get(base.legacy) ?? engs.get(base.hashed);
+    const c = onSeed ? cos.get(onSeed.companyId) : null;
+    const sameCo = (r) =>
+      !!c &&
+      (companyKey(companyName(r.company_name)) === companyKey(c.fields.name ?? "") ||
+        (!!linkedinKey(r.company_linkedin_url) && linkedinKey(r.company_linkedin_url) === linkedinKey(c.fields.linkedin)) ||
+        (!!host(r.company_website) && siteKey(host(r.company_website)) === siteKey(c.fields.website)));
+    const keeper = (onSeed && (rs.find(sameCo) ?? rs.find((r) => textKey(r.seat_title ?? "") === textKey(onSeed.fields.role ?? "")))) || rs[0];
+    const seen = new Set([`${rowCompany(keeper)}|${textKey(keeper.seat_title ?? "")}`]);
+    const companiesUsed = new Set([rowCompany(keeper)]);
+    plan.set(keeper, base);
+    for (const r of rs) {
+      if (r === keeper) continue;
+      const co = rowCompany(r);
+      const t = textKey(r.seat_title ?? "");
+      if (seen.has(`${co}|${t}`)) {
+        plan.set(r, { dup: true });
+        continue;
+      }
+      seen.add(`${co}|${t}`);
+      const k = companiesUsed.has(co) ? `${sid}:${co}:${t}` : `${sid}:${co}`;
+      companiesUsed.add(co);
+      plan.set(r, { hashed: scanSeatId(key, k), legacy: null, further: true });
+    }
+  }
+  return plan;
+}
+
 /* ---------- mappings ---------- */
 
 /** The file's function labels, as Merlin's functions. */

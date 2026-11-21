@@ -49,6 +49,12 @@
  * the first batch added keeps the id it has ("e_ss_" + the seat_id's letters and digits), so a
  * claim on it still points at it; a re-run finds either form and leaves that seat as it is (its
  * seat holder from scripts/add-seat-names.mjs, its day and its fields stay).
+ * The file's seat_id is one per person, not per seat: a person with seats at two clients has two
+ * rows under one seat_id. Each distinct (person, company, title) is its own seat
+ * (scripts/seat-import.mjs seatScanIds): the row whose company is that seat_id's seat on the seed
+ * (else the first) keeps the id above, so a claim never moves; another company's row gets
+ * HMAC("seat-scan:" + seat_id + ":" + the company's key), another title at the same company adds
+ * ":" + the title. Every seat this run adds carries the holder's person key (holderKey).
  * A seat is also a duplicate when its company already has a seat with the same title and start.
  *
  * Companies match by LinkedIn company page, then website host, then name (as Add matches them).
@@ -68,7 +74,6 @@
  * Prints counts and company names only, never a person's name.
  */
 import { execFileSync, spawnSync } from "child_process";
-import { createHmac } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 
 // The same matching keys as Add (lib/scan/clean.ts, lib/tableFields.ts) are TypeScript, so this
@@ -85,6 +90,7 @@ const { employeeBand, industryOf, revenueBand } = await import("../lib/industryM
 // Fractional firms, agencies and marketplaces are not clients (lib/firms.ts): never added, and the cleanup drops any the seed has.
 const { companyFirm } = await import("../lib/firmRemoval.ts");
 // What the importers share (CSV, the seed key, the client and seniority rules, matching, the cleanup).
+const { seatScanIds } = await import("./seat-import.mjs");
 const { FUNCTION_MAP, aboutNamesHolder: namesHolder, cleanKeeping, cleanUrl, companyIndex, companyName, host, hqCountry, isTrue, linkedinKey, newCompanyId, notFractional, ownFirm, parseCsv, personKey, real, rnEmployees, seedKey, seniorTitle } =
   await import("./seat-import.mjs");
 
@@ -120,15 +126,14 @@ const month = (v) => (/^\d{4}-\d{2}$/.test(String(v ?? "").trim()) ? String(v).t
 /* ---------- seat keys ---------- */
 
 const seatKey = seedKey("Seats are keyed by an HMAC under it.");
-/** The seat's id: a one-way HMAC of the file's seat_id, so no profile id reaches the seed. */
-const hashedId = (seatId) => `e_ss_${createHmac("sha256", seatKey).update(`seat-scan:${seatId}`).digest("hex").slice(0, 20)}`;
-/** The id the first batch gave a seat (the seat_id's letters and digits). Kept for the seats it added. */
-const legacyId = (seatId) => `e_ss_${seatId.replace(/[^A-Za-z0-9]/g, "")}`;
+
 
 /* ---------- merge ---------- */
 
 const seed = JSON.parse(readFileSync(seedPath, "utf8"));
 const rows = parseCsv(readFileSync(csvPath, "utf8"));
+/** Each row's seat id (seat-import.mjs seatScanIds): seat_id is one per person, so a person's further seats get their own. */
+const idPlan = seatScanIds(rows, seed, seatKey);
 
 /* ---------- --backfill-holder-keys: the person key on seats on file, nothing else ---------- */
 
@@ -141,8 +146,12 @@ if (backfillKeys) {
   const k = { matched: 0, added: 0, had: 0, differs: 0, noId: 0, notOnSeed: 0, notScan: 0, twice: 0 };
   const done = new Set();
   for (const r of rows) {
-    const sid = String(r.seat_id ?? "").trim();
-    const e = sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
+    const p = idPlan.get(r);
+    const e = p && !p.dup ? (p.legacy && byId.get(p.legacy)) || byId.get(p.hashed) : undefined;
+    if (p?.dup) {
+      k.twice++;
+      continue;
+    }
     if (!e) {
       k.notOnSeed++;
       continue;
@@ -167,7 +176,7 @@ if (backfillKeys) {
   const seatsOf = new Map();
   for (const e of seed.engagements) if (e.holderKey && !e.id.startsWith("e_ps_")) seatsOf.set(e.holderKey, (seatsOf.get(e.holderKey) ?? 0) + 1);
   console.log(`${dryRun ? "DRY RUN, nothing written. " : ""}rows read: ${rows.length}`);
-  console.log(`seats on file matched by seat id: ${k.matched} (not on the seed: ${k.notOnSeed}${k.notScan ? `, not a seat-scan seat: ${k.notScan}` : ""}${k.twice ? `, the same seat twice in the file: ${k.twice}` : ""})`);
+  console.log(`seats on file matched by seat id: ${k.matched} (not on the seed: ${k.notOnSeed}${k.notScan ? `, not a seat-scan seat: ${k.notScan}` : ""}${k.twice ? `, the same person, company and title twice in the file: ${k.twice}` : ""})`);
   console.log(`person keys added: ${k.added}; already there: ${k.had}; on file under another key (kept): ${k.differs}; rows with no person id: ${k.noId}`);
   console.log(`current seats with a person key now: ${[...seatsOf.values()].reduce((a, b) => a + b, 0)}, distinct people: ${seatsOf.size}, people with 2+ current seats: ${[...seatsOf.values()].filter((x) => x >= 2).length}`);
   if (!dryRun && !noSeal && seedPath === "data/intel-seed.json") execFileSync(process.execPath, ["scripts/seal-intel-seed.mjs"], { stdio: "inherit" });
@@ -230,7 +239,10 @@ let updated = 0;
 let unchanged = 0;
 let legacyKept = 0;
 let filledOnExisting = 0;
-const seen = new Set();
+/** Rows that are a person's further seat under one seat_id (their own id), and of them the seats added. */
+let furtherRows = 0;
+let furtherAdded = 0;
+const furtherPeople = new Set();
 const fnCount = {};
 const typeCount = {};
 const countryCount = {};
@@ -263,17 +275,21 @@ for (const r of rows) {
   count(typeCount, String(r.role_type ?? "").trim());
   count(countryCount, String(r.country ?? "").trim());
   const seatId = String(r.seat_id ?? "").trim();
+  const plan = idPlan.get(r) ?? {};
+  // This row's seat ids: the seat_id's own (and the first batch's), or a further seat's of the same person.
+  const hashedId = () => plan.hashed;
+  const legacyId = () => plan.legacy ?? "";
   // A handle or a web address as the name ("@acme.ai", "www.acme.com") reads as the name without its "@" or "www.".
   const company = companyName(r.company_name);
   if (!seatId) {
     drop("no seat id");
     continue;
   }
-  if (seen.has(seatId)) {
+  if (plan.dup) {
     drop("same seat twice in the file");
     continue;
   }
-  seen.add(seatId);
+  if (plan.further) furtherRows++;
   if (engIndex.has(legacyId(seatId)) || engIndex.has(hashedId(seatId))) onSeedById++;
   const nf = notFractional(r);
   if (nf) {
@@ -400,6 +416,10 @@ for (const r of rows) {
     // When the seat came into the table: this run's time (lib/hireAlerts.ts counts a seat added in
     // the last week as a new hire for saved views that follow hires).
     eng.addedAt = runAt;
+    // The holder's one-way person key, the same on each of their seats (seat-import.mjs personKey).
+    const hk = personKey(seatKey, r.person_sales_nav_id);
+    if (hk) eng.holderKey = hk;
+    if (plan.further) furtherAdded++, furtherPeople.add(seatId);
     engIndex.set(eng.id, seed.engagements.length);
     seed.engagements.push(eng);
     added++;
@@ -432,6 +452,7 @@ console.log(`companies created: ${created.size}`);
 console.log(`seats added: ${added}, updated: ${updated}, unchanged: ${unchanged} (${legacyKept} keep the first batch's id)`);
 if (differs) console.log(`seats on file whose row reads differently (title, start, function or company), left as on file: ${differs}`);
 console.log(`rows whose seat is on the seed by id: ${onSeedById}`);
+console.log(`a person's further seats (one seat_id, another company or title): ${furtherRows} rows past the id checks, ${furtherAdded} seats added for ${furtherPeople.size} people`);
 console.log(`by function (seats added): ${top(fnCount)}`);
 if (companiesPath) {
   console.log(`Companies tab: found for ${tabMatched} rows past the own-firm checks, missing for ${tabMissing}`);

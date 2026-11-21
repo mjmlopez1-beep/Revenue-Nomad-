@@ -11,7 +11,8 @@
  * Needs the seed key (RN_INTEL_SEED_KEY, else data/intel-seed.key): a row's seat is found by the
  * same one-way HMAC of its seat_id that scripts/add-seat-scan.mjs keyed it by ("e_ss_" + the first 20
  * hex of HMAC-SHA256(key, "seat-scan:" + seat_id)), or by the first batch's id ("e_ss_" + the
- * seat_id's letters and digits).
+ * seat_id's letters and digits). A person's further seat under the same seat_id (another company or
+ * title) is found by its own id, as add-seat-scan.mjs gave it (scripts/seat-import.mjs seatScanIds).
  *
  * Only rows whose country is exactly "United States" are named. A seat named from a public profile
  * whose row says the holder is elsewhere loses that name, and the run stops without writing if any
@@ -29,7 +30,6 @@
  * Prints counts only, never a name.
  */
 import { execFileSync, spawnSync } from "child_process";
-import { createHmac } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 
 // The name rules (lib/personName.ts) are TypeScript, so this runs under tsx: started with plain node, it starts itself again with tsx loaded.
@@ -38,7 +38,7 @@ if (!process.env.RN_SEAT_NAMES_TSX) {
   process.exit(r.status ?? 1);
 }
 // What the importers share: the CSV, the seed key, and names for United States seats only (seat-import.mjs).
-const { inUs, nameSeat, outsideUsNames, parseCsv, seedKey } = await import("./seat-import.mjs");
+const { inUs, nameSeat, outsideUsNames, parseCsv, seatScanIds, seedKey } = await import("./seat-import.mjs");
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -58,12 +58,16 @@ if (!csvPath) {
 }
 
 const seatKey = seedKey("Seats are found by an HMAC under it.");
-const hashedId = (seatId) => `e_ss_${createHmac("sha256", seatKey).update(`seat-scan:${seatId}`).digest("hex").slice(0, 20)}`;
-const legacyId = (seatId) => `e_ss_${seatId.replace(/[^A-Za-z0-9]/g, "")}`;
 
 const seed = JSON.parse(readFileSync(seedPath, "utf8"));
 const rows = parseCsv(readFileSync(csvPath, "utf8"));
 const byId = new Map(seed.engagements.map((e) => [e.id, e]));
+// Each row's seat, as add-seat-scan.mjs keyed it: the seat_id's own id (or the first batch's), or a person's further seat's.
+const idPlan = seatScanIds(rows, seed, seatKey);
+const seatOfRow = (r) => {
+  const p = idPlan.get(r);
+  return p && !p.dup ? (p.legacy && byId.get(p.legacy)) || byId.get(p.hashed) : undefined;
+};
 
 const counts = { us: 0, matchedHashed: 0, matchedLegacy: 0, notOnSeed: 0, notFound: 0, alreadyNamed: 0, named: 0, sameSeatTwice: 0 };
 const skipped = {};
@@ -76,12 +80,16 @@ for (const r of rows) {
     counts.notOnSeed++;
     continue;
   }
-  const e = byId.get(legacyId(sid)) ?? byId.get(hashedId(sid));
+  if (idPlan.get(r)?.dup) {
+    counts.sameSeatTwice++;
+    continue;
+  }
+  const e = seatOfRow(r);
   if (!e) {
     counts.notOnSeed++;
     continue;
   }
-  if (e.id === legacyId(sid)) counts.matchedLegacy++;
+  if (e.id === idPlan.get(r).legacy) counts.matchedLegacy++;
   else counts.matchedHashed++;
   if (e.fields?.source !== "Seat scan") {
     counts.notFound++;
@@ -102,10 +110,6 @@ for (const r of rows) {
 // The owner's rule: no name for anyone based outside the United States. A seat named from a public
 // profile whose row in this file is outside the United States (the holder moved, or an older file
 // said otherwise) loses that name. A member's claim lives in the state and is not touched.
-const seatOfRow = (r) => {
-  const sid = String(r.seat_id ?? "").trim();
-  return sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
-};
 const { takenOff, namedOutsideUs } = outsideUsNames(rows, seatOfRow, (e) => e.fields?.source === "Seat scan");
 if (namedOutsideUs) {
   console.error(`${namedOutsideUs} seats outside the United States would carry a name. Nothing was written.`);

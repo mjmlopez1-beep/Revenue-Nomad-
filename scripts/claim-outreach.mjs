@@ -23,7 +23,6 @@
  * Prints counts only, never a name.
  */
 import { spawnSync } from "child_process";
-import { createHmac } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 
@@ -98,22 +97,24 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const monthText = (m) => (/^\d{4}-\d{2}$/.test(m ?? "") ? `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}` : /^\d{4}$/.test(m ?? "") ? m : "");
 
 const key = Buffer.from(keyB64, "base64");
-const hashedId = (seatId) => `e_ss_${createHmac("sha256", key).update(`seat-scan:${seatId}`).digest("hex").slice(0, 20)}`;
-const legacyId = (seatId) => `e_ss_${seatId.replace(/[^A-Za-z0-9]/g, "")}`;
 
 const seed = JSON.parse(readFileSync(seedPath, "utf8"));
 const state = statePath ? JSON.parse(readFileSync(statePath, "utf8")) : null;
 const engs = new Map(seed.engagements.map((e) => [e.id, e]));
+// Each row's seat as add-seat-scan.mjs keyed it, a person's further seats under one seat_id included (scripts/seat-import.mjs).
+const { seatScanIds } = await import("./seat-import.mjs");
+const csvRows = parseCsv(readFileSync(csvPath, "utf8"));
+const idPlan = seatScanIds(csvRows, seed, key);
 const companies = new Map(seed.companies.map((c) => [c.id, c]));
 const base = (process.env.RN_PUBLIC_URL || "https://table-pilot.up.railway.app").replace(/\/+$/, "");
 
 const counts = { us: 0, notOnSeed: 0, notNamed: 0, claimed: 0, removed: 0, noLead: 0, written: 0 };
 const lines = [["first_name", "full_name", "company", "role", "start_month", "claim_link", "sales_navigator_lead", "message"].join(",")];
-for (const r of parseCsv(readFileSync(csvPath, "utf8"))) {
+for (const r of csvRows) {
   if (String(r.country ?? "").trim() !== "United States") continue;
   counts.us++;
-  const sid = String(r.seat_id ?? "").trim();
-  const e = sid ? engs.get(legacyId(sid)) ?? engs.get(hashedId(sid)) : undefined;
+  const p = idPlan.get(r);
+  const e = p && !p.dup ? (p.legacy && engs.get(p.legacy)) || engs.get(p.hashed) : undefined;
   if (!e) {
     counts.notOnSeed++;
     continue;
