@@ -192,7 +192,7 @@ async function main() {
   const row = (rows: { label: string; n: number; unit?: string }[] | null, label: string) => rows?.find((x) => x.label === label);
   check(
     "outcomes: wired, every count 0 with nobody's pipeline, no share with nothing to divide by",
-    Array.isArray(h.outcomes) && h.outcomes.length === 15 && h.outcomes.every((x) => x.n === 0) && !h.outcomes.some((x) => x.unit === "%") && row(h.outcomes, "Deals")?.n === 0,
+    Array.isArray(h.outcomes) && h.outcomes.length === 16 && row(h.outcomes, "Won from a signed proposal")?.n === 0 && h.outcomes.every((x) => x.n === 0) && !h.outcomes.some((x) => x.unit === "%") && row(h.outcomes, "Deals")?.n === 0,
     h.outcomes,
   );
 
@@ -288,8 +288,8 @@ async function main() {
   );
   const hp = H.healthStats({ s: { ...state, pipeline } as unknown as State, nowMs: NOW, starter: 25, entityOf, isMember: (id) => isMember.has(id), billing: true });
   check(
-    "the rows: 25 members, 25 deals, how far they got, 21 won and 15 through Merlin, 1 a seat, $105,000 and $75,000 a month, 4 follow-ups due",
-    same(hp.outcomes?.slice(0, 12), [
+    "the rows: 25 members, 25 deals, how far they got, 21 won and 15 through Merlin, none from a signed proposal, 1 a seat, $105,000 and $75,000 a month, 4 follow-ups due",
+    same(hp.outcomes?.slice(0, 13), [
       { label: "Members with a deal", n: 25 },
       { label: "Deals", n: 25 },
       { label: "Reached Sent", n: 25 },
@@ -298,6 +298,7 @@ async function main() {
       { label: "Reached Proposal", n: 21 },
       { label: "Won", n: 21 },
       { label: "Won through Merlin", n: 15 },
+      { label: "Won from a signed proposal", n: 0 },
       { label: "Won that became a seat", n: 1 },
       { label: "Won, a month", n: 105000, unit: "$" },
       { label: "Won through Merlin, a month", n: 75000, unit: "$" },
@@ -307,7 +308,7 @@ async function main() {
   );
   check(
     "then the shares, what the stages were seen from, and the intros",
-    same(hp.outcomes?.slice(12), [
+    same(hp.outcomes?.slice(13), [
       { label: "Sent to Replied", n: 84, unit: "%" },
       { label: "Replied to Meeting", n: 100, unit: "%" },
       { label: "Meeting to Won", n: 100, unit: "%" },
@@ -320,7 +321,7 @@ async function main() {
       { label: "Intros made", n: 1 },
       { label: "Intros that led to a win", n: 1 },
     ]),
-    hp.outcomes?.slice(12),
+    hp.outcomes?.slice(13),
   );
   const pw = [...hp.insights.working, ...hp.insights.notWorking];
   const reply = pw.find((x) => x.text.includes("gets a reply"));

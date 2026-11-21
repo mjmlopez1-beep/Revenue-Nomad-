@@ -105,6 +105,8 @@ const Notifications = dynamic(() => loadNotifications().then((m) => m.Notificati
 const Benchmarks = dynamic(() => loadBenchmarks().then((m) => m.Benchmarks), { ssr: false, loading: pageWait });
 const Fractionals = dynamic(() => loadFractionals().then((m) => m.Fractionals), { ssr: false, loading: pageWait });
 const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
+// Proposals (Proposals.tsx), loaded when opened.
+const ProposalsPage = dynamic(() => import("./Proposals").then((m) => m.ProposalsPage), { ssr: false, loading: pageWait });
 /** Fetch them while the member reads (the Add form first): opening one is then instant. */
 const preloadLater = (admin: boolean) => {
   for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadFractionals, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
@@ -209,7 +211,8 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // "fractionals": Fractionals (Fractionals.tsx). "partners", Referral partners' old address, opens it with Different from yours.
 // "notifications": Notifications (Notifications.tsx): every email and Slack post, and how often.
 // "pipeline": Your pipeline (Pipeline.tsx).
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline";
+// "proposals": Proposals (Proposals.tsx), the member's own.
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals";
 
 /* ---------- the place in the address bar ---------- */
 
@@ -230,6 +233,7 @@ const PAGE_TITLE: Record<Page, string> = {
   radar: YOUR_FEATURE,
   network: "Your network",
   pipeline: "Your pipeline",
+  proposals: "Proposals",
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -2662,6 +2666,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         ) : page === "pipeline" ? (
           <main className="tp-main tp-main-page">
             <PipelinePage infos={infos} onBack={toBase} openCompany={openCompany} onIntegrations={() => setPage("integrations")} />
+          </main>
+        ) : page === "proposals" ? (
+          <main className="tp-main tp-main-page">
+            <ProposalsPage view={view} infos={infos} onBack={toBase} />
           </main>
         ) : page === "network" ? (
           // [google network] Your network: the member's own, from Google and their own Claude.

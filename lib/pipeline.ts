@@ -817,6 +817,8 @@ export interface OutcomeStats {
   conversion: { sentToReplied: number | null; repliedToMeeting: number | null; meetingToWon: number | null; sentToWon: number | null };
   won: number;
   wonThroughMerlin: number;
+  /** Won from a signed proposal (the proposal builder moved it to Won: its via is "proposal"). */
+  wonFromProposal: number;
   /** The month's value of every Won deal with terms, and of those through Merlin (dollars). */
   monthlyValue: number;
   monthlyValueThroughMerlin: number;
@@ -842,6 +844,7 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
   let members = 0;
   let entries = 0;
   let wonThroughMerlin = 0;
+  let wonFromProposal = 0;
   let monthly = 0;
   let monthlyMerlin = 0;
   let wonSeats = 0;
@@ -863,6 +866,7 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
         monthly += v;
         if (e.won ? e.won.merlin : merlinByDefault(e)) wonThroughMerlin++, (monthlyMerlin += v);
         if (e.seatId) wonSeats++;
+        if (e.via?.won === "proposal") wonFromProposal++;
         if (e.introId) wonIntro.add(e.introId);
       }
     }
@@ -884,6 +888,7 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
     },
     won: byStage.won,
     wonThroughMerlin,
+    wonFromProposal,
     monthlyValue: monthly,
     monthlyValueThroughMerlin: monthlyMerlin,
     wonSeats,

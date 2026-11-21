@@ -148,6 +148,8 @@ run google npx tsx scripts/test-google.mts
 run google-pages npx tsx scripts/test-google-pages.mts
 # Smart ways in (lib/paths): the member's own LinkedIn Connections.csv (its notes, quotes, dates), matching precisely (weak matches refused), each kind of path found and ranked, the words (no locked name, the member's voice), Your hidden paths, privacy (another member, the table, the export, the connector by count only, never a person key), the daily upload limit, and delete removing everything from the file. A made-up seed and file.
 run paths npx tsx scripts/test-paths.mts
+# Proposals (lib/proposals, lib/mcp/proposals.ts): the library and its checklist, the transcript extractor (no model), create, edit and reorder, fields from the record, profile and call, the rate suggestion, Free's one template and Pro's sending, privacy (another member, the export, the signer's view), send with a signed expiring link, the email code, consent, signing with the document's SHA-256 and the audit trail, decline, void, a new version on a change, an expired link, the pipeline moving on send, sign and decline (Proposal, Won with the proposal's fee and hours and any intro credited, Lost), the connector's tools asking first. In process, billing live with made-up Stripe settings, email to a fake endpoint, fetch replaced.
+run proposals npx tsx scripts/test-proposals.mts
 # Saved views: rename, the same view twice, remove and Undo, on the server and through the connector, on a made-up seed.
 run views npx tsx scripts/test-views.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.

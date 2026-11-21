@@ -48,6 +48,7 @@ import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { WarmthChip } from "./network/parts"; // [google network]
 import { Charge } from "./Charge";
 import { PipelineBlock } from "./PipelineBlock";
+import { WriteProposal } from "./WriteProposal";
 import { Prop } from "../ui/fractions/lazy";
 import dynamic from "next/dynamic";
 import { bestBuyer, buyerNoteMove, buyersOf, buyerWhat, findBuyer, knowSeatLine, moveSent, type BuyerOnFile } from "@/lib/moves";
@@ -2152,6 +2153,7 @@ export function Drawer({
           <YourWayIn i={i} seats={wayInSeats} />
           {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
           <Charge i={i} benchmarks={benchmarks} seats={mySeats} />
+          <WriteProposal i={i} />
           {/* About: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
           {(!c.hidden || c.cells.about?.s === "value") && (
             <section className="tp-dsec">

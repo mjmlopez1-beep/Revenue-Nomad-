@@ -16,6 +16,7 @@ import { upgradeUrl } from "../plan";
 import { BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
 import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
+import { registerProposalTools } from "./proposals";
 import { networkOn } from "../google/types"; // [google network]
 import { VOICE_EXCLAMATIONS, VOICE_FORMALITY, VOICE_GREETINGS, VOICE_LENGTHS, VOICE_NAMES, VOICE_OPENERS, VOICE_PHRASES_MAX, VOICE_PHRASE_CHARS, VOICE_SIGNOFFS } from "../voice";
 
@@ -50,6 +51,7 @@ Using it well
 - todays_moves gives the member's moves for today, as Merlin's Home shows them: for each company why now, the best way in, the one move, and the facts a note may use. Draft a note from those facts only, in the member's voice when my_voice has one, and hand it to the member to send themselves. A person from the member's Google account is never named there (their name is on Merlin's Home): don't guess it. Merlin never sends a note for a member, and never reads their email.
 - my_pipeline gives the member's own deals, which Merlin moves by itself (Sent, Replied, Meeting, Proposal, Won, Went quiet). The member only marks Lost or Not now, or adds a note, with update_pipeline. Follow-ups due come with Merlin's words; draft one in the member's voice when asked, and the member sends it.
 - A member's writing voice is style conclusions only (greeting, sign-off, length, tone, a few stock phrases), never message text. To learn it, read the member's own sent mail on your side only when they ask, summarise it into save_my_voice's fields, show them the summary, and save it once they agree. Never send Merlin message text, subjects, names or addresses from their mail.
+- Proposals: list_proposal_templates holds templates from proposals that won. Draft one with create_or_update_proposal from the member's own call (paraphrase their client's words, never paste the transcript), check get_proposal's checklist and risk flags with them, and send it only through send_proposal_for_signature after they say yes.
 - Each company and open role carries fit (Hiring now, Repeat hirer, Recent seat, Past seat, Posting closed, Full-time only, No seats) and fit_reason, one line saying why. Pass the reason on with the tier.
 - Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name, and never guess one from its industry, size or place.`;
 
@@ -451,6 +453,9 @@ export function makeServer(ctx: T.Ctx): McpServer {
     },
     () => run(ctx, () => T.myVoice(ctx)),
   );
+
+  // The proposal builder (lib/mcp/proposals.ts): the member's own proposals, sent only after they say so.
+  registerProposalTools(server, ctx, run);
 
   return server;
 }

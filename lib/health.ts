@@ -309,6 +309,7 @@ export function outcomeRows(o: OutcomeStats): OutcomeRow[] {
     { label: "Reached Proposal", n: o.reached.proposal },
     { label: "Won", n: o.won },
     { label: "Won through Merlin", n: o.wonThroughMerlin },
+    { label: "Won from a signed proposal", n: o.wonFromProposal },
     { label: "Won that became a seat", n: o.wonSeats },
     { label: "Won, a month", n: o.monthlyValue, unit: "$" },
     { label: "Won through Merlin, a month", n: o.monthlyValueThroughMerlin, unit: "$" },

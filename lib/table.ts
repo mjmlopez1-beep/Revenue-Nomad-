@@ -131,6 +131,11 @@ import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 
+import type { StoredProposal } from "./proposals/types";
+// The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
+// inside the same change that sends, signs or declines. Registered once, when the server loads this module.
+import { proposalToPipeline, setPipelineHook } from "./proposals/pipelineHook";
+setPipelineHook(proposalToPipeline);
 export type { Action, ActionResult, View } from "./tableTypes";
 
 /** Credits every member starts with (25 unless RN_STARTER_CREDITS says otherwise). */
@@ -552,6 +557,8 @@ export interface State extends MessagingState {
   voice?: Record<string, VoiceProfile>;
   /** Automatic jobs (lib/schedule.ts): the cadences the owner changed in Pilot metrics. The rest follow JOB_DEFAULTS. */
   schedule?: ScheduleState;
+  /** Proposals (lib/proposals): each member's own, with their sends and audit trails. Private to them: never in another member's view, the shared table, the export or an admin's panel. */
+  proposals?: StoredProposal[];
 }
 
 /** State.salesBuild[companyId]. */
@@ -7127,7 +7134,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // Proposals are a member's own and a client's signature: never in the export.
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
