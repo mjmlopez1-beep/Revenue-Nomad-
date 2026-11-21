@@ -456,6 +456,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             </a>
             <a href="/remove">Remove my name</a>
             <a href="/data">Where your data goes</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
             <button type="button" className="lp-linkbtn lp-linkbtn-ink" onClick={() => openSignIn()}>
               Sign in
             </button>

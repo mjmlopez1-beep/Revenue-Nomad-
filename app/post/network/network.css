@@ -31,6 +31,22 @@
   line-height: 19px;
   color: var(--muted);
 }
+/* How Merlin uses your Google data: one line under each Connect Google, to /privacy#google. */
+.nw-policy {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 32px;
+  font-size: 13.5px;
+  line-height: 19px;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.in-card .nw-policy {
+  margin-top: 8px;
+}
 .nw-body {
   margin: 8px 0 0;
   font-size: 15px;

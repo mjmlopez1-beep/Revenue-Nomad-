@@ -44,6 +44,16 @@ export function SignTop() {
   );
 }
 
+/** Merlin's Privacy Policy and Terms, under every state of the signing page and the signed copy. */
+export function SignLegal() {
+  return (
+    <nav className="sg-legal" aria-label="Merlin's policies">
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+    </nav>
+  );
+}
+
 const STATUS_SAY: Record<SignerView["status"], { h: string; p: string }> = {
   open: { h: "", p: "" },
   signed: { h: "Signed", p: "Thank you. Your signed copy, with its audit trail, is on its way to your email." },
@@ -82,6 +92,7 @@ export function SignView({ token }: { token: string }) {
             <h1 className="sg-h">This link doesn&#39;t work</h1>
             <p className="sg-p">{fatal}</p>
           </div>
+          <SignLegal />
         </main>
       </div>
     );
@@ -91,6 +102,7 @@ export function SignView({ token }: { token: string }) {
         <SignTop />
         <main className="sg-main" aria-busy="true">
           <div className="sg-card sg-skel" />
+          <SignLegal />
         </main>
       </div>
     );
@@ -340,6 +352,7 @@ export function SignView({ token }: { token: string }) {
           <p>
             Document fingerprint (SHA-256): <span className="sg-hash">{v.hash}</span>
           </p>
+          <SignLegal />
         </footer>
       </main>
       {open && step === "read" && (

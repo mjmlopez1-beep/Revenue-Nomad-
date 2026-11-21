@@ -32,13 +32,16 @@ export async function emailMeLink(toast: (text: string, err?: boolean) => void) 
   toast(r.error ?? r.message ?? "Sent. Check your email.", !!r.error);
 }
 
-/** A link to the public "Where Merlin's data goes" page (app/data). */
+/** A link to the public "Where Merlin's data goes" page (app/data), with the Privacy Policy (app/privacy) and Terms of Service (app/terms). */
 export function DataLink() {
   return (
     <section className="tp-card tp-set">
       <div className="tp-set-t">
         <h2 className="tp-card-h">Where your data goes</h2>
         <p className="cr-note">What leaves Merlin, who receives it and why, and how to switch each part off.</p>
+        <p className="cr-note tp-legal">
+          <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a>
+        </p>
       </div>
       <a className="btn btn-sm" href="/data">
         Read it

@@ -13,7 +13,7 @@ const SERVICES: Service[] = [
   {
     who: "Company websites",
     gets: "A request from Merlin's server for public pages: a company's homepage, its team or leadership pages, its careers page, its icon, and a website a member pastes into the Add form. No member data goes with it.",
-    why: "About texts, who leads each function (titles only, never a name), open roles, a company's icon, and finding a company's website. Page reads check robots.txt first.",
+    why: "About texts, who leads each function and the company (their name and title as the company prints them, kept only for companies with a US headquarters), open roles, a company's icon, and finding a company's website. Page reads check robots.txt first.",
   },
   {
     who: "Job boards and applicant tracking systems",
@@ -166,7 +166,8 @@ export function DataFlows() {
           </section>
 
           <p className="cl-help">
-            Questions? Write to us from <a href="https://revenuenomad.com">revenuenomad.com</a>.
+            Questions? Write to us from <a href="https://revenuenomad.com">revenuenomad.com</a>. See also the <a href="/privacy">Privacy Policy</a> and the{" "}
+            <a href="/terms">Terms of Service</a>.
           </p>
           <a className="cl-link" href="/">
             Open Merlin

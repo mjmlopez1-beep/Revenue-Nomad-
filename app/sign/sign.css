@@ -418,6 +418,31 @@
 .sg-foot p {
   margin: 0;
 }
+/* Privacy and Terms, under every state of the page. */
+.sg-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 19px;
+}
+.sg-legal a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sg-foot .sg-legal {
+  padding: 0;
+}
+@media print {
+  .sg-legal {
+    display: none;
+  }
+}
 
 /* The signed copy. */
 .sg-signed,
