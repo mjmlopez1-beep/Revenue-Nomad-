@@ -17,6 +17,7 @@ import { BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPE
 import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
 import { networkOn } from "../google/types"; // [google network]
+import { VOICE_EXCLAMATIONS, VOICE_FORMALITY, VOICE_GREETINGS, VOICE_LENGTHS, VOICE_NAMES, VOICE_OPENERS, VOICE_PHRASES_MAX, VOICE_PHRASE_CHARS, VOICE_SIGNOFFS } from "../voice";
 
 export const PER_MINUTE = 60;
 export const PER_DAY = 2000;
@@ -46,6 +47,8 @@ Using it well
 - A company may carry who_leads: who leads each function there, read from the company's own website ("Sales: full-time CRO since Nov 2024"), roles only, never names. A full-time leader in the member's function means no opening there for now (no_function_yet lists those last, with a note); a fractional or interim leader means the company hires fractionals in that function. "Members say: full-time CRO" is members' word. No fractional seat on Merlin is not the same as nobody leading the function: never tell the member a company has no Sales leader unless no_function_yet_note says their team page was checked ("No Sales leader on their team page (checked Nov 2026)").
 - A member's Ideal Fractional Profile (IFP) is the companies they want as clients: industries, company size, revenue and countries. my_account returns it. Use it to fill search_companies filters when they ask what fits them.
 - To see what's new, use list_open_roles with since_days 7. Saved searches (alerts) put new matches in the weekly email.
+- todays_moves gives the member's moves for today, as Merlin's Home shows them: for each company why now, the best way in, the one move, and the facts a note may use. Draft a note from those facts only, in the member's voice when my_voice has one, and hand it to the member to send themselves. Merlin never sends a note for a member, and never reads their email.
+- A member's writing voice is style conclusions only (greeting, sign-off, length, tone, a few stock phrases), never message text. To learn it, read the member's own sent mail on your side only when they ask, summarise it into save_my_voice's fields, show them the summary, and save it once they agree. Never send Merlin message text, subjects, names or addresses from their mail.
 - Each company and open role carries fit (Hiring now, Repeat hirer, Recent seat, Past seat, Posting closed, Full-time only, No seats) and fit_reason, one line saying why. Pass the reason on with the tier.
 - Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name, and never guess one from its industry, size or place.`;
 
@@ -364,6 +367,55 @@ export function makeServer(ctx: T.Ctx): McpServer {
       () => run(ctx, () => T.myNetwork(ctx)),
     );
   }
+
+  // Today's moves, and the voice their notes are written in (lib/moves.ts, lib/voice.ts). Each member's own.
+  server.registerTool(
+    "todays_moves",
+    {
+      title: "Today's moves",
+      description:
+        "The member's moves for today, exactly as Merlin's Home shows them: up to three companies from their Crystal Ball, best first, each with why now, how likely (or Hiring now), the best way in on file (someone the member already knows there from their own network, the fractional who held a seat, an open role, or nothing yet), the one move to make, and for a move with a note the facts that note may use plus Merlin's own draft. You can draft each note in the member's voice (my_voice) from those facts only: never add a fact that isn't there, never a rate, and never guess a locked company's or a locked seat holder's name. The member sends every note themselves; Merlin never sends for them. The address of someone they know stays on Merlin. Done and Snooze are the member's to press on Merlin.",
+      inputSchema: {},
+      annotations: { title: "Today's moves", ...READ },
+    },
+    () => run(ctx, () => T.todaysMoves(ctx)),
+  );
+
+  server.registerTool(
+    "save_my_voice",
+    {
+      title: "Save my writing voice",
+      description:
+        "Save how the member writes short notes, so Merlin drafts their moves' notes in their voice. Only when the member asks. You read a sample of the member's OWN SENT mail on your side (a few dozen short messages they wrote), work out the style, and send CONCLUSIONS ONLY: one value for each field below and up to 5 short stock phrases of their own. NEVER paste message text, subjects, quotes, names, email addresses, links or numbers: a call with any other field, or a phrase that reads like mail, is refused and nothing is saved. Call it first without member_agreed: it saves nothing and returns the summary. Show the member that summary and ask if it's right, then call again with the same values and member_agreed: true. It is private to the member (other members and admins never see it), costs and earns no credits, and they can edit or remove it in Your profile on Merlin. Merlin itself never reads their email.",
+      inputSchema: {
+        greeting: z.string().describe(`How they open a note, one of: ${VOICE_GREETINGS.join(" | ")}. \"{first}\" stands for the reader's first name; send it literally.`),
+        signoff: z.string().describe(`How they close before their name, one of: ${VOICE_SIGNOFFS.join(" | ")}`),
+        name: z.string().describe(`The name under the sign-off, one of: ${VOICE_NAMES.join(" | ")} (their first name, their full name, or none).`),
+        length: z.string().describe(`One of: ${VOICE_LENGTHS.join(" | ")}. short is about three sentences, medium about five.`),
+        formality: z.string().describe(`One of: ${VOICE_FORMALITY.join(" | ")}`),
+        contractions: z.boolean().describe("true when they write I'd and it's, false when they write I would and it is."),
+        exclamations: z.string().describe(`One of: ${VOICE_EXCLAMATIONS.join(" | ")}`),
+        emoji: z.boolean().describe("true when they use emoji in work notes."),
+        opener: z.string().describe(`One of: ${VOICE_OPENERS.join(" | ")}. direct is straight to the point, smalltalk is a line of small talk first.`),
+        phrases: z.array(z.string()).optional().describe(`Up to ${VOICE_PHRASES_MAX} short stock phrases they use again and again, each at most ${VOICE_PHRASE_CHARS} characters (\"Hope you're well\", \"No rush at all\"). Their own turns of phrase only: no names, addresses, links, numbers or anything quoted from a message.`),
+        member_agreed: z.boolean().optional().describe("true only after the member saw the summary and said yes. Without it nothing is saved."),
+      },
+      annotations: { title: "Save my writing voice", ...WRITE },
+    },
+    (a) => run(ctx, () => T.saveMyVoice(ctx, a)),
+  );
+
+  server.registerTool(
+    "my_voice",
+    {
+      title: "My writing voice",
+      description:
+        "The member's saved writing voice on Merlin: the style conclusions (greeting, sign-off, length, tone, contractions, exclamation marks, emoji, how they open, their stock phrases), or that none is saved yet. Use it to write a move's note the way they write. Only ever the member's own, and never message text.",
+      inputSchema: {},
+      annotations: { title: "My writing voice", ...READ },
+    },
+    () => run(ctx, () => T.myVoice(ctx)),
+  );
 
   return server;
 }

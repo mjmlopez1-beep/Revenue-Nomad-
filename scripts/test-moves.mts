@@ -1,0 +1,643 @@
+/**
+ * Checks of "Your three moves today" (lib/moves.ts, lib/movesView.ts, the "move" action), the
+ * drafted note and its templates, the writing voice (lib/voice.ts, the "voice" action, the
+ * connector's save_my_voice, my_voice and todays_moves) and Home's one-time Pro welcome. No server:
+ * lib/table.ts runs in process on a made-up seed in a temporary data dir, with fetch replaced, so
+ * nothing leaves the machine. Billing is live with made-up Stripe settings (nothing reaches Stripe).
+ * Each member's network is written as a Google sync leaves it (State.network, lib/google/types.ts):
+ * no Google is called, real or fake.
+ *
+ *   npx tsx scripts/test-moves.mts      exits 1 on any failure
+ *
+ * Covered:
+ *   - which three: different companies, someone the member knows first, then a way in on file (a
+ *     seat holder or an open role), then nothing on file; within each the band, then Crystal Ball's
+ *     order; fewer than three;
+ *   - each plan: Trial (named in Crystal Ball, opens free), Pro, Free (nothing named, one a day);
+ *     Google connected, the connector on and not connected ("connect"), and off (no mention, no
+ *     network in any move);
+ *   - privacy: a move's record is the member's table's own record (buildView), its person is the
+ *     network view's own, and nothing of one member's network, unlocks, moves or voice reaches
+ *     another member's Home, table or export; the shared table isn't built again for them;
+ *   - Done and Snooze: the next best takes the place, 7 days, the month's count, Undo, done twice
+ *     counts once, a company outside their Crystal Ball refused, other members untouched, Crystal
+ *     Ball itself unchanged;
+ *   - the note for each situation, plain and in every voice setting: never a locked name, a rate
+ *     or another member's data (every secret word in a note is one the member's own table or
+ *     network already shows); three sentences or five; greeting, sign-off, tone, contractions,
+ *     exclamation marks, emoji, small talk, at most one stock phrase;
+ *   - mail links carry an address only when the member has it (their own network, or a contact
+ *     they unlocked), else To is empty;
+ *   - the voice: what is refused (unknown fields and values, mail-like phrases, addresses, links,
+ *     numbers, long ones), the app's save and remove, the connector's two steps, theirs alone;
+ *   - todays_moves is Home's moves, with no address and nothing locked;
+ *   - ?today=1 under its size, each move with its record, the same as the full view's;
+ *   - the Pro welcome: once, right after Pro, never for Trial, Free or a long-standing Pro.
+ */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+const dir = mkdtempSync(path.join(tmpdir(), "rn-moves-"));
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+const t0 = Date.now();
+const iso = (ms: number) => new Date(t0 + ms).toISOString();
+const today = iso(0).slice(0, 10);
+const monthAgo = (n: number) => {
+  const d = new Date(t0);
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - n);
+  return d.toISOString().slice(0, 7);
+};
+/** A day n months back, mid-month: "last met in <that month>". */
+const dayMonthsAgo = (n: number) => `${monthAgo(n)}-12`;
+
+/* ---------- the made-up seed ---------- */
+
+const co = (id: string, name: string, site: string, more: Record<string, string> = {}) => ({ id, fields: { name, website: site, industry: "SaaS", employees: "51–200", revenue: "$5M–$20M", hq: "Austin, TX", ...more } });
+const companies = [
+  co("c_lark", "Larkfield Robotics", "larkfield.example", { industry: "Manufacturing", hq: "Pittsburgh, PA" }),
+  co("c_corv", "Corvid Health", "corvidhealth.example", { industry: "Healthcare", employees: "201–500", hq: "Nashville, TN" }),
+  co("c_harb", "Harborline Pay", "harborline.example", { industry: "Fintech", employees: "11–50", hq: "Charlotte, NC" }),
+  co("c_salt", "Saltmarsh Energy", "saltmarsh.example"),
+  co("c_copp", "Copperleaf Kitchens", "copperleaf.example"),
+  co("c_tall", "Tallgrass Analytics", "tallgrass.example"),
+  co("c_nort", "Northwind Supply", "northwind.example"),
+  co("c_pine", "Pinecrest Logistics", "pinecrest.example"),
+  co("c_blue", "Bluefin Freight", "bluefin.example"),
+  co("c_out", "Sablecrest Partners", "sablecrest.example"),
+];
+const seat = (id: string, companyId: string, fields: Record<string, string>, extra: Record<string, unknown> = {}) => ({ id, companyId, verified: false, fields, ...extra });
+const cro = (id: string, companyId: string, operator?: string, extra: Record<string, unknown> = {}) =>
+  seat(id, companyId, { source: "Member success story", role: "Fractional CRO", function: "Sales", type: "Fractional", start: monthAgo(2), status: "Active", end: "Ongoing", rate: "$11k/mo", ...(operator ? { operator } : {}) }, extra);
+const engagements = [
+  // Someone-you-know companies: a fractional CRO seat with nobody named, so only the network is a way in there.
+  cro("e_lark_cro", "c_lark"),
+  cro("e_corv_cro", "c_corv"),
+  cro("e_harb_cro", "c_harb"),
+  seat("e_harb_open", "c_harb", { source: "Demand scan", role: "Fractional Head of RevOps", function: "RevOps", status: "Open role", posting: "https://harborline.example/jobs/revops", rate: "$8k/mo" }),
+  // The fractional who held a seat is a member on Merlin (Hana), with a person on file who has her name and an email.
+  cro("e_salt_cro", "c_salt", "Hana Holder"),
+  // The fractional who held a seat isn't on Merlin yet: a name from public profiles on a found seat (Invite to connect).
+  seat("e_copp_cmo", "c_copp", { source: "Seat scan", role: "Fractional CMO", function: "Marketing", type: "Fractional", start: monthAgo(3), status: "Active", end: "Ongoing", operator: "Pella Quist" }, { holderFrom: "public profile" }),
+  // Only an open role in the member's function.
+  cro("e_tall_cro", "c_tall"),
+  seat("e_tall_open", "c_tall", { source: "Demand scan", role: "Fractional VP RevOps ($9k/mo)", function: "RevOps", status: "Open role", posting: "https://tallgrass.example/careers/revops", rate: "$9k/mo" }),
+  // Nothing to reach anyone with.
+  cro("e_nort_cro", "c_nort"),
+  cro("e_pine_cro", "c_pine"),
+  cro("e_blue_cro", "c_blue", "Ivo Castellan"),
+  cro("e_out_cro", "c_out", "Odile Varga"),
+];
+const contacts = [
+  { id: "p_lark_cfo", companyId: "c_lark", fields: { name: "Marisol Achterberg", title: "CFO", relationship: "Decision maker", email: "marisol@larkfield.example" } },
+  { id: "p_salt_hana", engagementId: "e_salt_cro", fields: { name: "Hana Holder", title: "Fractional CRO", relationship: "Seat holder", email: "hana@holderco.example" } },
+  { id: "p_salt_ceo", companyId: "c_salt", fields: { name: "Bastian Quell", title: "CEO", relationship: "Hiring for the seat", email: "bastian@saltmarsh.example", phone: "512.555.0141" } },
+  { id: "p_tall_ceo", companyId: "c_tall", fields: { name: "Philippa Strand", title: "Founder", relationship: "Decision maker", email: "philippa@tallgrass.example" } },
+];
+
+const member = (id: string, name: string, title = "Fractional Head of RevOps") => ({ id, name, email: `${id.slice(4)}.moves@example.com`, title, token: `tok-${id.slice(4)}-moves` });
+const members = [
+  member("mem_mor", "Morgan Hale"),
+  member("mem_tes", "Tess Trial"),
+  member("mem_fre", "Fen Free"),
+  member("mem_pro", "Pat Pro"),
+  member("mem_old", "Olga Oldpro"),
+  member("mem_hld", "Hugo Held"),
+  member("mem_oth", "Oto Other"),
+  member("mem_few", "Finn Few"),
+  member("mem_han", "Hana Holder", "Fractional CRO"),
+  { id: "mem_ada", name: "Ada Admin", email: "admin-moves@example.com", title: "Admin", token: "tok-ada-moves" },
+];
+const seed = { builtAt: iso(-60 * DAY), members, companies, engagements, contacts };
+writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
+
+/** One kept Crystal Ball row (lib/radar/types.ts RadarSentRow): what the day's view lists. */
+const hired = (m: string, c: string, band: string) => ({ k: `t:${m}:${c}`, c, kind: "adjacent", l: "Hired a fractional CRO 2 months ago · Sales usually comes before RevOps", b: band, w: "Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months" });
+const role = (m: string, c: string, title: string) => ({ k: `t:${m}:${c}:r`, c, kind: "role", l: `New open role: ${title} · In your function`, b: "High", w: "Open now · a direct opening in RevOps" });
+/** The day's companies, in Crystal Ball's own order: the ones with nothing to reach anyone with come first, so the way in has to do the ranking. */
+const ball = (m: string) => [
+  hired(m, "c_nort", "High"),
+  role(m, "c_tall", "Fractional VP RevOps"),
+  hired(m, "c_salt", "High"),
+  hired(m, "c_copp", "High"),
+  hired(m, "c_lark", "Medium"),
+  hired(m, "c_corv", "High"),
+  role(m, "c_harb", "Fractional Head of RevOps"),
+  hired(m, "c_pine", "Medium"),
+  hired(m, "c_blue", "Low"),
+];
+const ballOf = (m: string, rows = ball(m)) => ({ sent: {}, days: { [today]: rows } });
+
+/** A member's network as a sync leaves it: per company, the people, the counts and the dates. */
+const person = (email: string, name: string, title: string, meetings: number, last: string) => ({ key: email, email, name, title, meetings, last, first: dayMonthsAgo(14), src: ["calendar"] });
+const netCo = (domain: string, p: ReturnType<typeof person>) => ({ domain, people: [p], meetings: p.meetings, last: p.last, first: p.first, months: [p.last.slice(0, 7)] });
+const link = (email: string) => ({ token: "sealed-not-a-real-token", email, scopes: ["openid", "email", "https://www.googleapis.com/auth/calendar.events.readonly", "https://www.googleapis.com/auth/contacts.readonly"], connectedAt: iso(-3 * DAY), syncedAt: iso(-HOUR), status: "ok" });
+const network = {
+  mem_mor: {
+    google: link("morgan@halerevops.example"),
+    cal: {
+      at: iso(-HOUR),
+      unmatched: 4,
+      real: 3,
+      companies: {
+        c_lark: netCo("larkfield.example", person("dana@larkfield.example", "Dana Whitfield", "CEO", 4, dayMonthsAgo(8))),
+        c_corv: netCo("corvidhealth.example", person("priya@corvidhealth.example", "Priya Raman", "Director of Operations", 5, iso(-16 * DAY).slice(0, 10))),
+        c_harb: netCo("harborline.example", person("nia@harborline.example", "Nia Castell", "Head of Growth", 2, dayMonthsAgo(2))),
+      },
+    },
+  },
+  // Oto knows someone at Northwind. Nobody else may ever see her.
+  mem_oth: { google: link("oto@otherco.example"), cal: { at: iso(-HOUR), unmatched: 0, real: 1, companies: { c_nort: netCo("northwind.example", person("zelda@northwind.example", "Zelda Quince", "Chief Operating Officer", 6, dayMonthsAgo(1))) } } },
+};
+
+const trial = { trialStartedAt: iso(-5 * DAY), trialEndsAt: iso(16 * DAY) };
+writeFileSync(
+  path.join(dir, "intel.json"),
+  JSON.stringify({
+    ledger: [],
+    values: {},
+    unlocks: {},
+    // Everyone has signed in but the admin (Hana too: a seat holder who is on Merlin).
+    seen: Object.fromEntries(members.map((m) => [m.id, iso(-HOUR)])),
+    profiles: Object.fromEntries(members.map((m) => [m.id, { function: m.id === "mem_han" ? "Sales" : "RevOps", onboarded: true, icp: { industries: [], employees: [], revenue: [], countries: [] } }])),
+    billing: {
+      members: {
+        mem_mor: trial,
+        mem_tes: trial,
+        mem_oth: trial,
+        mem_few: trial,
+        mem_han: trial,
+        mem_fre: { trialStartedAt: iso(-30 * DAY), trialEndsAt: iso(-9 * DAY) },
+        // Paid yesterday: the welcome is due. Paid 100 days ago: it isn't. Bought in the trial, first charge still to come: due.
+        mem_pro: { trialStartedAt: iso(-22 * DAY), trialEndsAt: iso(-1 * DAY), proUntil: iso(29 * DAY), interval: "month", paidSince: iso(-1 * DAY), subscriptionId: "sub_pro" },
+        mem_old: { trialStartedAt: iso(-130 * DAY), trialEndsAt: iso(-109 * DAY), proUntil: iso(20 * DAY), interval: "month", paidSince: iso(-100 * DAY), subscriptionId: "sub_old" },
+        mem_hld: { trialStartedAt: iso(-5 * DAY), trialEndsAt: iso(16 * DAY), proUntil: iso(16 * DAY), proStartsAt: iso(16 * DAY), interval: "year", subscriptionId: "sub_hld" },
+      },
+      events: [],
+      payments: [],
+      ended: [],
+    },
+    radar: {
+      lastRunAt: null,
+      lastRunDay: null,
+      members: {
+        mem_mor: ballOf("mem_mor"),
+        mem_tes: ballOf("mem_tes"),
+        mem_fre: ballOf("mem_fre"),
+        mem_pro: ballOf("mem_pro"),
+        mem_oth: ballOf("mem_oth"),
+        // Finn's Crystal Ball has two companies today.
+        mem_few: ballOf("mem_few", [hired("mem_few", "c_nort", "High"), hired("mem_few", "c_salt", "Medium")]),
+      },
+      stats: { runs: 0, sent: 0, emails: 0, slack: 0, instant: 0 },
+    },
+    network,
+  }),
+);
+
+const TEST_KEY = Buffer.alloc(32, 9).toString("base64");
+Object.assign(process.env, {
+  RN_DATA_DIR: dir,
+  RN_INTEL_SEED: path.join(dir, "intel-seed.json"),
+  // A made-up seed key, so seats have claim links (Invite to connect).
+  RN_INTEL_SEED_KEY: TEST_KEY,
+  RN_ID_SECRET: "test-id-secret-not-real",
+  RN_STARTER_CREDITS: "25",
+  RN_ADMIN_EMAILS: "admin-moves@example.com",
+  RN_PUBLIC_URL: "https://post.example.com",
+  RN_LOGO_LOOKUP: "off",
+  RN_SCAN_TEST: "1",
+  RN_DIGEST: "0",
+  RN_BILLING: "1",
+  STRIPE_SECRET_KEY: "sk_test_moves",
+  STRIPE_WEBHOOK_SECRET: "whsec_test_moves",
+  STRIPE_PRICE_MONTH: "price_month_moves",
+  STRIPE_PRICE_YEAR: "price_year_moves",
+  // The Google connector on, with a client set up (so a member without Google is offered Connect).
+  RN_GOOGLE: "1",
+  GOOGLE_CLIENT_ID: "client-test",
+  GOOGLE_CLIENT_SECRET: "secret-test",
+});
+for (const k of ["RN_FREE_COMPANY", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADAR", "RESEND_API_KEY", "RN_GOOGLE_GMAIL"]) delete process.env[k];
+globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
+
+let passes = 0;
+let failures = 0;
+const check = (name: string, ok: boolean, detail?: unknown) => {
+  if (ok) passes++;
+  else failures++;
+  console.log(`${ok ? "PASS" : "FAIL"} ${name}${ok || detail === undefined ? "" : `: ${JSON.stringify(detail)?.slice(0, 700)}`}`);
+};
+
+/** Every word in the seed and the networks that a member may or may not be allowed to see. */
+const SECRETS = [
+  ...companies.map((c) => c.fields.name),
+  ...companies.map((c) => c.fields.website),
+  "Hana Holder", "Pella Quist", "Ivo Castellan", "Odile Varga", "Marisol Achterberg", "Bastian Quell", "Philippa Strand",
+  "Dana Whitfield", "Priya Raman", "Nia Castell", "Zelda Quince",
+  "dana@larkfield.example", "priya@corvidhealth.example", "nia@harborline.example", "zelda@northwind.example",
+  "hana@holderco.example", "marisol@larkfield.example", "bastian@saltmarsh.example", "philippa@tallgrass.example", "512.555.0141",
+];
+const NETWORK_WORDS = ["Dana Whitfield", "Dana", "Priya Raman", "Priya", "Nia Castell", "Zelda Quince", "Zelda", "dana@", "priya@", "nia@", "zelda@", "halerevops", "otherco.example"];
+const found = (x: unknown, words: string[] = SECRETS) => {
+  const s = typeof x === "string" ? x : JSON.stringify(x);
+  return words.filter((w) => s.toLowerCase().includes(w.toLowerCase()));
+};
+/** A rate, however it is written: an amount of money, or a per-month or per-hour figure. */
+const RATE = /[$€£]\s?\d|\b\d+\s?k\b|\/\s?(mo|hr|hour|month)\b|\bper (hour|month|day)\b/i;
+const sortKeys = (x: unknown): unknown =>
+  Array.isArray(x) ? x.map(sortKeys) : x && typeof x === "object" ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, sortKeys((x as Record<string, unknown>)[k])])) : x;
+const same = (a: unknown, b: unknown) => JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
+const sentences = (s: string) => s.split(/(?<=[.!?])\s+/).filter(Boolean);
+
+async function main() {
+  const T = await import("../lib/table");
+  const radar = await import("../lib/radar");
+  const G = await import("../lib/google");
+  const { todayView, TODAY_MAX } = await import("../lib/today");
+  const { firstPage } = await import("../lib/firstPage");
+  const { movesFor } = await import("../lib/movesView");
+  const { unpackCompany } = await import("../lib/viewWire");
+  const M = await import("../lib/moves");
+  const V = await import("../lib/voice");
+  const tools = await import("../lib/mcp/tools");
+  type Move = import("../lib/moves").Move;
+  type CompanyRec = import("../lib/tableTypes").CompanyRec;
+  type VoiceStyle = import("../lib/voice").VoiceStyle;
+
+  const BASE = "https://post.example.com";
+  const MOR = "tok-mor-moves";
+  const TES = "tok-tes-moves";
+  const FRE = "tok-fre-moves";
+  const OTH = "tok-oth-moves";
+  const FEW = "tok-few-moves";
+  const pub = (id: string) => T.tableInternals.pubId(id);
+  const P = Object.fromEntries(companies.map((c) => [c.id.slice(2), pub(c.id)])) as Record<string, string>;
+  const nameOf = (id: string) => companies.find((c) => pub(c.id) === id)?.fields.name ?? id;
+  const act = (tok: string, a: Record<string, unknown>) => T.perform(tok, a as never, BASE);
+  const refused = async (p: Promise<unknown>) => p.then(() => null, (e: Error) => e.message);
+  const ctxOf = async (tok: string) => ({ member: (await T.memberForToken(tok))!, origin: BASE });
+  /** A member's moves as Home builds them: from ?today=1's wire and its own packed records. */
+  const homeMoves = async (tok: string): Promise<{ moves: Move[]; recs: CompanyRec[]; today: NonNullable<Awaited<ReturnType<typeof todayView>>> }> => {
+    const t = (await todayView(tok))!;
+    const recs = t.companies.map((c) => unpackCompany(JSON.parse(JSON.stringify(c))));
+    const byId = new Map(recs.map((c) => [c.id, c]));
+    return { today: t, recs, moves: t.moves!.list.map((w) => M.buildMove(byId.get(w.id)!, w.row, w.know, t.me)) };
+  };
+
+  /* ================= which three, and in what order ================= */
+  console.log("\nwhich three");
+  check("signed out: no moves", (await movesFor(null)) === null && (await movesFor("not-a-token")) === null);
+  const mor = await homeMoves(MOR);
+  check("Morgan (Trial, Google connected): the three companies she knows someone at, the High ones first", same(mor.moves.map((m) => m.id), [P.corv, P.harb, P.lark]), mor.moves.map((m) => nameOf(m.id)));
+  check("three different companies", new Set(mor.moves.map((m) => m.id)).size === 3);
+  check("each is someone she knows", mor.moves.every((m) => m.way.kind === "know"), mor.moves.map((m) => m.way.kind));
+  check("and Crystal Ball's own order would have led with none of them", same((await radar.radarView(MOR))!.rows.slice(0, 3).map((r) => r.id), [P.nort, P.tall, P.salt]));
+  const [mCorv, mHarb, mLark] = mor.moves;
+  check("a decision maker she knows: Message Dana", mLark.do === "message" && mLark.title === "Message Dana" && mLark.way.kind === "know" && mLark.way.person.dm && mLark.way.person.title === "CEO", mLark);
+  check("someone who isn't the buyer: Ask Priya for an intro", mCorv.do === "intro" && mCorv.title === "Ask Priya for an intro" && mCorv.way.kind === "know" && !mCorv.way.person.dm, mCorv);
+  check("an open role in her function where she knows someone: Reply to the open role, Hiring now", mHarb.do === "reply" && mHarb.title === "Reply to the open role" && mHarb.hiring && /let Nia know/.test(mHarb.line), mHarb);
+  check("Likely to hire with its band, never a percentage", !mLark.hiring && mLark.band === "Medium" && mCorv.band === "High" && !/%/.test(JSON.stringify(mor.moves)));
+  check("why now is the Crystal Ball's own words", mLark.why === "Fractional CRO hired 2 months ago. RevOps usually follows in 1–4 months.", mLark.why);
+  check("the person: warmth, last met and meetings", mLark.way.kind === "know" && /^Last met in [A-Z][a-z]+( \d{4})? · 4 meetings$/.test(M.knowLine(mLark.way.person)), mLark.way.kind === "know" ? M.knowLine(mLark.way.person) : null);
+  check("named free: a company she knows someone at is hers to see", mor.moves.every((m) => !m.hidden && !!m.name && nameOf(m.id) === m.name), mor.moves.map((m) => m.name));
+  check("the connector is on and connected", mor.today.moves!.google === "on" && mor.today.moves!.month === 0);
+
+  const tes0 = await homeMoves(TES);
+  check("Tess (Trial, no Google): the High companies with a way in on file, in Crystal Ball's order", same(tes0.moves.map((m) => m.id), [P.tall, P.salt, P.copp]), tes0.moves.map((m) => nameOf(m.id)));
+  check("her ways in: an open role, then a seat holder on file twice", same(tes0.moves.map((m) => m.way.kind), ["role", "holder", "holder"]));
+  check("a Low company with a seat holder on file doesn't jump the queue, and one with nothing waits", !tes0.moves.some((m) => m.id === P.blue || m.id === P.nort));
+  check("Trial sees each company named, as in her Crystal Ball, and still locked", tes0.moves.every((m) => m.hidden && m.name === nameOf(m.id) && m.do === "open" && m.title === "Open the company"), tes0.moves);
+  check("the seat holder isn't named while locked", tes0.moves.every((m) => m.way.kind !== "holder" || m.way.name === null) && M.holderOnFile("Sales") === "The fractional who held their Sales seat is on file");
+  check("no person from anyone's network in her moves", !found(tes0.today, NETWORK_WORDS).length && tes0.today.moves!.list.every((w) => !w.know), found(tes0.today, NETWORK_WORDS));
+  check("the connector is on and she hasn't connected: one line offers it", tes0.today.moves!.google === "connect");
+  check("her plan opens Crystal Ball companies free", tes0.today.me.crystal === "all");
+
+  const fre = await homeMoves(FRE);
+  check("Fen (Free): the same three, nothing named", same(fre.moves.map((m) => m.id), [P.tall, P.salt, P.copp]) && fre.moves.every((m) => m.hidden && m.name === null && m.do === "open"), fre.moves);
+  check("Free's answer names no company and no person", !found(fre.today).length, found(fre.today));
+  check("Free opens one a day", fre.today.me.crystal === "one" && /one free Crystal Ball company today/.test(fre.moves[0].line), fre.moves[0].line);
+  check("a locked company's free facts still show", fre.moves[0].facts === "SaaS · 51–200 · TX" || /SaaS · 51–200/.test(fre.moves[0].facts), fre.moves[0].facts);
+
+  const few = await homeMoves(FEW);
+  check("fewer than three good ones: what there is", same(few.moves.map((m) => m.id), [P.salt, P.nort]) && few.moves[1].way.kind === "none", few.moves.map((m) => [nameOf(m.id), m.way.kind]));
+  const han = (await todayView("tok-han-moves"))!;
+  check("none at all: an empty list, and nothing else breaks", han.moves!.list.length === 0 && han.companies.length === 0 && han.radar.rows.length === 0);
+
+  /* ================= what a move may show: the member's own table and network, nothing else ================= */
+  console.log("\nprivacy");
+  for (const [who, tok] of [["Morgan", MOR], ["Tess", TES], ["Fen", FRE], ["Oto", OTH], ["Finn", FEW]] as const) {
+    const h = await homeMoves(tok);
+    const view = await T.buildView(tok);
+    const byId = new Map(view.companies.map((c) => [c.id, c]));
+    const raw = JSON.stringify(h.today);
+    check(`${who}: ?today=1 is under its size`, raw.length < TODAY_MAX, raw.length);
+    check(`${who}: each move comes with its record, in order`, h.recs.length === h.today.moves!.list.length && h.recs.every((c, k) => c.id === h.today.moves!.list[k].id));
+    check(`${who}: each record is the table's own record, locks and all`, h.recs.every((c) => same(c, byId.get(c.id))), h.recs.find((c) => !same(c, byId.get(c.id)))?.id);
+    const fromView = h.today.moves!.list.map((w) => M.buildMove(byId.get(w.id)!, w.row, w.know, view.me!));
+    check(`${who}: the move built from ?today=1 is the move built from the full view`, same(h.moves, fromView));
+    const fp = await firstPage(tok, "");
+    check(`${who}: the first screen (?first=1 on Home) carries the same moves`, !!fp && "today" in fp && same(fp.today.moves, h.today.moves));
+    // Every secret word a move shows is one the member's own table, Crystal Ball or network already shows them.
+    const net = await G.networkView(tok);
+    const mine = JSON.stringify([view.companies, view.me, await radar.radarView(tok), net]);
+    const shown = found(h.moves);
+    check(`${who}: a move shows nothing their table, Crystal Ball and network don't`, shown.every((w) => mine.toLowerCase().includes(w.toLowerCase())), shown.filter((w) => !mine.toLowerCase().includes(w.toLowerCase())));
+    // Who they know is the network view's own person.
+    const netCos = net && net.on ? new Map(net.companies.map((c) => [c.id, c])) : new Map();
+    check(
+      `${who}: each person is from their own network view, as it shows them`,
+      h.today.moves!.list.every((w) => !w.know || same(w.know, M.knowFrom(netCos.get(w.id)?.people ?? []))),
+      h.today.moves!.list.map((w) => w.know?.name),
+    );
+  }
+  const oth = await homeMoves(OTH);
+  check("Oto knows Zelda at Northwind: his first move, and only his", oth.moves[0].id === P.nort && oth.moves[0].way.kind === "know" && oth.moves[0].way.person.name === "Zelda Quince", oth.moves[0]);
+  check("nobody else's Home has her, or Morgan's people", !found(mor.today, ["Zelda", "zelda@", "otherco"]).length && !found(oth.today, ["Dana", "Priya", "Nia Castell", "halerevops"]).length && !found(tes0.today, NETWORK_WORDS).length && !found(fre.today, NETWORK_WORDS).length);
+  check("Northwind is named for Oto alone", oth.moves[0].name === "Northwind Supply" && !found(fre.today, ["Northwind"]).length);
+
+  /* ================= opening, and the ways in that follow ================= */
+  console.log("\nthe way in");
+  const credits = async (tok: string) => (await T.buildView(tok)).me!.credits;
+  const before = await credits(TES);
+  for (const id of [P.tall, P.salt, P.copp]) await act(TES, { type: "unlock", entity: "company", id, field: "identity", from: "crystal" });
+  check("opening a company from a move costs what Crystal Ball costs: nothing on Trial", (await credits(TES)) === before, [before, await credits(TES)]);
+  let tes = await homeMoves(TES);
+  const bySeat = (m: Move) => (m.way.kind === "holder" || m.way.kind === "role" ? m.way.seatId : "");
+  check("opened: who held the seat is still locked, 1 credit", tes.moves[1].do === "seeHolder" && tes.moves[1].way.kind === "holder" && tes.moves[1].way.name === null && !tes.moves[1].hidden, tes.moves[1]);
+  check("opened: the open role's posting came with the company", tes.moves[0].do === "reply" && tes.moves[0].way.kind === "role" && tes.moves[0].way.posting === "https://tallgrass.example/careers/revops", tes.moves[0].way);
+  check("the role's title is shown as the record has it", tes.moves[0].way.kind === "role" && tes.moves[0].way.title === "Fractional VP RevOps ($9k/mo)");
+  await act(TES, { type: "unlock", entity: "engagement", id: bySeat(tes.moves[1]), field: "operator" });
+  await act(TES, { type: "unlock", entity: "engagement", id: bySeat(tes.moves[2]), field: "operator" });
+  check("people cost what they cost: 1 credit each", (await credits(TES)) === before - 2, [before, await credits(TES)]);
+  tes = await homeMoves(TES);
+  const [tTall, tSalt, tCopp] = tes.moves;
+  check("a seat holder on Merlin: Message the seat holder", tSalt.do === "holderMessage" && tSalt.title === "Message the seat holder" && tSalt.way.kind === "holder" && tSalt.way.name === "Hana Holder" && tSalt.way.member, tSalt);
+  check("a seat holder not on Merlin yet: Invite them to connect, with the claim link", tCopp.do === "holderInvite" && tCopp.title === "Invite them to connect" && tCopp.way.kind === "holder" && tCopp.way.name === "Pella Quist" && !!tCopp.way.invite?.path.startsWith("/claim/"), tCopp);
+  check("an open role: Reply to the open role", tTall.do === "reply" && tTall.title === "Reply to the open role" && tTall.hiring);
+  check("Fen sees none of what Tess opened", same((await homeMoves(FRE)).moves, fre.moves));
+  const none = (await homeMoves(FEW)).moves[1];
+  check("nothing on file: No way in yet, Open the company", none.way.kind === "none" && none.do === "open" && none.hidden);
+
+  /* ================= Google off, and not connected ================= */
+  console.log("\nGoogle");
+  // The switch is read when a table is built: a change to the state stands in for the restart that flips it.
+  const flip = () => act("tok-ada-moves", { type: "settings", digest: true });
+  delete process.env.RN_GOOGLE;
+  await flip();
+  const morOff = await homeMoves(MOR);
+  check("connector off: no mention, no person, and the network names nothing", morOff.today.moves!.google === "off" && morOff.today.moves!.list.every((w) => !w.know) && !found(morOff.today, NETWORK_WORDS).length, found(morOff.today, NETWORK_WORDS));
+  check("connector off: Morgan's moves are the ones anyone on Trial gets", same(morOff.moves.map((m) => m.id), [P.tall, P.salt, P.copp]) && morOff.moves.every((m) => m.hidden));
+  process.env.RN_GOOGLE = "1";
+  await flip();
+  delete process.env.GOOGLE_CLIENT_ID;
+  check("connector on with no Google client set up: nothing to connect to, no mention", (await homeMoves(TES)).today.moves!.google === "off");
+  process.env.GOOGLE_CLIENT_ID = "client-test";
+  check("and back on: Morgan's three again", same((await homeMoves(MOR)).moves.map((m) => m.id), [P.corv, P.harb, P.lark]));
+
+  /* ================= Done and Snooze ================= */
+  console.log("\ndone and snooze");
+  const stats0 = T.sharedViewStats();
+  const tesView0 = JSON.stringify(sortKeys((await T.buildView(TES)).companies));
+  const freToday0 = JSON.stringify(sortKeys((await todayView(FRE))!.moves));
+  const ball0 = JSON.stringify((await radar.radarView(MOR))!.rows);
+  let r = await act(MOR, { type: "move", id: P.corv, op: "done" });
+  check("Done says so, and counts", /^Done\. That's your first move this month\.$/.test(r.message), r.message);
+  let m2 = await homeMoves(MOR);
+  check("the done company is gone and the next best takes its place", same(m2.moves.map((m) => m.id), [P.harb, P.lark, P.tall]) && m2.today.moves!.month === 1, m2.moves.map((m) => nameOf(m.id)));
+  check("Crystal Ball itself is unchanged", JSON.stringify((await radar.radarView(MOR))!.rows) === ball0);
+  r = await act(MOR, { type: "move", id: P.lark, op: "snooze" });
+  check("Snooze says for how long", r.message === "Snoozed for 7 days.", r.message);
+  m2 = await homeMoves(MOR);
+  check("the snoozed company is replaced too, and isn't counted", same(m2.moves.map((m) => m.id), [P.harb, P.tall, P.salt]) && m2.today.moves!.month === 1, m2.moves.map((m) => nameOf(m.id)));
+  const at = async (ms: number) => (await movesFor(MOR, { nowMs: Date.now() + ms }))!.moves.map((m) => m.id);
+  check("6 days on it is still snoozed, 8 days on it is back", !(await at(6 * DAY)).includes(P.lark) && (await at(8 * DAY)).includes(P.lark));
+  check("a done company stays away for 30 days", !(await at(29 * DAY)).includes(P.corv) && (await at(31 * DAY)).includes(P.corv));
+  await act(MOR, { type: "move", id: P.corv, op: "done" });
+  check("done twice counts once", (await homeMoves(MOR)).today.moves!.month === 1);
+  r = await act(MOR, { type: "move", id: P.harb, op: "done" });
+  check("a second move done: the count says 2", /That's 2 moves this month/.test(r.message) && (await homeMoves(MOR)).today.moves!.month === 2, r.message);
+  r = await act(MOR, { type: "move", id: P.harb, op: "undo" });
+  m2 = await homeMoves(MOR);
+  check("Undo puts it back and takes the count back", r.message === "Back in your moves." && m2.moves[0].id === P.harb && m2.today.moves!.month === 1, m2.moves.map((m) => nameOf(m.id)));
+  await act(MOR, { type: "move", id: P.lark, op: "undo" });
+  check("Undo of a snooze brings it back", (await homeMoves(MOR)).moves.some((m) => m.id === P.lark));
+  check("a company outside her Crystal Ball has no move", (await refused(act(MOR, { type: "move", id: P.out, op: "done" }))) === T.MOVE_NOT_IN);
+  check("an unknown thing to do with a move is refused", !!(await refused(act(MOR, { type: "move", id: P.salt, op: "delete" }))) && !!(await refused(act(MOR, { type: "move", id: "nope", op: "done" }))));
+  check("signed out: refused", !!(await refused(act("not-a-token", { type: "move", id: P.salt, op: "done" }))));
+  // Everyone else is exactly where they were.
+  check("Tess's table is the same, byte for byte", JSON.stringify(sortKeys((await T.buildView(TES)).companies)) === tesView0);
+  check("Fen's moves are the same", JSON.stringify(sortKeys((await todayView(FRE))!.moves)) === freToday0);
+  check("the shared table wasn't built again for it", T.sharedViewStats().builds === stats0.builds, [stats0, T.sharedViewStats()]);
+  const state = (await T.exportState()) as Record<string, unknown>;
+  check("the export leaves members' moves, voices and networks out", !("moves" in state) && !("voice" in state) && !("network" in state));
+  // The log is pure: a month's count is that month's.
+  const log = M.emptyMoveLog();
+  const jan = Date.UTC(2027, 0, 31, 23);
+  M.logMove(log, "c1", "done", jan);
+  M.logMove(log, "c2", "done", jan + 2 * HOUR);
+  check("the month's count is the calendar month's", M.movesThisMonth(log, jan) === 1 && M.movesThisMonth(log, jan + 2 * HOUR) === 1 && M.movesThisMonth(log, jan + 40 * DAY) === 0, log);
+  check("what has run out is forgotten", (M.logMove(log, "c3", "snooze", jan + 400 * DAY), Object.keys(log.done).length === 0 && Object.keys(log.months).length === 0), log);
+
+  /* ================= the note ================= */
+  console.log("\nthe note");
+  mor.moves = (await homeMoves(MOR)).moves;
+  const morNow = await homeMoves(MOR);
+  const rowOf = (h: Awaited<ReturnType<typeof homeMoves>>, id: string) => h.today.moves!.list.find((w) => w.id === id)!.row;
+  const moveOf = (h: Awaited<ReturnType<typeof homeMoves>>, id: string) => h.moves.find((m) => m.id === id)!;
+  tes = await homeMoves(TES);
+  const cases: { name: string; h: Awaited<ReturnType<typeof homeMoves>>; id: string; kind: string; tok: string }[] = [
+    { name: "someone you know", h: morNow, id: P.lark, kind: "know", tok: MOR },
+    { name: "an open role, to someone you know", h: morNow, id: P.harb, kind: "role", tok: MOR },
+    { name: "the seat holder on Merlin", h: tes, id: P.salt, kind: "holderMessage", tok: TES },
+    { name: "an invite to connect", h: tes, id: P.copp, kind: "holderInvite", tok: TES },
+    { name: "an open role", h: tes, id: P.tall, kind: "roleCold", tok: TES },
+  ];
+  // Asking for an intro: Corvid is done for Morgan now, so read it from the day before she marked it.
+  const introFacts = M.noteFacts(mCorv, mor.today.moves!.list.find((w) => w.id === P.corv)!.row, mor.today.me, BASE)!;
+  const VOICES: Record<string, VoiceStyle> = {
+    casual: { greeting: "Hey {first},", signoff: "Cheers,", name: "first", length: "short", formality: "casual", contractions: true, exclamations: "sometimes", emoji: true, opener: "smalltalk", phrases: ["Hope the week's treating you well", "No rush at all"] },
+    formal: { greeting: "Dear {first},", signoff: "Regards,", name: "full", length: "medium", formality: "formal", contractions: false, exclamations: "never", emoji: false, opener: "direct", phrases: [] },
+    terse: { greeting: "none", signoff: "none", name: "none", length: "short", formality: "neutral", contractions: true, exclamations: "never", emoji: false, opener: "direct", phrases: ["Quarterly numbers"] },
+    warm: { greeting: "{first},", signoff: "Thanks,", name: "first", length: "medium", formality: "neutral", contractions: true, exclamations: "sometimes", emoji: false, opener: "direct", phrases: ["Looking forward to it"] },
+  };
+  const allNotes: { who: string; tok: string; text: string }[] = [];
+  for (const c of cases) {
+    const m = moveOf(c.h, c.id);
+    const facts = M.noteFacts(m, rowOf(c.h, c.id), c.h.today.me, BASE);
+    check(`${c.name}: a note is drafted, of the right kind`, !!facts && facts.kind === c.kind, facts?.kind);
+    if (!facts) continue;
+    for (const [vn, v] of [["plain", null], ...Object.entries(VOICES)] as [string, VoiceStyle | null][]) {
+      const d = M.draftNote(facts, v);
+      allNotes.push({ who: `${c.name} (${vn})`, tok: c.tok, text: `${d.subject}\n${d.body}` });
+    }
+  }
+  for (const [vn, v] of [["plain", null], ...Object.entries(VOICES)] as [string, VoiceStyle | null][]) {
+    const d = M.draftNote(introFacts, v);
+    allNotes.push({ who: `asking for an intro (${vn})`, tok: MOR, text: `${d.subject}\n${d.body}` });
+  }
+  check("every situation has its template, plain and in four voices", allNotes.length === 30, allNotes.length);
+  // What each member can see: their own table, Crystal Ball and network. A note may use nothing else.
+  const visible: Record<string, string> = {};
+  for (const tok of [MOR, TES]) visible[tok] = JSON.stringify([(await T.buildView(tok)).companies, await radar.radarView(tok), await G.networkView(tok)]).toLowerCase();
+  const leaks = allNotes.flatMap((n) => found(n.text).filter((w) => !visible[n.tok].includes(w.toLowerCase())).map((w) => `${n.who}: ${w}`));
+  check("no note has a name, site or contact detail its member can't already see", leaks.length === 0, leaks);
+  check("no note has a rate", allNotes.every((n) => !RATE.test(n.text)), allNotes.filter((n) => RATE.test(n.text)).map((n) => n.who));
+  check("no note has anyone else's network in it", allNotes.every((n) => !found(n.text, ["Zelda", "Quince", "otherco"]).length) && allNotes.filter((n) => n.tok === TES).every((n) => !found(n.text, NETWORK_WORDS).length));
+  check("no note names a person on file the member hasn't opened", allNotes.every((n) => !found(n.text, ["Marisol", "Bastian", "Philippa", "Ivo Castellan", "Odile"]).length));
+  check("a note never carries an address in its words", allNotes.every((n) => !/@/.test(n.text)));
+  const text = (kind: string, vn = "plain") => allNotes.find((n) => n.who === `${kind} (${vn})`)!.text;
+  check("someone you know: the relationship, the why now, her own function", /^Catching up, and a thought on RevOps\nHi Dana,\n\nIt's been since [A-Z][a-z]+( last year)?, which is too long\. I saw Larkfield Robotics hired a fractional CRO 2 months ago\./.test(text("someone you know")) && /a fractional Head of RevOps/.test(text("someone you know")) && /\n\nMorgan$/.test(text("someone you know")), text("someone you know"));
+  check("asking for an intro asks for one", /introduc/i.test(text("asking for an intro")) && /^An introduction at Corvid Health\?\nHi Priya,/.test(text("asking for an intro")), text("asking for an intro"));
+  check("the seat holder: the seat she can see, and no word on what it paid", /I saw you held the fractional CRO seat at Saltmarsh Energy\./.test(text("the seat holder on Merlin")) && /^Your seat at Saltmarsh Energy\nHi Hana,/.test(text("the seat holder on Merlin")), text("the seat holder on Merlin"));
+  const claim = `${BASE}${(tCopp.way as { invite: { path: string } }).invite.path}`;
+  check("an invite to connect ends in the seat's claim link, in every voice", ["plain", ...Object.keys(VOICES)].every((vn) => text("an invite to connect", vn).includes(claim) && /Claim it with this link/.test(text("an invite to connect", vn))), text("an invite to connect"));
+  check("an open role: the title without its rate, and the posting", /the open Fractional VP RevOps role at Tallgrass Analytics/.test(text("an open role")) && !/9k/.test(text("an open role")), text("an open role"));
+  check("an open role with nobody to write to greets nobody by name", /^The Fractional VP RevOps role at Tallgrass Analytics\nHi there,/.test(text("an open role")), text("an open role"));
+  check("Merlin never says where a name came from", allNotes.every((n) => !/linkedin|sales navigator|public profile/i.test(n.text)));
+
+  // The voice, setting by setting, on one move.
+  const knowFacts = M.noteFacts(moveOf(morNow, P.lark), rowOf(morNow, P.lark), morNow.today.me, BASE)!;
+  const plain = M.draftNote(knowFacts, null);
+  const body = (v: Partial<VoiceStyle>) => M.draftNote(knowFacts, { ...V.NEUTRAL_VOICE, ...v }).body;
+  check("no voice: the plain template, five sentences, signed with her first name", !plain.voiced && M.templateSentences(knowFacts, null).length === 5 && M.templateSentences(knowFacts, null).every((s) => plain.body.includes(s)) && plain.body.startsWith("Hi Dana,\n\n") && plain.body.endsWith("\n\nMorgan"), plain.body);
+  check("plain: no exclamation mark, no emoji", !/!/.test(plain.body) && !/\p{Extended_Pictographic}/u.test(plain.body));
+  check("greeting: each form", body({ greeting: "Hey {first}," }).startsWith("Hey Dana,\n") && body({ greeting: "{first}," }).startsWith("Dana,\n") && body({ greeting: "Dear {first}," }).startsWith("Dear Dana,\n") && body({ greeting: "none" }).startsWith("It's been since"));
+  check("sign-off and name: each form", body({ signoff: "Best,", name: "first" }).endsWith("\n\nBest,\nMorgan") && body({ signoff: "Thanks,", name: "none" }).endsWith("\n\nThanks,") && body({ signoff: "Regards,", name: "full" }).endsWith("\n\nRegards,\nMorgan Hale") && !/Morgan$/.test(body({ signoff: "none", name: "none" })));
+  const short = M.templateSentences(knowFacts, { ...V.NEUTRAL_VOICE, length: "short" });
+  check("short is three sentences, medium five", short.length === 3 && short.every((s) => body({ length: "short" }).includes(s)) && sentences(body({ length: "short", greeting: "none", name: "none" })).length === 3 && sentences(body({ greeting: "none", name: "none" })).length === 5, sentences(body({ length: "short", greeting: "none", name: "none" })));
+  check("tone: casual, neutral and formal read differently", new Set([body({ formality: "casual" }), body({ formality: "neutral" }), body({ formality: "formal" })]).size === 3 && /Would you have 20 minutes/.test(body({ formality: "formal" })) && /Up for 20 minutes/.test(body({ formality: "casual" })));
+  const CONTRACTION = /\b(I'm|I'd|I've|it's|that's|you're|don't|isn't|we're|whoever's)\b/i;
+  check("contractions: with and without", CONTRACTION.test(body({})) && !CONTRACTION.test(body({ contractions: false })) && /It has been since/.test(body({ contractions: false })) && /I would be glad/.test(body({ contractions: false })), body({ contractions: false }));
+  check("contractions off holds in every tone and situation", [...cases.map((c) => M.noteFacts(moveOf(c.h, c.id), rowOf(c.h, c.id), c.h.today.me, BASE)!), introFacts].every((f) => (["casual", "neutral", "formal"] as const).every((formality) => !CONTRACTION.test(M.draftNote(f, { ...V.NEUTRAL_VOICE, formality, contractions: false }).body.replace(/we're connected/, "")))));
+  check("exclamation marks: never, or exactly one", !/!/.test(body({ exclamations: "never" })) && (body({ exclamations: "sometimes" }).match(/!/g) ?? []).length === 1 && (body({ exclamations: "sometimes", signoff: "Thanks," }).match(/!/g) ?? []).length === 1 && (body({ exclamations: "sometimes", opener: "smalltalk" }).match(/!/g) ?? []).length === 1, body({ exclamations: "sometimes" }));
+  check("emoji: none, or one", (body({ emoji: true }).match(/\p{Extended_Pictographic}/gu) ?? []).length === 1 && !/\p{Extended_Pictographic}/u.test(body({ emoji: false })));
+  check("small talk first, or straight to the point", /^Hi Dana,\n\nHope you're well\. It's been since/.test(body({ opener: "smalltalk" })) && /^Hi Dana,\n\nIt's been since/.test(body({ opener: "direct" })) && /I hope this finds you well\./.test(body({ opener: "smalltalk", formality: "formal" })));
+  const phrases = ["Hope the week's treating you well", "No rush at all", "Talk soon"];
+  const used = (b: string) => phrases.filter((p) => b.includes(p));
+  check("a stock phrase goes in where it fits: their own small talk", same(used(body({ opener: "smalltalk", phrases })), ["Hope the week's treating you well"]) && /Hi Dana,\n\nHope the week's treating you well\. It's been/.test(body({ opener: "smalltalk", phrases })));
+  check("or their closing line, and never more than one", same(used(body({ opener: "direct", phrases })), ["No rush at all"]) && /\n\nNo rush at all\.\n\nMorgan$/.test(body({ opener: "direct", phrases })), body({ opener: "direct", phrases }));
+  check("a phrase that fits nowhere is left out", !body({ phrases: ["Quarterly numbers"] }).includes("Quarterly"));
+  check("with a voice the note says so", M.draftNote(knowFacts, VOICES.casual).voiced && !M.draftNote(knowFacts, null).voiced);
+
+  /* ================= sending it ================= */
+  console.log("\nmail links");
+  const to = (f: ReturnType<typeof M.noteFacts>) => f?.to?.email ?? null;
+  check("someone from her own network: the address she already has", to(knowFacts) === "dana@larkfield.example" && knowFacts.to?.from === "your own contacts");
+  const gm = M.gmailLink(to(knowFacts), plain.subject, plain.body);
+  const mt = M.mailtoLink(to(knowFacts), plain.subject, plain.body);
+  check("Open in Gmail: a compose link with the address, the subject and the note", gm.startsWith("https://mail.google.com/mail/?view=cm&fs=1&to=dana%40larkfield.example&su=") && new URL(gm).searchParams.get("body") === plain.body && new URL(gm).searchParams.get("su") === plain.subject, gm.slice(0, 160));
+  check("another mail app: a mailto with the same", mt.startsWith("mailto:dana%40larkfield.example?subject=") && decodeURIComponent(mt.split("&body=")[1]) === plain.body, mt.slice(0, 120));
+  const saltFacts = M.noteFacts(moveOf(tes, P.salt), rowOf(tes, P.salt), tes.today.me, BASE)!;
+  check("a seat holder whose email she hasn't unlocked: To is empty", to(saltFacts) === null && !/to=/.test(M.gmailLink(to(saltFacts), "s", "b")) && M.mailtoLink(to(saltFacts), "s", "b").startsWith("mailto:?subject="), M.gmailLink(to(saltFacts), "s", "b"));
+  check("an open role with nobody to write to: To is empty", M.noteFacts(moveOf(tes, P.tall), rowOf(tes, P.tall), tes.today.me, BASE)!.to === null);
+  // She unlocks the person on file with Hana's name, then her email: now the address is hers to use.
+  const salt = (await T.buildView(TES)).companies.find((c) => c.id === P.salt)!;
+  const hanaRec = salt.engagements.flatMap((e) => e.people).find((p) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Seat holder")!;
+  await act(TES, { type: "unlock", entity: "contact", id: hanaRec.id, field: "name" });
+  check("the name alone opens no address", to(M.noteFacts(moveOf(await homeMoves(TES), P.salt), rowOf(tes, P.salt), tes.today.me, BASE)) === null);
+  await act(TES, { type: "unlock", entity: "contact", id: hanaRec.id, field: "email" });
+  tes = await homeMoves(TES);
+  const saltNow = M.noteFacts(moveOf(tes, P.salt), rowOf(tes, P.salt), tes.today.me, BASE)!;
+  check("a contact she unlocked: the address is in the link", to(saltNow) === "hana@holderco.example" && saltNow.to?.from === "unlocked on Merlin" && M.gmailLink(to(saltNow), "s", "b").includes("to=hana%40holderco.example"));
+  check("a link never carries anything that isn't one address", !/to=/.test(M.gmailLink("a@b.co, c@d.co", "s", "b")) && M.mailtoLink("not an address", "s", "b").startsWith("mailto:?") && M.mailtoLink("x@y.example\nbcc: z@y.example", "s", "b").startsWith("mailto:?"));
+  check("a locked company, or a locked seat holder, has no note", M.noteFacts(fre.moves[0], fre.today.moves!.list[0].row, fre.today.me, BASE) === null && M.noteFacts(tes0.moves[0], tes0.today.moves!.list[0].row, tes0.today.me, BASE) === null);
+
+  /* ================= the voice ================= */
+  console.log("\nthe voice");
+  const good = { ...VOICES.casual };
+  const bad = (x: unknown) => {
+    try {
+      V.cleanVoice(x);
+      return null;
+    } catch (e) {
+      return e instanceof V.VoiceProblem ? e.message : `threw ${String(e)}`;
+    }
+  };
+  check("a whole, clean profile is kept as it is", same(V.cleanVoice(good), good));
+  check("an unknown field refuses it (message text can't ride in)", /never message text/.test(bad({ ...good, sample: "Hi Dana, thanks for the call yesterday." }) ?? "") && /never message text/.test(bad({ ...good, subject: "Re: Q3" }) ?? ""));
+  check("an unknown value refuses it", !!bad({ ...good, greeting: "Yo {first}!" }) && !!bad({ ...good, formality: "very formal" }) && !!bad({ ...good, length: "long" }) && !!bad({ ...good, contractions: "yes" }) && !!bad({ ...good, emoji: 1 }) && !!bad({ ...good, opener: "rambling" }) && !!bad({ ...good, name: "Morgan" }));
+  check("a missing field refuses it", !!bad({ greeting: "Hi {first}," }) && !!bad(null) && !!bad("casual") && !!bad([good]));
+  const refusedPhrases = [
+    "On Tue, Mar 3, Dana Whitfield wrote:", "Re: next steps", "> thanks for the intro", "Hi Dana, thanks for yesterday", "reach me at morgan@halerevops.example", "see https://halerevops.example/deck",
+    "book at calendly.com/morgan", "call me on 512 555 0141", "invoice 20391 attached", "first line\nsecond line", "\"as discussed last week\"", "it will be $9k a month",
+    "x".repeat(61), "", "One. Two. Three. Four.", "<b>bold</b>",
+  ];
+  check("phrases that read like mail, an address, a link, a number, or too long are refused", refusedPhrases.every((p) => !!V.phraseProblem(p) && !!bad({ ...good, phrases: [p] })), refusedPhrases.filter((p) => !V.phraseProblem(p)));
+  check("their own short phrases are fine", ["Hope you're well", "No rush at all", "Talk soon", "Happy Friday", "Onward", "Appreciate you"].every((p) => V.phraseProblem(p) === null));
+  check("at most five phrases, and a repeat counts once", !!bad({ ...good, phrases: ["a", "b", "c", "d", "e", "f"] }) && V.cleanVoice({ ...good, phrases: ["Talk soon", "talk soon"] }).phrases.length === 1);
+
+  // The app: saved by hand, theirs alone, removed.
+  r = await act(MOR, { type: "voice", voice: VOICES.formal });
+  let me = (await T.buildView(MOR)).me!;
+  check("Your profile saves it, checked on the server", /Saved/.test(r.message) && same(V.styleOf(me.voice), VOICES.formal) && me.voice?.by === "you" && !!me.voice?.at, me.voice);
+  check("?today=1 carries it for the note sheet", same(V.styleOf((await todayView(MOR))!.me.voice), VOICES.formal));
+  check("the app refuses what the server refuses", /never message text/.test((await refused(act(MOR, { type: "voice", voice: { ...VOICES.formal, body: "Dear Dana, ..." } }))) ?? "") && !!(await refused(act(MOR, { type: "voice", voice: { ...VOICES.formal, phrases: ["mail me at a@b.example"] } }))) && same(V.styleOf((await T.buildView(MOR)).me!.voice), VOICES.formal));
+  check("nobody else's Me has a voice", !(await T.buildView(TES)).me!.voice && !(await T.buildView(FRE)).me!.voice && !(await T.buildView("tok-ada-moves")).me!.voice);
+  const admin = JSON.stringify(await T.buildView("tok-ada-moves"));
+  check("an admin's view has nobody's voice, moves or network", !/Regards,|"voice"|"moves"/.test(admin) && !found(admin, NETWORK_WORDS.filter((w) => w.length > 5)).length);
+  check("Tess's table is still the same, and the shared table still wasn't built again", JSON.stringify(sortKeys((await T.buildView(TES)).companies)) !== "" && T.sharedViewStats().builds === stats0.builds);
+  r = await act(MOR, { type: "voice", remove: true });
+  check("Remove takes it away", /removed/.test(r.message) && !(await T.buildView(MOR)).me!.voice);
+
+  // The connector: conclusions only, shown first, saved once the member agrees.
+  const ctx = await ctxOf(MOR);
+  const toolRefused = async (p: Promise<unknown>) => p.then(() => null, (e: Error) => (e instanceof tools.ToolProblem ? e.message : `threw ${String(e)}`));
+  let out = await tools.saveMyVoice(ctx, { ...VOICES.casual });
+  check("save_my_voice without the member's yes saves nothing and says what to show them", out.saved === false && /Show the member/.test(String(out.next)) && !(await T.buildView(MOR)).me!.voice, out);
+  out = await tools.saveMyVoice(ctx, { ...VOICES.casual, member_agreed: true });
+  me = (await T.buildView(MOR)).me!;
+  check("with their yes it is saved, from their Claude", out.saved === true && same(V.styleOf(me.voice), VOICES.casual) && me.voice?.by === "claude", me.voice);
+  check("save_my_voice refuses message text: another field", /never message text/.test((await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.casual, member_agreed: true, examples: ["Hi Dana, great seeing you at the offsite."] }))) ?? "") && /never message text/.test((await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, sent_mail: "..." }))) ?? ""));
+  check("save_my_voice refuses a phrase that reads like mail, and a value off the list", !!(await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, phrases: ["On Monday Priya Raman wrote: sounds good"] }))) && !!(await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, phrases: ["priya@corvidhealth.example"] }))) && !!(await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, signoff: "Kind regards, Morgan Hale, +1 512 555 0141" }))));
+  check("a refused save changed nothing", same(V.styleOf((await T.buildView(MOR)).me!.voice), VOICES.casual));
+  const mv = await tools.myVoice(ctx);
+  check("my_voice reads it back, the member's own", mv.saved === true && same(mv.voice, VOICES.casual) && /Claude/.test(String(mv.saved_by)), mv);
+  check("my_voice for a member with none says how to learn it, and has nobody else's", (await tools.myVoice(await ctxOf(TES))).saved === false && !JSON.stringify(await tools.myVoice(await ctxOf(TES))).includes("Cheers"));
+  check("the saved voice is in nobody else's view or Home, and not in the export", !JSON.stringify([await T.buildView(TES), await todayView(TES), await T.buildView(OTH), await T.exportState()]).includes("No rush at all"));
+
+  /* ================= todays_moves ================= */
+  console.log("\ntodays_moves");
+  const tm = (await tools.todaysMoves(ctx)) as { moves: Record<string, unknown>[]; moves_done_this_month: number; voice: unknown; how_to_use: string };
+  const app = (await movesFor(MOR))!;
+  check("todays_moves is Home's moves: the same companies, moves and words", same(tm.moves.map((m) => [m.company_id, m.company, m.your_move, m.how, m.why_now]), app.moves.map((m) => [m.id, m.name, m.title, m.line, m.why])), tm.moves.map((m) => m.your_move));
+  check("and the same as ?today=1's", same(tm.moves.map((m) => m.company_id), (await todayView(MOR))!.moves!.list.map((w) => w.id)) && tm.moves_done_this_month === app.wire.month);
+  const noteOf = (id: string) => tm.moves.find((m) => m.company_id === id)?.note as { to: string; facts: Record<string, unknown>; merlin_draft: { subject: string; body: string } } | undefined;
+  const larkApp = app.moves.find((m) => m.id === P.lark)!;
+  const larkDraft = M.draftNote(M.noteFacts(larkApp, app.wire.list.find((w) => w.id === P.lark)!.row, app.me, BASE)!, VOICES.casual);
+  check("its note is the app's own draft, in the member's voice", !!noteOf(P.lark) && same(noteOf(P.lark)!.merlin_draft, { subject: larkDraft.subject, body: larkDraft.body }) && noteOf(P.lark)!.to === "Dana Whitfield", noteOf(P.lark));
+  check("the facts are the note sheet's facts", same(noteOf(P.lark)!.facts.company, "Larkfield Robotics") && /hired a fractional CRO/.test(String(noteOf(P.lark)!.facts.what_happened)));
+  check("no address leaves Merlin through it, and no rate", !/@/.test(JSON.stringify(tm)) && !RATE.test(JSON.stringify(tm.moves.map((m) => [m.note, m.why_now, m.how]))), JSON.stringify(tm).match(/\S+@\S+/)?.[0]);
+  check("it tells Claude the member sends, and to use only these facts", /member sends each note themselves/.test(tm.how_to_use) && /never add/.test(tm.how_to_use) && same(tm.voice, VOICES.casual));
+  const tmFre = (await tools.todaysMoves(await ctxOf(FRE))) as { moves: Record<string, unknown>[] };
+  check("for Free it names nothing and drafts nothing", !found(tmFre).length && tmFre.moves.every((m) => m.company === "Locked company" && m.locked === true && !("note" in m)), found(tmFre));
+  const tmTes = (await tools.todaysMoves(await ctxOf(TES))) as { moves: Record<string, unknown>[] };
+  check("for Tess: her own moves, nobody's network, and only what she opened", same(tmTes.moves.map((m) => m.company_id), (await movesFor(TES))!.moves.map((m) => m.id)) && !found(tmTes, NETWORK_WORDS).length && !found(tmTes, ["Bastian", "Marisol", "Philippa", "Cheers"]).length, found(tmTes, NETWORK_WORDS));
+
+  /* ================= the Pro welcome ================= */
+  console.log("\nthe Pro welcome");
+  const plan = async (tok: string) => (await T.buildView(tok)).me!.plan!;
+  check("right after Pro: the welcome is due", (await plan("tok-pro-moves")).name === "pro" && (await plan("tok-pro-moves")).proWelcome === true);
+  check("and ?today=1 says so, for Home's first paint", (await todayView("tok-pro-moves"))!.plan?.proWelcome === true);
+  check("bought in the trial, first charge still to come: due too", (await plan("tok-hld-moves")).name === "pro" && (await plan("tok-hld-moves")).proWelcome === true && !!(await plan("tok-hld-moves")).proStartsAt);
+  check("never for Trial, Free, or someone on Pro for months", !(await plan(MOR)).proWelcome && !(await plan(FRE)).proWelcome && (await plan("tok-old-moves")).name === "pro" && !(await plan("tok-old-moves")).proWelcome);
+  await act("tok-pro-moves", { type: "noticeSeen", kind: "proWelcome" });
+  check("Got it: it doesn't come back", !(await plan("tok-pro-moves")).proWelcome && !(await todayView("tok-pro-moves"))!.plan?.proWelcome);
+  await act("tok-pro-moves", { type: "noticeSeen", kind: "proWelcome" });
+  check("and stays away", !(await plan("tok-pro-moves")).proWelcome);
+  check("someone else's welcome is still theirs", (await plan("tok-hld-moves")).proWelcome === true);
+  check("the trial-ended card is a different notice", (await plan(FRE)).trialEnded === true);
+}
+
+try {
+  await main();
+} catch (e) {
+  failures++;
+  console.log("FAIL threw:", e);
+} finally {
+  rmSync(dir, { recursive: true, force: true });
+}
+console.log(`\n${passes} passed, ${failures} failed`);
+process.exit(failures ? 1 : 0);

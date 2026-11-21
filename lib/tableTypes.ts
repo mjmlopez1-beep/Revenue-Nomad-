@@ -6,6 +6,8 @@ import type { Entity } from "./tableFields";
 import type { RadarStats } from "./radar/types";
 import type { CompanyLeads, LeadersRunSummary } from "./leaders/types";
 import type { FundingAdminStats } from "./funding/types";
+import type { MovesWire } from "./moves";
+import type { VoiceProfile } from "./voice";
 
 /**
  * What one field looks like to the viewer.
@@ -360,6 +362,12 @@ export interface Me {
   looking?: boolean | null;
   /** Their plan, only while billing is live (RN_BILLING=1 with Stripe set up). Left out otherwise: nothing is gated. */
   plan?: PlanView;
+  /**
+   * Their writing voice (lib/voice.ts): style conclusions their own Claude saved from their sent
+   * mail, or that they typed in Your profile. The notes Merlin drafts are written in it. Only ever
+   * their own; left out when none is saved.
+   */
+  voice?: VoiceProfile;
 }
 
 /** Onboarding's answers to "How many clients do you have now?". */
@@ -420,6 +428,8 @@ export interface PlanView {
   limits: { savedViews: number | null; claudePerDay: number | null };
   /** The trial ended without a paid plan and the member hasn't closed Today's trial-ended card yet (PlanRecord.notices.trialEndedSeen). */ // [ux ws1]
   trialEnded?: boolean; // [ux ws1]
+  /** The member is on paid Pro and hasn't closed Home's one-time Pro welcome yet (PlanRecord.notices.proWelcomeSeen). */
+  proWelcome?: boolean;
 }
 
 /** The most functions "Which fractional usually gets hired before you?" takes. */
@@ -1014,7 +1024,20 @@ export type Action =
   /** The invite loop: the inviter closed the line saying these fractionals joined from their invite (Me.joined ids). It doesn't come back. */
   | { type: "joinedSeen"; ids: string[] }
   /** Today's one-time cards: the member closed it ("trialEnded": the trial-ended card), kept in PlanRecord.notices. */ // [ux ws1]
-  | { type: "noticeSeen"; kind: "trialEnded" } // [ux ws1]
+  | { type: "noticeSeen"; kind: "trialEnded" | "proWelcome" } // [ux ws1]
+  /**
+   * Your three moves today (lib/moves.ts): the member did the move at this company (it leaves the
+   * list for DONE_DAYS and counts for the month), snoozed it (hidden for SNOOZE_DAYS), or took
+   * that back. `id` is the company's public id; the server checks it is in their own Crystal Ball.
+   * Theirs alone: it changes nothing anyone else sees, and nothing in Crystal Ball itself.
+   */
+  | { type: "move"; id: string; op: "done" | "snooze" | "undo" }
+  /**
+   * Your writing voice (lib/voice.ts): save the style conclusions the member typed in Your profile
+   * (every field one value from its list, checked on the server), or remove the profile. Never text
+   * from a message.
+   */
+  | { type: "voice"; voice?: unknown; remove?: boolean }
   /**
    * Invite to connect (EngagementRec.invite): the member sent the seat holder a note with the seat's
    * claim link. One record per member and seat ("Invited Nov 18"): sending again keeps the first date
@@ -1091,6 +1114,8 @@ export type ActionResult = {
   reported?: View["reported"];
   partial?: boolean;
   version?: string;
+  /** The "move" action: today's moves as they now stand (the next best in place of the one done or snoozed), with their records in `companies`. */
+  moves?: MovesWire;
 };
 
 /**

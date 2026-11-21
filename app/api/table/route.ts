@@ -12,6 +12,7 @@ import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
 import { packedViewJson } from "@/lib/viewWire";
 import { todayView } from "@/lib/today";
+import { movesFor } from "@/lib/movesView";
 import { firstPage } from "@/lib/firstPage";
 import { isHome } from "@/app/post/place";
 import { inSlot } from "@/lib/viewQueue";
@@ -544,6 +545,11 @@ export const POST = guarded(async (req: NextRequest) => {
       return null;
     });
     if (!patch) return sendJson(req, { ...out, partial: true, version: viewVersion() });
+    // A move done, snoozed or taken back: today's moves as they now stand, the next best in place, with their records.
+    if (action.type === "move") {
+      const mv = await movesFor(token).catch(() => null);
+      if (mv) return sendJson(req, { ...out, ...patch, companies: mv.companies, moves: mv.wire, me: { ...patch.me, ...out.me } });
+    }
     return sendJson(req, { ...out, ...patch, me: { ...patch.me, ...out.me } });
   } catch (e) {
     if (e instanceof ActionError) return err(e.message);

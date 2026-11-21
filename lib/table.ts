@@ -119,6 +119,9 @@ import { inSlot } from "./viewQueue";
 import { isDue, settingOf, type ScheduleState } from "./schedule";
 // [google network] companies a member knows someone at are named for them free (lib/google/types.ts).
 import { networkKnown, type NetworkState } from "./google/types";
+// Your three moves today, and the voice its notes are written in: each member's own (lib/moves.ts, lib/voice.ts).
+import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type MoveLog } from "./moves";
+import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -476,6 +479,16 @@ export interface State extends MessagingState {
   funding?: FundingState;
   /** [google network] Each member's own network (lib/google/types.ts): private to them, never exported or counted for others. */
   network?: NetworkState;
+  /**
+   * Your three moves today (lib/moves.ts): what each member did with theirs (done, snoozed, a count
+   * a month), by member id. Private to them: never in another member's view, the shared table or the export.
+   */
+  moves?: Record<string, MoveLog>;
+  /**
+   * Each member's writing voice (lib/voice.ts): style conclusions only, never text from a message.
+   * Private to them: never in another member's view, the shared table, the export or an admin's panel.
+   */
+  voice?: Record<string, VoiceProfile>;
   /** Automatic jobs (lib/schedule.ts): the cadences the owner changed in Pilot metrics. The rest follow JOB_DEFAULTS. */
   schedule?: ScheduleState;
 }
@@ -2952,6 +2965,8 @@ function warmShared() {
 const NOBODY_BLIND = new Set([
   "ledger", "held", "unlocks", "follows", "referralPaid", "reportLog", "signals", "lockedViews", "digest", "connector", "integrations", "radar", "inviteJoins",
   "billing", "found", "findMisses", "seatInvites", "seatPrivate", "benchRates", "n", "at", "firstAt", "hist",
+  // A member's moves and writing voice are theirs alone: Nobody has neither, and no record reads them.
+  "moves", "voice",
 ]);
 /** Per fact or confirmation: these change the records of the company they are at. */
 const BY_RECORD = new Set(["values", "verifications"]);
@@ -3216,7 +3231,7 @@ const PATCH_MAX = 8;
 export async function viewPatch(
   token: string | null,
   ids: string[],
-  opts: { asMember?: boolean; since?: string; benchmarks?: boolean; found?: boolean } = {},
+  opts: { asMember?: boolean; since?: string; benchmarks?: boolean; found?: boolean; /** The most companies built (PATCH_MAX unless given: today's moves look at more). */ max?: number } = {},
 ): Promise<(Pick<ActionResult, "companies" | "ledgerNew" | "benchmarks" | "scan" | "reported" | "partial" | "version"> & { me: Me }) | null> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
@@ -3231,7 +3246,7 @@ export async function viewPatch(
     if (c && g.companies.has(c)) cos.add(c);
     else missing = true;
   }
-  const many = cos.size > PATCH_MAX;
+  const many = cos.size > (opts.max ?? PATCH_MAX);
   // found: the answer to a lookup by exact name, its companies named for that answer only (CompanyRec.found).
   const v = await fullView(seed, s, me, !!opts.asMember && isAdmin(me), many ? new Set() : cos, !!opts.benchmarks, false, opts.found ? foundIds(s, me.id, Date.now()) : null);
   const since = opts.since ?? "";
@@ -3245,6 +3260,39 @@ export async function viewPatch(
     ...(many || missing ? { partial: true } : {}),
     version: v.version,
   };
+}
+
+/**
+ * The member's own move log, as today's moves read it (lib/movesView.ts): the companies hidden
+ * from their moves right now (done lately or snoozed), by public id, and how many moves they
+ * marked done this calendar month. Null when the token is nobody's.
+ */
+export async function moveState(token: string | null, nowMs = Date.now()): Promise<{ hidden: Set<string>; month: number } | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return null;
+  const log = s.moves?.[me.id];
+  return { hidden: new Set([...movesHidden(log, nowMs)].map((id) => pubId(id))), month: movesThisMonth(log, nowMs) };
+}
+
+/**
+ * save_my_voice (the connector): the style conclusions the member's own Claude summarised from
+ * their sent mail, checked like the app's own save (lib/voice.ts cleanVoice: one value from each
+ * list, no other field, short clean phrases), kept for that member alone. Throws VoiceProblem.
+ */
+export async function saveVoice(memberId: string, raw: unknown, by: VoiceProfile["by"] = "claude"): Promise<VoiceProfile> {
+  const style = cleanVoice(raw);
+  return mutate((s) => {
+    const v: VoiceProfile = { ...style, at: new Date().toISOString(), by };
+    (s.voice ??= {})[memberId] = v;
+    return v;
+  });
+}
+/** A member's saved voice, or null. Only ever asked for the member themself. */
+export async function voiceOf(memberId: string): Promise<VoiceProfile | null> {
+  const s = await loadState();
+  const v = s.voice?.[memberId];
+  return v ? { ...v, phrases: [...(v.phrases ?? [])] } : null;
 }
 
 /**
@@ -3758,6 +3806,8 @@ async function fullView(
       ...(Array.isArray(prof.before) ? { before: [...prof.before] } : {}),
       firstView: prof.firstView && (s.connector?.alerts?.[me.id] ?? []).some((x) => x.id === prof.firstView && x.place) ? prof.firstView : null,
       draft: !prof.onboarded && prof.draft ? { ...prof.draft } : null,
+      // Their own writing voice (lib/voice.ts), when they saved one.
+      ...(s.voice?.[me.id] ? { voice: { ...s.voice[me.id], phrases: [...(s.voice[me.id].phrases ?? [])] } } : {}),
       clientCount: prof.clientCount ?? null,
       looking: typeof prof.looking === "boolean" ? prof.looking : null,
       // Their plan, only while billing is live (lib/billing). Without it nothing is gated.
@@ -4394,6 +4444,8 @@ const BENCH_DAILY_MAX = 5;
 const RATE_HELP = "Use a rate like $8k/mo or $150/hr.";
 /** A request the server doesn't know (an old tab after a release, most likely). */
 const UNKNOWN_ACTION = "That didn't go through. Refresh the page and try again.";
+/** Said when a move names a company that isn't in the member's Crystal Ball. */
+export const MOVE_NOT_IN = `That company isn't in your ${FEATURE_NAME} any more, so it has no move. Refresh Home for today's.`;
 /** A fact an admin took off the table (review, or adminRemove): what happened to the credits. */
 const REMOVED = "Removed. Anyone who unlocked it got their credit back, and it can be added again.";
 
@@ -4508,6 +4560,8 @@ export async function perform(
   if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
   // From Crystal Ball (an unlock with from "crystal"): its companies are read in the action, from the action's own state (lib/radar, loaded here so the two files don't import each other at start).
   const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
+  // A move is at a company in the member's own Crystal Ball: read the same way.
+  const movesMod = a?.type === "move" ? await import("./radar") : null;
   const out = await mutate((s, seed): ActionResult & { refused?: string; connected?: string } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError("You're signed out. Sign in again to add, confirm or unlock.");
@@ -6342,8 +6396,50 @@ export async function perform(
         case "noticeSeen": { // [ux ws1] Today's one-time trial-ended card, closed: kept with the plan's notices.
           const rec = s.billing?.members?.[me.id];
           if (rec && a.kind === "trialEnded") (rec.notices ??= {}).trialEndedSeen = now; // [ux ws1]
+          // Home's one-time Pro welcome, closed.
+          if (rec && a.kind === "proWelcome") (rec.notices ??= {}).proWelcomeSeen = now;
           return { message: "" }; // [ux ws1]
         } // [ux ws1]
+        case "move": {
+          // Your three moves today: done (it leaves the list and counts), snoozed (hidden for a week), or taken back. The member's own log, nothing else.
+          const op = a.op === "done" || a.op === "snooze" || a.op === "undo" ? a.op : null;
+          if (!op) throw new ActionError(UNKNOWN_ACTION);
+          const co = g.companies.get(inId("company", a.id));
+          if (!co) throw new ActionError(gone("company"));
+          const all = (s.moves ??= {});
+          const had = all[me.id];
+          // Only a company in their own Crystal Ball has a move (never what the client says), or one already in their log (to take it back).
+          const known = !!had && (!!had.done[co.id] || !!had.snoozed[co.id]);
+          if (!known && !movesMod!.crystalCompanyIds(seed, s, me, nowMs).has(co.id)) throw new ActionError(MOVE_NOT_IN);
+          const log = (all[me.id] ??= emptyMoveLog());
+          logMove(log, co.id, op, nowMs);
+          const n = movesThisMonth(log, nowMs);
+          return {
+            message:
+              op === "done"
+                ? `Done. ${n === 1 ? "That's your first move this month." : `That's ${n} moves this month.`}`
+                : op === "snooze"
+                  ? `Snoozed for ${SNOOZE_DAYS} days.`
+                  : "Back in your moves.",
+          };
+        }
+        case "voice": {
+          // Your writing voice, typed in Your profile: style conclusions only, each one a value from its list (lib/voice.ts).
+          const all = (s.voice ??= {});
+          if (a.remove) {
+            delete all[me.id];
+            return { message: "Your writing voice is removed. Notes go back to the plain template." };
+          }
+          let style;
+          try {
+            style = cleanVoice(a.voice);
+          } catch (e) {
+            if (e instanceof VoiceProblem) throw new ActionError(e.message);
+            throw e;
+          }
+          all[me.id] = { ...style, at: now, by: "you" };
+          return { message: "Saved. Your notes are drafted in this voice." };
+        }
         case "joinedSeen": {
           // The invite loop: the inviter closed the line saying who joined from their invite. It doesn't come back.
           const ids = new Set((Array.isArray(a.ids) ? a.ids : []).slice(0, 50).map((x) => String(x)));
@@ -6461,7 +6557,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // Admins never read members' conversations: they leave without their texts (the volume's daily
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
-  const { signins: _signins, network: _network, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // A member's writing voice and what they did with their moves are theirs alone too.
+  const { signins: _signins, network: _network, voice: _voice, moves: _moves, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -6978,6 +7075,18 @@ function ownRate(s: State, memberId: string): { kind: "monthly" | "hourly"; amou
   }
   return null;
 }
+/** Home's Pro welcome shows for this long after Pro was first paid for (a member who was on Pro long before the card existed never gets it). */
+export const PRO_WELCOME_DAYS = 30;
+/**
+ * Home's one-time Pro welcome is due: the member is on paid Pro (bought now, or bought in the trial
+ * and waiting for its first charge), it started in the last PRO_WELCOME_DAYS, and they haven't
+ * closed the card (PlanRecord.notices.proWelcomeSeen).
+ */
+const proWelcomeDue = (rec: PlanRecord | undefined, name: PlanView["name"], nowMs: number): boolean => {
+  if (name !== "pro" || !rec || rec.notices?.proWelcomeSeen) return false;
+  if (rec.paidSince) return nowMs - Date.parse(rec.paidSince) < PRO_WELCOME_DAYS * DAY_MS;
+  return !!rec.proStartsAt;
+};
 /** Me.plan: what the Plan and billing page, the banner and the upgrade moments read. */
 function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: Tracks; fnOfEng: (engId: string) => string | null }): PlanView {
   const rec = planRec(s, memberId);
@@ -7014,6 +7123,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     prices: { month: PRICES.month, year: PRICES.year, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
     limits: { savedViews: free ? FREE_SAVED_VIEWS : null, claudePerDay: free ? FREE_MCP_PER_DAY : null },
     ...(free && rec?.trialStartedAt && !rec.paidSince && !rec.notices?.trialEndedSeen ? { trialEnded: true } : {}), // [ux ws1] Today's one-time trial-ended card
+    ...(proWelcomeDue(rec, name, nowMs) ? { proWelcome: true } : {}),
   };
 }
 
