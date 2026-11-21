@@ -109,6 +109,7 @@ import { valueCounts, valueLines } from "./billing/emails";
 import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStats } from "./radar/types";
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
+import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./websites/types";
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, KNOWN_DAYS as LEADERS_KNOWN_DAYS, DAILY_BATCH as LEADERS_DAILY_BATCH, READER_VERSION as LEADERS_READER_VERSION, leadersEnabled, leadersProgress, fnKnow, memberRoles, reportsOf, teamReadAt, CONFIRM_MEMBERS,
   type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
@@ -204,7 +205,7 @@ interface Added {
 }
 export interface FieldValue {
   value: string;
-  by: string; // member id, "seed", "scan" (the weekly scan; treated like seed), or "website" (an About text read from the company's site, lib/about; treated like seed)
+  by: string; // member id, "seed", "scan" (the weekly scan; treated like seed), "website" (an About text read from the company's site, lib/about; treated like seed), or "found" (a website Merlin found, lib/websites; treated like seed, never marked for members)
   at: string;
   /** reported: hidden for everyone (two or more members reported it) until an admin reviews it. */
   status: "live" | "reported" | "removed";
@@ -435,6 +436,8 @@ export interface State extends MessagingState {
   radar?: RadarState;
   /** About texts read from company websites (lib/about): each company's last try, and the last run. The texts are values by "website". */
   about?: AboutState;
+  /** The website finder (lib/websites): each company's last try (found, with its confidence; none; undone), and the last run. Admins only. The websites are values by "found". */
+  websites?: WebsitesState;
   /**
    * Who leads each function, read from each company's own website (lib/leaders), by internal
    * company id: the function, level, full-time or fractional, since when and the page. Never a name.
@@ -1988,7 +1991,7 @@ function valueOf(node: Node | undefined, s: State, field: string): FieldValue | 
   return field === "operator" && (node as EngNode).holderFrom === PUBLIC_PROFILE ? { value: sv, by: "seed", at: "", status: "live", pub: true } : { value: sv, by: "seed", at: "", status: "live" };
 }
 /** Values from our own records (the seed) or the weekly scan: nobody earned a credit for them. */
-const isSystem = (by: string) => by === "seed" || by === "scan" || by === ABOUT_BY;
+const isSystem = (by: string) => by === "seed" || by === "scan" || by === ABOUT_BY || by === WEBSITE_FOUND_BY;
 const live = (node: Node | undefined, s: State, field: string) => {
   const v = valueOf(node, s, field);
   return v && v.status === "live" ? v.value : null;
@@ -3682,7 +3685,7 @@ async function fullView(
         label: f.label,
         value: v.value,
         companyId: pubId(companyIdOf(id)),
-        addedBy: v.by === "seed" ? "Revenue Nomad records" : v.by === "scan" ? "Weekly scan" : v.by === ABOUT_BY ? ABOUT_SOURCE : memberName(v.by),
+        addedBy: v.by === "seed" ? "Revenue Nomad records" : v.by === "scan" ? "Weekly scan" : v.by === ABOUT_BY ? ABOUT_SOURCE : v.by === WEBSITE_FOUND_BY ? WEBSITE_FOUND_SOURCE : memberName(v.by),
         reporters: (v.reporters ?? (v.reportedBy ? [v.reportedBy] : [])).map(memberName),
         reportedAt: lastReport.get(k) ?? null,
         hidden: v.status === "reported",

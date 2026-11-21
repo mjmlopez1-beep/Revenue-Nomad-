@@ -16,7 +16,7 @@
  * The env switches still win: a job whose switch is off never runs on its own (envOff).
  */
 
-export const JOBS = ["scan", "radar", "leaders", "funding", "about"] as const;
+export const JOBS = ["scan", "radar", "leaders", "funding", "about", "websites"] as const;
 export type JobId = (typeof JOBS)[number];
 
 export const CADENCES = ["daily", "twice-weekly", "weekly", "off"] as const;
@@ -34,6 +34,8 @@ export type ScheduleState = Partial<Record<JobId, JobSetting>>;
  * As the jobs ran before they had a schedule: the scan once a week, Crystal Ball each day from
  * 13:00 UTC (RADAR_HOUR_UTC), the leadership pages and the funding filings each day from 06:00
  * UTC (DAILY_HOUR_UTC, FUNDING_HOUR_UTC), and the About texts each day at 09:00, clear of the others.
+ * The website finder (lib/websites) came later: each day at 03:00 UTC, off-peak in Europe and the
+ * Americas, so its ~300 companies a run (about 12 days for 3,500) read while sites are quiet.
  */
 export const JOB_DEFAULTS: Record<JobId, JobSetting> = {
   scan: { every: "weekly", hourUtc: 12 },
@@ -41,6 +43,7 @@ export const JOB_DEFAULTS: Record<JobId, JobSetting> = {
   leaders: { every: "daily", hourUtc: 6 },
   funding: { every: "daily", hourUtc: 6 },
   about: { every: "daily", hourUtc: 9 },
+  websites: { every: "daily", hourUtc: 3 },
 };
 
 /** The names and the few words Pilot metrics shows for each job. */
@@ -50,6 +53,7 @@ export const JOB_WORDS: Record<JobId, { name: string; what: string }> = {
   leaders: { name: "Leadership pages", what: "Reads company websites for who leads each function." },
   funding: { name: "Funding filings", what: "Reads the day's SEC Form D filings for new raises." },
   about: { name: "About texts", what: "Reads the homepage of companies with no About yet, or an old one." },
+  websites: { name: "Website finder", what: "Finds the website of companies with none, from their name. Admins only: members never see how a website was found." },
 };
 
 /** The words for each cadence: the select's, and in a sentence ("runs every day at 9:00 AM"). */
@@ -134,6 +138,8 @@ export function envOff(job: JobId, env: Record<string, string | undefined> = pro
       return env.RN_FUNDING === "1" ? null : "Off: set RN_FUNDING=1 in Railway";
     case "about":
       return env.RN_ABOUT === "1" ? null : "Off: set RN_ABOUT=1 in Railway";
+    case "websites":
+      return env.RN_WEBSITES === "1" ? null : "Off: set RN_WEBSITES=1 in Railway";
   }
 }
 
@@ -181,6 +187,10 @@ export interface JobRow {
   lastFailed: boolean;
   /** When it starts next (ISO), or null: off, or running now. */
   nextAt: string | null;
+  /** Whether it has a "Dry run" (reads and checks, writes nothing), which works with its switch off too. */
+  canDry?: boolean;
+  /** How the last dry run went, in a few words, or null. */
+  dryNote?: string | null;
 }
 
 export interface JobsPanel {

@@ -4,7 +4,7 @@
  * to a cadence (setCadence). The due-time rules are in lib/schedule.ts.
  *
  * Each job keeps its own check and its own in-flight guard (maybeScan, maybeRadar, maybeLeaders,
- * maybeFunding, maybeAbout): a job that is running is never started twice, and a check with
+ * maybeFunding, maybeAbout, maybeWebsites): a job that is running is never started twice, and a check with
  * nothing due only reads the state in memory. Counts only here: never a company or a person.
  */
 import { loadState, maybeScan, scanRunning, tableInternals as T, type State } from "./table";
@@ -13,6 +13,7 @@ import { fundingRunning, maybeFunding } from "./funding/run";
 import { fundingEnabled } from "./funding/types";
 import { aboutEnabled, aboutProgress } from "./about/types";
 import { leadersEnabled, leadersProgress } from "./leaders/types";
+import { runWords, websitesEnabled, websitesProgress } from "./websites/types";
 import { JOBS, JOB_WORDS, TICK_MS, envOff, jobsRuntime, nextRunAt, settingOf, type JobId, type JobRow, type JobSetting, type JobsPanel } from "./schedule";
 
 const HOUR = 60 * 60 * 1000;
@@ -31,6 +32,7 @@ export async function runDueJobs(origin?: string, nowMs = Date.now()): Promise<R
     leaders: () => (leadersEnabled() ? import("./leaders/run").then((m) => m.maybeLeaders(nowMs)) : false),
     funding: () => maybeFunding(nowMs),
     about: () => (aboutEnabled() ? import("./about/run").then((m) => m.maybeAbout({ nowMs })) : false),
+    websites: () => (websitesEnabled() ? import("./websites/run").then((m) => m.maybeWebsites({ nowMs })) : false),
   };
   const out = {} as Record<JobId, boolean>;
   await Promise.all(
@@ -66,6 +68,8 @@ function dueFrom(s: State, job: JobId): number {
       return Date.parse(s.funding?.lastRunAt ?? "");
     case "about":
       return Date.parse(s.about?.lastRun?.startedAt ?? "");
+    case "websites":
+      return Date.parse(s.websites?.lastRun?.startedAt ?? "");
   }
 }
 
@@ -105,6 +109,12 @@ function lastOf(s: State, job: JobId): { at: string | null; note: string | null;
       if (!r.endedAt && !aboutProgress.running) return { at: r.startedAt, note: `Stopped before the end, ${n0(r.done)} of ${n0(r.total)} read`, failed: true };
       return { at: r.startedAt, note: `${plural(r.done, "company", "companies")} read, ${n0(r.filled)} filled`, failed: false };
     }
+    case "websites": {
+      const r = s.websites?.lastRun;
+      if (!r) return { at: null, note: null, failed: false };
+      if (!r.endedAt && !websitesProgress.running) return { at: r.startedAt, note: `Stopped before the end, ${n0(r.done)} of ${n0(r.total)} read`, failed: true };
+      return { at: r.startedAt, note: runWords(r), failed: false };
+    }
   }
 }
 
@@ -114,6 +124,7 @@ const runningNow: Record<JobId, () => boolean> = {
   leaders: () => leadersProgress.running,
   funding: fundingRunning,
   about: () => aboutProgress.running,
+  websites: () => websitesProgress.running,
 };
 
 /** Whether "Run now" can start the job on this server (the scan and Crystal Ball always can; the rest need their switch). */
@@ -123,7 +134,18 @@ const canRun: Record<JobId, () => string | null> = {
   leaders: () => (leadersEnabled() ? null : "Set RN_LEADERS=1 in Railway first."),
   funding: () => (fundingEnabled() ? null : "Set RN_FUNDING=1 in Railway first."),
   about: () => (aboutEnabled() ? null : "Set RN_ABOUT=1 in Railway first."),
+  websites: () => (websitesEnabled() ? null : "Set RN_WEBSITES=1 in Railway first. Dry run works now: it writes nothing."),
 };
+
+/** The website finder's last dry run, in this process: its counts, or how far it has got. */
+function dryNote(): string | null {
+  const live = websitesProgress.running && websitesProgress.run?.dry ? websitesProgress.run : null;
+  if (live) return `Dry run going: ${n0(live.done)} of ${n0(live.total)} read, ${n0(live.found)} found so far`;
+  const d = websitesProgress.dry?.run;
+  if (!d) return null;
+  const hit = d.done ? Math.round((100 * d.found) / d.done) : 0;
+  return `Dry run ${d.startedAt.slice(0, 10)}: ${runWords(d)} (${hit}% found). Nothing was saved.`;
+}
 
 /** One row of the Automatic jobs card. Pure apart from the env switches and what is running in this process. */
 export function jobRow(s: State, job: JobId, nowMs: number): JobRow {
@@ -152,6 +174,7 @@ export function jobRow(s: State, job: JobId, nowMs: number): JobRow {
     lastNote: last.note,
     lastFailed: last.failed,
     nextAt: next === null ? null : new Date(next).toISOString(),
+    ...(job === "websites" ? { canDry: !running, dryNote: dryNote() } : {}),
   };
 }
 
