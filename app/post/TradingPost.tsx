@@ -53,7 +53,7 @@ import { earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar, useRadarNew } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
 import { RadarPage, radarRows, useRadarDay } from "./Radar";
-import { SIG_DAY_RE, YOUR_FEATURE } from "@/lib/radar/types";
+import { SIG_DAY_RE, YOUR_FEATURE, type RadarRange } from "@/lib/radar/types";
 import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
@@ -247,7 +247,7 @@ const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "u
 const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
 
 /** The address for a place, leaving out what the member's defaults already say. Today's is / alone; the table's never is (?p=table at its defaults). */
-function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null }): string {
+function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null; range?: RadarRange | null }): string {
   const d = defaultsFor(me);
   const q = new URLSearchParams();
   if (x.v !== d.v) q.set("v", x.v);
@@ -259,8 +259,9 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   if (x.all && x.v === "hiring") q.set("af", "1");
   if (x.p === "table" && x.c) q.set("c", x.c);
   if (x.p !== "table" && x.p !== "today") q.set("p", x.p);
-  // The radar's day says which day, so a reload or a shared link opens the same companies.
+  // The radar's day (an email's link) or the range the member picked, so a reload opens the same companies. The default range says nothing.
   if (x.p === "radar" && x.sig) q.set("sig", x.sig);
+  else if (x.p === "radar" && x.range) q.set("range", x.range);
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
   if (x.p === "today") return path;
   if (x.p === "table" && !q.toString()) q.set("p", "table");
@@ -679,12 +680,16 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /** How many rows the list has: the whole table's count while only its first page is here. */
   const listN = first ? first.n : sorted.length;
   /*
-   * The radar's day (page "radar", Radar.tsx): one day's companies from the member's signals, the
-   * page the email's and Slack's links open. `sigDay` null: the latest day with something in it.
-   * The record opened from it steps through the same companies (navRows).
+   * The radar's list (page "radar", Radar.tsx): a range of the member's signals (Today, Last 7
+   * days, Last 30 days), or one day, the page the email's and Slack's links open (?sig=). Both
+   * null: the range that opens by default (Today if it has companies, else Last 7 days, else Last
+   * 30 days). The record opened from it steps through the same companies (navRows).
    */
-  const [sigDay, setSigDay] = useState<string | null>(place0.sig);
-  const radar = useRadarDay(page === "radar", sigDay, [me.function, me.icp, me.before]);
+  const [sigDay, setSigDayRaw] = useState<string | null>(place0.sig);
+  const [radarRange, setRadarRange] = useState<RadarRange | null>(place0.range ?? null);
+  /** A day, or none (the range picked, or the default): picking one clears the other. */
+  const setSigDay = useCallback((d: string | null, r: RadarRange | null = null) => (setSigDayRaw(d), setRadarRange(d ? null : r)), []);
+  const radar = useRadarDay(page === "radar", sigDay, radarRange, [me.function, me.icp, me.before]);
   // [google network] Crystal Ball cut to the companies where the member knows someone (the connect moment's button).
   const [radarKnow, setRadarKnow] = useState(false);
   // It lasts for that visit to Crystal Ball (a record opened from it comes back to the same list), not for the next one.
@@ -1213,7 +1218,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const navOpen = (page !== "table" && page !== "today") || !!drawer;
   const overlayOpen = layout !== "desktop" && !!(editor || pop || sortOpen || addOpts || sideOverlay);
   const depth = (navOpen ? 1 : 0) + (overlayOpen ? 1 : 0);
-  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay ?? radar.stale?.day ?? null });
+  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay, range: radarRange });
   const urlRef = useRef(url);
   urlRef.current = url;
   const depthRef = useRef(depth);
@@ -1340,7 +1345,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       const p = x.p && (x.p !== "metrics" || view.admin) ? x.p : null;
       if (p && p !== page) {
         setDrawer(null);
-        if (p === "radar") setSigDay(x.sig);
+        if (p === "radar") setSigDay(x.sig, x.range ?? null);
         setPage(p);
       } else if (!p && x.c && byId.has(x.c) && (page !== "table" || drawer?.id !== x.c)) {
         setDrawer({ id: x.c, rowKey: sorted.find((r) => r.i.c.id === x.c)?.key ?? x.c, focus: null });
@@ -1351,7 +1356,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       const x = readPlace(me);
       if (x.p && (x.p !== "metrics" || view.admin)) {
         setDrawer(null);
-        if (x.p === "radar") setSigDay(x.sig);
+        if (x.p === "radar") setSigDay(x.sig, x.range ?? null);
         setPage(x.p);
       } else if (x.c && byId.has(x.c)) openCompany(x.c);
     }
@@ -2566,7 +2571,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               phone={phone}
               onBack={toBase}
               onProfile={() => setIcpOpen(true)}
-              onDay={setSigDay}
+              onRange={(r) => setSigDay(null, r)}
               openCompany={openCompany}
               know={radarKnow}
               onKnow={setRadarKnow}

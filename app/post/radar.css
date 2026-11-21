@@ -452,6 +452,19 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A range's words are longer ("… · Last 30 days · 21 companies"): on a phone they wrap rather than lose the count. */
+@media (max-width: 560px) {
+  .rd-pill {
+    height: auto;
+    min-height: 32px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  .rd-pill > span:first-child {
+    white-space: normal;
+    line-height: 1.3;
+  }
+}
 /* Free, after today's free company: one quiet line under the heading. */
 .rd-used {
   margin: 0 0 16px;

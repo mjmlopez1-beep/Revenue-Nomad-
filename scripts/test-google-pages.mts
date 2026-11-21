@@ -372,6 +372,20 @@ async function main() {
   check("each chip prints the grade Your network gives the company: \"You know someone · Warm\"", chips.every(({ c, html }) => text(html) === `You know someone · ${c.warmth}` && text(html) === types.knowWords(c.warmth)), chips.map((x) => text(x.html)));
   check("the colour is a second cue, and the chip has a name a screen reader says", chips.every(({ c, html }) => html.includes(`nw-l-${c.warmth.toLowerCase()}`) && html.includes(`aria-label="You know someone here: ${c.warmth}"`)));
   check("a company the member knows nobody at has no chip", renderToStaticMarkup(React.createElement(N2.KnowChip, { companyId: fa.table.companies.find((c) => !anaIds.has(c.id))!.id })) === "");
+  // "Where you know someone" cuts the range the member picked (Crystal Ball's page, app/post/Radar.tsx), not a day.
+  const RP = await import("../app/post/Radar.tsx");
+  const { rowsFor } = await import("../app/post/model.ts");
+  const month = (await radar.radarView(ANA, null, undefined, "30d"))!;
+  const page = (know: boolean) => {
+    const rowsAll = RP.radarRows(month, rowsFor("companies", deriveAll(fa.table.companies)));
+    return text(render(fa.table.me, React.createElement(RP.RadarPage, { view: month, failed: null, reload: noop, rows: rowsAll, me: fa.table.me!, phone: true, onBack: noop, onProfile: noop, onRange: noop, openCompany: noop, know, onKnow: noop })));
+  };
+  const inMonth = month.rows.filter((r) => anaIds.has(r.id)).length;
+  const knowOn = page(true);
+  const knowOff = page(false);
+  check("Crystal Ball's Last 30 days: the pill says the range", month.range === "30d" && knowOff.includes(`From your Crystal Ball · Last 30 days · ${month.rows.length} companies`), knowOff.slice(0, 400));
+  check("Where you know someone cuts that range to the companies she knows someone at", inMonth === 2 && knowOn.includes("From your Crystal Ball · Last 30 days · 2 companies") && /Where you know someone\s*2/.test(knowOn), knowOn.slice(0, 400));
+  check("the three ranges are there with their counts", ["Today", "Last 7 days", "Last 30 days"].every((l) => knowOn.includes(l)) && (month.ranges ?? []).length === 3);
 
   /* ---------- 5. what to charge them ---------- */
   console.log("\nWhat to charge them");

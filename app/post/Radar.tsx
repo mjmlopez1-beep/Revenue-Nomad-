@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * The radar's day (page "radar"; members read it as FEATURE_NAME): the Companies list cut to the
- * companies in one UTC day of the member's signals, the page the email's and Slack's links open
- * (/?p=table&sig=2026-11-19, also ?p=radar). The server decides which companies (GET
- * /api/table?radar=1&day=, lib/radar radarView: only the member's own signals); the rows are the
+ * The radar's page (page "radar"; members read it as FEATURE_NAME): the Companies list cut to the
+ * companies in a range of the member's signals, Today, Last 7 days or Last 30 days, each company
+ * once at its most recent day (the line beside it says which day). It opens on Today when Today has
+ * companies, else Last 7 days, else Last 30 days (?p=radar; ?p=radar&range=7d once picked). An
+ * email's or Slack's link names a day (/?p=table&sig=2026-11-19) and opens that day alone, exactly
+ * what it listed, with the ranges a tap away. The server decides which companies (GET
+ * /api/table?radar=1&range=&day=, lib/radar radarView: only the member's own signals); the rows are the
  * member's own table rows, so a company they don't know stays locked and named by nothing.
  *
  * Each row (desktop) and card (phones) says what happened there and has one button. For a locked
@@ -14,10 +17,10 @@
  * record's own UnlockCompany, so the zero-credit wall and the daily limit work as everywhere). Open
  * for one the member knows. The server checks each free open is in their Crystal Ball. The row or card
  * itself opens the record, and closing it comes back here. A removable pill says what the list
- * is ("From your Crystal Ball · Nov 19 · 2 companies"); taking it off shows all companies. The
- * last 7 days are one tap each.
+ * is ("From your Crystal Ball · Last 7 days · 9 companies", "… · Nov 19 · 2 companies" for a day's
+ * link); taking it off shows all companies. The three ranges are one tap each, with their counts.
  *
- * [google network] "Where you know someone": the day cut to the companies in the member's own
+ * [google network] "Where you know someone": the list cut to the companies in the member's own
  * network (the rows that carry the "You know someone · Warm" chip). The connect moment's button
  * opens the page with it on; a chip beside the days turns it on and off. Nothing with RN_GOOGLE off.
  *
@@ -26,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_INDUSTRIES } from "@/lib/tableFields";
-import { CRYSTAL_USED_LINE, YOUR_FEATURE, FEATURE_NAME, yourFeature, type RadarView } from "@/lib/radar/types";
+import { CRYSTAL_USED_LINE, YOUR_FEATURE, FEATURE_NAME, rangeLabel, yourFeature, type RadarRange, type RadarView } from "@/lib/radar/types";
 import { IconChevron, IconCheck, IconX, post } from "../ui/shared";
 import { isOpenRole, type CoInfo, type Row } from "./model";
 import { useUi } from "./ui";
@@ -55,18 +58,18 @@ const dayLabel = (day: string, today: string) => {
 };
 
 /**
- * One day's companies from the server, while `active` (the page is open). The last answer stays
- * after the page closes, so the record opened from it steps through the same companies.
- * `day` null: the latest day with something in it.
+ * The page's companies from the server, while `active` (the page is open): one day (`day`, an
+ * email's or Slack's link) or a range (`range`; null: the one that opens by default). The last
+ * answer stays after the page closes, so the record opened from it steps through the same companies.
  */
-export function useRadarDay(active: boolean, day: string | null, again: unknown[]) {
+export function useRadarDay(active: boolean, day: string | null, range: RadarRange | null, again: unknown[]) {
   const [data, setData] = useState<RadarView | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const want = useRef(0);
   const load = useCallback(async () => {
     const n = ++want.current;
     try {
-      const r = await fetch(`/api/table?radar=1${day ? `&day=${encodeURIComponent(day)}` : ""}`, { cache: "no-store" });
+      const r = await fetch(`/api/table?radar=1&range=${range ?? "auto"}${day ? `&day=${encodeURIComponent(day)}` : ""}`, { cache: "no-store" });
       const j = await r.json().catch(() => null);
       if (n !== want.current) return;
       if (!r.ok || !j) return setFailed(j?.error || `${YOUR_FEATURE} didn't load. Try again.`);
@@ -75,12 +78,14 @@ export function useRadarDay(active: boolean, day: string | null, again: unknown[
     } catch {
       if (n === want.current) setFailed("We couldn't reach Merlin. Check your connection and try again.");
     }
-  }, [day]);
+  }, [day, range]);
   useEffect(() => {
     if (active) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, load, ...again]);
-  return { data: data && (!day || data.day === day || data.expired) ? data : null, stale: data, failed, reload: load };
+  // The answer for what was asked: that day, that range, or (neither) whichever range opened by default.
+  const fits = !!data && (day ? (data.day === day && !data.range) || !!data.expired : range ? data.range === range : !!data.range);
+  return { data: fits ? data : null, stale: data, failed, reload: load };
 }
 
 /** The member's rows for the day's companies, in the server's order (most likely first). */
@@ -104,7 +109,7 @@ export function RadarPage({
   phone,
   onBack,
   onProfile,
-  onDay,
+  onRange,
   openCompany,
   know = false,
   onKnow,
@@ -119,7 +124,8 @@ export function RadarPage({
   /** All companies: the pill taken off, or Back. */
   onBack: () => void;
   onProfile: () => void;
-  onDay: (day: string) => void;
+  /** Today, Last 7 days or Last 30 days (the switcher). */
+  onRange: (range: RadarRange) => void;
   openCompany: (id: string) => void;
   /** [google network] Only the companies where the member knows someone. */
   know?: boolean;
@@ -171,9 +177,24 @@ export function RadarPage({
       ),
     [open, fnMine, crystal],
   );
+  // Over several days each company says which day its lines are from, beside the first one's band: "High · Yesterday · Fractional CMO hired…".
+  const dated = !!view?.range && view.range !== "today";
   const signals = useMemo<SignalRows>(
-    () => ({ lines: new Map((view?.rows ?? []).map((x) => [x.id, x.lines])), notes: new Map((view?.rows ?? []).flatMap((x) => (x.notes ? [[x.id, x.notes] as const] : []))), action }),
-    [view, action],
+    () => ({
+      lines: new Map((view?.rows ?? []).map((x) => [x.id, x.lines])),
+      notes: new Map(
+        (view?.rows ?? []).flatMap((x) => {
+          if (!dated || !x.day) return x.notes ? [[x.id, x.notes] as const] : [];
+          const when = dayLabel(x.day, view!.today);
+          const first = x.notes?.[0] ?? "";
+          const cut = first.indexOf(" · ");
+          const note = !first ? when : cut > 0 ? `${first.slice(0, cut)} · ${when} · ${first.slice(cut + 3)}` : `${when} · ${first}`;
+          return [[x.id, [note, ...(x.notes ?? []).slice(1)]] as const];
+        }),
+      ),
+      action,
+    }),
+    [view, dated, action],
   );
   const flip = async () => {
     setBusy(true);
@@ -186,6 +207,12 @@ export function RadarPage({
   const before = view?.before ?? [];
   const n = rows.length;
   const day = view?.day ?? null;
+  const range = view?.range ?? null;
+  // Something moved today: the ball glows.
+  const glow = n > 0 && (range ? (view?.ranges?.[0]?.companies ?? 0) > 0 : day === view?.today);
+  // What the list is, in the pill ("Last 7 days", "Nov 19"), and in a sentence ("in the last 7 days", "on Nov 19").
+  const what = range ? rangeLabel(range) : day ? shortDay(day) : "";
+  const when = range === "today" || (!range && day === view?.today) ? "today" : range ? `in the ${rangeLabel(range).toLowerCase()}` : day ? `on ${shortDay(day)}` : "";
   return (
     <div className="tp-page rd-page">
       <button type="button" className="tp-back" onClick={onBack}>
@@ -194,7 +221,7 @@ export function RadarPage({
       {/* The header card: the words first, the ball at its far end on a nested corner. With nothing today, the empty state's picture is the page's one. */}
       <header className="rd-head">
       <Bleed kind="BR" on="white" className="rd-head-bleed" />
-      {view?.ready && !n ? null : <Prop name={n > 0 && day === view?.today ? "ballGlow" : "ballPlain"} height={n > 0 && day === view?.today ? 92 : 64} className="rd-head-ball" />}
+      {view?.ready && !n ? null : <Prop name={glow ? "ballGlow" : "ballPlain"} height={glow ? 92 : 64} className="rd-head-ball" />}
       <h1 className="tp-page-h">{YOUR_FEATURE}</h1>
       {/* [ux ws3] One line, then the rest behind "How it ranks". */}
       <p className="rd-lead">
@@ -229,7 +256,7 @@ export function RadarPage({
         <div className="rd-bar">
           <span className="chip chip-on rd-pill">
             <span>
-              From {yourFeature} · {shortDay(day)} · {plural(n, "company", "companies")}
+              From {yourFeature} · {what} · {plural(n, "company", "companies")}
             </span>
             <button type="button" className="rd-pill-x" onClick={onBack} aria-label="Remove this filter and show all companies" title="Show all companies">
               <IconX size={13} />
@@ -244,12 +271,13 @@ export function RadarPage({
               </span>
             </button>
           )}
-          <div className="rd-days" role="group" aria-label="Pick a day">
-            {[...view.days, ...(view.days.some((d) => d.day === day) ? [] : [{ day, companies: n }])].map((d) => (
-              <button key={d.day} type="button" className={`chip rd-day${d.day === day ? " chip-on" : ""}`} aria-pressed={d.day === day} onClick={() => onDay(d.day)}>
-                {dayLabel(d.day, view.today)}
-                <span className="num rd-day-n" aria-label={`, ${plural(d.companies, "company", "companies")}`}>
-                  {d.companies}
+          {/* Today, Last 7 days, Last 30 days, each with its companies. A day's link (?sig=) shows that day in the pill, with none of them on. */}
+          <div className="rd-days rd-ranges" role="group" aria-label="Pick a range">
+            {(view.ranges ?? []).map((r) => (
+              <button key={r.range} type="button" className={`chip rd-day${r.range === range ? " chip-on" : ""}`} aria-pressed={r.range === range} onClick={() => onRange(r.range)}>
+                {rangeLabel(r.range)}
+                <span className="num rd-day-n" aria-label={`, ${plural(r.companies, "company", "companies")}`}>
+                  {r.companies}
                 </span>
               </button>
             ))}
@@ -266,7 +294,7 @@ export function RadarPage({
 
       {view?.expired && (
         <p className="rd-note rd-expired" role="status">
-          That day is older than we keep. Here is the latest instead.
+          That day is older than we keep. Here is what moved {when || "lately"} instead.
         </p>
       )}
 
@@ -286,7 +314,7 @@ export function RadarPage({
       ) : !n && knowOn && dayRows.length > 0 ? (
         <section className="tp-card rd-empty">
           <p className="rd-note">
-            Nobody you know is at a company in {yourFeature} {day === view.today ? "today" : `on ${shortDay(day!)}`}.{" "}
+            Nobody you know is at a company in {yourFeature} {when}.{" "}
             <button type="button" className="rd-link" onClick={() => onKnow?.(false)}>
               Show all {dayRows.length}
             </button>
@@ -296,7 +324,7 @@ export function RadarPage({
         <section className="tp-card rd-empty rd-empty-pic">
           <Spot name="ballEmpty" size={104} />
           <p className="rd-note">
-            Nothing moved at companies in your profile {day === view.today ? "today" : `on ${shortDay(day!)}`}. We never send a day with nothing in it.
+            Nothing moved at companies in your profile {when}. We never send a day with nothing in it.
           </p>
         </section>
       ) : phone ? (

@@ -227,7 +227,9 @@ const patchless = (a: Action) =>
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
- * GET ?radar=1[&day=YYYY-MM-DD]  RadarView: one day's companies from the member's radar (lib/radar radarView), the list its email and Slack links open. 401 signed out.
+ * GET ?radar=1[&day=YYYY-MM-DD][&range=today|7d|30d|auto]  RadarView: one day's companies from the member's radar (lib/radar radarView), the list its email and
+ *                  Slack links open. With &range= (Crystal Ball's page): that range of days, each company once (auto, or any other value: Today
+ *                  if it has companies, else Last 7 days, else Last 30 days), or a kept day asked for alone. 401 signed out.
  * GET ?today=1[&since=ISO]  TodayView (lib/viewWire.ts, lib/today.ts): what Today draws before the table, under 20 KB: me,
  *                  plan, the free company, Crystal Ball's top 4, today's moves (lib/movesView.ts: up to three of the day's companies
  *                  with their records and, from the member's own network, who they know there), and "Since Tuesday" counts. 401 signed out.
@@ -302,9 +304,9 @@ export const GET = guarded(async (req: NextRequest) => {
     return unread === null ? err(SIGNED_OUT_READ, 401) : NextResponse.json({ unread }, { headers: { "cache-control": "no-store" } });
   }
   // Referral partners (lib/table.ts partnersView): who gets hired before and after the member, counts of members' answers, and the members listed.
-  // One day's companies from the member's radar (lib/radar radarView): the list its email and Slack open, with the day switcher.
+  // The member's radar (lib/radar radarView): one day's companies, the list its email and Slack open; with &range=, the page's ranges.
   if (req.nextUrl.searchParams.get("radar") !== null) {
-    const r = await radarView(token, req.nextUrl.searchParams.get("day"));
+    const r = await radarView(token, req.nextUrl.searchParams.get("day"), undefined, req.nextUrl.searchParams.get("range"));
     return r ? sendJson(req, r) : err(`You're signed out. Sign in again to see ${yourFeature}.`, 401);
   }
   if (req.nextUrl.searchParams.get("partners") !== null) {

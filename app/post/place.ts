@@ -8,7 +8,7 @@
  * TradingPost.tsx); the server is told them with the request.
  */
 import type { Me, SavedViewRec } from "@/lib/tableTypes";
-import { SIG_DAY_RE } from "@/lib/radar/types";
+import { SIG_DAY_RE, radarRangeOf } from "@/lib/radar/types";
 import { firstViewPlace } from "../onboard/place";
 import {
   EMPTY_FILTERS, RECORD_TYPES, SORTS, TYPE_PARAM, activeCount, applyFilters, decodeFilters, encodeFilters, hasRoleDates, hiredOn, icpApplies, icpEmpty, icpMatch, mySeats, namedFn,
@@ -87,9 +87,11 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
   // and so does an older email's "See who" (?upgrade=radar).
   const sig = SIG_DAY_RE.test(q.get("sig") ?? "") ? q.get("sig") : null;
   const p: PlacePage | null = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PLACE_PAGES.find((x) => x === q.get("p")) ?? null;
+  // The radar's range the member picked (?p=radar&range=7d); a day (?sig=) wins.
+  const range = p === "radar" && !sig ? radarRangeOf(q.get("range")) : null;
   // Nothing in the address that names a place (?c=, ?p=, ?v= and the rest): Today, the home. "?p=table" is the table at its defaults.
   const home = !from && !PLACE_KEYS.some((k) => q.has(k));
-  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, home };
+  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, ...(range ? { range } : {}), home };
 }
 /** The address names no place: / opens Today. */
 export const isHome = (search: string) => {

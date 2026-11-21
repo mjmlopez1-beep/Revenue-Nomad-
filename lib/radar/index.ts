@@ -22,8 +22,9 @@
  * everyone else gets one radar a UTC day. With billing off nobody is on Pro.
  *
  * The day's view (radarView): the companies that went out that UTC day, as kept with the delivery
- * (State.radar.members[id].days, 14 days), so the email's link opens exactly what the email listed.
- * A day nothing went out lists the signals that happened that day.
+ * (State.radar.members[id].days, RADAR_KEEP_VIEW_DAYS: 31 days), so the email's link opens exactly
+ * what the email listed. A day nothing went out lists the signals that happened that day. The page
+ * reads them as ranges (Today, Last 7 days, Last 30 days): each company once, at its latest day.
  *
  * Never twice: each member's sent signals are kept (State.radar.members[id].sent, 120 days). A
  * signal is marked sent only when it went out by email or Slack.
@@ -55,7 +56,8 @@ import { renderRadarEmail } from "./format";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import { isDue, settingOf } from "../schedule";
 import {
-  RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarPath, type RadarDay, type RadarSentRow, type RadarState, type RadarView,
+  RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarPath, radarRangeOf,
+  type RadarDay, type RadarRange, type RadarSentRow, type RadarState, type RadarView,
 } from "./types";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -258,6 +260,8 @@ function firstCompanies(rows: RadarSentRow[], n: number): RadarSentRow[] {
 
 /** A day the view still opens when asked for it: today or earlier, inside RADAR_KEEP_VIEW_DAYS. */
 const keptDay = (day: string, nowMs: number) => day <= dayOfMs(nowMs) && nowMs - dayStart(day) <= RADAR_KEEP_VIEW_DAYS * DAY;
+/** Every day the view still opens, today first: the days Crystal Ball's companies come from (the page's ranges and crystalCompanyIds alike). */
+const keptDays = (nowMs: number) => Array.from({ length: RADAR_KEEP_VIEW_DAYS + 1 }, (_, i) => dayOfMs(nowMs - i * DAY)).filter((d) => keptDay(d, nowMs));
 
 /**
  * The member's Crystal Ball rows for these UTC days, as the day's view lists them: a day something
@@ -294,8 +298,7 @@ function dayRows(c: Ctx, m: Member, wanted: string[]): { p: RadarProfile; ready:
  * can't claim one. Pure on the seed and state it is given, so an action reads it from its own draft.
  */
 export function crystalCompanyIds(seed: Seed, s: State, m: Member, nowMs: number): Set<string> {
-  const days = Array.from({ length: RADAR_KEEP_VIEW_DAYS + 1 }, (_, i) => dayOfMs(nowMs - i * DAY)).filter((d) => keptDay(d, nowMs));
-  const { byDay } = dayRows(ctxOf(seed, s, nowMs), m, days);
+  const { byDay } = dayRows(ctxOf(seed, s, nowMs), m, keptDays(nowMs));
   return new Set([...byDay.values()].flatMap((rows) => rows.map((x) => x.c)));
 }
 
@@ -307,15 +310,44 @@ export async function crystalPublicIds(token: string | null, nowMs = Date.now())
   return new Set([...crystalCompanyIds(seed, s, m, nowMs)].map((id) => T.pubId(id)));
 }
 
+/** Most likely first; a row kept before Crystal Ball scored (no band) after Low. */
+const BAND_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+const bandOrder = (b?: string) => BAND_ORDER[b ?? ""] ?? 3;
+
+/**
+ * A range's rows: each company once, with its signals of the most recent day it appeared on
+ * (`days` today first), and that day. In the order the page reads: most likely first, then newest,
+ * then the day's own order (its most likely first).
+ */
+function rangeRows(byDay: Map<string, RadarSentRow[]>, days: string[]): { rows: RadarSentRow[]; dayOf: Map<string, string> } {
+  const dayOf = new Map<string, string>();
+  const rows: RadarSentRow[] = [];
+  for (const d of days)
+    for (const x of byDay.get(d) ?? []) {
+      const at = dayOf.get(x.c);
+      if (at === undefined) dayOf.set(x.c, d);
+      else if (at !== d) continue;
+      rows.push(x);
+    }
+  return { rows, dayOf };
+}
+
 /**
  * GET /api/table?radar=1[&day=YYYY-MM-DD]: one UTC day's companies for the member, the list the
  * email's and Slack's links open. A day something went out lists exactly what went out (kept with
  * the delivery); any other day of the last RADAR_VIEW_DAYS lists the signals that happened that
  * day and were never sent. Only the member's own signals, and only companies still in the table.
  * No day asked: the latest day with something in it. A day older than what is kept (or not a
- * day): the latest, with `expired`. Null when signed out.
+ * day): the latest, with `expired`. Null when signed out. Home, Today's moves and the connect
+ * moment read it this way.
+ *
+ * `rangeAsked` (&range=, the page): Crystal Ball as ranges. Every kept day is read (the same days
+ * crystalCompanyIds reads, so whatever a range lists opens from it), and the view lists the range
+ * asked for (RADAR_RANGES), or by default Today if it has companies, else Last 7 days, else Last 30
+ * days. A kept day asked for (an email's or Slack's link) lists that day alone, as before, with
+ * `range` null; one that isn't kept opens the default range with `expired`.
  */
-export async function radarView(token: string | null, dayAsked?: string | null, nowIso?: string): Promise<RadarView | null> {
+export async function radarView(token: string | null, dayAsked?: string | null, nowIso?: string, rangeAsked?: string | null): Promise<RadarView | null> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = memberByToken(seed, token, s);
   if (!m) return null;
@@ -323,14 +355,33 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const today = dayOfMs(nowMs);
   const c = ctxOf(seed, s, nowMs);
   const pro = isPro(s, m.id, nowMs);
+  const ranged = rangeAsked != null;
   const list = Array.from({ length: RADAR_VIEW_DAYS }, (_, i) => dayOfMs(nowMs - i * DAY));
   const asked = typeof dayAsked === "string" && SIG_DAY_RE.test(dayAsked) && Number.isFinite(dayStart(dayAsked)) ? dayAsked : null;
   // A day asked for that is kept (an older email's link) is listed too.
   const inKeep = !!asked && keptDay(asked, nowMs);
-  const { p, ready, byDay } = dayRows(c, m, inKeep && !list.includes(asked!) ? [...list, asked!] : list);
+  const kept = keptDays(nowMs);
+  const { p, ready, byDay } = dayRows(c, m, ranged ? kept : inKeep && !list.includes(asked!) ? [...list, asked!] : list);
   const count = (d: string) => new Set((byDay.get(d) ?? []).map((x) => x.c)).size;
   const latest = list.find((d) => count(d) > 0) ?? today;
-  const day = inKeep ? asked! : latest;
+  const day = inKeep ? asked! : ranged ? today : latest;
+  // The page's ranges: each company once, at its latest day in the range.
+  const cut = (n: number) => rangeRows(byDay, kept.slice(0, n));
+  const ranges = ranged ? RADAR_RANGES.map((r) => ({ range: r.range, companies: cut(r.days).dayOf.size })) : [];
+  const range: RadarRange | null = !ranged || inKeep ? null : (radarRangeOf(rangeAsked) ?? ranges.find((r) => r.companies > 0)?.range ?? "30d");
+  const shown = range ? cut(RADAR_RANGES.find((r) => r.range === range)!.days) : { rows: byDay.get(day) ?? [], dayOf: null };
+  const rows = rowsOf(shown.rows, T.pubId).map(({ id, c: co, kinds, lines, notes, band }) => ({
+    id,
+    ...(shown.dayOf ? { day: shown.dayOf.get(co) } : {}),
+    kinds,
+    lines,
+    ...(notes.some(Boolean) ? { notes } : {}),
+    ...(band ? { band } : {}),
+    // Trial and Pro see each company named here, free (the table still keeps it locked and theirs to unlock).
+    ...(pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {}),
+  }));
+  // A range reads most likely first, then newest (rows come newest day first; the sort keeps that order within a band).
+  if (range) rows.sort((a, b) => bandOrder(a.band) - bandOrder(b.band));
   return {
     on: !s.profiles[m.id]?.radarOff,
     ready,
@@ -342,15 +393,8 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     today,
     ...(dayAsked != null && dayAsked !== "" && !inKeep ? { expired: true } : {}),
     days: list.map((d) => ({ day: d, companies: count(d) })),
-    rows: rowsOf(byDay.get(day) ?? [], T.pubId).map(({ id, c: co, kinds, lines, notes, band }) => ({
-      id,
-      kinds,
-      lines,
-      ...(notes.some(Boolean) ? { notes } : {}),
-      ...(band ? { band } : {}),
-      // Trial and Pro see each company named here, free (the table still keeps it locked and theirs to unlock).
-      ...(pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {}),
-    })),
+    ...(ranged ? { range, ranges } : {}),
+    rows,
     email: emailEnabled() && EMAIL_RE.test(m.email),
     slack: hasDest(s, m.id),
   };

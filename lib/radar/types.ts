@@ -125,9 +125,26 @@ export const SIG_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** The app's address for one day's companies: the email's, Slack's and the page's link. */
 export const radarPath = (day: string) => `/?p=table&sig=${day}`;
 
+/**
+ * The page's ranges (the switcher): Today, the last 7 days and the last 30 days, each counting back
+ * from today (UTC). A range lists each company once, at its most recent day in it.
+ */
+export type RadarRange = "today" | "7d" | "30d";
+export const RADAR_RANGES: { range: RadarRange; days: number; label: string }[] = [
+  { range: "today", days: 1, label: "Today" },
+  { range: "7d", days: 7, label: "Last 7 days" },
+  { range: "30d", days: 30, label: "Last 30 days" },
+];
+/** A range as ?range= carries it (the page's address and GET ?radar=1&range=), or null. */
+export const radarRangeOf = (x: unknown): RadarRange | null => RADAR_RANGES.find((r) => r.range === x)?.range ?? null;
+/** "Today", "Last 7 days", "Last 30 days". */
+export const rangeLabel = (r: RadarRange) => RADAR_RANGES.find((x) => x.range === r)!.label;
+
 /** One company in a day's view: its public id (as the member's table has it) and what happened there. */
 export interface RadarRow {
   id: string;
+  /** In a range: the UTC day its lines are from, the most recent day it appeared in the range. */
+  day?: string;
   kinds: RadarKind[];
   /** A line for each signal, never naming the company: "Hired a fractional Finance leader · Finance usually comes before Sales". */
   lines: string[];
@@ -143,7 +160,11 @@ export interface RadarRow {
   name?: string;
 }
 
-/** GET /api/table?radar=1[&day=YYYY-MM-DD]: one day's companies, for the list in the app. */
+/**
+ * GET /api/table?radar=1[&day=YYYY-MM-DD]: one day's companies (the latest day with any, with no
+ * day), what Home, Today's moves and the connect moment read. With &range= (the page): a range of
+ * days (`range`, `ranges`), or the day asked for when it is kept (an email's or Slack's link).
+ */
 export interface RadarView {
   /** The member's radar is on (Your profile). */
   on: boolean;
@@ -155,14 +176,21 @@ export interface RadarView {
   /** The functions it watches for adjacent hires, and whether they came from the member's own answer. */
   before: string[];
   beforeFromMember: boolean;
-  /** The day shown, and today (UTC). */
+  /** The day shown (a range: today), and today (UTC). */
   day: string;
   today: string;
-  /** The day asked for is older than what is kept (or not a day): `day` is the latest instead. */
+  /** The day asked for is older than what is kept (or not a day): `day` is the latest instead (with &range=, the range that opens by default). */
   expired?: boolean;
-  /** The last RADAR_VIEW_DAYS days, today first, with how many companies each has (the day switcher). */
+  /**
+   * The last RADAR_VIEW_DAYS days, today first, with how many companies each has: what counts
+   * what is new since the member last looked (Home's "Since your last visit", the menu's count).
+   */
   days: { day: string; companies: number }[];
-  /** The day's companies. */
+  /** With &range= only: the range shown, or null for one day (a day's link that is still kept). */
+  range?: RadarRange | null;
+  /** With &range= only: each range with how many companies it lists (the switcher), Today first. */
+  ranges?: { range: RadarRange; companies: number }[];
+  /** The day's companies, or the range's, most likely first. */
   rows: RadarRow[];
   /** Email or Slack would carry it: what the page says about delivery. */
   email: boolean;
@@ -217,8 +245,8 @@ export const RADAR_KEEP_DAYS = 120;
 export const RADAR_MAX_WINDOW_DAYS = 7;
 /** The day switcher lists this many days, today first. */
 export const RADAR_VIEW_DAYS = 7;
-/** A delivery's companies are kept this long, so an older email's link still opens its day. */
-export const RADAR_KEEP_VIEW_DAYS = 14;
+/** A delivery's companies are kept this long, so Last 30 days lists them and an older email's link still opens its day. */
+export const RADAR_KEEP_VIEW_DAYS = 31;
 
 /** Pilot metrics: the radar's panel. Counts only. */
 export interface RadarStats {
