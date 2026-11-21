@@ -1133,3 +1133,16 @@
     flex: 1 1 100%;
   }
 }
+/* A step that wraps keeps its air, and the small lock keeps its size beside two lines. */
+.nf-step {
+  padding: 10px 0;
+}
+.nf-fine,
+.nf-private {
+  align-items: flex-start;
+}
+.nf-fine svg,
+.nf-private svg {
+  flex: none;
+  margin-top: 4px;
+}
