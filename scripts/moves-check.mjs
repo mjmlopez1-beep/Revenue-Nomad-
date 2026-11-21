@@ -430,13 +430,16 @@ async function flows() {
   out.merlinMarksDone = !out.afterMerlin.includes("Message the seat holder") && /This month:\s*1\s*move done/.test((await page.locator(".mv-tally").textContent()) ?? "");
   const hana = await (await fetch(`${BASE}/api/table?messages=1`, { headers: { cookie: `rn_table=${MEMBERS.hana.token}` } })).json();
   out.hanaGotIt = (hana.conversations ?? []).some((c) => c.messages?.some((m) => /^Dear Hana,/.test(m.text)));
-  // Mark as sent: the move is done too.
+  // Mark as sent: the move leaves today's moves (and counts), and the company goes into Your pipeline at
+  // Sent with a follow-up in 3 business days (lib/pipeline.ts), no longer simply hidden for 30 days.
   await draft(page, "Invite them to connect");
   await page.locator(".mn-sheet").getByRole("button", { name: "Mark as sent" }).click();
   await page.waitForSelector(".mn-sheet", { state: "detached", timeout: 10_000 });
   await page.waitForTimeout(1200);
   out.afterSent = await titles();
   out.sentMarksDone = !out.afterSent.includes("Invite them to connect") && /This month:\s*2\s*moves done/.test((await page.locator(".mv-tally").textContent()) ?? "");
+  const pipe = await (await fetch(`${BASE}/api/table?pipeline=1`, { headers: { cookie: `rn_table=${MEMBERS.tess.token}` } })).json();
+  out.sentInPipeline = (pipe.entries ?? []).some((e) => e.stage === "sent" && /^\d{4}-\d{2}-\d{2}$/.test(e.due ?? ""));
   await api(MEMBERS.tess.token, { type: "voice", remove: true });
   await ctx.close();
   results.flows = out;

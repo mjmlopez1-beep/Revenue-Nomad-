@@ -150,7 +150,8 @@ async function main() {
   check("Add what you know and Invite a fractional are buttons (they open a sheet)", ["add", "invite"].every((k) => all.find((it) => it.key === k && !it.href)));
   const keys = all.map((it) => it.key);
   check("nothing is listed twice", new Set(keys).size === keys.length, keys);
-  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,fractionals,messages,view:v1,view:v2,following,seats,network,add,rates,invite,integrations,billing,credits,metrics", keys);
+  // Your pipeline sits under Yours, after Your seats.
+  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,fractionals,messages,view:v1,view:v2,following,seats,pipeline,network,add,rates,invite,integrations,billing,credits,metrics", keys);
   check("People reads Decision makers", all.find((it) => it.key === "people")?.label === "Decision makers");
   check("each saved view by name, with its new matches", all.find((it) => it.key === "view:v1")?.label === "Open Sales roles" && all.find((it) => it.key === "view:v1")?.badge === 2);
   check("counts: the lists, Hiring now, unread, Crystal Ball's new, credits", all.find((it) => it.key === "companies")?.count === 40 && all.find((it) => it.key === "hiring")?.count === 14 && all.find((it) => it.key === "messages")?.badge === 2 && all.find((it) => it.key === "radar")?.badge === 3 && all.find((it) => it.key === "credits")?.count === 25);

@@ -44,6 +44,7 @@ import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingT
 import { WayInPeople, wayInFrom } from "./network/Network"; // [google network]
 import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { Charge } from "./Charge";
+import { PipelineBlock } from "./PipelineBlock";
 import { Prop } from "../ui/fractions/lazy";
 
 /**
@@ -1925,6 +1926,8 @@ export function Drawer({
               <Pro where="hidden_company" variant="line" />
             </div>
           )}
+          {/* Your pipeline at this company (PipelineBlock.tsx): the member's own deal here, as Merlin moved it. Nothing when there is none. */}
+          {!c.hidden && <PipelineBlock i={i} />}
           {/* [ux ws3] Your way in: who held the seats here and the next step with each, before About, seats and people. */}
           <YourWayIn i={i} seats={wayInSeats} />
           {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}

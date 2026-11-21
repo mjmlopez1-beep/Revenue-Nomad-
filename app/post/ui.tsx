@@ -36,10 +36,14 @@ export interface AddOpts {
   engagementId?: string;
   /** A seat the member held: the new engagement is linked to them as seat holder. */
   mine?: boolean;
+  /** The seat form's answers to start from (Add it as your seat, from a won deal: lib/pipeline.ts wonSeatFields). */
+  seat?: Record<string, string>;
+  /** The won deal (pipeline entry id) the seat comes from: the new seat is confirmed by it. */
+  won?: string;
 }
 
 /** A page that replaces the table. */
-export type AppPage = "rates" | "credits" | "seats" | "metrics" | "messages" | "partners" | "network" | "fractionals";
+export type AppPage = "rates" | "credits" | "seats" | "metrics" | "messages" | "partners" | "network" | "fractionals" | "pipeline";
 
 export interface Ui {
   me: Me;

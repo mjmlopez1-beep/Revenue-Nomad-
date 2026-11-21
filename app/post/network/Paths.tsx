@@ -30,6 +30,7 @@ import { useUi } from "../ui";
 import { earnRoom } from "../NextMove";
 import { WarmthChip } from "./parts";
 import { load, monthYear, netAct } from "./useNetwork";
+import { pipelineAct } from "../pipelineStore";
 import { NO_FILTER, SIZE_GROUPS, bestPerson, clientRows, everyone, fitWords, introWho, setWords, warmRows, type EveryoneFilter, type WarmFilter } from "./model";
 
 const NoteSheet = dynamic(() => import("../MoveNote").then((m) => m.NoteSheet), { ssr: false });
@@ -110,7 +111,13 @@ type Drafting = { m: Move; row: RadarRow; facts?: NoteFacts } | null;
 
 function Note({ d, me, onClose, onClaude }: { d: Drafting; me: Me; onClose: () => void; onClaude: () => void }) {
   if (!d) return null;
-  return <NoteSheet key={d.m.id + (d.facts?.to?.name ?? "")} m={d.m} row={d.row} me={me} facts={d.facts ?? null} sentLabel="Done" onClose={onClose} onSent={onClose} onClaude={() => (onClose(), onClaude())} />;
+  // The note used, or marked sent: the company goes into Your pipeline (lib/pipeline.ts); an ask for an intro is recorded as one.
+  const sent = () => {
+    const p = d.m.way.kind === "know" ? d.m.way.person : null;
+    const intro = d.m.do === "intro" || d.facts?.kind === "ask";
+    void pipelineAct({ type: "pipeline.sent", companyId: d.m.id, from: "network", intro, ...(p ? { to: { name: p.name, role: p.title, google: p.google } } : {}) });
+  };
+  return <NoteSheet key={d.m.id + (d.facts?.to?.name ?? "")} m={d.m} row={d.row} me={me} facts={d.facts ?? null} sentLabel="Mark as sent" onClose={onClose} onUsed={sent} onSent={() => (sent(), onClose())} onClaude={() => (onClose(), onClaude())} />;
 }
 
 /* ---------- 1. warm paths ---------- */

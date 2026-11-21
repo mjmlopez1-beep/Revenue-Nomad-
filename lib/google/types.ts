@@ -80,6 +80,14 @@ export interface NetCompany {
   invitedBy?: number;
   /** The most of their people at one meeting. */
   side?: number;
+  /**
+   * Gmail only, for Your pipeline (lib/pipeline.ts): the time (ISO, from the Date header) of the
+   * latest email out to someone there and in from someone there, and of the first one out. Times
+   * only, never a subject or text.
+   */
+  outAt?: string;
+  inAt?: string;
+  outFirstAt?: string;
 }
 
 /** Someone at no company on Merlin the member really knows or who can introduce them (SourceData.loose). */

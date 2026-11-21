@@ -48,6 +48,7 @@ Using it well
 - A member's Ideal Fractional Profile (IFP) is the companies they want as clients: industries, company size, revenue and countries. my_account returns it. Use it to fill search_companies filters when they ask what fits them.
 - To see what's new, use list_open_roles with since_days 7. Saved searches (alerts) put new matches in the weekly email.
 - todays_moves gives the member's moves for today, as Merlin's Home shows them: for each company why now, the best way in, the one move, and the facts a note may use. Draft a note from those facts only, in the member's voice when my_voice has one, and hand it to the member to send themselves. A person from the member's Google account is never named there (their name is on Merlin's Home): don't guess it. Merlin never sends a note for a member, and never reads their email.
+- my_pipeline gives the member's own deals, which Merlin moves by itself (Sent, Replied, Meeting, Proposal, Won, Went quiet). The member only marks Lost or Not now, or adds a note, with update_pipeline. Follow-ups due come with Merlin's words; draft one in the member's voice when asked, and the member sends it.
 - A member's writing voice is style conclusions only (greeting, sign-off, length, tone, a few stock phrases), never message text. To learn it, read the member's own sent mail on your side only when they ask, summarise it into save_my_voice's fields, show them the summary, and save it once they agree. Never send Merlin message text, subjects, names or addresses from their mail.
 - Each company and open role carries fit (Hiring now, Repeat hirer, Recent seat, Past seat, Posting closed, Full-time only, No seats) and fit_reason, one line saying why. Pass the reason on with the tier.
 - Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name, and never guess one from its industry, size or place.`;
@@ -407,6 +408,36 @@ export function makeServer(ctx: T.Ctx): McpServer {
       annotations: { title: "Save my writing voice", ...WRITE },
     },
     (a) => run(ctx, () => T.saveMyVoice(ctx, a)),
+  );
+
+  // Your pipeline (lib/pipeline.ts): the member's own deals, moved by what Merlin sees. Reads and two small changes, never a credit.
+  server.registerTool(
+    "my_pipeline",
+    {
+      title: "My pipeline",
+      description:
+        "The member's own pipeline on Merlin: each company they reached out to, its stage (Sent, Replied, Meeting, Proposal, Won, Went quiet, Lost, Not now), how Merlin knows (from their note, Merlin messages, their calendar, their Gmail headers when connected), the channel, who it went to, the date of each stage, the next step and follow-up date, their private notes and a short log. Also the follow-ups due today with Merlin's words for them, the intros they asked for (and ones other members asked of them), the count in each stage and the month's value of what they won. Merlin moves the stages itself; the member only marks Lost or Not now (update_pipeline). A company is named only where the member can see it, and a person from the member's Google account is never named: their name is on Merlin. Only ever the member's own. Costs and earns no credits.",
+      inputSchema: {},
+      annotations: { title: "My pipeline", ...READ },
+    },
+    () => run(ctx, () => T.myPipeline(ctx)),
+  );
+
+  server.registerTool(
+    "update_pipeline",
+    {
+      title: "Update my pipeline",
+      description:
+        "Mark one entry of the member's pipeline Lost or Not now, or add a private note to it. Only when the member asks. These are the only changes a member makes: Merlin moves Sent, Replied, Meeting, Proposal, Won and Went quiet by itself, so don't try to set those. Pass entry_id from my_pipeline (or company_id). Notes are the member's alone. Costs and earns no credits.",
+      inputSchema: {
+        entry_id: z.string().optional().describe("The entry's id, from my_pipeline."),
+        company_id: z.string().optional().describe("The company's id, when there is no entry_id."),
+        action: z.enum(["lost", "not_now", "note"]).describe("lost, not_now, or note (with note)."),
+        note: z.string().optional().describe("The note's text, for action note. Up to 1,000 characters."),
+      },
+      annotations: { title: "Update my pipeline", ...WRITE },
+    },
+    (a) => run(ctx, () => T.updatePipeline(ctx, a)),
   );
 
   server.registerTool(

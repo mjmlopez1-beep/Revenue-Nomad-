@@ -7,6 +7,7 @@ import type { RadarStats } from "./radar/types";
 import type { CompanyLeads, LeadersRunSummary } from "./leaders/types";
 import type { FundingAdminStats } from "./funding/types";
 import type { MovesWire } from "./moves";
+import type { Channel, ManualStage, PipelineView } from "./pipeline";
 import type { VoiceProfile } from "./voice";
 
 /**
@@ -1053,6 +1054,38 @@ export type Action =
    */
   | { type: "move"; id: string; op: "done" | "snooze" | "undo" }
   /**
+   * Mark as sent, or the move's note used (Open in Gmail, Copy, Message on Merlin): the move is done
+   * and the company goes into the member's pipeline at Sent (lib/pipeline.ts), with the channel and
+   * who it went to as the note had them. Undo takes the new entry back too.
+   */
+  | { type: "move"; id: string; op: "sent"; channel?: Channel; to?: { name?: string | null; role?: string | null; google?: boolean }; intro?: boolean }
+  /**
+   * Your pipeline (lib/pipeline.ts, lib/pipelineActions.ts): each member's own. Merlin moves the
+   * stages by what it sees; these are what the member does. `id` is an entry's id. Each answers with
+   * the whole PipelineView as `pipeline`.
+   *  - sent: a drafted note was used at a company outside today's moves (a record, Your network).
+   *    `intro`: it asked the person for an introduction (recorded as an intro too).
+   *  - followed: a drafted follow-up was used. snooze: the follow-up 3 days later.
+   *  - close: Lost or Not now (the only stages the member sets). reopen: undo that, or Went quiet.
+   *  - correct: a detected Replied or Meeting was wrong. remove: not a deal at all.
+   *  - note: a private note. won: the terms of a won deal (for Add it as your seat), and seat: the
+   *    seat it became (`engagementId`, the member's own seat at that company).
+   *  - intro: the member asked the other member in a conversation for an intro at the seat's company.
+   *    introMark: either side marks an intro made, declined or back to asked.
+   */
+  | { type: "pipeline.sent"; companyId: string; channel?: Channel; to?: { name?: string | null; role?: string | null; google?: boolean }; from?: "network" | "record"; intro?: boolean }
+  | { type: "pipeline.followed"; id: string }
+  | { type: "pipeline.snooze"; id: string }
+  | { type: "pipeline.close"; id: string; stage: ManualStage }
+  | { type: "pipeline.reopen"; id: string }
+  | { type: "pipeline.correct"; id: string }
+  | { type: "pipeline.remove"; id: string }
+  | { type: "pipeline.note"; id: string; text: string }
+  | { type: "pipeline.won"; id: string; pricing: "hourly" | "monthly"; rate: number | string; hours?: number | string | null; start?: string | null; months?: number | string | null; merlin?: boolean }
+  | { type: "pipeline.seat"; id: string; engagementId: string }
+  | { type: "pipeline.intro"; conversationId: string }
+  | { type: "pipeline.introMark"; id: string; status: "made" | "declined" | "asked" }
+  /**
    * Your writing voice (lib/voice.ts): save the style conclusions the member typed in Your profile
    * (every field one value from its list, checked on the server), or remove the profile. Never text
    * from a message.
@@ -1136,6 +1169,8 @@ export type ActionResult = {
   version?: string;
   /** The "move" action: today's moves as they now stand (the next best in place of the one done or snoozed), with their records in `companies`. */
   moves?: MovesWire;
+  /** Pipeline actions: the member's pipeline as it now stands (lib/pipeline.ts PipelineView). */
+  pipeline?: PipelineView;
 };
 
 /**
