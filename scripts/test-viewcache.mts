@@ -211,6 +211,14 @@ async function main() {
   await t.buildView(TOK.bob);
   check("a seed member's first visit builds the shared part whole", t.sharedViewStats().builds === sid0 + 1, t.sharedViewStats());
   await parity("after a seed member's first visit", [...Object.values(TOK), "tok-sid-cache"]);
+
+  // The graph other modules read (Crystal Ball, alerts, messages: tableInternals.graph): the committed state's is built once and shared; a draft's is its own.
+  const [seedNow, sNow] = await Promise.all([t.loadSeed(), t.loadState()]);
+  const g1 = t.tableInternals.graph(seedNow, sNow);
+  check("the committed state's graph is built once for every reader", g1 === t.tableInternals.graph(seedNow, sNow) && g1.companies.size > 0);
+  const draft = structuredClone(sNow);
+  const gd = t.tableInternals.graph(seedNow, draft);
+  check("a draft's graph is its own, built from it", gd !== g1 && gd !== t.tableInternals.graph(seedNow, draft) && gd.companies.size === g1.companies.size);
 }
 
 try {

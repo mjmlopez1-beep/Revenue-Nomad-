@@ -6650,7 +6650,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
  * only through `mutate` (one writer, in order), and read it through the same helpers the view uses.
  */
 export const tableInternals = {
-  mutate, graph, memberIndex, seatHolder, signedIn, valueOf, live, cellOf, identityHidden, tracksOf, pubId, inboxKey, firstName, ID_KEY,
+  // The committed state's graph is built once and shared, as the views share it (viewGraph); a draft's is its own. Read it, never change it.
+  mutate, graph: viewGraph, memberIndex, seatHolder, signedIn, valueOf, live, cellOf, identityHidden, tracksOf, pubId, inboxKey, firstName, ID_KEY,
   // Alerts (lib/notify/events.ts) match new open roles the way the weekly email does.
   fnOf, hqRegion, isOpenRole, friendliness,
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
