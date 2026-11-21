@@ -80,7 +80,8 @@ export async function checkoutPro(who: Who, interval: "month" | "year", base: st
     mode: "subscription",
     "line_items[0][price]": price(interval),
     "line_items[0][quantity]": 1,
-    success_url: `${base}/?p=billing&paid=1`,
+    // Back on Home, where the one-time Pro welcome is (app/post/TradingPost.tsx reads paid=1).
+    success_url: `${base}/?paid=1`,
     cancel_url: `${base}/?p=billing`,
     client_reference_id: who.ref,
     "metadata[ref]": who.ref,

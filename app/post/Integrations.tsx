@@ -18,6 +18,7 @@ import { ProLock, ProRow, ProTag, UpgradeNote, planDay } from "./Billing";
 import { useUi } from "./ui";
 import type { AlertKind, DestView, IntegrationsView } from "@/lib/notify/types";
 import { ClaudeNetworkPrompt, GoogleSection } from "./network/Network"; // [google network]
+import { VoicePrompt } from "./Voice";
 import "./connect.css";
 import "./pages.css";
 import "./integrations.css";
@@ -639,6 +640,8 @@ export function Integrations({ onBack, onCredits, section, onNetwork }: { onBack
         <UseInClaude embedded onBack={onBack} onCredits={onCredits} />
         {/* [google network] the prompt for adding a Gmail network through the member's own Claude. */}
         <ClaudeNetworkPrompt />
+        {/* Your writing voice: the prompt for a member's own Claude to learn it from their sent mail (Voice.tsx). */}
+        <VoicePrompt />
       </section>
     </div>
   );

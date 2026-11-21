@@ -17,6 +17,10 @@ import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFi
 import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
 import { Sheet, UiCtx } from "./ui";
 import { PartnersSwitch, RadarSwitch } from "./PartnersSwitch";
+import dynamic from "next/dynamic";
+
+/** Your writing voice (Voice.tsx) loads with the sheet that shows it, not with the app. */
+const VoiceSection = dynamic(() => import("./Voice").then((m) => m.VoiceSection), { ssr: false });
 import "./hunt.css";
 
 export const EMPTY_ICP: Icp = { industries: [], employees: [], revenue: [], countries: [] };
@@ -395,6 +399,7 @@ export function IcpSheet({
       <LookingSwitch />
       <RadarSwitch />
       <PartnersSwitch />
+      <VoiceSection />
       {views ? (
         <div className="hunt-sub hunt-views-sub">
           <div className="hunt-h">Saved views</div>

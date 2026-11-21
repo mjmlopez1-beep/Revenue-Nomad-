@@ -15,6 +15,7 @@ import "./connect.css";
 const EXAMPLES = [
   "Which companies are the best fit for me to prospect as a fractional VP Marketing?",
   "What's the best way into [a company you want as a client]?",
+  "What are my three moves today? Draft each note in my voice.",
   "Set up alerts on fractional Marketing roles at SaaS companies from $5M to $20M.",
   "What's new in open Sales roles this week?",
   "What does a fractional RevOps lead charge?",

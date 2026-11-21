@@ -9,12 +9,14 @@
 import { ALL_FIELDS, type Entity } from "./tableFields";
 import type { Cell, CompanyRec, EngagementRec, Me, PersonRec, PlanView, View } from "./tableTypes";
 import type { RadarRow } from "./radar/types";
+import type { MovesWire } from "./moves";
 
 /**
  * GET /api/table?today=1[&since=ISO]: what Today draws before the full view arrives, a few KB
  * (under 20). The same sign-in as the view (401 signed out), and the same locks: the radar rows
  * are radarView's own (a company named only where the member's table names it, Trial and Pro
- * aside), and `companies` are the rows' records exactly as the member's table builds them.
+ * aside), `moves` are today's moves (lib/moves.ts), and `companies` are the moves' records exactly
+ * as the member's table builds them.
  */
 export interface TodayView {
   /** The member, as the view's `me`. */
@@ -38,9 +40,16 @@ export interface TodayView {
   /** Asked with &since=ISO (the previous visit): companies new in Crystal Ball, open roles opened in their function, follows with news. */
   since?: { radar: number; roles: number; follows: number; sinceIso: string };
   /**
-   * The rows' companies, packed as the view packs them (unpackCompany puts the empty cells back;
-   * fetchToday in app/ui/shared.tsx does): free facts, seats, who held them and the unlocks, as
-   * the table shows them. Some are left off when they would take the answer past its size.
+   * Your three moves today (lib/moves.ts, lib/movesView.ts): up to three of the day's companies, the
+   * ones with the best way in first, each with its Crystal Ball row and, from the member's own
+   * network, who they know there. Never anything of another member's. Left out by an older server.
+   */
+  moves?: MovesWire;
+  /**
+   * The moves' companies, in the moves' order, packed as the view packs them (unpackCompany puts the
+   * empty cells back; fetchFirst in app/ui/shared.tsx does): free facts, seats, who held them and
+   * the unlocks, as the table shows them. A move that would take the answer past its size is left
+   * off with its company.
    */
   companies: CompanyRec[];
   /**

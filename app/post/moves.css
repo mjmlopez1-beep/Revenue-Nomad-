@@ -1,0 +1,484 @@
+/*
+ * Your three moves today (Moves.tsx). Classes are prefixed mv-. Built from the app's tokens: its
+ * one type scale, radii 6/8/10, no shadows, ember only on the Open role chip. The note's sheet and
+ * the voice have their own file (movenote.css), loaded with them.
+ */
+
+/* ---------- the section ---------- */
+.mv {
+  gap: 12px;
+}
+.mv-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+.mv-head .hm-h2 {
+  white-space: nowrap;
+}
+.mv-head-s {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.mv-sp {
+  flex: 1;
+}
+.mv-head .hm-more {
+  white-space: nowrap;
+}
+.mv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  /* The three parts sit side by side only where the list is wide enough for them. */
+  container-type: inline-size;
+}
+
+/* ---------- one move: the company, the way in, your move ---------- */
+.mv-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.mv-card > div {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px 16px 14px;
+  min-width: 0;
+}
+.mv-card > div + div {
+  border-top: 1px solid var(--line);
+}
+@container (min-width: 600px) {
+  .mv-card {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  }
+  .mv-card > div {
+    gap: 8px;
+    padding: 14px 20px 16px;
+  }
+  .mv-card > .mv-way {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+  .mv-card > .mv-do {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 20px;
+    align-items: center;
+  }
+  .mv-card > .mv-do > .mv-label,
+  .mv-card > .mv-do > .mv-do-t,
+  .mv-card > .mv-do > .mv-do-p {
+    grid-column: 1;
+  }
+  .mv-card > .mv-do > .mv-acts {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+  .mv-card > .mv-do > .mv-post {
+    grid-column: 2;
+    justify-self: end;
+  }
+}
+@container (min-width: 860px) {
+  .mv-card {
+    grid-template-columns: minmax(0, 1.14fr) minmax(0, 1fr) minmax(0, 0.98fr);
+  }
+  .mv-card > .mv-do {
+    grid-column: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    align-content: start;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+  .mv-card > .mv-do > .mv-acts,
+  .mv-card > .mv-do > .mv-post {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+}
+.mv-label {
+  display: block;
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mv-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mv-band {
+  flex: none;
+  display: inline-block;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.mv-band-high {
+  background: var(--pine);
+  color: #fff;
+}
+.mv-band-medium {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+}
+.mv-band-low {
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.mv-chip {
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11.5px;
+  border-radius: 999px;
+}
+.mv-co-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mv-co-open:hover .mv-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.mv-co-open:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 3px;
+}
+.mv-co-id {
+  display: grid;
+  min-width: 0;
+}
+.mv-name {
+  display: block;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mv-facts {
+  display: block;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mv-why {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+
+/* A person: round, sand, pine initials (a company keeps the app's square mark). */
+.mv-av {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--sand);
+  color: var(--pine);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.mv-av-quiet {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.mv-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.mv-who-t {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.mv-who-n {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mv-who-x {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.mv-none-t {
+  color: var(--body-ink);
+}
+.mv-who-s {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mv-dm {
+  color: var(--volt-ink);
+  font-weight: 600;
+}
+.mv-who-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+  min-width: 0;
+}
+.mv-who-line.mv-quiet {
+  font-size: 13px;
+  color: var(--muted);
+}
+.mv-warm {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.mv-warm-hot {
+  background: var(--pine);
+  color: var(--volt);
+}
+.mv-warm-warm {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+}
+.mv-warm-fading {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.mv-warm-cold {
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.mv-do-t {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.mv-do-p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.mv-acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.mv-acts .btn-ghost {
+  color: var(--body-ink);
+  font-weight: 600;
+  padding: 0 12px;
+}
+.mv-acts .mv-main {
+  white-space: nowrap;
+}
+.mv-later {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* "All 9 in Crystal Ball": beside the heading, or under the moves on a phone. */
+.mv-all-foot {
+  display: none;
+}
+.mv-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.mv-link:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.mv-link:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.mv-add {
+  justify-self: start;
+  min-height: 32px;
+  text-decoration: none;
+}
+.mv-add .plus1 {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--volt);
+  color: var(--pine);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 700;
+}
+.mv-post {
+  justify-self: start;
+}
+.mv-none {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.mv-none-more {
+  font-size: 14px;
+  color: var(--muted);
+}
+/* Under the moves: the month's count, and the one line about Google. Quiet. */
+.mv-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 20px;
+}
+.mv-tally,
+.mv-google {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.mv-tally b {
+  color: var(--ink);
+}
+.mv-google .mv-link {
+  font-weight: 500;
+  color: var(--muted);
+}
+.mv-google .mv-link:hover {
+  color: var(--pine);
+}
+
+/* While the moves are on their way: one card of the same shape, so nothing moves when they land. */
+.mv-skel > div {
+  min-height: 132px;
+}
+.mv-skel .td-skel + .td-skel {
+  margin-top: 4px;
+}
+@media (min-width: 1200px) {
+  .mv-skel {
+    grid-template-columns: minmax(0, 1.14fr) minmax(0, 1fr) minmax(0, 0.98fr);
+  }
+  .mv-skel > div + div {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+}
+@media (max-width: 767px) {
+  .mv-skel > div + div {
+    display: none;
+  }
+  .mv-skel > div {
+    min-height: 150px;
+  }
+  .mv-head-s {
+    display: none;
+  }
+  .mv-all-top {
+    display: none;
+  }
+  .mv-all-foot {
+    display: block;
+  }
+  .mv {
+    gap: 8px;
+  }
+  .mv-head {
+    min-height: 0;
+  }
+  .mv-list {
+    gap: 10px;
+  }
+  .mv-card > div {
+    gap: 3px;
+    padding: 8px 14px 10px;
+  }
+  .mv-do-p {
+    margin-bottom: 3px;
+  }
+  .mv-av {
+    width: 36px;
+    height: 36px;
+    font-size: 12.5px;
+  }
+  .mv-acts .mv-main {
+    flex: 1;
+    min-height: 44px;
+  }
+  .mv-acts .btn-ghost {
+    min-height: 44px;
+  }
+}

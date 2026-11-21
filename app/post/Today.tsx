@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * Today's data and its lead card. Home (Home.tsx, page "today") draws them.
+ * Today's data, the one action on a Crystal Ball company, and the lead card. Home (Home.tsx, page
+ * "today") draws them: its moves (Moves.tsx) use the data and the action, and the card stands in
+ * on a day with no move.
  *
- *   "Your best lead today": the top company of the member's Crystal Ball (already ranked), else the
- *   top row of their first view. Its free facts (industry, size, region), what happened there and
- *   why now, and a line on the warm path. One action (LeadAction, the one place it is decided, used
- *   by the card and by Home's next three rows):
+ *   The lead card ("Top of your table"): the top row of the member's first view. Its free facts
+ *   (industry, size, region), what happened there, and a line on the warm path. One action
+ *   (LeadAction, the one place it is decided, used by the card and by each move at a locked company):
  *     - a Crystal Ball company, while billing is live (CrystalOpen.tsx, Me.crystal): "Open" on Trial
  *       and Pro (free, theirs from then on), "Open free · 1 left today" on Free (one a day, with
  *       everything on it), then "Upgrade to open more" and the line that says why,
@@ -16,8 +17,8 @@
  *   Once the company is open the card becomes its warm path: who held a seat there (1 credit), then
  *   Message them on Merlin or Invite to connect. And the one-time trial-ended card.
  *
- * Its data: GET /api/table?today=1 (me, plan, the top 4 radar rows, the free company, the since
- * counts) when the server has it. Without it (an older server: a 4xx, a full view, or no radar in
+ * Its data: GET /api/table?today=1 (me, plan, the top 4 radar rows, today's moves, the free company,
+ * the since counts) when the server has it. Without it (an older server: a 4xx, a full view, or no radar in
  * the answer) the same comes from what the page has: the radar's own GET ?radar=1 for the rows and
  * the day counts, the free company from Me, and the since counts from the view.
  */
@@ -74,6 +75,7 @@ export function useTodayData(
         newCount: radar,
         since: sinceIso ? { radar, roles: localRef.current.roles, follows: localRef.current.follows, sinceIso } : null,
         from: "radar",
+        moves: null,
         latest: v.ready ? ((d) => (d ? { day: d.day, n: d.companies } : null))(v.days.find((d) => d.companies > 0)) : null,
       };
     };
@@ -117,6 +119,7 @@ function todayFrom(j: TodayAnswer, sinceIso: string | null, local: { roles: numb
     newCount: j.radar.newCount,
     since: s ?? (sinceIso ? { radar: j.radar.newCount, roles: local.roles, follows: local.follows, sinceIso } : null),
     from: "today",
+    moves: j.moves && Array.isArray(j.moves.list) ? j.moves : null,
     latest: j.radar.ready !== false && j.radar.day && j.radar.newCount > 0 ? { day: j.radar.day, n: j.radar.newCount } : null,
   };
 }
@@ -144,21 +147,21 @@ function warmSeat(i: CoInfo, me: Pick<Me, "before" | "function">) {
  * "Unlock · 2 credits" after it, "Unlocks again tomorrow" when the day's limit binds), or "Open"
  * for a company the member can see. With too few credits the zero-credits popover says what to add.
  */
-export function LeadAction({ i, row, onOpen, compact }: { i: CoInfo; row: RadarRow | null; onOpen: () => void; compact?: boolean }) {
+export function LeadAction({ i, row, onOpen, compact, cls }: { i: CoInfo; row: RadarRow | null; onOpen: () => void; compact?: boolean; /** The button's classes after "btn", in place of the card's or the row's (a move's primary button). */ cls?: string }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const c = i.c;
   if (!c.hidden)
     return (
-      <button type="button" className={compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} onClick={onOpen}>
+      <button type="button" className={cls !== undefined ? `btn btn-pine ${cls}` : compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} onClick={onOpen}>
         Open
       </button>
     );
   const busy = ui.busy.has(`${c.id}.identity`);
   // A Crystal Ball row opens from here by plan (CrystalOpen), as on Crystal Ball. Not the first view's row.
   const crystal = row ? ui.me.crystal ?? null : null;
-  if (crystal) return <CrystalOpen id={c.id} name={c.hidden ? row?.name ?? null : c.name} className={compact ? "btn-sm td-row-go" : "btn-lg td-main"} />;
+  if (crystal) return <CrystalOpen id={c.id} name={c.hidden ? row?.name ?? null : c.name} className={cls ?? (compact ? "btn-sm td-row-go" : "btn-lg td-main")} />;
   const free = freeCompanyNow(ui.me);
   const later = (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || !!ui.me.freeCompany);
   const unlock = () => {
@@ -168,7 +171,7 @@ export function LeadAction({ i, row, onOpen, compact }: { i: CoInfo; row: RadarR
   const label = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : free ? (compact ? "Unlock free" : "Unlock free · your company of the day") : `Unlock · ${COMPANY_PRICE_SAY}`;
   return (
     <>
-      <button ref={ref} type="button" className={compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} disabled={busy || later} aria-busy={busy} onClick={unlock}>
+      <button ref={ref} type="button" className={cls !== undefined ? `btn btn-pine ${cls}` : compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} disabled={busy || later} aria-busy={busy} onClick={unlock}>
         {label}
       </button>
       {zero && ui.me.credits < COMPANY_PRICE && ref.current && <ZeroCredits anchor={ref.current} id={c.id} need={COMPANY_PRICE} onClose={() => setZero(false)} />}

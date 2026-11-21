@@ -5,6 +5,7 @@
  */
 import type { Me, PlanView } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
+import type { MovesWire } from "@/lib/moves";
 import { isFirm, isOpenRole, namedFn, shown, type CoInfo } from "./model";
 
 /** GET /api/table?today=1 (BUILD-LIST contract, WS2). */
@@ -13,6 +14,8 @@ export interface TodayAnswer {
   plan?: PlanView;
   freeCompany?: boolean;
   radar: { day: string; fn: string | null; rows: RadarRow[]; newCount: number; ready?: boolean };
+  /** Your three moves today (lib/moves.ts). Left out by a server from before them. */
+  moves?: MovesWire;
   since?: { radar: number; roles: number; follows: number; sinceIso: string };
 }
 /** What Today draws from, whichever way it came. */
@@ -23,6 +26,8 @@ export interface TodayData {
   newCount: number;
   since: { radar: number; roles: number; follows: number; sinceIso: string } | null;
   from: "today" | "radar";
+  /** Today's moves as the server picked them. Null from a server without them: Home makes them of the top rows, with no way in from a network. */
+  moves: MovesWire | null;
   /**
    * Crystal Ball's latest day with companies and how many it has: the count of new companies on
    * its menu item and in the bar (useRadarNew in TopBar.tsx). Null when it has none, or isn't

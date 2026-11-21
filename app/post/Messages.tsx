@@ -147,6 +147,17 @@ function useConversationAbout(engagementId: string): ConversationRec | null {
   return c;
 }
 
+/**
+ * Write to a seat holder who is a member, from outside the compose sheet (a move's drafted note,
+ * MoveNote.tsx): the same action as "Message Ana" (message.start), so it goes into the conversation
+ * about that seat when there is one already. The conversation is remembered for "Open conversation".
+ */
+export async function startSeatMessage(engagementId: string, text: string): Promise<ActAnswer> {
+  const r = await send({ type: "message.start", engagementId, text });
+  if (!r.error && r.conversation) rememberOne(r.conversation);
+  return r;
+}
+
 /** A conversation the Messages page should open first (from "Open conversation" on a record). */
 let openNext: string | null = null;
 /** Open Messages at one conversation. */

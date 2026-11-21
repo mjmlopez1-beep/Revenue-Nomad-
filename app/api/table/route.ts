@@ -12,6 +12,7 @@ import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
 import { packedViewJson } from "@/lib/viewWire";
 import { todayView } from "@/lib/today";
+import { movesFor } from "@/lib/movesView";
 import { firstPage } from "@/lib/firstPage";
 import { isHome } from "@/app/post/place";
 import { inSlot } from "@/lib/viewQueue";
@@ -228,7 +229,8 @@ const patchless = (a: Action) =>
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
  * GET ?radar=1[&day=YYYY-MM-DD]  RadarView: one day's companies from the member's radar (lib/radar radarView), the list its email and Slack links open. 401 signed out.
  * GET ?today=1[&since=ISO]  TodayView (lib/viewWire.ts, lib/today.ts): what Today draws before the table, under 20 KB: me,
- *                  plan, the free company, Crystal Ball's top 4 with their records, and "Since Tuesday" counts. 401 signed out.
+ *                  plan, the free company, Crystal Ball's top 4, today's moves (lib/movesView.ts: up to three of the day's companies
+ *                  with their records and, from the member's own network, who they know there), and "Since Tuesday" counts. 401 signed out.
  * GET ?first=1&place=QUERY[&off=a,b][&since=ISO]  the first screen before the full view (lib/firstPage.ts): for Today's
  *                  address (QUERY names no place) { today: TodayView }, else { view, first }: the member's view with the
  *                  companies of the list's first 50 rows only (and the one ?c= opens), exactly as the full view has them,
@@ -544,6 +546,11 @@ export const POST = guarded(async (req: NextRequest) => {
       return null;
     });
     if (!patch) return sendJson(req, { ...out, partial: true, version: viewVersion() });
+    // A move done, snoozed or taken back: today's moves as they now stand, the next best in place, with their records.
+    if (action.type === "move") {
+      const mv = await movesFor(token).catch(() => null);
+      if (mv) return sendJson(req, { ...out, ...patch, companies: mv.companies, moves: mv.wire, me: { ...patch.me, ...out.me } });
+    }
     return sendJson(req, { ...out, ...patch, me: { ...patch.me, ...out.me } });
   } catch (e) {
     if (e instanceof ActionError) return err(e.message);

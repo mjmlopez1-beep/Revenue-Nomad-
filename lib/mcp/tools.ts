@@ -41,6 +41,12 @@ import { firstOf, inviteNote, seatOpener } from "../partners";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS } from "../tableFields";
 import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
+// Today's moves and the voice their notes are written in (lib/moves.ts, lib/voice.ts): the member's own.
+import { movesFor } from "../movesView";
+import { knowLine } from "../moves";
+import { draftNote, noteFacts } from "../moveNote";
+import { VOICE_FIELDS, VoiceProblem, cleanVoice, styleOf, voiceRows } from "../voice";
+import { saveVoice, voiceOf } from "../table";
 
 export interface Ctx {
   member: Member;
@@ -1189,4 +1195,140 @@ export async function myNetwork(ctx: Ctx): Promise<ToolOut> {
     if (e instanceof NetworkProblem) throw new ToolProblem(e.message);
     throw e;
   }
+}
+
+/* ---------- your writing voice and today's moves (lib/voice.ts, lib/moves.ts, lib/movesView.ts) ---------- */
+
+/**
+ * save_my_voice: how the member writes, as style conclusions their own Claude drew from their own
+ * sent mail. Checked like the app's own save (one value from each list, no other field, phrases
+ * that are short and clean), shown back first, and kept only once the member agreed. Never message
+ * text: a field that isn't on the list, or a phrase that reads like mail, refuses the call. The
+ * voice comes as one object so a field that isn't on the list reaches this check (the connector's
+ * own schema would drop it unseen at the top level).
+ */
+export async function saveMyVoice(ctx: Ctx, a: { voice?: unknown; member_agreed?: unknown }): Promise<ToolOut> {
+  const raw = a?.voice;
+  const member_agreed = a?.member_agreed;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new ToolProblem(`Send the voice as one object with: ${VOICE_FIELDS.join(", ")}. Nothing was saved.`);
+  let style;
+  try {
+    style = cleanVoice(raw);
+  } catch (e) {
+    if (e instanceof VoiceProblem) throw new ToolProblem(e.message);
+    throw e;
+  }
+  const reads = Object.fromEntries(voiceRows(style, ctx.member.name));
+  if (member_agreed !== true)
+    return {
+      saved: false,
+      voice: reads,
+      next: "Nothing is saved yet. Show the member this summary of how they write, in plain words, and ask if it's right. Call save_my_voice again with the same values and member_agreed: true only after they say yes.",
+    };
+  try {
+    await saveVoice(ctx.member.id, raw, "claude");
+  } catch (e) {
+    if (e instanceof VoiceProblem) throw new ToolProblem(e.message);
+    throw e;
+  }
+  return {
+    saved: true,
+    voice: reads,
+    note: "Saved for the member only: style conclusions, no message text. The notes Merlin drafts for their moves are now written this way. They can edit or remove it in Your profile on Merlin.",
+  };
+}
+
+/** my_voice: the member's saved writing voice, or that there is none. Only ever their own. */
+export async function myVoice(ctx: Ctx): Promise<ToolOut> {
+  const v = await voiceOf(ctx.member.id);
+  if (!v) return { saved: false, note: "No writing voice saved yet. With the member's go-ahead, read a few dozen of their own sent emails on your side, summarise the style into save_my_voice's fields, show them, and save it once they agree. Merlin never reads their email." };
+  return { saved: true, voice: styleOf(v), reads: Object.fromEntries(voiceRows(v, ctx.member.name)), saved_at: v.at, saved_by: v.by === "claude" ? "the member's Claude" : "the member, by hand" };
+}
+
+/**
+ * todays_moves: the member's moves for today as Home shows them (the same three, the same order,
+ * built by the same functions), each with the facts a note may use: exactly what the app's note
+ * sheet uses, and nothing locked. The address of someone they know stays on Merlin.
+ */
+export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
+  const mv = await movesFor(ctx.member.token);
+  if (!mv) throw new ToolProblem("The member is signed out of Merlin.");
+  const voice = await voiceOf(ctx.member.id);
+  const base = publicBase() ?? ctx.origin;
+  const moves = mv.moves.map((m, k) => {
+    const row = mv.wire.list[k].row;
+    const facts = noteFacts(m, row, mv.me, base);
+    const way = m.way;
+    return {
+      company_id: m.id,
+      company: m.name ?? "Locked company",
+      ...(m.hidden ? { locked: true } : {}),
+      about: m.facts,
+      status: m.hiring ? "Hiring now: an open role" : `Likely to hire${m.band ? ` · ${m.band}` : ""}`,
+      why_now: m.why,
+      way_in:
+        way.kind === "know"
+          ? {
+              kind: "someone the member knows",
+              name: way.person.name,
+              title: way.person.title,
+              decision_maker: way.person.dm,
+              warmth: way.person.warmth,
+              relationship: knowLine(way.person),
+              from: "the member's own network on Merlin",
+            }
+          : way.kind === "holder"
+            ? {
+                kind: "the fractional who held a seat",
+                seat: [way.role, way.fn].filter(Boolean).join(", ") || "A fractional seat",
+                name: way.name ?? (m.hidden ? "on file, opens after the company" : LOCKED),
+                ...(way.name ? { on_merlin: way.member } : {}),
+              }
+            : way.kind === "role"
+              ? {
+                  kind: "an open role",
+                  title: way.title,
+                  ...(way.since ? { listed: way.since } : {}),
+                  posting: way.posting === "locked" ? LOCKED_ROLE : way.posting ?? (m.hidden ? "opens with the company" : "No posting link on file"),
+                }
+              : { kind: "nothing on file yet", next: "The member can add who they know there on Merlin and earn a credit." },
+      your_move: m.title,
+      how: m.line,
+      // Only when there is something to write: a locked company or a locked seat holder has no note yet.
+      ...(facts
+        ? {
+            note: {
+              to: facts.to?.name ?? null,
+              situation:
+                facts.kind === "know"
+                  ? "A note to someone the member knows there"
+                  : facts.kind === "intro"
+                    ? "Asking someone the member knows for an introduction"
+                    : facts.kind === "holderMessage"
+                      ? "A first message to the fractional who held the seat (sent on Merlin, or by email)"
+                      : facts.kind === "holderInvite"
+                        ? "An invite to connect, with the seat's claim link"
+                        : "A reply to the open role",
+              facts: {
+                company: facts.company,
+                ...(facts.saw ? { what_happened: facts.saw } : {}),
+                ...(facts.since ? { last_met: facts.since } : {}),
+                ...(facts.seat ? { seat: facts.seat } : {}),
+                ...(facts.role ? { open_role: facts.role } : {}),
+                ...(facts.link ? { claim_link: facts.link } : {}),
+                member: { first_name: facts.me.first, works_as: facts.me.as, ...(facts.me.clients ? { works_with: facts.me.clients } : {}) },
+              },
+              merlin_draft: ((d) => ({ subject: d.subject, body: d.body }))(draftNote(facts, voice)),
+            },
+          }
+        : {}),
+    };
+  });
+  return {
+    moves,
+    moves_done_this_month: mv.wire.month,
+    ...(voice ? { voice: styleOf(voice) } : { voice: "None saved. save_my_voice can learn it from the member's sent mail, with their go-ahead." }),
+    how_to_use:
+      "These are the member's moves on Merlin's Home today, best first. For a move with a note you can draft it in the member's voice (my_voice), from note.facts only: never add a company fact, a name, a rate or a contact detail that isn't in them, and never guess the name of a locked company or a locked seat holder. The member sends each note themselves, from their own mail or on Merlin. Merlin never sends for them, and neither should you unless they ask you to in their own mail tool. Done and Snooze are theirs to press on Merlin.",
+  };
 }

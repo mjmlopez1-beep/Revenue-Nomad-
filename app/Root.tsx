@@ -22,7 +22,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
-import { ToastProvider, calmRefusal, fetchFirst, fetchView, patchView, post, useToast, type Act, type ActPatch, type FirstResult, type View, type ViewResult } from "./ui/shared";
+import { ToastProvider, calmRefusal, fetchFirst, fetchView, patchView, post, useToast, type Act, type ActPatch, type ActResult, type FirstResult, type View, type ViewResult } from "./ui/shared";
 import type { TradingPostProps } from "./post/TradingPost";
 import type { OnboardingProps } from "./onboard/Onboarding";
 import type { Me } from "@/lib/tableTypes";
@@ -527,7 +527,7 @@ function App() {
       // Follow flips at once; the answer brings the company as the server now has it.
       const flip = a.type === "follow" ? a : null;
       if (flip) setView((v) => (v ? { ...v, companies: v.companies.map((c) => (c.id === flip.companyId ? { ...c, following: flip.on } : c)) } : v));
-      const r = await post<{ message: string; id?: string; capped?: boolean } & ActPatch>({ action: a });
+      const r = await post<{ message: string; id?: string; capped?: boolean; moves?: ActResult["moves"] } & ActPatch>({ action: a });
       if (r.error) {
         if (!opts?.silentError) toast(r.error, !calmRefusal(r.error));
         // The day's unlock limit: every unlock button says "Unlocks again tomorrow" at once, before the table comes back.
@@ -544,7 +544,7 @@ function App() {
         setView((v) => (v ? patchView(v, r) : v));
         settle(r);
       }
-      return { ok: true, message: r.message, id: r.id, capped: r.capped };
+      return { ok: true, message: r.message, id: r.id, capped: r.capped, ...(r.moves ? { moves: r.moves } : {}) };
     },
     [refresh, settle, sync, toast],
   );

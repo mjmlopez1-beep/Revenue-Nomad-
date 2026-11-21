@@ -7,8 +7,10 @@
  *
  * Covered: signed out is nothing; the member is the view's own Me, their free company of the day;
  * Crystal Ball's rows are its own (the top 4 of its latest day, ranked as it ranks them) and count
- * the day; each row's record is exactly the record the member's table builds (its locks with it),
- * so a locked company names nothing and an unlocked one is named; under 20 KB; and with &since=
+ * the day; today's moves are up to three of that day's companies (scripts/test-moves.mts checks
+ * which, and everything else about them), and each move's record is exactly the record the member's
+ * table builds (its locks with it), so a locked company names nothing and an unlocked one is named;
+ * under 20 KB; and with &since=
  * the counts for "Since Tuesday": the day's companies, roles opened in the member's function and
  * followed companies with a new fact.
  */
@@ -127,15 +129,19 @@ async function main() {
   check("under 20 KB", raw.length < TODAY_MAX, raw.length);
   check("no since without &since=", !("since" in today));
   check("names no company and no person while they are locked", !named(today).length, named(today));
-  // Each row's record, as the table builds it.
+  // Today's moves: three different companies of the day, each with its record, as the table builds it.
   const recs = today.companies.map((c) => unpackCompany(JSON.parse(JSON.stringify(c))));
   const byId = new Map(view.companies.map((c) => [c.id, c]));
-  check("every row comes with its record", recs.length === today.radar.rows.length && recs.every((c, i) => c.id === today.radar.rows[i].id), recs.map((c) => c.id));
+  const moves = today.moves!.list;
+  const dayIds = new Set(rv!.rows.map((x) => x.id));
+  check("three moves, each a different company of Crystal Ball's day, with that company's own row", moves.length === 3 && new Set(moves.map((w) => w.id)).size === 3 && moves.every((w) => dayIds.has(w.id) && same(w.row, rv!.rows.find((x) => x.id === w.id))), moves.map((w) => w.id));
+  check("no network, no Google line, nothing done yet (the connector is off here)", moves.every((w) => !w.know) && today.moves!.google === "off" && today.moves!.month === 0, today.moves);
+  check("every move comes with its record", recs.length === moves.length && recs.every((c, i) => c.id === moves[i].id), recs.map((c) => c.id));
   check("each record is the member's table's own record", recs.every((c) => same(c, byId.get(c.id))), recs.find((c) => !same(c, byId.get(c.id)))?.id);
   check("a locked record shows the free facts and no name", recs.every((c) => c.hidden && c.name === "Locked company" && c.cells.industry?.s === "value" && c.cells.website?.s === "locked"), recs[0]?.cells);
 
   // Unlocked: the record names it, as the table does.
-  const first = today.radar.rows[0].id;
+  const first = moves[0].id;
   await t.perform(SAL, { type: "unlock", entity: "company", id: first, field: "identity" }, BASE);
   const after = (await todayView(SAL))!;
   const rec = after.companies.find((c) => c.id === first);

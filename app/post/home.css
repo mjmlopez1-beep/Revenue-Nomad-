@@ -1,4 +1,4 @@
-/* Home (app/post/Home.tsx): calm and white, everything one click away. Classes are prefixed hm-; the lead card is Today's (today.css). */
+/* Home (app/post/Home.tsx): calm and white, everything one click away. Classes are prefixed hm-; today's moves are Moves.tsx's (moves.css), and the card that stands in when there are none is Today's (today.css). */
 
 .tp-app .tp-main-page.hm-page {
   background: var(--surface);
@@ -280,12 +280,6 @@
 }
 
 /* Sections. */
-.hm-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-  gap: 28px;
-  align-items: start;
-}
 .hm-sec {
   display: grid;
   gap: 12px;
@@ -342,70 +336,6 @@
   flex: none;
 }
 
-/* The next three leads, under the card. */
-.hm-leadrows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  overflow: hidden;
-}
-.hm-lrow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px 10px 10px;
-}
-.hm-lrow + .hm-lrow {
-  border-top: 1px solid var(--line);
-}
-.hm-lrow-open {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-  padding: 4px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.hm-lrow-open:hover .hm-lrow-n {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.hm-lrow-open:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 0;
-}
-.hm-lrow-id {
-  display: grid;
-  min-width: 0;
-}
-.hm-lrow-n {
-  font-size: 14.5px;
-  line-height: 20px;
-  font-weight: 700;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hm-lrow-p {
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hm-lrow-act {
-  flex: none;
-}
 .td-row-go {
   white-space: nowrap;
 }
@@ -773,9 +703,6 @@
 
 /* Narrower screens: two cards a row, the sections one under the other. */
 @media (max-width: 1199px) {
-  .hm-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   /* The band is too narrow for the scene beside the longest greeting: a plain corner instead. */
   .hm-hello-art {
     display: none;
@@ -815,6 +742,10 @@
     line-height: 22px;
   }
   .hm-hello + .hm-ask {
+    margin-top: -8px;
+  }
+  /* The first move starts close under the greeting, so its button is on the first screen. */
+  .hm-hello + .mv {
     margin-top: -8px;
   }
   .hm-gs {
@@ -866,17 +797,6 @@
   .hm-card-p {
     font-size: 12.5px;
     line-height: 17px;
-  }
-  .hm-lrow {
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    padding: 10px;
-  }
-  .hm-lrow-open {
-    flex-basis: 100%;
-  }
-  .hm-lrow-act {
-    margin-left: 52px;
   }
   .hm-long {
     display: none;

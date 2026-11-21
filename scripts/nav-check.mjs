@@ -207,7 +207,7 @@ async function context(member, opts = {}) {
 /** The app is drawn (its top bar is there) and nothing on screen is still loading. */
 const settle = (page) =>
   page
-    .waitForFunction(() => !!document.querySelector(".tp-top") && !document.querySelector(".tp-allwait, .td-card-skel, .hm-card-wait"), null, { timeout: 20_000 })
+    .waitForFunction(() => !!document.querySelector(".tp-top") && !document.querySelector(".tp-allwait, .mv-skel, .td-card-skel, .hm-card-wait"), null, { timeout: 20_000 })
     .catch(() => {});
 const shot = async (page, name) => {
   await page.screenshot({ path: path.join(OUT, `${name}.png`) });
@@ -223,10 +223,10 @@ async function firstPaint() {
     await cdp.send("Network.enable");
     await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 85, downloadThroughput: (9 * 1024 * 1024) / 8, uploadThroughput: (9 * 1024 * 1024) / 8 });
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
-    // The moment the lead card is in the page, seen from inside it (a poll from outside lands late while the page is busy).
+    // The moment the first move's card is in the page (the lead card, before Home had moves, or with none today), seen from inside it (a poll from outside lands late while the page is busy).
     await page.addInitScript(() => {
       const mo = new MutationObserver(() => {
-        if (window.__lead == null && document.querySelector(".td-card:not(.td-card-skel)")) {
+        if (window.__lead == null && document.querySelector(".mv-card:not(.mv-skel), .td-card:not(.td-card-skel)")) {
           window.__lead = performance.now();
           mo.disconnect();
         }
@@ -248,8 +248,8 @@ async function firstPaint() {
     if (process.env.TRACEFILE) await browser.startTracing(page, { path: process.env.TRACEFILE, categories: ["devtools.timeline", "disabled-by-default-devtools.timeline", "blink.user_timing", "loading"] });
     const start = Date.now();
     await page.goto(`${BASE}/`, { waitUntil: "commit" });
-    // Home is painted: its lead card (not the skeleton) is on screen.
-    await page.waitForSelector(".td-card:not(.td-card-skel)", { timeout: 30_000 });
+    // Home is painted: its first move (not the skeleton) is on screen.
+    await page.waitForSelector(".mv-card:not(.mv-skel), .td-card:not(.td-card-skel)", { timeout: 30_000 });
     const ms = await page.evaluate(() => window.__lead ?? null);
     if (process.env.TRACEFILE) await browser.stopTracing();
     if (process.env.PROFILE) {
@@ -308,7 +308,7 @@ async function shots() {
   await settle(page);
   await page.waitForTimeout(800);
   await shot(page, "home-trial-member-1440");
-  // The page scrolls inside its own column: the lower half, with the next leads and the saved views.
+  // The page scrolls inside its own column: the lower half, with the search, the four cards and the saved views.
   await page.evaluate(() => document.querySelector(".tp-main-page")?.scrollTo(0, 99999));
   await page.waitForTimeout(400);
   await shot(page, "home-trial-member-1440-lower");

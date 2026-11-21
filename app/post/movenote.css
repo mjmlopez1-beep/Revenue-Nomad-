@@ -1,0 +1,368 @@
+/*
+ * The drafted note (MoveNote.tsx) and Your writing voice (Voice.tsx). Classes are prefixed mn- (the
+ * note) and vo- (the voice); the person's mark, the warmth chip and the quiet links are the moves'
+ * own (moves.css). Loaded with the note's sheet and the voice's parts, not with Home's first paint.
+ */
+
+/* ---------- the drafted note ---------- */
+.tp-sheet.mn-sheet .tp-sheet-body {
+  padding-bottom: 16px;
+}
+.mn {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.mn-why {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: var(--pine-8);
+}
+.mn-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.mn-who .mv-av {
+  width: 40px;
+  height: 40px;
+  font-size: 13.5px;
+  background: var(--surface);
+}
+.mn-who-n {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mn-who .mv-who-s {
+  white-space: normal;
+}
+.mn-now {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.mn-now b {
+  color: var(--ink);
+}
+.mn-fields {
+  display: grid;
+  border: 1px solid var(--line-input);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  overflow: hidden;
+}
+.mn-fields:focus-within {
+  border-color: var(--pine);
+  box-shadow: 0 0 0 3px var(--pine-14);
+}
+.mn-field {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  font-size: 14px;
+  line-height: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.mn-k {
+  flex: none;
+  width: 56px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.mn-v {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mn-v-none {
+  font-weight: 400;
+  color: var(--muted);
+}
+.mn-addr {
+  margin-left: 6px;
+  font-family: var(--font-num, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.mn-from {
+  flex: none;
+  font-size: 13px;
+  color: var(--muted);
+}
+.mn-subject {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+}
+.mn-body {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  max-height: 46vh;
+  padding: 14px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--ink);
+}
+.mn-warn {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--ember-ink);
+}
+.mn-foot {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.mn-acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.mn-last {
+  display: flex;
+  align-items: center;
+  gap: 12px 20px;
+}
+.mn-last .mn-promise {
+  flex: 1;
+  min-width: 0;
+}
+.mn-done {
+  flex: none;
+}
+.mn-acts .mn-go {
+  min-height: 44px;
+  text-decoration: none;
+}
+.mn-other {
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--pine);
+  text-underline-offset: 3px;
+}
+.mn-promise {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.mn-promise b {
+  color: var(--ink);
+}
+.mn-shield {
+  flex: none;
+  margin-top: 1px;
+  color: var(--volt-ink);
+}
+@media (min-width: 768px) {
+  .tp-sheet-dialog .tp-sheet.mn-sheet {
+    width: min(680px, 100%);
+    max-height: min(820px, 94vh);
+  }
+  .tp-sheet.mn-sheet .tp-sheet-foot {
+    padding: 14px 20px 16px;
+  }
+}
+@media (max-width: 767px) {
+  /* A phone's footer stays short so the note has the screen: the ways to send in a row, then the other mail app and Mark as sent, then the promise in a line. */
+  .mn-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .mn-acts,
+  .mn-last {
+    display: contents;
+  }
+  .mn-acts .mn-go {
+    flex: 1 1 auto;
+    padding: 0 10px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .mn-acts .mn-go svg {
+    display: none;
+  }
+  .mn-other {
+    order: 2;
+    flex: 1 1 40%;
+  }
+  .mn-done {
+    order: 3;
+    min-height: 40px;
+  }
+  .mn-last .mn-promise {
+    order: 4;
+    flex: 1 1 100%;
+    font-size: 12.5px;
+  }
+  /* The promise in a line; the rest of it is the same on every note. */
+  .mn-promise-more {
+    display: none;
+  }
+  .mn-addr {
+    display: block;
+    margin-left: 0;
+  }
+  .mn-from {
+    flex-basis: 100%;
+    padding-left: 68px;
+  }
+  .mn-body {
+    max-height: none;
+  }
+}
+
+/* ---------- your writing voice ---------- */
+.vo-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.vo-line .mv-link {
+  font-size: 13px;
+  font-weight: 600;
+}
+.vo-muted {
+  color: var(--muted);
+}
+.vo-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+.hunt-sub.vo-sec {
+  justify-items: stretch;
+}
+.vo-dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+.vo-dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  min-width: 0;
+}
+.vo-dl > div:last-child {
+  grid-column: 1 / -1;
+}
+.vo-dl dt {
+  flex: none;
+  color: var(--muted);
+}
+.vo-dl dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.vo-when {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+.vo-acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.vo-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.vo-form .hunt-lead {
+  margin: 0;
+}
+.vo-q {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.vo-small {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+  margin-bottom: 8px !important;
+}
+.vo-phrases {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+@media (max-width: 599px) {
+  .vo-dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Integrations, the Claude section: the prompt to copy (Voice.tsx VoicePrompt). */
+.tp-card.vo-card {
+  margin-top: 20px;
+}
+.vo-body {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.vo-prompt {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--volt);
+  background: var(--bg);
+  border-radius: 0 var(--r-btn) var(--r-btn) 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+.vo-card .vo-when {
+  margin-top: 10px;
+}
