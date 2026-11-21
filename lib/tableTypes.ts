@@ -340,8 +340,12 @@ export interface Me {
    * show by first name and last initial).
    */
   fractionals?: boolean | null;
-  /** The next-client radar by email and Slack (on unless they turned it off in Your profile or with the radar email's link). */
+  /** Crystal Ball goes out by email or Slack at all (Notifications). */
   radar?: boolean;
+  /** How often the Crystal Ball email comes, or "off" (Notifications, or the email's own link). */
+  radarEmail?: "daily" | "twice" | "weekly" | "off";
+  /** Crystal Ball posts to Slack (Notifications), when Slack is connected. */
+  radarSlack?: boolean;
   /** Who they hunt (onboarding, and the Ideal Fractional Profile pill over the table). Null until they say. */
   icp?: Icp | null;
   /**
@@ -1029,7 +1033,7 @@ export type Action =
    * `fractionals`: "Show me in the Fractionals directory" (Your profile, and Home's one-time question).
    * `partners`: the same switch under its old name (Referral partners).
    */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean; fractionals?: boolean; radar?: boolean }
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean; fractionals?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean }
   /**
    * Fractionals: "Unlock · 1 credit" on a fractional not on Merlin yet (FractionalRec.id). The same
    * purchase as who held one of their seats: every seat of theirs then shows who held it, with the role.

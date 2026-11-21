@@ -150,7 +150,12 @@ async function main() {
   check("Add what you know and Invite a fractional are buttons (they open a sheet)", ["add", "invite"].every((k) => all.find((it) => it.key === k && !it.href)));
   const keys = all.map((it) => it.key);
   check("nothing is listed twice", new Set(keys).size === keys.length, keys);
-  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,fractionals,messages,view:v1,view:v2,following,seats,network,add,rates,invite,integrations,billing,credits,metrics", keys);
+  // Notifications (every email and Slack post, and how often) sits in the foot after Integrations: one place for the
+  // switches that were on Your credits, Your profile and Integrations.
+  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,fractionals,messages,view:v1,view:v2,following,seats,network,add,rates,invite,integrations,notifications,billing,credits,metrics", keys);
+  const ntItem = all.find((it) => it.key === "notifications");
+  check("Notifications is in the foot, and its link opens it", ntItem?.group === "foot" && ntItem.page === "notifications" && parsePlace(me, (ntItem.href ?? "").split("?")[1] ?? "", new Set()).p === "notifications", ntItem);
+  check("'notifications' finds it from Home's search", nm.navMatches("notifications", all).some((it) => it.key === "notifications"));
   check("People reads Decision makers", all.find((it) => it.key === "people")?.label === "Decision makers");
   check("each saved view by name, with its new matches", all.find((it) => it.key === "view:v1")?.label === "Open Sales roles" && all.find((it) => it.key === "view:v1")?.badge === 2);
   check("counts: the lists, Hiring now, unread, Crystal Ball's new, credits", all.find((it) => it.key === "companies")?.count === 40 && all.find((it) => it.key === "hiring")?.count === 14 && all.find((it) => it.key === "messages")?.badge === 2 && all.find((it) => it.key === "radar")?.badge === 3 && all.find((it) => it.key === "credits")?.count === 25);

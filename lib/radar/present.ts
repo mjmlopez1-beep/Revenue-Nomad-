@@ -104,6 +104,8 @@ export interface CardContext {
    * Crystal Ball company), "one" (Free: one a day, in full), null (2 credits, as anywhere). Left out: null.
    */
   opens?: (companyId: string) => "free" | "one" | null;
+  /** The company's record opened from this day's Crystal Ball (radarOpenPath): the email's card links. Left out: none. */
+  open?: (companyId: string) => string | null;
 }
 
 /** "a Software company", "an E-commerce company", or "a company in your profile". */
@@ -158,6 +160,7 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
   const place = seen ? ctx.place?.(sig.companyId) ?? null : null;
   const logo = known ? ctx.logo?.(sig.companyId) ?? null : null;
   const opens = known ? null : ctx.opens?.(sig.companyId) ?? null;
+  const open = ctx.open?.(sig.companyId) ?? null;
   return {
     id: ctx.cardId(sig.key),
     co: ctx.coId(sig.companyId),
@@ -175,6 +178,7 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
     signal: signalWords(sig, title),
     about: aboutOf(sig.co),
     ...(place ? { place } : {}),
+    ...(open ? { open } : {}),
     ...(known ? { known: true } : {}),
     ...(opens ? { opens } : {}),
     ...(logo && /^https:\/\/[^\s<>|]+$/.test(logo) ? { logo } : {}),

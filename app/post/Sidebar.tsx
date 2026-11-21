@@ -98,6 +98,12 @@ const P: Record<NavIconName, ReactNode> = {
       <path d="M12 16v5" />
     </>
   ),
+  notifications: (
+    <>
+      <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2H4.5z" />
+      <path d="M10 21h4" />
+    </>
+  ),
   billing: (
     <>
       <rect x="3" y="5.5" width="18" height="13" rx="2" />

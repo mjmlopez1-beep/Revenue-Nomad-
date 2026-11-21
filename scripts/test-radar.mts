@@ -12,7 +12,12 @@
  * companies (/?p=table&sig=<day>), the day's view listing only the member's own companies and
  * unlocking one for 2 credits, instant delivery for Pro, days with nothing skipped, the switch
  * and the email's unsubscribe link, the Slack and email formats, the funding plumbing, the
- * tracked links and the sign-in link that comes back to the day.
+ * tracked links and the sign-in link that comes back to the day. And coming back: each card opening
+ * its own company's record from the day (free on Trial and Pro, "Open free (today's)" on Free's first
+ * card only), every email link signing the member in once (lib/emailIn.ts: spent, expired, forged,
+ * moved or rotated links refused), how often the email comes (daily, twice a week, weekly roll-ups),
+ * no email or post on a day with nothing new, Slack apart from the email, and the unsubscribe
+ * link's Send it weekly instead and Turn it off (the email only).
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -169,6 +174,11 @@ async function main() {
     const s = typeof x === "string" ? x : JSON.stringify(x);
     return PUBS.filter((p) => s.includes(p) || s.includes(encodeURIComponent(p)));
   };
+  /**
+   * An email's words with each tracked link's destination taken out. Since each card opens its own
+   * company's record (radarOpenPath), the company's public id is inside that link's to=, and only there.
+   */
+  const outsideLinks = (x: unknown) => (typeof x === "string" ? x : JSON.stringify(x)).replace(/(\/api\/radar\/go\?[^"\s\\]*?)to=[^"&\s\\]*/g, "$1to=");
   const settle = async () => {
     for (let i = 0; i < 4; i++) {
       await new Promise((r) => setTimeout(r, 15));
@@ -179,6 +189,11 @@ async function main() {
   const radarPosts = (u: string) => outbox.filter((x) => x.url === u && x.raw.includes(fmt.RADAR_FOOTER));
   const clear = () => (outbox.length = 0);
   const state = () => t.loadState();
+  /** A member's radar record in a draft state, made when missing. */
+  const radarMember = (d: Awaited<ReturnType<typeof state>>, id: string) => {
+    d.radar ??= types.emptyRadar();
+    return (d.radar.members[id] ??= { sent: {} });
+  };
 
   /* ---------- the pure parts ---------- */
   console.log("\nIdeal Fractional Profile matching");
@@ -313,11 +328,24 @@ async function main() {
     return icons.length === 4 && icons.every((x) => /src="https:\/\/post\.example\.com\/email\/crystal-ball\/icon-[a-z]+@2x\.png\?v=\d+"/.test(x) && /width="\d+" height="\d+"/.test(x) && /alt=""/.test(x));
   })(), sm?.html.match(/<img [^>]*>/g));
   const salLinks = (sm?.html.match(/<a href="[^"]*"/g) ?? []).filter((x) => x.includes("/api/radar/go"));
-  check("the cards and the button all open the day's companies (tracked)", salLinks.length === 4 && salLinks.every((x) => x.includes(encodeURIComponent(dayPath))), salLinks);
-  check("the button says how many companies", /See the 2 companies/.test(sm?.html ?? "") && /See the 2 companies/.test(sm.text));
+  // Changed: each card used to open the day's list. Now each card opens its own company's record from that day
+  // (where the plan's free open is ready), and only the button under the cards opens the day's list.
+  const cardPath = (co: string) => encodeURIComponent(types.radarOpenPath(day0, pub(co)));
+  check(
+    "each card opens its own company from the day, the button the day's companies (tracked)",
+    salLinks.length === 4 &&
+      salLinks.filter((x) => x.includes(cardPath("c_beta"))).length === 2 &&
+      salLinks.filter((x) => x.includes(cardPath("c_acme"))).length === 1 &&
+      salLinks.filter((x) => x.includes(`to=${encodeURIComponent(dayPath)}"`)).length === 1,
+    salLinks,
+  );
+  check("every link in it signs Sal in once (an expiry and a grant)", salLinks.every((x) => /&amp;x=[0-9a-z]+&amp;t=[A-Za-z0-9_-]{27}&amp;to=/.test(x)), salLinks);
+  check("the button under the cards names them all", /See both companies/.test(sm?.html ?? "") && /See both companies/.test(sm.text));
+  check("billing off: each card says Open in Merlin, never Open free", (sm?.text.match(/^Open in Merlin: /gm) ?? []).length === 3 && !/Open free/.test(sm?.text ?? ""), sm?.text);
+  check("the footer links to Notifications, signed in", /\nNotifications\nhttps:\/\/post\.example\.com\/api\/go\?m=[^\n]+&to=%2F%3Fp%3Dnotifications\n/.test(sm?.text ?? "") && />Notifications<\/a>/.test(sm?.html ?? "") && /Choose how often in Notifications/.test(sm?.text ?? ""), sm?.text.slice(-700));
   check("no Pro-only teaser: no See who, no count of the rest, no Pro", !/See who|more today|comes with Pro|isn.t open yet|upgrade=radar/i.test(JSON.stringify(sm)), sm?.text);
   check("the email names no company and no person", !named(sm).length, named(sm));
-  check("the email carries no record id", !pubLeaks(sm).length, pubLeaks(sm));
+  check("the email carries a record id only inside a card's link", !pubLeaks(outsideLinks(sm)).length && pubLeaks(sm).every((p) => p === pub("c_beta") || p === pub("c_acme")), { out: pubLeaks(outsideLinks(sm)), all: pubLeaks(sm) });
   check("the unsubscribe link is the radar's own, as a header too", /r=radar/.test(sm?.text ?? "") && /r=radar/.test(String(sm?.headers?.["List-Unsubscribe"] ?? "")), sm?.headers);
   check("its words are the feature's", sm?.html.includes(`Unsubscribe from ${types.FEATURE_NAME} emails`) && sm.text.includes(`To stop the ${types.FEATURE_NAME} emails`));
   check("the email counts opens with a pixel", /\/api\/radar\/open\?m=/.test(sm?.html ?? ""));
@@ -342,7 +370,7 @@ async function main() {
     /Open role · High likelihood\n[^\n]+\n[^\n]+\nA direct opening in Sales\.\n/.test(sm?.text ?? "") && /Marketing leader\n(Sales|RevOps|\w+)[^\n]* usually follows in [^\n]+\.\n/.test(sm?.text ?? "") && />High<span class="cb-wide"> likelihood<\/span><\/td>/.test(sm?.html ?? "") && !/Open now/.test(sm?.text ?? ""),
     sm?.text,
   );
-  check("Mo's email names nothing", !named(moMail).length && !pubLeaks(moMail).length, named(moMail));
+  check("Mo's email names nothing", !named(moMail).length && !pubLeaks(outsideLinks(moMail)).length, { named: named(moMail), ids: pubLeaks(outsideLinks(moMail)) });
   const piaMail = mails("pia.profit@example.com")[0]?.body as { subject: string; html: string; text: string } | undefined;
   check("a company the member already unlocked is named, with nothing to unlock", !!piaMail && /Hired a fractional · \w+ likelihood\nFox Freight\nJust hired a fractional Sales leader\n/.test(piaMail.text) && (piaMail.text.match(/unlocks in Merlin/g) ?? []).length === 1, piaMail?.text);
   check("Pia's email names no company she can't see", !named(piaMail, NAMES.filter((x) => x !== "Fox Freight")).length, named(piaMail));
@@ -366,14 +394,16 @@ async function main() {
   clear();
   const quiet = await radar.runRadar({ now: nowIso() });
   await settle();
-  // Nothing new happened: Sal's day is filled with what is still true (Echo's fractional Sales seat, 12 to 24 months in), said for what it is.
-  const quietMail = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
+  // Nothing new happened. Changed: a day with only what is still true (Echo's fractional Sales seat, 12 to 24 months in) used to
+  // go out as "1 company still worth a look". Now an email (or a post) with no new company is skipped, and the page still lists it.
+  const quietDayIso = nowIso().slice(0, 10);
+  check("the next morning with nothing new: no email and no Slack post", quiet.ran && quiet.signals === 0 && !mails().length && !radarPosts(SLACK_SAL).length, { quiet, n: mails().length });
   check(
-    "the next morning with nothing new: a standing state fills the day, labelled 'Still a good time', never an empty email",
-    quiet.ran && quiet.signals === 0 && mails().length === 1 && !!quietMail && quietMail.subject === `${types.YOUR_FEATURE}: 1 company still worth a look` && /\nSTILL A GOOD TIME\n/.test(quietMail.text) && !/NEW SINCE YESTERDAY/.test(quietMail.text) && /Seat at \d+ months · \w+ likelihood\n[^\n]+\nIts fractional Sales seat is \d+ months in\nBased on typical tenure/.test(quietMail.text),
-    { quiet, text: quietMail?.text.slice(0, 600) },
+    "the standing state is not marked sent, but the day's view keeps it",
+    !(await state()).radar?.members.mem_sal?.sent[`still:tenure:${pub("e_echo_sales")}`] && !(await state()).radar?.members.mem_sal?.shown?.c_echo && ((await state()).radar?.members.mem_sal?.days?.[quietDayIso] ?? []).some((x) => x.c === "c_echo"),
+    (await state()).radar?.members.mem_sal,
   );
-  check("and it is remembered as sent, with the company, so it is not offered again", !!(await state()).radar?.members.mem_sal?.sent[`still:tenure:${pub("e_echo_sales")}`] && !!(await state()).radar?.members.mem_sal?.shown?.c_echo);
+  check("and the page lists it that day", ((await radar.radarView("tok-sal-0001", quietDayIso, nowIso()))?.rows ?? []).some((x) => x.id === pub("c_echo")));
   // A new RevOps hire at Acme comes in (RevOps comes before Sales): only it goes out the morning after.
   await T.mutate((d) => {
     d.engagements.push({ id: "e_acme_ops_new", companyId: "c_acme", by: "mem_mo", at: nowIso() });
@@ -386,10 +416,11 @@ async function main() {
   const run3 = await radar.runRadar({ now: nowIso() });
   await settle();
   const sm3 = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
+  // Changed: the standing state the quiet day kept (not sent) now fills this day beside the new hire, so it reads 2 companies.
   check(
-    "only the new signal goes out, nothing sent before",
-    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 1 company leaning your way` && /Hired a fractional Growth leader in \w{3} \d{4} · newly added to Merlin/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See the company/.test(sm3.text),
-    { run3, subject: sm3?.subject },
+    "only the new signal and the standing state go out, nothing sent before",
+    !!sm3 && sm3.subject === `${types.YOUR_FEATURE}: 2 companies leaning your way` && /Hired a fractional Growth leader in \w{3} \d{4} · newly added to Merlin/.test(sm3.text) && /\nSTILL A GOOD TIME\n/.test(sm3.text) && !/Fractional VP Sales/.test(sm3.text) && /See both companies/.test(sm3.text),
+    { run3, subject: sm3?.subject, text: sm3?.text.slice(0, 900) },
   );
   check("its link opens that day", !!sm3 && sm3.text.includes(encodeURIComponent(types.radarPath(day2))));
   const sentSal = Object.keys((await state()).radar?.members.mem_sal?.sent ?? {});
@@ -406,7 +437,13 @@ async function main() {
   const msig = radar.radarSig("mem_mo");
   check("a link with a wrong signature does nothing", !(await radar.unsubscribeRadar(pub("mem_mo"), "nope")) && !(await radar.unsubscribeRadar("nobody", msig)) && !(await state()).profiles.mem_mo.radarOff);
   check("the radar's link isn't the weekly email's (a different signature)", !(await radar.unsubscribeRadar(pub("mem_mo"), "x".repeat(msig.length))));
-  check("the email's link turns the radar off", (await radar.unsubscribeRadar(pub("mem_mo"), msig)) && (await state()).profiles.mem_mo.radarOff === true && !(await state()).profiles.mem_mo.digestOff);
+  // Changed: the email's link used to turn Crystal Ball off by email and Slack, for good. Now it turns the email off and leaves Slack on.
+  check(
+    "the email's link turns the email off, not Slack",
+    (await radar.unsubscribeRadar(pub("mem_mo"), msig)) && (await state()).profiles.mem_mo.radarEmail === "off" && !(await state()).profiles.mem_mo.radarSlackOff && !(await state()).profiles.mem_mo.radarOff && !(await state()).profiles.mem_mo.digestOff,
+    (await state()).profiles.mem_mo,
+  );
+  check("the view says the email is off and Slack on", ((v) => v.me?.radarEmail === "off" && v.me.radarSlack === true && v.me.radar === true)(await t.buildView("tok-mo-0001")));
   check("radar_off is recorded from the email", (await state()).signals.some((x) => x.memberId === "mem_mo" && x.name === "radar_off" && x.where === "email"));
   const link = radar.radarUnsubscribeUrl("https://post.example.com", "mem_mo");
   check("the unsubscribe URL is signed and marked", link.startsWith("https://post.example.com/api/table/unsubscribe?m=") && link.endsWith("&r=radar") && link.includes(msig));
@@ -441,10 +478,10 @@ async function main() {
   check("a line says what happened and why", page?.rows[1]?.lines[0] === "Just hired a fractional Marketing leader · Marketing usually comes before Sales. No fractional Sales leader on Merlin. We haven't checked their team page yet", page?.rows[1]?.lines);
   check("the view names no company and no person", !named(page).length, named(page));
   check("and carries only the public ids of the member's own signal companies", pubLeaks(page).every((x) => x === pub("c_beta") || x === pub("c_acme")), pubLeaks(page));
-  check("the days: the last 7, today first, each with its companies", page?.days.length === 7 && page.days[0].day === page.today && page.days.find((d) => d.day === day0)?.companies === 2 && page.days.find((d) => d.day === day2)?.companies === 1, page?.days);
+  check("the days: the last 7, today first, each with its companies", page?.days.length === 7 && page.days[0].day === page.today && page.days.find((d) => d.day === day0)?.companies === 2 && page.days.find((d) => d.day === day2)?.companies === 2, page?.days);
   check("the page says what it watches", page?.function === "Sales" && page.before.join() === "Marketing,RevOps,Finance" && page.ready && page.on && page.email && page.slack, page);
   const latest = await radar.radarView("tok-sal-0001", null, nowIso());
-  check("no day asked: the latest day with something in it", latest?.day === day2 && latest.rows.map((x) => x.id).join() === pub("c_acme"), latest?.day);
+  check("no day asked: the latest day with something in it", latest?.day === day2 && latest.rows.map((x) => x.id).sort().join() === [pub("c_acme"), pub("c_echo")].sort().join(), { day: latest?.day, rows: latest?.rows.map((x) => x.id) });
   const old = await radar.radarView("tok-sal-0001", "2020-01-01", nowIso());
   check("a day older than what is kept: the latest, and it says so", !!old?.expired && old.day === day2, old);
   check("a day that isn't one: the same", !!(await radar.radarView("tok-sal-0001", "../../x", nowIso()))?.expired);
@@ -682,6 +719,141 @@ async function main() {
   check("and what went out, opens and clicks (the two tracked clicks above)", (rs?.sent7 ?? 0) >= 4 && rs!.clicks === 2 && rs!.opens7 === 1, rs);
   const st = types.radarStats(undefined, [{ name: "radar_sent", at: nowIso() }, { name: "radar_clicked", at: nowIso() }, { name: "wall", at: nowIso() }], { a: { radarOff: true } }, 3, Date.now());
   check("radarStats counts only radar signals", st.sentToday === 1 && st.clicks === 1 && st.off === 1 && st.on === 3, st);
+  check("radarStats counts an email turned off on Notifications as off", types.radarStats(undefined, [], { a: { radarEmail: "off" }, b: { radarSlackOff: true }, c: { radarEmail: "weekly" } }, 3, Date.now()).off === 1);
+
+  /* ---------- coming back: the email's links sign in, each company opens its own record ---------- */
+  console.log("\nThe email's links sign the member in, once");
+  const ein = await import("../lib/emailIn");
+  const signin = await import("../lib/signin");
+  const qOf = (href: string) => Object.fromEntries(new URL(href.replace(/&amp;/g, "&")).searchParams);
+  const BASE = "https://post.example.com";
+  const sd = await t.loadSeed();
+  const linkA = ein.emailLinker(sd, await state(), "mem_sal", BASE)(ein.NOTIFICATIONS_PATH);
+  check("a footer link goes through /api/go with an expiry and a grant, to Notifications", /^https:\/\/post\.example\.com\/api\/go\?m=m_[\w-]+&x=[0-9a-z]+&t=[\w-]{27}&to=%2F%3Fp%3Dnotifications$/.test(linkA), linkA);
+  const qa = qOf(linkA);
+  const land1 = await ein.emailLanding(qa, null);
+  const land2 = await ein.emailLanding(qa, null);
+  check("opening it makes a one-time sign-in link to the same place", /^\/\?k=o[\w-]{32}&p=notifications$/.test(land1 ?? "") && /^\/\?k=o[\w-]{32}&p=notifications$/.test(land2 ?? "") && land1 !== land2, { land1, land2 });
+  const k1 = decodeURIComponent(/k=([^&]+)/.exec(land1 ?? "")![1]);
+  const k2 = decodeURIComponent(/k=([^&]+)/.exec(land2 ?? "")![1]);
+  const rec = (await state()).signins?.find((x) => x.purpose === "email");
+  check("the one-time link lasts 20 minutes, carries no code anyone can type, and remembers its email link", !!rec && Date.parse(rec.exp) - Date.now() <= signin.SIGNIN_TTL_MS && !!rec.grant && !!rec.grantExp, rec);
+  const who = await signin.redeemLink(k2);
+  check("redeeming it signs in that member, and only them", who?.id === "mem_sal", who?.id);
+  check("then the email link is spent: the other one-time link made from it (a scanner's visit) stops working", (await signin.redeemLink(k1)) === null);
+  check("and opening it again says it was used", (await ein.emailLanding(qa, null)) === "/?in=used&p=notifications");
+  const linkB = ein.emailLinker(sd, await state(), "mem_sal", BASE)("/?p=seats");
+  check("a browser already signed in as that member goes straight there, and the link stays good", (await ein.emailLanding(qOf(linkB), "tok-sal-0001")) === "/?p=seats" && /^\/\?k=/.test((await ein.emailLanding(qOf(linkB), null)) ?? ""));
+  check("someone else signed in here gets a sign-in link for the email's member", /^\/\?k=/.test((await ein.emailLanding(qOf(ein.emailLinker(sd, await state(), "mem_sal", BASE)("/?p=seats")), "tok-mo-0001")) ?? ""));
+  const qb = qOf(linkB);
+  check("a link with its place changed is refused", (await ein.emailLanding({ ...qb, to: "/?p=credits" }, null)) === "/?in=used&p=credits");
+  check("a link moved to another member is refused", (await ein.emailLanding({ ...qb, m: pub("mem_mo") }, null)) === "/?in=used&p=seats");
+  check("a link with a forged grant is refused", (await ein.emailLanding({ ...qb, t: "x".repeat(27) }, null)) === "/?in=used&p=seats");
+  check("a link never sends anywhere else", (await ein.emailLanding({ ...qb, to: "https://evil.example/" }, null)) === null && (await ein.emailLanding({ ...qb, to: "//evil.example" }, null)) === null);
+  check("an older email's link without a grant goes where it went, with no sign-in", (await ein.emailLanding({ m: qb.m, to: "/?p=seats" }, null)) === "/?p=seats");
+  skew += 8 * DAY;
+  check("after 7 days it no longer signs in", (await ein.emailLanding(qOf(ein.emailLinker(sd, await state(), "mem_sal", BASE, Date.now() - 8 * DAY)("/?p=seats")), null)) === "/?in=used&p=seats");
+  skew -= 8 * DAY;
+  // The radar email's own links: a card's link through the click route, then the sign-in.
+  const cardHref = salLinks.find((x) => x.includes(cardPath("c_acme")))!.slice('<a href="'.length, -1);
+  const cq = qOf(cardHref);
+  const clickTo = await radar.radarClicked(cq.m, cq.s, cq.w, cq.to);
+  check("a card's link counts the click and opens Acme's record from that day's Crystal Ball", clickTo === types.radarOpenPath(day0, pub("c_acme")), clickTo);
+  const cardLand = await ein.emailLanding({ ...cq, to: clickTo }, null);
+  check("and signs Sal in on the way", new RegExp(`^/\\?k=o[\\w-]{32}&sig=${day0}&c=${pub("c_acme")}$`).test(cardLand ?? ""), cardLand);
+  check("Slack's links never sign in (a channel is shared)", radarPosts(SLACK_SAL).every((x) => !/&x=[0-9a-z]+&t=/.test(x.raw)));
+  const rotated = await signin.rotateToken("tok-pro-0001");
+  check("Sign out on other devices stops every older email's links too", !!rotated && (await ein.emailLanding(qOf(ein.emailLinker(sd, { ...(await state()), tokens: {} }, "mem_pro", BASE)("/?p=seats")), null)) === "/?in=used&p=seats");
+
+  console.log("\nEach card's button, by plan");
+  const plans = (opens: "free" | "one" | undefined) =>
+    fmt.renderRadarEmail({ name: "Sal", day: dayOf([1, 2, 3].map((i) => card(i, { opens, open: `https://post.example.com/api/radar/go?c${i}` }))), unsubscribeUrl: "https://post.example.com/u", appUrl: "https://post.example.com" });
+  const trial = plans("free");
+  check("Trial and Pro: every card says Open free", (trial.text.match(/^Open free: /gm) ?? []).length === 3 && (trial.html.match(/>Open free<\/a>/g) ?? []).length === 3, trial.text);
+  const freePlan = plans("one");
+  check(
+    "Free: only the first card says Open free (today's), the rest Open in Merlin",
+    (freePlan.text.match(/^Open free \(today's\): /gm) ?? []).length === 1 && (freePlan.text.match(/^Open in Merlin: /gm) ?? []).length === 2 && freePlan.text.indexOf("Open free (today's)") < freePlan.text.indexOf("Open in Merlin") && (freePlan.html.match(/>Open free \(today&#39;s\)<\/a>|>Open free \(today's\)<\/a>/g) ?? []).length === 1,
+    freePlan.text,
+  );
+  check("each card's button opens its own company, the button under them the day", [1, 2, 3].every((i) => trial.html.includes(`href="https://post.example.com/api/radar/go?c${i}"`)) && trial.html.includes(`href="${VIEW}"`) && /See all 3 companies/.test(trial.text), trial.html.match(/href="[^"]+"/g));
+  check("the email's own button: Open Crystal Ball for one company, See both for two", fmt.seeAllWords(1) === `Open ${types.FEATURE_NAME}` && fmt.seeAllWords(2) === "See both companies" && fmt.seeAllWords(5) === "See all 5 companies");
+  const { parsePlace } = await import("../app/post/place");
+  const deep = parsePlace({} as never, types.radarOpenPath(day0, pub("c_acme")).slice(1), new Set());
+  check("the card's link opens that company over that day's Crystal Ball", deep.p === "radar" && deep.sig === day0 && deep.c === pub("c_acme"), deep);
+
+  console.log("\nHow often: daily, twice a week, weekly, and Slack apart");
+  const MON = Date.parse("2026-11-23T13:00:00Z");
+  const at = (d: number, h = 13) => new Date(MON + d * DAY + (h - 13) * HOUR).toISOString();
+  check("daily is always due", types.radarEmailDue("daily", at(0), MON + HOUR));
+  check("weekly: due on Monday after last week's", types.radarEmailDue("weekly", at(-7), MON) && !types.radarEmailDue("weekly", at(0), MON + 2 * DAY) && types.radarEmailDue("weekly", at(0), MON + 7 * DAY));
+  check("weekly: a Monday missed goes on Tuesday", types.radarEmailDue("weekly", at(-7), MON + DAY));
+  check("twice a week: Monday and Thursday", !types.radarEmailDue("twice", at(0), MON + 2 * DAY) && types.radarEmailDue("twice", at(0), MON + 3 * DAY) && !types.radarEmailDue("twice", at(3), MON + 5 * DAY) && types.radarEmailDue("twice", at(3), MON + 7 * DAY));
+  check("never sent: due", types.radarEmailDue("weekly", null, MON + 2 * DAY));
+  check("the choices' words", types.RADAR_EVERY_WORDS.weekly === "Once a week" && types.RADAR_ROLLUP_MAX.weekly > types.RADAR_ROLLUP_MAX.daily);
+  const wk = await t.perform("tok-sal-0001", { type: "settings", radarEmail: "weekly" }, BASE);
+  const vWk = await t.buildView("tok-sal-0001");
+  check("Notifications sets the email weekly, and Slack stays on", (await state()).profiles.mem_sal.radarEmail === "weekly" && vWk.me?.radarEmail === "weekly" && vWk.me.radarSlack === true && /once a week/.test(wk.message), { msg: wk.message, me: vWk.me?.radarEmail });
+  const sOff = await t.perform("tok-sal-0001", { type: "settings", radarSlack: false }, BASE);
+  const vS = await t.buildView("tok-sal-0001");
+  check("and Slack off, with the email left weekly", vS.me?.radarSlack === false && vS.me.radarEmail === "weekly" && vS.me.radar === true && /won't post to Slack/.test(sOff.message), vS.me?.radarSlack);
+  const bad = await t.perform("tok-sal-0001", { type: "settings", radarEmail: "hourly" as never }, BASE).catch((e) => ({ message: String(e) }));
+  check("a choice that isn't one changes nothing", (await state()).profiles.mem_sal.radarEmail === "weekly", bad);
+  await t.perform("tok-off-0001", { type: "settings", radarEmail: "daily" }, BASE);
+  const vOtto = await t.buildView("tok-off-0001");
+  check("a member who turned both off before: turning the email on leaves Slack off", vOtto.me?.radarEmail === "daily" && vOtto.me.radarSlack === false && !(await state()).profiles.mem_off.radarOff, (await state()).profiles.mem_off);
+  // Sal (weekly, Slack off) just had an email: a new open Sales role at Acme waits for the weekly one.
+  await T.mutate((d) => void Object.assign(radarMember(d, "mem_sal"), { lastMailAt: nowIso(), lastAt: new Date(Date.now() - 2 * DAY).toISOString() }));
+  await t.applyScan(
+    {
+      roles: [...found, role("Echo Energy", "Fractional Head of Marketing", "Marketing", "echo.example"), role("Fox Freight", "Fractional Finance Director", "Finance", "fox.example"), role("Acme Robotics", "Fractional Head of Sales", "Sales", "acme.example")],
+      sources: [{ source: "board", fetched: 6, matched: 6 }],
+    },
+    nowIso(),
+  );
+  await settle();
+  // The Acme Sales role went to Sal: its key is marked sent, and the day kept it at Acme.
+  const finKey = (s: Awaited<ReturnType<typeof state>>) => {
+    const m = s.radar?.members.mem_sal;
+    return Object.values(m?.days ?? {}).flat().some((r) => r.c === "c_acme" && r.k.startsWith("role:") && !!m?.sent[r.k]);
+  };
+  skew += HOUR;
+  clear();
+  await radar.runRadar({ now: nowIso(), force: true });
+  await settle();
+  check("weekly, not due yet: no email and nothing marked sent", !mails("sal.starter@example.com").length && !finKey(await state()), mails().map((x) => x.body.to));
+  // (lastAt too: a member not on Pro gets one Crystal Ball a UTC day, and the funding run above may have sent today's.)
+  await T.mutate((d) => void Object.assign(radarMember(d, "mem_sal"), { lastMailAt: new Date(Date.now() - 8 * DAY).toISOString(), lastAt: new Date(Date.now() - 2 * DAY).toISOString() }));
+  clear();
+  await radar.runRadar({ now: nowIso(), force: true });
+  await settle();
+  const wkMail = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string; html: string } | undefined;
+  check("its day comes: one roll-up with what is new this week", !!wkMail && /\nNEW THIS WEEK\n/.test(wkMail.text) && /new this week/.test(wkMail.text) && /leaning your way this week/.test(wkMail.text) && /Fractional Head of Sales/.test(wkMail.text), wkMail?.text.slice(0, 700));
+  check("Slack off: no post for Sal, while the email went", !radarPosts(SLACK_SAL).length && finKey(await state()) && !!(await state()).radar?.members.mem_sal?.lastMailAt);
+  check("radar_sent says email only", (await state()).signals.filter((x) => x.memberId === "mem_sal" && x.name === "radar_sent").slice(-1)[0]?.where === "email");
+
+  console.log("\nThe unsubscribe link: weekly instead, or off, and never Slack");
+  const psig = radar.radarSig("mem_sal");
+  check("the link says what the email is set to now", (await radar.radarLinkMember(pub("mem_sal"), psig))?.email === "weekly" && (await radar.radarLinkMember(pub("mem_sal"), "nope")) === null);
+  await t.perform("tok-sal-0001", { type: "settings", radarEmail: "daily" }, BASE);
+  await t.perform("tok-sal-0001", { type: "settings", radarSlack: true }, BASE);
+  check("Send it weekly instead", (await radar.setRadarEmail(pub("mem_sal"), psig, "weekly")) && (await state()).profiles.mem_sal.radarEmail === "weekly" && !(await state()).profiles.mem_sal.radarSlackOff);
+  check("Turn it off: the email only, Slack stays on", (await radar.setRadarEmail(pub("mem_sal"), psig, "off")) && ((v) => v.me?.radarEmail === "off" && v.me.radarSlack === true)(await t.buildView("tok-sal-0001")));
+  check("a wrong signature changes nothing", !(await radar.setRadarEmail(pub("mem_sal"), "nope", "weekly")) && (await state()).profiles.mem_sal.radarEmail === "off");
+  // The email off, Slack on: the next new company still posts to Slack, and no email goes.
+  await t.applyScan(
+    {
+      roles: [...found, role("Echo Energy", "Fractional Head of Marketing", "Marketing", "echo.example"), role("Fox Freight", "Fractional Finance Director", "Finance", "fox.example"), role("Acme Robotics", "Fractional Head of Sales", "Sales", "acme.example"), role("Beta Labs", "Fractional CRO", "Sales", "beta.example")],
+      sources: [{ source: "board", fetched: 7, matched: 7 }],
+    },
+    nowIso(),
+  );
+  await settle();
+  skew += DAY;
+  clear();
+  await radar.runRadar({ now: nowIso() });
+  await settle();
+  check("with the email off, Crystal Ball still posts to Slack, and sends no email", radarPosts(SLACK_SAL).length === 1 && /Fractional CRO/.test(radarPosts(SLACK_SAL)[0].raw) && !mails("sal.starter@example.com").length, { posts: radarPosts(SLACK_SAL).length, mails: mails().map((x) => x.body.to) });
 }
 
 main()

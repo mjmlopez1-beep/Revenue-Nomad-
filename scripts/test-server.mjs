@@ -1456,8 +1456,28 @@ section("settings", async () => {
   const ok = await call("GET", `/api/table/unsubscribe?m=${m}&s=${sig}`, { ipAddr: ip(141) });
   if (ok.status !== 200) return skip("unsubscribe link", "the server signs with a different key (set ID_SECRET to its RN_ID_SECRET)");
   check("the unsubscribe link turns the email off", (await E.view()).me.digest === false);
-  check("the page says so, and how to turn it back on", /text\/html/.test(ok.headers.get("content-type") ?? "") && /You're unsubscribed/.test(ok.text) && /Your credits/.test(ok.text), ok.text.slice(0, 200));
+  // Changed: every email setting is on Notifications now (it was under Your credits).
+  check("the page says so, and how to turn it back on", /text\/html/.test(ok.headers.get("content-type") ?? "") && /You're unsubscribed/.test(ok.text) && /Notifications/.test(ok.text) && ok.text.includes('href="/?p=notifications"'), ok.text.slice(0, 200));
   check("the page has no member data", !ok.text.includes(ev.me.email) && !ok.text.includes("Eli"));
+
+  // Crystal Ball's own link (r=radar): a page that offers weekly first, then off; nothing changes until one is picked, and never Slack.
+  const rsig = h(`radar:${ev.me.id}`).slice(0, 22);
+  const rpath = `/api/table/unsubscribe?m=${m}&s=${rsig}&r=radar`;
+  const rpage = await call("GET", rpath, { ipAddr: ip(142) });
+  const rme = (await E.view()).me;
+  check(
+    "the Crystal Ball link offers Send it weekly instead before Turn it off, and changes nothing yet",
+    rpage.status === 200 && rpage.text.indexOf("Send it weekly instead") > 0 && rpage.text.indexOf("Send it weekly instead") < rpage.text.indexOf("Turn it off") && /doesn't change Crystal Ball in Slack/.test(rpage.text) && rme.radarEmail === "daily" && rme.radarSlack === true,
+    [rpage.status, rme.radarEmail],
+  );
+  const form = (v) => fetch(BASE + rpath, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": ip(142) }, body: `do=${v}` });
+  const wk = await form("weekly");
+  const wkText = await wk.text();
+  check("Send it weekly instead: the email comes once a week, Slack unchanged", wk.status === 200 && /comes once a week/.test(wkText) && ((x) => x.radarEmail === "weekly" && x.radarSlack === true)((await E.view()).me), wk.status);
+  const offPost = await fetch(BASE + rpath, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": ip(142) }, body: "List-Unsubscribe=One-Click" });
+  check("a mail app's one-click unsubscribe turns the email off, not Slack", offPost.status === 200 && ((x) => x.radarEmail === "off" && x.radarSlack === true)((await E.view()).me), offPost.status);
+  const badForm = await fetch(`${BASE}/api/table/unsubscribe?m=${m}&s=${rsig.slice(0, 21)}${rsig[21] === "x" ? "y" : "x"}&r=radar`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": ip(142) }, body: "do=weekly" });
+  check("a bad signature changes nothing", badForm.status === 400 && (await E.view()).me.radarEmail === "off");
   const adm = await admin();
   if (adm) check("admins see how many opted out", (await adm.view()).admin.digest.optedOut >= 1);
 });

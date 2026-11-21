@@ -14,15 +14,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconChevron, useToast } from "../ui/shared";
 import { useCopy } from "./Credits";
 import { UseInClaude } from "./UseInClaude";
-import { ProLock, ProRow, ProTag, UpgradeNote, planDay } from "./Billing";
+import { ProRow, UpgradeNote, planDay } from "./Billing";
 import { useUi } from "./ui";
-import type { AlertKind, DestView, IntegrationsView } from "@/lib/notify/types";
+import type { DestView, IntegrationsView } from "@/lib/notify/types";
 import { ClaudeNetworkPrompt, GoogleSection } from "./network/Network"; // [google network]
 import { VoicePrompt } from "./Voice";
 import "./connect.css";
 import "./pages.css";
 import "./integrations.css";
 import { Prop } from "../ui/fractions/lazy";
+import { FEATURE_NAME } from "@/lib/radar/types";
 
 const WEBHOOK_EXAMPLE = JSON.stringify(
   {
@@ -106,26 +107,6 @@ function HookMark() {
       <path d="M6.5 13.5A3 3 0 1 0 10 18h7" />
       <path d="M17 12a3 3 0 1 1 0 6" />
     </svg>
-  );
-}
-
-function Switch({ id, on, onChange, busy }: { id: string; on: boolean; onChange: (next: boolean) => void; busy?: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-labelledby={`${id}-t`}
-      aria-describedby={`${id}-d`}
-      className={`tp-switch${on ? " on" : ""}`}
-      disabled={busy}
-      onClick={() => onChange(!on)}
-    >
-      <span className="tp-switch-track" aria-hidden>
-        <span className="tp-switch-knob" />
-      </span>
-      <span className="tp-switch-l">{on ? "On" : "Off"}</span>
-    </button>
   );
 }
 
@@ -308,24 +289,20 @@ function ManualSlack({ open, children }: { open: boolean; children: ReactNode })
   );
 }
 
-const ALERTS: { key: AlertKind; title: (fn: string | null, saved: number) => string; desc: (fn: string | null, saved: number) => string }[] = [
-  {
-    key: "roles",
-    title: (fn) => (fn && fn !== "Other" ? `New open roles in ${fn}` : "New open roles for your saved views"),
-    desc: (fn, saved) =>
-      `One post after each weekly scan${fn && fn !== "Other" ? ` with the new ${fn} roles` : ""}.${
-        saved ? ` It covers your ${saved === 1 ? "saved view" : `${saved} saved views`} too.` : " Saved views count too, once you have some."
-      }`,
-  },
-  { key: "message", title: () => "New messages", desc: () => "Who wrote, the company it's about and the first lines, with a link to reply, and who joined from your invite. Never an email address." },
-  {
-    key: "seat",
-    title: () => "Someone engages your seat",
-    desc: () => "Another fractional unlocks who held your seat or facts on it, or writes to you about it. We show their function and title, never their name unless they wrote. It's often a chance to talk or partner.",
-  },
-];
-
-export function Integrations({ onBack, onCredits, section, onNetwork }: { onBack: () => void; onCredits: () => void; section?: "claude" | "slack"; onNetwork?: () => void }) {
+export function Integrations({
+  onBack,
+  onCredits,
+  section,
+  onNetwork,
+  onNotifications,
+}: {
+  onBack: () => void;
+  onCredits: () => void;
+  section?: "claude" | "slack";
+  onNetwork?: () => void;
+  /** Notifications: what goes to Slack, and how often, is chosen there (one place for every email and post). */
+  onNotifications?: () => void;
+}) {
   const toast = useToast();
   const copy = useCopy();
   // Billing live only (Me.plan): Pro's alerts locked on Free, marked in the trial.
@@ -387,14 +364,6 @@ export function Integrations({ onBack, onCredits, section, onNetwork }: { onBack
     if (r.error) return r.error;
     if (r.message && r.message !== "Saved.") toast(r.message);
     return null;
-  };
-  const setAlert = (k: AlertKind, on: boolean) => {
-    if (!view) return;
-    setView({ ...view, alerts: { ...view.alerts, [k]: on } }); // shown at once, put back if it fails
-    void call({ op: "alerts", [k]: on }).then((r) => {
-      if (r.view) setView(r.view);
-      if (r.error) toast(r.error, true);
-    });
   };
   const jump = (el: HTMLElement | null) => el?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 
@@ -527,31 +496,18 @@ export function Integrations({ onBack, onCredits, section, onNetwork }: { onBack
             </section>
 
             {anyOn && (
-              <section className="tp-card in-card" aria-labelledby="in-alerts-h">
-                <h3 className="tp-card-h" id="in-alerts-h">
-                  What you get alerts for
-                </h3>
-                <ul className="in-alerts">
-                  {ALERTS.map((a) => {
-                    // Every alert but the weekly roles post is Pro's: locked in place on Free, marked in the trial.
-                    const pro = a.key !== "roles" && !!plan && plan.name !== "pro";
-                    const locked = pro && plan!.name === "free";
-                    return (
-                      <li key={a.key} className={`in-alert${locked ? " locked" : ""}`}>
-                        <div className="in-alert-t">
-                          <span className="in-alert-h" id={`in-a-${a.key}-t`}>
-                            {a.title(view.function, view.savedViews)} {pro && !locked && <ProTag plan={plan} />}
-                          </span>
-                          <span className="in-alert-d" id={`in-a-${a.key}-d`}>
-                            {a.desc(view.function, view.savedViews)}
-                          </span>
-                        </div>
-                        {locked ? <ProLock from="slack" what={a.title(view.function, view.savedViews)} /> : <Switch id={`in-a-${a.key}`} on={view.alerts[a.key]} onChange={(on) => setAlert(a.key, on)} />}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <p className="in-hint">At most one post of each kind every 15 minutes. When more happen, they come together in one post with a count.</p>
+              <section className="tp-card in-card in-to-nt" aria-labelledby="in-alerts-h">
+                <div>
+                  <h3 className="tp-card-h" id="in-alerts-h">
+                    What you get alerts for
+                  </h3>
+                  <p className="cr-note">Choose which alerts come to Slack, and {FEATURE_NAME} apart from its email, in Notifications.</p>
+                </div>
+                {onNotifications && (
+                  <button type="button" className="btn" onClick={onNotifications}>
+                    Open Notifications
+                  </button>
+                )}
               </section>
             )}
 

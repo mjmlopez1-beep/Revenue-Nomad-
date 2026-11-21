@@ -6,8 +6,10 @@
  * Both list the day's signals most likely first (the email up to EMAIL_CARDS, Slack up to
  * SLACK_CARDS, then "And N more"), each with its band and why-now line, and leave Low out (it stays
  * on the page). The email sets them as cards under a Fractions hero, new events first, then the
- * ones still a good time (its layout is described above renderRadarEmail). Every link in the email, the cards' and the button's, opens the day's companies in
- * the app, where each locked one unlocks right on its row. Slack lays the cards out one company a
+ * ones still a good time (its layout is described above renderRadarEmail). Each card's button opens
+ * its own company's record from that day's Crystal Ball (RadarCard.open), with the plan's free open
+ * ready there; the button under the cards opens the day's companies. Every link signs the member
+ * in once (lib/emailIn.ts, added by the run). Slack lays the cards out one company a
  * block (radarEntry): there a company the card names also links to its record, and one the member's
  * table shows has its logo; a locked one has neither, and its button opens the day's companies.
  */
@@ -15,7 +17,7 @@ import { MAIL, escHtml as esc, footerNote, mailButton, oneLine } from "../email"
 import { HERO_ART, LOCKUP_ART, artOrigin, artShell, iconArt, mailImg, type IconArt } from "../emailArt";
 import { COMPANY_PRICE_SAY } from "../tableFields";
 import type { Alert, AlertEntry } from "../notify/format";
-import { FEATURE_NAME, RADAR_STILL, YOUR_FEATURE, type RadarBand, type RadarCard, type RadarDay, type RadarItem, type RadarKind } from "./types";
+import { FEATURE_NAME, RADAR_STILL, YOUR_FEATURE, type RadarBand, type RadarCard, type RadarDay, type RadarEvery, type RadarItem, type RadarKind } from "./types";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const companies = (n: number) => plural(n, "company", "companies");
@@ -23,10 +25,15 @@ const companies = (n: number) => plural(n, "company", "companies");
 export const SLACK_CARDS = 5;
 /** How many cards the email lists before "And N more". */
 export const EMAIL_CARDS = 10;
-export const RADAR_FOOTER = `${FEATURE_NAME} from Merlin. Turn it off in Your profile.`;
+export const RADAR_FOOTER = `${FEATURE_NAME} from Merlin. Choose what posts here in Notifications.`;
 
 /** The button: "See the company", "See the 2 companies". */
 export const seeWords = (n: number) => (n === 1 ? "See the company" : `See the ${companies(n)}`);
+/**
+ * The email's button for the whole list: "See all 3 companies", "See both companies", or with one
+ * company (its card already opens it) "Open Crystal Ball".
+ */
+export const seeAllWords = (n: number) => (n <= 1 ? `Open ${FEATURE_NAME}` : n === 2 ? "See both companies" : `See all ${n} companies`);
 /** "And 3 more." */
 const moreWords = (n: number) => `And ${plural(n, "more signal")}.`;
 
@@ -165,6 +172,10 @@ export interface RadarMail {
   day: RadarDay;
   /** The radar's own unsubscribe link (signed for the member). */
   unsubscribeUrl: string;
+  /** Notifications in the app, signed in (lib/emailIn.ts): where the member picks how often it comes. */
+  settingsUrl?: string;
+  /** How often the member gets it (Notifications): a twice-a-week or weekly email counts what is new since the last one. */
+  every?: RadarEvery;
   /** A 1 by 1 image that counts the email as opened, or "". */
   openPixel?: string;
   /** The app: the site the pictures load from (else RN_PUBLIC_URL). */
@@ -180,8 +191,14 @@ export const OPEN_ONE_LINE = `Locked for you: open it in Merlin, free from your 
 export const openLine = (c: Pick<RadarCard, "locked" | "opens">): string | null =>
   c.opens === "free" ? OPEN_FREE_LINE : c.opens === "one" ? OPEN_ONE_LINE : c.locked ? lockedLine : null;
 
-/** The card's button: "Open free" where the plan opens it at no cost (the run decides: `opens`), else "Open in Merlin". */
-export const openButton = (c: Pick<RadarCard, "opens">) => (c.opens ? "Open free" : "Open in Merlin");
+/** Free's button on the one company of the day the email offers free: the first card that opens that way. */
+export const OPEN_TODAYS = "Open free (today's)";
+/**
+ * The card's button: "Open free" on Trial and Pro (every Crystal Ball company opens free, `opens`
+ * "free"); on Free, "Open free (today's)" on the first card only (`first`: one company a day opens
+ * free), "Open in Merlin" on the rest and on every other card.
+ */
+export const openButton = (c: Pick<RadarCard, "opens">, first = true) => (c.opens === "free" ? "Open free" : c.opens === "one" && first ? OPEN_TODAYS : "Open in Merlin");
 /**
  * How a company opens, in the email's words: said once above the cards when every card that needs
  * it says the same (the usual case: one plan), else beside each card's button. Null for a company
@@ -268,16 +285,19 @@ export function dayWords(day: string): string {
 }
 
 /** The hero's headline: "3 companies are leaning your way today", or on a day with nothing new "2 companies are still worth a look". */
-export function heroWords(d: RadarDay): string {
+export function heroWords(d: RadarDay, every: RadarEvery = "daily"): string {
   const { moved, still } = movedOf(d);
   const n = moved + still;
-  return moved ? `${companies(n)} ${n === 1 ? "is" : "are"} leaning your way today` : `${companies(still)} ${still === 1 ? "is" : "are"} still worth a look`;
+  const when = every === "daily" ? " today" : every === "weekly" ? " this week" : "";
+  return moved ? `${companies(n)} ${n === 1 ? "is" : "are"} leaning your way${when}` : `${companies(still)} ${still === 1 ? "is" : "are"} still worth a look`;
 }
+/** Since when the email counts what is new: "since yesterday", "since your last email" (twice a week), "this week". */
+const sinceWords = (every: RadarEvery) => (every === "daily" ? "since yesterday" : every === "weekly" ? "this week" : "since your last email");
 /** "2 new · 1 still a good time", "3 new since yesterday", or "Nothing new since yesterday" (the headline counts what is still a good time). */
-export function countWords(d: RadarDay): string {
+export function countWords(d: RadarDay, every: RadarEvery = "daily"): string {
   const { moved, still } = movedOf(d);
-  if (!moved) return "Nothing new since yesterday";
-  return still ? `${moved} new · ${still} still a good time` : `${moved} new since yesterday`;
+  if (!moved) return `Nothing new ${sinceWords(every)}`;
+  return still ? `${moved} new · ${still} still a good time` : `${moved} new ${sinceWords(every)}`;
 }
 
 const CHIP: Record<RadarBand, { bg: string; ink: string; cls: string }> = {
@@ -299,11 +319,18 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
   const fresh = shown.filter((c) => !isStill(c));
   const still = shown.filter(isStill);
   const rest = n - shown.length;
-  const button = seeWords(d.companies);
-  const hero = heroWords(d);
-  const count = countWords(d);
+  const every = m.every ?? "daily";
+  const button = seeAllWords(d.companies);
+  const hero = heroWords(d, every);
+  const count = countWords(d, every);
   const date = dayWords(d.day);
-  const why = "You get this when a company in your Ideal Fractional Profile moves. Turn it off in Your profile, or with the link below.";
+  const freshTitle = `New ${sinceWords(every)}`;
+  // Free: only the first card that opens as today's free one says so.
+  const todays = shown.find((c) => c.opens === "one");
+  const label = (c: RadarCard) => openButton(c, c === todays);
+  const href = (c: RadarCard) => c.open ?? c.url;
+  const settingsUrl = m.settingsUrl ?? "";
+  const why = `You get this when a company in your Ideal Fractional Profile moves.${settingsUrl ? " Choose how often in Notifications, or turn it off with the link below." : " Turn it off with the link below."}`;
   const note = footerNote();
   const stillIntro = "Nothing new happened at these, and the timing still fits.";
   const lead = shown[0] ? `${companyLine(shown[0])}: ${lowerFirst(cardLines(shown[0]).fact)}` : "";
@@ -323,7 +350,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
       reason,
       ...(factLine(c) ? [factLine(c)] : []),
       ...(!oneNote && openNote(c) ? [openNote(c)!] : []),
-      `${openButton(c)}: ${c.url}`,
+      `${label(c)}: ${href(c)}`,
       "",
     ];
   };
@@ -334,7 +361,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
     [date, count].filter(Boolean).join(" · "),
     ...(oneNote ? [oneNote] : []),
     "",
-    ...(fresh.length ? ["NEW SINCE YESTERDAY", "", ...fresh.flatMap(textCard)] : []),
+    ...(fresh.length ? [freshTitle.toUpperCase(), "", ...fresh.flatMap(textCard)] : []),
     ...(still.length ? ["STILL A GOOD TIME", stillIntro, "", ...still.flatMap(textCard)] : []),
     ...(rest > 0 ? [moreWords(rest), ""] : []),
     button,
@@ -342,6 +369,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
     "",
     "--",
     why,
+    ...(settingsUrl ? ["Notifications", settingsUrl] : []),
     `To stop the ${FEATURE_NAME} emails, open this link`,
     m.unsubscribeUrl,
     ...(note ? [note] : []),
@@ -391,7 +419,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
 <p class="cb-muted" style="margin:0 0 ${facts ? 6 : 14}px;font-family:${F};font-size:14px;line-height:20px;color:${MAIL.muted}">${esc(reason)}</p>
 ${facts ? `<p class="cb-muted" style="margin:0 0 14px;font-family:${F};font-size:12px;line-height:18px;color:${MAIL.muted}">${facts.split(" · ").map((x) => `<span style="white-space:nowrap">${esc(x)}</span>`).join(" · ")}</p>` : ""}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-<td class="cb-btn" bgcolor="${quiet ? MAIL.voltSoft : MAIL.pine}" style="border-radius:8px;background-color:${quiet ? MAIL.voltSoft : MAIL.pine}"><a href="${esc(c.url)}" style="display:inline-block;padding:9px 16px;font-family:${F};font-size:14px;line-height:18px;font-weight:700;color:${quiet ? MAIL.pine : "#FFFFFF"};text-decoration:none;border-radius:8px">${esc(openButton(c))}</a></td>
+<td class="cb-btn" bgcolor="${quiet ? MAIL.voltSoft : MAIL.pine}" style="border-radius:8px;background-color:${quiet ? MAIL.voltSoft : MAIL.pine}"><a href="${esc(href(c))}" style="display:inline-block;padding:9px 16px;font-family:${F};font-size:14px;line-height:18px;font-weight:700;color:${quiet ? MAIL.pine : "#FFFFFF"};text-decoration:none;border-radius:8px">${esc(label(c))}</a></td>
 ${how ? `<td class="cb-muted" style="padding-left:12px;font-family:${F};font-size:12px;line-height:16px;color:${MAIL.muted}">${esc(how)}</td>` : ""}
 </tr></table>
 </td>
@@ -410,7 +438,7 @@ ${how ? `<td class="cb-muted" style="padding-left:12px;font-family:${F};font-siz
 </td></tr>`;
   };
   const cards = [
-    ...(fresh.length ? [group("new", "New since yesterday", null), ...fresh.map((c) => card(c, false))] : []),
+    ...(fresh.length ? [group("new", freshTitle, null), ...fresh.map((c) => card(c, false))] : []),
     ...(still.length ? [`<tr><td style="padding:${fresh.length ? 16 : 0}px 0 0"></td></tr>`, group("still", "Still a good time", stillIntro), ...still.map((c) => card(c, true))] : []),
   ].join("\n");
   const body = `<tr><td class="cb-gut" style="padding:${oneNote ? 18 : 28}px 24px 8px">
@@ -428,7 +456,16 @@ ${m.openPixel ? `<img src="${esc(m.openPixel)}" width="1" height="1" alt="" styl
     preheader,
     top,
     body,
-    footer: [esc(why), `<a href="${esc(m.unsubscribeUrl)}" style="color:${MAIL.muted};text-decoration:underline">Unsubscribe from ${esc(FEATURE_NAME)} emails</a>`, note ? esc(note) : ""],
+    footer: [
+      esc(why),
+      [
+        settingsUrl ? `<a href="${esc(settingsUrl)}" style="color:${MAIL.muted};text-decoration:underline">Notifications</a>` : "",
+        `<a href="${esc(m.unsubscribeUrl)}" style="color:${MAIL.muted};text-decoration:underline">Unsubscribe from ${esc(FEATURE_NAME)} emails</a>`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      note ? esc(note) : "",
+    ],
   });
   return { subject, text, html };
 }

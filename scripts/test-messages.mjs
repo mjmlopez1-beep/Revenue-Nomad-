@@ -178,6 +178,12 @@ async function main() {
   check("it links to the conversation with a one-time sign-in link", !!once && once[2] === encodeURIComponent(convId) && m0.html.includes("Read and reply") && m0.html.includes(`?k=${once[1]}&amp;p=messages`), m0?.text.slice(-500));
   check("the footer says replies to the email don't reach them", !!m0 && m0.text.includes("Replies to this email don't reach them. Reply on Merlin.") && m0.html.includes("Replies to this email don&#39;t reach them") || m0?.html.includes("Replies to this email don't reach them"));
   check("the text version says link, not button", !!m0 && /link/.test(m0.text) && !/button/i.test(m0.text), m0?.text);
+  // Changed: the footer used to say "Turn them off in Your credits". The switch is on Notifications now, linked, signed in.
+  check(
+    "the footer turns them off in Notifications, with a signed link there",
+    !!m0 && m0.text.includes("Turn them off in Notifications on Merlin.") && !/Your credits/.test(m0.text + m0.html) && /\nNotifications\nhttps:\/\/post\.example\.com\/api\/go\?m=[^\s]+&to=%2F%3Fp%3Dnotifications\n/.test(m0.text) && />Notifications<\/a>/.test(m0.html),
+    m0?.text.slice(-500),
+  );
   {
     const si = await import("../lib/signin");
     const rec = (await t.loadState()).signins?.find((x) => x.purpose === "message");

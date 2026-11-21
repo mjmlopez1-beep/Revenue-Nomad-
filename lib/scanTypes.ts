@@ -120,6 +120,19 @@ export interface DigestData {
   alerts?: { name: string; n: number }[];
   appUrl: string;
   unsubscribeUrl: string;
+  /** Notifications in the app, signed in (lib/emailIn.ts): the footer's link. */
+  settingsUrl?: string;
+  /** Your seats, signed in: the "still missing on your seats" line's link. */
+  seatsUrl?: string;
+  /** Your credits, signed in: the low-credits line's link. */
+  creditsUrl?: string;
+  /**
+   * How a locked company opens for the member, so the email says it as their plan does: "pro"
+   * (Trial and Pro: the first company each day free, and any Crystal Ball company free), "free" (the
+   * Free plan: 2 credits), "day" (billing off: the first company each day free, then 2 credits).
+   * Absent: 2 credits.
+   */
+  unlock?: "pro" | "free" | "day";
   /**
    * The list the headline counts, in the app: Hiring now in the member's function with the
    * profile off, newest first (every function when the headline counts every new role).

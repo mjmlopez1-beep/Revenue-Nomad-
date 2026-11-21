@@ -93,11 +93,13 @@ const pageWait = () => (
 );
 const loadAdd = () => import("./AddModal");
 const loadIntegrations = () => import("./Integrations");
+const loadNotifications = () => import("./Notifications");
 const loadBenchmarks = () => import("./Benchmarks");
 const loadFractionals = () => import("./Fractionals");
 const loadAdmin = () => import("./Admin");
 const AddModal = dynamic(() => loadAdd().then((m) => m.AddModal), { ssr: false });
 const Integrations = dynamic(() => loadIntegrations().then((m) => m.Integrations), { ssr: false, loading: pageWait });
+const Notifications = dynamic(() => loadNotifications().then((m) => m.Notifications), { ssr: false, loading: pageWait });
 const Benchmarks = dynamic(() => loadBenchmarks().then((m) => m.Benchmarks), { ssr: false, loading: pageWait });
 const Fractionals = dynamic(() => loadFractionals().then((m) => m.Fractionals), { ssr: false, loading: pageWait });
 const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
@@ -200,7 +202,8 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // [google network] "network": Your network (app/post/network), only with RN_GOOGLE=1.
 // "today": Today (Today.tsx), the home for / with no place in the address. It sits level with the table (no history entry above it).
 // "fractionals": Fractionals (Fractionals.tsx). "partners", Referral partners' old address, opens it with Different from yours.
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network" | "fractionals";
+// "notifications": Notifications (Notifications.tsx): every email and Slack post, and how often.
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals";
 
 /* ---------- the place in the address bar ---------- */
 
@@ -214,6 +217,7 @@ const PAGE_TITLE: Record<Page, string> = {
   metrics: "Pilot metrics",
   messages: "Messages",
   integrations: "Integrations",
+  notifications: "Notifications",
   partners: "Fractionals",
   fractionals: "Fractionals",
   billing: "Plan and billing",
@@ -345,7 +349,15 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /** Hiring now leads with the member's function (theirs only, until "Show all functions"). */
   const hireFn = tab === "hiring" ? namedFn(me.function) : null;
   const [limit, setLimit] = useState(PAGE);
-  const [page, setPage] = useState<Page>(() => (start === "seats" ? "seats" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table")));
+  /**
+   * A Crystal Ball email's card (?sig=<day>&c=<id>, lib/radar/types radarOpenPath): that company's record,
+   * opened over that day's companies as if from the page, so its Open is Crystal Ball's (free on Trial and
+   * Pro, today's one on Free) and closing it shows the day. A company not on file opens the day alone.
+   */
+  const [deepRadar] = useState(() => place0.p === "radar" && !!place0.c && start !== "seats" && view.companies.some((c) => c.id === place0.c));
+  const [page, setPage] = useState<Page>(() =>
+    start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"),
+  );
   /** The page level with the table under a record or a page (Today or the table): where Back and a page's own Back go. */
   const baseRef = useRef<"today" | "table">(page === "today" ? "today" : "table");
   if (page === "today" || page === "table") baseRef.current = page;
@@ -364,7 +376,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /* ----- overlays ----- */
   // A link or a reload with ?c= opens that company's record at once (its row is found on mount).
   const [drawer, setDrawer] = useState<DrawerState | null>(() =>
-    place0.c && !place0.p && start !== "seats" && view.companies.some((c) => c.id === place0.c) ? { id: place0.c, rowKey: place0.c, focus: null } : null,
+    deepRadar
+      ? { id: place0.c!, rowKey: place0.c!, focus: null, returnTo: "radar" }
+      : place0.c && !place0.p && start !== "seats" && view.companies.some((c) => c.id === place0.c)
+        ? { id: place0.c, rowKey: place0.c, focus: null }
+        : null,
   );
   const [addOpts, setAddOpts] = useState<AddOpts | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -693,7 +709,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [radarRange, setRadarRange] = useState<RadarRange | null>(place0.range ?? null);
   /** A day, or none (the range picked, or the default): picking one clears the other. */
   const setSigDay = useCallback((d: string | null, r: RadarRange | null = null) => (setSigDayRaw(d), setRadarRange(d ? null : r)), []);
-  const radar = useRadarDay(page === "radar", sigDay, radarRange, [me.function, me.icp, me.before]);
+  // A record opened from Crystal Ball (or an email's card straight to it) keeps the day's companies loaded: its Open reads them.
+  const radar = useRadarDay(page === "radar" || drawer?.returnTo === "radar", sigDay, radarRange, [me.function, me.icp, me.before]);
   // [google network] Crystal Ball cut to the companies where the member knows someone (the connect moment's button).
   const [radarKnow, setRadarKnow] = useState(false);
   // [google network] Your network opened at one of its parts (Crystal Ball's "Where you know someone" leads to its warm paths), for that visit.
@@ -957,6 +974,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     setEditor(null);
     setPop(null);
     setDrawer(null);
+    // From a sheet (Your profile's Crystal Ball line opens Notifications): the sheet closes for the page.
+    setIcpOpen(false);
     setPage(p === "metrics" && !view.admin ? "table" : p);
   });
   const openSeats = useStable((engagementId?: string) => {
@@ -1298,6 +1317,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       if (drawer) openCompany(place0.c);
       else toast("That company link didn't open anything we have on file. Here is the table instead.");
     }
+    // An email's card: find the company's row for "3 of 72", keeping Crystal Ball as where it came from.
+    if (deepRadar && drawer) openCompany(place0.c!);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -2551,11 +2572,15 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </main>
         ) : page === "credits" ? (
           <main className="tp-main tp-main-page">
-            <MyCredits view={view} onBack={toBase} refresh={refresh} onUseInClaude={() => setPage("integrations")} />
+            <MyCredits view={view} onBack={toBase} refresh={refresh} onUseInClaude={() => setPage("integrations")} onNotifications={() => setPage("notifications")} />
           </main>
         ) : page === "integrations" ? (
           <main className="tp-main tp-main-page">
-            <Integrations onBack={toBase} onCredits={() => setPage("credits")} section={claudeLink ? "claude" : undefined} onNetwork={() => setPage("network")} />
+            <Integrations onBack={toBase} onCredits={() => setPage("credits")} section={claudeLink ? "claude" : undefined} onNetwork={() => setPage("network")} onNotifications={() => setPage("notifications")} />
+          </main>
+        ) : page === "notifications" ? (
+          <main className="tp-main tp-main-page">
+            <Notifications view={view} onBack={toBase} onIntegrations={() => setPage("integrations")} />
           </main>
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
@@ -2971,6 +2996,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             // The account only: every page is in the sidebar (or the tab bar and More).
             items={[
               { label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
+              // Every email and Slack post, and how often (the sidebar's foot has it too).
+              { label: "Notifications", current: page === "notifications", onClick: () => openPage("notifications") },
               // One way to get signed in elsewhere: emailed when email is on, else the link copied.
               view.email
                 ? { label: "Email me a sign-in link", onClick: () => void emailMeLink(toast) }

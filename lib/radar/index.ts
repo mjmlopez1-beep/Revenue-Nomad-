@@ -12,14 +12,23 @@
  *
  * Every member gets every signal: a company's name is locked for everyone until they unlock it,
  * so nothing here is held back by plan. Each card names the company only when the member's table
- * does (Trial and Pro aside: they see every name), and every link (the cards' and the button) opens
- * the day's companies in the app (radarPath: /?p=table&sig=<day>), where each locked one opens on
- * its row: free on Trial and Pro, one a day in full on Free, COMPANY_PRICE with billing off
- * (crystalCompanyIds is what the server checks; lib/table.ts crystalOf the plan's rule).
+ * does (Trial and Pro aside: they see every name). In the email each card opens its own company's
+ * record over that day's companies (RadarCard.open, radarOpenPath: /?sig=<day>&c=<id>), where it opens
+ * as on the page: free on Trial and Pro, today's one in full on Free, COMPANY_PRICE with billing off
+ * (crystalCompanyIds is what the server checks; lib/table.ts crystalOf the plan's rule). The button
+ * under the cards opens the day's companies (radarPath: /?p=table&sig=<day>). Every link in the email
+ * signs the member in once (lib/emailIn.ts); Slack's never do, a channel being shared.
  * In Slack a named company also links to its record, and one the member knows shows its logo.
  * Plans (lib/plan.ts) change delivery only: Pro (and the trial) get signals at once, when a scan or
  * a change to a seat makes one, in the next alert batch with Slack or a webhook (radarInstant);
  * everyone else gets one radar a UTC day. With billing off nobody is on Pro.
+ *
+ * What the member chose (Notifications, lib/radar/types radarPrefs): the email every morning, twice a
+ * week (Monday and Thursday) or once a week (Monday), or off, and Crystal Ball in Slack on or off,
+ * apart. A twice-a-week or weekly email waits for its day (radarEmailDue), and what moved meanwhile
+ * stays unsent, so its email rolls it up (up to RADAR_ROLLUP_MAX companies). Slack keeps its own pace.
+ * Nothing goes out, by email or Slack, on a day with no new company for the member: a day with only
+ * standing states ("still a good time") is kept for the page, not sent (keepForView).
  *
  * The day's view (radarView): the companies that went out that UTC day, as kept with the delivery
  * (State.radar.members[id].days, RADAR_KEEP_VIEW_DAYS: 31 days), so the email's link opens exactly
@@ -43,8 +52,8 @@
  *
  * Product signals (State.signals): radar_sent (one per delivery, where = email, slack, email+slack
  * or instant), radar_opened (the email's pixel, or the day's view in the app), radar_clicked (a
- * link in the email or Slack, through /api/radar/go), radar_off (Your profile, or the email's
- * unsubscribe link).
+ * link in the email or Slack, through /api/radar/go), radar_off (the email turned off: Notifications,
+ * Your profile's old switch, or the email's unsubscribe link).
  */
 import { createHmac, timingSafeEqual } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
@@ -63,9 +72,10 @@ import { renderRadarEmail } from "./format";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import { isDue, settingOf } from "../schedule";
 import {
-  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarPath, radarRangeOf,
-  type RadarDay, type RadarRange, type RadarSentRow, type RadarState, type RadarView,
+  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_ROLLUP_MAX, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarEmailDue, radarOpenPath, radarPath, radarPrefs, radarRangeOf,
+  type RadarDay, type RadarEmail, type RadarRange, type RadarSentRow, type RadarState, type RadarView,
 } from "./types";
+import { NOTIFICATIONS_PATH, emailLinker, grantQuery, safePath } from "../emailIn";
 
 const DAY = 24 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
@@ -97,12 +107,9 @@ const coId = (memberId: string, companyId: string) => createHmac("sha256", T.ID_
 
 /**
  * A path the click link may send to: the app's root with a query, nothing else (no open
- * redirect). The day's companies (/?p=table&sig=2026-11-19) are one.
+ * redirect). The day's companies (/?p=table&sig=2026-11-19) and a card's company are two (lib/emailIn.ts).
  */
-export const safePath = (to: unknown): string | null => {
-  const v = String(to ?? "");
-  return /^\/(\?[A-Za-z0-9_\-.~%=&:+,]*)?$/.test(v) && v.length <= 300 ? v : null;
-};
+export { safePath };
 
 /**
  * Where a sign-in link returns to (POST { emailLink, to }): the page the visitor asked from, a
@@ -121,11 +128,19 @@ export function returnQuery(to: unknown): string {
 /** The radar email's own unsubscribe link (the weekly email's route, with r=radar and the radar's signature). */
 export const radarUnsubscribeUrl = (base: string, memberId: string) => `${base}/api/table/unsubscribe?m=${encodeURIComponent(T.pubId(memberId))}&s=${radarSig(memberId)}&r=radar`;
 
-/** Absolute, tracked links for one channel: each card's link and the button go through /api/radar/go. */
-function tracked(day: RadarDay, base: string, memberId: string, w: "email" | "slack"): RadarDay {
+/**
+ * Absolute, tracked links for one channel: each card's links and the button go through
+ * /api/radar/go. `grant` (the email only, never Slack, which a channel shares): each link also
+ * signs the member in, once (lib/emailIn.ts grantQuery).
+ */
+function tracked(day: RadarDay, base: string, memberId: string, w: "email" | "slack", grant?: (path: string) => string): RadarDay {
   const q = `m=${encodeURIComponent(T.pubId(memberId))}&s=${radarSig(memberId)}&w=${w}`;
-  const go = (path: string) => `${base}/api/radar/go?${q}&to=${encodeURIComponent(path)}`;
-  return { ...day, url: go(day.url), cards: day.cards.map((c) => ({ ...c, url: go(c.url), ...(c.place ? { place: go(c.place) } : {}) })) };
+  const go = (path: string) => `${base}/api/radar/go?${q}${grant ? `&${grant(path)}` : ""}&to=${encodeURIComponent(path)}`;
+  return {
+    ...day,
+    url: go(day.url),
+    cards: day.cards.map((c) => ({ ...c, url: go(c.url), ...(c.place ? { place: go(c.place) } : {}), ...(c.open ? { open: go(c.open) } : {}) })),
+  };
 }
 
 /* ---------- who has a radar ---------- */
@@ -179,8 +194,8 @@ function cardContext(c: Ctx, m: Member, day: string, logos: Map<string, string> 
   // Trial and Pro: every card names its company, free. Naming it on the card doesn't make it theirs
   // or charge: the table keeps it locked, and its people and seat holders still need their own unlocks.
   const pro = isPro(c.s, m.id, c.nowMs);
-  // Free (trial over, billing live): one Crystal Ball company a day opens in full, free. Billing off: neither.
-  const free = gated(planRecord(c.s, m.id), c.nowMs);
+  // Free (trial over, billing live): one Crystal Ball company a day opens in full, free, while today's is left. Billing off: neither.
+  const free = gated(planRecord(c.s, m.id), c.nowMs) && T.crystalOf(c.s, m.id, c.nowMs) === "one";
   return {
     // The member's own table, as a member: a company locked for them stays unnamed (an admin's too), unless they are on Pro.
     visible: (companyId) => pro || knownTo(c, m, companyId),
@@ -191,6 +206,8 @@ function cardContext(c: Ctx, m: Member, day: string, logos: Map<string, string> 
     url: radarPath(day),
     known: (companyId) => knownTo(c, m, companyId),
     place: (companyId) => `/?c=${encodeURIComponent(T.pubId(companyId))}`,
+    // The email's card: the company's record, opened from this day's Crystal Ball (its free open ready, as on the page).
+    open: (companyId) => radarOpenPath(day, T.pubId(companyId)),
     logo: (companyId) => logos.get(companyId) ?? null,
   };
 }
@@ -245,6 +262,16 @@ function markSent(d: State, memberId: string, sigs: MemberSignal[], nowIso: stri
   mine.lastAt = nowIso;
   mine.lastCount = sigs.length;
   mine.lastVia = via;
+}
+
+/**
+ * A day nothing new went out (only companies still a good time): no email, no post, nothing marked
+ * sent, but the day's view keeps them, so the page lists them today.
+ */
+function keepForView(d: State, memberId: string, rows: MemberSignal[], nowIso: string) {
+  const mine = (radarOf(d).members[memberId] ??= { sent: {} });
+  const kept = ((mine.days ??= {})[nowIso.slice(0, 10)] ??= []);
+  for (const x of rows) if (!kept.some((y) => y.k === x.key) && kept.length < DAY_ROWS_MAX) kept.push(sentRow(x));
 }
 
 /** Funding events' companies with no ownership on file become VC-backed (by "scan": nobody earned for it, and a member can correct it). */
@@ -394,7 +421,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   // A range reads most likely first, then newest (rows come newest day first; the sort keeps that order within a band).
   if (range) rows.sort((a, b) => bandOrder(a.band) - bandOrder(b.band));
   return {
-    on: !s.profiles[m.id]?.radarOff,
+    on: ((x) => x.email !== "off" || x.slack)(radarPrefs(s.profiles[m.id])),
     ready,
     ...(ready && icpIsEmpty(p.icp) ? { anyCompany: true } : {}),
     function: p.fn,
@@ -489,43 +516,55 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   const mailOn = emailEnabled();
   for (const m of c.idx.all) {
     try {
-      if (s0.profiles[m.id]?.radarOff || !signedIn(c, m.id)) continue;
-      const email = mailOn && EMAIL_RE.test(m.email);
-      const slack = hasDest(s0, m.id);
+      if (!signedIn(c, m.id)) continue;
+      // Notifications: how often the email comes (daily, twice a week, weekly or off), and Crystal Ball in Slack on or off, apart.
+      const prefs = radarPrefs(s0.profiles[m.id]);
+      const mem = s0.radar?.members?.[m.id];
+      const emailOn = mailOn && EMAIL_RE.test(m.email) && prefs.email !== "off";
+      const every = prefs.email === "off" ? "daily" : prefs.email;
+      // A twice-a-week or weekly email waits for its day; what moved meanwhile stays unsent, so the next one rolls it up.
+      const email = emailOn && radarEmailDue(every, mem?.lastMailAt, nowMs);
+      const slack = hasDest(s0, m.id) && prefs.slack;
       if (!email && !slack) continue;
       const p = readyProfile(c, m);
       if (!p) continue;
       const pro = isPro(s0, m.id, nowMs);
       // A free member gets one radar a UTC day, even when an admin sends one again.
-      const last = s0.radar?.members?.[m.id]?.lastAt;
+      const last = mem?.lastAt;
       if (!pro && last && last.slice(0, 10) === today && Date.parse(last) < nowMs) continue;
       const sent = sentKeys(s0, m.id);
       const mine = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
-      // The day (pickDaily): High and Medium events, at most RADAR_DAY_MAX companies, filled with standing states to
-      // RADAR_DAY_MIN when fewer fresh events reach them; no company twice inside 30 days unless something new happened.
+      // The day (pickDaily): High and Medium events, at most RADAR_DAY_MAX companies (a roll-up email more, RADAR_ROLLUP_MAX),
+      // filled with standing states to RADAR_DAY_MIN when fewer fresh events reach them; no company twice inside 30 days unless something new happened.
       const still = signalsFor(standing, p, { counts, nowMs });
-      const picked = pickDaily(mine, still, { sent, shown: s0.radar?.members?.[m.id]?.shown }, nowMs);
+      const picked = pickDaily(mine, still, { sent, shown: mem?.shown }, nowMs, RADAR_ROLLUP_MAX[email ? every : "daily"]);
       const out_ = picked.send;
       // Low stays on the page: the day's companies keep what went out and this run's other events.
       const rows = [...out_, ...mine.filter((x) => x.atMs > sinceMs && !out_.includes(x))];
+      // Nothing new for them (only companies that are still a good time): no email and no post. The page still lists them today.
+      if (!picked.fromEvents) {
+        if (out_.length) await T.mutate((d) => keepForView(d, m.id, rows, nowIso));
+        continue;
+      }
       const day = dayOf(out_, cardContext(c, m, today, slack ? await logosFor(c, m, out_) : undefined), "daily", today);
       if (!day) continue;
       // Someone may have turned it off while the run was going.
-      const s1 = await loadState();
-      if (s1.profiles[m.id]?.radarOff) continue;
+      const now1 = radarPrefs((await loadState()).profiles[m.id]);
       const via: string[] = [];
-      if (email) {
+      if (email && now1.email !== "off") {
         const unsubscribeUrl = radarUnsubscribeUrl(base, m.id);
         const mail = renderRadarEmail({
           name: m.name,
-          day: tracked(day, base, m.id, "email"),
+          day: tracked(day, base, m.id, "email", (path) => grantQuery(seed, s0, m.id, path, nowMs)),
           unsubscribeUrl,
+          settingsUrl: emailLinker(seed, s0, m.id, base, nowMs)(NOTIFICATIONS_PATH),
           openPixel: `${base}/api/radar/open?m=${encodeURIComponent(T.pubId(m.id))}&s=${radarSig(m.id)}`,
           appUrl: base,
+          every,
         });
         if (await sendEmail(m.email, mail.subject, mail.text, mail.html, { unsubscribeUrl })) (via.push("email"), out.emails++);
       }
-      if (slack) {
+      if (slack && now1.slack) {
         await deliver(m.id, { kind: "radar", at: nowIso, day: tracked(day, base, m.id, "slack") });
         via.push("slack");
         out.slack++;
@@ -537,6 +576,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       const where = via.join("+");
       await T.mutate((d) => {
         markSent(d, m.id, out_, nowIso, where, rows);
+        if (via.includes("email")) radarOf(d).members[m.id].lastMailAt = nowIso;
         const r = radarOf(d);
         r.stats.sent++;
         if (via.includes("email")) r.stats.emails++;
@@ -583,7 +623,7 @@ export async function radarInstant(nowIso?: string): Promise<number> {
   const nowMs = Date.parse(now);
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const c = ctxOf(seed, s, nowMs);
-  const pros = c.idx.all.filter((m) => isPro(s, m.id, nowMs) && hasDest(s, m.id) && !s.profiles[m.id]?.radarOff && signedIn(c, m.id));
+  const pros = c.idx.all.filter((m) => isPro(s, m.id, nowMs) && hasDest(s, m.id) && radarPrefs(s.profiles[m.id]).slack && signedIn(c, m.id));
   const since = await T.mutate((d) => {
     const r = radarOf(d);
     const prev = Date.parse(r.instantAt ?? "");
@@ -628,17 +668,35 @@ async function memberOfPub(m: unknown): Promise<{ id: string } | null> {
   return T.memberIndex(seed, s).all.find((x) => T.pubId(x.id) === String(m ?? "")) ?? null;
 }
 
-/** The radar email's unsubscribe link: turns the radar off for the member it was signed for. False when the link isn't valid. */
-export async function unsubscribeRadar(m: unknown, sig: unknown): Promise<boolean> {
+/**
+ * The Crystal Ball email's own choice, set for the member a link was signed for (the unsubscribe
+ * page and a mail app's one-click unsubscribe): "off" turns the email off, "weekly" sends it once
+ * a week instead. Crystal Ball in Slack stays as it was. False when the link isn't valid.
+ */
+export async function setRadarEmail(m: unknown, sig: unknown, choice: RadarEmail, where = "email"): Promise<boolean> {
   const member = await memberOfPub(m);
   if (!member || !sigOk(member.id, sig)) return false;
   await T.mutate((d) => {
     const p = { ...(d.profiles[member.id] ?? {}) };
-    if (!p.radarOff) T.addSignal(d, member.id, "radar_off", "email", new Date().toISOString());
-    p.radarOff = true;
+    const was = radarPrefs(p);
+    // Before Notifications one switch turned both off: the Slack side keeps what it was.
+    delete p.radarOff;
+    if (!was.slack) p.radarSlackOff = true;
+    if (choice === "off" && was.email !== "off") T.addSignal(d, member.id, "radar_off", where, new Date().toISOString());
+    p.radarEmail = choice;
     d.profiles[member.id] = p;
   });
   return true;
+}
+
+/** The radar email's unsubscribe link: turns the email off (not Slack) for the member it was signed for. False when the link isn't valid. */
+export const unsubscribeRadar = (m: unknown, sig: unknown) => setRadarEmail(m, sig, "off");
+
+/** Whether the link is the radar's, signed for that member, and what the email is set to now (the unsubscribe page). Null when it isn't valid. */
+export async function radarLinkMember(m: unknown, sig: unknown): Promise<{ email: RadarEmail } | null> {
+  const member = await memberOfPub(m);
+  if (!member || !sigOk(member.id, sig)) return null;
+  return { email: radarPrefs((await loadState()).profiles[member.id]).email };
 }
 
 /** The email was opened (its pixel loaded): radar_opened, once a member a day. */

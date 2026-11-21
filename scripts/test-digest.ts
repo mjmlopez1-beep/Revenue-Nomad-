@@ -143,11 +143,23 @@ async function main() {
   check("functions come most roles first", JSON.stringify(sal?.byFunction) === JSON.stringify([{ function: "Sales", n: 2 }, { function: "Marketing", n: 1 }]), sal?.byFunction);
   // 14: the seat's 13 facts and its Why now (Why it ended is only missing once a seat has ended).
   check("facts missing on the member's own seats are counted", sal?.seatFactsMissing === 14 && mo?.seatFactsMissing === 0, { sal: sal?.seatFactsMissing, mo: mo?.seatFactsMissing });
-  check("credits, function and links are the member's own", sal?.credits === 25 && sal.function === "Sales" && sal.appUrl === BASE && sal.unsubscribeUrl.startsWith(`${BASE}/api/table/unsubscribe?m=m_`) && sal.unsubscribeUrl !== mo?.unsubscribeUrl, sal);
-  check("the app link carries no sign-in code", !sal?.appUrl.includes("tok-") && !sal?.unsubscribeUrl.includes("tok-"));
+  // Changed: the links used to go straight to the app, so a phone that wasn't signed in landed on Sign in. Each now goes
+  // through /api/go, which signs that member in once (lib/emailIn.ts) and opens the same place: `goTo` reads where.
+  const isGo = (u: string | undefined, id: string) => !!u && u.startsWith(`${BASE}/api/go?m=${encodeURIComponent(t.tableInternals.pubId(id))}&x=`) && /&t=[\w-]{27}&to=/.test(u);
+  const goTo = (u: string | undefined) => (u ? new URL(u).searchParams.get("to") ?? "" : "");
+  check("credits, function and links are the member's own", sal?.credits === 25 && sal.function === "Sales" && isGo(sal.appUrl, "m1") && goTo(sal.appUrl) === "/" && sal.unsubscribeUrl.startsWith(`${BASE}/api/table/unsubscribe?m=m_`) && sal.unsubscribeUrl !== mo?.unsubscribeUrl, sal);
+  check("the app link carries no sign-in code", !sal?.appUrl.includes("tok-") && !sal?.unsubscribeUrl.includes("tok-") && !/[?&]k=/.test(sal?.appUrl ?? ""));
+  check(
+    "every link to the app signs in that member only: the list, each role, Notifications, Your seats, Your credits",
+    [sal?.rolesUrl, ...(sal?.roles ?? []).map((r) => r.url), sal?.settingsUrl, sal?.seatsUrl, sal?.creditsUrl].every((u) => isGo(u, "m1")) && goTo(sal?.settingsUrl) === "/?p=notifications" && goTo(sal?.seatsUrl) === "/?p=seats" && goTo(sal?.creditsUrl) === "/?p=credits" && isGo(mo?.rolesUrl, "m2"),
+    [sal?.rolesUrl, sal?.settingsUrl],
+  );
+  const ein = await import("../lib/emailIn");
+  const landed = await ein.emailLanding(Object.fromEntries(new URL(sal!.seatsUrl!).searchParams) as never, null);
+  check("opening one signs Sal in once and opens the place", /^\/\?k=o[\w-]{32}&p=seats$/.test(landed ?? ""), landed);
 
   // The button opens the list the headline counts: Hiring now in the member's function, with the profile off (f names it).
-  const place = (u: string | undefined) => (u ? new URL(u) : null);
+  const place = (u: string | undefined) => (u ? new URL(`${BASE}${goTo(u)}`) : null);
   const salList = place(sal?.rolesUrl);
   check(
     "the button opens Hiring now on seats in the member's function, the list the email counted",
@@ -166,7 +178,7 @@ async function main() {
   check(
     "the email data lists the member's new roles in free facts only, each linked to its record over that list",
     salRoles.length === 2 &&
-      salRoles.every((r) => r.function === "Sales" && /^Fractional (VP|Head of) Sales$/.test(r.title) && r.url.startsWith(`${sal!.rolesUrl}&c=`) && /^\d{4}-\d{2}-\d{2}$/.test(r.listed ?? "")) &&
+      salRoles.every((r) => r.function === "Sales" && /^Fractional (VP|Head of) Sales$/.test(r.title) && goTo(r.url).startsWith(`${goTo(sal!.rolesUrl)}&c=`) && /^\d{4}-\d{2}-\d{2}$/.test(r.listed ?? "")) &&
       salRoles.every((r) => Object.keys(r).sort().join() === "employees,function,industry,listed,region,title,url"),
     salRoles,
   );
@@ -178,7 +190,43 @@ async function main() {
     salMail.text,
   );
   check("the rendered email never names a company it counted", !/Acme|Beta Co|Gamma Co/.test(salMail.text + salMail.html + moMail.text + moMail.html));
-  check("a locked role says the credit shows which company is hiring (the hiring contact is a separate unlock)", /to see which company is hiring/.test(moMail.text) && !/see who is hiring/.test(moMail.text + salMail.text), moMail.text.split("\n")[2]);
+  // Changed: with billing off a member's first company each day opens free, so the email says so instead of "Unlock it for 2 credits".
+  check("billing off: a locked role says the first company each day opens free, then 2 credits", mo?.unlock === "day" && /The company is locked\. Your first company each day opens free, then each is 2 credits\./.test(moMail.text) && !/see who is hiring/.test(moMail.text + salMail.text), moMail.text.split("\n")[2]);
+
+  /* ---------- the words, by plan, and the lines that are links ---------- */
+  const { renderDigest } = await import("../lib/digest");
+  const G = (to: string) => `${BASE}/api/go?m=m_x&x=1&t=${"a".repeat(27)}&to=${encodeURIComponent(to)}`;
+  const base = { ...sal!, newRoles: 2, newRolesMine: 2, newRolesMineHidden: 2, seatFactsMissing: 5, credits: 0, settingsUrl: G("/?p=notifications"), seatsUrl: G("/?p=seats"), creditsUrl: G("/?p=credits") };
+  const freeMail = renderDigest({ ...base, unlock: "free" });
+  check("two locked companies: Both companies are locked (never All 2)", /Both companies are locked\. Unlock one for 2 credits to see which company is hiring\./.test(freeMail.text) && !/All 2 companies/.test(freeMail.text + freeMail.html), freeMail.text.split("\n")[2]);
+  check("All N for three or more", /All 3 companies are locked\./.test(renderDigest({ ...base, newRoles: 3, newRolesMine: 3, newRolesMineHidden: 3, unlock: "free" }).text));
+  for (const unlock of ["pro", "day"] as const) {
+    const m = renderDigest({ ...base, unlock });
+    check(`${unlock === "pro" ? "Trial and Pro" : "Billing off"}: never "Unlock one for 2 credits"`, !/Unlock (one|it) for 2 credits/.test(m.text + m.html) && /Your first company each day opens free/.test(m.text), m.text.split("\n")[2]);
+  }
+  check("Trial and Pro: Crystal Ball companies open free too", /Your first company each day opens free, and so does any company in your Crystal Ball\./.test(renderDigest({ ...base, unlock: "pro" }).text));
+  check("Trial and Pro, none in their function: no 2 credits either", ((m) => /None are in Sales\. Each company stays locked until you open it\. Your first company each day opens free/.test(m.text) && !/2 credits/.test(m.text))(renderDigest({ ...base, newRolesMine: 0, newRolesMineHidden: 0, unlock: "pro" })));
+  check(
+    "the seats line's Add one is a link to Your seats, signed in",
+    freeMail.html.includes(`5 things are still missing on your seats. <a href="${G("/?p=seats").replace(/&/g, "&amp;")}"`) && />Add one<\/a> and you earn a credit\./.test(freeMail.html) && freeMail.text.includes(`5 things are still missing on your seats. Add one and you earn a credit.\n${G("/?p=seats")}`),
+    freeMail.html.match(/still missing[^\n]+/)?.[0],
+  );
+  check("0 credits: the line links to Your credits", freeMail.html.includes(`You have <a href="${G("/?p=credits").replace(/&/g, "&amp;")}"`) && />0 credits<\/a>\./.test(freeMail.html), freeMail.html.match(/You have[^\n]+/)?.[0]);
+  const noSeats = renderDigest({ ...base, seatFactsMissing: 0, unlock: "free" });
+  check("0 credits and nothing missing: Add a fact you know is the link", />Add a fact you know<\/a> and you earn one\./.test(noSeats.html) && noSeats.text.includes(`You have 0 credits. Add a fact you know and you earn one.\n${G("/?p=credits")}`), noSeats.html.match(/You have[^\n]+/)?.[0]);
+  check("the footer links to Notifications", />Notifications<\/a>/.test(freeMail.html) && freeMail.text.includes(`Notifications\n${G("/?p=notifications")}`) && /Choose which emails you get in Notifications/.test(freeMail.text));
+  const hireMail = renderDigest({
+    ...base,
+    newRoles: 0,
+    newRolesMine: 0,
+    newRolesMineHidden: 0,
+    hires: [{ name: "Finance hires", n: 2, functions: ["Finance"], inProfile: true, url: G("/?v=all"), rows: [{ company: "A locked company", function: "Finance", start: "2026-03", url: G("/?v=all&c=c_1") }] }],
+  });
+  check(
+    "a hire found this week that started earlier says added this week, and when it started",
+    hireMail.subject === "2 companies in your profile that hired a fractional Finance leader, added this week" && /Finance · started Mar 2026/.test(hireMail.text) && !/hired a fractional Finance leader this week/.test(hireMail.text + hireMail.html),
+    { subject: hireMail.subject, text: hireMail.text.slice(0, 400) },
+  );
 
   failFor = "flo@example.com";
   const n1 = await t.sendDigests(at(0));

@@ -697,6 +697,8 @@ console.log("\nThe API's routes");
   // Each answers only with its own proof: the member's cookie, the cron secret, an OAuth token or flow, an unsubscribe signature, Stripe's webhook signature. Health and the counts are public on purpose.
   const KNOWN = [
     "api/billing", "api/billing/webhook",
+    // A link in the weekly email or an email's footer: a signed grant for one member, 7 days, used once (lib/emailIn.ts); it only ever goes to a path in the app.
+    "api/go",
     "api/health", "api/integrations",
     // [google network] Your network (lib/google): the member's cookie, and Google's OAuth flow (a one-time state bound to the member and the browser).
     "api/integrations/google", "api/integrations/google/callback", "api/integrations/google/start",

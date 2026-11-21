@@ -252,6 +252,8 @@ const MESSAGE_NOTE = "Sign in to read your message.";
 /** A link to a day of the radar (?sig=, its email and Slack). Signed out, Sign in opens with this; the emailed sign-in link comes back to the same day. */
 const RADAR_NOTE = `Sign in to see the companies from ${yourFeature}.`;
 const MESSAGE_LINK_USED = "That link was already used, or it's more than 7 days old. Sign in to read your message.";
+/** A link in the Crystal Ball or weekly email that was already used, or is more than 7 days old (?in=used, lib/emailIn.ts). */
+const EMAIL_LINK_USED = "That link from your email was already used, or it's more than 7 days old. Sign in to open it.";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
 
@@ -510,6 +512,9 @@ function App() {
         } catch {}
       }
       if (!k && lastSawVisitor() && !signedInHere()) setGuest(true);
+      // An email's link that no longer signs in (lib/emailIn.ts): signed out, Sign in opens and says why.
+      const spent = url.searchParams.get("in") === "used";
+      if (spent && !k) setSignInError(EMAIL_LINK_USED);
       let signedInNow = false;
       if (k) {
         const r = await post({ signIn: k });
@@ -521,9 +526,10 @@ function App() {
           if (toThread) fromMessageLink.current = true;
         }
       }
-      if (k || ref) {
+      if (k || ref || spent) {
         url.searchParams.delete("k");
         url.searchParams.delete("ref");
+        url.searchParams.delete("in");
         window.history.replaceState(null, "", url.pathname + url.search + url.hash);
       }
       // Just signed in by the link (often the first visit in this browser): the first screen first, as for any member.

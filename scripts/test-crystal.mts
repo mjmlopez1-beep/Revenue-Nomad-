@@ -413,7 +413,8 @@ async function main() {
   check("and in the email: its button says Open free, and the email says why once", mailPro.text.includes("Open free: ") && mailPro.html.includes(">Open free</a>") && !/Locked for you|credits/.test(mailPro.text) && mailPro.html.includes("opens free from your Crystal Ball"), mailPro.text);
   const freeCard = card({ company: null, locked: true, opens: "one", subject: "A SaaS company", place: undefined });
   const freeMail = fmt.renderRadarEmail({ name: "Fen", day: dayOf([freeCard]), unsubscribeUrl: "https://post.example.com/u", appUrl: BASE });
-  check("Free in the email: one a day, from Crystal Ball", freeMail.text.includes("One Crystal Ball company a day opens free, with everything on it.") && freeMail.html.includes(">Open free</a>"), freeMail.text);
+  // Changed: on Free only one company a day opens free, so its card says which ("Open free (today's)"), never a bare "Open free".
+  check("Free in the email: one a day, from Crystal Ball", freeMail.text.includes("One Crystal Ball company a day opens free, with everything on it.") && freeMail.text.includes("Open free (today's): ") && !freeMail.html.includes(">Open free</a>"), freeMail.text);
   const offCard = card({ company: null, locked: true, subject: "A SaaS company", place: undefined });
   const offMail = fmt.renderRadarEmail({ name: "Bo", day: dayOf([offCard]), unsubscribeUrl: "https://post.example.com/u", appUrl: BASE });
   check("billing off: the 2-credit unlock, and the button says Open in Merlin", offMail.text.includes("A locked company unlocks in Merlin for 2 credits.") && offMail.html.includes(">Open in Merlin</a>") && !offMail.html.includes(">Open free</a>"), offMail.text);

@@ -9,32 +9,31 @@
 import { useContext, useState } from "react";
 import { IconCheck } from "../ui/shared";
 import { UiCtx } from "./ui";
-import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
+import { RADAR_EVERY_WORDS, YOUR_FEATURE, type RadarEmail } from "@/lib/radar/types";
+
+/** "Every morning by email, and in Slack": Crystal Ball's delivery as the member set it on Notifications. */
+export function radarDelivery(me: { radarEmail?: RadarEmail; radarSlack?: boolean }, slack: boolean): string {
+  const email = me.radarEmail ?? "daily";
+  const inSlack = slack && me.radarSlack !== false;
+  if (email === "off") return inSlack ? `The email is off. It still comes in Slack.` : `The email is off.`;
+  const when = email === "daily" ? "Every morning something moves" : RADAR_EVERY_WORDS[email];
+  return `${when}, by email${inSlack ? " and in Slack" : ""}.`;
+}
 
 /**
- * Your profile: "Send me <FEATURE_NAME> emails", the radar by email and Slack (lib/radar), on
- * unless the member turned it off here or with the radar email's link. Saves at once, like the switch below.
+ * Your profile: Crystal Ball's delivery, said as it is, and a way to Notifications, where the
+ * email's frequency and Slack are set (the switch that was here turned both off at once).
  */
 export function RadarSwitch() {
   const ui = useContext(UiCtx);
-  const [busy, setBusy] = useState(false);
   if (!ui) return null;
-  const on = ui.me.radar !== false;
-  const flip = async () => {
-    setBusy(true);
-    await ui.act({ type: "settings", radar: !on });
-    setBusy(false);
-  };
   return (
     <div className="hunt-sub pt-switch">
       <div className="hunt-h">{YOUR_FEATURE}</div>
-      <button type="button" role="switch" aria-checked={on} className={`tp-ftoggle hunt-email${on ? " on" : ""}`} disabled={busy} aria-busy={busy} onClick={() => void flip()}>
-        <span className="tp-check" aria-hidden>
-          {on && <IconCheck size={11} />}
-        </span>
-        <span className="tp-ftoggle-l">Send me {FEATURE_NAME} emails</span>
+      <p className="hunt-lead">{radarDelivery(ui.me, false)} Never on a day with nothing new.</p>
+      <button type="button" className="btn btn-sm" onClick={() => ui.openPage("notifications")}>
+        Change in Notifications
       </button>
-      <p className="hunt-lead">On mornings when a company in your profile moves, by email and in Slack if you connected it. Never on a day with nothing new.</p>
     </div>
   );
 }
