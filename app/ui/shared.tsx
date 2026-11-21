@@ -10,9 +10,10 @@ import { fieldDef, type Entity } from "@/lib/tableFields";
 import { webLink } from "@/lib/links";
 import { unpackCompany, unpackView, type TodayView } from "@/lib/viewWire";
 import type { FirstList } from "@/app/post/place";
+import type { MovesWire } from "@/lib/moves";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
-export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean };
+export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean; /** The "move" action: today's moves as they now stand. */ moves?: MovesWire };
 /**
  * Run an action. `quiet`: no toast for the success message (the caller says it). `silentError`:
  * no toast for a refusal either, for a caller that shows the error in place (a form under its

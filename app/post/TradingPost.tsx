@@ -304,7 +304,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /* ----- the place: from the address bar, else the member's onboarding answers ----- */
   const [place0] = useState(() => readPlace(me));
   /** Opened from an old "Use it in Claude" link: Integrations opens at the Claude section. */
-  const [claudeLink] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "claude");
+  const [claudeLink, setClaudeLink] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "claude");
   const [recordType, setRecordType] = useState<RecordType>(place0.t);
   const [tabPicked, setTabPicked] = useState<Tab>(place0.v);
   const [filters, setFilters] = useState<Filters>(place0.f);
@@ -813,6 +813,33 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const radarLatest = today.data?.latest ?? null;
   const radarNew = useRadarNew(useMemo(() => radarLatest, [radarLatest?.day, radarLatest?.n]), page === "radar", me.id, today.data !== null); // eslint-disable-line react-hooks/exhaustive-deps
   const [trialSeen, setTrialSeen] = useState(false);
+  // The one-time Pro welcome on Home, closed here, and the way back from checkout (?paid=1): say thanks once, and load the plan the payment just made.
+  const [proSeen, setProSeen] = useState(false);
+  const planNow = useRef(me.plan?.name);
+  planNow.current = me.plan?.name;
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("paid") !== "1" || q.get("p")) return;
+    toast(me.plan?.firstChargeAt ? "Thanks. Pro is yours. Nothing is charged until your trial ends." : "Thanks. Pro is yours.");
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("paid");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+    // Stripe tells the server a moment after it sends the member back: look until the plan is Pro, a few times.
+    let n = 0;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const look = () => {
+      if (planNow.current === "pro" || n++ >= 5) return;
+      void refresh();
+      t = setTimeout(look, 1500 + n * 500);
+    };
+    look();
+    return () => {
+      if (t) clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // The invite loop: who joined from this member's invite and wasn't shown yet (Me.joined). Closed here, it goes at once.
   const [joinedOff, setJoinedOff] = useState<string[]>([]);
   const joined = (me.joined ?? []).filter((j) => !joinedOff.includes(j.id));
@@ -2464,6 +2491,13 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                 void act({ type: "noticeSeen", kind: "trialEnded" }, { quiet: true, silentError: true });
               }}
               onSeePro={() => openPlans("billing")}
+              proWelcome={!!me.plan?.proWelcome && !proSeen}
+              onProSeen={() => {
+                setProSeen(true);
+                void act({ type: "noticeSeen", kind: "proWelcome" }, { quiet: true, silentError: true });
+              }}
+              integrations={{ href: pageHref("integrations"), go: () => (setDrawer(null), setPage("integrations")) }}
+              onClaude={() => (setDrawer(null), setClaudeLink(true), setPage("integrations"), setTimeout(() => document.getElementById("claude-voice")?.scrollIntoView({ block: "start" }), 500))}
               steps={homeSteps ? steps.steps : null}
               onStep={(k) => runNudge(stepAction[k])}
               onHideSteps={hideCheck}

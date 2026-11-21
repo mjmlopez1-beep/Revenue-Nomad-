@@ -17,6 +17,7 @@ import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFi
 import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
 import { Sheet, UiCtx } from "./ui";
 import { PartnersSwitch, RadarSwitch } from "./PartnersSwitch";
+import { VoiceSection } from "./Voice";
 import "./hunt.css";
 
 export const EMPTY_ICP: Icp = { industries: [], employees: [], revenue: [], countries: [] };
@@ -395,6 +396,7 @@ export function IcpSheet({
       <LookingSwitch />
       <RadarSwitch />
       <PartnersSwitch />
+      <VoiceSection />
       {views ? (
         <div className="hunt-sub hunt-views-sub">
           <div className="hunt-h">Saved views</div>

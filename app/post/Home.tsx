@@ -3,11 +3,12 @@
 /**
  * Home (page "today", the address / with no place in it): always a next click.
  *
+ *   the one nudge (nudges.ts)
+ *   "Good morning, Jordan" and one line on the day, then the one-time cards (the trial ended, the Pro welcome)
+ *   Your three moves today (Moves.tsx): a company from Crystal Ball, the way in, and the move, three times
  *   Get started, while a new member has steps left (one line once they are done)
- *   the one nudge (nudges.ts), and the trial-ended card
- *   "Hey Jordan", one line on what is new, and one search box (Enter opens the table on that text)
+ *   one search box (Enter opens the table on that text)
  *   four quick actions: Find companies, Your Crystal Ball, Add what you know, Fill in your seats
- *   Your best leads today: Crystal Ball's top company (Today.tsx LeadCard) and the next three
  *   Since your last visit: each count a row that opens it
  *   Your saved views: a small table (matches, new, the weekly email, last opened)
  *
@@ -24,10 +25,13 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Me, SavedViewRec } from "@/lib/tableTypes";
 import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
-import { CompanyLogo, IconChevron, IconSearch, IconX, LockedName, timeAgo } from "../ui/shared";
+import { CompanyLogo, IconChevron, IconSearch, IconX, timeAgo } from "../ui/shared";
 import { EMPTY_FILTERS, RECORD_TYPES, applyFilters, rowsFor, type CheckStep, type CoInfo, type RecordType, type Row } from "./model";
 import { plural, useMedia } from "./hooks";
-import { LeadAction, LeadCard, TrialEnded, factsOf, leadWhat, type TodayData } from "./Today";
+import { LeadCard, TrialEnded, factsOf, type TodayData } from "./Today";
+import { MovesSection } from "./Moves";
+import { ProWelcome } from "./Billing";
+import type { MovesWire } from "@/lib/moves";
 import { sinceWords } from "./todayModel";
 import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
@@ -67,6 +71,12 @@ export interface HomeProps {
   trialEnded: boolean;
   onTrialSeen: () => void;
   onSeePro: () => void;
+  /** The one-time Pro welcome, right after the plan became Pro (Me.plan.proWelcome), and its "Got it". */
+  proWelcome: boolean;
+  onProSeen: () => void;
+  /** Integrations (Connect Google), and the Claude connector's section of it (how a member's own Claude learns their voice). */
+  integrations: Go;
+  onClaude: () => void;
   /** Get started (null while the whole table is on its way, or once put away). */
   steps: CheckStep[] | null;
   onStep: (key: CheckStep["key"]) => void;
@@ -118,9 +128,9 @@ function GoLink({ to, className, children, label }: { to: Go; className?: string
 }
 
 /**
- * Home's first paint is its top: the greeting, the search, the four cards and the best lead. The
- * rest (the next leads, since your last visit, the saved views) comes on the next frame, the first
- * time Home is drawn on a visit, so a phone paints sooner. Later visits to Home draw it all at once.
+ * Home's first paint is its top: the greeting and today's moves. The rest (Get started, the search,
+ * the four cards, since your last visit, the saved views) comes on the next frame, the first time
+ * Home is drawn on a visit, so a phone paints sooner. Later visits to Home draw it all at once.
  */
 let drawnOnce = false;
 function useAfterFirstPaint() {
@@ -145,29 +155,30 @@ function useAfterFirstPaint() {
 export function HomePage(p: HomeProps) {
   const rest = useAfterFirstPaint();
   const { data, byId, me } = p;
-  // The leads: Crystal Ball's companies in the member's table, in its order (the top one is the card).
-  const leads = useMemo(() => {
-    const out: { i: CoInfo; row: NonNullable<TodayData["rows"]>[number] }[] = [];
-    for (const r of data?.rows ?? []) {
-      const i = byId.get(r.id);
-      if (i) out.push({ i, row: r });
-    }
-    return out;
-  }, [data, byId]);
-  const loading = (!data && !p.failed) || (p.waiting && !leads.length);
-  const lead = leads[0] ?? (!loading && p.firstRow ? { i: byId.get(p.firstRow.i.c.id) ?? p.firstRow.i, row: null } : null);
-  const next = leads.slice(1, 4);
+  // The hour is the browser's: Home is drawn in the browser only.
+  const hello = useMemo(() => ((h) => (h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"))(new Date().getHours()), []);
+  // Today's moves as the server picked them, then as it answered Done, Snooze or Undo. A server from before them: the day's top rows, with no way in from a network.
+  const [after, setAfter] = useState<MovesWire | null>(null);
+  const wire = useMemo<MovesWire | null>(
+    () => after ?? data?.moves ?? (data ? { list: data.rows.slice(0, 3).map((row) => ({ id: row.id, row })), month: 0, google: "off" } : null),
+    [after, data],
+  );
+  const moveN = useMemo(() => (wire?.list ?? []).filter((w) => byId.has(w.id)).length, [wire, byId]);
+  const loading = (!data && !p.failed) || (p.waiting && !!wire?.list.length && !moveN);
+  // With no move today: the top of their table, as before.
+  const lead = !loading && !moveN && p.firstRow ? { i: byId.get(p.firstRow.i.c.id) ?? p.firstRow.i, row: null } : null;
   const dayN = data?.newCount ?? 0;
   const since = data?.since ?? null;
   const sinceLow = p.sinceAt ? sinceWords(p.sinceAt).replace(/^Since/, "since") : null;
 
-  // The greeting's line: what is new, in one sentence.
+  // The greeting's line: today's moves, else what is new, in one sentence.
   const sub = (() => {
+    if (moveN > 0) return `${["", "One move", "Two moves", "Three moves"][Math.min(moveN, 3)]} for today. About ten minutes.`;
     const n = since && p.sinceAt ? since.radar : 0;
     if (n > 0 && sinceLow) return `${plural(n, "new company", "new companies")} in your ${FEATURE_NAME} ${sinceLow}.`;
     if (dayN > 0) return `${plural(dayN, "company", "companies")} in your ${FEATURE_NAME} today.`;
     if (!me.function) return "Tell us your function and Merlin finds the companies likely to hire you next.";
-    if (loading) return "Finding your best leads today.";
+    if (loading) return "Finding your moves for today.";
     return `Nothing new in your ${FEATURE_NAME} today. Your table has every company.`;
   })();
 
@@ -190,13 +201,42 @@ export function HomePage(p: HomeProps) {
         {/* The band's picture: a scene at the far end on a wide screen, a plain corner on a narrow one. Never under the words. */}
         <Strip kind={quietDay ? "night" : "morning"} on="mint" className="hm-hello-art" />
         <Bleed kind="BR" on="mint" className="hm-hello-corner" />
-        <h1 className="hm-h1">Hey {firstName(me.name)}</h1>
+        <h1 className="hm-h1">
+          {hello}, {firstName(me.name)}
+        </h1>
         <p className="hm-sub">{sub}</p>
       </header>
-      {p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} />}
       {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} art={<Scene kind="trialEnding" square pro on="mint" className="td-trial-art" />} /> : null}
-      <AskBox {...p} />
+      {p.proWelcome && me.plan ? <ProWelcome plan={me.plan} onSeen={p.onProSeen} /> : null}
 
+      <MovesSection
+        me={me}
+        byId={byId}
+        wire={wire}
+        onWire={setAfter}
+        loading={loading}
+        dayN={dayN}
+        integrations={p.integrations}
+        onClaude={p.onClaude}
+        openCompany={p.openCompany}
+        link={(children) => (
+          <GoLink to={p.radar} className="hm-more">
+            {children}
+          </GoLink>
+        )}
+        fallback={
+          lead ? (
+            <LeadCard key={lead.i.c.id} i={lead.i} row={lead.row} me={me} onOpen={() => p.openCompany(lead.i.c.id)} title="Top of your table" />
+          ) : (
+            <p className="mv-none mv-none-more">Browse every company, or widen who you want to work with in Your profile.</p>
+          )
+        }
+      />
+
+      {rest && p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} />}
+      {rest && <AskBox {...p} />}
+
+      {rest && (
       <ul className="hm-cards" aria-label="Start here">
         <li>
           <GoLink to={p.find} className="hm-card">
@@ -250,53 +290,7 @@ export function HomePage(p: HomeProps) {
           )}
         </li>
       </ul>
-
-      <div className="hm-grid">
-        <section className="hm-sec hm-leads" aria-labelledby="hm-leads-h">
-          <div className="hm-sec-head">
-            <h2 className="hm-h2" id="hm-leads-h">
-              Your best leads today
-            </h2>
-            {dayN > 0 && (
-              <GoLink to={p.radar} className="hm-more">
-                See all {dayN} in {FEATURE_NAME} <IconChevron dir="right" size={13} />
-              </GoLink>
-            )}
-          </div>
-          {loading && !lead ? (
-            <section className="td-card td-card-skel" aria-busy>
-              <span className="sr-only">Finding your best lead today</span>
-              <span className="td-skel" style={{ width: "40%" }} />
-              <span className="td-skel" style={{ width: "70%", height: 20 }} />
-              <span className="td-skel" style={{ width: "55%" }} />
-              <span className="td-skel" style={{ width: "35%", height: 44 }} />
-            </section>
-          ) : lead ? (
-            <LeadCard key={lead.i.c.id} i={lead.i} row={lead.row} me={me} onOpen={() => p.openCompany(lead.i.c.id)} title={lead.row ? "Top of your Crystal Ball" : "Top of your table"} />
-          ) : (
-            <section className="td-card">
-              <p className="td-none">Nothing new in your profile today. Browse every company, or widen who you want to work with in Your profile.</p>
-            </section>
-          )}
-          {rest && next.length > 0 && (
-            <ul className="hm-leadrows" aria-label={`More from ${FEATURE_NAME}`}>
-              {next.map(({ i, row }) => (
-                <li key={i.c.id} className="hm-lrow">
-                  <button type="button" className="hm-lrow-open" onClick={() => p.openCompany(i.c.id)}>
-                    <CompanyLogo name={i.c.hidden ? "" : i.c.name} domain={i.c.hidden ? null : i.c.iconDomain} hidden={i.c.hidden} seed={i.c.id} />
-                    <span className="hm-lrow-id">
-                      <span className="hm-lrow-n">{i.c.hidden ? row.name ?? <LockedName seed={i.c.id} /> : i.c.name}</span>
-                      <span className="hm-lrow-p">{leadWhat(i, row) ?? factsOf(i)}</span>
-                    </span>
-                  </button>
-                  <span className="hm-lrow-act">
-                    <LeadAction i={i} row={row} onOpen={() => p.openCompany(i.c.id)} compact />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      )}
 
         {rest && (
         <section className="hm-sec hm-since" aria-labelledby="hm-since-h">
@@ -325,7 +319,6 @@ export function HomePage(p: HomeProps) {
           )}
         </section>
         )}
-      </div>
 
       {rest && <SavedViewsTable views={p.views} onOpen={p.onOpenView} onEmail={p.onEmailView} table={p.table} waiting={p.waiting} />}
       {rest && p.events}

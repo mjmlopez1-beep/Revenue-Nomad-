@@ -140,6 +140,41 @@ export function CompareTable({ current }: { current?: "free" | "pro" }) {
   );
 }
 
+/* ---------- the Pro welcome on Home ---------- */
+
+/**
+ * Once, on Home, right after the plan became Pro (PlanView.proWelcome): The keep (Fractions, the
+ * quiet register on white, the only violet in the app), "You're on Pro. Everything here is yours."
+ * and what opened up, in the plans' own words. "Got it" puts it away for good (the noticeSeen
+ * action, kept with the plan's notices like the trial-ended card). The plans sheet keeps its own.
+ */
+export function ProWelcome({ plan, onSeen }: { plan: PlanView; onSeen: () => void }) {
+  // What Pro adds over Free, from the comparison's own rows (the ones that differ).
+  const opened = ROWS.filter(([, free, pro]) => free !== pro);
+  return (
+    <section className="bl-hello" aria-labelledby="bl-hello-h">
+      <Scene kind="castle" pro on="white" className="bl-hello-art" />
+      <div className="bl-hello-t">
+        <p className="bl-hello-h" id="bl-hello-h">
+          {plan.proStartsAt ? `You're on Pro. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.` : "You're on Pro. Everything here is yours."}
+        </p>
+        <ul className="bl-hello-list">
+          {opened.map(([what, , pro]) => (
+            <li key={what}>
+              <b>{what}.</b> {pro}
+            </li>
+          ))}
+        </ul>
+        <div className="bl-hello-acts">
+          <button type="button" className="btn btn-pine" onClick={onSeen}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ---------- the plans sheet ---------- */
 
 const TITLE: Record<PlansFrom, string> = {
