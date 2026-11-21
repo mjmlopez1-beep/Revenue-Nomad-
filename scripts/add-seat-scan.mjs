@@ -9,6 +9,7 @@
  *   node scripts/add-seat-scan.mjs <seats.csv> --seed <intel-seed.json> --no-seal      (tests)
  *   node scripts/add-seat-scan.mjs <seats.csv> --companies <companies.csv>             (the sheet's Companies tab)
  *   node scripts/add-seat-scan.mjs <seats.csv> --counts-only                           (print counts, no company name or title)
+ *   node scripts/add-seat-scan.mjs <seats.csv> --backfill-holder-keys [--dry-run]       (only the person key on seats on file)
  *
  * Needs the seed key (RN_INTEL_SEED_KEY, else data/intel-seed.key): seats are keyed by a one-way
  * HMAC of the file's seat_id under it, never by the profile id itself.
@@ -37,6 +38,13 @@
  * with us, so the seat has no holder until a member claims it as theirs ("claimSeat" in
  * lib/table.ts). A claim lives in the state, so a re-run never undoes one.
  *
+ * --backfill-holder-keys does only this, for seats already on file: each row's seat (found by its
+ * id as below) gets the holder's one-way person key, `holderKey` = "p_" + the first 20 hex of
+ * HMAC-SHA256(seed key, "person:" + person_sales_nav_id), the same on all of one person's seats
+ * (add-past-seats.mjs puts it on ended seats), so one fractional's seats can be grouped. The
+ * profile id itself is never stored, and the key sits on the seat record, outside its fields, so no
+ * view, export or connector answer carries it. A seat with a key keeps it; nothing else changes.
+ *
  * Seat ids: "e_ss_" + the first 20 hex of HMAC-SHA256(seed key, "seat-scan:" + seat_id). A seat
  * the first batch added keeps the id it has ("e_ss_" + the seat_id's letters and digits), so a
  * claim on it still points at it; a re-run finds either form and leaves that seat as it is (its
@@ -61,7 +69,7 @@
  */
 import { execFileSync, spawnSync } from "child_process";
 import { createHmac } from "crypto";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 
 // The same matching keys as Add (lib/scan/clean.ts, lib/tableFields.ts) are TypeScript, so this
 // runs under tsx: started with plain node, it starts itself again with tsx loaded.
@@ -69,14 +77,16 @@ if (!process.env.RN_SEAT_SCAN_TSX) {
   const r = spawnSync(process.execPath, ["--import", "tsx", ...process.argv.slice(1)], { stdio: "inherit", env: { ...process.env, RN_SEAT_SCAN_TSX: "1" } });
   process.exit(r.status ?? 1);
 }
-const { companyKey, isPlaceholderCompany, textKey } = await import("../lib/scan/clean.ts");
+const { companyKey, textKey } = await import("../lib/scan/clean.ts");
 const { siteKey, FUNCTIONS, GTM_FUNCTIONS } = await import("../lib/tableFields.ts");
 const { keepsNonGtm } = await import("../lib/seniority.ts");
-const { normalizeHq } = await import("../lib/geo.ts");
 const { isNotFirm } = await import("../lib/firms.ts");
 const { employeeBand, industryOf, revenueBand } = await import("../lib/industryMap.ts");
 // Fractional firms, agencies and marketplaces are not clients (lib/firms.ts): never added, and the cleanup drops any the seed has.
-const { companyFirm, cleanSeed } = await import("../lib/firmRemoval.ts");
+const { companyFirm } = await import("../lib/firmRemoval.ts");
+// What the importers share (CSV, the seed key, the client and seniority rules, matching, the cleanup).
+const { FUNCTION_MAP, aboutNamesHolder: namesHolder, cleanKeeping, cleanUrl, companyIndex, companyName, host, hqCountry, isTrue, linkedinKey, newCompanyId, notFractional, ownFirm, parseCsv, personKey, real, rnEmployees, seedKey, seniorTitle } =
+  await import("./seat-import.mjs");
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -92,139 +102,77 @@ const dryRun = args.includes("--dry-run");
 const companiesPath = flag("--companies");
 /** Print counts only: no company name or title (the file names real people and their clients). */
 const countsOnly = args.includes("--counts-only");
-const csvPath = args.filter((a) => a !== "--no-seal" && a !== "--dry-run" && a !== "--counts-only")[0];
+/** Only put the holder's one-way person key on the seats already on file, matched by seat id, and change nothing else. */
+const backfillKeys = args.includes("--backfill-holder-keys");
+const csvPath = args.filter((a) => a !== "--no-seal" && a !== "--dry-run" && a !== "--counts-only" && a !== "--backfill-holder-keys")[0];
 if (!csvPath) {
   console.error("Usage: node scripts/add-seat-scan.mjs <seats.csv> [--seed data/intel-seed.json] [--no-seal] [--dry-run]");
   process.exit(1);
 }
 
-/* ---------- CSV ---------- */
-
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (quoted) {
-      if (ch === '"' && text[i + 1] === '"') (cell += '"'), i++;
-      else if (ch === '"') quoted = false;
-      else cell += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ",") row.push(cell), (cell = "");
-    else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(cell), rows.push(row), (row = []), (cell = "");
-    } else cell += ch;
-  }
-  if (cell || row.length) row.push(cell), rows.push(row);
-  const [head, ...body] = rows.filter((r) => r.some((c) => c.trim()));
-  const keys = head.map((h) => h.replace(/^﻿/, "").trim());
-  return body.map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? "").trim()])));
-}
-
 /* ---------- mappings ---------- */
 
-/** The file's function labels, as Merlin's functions. */
-const FUNCTION_MAP = {
-  Marketing: "Marketing", Growth: "Growth", Sales: "Sales", "Revenue Leadership": "Sales", "Sales Leadership": "Sales",
-  Partnerships: "Partnerships", "Customer Success": "Customer Success", "AI GTM": "AI GTM", "Revenue Operations": "RevOps", RevOps: "RevOps",
-  "Sales Enablement": "Enablement", Enablement: "Enablement", Technology: "Technology", Finance: "Finance", Operations: "Operations",
-  "People/HR": "People", People: "People", Product: "Product", Executive: "Executive", Legal: "Legal", Other: "Other",
-};
-/** A LinkedIn industry, an employee count or range and a revenue band, as Revenue Nomad's standard values (lib/industryMap.ts), or null. */
+/** A LinkedIn industry and a revenue band, as Revenue Nomad's standard values (lib/industryMap.ts), or null. */
 const rnIndustry = (raw, company) => industryOf(raw, company);
-const rnEmployees = (count, range) => employeeBand(count) ?? employeeBand(range);
 const rnRevenue = (raw) => revenueBand(raw);
-const host = (u) => {
-  const s = String(u ?? "").trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
-  const h = s.split(/[/?#]/)[0].toLowerCase();
-  return /^[\w-]+(\.[\w-]+)*\.[a-z]{2,}$/.test(h) ? h : null;
-};
-const cleanUrl = (u) => String(u ?? "").trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "").slice(0, 200);
 const month = (v) => (/^\d{4}-\d{2}$/.test(String(v ?? "").trim()) ? String(v).trim() : null);
-
-/* ---------- the fractional's own firm ---------- */
-
-/** Names that stand for "no client": the fractional's own practice or a client they won't name. */
-const STAND_INS = new Set(
-  [
-    "self", "selfemployed", "self employed", "freelance", "freelancer", "freelancing", "independent", "independentconsultant", "independent consultant",
-    "stealth", "stealthstartup", "stealth startup", "stealthmode", "stealth mode", "stealthcompany", "confidential", "confidentialclient", "confidential client",
-    "various", "variousclients", "multipleclients", "multiple clients", "consultant", "selfemployedconsultant", "myself", "private", "undisclosed",
-  ].map((s) => textKey(s)),
-);
-const STAND_IN_START = /^(self[\s-]?employed|stealth\b|freelance\b|independent (consultant|contractor|advisor)\b|confidential\b)/i;
-const words = (s) =>
-  String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-
-/** Why a row is the fractional's own firm, or null when the company reads as a client. */
-function ownFirm(r) {
-  if (String(r.company_employee_range ?? "").trim() === "1") return "one-person company";
-  const name = r.company_name;
-  const key = textKey(name);
-  if (STAND_INS.has(key) || STAND_IN_START.test(name.trim()) || isPlaceholderCompany(name)) return "stand-in name (self-employed, stealth, freelance, confidential)";
-  // "Jane Doe, MBA" or "Jane Doe (she/her)": the name before any credentials or note.
-  const person = words(String(r.person_name ?? "").split(/[,(|]/)[0]);
-  const surname = person[person.length - 1] ?? "";
-  const full = person.join("");
-  const coWords = words(name);
-  if ((full.length >= 5 && key.includes(full)) || (surname.length >= 2 && coWords.includes(surname)) || (surname.length >= 5 && key.includes(surname)))
-    return "company named after the person";
-  return null;
-}
 
 /* ---------- seat keys ---------- */
 
-const keyB64 = process.env.RN_INTEL_SEED_KEY || (existsSync("data/intel-seed.key") ? readFileSync("data/intel-seed.key", "utf8").trim() : "");
-if (!keyB64) {
-  console.error("No seed key: set RN_INTEL_SEED_KEY or put it in data/intel-seed.key. Seats are keyed by an HMAC under it.");
-  process.exit(1);
-}
-const seatKey = Buffer.from(keyB64, "base64");
+const seatKey = seedKey("Seats are keyed by an HMAC under it.");
 /** The seat's id: a one-way HMAC of the file's seat_id, so no profile id reaches the seed. */
 const hashedId = (seatId) => `e_ss_${createHmac("sha256", seatKey).update(`seat-scan:${seatId}`).digest("hex").slice(0, 20)}`;
 /** The id the first batch gave a seat (the seat_id's letters and digits). Kept for the seats it added. */
 const legacyId = (seatId) => `e_ss_${seatId.replace(/[^A-Za-z0-9]/g, "")}`;
 
-/* ---------- fractional work only ---------- */
-
-/** Role types that are fractional work (blank counts: the file is a search for fractional titles). */
-const WORK_TYPES = /^(|fractional|interim|freelance|contract|contractor|advisory|advisor|project|part[- ]?time|consultant|consulting)$/i;
-/** Why the row is not current fractional work, or null. */
-function notFractional(r) {
-  if (!WORK_TYPES.test(String(r.role_type ?? "").trim())) return "not fractional work (role type)";
-  const t = String(r.seat_title ?? "");
-  // "VP Sales (Fractional 2019-2022, Full-Time 2022-Present)". A full-time contract is contract work.
-  if (/\bfull[- ]?time\b/i.test(t) && !/\bfull[- ]?time contract/i.test(t)) return "not fractional work (title says full-time)";
-  // "Available for Fractional CMO roles", "Open to fractional work": a search for work, not a seat.
-  if (/\b(available for|open to|seeking|looking for)\b/i.test(t)) return "not a seat (title is a search for work)";
-  if (/\b(ex|former|formerly|previously)[- ]+fractional\b/i.test(t)) return "not a seat (a past fractional role)";
-  return null;
-}
-
-/* ---------- seniority outside GTM ---------- */
-
-/** C-level abbreviations (CSO and CPO read either way; both are C-level). */
-const C_LEVEL = "ceo|cfo|coo|cto|cio|ciso|cpo|chro|cho|clo|cco|cdo|cso|cmo|cro|cao|caio|cbo|cxo|cgo|cno|cuo|cko|cqo|cpto";
-const SENIOR = new RegExp(
-  [
-    "\\bdirector\\b", "\\bhead\\b", "\\bvp\\b", "\\bsvp\\b", "\\bevp\\b", "\\bvice[- ]president\\b", "\\bpresident\\b", "\\bchief\\b", `\\b(${C_LEVEL})s?\\b`,
-    "\\bc[- ]?suite\\b", "\\bc[- ]?level\\b", "\\bgeneral counsel\\b", "\\bcontroller\\b", "\\bcomptroller\\b", "\\bmanaging (partner|director)\\b",
-    "\\b(operating|executive|equity) partner\\b", "\\bfractional (executive|exec)\\b", "\\bexecutive director\\b",
-  ].join("|"),
-  "i",
-);
-/** Phrases that hold a senior word without being senior: "Assistant to the CEO", "Associate Director", "Deputy Head of". */
-const NOT_SENIOR_PHRASE = /\b(executive assistant|personal assistant|assistant|ea|pa)\s+(to|for)\b.*$|\b(assistant|associate|deputy)\s+(to\s+(the\s+)?)?(director|vp|vice[- ]president|head|controller|general counsel|chief)\b/gi;
-/** True when a title shows Director-and-above seniority (the rule for seats outside GTM). */
-const seniorTitle = (title) => SENIOR.test(String(title ?? "").replace(NOT_SENIOR_PHRASE, " "));
-
 /* ---------- merge ---------- */
 
 const seed = JSON.parse(readFileSync(seedPath, "utf8"));
 const rows = parseCsv(readFileSync(csvPath, "utf8"));
+
+/* ---------- --backfill-holder-keys: the person key on seats on file, nothing else ---------- */
+
+// Each row's seat on the seed (by the hashed or the first batch's id, as below) gets the holder's
+// one-way person key (seat-import.mjs personKey, from person_sales_nav_id) as `holderKey`, when it
+// has none. No seat is added, no company or field changes, and the cleanup doesn't run, so a
+// re-run changes nothing. Counts only.
+if (backfillKeys) {
+  const byId = new Map(seed.engagements.map((e) => [e.id, e]));
+  const k = { matched: 0, added: 0, had: 0, differs: 0, noId: 0, notOnSeed: 0, notScan: 0, twice: 0 };
+  const done = new Set();
+  for (const r of rows) {
+    const sid = String(r.seat_id ?? "").trim();
+    const e = sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
+    if (!e) {
+      k.notOnSeed++;
+      continue;
+    }
+    if (e.fields?.source !== "Seat scan") {
+      k.notScan++;
+      continue;
+    }
+    if (done.has(e.id)) {
+      k.twice++;
+      continue;
+    }
+    done.add(e.id);
+    k.matched++;
+    const key = personKey(seatKey, r.person_sales_nav_id);
+    if (!key) k.noId++;
+    else if (!e.holderKey) (e.holderKey = key), k.added++;
+    else if (e.holderKey === key) k.had++;
+    else k.differs++;
+  }
+  if (!dryRun) writeFileSync(seedPath, JSON.stringify(seed, null, 1));
+  const seatsOf = new Map();
+  for (const e of seed.engagements) if (e.holderKey && !e.id.startsWith("e_ps_")) seatsOf.set(e.holderKey, (seatsOf.get(e.holderKey) ?? 0) + 1);
+  console.log(`${dryRun ? "DRY RUN, nothing written. " : ""}rows read: ${rows.length}`);
+  console.log(`seats on file matched by seat id: ${k.matched} (not on the seed: ${k.notOnSeed}${k.notScan ? `, not a seat-scan seat: ${k.notScan}` : ""}${k.twice ? `, the same seat twice in the file: ${k.twice}` : ""})`);
+  console.log(`person keys added: ${k.added}; already there: ${k.had}; on file under another key (kept): ${k.differs}; rows with no person id: ${k.noId}`);
+  console.log(`current seats with a person key now: ${[...seatsOf.values()].reduce((a, b) => a + b, 0)}, distinct people: ${seatsOf.size}, people with 2+ current seats: ${[...seatsOf.values()].filter((x) => x >= 2).length}`);
+  if (!dryRun && !noSeal && seedPath === "data/intel-seed.json") execFileSync(process.execPath, ["scripts/seal-intel-seed.mjs"], { stdio: "inherit" });
+  process.exit(0);
+}
 
 /* ---------- the Companies tab ---------- */
 
@@ -242,24 +190,6 @@ const tabOf = (r) => {
   const id = String(r.company_sales_nav_id ?? "").trim();
   return (id ? tabById.get(id) : tabByName.get(textKey(r.company_name ?? ""))) ?? null;
 };
-/** A cell's value, or "" for a blank or a spreadsheet error ("#VALUE!", "#N/A"). */
-const real = (v) => {
-  const s = String(v ?? "").trim();
-  return s && !/^#[A-Z/0]+[!?]?$/.test(s) ? s : "";
-};
-const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-/** A two-letter country code as the country Merlin reads it (lib/geo.ts), or null. */
-function hqCountry(code) {
-  const c = real(code).toUpperCase();
-  if (!/^[A-Z]{2}$/.test(c)) return null;
-  let name = null;
-  try {
-    name = regionNames.of(c);
-  } catch {
-    name = null;
-  }
-  return (name && normalizeHq(name).country) || normalizeHq(c).country || null;
-}
 /** Seat holders' names in the file by company, for the About check only (never stored or printed). */
 const holderKey = (r) => String(r.company_sales_nav_id ?? "").trim() || `name:${textKey(r.company_name ?? "")}`;
 const holdersAt = new Map();
@@ -268,44 +198,15 @@ for (const r of rows) {
   if (!holdersAt.has(k)) holdersAt.set(k, []);
   holdersAt.get(k).push(String(r.person_name ?? ""));
 }
-/** True when an About line names one of the company's seat holders: the whole name, or a word of it after the first of 3+ letters. */
-function aboutNamesHolder(about, r) {
-  const aw = words(about);
-  const set = new Set(aw);
-  const flat = aw.join("");
-  for (const n of holdersAt.get(holderKey(r)) ?? []) {
-    const person = words(String(n).split(/[,(|]/)[0]);
-    if (!person.length) continue;
-    if (person.length >= 2 && flat.includes(person.join(""))) return true;
-    if (person.slice(1).some((w) => w.length >= 3 && set.has(w))) return true;
-    if (person.length === 1 && person[0].length >= 3 && set.has(person[0])) return true;
-  }
-  return false;
-}
-const isTrue = (v) => /^true$/i.test(String(v ?? "").trim());
+/** True when an About line names one of the company's seat holders in the file. */
+const aboutNamesHolder = (about, r) => namesHolder(about, holdersAt.get(holderKey(r)));
 const dropped = {};
 const drop = (why) => (dropped[why] = (dropped[why] ?? 0) + 1);
 const count = (bag, k) => (bag[k || "(blank)"] = (bag[k || "(blank)"] ?? 0) + 1);
 const top = (bag, n = 99) => Object.entries(bag).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k} ${v}`).join(", ");
 
-/** A LinkedIn company page as matched: its id or slug ("linkedin.com/company/12345" is 12345). */
-const linkedinKey = (u) => {
-  const m = String(u ?? "").match(/linkedin\.com\/company\/([^/?#]+)/i);
-  return m ? decodeURIComponent(m[1]).toLowerCase() : null;
-};
-const bySite = new Map();
-const byName = new Map();
-const byLinkedin = new Map();
 const ids = new Set(seed.companies.map((c) => c.id));
-const index = (c) => {
-  const sk = siteKey(c.fields.website);
-  if (sk && !bySite.has(sk)) bySite.set(sk, c);
-  const nk = companyKey(c.fields.name ?? "");
-  if (nk && !byName.has(nk)) byName.set(nk, c);
-  const lk = linkedinKey(c.fields.linkedin);
-  if (lk && !byLinkedin.has(lk)) byLinkedin.set(lk, c);
-};
-for (const c of seed.companies) index(c);
+const { bySite, byName, byLinkedin, index, domainOwner } = companyIndex(seed.companies);
 const companyById = new Map(seed.companies.map((c) => [c.id, c]));
 /** Firms the seed cleanup removed before (lib/firmRemoval.ts), by name and by their seats. */
 const removedNames = new Set((seed.removedFirms?.companies ?? []).map((c) => companyKey(c.name)).filter(Boolean));
@@ -319,19 +220,6 @@ const bySig = new Map();
 for (const e of seed.engagements) {
   const sig = seatSig(e.companyId, e.fields.role, e.fields.start);
   if (sig && !bySig.has(sig)) bySig.set(sig, e.id);
-}
-
-/**
- * The company a website's own name is, when that is another company on file and not this one
- * (the "Lang" -> mangopay.com fix in build-intel-seed.py): a lookup goes to the company its domain names.
- */
-function domainOwner(site, company) {
-  if (!site) return null;
-  const stem = companyKey(site.split(".")[0]);
-  if (!stem || stem.length < 4 || companyKey(company).includes(stem)) return null;
-  const owner = byName.get(stem);
-  // An owner with another website is a different company that only shares the name.
-  return owner && (!owner.fields.website || siteKey(owner.fields.website) === siteKey(site)) ? owner : null;
 }
 
 const matched = new Set();
@@ -376,7 +264,7 @@ for (const r of rows) {
   count(countryCount, String(r.country ?? "").trim());
   const seatId = String(r.seat_id ?? "").trim();
   // A handle or a web address as the name ("@acme.ai", "www.acme.com") reads as the name without its "@" or "www.".
-  const company = String(r.company_name ?? "").trim().replace(/\s+/g, " ").replace(/^(https?:\/\/)?(www\.)?@*/i, "").trim().slice(0, 80);
+  const company = companyName(r.company_name);
   if (!seatId) {
     drop("no seat id");
     continue;
@@ -483,10 +371,7 @@ for (const r of rows) {
     }
     if (lk && !byLinkedin.has(lk)) byLinkedin.set(lk, c);
   } else {
-    const base = `c_${companyKey(company).replace(/[^a-z0-9]/g, "").slice(0, 40) || "co"}`;
-    let id = base;
-    for (let n = 2; ids.has(id); n++) id = `${base}_${n}`;
-    ids.add(id);
+    const id = newCompanyId(company, ids);
     c = { id, fields: { name: company, ...Object.fromEntries(Object.entries(want).filter(([, v]) => v)) } };
     seed.companies.push(c);
     companyById.set(id, c);
@@ -530,18 +415,9 @@ for (const r of rows) {
 }
 
 // Labels, places, and firms the file only shows as one together (several fractionals at one
-// small company, or an About text that sells fractional leaders). The About texts are read, not stored.
-// The cleanup reads an earlier tag with the company's About to pick the closest value: an About this
-// run filled in must not change a value a company on file already had (never overwrite).
-const hadStd = new Map(seed.companies.filter((c) => !created.has(c.id)).map((c) => [c.id, { industry: c.fields.industry, employees: c.fields.employees, revenue: c.fields.revenue }]));
-const cleaned = cleanSeed(seed, { about: aboutHint });
-let stdKept = 0;
-for (const c of seed.companies) {
-  const was = hadStd.get(c.id);
-  if (!was) continue;
-  for (const [k, v] of Object.entries(was)) if (v && c.fields[k] !== v) (c.fields[k] = v), stdKept++;
-}
-seed.companies.sort((a, b) => (a.fields.name ?? "").toLowerCase().localeCompare((b.fields.name ?? "").toLowerCase()));
+// small company, or an About text that sells fractional leaders). The About texts are read, not stored,
+// and a value a company on file already had stays (seat-import.mjs cleanKeeping).
+const { cleaned, stdKept } = cleanKeeping(seed, created, aboutHint);
 if (!dryRun) writeFileSync(seedPath, JSON.stringify(seed, null, 1));
 
 const kept = added + updated + unchanged;

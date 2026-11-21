@@ -37,6 +37,12 @@ export interface FirmReview {
 }
 
 const SEAT_SCAN = "Seat scan";
+/**
+ * Fractionals who list the company as their current seat (FirmInput.listedBy). An ended seat from
+ * our records (scripts/add-past-seats.mjs) is a client that hired one in the past, so a company that
+ * went through three fractionals over the years is not a firm for that alone.
+ */
+const listedBy = (engs: { fields: Record<string, string> }[]) => engs.filter((e) => e.fields.source === SEAT_SCAN && e.fields.status !== "Ended").length;
 /** Seat sources a member stands behind: a seat they published, or their story. Their company is never dropped from the seed. */
 const MEMBER_SOURCES = new Set(["Published engagement", "Member success story"]);
 
@@ -105,7 +111,7 @@ export function cleanSeed(seed: Seed, opts: { about?: Map<string, string> } = {}
       about: c.fields.about || opts.about?.get(c.id),
       employees: c.fields.employees,
       holders: engs.map((e) => e.fields.operator).filter(Boolean),
-      listedBy: engs.filter((e) => e.fields.source === SEAT_SCAN).length,
+      listedBy: listedBy(engs),
     });
     if (!why) continue;
     if (engs.some((e) => MEMBER_SOURCES.has(e.fields.source) && e.fields.operator)) {
@@ -159,7 +165,7 @@ export function seedFirmIds(seed: Seed): Map<string, { reason: string; engagemen
       about: c.fields.about,
       employees: c.fields.employees,
       holders: engs.map((e) => e.fields.operator).filter(Boolean),
-      listedBy: engs.filter((e) => e.fields.source === SEAT_SCAN).length,
+      listedBy: listedBy(engs),
     });
     if (why) out.set(c.id, { reason: why, engagements: engs.map((e) => e.id) });
   }
