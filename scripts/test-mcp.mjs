@@ -829,7 +829,8 @@ async function main() {
     await c2c.connect(new StreamableHTTPClientTransport(new URL(MCP), { authProvider: provider }));
     check("SDK client: after sign-in it completes the handshake", !!c2c.getServerVersion()?.name && c2c.getServerVersion().name === "merlin");
     const tl = await c2c.listTools();
-    check("SDK client: it lists the tools", tl.tools.length === 15, tl.tools.length);
+    // 17 with my_pipeline and update_pipeline (Your pipeline).
+    check("SDK client: it lists the tools", tl.tools.length === 17, tl.tools.length);
     const res = await c2c.callTool({ name: "search_companies", arguments: { hiring_now: true, limit: 3 } });
     const parsed = JSON.parse(res.content?.[0]?.text ?? "{}");
     check("SDK client: it calls a tool and reads the answer", Array.isArray(parsed.companies) && parsed.companies.length > 0, res);
