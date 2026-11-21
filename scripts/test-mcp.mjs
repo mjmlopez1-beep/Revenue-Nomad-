@@ -39,6 +39,33 @@ try {
   /* no seed here */
 }
 const secretWords = new Set();
+/**
+ * Which of many words occur in a text, in one pass. The seed's tens of thousands of names and titles checked one by one
+ * against a view of many megabytes took most of an hour; this indexes the words by their first 6 characters and looks
+ * at each place in the text once. Words shorter than 6 characters are checked the plain way.
+ */
+function wordFinder(words) {
+  const byHead = new Map();
+  const short = [];
+  for (const w of new Set(words)) {
+    if (typeof w !== "string" || !w) continue;
+    if (w.length < 6) short.push(w);
+    else {
+      const k = w.slice(0, 6);
+      const l = byHead.get(k);
+      if (l) l.push(w);
+      else byHead.set(k, [w]);
+    }
+  }
+  return (text) => {
+    const found = new Set(short.filter((w) => text.includes(w)));
+    for (let i = 0; i + 6 <= text.length; i++) {
+      const l = byHead.get(text.slice(i, i + 6));
+      if (l) for (const w of l) if (!found.has(w) && text.startsWith(w, i)) found.add(w);
+    }
+    return found;
+  };
+}
 function redact(text) {
   let out = String(text);
   for (const w of secretWords) if (w && out.includes(w)) out = out.split(w).join("[redacted]");
@@ -448,11 +475,14 @@ async function main() {
       else if (x && typeof x === "object") for (const y of Object.values(x)) walk(y);
     };
     walk(av0);
-    for (const w of new Set(words)) {
+    const uniq = [...new Set(words)];
+    const esc = (w) => JSON.stringify(w).slice(1, -1);
+    const inView = wordFinder(uniq.flatMap((w) => [w, esc(w)]))(aJson0);
+    for (const w of uniq) {
       secretWords.add(w);
       seedWords.push(w);
       // Anything A's own app view shows is allowed. The rest is locked or hidden for A.
-      if (!shownStrings.has(w) && !aJson0.includes(w) && !aJson0.includes(JSON.stringify(w).slice(1, -1))) forbidden.add(w);
+      if (!shownStrings.has(w) && !inView.has(w) && !inView.has(esc(w))) forbidden.add(w);
     }
   }
   check("setup: what B added is locked for A in the app", !aJson0.includes(personName) && !aJson0.includes(bRate) && !aJson0.includes(hiddenName));
@@ -614,7 +644,8 @@ async function main() {
   /* gating: nothing A's tools returned so far carries a value locked or hidden for A */
   {
     const all = seenByA.join("\n");
-    const leaks = [...forbidden].filter((w) => all.includes(w));
+    const inAll = wordFinder([...forbidden])(all);
+    const leaks = [...forbidden].filter((w) => inAll.has(w));
     check(`no locked value or hidden company appears in any tool result (${forbidden.size} values checked)`, leaks.length === 0, leaks.length ? `${leaks.length} leaked` : undefined);
     check("no placeholder company (Private Company, Stealth Startup, Confidential) appears in any tool result", !/"(Private Company|Stealth Startup|Confidential|Start- Up|A Series B SaaS company)"/.test(all));
     check("every website, LinkedIn and posting link in a tool result starts with https:// or http://", [...all.matchAll(/\\?"(website|linkedin|posting)\\?":\\?"([^"\\]*)/g)].every((m) => /^https?:\/\//.test(m[2]) || /^(on file|locked|opens after|No posting|under review)/.test(m[2])));
@@ -843,7 +874,8 @@ async function main() {
     const all = seenByA.join("\n");
     // What A's app shows now, after the unlocks: a title many seats share ("Fractional CMO") is A's to see once A paid for one of them.
     const aJsonNow = JSON.stringify(await A.view());
-    const leaks = [...forbidden].filter((w) => w !== personName && w !== hiddenName && w !== hiddenSite && w !== "$9,876/mo" && w !== `jobs.example.com/qamcp/${RUN}` && all.includes(w) && !aJsonNow.includes(w) && !sentByA.some((x) => x.includes(w)));
+    const inAll = wordFinder([...forbidden])(all);
+    const leaks = [...forbidden].filter((w) => w !== personName && w !== hiddenName && w !== hiddenSite && w !== "$9,876/mo" && w !== `jobs.example.com/qamcp/${RUN}` && inAll.has(w) && !aJsonNow.includes(w) && !sentByA.some((x) => x.includes(w)));
     check("still no leak after A's unlocks (only what A paid for shows)", leaks.length === 0, leaks.length ? `${leaks.length} leaked` : undefined);
   }
 }
