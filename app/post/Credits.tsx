@@ -17,7 +17,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { FREE_COMPANY_TODAY, freeCompanyNow } from "./display";
 import { CRYSTAL_FREE_TODAY, FEATURE_NAME } from "@/lib/radar/types";
 import { Pro, useUi } from "./ui";
-import { MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
+import { DataLink, MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
 import { ReportedMessages } from "./Messages";
 import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
@@ -453,6 +453,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
           {view.scan?.digest && <WeeklyEmail />}
           {view.email && <MessageEmail />}
           <ConnectedApps onHowTo={onUseInClaude} />
+          <DataLink />
         </>
       ) : (
         <>
@@ -464,6 +465,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
           {view.scan?.digest && <WeeklyEmail />}
           {view.email && <MessageEmail />}
           <ConnectedApps onHowTo={onUseInClaude} />
+          <DataLink />
           {review}
           {history}
         </>

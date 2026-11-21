@@ -50,6 +50,8 @@ export interface FetchOpts {
    * (robotsAllowsPath), which is stricter: a Disallow of "/" still refuses every page.
    */
   robotsCheck?: (url: URL) => Promise<boolean>;
+  /** Refuse a redirect to another registrable domain (lib/logo.ts: a company's icon comes from its own site only). */
+  sameSite?: boolean;
 }
 
 /** A refusal for safety (a private address, a bad port or scheme, a redirect elsewhere): never retried sooner than any other failure. */
@@ -164,6 +166,8 @@ interface Raw {
   type: string;
   location: string | null;
   body: string;
+  /** The body's bytes as read (decompressed), for an image (fetchImageAt). */
+  bytes: Buffer;
   truncated: boolean;
 }
 
@@ -230,7 +234,7 @@ function getOnce(url: URL, o: Required<Pick<FetchOpts, "timeoutMs">> & FetchOpts
         if (!wantBody(status, type)) {
           res.destroy();
           req.destroy();
-          return finish(null, { status, type, location, body: "", truncated: false });
+          return finish(null, { status, type, location, body: "", bytes: Buffer.alloc(0), truncated: false });
         }
         const enc = String(res.headers["content-encoding"] ?? "").toLowerCase().trim();
         let stream: NodeJS.ReadableStream = res;
@@ -248,7 +252,7 @@ function getOnce(url: URL, o: Required<Pick<FetchOpts, "timeoutMs">> & FetchOpts
           } catch {
             body = buf.toString("utf8");
           }
-          finish(null, { status, type, location, body, truncated });
+          finish(null, { status, type, location, body, bytes: buf, truncated });
         };
         stream.on("data", (c: Buffer) => {
           if (settled) return;
@@ -308,7 +312,7 @@ function netReason(e: unknown): string {
  * GET `start` and follow up to MAX_REDIRECTS redirects, each hop checked (scheme, port, host,
  * addresses). Cross-site hops only go to a public host name. Returns the last response.
  */
-async function follow(start: URL, o: FetchOpts, max: number, kind: "html" | "robots"): Promise<{ raw: Raw; url: URL }> {
+async function follow(start: URL, o: FetchOpts, max: number, kind: "html" | "robots" | "image"): Promise<{ raw: Raw; url: URL }> {
   const opts = { timeoutMs: o.timeoutMs ?? TIMEOUT_MS, ...o };
   let url = start;
   const site = registrable(start.hostname);
@@ -320,7 +324,8 @@ async function follow(start: URL, o: FetchOpts, max: number, kind: "html" | "rob
     try {
       raw = await getOnce(url, opts, max, (status, type) =>
         // A bot wall answers 403 or 503 with a page: read it, to tell a challenge from a plain refusal.
-        ((status >= 200 && status < 300) || (kind === "html" && CHALLENGE_STATUS.has(status))) && (kind === "robots" || /text\/html|application\/xhtml\+xml/.test(type)),
+        ((status >= 200 && status < 300) || (kind === "html" && CHALLENGE_STATUS.has(status))) &&
+        (kind === "robots" || (kind === "image" ? IMAGE_TYPE.test(type) : /text\/html|application\/xhtml\+xml/.test(type))),
       );
     } finally {
       release();
@@ -336,6 +341,7 @@ async function follow(start: URL, o: FetchOpts, max: number, kind: "html" | "rob
       next.hash = "";
       const bad = urlProblem(next, o.allow);
       if (bad) throw new Refused(bad);
+      if (o.sameSite && registrable(next.hostname) !== site) throw new Refused("redirect to another site");
       if (registrable(next.hostname) !== site && !publicName(next.hostname) && !(o.allow?.loopback && !net.isIP(next.hostname))) throw new Refused("redirect to a non-public host");
       url = next;
       continue;
@@ -504,6 +510,40 @@ export async function fetchXmlAt(address: string, opts: FetchOpts = {}): Promise
     if (raw.status < 200 || raw.status >= 300) return { ok: false, kind: "failed", reason: `http ${raw.status}` };
     if (!/xml|text\/plain/.test(raw.type)) return { ok: false, kind: "skipped", reason: "not xml" };
     return { ok: true, url: url.href, host: url.hostname, body: raw.body };
+  } catch (e) {
+    if (e instanceof Refused) return { ok: false, kind: "skipped", reason: e.message };
+    return { ok: false, kind: "failed", reason: netReason(e) };
+  }
+}
+
+/** Raster image types fetchImageAt reads. No SVG: it can carry script. */
+const IMAGE_TYPE = /^\s*image\/(png|x-icon|vnd\.microsoft\.icon|ico|gif|jpeg|webp)\s*(;|$)/;
+
+/**
+ * An image by its full address (a company's icon, lib/logo.ts), under the same rules as
+ * fetchPageAt: every hop checked, the timeout, at most `maxBytes`. Raster images only (PNG, ICO,
+ * GIF, JPEG, WebP); a larger body is refused, never cut. robots.txt is the caller's to check
+ * (robotsCheck), since it reads it once for the site.
+ */
+export async function fetchImageAt(address: string, opts: FetchOpts = {}): Promise<{ ok: true; url: string; type: string; bytes: Buffer } | { ok: false; kind: "skipped" | "failed"; reason: string }> {
+  const o: FetchOpts = { ...opts, allow: opts.allow ?? testAllowance() };
+  const max = o.maxBytes ?? 100 * 1024;
+  let start: URL;
+  try {
+    start = new URL(address);
+  } catch {
+    return { ok: false, kind: "skipped", reason: "bad address" };
+  }
+  start.hash = "";
+  try {
+    if (o.robotsCheck && !(await o.robotsCheck(start))) return { ok: false, kind: "skipped", reason: "robots.txt disallows" };
+    // One byte past the cap tells a body that is too big from one that is exactly the cap.
+    const { raw, url } = await follow(start, o, max + 1, "image");
+    if (raw.status < 200 || raw.status >= 300) return { ok: false, kind: "failed", reason: `http ${raw.status}` };
+    if (!IMAGE_TYPE.test(raw.type)) return { ok: false, kind: "skipped", reason: "not an image" };
+    if (raw.truncated || raw.bytes.length > max) return { ok: false, kind: "skipped", reason: "too big" };
+    if (!raw.bytes.length) return { ok: false, kind: "skipped", reason: "empty" };
+    return { ok: true, url: url.href, type: raw.type.split(";")[0].trim(), bytes: raw.bytes };
   } catch (e) {
     if (e instanceof Refused) return { ok: false, kind: "skipped", reason: e.message };
     return { ok: false, kind: "failed", reason: netReason(e) };

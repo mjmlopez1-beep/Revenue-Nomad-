@@ -515,7 +515,7 @@ async function main() {
     !!fox && (fox.text?.text ?? "").startsWith("*<https://post.example.com/api/radar/go?") && (fox.text?.text ?? "").includes(encodeURIComponent(`/?c=${pub("c_fox")}`)) && (fox.text?.text ?? "").includes("|Fox Freight>*\nNew open role: Fractional Finance Director") && (fox.fields ?? []).some((f) => /^\*Likelihood\*\n(High|Medium)$/.test(f.text)),
     fox,
   );
-  check("its logo is the public icon service's, from its website", fox?.accessory?.type === "image" && fox.accessory.image_url === "https://www.google.com/s2/favicons?domain=fox.example&sz=64", fox?.accessory);
+  check("its logo is our own /api/logo/<its public id>, never an icon service and never its domain", fox?.accessory?.type === "image" && fox.accessory.image_url === `https://post.example.com/api/logo/${pub("c_fox")}` && !/google|duckduckgo|fox\.example/.test(fox.accessory.image_url), fox?.accessory);
   check("its own button says Open and opens its record", foxButton?.text.text === "Open" && foxButton.url.includes(encodeURIComponent(`/?c=${pub("c_fox")}`)), foxButton);
   const otherSections = proBlocks.filter((b, i) => b.type === "section" && i !== foxAt);
   check("a company Pia's table keeps locked gets no logo in Slack", otherSections.every((b) => !b.accessory), otherSections);
@@ -569,10 +569,10 @@ async function main() {
     card(i, {
       company: `Named Co ${i}`, locked: undefined, known: true, subject: `Named Co ${i}`, signal: "No longer lists a Sales leader", headline: `Named Co ${i} no longer lists a Sales leader`,
       band: "High", whyNow: "CRO gone from its website · interim or fractional cover usually follows within 2 months", why: "Their Sales seat may need cover, at a company in your profile",
-      about: { industry: "SaaS", size: "51–200 people", hq: "Texas, US" }, place: `/?c=c_named${i}`, logo: `https://www.google.com/s2/favicons?domain=named${i}.example&sz=64`, ...o,
+      about: { industry: "SaaS", size: "51–200 people", hq: "Texas, US" }, place: `/?c=c_named${i}`, logo: `https://post.example.com/api/logo/c_named${i}`, ...o,
     });
   // A locked card that somehow carries a name, a record and a logo: none of them may reach Slack.
-  const lockedLeaky = card(9, { subject: "A SaaS company", signal: "No longer lists a Sales leader", band: "Medium", whyNow: "CRO gone from its website · cover usually follows within 2 months", about: { industry: "SaaS", size: "11–50 people" }, company: "Secret Sauce Inc", place: "/?c=c_secret", logo: "https://www.google.com/s2/favicons?domain=secret.example&sz=64" });
+  const lockedLeaky = card(9, { subject: "A SaaS company", signal: "No longer lists a Sales leader", band: "Medium", whyNow: "CRO gone from its website · cover usually follows within 2 months", about: { industry: "SaaS", size: "11–50 people" }, company: "Secret Sauce Inc", place: "/?c=c_secret", logo: "https://post.example.com/api/logo/c_secret" });
   const mixed = nfmt.alertFor([{ kind: "radar", at: nowIso(), day: dayOf([namedCard(1), lockedLeaky, namedCard(2, { known: undefined, logo: undefined }), ...Array.from({ length: 5 }, (_, i) => card(20 + i))]) }], BASE_URL)!;
   const mb = nfmt.slackBody(mixed) as unknown as { text: string; blocks: B[] };
   check("the Crystal Ball post is valid Block Kit, inside every limit", blockKitProblems(mb).length === 0, blockKitProblems(mb));
@@ -587,7 +587,7 @@ async function main() {
     JSON.stringify(n1?.fields?.map((f) => f.text)) === JSON.stringify(["*Likelihood*\nHigh", "*Why now*\nCRO gone from its website", "*Timing*\nInterim or fractional cover usually follows within 2 months", "*Industry*\nSaaS", "*Size*\n51–200 people", "*HQ*\nTexas, US"]),
     n1?.fields,
   );
-  check("its logo on the right", n1?.accessory?.type === "image" && n1.accessory.image_url === "https://www.google.com/s2/favicons?domain=named1.example&sz=64" && n1.accessory.alt_text === "Named Co 1 logo", n1?.accessory);
+  check("its logo on the right", n1?.accessory?.type === "image" && n1.accessory.image_url === "https://post.example.com/api/logo/c_named1" && n1.accessory.alt_text === "Named Co 1 logo", n1?.accessory);
   const btnAfter = (sec: B | undefined) => mb.blocks.slice(mb.blocks.indexOf(sec!) + 1).find((b) => b.type === "actions")?.elements?.[0] as { text: { text: string }; url: string } | undefined;
   check("its own button: Open, to its record", btnAfter(n1)?.text.text === "Open" && btnAfter(n1)?.url === `${BASE_URL}/?c=c_named1`, btnAfter(n1));
   const lk = secs[1];

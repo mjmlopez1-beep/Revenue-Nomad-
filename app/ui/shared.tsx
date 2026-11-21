@@ -11,6 +11,7 @@ import { webLink } from "@/lib/links";
 import { unpackCompany, unpackView, type TodayView } from "@/lib/viewWire";
 import type { FirstList } from "@/app/post/place";
 import type { MovesWire } from "@/lib/moves";
+import { logoIdFor } from "./logoIds";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
 export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean; /** The "move" action: today's moves as they now stand. */ moves?: MovesWire };
@@ -464,12 +465,15 @@ export function LockedSite({ seed, className }: { seed: string; className?: stri
 const COMPANY_ID = /^c_[\w-]{6,40}$/;
 
 /**
- * `hidden`: a locked company's logo. The page never has its domain, so the image comes from our
- * own GET /api/logo/<id> (lib/logo.ts), which fetches the icon on the server and sends only its
- * bytes. `seed` is the company's public id. With no logo (a 404, or a blank 16px icon) it is a
- * plain soft tile in a color from the id, with a quiet building in it: never letters, which would
- * read as a real mark. `noLogo`: the tile only (the landing page's rows have no company id).
- * A company the member can name keeps the icon services' addresses with its domain, as before.
+ * Every logo comes from our own GET /api/logo/<public id> (lib/logo.ts): the server reads the
+ * icon from the company's own website and sends only its bytes. The browser never asks an icon
+ * service, so no outside service learns which companies a member looks at. `seed` is the
+ * company's public id; without one, a known company's id is found by its domain (rememberLogo).
+ *
+ * `hidden`: a locked company's logo. With no logo (a 404, or a blank icon) it is a plain soft tile
+ * in a color from the id, with a quiet building in it: never letters, which would read as a real
+ * mark. `noLogo`: the tile only (the landing page's rows have no company id). A company the member
+ * can name with no logo (no id, no website, or a 404) gets its lettered tile.
  */
 export function CompanyLogo({
   name,
@@ -486,17 +490,11 @@ export function CompanyLogo({
   seed?: string;
   noLogo?: boolean;
 }) {
-  const sources = useMemo(
-    () =>
-      hidden
-        ? seed && !noLogo && COMPANY_ID.test(seed)
-          ? [`/api/logo/${encodeURIComponent(seed)}`]
-          : []
-        : domain
-          ? [`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`, `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`]
-          : [],
-    [domain, hidden, seed, noLogo],
-  );
+  const sources = useMemo(() => {
+    if (noLogo) return [];
+    const id = seed && COMPANY_ID.test(seed) ? seed : !hidden ? logoIdFor(domain) : undefined;
+    return id ? [`/api/logo/${encodeURIComponent(id)}`] : [];
+  }, [domain, hidden, seed, noLogo]);
   const [idx, setIdx] = useState(0);
   useEffect(() => setIdx(0), [domain, hidden, seed]);
   const cls = `logo${size === "lg" ? " logo-lg" : ""}`;
@@ -512,7 +510,7 @@ export function CompanyLogo({
           loading="lazy"
           decoding="async"
           // A blank or tiny icon is no logo: the tile instead.
-          onLoad={(e) => e.currentTarget.naturalWidth <= 16 && setIdx(sources.length)}
+          onLoad={(e) => e.currentTarget.naturalWidth < 16 && setIdx(sources.length)}
           onError={() => setIdx(sources.length)}
         />
       );
@@ -537,9 +535,9 @@ export function CompanyLogo({
       src={sources[idx]}
       alt=""
       loading="lazy"
-      referrerPolicy="no-referrer"
-      onLoad={(e) => idx === 0 && e.currentTarget.naturalWidth <= 16 && setIdx(1)}
-      onError={() => setIdx((i) => i + 1)}
+      decoding="async"
+      onLoad={(e) => e.currentTarget.naturalWidth < 16 && setIdx(sources.length)}
+      onError={() => setIdx(sources.length)}
     />
   );
 }

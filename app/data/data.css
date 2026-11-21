@@ -1,0 +1,62 @@
+/* Where Merlin's data goes (app/data): the claim page's look, wider for reading. */
+.cl-main.df-main {
+  max-width: 720px;
+}
+.df-card {
+  gap: 20px;
+}
+.df-sec {
+  display: grid;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.df-h {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+}
+.df-h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 700;
+}
+.df-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.df-list li {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
+}
+.df-list p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+.df-list strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.df-when {
+  color: var(--muted);
+  font-size: 14px;
+}
+.df-bullets {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 22px;
+}
