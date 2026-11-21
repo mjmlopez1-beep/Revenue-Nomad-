@@ -10,7 +10,9 @@
  *    first, last and next touch, and the months it had meetings in (for "a seat you might have held");
  *  - up to PEOPLE_MAX people per company: email, name, title, their counts and dates, where it came from;
  *  - counts only for everything that matched no company (never the domains or the people);
- *  - the Google refresh tokens, sealed (lib/google/crypto.ts), never sent to a browser or logged.
+ *  - the Google refresh tokens, sealed (lib/google/crypto.ts), never sent to a browser or logged;
+ *  - how long the first read took, when the member saw its result, and the companies they said
+ *    were "Not a seat" (so a seat guess they dismissed stays dismissed).
  * Never an event title, description or attendee list, never a subject, snippet or body. Calendar
  * events are fetched without them (the fields parameter leaves them out), Gmail with headers only.
  *
@@ -93,6 +95,8 @@ export interface GoogleLink {
   error?: string;
   /** Gmail only: it came from its own OAuth client (GOOGLE_GMAIL_CLIENT_ID), so dropping it revokes at Google too. */
   ownClient?: boolean;
+  /** Measured: milliseconds from this connection being made to its first read finishing. Set once, by that read. */
+  firstMs?: number;
 }
 
 export interface MemberNetwork {
@@ -103,6 +107,10 @@ export interface MemberNetwork {
   gm?: SourceData;
   /** What the member saved through their own Claude (save_my_network). */
   claude?: SourceData & { saves: string[]; named: { id: string; at: string }[] };
+  /** When the member saw the result of their first read (the connect moment shows once). ISO. */
+  found?: string;
+  /** Internal company ids the member said were "Not a seat": those seat guesses stay dismissed. */
+  notSeats?: string[];
 }
 
 /** State.network: member id -> their network. Nobody else's view ever reads another member's entry. */
@@ -119,6 +127,11 @@ export const CLAUDE_NEW_DAILY = 25;
 /** "A seat you might have held": meetings with a company in this many months, this many meetings in all. */
 export const SEAT_MONTHS = 3;
 export const SEAT_MEETINGS = 6;
+/** A seat guess with fewer months or fewer meetings than these reads "Less sure" (about every other week for half a year). */
+export const SEAT_SURE_MONTHS = 6;
+export const SEAT_SURE_MEETINGS = 18;
+/** "Not a seat" answers kept per member (the oldest go first). */
+export const NOT_SEATS_MAX = 500;
 
 /* ---------- the feature switch (env only, safe anywhere on the server) ---------- */
 
@@ -151,6 +164,9 @@ export function warmthOf(score: number): Warmth {
 }
 
 export const WARMTH_RANK: Record<Warmth, number> = { Hot: 0, Warm: 1, Fading: 2, Cold: 3 };
+
+/** Crystal Ball's chip, in words: "You know someone · Warm". The same grades Your network shows. */
+export const knowWords = (w: Warmth) => `You know someone · ${w}`;
 
 /* ---------- decision makers ---------- */
 
@@ -352,6 +368,56 @@ export interface NetCompanyView {
   seat: { from: string; to: string } | null;
 }
 
+/** What the read is doing right now (kept in memory while it runs, never stored). */
+export type SyncStage = "calendar" | "contacts" | "gmail" | "matching";
+
+/**
+ * "We think you held this seat": a company the member met with over months (NetCompanyView.seat),
+ * where they hold no seat on Merlin yet and haven't said "Not a seat". Only they see it. It holds
+ * no meeting title, guest list or date beyond the months and the count Your network already shows.
+ */
+export interface SeatGuessView {
+  /** The company's public id, name and site, as the member's table has them. */
+  id: string;
+  name: string;
+  site: string | null;
+  /** First and last month with a meeting (YYYY-MM), the past meetings in all, and the months from first to last. */
+  from: string;
+  to: string;
+  meetings: number;
+  months: number;
+  /** False: fewer than SEAT_SURE_MONTHS or SEAT_SURE_MEETINGS, so the card says "Less sure". */
+  sure: boolean;
+  /** Up to two people there the member met most: names and titles their own network already shows. */
+  with: { name: string; title: string | null }[];
+  /** What Confirm fills in: the function and title from the member's profile (the title is a guess they can change). */
+  function: string | null;
+  role: string | null;
+  /** Met this month or last, or a meeting is coming up: the seat goes in as Active with no end month. */
+  active: boolean;
+  /**
+   * A new seat here would wait to be confirmed (the company's first seat still waits, lib/table.ts
+   * pendingSeats): what Confirm adds earns "when confirmed", not now.
+   */
+  waits: boolean;
+}
+
+/**
+ * What Confirm sends as the seat's facts (the existing Add's engagementFields, with the member as
+ * the seat holder): their name, the function, the title, the first month and, for a seat that
+ * ended, the last month (an ongoing one goes in as Active). `role`: the member's own change to the title.
+ */
+export function seatConfirmFields(g: SeatGuessView, holder: string, role: string | null = g.role): Record<string, string> {
+  const title = (role ?? "").trim();
+  return {
+    operator: holder,
+    ...(g.function ? { function: g.function } : {}),
+    ...(title ? { role: title } : {}),
+    start: g.from,
+    ...(g.active ? { status: "Active" } : { end: g.to }),
+  };
+}
+
 export interface NetworkView {
   on: true;
   /** GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set. */
@@ -365,8 +431,39 @@ export interface NetworkView {
   claude: { at: string; companies: number } | null;
   claudeLeft: number;
   syncing: boolean;
+  /** While it reads: which part it is on. Null when idle. */
+  stage: SyncStage | null;
+  /**
+   * The first read of this connection: how long it took (measured, null until it finishes or when
+   * it was never timed) and whether the member has seen its result. Null without Google connected.
+   */
+  first: { ms: number | null; seen: boolean } | null;
   companies: NetCompanyView[];
+  /** Seats the member might have held, most meetings first. Nothing is added until they confirm one. */
+  seats: SeatGuessView[];
   /** People who matched no company on Merlin, people the member really meets or talks with. Counts only. */
   stats: { unmatched: number; real: number };
 }
 export type NetworkAnswer = NetworkView | { on: false };
+
+/* ---------- the connect moment ---------- */
+
+/**
+ * The connect moment's two numbers, from what the member's own pages give: `n` companies they know
+ * someone at (Your network's list), and `m` of those in Crystal Ball's day (its rows, most likely
+ * first). `m` is null while Crystal Ball isn't known (still loading, or the member has no function
+ * yet), so the page never prints a number it doesn't have. `ids`: the `m` companies, in Crystal
+ * Ball's order.
+ */
+export function foundNumbers(network: { id: string }[], crystal: { id: string }[] | null): { n: number; m: number | null; ids: string[] } {
+  const known = new Set(network.map((c) => c.id));
+  const ids = crystal ? [...new Set(crystal.map((r) => r.id).filter((id) => known.has(id)))] : [];
+  return { n: known.size, m: crystal ? ids.length : null, ids };
+}
+
+/** "58 seconds", "about 2 minutes": the measured time of the first read, in words. */
+export function tookWords(ms: number): string {
+  const sec = Math.max(1, Math.round(ms / 1000));
+  if (sec < 90) return `${sec} ${sec === 1 ? "second" : "seconds"}`;
+  return `about ${Math.round(sec / 60)} minutes`;
+}

@@ -7,6 +7,8 @@
  * POST { op: "disconnect" }   revoke at Google and delete everything (Gmail via Claude too)
  * POST { op: "drop-gmail" }   drop just Gmail and what it derived
  * POST { op: "forget-claude" } delete what the member's Claude saved
+ * POST { op: "seen-found" }    the member saw the result of their first read (the connect moment shows once)
+ * POST { op: "not-a-seat", company }  dismiss one seat guess for good (a company's public id)
  * Every answer is { view } or { error }. Tokens never leave the server.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -14,7 +16,7 @@ import { guarded } from "@/lib/apiGuard";
 import { ActionError } from "@/lib/table";
 import { publicOrigin } from "@/lib/mcp/http";
 import { limited } from "@/lib/rateLimit";
-import { disconnectAll, dropGmail, forgetClaude, networkCounts, networkView, refreshDue, syncNow } from "@/lib/google";
+import { disconnectAll, dropGmail, forgetClaude, networkCounts, networkView, notASeat, refreshDue, sawFound, syncNow } from "@/lib/google";
 
 export const dynamic = "force-dynamic";
 const COOKIE = "rn_table";
@@ -42,9 +44,9 @@ export const POST = guarded(async (req: NextRequest) => {
   if (!token) return fail(SIGNED_OUT, 401);
   const raw = await req.text();
   if (raw.length > 1024) return fail("That's too much to send.", 413);
-  let body: { op?: unknown } | null = null;
+  let body: { op?: unknown; company?: unknown } | null = null;
   try {
-    body = JSON.parse(raw) as { op?: unknown };
+    body = JSON.parse(raw) as { op?: unknown; company?: unknown };
   } catch {
     body = null;
   }
@@ -60,6 +62,10 @@ export const POST = guarded(async (req: NextRequest) => {
         return NextResponse.json({ view: await dropGmail(token), message: "Gmail is off. What it found is deleted." }, { headers: noStore });
       case "forget-claude":
         return NextResponse.json({ view: await forgetClaude(token), message: "Deleted what Claude saved." }, { headers: noStore });
+      case "seen-found":
+        return NextResponse.json({ view: await sawFound(token) }, { headers: noStore });
+      case "not-a-seat":
+        return NextResponse.json({ view: await notASeat(token, body.company), message: "Got it. We won't suggest that one again." }, { headers: noStore });
       default:
         return fail("That didn't go through. Refresh the page and try again.");
     }

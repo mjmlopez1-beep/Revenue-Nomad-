@@ -8,11 +8,11 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { ActionError, isAdmin, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
-import { siteKey } from "../tableFields";
+import { functionOf, siteKey } from "../tableFields";
 import {
-  CLAUDE_ENTRIES_MAX, CLAUDE_NEW_DAILY, CLAUDE_SAVES_DAILY, SEAT_MEETINGS, SEAT_MONTHS, companyScore, isDecisionMaker, isFreeMail, mergeCompany, networkIds, networkOn, warmthOf, warmthScore,
-  WARMTH_RANK, domainOf,
-  type GoogleLink, type LinkView, type MemberNetwork, type NetCompany, type NetCompanyView, type NetPerson, type NetworkAnswer, type NetworkView, type SourceData,
+  CLAUDE_ENTRIES_MAX, CLAUDE_NEW_DAILY, CLAUDE_SAVES_DAILY, NOT_SEATS_MAX, SEAT_MEETINGS, SEAT_MONTHS, SEAT_SURE_MEETINGS, SEAT_SURE_MONTHS, companyScore, isDecisionMaker, isFreeMail, mergeCompany, networkIds,
+  networkOn, warmthOf, warmthScore, WARMTH_RANK, domainOf,
+  type GoogleLink, type LinkView, type MemberNetwork, type NetCompany, type NetCompanyView, type NetPerson, type NetworkAnswer, type NetworkView, type SeatGuessView, type SourceData, type SyncStage,
 } from "./types";
 import {
   MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailTester, googleConfigured, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
@@ -200,6 +200,16 @@ async function withAccess<T>(memberId: string, kind: Kind, link: GoogleLink, fn:
 
 const syncing = new Set<string>();
 export const isSyncing = (memberId: string) => syncing.has(memberId);
+/** What a running read is on (memory only): the connect moment's progress says it as it is. */
+const stages = new Map<string, SyncStage>();
+/**
+ * Tests only (RN_SCAN_TEST=1): RN_GOOGLE_SYNC_SLOW_MS holds each part of a read this long, so the
+ * progress state can be looked at against the fake Google. Nothing on a real server.
+ */
+const slow = async () => {
+  const ms = process.env.RN_SCAN_TEST === "1" ? Number(process.env.RN_GOOGLE_SYNC_SLOW_MS) || 0 : 0;
+  if (ms > 0) await new Promise((r) => setTimeout(r, Math.min(ms, 60_000)));
+};
 
 async function markGone(memberId: string, kind: Kind, connectedAt: string) {
   await T.mutate((s) => {
@@ -231,11 +241,15 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
       try {
         await withAccess(memberId, "google", g, async (acc) => {
           if (hasCalendar(g.scopes)) {
+            stages.set(memberId, "calendar");
+            await slow();
             const cals = await G.ownedCalendars(acc, hasCalendarList(g.scopes));
             const events = (await Promise.all(cals.map((c) => G.calendarEvents(acc, c, from, nowMs + AHEAD_DAYS * DAY)))).flat();
             out.cal = calendarSource(events, dir, own, nowMs);
           }
           if (hasContacts(g.scopes)) {
+            stages.set(memberId, "contacts");
+            await slow();
             const saved = await G.contacts(acc, false);
             const other = hasOtherContacts(g.scopes) ? await G.contacts(acc, true).catch((e) => (G.isDenied(e) ? [] : Promise.reject(e))) : [];
             out.con = contactsSource(saved, other, dir, own, nowMs);
@@ -251,6 +265,7 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
     const gl = n.gmail;
     if (gl && gl.status !== "reconnect" && gmailTester(m.email, g?.email)) {
       try {
+        stages.set(memberId, "gmail");
         const self = new Set([m.email.toLowerCase(), g?.email, gl.email].filter((x): x is string => !!x));
         out.gm = gmailSource(await withAccess(memberId, "gmail", gl, (acc) => G.gmailHeaders(acc, from)), self, dir, own, nowMs);
         out.gmail = { at: new Date(nowMs).toISOString() };
@@ -260,6 +275,8 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
         out.gmail = { error: e instanceof G.GoogleError ? e.code : "error" };
       }
     }
+    stages.set(memberId, "matching");
+    await slow();
     await T.mutate((d) => {
       const cur = netOf(d, memberId);
       if (!cur) return;
@@ -268,6 +285,11 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
         if (out.cal) cur.cal = out.cal;
         if (out.con) cur.con = out.con;
         if (out.google?.at) {
+          // The first read of this connection: how long it took, by the clock (the connect moment says it only when measured).
+          if (!cur.google.syncedAt && cur.google.firstMs === undefined) {
+            const took = Date.now() - Date.parse(cur.google.connectedAt);
+            if (Number.isFinite(took) && took >= 0 && took < 60 * 60_000) cur.google.firstMs = took;
+          }
           cur.google.syncedAt = out.google.at;
           delete cur.google.error;
         } else if (out.google?.error) cur.google.error = out.google.error;
@@ -283,6 +305,7 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
     return error ? { ok: false, error } : { ok: true };
   } finally {
     syncing.delete(memberId);
+    stages.delete(memberId);
   }
 }
 
@@ -374,13 +397,78 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
   return out.sort((a, b) => WARMTH_RANK[a.warmth] - WARMTH_RANK[b.warmth] || b.score - a.score || a.name.localeCompare(b.name));
 }
 
+/** YYYY-MM of the month before `nowMs` (UTC). */
+const lastMonth = (nowMs: number) => {
+  const d = new Date(nowMs);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 15)).toISOString().slice(0, 7);
+};
+const monthsBetween = (from: string, to: string) => {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return Math.max(1, (ty - fy) * 12 + (tm - fm) + 1);
+};
+
+/**
+ * "We think you held these seats": the member's own companies with months of meetings
+ * (NetCompanyView.seat), less the ones where a seat is already theirs or carries their name, and
+ * the ones they said were "Not a seat". Most meetings first. It reads only the member's own
+ * network and their own seats, and adds nothing: Confirm is the member's own Add (lib/table.ts).
+ */
+export function seatGuessesOf(seed: Seed, s: State, m: Member, list: (NetCompanyView & { internal: string })[], n: MemberNetwork | undefined, nowMs = Date.now()): SeatGuessView[] {
+  const no = new Set(n?.notSeats ?? []);
+  const maybe = list.filter((c) => c.seat && !no.has(c.internal));
+  if (!maybe.length) return [];
+  const want = new Set(maybe.map((c) => c.internal));
+  const g = graphOf(seed, s);
+  const idx = T.memberIndex(seed, s);
+  // A seat there that is theirs, or that they put their name on (still waiting to be confirmed).
+  const held = new Set<string>();
+  for (const e of g.engagements.values()) {
+    if (!want.has(e.companyId) || held.has(e.companyId)) continue;
+    const v = T.valueOf(e, s, "operator");
+    if (!v || v.status !== "live") continue;
+    if (v.memberId === m.id || T.seatHolder(s, idx, e.id, v)?.id === m.id) held.add(e.companyId);
+  }
+  const prof = s.profiles[m.id] ?? {};
+  const title = (prof.title || (m.title === "Member" ? "" : m.title) || "").trim();
+  const fn = prof.function ?? functionOf(title) ?? null;
+  const recent = lastMonth(nowMs);
+  const waiting = new Set((s.pendingSeats ?? []).map((p) => p.companyId));
+  return maybe
+    .filter((c) => !held.has(c.internal))
+    .map((c): SeatGuessView => {
+      const months = monthsBetween(c.seat!.from, c.seat!.to);
+      return {
+        id: c.id,
+        name: c.name,
+        site: c.site,
+        from: c.seat!.from,
+        to: c.seat!.to,
+        meetings: c.meetings,
+        months,
+        sure: months >= SEAT_SURE_MONTHS && c.meetings >= SEAT_SURE_MEETINGS,
+        with: c.people
+          .filter((p) => !!p.name && p.meetings > 0)
+          .sort((a, b) => b.meetings - a.meetings)
+          .slice(0, 2)
+          .map((p) => ({ name: p.name!, title: p.title })),
+        function: fn,
+        role: title || null,
+        active: c.seat!.to >= recent || c.upcoming > 0,
+        waits: waiting.has(c.internal),
+      };
+    })
+    .sort((a, b) => Number(b.sure) - Number(a.sure) || b.meetings - a.meetings || a.name.localeCompare(b.name));
+}
+
 /** GET /api/integrations/google: the member's own network. { on: false } when RN_GOOGLE is off. */
 export async function networkView(token: string | null, nowMs = Date.now()): Promise<NetworkAnswer | null> {
   if (!networkOn()) return { on: false };
   const w = await who(token);
   if (!w) return null;
   const n = netOf(w.s, w.m.id);
-  const companies = companiesOf(w.seed, w.s, n, nowMs).map(({ internal: _i, ...c }) => c); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const all = companiesOf(w.seed, w.s, n, nowMs);
+  const companies = all.map(({ internal: _i, ...c }) => c); // eslint-disable-line @typescript-eslint/no-unused-vars
   const srcs = [n?.cal, n?.con, n?.gm, n?.claude];
   const view: NetworkView = {
     on: true,
@@ -392,7 +480,10 @@ export async function networkView(token: string | null, nowMs = Date.now()): Pro
     claude: n?.claude ? { at: n.claude.at, companies: Object.keys(n.claude.companies).length } : null,
     claudeLeft: Math.max(0, CLAUDE_SAVES_DAILY - savesToday(n, nowMs)),
     syncing: syncing.has(w.m.id),
+    stage: syncing.has(w.m.id) ? stages.get(w.m.id) ?? null : null,
+    first: n?.google ? { ms: n.google.syncedAt ? n.google.firstMs ?? null : null, seen: !!n.found } : null,
     companies,
+    seats: seatGuessesOf(w.seed, w.s, w.m, all, n, nowMs),
     stats: { unmatched: srcs.reduce((a, x) => a + (x?.unmatched ?? 0), 0), real: Math.max(n?.cal?.real ?? 0, n?.gm?.real ?? 0) },
   };
   return view;
@@ -408,6 +499,39 @@ export async function syncNow(token: string | null): Promise<NetworkAnswer> {
   if (!w) throw new ActionError(SIGNED_OUT);
   if (!netOf(w.s, w.m.id)?.google) throw new ActionError("Connect Google first.");
   void syncMember(w.m.id).catch(() => null);
+  return (await networkView(token))!;
+}
+
+/** The member saw the result of their first read: the connect moment doesn't open by itself again. */
+export async function sawFound(token: string | null): Promise<NetworkAnswer> {
+  const w = await who(token);
+  if (!w) throw new ActionError(SIGNED_OUT);
+  if (netOf(w.s, w.m.id)?.google && !netOf(w.s, w.m.id)?.found)
+    await T.mutate((s) => {
+      const n = netOf(s, w.m.id);
+      if (n?.google && !n.found) n.found = new Date().toISOString();
+    });
+  return (await networkView(token))!;
+}
+
+/**
+ * "Not a seat" on a seat guess: remembered for this member, so it never comes back. `companyId` is
+ * the company's public id, and only a company in their own network counts. Nothing else changes:
+ * no seat, no credit, nothing any other member sees.
+ */
+export async function notASeat(token: string | null, companyId: unknown): Promise<NetworkAnswer> {
+  const w = await who(token);
+  if (!w) throw new ActionError(SIGNED_OUT);
+  if (!networkOn()) throw new ActionError("Your network isn't on for Merlin yet.");
+  const pub = typeof companyId === "string" ? companyId.slice(0, 80) : "";
+  const hit = pub ? companiesOf(w.seed, w.s, netOf(w.s, w.m.id)).find((c) => c.id === pub) : undefined;
+  if (!hit) throw new ActionError("That company isn't in your network any more. Refresh the page.");
+  await T.mutate((s) => {
+    const n = netOf(s, w.m.id);
+    if (!n) return;
+    const list = (n.notSeats ?? []).filter((x) => x !== hit.internal);
+    n.notSeats = [...list, hit.internal].slice(-NOT_SEATS_MAX);
+  });
   return (await networkView(token))!;
 }
 

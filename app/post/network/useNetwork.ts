@@ -41,11 +41,11 @@ export function load(force = false): Promise<void> {
   return loading;
 }
 
-export type NetOp = "sync" | "disconnect" | "drop-gmail" | "forget-claude";
-/** A button: the answer replaces the view. Returns the message or the error. */
-export async function netAct(op: NetOp): Promise<{ message?: string; error?: string }> {
+export type NetOp = "sync" | "disconnect" | "drop-gmail" | "forget-claude" | "seen-found" | "not-a-seat";
+/** A button: the answer replaces the view. Returns the message or the error. `more`: what the op needs besides its name (not-a-seat's company). */
+export async function netAct(op: NetOp, more: Record<string, string> = {}): Promise<{ message?: string; error?: string }> {
   try {
-    const r = await fetch("/api/integrations/google", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op }) });
+    const r = await fetch("/api/integrations/google", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...more, op }) });
     const j = (await r.json().catch(() => ({}))) as { view?: NetworkAnswer; message?: string; error?: string };
     if (j.view) set(j.view);
     return r.ok ? { message: j.message } : { error: j.error || "That didn't go through. Try again." };
