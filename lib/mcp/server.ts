@@ -357,7 +357,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
       {
         title: "My network",
         description:
-          "The member's own network on Merlin: the companies they know someone at (from their Google Calendar and Contacts, Gmail for test members, and what they saved through save_my_network), warmest first, with warmth (Hot, Warm, Fading, Cold), the last contact, how many people and where it came from. Only ever the member's own. It doesn't list the people's names or emails: those stay on Merlin's Your network page.",
+          "The member's own network on Merlin: the companies they know someone at (from their Google Calendar and Contacts, Gmail for test members, and what they saved through save_my_network), warmest first, with warmth (Hot, Warm, Fading, Cold: the same grades Merlin prints on Crystal Ball's \"You know someone\" chip), the last contact, how many people and where it came from. Also seats_you_might_have_held: companies they met with over months, the same guesses Your seats offers to confirm. They are guesses, never seats: nothing is added unless the member says one was a seat they held (they confirm it on Your seats, or ask you to add it with add_my_seat). Only ever the member's own. It doesn't list the people's names or emails: those stay on Merlin's Your network page.",
         inputSchema: {},
         annotations: { title: "My network", ...READ },
       },

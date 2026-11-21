@@ -726,12 +726,16 @@ export async function saveFromClaude(member: Member, entriesRaw: unknown, nowMs 
   };
 }
 
-/** my_network: the member's own network on Merlin, companies with warmth. Never the people's names or emails. */
+/**
+ * my_network: the member's own network on Merlin, companies with warmth, and the seats they might
+ * have held (the same list Your seats offers to confirm). Never the people's names or emails.
+ */
 export async function myNetworkForClaude(member: Member, nowMs = Date.now()) {
   if (!networkOn()) throw new NetworkProblem("Your network isn't on for Merlin yet.");
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const n = netOf(s, member.id);
   const list = companiesOf(seed, s, n, nowMs);
+  const seats = seatGuessesOf(seed, s, member, list, n, nowMs);
   return {
     companies_you_know_people_at: list.length,
     google: n?.google ? (n.google.status === "reconnect" ? "Needs reconnecting on Merlin" : "Connected") : "Not connected",
@@ -746,7 +750,23 @@ export async function myNetworkForClaude(member: Member, nowMs = Date.now()) {
       decision_makers: c.people.filter((p) => p.dm).length,
       sources: c.src,
     })),
-    note: "Only the member's own network. Named for them free, like a company they own; seat holders and people there still cost their usual unlocks.",
+    // The same guesses Your seats shows as "We think you held these seats" (never who they met there).
+    ...(seats.length
+      ? {
+          seats_you_might_have_held: seats.map((g) => ({
+            company_id: g.id,
+            company: g.name,
+            meetings: g.meetings,
+            first_month: g.from,
+            last_month: g.to,
+            ...(g.sure ? {} : { less_sure: true }),
+            ...(g.waits ? { credits: "when confirmed" } : {}),
+          })),
+          seats_note:
+            "Guesses from months of meetings, not seats. Nothing is added unless the member says one was a seat they held: they confirm it in one click on Your seats in Merlin (or ask you to add it with add_my_seat), and Not a seat there dismisses it for good.",
+        }
+      : {}),
+    note: "Only the member's own network. Named for them free, like a company they own; seat holders and people there still cost their usual unlocks. On Merlin, Crystal Ball marks these companies \"You know someone\" with the same warmth (Hot, Warm, Fading, Cold).",
   };
 }
 

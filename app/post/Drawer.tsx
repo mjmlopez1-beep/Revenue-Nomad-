@@ -1268,6 +1268,11 @@ const ENG_ROWS = ["function", "type", ...ENG_FIELDS];
 const wayInSeat = (e: EngagementRec) => !openRole(e) && !e.yours && (!!e.cells.operator && e.cells.operator.s !== "empty" ? true : !!e.claimable);
 /** How many seats "Your way in" lists. */
 const WAY_IN_MAX = 3;
+/** [ux ws3] The seats "Your way in" lists: the ones someone held, the member's function first, then a name they can see, then a lock. */
+export function wayInSeatsOf(i: CoInfo, fn: string | null): EngagementRec[] {
+  const rank = (e: EngagementRec) => (shown(e.cells.function) === fn ? 0 : 4) + (e.cells.operator?.s === "value" ? 0 : e.cells.operator?.s === "locked" ? 1 : 2);
+  return i.engs.filter(wayInSeat).sort((a, b) => rank(a) - rank(b)).slice(0, WAY_IN_MAX);
+}
 
 /**
  * [ux ws3] Your way in: right under the record's header and its one action, the people who held
@@ -1278,7 +1283,7 @@ const WAY_IN_MAX = 3;
  * [google network] One section and one heading: the people the member already knows here come
  * first, warmest first (their own network, nothing with RN_GOOGLE off), then the seats someone held.
  */
-function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
+export function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
   const ui = useUi();
   const [adding, setAdding] = useState<string | null>(null);
   const hidden = !!i.c.hidden;
@@ -1733,8 +1738,7 @@ export function Drawer({
   const follow = () => ui.act({ type: "follow", companyId: c.id, on: !c.following });
   const plan = planOf(i);
   // [ux ws3] Your way in: the seats someone held, the member's function first, then a name they can see, then a lock.
-  const rankWay = (e: EngagementRec) => (shown(e.cells.function) === ui.me.function ? 0 : 4) + (e.cells.operator?.s === "value" ? 0 : e.cells.operator?.s === "locked" ? 1 : 2);
-  const wayInSeats = i.engs.filter(wayInSeat).sort((a, b) => rankWay(a) - rankWay(b)).slice(0, WAY_IN_MAX);
+  const wayInSeats = wayInSeatsOf(i, ui.me.function);
   // The website is stored as its host (a LinkedIn, Google Sites or Notion page keeps its path).
   const site = website?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
   // The company's own facts as rows. Missing ones are added in the header while it has no summary line,

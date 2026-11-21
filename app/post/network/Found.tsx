@@ -122,6 +122,7 @@ export function Found({
   onStay,
   onSeats,
   onAdd,
+  crystal: crystalGiven,
 }: {
   view: NetworkView;
   infos: CoInfo[];
@@ -138,8 +139,11 @@ export function Found({
   onStay: () => void;
   onSeats: () => void;
   onAdd: () => void;
+  /** Crystal Ball's day when the caller already has it (the checks render with it); else it is read here. */
+  crystal?: RadarView;
 }) {
-  const crystal = useCrystal(true);
+  const fetched = useCrystal(!crystalGiven);
+  const crystal = crystalGiven ? { view: crystalGiven, failed: false } : fetched;
   const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
   const ready = !!crystal.view?.ready;
   const { n, m, ids } = foundNumbers(view.companies, crystal.view ? (ready ? crystal.view.rows : null) : null);
