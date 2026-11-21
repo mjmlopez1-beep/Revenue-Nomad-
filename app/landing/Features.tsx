@@ -3,7 +3,7 @@
 /**
  * What Merlin does, one panel each: a small label, a headline with one phrase picked out, one
  * sentence, and a picture of that part of the product drawn in HTML and CSS (no image files),
- * with the panel's prop from the illustration system standing on it (fractions/scenes.tsx).
+ * with the panel's prop from the illustration system standing on it (scenes.tsx).
  * Crystal Ball (mint, the ball), warm paths (sand, the trail), rates (mint soft, the seat),
  * open roles (pine, the door).
  *
@@ -17,7 +17,7 @@
 import type { ReactNode } from "react";
 import { IconLock } from "../ui/shared";
 import { Locked } from "./Visuals";
-import { Corner, FeatBall, FeatDoor, FeatRates, FeatTrail, Sun } from "./fractions/scenes";
+import { Corner, FeatBall, FeatDoor, FeatRates, FeatTrail, Sun } from "./scenes";
 
 /** A made-up company's tile: two letters on a soft color, as the app draws a company with no logo. */
 function Tile({ letters, hue }: { letters: string; hue: number }) {

@@ -35,8 +35,8 @@ import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
 import Finder, { type PreviewExample, type Totals } from "./Finder";
 import Features from "./Features";
 import Quotes from "./Quotes";
-import { Band } from "./fractions/kit";
-import { Corner, FinalScene, HeroDome, HeroEdge, HeroStage, HeroStagePhone, HeroTrail } from "./fractions/scenes";
+import { Band } from "../ui/fractions/kit";
+import { Corner, FinalScene, HeroDome, HeroEdge, HeroStage, HeroStagePhone, HeroTrail } from "./scenes";
 
 export interface LandingProps {
   /**

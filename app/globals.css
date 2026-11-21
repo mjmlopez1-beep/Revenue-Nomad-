@@ -38,7 +38,7 @@
   --volt-ink: #0b6b45;
   --ember: #ff5a1f;
   --ember-ink: #b23a0a;
-  /* Illustration only (Fractions, app/landing/fractions): saffron is the crystal ball, sand the ground, faces and paper. */
+  /* Illustration only (Fractions, app/ui/fractions): saffron is the crystal ball, sand the ground, faces and paper. */
   --saffron: #ffc12e;
   --saffron-hi: #ffe39a;
   --sand: #f5ecd9;
@@ -819,6 +819,11 @@ span.locked-site {
 .toast-act .toast-t {
   flex: 1;
   min-width: 0;
+}
+/* A toast with a small picture before its words (a first unlock). */
+.toast-art {
+  flex: none;
+  margin: -6px 0;
 }
 .toast-btn {
   pointer-events: auto;

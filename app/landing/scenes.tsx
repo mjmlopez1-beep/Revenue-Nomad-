@@ -1,5 +1,5 @@
 /**
- * Fractions on the landing page: each picture the page uses, put together from kit.tsx.
+ * Fractions on the landing page: each picture the page uses, put together from the shared kit (app/ui/fractions/kit.tsx).
  *
  * The hero. The record card sits in a mint doorway; the Nomad stands on the card and holds up
  * the crystal ball; a dotted trail leads in from the left; big quarters run off the edges. The
@@ -13,8 +13,8 @@
  * Nothing here holds words, and every picture is decoration except the four props, which are
  * named.
  */
-import { Arch, Art, BigBall, Nomad, P, Seat, Spark, Steps, Tent } from "./kit";
-import { half, offcut, quarter, square, walk } from "./shapes";
+import { Arch, Art, BigBall, Nomad, P, Seat, Spark, Steps, Tent } from "../ui/fractions/kit";
+import { half, offcut, quarter, square, walk } from "../ui/fractions/shapes";
 
 type Cls = { className?: string };
 

@@ -26,7 +26,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { CompanyLogo, IconChevron, IconLock, IconSearch, IconX, LockedSite, Num, lockedLook } from "../ui/shared";
 import { FUNCTIONS, GTM_FUNCTIONS } from "@/lib/tableFields";
-import { SparkMark } from "./fractions/scenes";
+import { SparkMark } from "./scenes";
 
 /** Read by app/onboard/Onboarding.tsx. */
 const TRY_FN_KEY = "tp_try_fn";

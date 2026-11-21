@@ -6,7 +6,7 @@
  * white cards. Each feature panel is a field of its own (mint, sand, mint soft, pine) with a
  * solid pill label, and picks out one phrase of its headline in that field's ink.
  *
- * Pictures are Fractions, the illustration system (fractions/): halves and quarters of a circle,
+ * Pictures are Fractions, the illustration system (app/ui/fractions/): halves and quarters of a circle,
  * flat, on a 40px grid, with the Nomad and the crystal ball. They are inline SVG, hidden from
  * assistive technology unless named, and never sit over text. Where a picture is behind text
  * (the hero's hill in pine's tone), the text is still 4.5:1 on it. Ember is used large here, by
@@ -29,8 +29,8 @@
  * else moves (the pictures are still). None of it runs under prefers-reduced-motion.
  */
 
-/* The illustration kit's colours (fractions/kit.tsx). */
-@import "./fractions/fractions.css";
+/* The illustration kit's colours (app/ui/fractions/kit.tsx). */
+@import "../ui/fractions/fractions.css";
 
 .lp {
   /* Text on pine. All three pass 4.5:1 on #073f2f. */
@@ -2290,6 +2290,42 @@ button.lp-fake-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+/*
+ * Sign in with its picture (Fractions, the quiet register on mint): a panel down the dialog's
+ * left side on a wide screen, the Nomad alone by the title on a narrow one.
+ */
+.lp-dialog-art {
+  display: none;
+}
+.lp-dialog-nomad {
+  margin: -8px 8px -8px auto;
+}
+@media (min-width: 760px) {
+  .lp-dialog-pic {
+    position: relative;
+    width: min(680px, 100%);
+    padding-left: 244px;
+    overflow: hidden;
+  }
+  .lp-dialog-art {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    background: var(--volt-soft);
+  }
+  .lp-dialog-art .fx {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .lp-dialog-nomad {
+    display: none;
+  }
 }
 .lp-dialog-head h2 {
   font-size: 22px;

@@ -236,8 +236,8 @@ import { TOAST_MERGE_MS, mergeToastText } from "../post/nudges"; // [ux ws3]
  * A toast can carry one action ("Undo") and its own time on screen. The action closes the
  * toast when tapped. Without opts a toast is text only, as before.
  */
-export type ToastOpts = { action?: { label: string; onClick: () => void }; ms?: number };
-type Toast = { id: number; text: string; err?: boolean; action?: ToastOpts["action"] };
+export type ToastOpts = { action?: { label: string; onClick: () => void }; ms?: number; /** A small picture before the words (a first unlock): the caller draws it, so nothing is loaded for it here. */ art?: ReactNode };
+type Toast = { id: number; text: string; err?: boolean; action?: ToastOpts["action"]; art?: ReactNode };
 export type ToastFn = (text: string, err?: boolean, opts?: ToastOpts) => void;
 const ToastCtx = createContext<ToastFn>(() => {});
 export const useToast = () => useContext(ToastCtx);
@@ -267,7 +267,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         return;
       }
       lastPlain.current = plain ? { id, text, at: Date.now() } : null;
-      setToasts((t) => [...t.slice(-1), { id, text, err, action: opts?.action }]);
+      setToasts((t) => [...t.slice(-1), { id, text, err, action: opts?.action, art: opts?.art }]);
       setTimeout(() => drop(id), opts?.ms ?? toastMs(text, err));
     },
     [drop],
@@ -278,8 +278,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           // A toast with an action has the same look as the Undo toast (globals.css .toast-act, .toast-btn).
-          <div key={t.id} className={`toast${t.err ? " toast-err" : ""}${t.action ? " toast-act" : ""}`}>
-            {t.action ? <span className="toast-t">{t.text}</span> : t.text}
+          <div key={t.id} className={`toast${t.err ? " toast-err" : ""}${t.action || t.art ? " toast-act" : ""}`}>
+            {t.art ? <span className="toast-art">{t.art}</span> : null}
+            {t.action || t.art ? <span className="toast-t">{t.text}</span> : t.text}
             {t.action && (
               <button
                 type="button"

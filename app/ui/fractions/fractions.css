@@ -1,0 +1,199 @@
+/*
+ * Fractions, the illustration system (kit.tsx for the landing page's pictures, art.tsx for the
+ * asset library in the product). Only the colours and the way a picture sits in its box live
+ * here: where each picture goes is in the page's own stylesheet (landing.css, post.css and the
+ * rest), which imports this file, so a page still loads one stylesheet.
+ *
+ * Colour by weight: about 60% pine with its tone, 30% mint, sand and mint soft, 8% ember, 2%
+ * saffron. Ember is one large shape or the Nomad, never specks. Saffron is the crystal ball
+ * (and at most one spark, one door lining or the knob of the staff).
+ * Words never sit inside a picture. On these colours text is ink on mint, sand, ember and
+ * saffron, and white on pine and its tone: white on ember is 3.1:1 and is not allowed.
+ */
+/* :where, so the page's own rules place and hide a picture without a fight. */
+:where(.fx) {
+  display: block;
+  /* A picture never takes a tap from what is under it. */
+  pointer-events: none;
+}
+/* Each piece is stroked a hair in its own colour, so pieces that meet on the grid leave no seam. */
+.fx path,
+.fx circle,
+.fx rect {
+  stroke-width: 0.7px;
+  stroke-linejoin: round;
+}
+.fxc-pine {
+  fill: var(--pine);
+  stroke: var(--pine);
+}
+.fxc-pine2 {
+  fill: var(--pine-hover);
+  stroke: var(--pine-hover);
+}
+.fxc-mint {
+  fill: var(--volt);
+  stroke: var(--volt);
+}
+.fxc-mints {
+  fill: var(--volt-soft);
+  stroke: var(--volt-soft);
+}
+.fxc-mintd {
+  fill: var(--volt-hover);
+  stroke: var(--volt-hover);
+}
+.fxc-ember {
+  fill: var(--ember);
+  stroke: var(--ember);
+}
+.fxc-sand {
+  fill: var(--sand);
+  stroke: var(--sand);
+}
+.fxc-sandd {
+  fill: var(--sand-deep);
+  stroke: var(--sand-deep);
+}
+.fxc-acc {
+  fill: var(--saffron);
+  stroke: var(--saffron);
+}
+.fxc-acchi {
+  fill: var(--saffron-hi);
+  stroke: var(--saffron-hi);
+}
+.fxc-white {
+  fill: #fff;
+  stroke: #fff;
+}
+.fxc-bgf {
+  fill: var(--bg);
+  stroke: var(--bg);
+}
+/* A glyph or a bullet in the colour of the text beside it. */
+.fxc-cur {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+/*
+ * The quiet register, for every signed-in page (ways.ts QUIET, art.tsx). No field: the art sits
+ * on the surface it is given, in flat pre-mixed tints of that surface, never transparency.
+ * On a light surface: structure is pine at 50%, second structure pine at 20%, the big shape pine
+ * at 6%, the second shape mint at 20% (32% on mint tint). On pine: mint at 60%, 32% and 16%,
+ * paper sand at 62%, the large accent sand at 20%.
+ * One set of variables per surface; <Fx on="white | bg | mint | pine"> picks the set. Ember stays
+ * the Nomad's cloak or one spark, saffron the ball and one spark: those are the brand tokens above.
+ */
+.fx-on-white {
+  --fxq-bg: #ffffff;
+  --fxq-ink: #839f97;
+  --fxq-ink2: #cdd9d5;
+  --fxq-tone: #f0f3f3;
+  --fxq-hill: #d5faeb;
+  --fxq-light: #e8fbf2;
+  --fxq-b: #f5ecd9;
+  --fxq-pop: #ead9b6;
+}
+.fx-on-bg {
+  --fxq-bg: #fafaf7;
+  --fxq-ink: #819d93;
+  --fxq-ink2: #c9d5cf;
+  --fxq-tone: #ebefeb;
+  --fxq-hill: #d1f6e5;
+  --fxq-light: #e8fbf2;
+  --fxq-b: #f1e6cf;
+  --fxq-pop: #ead9b6;
+}
+.fx-on-mint {
+  --fxq-bg: #e8fbf2;
+  --fxq-ink: #789d91;
+  --fxq-ink2: #bbd5cb;
+  --fxq-tone: #dbf0e6;
+  --fxq-hill: #acf4d7;
+  --fxq-light: #ffffff;
+  --fxq-b: #f5ecd9;
+  --fxq-pop: #ead9b6;
+}
+.fx-on-pine {
+  --fxq-bg: #073f2f;
+  --fxq-ink: #1ea371;
+  --fxq-ink2: #137452;
+  --fxq-tone: #0e5640;
+  --fxq-hill: #0d5a41;
+  --fxq-light: #0d5a41;
+  --fxq-b: #9baa98;
+  --fxq-pop: #376251;
+}
+.fxc-q-bg {
+  fill: var(--fxq-bg);
+  stroke: var(--fxq-bg);
+}
+.fxc-q-ink {
+  fill: var(--fxq-ink);
+  stroke: var(--fxq-ink);
+}
+.fxc-q-ink2 {
+  fill: var(--fxq-ink2);
+  stroke: var(--fxq-ink2);
+}
+.fxc-q-tone {
+  fill: var(--fxq-tone);
+  stroke: var(--fxq-tone);
+}
+.fxc-q-hill {
+  fill: var(--fxq-hill);
+  stroke: var(--fxq-hill);
+}
+.fxc-q-light {
+  fill: var(--fxq-light);
+  stroke: var(--fxq-light);
+}
+.fxc-q-b {
+  fill: var(--fxq-b);
+  stroke: var(--fxq-b);
+}
+.fxc-q-pop {
+  fill: var(--fxq-pop);
+  stroke: var(--fxq-pop);
+}
+
+/* How the library's parts sit in their boxes (art.tsx). */
+/* A bleed fills its card's height from one side; the card is position: relative and clips it. */
+.fx-bleed {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: auto;
+  aspect-ratio: 2 / 1;
+  max-width: 60%;
+}
+.fx-bleed-r {
+  right: 0;
+}
+.fx-bleed-l {
+  left: 0;
+}
+.fx-glyph,
+.fx-bullet {
+  display: inline-block;
+  flex: none;
+  vertical-align: -0.125em;
+}
+/* An avatar frame with initials on it. */
+.fx-frame {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.fx-frame > .fx {
+  position: absolute;
+  inset: 0;
+}
+.fx-frame-in {
+  position: relative;
+  display: grid;
+  place-items: center;
+}

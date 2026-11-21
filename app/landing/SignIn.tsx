@@ -11,6 +11,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { IconX, post } from "../ui/shared";
 import { mailto, signInFailText } from "./contact";
+import { Doorway, NomadArt } from "../ui/fractions/art";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 
@@ -212,9 +213,14 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
 
   return (
     <div className="lp-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={panelRef} className="lp-dialog" role="dialog" aria-modal="true" aria-labelledby={`${id}-h`}>
+      <div ref={panelRef} className="lp-dialog lp-dialog-pic" role="dialog" aria-modal="true" aria-labelledby={`${id}-h`}>
+        {/* Beside the form on a wide screen: the doorway, quiet, on a mint panel. On a phone the Nomad alone, small, by the title. */}
+        <div className="lp-dialog-art" aria-hidden>
+          <Doorway />
+        </div>
         <div className="lp-dialog-head">
           <h2 id={`${id}-h`}>Sign in</h2>
+          <NomadArt pose="wave" height={40} className="lp-dialog-nomad" />
           <button type="button" className="btn btn-ghost btn-sm lp-dialog-x" onClick={onClose} aria-label="Close">
             <IconX />
           </button>
