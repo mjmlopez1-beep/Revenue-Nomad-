@@ -49,6 +49,9 @@ import { buyerWhat, findBuyer, hiredWords, isBuyer, knowLine, moveWithoutPerson,
 import { draftNote, noteFacts } from "../moveNote";
 import { VOICE_FIELDS, VoiceProblem, cleanVoice, styleOf, voiceRows } from "../voice";
 import { saveVoice, voiceOf } from "../table";
+// Your pipeline (lib/pipeline.ts, lib/pipelineActions.ts): the member's own deals, moved by what Merlin sees.
+import { CHANNEL_WORDS, STAGE_WORDS, monthWords, whoWords, type PipelineView } from "../pipeline";
+import { dueFollowUpsFor, pipelineViewFor } from "../pipelineActions";
 
 export interface Ctx {
   member: Member;
@@ -1271,6 +1274,80 @@ export async function saveMyVoice(ctx: Ctx, a: { voice?: unknown; member_agreed?
     voice: reads,
     note: "Saved for the member only: style conclusions, no message text. The notes Merlin drafts for their moves are now written this way. They can edit or remove it in Your profile on Merlin.",
   };
+}
+
+/**
+ * my_pipeline: the member's own pipeline, as Merlin moved it (from their notes and messages on
+ * Merlin, their calendar, and their Gmail headers when connected), with the follow-ups due and
+ * their intros. A company is named only where the member can see it. A person from the member's
+ * Google account is never named or titled here ("the person you know there"), as todays_moves holds.
+ * Only ever their own; nothing here spends or earns a credit.
+ */
+export async function myPipeline(ctx: Ctx): Promise<ToolOut> {
+  const v: PipelineView | null = await pipelineViewFor(ctx.member.token);
+  if (!v) throw new ToolProblem("The member is signed out of Merlin.");
+  const due = await dueFollowUpsFor(ctx.member.id, Date.now(), "merlin");
+  const who = (to: PipelineView["entries"][number]["to"], channel: PipelineView["entries"][number]["channel"]) =>
+    to.google ? "the person you know there" : whoWords({ name: to.name, role: to.role }, channel, "merlin");
+  return {
+    entries: v.entries.map((e) => ({
+      entry_id: e.id,
+      company_id: e.company,
+      company: e.name ?? "Locked company",
+      stage: STAGE_WORDS[e.stage],
+      ...(e.how ? { how_merlin_knows: e.how } : {}),
+      channel: CHANNEL_WORDS[e.channel],
+      to: who(e.to, e.channel),
+      dates: Object.fromEntries(Object.entries(e.dates).map(([k, d]) => [STAGE_WORDS[k as keyof typeof STAGE_WORDS], String(d).slice(0, 10)])),
+      ...(e.next ? { next_step: e.next } : {}),
+      ...(e.due ? { follow_up_due: e.due } : {}),
+      follow_ups_sent: e.follow,
+      ...(e.notes.length ? { notes: e.notes.map((n) => ({ at: n.at.slice(0, 10), text: n.text })) } : {}),
+      log: e.log.slice(-10).map((l) => `${l.at.slice(0, 10)}: ${l.text}`),
+      ...(e.won ? { won: { rate: e.won.pricing === "hourly" ? `$${e.won.rate}/hr` : `$${e.won.rate}/mo`, ...(e.won.hours ? { hours_a_week: e.won.hours } : {}), month_value: monthWords(e.won.monthly), through_merlin: e.won.merlin } } : {}),
+      ...(e.intro ? { intro: { by: e.intro.by, status: e.intro.status } } : {}),
+    })),
+    follow_ups_due: due.map((f) => ({ entry_id: f.entryId, company_id: f.companyPub, follow_up: f.title, line: f.line, due: f.due })),
+    intros: v.intros.map((i) => ({
+      intro_id: i.id,
+      ...(i.side === "of-you" ? { asked_of_you_by: i.who } : { introducer: i.member ? i.who : "someone the member knows" }),
+      company: i.company ? i.name ?? "Locked company" : "no company named",
+      status: i.status,
+      asked: i.askedAt.slice(0, 10),
+      ...(i.won ? { led_to_a_win: true } : {}),
+    })),
+    counts: Object.fromEntries(Object.entries(v.counts).map(([k, n]) => [STAGE_WORDS[k as keyof typeof STAGE_WORDS], n])),
+    won_month_value: monthWords(v.wonMonthly),
+    merlin_sees: v.sees.gmail ? "notes and messages on Merlin, the calendar and Gmail headers" : v.sees.calendar ? "notes and messages on Merlin and the calendar (Gmail isn't connected, so replies by email aren't seen)" : "notes and messages on Merlin",
+    how_to_use:
+      "This is the member's own pipeline. Merlin moves the stages by itself: Sent when a drafted note or a message goes out, Replied when an email comes in from the company (when Gmail is connected) or they reply on Merlin, Meeting from the calendar, Proposal and Won from a proposal, and Went quiet after the follow-ups go unanswered. The member only ever marks Lost or Not now, and adds notes: update_pipeline does those three things and nothing else. Never guess a locked company's name, and never name the person you know there: their name is on Merlin. Nothing here costs a credit.",
+  };
+}
+
+/** update_pipeline: mark an entry Lost or Not now, or add a private note. The only changes the member makes; Merlin moves the rest. */
+export async function updatePipeline(ctx: Ctx, a: { entry_id?: string; company_id?: string; action?: string; note?: string }): Promise<ToolOut> {
+  const v = await pipelineViewFor(ctx.member.token);
+  if (!v) throw new ToolProblem("The member is signed out of Merlin.");
+  const e = v.entries.find((x) => (a.entry_id && x.id === a.entry_id) || (!a.entry_id && a.company_id && x.company === a.company_id));
+  if (!e) throw new ToolProblem("That isn't in the member's pipeline. Call my_pipeline for the entry ids.");
+  const what = String(a.action ?? "");
+  const act: Action | null =
+    what === "lost"
+      ? { type: "pipeline.close", id: e.id, stage: "lost" }
+      : what === "not_now"
+        ? { type: "pipeline.close", id: e.id, stage: "notnow" }
+        : what === "note"
+          ? { type: "pipeline.note", id: e.id, text: String(a.note ?? "") }
+          : null;
+  if (!act) throw new ToolProblem("action is one of lost, not_now or note. Merlin moves every other stage by itself.");
+  try {
+    const r = await perform(ctx.member.token, act, ctx.origin);
+    const now = r.pipeline?.entries.find((x) => x.id === e.id);
+    return { ok: true, message: r.message, entry_id: e.id, company: e.name ?? "Locked company", ...(now ? { stage: STAGE_WORDS[now.stage] } : {}) };
+  } catch (err) {
+    if (err instanceof ActionError) throw new ToolProblem(err.message);
+    throw err;
+  }
 }
 
 /** my_voice: the member's saved writing voice, or that there is none. Only ever their own. */

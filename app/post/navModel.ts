@@ -12,13 +12,13 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
-export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals"] as const;
+export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline"] as const;
 export type AppPageKey = (typeof APP_PAGES)[number];
 
 export type NavGroup = "home" | "find" | "community" | "yours" | "earn" | "foot";
 export type NavIcon =
   | "home" | "companies" | "seats" | "people" | "radar" | "hiring" | "views" | "view" | "following" | "yourseats" | "messages" | "network"
-  | "add" | "partners" | "rates" | "invite" | "integrations" | "notifications" | "billing" | "credits" | "metrics" | "fractionals";
+  | "add" | "partners" | "rates" | "invite" | "integrations" | "notifications" | "billing" | "credits" | "metrics" | "fractionals" | "pipeline";
 
 export interface NavItem {
   /** "today", "companies", "radar", "view:<id>" and the rest: data-nav in the page, and the key the tests use. */
@@ -76,6 +76,8 @@ export interface NavInput {
   /** Your network is on (RN_GOOGLE). */
   network: boolean;
   networkN?: number | null;
+  /** Open deals in Your pipeline (null until known). */
+  pipelineN?: number | null;
   unread: number;
   radarNew: number;
   /** Companies, seats and people on file (null while only the first screen is here). */
@@ -123,6 +125,8 @@ export function navItems(x: NavInput): NavItem[] {
     { key: "fractionals", label: "Fractionals", group: "community", icon: "fractionals", href: x.hrefs.page("fractionals"), page: "fractionals", count: x.fractionalsN ?? null },
     { key: "messages", label: "Messages", group: "community", icon: "messages", href: x.hrefs.page("messages"), page: "messages", badge: x.unread, badgeOf: "unread" },
     ...x.views.map((v) => ({ key: `view:${v.id}`, label: v.name, group: "yours" as const, icon: "view" as const, href: v.href, page: "table" as const, badge: v.fresh ?? 0, badgeOf: "new since your last visit" })),
+    // Your pipeline (Pipeline.tsx): the member's deals, moved by what Merlin sees.
+    { key: "pipeline", label: "Your pipeline", group: "yours", icon: "pipeline", href: x.hrefs.page("pipeline"), page: "pipeline", count: x.pipelineN ?? null },
     { key: "following", label: "Following", group: "yours", icon: "following", href: x.hrefs.following, page: "table", count: x.followingN },
     { key: "seats", label: "Your seats", group: "yours", icon: "yourseats", href: x.hrefs.page("seats"), page: "seats", hint: x.seatsMissing ? `${x.seatsMissing} to fill in` : undefined },
     ...(x.network ? [{ key: "network", label: "Your network", group: "yours" as const, icon: "network" as const, href: x.hrefs.page("network"), page: "network" as const, count: x.networkN ?? null }] : []),

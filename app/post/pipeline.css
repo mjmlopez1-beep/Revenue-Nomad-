@@ -1,0 +1,471 @@
+/*
+ * Your pipeline (Pipeline.tsx, PipelineBlock.tsx, FollowUps.tsx, WonSheet.tsx, IntroLine.tsx).
+ * Classes are prefixed pl-. Built from the app's tokens (app/globals.css): its type scale, radii
+ * 6/8/10, no shadows. Stages are columns on a wide screen and a grouped list on a phone.
+ */
+
+/* ---------- a stage ---------- */
+.pl-stage {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  background: var(--surface-2);
+  color: var(--body-ink);
+  vertical-align: 2px;
+}
+.pl-stage-replied,
+.pl-stage-meeting,
+.pl-stage-proposal {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+}
+.pl-stage-won {
+  background: var(--pine);
+  color: #fff;
+}
+.pl-stage-lost,
+.pl-stage-notnow,
+.pl-stage-quiet {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.pl-how {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+/* ---------- Not right? ---------- */
+.pl-fix {
+  position: relative;
+}
+.pl-fix-s {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pl-fix-s::-webkit-details-marker {
+  display: none;
+}
+.pl-fix-s:hover {
+  color: var(--ink);
+}
+.pl-fix[open] .pl-fix-s {
+  color: var(--ink);
+}
+.pl-fix-m {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* ---------- log and notes ---------- */
+.pl-log {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.pl-log li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--body-ink);
+}
+.pl-log-d {
+  color: var(--muted);
+}
+.pl-log-note .pl-log-t {
+  white-space: pre-wrap;
+}
+.pl-log-more {
+  margin-top: 4px;
+  font-size: 13px;
+}
+.pl-note {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pl-note .input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Home: follow-ups due ---------- */
+.pl-fu {
+  gap: 12px;
+}
+.pl-fu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  container-type: inline-size;
+}
+.pl-fu-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.pl-fu-won {
+  border-color: var(--pine-14);
+  background: var(--volt-soft);
+}
+.pl-fu-co {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  align-self: start;
+}
+.pl-fu-t {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pl-fu-title {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.pl-fu-line {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.pl-fu-acts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+@container (min-width: 720px) {
+  .pl-fu-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .pl-fu-acts {
+    grid-column: 3;
+    justify-content: flex-end;
+  }
+}
+.pl-fu-more {
+  justify-self: start;
+  font-size: 14px;
+}
+
+/* ---------- the record's block ---------- */
+.pl-block .tp-dsec-h {
+  align-items: center;
+}
+.pl-block-who,
+.pl-block-next {
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--body-ink);
+}
+.pl-block-next {
+  margin-top: 2px;
+}
+.pl-block-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.pl-block-all {
+  font-size: 13px;
+}
+
+/* ---------- the page ---------- */
+.tp-page.pl-page {
+  max-width: 1240px;
+}
+.pl-lead,
+.pl-sees {
+  max-width: 720px;
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--body-ink);
+}
+.pl-lead {
+  margin: -4px 0 6px;
+}
+.pl-sees {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+.pl-empty {
+  margin: 12px 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.pl-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.pl-stats b {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.pl-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.pl-col {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.pl-col-h {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.pl-col-n {
+  font-weight: 600;
+  color: var(--muted);
+}
+.pl-col-none {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.pl-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.pl-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  min-width: 0;
+}
+.pl-card-co {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.pl-card-n {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.pl-card-to {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+}
+.pl-card-next {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.pl-due {
+  color: var(--ember-ink);
+}
+.pl-card-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.pl-closed,
+.pl-intros {
+  margin-top: 24px;
+  display: grid;
+  gap: 8px;
+}
+.pl-cards-closed {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.pl-cards-closed .pl-stage {
+  justify-self: start;
+}
+.pl-intro-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.pl-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 20px;
+}
+.pl-intro-t {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.pl-intro-acts {
+  display: inline-flex;
+  gap: 6px;
+}
+.pl-intro-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+  background: var(--surface-2);
+}
+
+/* A phone: one list, grouped by stage, the empty stages left out. */
+@media (max-width: 899px) {
+  .pl-board {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .pl-col {
+    padding: 0;
+    background: none;
+  }
+  .pl-col-empty {
+    display: none;
+  }
+}
+
+/* ---------- the Won sheet ---------- */
+.pl-won {
+  display: grid;
+  gap: 14px;
+}
+.pl-won-lead {
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--body-ink);
+}
+.pl-won-row {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pl-seg {
+  display: flex;
+  gap: 6px;
+}
+.pl-won-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 560px) {
+  .pl-won-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.pl-won-f {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 0;
+}
+.pl-won-f .input {
+  width: 100%;
+}
+.pl-won-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.pl-won-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pine);
+}
+.pl-won-v,
+.pl-won-intro,
+.pl-won-seat {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.pl-won-v {
+  font-weight: 700;
+  color: var(--ink);
+}
+.pl-won-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}

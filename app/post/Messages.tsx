@@ -18,6 +18,7 @@ import { Sheet, useUi } from "./ui";
 import { useLayout } from "./hooks";
 import { partnerOpener, seatOpener, type SharedCompanies } from "@/lib/partners";
 import "./messages.css";
+import { IntroLine } from "./IntroLine";
 import { Prop, Spot } from "../ui/fractions/lazy";
 
 const MAX = 2000;
@@ -482,6 +483,8 @@ function Thread({
           )}
         </div>
       </header>
+      {/* An intro at the seat's company: logged by the member who asked, marked made by either side (IntroLine.tsx, Your pipeline). */}
+      <IntroLine c={c} />
       {asking === "block" && (
         <div className="ms-ask" role="group" aria-label={`Block ${c.with.first}?`}>
           <p>Block {c.with.first}? They can&apos;t start a conversation with you, and this one closes. They see that you&apos;re not taking intros right now.</p>

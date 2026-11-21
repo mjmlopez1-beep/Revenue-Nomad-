@@ -25,6 +25,7 @@ import { radarView, returnQuery } from "@/lib/radar";
 import { yourFeature } from "@/lib/radar/types";
 import { runDueJobs } from "@/lib/jobs";
 import { fractionalsHome, fractionalsView } from "@/lib/fractionals";
+import { pipelineViewFor } from "@/lib/pipelineActions";
 
 export const dynamic = "force-dynamic";
 
@@ -217,7 +218,7 @@ function touchedIds(a: Action, out: ActionResult): string[] {
   return ids;
 }
 const patchless = (a: Action) =>
-  !a || typeof a.type !== "string" || a.type.startsWith("message.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
+  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
@@ -227,6 +228,7 @@ const patchless = (a: Action) =>
  *                  a person, email, phone, posting link or rate (lib/preview.ts). 400 on a value not on its list.
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
+ * GET ?pipeline=1  PipelineView: the member's own pipeline, follow-ups due and intros (lib/pipelineActions.ts). 401 signed out.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
  * GET ?fractionals=1  FractionalsView: the Fractionals directory, one record per fractional as the member may see it
  *                  (lib/fractionals.ts). ?fractionals=home: FractionalsHome, Home's one line. 401 signed out.
@@ -317,6 +319,11 @@ export const GET = guarded(async (req: NextRequest) => {
   if (fr !== null) {
     const f = fr === "home" ? await fractionalsHome(token) : await fractionalsView(token);
     return f ? sendJson(req, f) : err("You're signed out. Sign in again to see Fractionals.", 401);
+  }
+  // Your pipeline (lib/pipelineActions.ts): the member's own deals, moved by what Merlin sees, with the follow-ups due and their intros.
+  if (req.nextUrl.searchParams.get("pipeline") !== null) {
+    const p = await pipelineViewFor(token);
+    return p ? sendJson(req, p) : err("You're signed out. Sign in again to see your pipeline.", 401);
   }
   if (req.nextUrl.searchParams.get("partners") !== null) {
     const p = await partnersView(token);

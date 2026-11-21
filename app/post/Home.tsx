@@ -33,6 +33,7 @@ import { EMPTY_FILTERS, RECORD_TYPES, applyFilters, rowsFor, type CheckStep, typ
 import { plural, useMedia } from "./hooks";
 import { LeadCard, TrialEnded, factsOf, type TodayData } from "./Today";
 import { MovesSection } from "./Moves";
+import { FollowUps } from "./FollowUps";
 import { ProWelcome } from "./Billing";
 import type { MovesWire } from "@/lib/moves";
 import { crystalNames, nameMatches, showMeDue, trialCardLine, trialPillWords, sinceWords } from "./todayModel";
@@ -297,6 +298,9 @@ export function HomePage(p: HomeProps) {
       {p.trialStarted && me.plan?.name === "trial" ? <TrialStarted days={me.plan.trialDaysLeft} today={dayN} radar={p.radar} onSeen={p.onTrialStartSeen} /> : null}
       {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} art={<Scene kind="trialEnding" square pro on="mint" className="td-trial-art" />} /> : null}
       {p.proWelcome && me.plan ? <ProWelcome plan={me.plan} onSeen={p.onProSeen} /> : null}
+
+      {/* Your pipeline's follow-ups due, above the moves (FollowUps.tsx), read once Home's first paint is over. Nothing when none is due. */}
+      {rest && <FollowUps me={me} byId={byId} openCompany={p.openCompany} />}
 
       <MovesSection
         me={me}

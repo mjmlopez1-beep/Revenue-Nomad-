@@ -125,6 +125,8 @@ import { isDue, settingOf, type ScheduleState } from "./schedule";
 import { networkKnown, type NetworkState } from "./google/types";
 // Your three moves today, and the voice its notes are written in: each member's own (lib/moves.ts, lib/voice.ts).
 import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type MoveLog } from "./moves";
+// Your pipeline (lib/pipeline.ts): each member's own deals, moved by what Merlin sees. A move's note used opens its entry.
+import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, openEntry, pipelineHidden, type PipelineLog } from "./pipeline";
 import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
@@ -538,6 +540,11 @@ export interface State extends MessagingState {
    * a month), by member id. Private to them: never in another member's view, the shared table or the export.
    */
   moves?: Record<string, MoveLog>;
+  /**
+   * Your pipeline (lib/pipeline.ts): each member's own deals and the intros they asked for, by
+   * member id. Private to them: never in another member's view, the shared table or the export.
+   */
+  pipeline?: Record<string, PipelineLog>;
   /**
    * Each member's writing voice (lib/voice.ts): style conclusions only, never text from a message.
    * Private to them: never in another member's view, the shared table, the export or an admin's panel.
@@ -3205,6 +3212,8 @@ const NOBODY_BLIND = new Set([
   "billing", "found", "findMisses", "seatInvites", "seatPrivate", "benchRates", "n", "at", "firstAt", "hist",
   // A member's moves and writing voice are theirs alone: Nobody has neither, and no record reads them.
   "moves", "voice",
+  // Each member's pipeline is theirs alone too.
+  "pipeline",
 ]);
 /** Per fact or confirmation: these change the records of the company they are at. */
 const BY_RECORD = new Set(["values", "verifications"]);
@@ -3531,7 +3540,9 @@ export async function moveState(token: string | null, nowMs = Date.now()): Promi
   const me = memberByToken(seed, token, s);
   if (!me) return null;
   const log = s.moves?.[me.id];
-  return { hidden: new Set([...movesHidden(log, nowMs)].map((id) => pubId(id))), month: movesThisMonth(log, nowMs) };
+  // A company in their pipeline (lib/pipeline.ts pipelineHidden) lives there, not in today's moves.
+  const hidden = new Set([...movesHidden(log, nowMs), ...pipelineHidden(s.pipeline?.[me.id], nowMs)]);
+  return { hidden: new Set([...hidden].map((id) => pubId(id))), month: movesThisMonth(log, nowMs) };
 }
 
 /**
@@ -4845,6 +4856,8 @@ export async function perform(
   }
   // Messages between members live in lib/messages.ts (loaded here, so the two files don't import each other at start).
   if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
+  // Your pipeline lives in lib/pipelineActions.ts, loaded the same way.
+  if (typeof a?.type === "string" && a.type.startsWith("pipeline.")) return (await import("./pipelineActions")).performPipeline(token, a);
   // From Crystal Ball (an unlock with from "crystal"): its companies are read in the action, from the action's own state (lib/radar, loaded here so the two files don't import each other at start).
   const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
   // A move is at a company in the member's own Crystal Ball: read the same way.
@@ -6755,7 +6768,8 @@ export async function perform(
         } // [ux ws1]
         case "move": {
           // Your three moves today: done (it leaves the list and counts), snoozed (hidden for a week), or taken back. The member's own log, nothing else.
-          const op = a.op === "done" || a.op === "snooze" || a.op === "undo" ? a.op : null;
+          // "sent" (Mark as sent, or the note used): done, and the company goes into their pipeline at Sent (lib/pipeline.ts).
+          const op = a.op === "done" || a.op === "snooze" || a.op === "undo" || a.op === "sent" ? a.op : null;
           if (!op) throw new ActionError(UNKNOWN_ACTION);
           const co = g.companies.get(inId("company", a.id));
           if (!co) throw new ActionError(gone("company"));
@@ -6765,8 +6779,28 @@ export async function perform(
           const known = !!had && (!!had.done[co.id] || !!had.snoozed[co.id]);
           if (!known && !movesMod!.crystalCompanyIds(seed, s, me, nowMs).has(co.id)) throw new ActionError(MOVE_NOT_IN);
           const log = (all[me.id] ??= emptyMoveLog());
-          logMove(log, co.id, op, nowMs);
+          logMove(log, co.id, op === "sent" ? "done" : op, nowMs);
           const n = movesThisMonth(log, nowMs);
+          const pl = ((s.pipeline ??= {})[me.id] ??= emptyPipeline());
+          if (op === "sent" && a.op === "sent") {
+            const channel = a.intro ? "intro" : isChannel(a.channel) ? a.channel : "email";
+            const to = cleanTo(a.to);
+            // "Ask Dana for an intro": the ask is recorded as an intro too, and a win from it is credited to it.
+            const introId = a.intro
+              ? addIntro(pl, { id: `pl${randomBytes(8).toString("hex")}`, companyId: co.id, introducer: { name: to.name ?? null, role: to.role ?? null, ...(to.google ? { google: true } : {}) }, nowMs }).intro.id
+              : undefined;
+            const { entry } = openEntry(pl, { id: `pl${randomBytes(8).toString("hex")}`, companyId: co.id, channel, to, source: "move", via: "note", nowMs, introId });
+            if (introId) pl.intros.find((x) => x.id === introId)!.entryId ??= entry.id;
+            return { message: "In your pipeline. Merlin moves it when they reply, and nudges you to follow up in 3 business days." };
+          }
+          // Undo of a send just made: the entry it opened goes too, while nothing else happened to it.
+          if (op === "undo") {
+            const e = entryAt(pl, co.id);
+            if (e && e.source === "move" && e.stage === "sent" && !e.follow && !e.notes.length && nowMs - Date.parse(e.createdAt) < 24 * 3_600_000) {
+              pl.entries.splice(pl.entries.indexOf(e), 1);
+              pl.intros = pl.intros.filter((x) => !(x.entryId === e.id && x.status === "asked"));
+            }
+          }
           return {
             message:
               op === "done"
@@ -6990,6 +7024,18 @@ export async function perform(
           if (cur) {
             if (note && !cur.claimedBy) cur.note = note;
           } else s.seatInvites.push({ by: me.id, engagementId: e.id, at: now, ...(note ? { note } : {}) });
+          // An invite went out: the company is in their pipeline at Sent (lib/pipeline.ts), with the seat holder it went to.
+          const holderName = live(e, s, "operator");
+          const holderRole = live(e, s, "role");
+          openEntry(((s.pipeline ??= {})[me.id] ??= emptyPipeline()), {
+            id: `pl${randomBytes(8).toString("hex")}`,
+            companyId: e.companyId,
+            channel: "email",
+            to: { seatId: e.id, ...(holderRole ? { role: String(holderRole) } : {}), ...(holderName ? { name: String(holderName) } : {}) },
+            source: "record",
+            via: "note",
+            nowMs,
+          });
           return { message: "", id: pubId(e.id) };
         }
         default:
@@ -7080,7 +7126,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // Each member's pipeline (their deals, notes and intros) is theirs alone as well.
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars

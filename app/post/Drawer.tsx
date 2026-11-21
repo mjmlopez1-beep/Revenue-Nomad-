@@ -47,6 +47,7 @@ import { SmartWaysIn } from "./network/SmartPaths"; // [smart ways in]
 import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { WarmthChip } from "./network/parts"; // [google network]
 import { Charge } from "./Charge";
+import { PipelineBlock } from "./PipelineBlock";
 import { Prop } from "../ui/fractions/lazy";
 import dynamic from "next/dynamic";
 import { bestBuyer, buyerNoteMove, buyersOf, buyerWhat, findBuyer, knowSeatLine, type BuyerOnFile } from "@/lib/moves";
@@ -2139,6 +2140,8 @@ export function Drawer({
               <Pro where="hidden_company" variant="line" />
             </div>
           )}
+          {/* Your pipeline at this company (PipelineBlock.tsx): the member's own deal here, as Merlin moved it. Nothing when there is none. */}
+          {!c.hidden && <PipelineBlock i={i} />}
           {/* [smart ways in] the member's best ways in through people they know (SmartPaths.tsx), above Your way in. */}
           <SmartWaysIn i={i} />
           {/* [ux ws3] Your way in: who held the seats here and the next step with each, before About, seats and people. */}

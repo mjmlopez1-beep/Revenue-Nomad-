@@ -25,6 +25,7 @@ import { sideOf, unreadCount, unreadIn, type StoredConversation } from "./messag
 import { addSignIn } from "./signin";
 import { NOTIFICATIONS_PATH, emailLinker } from "./emailIn";
 import type { Action, ActionResult, ConversationRec, MessageRec } from "./tableTypes";
+import { emptyPipeline, openEntry } from "./pipeline";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -37,6 +38,25 @@ const NOT_TAKING = "They're not taking intros right now.";
 type MessageAction = Action;
 
 const newId = (p: string) => `${p}${randomBytes(8).toString("hex")}`;
+
+/**
+ * Your pipeline (lib/pipeline.ts): a message the member started about a seat went out on Merlin,
+ * so the seat's company is in their pipeline at Sent (a later one is a follow-up there). The other
+ * side's reply in this conversation moves it to Replied when Merlin next reads the pipeline.
+ */
+function pipelineSent(s: State, meId: string, c: StoredConversation, holder: { id: string; name: string }, role: string | null, nowMs: number) {
+  if (!c.about.companyId || c.a !== meId) return;
+  openEntry(((s.pipeline ??= {})[meId] ??= emptyPipeline()), {
+    id: newId("pl"),
+    companyId: c.about.companyId,
+    channel: "merlin",
+    to: { memberId: holder.id, name: holder.name, ...(role ? { role } : {}), ...(c.about.engagementId ? { seatId: c.about.engagementId } : {}) },
+    source: "message",
+    via: "message",
+    nowMs,
+    conversationId: c.id,
+  });
+}
 
 /** The text of a message, checked: something to say, and at most 2,000 characters. */
 function cleanText(raw: unknown): string {
@@ -341,11 +361,17 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           if ((s.blocks?.[me.id] ?? []).includes(holder.id)) throw new ActionError(`You blocked ${name}. Unblock them in Messages to write again.`);
           // One conversation per pair and seat: writing again goes into the one there is.
           const existing = convs.find((c) => c.about.engagementId === e.id && ((c.a === me.id && c.b === holder.id) || (c.a === holder.id && c.b === me.id)));
-          if (existing) return write(existing, a.text);
+          const seatRole = T.live(e, s, "role");
+          if (existing) {
+            const r0 = write(existing, a.text);
+            pipelineSent(s, me.id, existing, holder, seatRole ? String(seatRole) : null, nowMs);
+            return r0;
+          }
           roomForOne();
           const c: StoredConversation = { id: newId("cv"), a: me.id, b: holder.id, about: { companyId: e.companyId, engagementId: e.id }, messages: [], readAt: {}, status: "open", createdAt: now };
           convs.push(c);
           const r = write(c, a.text);
+          pipelineSent(s, me.id, c, holder, seatRole ? String(seatRole) : null, nowMs);
           // A conversation opened: in a Pro trial's last days it runs a week longer, once (lib/billing).
           T.valueMoment(s, me.id, nowMs);
           return { ...r, message: `Sent. ${name} will see it in Messages.` };
@@ -452,6 +478,14 @@ export async function performMessage(token: string | null, a: MessageAction, ori
   if (out.convId && (a.type === "message.start" || a.type === "message.send" || a.type === "message.connect")) {
     const id = out.convId;
     void import("./notify/events").then((n) => n.afterMessage(id)).catch((e) => console.error("message alert failed", e));
+  }
+  // A reply in a conversation the other member started: their pipeline moves to Replied (lib/pipelineActions.ts).
+  if (out.convId && a.type === "message.send") {
+    const id = out.convId;
+    void (async () => {
+      const c = (await loadState()).conversations?.find((x) => x.id === id);
+      if (c) await (await import("./pipelineActions")).detectNow(c.a);
+    })().catch((e) => console.error("pipeline detect failed", e));
   }
   return { message: out.message, ...(out.convId ? { id: out.convId } : {}), ...(out.rec ? { conversation: out.rec } : {}), unread: out.unread };
 }

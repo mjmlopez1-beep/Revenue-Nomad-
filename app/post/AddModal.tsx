@@ -28,6 +28,7 @@ import { MonthYear } from "./MonthYear";
 import { RateWho, reasonsFor, type RateChoice } from "./Seats";
 import { BENCH_RATE_HELP, atTime, plural, useDebounced } from "./hooks";
 import { Spot } from "../ui/fractions/lazy";
+import { pipelineAct } from "./pipelineStore";
 
 interface Lookup {
   domain: string;
@@ -346,6 +347,8 @@ interface Sent {
   capped: boolean;
   /** A rate shared for the benchmarks only, after the seat was saved. */
   bench?: { ok: boolean; message: string };
+  /** The seat saved (its public id). */
+  seatId?: string;
 }
 
 /* ---------- a seat we already have ---------- */
@@ -559,7 +562,7 @@ function EngagementForm({
     }
     setBusy(false);
     setDraft(emptySeat);
-    onDone({ n: answers, before, message: r.message, capped: !!r.capped, bench: shared });
+    onDone({ n: answers, before, message: r.message, capped: !!r.capped, bench: shared, ...(r.id ? { seatId: r.id } : {}) });
   };
   const id = (k: string) => `tp-ef-${k}`;
   const txt = (k: string, opts: { label?: string; type?: string; hint?: ReactNode; last?: boolean } = {}) => {
@@ -1036,7 +1039,8 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
   const [lookup, setLookup] = useState<Lookup | null>(null);
   const [looking, setLooking] = useState(false);
   // The forms' drafts live here, so a switch between "A seat" and "A person" keeps both.
-  const [seat, setSeat] = useState<SeatDraft>(emptySeat);
+  // Add it as your seat, from a won deal (Your pipeline): the form starts from its terms.
+  const [seat, setSeat] = useState<SeatDraft>(() => (opts.seat ? { ...emptySeat, v: { ...opts.seat } } : emptySeat));
   const [person, setPerson] = useState<PersonDraft>({ v: {}, seat: opts.engagementId ?? "" });
   const [coDirty, setCoDirty] = useState(false);
   const [ask, setAsk] = useState<null | { then: () => void }>(null);
@@ -1047,6 +1051,13 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
   const me = ui.me;
   const capped = earnNote(me).capped;
 
+  // The seat added from a won deal is confirmed by it (lib/pipelineActions.ts "pipeline.seat"), once.
+  const wonTold = useRef(false);
+  useEffect(() => {
+    if (!opts.won || wonTold.current || done?.what !== "seat" || !done.seatId) return;
+    wonTold.current = true;
+    void pipelineAct({ type: "pipeline.seat", id: opts.won, engagementId: done.seatId });
+  }, [done, opts.won]);
   const seatDirty = Object.values(seat.v).some((x) => x?.trim());
   const personDirty = Object.values(person.v).some((x) => x?.trim());
   const dirty = !done && (seatDirty || personDirty || coDirty);

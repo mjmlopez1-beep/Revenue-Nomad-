@@ -117,6 +117,13 @@ const P: Record<NavIconName, ReactNode> = {
     </>
   ),
   metrics: <path d="M4 19h16M6 15l4-5 3 3 5-7" />,
+  pipeline: (
+    <>
+      <rect x="3" y="4" width="5" height="16" rx="1.5" />
+      <rect x="10" y="4" width="5" height="11" rx="1.5" />
+      <rect x="17" y="4" width="4" height="7" rx="1.5" />
+    </>
+  ),
   fractionals: (
     <>
       <circle cx="8" cy="8.5" r="3" />

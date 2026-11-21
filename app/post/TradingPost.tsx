@@ -79,6 +79,8 @@ import { BillingPage, PlansHost, ProTag, TrialBanner, openPlans } from "./Billin
 import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { freeCompanyNow } from "./display";
 import { NetworkPage } from "./network/Network"; // [google network]
+import { PipelinePage } from "./Pipeline";
+import { usePipeline } from "./pipelineStore";
 import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./post.css";
 
@@ -206,7 +208,8 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // "today": Today (Today.tsx), the home for / with no place in the address. It sits level with the table (no history entry above it).
 // "fractionals": Fractionals (Fractionals.tsx). "partners", Referral partners' old address, opens it with Different from yours.
 // "notifications": Notifications (Notifications.tsx): every email and Slack post, and how often.
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals";
+// "pipeline": Your pipeline (Pipeline.tsx).
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline";
 
 /* ---------- the place in the address bar ---------- */
 
@@ -226,6 +229,7 @@ const PAGE_TITLE: Record<Page, string> = {
   billing: "Plan and billing",
   radar: YOUR_FEATURE,
   network: "Your network",
+  pipeline: "Your pipeline",
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -2298,6 +2302,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     }
     return m;
   }, [waiting, views, infos, cellMe, since.at]);
+  // Your pipeline's open deals, for its count (read once Home or the page has it).
+  const pipe = usePipeline(page === "pipeline").view;
+  const pipelineOpen = pipe ? pipe.counts.sent + pipe.counts.replied + pipe.counts.meeting + pipe.counts.proposal : null;
   const nav = navItems({
     page,
     recordType,
@@ -2316,6 +2323,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     plan: me.plan,
     network: !!network,
     networkN: network ? network.companies.length : null,
+    pipelineN: pipelineOpen,
     unread,
     radarNew,
     totals: waiting && !pf ? null : totals,
@@ -2650,6 +2658,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
             <Seats seats={seats} infos={infos} focus={seatFocus} onBack={toBase} search={seatCtx.search} back={seatBack} />
+          </main>
+        ) : page === "pipeline" ? (
+          <main className="tp-main tp-main-page">
+            <PipelinePage infos={infos} onBack={toBase} openCompany={openCompany} onIntegrations={() => setPage("integrations")} />
           </main>
         ) : page === "network" ? (
           // [google network] Your network: the member's own, from Google and their own Claude.

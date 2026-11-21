@@ -327,7 +327,7 @@ export function isBulk(m: GmailMeta): boolean {
 export function gmailSource(msgs: GmailMeta[], self: Set<string>, dir: Directory, own: Set<string>, nowMs: number): SourceData {
   const accs = new Map<string, Acc>();
   const companies = new Map<string, NetCompany>();
-  const touch = (email: string, name: string | undefined, out: boolean, d: string, seen: Set<string>) => {
+  const touch = (email: string, name: string | undefined, out: boolean, d: string, seen: Set<string>, atIso: string) => {
     if (self.has(email)) return;
     const domain = workDomain(email, own);
     if (!domain) return;
@@ -351,6 +351,11 @@ export function gmailSource(msgs: GmailMeta[], self: Set<string>, dir: Directory
       c.emails = (c.emails ?? 0) + 1;
       if (!c.first || d < c.first) c.first = d;
       if (!c.last || d > c.last) c.last = d;
+      // Your pipeline (lib/pipeline.ts): when the latest email went out to them and came in from them, and the first one out. The Date header's time only.
+      if (out) {
+        if (!c.outAt || atIso > c.outAt) c.outAt = atIso;
+        if (!c.outFirstAt || atIso < c.outFirstAt) c.outFirstAt = atIso;
+      } else if (!c.inAt || atIso > c.inAt) c.inAt = atIso;
       companies.set(acc.company, c);
     }
   };
@@ -359,14 +364,15 @@ export function gmailSource(msgs: GmailMeta[], self: Set<string>, dir: Directory
     if (!Number.isFinite(at) || at > nowMs + 86_400_000) continue;
     if (isBulk(m)) continue;
     const d = day(at);
+    const atIso = new Date(at).toISOString();
     const from = addresses(m.headers.from)[0];
     const seen = new Set<string>();
     if (self.has(from.email)) {
       const to = [...addresses(m.headers.to), ...addresses(m.headers.cc)];
       if (to.length > MAX_RECIPIENTS) continue;
-      for (const r of to) touch(r.email, r.name, true, d, seen);
+      for (const r of to) touch(r.email, r.name, true, d, seen, atIso);
     } else {
-      touch(from.email, from.name, false, d, seen);
+      touch(from.email, from.name, false, d, seen, atIso);
     }
   }
   let real = 0;

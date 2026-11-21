@@ -21,7 +21,7 @@
  * "Then: …") moves the card on to the next step, the move lib/moves.ts picks (remembered in this
  * browser, per role).
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import type { Me } from "@/lib/tableTypes";
 import { FEATURE_NAME } from "@/lib/radar/types";
@@ -33,6 +33,7 @@ import { useUi } from "./ui";
 import { LeadAction } from "./Today";
 import { useCrystalClick } from "./CrystalOpen";
 import { CRYSTAL_USED_UNLOCK, roleTermsLine, TOMORROW_LINE } from "./todayModel";
+import { loadPipeline } from "./pipelineStore";
 import "./moves.css";
 
 /*
@@ -138,13 +139,16 @@ export function MovesSection({
     if (note && !drafting) setNote(null);
   }, [note, drafting]);
 
-  const log = async (id: string, op: "done" | "snooze" | "undo", quiet = false) => {
+  // The note was used (Open in Gmail, Copy): when its sheet closes, the move is sent (Your pipeline, lib/pipeline.ts).
+  const used = useRef(false);
+  const log = async (id: string, op: "done" | "snooze" | "undo" | "sent", quiet = false, m?: Move) => {
     if (busy) return;
     setBusy(id);
-    const r = await ui.act({ type: "move", id, op }, { quiet: true });
+    const r = await ui.act(op === "sent" ? { type: "move", id, op, ...(m ? sentOf(m) : {}) } : { type: "move", id, op }, { quiet: true });
     setBusy(null);
     if (!r.ok) return;
     if (r.moves) onWire(r.moves);
+    if (op === "sent" || op === "undo") void loadPipeline(true);
     if (quiet || op === "undo") return void (op === "undo" && toast(r.message));
     toast(r.message, false, { action: { label: "Undo", onClick: () => void log(id, "undo") } });
   };
@@ -191,7 +195,7 @@ export function MovesSection({
                 me={me}
                 busy={busy === m.id}
                 onOpen={() => openCompany(m.id)}
-                onDraft={() => setNote(m.id)}
+                onDraft={() => ((used.current = false), setNote(m.id))}
                 onDone={() => void log(m.id, "done")}
                 onSnooze={() => void log(m.id, "snooze")}
               />
@@ -239,11 +243,17 @@ export function MovesSection({
           m={drafting.m}
           row={drafting.w.row}
           me={me}
-          onClose={() => setNote(null)}
-          onSent={() => {
-            const id = drafting.m.id;
+          onClose={() => {
             setNote(null);
-            void log(id, "done");
+            if (used.current) void log(drafting.m.id, "sent", false, drafting.m);
+            used.current = false;
+          }}
+          onUsed={() => (used.current = true)}
+          onSent={(channel) => {
+            const m = drafting.m;
+            used.current = false;
+            setNote(null);
+            void log(m.id, "sent", false, channel === "merlin" ? { ...m, do: "holderMessage" } : m);
           }}
           onClaude={() => {
             setNote(null);
@@ -253,6 +263,14 @@ export function MovesSection({
       )}
     </section>
   );
+}
+
+/** What a sent move tells the pipeline: the channel, who it went to (as the move shows them), and whether it asked for an intro. */
+function sentOf(m: Move): { channel: "email" | "merlin" | "intro"; to: { name?: string | null; role?: string | null; google?: boolean }; intro?: boolean } {
+  const w = m.way;
+  const to = w.kind === "know" ? { name: w.person.name, role: w.person.title, google: w.person.google } : w.kind === "holder" ? { name: w.name, role: w.role ?? (w.fn ? `fractional ${w.fn} lead` : null) } : {};
+  if (m.do === "intro") return { channel: "intro", to, intro: true };
+  return { channel: m.do === "holderMessage" && w.kind === "holder" && w.member ? "merlin" : "email", to };
 }
 
 const ownClick = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;

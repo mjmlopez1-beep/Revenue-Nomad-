@@ -10,7 +10,8 @@
  * Merlin drafts, the member sends: Copy, Open in Gmail (a compose link with the subject and the
  * note, and the address only when the member already has it: their own contacts, or a contact they
  * unlocked) or another mail app, and Message on Merlin for a seat holder who is a member. Nothing
- * here sends on its own. What they edit stays in this sheet. "Mark as sent" is the move's Done.
+ * here sends on its own. What they edit stays in this sheet. "Mark as sent", or using the note,
+ * puts the company in the member's pipeline at Sent (lib/pipeline.ts) and the move leaves today's.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
@@ -29,13 +30,16 @@ import "./movenote.css";
 const MAX = 2000;
 
 export function NoteSheet({
-  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent",
+  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed,
 }: {
   m: Move;
   row: RadarRow;
   me: Me;
   onClose: () => void;
-  onSent: () => void;
+  /** Mark as sent, or sent on Merlin ("merlin"). */
+  onSent: (channel?: "merlin") => void;
+  /** The note was used (Open in Gmail, another mail app, Copy): it goes into the member's pipeline (lib/pipeline.ts). */
+  onUsed?: () => void;
   onClaude: () => void;
   /** Your network: the note's facts as that page has them (an "ask" for an introduction), instead of the move's. */
   facts?: NoteFacts | null;
@@ -81,6 +85,7 @@ export function NoteSheet({
   // An invite to connect is recorded the first time it goes out, with the note as it reads now: it opens the conversation when they claim the seat.
   const record = () => {
     setUsed(true);
+    onUsed?.();
     if (invite) void ui.act({ type: "invite", engagementId: invite.seatId, note: body }, { quiet: true, silentError: true });
   };
   const copy = async () => {
@@ -97,7 +102,7 @@ export function NoteSheet({
     if (r.error) return setErr(r.error);
     const c = r.conversation;
     toast(r.message || "Sent.", false, { action: { label: "Open conversation", onClick: () => (c ? openConversation(ui.openPage, c.id) : ui.openPage("messages")) } });
-    onSent();
+    onSent("merlin");
   };
   const title = facts.kind === "roleCold" && !to ? "A note for the open role" : `A note to ${first ?? "them"}`;
   const buyer = way.kind === "buyer" ? way : null;
@@ -149,7 +154,7 @@ export function NoteSheet({
               </span>
             </span>
           </p>
-            <button type="button" className={`btn${used ? " btn-pine" : ""} mn-done`} onClick={onSent}>
+            <button type="button" className={`btn${used ? " btn-pine" : ""} mn-done`} onClick={() => onSent()}>
               {sentLabel}
             </button>
           </div>

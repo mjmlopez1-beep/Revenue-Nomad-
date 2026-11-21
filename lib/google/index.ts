@@ -310,6 +310,8 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
         } else if (out.gmail?.error) cur.gmail.error = out.gmail.error;
       }
     });
+    // Your pipeline (lib/pipelineActions.ts): replies and meetings this read shows move the member's deals.
+    void import("../pipelineActions").then((p) => p.detectNow(memberId)).catch((e) => console.error("pipeline detect failed", e));
     return error ? { ok: false, error } : { ok: true };
   } finally {
     syncing.delete(memberId);
