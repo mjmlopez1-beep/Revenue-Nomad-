@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { CompanyLogo, IconChevron, IconLock, IconSearch, IconX, LockedSite, Num, lockedLook } from "../ui/shared";
 import { FUNCTIONS, GTM_FUNCTIONS } from "@/lib/tableFields";
+import { SparkMark } from "./fractions/scenes";
 
 /** Read by app/onboard/Onboarding.tsx. */
 const TRY_FN_KEY = "tp_try_fn";
@@ -421,7 +422,11 @@ export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }:
     <section className="lp-sec lp-find" id="find" aria-labelledby="find-h">
       <div className="lp-wrap">
         <div className="lp-sec-head lp-sec-head-c">
-          <span className="lp-pill lp-pill-pine">Live data</span>
+          <span className="lp-sec-tag">
+            <SparkMark className="lp-spark" />
+            <span className="lp-pill lp-pill-pine">Live data</span>
+            <SparkMark className="lp-spark lp-spark-sm" t="pine" />
+          </span>
           <h2 className="lp-h2" id="find-h">
             What are you looking for?
           </h2>

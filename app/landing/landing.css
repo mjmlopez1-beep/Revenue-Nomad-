@@ -3,8 +3,15 @@
  *
  * Shape: big type with tight leading, a lot of air, very round corners. Pine for the nav, the
  * hero and the two bands (numbers, closing call to action); the page between is off-white with
- * white cards. Each feature panel has its own tint (mint, sand, pale blue, ember) and a solid
- * pill label, and picks out one phrase of its headline in that tint's ink.
+ * white cards. Each feature panel is a field of its own (mint, sand, mint soft, pine) with a
+ * solid pill label, and picks out one phrase of its headline in that field's ink.
+ *
+ * Pictures are Fractions, the illustration system (fractions/): halves and quarters of a circle,
+ * flat, on a 40px grid, with the Nomad and the crystal ball. They are inline SVG, hidden from
+ * assistive technology unless named, and never sit over text. Where a picture is behind text
+ * (the hero's hill in pine's tone), the text is still 4.5:1 on it. Ember is used large here, by
+ * design: the Nomad's cloak and one big shape a picture. The app's own rule (ember once a
+ * screen) is the app's, and is untouched.
  *
  * Type (Schibsted Grotesk): display 40 to 64, section heading 30 to 48, panel heading 26 to 40,
  * lead 18/28, reading text 16/24, captions and labels 13/20. Weights 400, 600, 700 and 800: only
@@ -12,14 +19,14 @@
  * Mono is only on domains, links and email addresses.
  *
  * Color: volt fills the one primary button in view, "+1", and the phrase picked out on pine.
- * Ember is the live dot, "Hiring now" on the example record and the open roles panel. Red is
- * for errors. Every text color here is 4.5:1 or better on what it sits on (the tints included).
+ * Ember is the live dot, "Hiring now" on the example record, and the pictures. Red is for
+ * errors. Every text color here is 4.5:1 or better on what it sits on (the fields included).
  *
  * Radii: 32 panels and bands (24 on phones), 24 the big box, 20 cards, 999 pills. Spacing steps:
  * 4, 8, 12, 16, 24, 32, 48, then 104 between sections (64 on phones).
  *
  * Motion is small and optional: the example question in the empty box fades in, and nothing
- * else moves. None of it runs under prefers-reduced-motion.
+ * else moves (the pictures are still). None of it runs under prefers-reduced-motion.
  */
 
 .lp {
@@ -238,11 +245,21 @@ html:has(.lp) {
 }
 
 /* ---------- hero ---------- */
-/* Pine with a soft volt light in one corner, and round bottom corners where it meets the page. */
+/*
+ * Flat pine, round bottom corners where it meets the page, and the hero picture: the record
+ * sits in a mint doorway with the Nomad standing on it, a trail leads in from the left, and
+ * quarters run off the edges (which is why the hero clips).
+ */
 .lp-hero {
-  background: radial-gradient(720px 480px at 88% 0%, rgba(46, 229, 157, 0.18), rgba(46, 229, 157, 0) 70%), var(--pine);
+  /* The space under the record, which the door runs through, and how far the door stands out past the record on each side. */
+  --hero-pb: 56px;
+  --door-pad: 40px;
+  position: relative;
+  overflow: hidden;
+  overflow: clip;
+  background: var(--pine);
   color: #fff;
-  padding: 64px 0 72px;
+  padding: 16px 0 var(--hero-pb);
   border-radius: 0 0 40px 40px;
 }
 /*
@@ -250,13 +267,18 @@ html:has(.lp) {
  * without moving the headline or the example record.
  */
 .lp-hero-in {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
   gap: 72px;
   align-items: start;
 }
+/* The room under the words is the trail's: it is 220px tall and stands on the hero's bottom edge. */
 .lp-hero-copy {
-  padding-top: 16px;
+  position: relative;
+  z-index: 1;
+  padding: 32px 0 176px;
 }
 /* The one live signal: how many roles opened this week. */
 .lp-live {
@@ -481,9 +503,76 @@ html:has(.lp) {
   color: #fff;
 }
 
-/* ---------- hero visual: one real record ---------- */
+/* ---------- hero visual: one real record, in the doorway ---------- */
+/*
+ * A column the height of the hero: the stage (the arch, the Nomad and the ball, as wide as the
+ * door), then the door's body with the record in it. The stage's bottom edge is the record's
+ * top, whatever the record's height, and the body runs on to the hero's bottom edge.
+ */
 .lp-hero-visual {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+}
+/* Over the shapes at the page's edges, which run behind the arch. */
+.lp-hero-stage {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: calc(100% + 2 * var(--door-pad));
+  max-width: none;
+  height: auto;
+  margin: 0 calc(-1 * var(--door-pad));
+}
+.lp-hero-stage-phone,
+.lp-hero-ql,
+.lp-hero-qr {
+  display: none;
+}
+.lp-hero-door {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+}
+.lp-hero-door::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -1px calc(-1 * var(--door-pad)) calc(-1 * var(--hero-pb));
+  background: var(--volt);
+}
+/* Right of the door, growing with the room there: an ember quarter and pine's tone, off the page's edge. */
+.lp-hero-edge {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--door-pad));
+  width: max(160px, calc(50vw - 598px));
+  height: auto;
+}
+.lp-hero-dome {
+  position: absolute;
+  left: calc(100% + var(--door-pad));
+  bottom: calc(-1 * var(--hero-pb));
+  width: 160px;
+  height: auto;
+}
+/* The trail arrives at the door's left edge, along the hero's bottom. */
+.lp-hero-trail {
+  position: absolute;
+  right: calc(100% + var(--door-pad));
+  bottom: calc(-1 * var(--hero-pb));
+  width: 640px;
+  height: auto;
+}
+/* A hill in pine's tone in the hero's bottom left corner. Text over it keeps 4.5:1. */
+.lp-hero-hill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 360px;
+  height: auto;
 }
 .lp-visual {
   margin: 0;
@@ -495,7 +584,7 @@ html:has(.lp) {
   overflow: hidden;
   font-size: 14px;
   line-height: 20px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--overlay-shadow);
 }
 .lp-rec-head {
   position: relative;
@@ -609,11 +698,12 @@ html:has(.lp) {
   font-weight: 600;
   color: var(--volt-ink);
 }
+/* Under the record, on the door: pine on mint is 7.3:1. */
 .lp-visual-cap {
   margin-top: 12px;
   font-size: 13px;
   line-height: 20px;
-  color: var(--on-pine-quiet);
+  color: var(--pine);
 }
 .lp-plus {
   flex: none;
@@ -738,6 +828,25 @@ button.lp-fake-btn {
 }
 .lp-sec-head .lp-pill {
   margin-bottom: 20px;
+}
+/* A label with a spark on each side: the one accent a plain section gets. */
+.lp-sec-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.lp-sec-tag .lp-pill {
+  margin-bottom: 0;
+}
+.lp-spark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.lp-spark-sm {
+  width: 12px;
+  height: 12px;
 }
 /* A centered heading over a section. */
 .lp-sec-head-c {
@@ -1231,8 +1340,15 @@ button.lp-fake-btn {
 .lp-stats-band {
   padding: 56px 56px 48px;
   border-radius: var(--r-panel);
-  background: radial-gradient(640px 360px at 0% 100%, rgba(46, 229, 157, 0.16), rgba(46, 229, 157, 0) 70%), var(--pine);
+  background: var(--pine);
   color: #fff;
+  overflow: hidden;
+}
+/* The texture band along the bottom edge: the lower row of the tile. */
+.lp-stats-tex {
+  display: block;
+  width: calc(100% + 112px);
+  margin: 40px -56px -48px;
 }
 .lp-stats-grid {
   margin: 0;
@@ -1330,49 +1446,71 @@ button.lp-fake-btn {
   color: var(--muted);
 }
 
-/* ---------- what you can do: four tinted panels ---------- */
+/* ---------- what you can do: four panels, each a field with its prop ---------- */
 .lp-feat-list {
   display: grid;
   gap: 24px;
 }
 /*
- * Each tint with its ink (the phrase picked out, the link) and its solid label. Every ink is
- * 5:1 or better on its tint; body text and captions on the tints are 4.9:1 or better.
+ * Each field with its inks: the heading, the phrase picked out, the link, the sentence, and its
+ * solid label. Every one is 4.5:1 or better on its field.
  */
 .lp-feat-mint {
-  --tint: #e2f7ec;
-  --tint-ink: #0b6b45;
-  --pill-bg: var(--volt);
-  --pill-ink: var(--pine);
+  --tint: var(--volt);
+  --feat-h: var(--pine);
+  --tint-ink: var(--ink);
+  --feat-link: var(--pine);
+  --feat-p: var(--ink);
+  --pill-bg: var(--pine);
+  --pill-ink: #fff;
 }
 .lp-feat-sand {
-  --tint: #f5ecd9;
+  --tint: var(--sand);
+  --feat-h: var(--ink);
   --tint-ink: #85560f;
+  --feat-link: #85560f;
+  --feat-p: var(--body-ink);
   --pill-bg: #f0b84a;
   --pill-ink: #2e2004;
 }
-.lp-feat-sky {
-  --tint: #e3edfb;
-  --tint-ink: #1d4f91;
-  --pill-bg: #2563c9;
+.lp-feat-soft {
+  --tint: var(--volt-soft);
+  --feat-h: var(--ink);
+  --tint-ink: var(--volt-ink);
+  --feat-link: var(--volt-ink);
+  --feat-p: var(--body-ink);
+  --pill-bg: var(--pine);
   --pill-ink: #fff;
 }
-.lp-feat-ember {
-  --tint: #ffe8dd;
-  --tint-ink: var(--ember-ink);
+.lp-feat-pine {
+  --tint: var(--pine);
+  --feat-h: #fff;
+  --tint-ink: var(--volt);
+  --feat-link: var(--volt);
+  --feat-p: var(--on-pine);
   --pill-bg: var(--ember);
   --pill-ink: var(--ink);
 }
 .lp-feat {
+  --feat-pad: 64px;
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   gap: 64px;
-  padding: 64px;
+  padding: var(--feat-pad);
   border-radius: var(--r-panel);
   background: var(--tint);
-  /* The focus ring on a tint: pine (10:1), where the page's green ring would fall under 3:1. */
+  /* The focus ring on a field: pine (7:1 or better on the light ones), where the page's green ring would fall under 3:1. */
   --focus: var(--pine);
+}
+.lp-feat-pine {
+  --focus: var(--volt);
+}
+.lp-feat-copy {
+  position: relative;
+  z-index: 1;
 }
 /* Every other panel leads with its picture. */
 .lp-feat:nth-child(even) .lp-feat-copy {
@@ -1385,6 +1523,7 @@ button.lp-fake-btn {
   line-height: 1.08;
   letter-spacing: -0.03em;
   max-width: 13em;
+  color: var(--feat-h);
 }
 .lp-feat-h em {
   color: var(--tint-ink);
@@ -1394,7 +1533,7 @@ button.lp-fake-btn {
   max-width: 28em;
   font-size: 18px;
   line-height: 28px;
-  color: var(--body-ink);
+  color: var(--feat-p);
   text-wrap: pretty;
 }
 .lp-feat-cta {
@@ -1407,7 +1546,7 @@ button.lp-fake-btn {
   border: 0;
   border-radius: 4px;
   background: none;
-  color: var(--tint-ink);
+  color: var(--feat-link);
   font: inherit;
   font-size: 15px;
   font-weight: 700;
@@ -1418,15 +1557,40 @@ button.lp-fake-btn {
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
+/*
+ * The picture: the prop stands on the product card, so the card's top edge is its ground. The
+ * stage runs to the panel's top and to its outer edge, where a hill or a dome is cut by the
+ * frame (to the right in the odd panels, to the left in the even ones).
+ */
 .lp-feat-fig {
-  margin: 0;
+  position: relative;
   min-width: 0;
 }
-.lp-feat-fig figcaption {
-  margin-top: 12px;
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted);
+.lp-feat-stage {
+  margin: calc(-1 * var(--feat-pad)) calc(-1 * var(--feat-pad)) 0 0;
+}
+.lp-feat:nth-child(even) .lp-feat-stage {
+  margin: calc(-1 * var(--feat-pad)) 0 0 calc(-1 * var(--feat-pad));
+}
+.lp-feat-stage .fx {
+  width: 100%;
+  height: auto;
+}
+/* One large shape in the panel's top corner, over the picture's side. */
+.lp-feat-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 120px;
+  height: auto;
+}
+.lp-feat:nth-child(even) .lp-feat-corner {
+  right: auto;
+  left: 0;
+}
+.lp-feat:nth-child(even) .lp-feat-sun {
+  left: 24px;
+  width: 160px;
 }
 
 /* The pictures: a white card each, drawn with the app's own shapes. Nothing in them is real data. */
@@ -1601,18 +1765,6 @@ button.lp-fake-btn {
   color: rgba(255, 255, 255, 0.8);
 }
 /* rates */
-.lp-v-sample {
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: #fdf0cf;
-  color: #5c4000;
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 .lp-v-seg {
   display: flex;
   flex-wrap: wrap;
@@ -1647,10 +1799,12 @@ button.lp-fake-btn {
   justify-content: space-between;
   gap: 12px;
 }
+/* Every amount is drawn locked, as the app draws one at rest: a small lock and a grey bar. */
 .lp-v-rate-med {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--faint);
 }
 .lp-v-track {
   position: relative;
@@ -1664,7 +1818,7 @@ button.lp-fake-btn {
   top: 0;
   bottom: 0;
   border-radius: 999px;
-  background: #9bbff0;
+  background: var(--volt);
 }
 .lp-v-mid {
   position: absolute;
@@ -1673,20 +1827,21 @@ button.lp-fake-btn {
   height: 18px;
   margin-left: -2px;
   border-radius: 2px;
-  background: #1d4f91;
+  background: var(--pine);
 }
 .lp-v-rate-ends {
   position: relative;
   height: 20px;
   margin-top: 6px;
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--muted);
+  color: var(--faint);
 }
 .lp-v-rate-ends > span {
   position: absolute;
+  top: 0;
+  height: 20px;
+  display: flex;
+  align-items: center;
   transform: translateX(-50%);
-  white-space: nowrap;
 }
 /* the alert in Slack */
 .lp-v-slack-head {
@@ -2028,11 +2183,20 @@ button.lp-fake-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 80px 32px;
+  padding: 80px 32px 0;
   border-radius: var(--r-panel);
-  background: radial-gradient(640px 400px at 100% 0%, rgba(46, 229, 157, 0.18), rgba(46, 229, 157, 0) 70%), var(--pine);
+  background: var(--pine);
   color: #fff;
   text-align: center;
+  overflow: hidden;
+}
+/* Under the form, on the band's bottom edge: the Nomad knocks on the door. Cut to its middle on a narrow screen. */
+.lp-final-art {
+  flex: none;
+  width: calc(100% + 64px);
+  max-width: none;
+  height: clamp(150px, 21.5vw, 240px);
+  margin: 40px -32px 0;
 }
 .lp-final .lp-h2 {
   max-width: 14em;
@@ -2250,17 +2414,38 @@ button.lp-fake-btn {
 }
 
 /* ---------- responsive ---------- */
+/*
+ * No room right of the door for the shapes that stand beside it: a narrower door, and one ember
+ * quarter in the page's top right corner, behind the arch.
+ */
+@media (max-width: 1320px) {
+  .lp-hero {
+    --door-pad: 24px;
+  }
+  .lp-hero-edge,
+  .lp-hero-dome {
+    display: none;
+  }
+  .lp-hero-qr {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: min(-32px, calc(558px - 50vw));
+    width: 160px;
+    height: auto;
+  }
+}
 @media (max-width: 1100px) {
   .lp-nav-links {
     display: none;
   }
   .lp-hero-in {
-    gap: 48px;
+    gap: 56px;
     grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
   }
   .lp-feat {
+    --feat-pad: 48px;
     gap: 40px;
-    padding: 48px;
   }
   .lp-mx-head,
   .lp-mx-row {
@@ -2274,19 +2459,46 @@ button.lp-fake-btn {
   }
 }
 @media (max-width: 960px) {
+  /*
+   * One column: the words, then the door in the middle of the page with the record in it. The
+   * trail and the right edge go; a quarter in pine's tone and an ember one sit at the page's
+   * two edges, behind the arch.
+   */
   .lp-hero {
-    padding: 56px 0 64px;
+    --hero-pb: 64px;
+    --door-pad: 40px;
+    padding-top: 0;
   }
   .lp-hero-in {
     grid-template-columns: minmax(0, 1fr);
-    gap: 48px;
+    gap: 0;
   }
   .lp-hero-copy {
-    padding-top: 0;
+    padding: 40px 0 56px;
   }
   .lp-hero-visual {
-    max-width: 520px;
+    max-width: 480px;
     width: 100%;
+    margin: 0 auto;
+  }
+  .lp-hero-trail,
+  .lp-hero-hill {
+    display: none;
+  }
+  .lp-hero-ql,
+  .lp-hero-qr {
+    display: block;
+    position: absolute;
+    top: -20px;
+    height: auto;
+  }
+  .lp-hero-ql {
+    left: calc(50% - 50vw);
+    width: 200px;
+  }
+  .lp-hero-qr {
+    right: calc(50% - 50vw);
+    width: 140px;
   }
   .lp-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2300,8 +2512,35 @@ button.lp-fake-btn {
   .lp-feat:nth-child(even) .lp-feat-copy {
     order: 0;
   }
+  /* The picture keeps to its side of the panel, so its stage still runs off that edge. */
   .lp-feat-fig {
+    width: 100%;
     max-width: 560px;
+    margin-left: auto;
+  }
+  .lp-feat:nth-child(even) .lp-feat-fig {
+    margin-left: 0;
+  }
+  .lp-feat-stage {
+    margin-top: 0;
+  }
+  .lp-feat:nth-child(even) .lp-feat-stage {
+    margin-top: 0;
+  }
+  /* The corner shape is always top right here, clear of the label and above the heading. */
+  .lp-feat-corner,
+  .lp-feat:nth-child(even) .lp-feat-corner {
+    left: auto;
+    right: 0;
+    width: 88px;
+  }
+  .lp-feat-corner-l {
+    transform: scaleX(-1);
+  }
+  .lp-feat:nth-child(even) .lp-feat-sun {
+    left: auto;
+    right: 32px;
+    width: 144px;
   }
   .lp-steps {
     grid-template-columns: minmax(0, 1fr);
@@ -2392,25 +2631,36 @@ button.lp-fake-btn {
     padding: 0 12px;
   }
   /*
-   * The first screen on a phone: the words and the form fill it down to where the real record
-   * starts, so the top of the record peeks up from the bottom edge before anything is read. On a
-   * screen too short for that, the record simply follows the form.
+   * The first screen on a phone: the words and the form, then the Nomad on the door, and the
+   * top of the real record peeking up from the bottom edge. On a screen too short for that, the
+   * picture and the record simply follow the form.
    */
   .lp-hero {
-    padding: 0 0 40px;
+    --hero-pb: 40px;
+    --door-pad: 0px;
     border-radius: 0 0 28px 28px;
-  }
-  .lp-hero-in {
-    gap: 0;
   }
   .lp-hero-copy {
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: flex-start;
-    min-height: calc(100vh - var(--nav-h) - 176px);
-    min-height: calc(100svh - var(--nav-h) - 176px);
-    padding: 24px 0;
+    padding: 16px 0 28px;
+  }
+  /* The door is as wide as the words, the record sits inside it, and the Nomad is half the size against it. */
+  .lp-hero-stage-wide {
+    display: none;
+  }
+  .lp-hero-stage-phone {
+    display: block;
+  }
+  .lp-hero-door {
+    padding: 0 16px;
+  }
+  .lp-hero-ql {
+    width: 120px;
+  }
+  .lp-hero-qr {
+    width: 80px;
   }
   .lp-hero-copy > * {
     width: 100%;
@@ -2432,16 +2682,17 @@ button.lp-fake-btn {
   }
   .lp-hero-free {
     margin-top: 12px;
-    font-size: 14px;
+    font-size: 13.5px;
     line-height: 20px;
+    letter-spacing: -0.005em;
   }
   .lp-hero-member {
     margin-top: 0;
   }
   .lp-hero-by {
-    margin-top: 4px;
-    padding-top: 12px;
-    font-size: 13.5px;
+    margin-top: 0;
+    padding-top: 10px;
+    font-size: 13px;
   }
   .lp-join-btn.btn-lg {
     padding: 0 16px;
@@ -2565,6 +2816,10 @@ button.lp-fake-btn {
   .lp-stats-band {
     padding: 40px 24px 32px;
   }
+  .lp-stats-tex {
+    width: calc(100% + 48px);
+    margin: 32px -24px -32px;
+  }
   .lp-stats-grid {
     gap: 32px 16px;
   }
@@ -2585,8 +2840,17 @@ button.lp-fake-btn {
     gap: 16px;
   }
   .lp-feat {
+    --feat-pad: 20px;
     gap: 24px;
     padding: 32px 20px 24px;
+  }
+  .lp-feat-corner,
+  .lp-feat:nth-child(even) .lp-feat-corner {
+    width: 72px;
+  }
+  .lp-feat:nth-child(even) .lp-feat-sun {
+    right: 20px;
+    width: 112px;
   }
   .lp-v {
     padding: 16px;
@@ -2630,7 +2894,11 @@ button.lp-fake-btn {
     padding: 64px 0 40px;
   }
   .lp-final-in {
-    padding: 48px 14px;
+    padding: 48px 14px 0;
+  }
+  .lp-final-art {
+    width: calc(100% + 28px);
+    margin: 32px -14px 0;
   }
   .lp-scrim {
     place-items: end stretch;
@@ -2669,16 +2937,22 @@ button.lp-fake-btn {
   .lp-nav-get.btn {
     font-size: 13.5px;
   }
-  /* The third fact goes so the line under the name stays on one line. */
-  .lp-rec-meta-x {
-    display: none;
-  }
   .lp-h1 {
     font-size: 36px;
   }
 }
+/* The record is narrower than the door here: the third fact goes so the line under the name stays on one line. */
+@media (max-width: 430px) {
+  .lp-rec-meta-x {
+    display: none;
+  }
+}
 /* Too narrow for the field and its button side by side: the button goes under it. */
 @media (max-width: 350px) {
+  /* The record takes nearly all of the door, so a company's name keeps its room. */
+  .lp-hero-door {
+    padding: 0 8px;
+  }
   .lp-join-row {
     flex-direction: column;
   }

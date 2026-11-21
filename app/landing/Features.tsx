@@ -1,18 +1,23 @@
 "use client";
 
 /**
- * What Merlin does, one tinted panel each: a small label, a headline with one phrase picked
- * out, one sentence and a picture of that part of the product drawn in HTML and CSS (no image
- * files). Crystal Ball (mint), warm paths (sand), rates (pale blue), open roles (ember).
+ * What Merlin does, one panel each: a small label, a headline with one phrase picked out, one
+ * sentence, and a picture of that part of the product drawn in HTML and CSS (no image files),
+ * with the panel's prop from the illustration system standing on it (fractions/scenes.tsx).
+ * Crystal Ball (mint, the ball), warm paths (sand, the trail), rates (mint soft, the seat),
+ * open roles (pine, the door).
  *
- * Every picture is an illustration, and says so: the companies and people in them are made up
- * (.example addresses, names like "Alex Sample"), and the rate figures are sample numbers, not
- * Merlin's. Nothing here reads from the table, so nothing real can show. The functions vary from
- * picture to picture (RevOps, People, Marketing, Customer Success, Finance, Sales, Technology,
- * Product), because Merlin covers every fractional function.
+ * Nothing here reads from the table, so nothing real can show: the companies and people in the
+ * pictures are invented (.example addresses, names like "Alex Sample"), and the pictures carry
+ * no label saying so. For that reason the rates picture shows no amount at all: every figure is
+ * drawn the way the app draws a locked one, so no invented number can pass for Merlin's. The
+ * functions vary from picture to picture (RevOps, People, Marketing, Customer Success, Finance,
+ * Sales, Technology, Product), because Merlin covers every fractional function.
  */
 import type { ReactNode } from "react";
 import { IconLock } from "../ui/shared";
+import { Locked } from "./Visuals";
+import { Corner, FeatBall, FeatDoor, FeatRates, FeatTrail, Sun } from "./fractions/scenes";
 
 /** A made-up company's tile: two letters on a soft color, as the app draws a company with no logo. */
 function Tile({ letters, hue }: { letters: string; hue: number }) {
@@ -102,12 +107,12 @@ function WayInVisual() {
   );
 }
 
-/* ---------- Rates: a range bar per function. Sample figures, never Merlin's. ---------- */
+/* ---------- Rates: a range bar per function, every amount locked. No figure is ever drawn here. ---------- */
 
 const RATES = [
-  { fn: "Sales", from: 22, to: 68, mid: 44, low: "$6,000", high: "$10,000", median: "$8,000" },
-  { fn: "Finance", from: 14, to: 56, mid: 34, low: "$5,000", high: "$9,000", median: "$7,000" },
-  { fn: "Technology", from: 34, to: 84, mid: 58, low: "$8,000", high: "$13,000", median: "$10,000" },
+  { fn: "Sales", from: 22, to: 68, mid: 44 },
+  { fn: "Finance", from: 14, to: 56, mid: 34 },
+  { fn: "Technology", from: 34, to: 84, mid: 58 },
 ];
 
 function RatesVisual() {
@@ -115,7 +120,7 @@ function RatesVisual() {
     <div className="lp-v lp-v-rates" aria-hidden>
       <div className="lp-v-top">
         <span className="lp-v-h">Rate benchmarks</span>
-        <span className="lp-v-sample">Sample figures</span>
+        <span className="lp-v-quiet">Median and range</span>
       </div>
       <div className="lp-v-seg">
         <span>Per month</span>
@@ -127,17 +132,22 @@ function RatesVisual() {
         <div key={r.fn} className="lp-v-rate">
           <div className="lp-v-rate-top">
             <span className="lp-v-name">{r.fn}</span>
-            <span className="lp-v-rate-med num">
-              {r.median} <span className="lp-v-quiet">median</span>
+            <span className="lp-v-rate-med">
+              <Locked w={56} />
+              <span className="lp-v-quiet">median</span>
             </span>
           </div>
           <div className="lp-v-track">
             <span className="lp-v-range" style={{ left: `${r.from}%`, width: `${r.to - r.from}%` }} />
             <span className="lp-v-mid" style={{ left: `${r.mid}%` }} />
           </div>
-          <div className="lp-v-rate-ends num">
-            <span style={{ left: `${r.from}%` }}>{r.low}</span>
-            <span style={{ left: `${r.to}%` }}>{r.high}</span>
+          <div className="lp-v-rate-ends">
+            <span style={{ left: `${r.from}%` }}>
+              <Locked w={36} />
+            </span>
+            <span style={{ left: `${r.to}%` }}>
+              <Locked w={36} />
+            </span>
           </div>
         </div>
       ))}
@@ -186,15 +196,19 @@ function SlackVisual() {
 
 interface Feature {
   key: string;
-  tone: "mint" | "sand" | "sky" | "ember";
+  /** The panel's field: mint, sand, mint soft or pine. */
+  tone: "mint" | "sand" | "soft" | "pine";
   label: string;
   /** The headline in three parts: before, the phrase picked out, after. */
   head: [string, string, string];
   body: string;
+  /** The panel's prop, standing on the picture. */
+  art: ReactNode;
+  /** One large shape in the panel's top corner. */
+  corner: ReactNode;
   visual: ReactNode;
   /** What the picture shows, for anyone who can't see it. */
   alt: string;
-  cap: string;
 }
 
 const FEATURES: Feature[] = [
@@ -204,9 +218,10 @@ const FEATURES: Feature[] = [
     label: "Crystal Ball",
     head: ["See who is likely to hire ", "your function next", ""],
     body: "Crystal Ball ranks the companies most likely to bring in a fractional in your function, and says why now.",
+    art: <FeatBall />,
+    corner: <Corner c="tr" t="ember" className="lp-feat-corner" />,
     visual: <BallVisual />,
-    alt: "Crystal Ball: three made-up companies, each with what happened there, a High or Medium likelihood and why now.",
-    cap: "Illustration. The companies are made up.",
+    alt: "Crystal Ball: three companies, each with what happened there, a High or Medium likelihood and why now.",
   },
   {
     key: "way",
@@ -214,29 +229,32 @@ const FEATURES: Feature[] = [
     label: "Warm paths",
     head: ["Know ", "who held the seat", " and who hired them"],
     body: "A company's record leads with your way in: message the fractional who held the seat, or invite them to connect.",
+    art: <FeatTrail />,
+    corner: <Sun className="lp-feat-corner lp-feat-sun" />,
     visual: <WayInVisual />,
-    alt: "A made-up company's record with Your way in: two past seat holders with Message and Invite to connect, and the CEO who hired them behind a 1 credit unlock.",
-    cap: "Illustration. The company and the people are made up.",
+    alt: "A company's record with Your way in: two past seat holders with Message and Invite to connect, and the CEO who hired them behind a 1 credit unlock.",
   },
   {
     key: "rates",
-    tone: "sky",
+    tone: "soft",
     label: "Rates",
     head: ["Price your work on ", "what fractionals charge", ""],
     body: "Median monthly and hourly rates by function and client revenue, shown only once enough people share one.",
+    art: <FeatRates />,
+    corner: <Corner c="tr" t="ember" className="lp-feat-corner" />,
     visual: <RatesVisual />,
-    alt: "Rate benchmarks: a range bar with a median for three functions. The figures are samples, not Merlin's.",
-    cap: "Illustration with sample figures, not Merlin's numbers.",
+    alt: "Rate benchmarks: a range bar and a median for three functions. Every amount is locked until you join.",
   },
   {
     key: "roles",
-    tone: "ember",
+    tone: "pine",
     label: "Open roles",
     head: ["New fractional roles ", "every week", ", in Slack or email"],
     body: "We check for open fractional, interim and contract roles each week and send you the ones in your function.",
+    art: <FeatDoor />,
+    corner: <Corner c="tl" t="ember" className="lp-feat-corner lp-feat-corner-l" />,
     visual: <SlackVisual />,
     alt: "A Merlin alert in Slack: two new open roles, each with its title, when it was posted and the company's size, and a button to open it in Merlin.",
-    cap: "Illustration. Open roles name the company once you unlock it.",
   },
 ];
 
@@ -263,6 +281,7 @@ export default function Features({ onJoin, starter }: { onJoin: () => void; star
         <div className="lp-feat-list">
           {FEATURES.map((f) => (
             <article key={f.key} className={`lp-feat lp-feat-${f.tone}`} aria-labelledby={`feat-${f.key}`}>
+              {f.corner}
               <div className="lp-feat-copy">
                 <span className="lp-pill">{f.label}</span>
                 <h3 className="lp-feat-h" id={`feat-${f.key}`}>
@@ -275,12 +294,12 @@ export default function Features({ onJoin, starter }: { onJoin: () => void; star
                   Try it with {starter} free credits <span aria-hidden>→</span>
                 </button>
               </div>
-              <figure className="lp-feat-fig">
+              <div className="lp-feat-fig">
+                <div className="lp-feat-stage">{f.art}</div>
                 <div role="img" aria-label={f.alt}>
                   {f.visual}
                 </div>
-                <figcaption>{f.cap}</figcaption>
-              </figure>
+              </div>
             </article>
           ))}
         </div>

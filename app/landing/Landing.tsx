@@ -35,6 +35,8 @@ import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
 import Finder, { type PreviewExample, type Totals } from "./Finder";
 import Features from "./Features";
 import Quotes from "./Quotes";
+import { Band } from "./fractions/kit";
+import { Corner, FinalScene, HeroDome, HeroEdge, HeroStage, HeroStagePhone, HeroTrail } from "./fractions/scenes";
 
 export interface LandingProps {
   /**
@@ -205,6 +207,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
       <main id="top">
         {/* ---------- hero ---------- */}
         <section className="lp-hero">
+          <Corner c="bl" t="pine2" className="lp-hero-hill" />
           <div className="lp-wrap lp-hero-in">
             <div className="lp-hero-copy">
               {opened > 0 ? (
@@ -225,7 +228,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 <p className="lp-live lp-live-quiet">The data exchange for fractional operators</p>
               )}
               <h1 className="lp-h1">
-                Find your next client and <em>your way in</em>
+                Find your next fractional client and <em>the way in</em>
               </h1>
               <p className="lp-hero-sub">See which companies hire fractionals, what they pay and who held the seat before you.</p>
               {inviter ? (
@@ -250,8 +253,18 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
               </p>
               <p className="lp-hero-by">Built by Revenue Nomad, the network of {NETWORK} fractionals.</p>
             </div>
+            {/* The record sits in a mint doorway: the arch and the Nomad above it, the door's body behind it. */}
             <div className="lp-hero-visual">
-              <HeroRecord example={example} intro={!!intro} onJoin={toJoin} />
+              <HeroEdge className="lp-hero-edge" />
+              <HeroDome className="lp-hero-dome" />
+              <HeroTrail className="lp-hero-trail" />
+              <Corner c="tl" t="pine2" className="lp-hero-ql" />
+              <Corner c="tr" t="ember" className="lp-hero-qr" />
+              <HeroStage className="lp-hero-stage lp-hero-stage-wide" />
+              <HeroStagePhone className="lp-hero-stage lp-hero-stage-phone" />
+              <div className="lp-hero-door">
+                <HeroRecord example={example} intro={!!intro} onJoin={toJoin} />
+              </div>
             </div>
           </div>
         </section>
@@ -285,6 +298,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 Counted across every function. It starts from fractional work members published on Revenue Nomad, member success stories and a weekly
                 check for open roles. Members add the rest.
               </p>
+              <Band id="fx-band-stats" off={200} className="lp-stats-tex" />
             </div>
           </div>
         </section>
@@ -419,6 +433,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
               <div className="lp-final-form" ref={finalForm}>
                 <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
               </div>
+              <FinalScene className="lp-final-art" />
             </div>
           </div>
         </section>

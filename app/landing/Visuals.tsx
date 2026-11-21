@@ -18,7 +18,7 @@ import { CompanyLogo, IconCheck, IconLock } from "../ui/shared";
 import type { PreviewExample } from "./Finder";
 
 /** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. Drawn with the app's own classes. */
-function Locked({ w = 72 }: { w?: number }) {
+export function Locked({ w = 72 }: { w?: number }) {
   return (
     <span className="lock-rest lp-locked">
       <IconLock size={12} />
