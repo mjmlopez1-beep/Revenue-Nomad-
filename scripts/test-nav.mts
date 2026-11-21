@@ -132,8 +132,10 @@ async function main() {
   // Every page is one item, and its link opens it.
   const all = nm.navItems(input({ admin: true, plan: trial, network: true, networkN: 4 }));
   const pagesOf = new Set(all.map((it) => it.page));
-  const missing = nm.APP_PAGES.filter((p) => !pagesOf.has(p));
+  // Referral partners' old page ("partners") is Fractionals now: its address opens Fractionals, and no item of its own.
+  const missing = nm.APP_PAGES.filter((p) => p !== "partners" && !pagesOf.has(p));
   check("every page the app draws is in the sidebar (an admin, billing and Your network on)", missing.length === 0, missing);
+  check("Referral partners has no item: Fractionals replaces it", !all.some((it) => it.key === "partners" || it.page === "partners") && all.find((it) => it.key === "fractionals")?.group === "community");
   const me = (await t.buildView("tok-sal-nav")).me!;
   const wrong = all
     .filter((it) => it.href)
@@ -148,7 +150,8 @@ async function main() {
   check("Add what you know and Invite a fractional are buttons (they open a sheet)", ["add", "invite"].every((k) => all.find((it) => it.key === k && !it.href)));
   const keys = all.map((it) => it.key);
   check("nothing is listed twice", new Set(keys).size === keys.length, keys);
-  check("in the order Home, Find, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,view:v1,view:v2,following,seats,messages,network,add,partners,rates,invite,integrations,billing,credits,metrics", keys);
+  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,fractionals,messages,view:v1,view:v2,following,seats,network,add,rates,invite,integrations,billing,credits,metrics", keys);
+  check("People reads Decision makers", all.find((it) => it.key === "people")?.label === "Decision makers");
   check("each saved view by name, with its new matches", all.find((it) => it.key === "view:v1")?.label === "Open Sales roles" && all.find((it) => it.key === "view:v1")?.badge === 2);
   check("counts: the lists, Hiring now, unread, Crystal Ball's new, credits", all.find((it) => it.key === "companies")?.count === 40 && all.find((it) => it.key === "hiring")?.count === 14 && all.find((it) => it.key === "messages")?.badge === 2 && all.find((it) => it.key === "radar")?.badge === 3 && all.find((it) => it.key === "credits")?.count === 25);
   check("no count drawn before the whole table is here", nm.navItems(input({ totals: null, hiringN: null })).filter((it) => ["companies", "engagements", "people", "hiring"].includes(it.key)).every((it) => it.count === null));
@@ -171,7 +174,7 @@ async function main() {
     ["Hiring now", { page: "table", recordType: "engagements", tab: "hiring" }, "hiring"],
     ["Following", { page: "table", tab: "following" }, "following"],
     ["a saved view on screen", { page: "table", tab: "hiring", currentView: "v1" }, "view:v1"],
-    ...nm.APP_PAGES.filter((p) => p !== "today" && p !== "table").map((p) => [p, { page: p, currentView: "v1" }, p] as [string, Partial<NavInput>, string]),
+    ...nm.APP_PAGES.filter((p) => p !== "today" && p !== "table").map((p) => [p, { page: p, currentView: "v1" }, p === "partners" ? "fractionals" : p] as [string, Partial<NavInput>, string]),
   ];
   for (const [name, x, want] of cases) {
     const got = on(x);

@@ -21,6 +21,7 @@
  */
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
+import { openFractionalAt } from "./fractionalsModel";
 import { VerifyName } from "./Verify";
 import { AboutText } from "./About";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
@@ -1084,7 +1085,7 @@ function safeHref(build: () => string): string | null {
  *    claim the seat through it, a conversation opens between them, and a new member's invite bonus
  *    goes to both.
  *  - A name the claim link can't bring in: find them on LinkedIn.
- * Then a link to Referral partners, for more fractionals at companies like this one.
+ * Then their record in Fractionals (every seat of theirs, and the clients they serve).
  */
 function Reach({ e, name, member, emailTo, more = true }: { e: EngagementRec; name: string; member: boolean; emailTo: string | null; more?: boolean }) {
   const ui = useUi();
@@ -1118,8 +1119,9 @@ function Reach({ e, name, member, emailTo, more = true }: { e: EngagementRec; na
         </span>
       )}
       {more && (
-        <button type="button" className="tp-intro tp-reach-more" onClick={() => ui.openPage("partners")}>
-          More referral partners at companies like yours
+        // Seat holder to record: their record in Fractionals, with every seat of theirs.
+        <button type="button" className="tp-intro tp-reach-more" onClick={() => (openFractionalAt(e.id), ui.openPage("fractionals"))}>
+          See {first}&apos;s record in Fractionals
         </button>
       )}
     </div>
@@ -1428,7 +1430,7 @@ function EngagementCard({ e, companyId, company, focus, coPeople = [], wayIn = f
       )}
       {e.people.length > 0 && (
         <div className="tp-eng-people">
-          <div className="tp-sublabel">People on this seat</div>
+          <div className="tp-sublabel">Decision makers on this seat</div>
           {e.people.map((p) => (
             <PersonCard key={p.id} p={p} inSeat />
           ))}
@@ -2003,7 +2005,7 @@ export function Drawer({
           </section>
           <section className="tp-dsec">
             <h3 className="tp-dsec-h">
-              <span className="tp-dsec-ht">People at {c.hidden ? "this company" : c.name}</span> <span className="num tp-cnt">{c.people.length}</span>
+              <span className="tp-dsec-ht">Decision makers at {c.hidden ? "this company" : c.name}</span> <span className="num tp-cnt">{c.people.length}</span>
             </h3>
             {c.people.length === 0 && !addingPerson && (
               <p className="tp-dsec-note">{c.hidden ? "Nobody is on file here yet." : "Nobody is on file here yet. Add someone you know and earn a credit for each fact."}</p>

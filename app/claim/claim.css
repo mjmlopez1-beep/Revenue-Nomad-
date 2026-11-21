@@ -229,3 +229,143 @@
     display: none;
   }
 }
+
+/* Activate your fractional profile: who's waiting, the seats that look like theirs, one button. */
+.cl-inviter {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: var(--pine-8);
+}
+.cl-inviter-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cl-av {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--pine);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cl-inviter-n {
+  display: block;
+  font-weight: 700;
+  color: var(--ink);
+}
+.cl-inviter-t {
+  display: block;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.cl-inviter-note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--body-ink);
+}
+.cl-inviter-more {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cl-h2 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  line-height: 24px;
+  color: var(--ink);
+}
+.cl-seats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+.cl-seatrow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+.cl-seatrow:first-child {
+  border-top: 0;
+}
+.cl-seatrow.off {
+  opacity: 0.6;
+}
+.cl-tick {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+  cursor: pointer;
+}
+.cl-tick input,
+.cl-show input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--pine);
+}
+.cl-seat-co {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.cl-seat-what {
+  display: block;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.cl-now {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pine);
+}
+.cl-notmine {
+  flex: none;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--body-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cl-show {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 21px;
+  cursor: pointer;
+}
+.cl-gains {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 14px 0 0 18px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--body-ink);
+}

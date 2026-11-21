@@ -278,6 +278,8 @@ function App() {
   // Signed in by that email's one-time link, the member goes straight to it, skipping onboarding for this visit.
   const [toMessage] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "messages");
   const [toRadar] = useState(() => typeof window !== "undefined" && SIG_DAY_RE.test(new URLSearchParams(window.location.search).get("sig") ?? ""));
+  // Just activated a fractional profile (app/claim/Claim.tsx): their record and first conversation, skipping onboarding for this visit.
+  const [toWelcome] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("welcome") === "1" && new URLSearchParams(window.location.search).get("p") === "fractionals");
   const linkNote = toMessage ? MESSAGE_NOTE : toRadar ? RADAR_NOTE : null;
   const fromMessageLink = useRef(false);
   // A visitor (as far as this browser knows) gets the landing page before the view arrives.
@@ -572,7 +574,7 @@ function App() {
     skipped.current = true;
   }, []);
 
-  const onboarding = !!view?.me && !view.me.onboarded && !fromMessageLink.current && !toMessage;
+  const onboarding = !!view?.me && !view.me.onboarded && !fromMessageLink.current && !toMessage && !toWelcome;
   useEffect(() => {
     if (onboarding) firstRun.current = true;
   }, [onboarding]);

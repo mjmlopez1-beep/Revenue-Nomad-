@@ -222,7 +222,7 @@ export function HiredSentence({
       </>
     ) : type === "people" ? (
       <>
-        People at {scope} that hired a fractional {fn} {when}
+        Decision makers at {scope} that hired a fractional {fn} {when}
         {gap && <> {gap}</>}
       </>
     ) : (

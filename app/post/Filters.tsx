@@ -468,7 +468,7 @@ export function FilterPanel({
         <ListBlock k="reason" title="Why they hired" f={f} setF={setF} counts={l.reason} />
         <ListBlock k="pricing" title="Pricing model" f={f} setF={setF} counts={l.pricing} />
       </Fold>
-      <Fold title="People" on={f.fractionalNamed || f.emailKnown || f.relationship.length > 0}>
+      <Fold title="Decision makers" on={f.fractionalNamed || f.emailKnown || f.relationship.length > 0}>
         <Toggle k="fractionalNamed" f={f} setF={setF} n={t.fractionalNamed} />
         <Toggle k="emailKnown" f={f} setF={setF} n={t.emailKnown} />
         <ListBlock k="relationship" title="Relationship" f={f} setF={setF} counts={l.relationship} />
