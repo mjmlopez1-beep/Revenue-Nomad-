@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import type { View } from "@/lib/tableTypes";
 import type { DiscoveryNote, ProposalBlock, ProposalRec, ProposalsView, SignerInfo } from "@/lib/proposals/types";
+import { SENDER_DUTY } from "@/lib/proposals/types";
 import {
   BLOCKS,
   DISCOVERY_LABELS,
@@ -996,6 +997,7 @@ function SendSheet({
         {!canSend && <p className="pp-warn">{PRO_SEND}</p>}
         {!email && canSend && <p className="pp-warn">Email isn&#39;t set up on Merlin yet, so a proposal can&#39;t go out for signature.</p>}
         <p className="pp-help">They get an email from you with a link (no account needed). They confirm their email with a code, agree to sign electronically and type their name. You both get the signed copy with its audit trail.</p>
+        <p className="pp-help">{SENDER_DUTY}</p>
         {(["name", "title", "email"] as const).map((k) => (
           <label key={k} className="pp-field">
             <span className="pp-field-l">{k === "name" ? "The person who signs" : k === "title" ? "Their title" : "Their email"}</span>

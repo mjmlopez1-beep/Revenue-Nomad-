@@ -203,9 +203,25 @@ export interface SignedCopy {
 
 /**
  * The consent shown above the signature, kept with each signature word for word, with its version.
- * Written to the ESIGN Act and UETA disclosures (consent to electronic records, the right to paper,
- * withdrawing consent, what is needed to keep a copy). Have it reviewed before launch.
+ * Modelled on what the established e-signature services show signers (Dropbox Sign's eSign
+ * Disclosure: a separate box the signer ticks, recorded in the audit trail, covering electronic
+ * delivery and the right to withdraw and its consequences; Contractbook: whoever signs for a company
+ * confirms they are authorised to) and on the ESIGN Act's section 101(c) consumer disclosures: consent
+ * to electronic records, its scope, the right to a paper copy at no cost, how to withdraw and what
+ * withdrawing does, keeping contact details current, what is needed to open and keep the records,
+ * and consent given in a way that shows the signer can open them. Our own words. Have it reviewed
+ * before launch; bump CONSENT_VERSION whenever the words change.
  */
-export const CONSENT_VERSION = "2026-11-21";
+export const CONSENT_VERSION = "2026-11-22";
 export const consentText = (provider: string) =>
-  `I agree to use electronic records and an electronic signature for this proposal. My typed name and clicking Sign is my signature, with the same effect as signing on paper. I can download or print the signed copy, and I get it by email. I can ask ${provider} for a paper copy at no cost, and I can withdraw this consent before I sign by closing this page: then I sign on paper instead. To use this, I need a web browser and access to my email address.`;
+  [
+    `I agree to use electronic records and an electronic signature for this proposal and the records about it: the signed copy, its audit trail and any notice about it.`,
+    `Typing my full name and clicking Sign is my signature. It is legally binding, with the same effect as signing by hand. If I sign for a company or another person, I confirm I am authorised to sign for them.`,
+    `I can ask ${provider} for a paper copy at any time, at no cost. I can withdraw this consent before I sign by not signing and telling ${provider}; we then sign another way. Withdrawing does not undo anything already signed.`,
+    `To open, sign and keep these records I need a device with a current web browser, access to my email, and a way to save or print a web page. Opening this page shows I can. If my email address changes, I tell ${provider}.`,
+    `A record of my signing (the time, my IP address and device, the email code I confirmed, and a fingerprint of this exact document) is kept with the signed copy and shared with both parties.`,
+  ].join(" ");
+
+/** What the member agrees to before sending (as Contractbook asks of its customers): the document suits e-signature, and the law where they and their client are is theirs to follow. */
+export const SENDER_DUTY =
+  "You confirm this proposal can be signed electronically and that sending it this way follows the rules that apply to you and your client. Merlin records the signing; it doesn't give legal advice.";

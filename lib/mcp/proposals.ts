@@ -16,6 +16,7 @@ import { BLOCKS, DISCOVERY_FIELDS, DISCOVERY_LABELS, FREE_TEMPLATE, OBJECTIONS, 
 import { adviceFromView } from "../proposals/rates";
 import { ProposalProblem, createProposal, docFields, getProposal, listProposals, sendProposal, updateProposal } from "../proposals/store";
 import type { ProposalBlock, ProposalRec } from "../proposals/types";
+import { SENDER_DUTY } from "../proposals/types";
 import { memberView } from "./view";
 import { ToolProblem, type Ctx, type ToolOut } from "./tools";
 
@@ -198,7 +199,7 @@ export async function sendForSignature(ctx: Ctx, a: { proposal_id: string; signe
       message: v.canSend
         ? blanks.length
           ? "It can't go out yet: fill the blanks first. Nothing was sent."
-          : "Nothing was sent. The client gets an email with a signed link (30 days), confirms their email with a code, and signs on Merlin. No account needed."
+          : "Nothing was sent. The client gets an email with a signed link (30 days), confirms their email with a code, and signs on Merlin. No account needed." + ` ${SENDER_DUTY}`
         : "Nothing was sent. Sending for signature is on Pro.",
       next: "Show the member who it goes to and what's missing. Only if they say send, call again with the same arguments and confirm: true.",
     };
