@@ -49,7 +49,7 @@ const seed = {
   members: [{ id: "sm1", name: "Fixture Seedmember", email: "seedmember-past@example.com", title: "Fractional CMO", token: "pastseats-seed-token-1" }, { id: "sm2", name: "Fixture Adminperson", email: "admin-past@example.com", title: "Admin", token: "pastseats-admin-token-2" }],
   companies: [
     // Matched by matched_company_id (its LinkedIn page), with nothing else on file: the seat row's facts fill it.
-    { id: "c_ember", fields: { name: "Ember Fixture Grove", linkedin: "linkedin.com/company/ember-fixture" } },
+    { id: "c_ember", fields: { name: "Ember Fixture Grove", linkedin: "linkedin.com/company/99077" } },
     // Has a current seat: a past row with the same title and overlapping years is that seat.
     { id: "c_quarry", fields: { name: "Quarry Fixture Systems", website: "quarry-fixture.example.com", industry: "SaaS", employees: "51–200" } },
     // Matched by a trusted Past Companies row's LinkedIn page; its own values stay.
@@ -90,14 +90,14 @@ const US = "United States";
 const kept = [
   // Trusted Past Companies match (domain+name+country): website, LinkedIn, industry, size, revenue, About, HQ.
   base({ past_seat_id: "PSFX-001", person_name: `${P.zelda}, MBA`, seat_title: "Fractional VP Marketing", company_name: "Kestrel Fixture Mills", start_year: "2022", end_year: "2024", country: US }),
-  // domain+name without the country: the tab's facts as a best guess (no HQ); the seat row's own facts are not read.
-  base({ past_seat_id: "PSFX-002", person_name: P.orrin, seat_title: "Fractional CFO", company_name: "Bluefin Fixture Analytics", function: "Finance", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2023", end_year: "2025", company_website: "https://bluefin-fixture.example.com", company_industry: "Software Development", company_employee_range: "11-50", company_rn_revenue_bucket: "$1M-$5M" }),
+  // domain+name without the country: the tab's facts as a best guess (no HQ), before the seat row's copy of the match (matched_company_id is its LinkedIn page).
+  base({ past_seat_id: "PSFX-002", person_name: P.orrin, seat_title: "Fractional CFO", company_name: "Bluefin Fixture Analytics", function: "Finance", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2023", end_year: "2025", matched_company_id: "https://www.linkedin.com/company/bluefin-wrong", company_website: "https://bluefin-fixture.example.com", company_industry: "Software Development", company_employee_range: "11-50", company_rn_revenue_bucket: "$1M-$5M" }),
   // no_match: name only. A United States holder.
   base({ past_seat_id: "PSFX-003", person_name: P.pella, seat_title: "Fractional CRO", company_name: "Corvid Fixture Freight", function: "Revenue Leadership", role_category: "Sales Leadership", start_year: "2021", end_year: "2022", country: US }),
   // skipped, and no start year: no start on the seat.
   base({ past_seat_id: "PSFX-004", person_name: P.rhea, seat_title: "Fractional Head of Growth", company_name: "Dunmore Fixture Robotics", function: "Growth", start_year: "", end_year: "2023" }),
   // matched_company_id: the seat row's own facts fill the company on file. A United States holder whose seat holder name is "Dr. ...".
-  base({ past_seat_id: "PSFX-005", person_name: `Dr. ${P.sable}`, seat_title: "Fractional COO", company_name: "Ember Grove (Fixture)", function: "Operations", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2024", end_year: String(THIS_YEAR), country: US, matched_company_id: "https://www.linkedin.com/company/ember-fixture/", company_website: "https://www.embergrove-fixture.example.com", company_industry: "Truck Transportation", company_employee_range: "51-200", company_rn_revenue_bucket: "$20M-$50M" }),
+  base({ past_seat_id: "PSFX-005", person_name: `Dr. ${P.sable}`, seat_title: "Fractional COO", company_name: "Ember Grove (Fixture)", function: "Operations", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2024", end_year: String(THIS_YEAR), country: US, matched_company_id: "99077", company_website: "https://www.embergrove-fixture.example.com", company_industry: "Truck Transportation", company_employee_range: "51-200", company_rn_revenue_bucket: "$20M-$50M" }),
   // Matched by a trusted Past Companies row's LinkedIn page.
   base({ past_seat_id: "PSFX-006", person_name: P.tobin, seat_title: "Fractional VP Sales", company_name: "Harbor Fixture Holdings", function: "Sales", start_year: "2022", end_year: "2023" }),
   // The same title as the current seat at Quarry, years before it: its own seat.
@@ -111,7 +111,7 @@ const kept = [
   // The file flags it as a provider, but NOT_FIRMS overrules the flag.
   base({ past_seat_id: "PSFX-010", person_name: P.cosima, seat_title: "Fractional VP Marketing", company_name: "SKYSHARE", start_year: "2022", end_year: "2024", company_likely_fractional_provider: "TRUE" }),
   // A spreadsheet's number "2023.0" reads as the year.
-  base({ past_seat_id: "PSFX-011", person_name: P.ilse, person_sales_nav_id: "NAVPASTSAME", seat_title: "Fractional Head of Partnerships", company_name: "Wrenfield Fixture Energy", function: "Partnerships", start_year: "2022.0", end_year: "2023.0" }),
+  base({ past_seat_id: "PSFX-011", person_name: P.ilse, person_sales_nav_id: "NAVPASTSAME", seat_title: "Fractional Head of Partnerships", company_name: "Wrenfield Fixture Energy", function: "Partnerships", start_year: "2022.0", end_year: "2023.0", matched_company_id: "name:Quarry Fixture Systems" }),
 ];
 const dropped = [
   base({ past_seat_id: "PSFX-d01", person_name: P.fenwick, seat_title: "Fractional CMO", company_name: "Still Current Fixture Co", start_year: "2024", end_year: String(THIS_YEAR), is_current: "TRUE" }),
@@ -246,7 +246,8 @@ check(
   blue?.fields.website === "bluefin-wrong.example.com" && blue.fields.linkedin === "linkedin.com/company/bluefin-wrong" && !!blue.fields.industry && blue.fields.employees === "201–500" && blue.fields.revenue === "$50M+" && blue.fields.about === "Bluefin Fixture Analytics charts tides for harbors." && !blue.fields.hq && !blue.fields.country,
   blue?.fields,
 );
-check("the seat row's own facts are not read without matched_company_id", !text1.includes("bluefin-fixture.example.com"));
+check("the tab's facts come before the seat row's copy of the match", !text1.includes("bluefin-fixture.example.com"));
+check("matched_company_id as \"name:\" + a current company's name: the seat goes to that company", seatOf("PSFX-011")?.companyId === "c_quarry" && !coNamed("Wrenfield Fixture Energy"));
 type Marked = Co & { enrichedBy?: { by: string; match: string; fields: string[] } };
 const mark = (c: Co | undefined) => (c as Marked | undefined)?.enrichedBy;
 check(
@@ -268,11 +269,11 @@ const harbor = s1.companies.find((c) => c.id === "c_harbor");
 check("a trusted Past Companies LinkedIn page matches a company on file, which keeps its own values and only gets what it lacked", seatOf("PSFX-006")?.companyId === "c_harbor" && harbor?.fields.industry === "SaaS" && harbor.fields.website === "harbor-fixture.example.com" && !coNamed("Harbor Fixture Holdings"), harbor?.fields);
 check("a trusted About that names a seat holder is not stored", !!coOf("PSFX-008") && !coOf("PSFX-008")!.fields.about && !text1.includes("Wexford") && coOf("PSFX-008")!.fields.website === "osprey-fixture.example.com", coOf("PSFX-008")?.fields);
 check("NOT_FIRMS overrules the provider flag", !!seatOf("PSFX-010"));
-check("enrichment counts by rule", /enrichment \(companies given facts\): by matched_company_id 1, by domain\+name\+country 3, by domain\+name \(best guess\) 1; with a website 5 of them; created by name only 5/.test(out1) && /\(their match: .*no_match 1/.test(out1), out1.split("\n").find((l) => l.startsWith("enrichment")));
-check("new companies whose only seat is an ended one are counted", line(out1, /new companies whose only seat is an ended one: (\d+)/) === "8", out1);
+check("enrichment counts by rule", /enrichment \(companies given facts\): by matched_company_id 1, by domain\+name\+country 3, by domain\+name \(best guess\) 1, by the seat row's Past Companies match 0; with a website 5 of them; created by name only 4/.test(out1) && /\(their match: .*no_match 1/.test(out1), out1.split("\n").find((l) => l.startsWith("enrichment")));
+check("new companies whose only seat is an ended one are counted", line(out1, /new companies whose only seat is an ended one: (\d+)/) === "7", out1);
 
 // Duplicates and the current seat.
-check("the past CMO seat at Quarry before the current one is its own seat; the one that overlaps it is not added", seatOf("PSFX-007")?.companyId === "c_quarry" && !seatOf("PSFX-u01") && s1.engagements.filter((e) => e.companyId === "c_quarry").length === 2);
+check("the past CMO seat at Quarry before the current one is its own seat; the one that overlaps it is not added", seatOf("PSFX-007")?.companyId === "c_quarry" && !seatOf("PSFX-u01") && s1.engagements.filter((e) => e.companyId === "c_quarry").length === 3);
 check("the same seat twice in the file is added once", !!seatOf("PSFX-002") && !seatOf("PSFX-u02"));
 check("no seat or company for a dropped row", dropped.every((r) => !r.past_seat_id || r.past_seat_id === "PSFX-001" || !seatOf(r.past_seat_id)) && !["Brightpath Fixture Partners", "Heron Fixture Woodworks", "Tallow Fixture Works", "Juniper Fixture Fields", "Solo Fixture Shop", "Castellanos Growth Partners", "Still Current Fixture Co"].some((n) => coNamed(n)));
 check("three ended seats at one company: kept, not taken for a firm", s1.engagements.filter((e) => e.companyId === coOf("PSFX-009a")?.id).length === 3 && /firms the cleanup removed: 0 companies/.test(out1), out1);
@@ -305,11 +306,12 @@ console.log("\nWithout the Past Companies tab");
   const t = JSON.parse(readFileSync(p, "utf8")) as { engagements: Eng[]; companies: Co[] };
   const co = (psid: string) => t.companies.find((c) => c.id === t.engagements.find((e) => e.id === pastId(psid))?.companyId);
   check("a trusted tab match counts for nothing without the tab: name only", !!co("PSFX-001") && Object.keys(co("PSFX-001")!.fields).join() === "name", co("PSFX-001")?.fields);
-  check("the seat row's facts without matched_company_id: name only", Object.keys(co("PSFX-002")?.fields ?? { x: 1 }).join() === "name", co("PSFX-002")?.fields);
+  check("without the tab, a matched_company_id that is the match's LinkedIn page brings the seat row's facts as a best guess (no HQ)", co("PSFX-002")?.fields.website === "bluefin-fixture.example.com" && co("PSFX-002")?.fields.linkedin === "linkedin.com/company/bluefin-wrong" && !co("PSFX-002")?.fields.hq && (co("PSFX-002") as Co & { enrichedBy?: { match: string } })?.enrichedBy?.match === "Past Companies match (seat row)", co("PSFX-002"));
+  check("a row with no matched_company_id and no tab: name only", Object.keys(co("PSFX-003")?.fields ?? { x: 1 }).join() === "name", co("PSFX-003")?.fields);
   check("matched_company_id still fills the company on file", co("PSFX-005")?.id === "c_ember" && co("PSFX-005")?.fields.website === "embergrove-fixture.example.com");
   check("Harbor (no matched_company_id, no tab): matched by name only if the name is on file, else a new company by name", t.engagements.some((e) => e.id === pastId("PSFX-006")) && !t.companies.find((c) => c.id === "c_harbor")?.fields.website);
   check("the provider flag on the tab is not read without it (Juniper kept)", t.engagements.some((e) => e.id === pastId("PSFX-d17")));
-  check("enrichment counts: matched_company_id 1, domain+name+country 0", /by matched_company_id 1, by domain\+name\+country 0, by domain\+name \(best guess\) 0;/.test(r.stdout), r.stdout);
+  check("enrichment counts: matched_company_id 1, domain+name+country 0", /by matched_company_id 1, by domain\+name\+country 0, by domain\+name \(best guess\) 0, by the seat row's Past Companies match 1;/.test(r.stdout), r.stdout);
 }
 
 // --names: United States rows only.

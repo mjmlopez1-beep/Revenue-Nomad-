@@ -52,16 +52,19 @@
  * overlap this one's (the same person may be on file as a current seat: person_also_in_current_seats),
  * and the same company, title, start and end twice in the file.
  *
- * Companies match by LinkedIn company page (matched_company_id, a company on the current seats'
- * Companies tab, or the linkedin_url of a Past Companies row this run takes facts from), then website host, then the
+ * Companies match by the current seats' company (matched_company_id's company id as a LinkedIn page,
+ * or its "name:"), then the Past Companies match's LinkedIn page, then website host, then the
  * company its website names, then name, as add-seat-scan.mjs matches them. An existing company only
  * gets the fields it does not have; a new one gets the row's facts, under one of these rules only:
- *   - matched_company_id is set: the seat row's own website, industry, size, revenue and About;
+ *   - matched_company_id names a company on the current seats' Companies tab (its company id, or
+ *     "name:" + its name): the seat row's own website, industry, size, revenue and About;
  *   - --companies, and the company's Past Companies row matched a domain (match_method
  *     "domain+name+country" or "domain+name", or a matched_domain): that row's website, LinkedIn
  *     page, industry, size, revenue and About, the owner's best guess (the sheet kept a domain match
  *     only where the country didn't conflict). HQ country (hq_country) only from "domain+name+country";
- *   - otherwise (no_match, skipped, no row, or no --companies): the company's name only.
+ *   - without the tab row, a matched_company_id that is a LinkedIn page (the Past Companies match
+ *     itself) brings the seat row's own copy of that match's facts, as a best guess (no HQ);
+ *   - otherwise (no_match, skipped, no row): the company's name only.
  * A company given facts carries a private import mark, `enrichedBy` = { by: "past seats", match:
  * the rule, fields: what it filled }, on its seed record outside its fields: never shown to members,
  * so a wrong match (two companies that share a name) can be found and undone.
@@ -188,7 +191,7 @@ const markEnriched = (c, rule, keys) => {
 };
 
 /** Seat holders' names in the file by company (and Past Companies' example person), for the About check only (never stored or printed). */
-const holderKey = (r) => linkedinKey(r.matched_company_id) ?? `name:${textKey(r.company_name ?? "")}`;
+const holderKey = (r) => (real(r.matched_company_id) ? `id:${real(r.matched_company_id).toLowerCase()}` : `name:${textKey(r.company_name ?? "")}`);
 const holdersAt = new Map();
 const holdersOf = (k) => {
   if (!holdersAt.has(k)) holdersAt.set(k, []);
@@ -250,7 +253,9 @@ const endCount = {};
 const countryCount = {};
 const juniorTitles = {};
 /** Companies that got facts, by the rule that gave them (created or on file), and companies created by name only. */
-const enrichedBy = { matched_company_id: new Set(), [TRUSTED_METHOD]: new Set(), "domain+name": new Set() };
+/** A Past Companies match read from the seat row alone (matched_company_id is its LinkedIn page; no --companies). */
+const SEAT_ROW_MATCH = "Past Companies match (seat row)";
+const enrichedBy = { matched_company_id: new Set(), [TRUSTED_METHOD]: new Set(), "domain+name": new Set(), [SEAT_ROW_MATCH]: new Set() };
 const nameOnly = new Set();
 /** The Past Companies match_method of the row each name-only company came from, and of each seat added. */
 const nameOnlyMethod = new Map();
@@ -327,7 +332,13 @@ for (const r of rows) {
   const tab = tabOf(r);
   if (companiesPath) tab ? tabFound++ : tabMissing++;
   const method = tab ? methodOf(tab) || "(blank)" : companiesPath ? "(no Past Companies row)" : "(no --companies)";
-  const viaCurrent = linkedinKey(r.matched_company_id);
+  // matched_company_id: a company on the current seats' Companies tab (its company id, digits, or
+  // "name:" + its name), or a LinkedIn company page, which is the Past Companies match itself.
+  const mcid = real(r.matched_company_id);
+  const pcLink = /linkedin\.com\/company\//i.test(mcid) ? mcid : "";
+  const viaCurrent = mcid && !pcLink ? mcid : "";
+  const curLi = /^\d+$/.test(viaCurrent) ? viaCurrent : null;
+  const curName = /^name:/i.test(viaCurrent) ? viaCurrent.slice(5).trim() : null;
   const trustedTab = !!tab && methodOf(tab) === TRUSTED_METHOD;
   const guessTab = usableTab(tab);
   // The fractional's own firm: the row's own size, or a trusted match's.
@@ -345,11 +356,12 @@ for (const r of rows) {
   }
 
   // What the row may say about the company, by the enrichment rule (the file header).
-  const rule = viaCurrent ? "matched_company_id" : guessTab ? (methodOf(tab) === TRUSTED_METHOD ? TRUSTED_METHOD : "domain+name") : null;
+  // A Past Companies match the tab doesn't give (no --companies): the seat row carries its facts, as a best guess too.
+  const rule = viaCurrent ? "matched_company_id" : guessTab ? (methodOf(tab) === TRUSTED_METHOD ? TRUSTED_METHOD : "domain+name") : pcLink ? SEAT_ROW_MATCH : null;
   const fromTab = guessTab ? tab : null;
-  const fromRow = viaCurrent ? r : null;
+  const fromRow = viaCurrent || pcLink ? r : null;
   const site = host(real(fromTab?.website)) ?? host(real(fromTab?.website_url)) ?? host(real(fromTab?.matched_domain)) ?? host(fromRow?.company_website);
-  const liRaw = viaCurrent ? r.matched_company_id : real(fromTab?.linkedin_url);
+  const liRaw = curLi ? `linkedin.com/company/${curLi}` : real(fromTab?.linkedin_url) || pcLink;
   const li = /linkedin\.com\/company\//i.test(liRaw ?? "") ? cleanUrl(liRaw) : null;
   const trustedAbout = (real(fromTab?.company_about) || real(fromRow?.company_about)).replace(/\s+/g, " ");
   const want = {
@@ -372,9 +384,9 @@ for (const r of rows) {
   // The company on file: its LinkedIn page, then website, then the company its website names, then name.
   let c;
   let how = "";
-  const lkCur = viaCurrent;
-  const lkTab = fromTab ? linkedinKey(fromTab.linkedin_url) : null;
-  if (lkCur && byLinkedin.get(lkCur)) (c = byLinkedin.get(lkCur)), (how = "LinkedIn page (matched_company_id)");
+  const lkTab = (fromTab ? linkedinKey(fromTab.linkedin_url) : null) ?? linkedinKey(pcLink);
+  if (curLi && byLinkedin.get(curLi)) (c = byLinkedin.get(curLi)), (how = "LinkedIn page (matched_company_id)");
+  if (!c && curName && byName.get(companyKey(curName))) (c = byName.get(companyKey(curName))), (how = "name (matched_company_id)");
   if (!c && lkTab && byLinkedin.get(lkTab)) (c = byLinkedin.get(lkTab)), (how = "LinkedIn page (Past Companies)");
   if (!c && site && bySite.get(siteKey(site))) (c = bySite.get(siteKey(site))), (how = "website");
   if (!c && domainOwner(site, company)) (c = domainOwner(site, company)), (how = "the company its website names");
@@ -543,7 +555,7 @@ console.log(`companies matched: ${matched.size} (${filledOnExisting} empty field
 console.log(`companies created: ${created.size}`);
 const nameOnlyBy = {};
 for (const id of nameOnly) if (left.has(id)) count(nameOnlyBy, nameOnlyMethod.get(id));
-console.log(`enrichment (companies given facts): by matched_company_id ${n(enrichedBy.matched_company_id)}, by ${TRUSTED_METHOD} ${n(enrichedBy[TRUSTED_METHOD])}, by domain+name (best guess) ${n(enrichedBy["domain+name"])}; with a website ${n(new Set([...enrichedBy.matched_company_id, ...enrichedBy[TRUSTED_METHOD], ...enrichedBy["domain+name"]].filter((id) => companyById.get(id)?.fields.website)))} of them; created by name only ${n(nameOnly)} (their match: ${top(nameOnlyBy) || "none"})`);
+console.log(`enrichment (companies given facts): by matched_company_id ${n(enrichedBy.matched_company_id)}, by ${TRUSTED_METHOD} ${n(enrichedBy[TRUSTED_METHOD])}, by domain+name (best guess) ${n(enrichedBy["domain+name"])}, by the seat row's Past Companies match ${n(enrichedBy[SEAT_ROW_MATCH])}; with a website ${n(new Set([...enrichedBy.matched_company_id, ...enrichedBy[TRUSTED_METHOD], ...enrichedBy["domain+name"], ...enrichedBy[SEAT_ROW_MATCH]].filter((id) => companyById.get(id)?.fields.website)))} of them; created by name only ${n(nameOnly)} (their match: ${top(nameOnlyBy) || "none"})`);
 console.log(`seats added by Past Companies match: ${top(methodCount) || "none"}`);
 if (companiesPath) console.log(`Past Companies: ${tabRows} rows; found for ${tabFound} seat rows past the year checks, missing for ${tabMissing}`);
 console.log(`About lines left out (they name a seat holder): ${aboutSkipped.size}`);
