@@ -7,7 +7,7 @@
  *   way around  the sidebar from 1024px (Sidebar.tsx, navModel.ts: every page one click away, the
  *               account menu in its foot), the tab bar and its More sheet under 1024px
  *   top bar     search, credits, "Add what you know", Messages
- *   home        Home.tsx (page "today"): greeting, search, quick actions, best leads, saved views
+ *   home        Home.tsx (page "today"): greeting, your three moves today, search, quick actions, saved views
  *   filter rail filters with counts beside the table (overlay under 1280px, bottom sheet on phones)
  *   content     the next-move card or Get started, record type, views, active filter chips, the table (cards on phones)
  *   pages       Your seats, Your credits, Rate benchmarks (each replaces the table)

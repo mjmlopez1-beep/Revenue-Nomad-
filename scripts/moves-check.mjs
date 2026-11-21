@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * "Your three moves today", the drafted note, the writing voice and the Pro welcome, looked at in
- * a real browser on a made-up seed: screenshots at 1440 and 390 (deviceScaleFactor 2), and no
- * sideways scroll on Home at five widths, with a note open too.
+ * a real browser on a made-up seed: screenshots at 1440 and 390 (deviceScaleFactor 2), no sideways
+ * scroll on Home at five widths, with a note open too, and the note's ways out clicked through.
  *
  *   npm run build
  *   OUT=<folder> node scripts/moves-check.mjs          (PORT=5940 by default)
- *   ONLY=sideways node scripts/moves-check.mjs         the widths only
+ *   ONLY=sideways node scripts/moves-check.mjs         the widths only (ONLY=shots, ONLY=flows: the pictures, the note's ways out)
  *
  * It writes its own made-up seed (fake companies, fake people, nobody real) into a temporary data
  * folder, with one member's network as a Google sync leaves it (nothing is read from Google: the
@@ -217,10 +217,28 @@ const todayOf = async (token) => (await fetch(`${BASE}/api/table?today=1`, { hea
   for (const c of t2.companies) for (const e of c.engagements) if (e.cells?.operator?.s === "locked") await api(T, { type: "unlock", entity: "engagement", id: e.id, field: "operator" });
 }
 
+/* ---------- how long ?today=1 takes on the server, and how big it is (a member with a network, one without) ---------- */
+const results = { shots: [], sideways: null };
+{
+  const time = async (token) => {
+    const ms = [];
+    let bytes = 0;
+    for (let k = 0; k < 12; k++) {
+      const at = performance.now();
+      const r = await fetch(`${BASE}/api/table?today=1`, { headers: { cookie: `rn_table=${token}` } });
+      bytes = (await r.text()).length;
+      ms.push(performance.now() - at);
+    }
+    ms.sort((a, b) => a - b);
+    return { medianMs: Math.round(ms[6] * 10) / 10, bytes };
+  };
+  results.today = { withNetwork: await time(MEMBERS.morgan.token), without: await time(MEMBERS.fen.token) };
+  console.log("?today=1", JSON.stringify(results.today));
+}
+
 /* ---------- the browser ---------- */
 const browser = await chromium.launch();
 const iphone = devices["iPhone 13"];
-const results = { shots: [], sideways: null };
 const WIDE = { viewport: { width: 1440, height: 900 } };
 async function context(member, opts = WIDE) {
   const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 2 });
@@ -365,6 +383,59 @@ async function shots() {
   }
 }
 
+/**
+ * The note's ways out, clicked through as Tess (who has no voice and no network): the Gmail link
+ * carries the note as it reads now and no address she doesn't have, a voice set by hand rewrites
+ * an untouched note, Message on Merlin sends and marks the move done, Mark as sent does too.
+ */
+async function flows() {
+  const out = {};
+  const { ctx, page } = await home(MEMBERS.tess);
+  const titles = () => page.$$eval(".mv-card .mv-do-t", (els) => els.map((e) => e.textContent));
+  const href = () => page.locator(".mn-sheet a.mn-go").getAttribute("href");
+  out.before = await titles();
+  // An open role: nobody to write to, so no address; what she types is what the link carries.
+  await draft(page, "Reply to the open role");
+  const first = new URL(await href());
+  out.roleLinkHasNoAddress = !first.searchParams.get("to") && first.hostname === "mail.google.com" && /Tallgrass Analytics/.test(first.searchParams.get("su") ?? "");
+  await page.locator("#mn-body").fill("Hello, a note I wrote myself.");
+  out.linkCarriesTheEdit = new URL(await href()).searchParams.get("body") === "Hello, a note I wrote myself.";
+  out.mailtoToo = ((await page.locator(".mn-sheet a.mn-other").getAttribute("href")) ?? "").startsWith("mailto:?subject=");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  // A voice set by hand from the note rewrites it (it was still as drafted).
+  await draft(page, "Message the seat holder");
+  out.plainFirst = /^Hi Hana,/.test(await page.locator("#mn-body").inputValue());
+  await page.locator(".mn-sheet .vo-line").getByText("Set it by hand").click();
+  await page.waitForSelector(".vo-sheet", { timeout: 10_000 });
+  await page.locator(".vo-sheet").getByRole("radio", { name: "Formal" }).click();
+  await page.locator(".vo-sheet").getByRole("radio", { name: "Dear Dana," }).click();
+  await page.locator(".vo-sheet").getByRole("button", { name: "Save" }).click();
+  await page.waitForSelector(".vo-sheet", { state: "detached", timeout: 10_000 });
+  await page.waitForTimeout(500);
+  const formal = await page.locator("#mn-body").inputValue();
+  out.voiceRewritesTheNote = /^Dear Hana,/.test(formal) && /I noticed that you held/.test(formal) && (await page.locator(".mn-sheet .vo-on").count()) === 1;
+  // Message on Merlin: sent as written, and the move is done.
+  await page.locator(".mn-sheet").getByRole("button", { name: "Message on Merlin" }).click();
+  await page.waitForSelector(".mn-sheet", { state: "detached", timeout: 10_000 });
+  await page.waitForTimeout(1200);
+  out.afterMerlin = await titles();
+  out.merlinMarksDone = !out.afterMerlin.includes("Message the seat holder") && /This month:\s*1\s*move done/.test((await page.locator(".mv-tally").textContent()) ?? "");
+  const hana = await (await fetch(`${BASE}/api/table?messages=1`, { headers: { cookie: `rn_table=${MEMBERS.hana.token}` } })).json();
+  out.hanaGotIt = (hana.conversations ?? []).some((c) => c.messages?.some((m) => /^Dear Hana,/.test(m.text)));
+  // Mark as sent: the move is done too.
+  await draft(page, "Invite them to connect");
+  await page.locator(".mn-sheet").getByRole("button", { name: "Mark as sent" }).click();
+  await page.waitForSelector(".mn-sheet", { state: "detached", timeout: 10_000 });
+  await page.waitForTimeout(1200);
+  out.afterSent = await titles();
+  out.sentMarksDone = !out.afterSent.includes("Invite them to connect") && /This month:\s*2\s*moves done/.test((await page.locator(".mv-tally").textContent()) ?? "");
+  await api(MEMBERS.tess.token, { type: "voice", remove: true });
+  await ctx.close();
+  results.flows = out;
+  console.log("flows", JSON.stringify(out));
+}
+
 /** Home doesn't scroll sideways at 320, 390, 768, 1024 and 1440, for each kind of member, nor with a note open. */
 async function sideways() {
   const out = [];
@@ -389,6 +460,8 @@ async function sideways() {
 try {
   if (ONLY === "shots" || ONLY === "all") await shots();
   if (ONLY === "sideways" || ONLY === "all") await sideways();
+  // Last: it marks two of Tess's moves done.
+  if (ONLY === "flows" || ONLY === "all") await flows();
   writeFileSync(path.join(OUT, `results-${ONLY}.json`), JSON.stringify(results, null, 2));
 } catch (e) {
   console.error(e);

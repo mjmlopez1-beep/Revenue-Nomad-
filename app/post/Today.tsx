@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * Today's data and its lead card. Home (Home.tsx, page "today") draws them.
+ * Today's data, the one action on a Crystal Ball company, and the lead card. Home (Home.tsx, page
+ * "today") draws them: its moves (Moves.tsx) use the data and the action, and the card stands in
+ * on a day with no move.
  *
- *   "Your best lead today": the top company of the member's Crystal Ball (already ranked), else the
- *   top row of their first view. Its free facts (industry, size, region), what happened there and
- *   why now, and a line on the warm path. One action (LeadAction, the one place it is decided, used
- *   by the card and by Home's next three rows):
+ *   The lead card ("Top of your table"): the top row of the member's first view. Its free facts
+ *   (industry, size, region), what happened there, and a line on the warm path. One action
+ *   (LeadAction, the one place it is decided, used by the card and by each move at a locked company):
  *     - a Crystal Ball company, while billing is live (CrystalOpen.tsx, Me.crystal): "Open" on Trial
  *       and Pro (free, theirs from then on), "Open free · 1 left today" on Free (one a day, with
  *       everything on it), then "Upgrade to open more" and the line that says why,
@@ -16,8 +17,8 @@
  *   Once the company is open the card becomes its warm path: who held a seat there (1 credit), then
  *   Message them on Merlin or Invite to connect. And the one-time trial-ended card.
  *
- * Its data: GET /api/table?today=1 (me, plan, the top 4 radar rows, the free company, the since
- * counts) when the server has it. Without it (an older server: a 4xx, a full view, or no radar in
+ * Its data: GET /api/table?today=1 (me, plan, the top 4 radar rows, today's moves, the free company,
+ * the since counts) when the server has it. Without it (an older server: a 4xx, a full view, or no radar in
  * the answer) the same comes from what the page has: the radar's own GET ?radar=1 for the rows and
  * the day counts, the free company from Me, and the since counts from the view.
  */

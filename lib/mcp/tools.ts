@@ -1198,20 +1198,18 @@ export async function myNetwork(ctx: Ctx): Promise<ToolOut> {
 
 /* ---------- your writing voice and today's moves (lib/voice.ts, lib/moves.ts, lib/movesView.ts) ---------- */
 
-/** What the member's Claude may send for a voice: these fields, and whether the member agreed. */
-const VOICE_CALL_FIELDS = new Set<string>([...VOICE_FIELDS, "member_agreed"]);
-
 /**
  * save_my_voice: how the member writes, as style conclusions their own Claude drew from their own
  * sent mail. Checked like the app's own save (one value from each list, no other field, phrases
  * that are short and clean), shown back first, and kept only once the member agreed. Never message
- * text: a field that isn't on the list, or a phrase that reads like mail, refuses the call.
+ * text: a field that isn't on the list, or a phrase that reads like mail, refuses the call. The
+ * voice comes as one object so a field that isn't on the list reaches this check (the connector's
+ * own schema would drop it unseen at the top level).
  */
-export async function saveMyVoice(ctx: Ctx, a: Record<string, unknown>): Promise<ToolOut> {
-  const extra = Object.keys(a ?? {}).filter((k) => !VOICE_CALL_FIELDS.has(k));
-  if (extra.length)
-    throw new ToolProblem(`Merlin keeps style conclusions only, never message text. This call had ${extra.slice(0, 3).join(", ")}, so nothing was saved. Send only: ${VOICE_FIELDS.join(", ")}.`);
-  const { member_agreed, ...raw } = a ?? {};
+export async function saveMyVoice(ctx: Ctx, a: { voice?: unknown; member_agreed?: unknown }): Promise<ToolOut> {
+  const raw = a?.voice;
+  const member_agreed = a?.member_agreed;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new ToolProblem(`Send the voice as one object with: ${VOICE_FIELDS.join(", ")}. Nothing was saved.`);
   let style;
   try {
     style = cleanVoice(raw);

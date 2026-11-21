@@ -378,6 +378,12 @@ async function main() {
   check("a seat holder not on Merlin yet: Invite them to connect, with the claim link", tCopp.do === "holderInvite" && tCopp.title === "Invite them to connect" && tCopp.way.kind === "holder" && tCopp.way.name === "Pella Quist" && !!tCopp.way.invite?.path.startsWith("/claim/"), tCopp);
   check("an open role: Reply to the open role", tTall.do === "reply" && tTall.title === "Reply to the open role" && tTall.hiring);
   check("Fen sees none of what Tess opened", same((await homeMoves(FRE)).moves, fre.moves));
+  // Harborline is Morgan's to see (she knows someone there) but its posting is still locked: without the person, the move is to see the posting, at its usual price.
+  const harbRec = mor.recs.find((c) => c.id === P.harb)!;
+  const harbRow = mor.today.moves!.list.find((w) => w.id === P.harb)!.row;
+  const noPerson = M.buildMove(harbRec, harbRow, undefined, mor.today.me);
+  check("an open role whose posting is locked: See the posting first, and no link", noPerson.way.kind === "role" && noPerson.way.posting === "locked" && noPerson.do === "seePosting" && !JSON.stringify(noPerson).includes("harborline.example"), noPerson);
+  check("with the person she knows there, the note goes to them and still has no posting link or rate", mHarb.open?.posting === "locked" && !JSON.stringify(mHarb).includes("harborline.example/jobs") && !RATE.test(JSON.stringify(mHarb)));
   const none = (await homeMoves(FEW)).moves[1];
   check("nothing on file: No way in yet, Open the company", none.way.kind === "none" && none.do === "open" && none.hidden);
 
@@ -585,13 +591,13 @@ async function main() {
   // The connector: conclusions only, shown first, saved once the member agrees.
   const ctx = await ctxOf(MOR);
   const toolRefused = async (p: Promise<unknown>) => p.then(() => null, (e: Error) => (e instanceof tools.ToolProblem ? e.message : `threw ${String(e)}`));
-  let out = await tools.saveMyVoice(ctx, { ...VOICES.casual });
+  let out = await tools.saveMyVoice(ctx, { voice: { ...VOICES.casual } });
   check("save_my_voice without the member's yes saves nothing and says what to show them", out.saved === false && /Show the member/.test(String(out.next)) && !(await T.buildView(MOR)).me!.voice, out);
-  out = await tools.saveMyVoice(ctx, { ...VOICES.casual, member_agreed: true });
+  out = await tools.saveMyVoice(ctx, { voice: { ...VOICES.casual }, member_agreed: true });
   me = (await T.buildView(MOR)).me!;
   check("with their yes it is saved, from their Claude", out.saved === true && same(V.styleOf(me.voice), VOICES.casual) && me.voice?.by === "claude", me.voice);
-  check("save_my_voice refuses message text: another field", /never message text/.test((await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.casual, member_agreed: true, examples: ["Hi Dana, great seeing you at the offsite."] }))) ?? "") && /never message text/.test((await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, sent_mail: "..." }))) ?? ""));
-  check("save_my_voice refuses a phrase that reads like mail, and a value off the list", !!(await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, phrases: ["On Monday Priya Raman wrote: sounds good"] }))) && !!(await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, phrases: ["priya@corvidhealth.example"] }))) && !!(await toolRefused(tools.saveMyVoice(ctx, { ...VOICES.formal, member_agreed: true, signoff: "Kind regards, Morgan Hale, +1 512 555 0141" }))));
+  check("save_my_voice refuses message text: another field", /never message text/.test((await toolRefused(tools.saveMyVoice(ctx, { voice: { ...VOICES.casual, examples: ["Hi Dana, great seeing you at the offsite."] }, member_agreed: true }))) ?? "") && /never message text/.test((await toolRefused(tools.saveMyVoice(ctx, { voice: { ...VOICES.formal, sent_mail: "..." }, member_agreed: true }))) ?? "") && !!(await toolRefused(tools.saveMyVoice(ctx, { voice: "Hi Dana, great seeing you.", member_agreed: true }))) && !!(await toolRefused(tools.saveMyVoice(ctx, { member_agreed: true }))));
+  check("save_my_voice refuses a phrase that reads like mail, and a value off the list", !!(await toolRefused(tools.saveMyVoice(ctx, { voice: { ...VOICES.formal, phrases: ["On Monday Priya Raman wrote: sounds good"] }, member_agreed: true }))) && !!(await toolRefused(tools.saveMyVoice(ctx, { voice: { ...VOICES.formal, phrases: ["priya@corvidhealth.example"] }, member_agreed: true }))) && !!(await toolRefused(tools.saveMyVoice(ctx, { voice: { ...VOICES.formal, signoff: "Kind regards, Morgan Hale, +1 512 555 0141" }, member_agreed: true }))));
   check("a refused save changed nothing", same(V.styleOf((await T.buildView(MOR)).me!.voice), VOICES.casual));
   const mv = await tools.myVoice(ctx);
   check("my_voice reads it back, the member's own", mv.saved === true && same(mv.voice, VOICES.casual) && /Claude/.test(String(mv.saved_by)), mv);
@@ -629,6 +635,16 @@ async function main() {
   check("and stays away", !(await plan("tok-pro-moves")).proWelcome);
   check("someone else's welcome is still theirs", (await plan("tok-hld-moves")).proWelcome === true);
   check("the trial-ended card is a different notice", (await plan(FRE)).trialEnded === true);
+
+  /* ================= Free's one a day, from a move ================= */
+  console.log("\nFree's one a day");
+  const freCredits = await credits(FRE);
+  await act(FRE, { type: "unlock", entity: "company", id: P.tall, field: "identity", from: "crystal" });
+  const fre2 = await homeMoves(FRE);
+  const opened = fre2.moves.find((m) => m.id === P.tall)!;
+  check("Free opens one from a move, with everything on it, for no credits", !opened.hidden && opened.name === "Tallgrass Analytics" && opened.do === "reply" && (await credits(FRE)) === freCredits, opened);
+  check("then today's is used: the others stay locked and unnamed, and say so", fre2.today.me.crystal === "used" && fre2.moves.filter((m) => m.id !== P.tall).every((m) => m.hidden && m.name === null && m.do === "open" && /is used/.test(m.line)), fre2.moves.map((m) => m.line));
+  check("a second one is refused, as from Crystal Ball", !!(await refused(act(FRE, { type: "unlock", entity: "company", id: P.salt, field: "identity", from: "crystal" }))));
 }
 
 try {

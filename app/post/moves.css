@@ -414,8 +414,11 @@
   color: var(--ink);
 }
 .mv-google .mv-link {
-  font-weight: 600;
-  color: var(--body-ink);
+  font-weight: 500;
+  color: var(--muted);
+}
+.mv-google .mv-link:hover {
+  color: var(--pine);
 }
 
 /* While the moves are on their way: one card of the same shape, so nothing moves when they land. */

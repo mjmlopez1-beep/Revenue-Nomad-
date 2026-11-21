@@ -201,6 +201,16 @@ async function main() {
   const home = await firstPage(SAL, "");
   check("Today's address gets Today's answer and no table", !!home && "today" in home && !("view" in home) && home.today.me.id === "mem_sal");
   check("so does a query that names no place", !!(await firstPage(SAL, "?ref=abc")) && "today" in (await firstPage(SAL, "?ref=abc"))!);
+  // Home's first screen carries today's moves (lib/moves.ts): each one's record is the full view's own, so what Sal unlocked is his alone.
+  for (const [who, tok] of [["Sal", SAL], ["Mo", "tok-mo-first"]] as const) {
+    const fp = await firstPage(tok, "");
+    const full = await t.buildView(tok);
+    const td = fp && "today" in fp ? fp.today : null;
+    const recs = (td?.companies ?? []).map((c) => unpackView({ companies: [JSON.parse(JSON.stringify(c))], packed: true } as never).companies[0]);
+    check(`${who}: Home's moves are at most three companies, each with its record`, !!td?.moves && td.moves.list.length <= 3 && recs.length === td.moves.list.length && recs.every((c, k) => c.id === td.moves!.list[k].id), td?.moves?.list.map((w) => w.id));
+    check(`${who}: each move's record is the full view's own record, locks and all`, recs.every((c) => same(c, full.companies.find((x) => x.id === c.id))), recs.find((c) => !same(c, full.companies.find((x) => x.id === c.id)))?.id);
+    check(`${who}: no move carries a person (nobody here has a network), and nothing is named that the table keeps locked`, !!td && td.moves!.list.every((w) => !w.know) && recs.every((c) => !c.hidden || c.name === "Locked company"));
+  }
 }
 
 try {

@@ -386,18 +386,22 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Save my writing voice",
       description:
-        "Save how the member writes short notes, so Merlin drafts their moves' notes in their voice. Only when the member asks. You read a sample of the member's OWN SENT mail on your side (a few dozen short messages they wrote), work out the style, and send CONCLUSIONS ONLY: one value for each field below and up to 5 short stock phrases of their own. NEVER paste message text, subjects, quotes, names, email addresses, links or numbers: a call with any other field, or a phrase that reads like mail, is refused and nothing is saved. Call it first without member_agreed: it saves nothing and returns the summary. Show the member that summary and ask if it's right, then call again with the same values and member_agreed: true. It is private to the member (other members and admins never see it), costs and earns no credits, and they can edit or remove it in Your profile on Merlin. Merlin itself never reads their email.",
+        "Save how the member writes short notes, so Merlin drafts their moves' notes in their voice. Only when the member asks. You read a sample of the member's OWN SENT mail on your side (a few dozen short messages they wrote), work out the style, and send CONCLUSIONS ONLY: one value for each field below and up to 5 short stock phrases of their own. NEVER paste message text, subjects, quotes, names, email addresses, links or numbers: a call with any other field, or a phrase that reads like mail, is refused and nothing is saved. Send them as one object, voice. Call it first without member_agreed: it saves nothing and returns the summary. Show the member that summary and ask if it's right, then call again with the same values and member_agreed: true. It is private to the member (other members and admins never see it), costs and earns no credits, and they can edit or remove it in Your profile on Merlin. Merlin itself never reads their email.",
       inputSchema: {
-        greeting: z.string().describe(`How they open a note, one of: ${VOICE_GREETINGS.join(" | ")}. \"{first}\" stands for the reader's first name; send it literally.`),
-        signoff: z.string().describe(`How they close before their name, one of: ${VOICE_SIGNOFFS.join(" | ")}`),
-        name: z.string().describe(`The name under the sign-off, one of: ${VOICE_NAMES.join(" | ")} (their first name, their full name, or none).`),
-        length: z.string().describe(`One of: ${VOICE_LENGTHS.join(" | ")}. short is about three sentences, medium about five.`),
-        formality: z.string().describe(`One of: ${VOICE_FORMALITY.join(" | ")}`),
-        contractions: z.boolean().describe("true when they write I'd and it's, false when they write I would and it is."),
-        exclamations: z.string().describe(`One of: ${VOICE_EXCLAMATIONS.join(" | ")}`),
-        emoji: z.boolean().describe("true when they use emoji in work notes."),
-        opener: z.string().describe(`One of: ${VOICE_OPENERS.join(" | ")}. direct is straight to the point, smalltalk is a line of small talk first.`),
-        phrases: z.array(z.string()).optional().describe(`Up to ${VOICE_PHRASES_MAX} short stock phrases they use again and again, each at most ${VOICE_PHRASE_CHARS} characters (\"Hope you're well\", \"No rush at all\"). Their own turns of phrase only: no names, addresses, links, numbers or anything quoted from a message.`),
+        voice: z
+          .looseObject({
+            greeting: z.string().describe(`How they open a note, one of: ${VOICE_GREETINGS.join(" | ")}. \"{first}\" stands for the reader's first name; send it literally.`),
+            signoff: z.string().describe(`How they close before their name, one of: ${VOICE_SIGNOFFS.join(" | ")}`),
+            name: z.string().describe(`The name under the sign-off, one of: ${VOICE_NAMES.join(" | ")} (their first name, their full name, or none).`),
+            length: z.string().describe(`One of: ${VOICE_LENGTHS.join(" | ")}. short is about three sentences, medium about five.`),
+            formality: z.string().describe(`One of: ${VOICE_FORMALITY.join(" | ")}`),
+            contractions: z.boolean().describe("true when they write I'd and it's, false when they write I would and it is."),
+            exclamations: z.string().describe(`One of: ${VOICE_EXCLAMATIONS.join(" | ")}`),
+            emoji: z.boolean().describe("true when they use emoji in work notes."),
+            opener: z.string().describe(`One of: ${VOICE_OPENERS.join(" | ")}. direct is straight to the point, smalltalk is a line of small talk first.`),
+            phrases: z.array(z.string()).optional().describe(`Up to ${VOICE_PHRASES_MAX} short stock phrases they use again and again, each at most ${VOICE_PHRASE_CHARS} characters (\"Hope you're well\", \"No rush at all\"). Their own turns of phrase only: no names, addresses, links, numbers or anything quoted from a message.`),
+          })
+          .describe("The style conclusions. Only the fields listed: anything else refuses the call."),
         member_agreed: z.boolean().optional().describe("true only after the member saw the summary and said yes. Without it nothing is saved."),
       },
       annotations: { title: "Save my writing voice", ...WRITE },
