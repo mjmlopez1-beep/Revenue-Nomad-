@@ -9,8 +9,8 @@
  * the sign-in link.
  * Spacing steps: 4, 8, 12, 16, 24, 32.
  *
- * Pictures are Fractions (app/ui/fractions/art.tsx): the Welcome scene as step 1's banner, the
- * trail as the progress, and a quiet corner in the page's margin on wide screens.
+ * Pictures are Fractions (app/ui/fractions/art.tsx): the Welcome scene as step 1's banner and
+ * the trail as the progress. Nothing outside the card.
  */
 /* The illustration kit's colours, in this one stylesheet. */
 @import "../ui/fractions/fractions.css";
@@ -99,20 +99,6 @@
 /* The trail in the dots' place. */
 .ob-trail {
   margin: -8px 0 -4px;
-}
-/* The corner cluster stands in the page's bottom right margin, never under the card. */
-.ob-corner {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  width: 220px;
-  height: 220px;
-  display: none;
-}
-@media (min-width: 1240px) {
-  .ob-corner {
-    display: block;
-  }
 }
 .ob-banner {
   display: block;

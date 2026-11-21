@@ -657,9 +657,13 @@
   font-size: 13px;
   color: var(--muted);
 }
-.hm-gs-bar {
+.hm-gs-track {
+  position: relative;
   flex: 1;
   max-width: 200px;
+}
+.hm-gs-bar {
+  display: block;
   height: 6px;
   border-radius: 3px;
   background: var(--line);
@@ -671,13 +675,11 @@
   background: var(--volt);
   border-radius: 3px;
 }
-/* The trail takes the bar's place: the bar stays in the page for a browser with no SVG, out of sight. */
-.hm-gs-bar {
-  display: none;
-}
-.hm-gs-trail {
-  margin: -10px 0 -6px auto;
-  flex: none;
+/* The Nomad walks the bar and stands on it where the member has got to (art.tsx NomadArt, 26px: one figure on one line). */
+.hm-gs-walker {
+  position: absolute;
+  bottom: 5px;
+  line-height: 0;
 }
 .hm-gs-steps {
   list-style: none;
@@ -832,15 +834,13 @@
     flex-wrap: wrap;
     gap: 4px 10px;
   }
-  .hm-gs-bar {
+  .hm-gs-track {
     flex-basis: 100%;
     max-width: none;
   }
-  /* The trail keeps to the title's line, so the card is no taller than it was with the bar. */
-  .hm-gs-trail {
-    height: 26px;
-    width: auto;
-    margin: -4px 0 -2px auto;
+  /* The bar runs under the title here: the Nomad would stand on the words, so the bar goes alone. */
+  .hm-gs-walker {
+    display: none;
   }
   .hm-card-art {
     top: 12px;

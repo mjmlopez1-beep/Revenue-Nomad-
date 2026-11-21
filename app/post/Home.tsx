@@ -13,9 +13,9 @@
  *
  * Pictures (Fractions, the quiet register: app/ui/fractions/art.tsx). The greeting sits in a mint
  * band with a small scene at its far end (morning when something is new, night when nothing is);
- * each quick action has its prop in a corner; Get started draws its progress as a trail. Home
+ * each quick action has its prop in a corner; the Nomad walks Get started's progress bar. Home
  * shows the Nomad once, where the moment is: knocking in the trial-ended card, else resting by
- * "Nothing new since", else walking the Get started trail.
+ * "Nothing new since", else walking the Get started bar (wide screens).
  *
  * It paints from GET ?today=1 before the whole table is here (Today.tsx useTodayData): what needs
  * the whole table (the saved views' counts, the seats card, the search's matches) waits a moment
@@ -31,7 +31,7 @@ import { LeadAction, LeadCard, TrialEnded, factsOf, leadWhat, type TodayData } f
 import { sinceWords } from "./todayModel";
 import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
-import { Bleed, NomadArt, Prop, Scene, Spot, Strip, Trail } from "../ui/fractions/lazy";
+import { Bleed, NomadArt, Prop, Scene, Spot, Strip } from "../ui/fractions/lazy";
 import "./home.css";
 
 /** A place on Home: a link where it is one (middle-click opens a new tab), else a button. */
@@ -466,11 +466,17 @@ function GetStarted({ steps, onStep, onHide, walker }: { steps: CheckStep[]; onS
         <span className="hm-gs-n num">
           {done} of {steps.length} done
         </span>
-        <span className="hm-gs-bar" aria-hidden>
-          <span style={{ width: `${(done / steps.length) * 100}%` }} />
+        {/* The bar is the trail: on a wide screen the Nomad walks it and stands where the member has got to. */}
+        <span className="hm-gs-track" aria-hidden>
+          <span className="hm-gs-bar">
+            <span style={{ width: `${(done / steps.length) * 100}%` }} />
+          </span>
+          {walker ? (
+            <span className="hm-gs-walker" style={{ left: `calc(${done / steps.length} * (100% - 30px))` }}>
+              <NomadArt pose="walk" height={26} on="bg" />
+            </span>
+          ) : null}
         </span>
-        {/* The same progress as a trail: a step done is a step walked. */}
-        <Trail done={done} total={steps.length} walker={walker} on="bg" height={36} className="hm-gs-trail" />
       </div>
       <ol className="hm-gs-steps">
         {steps.map((s, k) => (

@@ -46,7 +46,7 @@ import { contactOf, mailto } from "../landing/contact";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { invitedParts } from "@/lib/notify/format";
 import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
-import { Glyph, Texture, Trail, WelcomeBanner } from "../ui/fractions/art";
+import { Glyph, Trail, WelcomeBanner } from "../ui/fractions/art";
 
 export interface OnboardingProps {
   view: View;
@@ -448,8 +448,6 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
         </span>
       </header>
 
-      {/* A quiet corner of the same pieces in the page's empty margin, on wide screens only. */}
-      <Texture kind="corner" on="bg" className="ob-corner" />
       <main className="ob-main">
         <div className="ob-card" ref={cardRef}>
           {/* The welcome step opens on the Welcome scene (Fractions, app/ui/fractions): the Nomad waves you in. Drawn inline, so nothing is downloaded for it. */}
