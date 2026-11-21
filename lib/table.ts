@@ -158,6 +158,12 @@ interface SeedEngagement {
    * never counted as new.
    */
   addedAt?: string;
+  /**
+   * The seat holder's one-way person key ("p_" + 20 hex, an HMAC of their profile id under the seed
+   * key, scripts/seat-import.mjs personKey): the same on each of one person's seats, current and past.
+   * Server only, for grouping one fractional's seats: never copied into the graph, a view or an export.
+   */
+  holderKey?: string;
 }
 interface SeedContact {
   id: string;

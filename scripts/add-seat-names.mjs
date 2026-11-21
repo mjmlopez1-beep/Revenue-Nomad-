@@ -30,14 +30,15 @@
  */
 import { execFileSync, spawnSync } from "child_process";
 import { createHmac } from "crypto";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 
 // The name rules (lib/personName.ts) are TypeScript, so this runs under tsx: started with plain node, it starts itself again with tsx loaded.
 if (!process.env.RN_SEAT_NAMES_TSX) {
   const r = spawnSync(process.execPath, ["--import", "tsx", ...process.argv.slice(1)], { stdio: "inherit", env: { ...process.env, RN_SEAT_NAMES_TSX: "1" } });
   process.exit(r.status ?? 1);
 }
-const { cleanPersonName } = await import("../lib/personName.ts");
+// What the importers share: the CSV, the seed key, and names for United States seats only (seat-import.mjs).
+const { inUs, nameSeat, outsideUsNames, parseCsv, seedKey } = await import("./seat-import.mjs");
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -56,37 +57,7 @@ if (!csvPath) {
   process.exit(1);
 }
 
-/** The seat file's rows as objects (RFC 4180 quoting, a byte-order mark allowed). */
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (quoted) {
-      if (ch === '"' && text[i + 1] === '"') (cell += '"'), i++;
-      else if (ch === '"') quoted = false;
-      else cell += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ",") row.push(cell), (cell = "");
-    else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(cell), rows.push(row), (row = []), (cell = "");
-    } else cell += ch;
-  }
-  if (cell || row.length) row.push(cell), rows.push(row);
-  const [head, ...body] = rows.filter((r) => r.some((c) => c.trim()));
-  const keys = head.map((h) => h.replace(/^﻿/, "").trim());
-  return body.map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? "").trim()])));
-}
-
-const keyB64 = process.env.RN_INTEL_SEED_KEY || (existsSync("data/intel-seed.key") ? readFileSync("data/intel-seed.key", "utf8").trim() : "");
-if (!keyB64) {
-  console.error("No seed key: set RN_INTEL_SEED_KEY or put it in data/intel-seed.key. Seats are found by an HMAC under it.");
-  process.exit(1);
-}
-const seatKey = Buffer.from(keyB64, "base64");
+const seatKey = seedKey("Seats are found by an HMAC under it.");
 const hashedId = (seatId) => `e_ss_${createHmac("sha256", seatKey).update(`seat-scan:${seatId}`).digest("hex").slice(0, 20)}`;
 const legacyId = (seatId) => `e_ss_${seatId.replace(/[^A-Za-z0-9]/g, "")}`;
 
@@ -98,7 +69,7 @@ const counts = { us: 0, matchedHashed: 0, matchedLegacy: 0, notOnSeed: 0, notFou
 const skipped = {};
 const seen = new Set();
 for (const r of rows) {
-  if (String(r.country ?? "").trim() !== "United States") continue;
+  if (!inUs(r)) continue;
   counts.us++;
   const sid = String(r.seat_id ?? "").trim();
   if (!sid) {
@@ -122,41 +93,20 @@ for (const r of rows) {
   }
   seen.add(e.id);
   // Never overwrite: a seat that has a holder in the seed keeps it (a second run, or a name from elsewhere).
-  if (e.fields.operator) {
-    counts.alreadyNamed++;
-    continue;
-  }
-  const clean = cleanPersonName(r.person_name);
-  if ("skip" in clean) {
-    skipped[clean.skip] = (skipped[clean.skip] ?? 0) + 1;
-    continue;
-  }
-  e.fields.operator = clean.name;
-  e.holderFrom = "public profile";
-  counts.named++;
+  const put = nameSeat(e, r.person_name);
+  if (put.kept) counts.alreadyNamed++;
+  else if (put.skip) skipped[put.skip] = (skipped[put.skip] ?? 0) + 1;
+  else counts.named++;
 }
 
 // The owner's rule: no name for anyone based outside the United States. A seat named from a public
 // profile whose row in this file is outside the United States (the holder moved, or an older file
 // said otherwise) loses that name. A member's claim lives in the state and is not touched.
-let takenOff = 0;
-const outsideUs = (r) => String(r.country ?? "").trim() !== "United States";
-for (const r of rows) {
-  if (!outsideUs(r)) continue;
+const seatOfRow = (r) => {
   const sid = String(r.seat_id ?? "").trim();
-  const e = sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
-  if (e && e.holderFrom === "public profile") {
-    delete e.fields.operator;
-    delete e.holderFrom;
-    takenOff++;
-  }
-}
-const namedOutsideUs = rows.filter((r) => {
-  if (!outsideUs(r)) return false;
-  const sid = String(r.seat_id ?? "").trim();
-  const e = sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
-  return !!e && (e.holderFrom === "public profile" || (e.fields?.source === "Seat scan" && !!e.fields?.operator));
-}).length;
+  return sid ? byId.get(legacyId(sid)) ?? byId.get(hashedId(sid)) : undefined;
+};
+const { takenOff, namedOutsideUs } = outsideUsNames(rows, seatOfRow, (e) => e.fields?.source === "Seat scan");
 if (namedOutsideUs) {
   console.error(`${namedOutsideUs} seats outside the United States would carry a name. Nothing was written.`);
   process.exit(1);
