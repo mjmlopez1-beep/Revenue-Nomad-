@@ -11,9 +11,10 @@
 import { siteKey } from "../tableFields";
 import { companyKey, isPlaceholderCompany } from "../scan/clean";
 import {
-  AUTOMATED_LOCAL, PEOPLE_MAX, domainOf, isBulkDomain, isDecisionMaker, warmthScore, workDomain,
-  type NetCompany, type NetPerson, type NetSource, type SourceData,
+  AUTOMATED_LOCAL, LOOSE_MAX, PEOPLE_MAX, domainOf, isBulkDomain, isDecisionMaker, isFreeMail, warmthScore, workDomain,
+  type LoosePerson, type NetCompany, type NetPerson, type NetSource, type SourceData,
 } from "./types";
+import { personKind } from "./judge";
 
 /* ---------- the companies to match against ---------- */
 
@@ -83,13 +84,31 @@ interface Acc {
   domain: string | null;
 }
 
-/** People grouped into companies: the warmest PEOPLE_MAX kept per company, the rest counted. */
-function finish(accs: Map<string, Acc>, companies: Map<string, NetCompany>, nowMs: number, at: string, real: number): SourceData {
+/**
+ * Someone at no company on Merlin is kept (for the member alone) when they are a real relationship
+ * (2+ meetings, replies both ways, a saved contact) or their title says they can introduce the
+ * member (another fractional, an investor). Never a colleague at the member's own domain.
+ */
+function looseOf(p: NetPerson, own: Set<string>): LoosePerson | null {
+  const d = domainOf(p.email);
+  const domain = workDomain(p.email, own);
+  if (d && !domain && !isFreeMail(d)) return null;
+  const k = personKind(p, domain);
+  if (!((p.meetings ?? 0) >= 2 || p.both || p.saved || k === "fractional" || k === "investor")) return null;
+  if (!p.name && !p.email) return null;
+  return { ...p, ...(domain ? { domain } : {}) };
+}
+
+/** People grouped into companies: the warmest PEOPLE_MAX kept per company, the rest counted; people at no company on Merlin counted, and the ones looseOf keeps listed. */
+function finish(accs: Map<string, Acc>, companies: Map<string, NetCompany>, nowMs: number, at: string, real: number, own: Set<string> = new Set()): SourceData {
   let unmatched = 0;
   const per = new Map<string, NetPerson[]>();
+  const loose: LoosePerson[] = [];
   for (const a of accs.values()) {
     if (!a.company) {
       unmatched++;
+      const l = looseOf(a.person, own);
+      if (l) loose.push(l);
       continue;
     }
     const l = per.get(a.company) ?? [];
@@ -108,7 +127,8 @@ function finish(accs: Map<string, Acc>, companies: Map<string, NetCompany>, nowM
     if (c.months) c.months = [...new Set(c.months)].sort().slice(-30);
     out[id] = c;
   }
-  return { at, companies: out, unmatched, real };
+  loose.sort((x, y) => warmthScore(y, nowMs) - warmthScore(x, nowMs) || (y.last ?? "").localeCompare(x.last ?? ""));
+  return { at, companies: out, unmatched, real, ...(loose.length ? { loose: loose.slice(0, LOOSE_MAX) } : {}) };
 }
 
 /* ---------- Calendar ---------- */
@@ -140,6 +160,9 @@ export function calendarSource(events: CalEvent[], dir: Directory, own: Set<stri
     const past = at <= nowMs;
     const d = day(at);
     const seenCo = new Set<string>();
+    // Per company at this meeting: how many of their people came, and whether one of them sent the invite (counts only).
+    const sideOf = new Map<string, number>();
+    const invitedBy = new Set<string>();
     for (const a of list) {
       if (a.self || a.resource) continue;
       const email = String(a.email ?? "").trim().toLowerCase();
@@ -162,6 +185,10 @@ export function calendarSource(events: CalEvent[], dir: Directory, own: Set<stri
         p.upcoming = (p.upcoming ?? 0) + 1;
         if (!p.next || d < p.next) p.next = d;
       }
+      if (acc.company) {
+        sideOf.set(acc.company, (sideOf.get(acc.company) ?? 0) + 1);
+        if (a.organizer && past) invitedBy.add(acc.company);
+      }
       if (acc.company && !seenCo.has(acc.company)) {
         seenCo.add(acc.company);
         const c = companies.get(acc.company) ?? { people: [] };
@@ -177,10 +204,16 @@ export function calendarSource(events: CalEvent[], dir: Directory, own: Set<stri
         companies.set(acc.company, c);
       }
     }
+    for (const [id, n] of sideOf) {
+      const c = companies.get(id);
+      if (!c) continue;
+      if (n > (c.side ?? 0)) c.side = n;
+      if (invitedBy.has(id)) c.invitedBy = (c.invitedBy ?? 0) + 1;
+    }
   }
   let real = 0;
   for (const a of accs.values()) if ((a.person.meetings ?? 0) >= 2 && (workDomain(a.person.email, own) || a.company)) real++;
-  return finish(accs, companies, nowMs, new Date(nowMs).toISOString(), real);
+  return finish(accs, companies, nowMs, new Date(nowMs).toISOString(), real, own);
 }
 
 /* ---------- Contacts ---------- */
@@ -203,6 +236,7 @@ export function contactsSource(saved: GContact[], other: GContact[], dir: Direct
     const name = personName(c.names?.[0]?.displayName);
     const org = c.organizations?.[0];
     const title = cleanText(org?.title, 80);
+    const orgName = isSaved ? cleanText(org?.name, 80) : undefined;
     const emails = (c.emailAddresses ?? []).map((e) => String(e.value ?? "").trim().toLowerCase()).filter((e) => !!domainOf(e));
     let company: string | null = null;
     let domain: string | null = null;
@@ -227,11 +261,12 @@ export function contactsSource(saved: GContact[], other: GContact[], dir: Direct
         was.person.saved = true;
         was.person.name = name ?? was.person.name;
         was.person.title = title ?? was.person.title;
+        was.person.org = orgName ?? was.person.org;
       }
       if (!was.company && company) Object.assign(was, { company, domain });
       return;
     }
-    accs.set(key, { person: { key, ...(email ? { email } : {}), ...(name ? { name } : {}), ...(title ? { title } : {}), ...(isSaved ? { saved: true } : {}), src: ["contacts"] }, company, domain });
+    accs.set(key, { person: { key, ...(email ? { email } : {}), ...(name ? { name } : {}), ...(title ? { title } : {}), ...(orgName ? { org: orgName } : {}), ...(isSaved ? { saved: true } : {}), src: ["contacts"] }, company, domain });
   };
   for (const c of saved) add(c, true);
   for (const c of other) add(c, false);
@@ -241,7 +276,7 @@ export function contactsSource(saved: GContact[], other: GContact[], dir: Direct
     c.contacts = (c.contacts ?? 0) + 1;
     companies.set(a.company, c);
   }
-  return finish(accs, companies, nowMs, new Date(nowMs).toISOString(), 0);
+  return finish(accs, companies, nowMs, new Date(nowMs).toISOString(), 0, own);
 }
 
 /* ---------- Gmail headers ---------- */
@@ -336,7 +371,7 @@ export function gmailSource(msgs: GmailMeta[], self: Set<string>, dir: Directory
   }
   let real = 0;
   for (const a of accs.values()) if (a.person.both) real++;
-  return finish(accs, companies, nowMs, new Date(nowMs).toISOString(), real);
+  return finish(accs, companies, nowMs, new Date(nowMs).toISOString(), real, own);
 }
 
 /* ---------- what a member's Claude saves ---------- */

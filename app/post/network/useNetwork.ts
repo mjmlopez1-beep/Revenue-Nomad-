@@ -41,7 +41,7 @@ export function load(force = false): Promise<void> {
   return loading;
 }
 
-export type NetOp = "sync" | "disconnect" | "drop-gmail" | "forget-claude" | "seen-found" | "not-a-seat";
+export type NetOp = "sync" | "disconnect" | "drop-gmail" | "forget-claude" | "seen-found" | "not-a-seat" | "mark";
 /** A button: the answer replaces the view. Returns the message or the error. `more`: what the op needs besides its name (not-a-seat's company). */
 export async function netAct(op: NetOp, more: Record<string, string> = {}): Promise<{ message?: string; error?: string }> {
   try {

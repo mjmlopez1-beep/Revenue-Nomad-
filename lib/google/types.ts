@@ -9,7 +9,13 @@
  *  - per company on Merlin (internal id): counts (meetings, upcoming meetings, emails, contacts),
  *    first, last and next touch, and the months it had meetings in (for "a seat you might have held");
  *  - up to PEOPLE_MAX people per company: email, name, title, their counts and dates, where it came from;
- *  - counts only for everything that matched no company (never the domains or the people);
+ *  - for people at no company on Merlin: a count, and the ones the member really knows (2+
+ *    meetings, replies both ways, or a saved contact) or who can introduce them (a contact whose
+ *    title says fractional or investor), at most LOOSE_MAX, with their email domain (SourceData.loose);
+ *  - per company, who sent the invites and how many of their people came at most (invitedBy, side):
+ *    counts that tell a sales process from a relationship, never who or what it was about;
+ *  - what the member said about a company or a person ("Not a relationship", "It is one"), and what
+ *    Merlin set aside at the last read (auto), so Crystal Ball ranks by real relationships only;
  *  - the Google refresh tokens, sealed (lib/google/crypto.ts), never sent to a browser or logged;
  *  - how long the first read took, when the member saw its result, and the companies they said
  *    were "Not a seat" (so a seat guess they dismissed stays dismissed).
@@ -47,6 +53,8 @@ export interface NetPerson {
   next?: string;
   /** What the member said they are (claude): client, former client, referral partner, prospect, peer, other. */
   rel?: string;
+  /** The organisation on their saved contact (the member's own words). */
+  org?: string;
   /** A saved contact (Google Contacts). */
   saved?: boolean;
   src: NetSource[];
@@ -68,6 +76,16 @@ export interface NetCompany {
   next?: string;
   /** Distinct months with a past meeting (YYYY-MM), at most 30 kept. */
   months?: string[];
+  /** Past meetings someone at the company sent the invite for (the member's calendar's organizer flag). */
+  invitedBy?: number;
+  /** The most of their people at one meeting. */
+  side?: number;
+}
+
+/** Someone at no company on Merlin the member really knows or who can introduce them (SourceData.loose). */
+export interface LoosePerson extends NetPerson {
+  /** Their work email's domain; none for personal email. */
+  domain?: string;
 }
 
 export interface SourceData {
@@ -78,6 +96,8 @@ export interface SourceData {
   unmatched: number;
   /** People the member really meets or talks with (2+ meetings, or replies both ways), matched or not. A count only. */
   real: number;
+  /** People at no company on Merlin worth listing for the member alone (LOOSE_MAX at most). */
+  loose?: LoosePerson[];
 }
 
 export interface GoogleLink {
@@ -111,7 +131,22 @@ export interface MemberNetwork {
   found?: string;
   /** Internal company ids the member said were "Not a seat": those seat guesses stay dismissed. */
   notSeats?: string[];
+  /** Internal company id -> what the member said it is ("Not a relationship"). Kept across reads. */
+  notRel?: Record<string, NotRelWhy>;
+  /** Internal company ids where the member undid what Merlin set aside ("It is a relationship"). */
+  isRel?: string[];
+  /** People (their key, an email) the member said are not a relationship. */
+  notPeople?: string[];
+  /** What Merlin set aside at the last read (internal id -> kind), so Crystal Ball reads it without the table. */
+  auto?: Record<string, SetKind>;
 }
+
+/** What the member can say a company is instead of a relationship. */
+export const NOT_REL = ["vendor", "recruiter", "oneoff", "own", "other"] as const;
+export type NotRelWhy = (typeof NOT_REL)[number];
+export const NOT_REL_WORDS: Record<NotRelWhy, string> = { vendor: "A vendor selling to me", recruiter: "A recruiter", oneoff: "A one-off meeting", own: "My own firm", other: "Not a relationship" };
+/** What Merlin sets aside by itself: someone selling to the member, a recruiter, an investor (who goes to People who can introduce you). */
+export type SetKind = "vendor" | "recruiter" | "investor";
 
 /** State.network: member id -> their network. Nobody else's view ever reads another member's entry. */
 export type NetworkState = Record<string, MemberNetwork>;
@@ -119,6 +154,10 @@ export type NetworkState = Record<string, MemberNetwork>;
 /* ---------- limits ---------- */
 
 export const PEOPLE_MAX = 8;
+/** People at no company on Merlin kept per source (the warmest). */
+export const LOOSE_MAX = 300;
+/** "Not a relationship" answers kept per member, companies and people each (the oldest go first). */
+export const NOT_REL_MAX = 1000;
 /** save_my_network: calls a member can make in any rolling 24 hours, and entries per call. */
 export const CLAUDE_SAVES_DAILY = 5;
 export const CLAUDE_ENTRIES_MAX = 200;
@@ -126,7 +165,11 @@ export const CLAUDE_ENTRIES_MAX = 200;
 export const CLAUDE_NEW_DAILY = 25;
 /** "A seat you might have held": meetings with a company in this many months, this many meetings in all. */
 export const SEAT_MONTHS = 3;
-export const SEAT_MEETINGS = 6;
+export const SEAT_MEETINGS = 8;
+/** ...and at least this many meetings a month from the first to the last (about every three weeks): a prospect's few calls aren't a seat. */
+export const SEAT_RATE = 1.4;
+/** A client now: a seat pattern whose last meeting is this recent (or one is coming up). */
+export const CLIENT_RECENT_DAYS = 45;
 /** A seat guess with fewer months or fewer meetings than these reads "Less sure" (about every other week for half a year). */
 export const SEAT_SURE_MONTHS = 6;
 export const SEAT_SURE_MEETINGS = 18;
@@ -161,6 +204,79 @@ export function warmthScore(x: { meetings?: number; upcoming?: number; emails?: 
 
 export function warmthOf(score: number): Warmth {
   return score >= 0.45 ? "Hot" : score >= 0.2 ? "Warm" : score >= 0.07 ? "Fading" : "Cold";
+}
+
+/** What the warmth grade reads: counts and dates the member's own calendar, contacts and mail give. */
+export interface Touch {
+  meetings?: number;
+  upcoming?: number;
+  emails?: number;
+  both?: boolean;
+  saved?: boolean;
+  first?: string;
+  last?: string;
+  next?: string;
+  /** Distinct months with a meeting, when known (a company's); else the first-to-last span says it. */
+  months?: number;
+}
+/** The grades, in rules a member can check against their own calendar (WARMTH_RULES says them in words). */
+export const HOT_MEETINGS = 4;
+export const HOT_DAYS = 60;
+export const WARM_DAYS = 270;
+export const MAIL_WARM_DAYS = 180;
+export const FADING_DAYS = 730;
+export const WARMTH_RULES =
+  "Hot: 4 or more meetings across at least two months, the last in the past 60 days. Warm: 2 or more meetings in the past 9 months, emails both ways in the past 6, or a meeting coming up after one you had. Fading: one meeting, or any contact in the past 2 years. Cold: a saved contact only, or nothing in 2 years.";
+
+const daysSince = (d: string | undefined, nowMs: number) => {
+  const t = dayMs(d);
+  return Number.isFinite(t) ? Math.max(0, (nowMs - t) / DAY_MS) : Infinity;
+};
+
+/**
+ * The warmth grade by explicit rules (WARMTH_RULES): a single call is never Warm, a burst of calls
+ * in one fortnight is never Hot, and a meeting on the calendar counts only after one already had.
+ */
+export function warmthFor(x: Touch, nowMs = Date.now()): Warmth {
+  const m = x.meetings ?? 0;
+  const days = daysSince(x.last, nowMs);
+  const span = Number.isFinite(dayMs(x.first)) && Number.isFinite(dayMs(x.last)) ? (dayMs(x.last) - dayMs(x.first)) / DAY_MS : 0;
+  const spread = x.months !== undefined ? x.months >= 2 : span >= 28;
+  const soon = (x.upcoming ?? 0) > 0 || !!x.next;
+  const mail = !!x.both && (x.emails ?? 0) >= 4;
+  if (m >= HOT_MEETINGS && spread && (days <= HOT_DAYS || (soon && days <= 2 * HOT_DAYS))) return "Hot";
+  if ((m >= 2 && days <= WARM_DAYS) || (mail && days <= MAIL_WARM_DAYS) || (m >= 1 && soon && days <= WARM_DAYS)) return "Warm";
+  if ((m >= 1 || (x.emails ?? 0) > 0 || soon) && (days <= FADING_DAYS || soon)) return "Fading";
+  return "Cold";
+}
+
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Nov 5" within 30 days either way, "in March" this year, "in March 2025" another. */
+export function whenWords(d: string | null | undefined, nowMs = Date.now()): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d ?? "");
+  if (!m) return null;
+  const [y, mo, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (mo < 1 || mo > 12) return null;
+  const at = Date.UTC(y, mo - 1, day, 12);
+  if (Math.abs(nowMs - at) <= 30 * DAY_MS) return `${MONTHS_SHORT[mo - 1]} ${day}`;
+  return y === new Date(nowMs).getUTCFullYear() ? `in ${MONTHS_LONG[mo - 1]}` : `in ${MONTHS_LONG[mo - 1]} ${y}`;
+}
+
+/** The warmth's reason in plain words: "4 meetings, last in March", "1 meeting, Nov 5 · one coming up Dec 2", "12 emails both ways, last in June", "In your contacts". */
+export function touchWords(x: Touch, nowMs = Date.now()): string {
+  const m = x.meetings ?? 0;
+  const e = x.emails ?? 0;
+  const when = whenWords(x.last, nowMs);
+  const parts: string[] = [];
+  if (m) parts.push(`${m} ${m === 1 ? "meeting" : "meetings"}${when ? `, ${m === 1 ? "" : "last "}${when}` : ""}`);
+  else if (e) parts.push(`${e} ${e === 1 ? "email" : "emails"}${x.both ? " both ways" : ""}${when ? `, last ${when}` : ""}`);
+  if ((x.upcoming ?? 0) > 0 || x.next) {
+    const n = whenWords(x.next, nowMs);
+    parts.push(`one coming up${n ? ` ${n}` : ""}`);
+  }
+  if (!parts.length) return x.saved ? "In your contacts" : "In your contacts, never met";
+  return parts.join(" · ");
 }
 
 export const WARMTH_RANK: Record<Warmth, number> = { Hot: 0, Warm: 1, Fading: 2, Cold: 3 };
@@ -254,9 +370,11 @@ export function mergeCompany(n: MemberNetwork, id: string): NetCompany | null {
         if (p.src.includes("contacts")) {
           if (p.name) was.name = p.name;
           if (p.title) was.title = p.title;
+          if (p.org) was.org = p.org;
         } else {
           was.name ??= p.name;
           was.title ??= p.title;
+          was.org ??= p.org;
         }
         was.meetings = (was.meetings ?? 0) + (p.meetings ?? 0) || undefined;
         was.upcoming = (was.upcoming ?? 0) + (p.upcoming ?? 0) || undefined;
@@ -285,6 +403,8 @@ export function mergeCompany(n: MemberNetwork, id: string): NetCompany | null {
     upcoming: sum("upcoming") || undefined,
     emails: Math.max(...parts.map((x) => x.emails ?? 0)) || undefined,
     contacts: sum("contacts") || undefined,
+    invitedBy: parts.reduce((a, x) => a + (x.invitedBy ?? 0), 0) || undefined,
+    side: Math.max(0, ...parts.map((x) => x.side ?? 0)) || undefined,
     first: parts.reduce<string | undefined>((a, x) => min(a, x.first), undefined),
     last: parts.reduce<string | undefined>((a, x) => max(a, x.last), undefined),
     next: parts.reduce<string | undefined>((a, x) => min(a, x.next), undefined),
@@ -292,11 +412,38 @@ export function mergeCompany(n: MemberNetwork, id: string): NetCompany | null {
   };
 }
 
-/** A company's warmth for this member: its warmest person, or the company's own counts when they say more. */
+/** A company's warmth score for ordering: its warmest person, or the company's own counts when they say more. */
 export function companyScore(c: NetCompany, nowMs = Date.now()): number {
   const both = c.people.some((p) => p.both);
-  const own = warmthScore({ ...c, both }, nowMs);
-  return Math.max(own, ...c.people.map((p) => warmthScore(p, nowMs)));
+  const own = warmthScore({ ...c, contacts: 0, both }, nowMs);
+  return Math.max(own, ...c.people.map((p) => warmthScore({ ...p, saved: false }, nowMs)));
+}
+
+/** A company's touch: its own meetings (each counted once), its months, and its people's mail. */
+export const companyTouch = (c: NetCompany): Touch => ({
+  meetings: c.meetings,
+  upcoming: c.upcoming,
+  emails: c.emails,
+  both: c.people.some((p) => p.both),
+  first: c.first,
+  last: c.last,
+  next: c.next,
+  months: c.months?.length,
+});
+/** A company's grade: the warmer of its own counts and its warmest person. */
+export function companyWarmth(c: NetCompany, nowMs = Date.now()): Warmth {
+  let best = warmthFor(companyTouch(c), nowMs);
+  for (const p of c.people) {
+    const w = warmthFor(p, nowMs);
+    if (WARMTH_RANK[w] < WARMTH_RANK[best]) best = w;
+  }
+  return best;
+}
+
+/** Set aside for this member: what they said ("Not a relationship"), else what Merlin set aside at the last read and they didn't undo. */
+export function setAside(n: MemberNetwork, id: string): boolean {
+  if (n.notRel?.[id]) return true;
+  return !!n.auto?.[id] && !(n.isRel ?? []).includes(id);
 }
 
 /**
@@ -312,8 +459,9 @@ export function networkWarmth(s: { network?: NetworkState }, memberId: string, n
     if (!ids.has(id)) return null;
     let w = memo.get(id);
     if (w === undefined) {
-      const c = mergeCompany(n, id);
-      w = c ? warmthOf(companyScore(c, nowMs)) : null;
+      // Someone selling to them, a recruiter or an investor isn't a way in: Crystal Ball ranks by real relationships only.
+      const c = setAside(n, id) ? null : mergeCompany(n, id);
+      w = c ? companyWarmth(c, nowMs) : null;
       memo.set(id, w);
     }
     return w;
@@ -346,6 +494,82 @@ export interface NetPersonView {
   dm: boolean;
   rel: string | null;
   src: NetSource[];
+  /** The person's key (their email, or a name key): what "Not a relationship" on a person remembers. */
+  key: string;
+  /** The warmth in words: "4 meetings, last in March". */
+  why: string;
+  /** What their title says they are, when it says (lib/google/judge.ts personKind). */
+  kind: PersonKind | null;
+  /** The organisation on their saved contact. */
+  org: string | null;
+  /** The member said this person is not a relationship. */
+  hidden: boolean;
+}
+
+/** What a person's title (or their firm) says they are: another fractional, an investor, a recruiter, someone selling. */
+export type PersonKind = "fractional" | "investor" | "recruiter" | "seller";
+
+/** Crystal Ball's likelihood for this company hiring the member's function, scored live (lib/google/odds.ts). */
+export interface HireOdds {
+  band: "High" | "Medium" | "Low";
+  score: number;
+  /** Why, in Crystal Ball's own words: "Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months". */
+  why: string;
+  /** What happened, as a Crystal Ball row says it (a note can say "I saw ..."): the kind and the line. */
+  saw: { kind: "role" | "seat" | "adjacent"; line: string } | null;
+}
+
+/** A client the calendar shows: regular meetings over months, still going (or the member's own seat there). */
+export interface ClientView {
+  /** First and last month with a meeting (YYYY-MM), meetings in all, months from first to last. */
+  from: string;
+  to: string;
+  meetings: number;
+  months: number;
+  /** Met in the last CLIENT_RECENT_DAYS or a meeting is coming up. */
+  active: boolean;
+  /** The member's own seat there is on Merlin (public id), or null: not confirmed yet. */
+  seat: string | null;
+}
+
+/** Why a company is set aside, and who said so: Merlin (with Undo) or the member. */
+export interface SetView {
+  kind: SetKind | NotRelWhy;
+  why: string;
+  by: "merlin" | "you";
+}
+
+/** Someone who can introduce the member to other companies: another fractional, or an investor. */
+export interface IntroView {
+  key: string;
+  name: string;
+  title: string | null;
+  /** Where they are: the company on Merlin, their contact's organisation, or their email's domain. */
+  org: string | null;
+  kind: "fractional" | "investor";
+  warmth: Warmth;
+  why: string;
+  email: string | null;
+  /** The company on Merlin they are at (public id), when they are at one. */
+  companyId: string | null;
+  /** What they can open, said honestly: what Merlin knows, and what it doesn't. */
+  opens: string;
+  src: NetSource[];
+}
+
+/** Someone at no company on Merlin (LoosePerson), as the member's own list shows them. */
+export interface LooseView {
+  key: string;
+  name: string | null;
+  title: string | null;
+  org: string | null;
+  domain: string | null;
+  email: string | null;
+  warmth: Warmth;
+  why: string;
+  kind: PersonKind | null;
+  hidden: boolean;
+  src: NetSource[];
 }
 
 export interface NetCompanyView {
@@ -366,6 +590,21 @@ export interface NetCompanyView {
   more: number;
   /** Met over SEAT_MONTHS+ months: maybe a seat they held (Your seats confirms it; nothing is added). */
   seat: { from: string; to: string } | null;
+  /** Free facts, for the filters and the fit line. */
+  industry: string | null;
+  employees: string | null;
+  /** The company's warmth in words: "4 meetings, last in March". */
+  touch: string;
+  /** Set aside (a vendor, a recruiter, an investor, or what the member said), or null: a relationship. */
+  set: SetView | null;
+  /** In the member's Ideal Fractional Profile (true or false), or null without a profile. */
+  fit: boolean | null;
+  /** How likely it is to hire the member's function, or null without a function. */
+  odds: HireOdds | null;
+  /** In the member's Crystal Ball (any day it keeps). */
+  ball: boolean;
+  /** A client now, by the calendar (or the member's own seat there). */
+  client: ClientView | null;
 }
 
 /** What the read is doing right now (kept in memory while it runs, never stored). */
@@ -443,23 +682,18 @@ export interface NetworkView {
   seats: SeatGuessView[];
   /** People who matched no company on Merlin, people the member really meets or talks with. Counts only. */
   stats: { unmatched: number; real: number };
+  /** The member's function, for the words ("likely to hire a fractional RevOps leader"). */
+  fn: string | null;
+  /** Warm paths, best first: company ids of `companies` (warmPaths). The page lists exactly these, and every count of them is this length. */
+  warm: string[];
+  /** People who can introduce the member, warmest first. */
+  intros: IntroView[];
+  /** People at no company on Merlin, warmest first. */
+  loose: LooseView[];
 }
 export type NetworkAnswer = NetworkView | { on: false };
 
 /* ---------- the connect moment ---------- */
-
-/**
- * The connect moment's two numbers, from what the member's own pages give: `n` companies they know
- * someone at (Your network's list), and `m` of those in Crystal Ball's day (its rows, most likely
- * first). `m` is null while Crystal Ball isn't known (still loading, or the member has no function
- * yet), so the page never prints a number it doesn't have. `ids`: the `m` companies, in Crystal
- * Ball's order.
- */
-export function foundNumbers(network: { id: string }[], crystal: { id: string }[] | null): { n: number; m: number | null; ids: string[] } {
-  const known = new Set(network.map((c) => c.id));
-  const ids = crystal ? [...new Set(crystal.map((r) => r.id).filter((id) => known.has(id)))] : [];
-  return { n: known.size, m: crystal ? ids.length : null, ids };
-}
 
 /** "58 seconds", "about 2 minutes": the measured time of the first read, in words. */
 export function tookWords(ms: number): string {

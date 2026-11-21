@@ -21,8 +21,11 @@
  * link); taking it off shows all companies. The three ranges are one tap each, with their counts.
  *
  * [google network] "Where you know someone": the list cut to the companies in the member's own
- * network (the rows that carry the "You know someone · Warm" chip). The connect moment's button
- * opens the page with it on; a chip beside the days turns it on and off. Nothing with RN_GOOGLE off.
+ * network (the rows that carry the "You know someone · Warm" chip); a chip beside the ranges turns
+ * it on and off. With it on and nobody known in the range on screen, the page moves to the next
+ * range that has companies (Today, then Last 7 days, then Last 30 days) instead of a blank list;
+ * with nobody known in any of them it says so and leads to Your network's warm paths, which are
+ * scored live for every company the member knows, not only the ones that moved. Nothing with RN_GOOGLE off.
  *
  * Signals: radar_opened once per tab when the page shows, radar_clicked when a row is opened.
  */
@@ -113,6 +116,7 @@ export function RadarPage({
   openCompany,
   know = false,
   onKnow,
+  onWarm,
 }: {
   view: RadarView | null;
   failed: string | null;
@@ -130,6 +134,8 @@ export function RadarPage({
   /** [google network] Only the companies where the member knows someone. */
   know?: boolean;
   onKnow?: (on: boolean) => void;
+  /** [google network] Your network's warm paths. */
+  onWarm?: () => void;
 }) {
   const ui = useUi();
   const [busy, setBusy] = useState(false);
@@ -139,6 +145,22 @@ export function RadarPage({
   const knownN = useMemo(() => dayRows.filter((r) => knownIds.has(r.i.c.id)).length, [dayRows, knownIds]);
   const knowOn = know && !!net;
   const rows = useMemo(() => (knowOn ? dayRows.filter((r) => knownIds.has(r.i.c.id)) : dayRows), [knowOn, dayRows, knownIds]);
+  // [google network] Turned on with nobody known in this range: the next wider range with companies, once each time it is turned on.
+  const widened = useRef<string | null>(null);
+  useEffect(() => {
+    if (!knowOn) {
+      widened.current = null;
+      return;
+    }
+    if (!view?.ready || !view.range || knownN > 0 || widened.current === "done") return;
+    const order: RadarRange[] = ["today", "7d", "30d"];
+    const at = order.indexOf(view.range);
+    const next = (view.ranges ?? []).find((r) => order.indexOf(r.range) > at && r.companies > 0);
+    if (next && widened.current !== next.range) {
+      widened.current = next.range;
+      onRange(next.range);
+    } else widened.current = "done";
+  }, [knowOn, view, knownN, onRange]);
   useEffect(() => {
     if (!openedSent) (openedSent = true), signal("radar_opened", "app");
   }, []);
@@ -263,7 +285,8 @@ export function RadarPage({
             </button>
           </span>
           {/* [google network] the day cut to where they know someone (nothing with RN_GOOGLE off, or when they know nobody in it). */}
-          {net && onKnow && (knowOn || knownN > 0) && (
+          {/* With nobody known in this range it still shows over a range: turned on, it moves to the range that has them. */}
+          {net && onKnow && (knowOn || knownN > 0 || (!!view.range && net.companies.some((c) => !c.set))) && (
             <button type="button" className={`chip rd-day rd-know${knowOn ? " chip-on" : ""}`} aria-pressed={knowOn} onClick={() => onKnow(!knowOn)}>
               Where you know someone
               <span className="num rd-day-n" aria-label={`, ${plural(knownN, "company", "companies")}`}>
@@ -311,14 +334,24 @@ export function RadarPage({
         </p>
       ) : !view.ready ? (
         <StartRadar reload={reload} />
-      ) : !n && knowOn && dayRows.length > 0 ? (
+      ) : !n && knowOn ? (
         <section className="tp-card rd-empty">
           <p className="rd-note">
-            Nobody you know is at a company in {yourFeature} {when}.{" "}
-            <button type="button" className="rd-link" onClick={() => onKnow?.(false)}>
-              Show all {dayRows.length}
-            </button>
+            Nobody you know is at a company in {yourFeature} {when}. {yourFeature} lists companies where something just moved; your warm paths on Your network are every company you
+            know that fits your profile or is likely to hire you.
           </p>
+          <div className="rd-know-acts">
+            {onWarm && (
+              <button type="button" className="btn btn-primary" onClick={onWarm}>
+                See your warm paths
+              </button>
+            )}
+            {dayRows.length > 0 && (
+              <button type="button" className="btn" onClick={() => onKnow?.(false)}>
+                Show all {dayRows.length} here
+              </button>
+            )}
+          </div>
         </section>
       ) : !n ? (
         <section className="tp-card rd-empty rd-empty-pic">

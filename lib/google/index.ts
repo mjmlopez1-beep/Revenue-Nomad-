@@ -10,10 +10,16 @@ import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { ActionError, isAdmin, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { functionOf, siteKey } from "../tableFields";
 import {
-  CLAUDE_ENTRIES_MAX, CLAUDE_NEW_DAILY, CLAUDE_SAVES_DAILY, NOT_SEATS_MAX, SEAT_MEETINGS, SEAT_MONTHS, SEAT_SURE_MEETINGS, SEAT_SURE_MONTHS, companyScore, isDecisionMaker, isFreeMail, mergeCompany, networkIds,
-  networkOn, warmthOf, warmthScore, WARMTH_RANK, domainOf,
-  type GoogleLink, type LinkView, type MemberNetwork, type NetCompany, type NetCompanyView, type NetPerson, type NetworkAnswer, type NetworkView, type SeatGuessView, type SourceData, type SyncStage,
+  CLAUDE_ENTRIES_MAX, CLAUDE_NEW_DAILY, CLAUDE_SAVES_DAILY, NOT_REL, NOT_REL_MAX, NOT_REL_WORDS, NOT_SEATS_MAX, SEAT_SURE_MEETINGS, SEAT_SURE_MONTHS, companyScore, companyTouch, companyWarmth, isDecisionMaker,
+  isFreeMail, mergeCompany, networkIds, networkOn, touchWords, warmthFor, warmthScore, WARMTH_RANK, domainOf,
+  type ClientView, type GoogleLink, type IntroView, type LinkView, type LoosePerson, type LooseView, type MemberNetwork, type NetCompany, type NetCompanyView, type NetPerson, type NetworkAnswer,
+  type NetworkView, type NotRelWhy, type SeatGuessView, type SetKind, type SetView, type SourceData, type SyncStage,
 } from "./types";
+import { domainName, judgeCompany, personKind, seatPattern } from "./judge";
+import { oddsFor } from "./odds";
+import { companyFacts } from "../radar/signals";
+import { icpIsEmpty, inIcp, warmthMultiplier } from "../radar/match";
+import { crystalCompanyIds } from "../radar";
 import {
   MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailTester, googleConfigured, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
 } from "./config";
@@ -277,9 +283,11 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
     }
     stages.set(memberId, "matching");
     await slow();
+    const auto = judgedAuto(seed, s, { ...n, ...(out.cal ? { cal: out.cal } : {}), ...(out.con ? { con: out.con } : {}), ...(out.gm ? { gm: out.gm } : {}) }, m, nowMs);
     await T.mutate((d) => {
       const cur = netOf(d, memberId);
       if (!cur) return;
+      cur.auto = auto;
       // Only what the same connection read: one made again (or removed) while this ran wins.
       if (cur.google && g && cur.google.connectedAt === g.connectedAt) {
         if (out.cal) cur.cal = out.cal;
@@ -307,6 +315,13 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
     syncing.delete(memberId);
     stages.delete(memberId);
   }
+}
+
+/** What Merlin sets aside in this network (internal id -> kind): a vendor, a recruiter, an investor. Kept with the read for Crystal Ball. */
+function judgedAuto(seed: Seed, s: State, n: MemberNetwork, m: Member, nowMs: number): Record<string, SetKind> {
+  const out: Record<string, SetKind> = {};
+  for (const c of companiesOf(seed, s, n, nowMs, m)) if (c.set?.by === "merlin") out[c.internal] = c.set.kind as SetKind;
+  return out;
 }
 
 /** Members due their daily sync, one at a time, at most once every 10 minutes per process. */
@@ -347,40 +362,102 @@ const linkView = (l: GoogleLink | undefined): LinkView | null =>
 
 const savesToday = (n: MemberNetwork | undefined, nowMs: number) => (n?.claude?.saves ?? []).filter((at) => nowMs - Date.parse(at) < DAY).length;
 
-/** The merged, matched companies of one member, warmest first. Names come from the table (the member knows them now). */
-export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, nowMs = Date.now()): (NetCompanyView & { internal: string })[] {
+/** The member's own seats, by company (internal ids): a seat that is theirs, or that they put their name on (still waiting to be confirmed). */
+function heldSeats(seed: Seed, s: State, m: Member, want: Set<string>): Map<string, { id: string; active: boolean }> {
+  const held = new Map<string, { id: string; active: boolean }>();
+  if (!want.size) return held;
+  const g = graphOf(seed, s);
+  const idx = T.memberIndex(seed, s);
+  for (const e of g.engagements.values()) {
+    if (!want.has(e.companyId)) continue;
+    const v = T.valueOf(e, s, "operator");
+    if (!v || v.status !== "live") continue;
+    if (v.memberId === m.id || T.seatHolder(s, idx, e.id, v)?.id === m.id) {
+      const active = T.live(e, s, "status") !== "Ended";
+      const was = held.get(e.companyId);
+      if (!was || (active && !was.active)) held.set(e.companyId, { id: T.pubId(e.id), active });
+    }
+  }
+  return held;
+}
+
+const personView = (p: NetPerson, hidden: Set<string>, domain: string | undefined, nowMs: number) => ({
+  name: p.name ?? null,
+  title: p.title ?? null,
+  email: p.email ?? null,
+  warmth: warmthFor(p, nowMs),
+  last: p.last ?? null,
+  next: p.next ?? null,
+  meetings: p.meetings ?? 0,
+  emails: p.emails ?? 0,
+  both: !!p.both,
+  dm: isDecisionMaker(p.title),
+  rel: p.rel ?? null,
+  src: p.src,
+  key: p.key,
+  why: touchWords(p, nowMs),
+  kind: personKind(p, domain),
+  org: p.org ?? null,
+  hidden: hidden.has(p.key),
+});
+
+/**
+ * The merged, matched companies of one member, warmest first. Names come from the table (the
+ * member knows them now). With `m`, each is also judged (lib/google/judge.ts: set aside as a
+ * vendor, a recruiter or an investor, or what the member said), placed against their profile,
+ * scored for their function (lib/google/odds.ts), marked when it is in their Crystal Ball, and
+ * read as a client when the calendar shows one (or their own seat is there).
+ */
+export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, nowMs = Date.now(), m?: Member): (NetCompanyView & { internal: string })[] {
   if (!n) return [];
   const g = graphOf(seed, s);
+  const ids = [...networkIds(n)].filter((id) => g.companies.has(id));
+  const prof = m ? s.profiles[m.id] ?? {} : {};
+  const fn = m ? (prof.function ?? null) : null;
+  const icp = prof.icp && !icpIsEmpty(prof.icp) ? prof.icp : null;
+  const odds = m ? oddsFor(seed, s, ids, fn, nowMs, icp) : new Map();
+  const ball = m ? crystalIdsOf(seed, s, m, nowMs) : new Set<string>();
+  const held = m ? heldSeats(seed, s, m, new Set(ids)) : new Map<string, { id: string; active: boolean }>();
+  const hiddenPeople = new Set(n.notPeople ?? []);
+  const isRel = new Set(n.isRel ?? []);
   const out: (NetCompanyView & { internal: string })[] = [];
-  for (const id of networkIds(n)) {
-    const node = g.companies.get(id);
-    const c = node ? mergeCompany(n, id) : null;
-    if (!node || !c) continue;
+  for (const id of ids) {
+    const node = g.companies.get(id)!;
+    const c = mergeCompany(n, id);
+    if (!c) continue;
     const score = companyScore(c, nowMs);
     const people = c.people
-      .map((p) => ({ p, sc: warmthScore(p, nowMs) }))
-      .sort((a, b) => b.sc - a.sc || (b.p.last ?? "").localeCompare(a.p.last ?? ""))
-      .map(({ p, sc }) => ({
-        name: p.name ?? null,
-        title: p.title ?? null,
-        email: p.email ?? null,
-        warmth: warmthOf(sc),
-        last: p.last ?? null,
-        next: p.next ?? null,
-        meetings: p.meetings ?? 0,
-        emails: p.emails ?? 0,
-        both: !!p.both,
-        dm: isDecisionMaker(p.title),
-        rel: p.rel ?? null,
-        src: p.src,
-      }));
-    const months = c.months ?? [];
+      .map((p) => ({ p, sc: warmthScore(p, nowMs), w: warmthFor(p, nowMs) }))
+      .sort((a, b) => WARMTH_RANK[a.w] - WARMTH_RANK[b.w] || b.sc - a.sc || (b.p.last ?? "").localeCompare(a.p.last ?? ""))
+      .map(({ p }) => personView(p, hiddenPeople, c.domain, nowMs));
+    const facts = { industry: T.live(node, s, "industry"), employees: T.live(node, s, "employees") };
+    const mine = held.get(id);
+    const said = n.notRel?.[id];
+    const judged = judgeCompany(c, facts, { mine: !!mine, nowMs });
+    const set: SetView | null = said
+      ? { kind: said, why: NOT_REL_WORDS[said], by: "you" }
+      : judged && !isRel.has(id)
+        ? { kind: judged.kind, why: judged.why, by: "merlin" }
+        : null;
+    const pattern = seatPattern(c, nowMs);
+    const client: ClientView | null =
+      (pattern?.active && !said) || mine?.active
+        ? {
+            from: pattern?.from ?? c.months?.[0] ?? (c.first ?? "").slice(0, 7),
+            to: pattern?.to ?? c.months?.[c.months.length - 1] ?? (c.last ?? "").slice(0, 7),
+            meetings: c.meetings ?? 0,
+            months: pattern?.months ?? (c.months?.length ?? 0),
+            active: true,
+            seat: mine?.id ?? null,
+          }
+        : null;
+    const cf = icp ? companyFacts(g, s, id) : null;
     out.push({
       id: T.pubId(id),
       internal: id,
       name: node.name,
       site: siteKey(T.live(node, s, "website")),
-      warmth: warmthOf(score),
+      warmth: companyWarmth(c, nowMs),
       score,
       last: c.last ?? people.map((p) => p.last).filter(Boolean).sort().pop() ?? null,
       next: c.next ?? null,
@@ -391,10 +468,135 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
       src: [...new Set(people.flatMap((p) => p.src))],
       people,
       more: c.more ?? 0,
-      seat: months.length >= SEAT_MONTHS && (c.meetings ?? 0) >= SEAT_MEETINGS ? { from: months[0], to: months[months.length - 1] } : null,
+      seat: pattern ? { from: pattern.from, to: pattern.to } : null,
+      industry: facts.industry,
+      employees: facts.employees,
+      touch: touchWords(companyTouch(c), nowMs),
+      set,
+      fit: icp && cf ? inIcp(icp, cf) : null,
+      odds: odds.get(id) ?? null,
+      ball: ball.has(id),
+      client,
     });
   }
   return out.sort((a, b) => WARMTH_RANK[a.warmth] - WARMTH_RANK[b.warmth] || b.score - a.score || a.name.localeCompare(b.name));
+}
+
+/** Crystal Ball's companies for the member (every day it keeps), per state. */
+const ballMemo = new WeakMap<State, Map<string, Set<string>>>();
+function crystalIdsOf(seed: Seed, s: State, m: Member, nowMs: number): Set<string> {
+  let per = ballMemo.get(s);
+  if (!per) ballMemo.set(s, (per = new Map()));
+  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}`;
+  let hit = per.get(k);
+  if (!hit) {
+    try {
+      hit = crystalCompanyIds(seed, s, m, nowMs);
+    } catch {
+      hit = new Set();
+    }
+    per.set(k, hit);
+  }
+  return hit;
+}
+
+/**
+ * Warm paths into companies likely to hire the member, best first: companies in their network that
+ * are a relationship (not set aside, not their client now) and fit their profile, read Medium or
+ * High for their function, or are in their Crystal Ball. Ranked by how likely, then how warm, then
+ * the fit. The page lists exactly these, and every count of them is this list's length.
+ */
+export function warmPaths(list: NetCompanyView[]): string[] {
+  const rank = (c: NetCompanyView) => {
+    const o = c.odds?.score ?? 0;
+    const base = Math.max(o, c.ball ? 0.1 : 0, c.fit ? 0.03 : 0);
+    return base * (c.fit === false ? 0.75 : 1) * warmthMultiplier(c.warmth);
+  };
+  return list
+    // A saved contact alone (Cold) is a path only where the company is likely to hire: fit alone needs someone you have met or written to.
+    .filter((c) => !c.set && !c.client && ((c.fit === true && c.warmth !== "Cold") || c.ball || c.odds?.band === "High" || c.odds?.band === "Medium"))
+    .map((c) => ({ c, r: rank(c) }))
+    .sort((a, b) => b.r - a.r || WARMTH_RANK[a.c.warmth] - WARMTH_RANK[b.c.warmth] || b.c.score - a.c.score || a.c.name.localeCompare(b.c.name))
+    .map((x) => x.c.id);
+}
+
+const INVESTOR_OPENS =
+  "Investors back companies and introduce people to them. Merlin doesn't know which companies they back: ask what they see in their portfolio.";
+const fractionalOpens = (title: string | null) => {
+  const f = title ? functionOf(title) : null;
+  return `${f ? `A fractional ${f} leader` : "Another fractional"}. Fractionals pass along work outside their own function and know who is hiring. Merlin doesn't know their clients unless they are on Merlin: ask.`;
+};
+
+/** People who can introduce the member: investors and other fractionals, from their companies and the people at no company on Merlin. */
+function introsOf(list: NetCompanyView[], loose: LooseView[]): IntroView[] {
+  const out: IntroView[] = [];
+  const seen = new Set<string>();
+  const push = (x: IntroView) => {
+    if (seen.has(x.key)) return;
+    seen.add(x.key);
+    out.push(x);
+  };
+  for (const c of list) {
+    if (c.set?.by === "you") continue;
+    const investorCo = c.set?.kind === "investor";
+    for (const p of c.people) {
+      if (p.hidden || !p.name) continue;
+      const kind = investorCo || p.kind === "investor" ? "investor" : p.kind === "fractional" ? "fractional" : null;
+      if (!kind) continue;
+      push({ key: p.key, name: p.name, title: p.title, org: c.name, kind, warmth: p.warmth, why: p.why, email: p.email, companyId: c.id, opens: kind === "investor" ? INVESTOR_OPENS : fractionalOpens(p.title), src: p.src });
+    }
+  }
+  for (const p of loose) {
+    if (p.hidden || !p.name || (p.kind !== "investor" && p.kind !== "fractional")) continue;
+    push({ key: p.key, name: p.name, title: p.title, org: p.org ?? domainName(p.domain), kind: p.kind, warmth: p.warmth, why: p.why, email: p.email, companyId: null, opens: p.kind === "investor" ? INVESTOR_OPENS : fractionalOpens(p.title), src: p.src });
+  }
+  return out.sort((a, b) => WARMTH_RANK[a.warmth] - WARMTH_RANK[b.warmth] || a.name.localeCompare(b.name));
+}
+
+/** The member's people at no company on Merlin, merged across sources, warmest first. */
+function looseOf(n: MemberNetwork | undefined, nowMs: number): LooseView[] {
+  if (!n) return [];
+  const hidden = new Set(n.notPeople ?? []);
+  const by = new Map<string, LoosePerson>();
+  for (const src of [n.cal, n.con, n.gm]) {
+    for (const p of src?.loose ?? []) {
+      const was = by.get(p.key);
+      if (!was) {
+        by.set(p.key, { ...p, src: [...p.src] });
+        continue;
+      }
+      if (p.src.includes("contacts")) {
+        if (p.name) was.name = p.name;
+        if (p.title) was.title = p.title;
+        if (p.org) was.org = p.org;
+      } else was.name ??= p.name;
+      was.meetings = (was.meetings ?? 0) + (p.meetings ?? 0) || undefined;
+      was.upcoming = (was.upcoming ?? 0) + (p.upcoming ?? 0) || undefined;
+      was.emails = Math.max(was.emails ?? 0, p.emails ?? 0) || undefined;
+      was.both = was.both || p.both || undefined;
+      was.saved = was.saved || p.saved || undefined;
+      if (p.first && (!was.first || p.first < was.first)) was.first = p.first;
+      if (p.last && (!was.last || p.last > was.last)) was.last = p.last;
+      if (p.next && (!was.next || p.next < was.next)) was.next = p.next;
+      for (const x of p.src) if (!was.src.includes(x)) was.src.push(x);
+    }
+  }
+  return [...by.values()]
+    .map((p) => ({ p, w: warmthFor(p, nowMs), sc: warmthScore(p, nowMs) }))
+    .sort((a, b) => WARMTH_RANK[a.w] - WARMTH_RANK[b.w] || b.sc - a.sc)
+    .map(({ p, w }) => ({
+      key: p.key,
+      name: p.name ?? null,
+      title: p.title ?? null,
+      org: p.org ?? null,
+      domain: p.domain ?? null,
+      email: p.email ?? null,
+      warmth: w,
+      why: touchWords(p, nowMs),
+      kind: personKind(p, p.domain),
+      hidden: hidden.has(p.key),
+      src: p.src,
+    }));
 }
 
 /** YYYY-MM of the month before `nowMs` (UTC). */
@@ -402,33 +604,19 @@ const lastMonth = (nowMs: number) => {
   const d = new Date(nowMs);
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 15)).toISOString().slice(0, 7);
 };
-const monthsBetween = (from: string, to: string) => {
-  const [fy, fm] = from.split("-").map(Number);
-  const [ty, tm] = to.split("-").map(Number);
-  return Math.max(1, (ty - fy) * 12 + (tm - fm) + 1);
-};
 
 /**
- * "We think you held these seats": the member's own companies with months of meetings
- * (NetCompanyView.seat), less the ones where a seat is already theirs or carries their name, and
- * the ones they said were "Not a seat". Most meetings first. It reads only the member's own
- * network and their own seats, and adds nothing: Confirm is the member's own Add (lib/table.ts).
+ * "We think you held these seats": the member's own companies with months of regular meetings
+ * (seatPattern), less the ones where a seat is already theirs or carries their name, the ones they
+ * said were "Not a seat", and the ones set aside (a vendor's account manager meets monthly too).
+ * Most meetings first. It reads only the member's own network and their own seats, and adds
+ * nothing: Confirm is the member's own Add (lib/table.ts).
  */
 export function seatGuessesOf(seed: Seed, s: State, m: Member, list: (NetCompanyView & { internal: string })[], n: MemberNetwork | undefined, nowMs = Date.now()): SeatGuessView[] {
   const no = new Set(n?.notSeats ?? []);
-  const maybe = list.filter((c) => c.seat && !no.has(c.internal));
+  const maybe = list.filter((c) => c.seat && !no.has(c.internal) && !c.set);
   if (!maybe.length) return [];
-  const want = new Set(maybe.map((c) => c.internal));
-  const g = graphOf(seed, s);
-  const idx = T.memberIndex(seed, s);
-  // A seat there that is theirs, or that they put their name on (still waiting to be confirmed).
-  const held = new Set<string>();
-  for (const e of g.engagements.values()) {
-    if (!want.has(e.companyId) || held.has(e.companyId)) continue;
-    const v = T.valueOf(e, s, "operator");
-    if (!v || v.status !== "live") continue;
-    if (v.memberId === m.id || T.seatHolder(s, idx, e.id, v)?.id === m.id) held.add(e.companyId);
-  }
+  const held = heldSeats(seed, s, m, new Set(maybe.map((c) => c.internal)));
   const prof = s.profiles[m.id] ?? {};
   const title = (prof.title || (m.title === "Member" ? "" : m.title) || "").trim();
   const fn = prof.function ?? functionOf(title) ?? null;
@@ -460,6 +648,11 @@ export function seatGuessesOf(seed: Seed, s: State, m: Member, list: (NetCompany
     })
     .sort((a, b) => Number(b.sure) - Number(a.sure) || b.meetings - a.meetings || a.name.localeCompare(b.name));
 }
+const monthsBetween = (from: string, to: string) => {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return Math.max(1, (ty - fy) * 12 + (tm - fm) + 1);
+};
 
 /** GET /api/integrations/google: the member's own network. { on: false } when RN_GOOGLE is off. */
 export async function networkView(token: string | null, nowMs = Date.now()): Promise<NetworkAnswer | null> {
@@ -467,9 +660,10 @@ export async function networkView(token: string | null, nowMs = Date.now()): Pro
   const w = await who(token);
   if (!w) return null;
   const n = netOf(w.s, w.m.id);
-  const all = companiesOf(w.seed, w.s, n, nowMs);
+  const all = companiesOf(w.seed, w.s, n, nowMs, w.m);
   const companies = all.map(({ internal: _i, ...c }) => c); // eslint-disable-line @typescript-eslint/no-unused-vars
   const srcs = [n?.cal, n?.con, n?.gm, n?.claude];
+  const loose = looseOf(n, nowMs);
   const view: NetworkView = {
     on: true,
     configured: googleConfigured(),
@@ -485,6 +679,10 @@ export async function networkView(token: string | null, nowMs = Date.now()): Pro
     companies,
     seats: seatGuessesOf(w.seed, w.s, w.m, all, n, nowMs),
     stats: { unmatched: srcs.reduce((a, x) => a + (x?.unmatched ?? 0), 0), real: Math.max(n?.cal?.real ?? 0, n?.gm?.real ?? 0) },
+    fn: w.s.profiles[w.m.id]?.function ?? null,
+    warm: warmPaths(companies),
+    intros: introsOf(companies, loose),
+    loose,
   };
   return view;
 }
@@ -531,6 +729,52 @@ export async function notASeat(token: string | null, companyId: unknown): Promis
     if (!n) return;
     const list = (n.notSeats ?? []).filter((x) => x !== hit.internal);
     n.notSeats = [...list, hit.internal].slice(-NOT_SEATS_MAX);
+  });
+  return (await networkView(token))!;
+}
+
+export type MarkAs = NotRelWhy | "rel" | "undo";
+/**
+ * "Not a relationship" on a company (a vendor, a recruiter, a one-off, their own firm) or a person,
+ * "It is a relationship" on what Merlin set aside, and Undo of either. Remembered for this member
+ * across reads; nothing else changes (no seat, no credit, nothing another member sees). `company`
+ * is a public id in their own network; `person` a person's key in it (or among their people at no
+ * company on Merlin).
+ */
+export async function markNetwork(token: string | null, q: { company?: unknown; person?: unknown; as?: unknown }): Promise<NetworkAnswer> {
+  const w = await who(token);
+  if (!w) throw new ActionError(SIGNED_OUT);
+  if (!networkOn()) throw new ActionError("Your network isn't on for Merlin yet.");
+  const as = String(q.as ?? "");
+  if (!(NOT_REL as readonly string[]).includes(as) && as !== "rel" && as !== "undo") throw new ActionError("That didn't go through. Refresh the page and try again.");
+  const n0 = netOf(w.s, w.m.id);
+  if (typeof q.person === "string" && q.person) {
+    const key = q.person.slice(0, 200);
+    const known = companiesOf(w.seed, w.s, n0).some((c) => c.people.some((p) => p.key === key)) || looseOf(n0, Date.now()).some((p) => p.key === key);
+    if (!known) throw new ActionError("That person isn't in your network any more. Refresh the page.");
+    await T.mutate((s) => {
+      const n = netOf(s, w.m.id);
+      if (!n) return;
+      const list = (n.notPeople ?? []).filter((x) => x !== key);
+      n.notPeople = as === "undo" || as === "rel" ? list : [...list, key].slice(-NOT_REL_MAX);
+    });
+    return (await networkView(token))!;
+  }
+  const pub = typeof q.company === "string" ? q.company.slice(0, 80) : "";
+  const hit = pub ? companiesOf(w.seed, w.s, n0).find((c) => c.id === pub) : undefined;
+  if (!hit) throw new ActionError("That company isn't in your network any more. Refresh the page.");
+  await T.mutate((s) => {
+    const n = netOf(s, w.m.id);
+    if (!n) return;
+    const rel = (n.isRel ?? []).filter((x) => x !== hit.internal);
+    const not = { ...(n.notRel ?? {}) };
+    delete not[hit.internal];
+    if (as === "rel") rel.push(hit.internal);
+    else if (as !== "undo") not[hit.internal] = as as NotRelWhy;
+    n.isRel = rel.slice(-NOT_REL_MAX);
+    const keys = Object.keys(not);
+    for (const k of keys.slice(0, Math.max(0, keys.length - NOT_REL_MAX))) delete not[k];
+    n.notRel = not;
   });
   return (await networkView(token))!;
 }
@@ -734,10 +978,25 @@ export async function myNetworkForClaude(member: Member, nowMs = Date.now()) {
   if (!networkOn()) throw new NetworkProblem("Your network isn't on for Merlin yet.");
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const n = netOf(s, member.id);
-  const list = companiesOf(seed, s, n, nowMs);
+  const list = companiesOf(seed, s, n, nowMs, member);
   const seats = seatGuessesOf(seed, s, member, list, n, nowMs);
+  const byPub = new Map(list.map((c) => [c.id, c]));
+  const warm = warmPaths(list)
+    .map((id) => byPub.get(id)!)
+    .slice(0, 25);
   return {
     companies_you_know_people_at: list.length,
+    // The same list Your network opens on, in its order (never who the member knows there).
+    warm_paths: warm.map((c) => ({
+      company_id: c.id,
+      company: c.name,
+      warmth: c.warmth,
+      ...(c.odds && c.odds.score > 0 ? { likely_to_hire: c.odds.band, why_now: c.odds.why } : {}),
+      ...(c.fit ? { fits_profile: true } : {}),
+      ...(c.ball ? { in_crystal_ball: true } : {}),
+    })),
+    warm_paths_note:
+      "Companies the member knows someone at that fit their profile or are likely to hire their function (Crystal Ball's likelihood, scored live). On Merlin, Your network lists each with the person to write to.",
     google: n?.google ? (n.google.status === "reconnect" ? "Needs reconnecting on Merlin" : "Connected") : "Not connected",
     companies: list.slice(0, 100).map((c) => ({
       company_id: c.id,
@@ -749,6 +1008,9 @@ export async function myNetworkForClaude(member: Member, nowMs = Date.now()) {
       people: c.people.length + c.more,
       decision_makers: c.people.filter((p) => p.dm).length,
       sources: c.src,
+      // Merlin's reason can name the person met (a title on their contact): the connector says only what kind it is.
+      ...(c.set ? { set_aside: c.set.by === "you" ? `the member said: ${c.set.why.toLowerCase()}` : c.set.kind === "vendor" ? "looks like someone selling to the member" : c.set.kind === "recruiter" ? "looks like a recruiter" : "looks like an investor" } : {}),
+      ...(c.client ? { client_now: true } : {}),
     })),
     // The same guesses Your seats shows as "We think you held these seats" (never who they met there).
     ...(seats.length

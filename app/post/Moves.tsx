@@ -179,7 +179,7 @@ export function MovesSection({
       )}
       {/* A phone keeps its first screen for the first move: the link to the whole day sits under the moves there. */}
       {dayN > 0 && <div className="mv-all mv-all-foot">{all}</div>}
-      {(month > 0 || now?.google === "connect") && (
+      {(month > 0 || now?.google === "connect" || !!now?.warm) && (
         <div className="mv-foot">
           {month > 0 && (
             <p className="mv-tally num">
@@ -189,6 +189,14 @@ export function MovesSection({
           {now?.google === "connect" && (
             <p className="mv-google">
               <GoLink to={integrations}>Connect Google to see who you already know at these companies</GoLink>
+            </p>
+          )}
+          {/* [google network] Beyond today's moves: every company they know that is likely to hire them. */}
+          {now?.google === "on" && !!now.warm && (
+            <p className="mv-google">
+              <button type="button" className="mv-link" onClick={() => ui.openPage("network")}>
+                {now.warm === 1 ? "Your warm path" : `Your ${now.warm} warm paths`} into companies likely to hire you
+              </button>
             </p>
           )}
         </div>

@@ -21,7 +21,7 @@ const lowerFirst = (v: string) => (/^[A-Z][a-z]/.test(v) ? v.charAt(0).toLowerCa
 
 /* ---------- the drafted note ---------- */
 
-export type NoteKind = "know" | "intro" | "holderMessage" | "holderInvite" | "role" | "roleCold";
+export type NoteKind = "know" | "intro" | "holderMessage" | "holderInvite" | "role" | "roleCold" | "ask";
 
 /** Every fact a note may use. Each one is on the member's own screen already. */
 export interface NoteFacts {
@@ -42,6 +42,8 @@ export interface NoteFacts {
   role: string | null;
   /** The seat's claim link with the member's invite code, for an invite to connect. */
   link: string | null;
+  /** "ask" (Your network's People who can introduce you): who they are to the member, an investor or another fractional. */
+  via?: "investor" | "fractional";
 }
 
 /** A role's title as a note may say it: no bracket, no rate, no company after "at". */
@@ -214,6 +216,29 @@ function template(f: NoteFacts): Template {
           },
         ],
         short: [1, 2, 4],
+      };
+    }
+    case "ask": {
+      // Asking someone who can introduce the member to companies they know: what Merlin knows is who they are, never who they know.
+      const where = f.via === "investor" ? "across the companies you back" : "through your clients";
+      return {
+        subject: "An introduction?",
+        sentences: [
+          since,
+          {
+            casual: `I'm taking on a new client as ${me}${f.me.clients ? `, ideally ${f.me.clients}` : ""}.`,
+            neutral: `I'm taking on a new client as ${me}${f.me.clients ? `, ideally ${f.me.clients}` : ""}.`,
+            formal: `I'm taking on a new client as ${me}${f.me.clients ? `, ideally ${f.me.clients}` : ""}.`,
+          },
+          { casual: `You see a lot of teams ${where}.`, neutral: `You see a lot of teams ${where}.`, formal: `You see a great many teams ${where}.` },
+          {
+            casual: `If one of them needs ${fn ?? "senior"} help part-time, I'd love an intro.`,
+            neutral: `If one of them needs ${fn ?? "senior"} help part-time, I'd be grateful for an introduction.`,
+            formal: `If one of them would benefit from part-time ${fn ?? "senior"} leadership, I'd be grateful for an introduction.`,
+          },
+          { casual: "Anyone come to mind? Happy to return the favor.", neutral: "Does anyone come to mind? I'm glad to return the favor.", formal: "Does anyone come to mind? I'd be glad to return the favor." },
+        ],
+        short: [1, 3, 4],
       };
     }
     case "roleCold": {
