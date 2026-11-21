@@ -35,6 +35,8 @@ export async function runDueJobs(origin?: string, nowMs = Date.now()): Promise<R
     websites: () => (websitesEnabled() ? import("./websites/run").then((m) => m.maybeWebsites({ nowMs })) : false),
   };
   const out = {} as Record<JobId, boolean>;
+  // Not a job of its own: Google access removed 30 days ago means Merlin deletes what it read from it (lib/google expireRevoked).
+  await expireGoogle(nowMs);
   await Promise.all(
     JOBS.map(async (job) => {
       try {
@@ -46,6 +48,17 @@ export async function runDueJobs(origin?: string, nowMs = Date.now()): Promise<R
     }),
   );
   return out;
+}
+
+/** With any member's Google connection on file, delete what a connection whose access was removed 30 days ago read. Never throws. */
+async function expireGoogle(nowMs: number): Promise<void> {
+  try {
+    const s = await loadState();
+    if (!s.network || !Object.keys(s.network).length) return;
+    await (await import("./google")).expireRevoked(nowMs);
+  } catch (e) {
+    console.error("Google expiry check failed", e instanceof Error ? e.message : "error");
+  }
 }
 
 /** The scheduler's look (POST /api/table/jobs from its own timer): run the due checks, with the address saved from members' visits. */

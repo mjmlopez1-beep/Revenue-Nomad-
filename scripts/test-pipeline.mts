@@ -27,7 +27,11 @@
  *   - Won: the proposal hook, the terms, Add it as your seat prefilled (credits as usual), the seat
  *     confirmed by the win, and a seat added at an open deal is itself the win;
  *   - intros: asked in a conversation, seen and marked made by the other member, credited on the win;
- *   - the connector: my_pipeline, and update_pipeline limited to Lost, Not now and notes.
+ *   - the connector: my_pipeline, and update_pipeline limited to Lost, Not now and notes;
+ *   - deleting what came from Google: Disconnect and delete everything leaves no name, email or
+ *     title from the fake Google anywhere in the state, removes the entry only Gmail opened and
+ *     keeps every entry she acted on at its stage and dates; access removed at Google (Gmail's
+ *     own, then the whole grant) keeps everything 29 days and deletes it at 30, the clock injected.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -144,6 +148,8 @@ const anaMsgs = [
 ];
 
 const calls: { path: string; query: URLSearchParams }[] = [];
+/** Refresh tokens whose access the member removed at Google. */
+const dead = new Set<string>();
 const GRANT_MAIN = "openid email https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/contacts.readonly";
 const idToken = (email: string) => `x.${Buffer.from(JSON.stringify({ email, email_verified: true })).toString("base64url")}.y`;
 const CODES: Record<string, { refresh: string; scope: string; email: string }> = {
@@ -168,9 +174,13 @@ const google = createServer(async (req: IncomingMessage, res: ServerResponse) =>
       if (!c) return send(res, 400, { error: "invalid_grant" });
       return send(res, 200, { access_token: `ACCESS-${c.refresh}`, expires_in: 3600, refresh_token: c.refresh, scope: c.scope, id_token: idToken(c.email) });
     }
+    // Access removed in the member's Google Account: Google answers invalid_grant.
+    if (dead.has(body.get("refresh_token") ?? "")) return send(res, 400, { error: "invalid_grant", error_description: "Token has been expired or revoked." });
     return send(res, 200, { access_token: `ACCESS-${body.get("refresh_token")}`, expires_in: 3600 });
   }
+  if (p === "/oauth2/revoke") return send(res, 200, {});
   const tok = (req.headers.authorization ?? "").replace(/^Bearer ACCESS-/, "");
+  if (dead.has(tok)) return send(res, 401, { error: { status: "UNAUTHENTICATED" } });
   const isBo = tok.includes("-bo-");
   if (p === "/calendar/calendar/v3/users/me/calendarList") return send(res, 200, { items: [] });
   if (p.startsWith("/calendar/calendar/v3/calendars/")) return send(res, 200, { items: isBo ? boEvents : anaEvents });
@@ -571,6 +581,88 @@ async function main() {
   check("intros: asked, made, and the one that led to a win", stats.intros.made === 1 && stats.intros.won === 1 && stats.intros.asked >= 1, stats.intros);
   check("what it was detected from, counted", stats.detected.gmail >= 2 && stats.detected.calendar >= 1 && stats.detected.message >= 2 && stats.detected.proposal >= 2 && stats.detected.seat === 1, stats.detected);
   check("counts and sums only: no name, company, note or address", !has(stats, ["Ana", "Cy", "Larkfield", "Harborline", "7731", "@", "c_", "mem_"]).length, has(stats, ["Ana", "Larkfield", "c_", "mem_"]));
+
+  /* ================= deleting what came from Google ================= */
+  // Everyone the fake Google gave Merlin for Ana (Gmail headers, calendar guests), and a name and title she marked as from her Google account.
+  const GOOGLE_PEOPLE = ["Kit Example", "kit@dune.example", "Oli Example", "oli@outer.example", "Dana Whitfield", "dana@lark.example", "Priya Raman", "priya@corvid.example", "Ivy Investor", "Director of Operations"];
+  const anaState = () => JSON.stringify({ network: JSON.parse(stateFile()).network?.mem_ana ?? null, pipeline: JSON.parse(stateFile()).pipeline?.mem_ana ?? null });
+  const raw = (companyId: string) => (JSON.parse(stateFile()).pipeline.mem_ana.entries as import("../lib/pipeline").PipelineEntry[]).find((e) => e.companyId === companyId);
+  const ballAdd = (c: string) =>
+    T.tableInternals.mutate((s) => {
+      s.radar!.members.mem_ana.days![today].push(row("mem_ana", c) as never);
+    });
+  // Outerbank joins her Crystal Ball, so the email out to Oli opens an entry by itself: Gmail's alone.
+  await ballAdd("c_outr");
+  await sync("mem_ana");
+  const outr0 = await at(ANA, "c_outr");
+  check("set-up: Gmail opens an entry at Outerbank by itself, to Oli, and she does nothing with it", outr0?.source === "gmail" && outr0.to.name === "Oli Example" && outr0.notes.length === 0, outr0);
+  check("set-up: every one of those people is in her state before", GOOGLE_PEOPLE.every((w) => stateFile().includes(w)), GOOGLE_PEOPLE.filter((w) => !stateFile().includes(w)));
+  const stages0 = Object.fromEntries((await view(ANA)).entries.map((e) => [e.company, { stage: e.stage, dates: e.dates }]));
+  const larkRaw0 = raw("c_lark")!;
+
+  console.log("\nDisconnect and delete everything: the pipeline too");
+  await G.disconnectAll(ANA);
+  const s1 = stateFile();
+  check("no name, email or title from Google is left anywhere in the state", !has(s1, GOOGLE_PEOPLE).length, has(s1, GOOGLE_PEOPLE));
+  check("her network is gone, Bo's stays", !JSON.parse(s1).network?.mem_ana && !!JSON.parse(s1).network?.mem_bo);
+  const av1 = await view(ANA);
+  check("the entry only Gmail opened (Outerbank) is gone", !av1.entries.some((e) => e.company === pub("c_outr")));
+  const kept = ["c_lark", "c_corv", "c_salt", "c_tall", "c_harb", "c_copp", "c_pine", "c_bfin", "c_dune"];
+  check(
+    "every entry she acted on stays, at the same stage with the same dates",
+    kept.every((c) => {
+      const e = av1.entries.find((x) => x.company === pub(c));
+      return !!e && e.stage === stages0[pub(c)].stage && JSON.stringify(e.dates) === JSON.stringify(stages0[pub(c)].dates);
+    }),
+    kept.map((c) => [c, av1.entries.find((x) => x.company === pub(c))?.stage, stages0[pub(c)]?.stage]),
+  );
+  const lark1 = av1.entries.find((e) => e.company === pub("c_lark"))!;
+  const larkRaw1 = raw("c_lark")!;
+  check(
+    "Larkfield: Replied, sent from her note, without Dana's name and title, Gmail's mark or Gmail's times",
+    lark1.stage === "replied" && lark1.via.sent === "note" && !lark1.via.replied && !lark1.to.name && !lark1.to.role && !lark1.to.google && !larkRaw1.seen.in && !larkRaw1.seen.out && larkRaw0.seen.in !== undefined && !larkRaw1.log.some((l) => /Gmail/.test(l.text)) && larkRaw1.follow === larkRaw0.follow && larkRaw1.due === larkRaw0.due,
+    { lark1, seen: larkRaw1.seen, log: larkRaw1.log },
+  );
+  const corv1 = raw("c_corv")!;
+  check("Corvid: still Meeting, without the calendar's mark, its meeting days or Priya", corv1.stage === "meeting" && !corv1.via.meeting && !corv1.seen.met && !corv1.seen.next && !corv1.to.name && !corv1.log.some((l) => /calendar/.test(l.text)), corv1);
+  const dune1 = raw("c_dune")!;
+  check("Dune: Gmail opened it but she added a note, so it stays, with her note, without Kit or Gmail's mark", !!dune1 && dune1.notes.some((n) => n.text.includes("4410")) && !dune1.to.name && !dune1.via.sent && dune1.source !== "gmail" && dune1.stage === stages0[pub("c_dune")].stage, dune1);
+  check("what Merlin itself knows stays: the seat holder she messaged, her own notes, the Won terms", raw("c_salt")!.to.name === "Hana Holder" && raw("c_tall")!.to.name === "Pella Quist" && raw("c_tall")!.notes.some((n) => n.text.includes("7731")) && raw("c_harb")!.won?.rate === 175 && raw("c_copp")!.to.name === "Rory Example");
+  const intros1 = (await view(ANA)).intros;
+  check("intros stay: the one through Cy as it was, the ask of someone from her Google account without their name", intros1.some((i) => i.who === "Cy Introducer" && i.status === "made") && intros1.some((i) => i.company === null && i.who === "Someone you know"), intros1.map((i) => [i.who, i.status]));
+  check("Bo's pipeline and network are untouched", (await view(BO)).entries.length === 0 && !!JSON.parse(s1).network.mem_bo.google);
+
+  console.log("\nAccess removed at Google: kept 29 days, deleted at 30");
+  check("Ana connects again", (await fin(ANA, "code-ana")).outcome === "connected" && (await fin(ANA, "code-ana-gmail", "gmail")).outcome === "gmail");
+  await sync("mem_ana");
+  check("set-up: Gmail opens Outerbank again, to Oli", (await at(ANA, "c_outr"))?.to.name === "Oli Example");
+  const T0 = Date.now();
+  // Gmail's own access ends (test access lasts 7 days), Calendar and Contacts carry on.
+  dead.add("REFRESH-anagm-secret");
+  await G.syncMember("mem_ana", T0);
+  const v0 = (await G.networkView(ANA, T0 + DAY)) as import("../lib/google/types").NetworkView;
+  check("Gmail needs reconnecting, with the day it was found and the day it goes", v0.gmail?.status === "reconnect" && v0.gmail.goneAt === new Date(T0).toISOString() && v0.gmail.deleteOn === new Date(T0 + 30 * DAY).toISOString().slice(0, 10) && v0.google?.status === "ok" && v0.google.goneAt === null, v0.gmail);
+  check("29 days on: nothing deleted", (await G.expireRevoked(T0 + 29 * DAY)) === 0 && stateFile().includes("oli@outer.example") && !!(await at(ANA, "c_outr")));
+  check("30 days on: Gmail and what it found go, Calendar stays", (await G.expireRevoked(T0 + 30 * DAY)) === 1 && !stateFile().includes("oli@outer.example") && !stateFile().includes("Oli Example") && !JSON.parse(stateFile()).network.mem_ana.gm && !JSON.parse(stateFile()).network.mem_ana.gmail && !!JSON.parse(stateFile()).network.mem_ana.cal);
+  check("and the entry only Gmail opened goes with it", !(await at(ANA, "c_outr")));
+  // Then she removes Merlin in her Google Account.
+  dead.add("REFRESH-ana-secret");
+  await G.syncMember("mem_ana", T0);
+  const v1 = (await G.networkView(ANA, T0 + 2 * DAY)) as import("../lib/google/types").NetworkView;
+  check("Google needs reconnecting, removed on the day Merlin found it, deleted 30 days later", v1.google?.status === "reconnect" && v1.google.goneAt === new Date(T0).toISOString() && v1.google.deleteOn === new Date(T0 + 30 * DAY).toISOString().slice(0, 10), v1.google);
+  const v29 = (await G.networkView(ANA, T0 + 29 * DAY)) as import("../lib/google/types").NetworkView;
+  check("29 days on: her network is still there, and the state still has Priya from her calendar", v29.google?.status === "reconnect" && v29.companies.some((c) => c.name === "Corvid Health") && stateFile().includes("priya@corvid.example") && (await G.expireRevoked(T0 + 29 * DAY)) === 0);
+  const stages29 = Object.fromEntries((await view(ANA)).entries.map((e) => [e.company, e.stage]));
+  const v30 = (await G.networkView(ANA, T0 + 30 * DAY)) as import("../lib/google/types").NetworkView;
+  const s30 = stateFile();
+  check("30 days on: deleted before it is shown, nothing of it left anywhere in her state", !v30.google && v30.companies.length === 0 && !JSON.parse(s30).network?.mem_ana && !has(anaState(), GOOGLE_PEOPLE).length && !has(s30, GOOGLE_PEOPLE).length, has(s30, GOOGLE_PEOPLE));
+  const av30 = await view(ANA);
+  check("her pipeline keeps every deal she acted on, at the same stage", kept.every((c) => av30.entries.find((e) => e.company === pub(c))?.stage === stages29[pub(c)]), kept.map((c) => [c, av30.entries.find((e) => e.company === pub(c))?.stage, stages29[pub(c)]]));
+  // Bo removes access too: the automatic jobs' check deletes his after 30 days.
+  dead.add("REFRESH-bo-secret");
+  await G.syncMember("mem_bo", T0);
+  check("Bo: kept 29 days, then deleted by the check the automatic jobs run", (await G.expireRevoked(T0 + 29 * DAY)) === 0 && !!JSON.parse(stateFile()).network?.mem_bo && (await G.expireRevoked(T0 + 30 * DAY)) === 1 && !JSON.parse(stateFile()).network?.mem_bo);
+  check("lib/jobs.ts runs that check with every due check", /expireRevoked\(nowMs\)/.test(src("lib/jobs.ts")) && /await expireGoogle\(nowMs\)/.test(src("lib/jobs.ts")));
 
   console.log(`\n${passed} passed, ${failed} failed`);
 }

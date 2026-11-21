@@ -20,6 +20,8 @@
  *  6. Your hidden paths: saved-view targets, best first.
  *  7. Privacy: another member sees nothing, the table, the admin export and the connector carry no
  *     contact names and never a person key, the daily upload limit.
+ *  7b. Disconnect and delete everything on Your network: the ways in through Google go, the
+ *     LinkedIn import and its ways in stay (it has its own Delete).
  *  8. Delete removes everything derived from the file. RN_GOOGLE off: nothing.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -347,6 +349,21 @@ async function main() {
   const fourth = await P.importConnections(ANA, CSV).then(() => "ok", (e: Error) => e.message);
   check("3 uploads a day, then a clear no", /^That's 3 uploads today/.test(fourth), fourth);
   check("a bad file is refused with why, and nothing changes", (await P.importConnections(BO, "Name,Email\nA,b@c.example").then(() => "ok", (e: Error) => e.message)) === csv.CSV_PROBLEM_WORDS["not-connections"] && (await view(BO)).linkedin === null);
+
+  /* ---------- 7b. Disconnect and delete everything (Your network) ---------- */
+  console.log("\nDisconnect Google: its ways in go, the LinkedIn import stays");
+  const G = await import("../lib/google/index.ts");
+  const keptNet = structuredClone((await t.loadState()).network!.mem_ana);
+  const pathsNow = async () => JSON.stringify([await view(), ...(await Promise.all(Object.keys((await view()).counts).map((id) => P.companyPaths(ANA, id))))]);
+  check("before: a way in through Rae from her calendar", (await pathsNow()).includes("Rae Kim"));
+  await G.disconnectAll(ANA);
+  const gone = await pathsNow();
+  check("after: no way in through anyone from Google, nothing of them in the state", !gone.includes("Rae Kim") && !stateFile().includes("Rae Kim") && !stateFile().includes("rae@northwind.example"));
+  check("the LinkedIn import and its ways in stay, with the members she messaged", (await view()).linkedin?.rows === 15 && gone.includes("Lee Park") && gone.includes("Kai Lane"));
+  // Her network back as it was, for the checks below.
+  await t.tableInternals.mutate((s) => {
+    (s.network ??= {}).mem_ana = keptNet;
+  });
 
   /* ---------- 8. delete, and off ---------- */
   console.log("\nDelete and off");

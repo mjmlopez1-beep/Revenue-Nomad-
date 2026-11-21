@@ -72,7 +72,8 @@ Not called: no AI model provider, no analytics, no ad network, no icon service, 
 
 ### The member
 
-- Google: Your network, Disconnect and delete everything. Merlin revokes its token at Google and deletes what it kept, what their assistant saved there included (`app/post/network/Network.tsx`, `POST /api/integrations/google { op: "disconnect" }`).
+- Google: Your network, Disconnect and delete everything. Merlin revokes its token at Google and deletes what it kept, what their assistant saved there included, and what came from Google on Your pipeline: an entry Gmail opened that the member never acted on in Merlin goes, the rest keep their stages and dates without the contact's name, title, email or Gmail and calendar details (`app/post/network/Network.tsx`, `POST /api/integrations/google { op: "disconnect" }`, `lib/google/index.ts` `forgetIn`, `lib/pipeline.ts` `forgetGoogle`). Drop Gmail does the same for Gmail alone.
+- Google, access removed in the member's Google Account: the next read marks the connection Needs reconnecting and records the day (`GoogleLink.goneAt`), and Your network shows when Merlin will delete it. If the member doesn't reconnect within 30 days, Merlin deletes what it read from Google the same way, and keeps only what their assistant saved (`lib/google/index.ts` `expireRevoked`, run by the automatic jobs' timer in `lib/jobs.ts`, before the daily reads and before the member's own view).
 - Assistants: Your credits, Connected apps, Disconnect.
 - Email: switches for the weekly email and message emails in Your credits; Crystal Ball's email has its own unsubscribe link.
 - Slack and webhooks: removed in Integrations.

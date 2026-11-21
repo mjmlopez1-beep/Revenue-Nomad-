@@ -198,10 +198,15 @@ export function PrivacyView({ support }: { support: string | null }) {
           </p>
           <h3 className="df-h3">Disconnecting</h3>
           <p className="cl-p">
-            On Your network, Disconnect and delete everything revokes Merlin&apos;s access at Google and deletes everything Merlin kept from your Google account. You can
-            also remove Merlin in your Google Account&apos;s security settings: that stops Merlin&apos;s access, and what Merlin already worked out stays on Your network until
-            you choose Disconnect and delete everything. Entries in Your pipeline are yours and stay until you remove them, with the contact&apos;s name and title on an entry
-            and the dates it moved.
+            On Your network, Disconnect and delete everything revokes Merlin&apos;s access at Google and deletes everything Merlin kept from your Google account. That
+            includes what came from Google on Your pipeline. An entry Merlin opened from your Gmail alone is deleted. An entry you acted on in Merlin, such as a note you
+            sent, a message, a proposal or your seat, stays with its stages and dates, but without the contact&apos;s name, title or email from Google and without the
+            Gmail and calendar details that moved it.
+          </p>
+          <p className="cl-p">
+            You can also remove Merlin in your Google Account&apos;s security settings. That stops Merlin&apos;s access. Merlin finds out at its next read, and Your network
+            shows the date. If you don&apos;t reconnect within 30 days of that date, Merlin deletes what it read from Google, in the same way as Disconnect and delete
+            everything. What your own AI assistant saved stays until you delete it.
           </p>
         </>
       ),
@@ -273,8 +278,12 @@ export function PrivacyView({ support }: { support: string | null }) {
       body: (
         <ul className="df-bullets">
           <li>Your account and what you add: while your account is open.</li>
-          <li>Google: until you disconnect. Disconnect and delete everything, on Your network, deletes all of it at once and revokes Merlin&apos;s access at Google.</li>
-          <li>Gmail, for test members: Drop Gmail deletes what it found.</li>
+          <li>
+            Google: until you disconnect. Disconnect and delete everything, on Your network, deletes all of it at once, what came from Google on Your pipeline included,
+            and revokes Merlin&apos;s access at Google. If you remove Merlin&apos;s access in your Google Account, Merlin deletes it 30 days after it finds the access
+            removed, unless you reconnect.
+          </li>
+          <li>Gmail, for test members: Drop Gmail deletes what it found, on Your pipeline too. If Gmail&apos;s access ends and you don&apos;t reconnect it within 30 days, Merlin deletes what it found.</li>
           <li>What your assistant saved: Delete on Your network removes it.</li>
           <li>Your LinkedIn import: Delete removes the file and everything worked out from it. Uploading a new file replaces the old one.</li>
           <li>Your name on a seat, or as a company&apos;s leader: <a href="/remove">Remove my name</a> takes it off at once, and it stays off.</li>

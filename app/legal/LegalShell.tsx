@@ -11,7 +11,7 @@ import { Brand } from "../ui/shared";
 /** The day both documents took effect (ISO) and how it reads. Bump the versions with any change. */
 export const LEGAL_EFFECTIVE = "2026-11-22";
 export const LEGAL_EFFECTIVE_WORDS = "November 22, 2026";
-export const PRIVACY_VERSION = "1.0";
+export const PRIVACY_VERSION = "1.1";
 export const TERMS_VERSION = "1.0";
 
 /** Where people write to Revenue Nomad: RN_SUPPORT_EMAIL, read when the page is served. Null when it isn't set. */

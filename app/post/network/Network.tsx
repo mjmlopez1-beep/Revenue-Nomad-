@@ -11,7 +11,7 @@ import { IconChevron, initials, timeAgo, useToast } from "../../ui/shared";
 import { useCopy } from "../Credits";
 import type { CoInfo } from "../model";
 import type { Me } from "@/lib/tableTypes";
-import { SOURCE_WORDS, WARMTH_RULES, knowWords, type LinkView, type NetCompanyView, type NetPersonView, type NetSource, type NetworkView } from "@/lib/google/types";
+import { SOURCE_WORDS, WARMTH_RULES, goneWords, knowWords, type LinkView, type NetCompanyView, type NetPersonView, type NetSource, type NetworkView } from "@/lib/google/types";
 import { NOTICE_WORDS, countsLine, daysAgo, firstName, load, monthYear, netAct, takeNotice, useNetCompany, useNetwork, type GoogleNotice } from "./useNetwork";
 import { useUi } from "../ui";
 import { WarmthChip } from "./parts";
@@ -141,7 +141,10 @@ function DeleteAll({ busy, onDone }: { busy: boolean; onDone?: () => void }) {
     );
   return (
     <div className="nw-confirm" role="group" aria-label="Delete everything?">
-      <p>Merlin revokes its access at Google and deletes everything it kept about your network, what Claude saved included. This can&apos;t be undone.</p>
+      <p>
+        Merlin revokes its access at Google and deletes everything it kept about your network, what Claude saved included. Your pipeline keeps your deals and their stages, without
+        the names and details that came from Google. This can&apos;t be undone.
+      </p>
       <div className="nw-row">
         <button
           type="button"
@@ -320,11 +323,9 @@ export function NetworkPage({
               From your {g ? "calendar and contacts" : "Gmail, via your Claude"}: you know someone at {companies.length} {companies.length === 1 ? "company" : "companies"} on Merlin. Only you see this.
             </p>
           )}
-          {g?.status === "reconnect" && (
-            <Reconnect what="Google" note={`What Merlin found stays, last updated ${g.syncedAt ? timeAgo(g.syncedAt) : "before"}.`} href={START} />
-          )}
-          {view.gmail?.status === "reconnect" && (
-            <Reconnect what="Gmail" label="Reconnect Gmail (test access lasts 7 days)" note={`What Gmail showed stays, last updated ${view.gmail.syncedAt ? timeAgo(view.gmail.syncedAt) : "before"}.`} href={`${START}?gmail=1`} />
+          {g?.status === "reconnect" && <Reconnect what="Google" note={goneNote("Google", g)} href={START} />}
+          {view.gmail?.status === "reconnect" && g?.status !== "reconnect" && (
+            <Reconnect what="Gmail" label="Reconnect Gmail (test access lasts 7 days)" note={goneNote("Gmail", view.gmail)} href={`${START}?gmail=1`} />
           )}
           {(companies.length > 0 || view.loose.length > 0) && (
             <>
@@ -396,7 +397,12 @@ export function NetworkPage({
   );
 }
 
-function Reconnect({ what, label, note, href }: { what: string; label?: string; note: string; href: string }) {
+/** "Google access was removed on <date>. Reconnect within 30 days or Merlin deletes what it read from Google on <date>." */
+export function goneNote(what: "Google" | "Gmail", l: LinkView): string {
+  return l.goneAt ? goneWords(what, l.goneAt, l.deleteOn ?? undefined) : `Reconnect within 30 days or Merlin deletes what it read from ${what}.`;
+}
+
+export function Reconnect({ what, label, note, href }: { what: string; label?: string; note: string; href: string }) {
   return (
     <div className="nw-reconnect" role="status">
       <span>
@@ -685,7 +691,7 @@ export function GoogleSection({ onNetwork }: { onNetwork: () => void }) {
               {g.email ? `${g.email} · ` : ""}
               {updated(g)} · {view.companies.length} {view.companies.length === 1 ? "company" : "companies"} you know people at
             </p>
-            {g.status === "reconnect" && <Reconnect what="Google" note="What Merlin found stays." href={START} />}
+            {g.status === "reconnect" && <Reconnect what="Google" note={goneNote("Google", g)} href={START} />}
             {view.gmailOffered && (
               <p className="nw-body">
                 {view.gmail ? (

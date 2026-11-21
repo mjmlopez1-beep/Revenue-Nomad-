@@ -11,7 +11,7 @@ import { ActionError, fractionalInternals as F, isAdmin, loadSeed, loadState, me
 import { functionOf, siteKey } from "../tableFields";
 import {
   CLAUDE_ENTRIES_MAX, CLAUDE_NEW_DAILY, CLAUDE_SAVES_DAILY, NOT_REL, NOT_REL_MAX, NOT_REL_WORDS, NOT_SEATS_MAX, SEAT_SURE_MEETINGS, SEAT_SURE_MONTHS, companyScore, companyTouch, companyWarmth, isDecisionMaker,
-  isFreeMail, mergeCompany, networkIds, networkOn, touchWords, warmthFor, warmthScore, WARMTH_RANK, domainOf,
+  isFreeMail, mergeCompany, networkIds, networkOn, touchWords, warmthFor, warmthScore, WARMTH_RANK, domainOf, deleteDayOf, goneExpired,
   type ClientView, type GoogleLink, type IntroView, type LinkView, type LoosePerson, type LooseView, type MemberNetwork, type NetCompany, type NetCompanyView, type NetPerson, type NetworkAnswer,
   type NetworkView, type NotRelWhy, type SeatGuessView, type SetKind, type SetView, type SourceData, type SyncStage,
 } from "./types";
@@ -20,6 +20,7 @@ import { oddsFor } from "./odds";
 import { companyFacts } from "../radar/signals";
 import { icpIsEmpty, inIcp, warmthMultiplier } from "../radar/match";
 import { crystalCompanyIds } from "../radar";
+import * as P from "../pipeline";
 import {
   MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailTester, googleConfigured, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
 } from "./config";
@@ -217,10 +218,14 @@ const slow = async () => {
   if (ms > 0) await new Promise((r) => setTimeout(r, Math.min(ms, 60_000)));
 };
 
-async function markGone(memberId: string, kind: Kind, connectedAt: string) {
+/** Google said the grant is gone: Needs reconnecting, and when that was first seen (the 30 days of GONE_KEEP_DAYS count from it). */
+async function markGone(memberId: string, kind: Kind, connectedAt: string, nowMs: number) {
   await T.mutate((s) => {
     const l = netOf(s, memberId)?.[kind];
-    if (l && l.connectedAt === connectedAt) l.status = "reconnect";
+    if (l && l.connectedAt === connectedAt) {
+      l.status = "reconnect";
+      l.goneAt ??= new Date(nowMs).toISOString();
+    }
   });
 }
 
@@ -263,7 +268,7 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
         });
         out.google = { at: new Date(nowMs).toISOString() };
       } catch (e) {
-        if (G.isGone(e)) await markGone(memberId, "google", g.connectedAt);
+        if (G.isGone(e)) await markGone(memberId, "google", g.connectedAt, nowMs);
         error = e instanceof G.GoogleError ? e.code : "error";
         out.google = { error };
       }
@@ -276,7 +281,7 @@ export async function syncMember(memberId: string, nowMs = Date.now()): Promise<
         out.gm = gmailSource(await withAccess(memberId, "gmail", gl, (acc) => G.gmailHeaders(acc, from)), self, dir, own, nowMs);
         out.gmail = { at: new Date(nowMs).toISOString() };
       } catch (e) {
-        if (G.isGone(e)) await markGone(memberId, "gmail", gl.connectedAt);
+        if (G.isGone(e)) await markGone(memberId, "gmail", gl.connectedAt, nowMs);
         error ??= e instanceof G.GoogleError ? e.code : "error";
         out.gmail = { error: e instanceof G.GoogleError ? e.code : "error" };
       }
@@ -330,6 +335,8 @@ function judgedAuto(seed: Seed, s: State, n: MemberNetwork, m: Member, nowMs: nu
 let refreshAt = 0;
 let refreshing = false;
 export async function refreshDue(nowMs = Date.now()): Promise<number> {
+  // Access removed at Google for 30 days: deleted before anything is read again.
+  await expireRevoked(nowMs).catch((e) => console.error("Google expiry failed", e instanceof Error ? e.message : "error"));
   if (!networkOn() || refreshing || nowMs - refreshAt < 10 * 60_000) return 0;
   refreshAt = nowMs;
   refreshing = true;
@@ -347,6 +354,84 @@ export async function refreshDue(nowMs = Date.now()): Promise<number> {
   }
 }
 
+/* ---------- deleting what Merlin read from Google ---------- */
+
+/** The people Your network kept from these reads, lowercase names and emails, so lib/pipeline.ts forgetGoogle finds them on entries. */
+function peopleOf(srcs: (SourceData | undefined)[]): { names: Set<string>; emails: Set<string> } {
+  const names = new Set<string>();
+  const emails = new Set<string>();
+  for (const src of srcs) {
+    if (!src) continue;
+    for (const p of [...Object.values(src.companies).flatMap((c) => c.people), ...(src.loose ?? [])]) {
+      if (p.name) names.add(p.name.trim().toLowerCase());
+      if (p.email) emails.add(p.email.trim().toLowerCase());
+    }
+  }
+  return { names, emails };
+}
+
+/**
+ * Delete what Merlin read from the member's Google account, in a draft state (inside T.mutate):
+ *  - "everything": Disconnect and delete everything. The member's whole section, what their own
+ *    Claude saved included.
+ *  - "google": access removed at Google for GONE_KEEP_DAYS. The tokens, Calendar, Contacts and
+ *    Gmail and every conclusion and answer about them; only what their own Claude saved stays.
+ *  - "gmail": Drop Gmail, or Gmail's own access removed for GONE_KEEP_DAYS. Its token and what it found.
+ * Their pipeline loses what came from those reads (lib/pipeline.ts forgetGoogle: Google-only
+ * entries go, the rest keep their stages and dates without the person's name, title or "Detected
+ * from"). Smart ways in (lib/paths), "You know this person", Your way in, moves and Crystal Ball's
+ * "You know someone" are worked out from the network when asked for and never kept, so they go
+ * with it. The LinkedIn import (State.paths) is the member's own upload, with its own Delete.
+ */
+function forgetIn(s: State, memberId: string, what: "everything" | "google" | "gmail") {
+  const n = netOf(s, memberId);
+  const gmailOnly = what === "gmail";
+  const log = s.pipeline?.[memberId];
+  if (log) P.forgetGoogle(log, { gmail: true, calendar: !gmailOnly, google: !gmailOnly, ...peopleOf(gmailOnly ? [n?.gm] : [n?.cal, n?.con, n?.gm]) });
+  access.delete(`${memberId}:gmail`);
+  if (gmailOnly) {
+    if (n) {
+      delete n.gmail;
+      delete n.gm;
+    }
+    return;
+  }
+  access.delete(`${memberId}:google`);
+  if (what === "google" && n?.claude) netsOf(s)[memberId] = { claude: n.claude };
+  else delete netsOf(s)[memberId];
+}
+
+const dueToExpire = (n: MemberNetwork, nowMs: number) => [n.google, n.gmail].some((l) => l?.status === "reconnect" && (!l.goneAt || goneExpired(l.goneAt, nowMs)));
+
+/**
+ * Access removed at Google (a connection Needs reconnecting since goneAt): past GONE_KEEP_DAYS
+ * with no new connection, Merlin deletes what it read from it (forgetIn "google", or "gmail" for
+ * Gmail's own grant). A connection marked before goneAt was kept gets it now. Runs with the
+ * automatic jobs' timer (lib/jobs.ts runDueJobs), before the daily syncs (refreshDue) and before the
+ * member's own view, so nothing past its day is shown. `only`: one member. Returns how many members
+ * had data deleted.
+ */
+export async function expireRevoked(nowMs = Date.now(), only?: string): Promise<number> {
+  const nets = ((await loadState()) as State & { network?: Record<string, MemberNetwork> }).network ?? {};
+  const todo = Object.entries(nets)
+    .filter(([id, n]) => (!only || id === only) && dueToExpire(n, nowMs))
+    .map(([id]) => id);
+  if (!todo.length) return 0;
+  return T.mutate((d) => {
+    let k = 0;
+    for (const id of todo) {
+      const n = netOf(d, id);
+      if (!n) continue;
+      for (const l of [n.google, n.gmail]) if (l?.status === "reconnect" && !l.goneAt) l.goneAt = new Date(nowMs).toISOString();
+      if (n.google?.status === "reconnect" && goneExpired(n.google.goneAt, nowMs)) forgetIn(d, id, "google");
+      else if (n.gmail?.status === "reconnect" && goneExpired(n.gmail.goneAt, nowMs)) forgetIn(d, id, "gmail");
+      else continue;
+      k++;
+    }
+    return k;
+  });
+}
+
 /* ---------- the member's own view ---------- */
 
 const linkView = (l: GoogleLink | undefined): LinkView | null =>
@@ -354,6 +439,8 @@ const linkView = (l: GoogleLink | undefined): LinkView | null =>
     ? {
         email: l.email,
         status: l.status === "reconnect" ? "reconnect" : "ok",
+        goneAt: l.status === "reconnect" ? l.goneAt ?? null : null,
+        deleteOn: l.status === "reconnect" && l.goneAt ? deleteDayOf(l.goneAt) : null,
         syncedAt: l.syncedAt ?? null,
         connectedAt: l.connectedAt,
         calendar: hasCalendar(l.scopes),
@@ -789,8 +876,14 @@ const monthsBetween = (from: string, to: string) => {
 /** GET /api/integrations/google: the member's own network. { on: false } when RN_GOOGLE is off. */
 export async function networkView(token: string | null, nowMs = Date.now()): Promise<NetworkAnswer | null> {
   if (!networkOn()) return { on: false };
-  const w = await who(token);
+  let w = await who(token);
   if (!w) return null;
+  // Access removed 30 days ago: deleted now, never shown past its day.
+  const n0 = netOf(w.s, w.m.id);
+  if (n0 && dueToExpire(n0, nowMs)) {
+    await expireRevoked(nowMs, w.m.id).catch(() => 0);
+    w = (await who(token)) ?? w;
+  }
   const n = netOf(w.s, w.m.id);
   const all = companiesOf(w.seed, w.s, n, nowMs, w.m);
   const companies = all.map(({ internal: _i, ...c }) => c); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -913,31 +1006,27 @@ export async function markNetwork(token: string | null, q: { company?: unknown; 
   return (await networkView(token))!;
 }
 
-/** Disconnect and delete everything: revoke at Google, then erase the member's whole section (Gmail via Claude too). */
+/**
+ * Disconnect and delete everything: revoke at Google, then erase the member's whole section (Gmail
+ * via Claude too) and what came from Google in their pipeline (forgetIn "everything").
+ */
 export async function disconnectAll(token: string | null): Promise<NetworkAnswer> {
   const w = await who(token);
   if (!w) throw new ActionError(SIGNED_OUT);
   const n = netOf(w.s, w.m.id);
   const tokens = [n?.google?.token, n?.gmail?.token].map((x) => unseal(x)).filter((x): x is string => !!x);
-  await T.mutate((s) => {
-    delete netsOf(s)[w.m.id];
-  });
-  access.delete(`${w.m.id}:google`);
-  access.delete(`${w.m.id}:gmail`);
+  await T.mutate((s) => forgetIn(s, w.m.id, "everything"));
   await Promise.all(tokens.map((t) => G.revoke(t)));
   return (await networkView(token))!;
 }
 
-/** Drop just Gmail: its token and what it derived. With its own client it is revoked at Google too. */
+/** Drop just Gmail: its token and what it derived, in Your pipeline too. With its own client it is revoked at Google too. */
 export async function dropGmail(token: string | null): Promise<NetworkAnswer> {
   const w = await who(token);
   if (!w) throw new ActionError(SIGNED_OUT);
   const l = netOf(w.s, w.m.id)?.gmail;
   await T.mutate((s) => {
-    const n = netOf(s, w.m.id);
-    if (!n) return;
-    delete n.gmail;
-    delete n.gm;
+    if (netOf(s, w.m.id)) forgetIn(s, w.m.id, "gmail");
   });
   access.delete(`${w.m.id}:gmail`);
   // On the main client the Gmail grant is the same grant as Calendar and Contacts: revoking it would stop those too.

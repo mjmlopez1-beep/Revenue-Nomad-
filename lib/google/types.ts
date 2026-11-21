@@ -22,6 +22,10 @@
  * Never an event title, description or attendee list, never a subject, snippet or body. Calendar
  * events are fetched without them (the fields parameter leaves them out), Gmail with headers only.
  *
+ * Deleted, with what came from it on Your pipeline (lib/pipeline.ts forgetGoogle), on Disconnect
+ * and delete everything, or GONE_KEEP_DAYS after a read found the access removed at Google and the
+ * member didn't connect again (lib/google forgetIn, expireRevoked).
+ *
  * Google API Services User Data Policy, Limited Use: this data is used only to show this member
  * their own network inside Merlin. It is never shown to another member or an admin, never added to
  * shared counts or the radar's model, and never used to train anything.
@@ -115,8 +119,14 @@ export interface GoogleLink {
   email: string;
   scopes: string[];
   connectedAt: string;
-  /** "reconnect": Google said the token is gone (invalid_grant). The data already derived stays. */
+  /**
+   * "reconnect": Google said the token is gone (invalid_grant: the member removed Merlin's access,
+   * or it expired). What it derived stays GONE_KEEP_DAYS from goneAt, then Merlin deletes it
+   * (lib/google expireRevoked) unless the member connected again.
+   */
   status?: "ok" | "reconnect";
+  /** When a sync first found the grant revoked or invalid (ISO). A new connection starts without it. */
+  goneAt?: string;
   /** When it last went through (ISO). */
   syncedAt?: string;
   /** Short reason the last sync failed ("unreachable", "http_500"), never a token. */
@@ -183,6 +193,18 @@ export const SEAT_SURE_MONTHS = 6;
 export const SEAT_SURE_MEETINGS = 18;
 /** "Not a seat" answers kept per member (the oldest go first). */
 export const NOT_SEATS_MAX = 500;
+
+/** Access removed at Google (status "reconnect"): what Merlin read from it is deleted this many days after goneAt, unless the member connects again. */
+export const GONE_KEEP_DAYS = 30;
+/** The day (YYYY-MM-DD) Merlin deletes what it read from a connection whose access was found removed at `goneAt`. */
+export const deleteDayOf = (goneAt: string) => new Date(Date.parse(goneAt) + GONE_KEEP_DAYS * 86_400_000).toISOString().slice(0, 10);
+/** Past the keep: what that connection read is due for deletion. */
+export const goneExpired = (goneAt: string | undefined, nowMs: number) => !!goneAt && Number.isFinite(Date.parse(goneAt)) && nowMs - Date.parse(goneAt) >= GONE_KEEP_DAYS * 86_400_000;
+const longDay = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+/** Your network's line while access is removed: "Google access was removed on November 21, 2026. Reconnect within 30 days or Merlin deletes what it read from Google on December 21, 2026." */
+export function goneWords(what: "Google" | "Gmail", goneAt: string, deleteOn = deleteDayOf(goneAt)): string {
+  return `${what} access was removed on ${longDay(goneAt)}. Reconnect within ${GONE_KEEP_DAYS} days or Merlin deletes what it read from ${what} on ${longDay(deleteOn)}.`;
+}
 
 /* ---------- the feature switch (env only, safe anywhere on the server) ---------- */
 
@@ -481,6 +503,9 @@ export function networkWarmth(s: { network?: NetworkState }, memberId: string, n
 export interface LinkView {
   email: string;
   status: "ok" | "reconnect";
+  /** Needs reconnecting: when Google access was found removed (ISO), and the day Merlin deletes what it read from it (YYYY-MM-DD). */
+  goneAt: string | null;
+  deleteOn: string | null;
   syncedAt: string | null;
   connectedAt: string;
   calendar: boolean;

@@ -695,6 +695,24 @@ async function main() {
   const mine8 = JSON.stringify(await tools.myNetwork({ member: (await t.memberById("mem_cy"))!, origin: ORIGIN }));
   check("the connector lists her warm paths and what is set aside, never a person from her Google account", /warm_paths/.test(mine8) && /looks like someone selling to the member/.test(mine8) && !/Kyle|Rosa|Ben Cole|Idris|Chris|Nora|Tess|@/.test(mine8), mine8.slice(0, 600));
 
+  /* ---------- 9. access removed at Google ---------- */
+  console.log("\nAccess removed at Google: the line on Your network");
+  const N3 = await import("../app/post/network/Network.tsx");
+  const netPage = () => text(render(me8, React.createElement(N3.NetworkPage, { infos: infos8, me: me8, onBack: noop, openCompany: noop, onSeats: noop, onClaude: noop, onProfile: noop, refresh: noop })));
+  const goneAt = "2026-11-21T15:00:00.000Z";
+  const LINE = "Google access was removed on November 21, 2026. Reconnect within 30 days or Merlin deletes what it read from Google on December 21, 2026.";
+  check("connected as usual: no such line", !/access was removed/.test(netPage()));
+  served = { ...cv, google: { ...cv.google!, status: "reconnect", goneAt, deleteOn: types.deleteDayOf(goneAt) } };
+  await store.load(true);
+  const page9 = netPage();
+  check("Your network says when Google access was removed and the day Merlin deletes what it read", page9.includes(LINE) && /Reconnect Google/.test(page9), page9.slice(0, 700));
+  check("the Google card on Integrations says the same", text(render(me8, React.createElement(N3.GoogleSection, { onNetwork: noop }))).includes(LINE));
+  served = { ...cv, gmail: { ...(cv.google as object), status: "reconnect", goneAt, deleteOn: types.deleteDayOf(goneAt) } };
+  await store.load(true);
+  check("Gmail's own access removed: its line says Gmail", netPage().includes("Gmail access was removed on November 21, 2026. Reconnect within 30 days or Merlin deletes what it read from Gmail on December 21, 2026."));
+  served = cv;
+  await store.load(true);
+
   /* ---------- off ---------- */
   console.log("\nRN_GOOGLE off");
   delete process.env.RN_GOOGLE;

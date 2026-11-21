@@ -33,7 +33,9 @@
  * shared table, the export or anyone else's connector. A person from the member's own Google
  * account may be named on the member's own screens (as their moves name them) and nowhere else:
  * the connector and whoWords(..., "merlin") leave those names out. Admins see counts and sums only
- * (outcomeStats), never a name, a company or a note.
+ * (outcomeStats), never a name, a company or a note. When the member's Google data is deleted
+ * (lib/google), forgetGoogle takes out what came from it: Google-only entries, and the names,
+ * titles and Gmail and calendar details on the rest.
  *
  * The morning email reads dueFollowUps and followUpWords. Pure: no I/O and relative imports only
  * (the server and the app both load it). Ids are made by the caller.
@@ -667,6 +669,100 @@ export function markIntro(i: IntroRecord, status: IntroStatus, by: "asker" | "in
   if (status === "made") (i.madeAt = iso(nowMs)), delete i.declinedAt;
   else if (status === "declined") (i.declinedAt = iso(nowMs)), delete i.madeAt;
   else delete i.madeAt, delete i.declinedAt;
+}
+
+/* ---------- deleting what came from Google ---------- */
+
+/**
+ * What to take out of a pipeline when the member's Google data is deleted (lib/google:
+ * Disconnect and delete everything, Drop Gmail, or access removed at Google for GONE_KEEP_DAYS).
+ * gmail, calendar: which reads go. google: every person marked as from the member's Google account
+ * goes too (Calendar, Contacts and Gmail all at once). names, emails: the people Your network kept
+ * from those reads, lowercase, so a name on an entry is found even without the mark.
+ */
+export interface GoogleForget {
+  gmail: boolean;
+  calendar: boolean;
+  google: boolean;
+  names: Set<string>;
+  emails: Set<string>;
+}
+
+/**
+ * The member did something on Merlin with this entry: used a drafted note, a message or intro on
+ * Merlin, a proposal, their own seat, a follow-up they marked, their own note, or Won terms. An
+ * entry without any of these that Gmail opened exists only because of Google, and goes whole.
+ */
+export function merlinActed(e: PipelineEntry): boolean {
+  return (
+    Object.values(e.via).some((v) => v === "note" || v === "message" || v === "proposal" || v === "seat") ||
+    !!e.conversationId ||
+    !!e.introId ||
+    !!e.seatId ||
+    !!e.won ||
+    e.notes.length > 0 ||
+    // pipeline.followed logs a bare "Followed up"; one Gmail saw says "(your Gmail)".
+    e.log.some((l) => l.text === "Followed up")
+  );
+}
+
+const lower = (v: string | null | undefined) => String(v ?? "").trim().toLowerCase();
+
+/**
+ * Take what came from Google out of one member's pipeline, in place: an entry Gmail opened that
+ * the member did nothing with on Merlin goes; every other entry stays with its stages, dates,
+ * follow-ups, notes and what Merlin itself saw, without the person's name and title from Google,
+ * without "Detected from your Gmail" or "From your calendar" on a stage, and without the email and
+ * meeting times it kept to tell a newer signal from one already used. Intros asked of someone from
+ * Google keep their status, without that person's name and title. Returns the counts.
+ */
+export function forgetGoogle(log: PipelineLog, o: GoogleForget): { removed: number; cleared: number } {
+  const known = (name: string | null | undefined) => !!name && (o.names.has(lower(name)) || o.emails.has(lower(name)));
+  const fromGoogle = (p: { name?: string | null; google?: boolean; memberId?: string; seatId?: string }, gmailOpened = false) =>
+    (o.google && !!p.google) || gmailOpened || (!p.memberId && !p.seatId && known(p.name));
+  let removed = 0;
+  let cleared = 0;
+  const gone = new Set<string>();
+  log.entries = log.entries.filter((e) => {
+    const opened = o.gmail && (e.source === "gmail" || e.via.sent === "gmail");
+    if (opened && !merlinActed(e)) {
+      gone.add(e.id);
+      removed++;
+      return false;
+    }
+    const before = JSON.stringify(e);
+    if (fromGoogle(e.to, opened)) {
+      delete e.to.name;
+      delete e.to.role;
+      delete e.to.google;
+    }
+    for (const st of Object.keys(e.via) as Stage[]) if ((o.gmail && e.via[st] === "gmail") || (o.calendar && e.via[st] === "calendar")) delete e.via[st];
+    if (o.gmail) {
+      delete e.seen.out;
+      delete e.seen.in;
+      if (e.source === "gmail") e.source = "record";
+    }
+    if (o.calendar) {
+      delete e.seen.met;
+      delete e.seen.next;
+    }
+    for (const l of e.log) {
+      if (o.gmail) l.text = l.text.replace(/ \(your Gmail\)/g, "");
+      if (o.calendar) l.text = l.text.replace(/ \(your calendar\)/g, "");
+    }
+    if (JSON.stringify(e) !== before) cleared++;
+    return true;
+  });
+  for (const i of log.intros) {
+    if (i.entryId && gone.has(i.entryId)) delete i.entryId;
+    if (!i.introducer.memberId && fromGoogle(i.introducer) && (i.introducer.name || i.introducer.role || i.introducer.google)) {
+      delete i.introducer.name;
+      delete i.introducer.role;
+      delete i.introducer.google;
+      cleared++;
+    }
+  }
+  return { removed, cleared };
 }
 
 /* ---------- reading ---------- */

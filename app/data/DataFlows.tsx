@@ -140,7 +140,7 @@ export function DataFlows() {
             </h2>
             <h3 className="df-h3">You</h3>
             <ul className="df-bullets">
-              <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network.</li>
+              <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps. Disconnect any assistant you added.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>

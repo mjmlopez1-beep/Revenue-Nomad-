@@ -16,7 +16,8 @@
  *  5. The sync against fixture companies, what is kept (never a title, a subject or a raw token).
  *  6. Named free, privacy (another member, an admin, the export, the connector), Pilot metrics' counts.
  *  7. Gmail via Claude: text refused, merge and warmth, the daily cap and the rate limit, deletion.
- *  8. Direct Gmail: the tester gate, headers only, invalid_grant -> Needs reconnecting, drop Gmail.
+ *  8. Direct Gmail: the tester gate, headers only, invalid_grant -> Needs reconnecting (when it was
+ *     found, the day it is deleted, nothing deleted at 29 days), drop Gmail.
  *  9. Disconnect and delete everything.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -501,6 +502,10 @@ async function main() {
   await G.syncMember("mem_ana");
   const vr = await anaView();
   check("invalid_grant: Gmail needs reconnecting, what it found stays", vr.gmail?.status === "reconnect" && vr.google?.status === "ok" && vr.companies.find((c) => c.name === "Acme Robotics")!.src.includes("gmail"), vr.gmail);
+  const goneAt = vr.gmail?.goneAt ?? "";
+  check("with the time Merlin first found it gone, and the day it deletes what Gmail found (30 days on)", Math.abs(Date.parse(goneAt) - Date.now()) < 60_000 && vr.gmail?.deleteOn === new Date(Date.parse(goneAt) + 30 * DAY).toISOString().slice(0, 10) && vr.google?.goneAt === null && vr.google.deleteOn === null, vr.gmail);
+  check("the line says both days", types.goneWords("Gmail", "2026-11-21T09:00:00.000Z") === "Gmail access was removed on November 21, 2026. Reconnect within 30 days or Merlin deletes what it read from Gmail on December 21, 2026.");
+  check("29 days on, nothing is deleted yet", (await G.expireRevoked(Date.parse(goneAt) + 29 * DAY)) === 0 && !!(await t.loadState()).network!.mem_ana.gm);
   const callsBefore = calls.length;
   await G.syncMember("mem_ana");
   check("it isn't asked again until reconnected", !calls.slice(callsBefore).some((c) => c.path.startsWith("/gmail")));
