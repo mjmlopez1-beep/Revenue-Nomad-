@@ -222,7 +222,11 @@ async function shots() {
     for (const kind of ["tall", "short"]) {
       if (kind === "short") await page.reload().then(() => settle(page));
       await reshape(page, kind);
-      await page.locator(".lp-hero").screenshot({ path: path.join(OUT, `${TAG}-hero-${kind}-${name}.png`) });
+      const box = await page.evaluate(() => {
+        const r = document.querySelector(".lp-hero").getBoundingClientRect();
+        return { x: 0, y: Math.round(r.top + scrollY), width: innerWidth, height: Math.round(r.height) };
+      });
+      await page.screenshot({ path: path.join(OUT, `${TAG}-hero-${kind}-${name}.png`), fullPage: true, clip: box });
     }
     console.log(`shot ${TAG}-hero-tall-${name}.png ${TAG}-hero-short-${name}.png`);
     await ctx.close();
