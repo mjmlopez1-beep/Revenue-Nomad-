@@ -210,7 +210,7 @@ async function main() {
   const day = { cards: [card("hi", "High"), card("lo", "Low"), card("me", "Medium")], total: 3, companies: 3, day: "2026-11-19", url: "/x", mode: "daily" as const };
   const mail = F.renderRadarEmail({ name: "Sal", day, unsubscribeUrl: "/u", appUrl: "" });
   check("the email leaves Low out and counts only what it lists", !/Headline lo/.test(mail.text + mail.html) && /Headline hi/.test(mail.text) && /Headline me/.test(mail.text) && /2 companies/.test(mail.subject), mail.subject);
-  check("its cards say the band and why now", /High likelihood · why now hi/.test(mail.text) && /Medium likelihood · why now me/.test(mail.text));
+  check("its cards say the band (never a percentage) and why it is theirs", /· High likelihood\n/.test(mail.text) && /· Medium likelihood\n/.test(mail.text) && /\nwhy\.\n/.test(mail.text) && !/\d+\s*%/.test(mail.text));
   const alert = F.radarAlert([{ kind: "radar", at: new Date().toISOString(), day }], "");
   check("Slack too", !!alert && alert.count === 2 && !alert.lines.some((l) => /Headline lo/.test(l)), alert?.lines);
   check("deliverable keeps High and Medium", M.deliverable([{ band: "High" }, { band: "Low" }, { band: "Medium" }] as { band: "High" | "Medium" | "Low" }[]).length === 2);

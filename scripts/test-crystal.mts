@@ -410,12 +410,13 @@ async function main() {
   check("Trial or Pro in Slack: 'Open it in Merlin, free from your Crystal Ball', not the 2-credit line", proEntry.note?.includes(fmt.OPEN_FREE_LINE) === true && !/2 credits/.test(JSON.stringify(proEntry)), proEntry.note);
   check("and its button opens the day's companies, where it opens free", proEntry.button?.url === "https://post.example.com/day" && !proEntry.link, proEntry);
   const mailPro = fmt.renderRadarEmail({ name: "Tia", day: dayOf([card({ opens: "free" })]), unsubscribeUrl: "https://post.example.com/u", appUrl: BASE });
-  check("and in the email", mailPro.text.includes(fmt.OPEN_FREE_LINE) && !/Locked for you/.test(mailPro.text) && mailPro.html.includes("free from your Crystal Ball"), mailPro.text);
+  check("and in the email: its button says Open free, and the email says why once", mailPro.text.includes("Open free: ") && mailPro.html.includes(">Open free</a>") && !/Locked for you|credits/.test(mailPro.text) && mailPro.html.includes("opens free from your Crystal Ball"), mailPro.text);
   const freeCard = card({ company: null, locked: true, opens: "one", subject: "A SaaS company", place: undefined });
   const freeMail = fmt.renderRadarEmail({ name: "Fen", day: dayOf([freeCard]), unsubscribeUrl: "https://post.example.com/u", appUrl: BASE });
-  check("Free in the email: one a day, from Crystal Ball", freeMail.text.includes(fmt.OPEN_ONE_LINE), freeMail.text);
+  check("Free in the email: one a day, from Crystal Ball", freeMail.text.includes("One Crystal Ball company a day opens free, with everything on it.") && freeMail.html.includes(">Open free</a>"), freeMail.text);
   const offCard = card({ company: null, locked: true, subject: "A SaaS company", place: undefined });
-  check("billing off: the 2-credit line as before", fmt.renderRadarEmail({ name: "Bo", day: dayOf([offCard]), unsubscribeUrl: "https://post.example.com/u", appUrl: BASE }).text.includes("Locked for you: unlock it in Merlin for 2 credits."));
+  const offMail = fmt.renderRadarEmail({ name: "Bo", day: dayOf([offCard]), unsubscribeUrl: "https://post.example.com/u", appUrl: BASE });
+  check("billing off: the 2-credit unlock, and the button says Open in Merlin", offMail.text.includes("A locked company unlocks in Merlin for 2 credits.") && offMail.html.includes(">Open in Merlin</a>") && !offMail.html.includes(">Open free</a>"), offMail.text);
 }
 
 try {
