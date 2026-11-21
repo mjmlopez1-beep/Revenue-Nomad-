@@ -24,6 +24,7 @@ import { PreviewError, preview } from "@/lib/preview";
 import { radarView, returnQuery } from "@/lib/radar";
 import { yourFeature } from "@/lib/radar/types";
 import { runDueJobs } from "@/lib/jobs";
+import { fractionalsHome, fractionalsView } from "@/lib/fractionals";
 
 export const dynamic = "force-dynamic";
 
@@ -227,6 +228,8 @@ const patchless = (a: Action) =>
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
+ * GET ?fractionals=1  FractionalsView: the Fractionals directory, one record per fractional as the member may see it
+ *                  (lib/fractionals.ts). ?fractionals=home: FractionalsHome, Home's one line. 401 signed out.
  * GET ?radar=1[&day=YYYY-MM-DD][&range=today|7d|30d|auto]  RadarView: one day's companies from the member's radar (lib/radar radarView), the list its email and
  *                  Slack links open. With &range= (Crystal Ball's page): that range of days, each company once (auto, or any other value: Today
  *                  if it has companies, else Last 7 days, else Last 30 days), or a kept day asked for alone. 401 signed out.
@@ -308,6 +311,12 @@ export const GET = guarded(async (req: NextRequest) => {
   if (req.nextUrl.searchParams.get("radar") !== null) {
     const r = await radarView(token, req.nextUrl.searchParams.get("day"), undefined, req.nextUrl.searchParams.get("range"));
     return r ? sendJson(req, r) : err(`You're signed out. Sign in again to see ${yourFeature}.`, 401);
+  }
+  // Fractionals (lib/fractionals.ts): one record per fractional, with its locks; or Home's line about who joined this week.
+  const fr = req.nextUrl.searchParams.get("fractionals");
+  if (fr !== null) {
+    const f = fr === "home" ? await fractionalsHome(token) : await fractionalsView(token);
+    return f ? sendJson(req, f) : err("You're signed out. Sign in again to see Fractionals.", 401);
   }
   if (req.nextUrl.searchParams.get("partners") !== null) {
     const p = await partnersView(token);

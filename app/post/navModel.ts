@@ -12,13 +12,13 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
-export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "partners", "billing", "radar", "network"] as const;
+export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "partners", "billing", "radar", "network", "fractionals"] as const;
 export type AppPageKey = (typeof APP_PAGES)[number];
 
-export type NavGroup = "home" | "find" | "yours" | "earn" | "foot";
+export type NavGroup = "home" | "find" | "community" | "yours" | "earn" | "foot";
 export type NavIcon =
   | "home" | "companies" | "seats" | "people" | "radar" | "hiring" | "views" | "view" | "following" | "yourseats" | "messages" | "network"
-  | "add" | "partners" | "rates" | "invite" | "integrations" | "billing" | "credits" | "metrics";
+  | "add" | "partners" | "rates" | "invite" | "integrations" | "billing" | "credits" | "metrics" | "fractionals";
 
 export interface NavItem {
   /** "today", "companies", "radar", "view:<id>" and the rest: data-nav in the page, and the key the tests use. */
@@ -81,6 +81,8 @@ export interface NavInput {
   /** Companies, seats and people on file (null while only the first screen is here). */
   totals: Record<RecordType, number> | null;
   hiringN: number | null;
+  /** Fractionals in the directory (null until known). */
+  fractionalsN?: number | null;
   followingN: number | null;
   seatsMissing: number | null;
   credits: number;
@@ -96,8 +98,9 @@ export function planLine(plan: PlanView | undefined): string | null {
   return plan.name === "pro" ? "Pro" : "Free";
 }
 
-/** Which item is on: the page, else on the table the saved view, Hiring now, Following or the list. */
+/** Which item is on: the page, else on the table the saved view, Hiring now, Following or the list. Referral partners is Fractionals now. */
 export function currentKey(x: Pick<NavInput, "page" | "recordType" | "tab" | "currentView">): string {
+  if (x.page === "partners") return "fractionals";
   if (x.page !== "table") return x.page;
   if (x.currentView) return `view:${x.currentView}`;
   if (x.tab === "hiring") return "hiring";
@@ -105,7 +108,7 @@ export function currentKey(x: Pick<NavInput, "page" | "recordType" | "tab" | "cu
   return x.recordType;
 }
 
-/** The sidebar, top to bottom: Home, Find, Yours, Earn, then the foot. */
+/** The sidebar, top to bottom: Home, Find, Community (Fractionals and Messages), Yours, Earn, then the foot. */
 export function navItems(x: NavInput): NavItem[] {
   const on = currentKey(x);
   const t = x.totals;
@@ -113,16 +116,17 @@ export function navItems(x: NavInput): NavItem[] {
     { key: "today", label: "Home", group: "home", icon: "home", href: x.hrefs.today, page: "today" },
     { key: "companies", label: "Companies", group: "find", icon: "companies", href: x.hrefs.companies, page: "table", count: t ? t.companies : null },
     { key: "engagements", label: "Seats", group: "find", icon: "seats", href: x.hrefs.engagements, page: "table", count: t ? t.engagements : null },
-    { key: "people", label: "People", group: "find", icon: "people", href: x.hrefs.people, page: "table", count: t ? t.people : null },
+    { key: "people", label: "Decision makers", group: "find", icon: "people", href: x.hrefs.people, page: "table", count: t ? t.people : null },
     { key: "radar", label: FEATURE_NAME, group: "find", icon: "radar", href: x.hrefs.page("radar"), page: "radar", badge: x.radarNew, badgeOf: "new today" },
     { key: "hiring", label: "Hiring now", group: "find", icon: "hiring", href: x.hrefs.hiring, page: "table", count: x.hiringN },
+    // Community: the fractionals on file (Fractionals replaces Referral partners), and the conversations with them.
+    { key: "fractionals", label: "Fractionals", group: "community", icon: "fractionals", href: x.hrefs.page("fractionals"), page: "fractionals", count: x.fractionalsN ?? null },
+    { key: "messages", label: "Messages", group: "community", icon: "messages", href: x.hrefs.page("messages"), page: "messages", badge: x.unread, badgeOf: "unread" },
     ...x.views.map((v) => ({ key: `view:${v.id}`, label: v.name, group: "yours" as const, icon: "view" as const, href: v.href, page: "table" as const, badge: v.fresh ?? 0, badgeOf: "new since your last visit" })),
     { key: "following", label: "Following", group: "yours", icon: "following", href: x.hrefs.following, page: "table", count: x.followingN },
     { key: "seats", label: "Your seats", group: "yours", icon: "yourseats", href: x.hrefs.page("seats"), page: "seats", hint: x.seatsMissing ? `${x.seatsMissing} to fill in` : undefined },
-    { key: "messages", label: "Messages", group: "yours", icon: "messages", href: x.hrefs.page("messages"), page: "messages", badge: x.unread, badgeOf: "unread" },
     ...(x.network ? [{ key: "network", label: "Your network", group: "yours" as const, icon: "network" as const, href: x.hrefs.page("network"), page: "network" as const, count: x.networkN ?? null }] : []),
     { key: "add", label: "Add what you know", group: "earn", icon: "add" },
-    { key: "partners", label: "Referral partners", group: "earn", icon: "partners", href: x.hrefs.page("partners"), page: "partners" },
     { key: "rates", label: "Rate benchmarks", group: "earn", icon: "rates", href: x.hrefs.page("rates"), page: "rates" },
     { key: "invite", label: "Invite a fractional", group: "earn", icon: "invite", hint: `+${x.inviteBonus}` },
     { key: "integrations", label: "Integrations", group: "foot", icon: "integrations", href: x.hrefs.page("integrations"), page: "integrations" },

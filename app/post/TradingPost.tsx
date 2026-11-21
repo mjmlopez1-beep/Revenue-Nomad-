@@ -94,16 +94,16 @@ const pageWait = () => (
 const loadAdd = () => import("./AddModal");
 const loadIntegrations = () => import("./Integrations");
 const loadBenchmarks = () => import("./Benchmarks");
-const loadPartners = () => import("./Partners");
+const loadFractionals = () => import("./Fractionals");
 const loadAdmin = () => import("./Admin");
 const AddModal = dynamic(() => loadAdd().then((m) => m.AddModal), { ssr: false });
 const Integrations = dynamic(() => loadIntegrations().then((m) => m.Integrations), { ssr: false, loading: pageWait });
 const Benchmarks = dynamic(() => loadBenchmarks().then((m) => m.Benchmarks), { ssr: false, loading: pageWait });
-const Partners = dynamic(() => loadPartners().then((m) => m.Partners), { ssr: false, loading: pageWait });
+const Fractionals = dynamic(() => loadFractionals().then((m) => m.Fractionals), { ssr: false, loading: pageWait });
 const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
 /** Fetch them while the member reads (the Add form first): opening one is then instant. */
 const preloadLater = (admin: boolean) => {
-  for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadPartners, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
+  for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadFractionals, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
 };
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
@@ -199,7 +199,8 @@ type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // [google network] "network": Your network (app/post/network), only with RN_GOOGLE=1.
 // "today": Today (Today.tsx), the home for / with no place in the address. It sits level with the table (no history entry above it).
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network";
+// "fractionals": Fractionals (Fractionals.tsx). "partners", Referral partners' old address, opens it with Different from yours.
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "partners" | "billing" | "radar" | "network" | "fractionals";
 
 /* ---------- the place in the address bar ---------- */
 
@@ -213,14 +214,15 @@ const PAGE_TITLE: Record<Page, string> = {
   metrics: "Pilot metrics",
   messages: "Messages",
   integrations: "Integrations",
-  partners: "Referral partners",
+  partners: "Fractionals",
+  fractionals: "Fractionals",
   billing: "Plan and billing",
   radar: YOUR_FEATURE,
   network: "Your network",
 };
-const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
+const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
-const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["person", "people"] };
+const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["decision maker", "decision makers"] };
 
 /** Phones: the view chips fade out at whichever edge has more to scroll to, so a chip cut at the edge reads as more, not as a broken label. */
 function chipEdges(el: HTMLElement) {
@@ -258,7 +260,9 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   if (f !== encodeFilters(d.f)) q.set("f", f || "-");
   if (x.all && x.v === "hiring") q.set("af", "1");
   if (x.p === "table" && x.c) q.set("c", x.c);
-  if (x.p !== "table" && x.p !== "today") q.set("p", x.p);
+  // Referral partners' old address opens Fractionals with "Different from yours" on, and says so in the address.
+  if (x.p === "partners") q.set("p", "fractionals"), q.set("ff", "diff");
+  else if (x.p !== "table" && x.p !== "today") q.set("p", x.p);
   // The radar's day (an email's link) or the range the member picked, so a reload opens the same companies. The default range says nothing.
   if (x.p === "radar" && x.sig) q.set("sig", x.sig);
   else if (x.p === "radar" && x.range) q.set("range", x.range);
@@ -2587,9 +2591,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           <main className="tp-main tp-main-page">
             <BillingPage view={view} refresh={refresh} onBack={toBase} />
           </main>
-        ) : page === "partners" ? (
-          <main className="tp-main tp-main-page">
-            <Partners infos={infos} onBack={toBase} onProfile={() => setIcpOpen(true)} />
+        ) : page === "fractionals" || page === "partners" ? (
+          <main className="tp-main tp-main-page fr-main">
+            <Fractionals infos={infos} waiting={waiting} different={page === "partners"} onBack={toBase} onProfile={() => setIcpOpen(true)} />
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">

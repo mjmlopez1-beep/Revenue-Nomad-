@@ -318,6 +318,8 @@ const pickLocked = (view, n) => {
     if (x.cell.s !== "locked" || x.entity === "company" || x.company.hidden) continue;
     // Who held a seat and their role are one purchase: the role is left out while the holder is locked too.
     if (x.entity === "engagement" && x.field === "role" && x.eng?.cells.operator?.s === "locked") continue;
+    // Who held a member's seat is left out: one member's seats are one fractional (Fractionals), so buying one opens the rest.
+    if (x.entity === "engagement" && (x.field === "operator" || x.field === "role") && x.eng && x.eng.source !== "Seat scan" && x.eng.source !== "Demand scan") continue;
     // A person's LinkedIn, email and phone open after their name and title: left out until then.
     if (x.entity === "contact" && ["linkedin", "email", "phone"].includes(x.field) && ["name", "title"].some((f) => x.person?.cells[f]?.s === "locked")) continue;
     if (x.entity === "contact" && ["name", "title"].includes(x.field)) {

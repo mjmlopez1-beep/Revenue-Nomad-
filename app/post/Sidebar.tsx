@@ -111,6 +111,13 @@ const P: Record<NavIconName, ReactNode> = {
     </>
   ),
   metrics: <path d="M4 19h16M6 15l4-5 3 3 5-7" />,
+  fractionals: (
+    <>
+      <circle cx="8" cy="8.5" r="3" />
+      <circle cx="16.5" cy="9.5" r="2.5" />
+      <path d="M2.5 19.5a5.5 5.5 0 0 1 11 0M13.5 15.2a4.5 4.5 0 0 1 8 3.8" />
+    </>
+  ),
 };
 export function NavIcon({ name, size = 18 }: { name: NavIconName; size?: number }) {
   return (
@@ -185,6 +192,7 @@ export function NavEntry({ it, onNav, compact, className = "" }: { it: NavItem; 
 const GROUPS: { key: NavItem["group"]; label: string | null }[] = [
   { key: "home", label: null },
   { key: "find", label: "Find" },
+  { key: "community", label: "Community" },
   { key: "yours", label: "Yours" },
   { key: "earn", label: "Earn" },
 ];

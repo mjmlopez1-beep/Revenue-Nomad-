@@ -262,9 +262,9 @@ const FEATURES: Feature[] = [
 const ALSO = [
   "Ideal Fractional Profile and best fit",
   "Saved views with a weekly email",
-  "Referral partners in other functions",
+  "Fractionals who serve your kind of clients",
   "Merlin in Claude",
-  "Search across companies, seats and people",
+  "Search across companies, seats and decision makers",
   "Follow a company",
 ];
 

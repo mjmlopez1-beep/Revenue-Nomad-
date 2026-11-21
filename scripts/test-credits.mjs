@@ -187,7 +187,10 @@ function pickLocked(view, n) {
     if (c.hidden) continue;
     const people = [...c.people];
     for (const e of c.engagements) {
-      for (const [field, cell] of Object.entries(e.cells)) if (cell.s === "locked" && out.length < n && !(field === "role" && e.cells.operator?.s === "locked")) out.push({ entity: "engagement", id: e.id, field });
+      // Who held a member's seat is left out: one member's seats are one fractional (Fractionals), so buying one opens the rest.
+      const memberSeat = e.source !== "Seat scan" && e.source !== "Demand scan";
+      for (const [field, cell] of Object.entries(e.cells))
+        if (cell.s === "locked" && out.length < n && !(field === "role" && e.cells.operator?.s === "locked") && !(memberSeat && (field === "operator" || field === "role"))) out.push({ entity: "engagement", id: e.id, field });
       people.push(...e.people);
     }
     for (const p of people) {

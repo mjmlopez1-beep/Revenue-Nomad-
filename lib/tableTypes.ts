@@ -334,6 +334,12 @@ export interface Me {
   messageEmail?: boolean;
   /** Listed for other members in Referral partners (on unless they turned it off in Your profile). */
   partners?: boolean;
+  /**
+   * "Show me in the Fractionals directory": true (their full name, seats and clients free to every
+   * member), false (out of the directory), null (not chosen yet: Home asks once, and until then they
+   * show by first name and last initial).
+   */
+  fractionals?: boolean | null;
   /** The next-client radar by email and Slack (on unless they turned it off in Your profile or with the radar email's link). */
   radar?: boolean;
   /** Who they hunt (onboarding, and the Ideal Fractional Profile pill over the table). Null until they say. */
@@ -1019,8 +1025,22 @@ export type Action =
    * offer ("pro_view") and asking to hear about Pro ("pro_interest"). `where` names the place.
    */
   | { type: "signal"; name: "wall" | "pro_view" | "pro_interest" | "radar_opened" | "radar_clicked"; where: string }
-  /** `partners`: listed in Referral partners for other members (Your profile, "Show me in Referral partners"). */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean; radar?: boolean }
+  /**
+   * `fractionals`: "Show me in the Fractionals directory" (Your profile, and Home's one-time question).
+   * `partners`: the same switch under its old name (Referral partners).
+   */
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean; fractionals?: boolean; radar?: boolean }
+  /**
+   * Fractionals: "Unlock · 1 credit" on a fractional not on Merlin yet (FractionalRec.id). The same
+   * purchase as who held one of their seats: every seat of theirs then shows who held it, with the role.
+   */
+  | { type: "unlockFractional"; id: string }
+  /**
+   * Activate your fractional profile, from a claim link only (app/api/table/names, op "activate"):
+   * claim the seats of the link's fractional, but those in `skip` (public seat ids), connect with
+   * everyone who invited them, and "Show me in the Fractionals directory" (`show`, on unless false).
+   */
+  | { type: "activate"; engagementId: string; skip?: string[]; show?: boolean }
   /** The invite loop: the inviter closed the line saying these fractionals joined from their invite (Me.joined ids). It doesn't come back. */
   | { type: "joinedSeen"; ids: string[] }
   /** Today's one-time cards: the member closed it ("trialEnded": the trial-ended card), kept in PlanRecord.notices. */ // [ux ws1]
@@ -1154,6 +1174,70 @@ export interface PartnersView {
    * with who held it (SEAT_BUNDLE).
    */
   titles?: Record<string, string>;
+}
+
+/* ---------- Fractionals ---------- */
+
+/**
+ * One fractional, as the viewer may see them (GET /api/table?fractionals=1, lib/fractionals.ts).
+ * Never a person key, a source id or an email. A name the viewer hasn't unlocked never reaches the
+ * page: `name`, `first` and `initials` are left out then.
+ */
+export interface FractionalRec {
+  /** The record's public id (an HMAC). */
+  id: string;
+  /** "Dana Whitfield", or "Dana W." for a member who hasn't chosen yet. Left out while locked. */
+  name?: string;
+  first?: string;
+  initials?: string;
+  /** A member who has signed in: Message. Otherwise "Not on Merlin yet": Invite to connect. */
+  onMerlin: boolean;
+  /** When they joined Merlin (members who joined, not those from our records). */
+  since?: string;
+  /** The viewer's own record. */
+  you?: boolean;
+  /** The viewer's own record, and they are out of the directory: only they see it. */
+  hidden?: boolean;
+  /** The name is locked: "Unlock · 1 credit". */
+  locked?: boolean;
+  /** The viewer paid for this fractional (a seat of theirs, or the person): the Unlocked tab. */
+  unlocked?: boolean;
+  /** The title they lead with, when the viewer can see it: a member's own, else their newest seat's role. */
+  title?: string;
+  /** Their function and level, read from their titles (free). */
+  fn: string | null;
+  level: string | null;
+  /** Every function they held seats in. */
+  fns: string[];
+  /** Their seats, newest first: public seat and company ids, and whether the seat is current. The page draws each from its own table. */
+  seats: { id: string; co: string; now: boolean }[];
+  now: number;
+  past: number;
+  /** The clients they serve: what a member states, or read from their seats ("seats"), and the one line the table shows. */
+  clients: { from: "stated" | "seats"; industries: string[]; employees: string[]; revenue: string[]; countries: string[]; line: string } | null;
+  /** The clients look like the viewer's Ideal Fractional Profile. */
+  fits: boolean;
+  /** Members: their public member id (Message), and the conversation already open with them. */
+  memberId?: string;
+  conversationId?: string;
+  /** Not on Merlin yet, and the viewer can invite them: a seat's claim link with the viewer's invite code, the seat it is for, and when they marked it sent. */
+  invite?: { path: string; seat: string; at?: string };
+}
+
+/** GET /api/table?fractionals=1: the directory. */
+export interface FractionalsView {
+  records: FractionalRec[];
+  /** The viewer's function (for Different from yours and Same as yours). */
+  fn: string | null;
+  /** The viewer is in the directory (null: not chosen yet). */
+  shown: boolean | null;
+}
+
+/** GET /api/table?fractionals=home: Home's one quiet line. Fractionals who serve the member's kind of client and joined in the last 7 days. */
+export interface FractionalsHome {
+  n: number;
+  /** Up to 3, for the faces: initials only, of members whose name the viewer may see. */
+  initials: string[];
 }
 
 /**

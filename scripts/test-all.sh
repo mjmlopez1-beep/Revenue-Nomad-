@@ -130,6 +130,8 @@ run names env NAMES_PORT="$PORT" npx tsx scripts/test-names.mts
 run pastseats npx tsx scripts/test-pastseats.mts
 # Referral partners: Invite to connect, the claim bonus and the conversation it opens, Message, the Referral partners page and the connector's warm paths, on a made-up seed and key, with its own server.
 run partners env PARTNERS_PORT="$PORT" npx tsx scripts/test-partners.mts
+# Fractionals (lib/fractionals.ts, lib/fractionalsCore.ts, lib/table.ts personIndex, unlockFractional and activate): one record per fractional (by member, by person key, else the seat), who shows and how, every credit case (no second charge, plans, limits, refunds), invites and activating a profile with its bonuses and cap, Not mine, This isn't me, Remove my name, old claim links, Referral partners' links, the rename, and no person key in any answer. In process, billing live with made-up Stripe settings, fetch replaced.
+run fractionals npx tsx scripts/test-fractionals.mts
 # Plans and payments (lib/plan.ts, lib/billing): the trial and its extension, pause, cancel, the Stripe webhook (signature, each event, once), monthly credits and top-ups, Free's limits on and off, nothing changed with billing off. Fetch replaced: nothing reaches Stripe.
 run billing npx tsx scripts/test-billing.mts
 # Your network (lib/google): the OAuth start and callback, sealed tokens, the sync and matching on fixture companies, warmth, named free, privacy (another member, admins, the export, the connector), Gmail via Claude (text refused, the caps, deletion), Gmail headers for test members (the gate, bulk skipped, invalid_grant), disconnect, RN_GOOGLE off. A fake Google server on 127.0.0.1; nothing leaves the machine.

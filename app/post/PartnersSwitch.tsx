@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Your profile: "Show me in Referral partners", on unless the member turned it off. It saves at
- * once (settings, partners), apart from the sheet's Save. Listed, other members see their first
- * name, title, function and the clients they want on the Referral partners page, never an email.
+ * Your profile: "Show me in the Fractionals directory" (Referral partners' switch before it). It
+ * saves at once (settings, fractionals), apart from the sheet's Save. On: other members see their
+ * full name, title, seats and the clients they serve in Fractionals, free, never an email. Off:
+ * they are out of the directory. Not chosen yet: they show by first name and last initial.
  */
 import { useContext, useState } from "react";
 import { IconCheck } from "../ui/shared";
@@ -43,22 +44,28 @@ export function PartnersSwitch() {
   const ui = useContext(UiCtx);
   const [busy, setBusy] = useState(false);
   if (!ui) return null;
-  const on = ui.me.partners !== false;
+  const on = ui.me.fractionals === true;
   const flip = async () => {
     setBusy(true);
-    await ui.act({ type: "settings", partners: !on });
+    await ui.act({ type: "settings", fractionals: !on });
     setBusy(false);
   };
   return (
     <div className="hunt-sub pt-switch">
-      <div className="hunt-h">Referral partners</div>
+      <div className="hunt-h">Fractionals</div>
       <button type="button" role="switch" aria-checked={on} className={`tp-ftoggle hunt-email${on ? " on" : ""}`} disabled={busy} aria-busy={busy} onClick={() => void flip()}>
         <span className="tp-check" aria-hidden>
           {on && <IconCheck size={11} />}
         </span>
-        <span className="tp-ftoggle-l">Show me in Referral partners</span>
+        <span className="tp-ftoggle-l">Show me in the Fractionals directory</span>
       </button>
-      <p className="hunt-lead">Members see your first name, title, function and the clients you want, and can write to you. Never your email.</p>
+      <p className="hunt-lead">
+        {ui.me.fractionals === false
+          ? "You're out of the directory. Members you already talk to can still write to you."
+          : ui.me.fractionals === true
+            ? "Members see your name, your seats and the clients you serve, free, and can message you. Never your email."
+            : "You show as your first name and last initial until you choose. On, members see your name, your seats and the clients you serve, free, and can message you. Never your email."}
+      </p>
     </div>
   );
 }

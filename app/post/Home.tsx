@@ -22,8 +22,9 @@
  * the whole table (the saved views' counts, the seats card, the search's matches) waits a moment
  * in its own place, at its own size, so nothing moves when it lands.
  */
-import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Me, SavedViewRec } from "@/lib/tableTypes";
+import { useContext, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { FractionalsHome, Me, SavedViewRec } from "@/lib/tableTypes";
+import { UiCtx } from "./ui";
 import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
 import { CompanyLogo, IconChevron, IconSearch, IconX, timeAgo } from "../ui/shared";
 import { EMPTY_FILTERS, RECORD_TYPES, applyFilters, rowsFor, type CheckStep, type CoInfo, type RecordType, type Row } from "./model";
@@ -37,6 +38,78 @@ import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
 import { Bleed, NomadArt, Prop, Scene, Spot, Strip } from "../ui/fractions/lazy";
 import "./home.css";
+
+/* ---------- Fractionals on Home ---------- */
+
+/**
+ * "3 fractionals who serve your kind of client joined this week." Asked for after Home's first
+ * paint (GET ?fractionals=home, lib/fractionals.ts fractionalsHome), and nothing at all when none did.
+ */
+function FractionalsJoined() {
+  const ui = useContext(UiCtx);
+  const [d, setD] = useState<FractionalsHome | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetch("/api/table?fractionals=home", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => live && j && setD(j as FractionalsHome))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!ui || !d || d.n < 1) return null;
+  return (
+    <section className="hm-frline" aria-label="New in Fractionals">
+      {d.initials.length > 0 && (
+        <span className="hm-frfaces" aria-hidden>
+          {d.initials.map((x, k) => (
+            <span key={k} className="hm-frface">
+              {x}
+            </span>
+          ))}
+        </span>
+      )}
+      <span className="hm-frtext">
+        {d.n === 1 ? "1 fractional who serves your kind of client joined this week." : `${d.n} fractionals who serve your kind of client joined this week.`}
+      </span>
+      <button type="button" className="hm-frgo" onClick={() => ui.openPage("fractionals")}>
+        See {d.n === 1 ? "them" : "them"} <IconChevron dir="right" />
+      </button>
+    </section>
+  );
+}
+
+/** Once, for a member who hasn't chosen: show them in the Fractionals directory, or keep them out. Your profile has the same switch. */
+function ShowMeAsk() {
+  const ui = useContext(UiCtx);
+  const [busy, setBusy] = useState<"yes" | "no" | null>(null);
+  if (!ui) return null;
+  const pick = async (on: boolean) => {
+    setBusy(on ? "yes" : "no");
+    await ui.act({ type: "settings", fractionals: on });
+    setBusy(null);
+  };
+  return (
+    <section className="hm-frask" aria-labelledby="hm-frask-h">
+      <h2 className="hm-frask-h" id="hm-frask-h">
+        Show you in the Fractionals directory?
+      </h2>
+      <p className="hm-frask-p">
+        Members see your name, your seats and the clients you serve, free, and can message you. Never your email. Until you choose, you show as {ui.me.name.trim().split(/\s+/)[0]}{" "}
+        {(ui.me.name.trim().split(/\s+/).pop() ?? "").charAt(0).toUpperCase()}. You can change it any time in Your profile.
+      </p>
+      <div className="hm-frask-acts">
+        <button type="button" className="btn btn-pine" disabled={!!busy} aria-busy={busy === "yes"} onClick={() => void pick(true)}>
+          Show me
+        </button>
+        <button type="button" className="btn" disabled={!!busy} aria-busy={busy === "no"} onClick={() => void pick(false)}>
+          Keep me out
+        </button>
+      </div>
+    </section>
+  );
+}
 
 /** A place on Home: a link where it is one (middle-click opens a new tab), else a button. */
 export interface Go {
@@ -234,6 +307,10 @@ export function HomePage(p: HomeProps) {
           )
         }
       />
+
+      {/* Fractionals: one quiet line when fractionals who serve the member's kind of client joined this week, and the one-time question. */}
+      {rest && <FractionalsJoined />}
+      {rest && me.fractionals == null && <ShowMeAsk />}
 
       {rest && p.steps && <GetStarted steps={p.steps} onStep={p.onStep} onHide={p.onHideSteps} />}
       {rest && <AskBox {...p} />}

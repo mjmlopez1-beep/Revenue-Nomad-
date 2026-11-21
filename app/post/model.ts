@@ -55,7 +55,7 @@ export const sortFor = (t: RecordType, s: SortKey): SortKey => (SORTS_BY_TYPE[t]
 export const RECORD_TYPES: { key: RecordType; label: string }[] = [
   { key: "companies", label: "Companies" },
   { key: "engagements", label: "Seats" },
-  { key: "people", label: "People" },
+  { key: "people", label: "Decision makers" },
 ];
 
 /* ---------- cells ---------- */
@@ -1883,7 +1883,7 @@ export function viewName(f: Filters, tab: Tab, type: RecordType, hireFn: string 
   }
   const fns = f.fn.length ? f.fn : hireFn ? [hireFn] : [];
   const roles = tab === "hiring" || type === "engagements" || fns.length > 0;
-  const subject = fns.length ? `${fns.join(" or ")} ${tab === "hiring" ? "roles" : "seats"}` : tab === "hiring" ? "Open roles" : type === "people" ? "People" : roles ? "Seats" : "Companies";
+  const subject = fns.length ? `${fns.join(" or ")} ${tab === "hiring" ? "roles" : "seats"}` : tab === "hiring" ? "Open roles" : type === "people" ? "Decision makers" : roles ? "Seats" : "Companies";
   const inds = industryWords(f.industry).map((x) => x.replace(" (all)", ""));
   const ind = inds.length ? `${inds.join(" or ")} companies` : "";
   const head = ind ? (subject === "Companies" ? ind : `${subject} at ${ind}`) : subject;

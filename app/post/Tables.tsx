@@ -756,7 +756,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
     { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
     { label: "Rate", cls: "w-rate num", rates: true },
-    { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
+    { label: "Decision maker", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
   // Recently hired: the same columns, with the hire each company matched in place of the latest seat. Held by and Rate are that seat's.
   hiredCompanies: [
@@ -770,7 +770,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
     { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
     { label: "Rate", cls: "w-rate num", rates: true },
-    { label: "People", cls: "w-ppl c-lo", tip: "The decision maker on file" },
+    { label: "Decision maker", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
   // The radar's day: what happened at each company, two facts, and its one action (Unlock company or Open), fitted to the page.
   signalCompanies: [
@@ -791,7 +791,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Employees", cls: "w-emp num", sort: "employees" },
     { label: "Revenue", cls: "w-rev num", sort: "revenue" },
     { label: "HQ", cls: "w-hq", sort: "hq" },
-    { label: "People", cls: "w-ppl", tip: "The decision maker on file" },
+    { label: "Decision maker", cls: "w-ppl", tip: "The decision maker on file" },
   ],
   engagements: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },

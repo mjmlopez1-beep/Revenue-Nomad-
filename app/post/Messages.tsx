@@ -64,7 +64,7 @@ const seatDetail = (c: ConversationRec) => [c.about.seat, c.about.years].filter(
 
 /** The line above the first message: why this conversation exists. */
 function contextLine(c: ConversationRec): string {
-  if (c.kind === "partners") return c.started ? `You wrote to ${c.with.first} as a referral partner.` : `${c.with.first} found you in Referral partners and wants to connect.`;
+  if (c.kind === "partners") return c.started ? `You wrote to ${c.with.first} as a referral partner.` : `${c.with.first} found you in Fractionals and wants to connect.`;
   const d = seatDetail(c);
   const at = `${c.about.company && c.about.company !== HIDDEN_COMPANY ? c.about.company : "a company that's hiring"}${d ? ` (${d})` : ""}`;
   // Opened by itself when the seat holder claimed their seat through the invite (Invite to connect).
@@ -257,7 +257,7 @@ export function MessagesPage({ onBack, openCompany }: { onBack: () => void; open
               </span>
               <span className="ms-row-about">
                 {c.kind === "partners" ? (
-                  "Referral partners"
+                  "From Fractionals"
                 ) : (
                   <>
                     {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company}
@@ -629,11 +629,21 @@ function OpenConversation({ conv, first }: { conv: ConversationRec; first: strin
 }
 
 /**
- * "Connect" with a member listed in Referral partners: a conversation about no seat
- * (message.connect), with an opener they can change (lib/partners.ts partnerOpener). One per pair:
- * once there is a conversation with them, it opens that one instead.
+ * "Message" a member in Fractionals ("Connect" on Referral partners before it): a conversation about
+ * no seat (message.connect), with an opener they can change (lib/partners.ts partnerOpener). One per
+ * pair: once there is a conversation with them, it opens that one instead.
  */
-export function ConnectButton({ member, conversationId }: { member: { id: string; first: string }; conversationId?: string | null }) {
+export function ConnectButton({
+  member,
+  conversationId,
+  label = "Connect",
+  className = "btn btn-sm btn-pine",
+}: {
+  member: { id: string; first: string };
+  conversationId?: string | null;
+  label?: React.ReactNode;
+  className?: string;
+}) {
   const ui = useUi();
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
@@ -641,20 +651,20 @@ export function ConnectButton({ member, conversationId }: { member: { id: string
   const known = conversationId ?? sent;
   if (known)
     return (
-      <button type="button" className="btn btn-sm" onClick={() => openConversation(ui.openPage, known)}>
-        Open conversation
+      <button type="button" className={className.replace(" btn-pine", "")} onClick={() => openConversation(ui.openPage, known)}>
+        {label === "Connect" ? "Open conversation" : label}
       </button>
     );
   return (
     <>
-      <button ref={btn} type="button" className="btn btn-sm btn-pine" onClick={() => setOpen(true)}>
-        Connect
+      <button ref={btn} type="button" className={className} onClick={() => setOpen(true)}>
+        {label}
       </button>
       {open && (
         <Compose
           to={{ memberId: member.id }}
           first={member.first}
-          about="About connecting as referral partners."
+          about="From Fractionals: a fractional who serves the same kind of clients."
           opener={partnerOpener({ first: member.first, myTitle: ui.me.title, myFn: ui.me.function, icp: ui.me.icp })}
           onClose={() => setOpen(false)}
           onSent={(c) => setSent(c.id)}

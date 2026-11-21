@@ -96,8 +96,8 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
       `Invite a fractional you trust with your invite link. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company that's already on Merlin, or claim their seat through your Invite to connect link. A rate shared only for the benchmarks doesn't count, and there is no bonus when you both join from the same internet connection.`,
     ],
     [
-      "What are referral partners?",
-      "Fractionals in other functions who work with the same kind of clients you do, so you can send each other work. Referral partners shows who gets hired before and after your function, who held seats at companies like yours, and the members you can write to. You're listed there for other members unless you turn it off in Your profile.",
+      "What is Fractionals?",
+      "A directory of fractionals, one record each: their function and level, their seats now and past, and the kind of clients they serve. Members who choose to be shown are free to see and message. Someone not on Merlin yet costs 1 credit to see who they are, the same purchase as who held one of their seats, and then you can invite them with your own link. Your profile has the switch that shows you there or keeps you out.",
     ],
     [
       "What does it cost?",

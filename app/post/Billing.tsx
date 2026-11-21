@@ -106,7 +106,7 @@ const ROWS: [string, string, string][] = [
   ["Slack", "The weekly roles post", "Every alert"],
   ["Claude", "20 requests a day", "No daily cap"],
   ["Credits", "1 for each fact you add", "Plus 100 each paid month"],
-  ["Referral partners, messages, Recently hired", "Included", "Included"],
+  ["Fractionals, messages, Recently hired", "Included", "Included"],
 ];
 
 export function CompareTable({ current }: { current?: "free" | "pro" }) {

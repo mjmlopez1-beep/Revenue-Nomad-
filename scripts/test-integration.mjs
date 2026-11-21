@@ -233,7 +233,11 @@ function pickLocked(view, n, skipIds = new Set()) {
     const people = [...c.people];
     for (const e of c.engagements) {
       // Who held a seat and the role they held are one purchase too: the role is left out when the holder is locked.
-      if (!skipIds.has(e.id)) for (const [field, cell] of Object.entries(e.cells)) if (cell.s === "locked" && out.length < n && !(field === "role" && e.cells.operator?.s === "locked")) out.push({ entity: "engagement", id: e.id, field });
+      // Who held a member's seat is left out too: one member's seats are one fractional (Fractionals), so buying one opens the rest.
+      const memberSeat = e.source !== "Seat scan" && e.source !== "Demand scan";
+      if (!skipIds.has(e.id))
+        for (const [field, cell] of Object.entries(e.cells))
+          if (cell.s === "locked" && out.length < n && !(field === "role" && e.cells.operator?.s === "locked") && !(memberSeat && (field === "operator" || field === "role"))) out.push({ entity: "engagement", id: e.id, field });
       people.push(...e.people);
     }
     // A person's name and title are one purchase: the title is left out when the name is locked too.

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ActionError, claimByToken, claimPage, joinMember, memberByEmail, nameOffByName, nameOffByToken } from "@/lib/table";
+import { ActionError, activateByToken, claimByToken, claimPage, joinMember, memberByEmail, memberForToken, nameOffByName, nameOffByToken, nameOffSeat, seatNameForJoin } from "@/lib/table";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { guarded } from "@/lib/apiGuard";
 import { emailEnabled, sendEmail } from "@/lib/email";
@@ -22,7 +22,14 @@ export const dynamic = "force-dynamic";
  *                                       joining (or to sign in, for an address that is a member's) comes
  *                                       back to this page and claims it there. Same answer either way.
  * POST { op: "email", t, email, ref }   a one-time sign-in link back to this page. Same answer for any address.
- * POST { op: "notme" | "remove", t }    the name comes off the seat, no account needed (rate-limited by network).
+ * POST { op: "notme" | "remove", t }    the name comes off the seat, no account needed (rate-limited by network). On a
+ *                                       link whose fractional has more seats, off every seat of theirs still named.
+ * POST { op: "activate", t, ref, skip, show, email?, name? }  Activate your fractional profile (a fractional with
+ *                                       more than one seat): signed in, claim every seat of theirs but `skip` and
+ *                                       connect with everyone who invited them; signed out, join with `email` (the
+ *                                       name on the seats, or `name` when that won't do) and then the same, or with
+ *                                       email on, a link back here that does it.
+ * POST { op: "notmine-seat", t, seat }  "Not mine" on one seat of the activation page: its name comes off.
  * POST { op: "forget", name, company }  the public Remove my name page: the same answer whatever matched.
  */
 
@@ -55,10 +62,10 @@ const refOf = (raw: unknown) => (typeof raw === "string" && /^[A-Za-z0-9_-]{1,40
  * A one-time link that signs in (or finishes joining) and comes back to this claim page to claim the
  * seat, with the invite code the page came with (so the claim still connects them). In the background.
  */
-function sendBack(req: NextRequest, m: { id: string; name: string; email: string }, purpose: "signin" | "join", t: string, ref: string | null = null) {
+function sendBack(req: NextRequest, m: { id: string; name: string; email: string }, purpose: "signin" | "join", t: string, ref: string | null = null, more = "") {
   void (async () => {
     const { token, code } = await createSignIn(m.id, purpose);
-    const e = oneTimeEmail(m.name, `${origin(req)}/claim/${t}?k=${encodeURIComponent(token)}&go=1${ref ? `&ref=${encodeURIComponent(ref)}` : ""}`, code, purpose);
+    const e = oneTimeEmail(m.name, `${origin(req)}/claim/${t}?k=${encodeURIComponent(token)}&go=1${ref ? `&ref=${encodeURIComponent(ref)}` : ""}${more}`, code, purpose);
     await sendEmail(m.email, e.subject, e.text, e.html);
   })().catch((e) => console.error("claim link email failed", e));
 }
@@ -124,6 +131,64 @@ export const POST = guarded(async (req: NextRequest) => {
       return NextResponse.json({ ok: true, claimed: !out.waiting, waiting: out.waiting, message: out.message }, { headers: { "cache-control": "no-store" } });
     } catch (e) {
       if (e instanceof ActionError) return err(e.message);
+      throw e;
+    }
+  }
+
+  // Activate your fractional profile (a fractional with more than one seat, lib/table.ts activateByToken).
+  if (op === "notmine-seat") {
+    if (limited(`nameoff:${ip}`, 20, 60 * 60_000)) return err(SLOW, 429);
+    const r = await nameOffSeat(t, body.seat);
+    if (!r.done && r.why === "invalid") return err(BAD_LINK);
+    return NextResponse.json(
+      { ok: true, done: r.done, message: r.done ? "Thanks. That seat's name is off, so it isn't yours on Merlin." : "That seat is claimed by a member now, so its name is theirs." },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  if (op === "activate") {
+    const skip = Array.isArray(body.skip) ? body.skip.filter((x): x is string => typeof x === "string" && /^e_[A-Za-z0-9_-]{6,20}$/.test(x)).slice(0, 200) : [];
+    const show = body.show !== false;
+    const activate = async (memberToken: string) => {
+      const out = await activateByToken(memberToken, t, { origin: origin(req), ref, skip, show });
+      return { ok: true, activated: true, message: out.message, record: out.id ?? null, conversationId: out.conversationId };
+    };
+    if (token && (await memberForToken(token))) {
+      if (limited(`claim:${ip}`, 30, 60 * 60_000)) return err(SLOW, 429);
+      try {
+        return NextResponse.json(await activate(token), { headers: { "cache-control": "no-store" } });
+      } catch (e) {
+        if (e instanceof ActionError) return err(e.message);
+        throw e;
+      }
+    }
+    // Signed out: join with the name on the seats (never shown on the page), or the one they typed when that one won't do.
+    if (limited(`join:${ip}`, 10, 60 * 60_000)) return err("That's 10 sign-ups from this network in an hour, which is the limit. Try again in an hour.", 429);
+    const email = String(body.email ?? "").trim().toLowerCase().slice(0, 120);
+    if (emailEnabled() && limited(`email:${email}`, 3, 20 * 60_000)) return err("We've sent 3 links to that email in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
+    const typed = tidy(body.name, 80);
+    const name = typed || (await seatNameForJoin(t)) || "";
+    try {
+      const m = await joinMember(name, email, ref, ip);
+      if (emailEnabled()) {
+        const more = `${skip.length ? `&skip=${encodeURIComponent(skip.join(","))}` : ""}${show ? "" : "&show=0"}`;
+        sendBack(req, m, m.existing ? "signin" : "join", t, ref, more);
+        return NextResponse.json({ ok: true, sent: true }, { headers: { "cache-control": "no-store" } });
+      }
+      let answer: Record<string, unknown>;
+      try {
+        answer = await activate(m.token);
+      } catch (e) {
+        if (!(e instanceof ActionError)) throw e;
+        answer = { ok: true, activated: false, message: e.message };
+      }
+      return withSession(req, NextResponse.json(answer, { headers: { "cache-control": "no-store" } }), m.token);
+    } catch (e) {
+      if (e instanceof ActionError) {
+        // The name on the seats doesn't read as a first and last name: the page asks for theirs.
+        if (!typed && /first and last name/i.test(e.message)) return NextResponse.json({ error: "Add your first and last name, the way you work under it.", needName: true }, { status: 400, headers: { "cache-control": "no-store" } });
+        return err(e.message);
+      }
       throw e;
     }
   }

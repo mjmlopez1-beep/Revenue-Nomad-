@@ -66,7 +66,7 @@ check("Invite: no colons or em dashes in its sentences", !/—/.test(note) && !/
 const first = W.connectText("Ivy", note);
 check("the conversation's first message: who invited them, then the note without its claim link", first.startsWith("Ivy invited you to connect as referral partners.\n\nHi Pella") && !first.includes("/claim/") && !first.includes("Claim it with this link"), first);
 check("a note is kept to 2,000 characters, line breaks and all", W.cleanNote("a\r\n\r\n\r\n\r\nb" + "x".repeat(3000)).length === 2000 && W.cleanNote("a\r\n\r\n\r\nb").startsWith("a\n\nb"));
-check("Connect from Referral partners: its opener", W.partnerOpener({ first: "Sam", myTitle: "Fractional VP Sales", myFn: "Sales", icp }) === "Hi Sam, I'm a fractional VP Sales working with SaaS companies of 51–200 people in the US. I found you in Merlin's referral partners. Open to swapping notes and referrals?");
+check("Message from Fractionals (Connect on Referral partners before it): its opener", W.partnerOpener({ first: "Sam", myTitle: "Fractional VP Sales", myFn: "Sales", icp }) === "Hi Sam, I'm a fractional VP Sales working with SaaS companies of 51–200 people in the US. I found you in Merlin's Fractionals directory. Open to swapping notes and referrals?");
 
 /* ---------- the made-up seed and state ---------- */
 
@@ -607,7 +607,7 @@ if (up) {
   const hollis = new Who(cookieOf(await call("POST", "/api/table", { ip: "10.84.0.3", body: { signIn: "pt-tok-hide" } }))!, "10.84.0.3");
   const hollisId = T.tableInternals.pubId("sm_hide");
   r = await ivy.act({ type: "message.connect", memberId: hollisId, text: "Hi" });
-  check("a member who turned Referral partners off can't be connected with", r.status === 400 && /isn't listed/.test(r.json?.error ?? ""), r.json);
+  check("a member who turned Referral partners off (out of Fractionals now) can't be messaged from it", r.status === 400 && /isn't in the Fractionals directory/.test(r.json?.error ?? ""), r.json);
   r = await ivy.act({ type: "message.connect", memberId: pub((await ivy.view()).me.id), text: "Hi" });
   check("nor yourself", r.status === 400 && /That's you/.test(r.json?.error ?? ""), r.json);
   void hollis;
