@@ -350,7 +350,20 @@ async function main() {
   const viewJson = JSON.stringify(v0);
   const PRIVATE = ["pat.proposals@example.com", "mem_pat", "c_acme", "quoted $15k", "budget.signals", "notes", SECRET_LINE, '"fields"', '"sources"', "pr_"];
   check("the signer's view carries nothing private", PRIVATE.every((w) => !viewJson.includes(w)) && /^da\*+@acmerobotics\.example$/.test(v0.emailHint), PRIVATE.filter((w) => viewJson.includes(w)));
-  check("the consent: ESIGN-style, with its version", /electronic records and an electronic signature/.test(v0.consent) && /paper copy/.test(v0.consent) && /withdraw this consent/.test(v0.consent) && v0.consentVersion === CONSENT_VERSION);
+  check(
+    "the consent: ESIGN-style, with its version (electronic records, legally binding, authority, paper copy at no cost, withdrawing and what it does, what's needed, contact details, the audit trail)",
+    /electronic records and an electronic signature/.test(v0.consent) &&
+      /legally binding/.test(v0.consent) &&
+      /authorised to sign/.test(v0.consent) &&
+      /paper copy at any time, at no cost/.test(v0.consent) &&
+      /withdraw this consent/.test(v0.consent) &&
+      /does not undo anything already signed/.test(v0.consent) &&
+      /web browser/.test(v0.consent) &&
+      /email address changes/.test(v0.consent) &&
+      /fingerprint of this exact document/.test(v0.consent) &&
+      v0.consentVersion === CONSENT_VERSION,
+    v0.consent,
+  );
   const p1 = await S.getProposal(PAT, p.id, BASE);
   check("viewed: on the audit trail with IP and browser, once", p1.status === "viewed" && p1.send!.events.filter((e) => e.kind === "viewed").length === 1 && p1.send!.events.find((e) => e.kind === "viewed")?.ip === who.ip);
   await S.signerView(tok, who, BASE);
