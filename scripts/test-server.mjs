@@ -719,10 +719,16 @@ section("gzip", async () => {
   check("a coding the client refuses with q=0 is not used", refused.headers["content-encoding"] === "gzip", refused.headers["content-encoding"]);
   const plain = await as(null);
   console.log(`  member view: ${(plain.body.length / 1024).toFixed(0)} KB raw, ${(z.body.length / 1024).toFixed(1)} KB gzip, ${(b.body.length / 1024).toFixed(1)} KB brotli`);
+  const asCompact = (enc) => rawGet("/api/table?compact=1", { "accept-encoding": enc, cookie: `rn_table=${m.token}`, "x-forwarded-for": m.ip });
+  const cb = await asCompact("gzip, deflate, br");
+  const cz = await asCompact("gzip, deflate");
+  console.log(`  compact view (what the page loads): ${(cz.body.length / 1024).toFixed(1)} KB gzip, ${(cb.body.length / 1024).toFixed(1)} KB brotli`);
   check("brotli is smaller than gzip", b.body.length < z.body.length, [b.body.length, z.body.length]);
-  // The private seed holds about 6,600 companies since the third seat scan. Their About texts are not in the table (a record
-  // loads its own, GET ?about=): about 660 KB gzip and 480 KB brotli in full (it was 1,010 KB gzip with them; the page asks for ?compact=1).
-  check("the compressed view is under 800 KB", z.body.length < 800 * 1024 && b.body.length < 800 * 1024, [z.body.length, b.body.length]);
+  // The private seed holds about 12,600 companies since the Past Seats import (6,600 before it). About texts are not in the
+  // table (a record loads its own, GET ?about=). The page asks for ?compact=1, so that is the view held under 800 KB in both
+  // codings: about 690 KB gzip and 525 KB brotli. The full view (about 900 KB gzip, 560 KB brotli) is only for other clients.
+  check("the compact view the page loads is under 800 KB", cz.body.length < 800 * 1024 && cb.body.length < 800 * 1024, [cz.body.length, cb.body.length]);
+  check("the full view is under 800 KB in brotli and 1,100 KB in gzip", b.body.length < 800 * 1024 && z.body.length < 1100 * 1024, [z.body.length, b.body.length]);
   check("both say the same thing", JSON.stringify(bv?.me) === JSON.stringify(zv?.me) && bv?.companies?.length === zv?.companies?.length, [bv?.companies?.length, zv?.companies?.length]);
   check("vary: Accept-Encoding", /accept-encoding/i.test(String(b.headers.vary ?? "")) && /accept-encoding/i.test(String(z.headers.vary ?? "")));
   check("not compressed when not accepted", !plain.headers["content-encoding"] && !!JSON.parse(plain.body.toString("utf8")).companies);

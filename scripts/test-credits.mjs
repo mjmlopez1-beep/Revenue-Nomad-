@@ -345,7 +345,10 @@ section("sell", async () => {
   await openWhere(F, (c) => Object.keys(SELL).every((k) => c.cells[k]?.s === "empty") && c.cells.hq?.s === "empty", 7);
   const v = await F.view();
   const base = v.me.credits;
-  const sells = pickEmpty(v, 22, SELL);
+  // The 22nd goes in through an Add of a Sales seat (N6). It must be a company with no Sales seat on file
+  // yet, or the Add rightly claims that seat instead (the seed carries past seats at many companies).
+  const noSales = { ...v, companies: v.companies.filter((c) => !(c.engagements ?? []).some((e) => e.cells.function?.s !== "value" || e.cells.function.v === "Sales")) };
+  const sells = [...pickEmpty(v, 21, SELL), ...pickEmpty(noSales, 1, SELL)];
   let r;
   for (let i = 0; i < 5; i++) {
     r = await F.act(fillAct(sells[i]));
