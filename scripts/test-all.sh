@@ -115,8 +115,10 @@ run predict npx tsx scripts/test-predict.mts
 run hired npx tsx scripts/test-hired.mts
 # About texts from company websites (lib/about): extraction, the fetch safety rules and storage, against a mock server on $PORT. Nothing leaves the machine.
 run about env ABOUT_PORT="$PORT" npx tsx scripts/test-about.mts
-# Who leads each function, from company websites (lib/leaders): titles, the pages found, robots.txt, the page cap, same site only, no names stored, the record's line, "No fractional Sales yet" and its ranking, the connector, Pilot metrics, RN_LEADERS off. A mock server on $PORT; nothing leaves the machine.
+# Who leads each function, from company websites (lib/leaders): titles, the pages found, robots.txt, the page cap, same site only, no names where the HQ isn't in the United States, the record's line, "No fractional Sales yet" and its ranking, the connector, Pilot metrics, RN_LEADERS off. A mock server on $PORT; nothing leaves the machine.
 run leaders env LEADERS_PORT="$PORT" npx tsx scripts/test-leaders.mts
+# The leaders named from a company's website as decision makers: the CEO and each function's leader, nobody below, US companies only, Remove my name on every later read, a member's own choice, 1 credit for name and title then 1 for the email, merged with a member-added person, the likely email (2 or more emails on one pattern, never verified), the connector, Pilot metrics. A mock server on $PORT.
+run leaders-names env LEADERS_PORT="$PORT" npx tsx scripts/test-leaders-names.mts
 run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
 # Bundles and prices on the server module: Ongoing end months free and refunded once on load, SEAT_SCAN_ROLE_FREE both ways (a copy of lib/ flips it).

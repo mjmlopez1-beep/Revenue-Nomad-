@@ -81,8 +81,8 @@ export function RemoveView() {
             <>
               <h1 className="cl-h">Remove my name</h1>
               <p className="cl-p">
-                Merlin lists seats fractional leaders hold at their clients. If your name is on a seat and you&apos;d rather it wasn&apos;t, tell us where. It comes off at
-                once. You don&apos;t need an account.
+                Merlin lists seats fractional leaders hold at their clients, and the leaders a company names on its own website. If your name is on Merlin and you&apos;d
+                rather it wasn&apos;t, tell us where. It comes off at once and stays off. You don&apos;t need an account.
               </p>
               <form className="cl-form" onSubmit={submit} noValidate>
                 <label className="cl-label" htmlFor={`${id}-name`}>

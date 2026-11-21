@@ -35,7 +35,8 @@ import {
 import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
-import { checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
+import { LEADERS_SOURCE, LEADERS_SOURCE_SAY, checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
+import { likelyWords } from "@/lib/leaders/likely";
 import { LeaderReport } from "./LeaderReport";
 import { CrystalOpen } from "./CrystalOpen";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
@@ -204,7 +205,23 @@ function factInfo(t: FactRef, cell: Cell, ui: Ui, own: boolean, listed: boolean,
   // A seat holder can also fix the function on their own seat, whoever set it (our records included).
   const ownFn = own && t.entity === "engagement" && t.field === "function";
   const canEdit = (!!v?.mine || (!!v && ownFn)) && !fixed;
-  const source = !v ? "" : v.from === "records" ? "From Revenue Nomad records" : v.from === "research" ? "Revenue Nomad research" : v.from === "posting" ? "From the job posting" : v.mine ? (v.claimed ? "You claimed this" : "You added this") : "Added by a member";
+  const source = !v
+    ? ""
+    : v.from === "pattern"
+      ? `${likelyWords(v.likely ?? 0)}. Not verified`
+      : v.from === "website"
+        ? LEADERS_SOURCE_SAY
+        : v.from === "records"
+          ? "From Revenue Nomad records"
+          : v.from === "research"
+            ? "Revenue Nomad research"
+            : v.from === "posting"
+              ? "From the job posting"
+              : v.mine
+                ? v.claimed
+                  ? "You claimed this"
+                  : "You added this"
+                : "Added by a member";
   const confirmHelp = v && !v.from ? "Two confirmations earn the member who added it a credit." : "It tells other members this still holds.";
   const back = gated && !own ? " You get the credit back if we remove it." : "";
   const reportHelp = own
@@ -239,6 +256,13 @@ function Provenance({ cell, source }: { cell: Cell; source: string }) {
     return (
       <span className="tp-from" title="From the job posting">
         From the posting
+      </span>
+    );
+  // A likely email always says so, confirmed or not: it is never shown as verified.
+  if (cell.from === "pattern")
+    return (
+      <span className="tp-from tp-likely" title={`${likelyWords(cell.likely ?? 0)}. Not verified.`}>
+        Likely
       </span>
     );
   return null;
@@ -952,8 +976,43 @@ function PersonCard({ p, inSeat }: { p: PersonRec; inSeat?: boolean }) {
   const waits = (f: string) => (p.cells[f]?.s !== "locked" ? null : env.hidden ? AFTER_COMPANY : unseen && PERSON_DETAILS.includes(f) ? AFTER_NAME : null);
   return (
     <div className={`tp-person${inSeat ? "" : " tp-person-box"}`} id={`tp-d-${p.id}`}>
-      <FieldList entity="contact" id={p.id} cells={p.cells} fields={personFields(p)} render={personRender} pair={PERSON_BUNDLE} waits={waits} noAdd={unseen ? PERSON_NO_ADD : []} />
+      <FieldList
+        entity="contact"
+        id={p.id}
+        cells={p.cells}
+        fields={personFields(p)}
+        render={personRender}
+        pair={PERSON_BUNDLE}
+        waits={waits}
+        noAdd={unseen ? PERSON_NO_ADD : []}
+        labels={likelyCell(p.cells.email) ? { email: "Likely email" } : undefined}
+      />
+      {p.source === LEADERS_SOURCE && <SiteSource p={p} />}
     </div>
+  );
+}
+
+/** A likely email (built from the pattern of the emails on file): how many it was read from, else 0. */
+const likelyCell = (c: Cell | undefined) => (c && (c.s === "locked" || c.s === "value") && c.from === "pattern" ? c.likely ?? 0 : 0);
+
+/**
+ * Where a leader read from the company's website came from, with the page (at an unlocked company)
+ * and when it was read. A likely email says how it was built, before it is unlocked too.
+ */
+function SiteSource({ p }: { p: PersonRec }) {
+  const likely = likelyCell(p.cells.email);
+  const url = p.site?.url && /^https?:\/\//i.test(p.site.url) ? p.site.url : null;
+  return (
+    <p className="tp-dsec-note tp-person-src">
+      {url ? (
+        <a className="tp-link" href={url} target="_blank" rel="noreferrer nofollow">
+          {LEADERS_SOURCE_SAY}
+        </a>
+      ) : (
+        LEADERS_SOURCE_SAY
+      )}
+      {p.site?.at ? `, read ${checkedWords(p.site.at)}` : ""}.{likely ? ` Email: ${likelyWords(likely)}. Not verified.` : ""}
+    </p>
   );
 }
 

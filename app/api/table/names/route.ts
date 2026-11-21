@@ -38,7 +38,8 @@ const err = (message: string, status = 400) => NextResponse.json({ error: messag
 const SLOW = "That's a lot in a short time. Give it a few minutes, then try again.";
 const BAD_LINK = "That claim link didn't work. It may be cut short. Open the whole link from the message.";
 /** The public Remove my name page says this whatever matched, so it can't be used to look names up. */
-const FORGET_ANSWER = "Done. If your name was on a seat at that company, it's off now, and anyone who paid to see it got their credit back.";
+const FORGET_ANSWER =
+  "Done. If your name was on Merlin at that company, on a seat or read from the company's website, it's off now and stays off. Anyone who paid to see it got their credit back.";
 
 const origin = (req: NextRequest) =>
   process.env.RN_PUBLIC_URL?.replace(/\/$/, "") ||

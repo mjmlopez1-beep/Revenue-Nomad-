@@ -329,6 +329,7 @@ function LeadersRead({ a, refresh }: { a: AdminStats; refresh: () => Promise<voi
           ["Functions found", n0(r?.functions ?? 0)],
           ["Fractional or interim found", n0(r?.fractional ?? 0)],
           ["Full-time found", n0(r?.fullTime ?? 0)],
+          ["Named leaders kept", n0(r?.named ?? 0)],
           ["Failed, blocked by robots.txt, skipped", r ? `${n0(r.failed)} · ${n0(r.robots)} · ${n0(Math.max(0, r.skipped - r.robots))}` : "0 · 0 · 0"],
           [x.running ? "Started" : "Finished", r ? stamp(x.running ? r.startedAt : r.endedAt, "Stopped before the end") : "Not yet"],
         ]}
@@ -340,6 +341,7 @@ function LeadersRead({ a, refresh }: { a: AdminStats; refresh: () => Promise<voi
           ["Functions with a leader", n0(f.functions)],
           ["Fractional or interim", n0(f.fractional)],
           ["Full-time", n0(f.fullTime)],
+          ["Named leaders (US companies)", n0(f.named ?? 0)],
           ["Nobody found", n0(f.none)],
           ["Failed, blocked by robots.txt, skipped", `${n0(f.failed)} · ${n0(f.robots)} · ${n0(f.skipped)}`],
           ["Due for a read", n0(x.due)],
@@ -373,7 +375,7 @@ function LeadersRead({ a, refresh }: { a: AdminStats; refresh: () => Promise<voi
           ? "Off. It starts once RN_LEADERS=1 is set on the server."
           : running
             ? "Reading company websites, four at a time. This page updates as it goes."
-            : "Reads each company's leadership, team and press pages for who leads each function. No names are kept."}
+            : "Reads each company's leadership, team and press pages for who leads each function. Keeps the name and title of the CEO and each function's leader at US companies, nobody below them."}
       </p>
     </Card>
   );

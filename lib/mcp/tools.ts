@@ -30,7 +30,8 @@ import {
   fractionalLeadFns, fullTimeLead,
   type CoInfo, type FactRef, type Filters, type SortKey,
 } from "@/app/post/model";
-import { LEADERS_SOURCE, checkedWords, leadItems, ledFullTimeWords, monthYear } from "../leaders/types";
+import { LEADERS_SOURCE, LEADERS_SOURCE_SAY, checkedWords, leadItems, ledFullTimeWords, monthYear } from "../leaders/types";
+import { likelyWords } from "../leaders/likely";
 import { cleanWindow } from "../hired";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
 import { sameView } from "../hunt";
@@ -222,8 +223,21 @@ export function personLocked(p: PersonRec, hidden: boolean, field: string): stri
   return PERSON_BUNDLE.includes(field) ? LOCKED_PERSON : LOCKED;
 }
 
+/**
+ * A person as the connector sends them: the same locks as the app. A leader read from the company's
+ * website says so, with the page only where the app shows it (an unlocked company; the page the
+ * person was read on only once their name is unlocked). A likely email says it is likely and not verified.
+ */
 export function personOut(p: PersonRec, seatId?: string | null, hidden = false): ToolOut {
-  return { id: p.id, ...(seatId ? { seat_id: seatId } : {}), ...readAll(p.cells, PERSON_KEYS, (f) => personLocked(p, hidden, f)) };
+  const email = p.cells.email;
+  const likely = email && (email.s === "locked" || email.s === "value") && email.from === "pattern" ? email.likely ?? 0 : 0;
+  return {
+    id: p.id,
+    ...(seatId ? { seat_id: seatId } : {}),
+    ...readAll(p.cells, PERSON_KEYS, (f) => personLocked(p, hidden, f)),
+    ...(p.source === LEADERS_SOURCE ? { source: LEADERS_SOURCE_SAY, ...(p.site?.at ? { source_read: dayOfIso(p.site.at) } : {}), ...(!hidden && p.site?.url ? { source_page: p.site.url } : {}) } : {}),
+    ...(likely ? { email_is: `${likelyWords(likely)}. Not verified.`, email_verified: false } : {}),
+  };
 }
 
 /** How a seat's locked fact reads: an open role's posting with the role or the company, who held it with their role, after the company at a locked one. */

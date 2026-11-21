@@ -7400,3 +7400,7 @@ div.tp-pcard-when {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* A leader read from the company's own website: where they came from, under their card. */
+.tp-person-src {
+  margin: 6px 0 0;
+}

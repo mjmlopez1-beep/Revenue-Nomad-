@@ -1,7 +1,8 @@
 /**
  * Checks of "Who leads each function" (lib/leaders): reading titles, finding the pages on a
  * company's own site, the safety rules on the way (robots.txt, the page cap, same site only), how
- * the leaders are stored (never a name), where the product shows them (the record's line, "No
+ * the leaders are stored (no name where the HQ isn't in the United States: none here; see
+ * scripts/test-leaders-names.mts for the names), where the product shows them (the record's line, "No
  * fractional Sales yet" and its ranking, the Claude connector), Pilot metrics, and RN_LEADERS off.
  * Nothing leaves the machine: the sites come from a mock server on localhost, and names resolve
  * through a table here. The storage checks run lib/table.ts in this process on a made-up seed in
@@ -348,6 +349,12 @@ check("  found the leadership page through the about page, and the release throu
 check("  never read the careers page, or a press item that names no appointment", !hostSeen("truedialog.test").some((s) => s.path === "/careers" || s.path === "/news/product-launch"), hostSeen("truedialog.test").map((s) => s.path));
 check("  the stored page is never an address that spells a name", Object.values(o.functions).every((l) => !/jane|zabriskie/i.test(l.url)) && o.functions.Sales.url.endsWith("/newsroom"), Object.values(o.functions).map((l) => l.url));
 check("  every request sent the plain User-Agent", hostSeen("truedialog.test").every((s) => s.ua.startsWith("Merlin-About/1.0")), hostSeen("truedialog.test").map((s) => s.ua));
+eq(
+  "  the read names the CMO & CRO with the release's title, the VP Customer Success and the CEO; never the marketing manager",
+  [o.functions.Sales.name, o.functions.Sales.title, o.functions.Marketing.name, o.functions["Customer Success"].name, o.top?.name, nameHits([o]).includes("Ann Quigley")],
+  ["Jane Zabriskie", "Chief Marketing and Revenue Officer", "Jane Zabriskie", "Bo Ashcombe", "John Pemberton", false],
+);
+check("  the address shown with who leads never spells the name, even now the name is kept beside it", Object.values(o.functions).every((l) => !/zabriskie|ashcombe/i.test(l.url)), o.functions);
 
 o = await one("c_ld", "jsonld.test");
 eq("JSON-LD: a fractional CFO and an interim head of marketing, the account executive left out", summary(o.functions), sorted({ Marketing: "Head/interim/-/team page", Finance: "C-level/fractional/-/team page" }));
@@ -405,7 +412,13 @@ const ns = await one("c_ns", "nosales.test");
 check("a leadership page with nobody in Sales: read, a team page", ns.team && !ns.functions.Sales && !!ns.functions.Technology, ns);
 const nt = await one("c_nt", "noteam.test");
 check("a site with no team page anywhere: not a team page read", !nt.team, nt);
-eq("the layouts store no names", nameHits([o, ns, nt, alt]), []);
+// A read keeps the name of each function's leader and of the top leader (lib/table.ts saveLeaders decides where they may stay), never anyone below.
+eq(
+  "the layouts name each function's leader and the CEO, nobody below (an office manager, an account executive)",
+  [nameHits([o]), nameHits([ns]), nameHits([nt])],
+  [["wendmere", "Lu Wendmere", "gorrington", "Al Gorrington"], ["pemberton", "John Pemberton", "ashcombe", "Bo Ashcombe"], []],
+);
+check("  the CEO as the top leader, with the title the page prints", ns.top?.name === "John Pemberton" && ns.top.title === "Chief Executive Officer" && ns.top.rank === 0, ns.top);
 const readRec = (x: typeof ns, t: string) => ({ status: x.status === "found" ? "found" : "none", checkedAt: t, ok: true, functions: x.functions, team: x.team, ...(x.team ? { teamAt: t } : {}) }) as import("../lib/leaders/types").LeadersRecord;
 const nowT = at(0)();
 eq(
@@ -436,7 +449,8 @@ const strip = (x: Record<string, unknown>) => JSON.stringify({ ...x, leaders: un
 check("the run changed the state's leaders and nothing else", strip(st) === strip(before));
 eq("TrueDialog on file", { status: st.leaders.c_true.status, fns: summary(st.leaders.c_true.functions) }, { status: "found", fns: sorted({ Marketing: "C-level/full-time/2024-03/press release", Sales: "C-level/full-time/2024-03/press release", "Customer Success": "VP/full-time/-/team page" }) });
 check("  with when it was read, a hash, and the source page on its own site", st.leaders.c_true.checkedAt === at(0)() && !!st.leaders.c_true.hash && Object.values(st.leaders.c_true.functions as Record<string, { url: string }>).every((l) => l.url.startsWith(`http://truedialog.test:${P}/`)));
-eq("no names stored anywhere in the state", nameHits(st), []);
+// No company in this seed has an HQ on file, so its country is unknown: no name is kept (scripts/test-leaders-names.mts has the US companies).
+eq("no names stored anywhere in the state (no company here has a United States HQ)", nameHits(st), []);
 eq("no ledger rows: nobody earns credits", st.ledger.length, 0);
 
 /* ---------- the product ---------- */

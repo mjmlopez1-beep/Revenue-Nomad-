@@ -4,15 +4,21 @@
  * Officer", "joins … as VP Sales", "joined in 2024") with the press release's date. No network
  * here; see lib/leaders/run.ts.
  *
- * A name is only ever used to tell a leader's title from other text on the page. It is never
- * returned: a Candidate holds the function, level, kind, since and source alone.
+ * A Candidate holds the function, level, kind, since and source, and the person's name and title as
+ * the page prints them, only when they come as a clear name-and-title card or a press release
+ * naming an appointment. Only a function's leader (Director and above) and the top leader (CEO,
+ * president or founder) are ever candidates: nobody below a function's leader.
  */
 import { cleanText } from "../about/extract";
 import { DIRECTOR_PLUS, seniorityOf, type Seniority } from "../seniority";
-import { functionOf } from "../tableFields";
+import { functionOf, PERSON_NAME_RE } from "../tableFields";
 import { LEADER_LEVELS, type LeaderHow, type LeaderKind, type LeaderLevel } from "./types";
 
-/** One function's leader read on a page. `date`: the press release's day ("2024-11-05") or month, to tell newer from older. */
+/**
+ * One function's leader read on a page. `date`: the press release's day ("2024-11-05") or month, to
+ * tell newer from older. `name` and `title`: the person as the page prints them, when the page names
+ * them clearly. `fn` TOP_FN with `top` (0 CEO, 1 president, 2 founder): the company's top leader.
+ */
 export interface Candidate {
   fn: string;
   level: LeaderLevel;
@@ -21,7 +27,13 @@ export interface Candidate {
   how: LeaderHow;
   url: string;
   date?: string;
+  name?: string;
+  title?: string;
+  top?: number;
 }
+
+/** The function key of the company's top leader (a CEO, president or founder): never one of FUNCTIONS. */
+export const TOP_FN = "Top leader";
 
 /* ---------- titles ---------- */
 
@@ -83,10 +95,33 @@ export function classifyTitle(raw: string): { fn: string; level: LeaderLevel; ki
   return out;
 }
 
+/** Titles that only sound like the top: someone who works for the CEO, or a CEO's office. */
+const NOT_TOP = /\b(?:assistant|associate|office of|chief of staff|to the|staff)\b/i;
+/**
+ * The company's top leader from a title: 0 a CEO ("CEO, Co-Founder", "Chief Executive Officer"),
+ * 1 a president ("President & COO", never a vice president or a president of a division), 2 a
+ * founder. Null for anything else, and for a former role.
+ */
+export function topRank(raw: string): number | null {
+  const t = cleanText(raw).slice(0, 160);
+  if (!t || NOT_NOW.test(t) || NOT_TOP.test(t)) return null;
+  if (/\b(?:chief executive(?: officer)?|co-?ceo|ceo)\b/i.test(t)) return 0;
+  if (/\bpresident\b/i.test(t) && !/\b(?:vice|svp|evp|avp)[\s-]*president\b|\bpresident\s+(?:of|for)\b|\bpresident,\s*(?!co-?founder|founder|ceo)\p{L}/iu.test(t)) return 1;
+  if (/\b(?:co-?)?founder\b/i.test(t)) return 2;
+  return null;
+}
+/** A title's functions (classifyTitle) and, for a CEO, a president or a founder, the top leader too. */
+export function classifyAll(raw: string): { fn: string; level: LeaderLevel; kind: LeaderKind; top?: number }[] {
+  const out: { fn: string; level: LeaderLevel; kind: LeaderKind; top?: number }[] = classifyTitle(raw);
+  const top = topRank(raw);
+  if (top !== null) out.push({ fn: TOP_FN, level: "C-level", kind: kindOf(raw), top });
+  return out;
+}
+
 /** The more senior of two levels comes first (a negative number when `a` is more senior). */
 export const levelRank = (l: LeaderLevel) => LEADER_LEVELS.indexOf(l);
 
-/* ---------- names (to recognise a card, never kept) ---------- */
+/* ---------- names ---------- */
 
 const NAME_STOP =
   /\b(?:chief|officer|president|vp|vice|head|director|manager|lead|leader|team|leadership|management|board|our|the|meet|about|company|sales|marketing|revenue|growth|operations|finance|people|product|customer|success|partner|partners|founder|co-founder|advisor|advisors|contact|news|press|read|more|view|bio|email|careers|executive|executives|services|solutions|home|blog|global|inc|llc|ltd)\b/i;
@@ -100,12 +135,30 @@ export function looksLikeName(s: string): boolean {
   return words.every((w) => PARTICLE.test(w) || /^\p{Lu}[\p{L}'’.-]*$/u.test(w) || /^\p{Lu}\.$/u.test(w)) && /^\p{Lu}/u.test(words[words.length - 1]);
 }
 
-/** A line that reads as a title: short, no sentence, and it classifies. */
-function titleLine(s: string): ReturnType<typeof classifyTitle> {
+/** A name as kept: as the page prints it, spaces tidied, when it reads as a person's first and last name. Else undefined. */
+export function keptName(raw: string | undefined): string | undefined {
+  const t = cleanText(raw ?? "").replace(/\s+/g, " ").trim();
+  return t && looksLikeName(t) && PERSON_NAME_RE.test(t) ? t : undefined;
+}
+/** A title as kept: as the page prints it, without a date after it ("Chief Revenue Officer March 12, 2024"). */
+function keptTitle(raw: string): string {
+  const t = cleanText(raw).replace(/\s+/g, " ");
+  const d = new RegExp(String.raw`\s*[,|·–—-]?\s*\b(?:${MONTH_RE}\s+\d{1,2}\b|\d{1,2}\s+${MONTH_RE}|(?:19|20)\d{2}-\d{2}).*$`, "i").exec(t);
+  return (d ? t.slice(0, d.index) : t).replace(/[\s,;:|·–—-]+$/, "").trim().slice(0, 90);
+}
+/** The person a press line names, from the words between the verb and the title: "Jane Doe", "veteran Jane Doe", "Jane Doe, a 20-year veteran,". */
+function pressName(raw: string): string | undefined {
+  const head = cleanText(raw ?? "").split(",")[0];
+  const tail = /((?:\p{Lu}[\p{L}'’.-]*\s+){1,3}\p{Lu}[\p{L}'’.-]*)\s*$/u.exec(head)?.[1];
+  return keptName(head) ?? keptName(tail);
+}
+
+/** A line that reads as a title: short, no sentence, and it classifies (a function's leader, or the top leader). */
+function titleLine(s: string): ReturnType<typeof classifyAll> {
   const t = s.trim();
   if (!t || t.length > 90 || t.split(/\s+/).length > 10) return [];
   if (/[.!?]\s*\S/.test(t) || /\b(?:is|was|has|have|leads|led|joined|joins|brings|oversees|serves|spent|worked|appoints?|appointed|names|named|promotes|promoted|hires|hired|welcomes|welcomed|announces)\b/i.test(t)) return [];
-  return classifyTitle(t);
+  return classifyAll(t);
 }
 
 /* ---------- reading the HTML ---------- */
@@ -292,15 +345,18 @@ function pressIn(text: string, url: string, date: string | null, names?: Set<str
       const title = m[m.length - 1];
       // The words between the verb and "as" are who it is: a person, not a board or a committee.
       if (/\b(?:board|committee|council|partner(?:ship)?s? with|agency|firm)\b/i.test(m[1] ?? "")) continue;
-      // Who it is, only to keep their name out of what is stored: the words before "joins", else between the verb and the title.
-      if (n === 1) addNames(names, /((?:\p{Lu}[\p{L}'’.-]*\s+){1,4})$/u.exec(text.slice(Math.max(0, m.index - 60), m.index))?.[1] ?? "");
-      else addNames(names, m[1] ?? "");
+      // Who it is: the words before "joins", else between the verb and the title. Their words also keep a name out of the addresses stored.
+      const who = n === 1 ? (/((?:\p{Lu}[\p{L}'’.-]*\s+){1,4})$/u.exec(text.slice(Math.max(0, m.index - 60), m.index))?.[1] ?? "") : (m[1] ?? "");
+      addNames(names, who);
+      const name = pressName(who);
       const near = text.slice(m.index, m.index + m[0].length + 160);
       // "Pat joined Acme in 2022 as VP Marketing" says when itself; an appointment takes the release's date, else a "joined in" near it.
       const own = joinedIn(m[0]);
       const since = own ?? (date ? monthOf(date) : joinedIn(near) ?? undefined);
       const at = own ?? date ?? undefined;
-      for (const c of classifyTitle(title)) out.push({ ...c, ...(since ? { since } : {}), how: "press release", url, ...(at ? { date: at } : {}) });
+      const printed = keptTitle(title);
+      for (const c of classifyAll(title))
+        out.push({ ...c, ...(since ? { since } : {}), how: "press release", url, ...(at ? { date: at } : {}), ...(name && printed ? { name, title: printed } : {}) });
     }
   }
   return out;
@@ -347,25 +403,44 @@ export function extractLeaders(html: string, url: string, release = false, names
       if (!name.trim() || !job) return;
       addNames(names, name);
       const since = typeof o.startDate === "string" ? dateIn(o.startDate) : null;
-      for (const c of classifyTitle(job)) out.push({ ...c, ...(since ? { since: monthOf(since) } : {}), how: "team page", url });
+      const who = keptName(name);
+      for (const c of classifyAll(job)) out.push({ ...c, ...(since ? { since: monthOf(since) } : {}), how: "team page", url, ...(who ? { name: who, title: keptTitle(job) } : {}) });
     });
   }
   // Team cards: a title next to a name (the line before or after), or "Jane Doe, Chief Revenue Officer" on one line.
   const lines = linesOf(html, true);
+  const nameAt = (k: number) => k >= 0 && k < lines.length && looksLikeName(lines[k]);
+  // Which side of its title a card's name is on, read from the cards with a name on one side only: a
+  // grid of "Name, Title, Name, Title" has a name on both sides of most titles, and the page decides.
+  let before = 0;
+  let after = 0;
+  for (let n = 0; n < lines.length; n++) {
+    if (!titleLine(lines[n]).length) continue;
+    if (nameAt(n - 1) && !nameAt(n + 1)) before++;
+    else if (nameAt(n + 1) && !nameAt(n - 1)) after++;
+  }
+  const nameFirst = before >= after;
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
     let found = titleLine(line);
-    let named = found.length > 0 && ((n > 0 && looksLikeName(lines[n - 1])) || (n + 1 < lines.length && looksLikeName(lines[n + 1])));
-    if (!named) {
+    let named = found.length > 0 && (nameAt(n - 1) || nameAt(n + 1));
+    let who: string | undefined;
+    let printed = line;
+    if (named) {
+      const k = nameAt(n - 1) && nameAt(n + 1) ? (nameFirst ? n - 1 : n + 1) : nameAt(n - 1) ? n - 1 : n + 1;
+      who = keptName(lines[k]);
+    } else {
       const split = /^(.{4,40}?)\s*(?:,|\s[–—|·-]\s|:)\s*(.{2,90})$/.exec(line);
       if (split && looksLikeName(split[1])) {
         found = titleLine(split[2]);
         named = found.length > 0;
         if (named) addNames(names, split[1]);
+        who = keptName(split[1]);
+        printed = split[2];
       }
     }
     if (!named) continue;
-    for (const k of [n - 1, n + 1]) if (k >= 0 && k < lines.length && looksLikeName(lines[k])) addNames(names, lines[k]);
+    for (const k of [n - 1, n + 1]) if (nameAt(k)) addNames(names, lines[k]);
     // "Joined in 2024" in the card's next few lines, before the next card starts.
     let since: string | null = null;
     for (let k = n + 1; k < Math.min(lines.length, n + 5); k++) {
@@ -373,7 +448,8 @@ export function extractLeaders(html: string, url: string, release = false, names
       since = joinedIn(lines[k]);
       if (since) break;
     }
-    for (const c of found) out.push({ ...c, ...(since ? { since } : {}), how: "team page", url });
+    const title = keptTitle(printed);
+    for (const c of found) out.push({ ...c, ...(since ? { since } : {}), how: "team page", url, ...(who && title ? { name: who, title } : {}) });
   }
   // A photo grid's alt text: "Jane Doe, Chief Revenue Officer at Acme", "Jane Doe - CRO" (it often says it where the text is drawn by script).
   // And a JS-light page's data: {"name": "Jane Doe", "title": "Chief Revenue Officer"} in a script the page renders from.
@@ -384,7 +460,10 @@ export function extractLeaders(html: string, url: string, release = false, names
     const found = titleLine(title);
     if (!found.length) return;
     addNames(names, name);
-    for (const c of found) if (!fromText.has(c.fn) && !out.some((x) => x.fn === c.fn && x.how === "team page" && x.level === c.level)) out.push({ ...c, how: "team page", url });
+    const who = keptName(name);
+    const printed = keptTitle(title);
+    for (const c of found)
+      if (!fromText.has(c.fn) && !out.some((x) => x.fn === c.fn && x.how === "team page" && x.level === c.level)) out.push({ ...c, how: "team page", url, ...(who && printed ? { name: who, title: printed } : {}) });
   };
   for (const [name, title] of altCards(html)) extra(title, name);
   for (const [name, title] of scriptCards(html)) extra(title, name);

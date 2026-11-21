@@ -27,7 +27,13 @@ import type { VoiceProfile } from "./voice";
  */
 export type Cell =
   | { s: "empty" }
-  | { s: "locked"; ver: number; from?: "records" | "posting" | "research" }
+  | {
+      s: "locked";
+      ver: number;
+      from?: "records" | "posting" | "research" | "website" | "pattern";
+      /** A likely email (from "pattern"): how many members' emails at the company's domain follow its pattern. Never a verified email. */
+      likely?: number;
+    }
   | {
       s: "value";
       v: string;
@@ -37,9 +43,13 @@ export type Cell =
       system?: boolean;
       /**
        * Where a fact came from when no member added it: our records, the job posting, Revenue Nomad research (a company the weekly scan
-       * added, filled from our records), or the company's own website (an About text read from its homepage, lib/about: "Company website").
+       * added, filled from our records), or the company's own website (an About text read from its homepage, lib/about, or a leader
+       * read from its team page or a press release, lib/leaders: "Company website"). "pattern": a likely email for a leader from the
+       * company's website, built from the pattern of the emails members added at its domain (`likely` says how many).
        */
-      from?: "records" | "posting" | "research" | "website";
+      from?: "records" | "posting" | "research" | "website" | "pattern";
+      /** A likely email: how many emails on file at the company's domain follow its pattern. It is never shown as verified. */
+      likely?: number;
       /** The viewer spent a credit to see this value (it counts in their Unlocked list). Free values never carry it. */
       paid?: boolean;
       /** Seat holder only: the viewer claimed this seat from the seat scan (claimSeat), so it reads "You claimed this". */
@@ -72,6 +82,12 @@ export interface PersonRec {
   source: string;
   /** Keyed by contact field: name, title, relationship, email, phone, linkedin. */
   cells: Record<string, Cell>;
+  /**
+   * A leader read from the company's own website (source "Company website", lib/leaders): when it was
+   * read there, and the page. `url` is left out at a locked company, and is the very page the person
+   * was read on only for a viewer who sees their name (it may spell it).
+   */
+  site?: { at: string; url?: string };
 }
 
 export interface EngagementRec {
@@ -887,7 +903,8 @@ export interface AdminStats {
     enabled: boolean;
     running: boolean;
     run: LeadersRunSummary | null;
-    onFile: { companies: number; read: number; pages: number; team: number; press: number; functions: number; fractional: number; fullTime: number; none: number; failed: number; robots: number; skipped: number };
+    /** `named`: leaders on file with their name kept (a function's leader or the top leader, at a United States company). */
+    onFile: { companies: number; read: number; pages: number; team: number; press: number; functions: number; fractional: number; fullTime: number; none: number; failed: number; robots: number; skipped: number; named?: number };
     due: number;
     /**
      * Coverage: companies with a site of their own to read, read OK in the last 90 days, with a
