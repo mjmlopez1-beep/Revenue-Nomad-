@@ -90,7 +90,8 @@ const engagements = [
   cro("e_nort_cro", "c_nort"),
   cro("e_pine_cro", "c_pine"),
   cro("e_blue_cro", "c_blue", "Ivo Castellan"),
-  cro("e_out_cro", "c_out", "Odile Varga"),
+  // A company with nothing new for years: no signal of any kind, so never in her Crystal Ball.
+  seat("e_out_cro", "c_out", { source: "Member success story", role: "Fractional CRO", function: "Sales", type: "Fractional", start: monthAgo(48), status: "Active", end: "Ongoing", rate: "$11k/mo", operator: "Odile Varga" }),
 ];
 const contacts = [
   { id: "p_lark_cfo", companyId: "c_lark", fields: { name: "Marisol Achterberg", title: "CFO", relationship: "Decision maker", email: "marisol@larkfield.example" } },
