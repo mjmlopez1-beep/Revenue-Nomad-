@@ -38,6 +38,13 @@ export interface KnowPerson {
   emails: number;
   /** The title reads like a decision maker's (lib/google isDecisionMaker, the one flag). */
   dm: boolean;
+  /**
+   * They came from the member's Google account (Calendar, Contacts or Gmail are among their
+   * sources), not only from what the member's own Claude saved. Merlin shows them to the member in
+   * the app, and never passes them on through the connector (lib/mcp/tools.ts todaysMoves), as
+   * my_network never lists people.
+   */
+  google: boolean;
 }
 
 /** One move as the server sends it: the company, its Crystal Ball row, and who the member knows there. */
@@ -325,12 +332,42 @@ export function pickMoves(cands: MoveCandidate[], me: MoveMe, max = MOVES_MAX): 
 
 /** Who to show from a company of the member's network: a decision maker who isn't cold first, then the warmest. Only someone with a name. */
 export function knowFrom(
-  people: { name: string | null; title: string | null; email: string | null; warmth: Warmth; last: string | null; meetings: number; emails: number; dm: boolean }[],
+  people: { name: string | null; title: string | null; email: string | null; warmth: Warmth; last: string | null; meetings: number; emails: number; dm: boolean; src: readonly string[] }[],
 ): KnowPerson | undefined {
   const named = people.filter((p) => !!p.name && !!p.name.trim());
   const p = named.find((x) => x.dm && x.warmth !== "Cold") ?? named[0];
   if (!p) return undefined;
-  return { name: p.name!.trim(), title: p.title ?? null, email: p.email ?? null, warmth: p.warmth, last: p.last ?? null, meetings: p.meetings ?? 0, emails: p.emails ?? 0, dm: !!p.dm };
+  return {
+    name: p.name!.trim(),
+    title: p.title ?? null,
+    email: p.email ?? null,
+    warmth: p.warmth,
+    last: p.last ?? null,
+    meetings: p.meetings ?? 0,
+    emails: p.emails ?? 0,
+    dm: !!p.dm,
+    google: fromGoogle(p.src),
+  };
+}
+
+/** The sources that are the member's Google account (lib/google NetSource). What their own Claude saved ("claude") is not one. */
+const GOOGLE_SOURCES = new Set(["calendar", "contacts", "gmail"]);
+/** Any of a person's sources is the member's Google account. No source on file counts as Google's: the careful reading. */
+export const fromGoogle = (src: readonly string[] | null | undefined) => !src || !src.length || src.some((s) => GOOGLE_SOURCES.has(s));
+
+/**
+ * A move's words without the person in them, for where the person may not be passed on (the
+ * connector, for someone from the member's Google account): "Message Dana" reads "Message the
+ * person you know there". A move with no person in its words comes back as it is.
+ */
+export function moveWithoutPerson(m: Pick<Move, "do" | "way" | "title" | "line">, me: Pick<MoveMe, "function">): { title: string; line: string } {
+  if (m.way.kind !== "know") return { title: m.title, line: m.line };
+  const fn = me.function && me.function !== "Other" && me.function !== "Executive" ? me.function : null;
+  if (m.do === "reply") return { title: "Reply to the open role", line: "Apply through the posting, and let the person you know there know you did." };
+  if (m.do === "intro")
+    return { title: "Ask the person you know there for an intro", line: `They aren't the buyer on file, but know the team. Ask for an introduction${fn ? ` to whoever owns ${fn}` : ""}.` };
+  if (m.do === "message") return { title: "Message the person you know there", line: "A short note you can edit. You send it from your own email." };
+  return { title: m.title, line: m.line };
 }
 
 /* ---------- words for the way in ---------- */

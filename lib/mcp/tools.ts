@@ -43,7 +43,7 @@ import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
 // Today's moves and the voice their notes are written in (lib/moves.ts, lib/voice.ts): the member's own.
 import { movesFor } from "../movesView";
-import { knowLine } from "../moves";
+import { knowLine, moveWithoutPerson } from "../moves";
 import { draftNote, noteFacts } from "../moveNote";
 import { VOICE_FIELDS, VoiceProblem, cleanVoice, styleOf, voiceRows } from "../voice";
 import { saveVoice, voiceOf } from "../table";
@@ -1247,9 +1247,24 @@ export async function myVoice(ctx: Ctx): Promise<ToolOut> {
 
 /**
  * todays_moves: the member's moves for today as Home shows them (the same three, the same order,
- * built by the same functions), each with the facts a note may use: exactly what the app's note
- * sheet uses, and nothing locked. The address of someone they know stays on Merlin.
+ * built by the same functions), each with the facts a note may use: what the app's note sheet
+ * uses, and nothing locked. The address of someone they know stays on Merlin.
+ *
+ * Someone the member knows who came from their Google account (KnowPerson.google: Calendar,
+ * Contacts or Gmail among their sources) never leaves Merlin here, the line my_network holds for
+ * people: no name, title, counts or last-met date, in the way in, the move's words, the note's
+ * facts or a draft. Their warmth and whether they decide stay, and the answer says the name and the
+ * drafted note are on Merlin's Home. Someone only the member's own Claude saved is given as before.
  */
+/** Said in place of a Google-sourced person. */
+const ON_HOME = "Their name and the drafted note are on Merlin's Home. This person comes from the calendar and contacts the member connected to Merlin, so Merlin shows them to the member there and doesn't pass their name, title or history on here.";
+/**
+ * A note's "to" when the person stays on Merlin. (What this tool answers says "the calendar and
+ * contacts the member connected" and not the provider's name: a fixed line must not carry a word
+ * that is also a company's name, which may be locked for the member. The connector's checks read
+ * every answer for such names.)
+ */
+const NAME_PLACEHOLDER = "[their first name]";
 export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
   const mv = await movesFor(ctx.member.token);
   if (!mv) throw new ToolProblem("The member is signed out of Merlin.");
@@ -1259,6 +1274,9 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
     const row = mv.wire.list[k].row;
     const facts = noteFacts(m, row, mv.me, base);
     const way = m.way;
+    // Someone from the member's Google account: nothing of theirs goes out, and the move's words are said without them.
+    const kept = way.kind === "know" && way.person.google;
+    const words = kept ? moveWithoutPerson(m, mv.me) : { title: m.title, line: m.line };
     return {
       company_id: m.id,
       company: m.name ?? "Locked company",
@@ -1267,7 +1285,15 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
       status: m.hiring ? "Hiring now: an open role" : `Likely to hire${m.band ? ` · ${m.band}` : ""}`,
       why_now: m.why,
       way_in:
-        way.kind === "know"
+        way.kind === "know" && kept
+          ? {
+              kind: "someone the member knows",
+              decision_maker: way.person.dm,
+              warmth: way.person.warmth,
+              person: ON_HOME,
+              from: "the calendar and contacts the member connected to Merlin",
+            }
+          : way.kind === "know"
           ? {
               kind: "someone the member knows",
               name: way.person.name,
@@ -1275,7 +1301,7 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
               decision_maker: way.person.dm,
               warmth: way.person.warmth,
               relationship: knowLine(way.person),
-              from: "the member's own network on Merlin",
+              from: "what the member's own Claude saved to their network on Merlin",
             }
           : way.kind === "holder"
             ? {
@@ -1292,13 +1318,13 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
                   posting: way.posting === "locked" ? LOCKED_ROLE : way.posting ?? (m.hidden ? "opens with the company" : "No posting link on file"),
                 }
               : { kind: "nothing on file yet", next: "The member can add who they know there on Merlin and earn a credit." },
-      your_move: m.title,
-      how: m.line,
+      your_move: words.title,
+      how: words.line,
       // Only when there is something to write: a locked company or a locked seat holder has no note yet.
       ...(facts
         ? {
             note: {
-              to: facts.to?.name ?? null,
+              to: kept ? NAME_PLACEHOLDER : facts.to?.name ?? null,
               situation:
                 facts.kind === "know"
                   ? "A note to someone the member knows there"
@@ -1312,13 +1338,16 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
               facts: {
                 company: facts.company,
                 ...(facts.saw ? { what_happened: facts.saw } : {}),
-                ...(facts.since ? { last_met: facts.since } : {}),
+                ...(facts.since && !kept ? { last_met: facts.since } : {}),
                 ...(facts.seat ? { seat: facts.seat } : {}),
                 ...(facts.role ? { open_role: facts.role } : {}),
                 ...(facts.link ? { claim_link: facts.link } : {}),
                 member: { first_name: facts.me.first, works_as: facts.me.as, ...(facts.me.clients ? { works_with: facts.me.clients } : {}) },
               },
-              merlin_draft: ((d) => ({ subject: d.subject, body: d.body }))(draftNote(facts, voice)),
+              // Merlin's own draft greets them by name and says when they last met: for someone from Google it stays on Home.
+              ...(kept
+                ? { drafting: `Merlin's own draft is on Merlin's Home, with their name. Here, write it with ${NAME_PLACEHOLDER} where the name goes, and the member fills it in.` }
+                : { merlin_draft: ((d) => ({ subject: d.subject, body: d.body }))(draftNote(facts, voice)) }),
             },
           }
         : {}),
@@ -1329,6 +1358,6 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
     moves_done_this_month: mv.wire.month,
     ...(voice ? { voice: styleOf(voice) } : { voice: "None saved. save_my_voice can learn it from the member's sent mail, with their go-ahead." }),
     how_to_use:
-      "These are the member's moves on Merlin's Home today, best first. For a move with a note you can draft it in the member's voice (my_voice), from note.facts only: never add a company fact, a name, a rate or a contact detail that isn't in them, and never guess the name of a locked company or a locked seat holder. The member sends each note themselves, from their own mail or on Merlin. Merlin never sends for them, and neither should you unless they ask you to in their own mail tool. Done and Snooze are theirs to press on Merlin.",
+      "These are the member's moves on Merlin's Home today, best first. For a move with a note you can draft it in the member's voice (my_voice), from note.facts only: never add a company fact, a name, a rate or a contact detail that isn't in them, and never guess the name of a locked company or a locked seat holder. Where a move's way_in has no name and says the person is on Merlin's Home, they come from the calendar and contacts the member connected to Merlin: Merlin shows their name, title and history to the member in the app and doesn't pass them on here, so don't guess or look them up; help with the wording, leave [their first name] where the name goes, and point the member to Home for the name and Merlin's own draft. The member sends each note themselves, from their own mail or on Merlin. Merlin never sends for them, and neither should you unless they ask you to in their own mail tool. Done and Snooze are theirs to press on Merlin.",
   };
 }

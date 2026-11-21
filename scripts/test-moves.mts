@@ -30,7 +30,9 @@
  *     they unlocked), else To is empty;
  *   - the voice: what is refused (unknown fields and values, mail-like phrases, addresses, links,
  *     numbers, long ones), the app's save and remove, the connector's two steps, theirs alone;
- *   - todays_moves is Home's moves, with no address and nothing locked;
+ *   - todays_moves is Home's moves, with no address and nothing locked; a person from the member's
+ *     Google account never leaves Merlin through it (no name, title, counts, date or draft), and one
+ *     only their own Claude saved is given as before;
  *   - ?today=1 under its size, each move with its record, the same as the full view's;
  *   - the Pro welcome: once, right after Pro, never for Trial, Free or a long-standing Pro.
  */
@@ -148,6 +150,17 @@ const network = {
       },
     },
   },
+  // Finn has no Google. His own Claude saved one person from his inbox (save_my_network): the only kind the connector may name back.
+  mem_few: {
+    claude: {
+      at: iso(-2 * DAY),
+      unmatched: 0,
+      real: 1,
+      saves: [iso(-2 * DAY)],
+      named: [{ id: "c_salt", at: iso(-2 * DAY) }],
+      companies: { c_salt: { domain: "saltmarsh.example", emails: 14, last: dayMonthsAgo(3), people: [{ key: "n:quentin vale", name: "Quentin Vale", title: "Chief Revenue Officer", emails: 14, both: true, last: dayMonthsAgo(3), src: ["claude"] }] } },
+    },
+  },
   // Oto knows someone at Northwind. Nobody else may ever see her.
   mem_oth: { google: link("oto@otherco.example"), cal: { at: iso(-HOUR), unmatched: 0, real: 1, companies: { c_nort: netCo("northwind.example", person("zelda@northwind.example", "Zelda Quince", "Chief Operating Officer", 6, dayMonthsAgo(1))) } } },
 };
@@ -236,11 +249,11 @@ const SECRETS = [
   ...companies.map((c) => c.fields.name),
   ...companies.map((c) => c.fields.website),
   "Hana Holder", "Pella Quist", "Ivo Castellan", "Odile Varga", "Marisol Achterberg", "Bastian Quell", "Philippa Strand",
-  "Dana Whitfield", "Priya Raman", "Nia Castell", "Zelda Quince",
+  "Dana Whitfield", "Priya Raman", "Nia Castell", "Zelda Quince", "Quentin Vale",
   "dana@larkfield.example", "priya@corvidhealth.example", "nia@harborline.example", "zelda@northwind.example",
   "hana@holderco.example", "marisol@larkfield.example", "bastian@saltmarsh.example", "philippa@tallgrass.example", "512.555.0141",
 ];
-const NETWORK_WORDS = ["Dana Whitfield", "Dana", "Priya Raman", "Priya", "Nia Castell", "Zelda Quince", "Zelda", "dana@", "priya@", "nia@", "zelda@", "halerevops", "otherco.example"];
+const NETWORK_WORDS = ["Dana Whitfield", "Dana", "Priya Raman", "Priya", "Nia Castell", "Zelda Quince", "Zelda", "Quentin", "dana@", "priya@", "nia@", "zelda@", "halerevops", "otherco.example"];
 const found = (x: unknown, words: string[] = SECRETS) => {
   const s = typeof x === "string" ? x : JSON.stringify(x);
   return words.filter((w) => s.toLowerCase().includes(w.toLowerCase()));
@@ -608,13 +621,48 @@ async function main() {
   console.log("\ntodays_moves");
   const tm = (await tools.todaysMoves(ctx)) as { moves: Record<string, unknown>[]; moves_done_this_month: number; voice: unknown; how_to_use: string };
   const app = (await movesFor(MOR))!;
-  check("todays_moves is Home's moves: the same companies, moves and words", same(tm.moves.map((m) => [m.company_id, m.company, m.your_move, m.how, m.why_now]), app.moves.map((m) => [m.id, m.name, m.title, m.line, m.why])), tm.moves.map((m) => m.your_move));
+  // A move's words as the connector may say them: without the person, when the person comes from the member's Google account.
+  const said = (m: Move) => (m.way.kind === "know" && m.way.person.google ? M.moveWithoutPerson(m, app.me) : { title: m.title, line: m.line });
+  check("todays_moves is Home's moves: the same companies, in the same order, with the same why", same(tm.moves.map((m) => [m.company_id, m.company, m.why_now]), app.moves.map((m) => [m.id, m.name, m.why])), tm.moves.map((m) => m.company));
+  check("and the same move, said without the person where the person is from Google", same(tm.moves.map((m) => [m.your_move, m.how]), app.moves.map((m) => [said(m).title, said(m).line])), tm.moves.map((m) => [m.your_move, m.how]));
   check("and the same as ?today=1's", same(tm.moves.map((m) => m.company_id), (await todayView(MOR))!.moves!.list.map((w) => w.id)) && tm.moves_done_this_month === app.wire.month);
-  const noteOf = (id: string) => tm.moves.find((m) => m.company_id === id)?.note as { to: string; facts: Record<string, unknown>; merlin_draft: { subject: string; body: string } } | undefined;
+  const noteOf = (id: string) => tm.moves.find((m) => m.company_id === id)?.note as { to: string; facts: Record<string, unknown>; merlin_draft?: unknown } | undefined;
+  // Morgan's people come from her Google Calendar: nothing of theirs leaves Merlin through the connector.
+  const googled = app.moves.filter((m) => m.way.kind === "know" && m.way.person.google);
   const larkApp = app.moves.find((m) => m.id === P.lark)!;
-  const larkDraft = M.draftNote(M.noteFacts(larkApp, app.wire.list.find((w) => w.id === P.lark)!.row, app.me, BASE)!, VOICES.casual);
-  check("its note is the app's own draft, in the member's voice", !!noteOf(P.lark) && same(noteOf(P.lark)!.merlin_draft, { subject: larkDraft.subject, body: larkDraft.body }) && noteOf(P.lark)!.to === "Dana Whitfield", noteOf(P.lark));
-  check("the facts are the note sheet's facts", same(noteOf(P.lark)!.facts.company, "Larkfield Robotics") && /hired a fractional CRO/.test(String(noteOf(P.lark)!.facts.what_happened)));
+  check("Morgan's two people are from Google (her calendar), and Home still names them", googled.length === 2 && same(googled.map((m) => m.id), [P.harb, P.lark]) && larkApp.title === "Message Dana" && larkApp.way.kind === "know" && larkApp.way.person.name === "Dana Whitfield" && (await todayView(MOR))!.moves!.list.find((w) => w.id === P.lark)!.know!.name === "Dana Whitfield");
+  // SHOW=1: print one such move as the connector answers it.
+  if (process.env.SHOW) console.log(JSON.stringify(tm.moves.find((m) => m.company_id === P.lark), null, 1));
+  const raw = JSON.stringify(tm);
+  const theirs =googled.flatMap((m) => (m.way.kind === "know" ? [m.way.person] : []));
+  const personWords = [
+    ...theirs.flatMap((p) => [p.name, ...p.name.split(" "), p.title ?? "", p.last ?? "", M.knowLine(p), M.sinceMonth(p.last) ?? "", M.lastMetWords(p.last) ?? "", `${p.meetings} meeting`]),
+    "Priya", "Raman", "Director of Operations", "last_met", "Last met", "meetings", "relationship",
+  ].filter(Boolean);
+  check("a Google-sourced person: no name, title, counts or last-met date anywhere in the tool's answer", theirs.length === 2 && !found(raw, personWords).length, found(raw, personWords));
+  const wayOf = (id: string) => tm.moves.find((m) => m.company_id === id)!.way_in as Record<string, unknown>;
+  check("what stays: that she knows someone there, how warm, and whether they decide", same(Object.keys(wayOf(P.lark)).sort(), ["decision_maker", "from", "kind", "person", "warmth"]) && wayOf(P.lark).kind === "someone the member knows" && wayOf(P.lark).warmth === "Warm" && wayOf(P.lark).decision_maker === true, wayOf(P.lark));
+  check("and it says plainly where the name and the note are", /name and the drafted note are on Merlin's Home/.test(String(wayOf(P.lark).person)) && /calendar and contacts the member connected/.test(String(wayOf(P.lark).person)));
+  check("the answer's own words carry no company's name (a fixed line can't name one that may be locked)", !/Google/.test(raw));
+  check("the move is said without the name", tm.moves.find((m) => m.company_id === P.lark)!.your_move === "Message the person you know there" && /let the person you know there know/.test(String(tm.moves.find((m) => m.company_id === P.harb)!.how)));
+  check("its note has a placeholder for the name and no draft of Merlin's", noteOf(P.lark)!.to === "[their first name]" && !("merlin_draft" in noteOf(P.lark)!) && /draft is on Merlin's Home/.test(String((noteOf(P.lark) as unknown as { drafting: string }).drafting)) && !/Hey|Cheers|Hope the week/.test(JSON.stringify(noteOf(P.lark))), noteOf(P.lark));
+  check("the facts that aren't the person's stay, so Claude can still help with the wording", same(noteOf(P.lark)!.facts.company, "Larkfield Robotics") && /hired a fractional CRO/.test(String(noteOf(P.lark)!.facts.what_happened)) && same(Object.keys(noteOf(P.lark)!.facts).sort(), ["company", "member", "what_happened"]) && /open_role/.test(JSON.stringify(noteOf(P.harb)!.facts)), noteOf(P.lark)!.facts);
+  check("it tells Claude why a name is missing and not to guess one", /calendar and contacts the member connected/.test(tm.how_to_use) && /don't guess/.test(tm.how_to_use) && /\[their first name\]/.test(tm.how_to_use));
+  check("the words without the person are the move's own otherwise", same(M.moveWithoutPerson(mCorv, app.me), { title: "Ask the person you know there for an intro", line: "They aren't the buyer on file, but know the team. Ask for an introduction to whoever owns RevOps." }) && same(M.moveWithoutPerson(tSalt, app.me), { title: tSalt.title, line: tSalt.line }));
+  check("which sources are Google's: Calendar, Contacts and Gmail, alone or with Claude's; Claude's alone is not", M.fromGoogle(["calendar"]) && M.fromGoogle(["contacts"]) && M.fromGoogle(["gmail"]) && M.fromGoogle(["claude", "contacts"]) && !M.fromGoogle(["claude"]) && M.fromGoogle([]) && M.fromGoogle(null));
+
+  // Finn's one person came from what his own Claude saved: the connector gives them back as before.
+  const tmFew = (await tools.todaysMoves(await ctxOf(FEW))) as { moves: Record<string, unknown>[] };
+  const appFew = (await movesFor(FEW))!;
+  const qMove = appFew.moves[0];
+  const q = tmFew.moves[0];
+  const qWay = q.way_in as Record<string, unknown>;
+  const qNote = q.note as { to: string; facts: Record<string, unknown>; merlin_draft: { subject: string; body: string } };
+  const qDraft = M.draftNote(M.noteFacts(qMove, appFew.wire.list[0].row, appFew.me, BASE)!, null);
+  check("someone only the member's Claude saved is not Google-sourced", qMove.id === P.salt && qMove.way.kind === "know" && qMove.way.person.name === "Quentin Vale" && qMove.way.person.google === false, qMove.way);
+  check("so todays_moves names them, with their title and the relationship", qWay.name === "Quentin Vale" && qWay.title === "Chief Revenue Officer" && qWay.relationship === M.knowLine((qMove.way as { person: import("../lib/moves").KnowPerson }).person) && /14 emails/.test(String(qWay.relationship)) && q.your_move === "Message Quentin" && q.your_move === qMove.title && q.how === qMove.line, qWay);
+  check("and its note is the app's own draft, to them by name", qNote.to === "Quentin Vale" && same(qNote.merlin_draft, { subject: qDraft.subject, body: qDraft.body }) && /^Hi Quentin,/.test(qNote.merlin_draft.body) && typeof qNote.facts.last_met === "string", qNote);
+  check("still with no address", !/@/.test(JSON.stringify(tmFew)));
   check("no address leaves Merlin through it, and no rate", !/@/.test(JSON.stringify(tm)) && !RATE.test(JSON.stringify(tm.moves.map((m) => [m.note, m.why_now, m.how]))), JSON.stringify(tm).match(/\S+@\S+/)?.[0]);
   check("it tells Claude the member sends, and to use only these facts", /member sends each note themselves/.test(tm.how_to_use) && /never add/.test(tm.how_to_use) && same(tm.voice, VOICES.casual));
   const tmFre = (await tools.todaysMoves(await ctxOf(FRE))) as { moves: Record<string, unknown>[] };
