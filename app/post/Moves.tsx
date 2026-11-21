@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import type { Me } from "@/lib/tableTypes";
 import { CRYSTAL_USED_LINE, FEATURE_NAME } from "@/lib/radar/types";
-import { MOVES_MAX, buildMove, holderOnFile, knowLine, postedWords, type Move, type MoveWire, type MovesWire } from "@/lib/moves";
+import { MOVES_MAX, buildMove, buyerWhat, holderOnFile, knowLine, postedWords, type Move, type MoveWire, type MovesWire } from "@/lib/moves";
 import { webLink } from "@/lib/links";
 import { CompanyLogo, IconBriefcase, IconChevron, IconExternal, IconLock, IconPencil, LockedName, initials, useToast } from "../ui/shared";
 import type { CoInfo } from "./model";
@@ -272,7 +272,9 @@ function MoveCard({
   const ui = useUi();
   const c = i.c;
   const seatBusy = m.way.kind === "holder" && (ui.busy.has(`${m.way.seatId}.operator`) || ui.busy.has(`${m.way.seatId}.role`));
-  const postBusy = m.way.kind === "role" && ["posting", "rate", "hours"].some((f) => ui.busy.has(`${(m.way as { seatId: string }).seatId}.${f}`));
+  // The open role's posting: the way in's own role, or the role beside a buyer.
+  const postSeat = m.way.kind === "role" ? m.way.seatId : m.open?.seatId ?? null;
+  const postBusy = !!postSeat && ["posting", "rate", "hours"].some((f) => ui.busy.has(`${postSeat}.${f}`));
   const posting = m.open && m.open.posting && m.open.posting !== "locked" ? webLink(m.open.posting) : null;
   // The one button.
   let main: ReactNode;
@@ -290,8 +292,23 @@ function MoveCard({
         {seatBusy ? "Unlocking" : "See who held it · 1 credit"}
       </button>
     );
-  } else if (m.do === "seePosting" && m.way.kind === "role") {
-    const seatId = m.way.seatId;
+  } else if (m.do === "seeBuyer" && m.way.kind === "buyer") {
+    // The buyer's name and title: one purchase, 1 credit, as on the record.
+    const personId = m.way.personId;
+    const buyerBusy = ui.busy.has(`${personId}.name`) || ui.busy.has(`${personId}.title`);
+    main = (
+      <button type="button" className="btn btn-pine mv-main" disabled={buyerBusy} aria-busy={buyerBusy} onClick={() => void ui.unlock({ entity: "contact", id: personId, field: "name" })}>
+        {buyerBusy ? "Unlocking" : `${m.way.rel === "Hiring for the seat" ? "See who hired them" : "See who decides"} · 1 credit`}
+      </button>
+    );
+  } else if (m.do === "find" && m.find) {
+    main = (
+      <a className="btn btn-pine mv-main" href={m.find.linkedin} target="_blank" rel="noreferrer">
+        Search LinkedIn <IconExternal size={12} />
+      </a>
+    );
+  } else if (m.do === "seePosting" && postSeat) {
+    const seatId = postSeat;
     main = (
       <button type="button" className="btn btn-pine mv-main" disabled={postBusy} aria-busy={postBusy} onClick={() => void ui.unlock({ entity: "engagement", id: seatId, field: "posting" })}>
         {postBusy ? "Unlocking" : "See the posting · 1 credit"}
@@ -358,12 +375,15 @@ function MoveCard({
   );
 }
 
+const upperFirst = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
+
 /** The middle of a move: the best way in on file. */
 function WayIn({ m, companyId }: { m: Move; companyId: string }) {
   const ui = useUi();
   const way = m.way;
   if (way.kind === "know") {
     const p = way.person;
+    const seat = p.seat ? `${p.seat.now ? "Holds" : "Held"} their ${p.seat.fn && p.seat.fn !== "Other" ? `${p.seat.fn} ` : ""}seat` : null;
     return (
       <>
         <span className="mv-label">You know</span>
@@ -373,11 +393,11 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
           </span>
           <div className="mv-who-t">
             <span className="mv-who-n">{p.name}</span>
-            {(p.title || p.dm) && (
+            {(p.title || p.dm || seat) && (
               <span className="mv-who-s">
-                {p.title}
-                {p.title && p.dm ? " · " : ""}
-                {p.dm ? <span className="mv-dm">Decision maker</span> : null}
+                {seat ?? p.title}
+                {!seat && p.title && p.dm ? " · " : ""}
+                {!seat && p.dm ? <span className="mv-dm">Decision maker</span> : null}
               </span>
             )}
           </div>
@@ -386,6 +406,59 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
           <span className={`mv-warm mv-warm-${p.warmth.toLowerCase()}`}>{p.warmth}</span>
           <span>{knowLine(p)}</span>
         </p>
+      </>
+    );
+  }
+  if (way.kind === "buyer") {
+    const what = buyerWhat(way);
+    if (!way.name)
+      return (
+        <>
+          <span className="mv-label">Your way in</span>
+          <div className="mv-who">
+            <span className="mv-av mv-av-quiet" aria-hidden>
+              <IconLock size={16} />
+            </span>
+            <div className="mv-who-t">
+              <span className="mv-who-x">{way.rel === "Hiring for the seat" || way.rel === "Reported to" ? `The exec who ${what} is on file` : "A decision maker is on file"}</span>
+            </div>
+          </div>
+          {m.hidden ? (
+            <p className="mv-who-line mv-quiet">Opens after the company.</p>
+          ) : m.do === "seeBuyer" ? (
+            <p className="mv-who-line mv-quiet">1 credit shows their name and title.</p>
+          ) : (
+            // The open role leads the move: the buyer's own unlock is here.
+            <button type="button" className="mv-link mv-add" onClick={() => void ui.unlock({ entity: "contact", id: way.personId, field: "name" })}>
+              See who · 1 credit
+            </button>
+          )}
+        </>
+      );
+    return (
+      <>
+        <span className="mv-label">Your way in</span>
+        <div className="mv-who">
+          <span className="mv-av" aria-hidden>
+            {initials(way.name)}
+          </span>
+          <div className="mv-who-t">
+            <span className="mv-who-n">{way.name}</span>
+            <span className="mv-who-s">
+              {way.title ? `${way.title} · ` : ""}
+              <span className="mv-dm">Decision maker</span>
+            </span>
+          </div>
+        </div>
+        <p className="mv-who-line">
+          <span className="mv-warm mv-warm-warm">The buyer</span>
+          <span>{upperFirst(what)}</span>
+        </p>
+        {way.email === "locked" && (
+          <button type="button" className="mv-link mv-add" disabled={ui.busy.has(`${way.personId}.email`)} onClick={() => void ui.unlock({ entity: "contact", id: way.personId, field: "email" })}>
+            Their email · 1 credit
+          </button>
+        )}
       </>
     );
   }
@@ -404,6 +477,7 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
             </div>
           </div>
           <p className="mv-who-line mv-quiet">{m.hidden ? "Opens after the company." : "1 credit shows who, with the role they held."}</p>
+          <Find m={m} companyId={companyId} />
         </>
       );
     return (
@@ -422,6 +496,7 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
           {way.member ? <span className="mv-warm mv-warm-warm">On Merlin</span> : <span className="mv-warm mv-warm-fading">Not on Merlin yet</span>}
           <span>{way.member ? "Message them there" : way.invite?.at ? "You invited them" : way.invite ? "Your note invites them" : "Held the seat"}</span>
         </p>
+        <Find m={m} companyId={companyId} />
       </>
     );
   }
@@ -440,9 +515,18 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
           </div>
         </div>
         <p className="mv-who-line mv-quiet">{m.hidden ? "Its posting opens with the company." : way.posting === "locked" ? "Its posting is on file." : way.posting ? "Apply through its posting." : "No posting link on file."}</p>
+        <Find m={m} companyId={companyId} />
       </>
     );
   }
+  if (m.find)
+    return (
+      <>
+        <span className="mv-label">Your way in</span>
+        <p className="mv-who-x mv-none-t">Nobody who decides is on file yet</p>
+        <Find m={m} companyId={companyId} lead />
+      </>
+    );
   return (
     <>
       <span className="mv-label">Your way in</span>
@@ -455,5 +539,36 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
         </button>
       )}
     </>
+  );
+}
+
+/**
+ * Nobody who decides is on file: where to look (a LinkedIn people search by the company's name
+ * and the titles, their team page or website), and Add them. Links out; Merlin reads nothing back.
+ * `lead`: the move's own button is the LinkedIn search, so only the rest shows here.
+ */
+function Find({ m, companyId, lead }: { m: Move; companyId: string; lead?: boolean }) {
+  const ui = useUi();
+  const f = m.find;
+  if (!f) return null;
+  return (
+    <div className="mv-find">
+      {!lead && <span className="mv-find-h">{f.label}</span>}
+      <span className="mv-find-acts">
+        {!lead && (
+          <a className="mv-link" href={f.linkedin} target="_blank" rel="noreferrer">
+            Search LinkedIn <IconExternal size={11} />
+          </a>
+        )}
+        {f.site && (
+          <a className="mv-link" href={f.site.href} target="_blank" rel="noreferrer">
+            {f.site.label} <IconExternal size={11} />
+          </a>
+        )}
+        <button type="button" className="mv-link" onClick={() => ui.openAdd({ companyId, mode: "person" })}>
+          Add them <span className="plus1">+1 credit</span>
+        </button>
+      </span>
+    </div>
   );
 }

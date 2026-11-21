@@ -69,6 +69,10 @@ const companies = [
   co("c_pine", "Pinecrest Logistics", "pinecrest.example"),
   co("c_blue", "Bluefin Freight", "bluefin.example"),
   co("c_out", "Sablecrest Partners", "sablecrest.example"),
+  // The buyer on file: the CEO who hired their fractional CMO, on the seat (no decision maker at the company itself).
+  co("c_embr", "Emberline Software", "emberline.example", { industry: "Software" }),
+  // Nobody who decides on file, and a seat nobody is named on: where to look for them.
+  co("c_quay", "Quayside Labs", "quayside.example"),
 ];
 const seat = (id: string, companyId: string, fields: Record<string, string>, extra: Record<string, unknown> = {}) => ({ id, companyId, verified: false, fields, ...extra });
 const cro = (id: string, companyId: string, operator?: string, extra: Record<string, unknown> = {}) =>
@@ -91,13 +95,17 @@ const engagements = [
   cro("e_pine_cro", "c_pine"),
   cro("e_blue_cro", "c_blue", "Ivo Castellan"),
   // A company with nothing new for years: no signal of any kind, so never in her Crystal Ball.
+  seat("e_embr_cmo", "c_embr", { source: "Member success story", role: "Fractional CMO", function: "Marketing", type: "Fractional", start: monthAgo(4), status: "Active", end: "Ongoing" }),
+  cro("e_quay_cro", "c_quay"),
   seat("e_out_cro", "c_out", { source: "Member success story", role: "Fractional CRO", function: "Sales", type: "Fractional", start: monthAgo(48), status: "Active", end: "Ongoing", rate: "$11k/mo", operator: "Odile Varga" }),
 ];
 const contacts = [
   { id: "p_lark_cfo", companyId: "c_lark", fields: { name: "Marisol Achterberg", title: "CFO", relationship: "Decision maker", email: "marisol@larkfield.example" } },
   { id: "p_salt_hana", engagementId: "e_salt_cro", fields: { name: "Hana Holder", title: "Fractional CRO", relationship: "Seat holder", email: "hana@holderco.example" } },
-  { id: "p_salt_ceo", companyId: "c_salt", fields: { name: "Bastian Quell", title: "CEO", relationship: "Hiring for the seat", email: "bastian@saltmarsh.example", phone: "512.555.0141" } },
-  { id: "p_tall_ceo", companyId: "c_tall", fields: { name: "Philippa Strand", title: "Founder", relationship: "Decision maker", email: "philippa@tallgrass.example" } },
+  // Someone who worked with the seat, not a buyer: the seat holder stays the way in at Saltmarsh and the open role at Tallgrass.
+  { id: "p_salt_ceo", companyId: "c_salt", fields: { name: "Bastian Quell", title: "CEO", relationship: "Worked with", email: "bastian@saltmarsh.example", phone: "512.555.0141" } },
+  { id: "p_tall_ceo", companyId: "c_tall", fields: { name: "Philippa Strand", title: "Founder", relationship: "Worked with", email: "philippa@tallgrass.example" } },
+  { id: "p_embr_ceo", engagementId: "e_embr_cmo", fields: { name: "Rhea Vance", title: "CEO", relationship: "Hiring for the seat", email: "rhea@emberline.example" } },
 ];
 
 const member = (id: string, name: string, title = "Fractional Head of RevOps") => ({ id, name, email: `${id.slice(4)}.moves@example.com`, title, token: `tok-${id.slice(4)}-moves` });
@@ -118,6 +126,7 @@ writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
 
 /** One kept Crystal Ball row (lib/radar/types.ts RadarSentRow): what the day's view lists. */
 const hired = (m: string, c: string, band: string) => ({ k: `t:${m}:${c}`, c, kind: "adjacent", l: "Hired a fractional CRO 2 months ago · Sales usually comes before RevOps", b: band, w: "Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months" });
+const raised = (m: string, c: string, band: string) => ({ k: `t:${m}:${c}:f`, c, kind: "funding", l: "Raised a Series A · Sales usually comes next", b: band, w: "Series A raised 3 weeks ago · RevOps usually follows in 2–6 months" });
 const role = (m: string, c: string, title: string) => ({ k: `t:${m}:${c}:r`, c, kind: "role", l: `New open role: ${title} · In your function`, b: "High", w: "Open now · a direct opening in RevOps" });
 /** The day's companies, in Crystal Ball's own order: the ones with nothing to reach anyone with come first, so the way in has to do the ranking. */
 const ball = (m: string) => [
@@ -130,7 +139,11 @@ const ball = (m: string) => [
   role(m, "c_harb", "Fractional Head of RevOps"),
   hired(m, "c_pine", "Medium"),
   hired(m, "c_blue", "Low"),
+  raised(m, "c_embr", "Low"),
+  hired(m, "c_quay", "Low"),
 ];
+/** Olga's day: the buyer on file, and nobody who decides on file. */
+const ballOld = (m: string) => [raised(m, "c_embr", "High"), hired(m, "c_quay", "High")];
 const ballOf = (m: string, rows = ball(m)) => ({ sent: {}, days: { [today]: rows } });
 
 /** A member's network as a sync leaves it: per company, the people, the counts and the dates. */
@@ -202,6 +215,7 @@ writeFileSync(
         mem_fre: ballOf("mem_fre"),
         mem_pro: ballOf("mem_pro"),
         mem_oth: ballOf("mem_oth"),
+        mem_old: ballOf("mem_old", ballOld("mem_old")),
         // Finn's Crystal Ball has two companies today.
         mem_few: ballOf("mem_few", [hired("mem_few", "c_nort", "High"), hired("mem_few", "c_salt", "Medium")]),
       },
@@ -249,7 +263,7 @@ const check = (name: string, ok: boolean, detail?: unknown) => {
 const SECRETS = [
   ...companies.map((c) => c.fields.name),
   ...companies.map((c) => c.fields.website),
-  "Hana Holder", "Pella Quist", "Ivo Castellan", "Odile Varga", "Marisol Achterberg", "Bastian Quell", "Philippa Strand",
+  "Hana Holder", "Pella Quist", "Ivo Castellan", "Odile Varga", "Marisol Achterberg", "Bastian Quell", "Philippa Strand", "Rhea Vance", "rhea@emberline.example",
   "Dana Whitfield", "Priya Raman", "Nia Castell", "Zelda Quince", "Quentin Vale",
   "dana@larkfield.example", "priya@corvidhealth.example", "nia@harborline.example", "zelda@northwind.example",
   "hana@holderco.example", "marisol@larkfield.example", "bastian@saltmarsh.example", "philippa@tallgrass.example", "512.555.0141",
@@ -396,10 +410,98 @@ async function main() {
   const harbRec = mor.recs.find((c) => c.id === P.harb)!;
   const harbRow = mor.today.moves!.list.find((w) => w.id === P.harb)!.row;
   const noPerson = M.buildMove(harbRec, harbRow, undefined, mor.today.me);
-  check("an open role whose posting is locked: See the posting first, and no link", noPerson.way.kind === "role" && noPerson.way.posting === "locked" && noPerson.do === "seePosting" && !JSON.stringify(noPerson).includes("harborline.example"), noPerson);
+  check("an open role whose posting is locked: See the posting first, and no link", noPerson.way.kind === "role" && noPerson.way.posting === "locked" && noPerson.do === "seePosting" && !JSON.stringify(noPerson).includes("harborline.example/jobs"), noPerson);
   check("with the person she knows there, the note goes to them and still has no posting link or rate", mHarb.open?.posting === "locked" && !JSON.stringify(mHarb).includes("harborline.example/jobs") && !RATE.test(JSON.stringify(mHarb)));
   const none = (await homeMoves(FEW)).moves[1];
   check("nothing on file: No way in yet, Open the company", none.way.kind === "none" && none.do === "open" && none.hidden);
+
+  /* ================= the buyer, and where to look for them ================= */
+  console.log("\nthe buyer");
+  type RadarRow = import("../lib/radar/types").RadarRow;
+  const rowOf0 = (h: Awaited<ReturnType<typeof homeMoves>>, id: string) => h.today.moves!.list.find((w) => w.id === id)?.row as RadarRow;
+  const VOICES_SHORT: VoiceStyle = { greeting: "Hey {first},", signoff: "Cheers,", name: "first", length: "short", formality: "casual", contractions: true, exclamations: "never", emoji: false, opener: "direct", phrases: [] };
+  const recOf = async (tok: string, id: string) => (await T.buildView(tok)).companies.find((c) => c.id === id)!;
+  const rowFor = async (tok: string, id: string) => (await radar.radarView(tok))!.rows.find((r) => r.id === id)!;
+  const tesMe = (await T.buildView(TES)).me!;
+  const embrRow = await rowFor(TES, P.embr);
+  let embr = await recOf(TES, P.embr);
+  let bm = M.buildMove(embr, embrRow, undefined, tesMe);
+  check("a locked company: Open the company, and nobody on it is named", bm.do === "open" && bm.way.kind === "buyer" && bm.way.name === null && bm.way.title === null && !found(bm, ["Rhea", "rhea@"]).length, bm);
+  check("the seat's hirer is a decision maker on file, though the company has none of its own", embr.people.length === 0 && M.buyersOf(embr).length === 1 && M.buyersOf(embr)[0].e?.id === embr.engagements[0].id && M.buyersOf(embr)[0].rel === "Hiring for the seat");
+  const tesC0 = await credits(TES);
+  await act(TES, { type: "unlock", entity: "company", id: P.embr, field: "identity", from: "crystal" });
+  embr = await recOf(TES, P.embr);
+  bm = M.buildMove(embr, embrRow, undefined, tesMe);
+  check("opened: the buyer is the way in, ahead of nothing, with the price before the click", bm.way.kind === "buyer" && bm.do === "seeBuyer" && bm.title === "See who hired them" && /^1 credit shows their name and title, and their email is 1 more\./.test(bm.line) && (await credits(TES)) === tesC0, [bm.title, bm.line]);
+  check("still nobody named, and no address", !found(bm, ["Rhea", "rhea@"]).length && M.noteFacts(bm, embrRow, tesMe, BASE) === null);
+  check("a buyer on file means nothing to look up", bm.find === null && M.findBuyer(embr, tesMe) === null);
+  const rhea = (bm.way as { personId: string }).personId;
+  await act(TES, { type: "unlock", entity: "contact", id: rhea, field: "name" });
+  check("their name and title: 1 credit, one purchase", (await credits(TES)) === tesC0 - 1, [tesC0, await credits(TES)]);
+  embr = await recOf(TES, P.embr);
+  bm = M.buildMove(embr, embrRow, undefined, tesMe);
+  check("then: Write to Rhea, who hired their fractional Marketing leader (the seat's role is still locked, so it isn't said)", bm.do === "buyer" && bm.title === "Write to Rhea" && bm.line.startsWith("Rhea, CEO, hired their fractional Marketing leader.") && /Their email is 1 credit on the record/.test(bm.line), [bm.title, bm.line]);
+  let bf = M.noteFacts(bm, embrRow, tesMe, BASE)!;
+  let bd = M.draftNote(bf, null);
+  check("the note is the buyer's, to her by name, with no address yet", bf.kind === "buyer" && bf.to?.name === "Rhea Vance" && bf.to.email === null && bd.body.startsWith("Hi Rhea,\n\n"), bf.to);
+  check(
+    "it says why now from the signal and the pattern the company fits, in the member's words",
+    /I saw Emberline Software just raised a round\./.test(bd.body) && bd.body.includes("When a SaaS company is past $5M and has a fractional Marketing leader and no fractional RevOps seat yet, RevOps is usually what needs an owner next.") && !/CMO/.test(bd.body) && /a fractional Head of RevOps/.test(bd.body),
+    bd.body,
+  );
+  const bShort = M.draftNote(bf, VOICES_SHORT);
+  check("short: the signal, the pattern and the ask", sentences(bShort.body.replace(/^Hey Rhea,\n\n/, "").replace(/\n\nCheers,\nTess$/, "")).length === 3 && /When a SaaS company/.test(bShort.body), bShort.body);
+  check("never 'no RevOps leader' without their team page read", !/no RevOps leader/.test(bd.body) && M.patternLine({ ...bf.pattern!, noLeader: true }, "RevOps")!.neutral.includes("but no RevOps leader yet"));
+  check("after a hire signal it says what follows the hire, not the hire twice", M.patternLine(bf.pattern, "RevOps", true)!.neutral === "When a SaaS company past $5M makes that hire, RevOps is usually what needs an owner next.");
+  check("no rate (the revenue band is a free fact), no address, nothing she hasn't opened", !RATE.test(bd.body.replace("past $5M", "")) && M.revenueWord("$5M–$20M") === "past $5M" && M.revenueWord("Under $1M") === null && M.industryWord("SaaS") === "SaaS" && M.industryWord("Manufacturing") === "manufacturing" && !/@/.test(bd.body) && !found(bd.body, ["Bastian", "Philippa", "Marisol", "Ivo"]).length);
+  await act(TES, { type: "unlock", entity: "contact", id: rhea, field: "email" });
+  check("their email: 1 credit after the name", (await credits(TES)) === tesC0 - 2);
+  embr = await recOf(TES, P.embr);
+  bm = M.buildMove(embr, embrRow, undefined, tesMe);
+  bf = M.noteFacts(bm, embrRow, tesMe, BASE)!;
+  check("then the note goes to the address she unlocked", bf.to?.email === "rhea@emberline.example" && bf.to.from === "unlocked on Merlin" && /to=rhea%40emberline\.example/.test(M.gmailLink(bf.to.email, "s", "b")) && /A short note to their email on file/.test(bm.line), [bf.to, bm.line]);
+  // The order: someone they know, then the buyer, then the seat holder, then an open role.
+  const someone = { name: "Sam Known", title: "VP Finance", email: null, warmth: "Warm" as const, last: null, meetings: 2, emails: 0, dm: true, google: false };
+  check("someone the member knows comes before the buyer", M.wayIn(embr, embrRow, someone, tesMe).kind === "know");
+  const saltT = await recOf(TES, P.salt);
+  const withBuyer = { ...saltT, people: [...saltT.people, { id: "p_made_up", engagementId: null, source: "Member added", cells: { name: { s: "locked", ver: 0 }, title: { s: "locked", ver: 0 }, relationship: { s: "value", v: "Decision maker", ver: 0 } } }] } as CompanyRec;
+  check("the buyer comes before the seat holder", M.wayIn(saltT, rowOf0(tes, P.salt), undefined, tesMe).kind === "holder" && M.wayIn(withBuyer, rowOf0(tes, P.salt), undefined, tesMe).kind === "buyer");
+  check("someone who only worked with the seat is not a buyer", !M.buyersOf(saltT).length && saltT.people.some((p) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Worked with"));
+  const tallT = await recOf(TES, P.tall);
+  const tallBuyer = { ...tallT, people: [{ id: "p_made_up2", engagementId: null, source: "Member added", cells: { name: { s: "value", v: "Gil Made", ver: 0 }, title: { s: "value", v: "CEO", ver: 0 }, relationship: { s: "value", v: "Decision maker", ver: 0 }, email: { s: "empty" } } }] } as CompanyRec;
+  const tb = M.buildMove(tallBuyer, rowOf0(tes, P.tall), undefined, tesMe);
+  check("an open role in her function still leads the move, with the note to the buyer", tb.way.kind === "buyer" && tb.do === "reply" && tb.line === "Apply through the posting. Your note to Gil is drafted to go with it." && M.noteFacts(tb, rowOf0(tes, P.tall), tesMe, BASE)?.kind === "roleCold" && M.noteFacts(tb, rowOf0(tes, P.tall), tesMe, BASE)?.to?.name === "Gil Made", [tb.do, tb.line]);
+
+  // Nobody who decides on file: where to look.
+  const quayRow = await rowFor(TES, P.quay);
+  check("a locked company has nowhere to look yet (its name is locked)", M.findBuyer(await recOf(TES, P.quay), tesMe) === null && M.buildMove(await recOf(TES, P.quay), quayRow, undefined, tesMe).find === null);
+  await act(TES, { type: "unlock", entity: "company", id: P.quay, field: "identity", from: "crystal" });
+  const quay = await recOf(TES, P.quay);
+  const qm = M.buildMove(quay, quayRow, undefined, tesMe);
+  const li = new URL(qm.find!.linkedin);
+  check("nobody who decides: Find who runs RevOps at Quayside Labs", qm.way.kind === "none" && qm.do === "find" && qm.title === "Find who runs RevOps" && qm.find!.label === "Find who runs RevOps at Quayside Labs", [qm.title, qm.find?.label]);
+  check("a LinkedIn people search from the company's name and the titles", li.hostname === "www.linkedin.com" && li.pathname === "/search/results/people/" && li.searchParams.get("keywords") === '"Quayside Labs" ("VP Revenue Operations" OR "Head of RevOps" OR CRO OR Founder OR CEO)', li.searchParams.get("keywords"));
+  check("and their website, since it is known", same(qm.find!.site, { href: "https://quayside.example/", label: "Their website" }));
+  check("its team page instead, when the leaders read found one", same(M.findBuyer({ ...quay, leads: { checkedAt: today, teamAt: today, fns: [{ fn: "Sales", level: "VP", kind: "full-time", how: "team page", url: "quayside.example/team" }] } }, tesMe)!.site, { href: "https://quayside.example/team", label: "Their team page" }));
+  check("the words never say LinkedIn is where Merlin's data comes from", !/linkedin/i.test(qm.line + qm.title + qm.find!.label) && /add them here and earn a credit/.test(qm.line), qm.line);
+  check("no website: just the search", M.findBuyer({ ...quay, cells: { ...quay.cells, website: { s: "empty" } } }, tesMe)!.site === null);
+  check("without a function: Find who decides", M.findBuyer(quay, { function: null })!.label === "Find who decides at Quayside Labs" && /Founder%20OR%20CEO/.test(M.findBuyer(quay, { function: null })!.linkedin));
+  check("someone added at the company ends it", M.findBuyer({ ...quay, people: [{ id: "p_q", engagementId: null, source: "Member added", cells: { name: { s: "value", v: "Q Person", ver: 0 } } }] } as CompanyRec, tesMe) === null);
+
+  // What a move says is what is on file.
+  const blueT = await recOf(TES, P.blue);
+  await act(TES, { type: "unlock", entity: "company", id: P.blue, field: "identity", from: "crystal" });
+  const blueRec = await recOf(TES, P.blue);
+  const blueLocked = M.buildMove(blueRec, rowOf0(tes, P.blue) ?? (await rowFor(TES, P.blue)), undefined, tesMe);
+  check("a locked seat holder: the price, and no promise of how to reach them", blueLocked.do === "seeHolder" && blueLocked.line === "1 credit shows who held it. Nobody who hired them is on file yet." && !/Merlin|invite/i.test(blueLocked.line), blueLocked.line);
+  await act(TES, { type: "unlock", entity: "engagement", id: (blueLocked.way as { seatId: string }).seatId, field: "operator" });
+  const blueOpen = await recOf(TES, P.blue);
+  const noInvite = { ...blueOpen, engagements: blueOpen.engagements.map((e) => ({ ...e, invite: undefined })) } as CompanyRec;
+  const bn = M.buildMove(noInvite, await rowFor(TES, P.blue), undefined, tesMe);
+  check("named, not on Merlin, no claim link: says so, and that nobody who hired them is on file", bn.do === "record" && bn.line === "Ivo held their Sales seat and isn't on Merlin yet. Nobody who hired them is on file yet." && !/record has who hired/.test(bn.line) && !/invite/i.test(bn.line), bn.line);
+  check("and where to look for who decides", !!bn.find && bn.find.label === "Find who runs RevOps at Bluefin Freight");
+  check("a seat holder with a claim link: the invite", M.buildMove(blueOpen, await rowFor(TES, P.blue), undefined, tesMe).do === (blueOpen.engagements[0].invite ? "holderInvite" : "record"));
+  void blueT;
 
   /* ================= Google off, and not connected ================= */
   console.log("\nGoogle");
@@ -670,6 +772,28 @@ async function main() {
   check("for Free it names nothing and drafts nothing", !found(tmFre).length && tmFre.moves.every((m) => m.company === "Locked company" && m.locked === true && !("note" in m)), found(tmFre));
   const tmTes = (await tools.todaysMoves(await ctxOf(TES))) as { moves: Record<string, unknown>[] };
   check("for Tess: her own moves, nobody's network, and only what she opened", same(tmTes.moves.map((m) => m.company_id), (await movesFor(TES))!.moves.map((m) => m.id)) && !found(tmTes, NETWORK_WORDS).length && !found(tmTes, ["Bastian", "Marisol", "Philippa", "Cheers"]).length, found(tmTes, NETWORK_WORDS));
+
+  // The buyer and "Find who runs RevOps", through the connector (Olga, Pro: the buyer on file, and nobody who decides on file).
+  const OLD = "tok-old-moves";
+  for (const id of [P.embr, P.quay]) await act(OLD, { type: "unlock", entity: "company", id, field: "identity", from: "crystal" });
+  let tmOld = (await tools.todaysMoves(await ctxOf(OLD))) as { moves: Record<string, unknown>[] };
+  const oldWay = (id: string) => tmOld.moves.find((m) => m.company_id === id)!.way_in as Record<string, unknown>;
+  check("todays_moves: the buyer as the way in, its unlock and price, and no name while it is locked", oldWay(P.embr).kind === "the buyer: a decision maker on file" && oldWay(P.embr).who === "hired their fractional Marketing leader" && /^locked, 1 credit/.test(String(oldWay(P.embr).name)) && same(oldWay(P.embr).unlock, { entity: "person", id: (await movesFor(OLD))!.moves.find((m) => m.id === P.embr)!.way.kind === "buyer" ? ((await movesFor(OLD))!.moves.find((m) => m.id === P.embr)!.way as { personId: string }).personId : "", field: "name" }) && !found(tmOld, ["Rhea", "rhea@"]).length, oldWay(P.embr));
+  const oldRhea = ((await movesFor(OLD))!.moves.find((m) => m.id === P.embr)!.way as { personId: string }).personId;
+  await act(OLD, { type: "unlock", entity: "contact", id: oldRhea, field: "name" });
+  await act(OLD, { type: "unlock", entity: "contact", id: oldRhea, field: "email" });
+  tmOld = (await tools.todaysMoves(await ctxOf(OLD))) as { moves: Record<string, unknown>[] };
+  const embrTm = tmOld.moves.find((m) => m.company_id === P.embr)!;
+  const embrNote = embrTm.note as { to: string; situation: string; facts: Record<string, unknown>; merlin_draft: { body: string } };
+  check("once opened: named, with the note to them and the pattern's free facts, and still no address", oldWay(P.embr).name === "Rhea Vance" && embrTm.your_move === "Write to Rhea" && embrNote.to === "Rhea Vance" && /decision maker on file/.test(embrNote.situation) && (embrNote.facts.company_pattern as { hired: string }).hired === "a fractional Marketing leader" && /When a SaaS company is past \$5M/.test(embrNote.merlin_draft.body) && !/@/.test(JSON.stringify(tmOld)), embrTm);
+  const quayTm = tmOld.moves.find((m) => m.company_id === P.quay)! as Record<string, unknown> & { find_the_buyer: Record<string, string> };
+  check("todays_moves: nobody who decides on file comes with where to look, said as a search to open", !!quayTm.find_the_buyer && quayTm.find_the_buyer.what === "Find who runs RevOps at Quayside Labs" && quayTm.find_the_buyer.linkedin_people_search.startsWith("https://www.linkedin.com/search/results/people/?keywords=") && quayTm.find_the_buyer.website === "https://quayside.example/" && /not facts Merlin holds/.test(quayTm.find_the_buyer.then), quayTm);
+  const gcQuay = (await tools.getCompany(await ctxOf(OLD), { company: P.quay })) as { warm_paths: Record<string, unknown>[] };
+  const gcEmbr = (await tools.getCompany(await ctxOf(OLD), { company: P.embr })) as { warm_paths: Record<string, unknown>[] };
+  check("get_company's warm_paths: the seat's hirer marked as a decision maker", gcEmbr.warm_paths.some((w) => w.person_id === oldRhea && w.decision_maker === true && w.name === "Rhea Vance") && !gcEmbr.warm_paths.some((w) => "find_the_buyer" in w), gcEmbr.warm_paths);
+  check("and where to look, when nobody who decides is on file", gcQuay.warm_paths.some((w) => !!w.find_the_buyer), gcQuay.warm_paths);
+  const gcLocked = (await tools.getCompany(await ctxOf(TES), { company: P.pine })) as { warm_paths: Record<string, unknown>[] };
+  check("never at a locked company (its name would be in the search)", !gcLocked.warm_paths.some((w) => "find_the_buyer" in w) && !found(gcLocked, ["Pinecrest"]).length);
 
   /* ================= the Pro welcome ================= */
   console.log("\nthe Pro welcome");

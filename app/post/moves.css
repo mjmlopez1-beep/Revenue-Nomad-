@@ -482,3 +482,34 @@
     min-height: 44px;
   }
 }
+
+/* Nobody who decides is on file: where to look, and Add them. */
+.mv-find {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  min-width: 0;
+}
+.mv-find-h {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 650;
+  color: var(--body-ink);
+}
+.mv-find-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+.mv-find .plus1 {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--volt);
+  color: var(--pine);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 700;
+  text-decoration: none;
+}

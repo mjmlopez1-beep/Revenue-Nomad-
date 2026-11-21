@@ -43,8 +43,14 @@ import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
 import { WayInPeople, wayInFrom } from "./network/Network"; // [google network]
 import { useNetCompany } from "./network/useNetwork"; // [google network]
+import { WarmthChip } from "./network/parts"; // [google network]
 import { Charge } from "./Charge";
 import { Prop } from "../ui/fractions/lazy";
+import dynamic from "next/dynamic";
+import { bestBuyer, buyerNoteMove, buyersOf, buyerWhat, findBuyer, knowSeatLine, type BuyerOnFile } from "@/lib/moves";
+
+// The note's sheet and its templates load the first time a note is drafted from the record.
+const NoteSheet = dynamic(() => import("./MoveNote").then((m) => m.NoteSheet), { ssr: false });
 
 /**
  * Who leads each function, from the company's own website (lib/leaders): "Sales: full-time CRO
@@ -945,20 +951,20 @@ const personRender: Record<string, (v: string) => ReactNode> = {
  * At a locked company everything about them opens after the company. Their LinkedIn, email and
  * phone open after their name and title, and until then nothing but a relationship can be added.
  */
-function PersonCard({ p, inSeat }: { p: PersonRec; inSeat?: boolean }) {
+function PersonCard({ p, inSeat, anchor = true }: { p: PersonRec; inSeat?: boolean; anchor?: boolean }) {
   const env = useEnv();
   const unseen = personUnseen(p.cells);
   const waits = (f: string) => (p.cells[f]?.s !== "locked" ? null : env.hidden ? AFTER_COMPANY : unseen && PERSON_DETAILS.includes(f) ? AFTER_NAME : null);
   return (
-    <div className={`tp-person${inSeat ? "" : " tp-person-box"}`} id={`tp-d-${p.id}`}>
+    <div className={`tp-person${inSeat ? "" : " tp-person-box"}`} id={anchor ? `tp-d-${p.id}` : undefined}>
       <FieldList entity="contact" id={p.id} cells={p.cells} fields={personFields(p)} render={personRender} pair={PERSON_BUNDLE} waits={waits} noAdd={unseen ? PERSON_NO_ADD : []} />
     </div>
   );
 }
 
-function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string; engagementId: string | null; onDone: () => void }) {
+function AddPersonForm({ companyId, engagementId, onDone, initial }: { companyId: string; engagementId: string | null; onDone: () => void; initial?: Record<string, string> }) {
   const ui = useUi();
-  const [v, setV] = useState<Record<string, string>>({});
+  const [v, setV] = useState<Record<string, string>>(() => ({ ...(initial ?? {}) }));
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -1087,7 +1093,7 @@ function safeHref(build: () => string): string | null {
  *  - A name the claim link can't bring in: find them on LinkedIn.
  * Then their record in Fractionals (every seat of theirs, and the clients they serve).
  */
-function Reach({ e, name, member, emailTo, more = true }: { e: EngagementRec; name: string; member: boolean; emailTo: string | null; more?: boolean }) {
+function Reach({ e, name, member, emailTo, known = false, more = true }: { e: EngagementRec; name: string; member: boolean; emailTo: string | null; known?: boolean; more?: boolean }) {
   const ui = useUi();
   const env = useEnv();
   const first = name.trim().split(/\s+/)[0] || name;
@@ -1102,6 +1108,11 @@ function Reach({ e, name, member, emailTo, more = true }: { e: EngagementRec; na
           <span className="tp-notyet">Not on Merlin yet</span>
           <InviteConnect e={e} name={name} company={env.company} emailTo={emailTo} />
         </>
+      ) : known && emailTo ? (
+        // In the member's own contacts, with an address: they write from their own mail.
+        <a className="btn btn-sm btn-primary" href={`mailto:${encodeURIComponent(emailTo)}`}>
+          Email {first}
+        </a>
       ) : (
         li && (
           <a className="btn btn-sm btn-primary" href={li} target="_blank" rel="noreferrer">
@@ -1115,7 +1126,11 @@ function Reach({ e, name, member, emailTo, more = true }: { e: EngagementRec; na
             ? e.invite.at
               ? `Once ${first} claims their seat through your link, you're connected on Merlin.`
               : `Invite ${first}, and once they claim their seat you're connected on Merlin.`
-            : `${first} isn't on Merlin yet, so you can't message them here.`}
+            : known
+              ? emailTo
+                ? `${first} isn't on Merlin yet. The address is from your own contacts.`
+                : `${first} isn't on Merlin yet. You know them, so reach them the way you usually do.`
+              : `${first} isn't on Merlin yet, so you can't message them here.`}
         </span>
       )}
       {more && (
@@ -1277,27 +1292,138 @@ export function wayInSeatsOf(i: CoInfo, fn: string | null): EngagementRec[] {
 }
 
 /**
+ * The decision makers "Your way in" lists (lib/moves buyersOf): the company's people and the
+ * people on its seats marked Hiring for the seat, Reported to or Decision maker, the buyer to reach
+ * first at the top (bestBuyer). The member's own seats are left out. At most WAY_IN_MAX.
+ */
+export function wayInBuyersOf(c: CompanyRec, fn: string | null): BuyerOnFile[] {
+  const all = buyersOf(c, { others: true });
+  const best = bestBuyer(c, fn);
+  return (best ? [best, ...all.filter((b) => b.p.id !== best.p.id)] : all).slice(0, WAY_IN_MAX);
+}
+
+/** "Hired their fractional CRO · Marketing seat", "Decision maker": who a buyer on file is to the company. */
+const buyerLabel = (b: BuyerOnFile) => {
+  const what = buyerWhat({ rel: b.rel, fn: b.e ? shown(b.e.cells.function) : null, seatRole: b.e ? shown(b.e.cells.role) : null });
+  return what === "a decision maker there" ? "Decision maker" : what.charAt(0).toUpperCase() + what.slice(1);
+};
+
+/** One decision maker under Your way in: who they are to the company, their name (or its one lock), and a drafted note. */
+function WayInBuyer({ i, b, onDraft }: { i: CoInfo; b: BuyerOnFile; onDraft: (b: BuyerOnFile) => void }) {
+  const ui = useUi();
+  const hidden = !!i.c.hidden;
+  const name = shown(b.p.cells.name);
+  const title = shown(b.p.cells.title);
+  const email = b.p.cells.email;
+  const nameLocked = ["name", "title"].filter((f) => b.p.cells[f]?.s === "locked");
+  const emailBusy = ui.busy.has(cellKey(b.p.id, "email"));
+  return (
+    <div className="tp-wayin-row">
+      <span className="tp-wayin-what">{buyerLabel(b)}</span>
+      {name ? (
+        <>
+          <span className="tp-wayin-who">
+            {name}
+            {title ? <span className="tp-wayin-t"> · {title}</span> : null}
+          </span>
+          <div className="tp-reach">
+            <button type="button" className="btn btn-sm btn-primary" onClick={() => onDraft(b)}>
+              Draft a note to {firstOfName(name)}
+            </button>
+            {email?.s === "locked" && (
+              <button type="button" className="btn btn-sm" disabled={emailBusy} aria-busy={emailBusy} onClick={() => void ui.unlock({ entity: "contact", id: b.p.id, field: "email" })}>
+                {emailBusy ? "Unlocking" : "Their email · 1 credit"}
+              </button>
+            )}
+            <span className="tp-reach-note">
+              {email?.s === "value" ? "The note goes to their email on file. You send it from your own mail." : email?.s === "locked" ? "Their email is on file. The note is ready either way." : "No email on file. Copy the note and send it where you reach them."}
+            </span>
+          </div>
+        </>
+      ) : hidden ? (
+        <QuietLock words={waitWords(AFTER_COMPANY) ?? "Opens after the company"} tip={AFTER_COMPANY} />
+      ) : (
+        // Their name and title: one purchase, 1 credit, before the click.
+        <PairLock entity="contact" id={b.p.id} hidden={false} fields={nameLocked.length ? nameLocked : ["name"]} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Nobody who decides is on file at a company the member can see: "Find who runs Sales at Acme".
+ * A LinkedIn people search by the company's name and the titles, their team page or website, and
+ * Add them (+1 credit a fact). Links out; Merlin reads nothing from them.
+ */
+function WayInFind({ i }: { i: CoInfo }) {
+  const ui = useUi();
+  const [adding, setAdding] = useState(false);
+  const f = findBuyer(i.c, { function: ui.me.function });
+  if (!f) return null;
+  return (
+    <div className="tp-wayin-row tp-wayin-find">
+      <span className="tp-wayin-what">Nobody who decides is on file yet</span>
+      <span className="tp-wayin-who">{f.label}</span>
+      {adding ? (
+        <AddPersonForm companyId={i.c.id} engagementId={null} onDone={() => setAdding(false)} initial={{ relationship: "Decision maker" }} />
+      ) : (
+        <div className="tp-reach">
+          <a className="btn btn-sm btn-primary" href={f.linkedin} target="_blank" rel="noreferrer">
+            Search LinkedIn <IconExternal size={11} />
+          </a>
+          {f.site && (
+            <a className="btn btn-sm" href={f.site.href} target="_blank" rel="noreferrer">
+              {f.site.label} <IconExternal size={11} />
+            </a>
+          )}
+          <button type="button" className="btn btn-sm btn-ghost tp-addlink" onClick={() => setAdding(true)}>
+            Add them <span className="plus1">+1 credit</span>
+          </button>
+          <span className="tp-reach-note">These open in a new tab. Add who you find and earn a credit for each fact.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const firstOfName = (name: string) => name.trim().split(/\s+/)[0] || name;
+
+/**
  * [ux ws3] Your way in: right under the record's header and its one action, the people who held
  * its seats and the next step with each. Named and on Merlin: Message. Named, not a member: Not
  * on Merlin yet · Invite to connect. Locked: who held it, 1 credit (after the company at a locked
  * one). Nobody named: Know who held it? Add them, +1. Then the seats, people and details.
  *
  * [google network] One section and one heading: the people the member already knows here come
- * first, warmest first (their own network, nothing with RN_GOOGLE off), then the seats someone held.
+ * first, warmest first (their own network, nothing with RN_GOOGLE off), then the buyer (the
+ * decision makers on file, and the people on its seats who hired or managed the fractional), then
+ * the seats someone held. A seat whose holder is in the member's own contacts says so ("You know
+ * Pat (Hot), who holds their Marketing seat") and the invite goes to the address they have.
+ * Nobody who decides on file: where to look for them (WayInFind).
  */
 export function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
   const ui = useUi();
   const [adding, setAdding] = useState<string | null>(null);
+  const [draft, setDraft] = useState<BuyerOnFile | null>(null);
   const hidden = !!i.c.hidden;
   const mine = ui.me.function;
   const net = useNetCompany(hidden ? null : i.c.id);
-  if (!seats.length && !net) return null;
+  const buyers = wayInBuyersOf(i.c, mine);
+  const find = !hidden && !buyers.length && !!findBuyer(i.c, { function: mine });
+  if (!seats.length && !net && !buyers.length && !find) return null;
+  // Their own contacts who hold a seat here, by seat (lib/google seat matches).
+  const knownOn = new Map((net?.people ?? []).filter((p) => p.seat && p.name && !p.hidden).map((p) => [p.seat!.id, p]));
+  const move = draft ? buyerNoteMove(i.c, draft, ui.me) : null;
   return (
     <section className="tp-dsec tp-wayin" aria-labelledby="tp-wayin-h">
       <h3 className="tp-dsec-h" id="tp-wayin-h">
         Your way in{net && <span className="nw-muted nw-way-from">{wayInFrom(net)}</span>}
       </h3>
       {net && <WayInPeople c={net} company={i.c.name} />}
+      {buyers.map((b) => (
+        <WayInBuyer key={b.p.id} i={i} b={b} onDraft={setDraft} />
+      ))}
+      {find && <WayInFind i={i} />}
       {seats.map((e, k) => {
         const op = e.cells.operator;
         const name = op?.s === "value" ? op.v : null;
@@ -1306,14 +1432,28 @@ export function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
         const start = shown(e.cells.start);
         const what = [role ?? (fn ? `${fn} seat` : "A fractional seat"), start && fmtMonth(start)].filter(Boolean).join(" · ");
         const member = op?.s === "value" && !!op.member;
+        const known = name ? knownOn.get(e.id) : undefined;
         return (
           <div key={e.id} className="tp-wayin-row">
             <span className={`tp-wayin-what${fn && fn === mine ? " mine" : ""}`}>{what}</span>
             {name ? (
               <>
                 <span className="tp-wayin-who">{name}</span>
+                {known && (
+                  <span className="tp-wayin-know">
+                    <WarmthChip w={known.warmth} />
+                    <span>{knowSeatLine({ name: known.name!, warmth: known.warmth, seat: known.seat })} Only you see this.</span>
+                  </span>
+                )}
                 {!(op?.s === "value" && op.member?.you) && (
-                  <Reach e={e} name={name} member={member} emailTo={e.invite ? emailOnFile([...e.people, ...i.c.people], name) : null} more={k === seats.length - 1} />
+                  <Reach
+                    e={e}
+                    name={name}
+                    member={member}
+                    emailTo={known?.email || (e.invite ? emailOnFile([...e.people, ...i.c.people], name) : null)}
+                    known={!!known}
+                    more={k === seats.length - 1}
+                  />
                 )}
               </>
             ) : op?.s === "locked" ? (
@@ -1338,6 +1478,18 @@ export function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
           </div>
         );
       })}
+      {move && (
+        <NoteSheet
+          key={draft!.p.id}
+          m={move}
+          row={{ id: i.c.id, kinds: [], lines: [] }}
+          me={ui.me}
+          sentLabel="Done"
+          onClose={() => setDraft(null)}
+          onSent={() => setDraft(null)}
+          onClaude={() => setDraft(null)}
+        />
+      )}
     </section>
   );
 }
@@ -1741,6 +1893,8 @@ export function Drawer({
   const plan = planOf(i);
   // [ux ws3] Your way in: the seats someone held, the member's function first, then a name they can see, then a lock.
   const wayInSeats = wayInSeatsOf(i, ui.me.function);
+  // People on its seats marked Hiring for the seat, Reported to or Decision maker: decision makers at the company too (lib/moves buyersOf).
+  const seatBuyers = buyersOf(c).filter((b) => !!b.e);
   // The website is stored as its host (a LinkedIn, Google Sites or Notion page keeps its path).
   const site = website?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
   // The company's own facts as rows. Missing ones are added in the header while it has no summary line,
@@ -2005,13 +2159,20 @@ export function Drawer({
           </section>
           <section className="tp-dsec">
             <h3 className="tp-dsec-h">
-              <span className="tp-dsec-ht">Decision makers at {c.hidden ? "this company" : c.name}</span> <span className="num tp-cnt">{c.people.length}</span>
+              <span className="tp-dsec-ht">Decision makers at {c.hidden ? "this company" : c.name}</span> <span className="num tp-cnt">{c.people.length + seatBuyers.length}</span>
             </h3>
-            {c.people.length === 0 && !addingPerson && (
+            {c.people.length + seatBuyers.length === 0 && !addingPerson && (
               <p className="tp-dsec-note">{c.hidden ? "Nobody is on file here yet." : "Nobody is on file here yet. Add someone you know and earn a credit for each fact."}</p>
             )}
             {c.people.map((p) => (
               <PersonCard key={p.id} p={p} />
+            ))}
+            {/* Who hired or managed a fractional here decides too: listed with their seat (the seat's card has them as well). */}
+            {seatBuyers.map((b) => (
+              <div key={b.p.id} className="tp-person-box tp-dm-seat">
+                <div className="tp-sublabel">{[b.rel, b.e && shown(b.e.cells.function) ? `${shown(b.e.cells.function)} seat` : null].filter(Boolean).join(" · ")}</div>
+                <PersonCard p={b.p} inSeat anchor={false} />
+              </div>
             ))}
             {c.hidden ? null : addingPerson ? (
               <AddPersonForm companyId={c.id} engagementId={null} onDone={() => setAddingPerson(false)} />

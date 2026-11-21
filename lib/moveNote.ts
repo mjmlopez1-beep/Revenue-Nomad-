@@ -14,14 +14,14 @@
 import type { RadarKind, RadarRow } from "./radar/types";
 import { clientKinds, firstOf, myWords, seatWords } from "./partners";
 import { NEUTRAL_VOICE, asSentence, expandContractions, phraseSlot, styleOf, type VoiceFormality, type VoiceProfile, type VoiceStyle } from "./voice";
-import { sinceMonth, type Move, type MoveMe } from "./moves";
+import { hiredWords, sinceMonth, type BuyerCtx, type Move, type MoveMe } from "./moves";
 
 const flat = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim();
 const lowerFirst = (v: string) => (/^[A-Z][a-z]/.test(v) ? v.charAt(0).toLowerCase() + v.slice(1) : v);
 
 /* ---------- the drafted note ---------- */
 
-export type NoteKind = "know" | "intro" | "holderMessage" | "holderInvite" | "role" | "roleCold" | "ask" | "peerInvite";
+export type NoteKind = "know" | "knowHolder" | "intro" | "holderMessage" | "holderInvite" | "buyer" | "role" | "roleCold" | "ask" | "peerInvite";
 
 /** Every fact a note may use. Each one is on the member's own screen already. */
 export interface NoteFacts {
@@ -44,6 +44,53 @@ export interface NoteFacts {
   link: string | null;
   /** "ask" (Your network's People who can introduce you): who they are to the member, an investor or another fractional. */
   via?: "investor" | "fractional";
+  /** "buyer" (and a reply to the open role sent to the buyer): the company's free facts the note's pattern line uses. */
+  pattern?: BuyerCtx | null;
+  /** "knowHolder": the seat their own contact holds there ("the Marketing seat"), and whether it is still going. */
+  held?: { seat: string; now: boolean } | null;
+}
+
+/** "SaaS", "software", "manufacturing": the industry as a note says it before "company". Null when it reads badly there. */
+export function industryWord(v: string | null | undefined): string | null {
+  const t = flat(v).replace(/\s*\(.*\)$/, "").replace(/\s*&\s*/g, " and ");
+  if (!t || t.length > 30 || /\b(other|services?)\b/i.test(t) || /\//.test(t)) return null;
+  // A plain word goes lower case ("Manufacturing" -> "manufacturing"); one with its own capitals stays ("SaaS", "B2B", "AI").
+  return t.split(" ").map((w) => (/^[A-Z][a-z]+$/.test(w) ? w.toLowerCase() : w)).join(" ");
+}
+/** "past $5M", from a revenue band ("$5M–$20M", "$50M+"). Null under $1M, pre-revenue, or when it says nothing. */
+export function revenueWord(v: string | null | undefined): string | null {
+  const m = /^\$(\d+(?:\.\d+)?[KMB])/i.exec(flat(v));
+  return m ? `past $${m[1].toUpperCase()}` : null;
+}
+
+/**
+ * The pattern a note to the buyer says why now with, from the company's free facts only:
+ * "When a SaaS company is past $5M and has a fractional CMO but no Sales leader yet, Sales is
+ * usually what needs an owner next." "no Sales leader yet" only when their team page was read and
+ * names nobody there (lib/leaders), else "and no fractional Sales seat yet" when none is on file.
+ */
+export function patternLine(p: BuyerCtx | null | undefined, fn: string | null, sawHire = false): Tone | null {
+  if (!fn) return null;
+  const ind = industryWord(p?.industry);
+  const rev = revenueWord(p?.revenue);
+  const hired = p?.hired ? hiredWords(p.hired.role, p.hired.fn).replace(/^their /, "") : null;
+  const a = (w: string) => (/^[aeiou]/i.test(w) ? "an" : "a");
+  const co = ind ? `${a(ind)} ${ind} company` : "a company";
+  if (!hired && !rev) return null;
+  let when: string;
+  if (sawHire) {
+    // The note just said what they hired: the pattern says what usually follows it.
+    const gap = p?.noLeader ? ` and has no ${fn} leader yet` : "";
+    when = `When ${co}${rev ? ` ${rev}` : ""} makes that hire${gap}`;
+  } else if (hired) {
+    const gap = p?.noLeader ? ` but no ${fn} leader yet` : p?.gap ? ` and no fractional ${fn} seat yet` : "";
+    when = `When ${co}${rev ? ` is ${rev} and` : ""} has a ${hired}${gap}`;
+  } else when = `When ${co} is ${rev}`;
+  return {
+    casual: `${when}, ${fn} is usually what needs an owner next.`,
+    neutral: `${when}, ${fn} is usually what needs an owner next.`,
+    formal: `In my experience, when ${when.slice(5)}, ${fn} is usually the next function to need an owner.`,
+  };
 }
 
 /** A role's title as a note may say it: no bracket, no rate, no company after "at". */
@@ -88,13 +135,35 @@ export function sawClause(row: RadarRow, company: string): string | null {
 export function noteFacts(m: Move, row: RadarRow, me: MoveMe, origin = "", nowMs = Date.now()): NoteFacts | null {
   if (m.hidden || !m.name) return null;
   const kind: NoteKind | null =
-    m.do === "message" ? "know" : m.do === "intro" ? "intro" : m.do === "holderMessage" ? "holderMessage" : m.do === "holderInvite" ? "holderInvite" : m.do === "reply" ? (m.way.kind === "know" ? "role" : "roleCold") : null;
+    m.do === "message"
+      ? m.way.kind === "know" && m.way.person.seat
+        ? "knowHolder"
+        : "know"
+      : m.do === "intro"
+        ? "intro"
+        : m.do === "holderMessage"
+          ? "holderMessage"
+          : m.do === "holderInvite"
+            ? "holderInvite"
+            : m.do === "buyer"
+              ? "buyer"
+              : m.do === "reply"
+                ? m.way.kind === "know"
+                  ? "role"
+                  : "roleCold"
+                : null;
   if (!kind) return null;
   const meFacts = { first: firstOf(me.name), name: flat(me.name), as: myWords(me.title, me.function), fn: me.function && me.function !== "Other" && me.function !== "Executive" ? me.function : null, clients: clientKinds(me.icp) };
   const base = { kind, company: m.name, since: null as string | null, saw: sawClause(row, m.name), me: meFacts, seat: null as string | null, role: null as string | null, link: null as string | null };
   if (m.way.kind === "know") {
     const p = m.way.person;
-    return { ...base, to: { name: p.name, email: p.email, from: p.email ? "your own contacts" : null }, since: sinceMonth(p.last, nowMs), role: kind === "role" ? safeRole(m.open?.title) : null };
+    const held = kind === "knowHolder" && p.seat ? { seat: p.seat.fn && p.seat.fn !== "Other" ? `the ${p.seat.fn} seat` : "the seat", now: p.seat.now } : null;
+    return { ...base, to: { name: p.name, email: p.email, from: p.email ? "your own contacts" : null }, since: sinceMonth(p.last, nowMs), role: kind === "role" ? safeRole(m.open?.title) : null, held };
+  }
+  if (m.way.kind === "buyer" && m.way.name) {
+    const w = m.way;
+    const email = w.email && w.email !== "locked" ? w.email : null;
+    return { ...base, to: { name: w.name!, email, from: email ? "unlocked on Merlin" : null }, role: kind === "roleCold" ? safeRole(m.open?.title) : null, pattern: w.ctx };
   }
   if (m.way.kind === "holder" && m.way.name) {
     const link = kind === "holderInvite" && m.way.invite ? `${origin}${m.way.invite.path}` : null;
@@ -151,6 +220,59 @@ function template(f: NoteFacts): Template {
         ],
         short: [1, 2, 4],
       };
+    case "knowHolder": {
+      // Their own contact holds a seat there: they know how the company buys, and who decides.
+      const seat = f.held?.seat ?? "a seat";
+      const hold = f.held && !f.held.now ? "held" : "hold";
+      return {
+        subject: `${co}, and a quick question`,
+        sentences: [
+          since,
+          {
+            casual: `${co} came up for me this week, and I know you ${hold} ${seat} there.`,
+            neutral: `${co} came up for me this week, and I know you ${hold} ${seat} there.`,
+            formal: `${co} came to my attention this week, and I understand you ${hold} ${seat} there.`,
+          },
+          {
+            casual: `I'm looking at them for ${fn ?? "fractional"} work, which is what I do as ${me}.`,
+            neutral: `I'm looking at them for ${fn ?? "fractional"} work, which is what I do as ${me}.`,
+            formal: `I'm considering them for ${fn ?? "fractional"} work, which is what I do as ${me}.`,
+          },
+          { casual: "Happy to send referrals your way too.", neutral: "I'm glad to send referrals your way too.", formal: "I'd be glad to send referrals your way in return." },
+          {
+            casual: `Who decides on ${fn ?? "that"} there, and would you point me their way?`,
+            neutral: `Who decides on ${fn ?? "that"} there, and would you be open to pointing me their way?`,
+            formal: `Who decides on ${fn ?? "that"} there, and would you be willing to point me their way?`,
+          },
+        ],
+        short: [1, 2, 4],
+      };
+    }
+    case "buyer": {
+      // To the buyer on file: the signal, the pattern it fits, what the member does. Short, and no pitch.
+      const hire = !!f.saw && /\bhired\b/i.test(f.saw);
+      const pat = patternLine(f.pattern, fn, hire) ?? {
+        casual: `That's usually when ${fn ?? "a team"} starts needing a senior owner for a while.`,
+        neutral: `That's usually when ${fn ?? "a team"} starts to need a senior owner for a while.`,
+        formal: `In my experience that's when ${fn ?? "a team"} begins to need a senior owner for a time.`,
+      };
+      const clients = f.me.clients ? ` for ${f.me.clients}` : "";
+      return {
+        subject: fn ? `${fn} at ${co}` : `A thought on ${co}`,
+        sentences: [
+          saw,
+          pat,
+          { casual: `That's the work I do as ${me}${clients}.`, neutral: `That's the work I do as ${me}${clients}.`, formal: `That's the work I do as ${me}${clients}.` },
+          {
+            casual: "No pitch. Happy to share what I'd look at in the first 30 days.",
+            neutral: "No pitch, but I'd be glad to share what I'd look at in the first 30 days.",
+            formal: "I'd be glad to share what I'd review in the first 30 days, with no obligation.",
+          },
+          { casual: "Up for 20 minutes next week?", neutral: "Worth 20 minutes next week?", formal: "Would you have 20 minutes next week?" },
+        ],
+        short: [0, 1, 4],
+      };
+    }
     case "intro":
       return {
         subject: `An introduction at ${co}?`,

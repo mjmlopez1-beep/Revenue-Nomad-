@@ -13,14 +13,18 @@
  * it shows from the wire and the record it has (buildMove), so opening a company or a seat holder
  * changes the move at once. The connector's todays_moves reads the same functions.
  *
- * The way in, best first: (a) someone the member knows there, (b) the fractional who held a seat,
- * (c) an open role in the member's function, (d) nothing on file yet.
+ * The way in, best first: (a) someone the member knows there (their own network, or their own
+ * contact who holds a seat there), (b) the buyer on file: a decision maker, or the exec who hired
+ * or managed the fractional (a seat's "Hiring for the seat" and "Reported to"), (c) the fractional
+ * who held a seat, (d) an open role in the member's function, (e) nothing on file yet. With nobody
+ * who decides on file, a move also carries where to look for them (findBuyer: a LinkedIn people
+ * search and the company's own site, links out, nothing read from them).
  *
  * Pure: no I/O and relative imports only (lib/table.ts's side and the app both load it).
  */
 import type { CompanyRec, EngagementRec, Icp, PersonRec } from "./tableTypes";
 import type { RadarBand, RadarRow } from "./radar/types";
-import type { Warmth } from "./google/types";
+import { isDecisionMaker, type Warmth } from "./google/types";
 import { firstOf } from "./partners";
 
 /* ---------- what the server sends ---------- */
@@ -45,6 +49,12 @@ export interface KnowPerson {
    * my_network never lists people.
    */
   google: boolean;
+  /**
+   * They hold (or held) a seat here: a person in the member's own contacts whose name (first and
+   * last, with a fractional title or a title in the seat's function) or email (a member's) matches
+   * a seat holder the member can see by name (lib/google seatMatches). The seat's public id.
+   */
+  seat?: { id: string; fn: string | null; now: boolean };
 }
 
 /** One move as the server sends it: the company, its Crystal Ball row, and who the member knows there. */
@@ -113,6 +123,25 @@ export type Way =
       email: string | null;
     }
   | {
+      kind: "buyer";
+      /** The person's public id, for its unlocks ("contact" name, email). */
+      personId: string;
+      /** The seat they are on, or null for a decision maker at the company. */
+      seatId: string | null;
+      /** "Hiring for the seat", "Reported to", "Decision maker", or null (a person at the company with none). Free. */
+      rel: string | null;
+      /** Their seat's function and role, where the member can see them. */
+      fn: string | null;
+      seatRole: string | null;
+      /** Name and title: one purchase. Null while it is locked. */
+      name: string | null;
+      title: string | null;
+      /** Their email: the address once the member unlocked it, "locked" (1 credit, after the name), or null (none on file). */
+      email: string | "locked" | null;
+      /** What a note to them may say about the company: free facts only. */
+      ctx: BuyerCtx;
+    }
+  | {
       kind: "role";
       seatId: string;
       /** The role's title when the member can see it, else "Fractional Sales". */
@@ -138,7 +167,13 @@ export type MoveDo =
   /** Who held the seat is locked: 1 credit, as on the record. */
   | "seeHolder"
   /** The posting is locked: its credit, as on the record. */
-  | "seePosting";
+  | "seePosting"
+  /** The buyer's name and title are locked: 1 credit, as on the record. */
+  | "seeBuyer"
+  /** Write to the buyer: a drafted note in the member's voice. */
+  | "buyer"
+  /** Nobody who decides is on file: look for them (findBuyer), then add them. */
+  | "find";
 
 export interface Move {
   id: string;
@@ -160,6 +195,30 @@ export interface Move {
   title: string;
   /** One sentence under it. */
   line: string;
+  /** Nobody who decides is on file, at a company the member can see: where to look for them. */
+  find?: FindBuyer | null;
+}
+
+/** Free facts a note to the buyer may use to say why now ("When a SaaS company is past $5M and has a fractional CMO…"). */
+export interface BuyerCtx {
+  industry: string | null;
+  revenue: string | null;
+  /** A fractional seat they hired, as the member can see it: the role ("Fractional CMO"), else the function. */
+  hired: { role: string | null; fn: string | null } | null;
+  /** No fractional seat in the member's function is on file. */
+  gap: boolean;
+  /** Their team page was read and names nobody in the member's function (lib/leaders: only then may a note say "no Sales leader yet"). */
+  noLeader: boolean;
+}
+
+/** "Find who runs Sales at Acme": a LinkedIn people search and the company's own site. Links out only. */
+export interface FindBuyer {
+  /** The member's function, or null ("Find who decides at Acme"). */
+  fn: string | null;
+  label: string;
+  linkedin: string;
+  /** Their team page when the leaders read found one, else their website. Null without a website. */
+  site: { href: string; label: string } | null;
 }
 
 const cellV = (c: { s: string; v?: string } | undefined): string | null => (c && c.s === "value" && typeof c.v === "string" && c.v ? c.v : null);
@@ -225,9 +284,171 @@ function openRole(c: CompanyRec, row: RadarRow, me: MoveMe): EngagementRec | nul
   return mine[0] ?? (row.kinds.includes("role") ? open[0] ?? null : null);
 }
 
+/* ---------- the buyer ---------- */
+
+/** The relationships that make someone on a seat a buyer: who hired the fractional, a decision maker, who they reported to. Best first. */
+export const BUYER_RELS = ["Hiring for the seat", "Decision maker", "Reported to"] as const;
+const BUYER_RANK: Record<string, number> = { "Hiring for the seat": 0, "Decision maker": 1, "Reported to": 2 };
+
+/** A decision maker on file: the person, and the seat they are on (null at the company). */
+export interface BuyerOnFile {
+  p: PersonRec;
+  e: EngagementRec | null;
+  rel: string | null;
+}
+
+/**
+ * Someone on file who decides: a person at the company (the record's "Decision makers") with a
+ * buyer relationship or none, or a person on a seat marked Hiring for the seat, Reported to or
+ * Decision maker. Only someone with a name on file (shown, or locked behind its credit).
+ */
+export function isBuyer(p: PersonRec, onSeat: boolean): boolean {
+  const n = p.cells.name;
+  if (!n || (n.s !== "value" && n.s !== "locked")) return false;
+  const rel = cellV(p.cells.relationship);
+  if (rel) return (BUYER_RELS as readonly string[]).includes(rel);
+  return !onSeat && p.cells.relationship?.s !== "locked";
+}
+
+/**
+ * Every decision maker on file at the company: its own people first, then the hirers on its
+ * seats. `others`: leave out the member's own seats (their own client is not a way in).
+ */
+export function buyersOf(c: Pick<CompanyRec, "people" | "engagements">, opts: { others?: boolean } = {}): BuyerOnFile[] {
+  const out: BuyerOnFile[] = [];
+  const seen = new Set<string>();
+  const push = (p: PersonRec, e: EngagementRec | null) => {
+    if (seen.has(p.id) || !isBuyer(p, !!e)) return;
+    seen.add(p.id);
+    out.push({ p, e, rel: cellV(p.cells.relationship) });
+  };
+  for (const p of c.people) push(p, null);
+  for (const e of c.engagements) if (!(opts.others && e.yours)) for (const p of e.people) push(p, e);
+  return out;
+}
+
+/** The buyer to reach first: one the member can see by name, then who hired the seat, then a seat in the member's function, then a title that decides. */
+export function bestBuyer(c: Pick<CompanyRec, "people" | "engagements">, fn: string | null | undefined): BuyerOnFile | null {
+  const all = buyersOf(c, { others: true });
+  if (!all.length) return null;
+  const rank = (b: BuyerOnFile) =>
+    (b.p.cells.name?.s === "value" ? 0 : 1000) +
+    (BUYER_RANK[b.rel ?? ""] ?? 1) * 100 +
+    (b.e && fn && cellV(b.e.cells.function) === fn ? 0 : 10) +
+    (isDecisionMaker(cellV(b.p.cells.title)) ? 0 : 1);
+  return all.map((b, k) => ({ b, k })).sort((x, y) => rank(x.b) - rank(y.b) || x.k - y.k)[0].b;
+}
+
+/** What a note to the buyer may say about the company: free facts its record shows the member. */
+export function buyerCtx(c: CompanyRec, me: Pick<MoveMe, "function">, seat: EngagementRec | null): BuyerCtx {
+  const fn = me.function && me.function !== "Other" && me.function !== "Executive" ? me.function : null;
+  const hiredSeat = (e: EngagementRec) => !e.yours && !openRoleSeat(e) && !!cellV(e.cells.function) && cellV(e.cells.function) !== fn;
+  const e = seat && hiredSeat(seat) ? seat : (c.engagements.filter(hiredSeat).sort((a, b) => (cellV(b.cells.start) ?? "").localeCompare(cellV(a.cells.start) ?? ""))[0] ?? null);
+  const leads = c.leads;
+  return {
+    industry: cellV(c.cells.industry),
+    revenue: cellV(c.cells.revenue),
+    hired: e ? { role: cellV(e.cells.role), fn: cellV(e.cells.function) } : null,
+    gap: !!fn && !(c.friendly?.functions ?? []).includes(fn),
+    noLeader: !!fn && !!leads?.teamAt && !leads.fns.some((l) => l.fn === fn),
+  };
+}
+
+function buyerWay(b: BuyerOnFile, c: CompanyRec, me: MoveMe): Extract<Way, { kind: "buyer" }> {
+  const em = b.p.cells.email;
+  return {
+    kind: "buyer",
+    personId: b.p.id,
+    seatId: b.e?.id ?? null,
+    rel: b.rel,
+    fn: b.e ? cellV(b.e.cells.function) : null,
+    seatRole: b.e ? cellV(b.e.cells.role) : null,
+    name: cellV(b.p.cells.name),
+    title: cellV(b.p.cells.title),
+    email: em?.s === "value" && em.v ? em.v : em?.s === "locked" ? "locked" : null,
+    ctx: buyerCtx(c, me, b.e),
+  };
+}
+
+/** "their fractional CRO", "their fractional Marketing leader", from the seat's role the member can see, else its function. */
+export function hiredWords(role: string | null | undefined, fn: string | null | undefined): string {
+  const r = flat(role).replace(/\s*[([{].*$/, "");
+  if (r && r.length <= 40 && !/\d{2,}/.test(r)) return `their fractional ${r.replace(/^(fractional|interim|part-time)\s+/i, "")}`;
+  return fn && fn !== "Other" ? `their fractional ${fn} leader` : "their fractional";
+}
+
+/** Who they are to the company: "hired their fractional CRO", "managed their fractional Marketing leader", "a decision maker there". */
+export function buyerWhat(w: Pick<Extract<Way, { kind: "buyer" }>, "rel" | "fn" | "seatRole">): string {
+  if (w.rel === "Hiring for the seat") return `hired ${hiredWords(w.seatRole, w.fn)}`;
+  if (w.rel === "Reported to") return `managed ${hiredWords(w.seatRole, w.fn)}`;
+  return "a decision maker there";
+}
+
+/* ---------- where to look when nobody who decides is on file ---------- */
+
+/** Titles of who runs each function, for the LinkedIn search. */
+const RUNS: Record<string, string[]> = {
+  Sales: ["CRO", "VP Sales", "Head of Sales"],
+  Marketing: ["CMO", "VP Marketing", "Head of Marketing"],
+  RevOps: ["VP Revenue Operations", "Head of RevOps", "CRO"],
+  "Customer Success": ["Chief Customer Officer", "VP Customer Success", "Head of Customer Success"],
+  Partnerships: ["VP Partnerships", "Head of Partnerships"],
+  Growth: ["VP Growth", "Head of Growth", "CMO"],
+  "Product Marketing": ["VP Product Marketing", "Head of Product Marketing", "CMO"],
+  Enablement: ["Head of Enablement", "VP Sales", "CRO"],
+  "AI GTM": ["CRO", "VP Sales", "Head of Growth"],
+  Technology: ["CTO", "VP Engineering"],
+  Finance: ["CFO", "VP Finance"],
+  Operations: ["COO", "VP Operations"],
+  People: ["Chief People Officer", "VP People", "Head of People"],
+  Product: ["CPO", "VP Product", "Head of Product"],
+  Legal: ["General Counsel"],
+};
+const quoted = (v: string) => (/\s/.test(v) ? `"${v.replace(/"/g, "")}"` : v);
+
+/** A LinkedIn people search for who runs `fn` at the company: its name and the titles, as keywords. A link out; nothing is read back. */
+export function linkedInPeopleSearch(company: string, fn: string | null): string {
+  const titles = [...(fn && RUNS[fn] ? RUNS[fn] : []), "Founder", "CEO"];
+  const q = `${quoted(flat(company))} (${titles.map(quoted).join(" OR ")})`;
+  return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(q)}`;
+}
+
+/** A website as an https link, or null when it isn't a plain web address. */
+function siteLink(raw: string | null | undefined): string | null {
+  const v = flat(raw);
+  if (!v || /[\s<>"'`\\]/.test(v)) return null;
+  const full = /^https?:\/\//i.test(v) ? v : `https://${v.replace(/^\/\//, "")}`;
+  try {
+    const u = new URL(full);
+    return (u.protocol === "https:" || u.protocol === "http:") && /\.[a-z]{2,}$/i.test(u.hostname) && !u.username && !u.password ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Nobody who decides is on file at a company the member can see: "Find who runs Sales at Acme",
+ * a LinkedIn people search by the company's name and the titles, and their team page (when the
+ * leaders read found one) or their website. Null at a locked company, or once a buyer is on file.
+ */
+export function findBuyer(c: CompanyRec, me: Pick<MoveMe, "function">): FindBuyer | null {
+  if (c.hidden || !flat(c.name) || bestBuyer(c, me.function)) return null;
+  const fn = me.function && me.function !== "Other" && me.function !== "Executive" ? me.function : null;
+  const team = siteLink(c.leads?.fns.find((l) => l.how === "team page" && l.url)?.url);
+  const web = siteLink(cellV(c.cells.website));
+  return {
+    fn,
+    label: fn ? `Find who runs ${fn} at ${flat(c.name)}` : `Find who decides at ${flat(c.name)}`,
+    linkedin: linkedInPeopleSearch(c.name, fn),
+    site: team ? { href: team, label: "Their team page" } : web ? { href: web, label: "Their website" } : null,
+  };
+}
+
 /** The best way in at this company for this member. */
 export function wayIn(c: CompanyRec, row: RadarRow, know: KnowPerson | undefined, me: MoveMe): Way {
   if (know && !c.hidden) return { kind: "know", person: know };
+  const buyer = bestBuyer(c, me.function);
+  if (buyer) return buyerWay(buyer, c, me);
   const seat = holderSeat(c, me);
   if (seat) {
     const op = seat.cells.operator as { s: string; v?: string; member?: unknown };
@@ -263,7 +484,7 @@ function roleWay(e: EngagementRec): Extract<Way, { kind: "role" }> {
 
 /**
  * How good a way in is, for picking the three: someone they know leads, then a company with a way
- * in on file (the fractional who held a seat, or an open role to reply to), then one with nothing.
+ * in on file (the buyer, the fractional who held a seat, or an open role to reply to), then one with nothing.
  */
 export const wayRank = (w: Way) => (w.kind === "know" ? 0 : w.kind === "none" ? 2 : 1);
 const BAND_RANK: Record<RadarBand, number> = { High: 0, Medium: 1, Low: 2 };
@@ -276,7 +497,8 @@ export function buildMove(c: CompanyRec, row: RadarRow, know: KnowPerson | undef
   const way = wayIn(c, row, know, me);
   const role = openRole(c, row, me);
   const hiring = !!role;
-  const base = { id: c.id, name: c.hidden ? row.name ?? null : c.name, hidden: !!c.hidden, facts: moveFacts(c), hiring, open: role ? roleWay(role) : null, band: row.band ?? null, why: moveWhy(row), way };
+  const find = way.kind === "know" || way.kind === "buyer" ? null : findBuyer(c, me);
+  const base = { id: c.id, name: c.hidden ? row.name ?? null : c.name, hidden: !!c.hidden, facts: moveFacts(c), hiring, open: role ? roleWay(role) : null, band: row.band ?? null, why: moveWhy(row), way, find };
   const fnWord = me.function && me.function !== "Other" && me.function !== "Executive" ? me.function : null;
   if (c.hidden) {
     const line =
@@ -289,26 +511,83 @@ export function buildMove(c: CompanyRec, row: RadarRow, know: KnowPerson | undef
             : `Open it to see its name, its website and who to reach.`;
     return { ...base, do: "open", title: "Open the company", line };
   }
+  const roleMove = (to: string | null): Move | null => {
+    if (!role) return null;
+    const r = roleWay(role);
+    if (r.posting === "locked") return { ...base, do: "seePosting", title: "Reply to the open role", line: `See the posting first. Then your note${to ? ` to ${to}` : ""} is ready to send with it.` };
+    return { ...base, do: "reply", title: "Reply to the open role", line: `Apply through the posting. Your note${to ? ` to ${to}` : ""} is drafted to go with it.` };
+  };
   if (way.kind === "know") {
-    const first = firstOf(way.person.name);
+    const p = way.person;
+    const first = firstOf(p.name);
     if (role) return { ...base, do: "reply", title: "Reply to the open role", line: `Apply through the posting, and let ${first} know you did.` };
+    // Their own contact holds a seat here: they know how the company buys.
+    if (p.seat) return { ...base, do: "message", title: `Message ${first}`, line: `${knowSeatLine(p)} Ask who decides${fnWord ? ` on ${fnWord}` : ""} there.` };
     // Without a title on file nobody can say they aren't the buyer: write to them.
-    if (way.person.dm || !way.person.title) return { ...base, do: "message", title: `Message ${first}`, line: "A short note you can edit. You send it from your own email." };
+    if (p.dm || !p.title) return { ...base, do: "message", title: `Message ${first}`, line: "A short note you can edit. You send it from your own email." };
     return { ...base, do: "intro", title: `Ask ${first} for an intro`, line: `${first} isn't the buyer on file, but knows the team. Ask for an introduction${fnWord ? ` to whoever owns ${fnWord}` : ""}.` };
   }
+  if (way.kind === "buyer") {
+    const who = way.rel === "Hiring for the seat" ? "who hired them" : "who decides";
+    if (!way.name) {
+      // An open role in their function leads; the buyer's own unlock stays beside it on the way in.
+      const r = roleMove(null);
+      if (r) return r;
+      return {
+        ...base,
+        do: "seeBuyer",
+        title: `See ${who}`,
+        line: `1 credit shows their name and title${way.email === "locked" ? ", and their email is 1 more" : ""}. Your note is drafted for you then.`,
+      };
+    }
+    const first = firstOf(way.name);
+    const r = roleMove(first);
+    if (r) return r;
+    const what = `${first}${way.title ? `, ${way.title},` : ""} ${buyerWhat(way)}.`;
+    const reach =
+      way.email === "locked"
+        ? "Their email is 1 credit on the record. The note is ready either way."
+        : way.email
+          ? "A short note to their email on file. You send it from your own mail."
+          : "No email on file. Copy the note and send it where you reach them.";
+    return { ...base, do: "buyer", title: `Write to ${first}`, line: `${what} ${reach}` };
+  }
   if (way.kind === "holder") {
-    const seat = way.fn ? `their ${way.fn} seat` : "a seat there";
-    if (!way.name) return { ...base, do: "seeHolder", title: "See who held the seat", line: "Then message them on Merlin, or invite them to connect." };
+    const seat = way.fn && way.fn !== "Other" ? `their ${way.fn} seat` : "a seat there";
+    // Said only from what is on file: nobody who hired them is (a buyer would be the way in), and Merlin reaches them only when they're a member or have a claim link.
+    const nobody = "Nobody who hired them is on file yet.";
+    if (!way.name) return { ...base, do: "seeHolder", title: "See who held the seat", line: `1 credit shows who held it. ${nobody}` };
     const first = firstOf(way.name);
     if (way.member) return { ...base, do: "holderMessage", title: "Message the seat holder", line: `${first} held ${seat} and is on Merlin. Ask how the work came about.` };
     if (way.invite) return { ...base, do: "holderInvite", title: "Invite them to connect", line: `${first} held ${seat} and isn't on Merlin yet. Your note carries their claim link.` };
-    return { ...base, do: "record", title: "Open the company", line: `${first} held ${seat}. The record has who hired them.` };
+    return { ...base, do: "record", title: "Open the company", line: `${first} held ${seat} and isn't on Merlin yet. ${nobody}` };
   }
   if (way.kind === "role") {
     if (way.posting === "locked") return { ...base, do: "seePosting", title: "Reply to the open role", line: "See the posting first. Then your note is ready to send with it." };
     return { ...base, do: "reply", title: "Reply to the open role", line: "Apply through the posting. Your note is drafted to go with it." };
   }
+  if (find) return { ...base, do: "find", title: fnWord ? `Find who runs ${fnWord}` : "Find who decides", line: "Nobody who decides is on file yet. Look them up, then add them here and earn a credit." };
   return { ...base, do: "record", title: "Open the company", line: "See its seats and who decides, then add who you know." };
+}
+
+/**
+ * A note to one decision maker on the record (its "Your way in"): the buyer's move, without the
+ * day's ranking. `row`: the company's Crystal Ball row when the member has one, else nothing
+ * happened that a note can say, and "why now" is what the record shows.
+ */
+export function buyerNoteMove(c: CompanyRec, b: BuyerOnFile, me: MoveMe, row: RadarRow = { id: c.id, kinds: [], lines: [] }): Move {
+  const way = buyerWay(b, c, me);
+  const fn = me.function && me.function !== "Other" && me.function !== "Executive" ? me.function : null;
+  const h = way.ctx.hired;
+  const why = moveWhy(row) || (h && way.ctx.gap && fn ? `They hired ${hiredWords(h.role, h.fn).replace(/^their /, "a ")} and have no fractional ${fn} seat on file.` : "");
+  return { id: c.id, name: c.hidden ? null : c.name, hidden: !!c.hidden, facts: moveFacts(c), hiring: false, open: null, band: row.band ?? null, why, way, do: "buyer", title: "", line: "", find: null };
+}
+
+/** "You know Pat (Hot), who holds their Marketing seat." */
+export function knowSeatLine(p: Pick<KnowPerson, "name" | "warmth" | "seat">): string {
+  const s = p.seat;
+  const seat = s?.fn && s.fn !== "Other" ? `their ${s.fn} seat` : "a seat there";
+  return `You know ${firstOf(p.name)} (${p.warmth}), who ${s && !s.now ? "held" : "holds"} ${seat}.`;
 }
 
 /** A candidate: one company of the day with the member's record of it. */
@@ -332,12 +611,26 @@ export function pickMoves(cands: MoveCandidate[], me: MoveMe, max = MOVES_MAX): 
   return built.slice(0, max).map(({ move, wire }) => ({ move, wire }));
 }
 
-/** Who to show from a company of the member's network: a decision maker who isn't cold first, then the warmest. Only someone with a name. */
+/**
+ * Who to show from a company of the member's network: a decision maker who isn't cold first, then
+ * their own contact who holds a seat there (not cold), then the warmest. Only someone with a name.
+ */
 export function knowFrom(
-  people: { name: string | null; title: string | null; email: string | null; warmth: Warmth; last: string | null; meetings: number; emails: number; dm: boolean; src: readonly string[] }[],
+  people: {
+    name: string | null;
+    title: string | null;
+    email: string | null;
+    warmth: Warmth;
+    last: string | null;
+    meetings: number;
+    emails: number;
+    dm: boolean;
+    src: readonly string[];
+    seat?: { id: string; fn: string | null; now: boolean } | null;
+  }[],
 ): KnowPerson | undefined {
   const named = people.filter((p) => !!p.name && !!p.name.trim());
-  const p = named.find((x) => x.dm && x.warmth !== "Cold") ?? named[0];
+  const p = named.find((x) => x.dm && x.warmth !== "Cold") ?? named.find((x) => !!x.seat && x.warmth !== "Cold") ?? named[0];
   if (!p) return undefined;
   return {
     name: p.name!.trim(),
@@ -349,6 +642,7 @@ export function knowFrom(
     emails: p.emails ?? 0,
     dm: !!p.dm,
     google: fromGoogle(p.src),
+    ...(p.seat ? { seat: { id: p.seat.id, fn: p.seat.fn ?? null, now: !!p.seat.now } } : {}),
   };
 }
 

@@ -15,7 +15,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow } from "@/lib/radar/types";
-import { knowLine, type Move } from "@/lib/moves";
+import { buyerWhat, knowLine, type Move } from "@/lib/moves";
 import { draftNote, gmailLink, mailtoLink, noteFacts, type NoteFacts } from "@/lib/moveNote";
 import { firstOf } from "@/lib/partners";
 import { IconExternal, initials, useToast } from "../ui/shared";
@@ -98,7 +98,8 @@ export function NoteSheet({
     toast(r.message || "Sent.", false, { action: { label: "Open conversation", onClick: () => (c ? openConversation(ui.openPage, c.id) : ui.openPage("messages")) } });
     onSent();
   };
-  const title = facts.kind === "roleCold" ? "A note for the open role" : `A note to ${first ?? "them"}`;
+  const title = facts.kind === "roleCold" && !to ? "A note for the open role" : `A note to ${first ?? "them"}`;
+  const buyer = way.kind === "buyer" ? way : null;
   const len = [...body].length;
   return (
     <Sheet
@@ -159,6 +160,8 @@ export function NoteSheet({
                 <span className="mv-who-s">
                   {way.kind === "know"
                     ? [[way.person.title, m.name].filter(Boolean).join(", "), knowLine(way.person).replace(/^Last/, "last")].filter(Boolean).join(" · ")
+                    : buyer
+                    ? [[buyer.title, m.name].filter(Boolean).join(", "), buyerWhat(buyer)].filter(Boolean).join(" · ")
                     : holder
                       ? [holder.role ?? (holder.fn ? `${holder.fn} seat` : "A fractional seat"), m.name, holder.member ? "on Merlin" : "not on Merlin yet"].filter(Boolean).join(" · ")
                       : m.name}
@@ -167,9 +170,11 @@ export function NoteSheet({
               {way.kind === "know" ? <span className={`mv-warm mv-warm-${way.person.warmth.toLowerCase()}`}>{way.person.warmth}</span> : null}
             </div>
           ) : null}
-          <p className="mn-now">
-            <b>Why now.</b> {m.why}
-          </p>
+          {m.why ? (
+            <p className="mn-now">
+              <b>Why now.</b> {m.why}
+            </p>
+          ) : null}
         </div>
 
         <div className="mn-fields">
@@ -184,7 +189,13 @@ export function NoteSheet({
                   <span className="mn-from">{to.from === "your own contacts" ? "from your own contacts" : "a contact you unlocked"}</span>
                 </>
               ) : (
-                <span className="mn-v mn-v-none">{to ? `No address for ${first} on file. Add it in your mail.` : "Whoever the posting names. Add the address in your mail."}</span>
+                <span className="mn-v mn-v-none">
+                  {buyer?.email === "locked"
+                    ? `${first}'s email is on the record, 1 credit. Or add the address in your mail.`
+                    : to
+                      ? `No address for ${first} on file. Add it in your mail.`
+                      : "Whoever the posting names. Add the address in your mail."}
+                </span>
               )}
             </div>
           ) : null}
