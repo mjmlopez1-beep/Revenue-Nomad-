@@ -13,7 +13,7 @@
 import { MAIL, escHtml as esc, footerNote, mailButton, mailP, mailShell, oneLine } from "../email";
 import { COMPANY_PRICE_SAY } from "../tableFields";
 import type { Alert, AlertEntry } from "../notify/format";
-import { FEATURE_NAME, YOUR_FEATURE, type RadarCard, type RadarDay, type RadarItem } from "./types";
+import { FEATURE_NAME, RADAR_STILL, YOUR_FEATURE, type RadarCard, type RadarDay, type RadarItem } from "./types";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const companies = (n: number) => plural(n, "company", "companies");
@@ -28,12 +28,30 @@ export const seeWords = (n: number) => (n === 1 ? "See the company" : `See the $
 /** "And 3 more." */
 const moreWords = (n: number) => `And ${plural(n, "more signal")}.`;
 
-/** The email's subject and heading: "Your Crystal Ball: 2 companies in your profile moved". */
-export function radarSubject(d: RadarDay): string {
-  return `${YOUR_FEATURE}: ${companies(d.companies)} in your profile moved`;
+/**
+ * The day's companies that moved (an event there), and the ones that are only still a good time
+ * (standing states, their why-now starting RADAR_STILL): the subject never says a company moved
+ * when nothing happened there.
+ */
+function movedOf(d: RadarDay): { moved: number; still: number } {
+  const cos = new Map<string, boolean>();
+  for (const c of d.cards) cos.set(c.co, (cos.get(c.co) ?? false) || !(c.whyNow ?? "").startsWith(RADAR_STILL));
+  const moved = [...cos.values()].filter(Boolean).length;
+  // Cards kept without a company id (older batches) count as moved, as before.
+  return cos.size ? { moved, still: cos.size - moved } : { moved: d.companies, still: 0 };
 }
-/** Slack's headline: "Your Crystal Ball · 2 companies moved". */
-export const slackHeadline = (d: RadarDay) => `${YOUR_FEATURE} · ${companies(d.companies)} moved`;
+/** The email's subject and heading: "Your Crystal Ball: 2 companies in your profile moved", "…: 1 company in your profile moved, 1 still a good time", "…: 2 companies in your profile, still a good time". */
+export function radarSubject(d: RadarDay): string {
+  const { moved, still } = movedOf(d);
+  if (!moved && still) return `${YOUR_FEATURE}: ${companies(still)} in your profile, still a good time`;
+  return `${YOUR_FEATURE}: ${companies(moved)} in your profile moved${still ? `, ${still} still a good time` : ""}`;
+}
+/** Slack's headline: "Your Crystal Ball · 2 companies moved", "… · 1 company moved, 1 still a good time". */
+export const slackHeadline = (d: RadarDay) => {
+  const { moved, still } = movedOf(d);
+  if (!moved && still) return `${YOUR_FEATURE} · ${companies(still)}, still a good time`;
+  return `${YOUR_FEATURE} · ${companies(moved)} moved${still ? `, ${still} still a good time` : ""}`;
+};
 
 /* ---------- Slack and webhooks ---------- */
 
@@ -147,7 +165,16 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
   const first = oneLine(m.name).split(" ")[0].slice(0, 40) || "there";
   const subject = oneLine(radarSubject(d));
   const n = d.cards.length;
-  const lead = n === 1 ? "One signal at a company in your Ideal Fractional Profile since yesterday." : `${n} signals at ${companies(d.companies)} in your Ideal Fractional Profile since yesterday.`;
+  // Standing states happened before yesterday: the lead says so rather than counting them as news.
+  const stillN = d.cards.filter((c) => (c.whyNow ?? "").startsWith(RADAR_STILL)).length;
+  const newN = n - stillN;
+  const lead = !stillN
+    ? n === 1
+      ? "One signal at a company in your Ideal Fractional Profile since yesterday."
+      : `${n} signals at ${companies(d.companies)} in your Ideal Fractional Profile since yesterday.`
+    : newN
+      ? `${plural(newN, "signal")} in your Ideal Fractional Profile since yesterday, and ${plural(stillN, "company", "companies")} where it is still a good time.`
+      : `Nothing new since yesterday, so here ${stillN === 1 ? "is a company" : `are ${companies(stillN)}`} in your Ideal Fractional Profile where it is still a good time.`;
   const why = "You get this when a company in your Ideal Fractional Profile moves. Turn it off in Your profile, or with the link below.";
   const note = footerNote();
   const shown = d.cards.slice(0, EMAIL_CARDS);

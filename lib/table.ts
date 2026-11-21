@@ -479,6 +479,18 @@ export interface State extends MessagingState {
    * (lib/table.ts saveLeaders). Crystal Ball's "departure" signal. Newest last, 180 days kept. No names.
    */
   leaderDepartures?: { companyId: string; fn: string; kind: string; level: string; at: string }[];
+  /**
+   * A leader the company's own website didn't show for a function before and shows now, read OK
+   * both times with a team page both times (lib/table.ts saveLeaders). Crystal Ball's "arrival"
+   * signal. Newest last, 180 days kept. No names: the function, level, kind and since when.
+   */
+  leaderArrivals?: { companyId: string; fn: string; kind: string; level: string; since?: string; at: string }[];
+  /**
+   * Full-time hires a company's career feed lists in functions besides sales (TEAM_FUNCTIONS in
+   * lib/radar/predict.ts: marketing, engineering, finance, people, customer success), by internal
+   * company id and function, kept as State.salesBuild is (noteTeamHires). Counts only.
+   */
+  teamBuild?: Record<string, Record<string, SalesBuildRecord>>;
   /** Each company's employee band as it changed (oldest first), so a crossing of 25 or 50 can be read later. */
   headcount?: Record<string, { band: string; at: string }[]>;
   /** Funding events from SEC Form D filings, matched to companies on file, and each run's counts (lib/funding). No person's name. */
@@ -8039,32 +8051,70 @@ export function noteSalesHires(d: State, seed: Seed, byDomain: Map<string, numbe
     if (host && !ids.has(host)) ids.set(host, c.id);
   }
   const all = (d.salesBuild ??= {});
-  const atMs = Date.parse(at);
   let rises = 0;
   for (const [domain, n] of byDomain) {
     const id = ids.get(domain);
     if (!id) continue;
-    const r = all[id];
-    if (!r) {
-      all[id] = { n, at, ...(n > 0 ? { firstAt: at } : {}), hist: [{ n, at }] };
-      continue;
+    const r = noteHireCount(all[id], n, at, 1);
+    all[id] = r.rec;
+    if (r.rose) rises++;
+  }
+  return rises;
+}
+
+/**
+ * One company's count of full-time hires in a function, read again: the record, and whether the
+ * count rose the way Crystal Ball reads a build. The first read is the baseline, never a rise. A
+ * rise: from none to `firstAt` or more, or two or more over the lowest count of the last 30 days,
+ * at most one in 30 days.
+ */
+function noteHireCount(r: SalesBuildRecord | undefined, n: number, at: string, firstAt: number): { rec: SalesBuildRecord; rose: boolean } {
+  if (!r) return { rec: { n, at, ...(n > 0 ? { firstAt: at } : {}), hist: [{ n, at }] }, rose: false };
+  const atMs = Date.parse(at);
+  const recent = r.hist.filter((x) => atMs - Date.parse(x.at) <= SALES_JUMP_DAYS * DAY_MS);
+  const low = Math.min(r.n, ...recent.map((x) => x.n));
+  const last = r.rises?.[r.rises.length - 1];
+  const lately = !!last && atMs - Date.parse(last.at) <= SALES_JUMP_DAYS * DAY_MS;
+  let rose = false;
+  if (!lately && ((r.n === 0 && n >= firstAt) || n - low >= 2)) {
+    (r.rises ??= []).push({ at, from: r.n === 0 ? 0 : low, to: n });
+    if (r.rises.length > 6) r.rises.splice(0, r.rises.length - 6);
+    rose = true;
+  }
+  if (n > 0 && !r.firstAt) r.firstAt = at;
+  if (n !== r.n) {
+    r.hist.push({ n, at });
+    if (r.hist.length > SALES_HIST_MAX) r.hist.splice(0, r.hist.length - SALES_HIST_MAX);
+  }
+  r.n = n;
+  r.at = at;
+  return { rec: r, rose };
+}
+
+/**
+ * Full-time hires each career feed listed this run in the functions besides sales (by domain, then
+ * function: lib/scan/sources/ats.ts teamHireCounts), kept per company and function
+ * (State.teamBuild) as noteSalesHires keeps sales. A team build reads as a burst: from none to two
+ * or more, or two or more more than the lowest count of the last 30 days. Counts and dates only.
+ */
+export function noteTeamHires(d: State, seed: Seed, byDomain: Map<string, Record<string, number>>, at: string): number {
+  const g = graph(seed, d);
+  const ids = new Map<string, string>();
+  for (const c of g.companies.values()) {
+    const host = hostOf(live(c, d, "website"));
+    if (host && !ids.has(host)) ids.set(host, c.id);
+  }
+  const all = (d.teamBuild ??= {});
+  let rises = 0;
+  for (const [domain, counts] of byDomain) {
+    const id = ids.get(domain);
+    if (!id) continue;
+    const mine = (all[id] ??= {});
+    for (const [fn, n] of Object.entries(counts)) {
+      const r = noteHireCount(mine[fn], n, at, 2);
+      mine[fn] = r.rec;
+      if (r.rose) rises++;
     }
-    const recent = r.hist.filter((x) => atMs - Date.parse(x.at) <= SALES_JUMP_DAYS * DAY_MS);
-    const low = Math.min(r.n, ...recent.map((x) => x.n));
-    const last = r.rises?.[r.rises.length - 1];
-    const lately = !!last && atMs - Date.parse(last.at) <= SALES_JUMP_DAYS * DAY_MS;
-    if (!lately && ((r.n === 0 && n >= 1) || n - low >= 2)) {
-      (r.rises ??= []).push({ at, from: r.n === 0 ? 0 : low, to: n });
-      if (r.rises.length > 6) r.rises.splice(0, r.rises.length - 6);
-      rises++;
-    }
-    if (n > 0 && !r.firstAt) r.firstAt = at;
-    if (n !== r.n) {
-      r.hist.push({ n, at });
-      if (r.hist.length > SALES_HIST_MAX) r.hist.splice(0, r.hist.length - SALES_HIST_MAX);
-    }
-    r.n = n;
-    r.at = at;
   }
   return rises;
 }
@@ -8086,7 +8136,8 @@ export async function careerSources(opts: { feed?: FeedFetch; site?: SiteFetch; 
   const boards = Object.entries(all).flatMap(([d, e]) => (e.board && byDomain.has(d) ? [{ board: e.board, company: byDomain.get(d)! }] : []));
   const gone = new Set<string>();
   const sales = new Map<string, number>();
-  const sources = atsSources(boards, { fetch: opts.feed ?? fetchFeed, gone: (d) => gone.add(d), salesCount: (d, n) => sales.set(d, n) });
+  const teams = new Map<string, Record<string, number>>();
+  const sources = atsSources(boards, { fetch: opts.feed ?? fetchFeed, gone: (d) => gone.add(d), salesCount: (d, n) => sales.set(d, n), teamCount: (d, c) => teams.set(d, c) });
   const save = () =>
     mutate((d, seedD) => {
       const at = new Date(now).toISOString();
@@ -8094,6 +8145,7 @@ export async function careerSources(opts: { feed?: FeedFetch; site?: SiteFetch; 
       Object.assign(ats, fresh);
       for (const x of gone) ats[x] = { at };
       if (sales.size) noteSalesHires(d, seedD, sales, at);
+      if (teams.size) noteTeamHires(d, seedD, teams, at);
       return { found: Object.values(fresh).filter((e) => e.board).length, tried: Object.keys(fresh).length, gone: gone.size };
     });
   return { sources, save };
@@ -8731,6 +8783,18 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
         if (prev && leadersReadOk(prev) && (!prev.team || o.team))
           for (const [fn, l] of Object.entries(prev.functions))
             if (!functions[fn] && FUNCTIONS.includes(fn) && fn !== "Other") s.leaderDepartures.push({ companyId: o.companyId, fn, kind: l.kind, level: l.level, at: now });
+        // A leader on file now that wasn't before: only when both reads reached the site and a team page both times (a
+        // team page read for the first time lists everyone as new), and not one the page says has been there for over a year.
+        if (prev && leadersReadOk(prev) && prev.team && o.team) {
+          s.leaderArrivals = (s.leaderArrivals ?? []).filter((x) => nowMs - Date.parse(x.at) < 180 * DAY_MS);
+          for (const [fn, l] of Object.entries(o.functions)) {
+            if (prev.functions[fn] || !FUNCTIONS.includes(fn) || fn === "Other") continue;
+            const since = /^\d{4}(-\d{2})?$/.test(l.since ?? "") ? l.since! : undefined;
+            const sinceMs = since ? Date.UTC(Number(since.slice(0, 4)), since.length > 4 ? Number(since.slice(5, 7)) - 1 : 11, 1) : NaN;
+            if (Number.isFinite(sinceMs) && nowMs - sinceMs > 365 * DAY_MS) continue;
+            s.leaderArrivals.push({ companyId: o.companyId, fn, kind: l.kind, level: l.level, ...(since ? { since } : {}), at: now });
+          }
+        }
         const teamAt = o.team ? now : prev?.teamAt;
         all[o.companyId] = {
           status: found ? "found" : "none", checkedAt: now, ok: true, v: LEADERS_READER_VERSION, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts, readAt: now, ...(teamAt ? { teamAt } : {}),

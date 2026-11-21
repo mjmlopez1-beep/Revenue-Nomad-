@@ -161,6 +161,31 @@ async function main() {
     const x = byStage.get(stage);
     if (x) console.log(row(stage, x));
   }
+
+  // Crystal Ball's tenure marks (predict.ts TENURE_MARKS) read the ended seats' median and average: check them against
+  // the ended seats on file, month to month where both are months, a year alone as its middle (counts only).
+  const tracks = T.tracksOf(seed, s);
+  const lengths: number[] = [];
+  let yearOnly = 0;
+  for (const e of g.engagements.values()) {
+    if (!S.isLeaderRaw(e, s, tracks) || T.live(e, s, "status") !== "Ended") continue;
+    const a = P.monthSpan(T.live(e, s, "start"));
+    const b = P.monthSpan(T.live(e, s, "end"));
+    if (!a || !b) continue;
+    if (a.from !== a.to || b.from !== b.to) yearOnly++;
+    const len = (b.from + b.to) / 2 - (a.from + a.to) / 2;
+    if (len >= 0) lengths.push(len);
+  }
+  lengths.sort((x, y) => x - y);
+  const med = lengths.length ? lengths[Math.floor(lengths.length / 2)] : NaN;
+  const avg = lengths.length ? lengths.reduce((x, y) => x + y, 0) / lengths.length : NaN;
+  const after12 = lengths.filter((x) => x >= 12);
+  const in12to18 = after12.filter((x) => x < 18).length;
+  console.log("");
+  console.log(
+    `Tenure of ended fractional leadership seats with a start and an end: ${lengths.length} (${yearOnly} with a year alone). Median ${Number.isFinite(med) ? med.toFixed(1) : "n/a"} months, average ${Number.isFinite(avg) ? avg.toFixed(1) : "n/a"} (the marks use ${P.TENURE_MARKS.join(" and ")}).`,
+  );
+  console.log(`Of the seats that lasted 12 months or more, ${pct(in12to18, after12.length)} ended in the 6 months after (the 12-month mark's window).`);
 }
 
 main()

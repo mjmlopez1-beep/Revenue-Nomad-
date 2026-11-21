@@ -89,6 +89,7 @@ async function main() {
   const MCP = await import("../lib/mcp/tools");
   const ATS = await import("../lib/scan/sources/ats");
   const W = await import("../lib/viewWire");
+  const Ty = await import("../lib/radar/types");
   const T = t.tableInternals;
   const pub = T.pubId;
 
@@ -404,7 +405,8 @@ async function main() {
   // A profile asking for the country too, with none on file: fit under 1, so the hire reads Low when it comes in at its start month.
   const mktSales = { memberId: "m", fn: "Sales", icp: { ...icp, countries: ["United States"] }, before: [], beforeFromMember: false };
   const ym4 = monthAgo(4);
-  const open = P.windowOpensMs(ym4, 4);
+  // The window opens on a day of its month spread by the seat (here the signal's key: no seat id), not on the 1st.
+  const open = P.windowOpensMs(ym4, 4, "hire:pend:open");
   const arrived = P.windowOpensMs(ym4, 0) + DAY;
   const pend = raw({ key: "hire:pend:open", of: "hire:pend", fn: "Marketing", ym: ym4, stage: "$1M–$5M", co: co({ country: null }), addedMs: arrived, reopen: { from: open - DAY, to: Math.max(nowMs, open + 1) } });
   const atArrival = M.scoreFor({ ...pend, key: "hire:pend", reopen: undefined, of: undefined }, mktSales, { nowMs: arrived })!;
@@ -420,7 +422,7 @@ async function main() {
     for (const [f, v] of Object.entries({ role: "Fractional CMO", function: "Marketing", type: "Fractional", start: monthAgo(3), status: "Active", end: "Ongoing" }))
       d.values[`e_three_mkt.${f}`] = { value: v, by: "mem_pia", at: new Date(nowMs - 100 * DAY).toISOString(), status: "live" };
   });
-  const open3 = P.windowOpensMs(monthAgo(3), 3);
+  const open3 = P.windowOpensMs(monthAgo(3), 3, "e_three_mkt");
   const sigs3 = S.detectSignals(seed3, await t.loadState(), open3 - DAY, Math.max(nowMs, open3 + 1));
   const back = sigs3.find((x) => x.key === `hire:${pub("e_three_mkt")}:open`);
   check("detectSignals keeps it pending and offers it again the month a window opens, keyed once", !!back && back.of === `hire:${pub("e_three_mkt")}` && back.atMs === open3 && !sigs3.some((x) => x.key === `hire:${pub("e_three_mkt")}`), back && { key: back.key, of: back.of });
@@ -475,6 +477,165 @@ async function main() {
   check("a company the member can't see: nothing to say about it", typeof lr5 === "string", lr5);
   const lst = await t.loadState();
   check("no name stored with a report", !JSON.stringify(lst.leaderReports).match(/Seller|Profit|Admin/), lst.leaderReports);
+
+  /* ---------- the steady flow: more signals from the companies on file ---------- */
+  console.log("\nCalendar signals spread over the month");
+  const days = new Set<number>();
+  let inMonth = true;
+  for (let i = 0; i < 300; i++) {
+    const ms = P.windowOpensMs("2026-03", 4, `seat-${i}`);
+    const d = new Date(ms);
+    days.add(d.getUTCDate());
+    if (d.getUTCFullYear() !== 2026 || d.getUTCMonth() !== 6) inMonth = false;
+  }
+  check("a window opens on a day spread by the seat, inside its own month (the timing curve reads whole months)", inMonth && days.size >= 25 && P.windowOpensMs("2026-03", 4, "seat-1") === P.windowOpensMs("2026-03", 4, "seat-1"), [...days].sort((a, b) => a - b));
+  check("without a seat, the first of the month, as before", P.windowOpensMs("2026-03", 4) === Date.UTC(2026, 6, 1));
+  check("a year alone spans the year, a month itself", JSON.stringify(P.monthSpan("2025")) === JSON.stringify({ from: 2025 * 12, to: 2025 * 12 + 11 }) && P.monthSpan("2025-03")?.from === 2025 * 12 + 2 && P.monthSpan("soon") === null && P.monthSpan("2025-13") === null);
+
+  console.log("\nSeat tenure");
+  const salesM = { memberId: "mem_sal", fn: "Sales", icp, before: [], beforeFromMember: false };
+  const ten = raw({ key: "tenure:x:12", kind: "tenure", fn: "Sales", engagementId: "e_x", tenure: { start: monthAgo(12), months: 12, mark: 12 } });
+  const tenS = M.scoreFor(ten, salesM)!;
+  check("a Sales seat reaching 12 months: Medium for a Sales member, said to be typical tenure", !!tenS && tenS.band === "Medium" && /^Fractional Sales seat started \w{3} \d{4}, 12 months ago · based on typical tenure: ended fractional seats last a median 12 months/.test(tenS.whyNow), tenS && [tenS.band, tenS.whyNow]);
+  check("not for a member in another function (their window is the re-surfaced hire)", M.scoreFor(ten, revops) === null);
+  check("never a member's own seat", M.scoreFor({ ...ten, holderId: "mem_sal" }, salesM) === null && M.scoreFor({ ...ten, kind: "seat", key: "end:own", holderId: "mem_sal" }, salesM) === null);
+  const ten19 = M.scoreFor(raw({ key: "tenure:x:19", kind: "tenure", fn: "Sales", tenure: { start: monthAgo(19), months: 19, mark: 19 } }), salesM)!;
+  check("at 19 months it reads lower, and says the average", ten19.score < tenS.score && /average ended fractional seat lasted 19 months/.test(ten19.whyNow), ten19.whyNow);
+  const tenFt = M.scoreFor(raw({ key: "tenure:ft", kind: "tenure", fn: "Sales", ledFullTime: { Sales: "2023" }, tenure: { start: monthAgo(12), months: 12, mark: 12 } }), salesM)!;
+  check("a full-time Sales leader on their website: page only", tenFt.band === "Low", tenFt.score);
+
+  console.log("\nHiring again after an ended seat");
+  const reh = raw({ key: "rehire:y", kind: "rehire", fn: "Sales", stage: "$1M–$5M", ended: { end: monthAgo(4), months: 4 }, hiredFns: ["Sales"], activeFns: [] });
+  const rehS = M.scoreFor(reh, salesM)!;
+  check("a Sales seat ended 4 months ago: a signal for Sales, saying they hired one before", !!rehS && rehS.band === "Medium" && /^Fractional Sales seat there ended in \w{3} \d{4} · about a quarter of fractional roles come from companies that hired one before$/.test(rehS.whyNow), rehS && [rehS.band, rehS.whyNow]);
+  check("not while another fractional Sales seat is active there", M.scoreFor({ ...reh, activeFns: ["Sales"] }, salesM) === null);
+  check("not before 3 months, nor after 24", M.scoreFor({ ...reh, ended: { end: monthAgo(1), months: 1 } }, salesM) === null && M.scoreFor({ ...reh, ended: { end: monthAgo(26), months: 26 } }, salesM) === null);
+  check("ended with a full-time hire: weaker, and says so", M.scoreFor({ ...reh, endReason: "Replaced by full-time hire" }, salesM)!.score < rehS.score / 2);
+  const mktEnd = raw({ key: "rehire:m", kind: "rehire", fn: "Marketing", stage: "$1M–$5M", ended: { end: monthAgo(5), months: 5 }, hiredFns: ["Marketing"], activeFns: [] });
+  const rehNext = M.scoreFor(mktEnd, salesM);
+  check("a neighbour the rules name (marketing, then sales at $1M–$5M): a signal for Sales too", !!rehNext && /they've hired fractionals before, and Sales usually follows Marketing/.test(rehNext.whyNow), rehNext?.whyNow);
+  check("a pair no rule names: nothing", M.scoreFor({ ...mktEnd, fn: "Legal" }, salesM) === null);
+  const yearOnly = M.scoreFor({ ...reh, ended: { end: String(new Date().getUTCFullYear() - 1), months: 3 } }, salesM);
+  check("a year-only end reads as the year: 'ended in 2025'", !yearOnly || new RegExp(`ended in ${new Date().getUTCFullYear() - 1} ·`).test(yearOnly.whyNow), yearOnly?.whyNow);
+
+  console.log("\nTenure and rehire in the table");
+  const seedF = await t.loadSeed();
+  const nowF = Date.now();
+  const startTen = monthAgo(12);
+  const lastYear = String(new Date().getUTCFullYear() - 1);
+  await T.mutate((d) => {
+    const put = (id: string, companyId: string, f: Record<string, string>, by = "mem_pia") => {
+      d.engagements.push({ id, companyId, by, at: new Date(nowF - 400 * DAY).toISOString() });
+      for (const [k, v] of Object.entries(f)) d.values[`${id}.${k}`] = { value: v, by, at: new Date(nowF - 400 * DAY).toISOString(), status: "live" };
+    };
+    put("e_ten_sales", "c_two", { role: "Fractional VP Sales", function: "Sales", type: "Fractional", start: startTen, status: "Active", end: "Ongoing" });
+    put("e_end_year", "c_three", { role: "Fractional CMO", function: "Marketing", type: "Fractional", start: String(Number(lastYear) - 1), status: "Ended", end: lastYear });
+    put("e_end_now", "c_three", { role: "Fractional CFO", function: "Finance", type: "Fractional", start: "2025", status: "Ended", end: String(new Date().getUTCFullYear()) });
+  });
+  const sF = await t.loadState();
+  const tenAt = P.dayInMonthMs(P.monthIndex(startTen)! + 12, "e_ten_sales:tenure");
+  const tenSigs = S.detectSignals(seedF, sF, tenAt - DAY, tenAt + 1).filter((x) => x.kind === "tenure");
+  check("detectSignals: a tenure mark on the seat's own day of the month, keyed once", tenSigs.length === 1 && tenSigs[0].key === `tenure:${pub("e_ten_sales")}:12` && tenSigs[0].atMs === tenAt, tenSigs.map((x) => x.key));
+  check("and not the day before its day", !S.detectSignals(seedF, sF, tenAt - 2 * DAY, tenAt - DAY).some((x) => x.kind === "tenure" && x.engagementId === "e_ten_sales"));
+  const ly = Number(lastYear);
+  const rehAt = P.dayInMonthMs(ly * 12 + 11 + 3, "e_end_year:rehire");
+  const rehSigs = S.detectSignals(seedF, sF, rehAt - DAY, rehAt + 1).filter((x) => x.kind === "rehire");
+  check("a seat that ended in a year alone: its rehire comes 3 months after that year's December", rehSigs.some((x) => x.engagementId === "e_end_year" && x.key === `rehire:${pub("e_end_year")}` && x.ended?.end === lastYear), rehSigs.map((x) => x.key));
+  check("one that ended 'this year' (a year alone) waits: its December may not have come", !S.detectSignals(seedF, sF, 0, nowF + 1000).some((x) => x.kind === "rehire" && x.engagementId === "e_end_now"));
+  const stand = S.standingSignals(seedF, sF, nowF);
+  const stTen = stand.find((x) => x.key === `still:tenure:${pub("e_ten_sales")}`);
+  check("standing: the active seat 12 months in, keyed still:, not offered once its own event went", !!stTen && stTen.standing === true && stTen.sameAs?.includes(`tenure:${pub("e_ten_sales")}:12`) === true, stTen && { key: stTen.key, sameAs: stTen.sameAs });
+  const stTenS = stTen ? M.scoreFor(stTen, salesM, { nowMs: nowF }) : null;
+  check("its why-now starts 'Still a good time:'", !!stTenS && stTenS.whyNow.startsWith("Still a good time: Fractional Sales seat started"), stTenS?.whyNow);
+  check("standing: the seat that ended last year (rehire window), not the one that ended this year", stand.some((x) => x.key === `still:rehire:${pub("e_end_year")}`) && !stand.some((x) => x.key === `still:rehire:${pub("e_end_now")}`));
+
+  console.log("\nA new leader on the website");
+  const out2 = (functions: Record<string, unknown>, team = true) => ({ companyId: "c_one", status: "found", functions, pages: 2, team, press: false, robots: 0 }) as import("../lib/leaders/types").LeadersOutcome;
+  const ftLead = (fn: string, since?: string) => ({ [fn]: { level: "C-level" as const, kind: "full-time" as const, how: "team page" as const, url: "https://orchid.example/team", seenAt: ago(DAY), ...(since ? { since } : {}) } });
+  await t.saveLeaders([out2(ftLead("Finance"))], null, ago(50 * DAY));
+  check("a first read lists nobody as new", !(await t.loadState()).leaderArrivals?.length);
+  await t.saveLeaders([out2({ ...ftLead("Finance"), ...ftLead("Marketing", "2019") })], null, ago(40 * DAY));
+  check("a leader the page says has been there for years is no arrival", !(await t.loadState()).leaderArrivals?.length);
+  await t.saveLeaders([out2({ ...ftLead("Finance"), ...ftLead("Marketing", "2019") }, false)], null, ago(30 * DAY));
+  await t.saveLeaders([out2({ ...ftLead("Finance"), ...ftLead("Marketing", "2019"), ...ftLead("Technology") })], null, ago(20 * DAY));
+  check("nor one after a read that had no team page", !(await t.loadState()).leaderArrivals?.length);
+  const arrAt = new Date().toISOString();
+  await t.saveLeaders([out2({ ...ftLead("Finance"), ...ftLead("Marketing", "2019"), ...ftLead("Technology"), ...ftLead("Sales") })], null, arrAt);
+  const sArr = await t.loadState();
+  check("read OK both times, team page both times: one arrival, no name, no link", sArr.leaderArrivals?.length === 1 && sArr.leaderArrivals[0].fn === "Sales" && sArr.leaderArrivals[0].kind === "full-time" && !/https?:/.test(JSON.stringify(sArr.leaderArrivals)), sArr.leaderArrivals);
+  const arr = S.detectSignals(seedF, sArr, Date.now() - DAY, Date.now() + 5000).filter((x) => x.kind === "arrival");
+  const arrOps = arr[0] ? M.scoreFor(arr[0], revops) : null;
+  check("an arrival signal: a new CRO reads for RevOps", arr.length === 1 && !!arrOps && arrOps.band !== "Low" && /^New full-time CRO on their team page \(\w{3} \d{4}\) · RevOps help often follows a new sales leader within 6 months$/.test(arrOps.whyNow), arrOps && [arrOps.band, arrOps.whyNow]);
+  check("and nothing for Sales members (a full-time Sales leader lowers their odds) or a function no rule names", !!arr[0] && M.scoreFor(arr[0], salesM) === null && M.scoreFor(arr[0], { ...salesM, fn: "Legal" }) === null);
+
+  console.log("\nA team being hired");
+  const counts0 = ATS.teamHireCounts([{ title: "Senior Software Engineer" }, { title: "Backend Developer" }, { title: "Staff Accountant" }, { title: "Content Marketing Manager" }, { title: "Head of Engineering" }, { title: "Fractional CFO" }, { title: "Account Executive" }, { title: "Sales Engineer" }, { title: "Recruiter (Contract)" }, { title: "Customer Success Manager" }]);
+  check("career feed titles count by function, leaders, fractional and contract work and sales left out", counts0.Technology === 2 && counts0.Finance === 1 && counts0.Marketing === 1 && counts0.People === 0 && counts0["Customer Success"] === 1, counts0);
+  const tb1 = await T.mutate((d, sd) => t.noteTeamHires(d, sd, new Map([["orchid.example", { Marketing: 0, Technology: 1 }]]), ago(10 * DAY)));
+  const tb2 = await T.mutate((d, sd) => t.noteTeamHires(d, sd, new Map([["orchid.example", { Marketing: 1, Technology: 1 }]]), ago(5 * DAY)));
+  check("a baseline, then one more role: no burst", tb1 === 0 && tb2 === 0, [tb1, tb2]);
+  const tbAt = new Date().toISOString();
+  const tb3 = await T.mutate((d, sd) => t.noteTeamHires(d, sd, new Map([["orchid.example", { Marketing: 3, Technology: 1 }]]), tbAt));
+  check("two or more more than the lowest in 30 days: one burst, counts only", tb3 === 1 && !/Engineer|Marketing Manager/.test(JSON.stringify((await t.loadState()).teamBuild)), (await t.loadState()).teamBuild);
+  const teamSig = S.detectSignals(seedF, await t.loadState(), Date.now() - DAY, Date.now() + 5000).filter((x) => x.kind === "team-build");
+  const mktM = { memberId: "m", fn: "Marketing", icp, before: [], beforeFromMember: false };
+  const teamS = teamSig[0] ? M.scoreFor(teamSig[0], mktM) : null;
+  check("a team-build signal for Marketing members", teamSig.length === 1 && teamSig[0].fn === "Marketing" && !!teamS && /^3 full-time marketing roles posted \(0 before\) · a marketing team being hired can need fractional marketing leadership or senior help within 6 months$/.test(teamS.whyNow), teamS?.whyNow);
+  check("a full-time Marketing leader on their team page: page only", !!teamSig[0] && M.scoreFor(teamSig[0], mktM)!.band === "Low" === !!teamSig[0].lead?.ft.Marketing);
+
+  console.log("\nHeadcount crossings");
+  const hc = raw({ key: "size:c:51–200:d", kind: "headcount", fn: null, size: { from: "11–50", to: "51–200" } });
+  const peopleM = { memberId: "m", fn: "People", icp, before: [], beforeFromMember: false };
+  const hcS = M.scoreFor(hc, peopleM)!;
+  check("past 50 people: a People signal, from rule 9", !!hcS && hcS.band !== "Low" && /^Grew from 11–50 to 51–200 people \(on file \w{3} \d{4}\) · fractional HR usually comes in at 25 to 50 people$/.test(hcS.whyNow), hcS && [hcS.band, hcS.whyNow]);
+  check("nothing for a function the research doesn't tie to size", M.scoreFor(hc, salesM) === null);
+  await T.mutate((d) => {
+    d.headcount ??= {};
+    d.headcount.c_one = [{ band: "11–50", at: ago(30 * DAY) }, { band: "51–200", at: new Date().toISOString() }];
+    d.headcount.c_two = [{ band: "51–200", at: ago(30 * DAY) }, { band: "11–50", at: new Date().toISOString() }];
+  });
+  const hcSigs = S.detectSignals(seedF, await t.loadState(), Date.now() - DAY, Date.now() + 5000).filter((x) => x.kind === "headcount");
+  check("detectSignals: a rise is a signal, a fall is not", hcSigs.length === 1 && hcSigs[0].companyId === "c_one" && hcSigs[0].size?.to === "51–200", hcSigs.map((x) => x.key));
+
+  console.log("\nA leadership gap");
+  const gapSig = raw({ key: "gap:c:Finance:h", kind: "gap", fn: "Finance", stage: "$5M–$20M", lead: { teamAt: new Date().toISOString(), ft: {} } });
+  const gapS = M.scoreFor(gapSig, fin)!;
+  check("no Finance leader on their team page at $5M–$20M: Medium, never High, said from the matrix", !!gapS && gapS.band === "Medium" && /^No Finance leader on their team page \(checked \w{3} \d{4}\), and no fractional Finance seat on file · at \$5M–\$20M revenue, about 1 in \d+ fractional seats is Finance$/.test(gapS.whyNow), gapS && [gapS.band, gapS.whyNow]);
+  check("not when their team page names a full-time Finance leader", M.scoreFor({ ...gapSig, lead: { teamAt: new Date().toISOString(), ft: { Finance: { how: "team page", level: "C-level", confirmed: true } } } }, fin) === null);
+  await T.mutate((d) => {
+    d.leaders ??= {};
+    d.leaders.c_two = { status: "none", checkedAt: new Date().toISOString(), ok: true, functions: {}, why: "no leaders found", team: true, readAt: new Date().toISOString(), teamAt: new Date().toISOString() };
+  });
+  const sGap = await t.loadState();
+  const gaps = S.detectSignals(seedF, sGap, Date.now() - DAY, Date.now() + 5000).filter((x) => x.kind === "gap" && x.companyId === "c_two");
+  check("detectSignals: gaps where the matrix expects a leader, not where a fractional is on file", gaps.some((x) => x.fn === "Finance") && !gaps.some((x) => x.fn === "Sales" || x.fn === "Marketing"), gaps.map((x) => x.fn));
+  const gapsAgain = S.detectSignals(seedF, sGap, Date.now() - DAY, Date.now() + 5000).filter((x) => x.kind === "gap" && x.companyId === "c_two");
+  check("the same reading of the page is the same key (sent once)", JSON.stringify(gaps.map((x) => x.key)) === JSON.stringify(gapsAgain.map((x) => x.key)));
+  check("and it stands while the page was read lately", S.standingSignals(seedF, sGap, Date.now()).some((x) => x.kind === "gap" && x.companyId === "c_two" && x.key.startsWith("still:gap:")));
+
+  console.log("\nThe day: at most five companies, filled to two with what is still true");
+  const sc = (key: string, companyId: string, score: number, o: Record<string, unknown> = {}) => ({ ...raw({ key, companyId, ...o }), why: "w", score, band: P.bandOf(score), whyNow: "n" }) as import("../lib/radar/match").Scored;
+  const seven = Array.from({ length: 7 }, (_, i) => sc(`role:${i}`, `co${i}`, 0.5 - i * 0.01, { kind: "role" }));
+  const d1 = M.pickDaily([...seven, sc("hire:co0", "co0", 0.2)], [], { sent: {} }, nowF);
+  check("seven companies with events: the best five, a company's second signal rides along", new Set(d1.send.map((x) => x.companyId)).size === 5 && d1.send.length === 6 && !d1.send.some((x) => x.companyId === "co6"), d1.send.map((x) => x.key));
+  const standing2 = [sc("still:a", "sa", 0.2, { standing: true }), sc("still:b", "sb", 0.18, { standing: true }), sc("still:c", "sc", 0.17, { standing: true })];
+  const d2 = M.pickDaily([sc("role:x", "cx", 0.5, { kind: "role" })], standing2, { sent: {} }, nowF);
+  check("one company from events: one standing state fills it to two, the strongest", d2.send.length === 2 && d2.send[1].key === "still:a" && d2.fromEvents === 1, d2.send.map((x) => x.key));
+  const d3 = M.pickDaily([sc("role:x", "cx", 0.05, { kind: "role" })], [sc("still:low", "sl", 0.05, { standing: true }), ...standing2], { sent: { "hire:sa": "x" }, shown: { sb: new Date(nowF - 10 * DAY).toISOString() } }, nowF);
+  check("Low never goes; a company shown in the last 30 days is skipped; two from standing", d3.send.map((x) => x.key).join() === "still:a,still:c", d3.send.map((x) => x.key));
+  const d4 = M.pickDaily([sc("still:a2", "sa", 0.3, { standing: true, sameAs: ["tenure:z:12"] })], [], { sent: { "tenure:z:12": "x" } }, nowF);
+  check("a standing state whose own event went is not offered", d4.send.length === 0);
+  const quietShown = { sent: {}, shown: { cq: new Date(nowF - 5 * DAY).toISOString() } };
+  const d5 = M.pickDaily([sc("tenure:q:12", "cq", 0.2, { kind: "tenure" }), sc("role:q", "cq", 0.5, { kind: "role" })], [], quietShown, nowF);
+  check("inside 30 days a company comes back only with something new: an open role yes, a tenure mark no", d5.send.map((x) => x.key).join() === "role:q", d5.send.map((x) => x.key));
+  check("nothing fresh and nothing standing: nothing (no nothing-days)", M.pickDaily([], [], { sent: {} }, nowF).send.length === 0);
+  check("the day's numbers", Ty.RADAR_DAY_MAX === 5 && Ty.RADAR_DAY_MIN === 2 && Ty.RADAR_COMPANY_QUIET_DAYS === 30);
+
+  console.log("\nThe words");
+  const lines = [tenS, ten19, rehS, rehNext, arrOps, teamS, hcS, gapS, stTenS].filter(Boolean).map((x) => x!.whyNow);
+  check("no why-now line mentions LinkedIn or Sales Navigator, a percentage, or promises a hire", lines.length >= 8 && lines.every((l) => !/linkedin|sales navigator|%|will hire|guarantee/i.test(l)), lines);
+  const tenCard = (await import("../lib/radar/present")).cardOf({ ...stTenS!, why: stTenS!.why }, { visible: () => false, cardId: (x: string) => x, coId: (x: string) => x, url: "/x" });
+  check("a locked company's tenure card names nothing", /^A SaaS company's fractional Sales seat is \d+ months in$/.test(tenCard.headline) && !/Tamarind|Orchid|Juniper/.test(JSON.stringify(tenCard)), tenCard.headline);
 }
 
 main()

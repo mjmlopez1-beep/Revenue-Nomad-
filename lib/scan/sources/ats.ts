@@ -537,6 +537,39 @@ export function salesHireCount(jobs: Pick<ScanRawJob, "title">[]): number {
   return jobs.filter((j) => SALES_IC.test(j.title) && !NOT_FT_IC.test(j.title)).length;
 }
 
+/**
+ * Full-time individual contributors in the functions besides sales, by the titles a feed lists
+ * (Crystal Ball's team build, lib/radar/predict.ts TEAM_PRIORS). Conservative: a title counts only
+ * when it names the work plainly ("Software Engineer", "Staff Accountant", "Recruiter", "Customer
+ * Success Manager", "Content Marketing Manager"), never a leader of one (Director, Head, VP, Chief,
+ * Lead, Principal) or fractional, interim, part-time, contract or intern work.
+ */
+const TEAM_IC: Record<string, RegExp> = {
+  Marketing:
+    /\b(?:(?:content|digital|product|growth|performance|lifecycle|field|brand|demand gen(?:eration)?|email|partner|social media|event)?\s?marketing (?:manager|specialist|coordinator|associate|executive|analyst)s?|marketers?|seo (?:specialist|manager|analyst)s?|content (?:writer|strategist|marketer|manager)s?|copywriters?|social media (?:manager|specialist)s?)\b/i,
+  Technology:
+    /\b(?:(?:software|backend|back[- ]end|frontend|front[- ]end|full[- ]?stack|devops|platform|data|machine learning|ml|site reliability|mobile|ios|android|qa|test|cloud|infrastructure|security|firmware|embedded)\s+(?:engineers?|developers?)|software developers?|web developers?|sres?)\b/i,
+  Finance: /\b(?:(?:staff|senior|junior|general ledger|cost|tax|revenue)?\s?accountants?|financial analysts?|fp&a (?:analyst|manager)s?|bookkeepers?|accounts (?:payable|receivable) (?:specialist|clerk|analyst)s?|payroll (?:specialist|administrator)s?|billing specialists?)\b/i,
+  People: /\b(?:recruiters?|(?:technical|senior)? ?recruit(?:ing|ment) (?:coordinator|partner|specialist)s?|talent acquisition (?:partner|specialist|coordinator)s?|sourcers?|hr (?:generalist|coordinator|business partner|specialist|manager)s?|people (?:partner|operations (?:specialist|coordinator))s?)\b/i,
+  "Customer Success": /\b(?:customer success (?:manager|associate|specialist|representative|rep)s?|csms?|onboarding (?:specialist|manager)s?|implementation (?:specialist|consultant|manager)s?|customer support (?:specialist|representative|rep|agent)s?|support (?:specialist|agent)s?)\b/i,
+};
+const NOT_FT_TEAM_IC = /\b(?:fractional|interim|part[- ]time|contract(?:or)?|freelance|temporary|intern(?:ship)?|director|head|lead|principal|vp|vice president|chief|cmo|cto|cfo|chro|cco)\b/i;
+
+/**
+ * How many full-time individual contributors a feed lists right now in each of TEAM_IC's
+ * functions: counts only, kept by lib/table.ts careerSources (noteTeamHires). A title counts once,
+ * in the first function it reads as; a sales title (salesHireCount) never counts here.
+ */
+export function teamHireCounts(jobs: Pick<ScanRawJob, "title">[]): Record<string, number> {
+  const out: Record<string, number> = Object.fromEntries(Object.keys(TEAM_IC).map((fn) => [fn, 0]));
+  for (const j of jobs) {
+    if (NOT_FT_TEAM_IC.test(j.title) || SALES_IC.test(j.title)) continue;
+    const fn = Object.keys(TEAM_IC).find((f) => TEAM_IC[f].test(j.title));
+    if (fn) out[fn]++;
+  }
+  return out;
+}
+
 /* ---------- the sources ---------- */
 
 /**
@@ -546,7 +579,7 @@ export function salesHireCount(jobs: Pick<ScanRawJob, "title">[]): number {
  */
 export function atsSources(
   boards: { board: AtsBoard; company: AtsCompany }[],
-  opts: { fetch?: FeedFetch; gone?: (domain: string) => void; salesCount?: (domain: string, n: number) => void } = {},
+  opts: { fetch?: FeedFetch; gone?: (domain: string) => void; salesCount?: (domain: string, n: number) => void; teamCount?: (domain: string, counts: Record<string, number>) => void } = {},
 ): ScanSource[] {
   const fetch = opts.fetch ?? fetchFeed;
   const list = boards.slice(0, FEEDS_PER_RUN);
@@ -564,6 +597,7 @@ export function atsSources(
         if (parsed) ok++;
         // Only a feed that answered and read counts: a failure is never read as no sales hires.
         if (parsed) opts.salesCount?.(company.domain.toLowerCase(), salesHireCount(parsed));
+        if (parsed) opts.teamCount?.(company.domain.toLowerCase(), teamHireCounts(parsed));
         return parsed ?? [];
       });
       if (!ok && mine.length) throw new Error(`No ${ats} feed answered (${mine.length} tried)`);

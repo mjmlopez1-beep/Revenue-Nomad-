@@ -29,6 +29,15 @@
  *               comes back once (`reopen`) when its window opens and it reads Medium or High.
  *   The member's own "usually hired before you" answer (Profile.before) no longer decides who gets
  *   a hire: a pair they named is boosted (BEFORE_BOOST: they know their market).
+ *   tenure      a seat in the member's function at its tenure mark (predict.ts TENURE_PRIOR), never their own seat.
+ *   rehire      the same function (REHIRE_SAME_P) or one a transition rule names after it (the rule x
+ *               REHIRE_NEXT_SHARE), while no fractional in the member's function is active there.
+ *   arrival     a new full-time leader whose function ARRIVAL_PRIORS ties to the member's.
+ *   team-build  hiring in the member's own function (TEAM_PRIORS); a full-time leader of it known: page only.
+ *   headcount   a size band rule 9 ties to People (HEADCOUNT_PRIORS).
+ *   gap         the member's function's share of fractional seats at the company's stage (propensity), never High.
+ *   A standing state (signals.ts standingSignals) scores as its kind does, and its why-now starts "Still a
+ *   good time:". pickDaily makes the member's day from the ranked lists.
  * Cards rank by score. Each carries a band (High, Medium, Low) and a why-now line.
  */
 import { tableInternals as T, type Seed, type State } from "../table";
@@ -37,12 +46,13 @@ import { beforeOrder } from "@/app/onboard/firstView";
 import type { CoInfo } from "@/app/post/model";
 import type { CompanyRec, EngagementRec, Icp } from "../tableTypes";
 import type { CompanyFacts, RawSignal } from "./signals";
-import { isLeaderRaw } from "./signals";
-import type { RadarBand } from "./types";
+import { isCalendar, isLeaderRaw } from "./signals";
+import { RADAR_COMPANY_QUIET_DAYS, RADAR_DAY_MAX, RADAR_DAY_MIN, RADAR_STILL, type RadarBand } from "./types";
 import {
-  HIGH_AT, MEDIUM_AT, SCORE_FLOOR, SIGNAL_PRIORS, agoWords, bandOf, gapWords, hireWhyNow, isStage, leadWord, likelihood, ownerOf, thinLift, timing, windowGone, windowOpensMs, type TransitionCounts,
+  ARRIVAL_PRIORS, GAP_MIN_SHARE, HEADCOUNT_PRIORS, HIGH_AT, MEDIUM_AT, REHIRE_MONTHS, REHIRE_NEXT_SHARE, REHIRE_SAME_P, SCORE_FLOOR, SIGNAL_PRIORS, TEAM_PRIORS, TENURE_MARKS, TENURE_PRIOR, agoWords, bandOf, gapWords,
+  hireWhyNow, isStage, leadWord, likelihood, monthSpan, monthWords, ownerOf, propensity, thinLift, timing, windowGone, windowOpensMs, windowPassed, type TenureMark, type TransitionCounts,
 } from "./predict";
-import { fullTimeWords, noLeaderWords, type FnKnow, type LeaderHow, type LeaderLevel } from "../leaders/types";
+import { LEADER_LEVELS, fullTimeWords, noLeaderWords, roleLabel, type FnKnow, type LeaderHow, type LeaderLevel } from "../leaders/types";
 import { hireMonth, monthsAgo } from "../hired";
 import type { Warmth } from "../google/types"; // [google network]
 
@@ -132,6 +142,10 @@ export const UNKNOWN_CAP = HIGH_AT * 0.99;
 export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
   const any = anyCompany(p);
   if (!p.fn || p.fn === "Other" || (!any && !inIcp(p.icp, sig.co))) return null;
+  // A member is never sent their own seat.
+  if (sig.holderId && sig.holderId === p.memberId) return null;
+  // A fractional in their function there now: nothing for them in a signal that reads "no fractional in your function".
+  const activeHere = (sig.activeFns ?? sig.hiredFns).includes(p.fn);
   // Any company (no profile yet): the reason says what happened, never "in your profile".
   const where = any ? "" : ", at a company in your profile";
   switch (sig.kind) {
@@ -150,6 +164,19 @@ export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
       return sig.hiredFns.includes(p.fn) ? null : `A sales team being built. ${leaderLine(sig, p.fn)}`;
     case "funding":
       return `Money in usually means hiring${where}`;
+    case "tenure":
+      return sig.fn === p.fn ? `A fractional ${p.fn} seat like yours, ${sig.tenure?.months ?? 12} months in${where}` : null;
+    case "rehire":
+      if (!sig.fn || activeHere) return null;
+      return sig.fn === p.fn ? `They hired a fractional ${p.fn} before${where}` : `They hired a fractional ${sig.fn} before. ${leaderLine(sig, p.fn)}`;
+    case "arrival":
+      return sig.fn && ARRIVAL_PRIORS[sig.fn]?.[p.fn] && !activeHere ? `A new ${sig.fn} leader there. ${leaderLine(sig, p.fn)}` : null;
+    case "team-build":
+      return sig.fn === p.fn && TEAM_PRIORS[p.fn] && !activeHere ? `A ${p.fn} team being hired. ${leaderLine(sig, p.fn)}` : null;
+    case "headcount":
+      return sig.size && HEADCOUNT_PRIORS[sig.size.to]?.[p.fn] && !sig.hiredFns.includes(p.fn) ? `Growing. ${leaderLine(sig, p.fn)}` : null;
+    case "gap":
+      return sig.fn === p.fn && !sig.hiredFns.includes(p.fn) ? `No ${p.fn} leader on their team page${where}` : null;
   }
 }
 
@@ -176,6 +203,11 @@ export interface ScoreCtx {
 export const warmthMultiplier = (w: Warmth | null | undefined) => (w === "Hot" ? 1.6 : w === "Warm" ? 1.35 : w === "Fading" ? 1.15 : w === "Cold" ? 1.05 : 1);
 
 const MONTH_MS = 30.44 * 24 * 60 * 60 * 1000;
+/** How a standing state's why-now starts: it is still true, nothing new happened today. */
+export const STILL = RADAR_STILL;
+/** "marketing", "engineering": a function's team as a career feed's roles read. */
+const TEAM_WORD: Record<string, string> = { Marketing: "marketing", Technology: "engineering", Finance: "finance", People: "people", "Customer Success": "customer success" };
+const teamWord = (fn: string) => TEAM_WORD[fn] ?? fn.toLowerCase();
 const sinceMonths = (atMs: number, nowMs: number) => Math.max(0, Math.floor((nowMs - atMs) / MONTH_MS));
 
 /** The score, band and why-now of one signal for one member, or null when it isn't theirs. */
@@ -247,16 +279,85 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       score = (lift > 1 ? Math.min(raw * lift, Math.max(raw, UNKNOWN_CAP)) : raw) * fit;
       whyNow = hireWhyNow(x.fn, p.fn, t, l);
       if (sig.reopen) {
-        // Re-surfaced once: this member's window opens in this run's window, after the hire came in.
-        const open = windowOpensMs(x.ym, l.gap[0]);
+        // Re-surfaced once: this member's window opens in this run's window, after the hire came in (on the seat's own day of the month).
+        const open = windowOpensMs(x.ym, l.gap[0], sig.engagementId ?? sig.key);
         if (!(l.gap[0] > 0 && open > sig.reopen.from && open <= sig.reopen.to && open > (sig.addedMs ?? 0))) return null;
         openedMs = open;
       }
+      // A standing hire: only while this member's window is open now (not before it, not after it).
+      if (sig.standing && (t < l.gap[0] || windowPassed(t, l.gap))) return null;
+      break;
+    }
+    case "tenure": {
+      const x = sig.tenure;
+      const mark = (x && (TENURE_MARKS as readonly number[]).includes(x.mark) ? x.mark : 12) as TenureMark;
+      const pr = TENURE_PRIOR[mark];
+      if (!x) return null;
+      const past = Math.max(0, monthsAgo(x.start, nowMs) - mark);
+      score = pr.p * timing(past, pr.gap) * fit;
+      whyNow = `Fractional ${p.fn} seat started ${monthWords(x.start)}, ${agoWords(monthsAgo(x.start, nowMs))} · based on typical tenure: ${pr.words}, so the seat may come up again`;
+      break;
+    }
+    case "rehire": {
+      if (!sig.fn || !sig.ended) return null;
+      const span = monthSpan(sig.ended.end);
+      const since = span ? Math.max(0, monthsAgo(`${Math.floor(span.to / 12)}-${String((span.to % 12) + 1).padStart(2, "0")}`, nowMs)) : REHIRE_MONTHS[0];
+      if (since < REHIRE_MONTHS[0] || since > REHIRE_MONTHS[1]) return null;
+      const ended = `Fractional ${sig.fn} seat there ended in ${monthWords(sig.ended.end)}`;
+      const fullTime = sig.endReason === "Converted to full-time" || sig.endReason === "Replaced by full-time hire";
+      if (sig.fn === p.fn) {
+        score = REHIRE_SAME_P * fit * (fullTime ? FT_PENALTY : 1);
+        whyNow = fullTime
+          ? `${ended}, ${sig.endReason === "Converted to full-time" ? "as a full-time role" : "with a full-time hire"} · less likely to open again`
+          : `${ended} · about a quarter of fractional roles come from companies that hired one before`;
+      } else {
+        const l = likelihood(sig.fn, p.fn, stage, owner, { employees: sig.co.employees, businessModel: sig.co.model ?? null }, ctx.counts);
+        if (!l.rule) return null;
+        score = l.p * REHIRE_NEXT_SHARE * fit;
+        whyNow = `${ended} · they've hired fractionals before, and ${p.fn} usually follows ${sig.fn}`;
+      }
+      break;
+    }
+    case "arrival": {
+      const pr = sig.fn ? ARRIVAL_PRIORS[sig.fn]?.[p.fn] : undefined;
+      if (!pr || !sig.fn) return null;
+      score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      const role = sig.arrived ? roleLabel(sig.fn, (LEADER_LEVELS as readonly string[]).includes(sig.arrived.level) ? (sig.arrived.level as LeaderLevel) : "Head") : leadWord(sig.fn);
+      whyNow = `New ${sig.arrived?.kind === "full-time" ? "full-time " : ""}${role} on their team page (${monthWords(sig.at.slice(0, 7))}) · ${pr.why} ${gapWords(pr.gap)}`;
+      break;
+    }
+    case "team-build": {
+      const pr = TEAM_PRIORS[p.fn];
+      if (!pr || !sig.team) return null;
+      score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      whyNow = `${sig.team.to} full-time ${teamWord(p.fn)} roles posted (${sig.team.from} before) · ${pr.why} ${gapWords(pr.gap)}`;
+      break;
+    }
+    case "headcount": {
+      const pr = sig.size ? HEADCOUNT_PRIORS[sig.size.to]?.[p.fn] : undefined;
+      if (!pr || !sig.size) return null;
+      score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      whyNow = `Grew from ${sig.size.from} to ${sig.size.to} people (on file ${monthWords(sig.at.slice(0, 7))}) · ${pr.why}`;
+      break;
+    }
+    case "gap": {
+      const share = stage ? propensity(p.fn, stage) : 0;
+      if (!stage || share < GAP_MIN_SHARE || know.s === "full-time") return null;
+      // Never High: a share of seats, not a rate.
+      score = Math.min(share * fit, UNKNOWN_CAP);
+      const checked = know.s === "none" ? ` (checked ${monthWords(know.teamAt.slice(0, 7))})` : "";
+      whyNow = `No ${p.fn} leader on their team page${checked}, and no fractional ${p.fn} seat on file · at ${stage} revenue, about 1 in ${Math.round(1 / share)} fractional seats is ${p.fn}`;
       break;
     }
   }
+  // A standing state says what it is: still true, nothing new today.
+  if (sig.standing) whyNow = `${STILL} ${whyNow}`;
   // Who leads the member's function there: a full-time leader known (website or members) keeps it on the page only;
   // nobody has read their team page: never High on "nobody leads it yet" alone.
+  if (sig.kind === "tenure" || sig.kind === "rehire" || sig.kind === "arrival" || sig.kind === "team-build" || sig.kind === "headcount") {
+    if (ftLed) score = Math.min(score * FT_PENALTY, FT_CAP);
+    else if (know.s === "unknown") score = Math.min(score, UNKNOWN_CAP);
+  }
   if (sig.kind === "adjacent" || sig.kind === "sales-build") {
     if (ftLed) score = Math.min(score * (sig.kind === "adjacent" ? FT_PENALTY : 1), FT_CAP);
     else if (know.s === "unknown") score = Math.min(score, UNKNOWN_CAP);
@@ -275,7 +376,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
 /** The months-ago words, for lines that are not a hire's ("this month", "2 months ago"). */
 export const sinceWords = (atMs: number, nowMs: number) => agoWords(sinceMonths(atMs, nowMs));
 
-const KIND_RANK: Record<RawSignal["kind"], number> = { role: 0, seat: 1, departure: 2, adjacent: 3, "sales-build": 4, funding: 5 };
+const KIND_RANK: Record<RawSignal["kind"], number> = { role: 0, seat: 1, departure: 2, adjacent: 3, arrival: 4, "sales-build": 5, "team-build": 6, funding: 7, rehire: 8, tenure: 9, headcount: 10, gap: 11 };
 
 /** The signals for this member, ranked by score (most likely first); ties by kind (roles first), then newest. */
 export function signalsFor(all: RawSignal[], p: RadarProfile, ctx: ScoreCtx = {}): Scored[] {
@@ -288,6 +389,52 @@ export function signalsFor(all: RawSignal[], p: RadarProfile, ctx: ScoreCtx = {}
 
 /** What goes by email and Slack: everything but Low (Low stays on the page). */
 export const deliverable = <X extends { band: RadarBand }>(xs: X[]) => xs.filter((x) => x.band !== "Low");
+
+/** What a member's day remembers: each signal key sent (when), and each company sent (when, internal id). */
+export interface DayMemory {
+  sent: Record<string, string>;
+  shown?: Record<string, string>;
+}
+
+/**
+ * A member's day (the morning run's selection): their unsent High and Medium events, most likely
+ * first, at most RADAR_DAY_MAX companies (a company's other signals that day ride along with it).
+ * When fewer than RADAR_DAY_MIN companies come from fresh events, the strongest standing states
+ * (High or Medium, never shown: none of their own events went out) fill it to RADAR_DAY_MIN,
+ * labelled "Still a good time". A company sent in the last RADAR_COMPANY_QUIET_DAYS is not sent
+ * again unless something new happened there: a calendar signal (a window opening, a tenure mark, a
+ * rehire gap) or a standing state skips it, an event (a role, a hire, an ended seat, a leader
+ * gone or arrived, a burst of hiring, money, a size change, a gap first seen) doesn't. Both lists
+ * come ranked (signalsFor). Pure.
+ */
+export function pickDaily<X extends Scored>(fresh: X[], standing: X[], mem: DayMemory, nowMs: number): { send: X[]; fromEvents: number } {
+  const quiet = (companyId: string) => {
+    const at = Date.parse(mem.shown?.[companyId] ?? "");
+    return Number.isFinite(at) && nowMs - at < RADAR_COMPANY_QUIET_DAYS * 24 * 60 * 60 * 1000;
+  };
+  const unsent = (x: X) => !mem.sent[x.key] && !(x.of && mem.sent[x.of]) && !(x.sameAs ?? []).some((k) => mem.sent[k]);
+  const send: X[] = [];
+  const cos = new Set<string>();
+  for (const x of fresh) {
+    if (x.band === "Low" || !unsent(x) || (isCalendar(x) && quiet(x.companyId))) continue;
+    if (cos.has(x.companyId)) {
+      // The same company's other signals today, once each.
+      if (!send.some((y) => y.key === x.key)) send.push(x);
+    } else if (cos.size < RADAR_DAY_MAX) {
+      cos.add(x.companyId);
+      send.push(x);
+    }
+  }
+  const fromEvents = cos.size;
+  if (cos.size < RADAR_DAY_MIN)
+    for (const x of standing) {
+      if (cos.size >= RADAR_DAY_MIN) break;
+      if (x.band === "Low" || !unsent(x) || cos.has(x.companyId) || quiet(x.companyId)) continue;
+      cos.add(x.companyId);
+      send.push(x);
+    }
+  return { send, fromEvents };
+}
 
 /**
  * The functions onboarding would suggest as "usually hired before" `fn`, from the table's

@@ -14,6 +14,7 @@
  */
 import type { RadarBand, RadarCard, RadarDay, RadarKind } from "./types";
 import type { RawSignal } from "./signals";
+import { monthWords } from "./predict";
 
 /** A signal as a member gets it: why it is theirs, and (scored) its band and why-now. */
 export type MemberSignal = RawSignal & { why: string; band?: RadarBand; whyNow?: string };
@@ -67,14 +68,15 @@ const monthsSince = (ym: string, ms: number) => {
  * started in the last JUST_MONTHS; else "hired a fractional Marketing leader in Dec 2025", with
  * "· newly added to Merlin" when the seat is old but came into Merlin in the last 30 days.
  */
-export function hiredWords(sig: Pick<MemberSignal, "fn" | "ym" | "addedMs" | "atMs" | "reopen">, nowMs = Date.now()): string {
+export function hiredWords(sig: Pick<MemberSignal, "fn" | "ym" | "addedMs" | "atMs" | "reopen" | "standing">, nowMs = Date.now()): string {
   const fn = sig.fn ?? "";
   const ym = sig.ym && /^\d{4}-\d{2}$/.test(sig.ym) ? sig.ym : null;
   if (!ym) return `hired a fractional ${fn} leader`;
   const ago = monthsSince(ym, nowMs);
-  if (ago < JUST_MONTHS && !sig.reopen) return `just hired a fractional ${fn} leader`;
+  const later = !!sig.reopen || !!sig.standing;
+  if (ago < JUST_MONTHS && !later) return `just hired a fractional ${fn} leader`;
   const when = `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
-  const added = sig.addedMs ?? (sig.reopen ? undefined : sig.atMs);
+  const added = sig.standing ? undefined : sig.addedMs ?? (sig.reopen ? undefined : sig.atMs);
   const fresh = added !== undefined && nowMs - added <= 30 * 24 * 60 * 60 * 1000;
   return `hired a fractional ${fn} leader in ${when}${fresh && ago >= JUST_MONTHS ? " · newly added to Merlin" : ""}`;
 }
@@ -138,6 +140,18 @@ export function cardOf(sig: MemberSignal, ctx: CardContext): RadarCard {
     case "departure":
       headline = `${cap(who)} no longer lists a ${fn} leader`;
       break;
+    case "tenure":
+      headline = `${cap(who)}'s fractional ${fn} seat is ${sig.tenure?.months ?? 12} months in`;
+      break;
+    case "rehire":
+      headline = `${cap(who)} ended a fractional ${fn} seat${sig.ended ? ` in ${monthWords(sig.ended.end)}` : ""}`;
+      break;
+    case "arrival":
+    case "team-build":
+    case "headcount":
+    case "gap":
+      headline = `${cap(who)} ${lowerFirst(signalWords(sig, title))}`;
+      break;
   }
   // A locked company is never linked, never pictured: only a company the card names has a place, only one the member knows a logo.
   const known = seen && (ctx.known ? ctx.known(sig.companyId) : true);
@@ -198,8 +212,24 @@ export function signalWords(sig: MemberSignal, title: string): string {
       return sig.build && sig.build.from > 0 ? `Posted ${sig.build.to} full-time sales roles` : "Posted its first full-time sales roles";
     case "departure":
       return `No longer lists a ${fn} leader`;
+    case "tenure":
+      return `Its fractional ${fn} seat is ${sig.tenure?.months ?? 12} months in`;
+    case "rehire":
+      return `Ended a fractional ${fn} seat${sig.ended ? ` in ${monthWords(sig.ended.end)}` : ""}`;
+    case "arrival":
+      return `Lists a new ${sig.arrived?.kind === "full-time" ? "full-time " : ""}${fn} leader on its website`;
+    case "team-build":
+      return `Posted ${sig.team?.to ?? "several"} full-time ${TEAM_WORDS[fn] ?? fn.toLowerCase()} roles`;
+    case "headcount":
+      return sig.size ? `Grew from ${sig.size.from} to ${sig.size.to} people` : "Grew";
+    case "gap":
+      return `Lists no ${fn} leader on its team page`;
   }
 }
+
+const TEAM_WORDS: Record<string, string> = { Marketing: "marketing", Technology: "engineering", Finance: "finance", People: "people", "Customer Success": "customer success" };
+/** "Posted 3…" -> "posted 3…"; an acronym ("CRO …") stays. */
+const lowerFirst = (v: string) => (/^[A-Z](?![A-Z])/.test(v) ? v.charAt(0).toLowerCase() + v.slice(1) : v);
 
 /**
  * The line a company's row in the day's view carries for one signal. It never names the company
@@ -223,6 +253,13 @@ export function viewLine(sig: MemberSignal): string {
       return `${sig.build && sig.build.from > 0 ? `Posted ${sig.build.to} full-time sales roles` : "Posted its first full-time sales roles"} · ${sig.why}`;
     case "departure":
       return `No longer lists a ${fn} leader on its website · A seat like yours may need cover`;
+    case "tenure":
+    case "rehire":
+    case "arrival":
+    case "team-build":
+    case "headcount":
+    case "gap":
+      return `${sig.standing ? "Still a good time · " : ""}${signalWords(sig, "")} · ${sig.why}`;
   }
 }
 

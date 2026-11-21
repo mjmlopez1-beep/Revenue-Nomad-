@@ -27,7 +27,14 @@
  * reads them as ranges (Today, Last 7 days, Last 30 days): each company once, at its latest day.
  *
  * Never twice: each member's sent signals are kept (State.radar.members[id].sent, 120 days). A
- * signal is marked sent only when it went out by email or Slack.
+ * signal is marked sent only when it went out by email or Slack. Each company sent is kept 30 days
+ * (State.radar.members[id].shown): a calendar signal or a standing state doesn't name it again inside them.
+ *
+ * A member's day (lib/radar/match.ts pickDaily): their unsent High and Medium events since the last
+ * run and the RADAR_CARRY_DAYS before it, at most RADAR_DAY_MAX companies; when fewer than
+ * RADAR_DAY_MIN come from events, the strongest standing states they haven't been shown fill it
+ * ("Still a good time: …", signals.ts standingSignals). Nothing is made up to fill a day: a member
+ * with neither gets nothing.
  *
  * Crystal Ball's ranking (lib/radar/match.ts scoreFor, lib/radar/predict.ts): every member's
  * signals are scored and ranked, most likely first. High and Medium go by email and Slack (the
@@ -48,15 +55,15 @@ import { logoSources } from "../logo";
 import { emailEnabled, sendEmail } from "../email";
 import { billingLive, gated, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
-import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, type RawSignal } from "./signals";
-import { deliverable, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
+import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, standingSignals, type RawSignal } from "./signals";
+import { deliverable, pickDaily, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
 import { networkWarmth } from "../google/types"; // [google network]
 import { dayOf, rowsOf, viewLine, type CardContext, type MemberSignal } from "./present";
 import { renderRadarEmail } from "./format";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import { isDue, settingOf } from "../schedule";
 import {
-  RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarPath, radarRangeOf,
+  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarPath, radarRangeOf,
   type RadarDay, type RadarRange, type RadarSentRow, type RadarState, type RadarView,
 } from "./types";
 
@@ -226,6 +233,10 @@ function markSent(d: State, memberId: string, sigs: MemberSignal[], nowIso: stri
   const nowMs = Date.parse(nowIso);
   for (const [k, at] of Object.entries(mine.sent)) if (nowMs - Date.parse(at) > RADAR_KEEP_DAYS * DAY) delete mine.sent[k];
   for (const x of sigs) mine.sent[x.key] = nowIso;
+  // Each company sent, for the quiet days a calendar signal or a standing state waits before naming it again.
+  const shown = (mine.shown ??= {});
+  for (const [k, at] of Object.entries(shown)) if (nowMs - Date.parse(at) > RADAR_COMPANY_QUIET_DAYS * DAY) delete shown[k];
+  for (const x of sigs) shown[x.companyId] = nowIso;
   const today = nowIso.slice(0, 10);
   const days = (mine.days ??= {});
   for (const k of Object.keys(days)) if (!SIG_DAY_RE.test(k) || nowMs - dayStart(k) > RADAR_KEEP_VIEW_DAYS * DAY) delete days[k];
@@ -460,12 +471,19 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
   // Not from an SEC filing: a Form D is any private raise (angels, debt, friends and family), not proof of VC.
   const rounds = funding.filter((f) => f.source !== "SEC filing");
   if (rounds.length) await T.mutate((d) => void inferVcBacked(d, rounds, nowIso));
-  const all = detectSignals(seed, s0, sinceMs, nowMs, funding);
-  const out: RadarRun = { ran: true, signals: all.length, members: 0, emails: 0, slack: 0 };
-  if (!all.length) {
-    console.log("radar: 0 signals since the last run, nothing to send");
+  // The events since the last run, and the ones before it (up to RADAR_CARRY_DAYS) that the day's cap held back:
+  // what was sent is left out per member below, so an event goes at most once.
+  const all = detectSignals(seed, s0, Math.min(sinceMs, nowMs - RADAR_CARRY_DAYS * DAY), nowMs, funding);
+  const fresh = all.filter((x) => x.atMs > sinceMs).length;
+  // What is still true today (a window open, a gap still there): only for a member's day with few fresh events.
+  const standing = standingSignals(seed, s0, nowMs);
+  const out: RadarRun = { ran: true, signals: fresh, members: 0, emails: 0, slack: 0 };
+  if (!all.length && !standing.length) {
+    console.log("radar: 0 signals since the last run and nothing standing, nothing to send");
     return out;
   }
+  let fromEvents = 0;
+  let fromStanding = 0;
   const c = ctxOf(seed, s0, nowMs);
   const counts = observedTransitions(seed, s0);
   const mailOn = emailEnabled();
@@ -483,8 +501,13 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       if (!pro && last && last.slice(0, 10) === today && Date.parse(last) < nowMs) continue;
       const sent = sentKeys(s0, m.id);
       const mine = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
-      // High and Medium go out; Low stays on the page (kept with the day's companies below).
-      const out_ = deliverable(mine);
+      // The day (pickDaily): High and Medium events, at most RADAR_DAY_MAX companies, filled with standing states to
+      // RADAR_DAY_MIN when fewer fresh events reach them; no company twice inside 30 days unless something new happened.
+      const still = signalsFor(standing, p, { counts, nowMs });
+      const picked = pickDaily(mine, still, { sent, shown: s0.radar?.members?.[m.id]?.shown }, nowMs);
+      const out_ = picked.send;
+      // Low stays on the page: the day's companies keep what went out and this run's other events.
+      const rows = [...out_, ...mine.filter((x) => x.atMs > sinceMs && !out_.includes(x))];
       const day = dayOf(out_, cardContext(c, m, today, slack ? await logosFor(c, m, out_) : undefined), "daily", today);
       if (!day) continue;
       // Someone may have turned it off while the run was going.
@@ -509,9 +532,11 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       }
       if (!via.length) continue;
       out.members++;
+      fromEvents += picked.fromEvents;
+      fromStanding += out_.filter((x) => x.standing).length;
       const where = via.join("+");
       await T.mutate((d) => {
-        markSent(d, m.id, out_, nowIso, where, mine);
+        markSent(d, m.id, out_, nowIso, where, rows);
         const r = radarOf(d);
         r.stats.sent++;
         if (via.includes("email")) r.stats.emails++;
@@ -522,7 +547,9 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       console.error("radar failed for one member", e);
     }
   }
-  console.log(`radar: ${all.length} signals, sent to ${out.members} members (${out.emails} emails, ${out.slack} Slack)`);
+  console.log(
+    `radar: ${fresh} signals since the last run (${all.length} unsent-eligible in ${RADAR_CARRY_DAYS} days), ${standing.length} standing states, sent to ${out.members} members (${out.emails} emails, ${out.slack} Slack; ${fromEvents} companies from events, ${fromStanding} standing)`,
+  );
   return out;
 }
 
