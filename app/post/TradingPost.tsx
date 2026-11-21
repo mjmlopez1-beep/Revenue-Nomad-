@@ -687,6 +687,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const radar = useRadarDay(page === "radar", sigDay, [me.function, me.icp, me.before]);
   // [google network] Crystal Ball cut to the companies where the member knows someone (the connect moment's button).
   const [radarKnow, setRadarKnow] = useState(false);
+  // It lasts for that visit to Crystal Ball (a record opened from it comes back to the same list), not for the next one.
+  const fromRadar = drawer?.returnTo === "radar";
+  useEffect(() => {
+    if (page !== "radar" && !fromRadar) setRadarKnow(false);
+  }, [page, fromRadar]);
   const radarList = useMemo(() => radarRows(radar.stale, rowsFor("companies", infos)), [radar.stale, infos]);
   /** The rows the open record steps through (J and K, "1 of 7"): the radar's day when it was opened from there. */
   const navRows = drawer?.returnTo === "radar" ? radarList : sorted;
