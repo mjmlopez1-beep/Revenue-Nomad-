@@ -1987,17 +1987,17 @@ export function Drawer({
           )}
           <section className="tp-dsec">
             <h3 className="tp-dsec-h">
-              Seats <span className="num tp-cnt">{i.engs.length}</span>
+              Fractional seats <span className="num tp-cnt">{i.engs.length}</span>
             </h3>
             {notHires > 0 && <p className="tp-dsec-note">{seatSplit(i.engs)}</p>}
-            {i.engs.length === 0 && <p className="tp-dsec-note">No seats on file here yet. Add one you know and earn a credit for each fact.</p>}
+            {i.engs.length === 0 && <p className="tp-dsec-note">No fractional seats on file here yet. Add one you know and earn a credit for each fact.</p>}
             {i.engs.map((e) => (
               <EngagementCard key={e.id} e={e} companyId={c.id} company={c.hidden ? "this company" : c.name} focus={focus === e.id} coPeople={c.people} wayIn={wayInSeats.includes(e)} />
             ))}
             {/* Nothing can be added to a hidden company until it is unlocked, so nothing offers to. */}
             {!c.hidden && (
               <button type="button" className="btn btn-sm btn-ghost tp-addlink tp-addeng" onClick={() => ui.openAdd({ companyId: c.id, mode: "engagement" })}>
-                <IconPlus size={13} /> Add a seat you held
+                <IconPlus size={13} /> Add a fractional seat you held
               </button>
             )}
           </section>
