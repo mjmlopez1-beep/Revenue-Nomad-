@@ -138,6 +138,12 @@ export function sameName(a: string, b: string): boolean {
   return x[0] === y[0] && x[x.length - 1] === y[y.length - 1];
 }
 
+/** A name as sameName compares it: "jane doe" (first and last name words), or "" when it has no first and last name. Two names are the same person when their keys match. */
+export function nameKey(n: string): string {
+  const w = nameWords(n);
+  return w.length < 2 ? "" : `${w[0]} ${w[w.length - 1]}`;
+}
+
 /** The first name of a stored name, for a greeting ("Hi Jane"). */
 export function firstNameOf(name: string): string {
   const ws = String(name ?? "").trim().split(/\s+/);

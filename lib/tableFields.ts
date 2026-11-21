@@ -455,6 +455,8 @@ export const SOURCE_LABEL: Record<string, string> = {
   Clay: "Revenue Nomad research",
   // Current fractional seats Revenue Nomad found. Nobody holds one on Merlin until its fractional claims it.
   "Seat scan": "Revenue Nomad research",
+  // A leader read from the company's own team page or a press release there (lib/leaders).
+  "Company website": "From the company's website",
 };
 
 /**

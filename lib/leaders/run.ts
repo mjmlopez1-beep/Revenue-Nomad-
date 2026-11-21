@@ -30,7 +30,7 @@ import { fetchHomepage, fetchPageAt, fetchRobotsTxt, fetchXmlAt, registrable, ro
 import { claimLeadersDay, leadersTargets, loadState, saveLeaders } from "../table";
 import { isDue, settingOf } from "../schedule";
 import { extractLeaders, linkKind, linksOf, nameTokens, normUrl, sitemapLocs, type Candidate, type LinkKind } from "./extract";
-import { pickFunctions } from "./pick";
+import { pickFunctions, pickTop } from "./pick";
 import { DAILY_BATCH, leadersEnabled, leadersProgress, NEXT_BATCH, type LeaderFn, type LeadersOutcome, type LeadersRunSummary, type LeadersTarget } from "./types";
 
 export const CONCURRENCY = 4;
@@ -87,7 +87,11 @@ export interface OneOpts {
   fetchHome?: (domain: string, o: FetchOpts) => Promise<Page>;
 }
 
-/** One company: its homepage and up to PAGE_CAP pages more, and the leaders on them. Never a name. */
+/**
+ * One company: its homepage and up to PAGE_CAP pages more, and the leaders on them: each function's
+ * leader, and the top leader (CEO, president or founder), with the name and title the page prints
+ * when it names them clearly. lib/table.ts saveLeaders decides which names may be kept.
+ */
 export async function leadersOne(t: LeadersTarget, o: OneOpts = {}): Promise<LeadersOutcome> {
   const opts: FetchOpts = { ...o.fetch, allow: o.fetch?.allow ?? testAllowance() };
   const pause = () => (o.delayMs ?? DELAY_MS) > 0 ? new Promise((r) => setTimeout(r, o.delayMs ?? DELAY_MS)) : Promise.resolve();
@@ -213,10 +217,12 @@ export async function leadersOne(t: LeadersTarget, o: OneOpts = {}): Promise<Lea
     for (let k = 0; k < 8 && spellsName(cur); k++) cur = via.get(normUrl(new URL(cur))) ?? new URL("/", home.url).href;
     return spellsName(cur) ? new URL("/", home.url).href : cur;
   };
-  res.functions = pickFunctions(
-    cands.map((c) => ({ ...c, url: safeUrl(c.url) })),
-    o.now ?? new Date().toISOString(),
-  );
+  // `url` never spells a name; `page`, the very page a person was read on, goes out only with their name.
+  const kept = cands.map((c) => ({ ...c, page: c.url, url: safeUrl(c.url) }));
+  const seenAt = o.now ?? new Date().toISOString();
+  res.functions = pickFunctions(kept, seenAt);
+  const top = pickTop(kept, seenAt);
+  if (top) res.top = top;
   res.status = Object.keys(res.functions).length ? "found" : "none";
   if (res.status === "none") res.why = "no leaders found";
   return res;
@@ -275,7 +281,7 @@ export function runLeaders(o: RunOpts = {}): Promise<LeadersRunSummary> {
     const now = o.now ?? (() => new Date().toISOString());
     const t0 = Date.now();
     const scope = o.scope ?? "next";
-    const run: LeadersRunSummary = { startedAt: now(), endedAt: null, scope, total: 0, done: 0, read: 0, found: 0, none: 0, skipped: 0, failed: 0, robots: 0, pages: 0, team: 0, press: 0, functions: 0, fractional: 0, fullTime: 0 };
+    const run: LeadersRunSummary = { startedAt: now(), endedAt: null, scope, total: 0, done: 0, read: 0, found: 0, none: 0, skipped: 0, failed: 0, robots: 0, pages: 0, team: 0, press: 0, functions: 0, fractional: 0, fullTime: 0, named: 0 };
     leadersProgress.running = true;
     leadersProgress.run = run;
     try {
@@ -301,7 +307,7 @@ export function runLeaders(o: RunOpts = {}): Promise<LeadersRunSummary> {
             await saveLeaders(batch, null, now());
           } catch (e) {
             console.error("leaders: saving a batch failed", e);
-            saved = batch.map((x) => ({ ...x, status: "failed" as const, functions: {} }));
+            saved = batch.map((x) => ({ ...x, status: "failed" as const, functions: {}, named: 0 }));
           }
           for (const x of saved) {
             run.done++;
@@ -315,6 +321,8 @@ export function runLeaders(o: RunOpts = {}): Promise<LeadersRunSummary> {
             run.functions += k.functions;
             run.fractional += k.fractional;
             run.fullTime += k.fullTime;
+            // Named leaders kept: what saveLeaders let stay (a United States company, nobody who asked to be removed).
+            run.named = (run.named ?? 0) + (x.named ?? 0);
           }
           await saveLeaders([], run, now()).catch((e) => console.error("leaders: saving the run failed", e));
           o.onBatch?.({ ...run });
@@ -336,7 +344,7 @@ export function runLeaders(o: RunOpts = {}): Promise<LeadersRunSummary> {
       run.endedAt = now();
       await saveLeaders([], run, run.endedAt).catch((e) => console.error("leaders: saving the run failed", e));
       console.log(
-        `leaders: ${run.total} companies, read ${run.read}, found ${run.found}, ${run.functions} functions (${run.fractional} fractional or interim, ${run.fullTime} full-time), skipped ${run.skipped}, failed ${run.failed}, ${run.pages} pages, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+        `leaders: ${run.total} companies, read ${run.read}, found ${run.found}, ${run.functions} functions (${run.fractional} fractional or interim, ${run.fullTime} full-time), ${run.named ?? 0} named leaders kept, skipped ${run.skipped}, failed ${run.failed}, ${run.pages} pages, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
       );
       return { ...run };
     } finally {

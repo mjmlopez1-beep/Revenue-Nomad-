@@ -53,7 +53,7 @@ export function fnChipPlan(
  * nobody has verified yet (Cell.unverified): there a tick reads as "verified". Verify says how many
  * members confirmed it instead. A verified name keeps the marks every fact gets.
  */
-export const marksConfirmed = (cell: Cell | undefined): boolean => !!cell && cell.s === "value" && !cell.unverified;
+export const marksConfirmed = (cell: Cell | undefined): boolean => !!cell && cell.s === "value" && !cell.unverified && !cell.likely;
 
 /** Inside Verify, how many members confirmed the name: "1 member confirmed this name." */
 export function confirmedWords(n: number): string {

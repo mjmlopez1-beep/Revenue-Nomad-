@@ -94,7 +94,7 @@ import { emptyConnector, type ConnectorState } from "./mcp/types";
 import { alertMatches } from "./mcp/alerts";
 import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
 import { pillPlace } from "../app/onboard/place";
-import { sameName } from "./personName";
+import { nameKey, sameName } from "./personName";
 import { claimToken, seatForToken } from "./claimToken";
 import { cleanNote, connectText, notePitch } from "./partners";
 import type { Icp } from "./tableTypes";
@@ -113,8 +113,10 @@ import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./we
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, KNOWN_DAYS as LEADERS_KNOWN_DAYS, DAILY_BATCH as LEADERS_DAILY_BATCH, READER_VERSION as LEADERS_READER_VERSION, leadersEnabled, leadersProgress, fnKnow, memberRoles, reportsOf, teamReadAt, CONFIRM_MEMBERS,
   type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
+  LEADERS_SOURCE, LEADER_RELATIONSHIP, type LeaderFn, type LeaderHow, type LeaderTop,
 } from "./leaders/types";
-import { mergeFunctions } from "./leaders/pick";
+import { mergeFunctions, mergeTop } from "./leaders/pick";
+import { likelyEmail } from "./leaders/likely";
 import { fundingAdminStats, type FundingState } from "./funding/types";
 import { inSlot } from "./viewQueue";
 import { isDue, settingOf, type ScheduleState } from "./schedule";
@@ -448,9 +450,17 @@ export interface State extends MessagingState {
   websites?: WebsitesState;
   /**
    * Who leads each function, read from each company's own website (lib/leaders), by internal
-   * company id: the function, level, full-time or fractional, since when and the page. Never a name.
+   * company id: the function, level, full-time or fractional, since when and the page, and for
+   * each function's leader and the top leader the name and title the page prints, kept only at a
+   * company with a United States HQ (saveLeaders). They show as decision makers (leaderPeople).
    */
   leaders?: Record<string, LeadersRecord>;
+  /**
+   * People who asked to be removed (Remove my name) at a company, by internal company id: one-way
+   * keys of their name (leaderKey), never the name. A leader read from the website under one of
+   * them is never kept or shown there again.
+   */
+  leadersRemoved?: Record<string, string[]>;
   /** The last run that read leadership pages (lib/leaders/run.ts). */
   leadersRun?: LeadersRunSummary | null;
   /** The daily background read (lib/leaders/run.ts maybeLeaders): the UTC day it last started. */
@@ -1188,7 +1198,13 @@ interface Node {
 type CompanyNode = Node & { name: string };
 /** `holderFrom`: the seed's seat-holder name came from public profiles (PUBLIC_PROFILE), and it is on this node. */
 type EngNode = Node & { companyId: string; verified: boolean; source: string; holderFrom?: string };
-type PersonNode = Node & { companyId: string; engagementId: string | null; source: string };
+/**
+ * `site`: a leader read from the company's own website (source LEADERS_SOURCE, lib/leaders), built
+ * from State.leaders by leaderPeople: the page (`url` never spells a name, `page` is where the
+ * person was read), when, and how. `likely`: their email is a likely one from the pattern of the
+ * emails members added at the company's domain (seedFields.email), this many on file.
+ */
+type PersonNode = Node & { companyId: string; engagementId: string | null; source: string; site?: { url: string; page?: string; at: string; how: LeaderHow }; likely?: number };
 interface Graph {
   companies: Map<string, CompanyNode>;
   engagements: Map<string, EngNode>;
@@ -1254,6 +1270,8 @@ function graph(seed: Seed, s: State): Graph {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
     if (companyId && !out.has(companyId) && !g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, companyId, engagementId: p.engagementId ?? null, source: "Member added" });
   }
+  // Leaders named on each company's own website: decision makers on the record, like any other person there.
+  if (s.leaders) leaderPeople(seed, s, g);
   // Everyone on file at each company, for the same person on two records there (samePersonHeld).
   const atCompany = new Map<string, PersonNode[]>();
   for (const p of g.contacts.values()) {
@@ -2406,7 +2424,18 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   // (The "Active" a member's claim puts on an open role is written as the scan's, but no posting said it.)
   const fromScan = v.by === "scan" && !(key === "status" && v.value === "Active");
   // A seat holder named from public profiles reads as Revenue Nomad research, the seat's own source.
-  const from = v.by === "seed" ? ({ from: node!.research?.has(key) || v.pub ? "research" : "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
+  // A leader read from the company's website says so, and a likely email says how many emails on file it was read from.
+  const site = entity === "contact" && v.by === "seed" ? (node as PersonNode).site : undefined;
+  const likely = site && key === "email" && (node as PersonNode).likely ? (node as PersonNode).likely! : 0;
+  const from = likely
+    ? ({ from: "pattern", likely } as const)
+    : site
+      ? ({ from: "website" } as const)
+      : v.by === "seed"
+        ? ({ from: node!.research?.has(key) || v.pub ? "research" : "records" } as const)
+        : fromScan
+          ? ({ from: "posting" } as const)
+          : {};
   // A person's title comes with their name, and the name with the title (PERSON_BUNDLE). A seat's role comes with who held it, and the other way round (SEAT_BUNDLE).
   const paid =
     !!me &&
@@ -3686,7 +3715,9 @@ async function fullView(
       const cells: Record<string, Cell> = {};
       for (const f of PERSON_F) cells[f.key] = cell(p, "contact", f.key);
       count(cells, PERSON_F);
-      return { id: pubId(p.id), engagementId: p.engagementId ? pubId(p.engagementId) : null, source: p.source, cells };
+      // A leader from the company's website: the page they were read on goes out only to a viewer who sees their name (its address may spell it).
+      const site = p.site ? { at: p.site.at, url: cells.name?.s === "value" ? p.site.page ?? p.site.url : p.site.url } : undefined;
+      return { id: pubId(p.id), engagementId: p.engagementId ? pubId(p.engagementId) : null, source: p.source, cells, ...(site ? { site } : {}) };
     };
     // An open role below the seniority bar is left out until the next scan removes it (offBarRole).
     const engs = (engsByCompany.get(c.id) ?? []).filter((e) => !offBarRole(e, s, tracks, madeBy.get(e.id) === "scan"));
@@ -3770,6 +3801,8 @@ async function fullView(
     });
     if (hidden) {
       hiddenIds.add(c.id);
+      // A leader's page on the company's own site would name the company.
+      for (const p of coPeople) if (p.site) delete p.site.url;
       // An open role's free title never names the locked company.
       const site = live(c, s, "website") ?? icons[c.id] ?? null;
       for (const er of engRecs) {
@@ -5134,7 +5167,10 @@ export async function perform(
       let { value, error } = cleanValue(f, linked ? linked.name : raw);
       if (error && linked && linked.id === me.id && typeof raw === "string" && raw.trim()) ({ value, error } = cleanValue(f, raw));
       if (error) throw new ActionError(`${f.label}. ${error}`);
-      const cur = valueOf(node, s, key);
+      // A likely email (from the pattern of the emails on file) is no fact: the member who knows the real one adds it, and earns for it.
+      const guess = entity === "contact" && key === "email" && likelyGuess(node, s);
+      if (guess) delete s.verifications[fkey(node.id, key)];
+      const cur = guess ? null : valueOf(node, s, key);
       // Claiming a seat from the seat scan: once, by its own fractional, a few a day, and for no credit (see claimSeat).
       const scanClaim = entity === "engagement" && key === "operator" && isScanSeat(node.id) && cur?.by !== me.id;
       // A name from public profiles on it gives way to the member whose own name it is (first and last name match): the claim verifies it.
@@ -5255,7 +5291,10 @@ export async function perform(
     const putPerson = (companyId: string, engagementId: string | null, fields: readonly (readonly [string, string])[]) => {
       const typed = fields.find(([k]) => k === "name")![1];
       const key = normName(typed);
-      const same = key ? [...g.contacts.values()].filter((p) => p.companyId === companyId && normName(valueOf(p, s, "name")?.value ?? "") === key) : [];
+      // A leader read from the company's website is the same person by first and last name ("Jane Q. Doe" is Jane Doe there).
+      const same = key
+        ? [...g.contacts.values()].filter((p) => p.companyId === companyId && (normName(valueOf(p, s, "name")?.value ?? "") === key || (!!p.site && sameName(valueOf(p, s, "name")?.value ?? "", typed))))
+        : [];
       if (same.some((p) => valueOf(p, s, "name")!.by === me.id)) throw new ActionError(`You already added ${typed} here.`);
       const into = same.find((p) => valueOf(p, s, "name")!.status === "live");
       let earned = 0;
@@ -5274,7 +5313,7 @@ export async function perform(
       typedName.add(into.id);
       for (const [k, v] of fields) {
         if (k === "name") continue;
-        if (valueOf(into, s, k)) kept++;
+        if (valueOf(into, s, k) && !(k === "email" && likelyGuess(into, s))) kept++;
         else earned += setValue(into, "contact", k, v);
       }
       const nk = fkey(into.id, "name");
@@ -7320,8 +7359,50 @@ export async function nameOffByName(nameRaw: unknown, companyRaw: unknown): Prom
       takeNameOff(s, e.id, "public", now);
       n++;
     }
+    for (const cid of at) n += leaderNameOff(s, g, cid, name, now);
     return n;
   });
+}
+
+/**
+ * Remove my name for a leader read from the company's website: their name and title come off the
+ * company's record (State.leaders) and stay off on every later read (State.leadersRemoved holds a
+ * one-way key, never the name), their record there goes, and whoever paid to see anything on it
+ * gets the credit back. The mark is kept even when no one of that name is on file, so a later read
+ * never keeps them. Returns 1 when someone of that name came off.
+ */
+function leaderNameOff(s: State, g: Graph, companyId: string, name: string, now: string): number {
+  const key = leaderKey(companyId, name);
+  if (!key) return 0;
+  const marks = ((s.leadersRemoved ??= {})[companyId] ??= []);
+  if (!marks.includes(key)) marks.push(key);
+  if (marks.length > 200) marks.splice(0, marks.length - 200);
+  const rec = s.leaders?.[companyId];
+  let off = 0;
+  if (rec) {
+    for (const [fn, l] of Object.entries(rec.functions)) {
+      if (!l.name || !sameName(l.name, name)) continue;
+      const { name: _n, title: _t, page: _p, ...rest } = l; // eslint-disable-line @typescript-eslint/no-unused-vars
+      rec.functions[fn] = rest;
+      off = 1;
+    }
+    if (rec.top && sameName(rec.top.name, name)) {
+      delete rec.top;
+      off = 1;
+    }
+  }
+  // Their record on Merlin: what members added to it and paid for goes with it, the credit back.
+  const pid = leaderPersonId(companyId, name);
+  if (g.contacts.get(pid)?.site || Object.keys(s.unlocks).some((k) => k.startsWith(`${pid}.`)) || Object.keys(s.values).some((k) => k.startsWith(`${pid}.`))) {
+    for (const f of ["name", "title", "relationship", "email", "phone", "linkedin"]) {
+      const k = fkey(pid, f);
+      refundPaid(s, k, now, "name");
+      delete s.values[k];
+      delete s.verifications[k];
+    }
+    off = 1;
+  }
+  return off;
 }
 
 /* ---------- Referral partners (app/post/Partners.tsx) ---------- */
@@ -9187,6 +9268,137 @@ function aboutStats(s: State, g: Graph, nowMs: number): NonNullable<AdminStats["
 /** A fractional firm or agency (lib/firmRemoval.ts): its team page lists the fractionals it places, not its own leaders. */
 const isFirmNode = (node: CompanyNode, s: State) => !!companyFirm(node.name, live(node, s, "about"), live(node, s, "website"));
 
+/* ---------- leaders named on the company's website: decision makers on the record ---------- */
+
+/**
+ * The owner's rule, as for seat-holder names from public profiles (scripts/add-seat-names.mjs):
+ * names only for a company whose HQ is in the United States. An HQ we can't place is not.
+ */
+const LEADER_NAMES_COUNTRY = "United States";
+const namesAllowedAt = (c: Node | undefined, s: State) => !!c && geoOf(c, s).country === LEADER_NAMES_COUNTRY;
+/** A person at a company as a one-way key of their first and last name (nameKey): the record's id and Remove my name's mark. Never the name. */
+function leaderKey(companyId: string, name: string): string {
+  const k = nameKey(name);
+  return k ? createHmac("sha256", ID_KEY).update(`leader:${companyId}:${k}`).digest("base64url").slice(0, 20) : "";
+}
+/** The record id of a leader from the website: built from the company and the person's key, so it holds no name. */
+const leaderPersonId = (companyId: string, name: string) => `p_site_${leaderKey(companyId, name)}`;
+/** They asked to be removed at this company (Remove my name, State.leadersRemoved). */
+const leaderOff = (s: State, companyId: string, name: string) => {
+  const k = leaderKey(companyId, name);
+  return !k || (s.leadersRemoved?.[companyId] ?? []).includes(k);
+};
+/**
+ * Members whose profile keeps them out of view (Profile.fractionals false, or Referral partners
+ * off, which Fractionals reads as hidden too), as name keys: a leader of that name read from a
+ * website isn't shown, so a fractional who is a member keeps their own choice.
+ */
+function privateMemberKeys(seed: Seed, s: State): Set<string> {
+  const out = new Set<string>();
+  for (const m of [...seed.members, ...s.members]) {
+    const p = s.profiles[m.id];
+    if (p && (p.fractionals === false || p.partnersOff)) {
+      const k = nameKey(m.name);
+      if (k) out.add(k);
+    }
+  }
+  return out;
+}
+/** The named leaders of a record: the top leader first, then each function's in the order functions are listed. */
+function namedLeaders(rec: Pick<LeadersRecord, "functions" | "top">): (LeaderFn & { name: string; title: string })[] {
+  const out: (LeaderFn & { name: string; title: string })[] = [];
+  const add = (l: LeaderFn | undefined) => {
+    if (l?.name && l.title && !out.some((x) => sameName(x.name, l.name!))) out.push(l as LeaderFn & { name: string; title: string });
+  };
+  add(rec.top);
+  for (const fn of FUNCTIONS) add(rec.functions[fn]);
+  return out;
+}
+/**
+ * A record's names where they may stay: at a United States company, never for someone who asked
+ * to be removed there, never for a member whose profile keeps them out of view. Elsewhere the
+ * function's leader stays without a name, and the top leader (kept only for the name) goes.
+ * Returns how many distinct people stayed named.
+ */
+function keepNamesWhereAllowed(s: State, seed: Seed, node: Node | undefined, companyId: string, rec: Pick<LeadersRecord, "functions" | "top">, priv?: Set<string>): number {
+  const allowed = namesAllowedAt(node, s);
+  const hidden = priv ?? privateMemberKeys(seed, s);
+  const ok = (name: string) => allowed && !leaderOff(s, companyId, name) && !hidden.has(nameKey(name));
+  for (const [fn, l] of Object.entries(rec.functions)) {
+    if (!l.name || ok(l.name)) continue;
+    const { name: _n, title: _t, page: _p, ...rest } = l; // eslint-disable-line @typescript-eslint/no-unused-vars
+    rec.functions[fn] = rest;
+  }
+  if (rec.top && !ok(rec.top.name)) delete rec.top;
+  return namedLeaders(rec).length;
+}
+/** The email on file is a likely one built from the pattern (lib/leaders/likely.ts), not a fact anyone added. */
+const likelyGuess = (node: Node, s: State) => !!(node as PersonNode).likely && !byField(s, "values", node.id, "email");
+
+/**
+ * Leaders named on each company's own website (State.leaders) as people on the record: decision
+ * makers at the company level, with the name and title the page prints (seedFields, by "seed" like
+ * our records: 1 credit opens both, their LinkedIn, email and phone after, as for anyone). Only
+ * where names may show (namesAllowedAt, Remove my name, a member's own choice). Someone already on
+ * file there under the same first and last name (sameName) is the same person: the leader isn't
+ * added again. Then a likely email for each leader with none, from the pattern of the emails
+ * members added at the company's domain (lib/leaders/likely.ts).
+ */
+function leaderPeople(seed: Seed, s: State, g: Graph) {
+  let priv: Set<string> | null = null;
+  let byCompany: Map<string, PersonNode[]> | null = null;
+  const added: PersonNode[] = [];
+  for (const [cid, rec] of Object.entries(s.leaders ?? {})) {
+    if (!rec.top && !Object.values(rec.functions).some((l) => l.name)) continue;
+    const c = g.companies.get(cid);
+    if (!c || !namesAllowedAt(c, s)) continue;
+    priv ??= privateMemberKeys(seed, s);
+    if (!byCompany) {
+      byCompany = new Map();
+      for (const p of g.contacts.values()) {
+        let list = byCompany.get(p.companyId);
+        if (!list) byCompany.set(p.companyId, (list = []));
+        list.push(p);
+      }
+    }
+    const here = byCompany.get(cid) ?? [];
+    for (const l of namedLeaders(rec)) {
+      if (leaderOff(s, cid, l.name) || priv.has(nameKey(l.name))) continue;
+      if (here.some((p) => !p.site && sameName(valueOf(p, s, "name")?.value ?? "", l.name))) continue;
+      const id = leaderPersonId(cid, l.name);
+      if (g.contacts.has(id)) continue;
+      const node: PersonNode = {
+        id,
+        seedFields: { name: l.name, title: l.title, relationship: LEADER_RELATIONSHIP },
+        companyId: cid,
+        engagementId: null,
+        source: LEADERS_SOURCE,
+        site: { url: l.url, ...(l.page ? { page: l.page } : {}), at: l.seenAt, how: l.how },
+      };
+      g.contacts.set(id, node);
+      here.push(node);
+      byCompany.set(cid, here);
+      added.push(node);
+    }
+  }
+  // A likely email: at least LIKELY_MIN emails members added at the company's own domain, all one pattern.
+  for (const node of added) {
+    if (byField(s, "values", node.id, "email")) continue;
+    const domain = siteKey(live(g.companies.get(node.companyId), s, "website"));
+    if (!domain || domain.includes("/")) continue;
+    const onFile: { name: string; email: string }[] = [];
+    for (const p of byCompany!.get(node.companyId) ?? []) {
+      const ev = byField(s, "values", p.id, "email");
+      const nv = valueOf(p, s, "name");
+      if (ev && ev.status === "live" && !isSystem(ev.by) && nv?.status === "live") onFile.push({ name: nv.value, email: ev.value });
+    }
+    const guess = likelyEmail(node.seedFields.name, domain, onFile);
+    if (!guess) continue;
+    node.seedFields.email = guess.email;
+    node.likely = guess.n;
+  }
+}
+
 /** Whether a company is due a read of its leadership pages, and its record if any. */
 function leadersDue(s: State, node: CompanyNode, nowMs: number): { domain: string; prev: LeadersRecord | null } | null {
   const domain = siteKey(live(node, s, "website"));
@@ -9301,13 +9513,16 @@ const leadersHash = (fns: LeadersRecord["functions"]) =>
  * Store a batch of leadership reads, each company's record whole (State.leaders): its status, when
  * it was read, the functions found (merged with what was on file, lib/leaders/pick.ts) and the
  * counts for Pilot metrics. A read that could not reach the site keeps the leaders on file and
- * tries again later. Nothing here holds a name. `run` is the run so far. Returns how many were stored.
+ * tries again later. The names and titles read stay only where they may (keepNamesWhereAllowed: a
+ * United States company, nobody who asked to be removed, a member's own choice), and each outcome
+ * says how many people stayed named (LeadersOutcome.named). `run` is the run so far. Returns how many were stored.
  */
 export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary | null, nowIso?: string): Promise<number> {
   return mutate((s, seed) => {
     const now = nowIso ?? new Date().toISOString();
     const all = (s.leaders ??= {});
     const g = graph(seed, s);
+    const priv = privateMemberKeys(seed, s);
     let n = 0;
     const nowMs = Date.parse(now);
     // Departures older than this are let go.
@@ -9337,21 +9552,29 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
           }
         }
         const teamAt = o.team ? now : prev?.teamAt;
+        // Names stay only where they may (a United States company, nobody who asked to be removed, a member's own choice).
+        const named: Pick<LeadersRecord, "functions" | "top"> = { functions, top: mergeTop(prev?.top, o.top) };
+        o.named = keepNamesWhereAllowed(s, seed, g.companies.get(o.companyId), o.companyId, named, priv);
         all[o.companyId] = {
           status: found ? "found" : "none", checkedAt: now, ok: true, v: LEADERS_READER_VERSION, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts, readAt: now, ...(teamAt ? { teamAt } : {}),
+          ...(named.top ? { top: named.top } : {}),
         };
         payLeaderBack(s, o.companyId, functions, now);
       } else {
         // The site could not be read this time: what is on file stays, and when it was last read.
-        const functions = prev?.functions ?? {};
+        const functions = { ...(prev?.functions ?? {}) };
         const kept = Object.keys(functions).length > 0;
         // A record from before readAt and teamAt were kept: its own read stands for them.
         const wasOk = !!prev && leadersReadOk(prev);
         const readAt = prev?.readAt ?? (wasOk ? prev!.checkedAt : undefined);
         const teamAt = prev?.teamAt ?? (wasOk && prev!.team ? prev!.checkedAt : undefined);
+        // The names on file stay only where they still may; this read kept none of its own.
+        const named: Pick<LeadersRecord, "functions" | "top"> = { functions, ...(prev?.top ? { top: prev.top } : {}) };
+        keepNamesWhereAllowed(s, seed, g.companies.get(o.companyId), o.companyId, named, priv);
+        o.named = 0;
         all[o.companyId] = {
           status: kept ? "found" : o.status, checkedAt: now, ok: false, v: LEADERS_READER_VERSION, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts,
-          ...(readAt ? { readAt } : {}), ...(teamAt ? { teamAt } : {}),
+          ...(readAt ? { readAt } : {}), ...(teamAt ? { teamAt } : {}), ...(named.top ? { top: named.top } : {}),
         };
       }
       n++;
@@ -9418,11 +9641,12 @@ function payLeaderBack(s: State, companyId: string, functions: LeadersRecord["fu
 
 /** Pilot metrics: the run under way (or the last one), and what is on file. */
 function leadersStats(s: State, g: Graph, nowMs: number): NonNullable<AdminStats["leaders"]> {
-  const onFile = { companies: 0, read: 0, pages: 0, team: 0, press: 0, functions: 0, fractional: 0, fullTime: 0, none: 0, failed: 0, robots: 0, skipped: 0 };
+  const onFile = { companies: 0, read: 0, pages: 0, team: 0, press: 0, functions: 0, fractional: 0, fullTime: 0, none: 0, failed: 0, robots: 0, skipped: 0, named: 0 };
   const reasons = new Map<string, number>();
   for (const [id, r] of Object.entries(s.leaders ?? {})) {
     if (!g.companies.has(id)) continue;
     onFile.companies++;
+    onFile.named += namedLeaders(r).length;
     if (r.status === "found" || r.status === "none") onFile.read++;
     if (r.status === "none") onFile.none++;
     if (r.status === "failed") onFile.failed++;

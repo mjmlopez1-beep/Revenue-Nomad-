@@ -4,12 +4,19 @@
  * run, and the words the app, the record and the Claude connector use. No imports, so lib/table.ts,
  * the app (app/post) and lib/mcp can all use it.
  *
- * No names are ever kept: only the function, the level, full-time or fractional, since when, and
- * the page on the company's own site it was read from.
+ * For each function's leader (C-level, VP, Head or Director) and for the company's top leader (its
+ * CEO, else its president, else a founder) it keeps the person's name and title as the page prints
+ * them, the page and when it was read. Nobody below a function's leader is kept. Names are kept
+ * only at a company with a United States HQ (lib/table.ts saveLeaders), never for someone who asked
+ * to be removed (Remove my name), and never for a member whose profile keeps them out of view.
  */
 
 /** How the record names the source. */
 export const LEADERS_SOURCE = "Company website";
+/** A person read from the company's website, as the app labels their source (PersonRec.source is LEADERS_SOURCE). */
+export const LEADERS_SOURCE_SAY = "From the company's website";
+/** The relationship a leader read from the website has on the record: the same people model as members' decision makers. */
+export const LEADER_RELATIONSHIP = "Decision maker";
 
 /** A company is tried again this long after a skip or a failure (or a read that found nobody). */
 export const RETRY_DAYS = 30;
@@ -20,8 +27,9 @@ export const REFRESH_DAYS = 75;
  * is due again at once, whatever its age, so a better reader's first daily batches re-read what
  * the old one read instead of waiting REFRESH_DAYS. Bump it when extract.ts or run.ts read better.
  * 2: an About page holding the team grid counts as a team page; CPTO, CBO and a bare CCO; photo alt text; script data.
+ * 3: keeps the name and title of each function's leader and of the top leader (CEO, president or founder).
  */
-export const READER_VERSION = 2;
+export const READER_VERSION = 3;
 /** A read is what we know about a company's leadership for this long. After that, or with no read, its leadership is unknown. */
 export const KNOWN_DAYS = 90;
 
@@ -32,7 +40,13 @@ export type LeaderKind = "full-time" | "fractional" | "interim" | "advisor" | "p
 /** Where a leader on file came from: the company's own team page or a press release, or members ("Members say: full-time CRO"). */
 export type LeaderHow = "team page" | "press release" | "members";
 
-/** One function's leader on file. `since`: "2024" or "2024-11". `url`: the page on the company's own site. `seenAt`: when it was read there. */
+/**
+ * One function's leader on file. `since`: "2024" or "2024-11". `url`: the page on the company's
+ * own site, never an address that spells a name (the page that linked to it instead). `seenAt`:
+ * when it was read there. `name` and `title`: the person as the page prints them, kept only where
+ * names may be (lib/table.ts saveLeaders), and `page` the very page they were read on when it is
+ * not `url` (it may spell their name, so it goes out only with the name).
+ */
 export interface LeaderFn {
   level: LeaderLevel;
   kind: LeaderKind;
@@ -40,6 +54,15 @@ export interface LeaderFn {
   how: LeaderHow;
   url: string;
   seenAt: string;
+  name?: string;
+  title?: string;
+  page?: string;
+}
+/** The company's top leader: its CEO, else its president, else a founder (`rank` 0, 1, 2). Kept only with a name. */
+export interface LeaderTop extends LeaderFn {
+  name: string;
+  title: string;
+  rank: number;
 }
 
 /**
@@ -66,6 +89,8 @@ export interface LeadersRecord {
   readAt?: string;
   /** The last read that reached a team or leadership page, kept through a later failure. "Nobody leads X" is said only from one in the last KNOWN_DAYS. */
   teamAt?: string;
+  /** The top leader (CEO, president or founder), with their name. */
+  top?: LeaderTop;
 }
 
 /** A run's counts (State.leadersRun, and the run under way). */
@@ -93,6 +118,8 @@ export interface LeadersRunSummary {
   functions: number;
   fractional: number;
   fullTime: number;
+  /** Named leaders kept (a function's leader or the top leader, at a company where names may be kept). */
+  named?: number;
 }
 
 /** A company to read: internal id, name, website host, and its last record if any. */
@@ -113,6 +140,10 @@ export interface LeadersOutcome {
   team: boolean;
   press: boolean;
   robots: number;
+  /** The top leader read (CEO, president or founder), with their name. */
+  top?: LeaderTop;
+  /** Named leaders kept when it was saved (lib/table.ts saveLeaders sets it): names stay only where they may. */
+  named?: number;
 }
 
 /** One function's leader as the view sends it (CompanyRec.leads). `url` is left out at a hidden company. */

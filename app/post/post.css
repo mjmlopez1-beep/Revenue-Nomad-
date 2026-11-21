@@ -7381,3 +7381,7 @@ div.tp-pcard-when {
 .tp-app .ms-av {
   border-radius: 50% 50% 0 0;
 }
+/* A leader read from the company's own website: where they came from, under their card. */
+.tp-person-src {
+  margin: 6px 0 0;
+}
