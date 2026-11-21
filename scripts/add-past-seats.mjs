@@ -23,8 +23,9 @@
  * (a start as its December for Recently hired, lib/hired.ts). A row with no start year gets no start.
  * The seat carries no `addedAt`: add-seat-scan stamps it so saved views that follow hires hear about
  * a new hire that week (lib/hireAlerts.ts), and Crystal Ball reads it as a hire that just came in
- * (lib/radar/signals.ts, adjacent). An ended seat is neither, and those readers don't look at the
- * status, so the stamp stays off. Like a current seat, it has no holder until its fractional claims
+ * (lib/radar/signals.ts, adjacent). An ended seat is neither: Recently hired, which the hire alerts
+ * read, leaves an ended seat out, but Crystal Ball's adjacent signal doesn't look at the status, so
+ * the stamp stays off. Like a current seat, it has no holder until its fractional claims
  * it (claimSeat in lib/table.ts), unless --names gives it one.
  *
  * Each seat also gets the holder's one-way person key, `holderKey` = "p_" + the first 20 hex of
@@ -52,14 +53,18 @@
  * and the same company, title, start and end twice in the file.
  *
  * Companies match by LinkedIn company page (matched_company_id, a company on the current seats'
- * Companies tab, or a trusted Past Companies row's linkedin_url), then website host, then the
+ * Companies tab, or the linkedin_url of a Past Companies row this run takes facts from), then website host, then the
  * company its website names, then name, as add-seat-scan.mjs matches them. An existing company only
  * gets the fields it does not have; a new one gets the row's facts, under one of these rules only:
  *   - matched_company_id is set: the seat row's own website, industry, size, revenue and About;
- *   - --companies, and the company's Past Companies row has match_method "domain+name+country": that
- *     row's website, LinkedIn page, industry, size, revenue, About and HQ country (hq_country);
- *   - otherwise (domain+name without the country, no_match, skipped, no row, or no --companies):
- *     the company's name only. Two companies that share a name are mostly these wrong matches.
+ *   - --companies, and the company's Past Companies row matched a domain (match_method
+ *     "domain+name+country" or "domain+name", or a matched_domain): that row's website, LinkedIn
+ *     page, industry, size, revenue and About, the owner's best guess (the sheet kept a domain match
+ *     only where the country didn't conflict). HQ country (hq_country) only from "domain+name+country";
+ *   - otherwise (no_match, skipped, no row, or no --companies): the company's name only.
+ * A company given facts carries a private import mark, `enrichedBy` = { by: "past seats", match:
+ * the rule, fields: what it filled }, on its seed record outside its fields: never shown to members,
+ * so a wrong match (two companies that share a name) can be found and undone.
  * An About line is never stored when it names one of the company's seat holders in the file.
  *
  * --names puts the holder's name on a seat only when the row's country is exactly "United States",
@@ -162,6 +167,25 @@ const tabOf = (r) => {
 /** The match the Past Companies row was made by ("domain+name+country", "domain+name", "no_match", "skipped"). */
 const methodOf = (tab) => real(tab?.match_method).toLowerCase();
 const TRUSTED_METHOD = "domain+name+country";
+/**
+ * A Past Companies row whose facts this run attaches, as the owner's best guess: one the sheet
+ * matched to a domain ("domain+name+country", "domain+name", or a matched_domain with another
+ * method), not "no_match" or "skipped". The sheet kept a domain match only where the country didn't
+ * conflict. HQ country comes only from "domain+name+country".
+ */
+const usableTab = (tab) => {
+  const m = methodOf(tab);
+  if (!tab || m === "no_match" || m === "skipped") return false;
+  return m.startsWith("domain+") || !!host(real(tab.matched_domain));
+};
+/** The private import mark on a company this run gave facts to (SeedCompany.enrichedBy): never shown to members, so a wrong match can be found and undone. */
+const markEnriched = (c, rule, keys) => {
+  if (!keys.length) return;
+  const was = c.enrichedBy?.by === "past seats" && c.enrichedBy.match === rule ? c.enrichedBy.fields : [];
+  // A company marked by another rule keeps its first mark and gains the fields under this one.
+  if (c.enrichedBy && c.enrichedBy.match !== rule) c.enrichedBy = { ...c.enrichedBy, fields: [...new Set([...c.enrichedBy.fields, ...keys])], also: [...new Set([...(c.enrichedBy.also ?? []), rule])] };
+  else c.enrichedBy = { by: "past seats", match: rule, fields: [...new Set([...was, ...keys])] };
+};
 
 /** Seat holders' names in the file by company (and Past Companies' example person), for the About check only (never stored or printed). */
 const holderKey = (r) => linkedinKey(r.matched_company_id) ?? `name:${textKey(r.company_name ?? "")}`;
@@ -226,7 +250,7 @@ const endCount = {};
 const countryCount = {};
 const juniorTitles = {};
 /** Companies that got facts, by the rule that gave them (created or on file), and companies created by name only. */
-const enrichedBy = { matched_company_id: new Set(), [TRUSTED_METHOD]: new Set() };
+const enrichedBy = { matched_company_id: new Set(), [TRUSTED_METHOD]: new Set(), "domain+name": new Set() };
 const nameOnly = new Set();
 /** The Past Companies match_method of the row each name-only company came from, and of each seat added. */
 const nameOnlyMethod = new Map();
@@ -305,8 +329,9 @@ for (const r of rows) {
   const method = tab ? methodOf(tab) || "(blank)" : companiesPath ? "(no Past Companies row)" : "(no --companies)";
   const viaCurrent = linkedinKey(r.matched_company_id);
   const trustedTab = !!tab && methodOf(tab) === TRUSTED_METHOD;
+  const guessTab = usableTab(tab);
   // The fractional's own firm: the row's own size, or a trusted match's.
-  const why = ownFirm({ ...r, company_employee_range: real(r.company_employee_range) || (trustedTab ? real(tab.employee_range) : "") });
+  const why = ownFirm({ ...r, company_employee_range: real(r.company_employee_range) || (guessTab ? real(tab.employee_range) : "") });
   if (why) {
     drop(why);
     continue;
@@ -320,8 +345,8 @@ for (const r of rows) {
   }
 
   // What the row may say about the company, by the enrichment rule (the file header).
-  const rule = viaCurrent ? "matched_company_id" : trustedTab ? TRUSTED_METHOD : null;
-  const fromTab = trustedTab ? tab : null;
+  const rule = viaCurrent ? "matched_company_id" : guessTab ? (methodOf(tab) === TRUSTED_METHOD ? TRUSTED_METHOD : "domain+name") : null;
+  const fromTab = guessTab ? tab : null;
   const fromRow = viaCurrent ? r : null;
   const site = host(real(fromTab?.website)) ?? host(real(fromTab?.website_url)) ?? host(real(fromTab?.matched_domain)) ?? host(fromRow?.company_website);
   const liRaw = viaCurrent ? r.matched_company_id : real(fromTab?.linkedin_url);
@@ -336,7 +361,7 @@ for (const r of rows) {
       : employeeBand(real(fromRow?.company_employee_range)),
     revenue: revenueBand(real(fromTab?.rn_revenue_bucket) || real(fromRow?.company_rn_revenue_bucket)),
     // HQ country only when the match carries the country.
-    hq: fromTab ? hqCountry(fromTab.hq_country) ?? normalizeHq(real(fromTab.hq_country)).country ?? null : null,
+    hq: fromTab && trustedTab ? hqCountry(fromTab.hq_country) ?? normalizeHq(real(fromTab.hq_country)).country ?? null : null,
     about: null,
   };
   if (trustedAbout) {
@@ -403,13 +428,16 @@ for (const r of rows) {
       count(matchedBy, how);
     }
     // Never overwrite: an existing company only gets the fields it does not have.
+    const filled = [];
     for (const [k, v] of Object.entries(want)) {
       if (v && !c.fields[k]) {
         c.fields[k] = v;
+        filled.push(k);
         if (!created.has(c.id)) filledOnExisting++, filledCompanies.add(c.id);
         if (rule) enrichedBy[rule].add(c.id), nameOnly.delete(c.id);
       }
     }
+    if (rule) markEnriched(c, rule, filled);
     const lk = linkedinKey(li);
     if (lk && !byLinkedin.has(lk)) byLinkedin.set(lk, c);
   } else {
@@ -420,7 +448,7 @@ for (const r of rows) {
     companyById.set(id, c);
     created.add(id);
     index(c);
-    if (rule && Object.keys(facts).length) enrichedBy[rule].add(id);
+    if (rule && Object.keys(facts).length) enrichedBy[rule].add(id), markEnriched(c, rule, Object.keys(facts));
     else nameOnly.add(id), nameOnlyMethod.set(id, method);
   }
   if (trustedAbout && !aboutHint.has(c.id)) aboutHint.set(c.id, trustedAbout);
@@ -515,7 +543,7 @@ console.log(`companies matched: ${matched.size} (${filledOnExisting} empty field
 console.log(`companies created: ${created.size}`);
 const nameOnlyBy = {};
 for (const id of nameOnly) if (left.has(id)) count(nameOnlyBy, nameOnlyMethod.get(id));
-console.log(`enrichment (companies given facts): by matched_company_id ${n(enrichedBy.matched_company_id)}, by ${TRUSTED_METHOD} ${n(enrichedBy[TRUSTED_METHOD])}; created by name only ${n(nameOnly)} (their match: ${top(nameOnlyBy) || "none"})`);
+console.log(`enrichment (companies given facts): by matched_company_id ${n(enrichedBy.matched_company_id)}, by ${TRUSTED_METHOD} ${n(enrichedBy[TRUSTED_METHOD])}, by domain+name (best guess) ${n(enrichedBy["domain+name"])}; with a website ${n(new Set([...enrichedBy.matched_company_id, ...enrichedBy[TRUSTED_METHOD], ...enrichedBy["domain+name"]].filter((id) => companyById.get(id)?.fields.website)))} of them; created by name only ${n(nameOnly)} (their match: ${top(nameOnlyBy) || "none"})`);
 console.log(`seats added by Past Companies match: ${top(methodCount) || "none"}`);
 if (companiesPath) console.log(`Past Companies: ${tabRows} rows; found for ${tabFound} seat rows past the year checks, missing for ${tabMissing}`);
 console.log(`About lines left out (they name a seat holder): ${aboutSkipped.size}`);
