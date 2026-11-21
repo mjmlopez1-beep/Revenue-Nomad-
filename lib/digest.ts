@@ -53,6 +53,9 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   // The button opens the list the headline counts. An older caller without one opens the app.
   const rolesUrl = link(d.rolesUrl) || appUrl;
   const unsubscribeUrl = link(d.unsubscribeUrl);
+  const settingsUrl = link(d.settingsUrl);
+  const seatsUrl = link(d.seatsUrl);
+  const creditsUrl = link(d.creditsUrl);
   const footerNote = footerLine();
   // The roles it counts, in free facts only. A field that isn't text is left out.
   const roles = (Array.isArray(d.roles) ? d.roles : [])
@@ -74,7 +77,8 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
       url: link(h?.url),
       rows: (Array.isArray(h?.rows) ? h.rows : []).slice(0, DIGEST_HIRE_ROWS).map((r: Partial<DigestHireRow>) => ({
         company: oneLine(r?.company).slice(0, 80) || LOCKED_HIRER,
-        meta: [oneLine(r?.function).slice(0, 40), startWords(oneLine(r?.start))].filter(Boolean).join(" · "),
+        // When the hire started (it was added to Merlin this week, the hire itself may be older).
+        meta: [oneLine(r?.function).slice(0, 40), startWords(oneLine(r?.start)) ? `started ${startWords(oneLine(r?.start))}` : ""].filter(Boolean).join(" · "),
         url: link(r?.url),
       })),
     }))
@@ -88,23 +92,33 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   // The headline is a number and what it counts, so the subject and the top of the email match.
   const heroCount = hireOnly ? hires[0].n : mine > 0 ? mine : newRoles;
   const heroLabel = hireOnly
-    ? hiresLine(hires[0].n, hires[0].functions, hires[0].inProfile).replace(/^\d+ /, "")
+    ? hiresLine(hires[0].n, hires[0].functions, hires[0].inProfile, true).replace(/^\d+ /, "")
     : mine > 0
       ? `new ${fn} ${mine === 1 ? "role" : "roles"} this week`
       : `new fractional ${newRoles === 1 ? "role" : "roles"} this week`;
   const subject = heroCount > 0 ? `${heroCount} ${heroLabel}` : "No new fractional roles this week";
   const hireCta = "Open the saved view";
 
+  // How a locked company opens, as the member's plan has it: never "2 credits" to a member whose first company each day is free.
+  const plan = d.unlock === "pro" || d.unlock === "day" ? d.unlock : "credits";
+  const FIRST_FREE = "Your first company each day opens free";
+  const opensWords = (one: boolean) =>
+    plan === "pro"
+      ? `${FIRST_FREE}, and so does any company in your Crystal Ball.`
+      : plan === "day"
+        ? `${FIRST_FREE}, then each is 2 credits.`
+        : `Unlock ${one ? "it" : "one"} for 2 credits to see which company is hiring.`;
   let lead: string;
   if (mine > 0) {
     if (hidden === 0) lead = mine === 1 ? "You can already see the company." : mine === 2 ? "You can already see both companies." : `You can already see all ${mine} companies.`;
-    else if (mine === 1) lead = "The company is locked. Unlock it for 2 credits to see which company is hiring.";
-    else if (hidden === mine) lead = `All ${mine} companies are locked. Unlock one for 2 credits to see which company is hiring.`;
-    else if (hidden === 1) lead = `1 of the ${mine} companies is locked. Unlock it for 2 credits to see which company is hiring.`;
-    else lead = `${hidden} of the ${mine} companies are locked. Unlock one for 2 credits to see which company is hiring.`;
+    else if (mine === 1) lead = `The company is locked. ${opensWords(true)}`;
+    else if (hidden === mine) lead = `${mine === 2 ? "Both companies are" : `All ${mine} companies are`} locked. ${opensWords(false)}`;
+    else if (hidden === 1) lead = `1 of the ${mine} companies is locked. ${opensWords(true)}`;
+    else lead = `${hidden} of the ${mine} companies are locked. ${opensWords(false)}`;
   } else if (newRoles > 0) {
     const none = fn && fn !== "Other" ? (newRoles === 1 ? `It is not in ${fn}. ` : `None are in ${fn}. `) : "";
-    lead = `${none}${newRoles === 1 ? "The" : "Each"} company stays locked until you unlock it for 2 credits.`;
+    const stays = `${newRoles === 1 ? "The" : "Each"} company stays locked until you`;
+    lead = plan === "credits" ? `${none}${stays} unlock it for 2 credits.` : `${none}${stays} open it. ${opensWords(newRoles === 1)}`;
   } else if (hireOnly) {
     // Why this email came: the view the member saved, by its own name.
     lead = hires[0].name ? `From your saved view “${hires[0].name}”.` : "";
@@ -134,21 +148,28 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
 
   const closedLine =
     closed === 0 ? "" : closed === 1 ? "1 role closed this week. Its company is visible again." : `${closed} roles closed this week. Their companies are visible again.`;
-  const seatsLine =
+  // The seats line and the credits line, each with the words that link (Your seats, Your credits: signed in).
+  const seatsParts: [string, string, string] | null =
     missing === 0
-      ? ""
+      ? null
       : missing === 1
-        ? "1 thing is still missing on your seats. Add it and you earn a credit."
-        : `${missing} things are still missing on your seats. Add one and you earn a credit.`;
+        ? ["1 thing is still missing on your seats. ", "Add it", " and you earn a credit."]
+        : [`${missing} things are still missing on your seats. `, "Add one", " and you earn a credit."];
+  const seatsLine = seatsParts ? seatsParts.join("") : "";
   // Low on credits: say how to earn, unless the seats line just did.
-  const creditsLine =
+  const creditsParts: [string, string, string] =
     credits === 0
-      ? `You have 0 credits.${seatsLine ? "" : " Add a fact you know and you earn one."}`
+      ? seatsLine
+        ? ["You have ", "0 credits", "."]
+        : ["You have 0 credits. ", "Add a fact you know", " and you earn one."]
       : credits <= 3
-        ? `You have ${plural(credits, "credit")} left.${seatsLine ? "" : " Add a fact you know and you earn another."}`
-        : `You have ${credits} credits to spend.`;
+        ? seatsLine
+          ? ["You have ", plural(credits, "credit"), " left."]
+          : [`You have ${plural(credits, "credit")} left. `, "Add a fact you know", " and you earn another."]
+        : ["You have ", `${credits} credits`, " to spend."];
+  const creditsLine = creditsParts.join("");
   const cta = "See this week's roles";
-  const why = "You get this once a week because you're a Merlin member.";
+  const why = `You get this once a week because you're a Merlin member.${settingsUrl ? " Choose which emails you get in Notifications." : ""}`;
   const listTitle = "New roles by function";
   const restLabel = "Other functions";
 
@@ -167,7 +188,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     ...(rolesUrl && !hireOnly ? ["", cta, rolesUrl] : []),
     // Each saved view that follows hires: its line (the first one is the headline in a week with no new roles), the companies, the view.
     ...hires.flatMap((h, k) => [
-      ...(hireOnly && k === 0 ? [] : ["", `${hiresLine(h.n, h.functions, h.inProfile)}.`]),
+      ...(hireOnly && k === 0 ? [] : ["", `${hiresLine(h.n, h.functions, h.inProfile, true)}.`]),
       ...(h.name && !(hireOnly && k === 0) ? [`  From your saved view “${h.name}”`] : []),
       "",
       ...h.rows.flatMap((r) => [`${r.company}${r.meta ? ` · ${r.meta}` : ""}`, ...(r.url ? [`  ${r.url}`] : [])]),
@@ -176,12 +197,14 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     ...(showList ? ["", listTitle, ...shown.map((r) => `  ${r.function}  ${r.n}`), ...(rest ? [`  ${restLabel}  ${rest}`] : [])] : []),
     ...(alerts.length ? ["", alertsTitle, ...alerts.map((a) => `  ${a.name}  ${alertNew(a.n)}`)] : []),
     ...(closedLine ? ["", closedLine] : []),
-    ...(seatsLine ? ["", seatsLine] : []),
+    ...(seatsLine ? ["", seatsLine, ...(seatsUrl ? [seatsUrl] : [])] : []),
     "",
     creditsLine,
+    ...(creditsUrl ? [creditsUrl] : []),
     "",
     "--",
     why,
+    ...(settingsUrl ? ["Notifications", settingsUrl] : []),
     ...(unsubscribeUrl ? ["To stop these emails, open this link", unsubscribeUrl] : []),
     ...(footerNote ? [footerNote] : []),
   ].join("\n");
@@ -248,7 +271,7 @@ ${roles
       const lead0 = hireOnly && k === 0;
       const head = lead0
         ? ""
-        : `<p style="margin:0 0 4px;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:${MAIL.ink}">${esc(hiresLine(h.n, h.functions, h.inProfile))}</p>${
+        : `<p style="margin:0 0 4px;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:${MAIL.ink}">${esc(hiresLine(h.n, h.functions, h.inProfile, true))}</p>${
             h.name ? `\n<p style="margin:0 0 12px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">From your saved view “${esc(h.name)}”</p>` : ""
           }`;
       const list = h.rows.length
@@ -269,9 +292,12 @@ ${h.rows
     })
     .join("\n");
 
-  const seats = seatsLine
+  // A line with its link words linked (signed in), or plain when there is no link.
+  const linked = (parts: [string, string, string], href: string) =>
+    href ? `${esc(parts[0])}<a href="${esc(href)}" style="color:${MAIL.ink};font-weight:700;text-decoration:underline">${esc(parts[1])}</a>${esc(parts[2])}` : esc(parts.join(""));
+  const seats = seatsParts
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr>
-<td bgcolor="${MAIL.voltSoft}" style="padding:12px 16px;border-radius:8px;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${esc(seatsLine)}</td>
+<td bgcolor="${MAIL.voltSoft}" style="padding:12px 16px;border-radius:8px;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${linked(seatsParts, seatsUrl)}</td>
 </tr></table>`
     : "";
 
@@ -287,7 +313,7 @@ ${h.rows
     alertList,
     closedLine ? mailP(esc(closedLine)) : "",
     seats,
-    mailP(esc(creditsLine), "margin-bottom:0;"),
+    mailP(linked(creditsParts, creditsUrl), "margin-bottom:0;"),
   ]
     .filter(Boolean)
     .join("\n");
@@ -297,7 +323,16 @@ ${h.rows
     link: appUrl || unsubscribeUrl,
     preheader: oneLine([lead, creditsLine].filter(Boolean).join(" ")),
     body,
-    footer: [esc(why), unsubscribeUrl ? `<a href="${esc(unsubscribeUrl)}" style="color:${MAIL.muted};text-decoration:underline">Unsubscribe</a>` : "", footerNote ? esc(footerNote) : ""],
+    footer: [
+      esc(why),
+      [
+        settingsUrl ? `<a href="${esc(settingsUrl)}" style="color:${MAIL.muted};text-decoration:underline">Notifications</a>` : "",
+        unsubscribeUrl ? `<a href="${esc(unsubscribeUrl)}" style="color:${MAIL.muted};text-decoration:underline">Unsubscribe</a>` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      footerNote ? esc(footerNote) : "",
+    ],
   });
 
   return { subject: oneLine(subject), text, html };

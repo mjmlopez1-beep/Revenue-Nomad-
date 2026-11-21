@@ -5,7 +5,9 @@
  * minutes, with a 6-digit code in the same email for opening Merlin on another device.
  * Joining sends the same kind of link to finish joining, and using it proves the address
  * (State.members[].proven, see trustOf in lib/table.ts). The personal link (?k= with the
- * member's own token) keeps working as before.
+ * member's own token) keeps working as before. The Crystal Ball and weekly emails' links make
+ * a one-time link like these when opened (purpose "email", lib/emailIn.ts): 20 minutes, no code,
+ * and using it spends the email link it was made from.
  *
  * Only hashes are stored: the link's token as SHA-256, the code as an HMAC. A link or code works
  * once. A code stops after 5 wrong tries. Expired ones are cleaned up whenever a link is made or
@@ -29,9 +31,10 @@ const hashToken = (t: string) => createHash("sha256").update(`rn-signin:${t}`).d
 const hashCode = (recordId: string, code: string) => createHmac("sha256", T.ID_KEY).update(`rn-code:${recordId}:${code}`).digest("hex");
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-/** Drop links that expired. */
+/** Drop links that expired, and the spent email links once they would have expired anyway. */
 function cleanup(s: State, nowMs: number) {
   if (s.signins?.length) s.signins = s.signins.filter((x) => Date.parse(x.exp) > nowMs);
+  if (s.emailGrants) for (const [k, exp] of Object.entries(s.emailGrants)) if (!(Date.parse(exp) > nowMs)) delete s.emailGrants[k];
 }
 
 /** The member by id, with the personal token that works now. */
@@ -42,7 +45,7 @@ function memberById(seed: Seed, s: State, id: string): Member | null {
 }
 
 /** Using a link or code made for joining proves the address. */
-function finish(s: State, memberId: string, purpose: "signin" | "join" | "message") {
+function finish(s: State, memberId: string, purpose: Purpose) {
   if (purpose !== "join") return;
   const j = s.members.find((x) => x.id === memberId);
   if (j) j.proven = true;
@@ -52,24 +55,40 @@ function finish(s: State, memberId: string, purpose: "signin" | "join" | "messag
 export const MESSAGE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Message-email links a member can have waiting at once (one per conversation an hour at most). */
 const MESSAGE_LIVE_MAX = 10;
+/** Links made when a member opens a link in the Crystal Ball or weekly email (lib/emailIn.ts). Each is used within seconds. */
+const EMAIL_LIVE_MAX = 5;
+
+type Purpose = "signin" | "join" | "message" | "email";
+/** The kinds capped apart: sign-in and join links, a message email's, and the ones made from an email link. */
+const capGroup = (p: Purpose) => (p === "message" ? "message" : p === "email" ? "email" : "signin");
 
 /**
  * Put a new one-time link (and code) for a member into the state, inside a change already
  * under way. Links of each kind are capped apart, so a message email never pushes out the
- * sign-in link the member just asked for.
+ * sign-in link the member just asked for. `grant` (purpose "email" only): the email link it is
+ * made from, and when that one expires. Using this link spends that email link (redeemLink).
  */
-export function addSignIn(s: State, memberId: string, purpose: "signin" | "join" | "message", nowMs = Date.now()): { token: string; code: string } {
+export function addSignIn(s: State, memberId: string, purpose: Purpose, nowMs = Date.now(), grant?: { id: string; exp: string }): { token: string; code: string } {
   const token = `o${randomBytes(24).toString("base64url")}`;
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   cleanup(s, nowMs);
   s.signins ??= [];
   const id = hashToken(token);
-  const msg = purpose === "message";
-  const cap = msg ? MESSAGE_LIVE_MAX : LIVE_MAX;
-  const mine = s.signins.filter((x) => x.memberId === memberId && (x.purpose === "message") === msg).sort((a, b) => a.exp.localeCompare(b.exp));
+  const group = capGroup(purpose);
+  const cap = group === "message" ? MESSAGE_LIVE_MAX : group === "email" ? EMAIL_LIVE_MAX : LIVE_MAX;
+  const mine = s.signins.filter((x) => x.memberId === memberId && capGroup(x.purpose) === group).sort((a, b) => a.exp.localeCompare(b.exp));
   const drop = new Set(mine.slice(0, Math.max(0, mine.length - (cap - 1))).map((x) => x.id));
   s.signins = s.signins.filter((x) => !drop.has(x.id));
-  s.signins.push({ id, memberId, code: hashCode(id, code), purpose, exp: new Date(nowMs + (msg ? MESSAGE_LINK_TTL_MS : SIGNIN_TTL_MS)).toISOString(), tries: 0 });
+  const ttl = purpose === "message" ? MESSAGE_LINK_TTL_MS : SIGNIN_TTL_MS;
+  s.signins.push({
+    id,
+    memberId,
+    code: hashCode(id, code),
+    purpose,
+    exp: new Date(nowMs + ttl).toISOString(),
+    tries: 0,
+    ...(purpose === "email" && grant ? { grant: grant.id, grantExp: grant.exp } : {}),
+  });
   return { token, code };
 }
 
@@ -87,6 +106,12 @@ export async function redeemLink(token: string): Promise<Member | null> {
     const rec = s.signins?.find((x) => x.id === id);
     if (!rec) return null;
     s.signins = s.signins!.filter((x) => x !== rec);
+    // Made from an email link: that email link is spent now, and any other link made from it (a mail scanner's visit, say) goes too.
+    if (rec.grant) {
+      if (s.emailGrants?.[rec.grant]) return null;
+      s.emailGrants = { ...(s.emailGrants ?? {}), [rec.grant]: rec.grantExp ?? rec.exp };
+      s.signins = s.signins.filter((x) => x.grant !== rec.grant);
+    }
     finish(s, rec.memberId, rec.purpose);
     return memberById(seed, s, rec.memberId);
   });
@@ -105,8 +130,8 @@ export async function redeemCode(emailRaw: string, codeRaw: string): Promise<Mem
   if (!who) return null;
   return T.mutate((s, seed) => {
     cleanup(s, Date.now());
-    // A message email carries no code, so its link is never one a typed code can open.
-    const live = (s.signins ?? []).filter((x) => x.memberId === who.id && x.purpose !== "message");
+    // A message email carries no code, nor does a link made from an email link, so a typed code opens neither.
+    const live = (s.signins ?? []).filter((x) => x.memberId === who.id && x.purpose !== "message" && x.purpose !== "email");
     if (!live.length) return null;
     const hit = live.find((x) => same(x.code, hashCode(x.id, code)));
     if (hit) {

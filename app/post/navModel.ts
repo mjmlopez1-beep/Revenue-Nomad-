@@ -12,13 +12,13 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
-export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "partners", "billing", "radar", "network", "fractionals"] as const;
+export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals"] as const;
 export type AppPageKey = (typeof APP_PAGES)[number];
 
 export type NavGroup = "home" | "find" | "community" | "yours" | "earn" | "foot";
 export type NavIcon =
   | "home" | "companies" | "seats" | "people" | "radar" | "hiring" | "views" | "view" | "following" | "yourseats" | "messages" | "network"
-  | "add" | "partners" | "rates" | "invite" | "integrations" | "billing" | "credits" | "metrics" | "fractionals";
+  | "add" | "partners" | "rates" | "invite" | "integrations" | "notifications" | "billing" | "credits" | "metrics" | "fractionals";
 
 export interface NavItem {
   /** "today", "companies", "radar", "view:<id>" and the rest: data-nav in the page, and the key the tests use. */
@@ -130,6 +130,8 @@ export function navItems(x: NavInput): NavItem[] {
     { key: "rates", label: "Rate benchmarks", group: "earn", icon: "rates", href: x.hrefs.page("rates"), page: "rates" },
     { key: "invite", label: "Invite a fractional", group: "earn", icon: "invite", hint: `+${x.inviteBonus}` },
     { key: "integrations", label: "Integrations", group: "foot", icon: "integrations", href: x.hrefs.page("integrations"), page: "integrations" },
+    // Every email and Slack post, and how often: the account menu and every email's footer open it too.
+    { key: "notifications", label: "Notifications", group: "foot", icon: "notifications", href: x.hrefs.page("notifications"), page: "notifications" },
     ...(x.plan ? [{ key: "billing", label: "Plan and billing", group: "foot" as const, icon: "billing" as const, href: x.hrefs.page("billing"), page: "billing" as const, hint: x.plan.name === "pro" ? "Pro" : undefined }] : []),
     { key: "credits", label: "Credits", group: "foot", icon: "credits", href: x.hrefs.page("credits"), page: "credits", count: x.credits },
     ...(x.admin ? [{ key: "metrics", label: "Pilot metrics", group: "foot" as const, icon: "metrics" as const, href: x.hrefs.page("metrics"), page: "metrics" as const, admin: true }] : []),

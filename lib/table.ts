@@ -106,7 +106,7 @@ import {
 } from "./billing/rules";
 import { surveyCode } from "./billing/stripe";
 import { valueCounts, valueLines } from "./billing/emails";
-import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE, radarStats, type RadarState, type RadarStats } from "./radar/types";
+import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE, radarPrefs, radarStats, type RadarEmail, type RadarState, type RadarStats } from "./radar/types";
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./websites/types";
@@ -287,8 +287,16 @@ interface Profile {
    * (Home asks once), and they show by first name and last initial.
    */
   fractionals?: boolean;
-  /** Turned off the next-client radar (Your profile, or the radar email's own unsubscribe link). See lib/radar. */
+  /**
+   * Before Notifications: turned Crystal Ball off by email and Slack both (Your profile, or the radar
+   * email's unsubscribe link). Read through radarPrefs (lib/radar/types.ts); changing either part
+   * on Notifications replaces it with the two below.
+   */
   radarOff?: boolean;
+  /** How often the Crystal Ball email comes (Notifications, the unsubscribe page): absent is daily. */
+  radarEmail?: RadarEmail;
+  /** Turned Crystal Ball in Slack off (Notifications). The email is set apart. */
+  radarSlackOff?: boolean;
   /**
    * The fractional functions they say usually get hired before them (Me.before): up to
    * BEFORE_MAX, [] for "Not sure", absent when never asked. Private to the member: anything
@@ -4027,7 +4035,10 @@ async function fullView(
       partners: !prof.partnersOff,
       // Fractionals: "Show me in the Fractionals directory" (null: not chosen yet). Referral partners' old switch off reads as out.
       fractionals: prof.fractionals ?? (prof.partnersOff ? false : null),
-      radar: !prof.radarOff,
+      radar: ((x) => x.email !== "off" || x.slack)(radarPrefs(prof)),
+      // Notifications: how often the Crystal Ball email comes, and whether it posts to Slack.
+      radarEmail: radarPrefs(prof).email,
+      radarSlack: radarPrefs(prof).slack,
       proInterest: !!prof.proInterest,
       // Who they hunt, and their saved views (one list with the connector's saved searches).
       icp: prof.icp ?? null,
@@ -4353,12 +4364,12 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
       s.radar,
       s.signals,
       s.profiles,
-      // Members whose radar is on and can match something: signed in, a function, an Ideal Fractional Profile.
+      // Members whose radar is on (its email, or Slack with Slack connected) and can match something: signed in, a function, an Ideal Fractional Profile.
       idx.all.filter((m) => {
         const p = s.profiles[m.id];
         const fn = p?.function ?? functionOf(p?.title || m.title);
         const icp = p?.icp;
-        return signedIn(s, idx, m.id) && !p?.radarOff && !!fn && fn !== "Other" && !!icp && !!(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
+        return signedIn(s, idx, m.id) && ((x) => x.email !== "off" || (x.slack && [s.integrations?.members[m.id]?.slack, s.integrations?.members[m.id]?.webhook].some((d) => !!d && !d.broken)))(radarPrefs(p)) && !!fn && fn !== "Other" && !!icp && !!(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
       }).length,
       nowMs,
     ),
@@ -6624,10 +6635,42 @@ export async function perform(
             s.profiles[me.id] = p;
             return { message: a.messageEmail ? "We'll email you when a member messages you." : "Message emails are off. New messages still show in Messages." };
           }
+          // Notifications: Crystal Ball's email (how often, or off) and its Slack posts, each on its own.
+          if (typeof a.radarEmail === "string" || typeof a.radarSlack === "boolean") {
+            const choice = typeof a.radarEmail === "string" ? a.radarEmail : null;
+            if (choice !== null && !(["daily", "twice", "weekly", "off"] as string[]).includes(choice)) throw new ActionError("That didn't go through. Refresh the page and try again.");
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            const was = radarPrefs(p);
+            // The switch before Notifications turned both off: each part keeps what it was.
+            delete p.radarOff;
+            p.radarEmail = was.email;
+            if (!was.slack) p.radarSlackOff = true;
+            if (choice) {
+              if (choice === "off" && was.email !== "off") addSignal(s, me.id, "radar_off", "notifications", now);
+              p.radarEmail = choice as RadarEmail;
+            }
+            if (typeof a.radarSlack === "boolean") {
+              if (a.radarSlack) delete p.radarSlackOff;
+              else p.radarSlackOff = true;
+            }
+            if (p.radarEmail === "daily") delete p.radarEmail;
+            s.profiles[me.id] = p;
+            if (typeof a.radarSlack === "boolean")
+              return { message: a.radarSlack ? `${YOUR_FEATURE} posts to Slack again.` : `${YOUR_FEATURE} won't post to Slack. The email is set apart.` };
+            return {
+              message:
+                choice === "off"
+                  ? `The ${FEATURE_NAME} email is off. ${FEATURE_NAME} in the app still lists what's new.`
+                  : `The ${FEATURE_NAME} email comes ${choice === "daily" ? "on mornings when something moved" : choice === "twice" ? "twice a week, Monday and Thursday" : "once a week, on Mondays"}.`,
+            };
+          }
           if (typeof a.radar === "boolean") {
             const p = { ...(s.profiles[me.id] ?? {}) };
-            if (a.radar) delete p.radarOff;
-            else if (!p.radarOff) {
+            if (a.radar) {
+              delete p.radarOff;
+              delete p.radarEmail;
+              delete p.radarSlackOff;
+            } else if (!p.radarOff) {
               p.radarOff = true;
               addSignal(s, me.id, "radar_off", "profile", now);
             }
@@ -6988,7 +7031,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
   // A member's writing voice and what they did with their moves are theirs alone too.
-  const { signins: _signins, network: _network, voice: _voice, moves: _moves, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -7024,6 +7067,8 @@ export const tableInternals = {
   valueMoment, alertViewsOf, freeNow, billingRef, balance, grantPlanCredits,
   // The next-client radar (lib/radar) reads hires and open roles the way the table does, and records its product signals.
   belowLead, offBarRole, isUnseen, addSignal,
+  // How a Crystal Ball company opens for the member today (its email's buttons say the same).
+  crystalOf,
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
@@ -8902,6 +8947,8 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     return out;
   };
 
+  // Every link in it signs the member in, once (lib/emailIn.ts), loaded here so the two files don't import each other at start.
+  const emailIn = await import("./emailIn");
   // Only members who have signed in get it, unless RN_DIGEST_ALL=1 sends it to everyone on file.
   const everyone = process.env.RN_DIGEST_ALL === "1";
   const joined = new Set(s.members.map((m) => m.id));
@@ -8937,6 +8984,16 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     const fn = prof.function ?? functionOf(prof.title || m.title);
     const mine = fn ? fresh.filter((e) => fnOf(e, s) === fn) : [];
     const listed = listFor(fn, mine);
+    // Each link to the app, signed in for this member (a path the links can't carry stays as it was).
+    const linker = emailIn.emailLinker(seed, s, m.id, base, nowMs);
+    const signed = (u: string) => {
+      const path = u.startsWith(base) ? u.slice(base.length) || "/" : null;
+      return path !== null && emailIn.safePath(path) ? linker(path) : u;
+    };
+    // How a locked company opens for them (the email says it as their plan does).
+    const rec = planRec(s, m.id);
+    const freeDay = !(process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off");
+    const unlock = hasPro(rec, nowMs) ? "pro" : gated(rec, nowMs) ? "free" : freeDay ? "day" : undefined;
     out.push({
       memberId: m.id,
       data: {
@@ -8951,11 +9008,15 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         seatFactsMissing: missing.get(m.id) ?? 0,
         credits: Math.max(0, balance(s, m.id)), // as the app shows it: never below zero (see Me.owed)
         alerts: alertCounts(m),
-        appUrl: base,
+        appUrl: signed(`${base}/`),
         unsubscribeUrl: `${base}/api/table/unsubscribe?m=${pubId(m.id)}&s=${unsubSig(m.id)}`,
-        rolesUrl: listed.url,
-        roles: listed.roles,
-        ...(hires.length ? { hires } : {}),
+        settingsUrl: linker("/?p=notifications"),
+        seatsUrl: linker("/?p=seats"),
+        creditsUrl: linker("/?p=credits"),
+        ...(unlock ? { unlock: unlock as "pro" | "free" | "day" } : {}),
+        rolesUrl: signed(listed.url),
+        roles: listed.roles.map((r) => ({ ...r, url: signed(r.url) })),
+        ...(hires.length ? { hires: hires.map((h) => ({ ...h, url: signed(h.url), rows: h.rows.map((r) => ({ ...r, url: signed(r.url) })) })) } : {}),
       },
     });
   }

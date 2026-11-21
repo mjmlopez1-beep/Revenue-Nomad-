@@ -96,6 +96,12 @@ export interface RadarCard {
   about?: { industry?: string; size?: string; hq?: string; revenue?: string };
   /** Only when the card names the company: its record in the app ("/?c=<public id>"). A path, or absolute once tracked. */
   place?: string;
+  /**
+   * The email's link for this card: the company's record opened from that day's Crystal Ball
+   * (radarOpenPath), so it opens there as it would from the page (free on Trial and Pro, today's
+   * one on Free). Locked or not: the record of a locked company stays locked and unnamed.
+   */
+  open?: string;
   /** The member's own table shows the company (a known company: Open), not only a name on the card (Trial and Pro). */
   known?: boolean;
   /**
@@ -133,6 +139,59 @@ export interface RadarItem {
 export const SIG_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** The app's address for one day's companies: the email's, Slack's and the page's link. */
 export const radarPath = (day: string) => `/?p=table&sig=${day}`;
+/**
+ * One company's record, opened from one day's Crystal Ball (the email's card links): the app
+ * opens the record over that day's companies, so its Open is the one Crystal Ball gives, and
+ * closing it shows the day. `id` is the company's public id, as the member's table has it.
+ */
+export const radarOpenPath = (day: string, id: string) => `/?sig=${day}&c=${encodeURIComponent(id)}`;
+
+/* ---------- how often the email comes, per member ---------- */
+
+/** How often the Crystal Ball email comes (Notifications). Daily unless the member picked another. */
+export const RADAR_EVERY = ["daily", "twice", "weekly"] as const;
+export type RadarEvery = (typeof RADAR_EVERY)[number];
+export type RadarEmail = RadarEvery | "off";
+/** The choices' words (Notifications, the unsubscribe page). */
+export const RADAR_EVERY_WORDS: Record<RadarEmail, string> = { daily: "Every morning", twice: "Twice a week", weekly: "Once a week", off: "Off" };
+/** When each choice goes: twice a week on Monday and Thursday mornings, once a week on Monday's, with what is new since the last one. */
+export const RADAR_EVERY_WHEN: Record<RadarEvery, string> = {
+  daily: "On mornings when a company in your profile moves.",
+  twice: "Monday and Thursday mornings, with what moved since the last one.",
+  weekly: "Monday mornings, with what moved that week.",
+};
+/** What the member chose, from their profile. `radarOff` (before Notifications): both off. */
+export interface RadarPrefsStored {
+  radarOff?: boolean;
+  radarEmail?: RadarEmail;
+  radarSlackOff?: boolean;
+}
+/** The email's choice and whether Crystal Ball posts to Slack, as the profile says. */
+export function radarPrefs(p: RadarPrefsStored | undefined): { email: RadarEmail; slack: boolean } {
+  if (p?.radarOff) return { email: "off", slack: false };
+  const email = p?.radarEmail && (RADAR_EVERY as readonly string[]).includes(p.radarEmail) ? p.radarEmail : p?.radarEmail === "off" ? "off" : "daily";
+  return { email, slack: !p?.radarSlackOff };
+}
+
+/** Run days by UTC weekday (0 Sunday): twice a week Monday and Thursday, once a week Monday (as Pilot metrics' own cadences). */
+const EVERY_DAYS: Record<RadarEvery, number[]> = { daily: [0, 1, 2, 3, 4, 5, 6], twice: [1, 4], weekly: [1] };
+/**
+ * The member's email is due on this run: daily always; otherwise when no Crystal Ball email went
+ * to them since the start of the latest run day of their choice that has come (a run missed on a
+ * Monday goes on Tuesday). Pure.
+ */
+export function radarEmailDue(every: RadarEvery, lastMailIso: string | null | undefined, nowMs: number): boolean {
+  if (every === "daily") return true;
+  const last = Date.parse(lastMailIso ?? "");
+  if (!Number.isFinite(last)) return true;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const today = Date.parse(`${new Date(nowMs).toISOString().slice(0, 10)}T00:00:00.000Z`);
+  for (let back = 0; back < 7; back++) {
+    const d = today - back * DAY_MS;
+    if (EVERY_DAYS[every].includes(new Date(d).getUTCDay())) return last < d;
+  }
+  return true;
+}
 
 /**
  * The page's ranges (the switcher): Today, the last 7 days and the last 30 days, each counting back
@@ -229,6 +288,8 @@ export interface RadarMember {
   days?: Record<string, RadarSentRow[]>;
   /** Internal company id -> when a company was last sent to them, kept RADAR_COMPANY_QUIET_DAYS: a calendar signal or a standing state never repeats a company inside it. */
   shown?: Record<string, string>;
+  /** The last Crystal Ball email (ISO): when a twice-a-week or weekly email is next due (radarEmailDue). */
+  lastMailAt?: string;
 }
 
 export interface RadarState {
@@ -257,6 +318,8 @@ export const RADAR_MAX_WINDOW_DAYS = 7;
 /** A member's day: at most this many companies, and when fewer fresh events reach them, standing states fill it to RADAR_DAY_MIN. */
 export const RADAR_DAY_MAX = 5;
 export const RADAR_DAY_MIN = 2;
+/** At most this many companies in one delivery, by how often the member's email comes: a roll-up carries more than one morning's. */
+export const RADAR_ROLLUP_MAX: Record<RadarEvery, number> = { daily: RADAR_DAY_MAX, twice: 8, weekly: 10 };
 /** How a standing state's why-now starts (lib/radar/match.ts): still true, nothing new happened there today. */
 export const RADAR_STILL = "Still a good time:";
 /** A company sent to a member is not sent again inside this many days unless something new happened there. */
@@ -301,14 +364,15 @@ export interface RadarStats {
 export function radarStats(
   r: RadarState | undefined,
   signals: { name: string; at: string }[],
-  profiles: Record<string, { radarOff?: boolean }>,
+  profiles: Record<string, RadarPrefsStored>,
   eligible: number,
   nowMs: number,
 ): RadarStats {
   const DAY = 24 * 60 * 60 * 1000;
   const today = new Date(nowMs).toISOString().slice(0, 10);
   const out: RadarStats = { on: eligible, off: 0, sentToday: 0, sent7: 0, opens7: 0, clicks7: 0, clicks: 0, lastRunAt: r?.lastRunAt ?? null };
-  for (const p of Object.values(profiles)) if (p?.radarOff) out.off++;
+  // Off: the email is off (Slack can still be on: Notifications sets the two apart).
+  for (const p of Object.values(profiles)) if (radarPrefs(p).email === "off") out.off++;
   for (const x of signals) {
     if (!x.name.startsWith("radar_")) continue;
     const age = nowMs - Date.parse(x.at);

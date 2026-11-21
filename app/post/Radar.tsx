@@ -32,8 +32,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_INDUSTRIES } from "@/lib/tableFields";
-import { CRYSTAL_USED_LINE, YOUR_FEATURE, FEATURE_NAME, rangeLabel, yourFeature, type RadarRange, type RadarView } from "@/lib/radar/types";
-import { IconChevron, IconCheck, IconX, post } from "../ui/shared";
+import { CRYSTAL_USED_LINE, YOUR_FEATURE, rangeLabel, yourFeature, type RadarRange, type RadarView } from "@/lib/radar/types";
+import { IconChevron, IconX, post } from "../ui/shared";
 import { isOpenRole, type CoInfo, type Row } from "./model";
 import { useUi } from "./ui";
 import { DataTable, type SignalRows } from "./Tables";
@@ -43,6 +43,7 @@ import { CrystalOpen } from "./CrystalOpen";
 import { LeaderReport } from "./LeaderReport";
 import { plural } from "./hooks";
 import { ProRow, planDay } from "./Billing";
+import { radarDelivery } from "./PartnersSwitch";
 import { KnowChip } from "./network/Network"; // [google network]
 import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./radar.css";
@@ -138,7 +139,6 @@ export function RadarPage({
   onWarm?: () => void;
 }) {
   const ui = useUi();
-  const [busy, setBusy] = useState(false);
   // [google network] the member's own network: which of the day's companies they know someone at.
   const net = useNetwork().view;
   const knownIds = useMemo(() => new Set((net?.companies ?? []).map((c) => c.id)), [net]);
@@ -218,12 +218,6 @@ export function RadarPage({
     }),
     [view, dated, action],
   );
-  const flip = async () => {
-    setBusy(true);
-    await ui.act({ type: "settings", radar: !(view?.on ?? true) });
-    setBusy(false);
-    reload();
-  };
 
   const fn = view?.function ?? me.function;
   const before = view?.before ?? [];
@@ -373,26 +367,20 @@ export function RadarPage({
       {view?.ready && (
         <section className="tp-card rd-deliver" aria-labelledby="rd-deliver-h">
           <h2 className="tp-card-h" id="rd-deliver-h">
-            Every morning
+            By email and Slack
           </h2>
           <p className="rd-note">
-            {!view.on
-              ? `${YOUR_FEATURE} is off. This page still lists what moved.`
-              : view.anyCompany
-                ? `Set your profile to get ${yourFeature} by email each morning. Until then it is here.`
-              : view.email && view.slack
-                ? `${YOUR_FEATURE} comes by email and in Slack, on mornings when something moved.`
-                : view.email
-                  ? `${YOUR_FEATURE} comes by email, on mornings when something moved.`
-                  : view.slack
-                    ? `${YOUR_FEATURE} comes in Slack, on mornings when something moved.`
-                    : `Connect Slack under Integrations to get ${yourFeature} every morning. Until then it is here.`}
+            {view.anyCompany
+              ? `Set your profile to get ${yourFeature} by email each morning. Until then it is here.`
+              : !view.email && !view.slack
+                ? `Connect Slack under Integrations to get ${yourFeature} every morning. Until then it is here.`
+                : !view.on
+                  ? `${YOUR_FEATURE} is off by email and in Slack. This page still lists what moved.`
+                  : `${view.email ? radarDelivery(me, view.slack) : me.radarSlack !== false ? `${YOUR_FEATURE} comes in Slack, on mornings when something moved.` : `${YOUR_FEATURE} is off in Slack.`} This page lists what moved either way.`}
           </p>
-          <button type="button" role="switch" aria-checked={view.on} className={`tp-ftoggle rd-switch${view.on ? " on" : ""}`} disabled={busy} aria-busy={busy} onClick={() => void flip()}>
-            <span className="tp-check" aria-hidden>
-              {view.on && <IconCheck size={11} />}
-            </span>
-            <span className="tp-ftoggle-l">Send me {FEATURE_NAME} emails</span>
+          {/* How often it comes, and Slack apart from the email: Notifications (one place for every email and post). */}
+          <button type="button" className="btn btn-sm rd-switch" onClick={() => ui.openPage("notifications")}>
+            Change in Notifications
           </button>
           {/* Billing live only: Slack as it happens is Pro's. Locked on Free, marked in the trial, nothing on Pro. */}
           <ProRow

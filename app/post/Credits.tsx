@@ -17,7 +17,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { FREE_COMPANY_TODAY, freeCompanyNow } from "./display";
 import { CRYSTAL_FREE_TODAY, FEATURE_NAME } from "@/lib/radar/types";
 import { Pro, useUi } from "./ui";
-import { MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
+import { NotificationsCard, SignInActions } from "./Settings";
 import { ReportedMessages } from "./Messages";
 import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
@@ -262,7 +262,7 @@ function Review({ view }: { view: View }) {
 
 /* ---------- the page ---------- */
 
-export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View; onBack: () => void; refresh?: () => Promise<void>; onUseInClaude?: () => void }) {
+export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotifications }: { view: View; onBack: () => void; refresh?: () => Promise<void>; onUseInClaude?: () => void; onNotifications?: () => void }) {
   const ui = useUi();
   const me = ui.me;
   const phone = ui.layout === "phone";
@@ -450,8 +450,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
           {inviteCard}
           {rulesCard}
           {signinCard}
-          {view.scan?.digest && <WeeklyEmail />}
-          {view.email && <MessageEmail />}
+          <NotificationsCard onOpen={onNotifications} />
           <ConnectedApps onHowTo={onUseInClaude} />
         </>
       ) : (
@@ -461,8 +460,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View
             {inviteCard}
             {signinCard}
           </div>
-          {view.scan?.digest && <WeeklyEmail />}
-          {view.email && <MessageEmail />}
+          <NotificationsCard onOpen={onNotifications} />
           <ConnectedApps onHowTo={onUseInClaude} />
           {review}
           {history}

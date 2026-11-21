@@ -398,7 +398,7 @@ export interface DayMemory {
 
 /**
  * A member's day (the morning run's selection): their unsent High and Medium events, most likely
- * first, at most RADAR_DAY_MAX companies (a company's other signals that day ride along with it).
+ * first, at most RADAR_DAY_MAX companies (`max`: more in a twice-a-week or weekly email, RADAR_ROLLUP_MAX; a company's other signals that day ride along with it).
  * When fewer than RADAR_DAY_MIN companies come from fresh events, the strongest standing states
  * (High or Medium, never shown: none of their own events went out) fill it to RADAR_DAY_MIN,
  * labelled "Still a good time". A company sent in the last RADAR_COMPANY_QUIET_DAYS is not sent
@@ -407,7 +407,7 @@ export interface DayMemory {
  * gone or arrived, a burst of hiring, money, a size change, a gap first seen) doesn't. Both lists
  * come ranked (signalsFor). Pure.
  */
-export function pickDaily<X extends Scored>(fresh: X[], standing: X[], mem: DayMemory, nowMs: number): { send: X[]; fromEvents: number } {
+export function pickDaily<X extends Scored>(fresh: X[], standing: X[], mem: DayMemory, nowMs: number, max = RADAR_DAY_MAX): { send: X[]; fromEvents: number } {
   const quiet = (companyId: string) => {
     const at = Date.parse(mem.shown?.[companyId] ?? "");
     return Number.isFinite(at) && nowMs - at < RADAR_COMPANY_QUIET_DAYS * 24 * 60 * 60 * 1000;
@@ -420,7 +420,7 @@ export function pickDaily<X extends Scored>(fresh: X[], standing: X[], mem: DayM
     if (cos.has(x.companyId)) {
       // The same company's other signals today, once each.
       if (!send.some((y) => y.key === x.key)) send.push(x);
-    } else if (cos.size < RADAR_DAY_MAX) {
+    } else if (cos.size < max) {
       cos.add(x.companyId);
       send.push(x);
     }

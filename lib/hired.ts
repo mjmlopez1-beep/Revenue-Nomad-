@@ -126,8 +126,10 @@ export function hireWhat(role: string | null | undefined, fn: string | null | un
  * The weekly email's and Slack's line for a saved view that follows hires:
  * "2 companies in your profile hired a fractional Finance leader this week".
  */
-export function hiresLine(n: number, fns: readonly string[], inProfile: boolean): string {
+export function hiresLine(n: number, fns: readonly string[], inProfile: boolean, added = false): string {
   const k = Math.max(0, Math.round(n));
+  // `added` (the weekly email): the hire came onto Merlin this week, and may have started months before.
+  if (added) return `${k} ${k === 1 ? "company" : "companies"}${inProfile ? " in your profile" : ""} that hired ${fnLeader(fns)}, added this week`;
   return `${k} ${k === 1 ? "company" : "companies"}${inProfile ? " in your profile" : ""} hired ${fnLeader(fns)} this week`;
 }
 

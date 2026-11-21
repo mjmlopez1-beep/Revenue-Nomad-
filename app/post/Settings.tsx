@@ -1,52 +1,26 @@
 "use client";
 
-/** Member settings shown on Your credits: the weekly email, message emails, and the sign-in link actions. */
-import { useEffect, useState } from "react";
-import { useUi } from "./ui";
+/** Member settings shown on Your credits: the way to Notifications (every email and Slack post), and the sign-in link actions. */
+import { useState } from "react";
 import { post, useToast } from "../ui/shared";
 import "./pages.css";
 
-export function WeeklyEmail() {
-  const ui = useUi();
-  const saved = ui.me.digest;
-  const fn = ui.me.function;
-  // What the member just picked, shown until the server's answer arrives.
-  const [picked, setPicked] = useState<boolean | null>(null);
-  const on = picked ?? saved;
-  useEffect(() => {
-    if (picked !== null && picked === saved) setPicked(null);
-  }, [picked, saved]);
-  const toggle = async () => {
-    const next = !on;
-    setPicked(next);
-    const r = await ui.act({ type: "settings", digest: next });
-    if (!r.ok) setPicked(null);
-  };
+/**
+ * Your credits used to hold the weekly email's and the message emails' switches. They are on
+ * Notifications now, with Crystal Ball's and Slack's: this card leads there.
+ */
+export function NotificationsCard({ onOpen }: { onOpen?: () => void }) {
+  if (!onOpen) return null;
   return (
     <section className="tp-card tp-set">
       <div className="tp-set-t">
-        <h2 className="tp-card-h" id="tp-set-digest">
-          Weekly email
+        <h2 className="tp-card-h" id="tp-set-nt">
+          Emails and Slack
         </h2>
-        <p className="cr-note" id="tp-set-digest-d">
-          {fn && fn !== "Other"
-            ? `One email after each weekly scan with the new open roles, ${fn} first. We skip weeks with none.`
-            : "One email after each weekly scan with the new open roles. We skip weeks with none."}
-        </p>
+        <p className="cr-note">The weekly email, message emails and Crystal Ball, and how often each comes, are in Notifications.</p>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-labelledby="tp-set-digest"
-        aria-describedby="tp-set-digest-d"
-        className={`tp-switch${on ? " on" : ""}`}
-        onClick={() => void toggle()}
-      >
-        <span className="tp-switch-track" aria-hidden>
-          <span className="tp-switch-knob" />
-        </span>
-        <span className="tp-switch-l">{on ? "On" : "Off"}</span>
+      <button type="button" className="btn" aria-describedby="tp-set-nt" onClick={onOpen}>
+        Open Notifications
       </button>
     </section>
   );
@@ -56,49 +30,6 @@ export function WeeklyEmail() {
 export async function emailMeLink(toast: (text: string, err?: boolean) => void) {
   const r = await post<{ message?: string }>({ emailMe: true });
   toast(r.error ?? r.message ?? "Sent. Check your email.", !!r.error);
-}
-
-/** The email when a member messages you. Shown only while email is on. */
-export function MessageEmail() {
-  const ui = useUi();
-  const saved = ui.me.messageEmail !== false;
-  const [picked, setPicked] = useState<boolean | null>(null);
-  const on = picked ?? saved;
-  useEffect(() => {
-    if (picked !== null && picked === saved) setPicked(null);
-  }, [picked, saved]);
-  const toggle = async () => {
-    const next = !on;
-    setPicked(next);
-    const r = await ui.act({ type: "settings", messageEmail: next });
-    if (!r.ok) setPicked(null);
-  };
-  return (
-    <section className="tp-card tp-set">
-      <div className="tp-set-t">
-        <h2 className="tp-card-h" id="tp-set-msg">
-          Message emails
-        </h2>
-        <p className="cr-note" id="tp-set-msg-d">
-          An email when a member writes to you, at most one an hour for each conversation. It never shows your email address to them.
-        </p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-labelledby="tp-set-msg"
-        aria-describedby="tp-set-msg-d"
-        className={`tp-switch${on ? " on" : ""}`}
-        onClick={() => void toggle()}
-      >
-        <span className="tp-switch-track" aria-hidden>
-          <span className="tp-switch-knob" />
-        </span>
-        <span className="tp-switch-l">{on ? "On" : "Off"}</span>
-      </button>
-    </section>
-  );
 }
 
 /**

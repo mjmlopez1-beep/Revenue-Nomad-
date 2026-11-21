@@ -63,9 +63,14 @@ export interface StoredSignIn {
   memberId: string;
   code: string;
   /** "message": the link in a message email. It signs in once and opens the conversation (7 days, no code). */
-  purpose: "signin" | "join" | "message";
+  /** "email": made when a member opens a link in the Crystal Ball or weekly email (lib/emailIn.ts): 20 minutes, no code. */
+  purpose: "signin" | "join" | "message" | "email";
   exp: string;
   tries: number;
+  /** "email": the hash of the email link it was made for. Using it spends that link (State.emailGrants). */
+  grant?: string;
+  /** "email": when that email link stops working. */
+  grantExp?: string;
 }
 
 /** The state fields this feature adds (all optional, so an older state file loads as it is). */
@@ -77,6 +82,8 @@ export interface MessagingState {
   signins?: StoredSignIn[];
   /** A seed member's personal sign-in token after "Sign out on other devices" (the seed's own stops working). */
   tokens?: Record<string, string>;
+  /** Email links already used to sign in (lib/emailIn.ts): the link's hash, and when it would have expired. */
+  emailGrants?: Record<string, string>;
 }
 
 /** The viewer's side of a conversation. */

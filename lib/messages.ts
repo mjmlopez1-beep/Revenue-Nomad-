@@ -23,6 +23,7 @@ import { HIDDEN_COMPANY, functionOf } from "./tableFields";
 import { MAIL, emailEnabled, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine, sendEmail } from "./email";
 import { sideOf, unreadCount, unreadIn, type StoredConversation } from "./messageState";
 import { addSignIn } from "./signin";
+import { NOTIFICATIONS_PATH, emailLinker } from "./emailIn";
 import type { Action, ActionResult, ConversationRec, MessageRec } from "./tableTypes";
 
 const HOUR = 60 * 60 * 1000;
@@ -128,7 +129,7 @@ export async function unreadFor(token: string | null): Promise<number | null> {
  * "Ana sent you a message on Merlin about your seat at Acme": the first 200 characters
  * and a link. Never either member's email address. `holder`: the reader held the seat.
  */
-export function messageEmail(o: { from: string; company: string; holder: boolean; text: string; link: string; about?: string }) {
+export function messageEmail(o: { from: string; company: string; holder: boolean; text: string; link: string; about?: string; settingsUrl?: string }) {
   const first = oneLine(o.from).slice(0, 40) || "A member";
   const company = oneLine(o.company).slice(0, 80) || "a company";
   // A conversation from Referral partners is about no seat: `about` says what it is about instead.
@@ -137,7 +138,8 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
   const snippet = [...flat].length > 200 ? `${[...flat].slice(0, 200).join("").trimEnd()}…` : flat;
   const link = oneLine(o.link);
   const subject = `${first} sent you a message on Merlin about ${about}`;
-  const why = "You get at most one of these an hour for each conversation. Turn them off in Your credits on Merlin.";
+  const why = "You get at most one of these an hour for each conversation. Turn them off in Notifications on Merlin.";
+  const settings = oneLine(o.settingsUrl);
   const noReply = "Replies to this email don't reach them. Reply on Merlin.";
   const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
   const note = footerNote();
@@ -153,6 +155,7 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
     "",
     "--",
     why,
+    ...(settings ? ["Notifications", settings] : []),
     from,
     ...(note ? [note] : []),
   ].join("\n");
@@ -163,7 +166,7 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
     mailButton(link, "Read and reply", "margin:0 0 16px"),
     mailP(escHtml(noReply), `margin-bottom:0;font-size:14px;line-height:20px;color:${MAIL.muted};`),
   ].join("\n");
-  const html = mailShell({ title: subject, preheader: snippet.slice(0, 120), body, link, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: subject, preheader: snippet.slice(0, 120), body, link, footer: [escHtml(why), settingsLink(settings), escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
 }
 
@@ -172,25 +175,42 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
  * "Ana claimed her seat on Merlin through your invite". Their note is the conversation's first
  * message, so the email says that and links to it. Never an email address.
  */
-export function connectEmail(o: { partner: string; company: string; link: string }) {
+export function connectEmail(o: { partner: string; company: string; link: string; settingsUrl?: string }) {
   const first = oneLine(o.partner).slice(0, 40) || "A fractional";
   const company = oneLine(o.company).slice(0, 80) || "their company";
   const subject = `${first} claimed their seat at ${company} through your invite`;
   const lead = `You're connected as referral partners on Merlin. Your note is the first message in your conversation, so say hello.`;
-  const why = "You get at most one of these an hour for each conversation. Turn them off in Your credits on Merlin.";
+  const why = "You get at most one of these an hour for each conversation. Turn them off in Notifications on Merlin.";
   const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
   const note = footerNote();
   const link = oneLine(o.link);
-  const text = [`${first} claimed their seat at ${company} through your invite.`, "", lead, "", "Open the conversation with this link. It signs you in once and works for 7 days.", link, "", "--", why, from, ...(note ? [note] : [])].join("\n");
+  const settings = oneLine(o.settingsUrl);
+  const text = [
+    `${first} claimed their seat at ${company} through your invite.`,
+    "",
+    lead,
+    "",
+    "Open the conversation with this link. It signs you in once and works for 7 days.",
+    link,
+    "",
+    "--",
+    why,
+    ...(settings ? ["Notifications", settings] : []),
+    from,
+    ...(note ? [note] : []),
+  ].join("\n");
   const body = [
     mailH(`${escHtml(first)} is on Merlin`),
     mailP(`${escHtml(first)} claimed their seat at ${escHtml(company)} through your invite.`, "margin-bottom:16px;"),
     mailP(escHtml(lead), "margin-bottom:24px;"),
     mailButton(link, "Open the conversation", "margin:0 0 16px"),
   ].join("\n");
-  const html = mailShell({ title: subject, preheader: lead.slice(0, 120), body, link, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: subject, preheader: lead.slice(0, 120), body, link, footer: [escHtml(why), settingsLink(settings), escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
 }
+
+/** The footer's Notifications link (signed in, lib/emailIn.ts), or nothing. */
+export const settingsLink = (url: string) => (/^https?:\/\//i.test(url) ? `<a href="${escHtml(url)}" style="color:${MAIL.muted};text-decoration:underline">Notifications</a>` : "");
 
 /**
  * After an invite's conversation opened (lib/table.ts connectInvite): the inviter hears that the
@@ -220,7 +240,8 @@ export async function afterConnect(conversationId: string, origin?: string): Pro
     c.notifiedAt = { ...(c.notifiedAt ?? {}), a: new Date(nowMs).toISOString() };
     // The button signs them in once (7 days) and opens this conversation, as a message email's does.
     const { token: once } = addSignIn(s, inviter.id, "message", nowMs);
-    return { to: inviter.email, ...connectEmail({ partner: T.firstName(partner.name), company, link: `${base}/?k=${encodeURIComponent(once)}&p=messages&m=${encodeURIComponent(c.id)}` }) };
+    const settingsUrl = emailLinker(seed, s, inviter.id, base, nowMs)(NOTIFICATIONS_PATH);
+    return { to: inviter.email, ...connectEmail({ partner: T.firstName(partner.name), company, link: `${base}/?k=${encodeURIComponent(once)}&p=messages&m=${encodeURIComponent(c.id)}`, settingsUrl }) };
   });
   if (mail) void sendEmail(mail.to, mail.subject, mail.text, mail.html).catch((e) => console.error("connect email failed", e));
 }
@@ -296,6 +317,7 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           holder: otherId === c.b,
           text,
           link: `${base}/?k=${encodeURIComponent(once)}&p=messages&m=${encodeURIComponent(c.id)}`,
+          settingsUrl: emailLinker(seed, s, otherId, base, nowMs)(NOTIFICATIONS_PATH),
           ...(c.kind === "partners" ? { about: "connecting as referral partners" } : {}),
         });
         notify = { to: other.email, ...mail };
