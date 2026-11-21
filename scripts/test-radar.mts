@@ -357,7 +357,14 @@ async function main() {
   clear();
   const quiet = await radar.runRadar({ now: nowIso() });
   await settle();
-  check("the next morning with nothing new sends nothing (no nothing-days)", quiet.ran && quiet.signals === 0 && !mails().length && !radarPosts(SLACK_SAL).length, quiet);
+  // Nothing new happened: Sal's day is filled with what is still true (Echo's fractional Sales seat, 12 to 24 months in), said for what it is.
+  const quietMail = mails("sal.starter@example.com")[0]?.body as { subject: string; text: string } | undefined;
+  check(
+    "the next morning with nothing new: a standing state fills the day, labelled 'Still a good time', never an empty email",
+    quiet.ran && quiet.signals === 0 && mails().length === 1 && !!quietMail && /Still a good time: Fractional Sales seat started Jan 2025/.test(quietMail.text) && /based on typical tenure/.test(quietMail.text),
+    { quiet, text: quietMail?.text.slice(0, 600) },
+  );
+  check("and it is remembered as sent, with the company, so it is not offered again", !!(await state()).radar?.members.mem_sal?.sent[`still:tenure:${pub("e_echo_sales")}`] && !!(await state()).radar?.members.mem_sal?.shown?.c_echo);
   // A new RevOps hire at Acme comes in (RevOps comes before Sales): only it goes out the morning after.
   await T.mutate((d) => {
     d.engagements.push({ id: "e_acme_ops_new", companyId: "c_acme", by: "mem_mo", at: nowIso() });
@@ -377,7 +384,7 @@ async function main() {
   );
   check("its link opens that day", !!sm3 && sm3.text.includes(encodeURIComponent(types.radarPath(day2))));
   const sentSal = Object.keys((await state()).radar?.members.mem_sal?.sent ?? {});
-  check("no signal was sent to a member twice", sentSal.length === 4 && new Set(sentSal).size === 4, sentSal);
+  check("no signal was sent to a member twice", sentSal.length === 5 && new Set(sentSal).size === 5, sentSal);
 
   console.log("\nThe switch and the unsubscribe link");
   const off = await t.perform("tok-sal-0001", { type: "settings", radar: false }, "https://post.example.com");

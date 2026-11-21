@@ -121,6 +121,23 @@ export const REPEAT_RATE = 0.24;
 /** The window used when no rule names the pair: the research's "existing seat passes 6 to 9 months, a second seat follows within 0 to 6". */
 export const FALLBACK_GAP: Gap = [3, 12];
 
+/** "2025-06" or "2025": the earliest and latest month index it can mean (a year alone is any of its months). Null when it isn't one. */
+export function monthSpan(v: string | null | undefined): { from: number; to: number } | null {
+  const m = /^(\d{4})(?:-(\d{2}))?$/.exec(String(v ?? "").trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  if (m[2]) {
+    const mo = Number(m[2]);
+    if (mo < 1 || mo > 12) return null;
+    return { from: y * 12 + mo - 1, to: y * 12 + mo - 1 };
+  }
+  return { from: y * 12, to: y * 12 + 11 };
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Mar 2026", or "2025" for a year alone. */
+export const monthWords = (v: string) => (/^\d{4}-\d{2}$/.test(v) ? `${MONTH_NAMES[Number(v.slice(5, 7)) - 1]} ${v.slice(0, 4)}` : v.slice(0, 4));
+
 /* ---------- the transition rules ---------- */
 
 /** Months from the last seat's start to the next one: [earliest, latest] of the typical gap. */
@@ -381,12 +398,39 @@ export function timing(t: number, gap: Gap): number {
 /** Every month a hire's window can open at (the rules' and the fallback's earliest, above 0): where a re-surfaced hire is looked for. */
 export const GAP_STARTS: readonly number[] = [...new Set([...RULES.filter((r) => !r.inactive).map((r) => r.gap[0]), FALLBACK_GAP[0]])].filter((a) => a > 0).sort((a, b) => a - b);
 
-/** When the window `a` months after a hire's start month opens: the first of that month (UTC). */
-export function windowOpensMs(ym: string, a: number): number {
+/** A stable number for a string (FNV-1a, 32 bits): the same day for the same seat on every run, on every server. */
+export function stableHash(v: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < v.length; i++) {
+    h ^= v.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
+ * A day inside month index `k` (months since year 0), at 00:00 UTC: the first without a `salt`,
+ * else a day spread over the month by a stable hash of it (the company and seat), so a month's
+ * calendar signals arrive a few each day instead of all on the 1st. Still inside month k: the
+ * timing curve, which counts whole months, reads the same on any day of it.
+ */
+export function dayInMonthMs(k: number, salt?: string): number {
+  const y = Math.floor(k / 12);
+  const mo = k - y * 12;
+  if (!salt) return Date.UTC(y, mo, 1);
+  const days = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+  return Date.UTC(y, mo, 1 + (stableHash(`${salt}:${k}`) % days));
+}
+
+/**
+ * When the window `a` months after a hire's start month opens: a day in that month (UTC), the
+ * first without a `salt`, else spread by the seat (dayInMonthMs). Signals and scoring pass the
+ * seat's internal id, so both read the same day.
+ */
+export function windowOpensMs(ym: string, a: number, salt?: string): number {
   const m = monthIndex(ym);
   if (m === null) return NaN;
-  const k = m + a;
-  return Date.UTC(Math.floor(k / 12), k % 12, 1);
+  return dayInMonthMs(m + a, salt);
 }
 
 /* ---------- functions with thin priors ---------- */
@@ -453,6 +497,99 @@ export const SIGNAL_PRIORS: Record<string, Record<string, { p: number; gap: Gap;
     Sales: { p: 0.3, gap: [0, 6], why: "a sales leader usually follows a round" },
   },
 };
+
+/* ---------- calendar signals: a seat's tenure, and hiring again after one ended ---------- */
+
+/**
+ * How long fractional seats last, from Merlin's ended seats (the owner's sheet, 2026: ended
+ * fractional seats last a median 12 months, an average 19). An active seat reaching one of these
+ * marks is at the point where seats like it usually end, so its function may come up again there
+ * (a replacement): a signal for members in that function, said to be based on typical tenure.
+ * Judgment on p: about half of seats have ended by the median; a company whose seat ends hires
+ * again in about a quarter of cases (REPEAT_RATE), usually in another function, so a replacement
+ * in the same one within the next half year is put under a fifth, and lower again at the average.
+ */
+export const TENURE_MARKS = [12, 19] as const;
+export type TenureMark = (typeof TENURE_MARKS)[number];
+export const TENURE_PRIOR: Record<TenureMark, { p: number; gap: Gap; words: string }> = {
+  12: { p: 0.18, gap: [0, 6], words: "ended fractional seats last a median 12 months" },
+  19: { p: 0.12, gap: [0, 6], words: "the average ended fractional seat lasted 19 months" },
+};
+/** Past this many months in, an active seat's tenure says nothing more (its standing state stops). */
+export const TENURE_UNTIL = 24;
+
+/**
+ * A company whose fractional seat ended between these many months ago has hired fractionals
+ * before: past the first, a signal for that function and the functions the rules say follow it.
+ */
+export const REHIRE_MONTHS: Gap = [3, 24];
+/**
+ * The same function again after an ended seat. Judgment: repeat clients are about a quarter of
+ * fractional postings (REPEAT_RATE) and "usually for a different function", so the same function
+ * gets under that.
+ */
+export const REHIRE_SAME_P = 0.15;
+/** A function the transition rules name after the ended seat's: the rule's likelihood times this (the seat is over, its window measured from its start mostly gone). */
+export const REHIRE_NEXT_SHARE = 0.5;
+
+/* ---------- signals read from the company's website, career feed and size ---------- */
+
+/**
+ * A new full-time leader on the company's own team page (read OK both times): what it predicts for
+ * other functions. Judgment, from the owner's rule ("a new CRO often brings in RevOps or
+ * enablement help") and rules 6 and 8's pairs (a sales leader then RevOps, marketing then
+ * marketing ops), discounted because the new leader is full-time, not a fractional seat. A new
+ * leader in the member's own function lowers the odds instead (match.ts: a full-time leader known).
+ */
+export const ARRIVAL_PRIORS: Record<string, Record<string, { p: number; gap: Gap; why: string }>> = {
+  Sales: {
+    RevOps: { p: 0.25, gap: [0, 6], why: "RevOps help often follows a new sales leader" },
+    Enablement: { p: 0.15, gap: [0, 6], why: "enablement help often follows a new sales leader" },
+  },
+  Marketing: { RevOps: { p: 0.15, gap: [0, 6], why: "marketing ops help often follows a new marketing leader" } },
+};
+
+/**
+ * Full-time hiring in a function (the career feed's counts rose: lib/table.ts noteTeamHires): a
+ * fractional leader above the new team, or senior fractional help beside it. Judgment: the
+ * research gives this only for sales ("first 2-3 AE job posts", SIGNAL_PRIORS "sales-build"); the
+ * other functions get a smaller prior, and a full-time leader of the function known there keeps it
+ * on the page only.
+ */
+export const TEAM_PRIORS: Record<string, { p: number; gap: Gap; why: string }> = {
+  Marketing: { p: 0.2, gap: [0, 6], why: "a marketing team being hired can need fractional marketing leadership or senior help" },
+  Technology: { p: 0.15, gap: [0, 6], why: "an engineering team being hired can need fractional technology leadership" },
+  Finance: { p: 0.2, gap: [0, 6], why: "a finance team being hired can need fractional finance leadership" },
+  People: { p: 0.2, gap: [0, 6], why: "a recruiting push can need fractional people leadership" },
+  "Customer Success": { p: 0.2, gap: [0, 6], why: "a customer success team being hired can need fractional CS leadership" },
+};
+/** The functions the career feeds count full-time hires in, besides sales (sales-build). */
+export const TEAM_FUNCTIONS = Object.keys(TEAM_PRIORS);
+
+/**
+ * The company's size band rose (State.headcount, read the day it changed). Rule 9: "fractional HR
+ * comes in at 25 to 50 people" (p 0.25-0.35). Into 51–200 it has just passed 50: the rule's
+ * midpoint, soon. Into 11–50 it is on the way to 25: less, and later.
+ */
+export const HEADCOUNT_PRIORS: Record<string, Record<string, { p: number; gap: Gap; why: string }>> = {
+  "11–50": { People: { p: 0.1, gap: [0, 12], why: "fractional HR usually comes in at 25 to 50 people" } },
+  "51–200": { People: { p: 0.3, gap: [0, 6], why: "fractional HR usually comes in at 25 to 50 people" } },
+};
+/** Bands in order, to tell a rise from a fall. */
+export const SIZE_BANDS = ["1–10", "11–50", "51–200", "201–500", "501–1,000", "1,001+"];
+
+/**
+ * A leadership gap (a state): the company's own team page (read OK, in the last KNOWN_DAYS) shows
+ * no leader in a function, no fractional seat in it is on file, and at its revenue stage the
+ * research's propensity matrix gives the function at least GAP_MIN_SHARE of fractional seats.
+ * Scored at that share (a prior, judgment: the matrix is a share of seats, not a rate), never High.
+ */
+export const GAP_FUNCTIONS = ["Finance", "Marketing", "Sales", "Technology", "Operations", "People"];
+export const GAP_MIN_SHARE = 0.1;
+/** Stages a missing leader is read at: with revenue, from $1M. */
+export const GAP_STAGES: readonly Stage[] = [S1_5, S5_20, S20_50, S50];
+/** Sizes it is read at: not a company of ten or fewer. */
+export const GAP_MIN_BAND = "11–50";
 
 /* ---------- words ---------- */
 

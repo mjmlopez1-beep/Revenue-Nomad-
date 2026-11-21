@@ -11,6 +11,15 @@
  *   funding   it raised money (SEC Form D filings with RN_FUNDING=1: lib/funding, lib/radar/sources/funding.ts)
  *   sales-build  its career feed posted its first full-time sales hires (AE, SDR, BDR), or a jump in them
  *   departure    a leader its own website listed for the member's function is gone from it
+ *   tenure       a fractional seat in their function reached the months seats like it usually last (typical tenure)
+ *   rehire       it ended a fractional seat 3 to 24 months ago (it has hired fractionals before)
+ *   arrival      a new full-time leader on its own website, in a function whose arrival tends to bring theirs
+ *   team-build   its career feed posted a burst of full-time hires in their function (marketing, engineering…)
+ *   headcount    its size band rose to where the research puts the next fractional seat (People)
+ *   gap          its own team page shows no leader in their function, at a stage where one is usual (a state)
+ *
+ * Besides these events, a member's day can be filled with standing states (still true, not new:
+ * "Still a good time: …") when fewer than two fresh events reach them (lib/radar/match.ts pickDaily).
  *
  * Each signal for a member is scored (lib/radar/match.ts scoreFor, lib/radar/predict.ts): how
  * likely the company is to hire a fractional in their function next, times how well the timing
@@ -46,8 +55,8 @@ export const CRYSTAL_UPGRADE = "Upgrade to open more";
 export const CRYSTAL_FREE_TODAY = `1 free in ${FEATURE_NAME} today`;
 export const CRYSTAL_USED_LINE = `Your free ${FEATURE_NAME} company for today is used. Pro opens every company in your ${FEATURE_NAME}.`;
 
-export type RadarKind = "adjacent" | "role" | "seat" | "funding" | "sales-build" | "departure";
-export const RADAR_KINDS: RadarKind[] = ["role", "seat", "departure", "adjacent", "sales-build", "funding"];
+export type RadarKind = "adjacent" | "role" | "seat" | "funding" | "sales-build" | "departure" | "tenure" | "rehire" | "arrival" | "team-build" | "headcount" | "gap";
+export const RADAR_KINDS: RadarKind[] = ["role", "seat", "departure", "adjacent", "arrival", "sales-build", "team-build", "funding", "rehire", "tenure", "headcount", "gap"];
 /** How likely, in a word: never a percentage. */
 export type RadarBand = "High" | "Medium" | "Low";
 
@@ -190,6 +199,8 @@ export interface RadarMember {
   lastVia?: string;
   /** What went out each UTC day ("2026-11-19"), for that day's view. Kept RADAR_KEEP_VIEW_DAYS days. */
   days?: Record<string, RadarSentRow[]>;
+  /** Internal company id -> when a company was last sent to them, kept RADAR_COMPANY_QUIET_DAYS: a calendar signal or a standing state never repeats a company inside it. */
+  shown?: Record<string, string>;
 }
 
 export interface RadarState {
@@ -215,6 +226,15 @@ export const RADAR_HOUR_UTC = 13;
 export const RADAR_KEEP_DAYS = 120;
 /** A daily run looks back to the last run, at most this far. */
 export const RADAR_MAX_WINDOW_DAYS = 7;
+/** A member's day: at most this many companies, and when fewer fresh events reach them, standing states fill it to RADAR_DAY_MIN. */
+export const RADAR_DAY_MAX = 5;
+export const RADAR_DAY_MIN = 2;
+/** How a standing state's why-now starts (lib/radar/match.ts): still true, nothing new happened there today. */
+export const RADAR_STILL = "Still a good time:";
+/** A company sent to a member is not sent again inside this many days unless something new happened there. */
+export const RADAR_COMPANY_QUIET_DAYS = 30;
+/** A High or Medium event the day's cap held back stays eligible this long (the run looks back this far for unsent events). */
+export const RADAR_CARRY_DAYS = 7;
 /** The day switcher lists this many days, today first. */
 export const RADAR_VIEW_DAYS = 7;
 /** A delivery's companies are kept this long, so an older email's link still opens its day. */

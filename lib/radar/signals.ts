@@ -19,6 +19,19 @@
  *               or rose by two or more in 30 days (State.salesBuild, lib/table.ts noteSalesHires).
  *   departure   a leader the company's own website listed for a function is gone from it, read OK
  *               both times (State.leaderDepartures, lib/table.ts saveLeaders).
+ *   tenure      an active fractional seat reached 12 or 19 months (predict.ts TENURE_MARKS: the median and
+ *               average of ended seats), on a day of that month spread by the seat. Typical tenure, said so.
+ *   rehire      a fractional leadership seat that ended 3 months ago (a year-only end read as its December),
+ *               still inside 24 months of its earliest end: the company has hired fractionals before.
+ *   arrival     a leader the company's own website didn't list is on it now, read OK both times, team page
+ *               both times (State.leaderArrivals, lib/table.ts saveLeaders).
+ *   team-build  the career feed's full-time hires in marketing, engineering, finance, people or customer
+ *               success rose by two or more in 30 days (State.teamBuild, lib/table.ts noteTeamHires).
+ *   headcount   the company's size band rose into one the research ties a seat to (State.headcount).
+ *   gap         a team page read in the window shows no leader in a function usual at the company's stage,
+ *               and no fractional seat in it is on file (a state, emitted when a reading first shows it).
+ * A seat that came with the seed came into Merlin when the seed was built (seed.builtAt).
+ * standingSignals: what is still true today, for a day with few fresh events (see there).
  * Firms kept for an admin's review are no clients: nothing there is a signal.
  *
  * Every signal also carries what Crystal Ball's likelihood reads (lib/radar/match.ts scoreFor): the
@@ -33,7 +46,10 @@ import { titleWithout } from "../scan/clean";
 import { siteKey } from "../tableFields";
 import type { RadarKind } from "./types";
 import type { FundingCompany, FundingEvent } from "./sources/funding";
-import { GAP_STARTS, countTransitions, isStage, windowOpensMs, type SeatPoint, type TransitionCounts } from "./predict";
+import {
+  GAP_FUNCTIONS, GAP_MIN_BAND, GAP_MIN_SHARE, GAP_STAGES, GAP_STARTS, HEADCOUNT_PRIORS, REHIRE_MONTHS, SIZE_BANDS, TENURE_MARKS, TENURE_UNTIL, countTransitions, dayInMonthMs, isStage, monthIndex, monthSpan, propensity, windowOpensMs,
+  type SeatPoint, type TransitionCounts,
+} from "./predict";
 import { fnKnow, teamReadAt } from "../leaders/types";
 
 /** An adjacent hire is news while its start is at most this many months ago (the longest timing window, lib/radar/predict.ts). */
@@ -106,7 +122,28 @@ export interface RawSignal {
    */
   reopen?: { from: number; to: number };
   of?: string;
+  /** tenure: the seat's start month, how many months in it is, and the mark it reached (TENURE_MARKS). */
+  tenure?: { start: string; months: number; mark: number };
+  /** rehire: the ended seat's end as on file ("2025-06", or a year alone) and the whole months since its latest possible end. */
+  ended?: { end: string; months: number };
+  /** arrival: the new leader's level and kind on the team page, and since when when it says. Never a name. */
+  arrived?: { kind: string; level: string; since?: string };
+  /** team-build: full-time hires in the function the career feed listed, before and now. */
+  team?: { from: number; to: number };
+  /** headcount: the size band before and now. */
+  size?: { from: string; to: string };
+  /** Not an event: a state still true today (a window open, a gap still there), only for a day with few fresh events (match.ts pickDaily). */
+  standing?: boolean;
+  /** A standing state is not offered when any of these keys went to the member (its own event did). */
+  sameAs?: string[];
+  /** Internal member id of a member who holds the seat: never sent their own seat. Internal: never sent. */
+  holderId?: string | null;
+  /** Functions with an active fractional seat there now (not ended), or a fractional or interim leader on its website. */
+  activeFns?: string[];
 }
+
+/** A signal read off the calendar (a window opening, a tenure mark, a gap since an ended seat) or a standing state: nothing new happened at the company. */
+export const isCalendar = (x: Pick<RawSignal, "kind" | "reopen" | "standing">) => !!x.reopen || !!x.standing || x.kind === "tenure" || x.kind === "rehire";
 
 /** RawSignal.lead. */
 export interface SignalLeads {
@@ -197,15 +234,26 @@ export function observedTransitions(seed: Seed, s: State): TransitionCounts {
   return c;
 }
 
-/**
- * Every signal that happened after `sinceMs` and by `nowMs`. `funding` are the events the funding
- * source returned for the same window. Newest first.
- */
-export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: number, funding: FundingEvent[] = []): RawSignal[] {
+const monthOfMs = (ms: number) => {
+  const d = new Date(ms);
+  return d.getUTCFullYear() * 12 + d.getUTCMonth();
+};
+
+/** The seat is over: its status says Ended (or Closed), or its end is a month or year already past. */
+function seatEnded(e: EngNode, s: State, nowMs: number): boolean {
+  const status = T.live(e, s, "status");
+  if (status === "Ended" || status === "Closed") return true;
+  if (status === "Active") return false;
+  const end = monthSpan(T.live(e, s, "end"));
+  return !!end && end.to < monthOfMs(nowMs);
+}
+
+/** The shared reading of the table a run's signals (and standing states) are made from. */
+function readTable(seed: Seed, s: State, nowMs: number) {
   const g = T.graph(seed, s);
   const tracks = T.tracksOf(seed, s);
   const firms = T.firmsInReview(seed, s);
-  const inWindow = (ms: number) => Number.isFinite(ms) && ms > sinceMs && ms <= nowMs;
+  const idx = T.memberIndex(seed, s);
 
   // Each company's seats, and the functions it has a hire in.
   const byCompany = new Map<string, EngNode[]>();
@@ -214,15 +262,29 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     l.push(e);
     byCompany.set(e.companyId, l);
   }
+  const leadsKind = (companyId: string) =>
+    Object.entries(s.leaders?.[companyId]?.functions ?? {})
+      .filter(([, l]) => l.kind === "fractional" || l.kind === "interim")
+      .map(([fn]) => fn);
   const hiredFnsMemo = new Map<string, string[]>();
   const hiredFns = (companyId: string) => {
     let h = hiredFnsMemo.get(companyId);
     if (!h) {
-      const leads = Object.entries(s.leaders?.[companyId]?.functions ?? {})
-        .filter(([, l]) => l.kind === "fractional" || l.kind === "interim")
-        .map(([fn]) => fn);
-      h = [...new Set([...(byCompany.get(companyId) ?? []).filter((e) => isHireRaw(e, s, tracks)).map((e) => named(T.fnOf(e, s))), ...leads].filter((x): x is string => !!x))];
+      h = [...new Set([...(byCompany.get(companyId) ?? []).filter((e) => isHireRaw(e, s, tracks)).map((e) => named(T.fnOf(e, s))), ...leadsKind(companyId)].filter((x): x is string => !!x))];
       hiredFnsMemo.set(companyId, h);
+    }
+    return h;
+  };
+  const activeMemo = new Map<string, string[]>();
+  const activeFns = (companyId: string) => {
+    let h = activeMemo.get(companyId);
+    if (!h) {
+      h = [
+        ...new Set(
+          [...(byCompany.get(companyId) ?? []).filter((e) => isHireRaw(e, s, tracks) && !seatEnded(e, s, nowMs)).map((e) => named(T.fnOf(e, s))), ...leadsKind(companyId)].filter((x): x is string => !!x),
+        ),
+      ];
+      activeMemo.set(companyId, h);
     }
     return h;
   };
@@ -236,7 +298,6 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
         return fn && ym && monthsAgo(ym, nowMs) <= HIRE_FRESH_MONTHS && monthsAgo(ym, nowMs) >= 0 ? [{ fn, ym }] : [];
       })
       .sort((a, b) => a.ym.localeCompare(b.ym));
-  const out: RawSignal[] = [];
   const leadsMemo = new Map<string, SignalLeads>();
   const leadsOf = (companyId: string): SignalLeads => {
     let l = leadsMemo.get(companyId);
@@ -252,17 +313,22 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     }
     return l;
   };
+  const holderOf = (e: EngNode | null) => (e ? T.seatHolder(s, idx, e.id, T.valueOf(e, s, "operator"))?.id ?? null : null);
+  const out: RawSignal[] = [];
   const push = (x: Omit<RawSignal, "co" | "hiredFns" | "atMs"> & { atMs?: number }) => {
     if (firms.has(x.companyId)) return;
     const co = companyFacts(g, s, x.companyId);
     if (!co) return;
     const ft = Object.entries(s.leaders?.[x.companyId]?.functions ?? {}).filter(([, l]) => l.kind === "full-time");
     const e = x.engagementId ? g.engagements.get(x.engagementId) ?? null : null;
+    const holderId = holderOf(e);
     out.push({
       ...x,
       atMs: x.atMs ?? Date.parse(x.at),
       co,
       hiredFns: hiredFns(x.companyId),
+      activeFns: activeFns(x.companyId),
+      ...(holderId ? { holderId } : {}),
       ...(ft.length ? { ledFullTime: Object.fromEntries(ft.map(([fn, l]) => [fn, l.since?.slice(0, 4) ?? ""])) } : {}),
       lead: leadsOf(x.companyId),
       stage: stageOf(s, e, co.revenue),
@@ -270,6 +336,64 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
       recent: recentOf(x.companyId),
     });
   };
+  // When each seat came into Merlin: its own time, else the seed's build for a seat that came with the seed.
+  const added = seatAddedTimes(seed, s);
+  const seedIds = new Set(seed.engagements.map((e) => e.id));
+  const builtMs = Date.parse(seed.builtAt ?? "");
+  const addedOf = (e: EngNode): number | undefined => added.get(T.pubId(e.id)) ?? (seedIds.has(e.id) && Number.isFinite(builtMs) ? builtMs : undefined);
+  return { g, tracks, firms, out, push, addedOf, hiredFns, activeFns, leadsOf };
+}
+type TableRead = ReturnType<typeof readTable>;
+
+/** A fractional seat (Fractional, or no type on file) still going, with a start month: what a tenure mark reads. Interim, advisory and project seats end by design. */
+function tenureSeat(e: EngNode, s: State, tracks: Tracks, nowMs: number): { fn: string; start: string; m: number } | null {
+  if (!isLeaderRaw(e, s, tracks) || seatEnded(e, s, nowMs)) return null;
+  const type = T.live(e, s, "type");
+  if (type && type !== "Fractional") return null;
+  const fn = named(T.fnOf(e, s));
+  const start = T.live(e, s, "start");
+  const m = start && /^\d{4}-\d{2}$/.test(start) ? monthIndex(start) : null;
+  return fn && start && m !== null ? { fn, start, m } : null;
+}
+
+/** An ended fractional leadership seat with an end on file, read defensively (a year alone spans the year): what a rehire reads. */
+function endedSeat(e: EngNode, s: State, tracks: Tracks, nowMs: number): { fn: string; end: string; span: { from: number; to: number } } | null {
+  if (!isLeaderRaw(e, s, tracks) || !seatEnded(e, s, nowMs)) return null;
+  const fn = named(T.fnOf(e, s));
+  const end = T.live(e, s, "end");
+  const span = monthSpan(end);
+  return fn && end && span ? { fn, end, span } : null;
+}
+
+/** A leadership gap at a company, by function, from its own team page: none when the page wasn't read lately (KNOWN_DAYS). */
+function gapsAt(r: TableRead, s: State, companyId: string, nowMs: number): { fn: string; stage: string; at: string; key: string }[] {
+  const rec = s.leaders?.[companyId];
+  const teamAt = teamReadAt(rec ?? null, nowMs);
+  if (!rec || !teamAt || rec.ok === false) return [];
+  const c = r.g.companies.get(companyId);
+  if (!c) return [];
+  const stage = T.live(c, s, "revenue");
+  const band = T.live(c, s, "employees");
+  if (!isStage(stage) || !GAP_STAGES.includes(stage) || !band || SIZE_BANDS.indexOf(band) < SIZE_BANDS.indexOf(GAP_MIN_BAND)) return [];
+  const lead = r.leadsOf(companyId);
+  const hired = r.hiredFns(companyId);
+  return GAP_FUNCTIONS.filter((fn) => !rec.functions[fn] && !lead.ft[fn] && !hired.includes(fn) && propensity(fn, stage) >= GAP_MIN_SHARE).map((fn) => ({
+    fn,
+    stage,
+    at: teamAt,
+    // The same reading of the page is the same gap: a new key only when what the page lists changed.
+    key: `gap:${T.pubId(companyId)}:${fn}:${(rec.hash ?? "none").slice(0, 10)}`,
+  }));
+}
+
+/**
+ * Every signal that happened after `sinceMs` and by `nowMs`. `funding` are the events the funding
+ * source returned for the same window. Newest first.
+ */
+export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: number, funding: FundingEvent[] = []): RawSignal[] {
+  const r = readTable(seed, s, nowMs);
+  const { g, tracks, push, out, addedOf } = r;
+  const inWindow = (ms: number) => Number.isFinite(ms) && ms > sinceMs && ms <= nowMs;
 
   // 1. Adjacent hires: leadership seats that came into the table in the window.
   const added = seatAddedTimes(seed, s);
@@ -283,14 +407,16 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     push({ key: `hire:${T.pubId(e.id)}`, kind: "adjacent", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: at });
   }
 
-  // 1b. Adjacent hires that came in earlier, whose timing window may open in this window: each once more (key "…:open"),
-  // scored per member (lib/radar/match.ts keeps it only when their window opens now and it reads Medium or High).
+  // 1b. Adjacent hires that came in earlier (a seat that came with the seed came in when it was built), whose timing
+  // window may open in this window: each once more (key "…:open"), on a day of the month spread by the seat
+  // (predict.ts windowOpensMs), scored per member (lib/radar/match.ts keeps it only when their window opens now and
+  // it reads Medium or High).
   for (const e of g.engagements.values()) {
-    const at = added.get(T.pubId(e.id));
+    const at = addedOf(e);
     if (at === undefined || !Number.isFinite(at) || at > sinceMs) continue;
     const ym = hireMonth(T.live(e, s, "start"));
     if (!ym || monthsAgo(ym, nowMs) > HIRE_FRESH_MONTHS || monthsAgo(ym, nowMs) < 0) continue;
-    const opens = GAP_STARTS.map((a) => windowOpensMs(ym, a)).filter((ms) => inWindow(ms) && ms > at);
+    const opens = GAP_STARTS.map((a) => windowOpensMs(ym, a, e.id)).filter((ms) => inWindow(ms) && ms > at);
     if (!opens.length) continue;
     const fn = named(T.fnOf(e, s));
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
@@ -342,9 +468,9 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
   }
 
   // 5. First sales hires posted, or a jump in them (the career feeds' counts).
-  for (const [companyId, r] of Object.entries(s.salesBuild ?? {})) {
+  for (const [companyId, rec] of Object.entries(s.salesBuild ?? {})) {
     if (!g.companies.has(companyId)) continue;
-    for (const x of r.rises ?? []) {
+    for (const x of rec.rises ?? []) {
       const at = Date.parse(x.at);
       if (!inWindow(at)) continue;
       push({ key: `build:${T.pubId(companyId)}:${x.at.slice(0, 10)}`, kind: "sales-build", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn: null, title: null, build: { from: x.from, to: x.to } });
@@ -358,7 +484,111 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     push({ key: `gone:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, kind: "departure", at: new Date(at).toISOString(), atMs: at, companyId: x.companyId, engagementId: null, fn: x.fn, title: null, gone: { kind: x.kind, level: x.level } });
   }
 
+  // 7. Tenure: an active fractional seat reached the months seats like it usually last (predict.ts TENURE_MARKS), on a
+  // day of that month spread by the seat. Only when the seat was on file by then: else it is a standing state.
+  for (const e of g.engagements.values()) {
+    const t = tenureSeat(e, s, tracks, nowMs);
+    if (!t) continue;
+    const at = addedOf(e);
+    if (at === undefined) continue;
+    for (const mark of TENURE_MARKS) {
+      const ms = dayInMonthMs(t.m + mark, `${e.id}:tenure`);
+      if (!inWindow(ms) || ms <= at) continue;
+      push({ key: `tenure:${T.pubId(e.id)}:${mark}`, kind: "tenure", at: new Date(ms).toISOString(), atMs: ms, companyId: e.companyId, engagementId: e.id, fn: t.fn, title: null, tenure: { start: t.start, months: mark, mark } });
+    }
+  }
+
+  // 8. Rehire: a fractional seat that ended REHIRE_MONTHS[0] months ago (counted from its latest possible end, a
+  // year alone read as its December), while still inside REHIRE_MONTHS[1] of its earliest. On a day spread by the seat.
+  for (const e of g.engagements.values()) {
+    const x = endedSeat(e, s, tracks, nowMs);
+    if (!x) continue;
+    const at = addedOf(e);
+    if (at === undefined) continue;
+    const ms = dayInMonthMs(x.span.to + REHIRE_MONTHS[0], `${e.id}:rehire`);
+    if (!inWindow(ms) || ms <= at || monthOfMs(nowMs) > x.span.from + REHIRE_MONTHS[1]) continue;
+    push({ key: `rehire:${T.pubId(e.id)}`, kind: "rehire", at: new Date(ms).toISOString(), atMs: ms, companyId: e.companyId, engagementId: e.id, fn: x.fn, title: null, endReason: T.live(e, s, "endReason"), ended: { end: x.end, months: REHIRE_MONTHS[0] } });
+  }
+
+  // 9. A new leader on the company's own website, read OK both times (State.leaderArrivals, lib/table.ts saveLeaders).
+  for (const x of s.leaderArrivals ?? []) {
+    const at = Date.parse(x.at);
+    if (!inWindow(at) || !g.companies.has(x.companyId)) continue;
+    push({ key: `arrive:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, kind: "arrival", at: new Date(at).toISOString(), atMs: at, companyId: x.companyId, engagementId: null, fn: x.fn, title: null, arrived: { kind: x.kind, level: x.level, ...(x.since ? { since: x.since } : {}) } });
+  }
+
+  // 10. A burst of full-time hires in a function besides sales (the career feeds' counts, State.teamBuild).
+  for (const [companyId, byFn] of Object.entries(s.teamBuild ?? {})) {
+    if (!g.companies.has(companyId)) continue;
+    for (const [fn, rec] of Object.entries(byFn))
+      for (const x of rec.rises ?? []) {
+        const at = Date.parse(x.at);
+        if (!inWindow(at)) continue;
+        push({ key: `team:${T.pubId(companyId)}:${fn}:${x.at.slice(0, 10)}`, kind: "team-build", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn, title: null, team: { from: x.from, to: x.to } });
+      }
+  }
+
+  // 11. The size band rose to one the research ties a seat to (State.headcount, recordHeadcount).
+  for (const [companyId, h] of Object.entries(s.headcount ?? {})) {
+    if (!g.companies.has(companyId)) continue;
+    for (let i = 1; i < h.length; i++) {
+      const at = Date.parse(h[i].at);
+      const [from, to] = [h[i - 1].band, h[i].band];
+      if (!inWindow(at) || !HEADCOUNT_PRIORS[to] || SIZE_BANDS.indexOf(from) < 0 || SIZE_BANDS.indexOf(to) <= SIZE_BANDS.indexOf(from)) continue;
+      push({ key: `size:${T.pubId(companyId)}:${to}:${h[i].at.slice(0, 10)}`, kind: "headcount", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn: null, title: null, size: { from, to } });
+    }
+  }
+
+  // 12. A leadership gap confirmed by a team page read in the window (the same reading of the page: the same key).
+  for (const companyId of Object.keys(s.leaders ?? {})) {
+    for (const x of gapsAt(r, s, companyId, nowMs)) {
+      const at = Date.parse(x.at);
+      if (!inWindow(at)) continue;
+      push({ key: x.key, kind: "gap", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn: x.fn, title: null });
+    }
+  }
+
   return out.sort((a, b) => b.atMs - a.atMs);
+}
+
+/**
+ * The states still true today, for a member's day when fewer than two fresh events reach them
+ * (lib/radar/match.ts pickDaily), each keyed "still:…" and offered only while none of its events
+ * (sameAs) went to the member:
+ *   adjacent  a leadership hire (on file, started in the last HIRE_FRESH_MONTHS) whose timing window is
+ *             open for the member's function now (match.ts checks the window, per member)
+ *   tenure    an active fractional seat 12 to 24 months in (past the median of ended seats)
+ *   rehire    a fractional seat that ended REHIRE_MONTHS ago
+ *   gap       a leadership gap its team page still shows (read in the last KNOWN_DAYS)
+ * Each is dated now: nothing happened today, and the card says so ("Still a good time: …").
+ */
+export function standingSignals(seed: Seed, s: State, nowMs: number): RawSignal[] {
+  const r = readTable(seed, s, nowMs);
+  const { g, tracks, push, out, addedOf } = r;
+  const at = new Date(nowMs).toISOString();
+  const nowM = monthOfMs(nowMs);
+  for (const e of g.engagements.values()) {
+    const on = addedOf(e);
+    if (on === undefined || on > nowMs) continue;
+    const pub = T.pubId(e.id);
+    const fn = named(T.fnOf(e, s));
+    if (!fn || !isLeaderRaw(e, s, tracks)) continue;
+    const ym = hireMonth(T.live(e, s, "start"));
+    if (ym && monthsAgo(ym, nowMs) >= 1 && monthsAgo(ym, nowMs) <= HIRE_FRESH_MONTHS)
+      push({ key: `still:hire:${pub}`, of: `hire:${pub}`, sameAs: [`hire:${pub}`, `hire:${pub}:open`], standing: true, kind: "adjacent", at, atMs: nowMs, companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: on });
+    const t = tenureSeat(e, s, tracks, nowMs);
+    const months = t ? nowM - t.m : -1;
+    if (t && months >= TENURE_MARKS[0] && months <= TENURE_UNTIL) {
+      const mark = [...TENURE_MARKS].reverse().find((m) => months >= m)!;
+      push({ key: `still:tenure:${pub}`, sameAs: TENURE_MARKS.map((m) => `tenure:${pub}:${m}`), standing: true, kind: "tenure", at, atMs: nowMs, companyId: e.companyId, engagementId: e.id, fn: t.fn, title: null, tenure: { start: t.start, months, mark } });
+    }
+    const x = endedSeat(e, s, tracks, nowMs);
+    if (x && nowM >= x.span.to + REHIRE_MONTHS[0] && nowM <= x.span.from + REHIRE_MONTHS[1])
+      push({ key: `still:rehire:${pub}`, sameAs: [`rehire:${pub}`], standing: true, kind: "rehire", at, atMs: nowMs, companyId: e.companyId, engagementId: e.id, fn: x.fn, title: null, endReason: T.live(e, s, "endReason"), ended: { end: x.end, months: nowM - x.span.to } });
+  }
+  for (const companyId of Object.keys(s.leaders ?? {}))
+    for (const x of gapsAt(r, s, companyId, nowMs)) push({ key: `still:${x.key}`, sameAs: [x.key], standing: true, kind: "gap", at, atMs: nowMs, companyId, engagementId: null, fn: x.fn, title: null });
+  return out;
 }
 
 /**
