@@ -1,0 +1,579 @@
+{
+  "schemaVersion": "1.0",
+  "generated": "2026-11-21",
+  "notice": "Generic, anonymized templates distilled from past fractional and consulting proposals. Contains no client names, people, identifying figures or verbatim client text. Example sentences are illustrative and newly written. {{field}} placeholders are filled from discovery, the rate index, or the user.",
+  "fieldSources": {
+    "discovery": "Extracted from a discovery-call transcript or notes and confirmed by the user before use",
+    "rate_index": "Suggested by the Merlin rate index by company stage, seat and hours",
+    "profile": "From the fractional's own Merlin profile",
+    "manual": "Entered by the user"
+  },
+  "blocks": [
+    {
+      "id": "cover",
+      "title": "Cover",
+      "purpose": "Lead with the outcome, not the service, and show who it is for.",
+      "guidance": "Headline states the result in plain words. Include 'prepared for' (name and title of the signer), 'prepared by', date, and version. One subtitle sentence on the shape of the engagement.",
+      "goodLooksLike": ["Outcome-led headline", "Addressed to the person who signs", "Version number for revisions"],
+      "commonMistakes": ["Headline is the service name only", "Addressed to a go-between instead of the signer"],
+      "exampleText": [
+        "Build the sales system first, then hire into it.",
+        "A senior operator embedded two days a week to take you from a flat year to a repeatable plan."
+      ],
+      "fields": [
+        {"key": "headline", "label": "Outcome headline", "type": "text", "required": true, "source": "manual"},
+        {"key": "client.companyName", "label": "Client company", "type": "text", "required": true, "source": "discovery"},
+        {"key": "client.signerName", "label": "Signer name", "type": "text", "required": true, "source": "discovery"},
+        {"key": "client.signerTitle", "label": "Signer title", "type": "text", "required": true, "source": "discovery"},
+        {"key": "provider.name", "label": "Prepared by", "type": "text", "required": true, "source": "profile"},
+        {"key": "proposal.date", "label": "Date", "type": "date", "required": true, "source": "manual"},
+        {"key": "proposal.version", "label": "Version", "type": "text", "required": false, "source": "manual"}
+      ]
+    },
+    {
+      "id": "what_we_heard",
+      "title": "What we heard",
+      "purpose": "Prove you listened before you prescribe, in the buyer's own vocabulary.",
+      "guidance": "4 to 6 headed bullets. Each is one pain with one concrete fact (a rate, a duration, a count). Reference the date of the call. Paraphrase; never paste transcript text. Soften personnel issues; the document will be forwarded.",
+      "goodLooksLike": ["Specific facts, not generic pains", "Buyer's terms for their business", "Ordered from most to least painful"],
+      "commonMistakes": ["Listing every problem mentioned", "Generic statements any company could receive", "Naming or criticizing individual employees bluntly"],
+      "exampleText": [
+        "Your sales seat has been empty for three weeks, and the CRM it relied on was set up for a different business line.",
+        "Conversion on qualified calls has fallen sharply since the price change, and the cycle now runs several weeks longer."
+      ],
+      "fields": [
+        {"key": "discovery.callDate", "label": "Discovery call date", "type": "date", "required": true, "source": "discovery"},
+        {"key": "pains", "label": "Pains (4-6, each with a fact)", "type": "list", "required": true, "source": "discovery"},
+        {"key": "buyerQuoteParaphrase", "label": "One paraphrased line in the buyer's voice (optional, confirm with buyer)", "type": "text", "required": false, "source": "discovery"}
+      ]
+    },
+    {
+      "id": "why_now",
+      "title": "The moment",
+      "purpose": "Create urgency from the buyer's own trigger event and the cost of waiting.",
+      "guidance": "2 to 4 lines or 3 to 4 stat callouts: the trigger (seat empty, new leader, competitor exit, board target), the gap to the goal, and what a quarter of delay costs.",
+      "goodLooksLike": ["Trigger tied to a date", "Cost of inaction stated in the buyer's terms"],
+      "commonMistakes": ["Manufactured urgency", "No link to the recommendation"],
+      "exampleText": [
+        "An empty seat is the cheapest moment to build the system the next hire will run.",
+        "A competitor stepping back opens a window that will not stay open past next year's budget cycle."
+      ],
+      "fields": [
+        {"key": "whyNow.trigger", "label": "Trigger event", "type": "text", "required": true, "source": "discovery"},
+        {"key": "whyNow.costOfWaiting", "label": "Cost of waiting", "type": "text", "required": false, "source": "discovery"},
+        {"key": "statCallouts", "label": "Stat callouts (3-4)", "type": "list", "required": false, "source": "discovery"}
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "title": "Diagnosis",
+      "purpose": "Reframe the problem so the recommended shape follows naturally.",
+      "guidance": "Open with a one-line reframe ('This isn't X, it's Y'). Follow with 3 to 5 numbered patterns you have seen before. Each pattern should point to a workstream.",
+      "goodLooksLike": ["Reframe the buyer agrees with", "Patterns map to workstreams"],
+      "commonMistakes": ["Blaming the team", "Diagnosis that does not lead to the recommendation"],
+      "exampleText": [
+        "This isn't a hiring problem. It's a missing system that no hire could invent while also carrying a quota.",
+        "Every inquiry gets the same treatment today, so the best-fit buyers wait behind broad RFPs."
+      ],
+      "fields": [
+        {"key": "diagnosis.reframe", "label": "One-line reframe", "type": "text", "required": true, "source": "manual"},
+        {"key": "diagnosis.patterns", "label": "Patterns (3-5)", "type": "list", "required": true, "source": "discovery"}
+      ]
+    },
+    {
+      "id": "the_math",
+      "title": "The math",
+      "purpose": "Tie the engagement to the buyer's own target and show the gap honestly.",
+      "guidance": "Work backward: goal, deals needed, opportunities, meetings, activity, using stated assumptions. Mark which assumptions Workstream 1 will validate. State an honest first-quarter goal. Do not promise the target.",
+      "goodLooksLike": ["Assumptions visible", "Gap quantified", "Honest near-term goal"],
+      "commonMistakes": ["Promising revenue", "Leading with hire-cost savings instead", "Hidden or unrealistic conversion assumptions"],
+      "exampleText": [
+        "At your average first-year contract value, the growth goal needs roughly ten new clients a month after churn; today's pace is about three.",
+        "Restoring last year's conversion rate on the same lead volume would close about half of that gap before any new channel is added."
+      ],
+      "fields": [
+        {"key": "goals.target", "label": "Target and deadline", "type": "text", "required": true, "source": "discovery"},
+        {"key": "metrics.runRate", "label": "Current run rate", "type": "text", "required": false, "source": "discovery"},
+        {"key": "metrics.avgDealValue", "label": "Average deal value", "type": "currency", "required": false, "source": "discovery"},
+        {"key": "metrics.conversionRates", "label": "Conversion rates by stage", "type": "list", "required": false, "source": "discovery"},
+        {"key": "metrics.cycleLength", "label": "Sales cycle length", "type": "text", "required": false, "source": "discovery"},
+        {"key": "math.assumptions", "label": "Assumptions to validate", "type": "list", "required": true, "source": "manual"},
+        {"key": "math.nearTermGoal", "label": "Honest first-quarter goal", "type": "text", "required": true, "source": "manual"}
+      ]
+    },
+    {
+      "id": "recommendation",
+      "title": "What we recommend",
+      "purpose": "State the engagement shape: seat(s), seniority, commitment, mandate, and what it is not.",
+      "guidance": "Title, days per week or hours per month, one-sentence mandate, and an explicit 'This is not a ___ role.' For two seats, show each as a card with responsibilities and allocation.",
+      "goodLooksLike": ["One recommended option", "Clear boundary statement", "Mandate in one sentence"],
+      "commonMistakes": ["Vague 'advisory support'", "Scope larger than the hours", "Multiple options when none were requested"],
+      "exampleText": [
+        "A VP-level operator, two days a week, who owns the revenue plan and the operating rhythm so the founder gets her week back.",
+        "This is not a sales manager seat. Your director keeps running the day to day and gains a strategist above her."
+      ],
+      "fields": [
+        {"key": "seats", "label": "Seats (title, seniority, allocation, responsibilities)", "type": "list", "required": true, "source": "discovery"},
+        {"key": "roleShape", "label": "Builder / manager / closer", "type": "enum", "options": ["builder", "manager", "closer", "builder-who-sells", "advisor"], "required": true, "source": "discovery"},
+        {"key": "notThisRole", "label": "What this role is not", "type": "text", "required": true, "source": "manual"}
+      ]
+    },
+    {
+      "id": "role_profile",
+      "title": "Role profile and selection",
+      "purpose": "Show you know what good looks like and set up the shortlist.",
+      "guidance": "Must-haves tied to stage and motion; nice-to-haves tied to industry; explicit 'not a fit'. Explain selection: number of profiles, buyer meets as many as they like, optional 'walk us through your first month' exercise.",
+      "goodLooksLike": ["Stage-matched requirements", "Not-a-fit list", "Selection steps with timing"],
+      "commonMistakes": ["Generic wish list", "Presenting only one candidate", "Naming a person before availability is confirmed"],
+      "exampleText": [
+        "Has personally closed new business at a company under five million in revenue, not only managed the people who did.",
+        "Not a fit: a leader who expects a team, systems and leads to already be in place."
+      ],
+      "fields": [
+        {"key": "candidate.mustHave", "label": "Must-haves", "type": "list", "required": true, "source": "discovery"},
+        {"key": "candidate.niceToHave", "label": "Nice-to-haves", "type": "list", "required": false, "source": "discovery"},
+        {"key": "candidate.notAFit", "label": "Not a fit", "type": "list", "required": false, "source": "discovery"},
+        {"key": "shortlist.count", "label": "Number of profiles to present", "type": "number", "required": true, "source": "manual", "default": 3},
+        {"key": "shortlist.days", "label": "Business days to shortlist", "type": "number", "required": true, "source": "manual", "default": 5}
+      ]
+    },
+    {
+      "id": "phases_workstreams",
+      "title": "Plan: phases and workstreams",
+      "purpose": "Make the work concrete, sequenced and checkable.",
+      "guidance": "2 to 3 phases. Inside, 3 to 7 workstreams, each with a week range, 3 to 6 approach bullets, a Deliverable line and an Expected impact line. Optionally mark 'Start now' vs 'Can wait' with what waiting costs. Prefer deliverables over hours.",
+      "goodLooksLike": ["Every workstream has a named deliverable", "Expected impact stated as direction, not a guarantee", "Clear sequence and dependencies"],
+      "commonMistakes": ["Activities with no deliverable", "Hours listed per task", "No dependencies or sequencing"],
+      "exampleText": [
+        "Deliverable: a one-page sales process with named stages, required activities and a black-and-white exit gate for every stage.",
+        "Expected impact: the next sales hire starts on a working system instead of spending their first quarter building one."
+      ],
+      "fields": [
+        {"key": "phases", "label": "Phases (name, timing, objective)", "type": "list", "required": true, "source": "manual"},
+        {"key": "workstreams", "label": "Workstreams (title, weeks, approach[], deliverable, expectedImpact, priority)", "type": "list", "required": true, "source": "manual"}
+      ]
+    },
+    {
+      "id": "milestones",
+      "title": "Milestones",
+      "purpose": "Give the buyer decision points, not just status updates.",
+      "guidance": "Day 30 / 60 / 90 (or dates). Each milestone ends with a decision for the buyer.",
+      "goodLooksLike": ["Each milestone ends in a decision", "Includes the renewal or scale decision"],
+      "commonMistakes": ["Milestones that are only activities", "No day-90 decision"],
+      "exampleText": [
+        "Day 30: diagnostic readout with a ranked list of changes. You choose what we fix first.",
+        "Day 90: plan and team assessment presented; decide to continue, scale up, or wrap."
+      ],
+      "fields": [
+        {"key": "milestones", "label": "Milestones (when, what, decision)", "type": "list", "required": true, "source": "manual"}
+      ]
+    },
+    {
+      "id": "success_measures",
+      "title": "Success measures",
+      "purpose": "Define what the buyer can point to by day 90.",
+      "guidance": "3 to 6 measurable leading indicators. Baselines set at day 30. Avoid committing to revenue outcomes not controllable in 90 days.",
+      "goodLooksLike": ["Measurable", "Baseline plus target", "Within the engagement's control"],
+      "commonMistakes": ["Revenue guarantees", "Unmeasurable outcomes"],
+      "exampleText": [
+        "A live view of every open opportunity, reviewed weekly by the team that owns it.",
+        "A response-time baseline for new inquiries, with a target agreed at the day 30 readout."
+      ],
+      "fields": [
+        {"key": "goals.successDefinition", "label": "Buyer's definition of success", "type": "text", "required": false, "source": "discovery"},
+        {"key": "successMeasures", "label": "Measures (signal, target, by day)", "type": "list", "required": true, "source": "manual"}
+      ]
+    },
+    {
+      "id": "operating_cadence",
+      "title": "Operating cadence",
+      "purpose": "Show what a normal week looks like after the build phase.",
+      "guidance": "Table or 5 to 8 lines: pipeline review, 1:1s, forecast memo, leadership sync, written weekly update. Optional hour split per day.",
+      "goodLooksLike": ["Concrete rituals", "Written weekly update to the sponsor"],
+      "commonMistakes": ["Meeting-heavy build phase", "No written reporting"],
+      "exampleText": [
+        "Every Monday you receive a short written forecast: pacing, what changed, and the plan for anything off track."
+      ],
+      "fields": [
+        {"key": "cadence", "label": "Recurring rituals", "type": "list", "required": false, "source": "manual"}
+      ]
+    },
+    {
+      "id": "reporting_structure",
+      "title": "Reporting structure",
+      "purpose": "Settle who reports to whom and who decides.",
+      "guidance": "Fractional reports to ___; who reports to the fractional; client decides on hires, exits, pricing; fractional recommends. Note the provider remains accountable for delivery and replacement.",
+      "goodLooksLike": ["Decision rights explicit", "Incumbent roles protected where intended"],
+      "commonMistakes": ["Unclear authority over the team", "Fractional implied to make personnel decisions"],
+      "exampleText": [
+        "Decisions on hiring, exits and pricing stay with you. We bring the analysis and a written recommendation."
+      ],
+      "fields": [
+        {"key": "reportsTo", "label": "Fractional reports to (title)", "type": "text", "required": true, "source": "discovery"},
+        {"key": "directReports", "label": "Who reports to the fractional", "type": "list", "required": false, "source": "discovery"},
+        {"key": "decisionRights", "label": "Decision rights", "type": "list", "required": true, "source": "manual"}
+      ]
+    },
+    {
+      "id": "assumptions",
+      "title": "Assumptions and client responsibilities",
+      "purpose": "Make the client a co-owner of pace and protect scope.",
+      "guidance": "Data and system access in week one; standing weekly sponsor session; stakeholder availability; team-size cap the price assumes; tools paid by client.",
+      "goodLooksLike": ["Sponsor time commitment stated", "Team-size cap", "Access deadline"],
+      "commonMistakes": ["No dependencies, so delays become the fractional's fault"],
+      "exampleText": [
+        "A standing 30-minute weekly session with you is the single biggest factor in how fast this gets built, because the process we are documenting is yours.",
+        "This scope is priced for a team of up to five; a larger team is handled by written amendment."
+      ],
+      "fields": [
+        {"key": "dependencies", "label": "Client dependencies", "type": "list", "required": true, "source": "discovery"},
+        {"key": "teamSizeCap", "label": "Team-size cap for this price", "type": "number", "required": false, "source": "manual"}
+      ]
+    },
+    {
+      "id": "out_of_scope",
+      "title": "Out of scope",
+      "purpose": "Prevent scope creep by naming what a buyer might assume is included.",
+      "guidance": "3 to 6 items, each 'available by written amendment'. Common: closing deals personally, recruiting, CRM administration, marketing execution, system integrations.",
+      "goodLooksLike": ["Specific to this buyer's likely assumptions"],
+      "commonMistakes": ["Missing entirely", "So long it reads as defensive"],
+      "exampleText": [
+        "Recruiting or placing additional sales headcount. We can add this by written amendment."
+      ],
+      "fields": [
+        {"key": "outOfScope", "label": "Out-of-scope items", "type": "list", "required": true, "source": "discovery"}
+      ]
+    },
+    {
+      "id": "why_fractional",
+      "title": "Why fractional",
+      "purpose": "Support the decision against a full-time hire or a consulting firm.",
+      "guidance": "Comparison table: time to seat, time to impact, fully loaded annual cost (ranges), exit cost if wrong, signal to the team. Use as support, not the centerpiece.",
+      "goodLooksLike": ["Ranges, not precise salaries", "Includes the 'if the call is wrong' row"],
+      "commonMistakes": ["Making this the main argument", "Overstating savings"],
+      "exampleText": [
+        "A full-time search takes a quarter to seat and another two to show impact; an embedded operator is producing artifacts in the first month."
+      ],
+      "fields": [
+        {"key": "comparison.rows", "label": "Comparison rows", "type": "table", "required": false, "source": "rate_index"}
+      ]
+    },
+    {
+      "id": "proof",
+      "title": "Proof",
+      "purpose": "Earn credibility with the closest analog, not the biggest logo.",
+      "guidance": "About (3 lines), how operators are vetted and matched (required variables plus one strong preference), and 1 to 2 case studies with the same problem shape as the buyer's. Anonymize unless the reference has consented.",
+      "goodLooksLike": ["Same-shape case study", "Matching criteria specific to this brief"],
+      "commonMistakes": ["Unrelated logos", "Case study from a different motion or stage", "Naming clients without consent"],
+      "exampleText": [
+        "A founder-led platform selling to a technical buyer who ignores generic outreach. Sound familiar?"
+      ],
+      "fields": [
+        {"key": "provider.about", "label": "About", "type": "text", "required": false, "source": "profile"},
+        {"key": "matchingCriteria", "label": "Matching criteria", "type": "list", "required": false, "source": "manual"},
+        {"key": "caseStudies", "label": "Case studies (problem, talent, outcome)", "type": "list", "required": false, "source": "profile"}
+      ]
+    },
+    {
+      "id": "team_rates",
+      "title": "Team and rates",
+      "purpose": "Show who does what on multi-role engagements.",
+      "guidance": "Table of role, function, responsibilities, estimated hours or share. If packaged as flat fees, say so and show standard overage rates.",
+      "goodLooksLike": ["One accountable lead named", "Roles map to workstreams"],
+      "commonMistakes": ["Too many roles for the size of the work"],
+      "exampleText": [
+        "One lead owns every deliverable; specialists from the bench join for specific workstreams."
+      ],
+      "fields": [
+        {"key": "team", "label": "Team (role, function, responsibilities, hours)", "type": "table", "required": false, "source": "manual"}
+      ]
+    },
+    {
+      "id": "investment",
+      "title": "Timeline and investment",
+      "purpose": "State the commercial terms clearly in one place.",
+      "guidance": "Initial term and what follows; monthly fee with hours/days or 'priced on deliverables'; step-down from month 4 if applicable; variable compensation basis (collected revenue, window); overage rate with written consent; billing in advance and due date; late fee and work-pause rule; replacement guarantee; conversion fee.",
+      "goodLooksLike": ["One price for the recommended option", "Step-down after build", "Opt-out point stated"],
+      "commonMistakes": ["Deferring price to a later email", "Ambiguous overage rules", "Variable pay on booked rather than collected revenue"],
+      "exampleText": [
+        "The first three months are the build and carry the heavier allocation; from month four the engagement continues month to month at a lower steady-state fee.",
+        "If the selected operator is not the right fit at any point, we present replacements and transition the work at no added cost."
+      ],
+      "fields": [
+        {"key": "term.initialMonths", "label": "Initial term (months)", "type": "number", "required": true, "source": "manual", "default": 3},
+        {"key": "term.firm", "label": "Initial term is firm", "type": "boolean", "required": true, "source": "manual", "default": true},
+        {"key": "term.optOutDay", "label": "Opt-out day (optional)", "type": "number", "required": false, "source": "manual", "default": 90},
+        {"key": "term.noticeDays", "label": "Notice after initial term (days)", "type": "number", "required": true, "source": "manual", "default": 30},
+        {"key": "pricing.model", "label": "Pricing model", "type": "enum", "options": ["retainer_hours", "retainer_days", "program_fee", "fixed_fee_phased", "fixed_plus_variable", "ramp_to_commission"], "required": true, "source": "manual"},
+        {"key": "pricing.monthlyFee", "label": "Monthly fee (build phase)", "type": "currency", "required": false, "source": "rate_index"},
+        {"key": "pricing.allocation", "label": "Hours per month or days per week", "type": "text", "required": false, "source": "rate_index"},
+        {"key": "pricing.stepDownFee", "label": "Steady-state fee from month 4", "type": "currency", "required": false, "source": "rate_index"},
+        {"key": "pricing.variable", "label": "Variable compensation (basis, %, window)", "type": "text", "required": false, "source": "manual"},
+        {"key": "pricing.overageRate", "label": "Overage hourly rate", "type": "currency", "required": false, "source": "rate_index"},
+        {"key": "pricing.overageConsentThresholdPct", "label": "Written consent required above (% of allocation)", "type": "number", "required": false, "source": "manual", "default": 0},
+        {"key": "billing.timing", "label": "Billing timing", "type": "enum", "options": ["monthly_in_advance", "on_signing_then_monthly", "by_phase_milestone"], "required": true, "source": "manual", "default": "monthly_in_advance"},
+        {"key": "billing.dueDays", "label": "Payment due (days after invoice)", "type": "number", "required": true, "source": "manual", "default": 0},
+        {"key": "billing.lateFeePctPer15Days", "label": "Late fee (% per 15 days)", "type": "number", "required": false, "source": "manual", "default": 1.5},
+        {"key": "billing.pauseAtDaysOverdue", "label": "Work pauses at (days overdue)", "type": "number", "required": false, "source": "manual", "default": 30},
+        {"key": "replacementGuarantee", "label": "Replacement at no cost", "type": "boolean", "required": false, "source": "manual", "default": true},
+        {"key": "conversionFee", "label": "Full-time conversion fee (flat or % of salary, tail days)", "type": "text", "required": false, "source": "manual"},
+        {"key": "budget.signals", "label": "Budget signals from discovery (internal only)", "type": "text", "required": false, "source": "discovery", "internalOnly": true}
+      ]
+    },
+    {
+      "id": "payment_schedule",
+      "title": "Payment schedule",
+      "purpose": "Remove ambiguity on when money moves.",
+      "guidance": "Table of invoice number, date, amount, period covered. Pro-rate partial first periods.",
+      "goodLooksLike": ["Dates aligned to start date", "Pro-rated first period if mid-month"],
+      "commonMistakes": ["Schedule that contradicts the investment block"],
+      "exampleText": [
+        "Invoice 1 covers the partial first period and is due on signing; later invoices follow on the same day each month."
+      ],
+      "fields": [
+        {"key": "schedule", "label": "Invoices (date, amount, period)", "type": "table", "required": false, "source": "manual"}
+      ]
+    },
+    {
+      "id": "future_phases",
+      "title": "Potential next phases",
+      "purpose": "Plant the expansion path without inflating today's scope.",
+      "guidance": "3 to 5 bullets of logical follow-on work, each one line, explicitly not included in this agreement.",
+      "goodLooksLike": ["Follows from findings", "Clearly optional"],
+      "commonMistakes": ["Smuggling future work into current price"],
+      "exampleText": [
+        "Packaging the expansion services into named, priced offers once the pilot shows which accounts buy."
+      ],
+      "fields": [
+        {"key": "futurePhases", "label": "Potential next phases", "type": "list", "required": false, "source": "manual"}
+      ]
+    },
+    {
+      "id": "next_steps",
+      "title": "Next steps",
+      "purpose": "Close with a dated path and a commitment.",
+      "guidance": "Dated table (when, what, owner), starting with the completed discovery call and ending with the operator starting. Add a one-line commitment. Book the next meeting before sending.",
+      "goodLooksLike": ["Every row dated with an owner", "Next meeting already booked", "Includes the signer's review step"],
+      "commonMistakes": ["'Let us know your thoughts'", "No date", "Signer's review not scheduled"],
+      "exampleText": [
+        "If you select us, you will have a named shortlist within five business days and an operator in seat within three weeks."
+      ],
+      "fields": [
+        {"key": "nextStep", "label": "Agreed next step from discovery", "type": "text", "required": true, "source": "discovery"},
+        {"key": "nextSteps", "label": "Steps (when, what, owner)", "type": "table", "required": true, "source": "manual"},
+        {"key": "commitment", "label": "Commitment line", "type": "text", "required": false, "source": "manual"}
+      ]
+    },
+    {
+      "id": "terms",
+      "title": "Terms and conditions",
+      "purpose": "Standard consulting agreement the SOW attaches to.",
+      "guidance": "Library clause set with variables: services; payments and expenses; independent contractor; confidentiality (survival years); non-solicitation (months); work product and background IP license; term and termination; subcontracting with named operator acknowledged; indemnification; injunctive relief; governing law and arbitration; entire agreement; conversion fee; notices; severability and misclassification savings; counterparts and electronic signature; survival; counsel acknowledgment. Have counsel approve the library; users change variables, not clause text.",
+      "goodLooksLike": ["Variables only, clause text locked", "Electronic-signature clause present"],
+      "commonMistakes": ["Editing legal text per deal", "Inconsistent conversion fee between SOW and terms"],
+      "exampleText": [],
+      "fields": [
+        {"key": "terms.governingLaw", "label": "Governing law (state)", "type": "text", "required": true, "source": "profile"},
+        {"key": "terms.disputeMethod", "label": "Dispute resolution", "type": "enum", "options": ["arbitration", "courts"], "required": true, "source": "profile", "default": "arbitration"},
+        {"key": "terms.confidentialityYears", "label": "Confidentiality survival (years)", "type": "number", "required": true, "source": "profile", "default": 5},
+        {"key": "terms.nonSolicitMonths", "label": "Non-solicitation (months after term)", "type": "number", "required": true, "source": "profile", "default": 12},
+        {"key": "terms.conversionTailDays", "label": "Conversion fee tail (days)", "type": "number", "required": true, "source": "profile", "default": 90},
+        {"key": "terms.acceptanceReviewDays", "label": "Deliverable review window (business days)", "type": "number", "required": false, "source": "profile", "default": 5},
+        {"key": "terms.deemedAcceptedDays", "label": "Deemed accepted after (business days)", "type": "number", "required": false, "source": "profile", "default": 10}
+      ]
+    },
+    {
+      "id": "signature",
+      "title": "Signature",
+      "purpose": "Electronic signature by both parties.",
+      "guidance": "Client signer and provider signer, each with name, title and date captured by the e-sign flow. Track viewed and signed events; countersign; store executed PDF with audit trail; on client signature, trigger the operator subcontract.",
+      "goodLooksLike": ["Signer matches the cover's 'prepared for'", "Audit trail stored"],
+      "commonMistakes": ["Signer is not the economic buyer"],
+      "exampleText": [],
+      "fields": [
+        {"key": "client.signerName", "label": "Client signer", "type": "text", "required": true, "source": "discovery"},
+        {"key": "client.signerTitle", "label": "Client signer title", "type": "text", "required": true, "source": "discovery"},
+        {"key": "client.signerEmail", "label": "Client signer email", "type": "email", "required": true, "source": "manual"},
+        {"key": "provider.signerName", "label": "Provider signer", "type": "text", "required": true, "source": "profile"}
+      ]
+    },
+    {
+      "id": "addendum_header",
+      "title": "Addendum reference",
+      "purpose": "Extend an existing agreement without renegotiating terms.",
+      "guidance": "One paragraph: references the original agreement and date, states that its terms continue, and lists only what changes (hours, seat, term, rate). Follow with the invoice schedule and signatures.",
+      "goodLooksLike": ["One page", "Only deltas listed", "Re-evaluation date stated"],
+      "commonMistakes": ["Restating the whole SOW", "Changing terms silently"],
+      "exampleText": [
+        "This addendum follows the terms of our original agreement and changes only the monthly allocation and the term below."
+      ],
+      "fields": [
+        {"key": "addendum.originalAgreementDate", "label": "Original agreement date", "type": "date", "required": true, "source": "manual"},
+        {"key": "addendum.changes", "label": "Changes (hours, seat, term, rate)", "type": "list", "required": true, "source": "manual"},
+        {"key": "addendum.effectiveDate", "label": "Effective date", "type": "date", "required": true, "source": "manual"},
+        {"key": "addendum.reviewDate", "label": "Re-evaluate on", "type": "date", "required": false, "source": "manual"}
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "id": "fractional-sales-leader",
+      "title": "Fractional sales leader: build, then lead",
+      "bestFor": "Founder-led or plateaued companies roughly $2-20M in revenue that need a sales leader to build process and run the team, or a builder who sells.",
+      "stageBand": "$2-20M",
+      "pricingModel": "retainer_hours",
+      "pricingGuidance": "Heavier allocation months 1-3 (build), step-down from month 4. Broad bands: about $4-6K/mo for ~20 hrs with a small team; about $5-15K/mo for 20-40 hrs or 1-2 days/week at $5-20M. For a builder who sells, consider fixed plus a share of collected revenue on new contracts. Initial term 3-4 months, then month to month with 30 days' notice; optional day-90 opt-out.",
+      "lengthTarget": "4-8 pages",
+      "blocks": [
+        {"blockId": "cover", "required": true},
+        {"blockId": "what_we_heard", "required": true},
+        {"blockId": "why_now", "required": false},
+        {"blockId": "the_math", "required": true},
+        {"blockId": "recommendation", "required": true, "overrides": {"exampleText": ["A fractional VP of Sales who owns the plan and holds the team to it, while your director keeps running the daily motion."]}},
+        {"blockId": "role_profile", "required": true},
+        {"blockId": "phases_workstreams", "required": true, "overrides": {"guidance": "Phase 1 (days 1-90): benchmark the current state, build the process with stage gates, script the customer moments, train and coach, assess the team. Phase 2 (day 91+): run the weekly meeting, 1:1s, call review, forecast, written weekly update."}},
+        {"blockId": "milestones", "required": true},
+        {"blockId": "reporting_structure", "required": true},
+        {"blockId": "assumptions", "required": true},
+        {"blockId": "out_of_scope", "required": true},
+        {"blockId": "proof", "required": false},
+        {"blockId": "investment", "required": true},
+        {"blockId": "next_steps", "required": true},
+        {"blockId": "terms", "required": true},
+        {"blockId": "signature", "required": true}
+      ]
+    },
+    {
+      "id": "sprint-90",
+      "title": "90-day program with an embedded lead",
+      "bestFor": "PE-backed or larger companies ($20M+) needing a foundation or transformation build with one accountable lead positioned inside the leadership team.",
+      "stageBand": "$20M+ or PE-backed",
+      "pricingModel": "program_fee",
+      "pricingGuidance": "Flat monthly program fee priced on deliverables, not hours; firm initial term of 90 days to 6 months, then month to month. Broad band about $15-30K/mo. If a sponsor signals a cap, present 2-3 intensity options with scope for each rather than discounting.",
+      "lengthTarget": "6-10 pages",
+      "blocks": [
+        {"blockId": "cover", "required": true},
+        {"blockId": "what_we_heard", "required": true},
+        {"blockId": "diagnosis", "required": true},
+        {"blockId": "recommendation", "required": true, "overrides": {"exampleText": ["The program is delivered by an embedded team under one accountable lead who sits with your leadership, not as an outside advisory engagement."]}},
+        {"blockId": "phases_workstreams", "required": true, "overrides": {"guidance": "Phase 1 embed and diagnose (days 1-30) ending in a ranked backlog; Phase 2 confirm then execute in short increments. 5-7 workstreams marked Start now / Can wait with deliverable and expected impact each. Agree month-4 priorities in writing by day 45."}},
+        {"blockId": "milestones", "required": true},
+        {"blockId": "success_measures", "required": true},
+        {"blockId": "reporting_structure", "required": true},
+        {"blockId": "assumptions", "required": true},
+        {"blockId": "out_of_scope", "required": true},
+        {"blockId": "proof", "required": true, "overrides": {"guidance": "Include at least one case study from the buyer's industry or an equivalent problem shape; sponsors ask for it explicitly."}},
+        {"blockId": "investment", "required": true},
+        {"blockId": "next_steps", "required": true},
+        {"blockId": "terms", "required": true},
+        {"blockId": "signature", "required": true}
+      ]
+    },
+    {
+      "id": "ongoing-retainer",
+      "title": "Ongoing retainer or expansion addendum",
+      "bestFor": "Existing clients: continuing after a build phase, adding hours or a second seat, or extending the term.",
+      "stageBand": "any",
+      "pricingModel": "retainer_hours",
+      "pricingGuidance": "Keep the original rate unless the scope or seniority changes; state the new allocation, effective date, re-evaluation date and invoice schedule. Month to month with 30 days' notice after any committed period.",
+      "lengthTarget": "1-2 pages",
+      "blocks": [
+        {"blockId": "addendum_header", "required": true},
+        {"blockId": "recommendation", "required": false, "overrides": {"guidance": "Only if responsibilities change: list the updated responsibilities as short headed bullets."}},
+        {"blockId": "operating_cadence", "required": false},
+        {"blockId": "payment_schedule", "required": true},
+        {"blockId": "signature", "required": true}
+      ]
+    },
+    {
+      "id": "revops-build",
+      "title": "RevOps or systems build project",
+      "bestFor": "Defined builds: CRM migration or rebuild, sales playbook, outbound engine, lead scoring, AI-assisted workflow.",
+      "stageBand": "$1-50M",
+      "pricingModel": "fixed_fee_phased",
+      "pricingGuidance": "Fixed fee by phase over 6-12 weeks (broadly about $5-35K total), billed on signing then by month or phase; optional ongoing optimization retainer afterward (broadly about $5-6K/mo). Deliverable acceptance window and change orders above a set threshold.",
+      "lengthTarget": "4-8 pages",
+      "blocks": [
+        {"blockId": "cover", "required": true},
+        {"blockId": "what_we_heard", "required": true},
+        {"blockId": "phases_workstreams", "required": true, "overrides": {"guidance": "Typical: Phase 1 discovery and audit (weeks 1-2); Phase 2 build or playbook (weeks 3-6); Phase 3 configuration and tooling (weeks 5-8); Phase 4 enablement and rollout (weeks 7-10). Each phase lists approach and deliverables. State what is a recommendation only vs implemented."}},
+        {"blockId": "team_rates", "required": false},
+        {"blockId": "success_measures", "required": false},
+        {"blockId": "assumptions", "required": true},
+        {"blockId": "out_of_scope", "required": true},
+        {"blockId": "investment", "required": true},
+        {"blockId": "payment_schedule", "required": true},
+        {"blockId": "future_phases", "required": false},
+        {"blockId": "next_steps", "required": true},
+        {"blockId": "terms", "required": true},
+        {"blockId": "signature", "required": true}
+      ]
+    },
+    {
+      "id": "advisory",
+      "title": "Advisory engagement",
+      "bestFor": "Pre-seed to early-stage founders, or an investor or operator supporting a small portfolio, who need foundational go-to-market guidance at low intensity.",
+      "stageBand": "pre-revenue to $2M",
+      "pricingModel": "retainer_days",
+      "pricingGuidance": "Half a day to one day per week; broad band about $2-5K/mo; month to month. Buyers at this stage want a clear number up front.",
+      "lengthTarget": "2-3 pages",
+      "blocks": [
+        {"blockId": "cover", "required": true},
+        {"blockId": "what_we_heard", "required": true},
+        {"blockId": "recommendation", "required": true, "overrides": {"exampleText": ["Half a day a week focused on three foundations: who you sell to, how you reach them, and a simple pipeline you can run yourself."]}},
+        {"blockId": "milestones", "required": true},
+        {"blockId": "operating_cadence", "required": false},
+        {"blockId": "investment", "required": true},
+        {"blockId": "next_steps", "required": true},
+        {"blockId": "terms", "required": true},
+        {"blockId": "signature", "required": true}
+      ]
+    }
+  ],
+  "discoveryExtraction": {
+    "description": "Fields to extract from a discovery-call transcript to pre-fill a proposal. Extracted values are paraphrased and shown to the user for confirmation; never paste transcript text into a client document.",
+    "fields": [
+      {"key": "company.profile", "feeds": ["cover", "what_we_heard"], "extract": "Industry, model, revenue band, headcount, ownership, regions", "cues": ["we're a", "we do about", "our investors", "the parent company"]},
+      {"key": "goals.target", "feeds": ["the_math", "success_measures"], "extract": "Revenue or customer target with deadline", "cues": ["get to", "by end of", "the plan is", "the board wants"]},
+      {"key": "goals.successDefinition", "feeds": ["success_measures"], "extract": "What good looks like at 90 days and 12 months", "cues": ["if this works", "I'd be thrilled", "success would be"]},
+      {"key": "currentState.team", "feeds": ["what_we_heard", "role_profile", "reporting_structure"], "extract": "Roles, tenure, performers, incumbents to protect", "cues": ["we have", "reps", "she's great at", "not using"]},
+      {"key": "currentState.process", "feeds": ["diagnosis", "phases_workstreams"], "extract": "Deal flow, number of meetings, handoffs", "cues": ["first we", "then a demo", "three calls", "hand off"]},
+      {"key": "currentState.systems", "feeds": ["phases_workstreams", "assumptions"], "extract": "CRM, tools, data sources, adoption", "cues": ["spreadsheet", "CRM", "set up for", "nobody updates"]},
+      {"key": "pains", "feeds": ["what_we_heard"], "extract": "4-6 pains with one fact each", "cues": ["the problem is", "frustrating", "can't figure out", "keeps happening"]},
+      {"key": "metrics", "feeds": ["the_math", "diagnosis"], "extract": "Conversion, cycle length, win rate, deal value, lead volume, spend", "cues": ["percent", "weeks", "per month", "average deal"]},
+      {"key": "priorAttempts", "feeds": ["diagnosis"], "extract": "Failed hires, agencies, tools and why", "cues": ["we tried", "didn't work out", "let go", "agency"]},
+      {"key": "whyNow", "feeds": ["why_now"], "extract": "Trigger event and cost of waiting", "cues": ["just left", "new CEO", "competitor", "this quarter"]},
+      {"key": "timeline", "feeds": ["milestones", "next_steps"], "extract": "Desired start, blackout dates, decision date", "cues": ["by the first", "before", "I'm traveling", "kick off"]},
+      {"key": "decision.process", "feeds": ["next_steps"], "extract": "Signer, reviewers, committee, competing vendors", "cues": ["take it to", "our CEO", "the board", "talking to others"]},
+      {"key": "decision.signerOnCall", "feeds": ["risk_flags"], "extract": "Was the economic buyer on the call (boolean)", "cues": ["I can approve", "I need to check with"]},
+      {"key": "budget.signals", "feeds": ["investment", "risk_flags"], "extract": "Caps, market quotes, sensitivity, preferred structure", "cues": ["we were quoted", "too expensive", "budget", "commission"]},
+      {"key": "roleShape", "feeds": ["recommendation"], "extract": "Seat, seniority, days/week, builder/manager/closer", "cues": ["days a week", "someone who can sell", "not a manager"]},
+      {"key": "candidate", "feeds": ["role_profile"], "extract": "Must-have, nice-to-have, not-a-fit", "cues": ["has to have", "ideally", "not someone who"]},
+      {"key": "stakeholders", "feeds": ["reporting_structure", "assumptions"], "extract": "Sponsor, champion, users, incumbents (stored privately)", "cues": ["reports to", "works with", "owns"]},
+      {"key": "dependencies", "feeds": ["assumptions"], "extract": "Data access, sponsor time, references", "cues": ["we can give you access", "30 minutes a week"]},
+      {"key": "sensitivities", "feeds": ["tone_checks"], "extract": "Personnel issues, words to avoid, confidentiality", "cues": ["don't say", "between us", "delicate"]},
+      {"key": "outOfScopeHints", "feeds": ["out_of_scope"], "extract": "Work the client handles or doesn't want", "cues": ["our contractor handles", "we don't need"]},
+      {"key": "objectionsRaised", "feeds": ["objection_prep"], "extract": "Concerns raised", "cues": ["my worry is", "what if", "I'm not sure"]},
+      {"key": "nextStep", "feeds": ["next_steps"], "extract": "Agreed follow-up date and owner", "cues": ["let's meet", "send me by", "follow up"]}
+    ],
+    "riskFlags": [
+      {"id": "signer_absent", "when": "decision.signerOnCall == false", "message": "The person who signs was not on the call. Proposals routed through a go-between lost more often; ask to present to the signer."},
+      {"id": "no_budget_signal", "when": "budget.signals is empty", "message": "No budget signal captured. Ask for a range or market quotes before sending to avoid sticker shock."},
+      {"id": "no_next_step", "when": "nextStep is empty", "message": "No dated next step. Book the review meeting before sending."},
+      {"id": "single_candidate", "when": "shortlist.count < 2", "message": "Present at least two profiles; a single candidate gives the buyer no choice."},
+      {"id": "price_deferred", "when": "pricing.monthlyFee is empty and pricing.model != fixed_fee_phased", "message": "State a price. Deferring it to a later email stalled deals."},
+      {"id": "over_band", "when": "pricing.monthlyFee > rate_index.bandHigh", "message": "Above the typical band for this stage. Consider 2-3 intensity options."}
+    ]
+  },
+  "objectionLibrary": [
+    {"objection": "Higher than expected", "response": "Offer 2-3 intensity levels with scope for each; tie back to the math; reduce scope rather than rate; show the step-down after the build phase."},
+    {"objection": "Why not hire full-time?", "response": "Too early to know who to hire before the leaks are diagnosed; a full-time search takes months to seat; build the system first and hire into it, with a defined conversion path."},
+    {"objection": "Middleman fee", "response": "Named operator, vetted bench, one contract and invoice, replacement guarantee, provider accountable for delivery."},
+    {"objection": "Consulting firms leave a deck", "response": "One embedded accountable lead inside the leadership team, a live backlog and a monthly deliverables summary."},
+    {"objection": "No results in three months", "response": "Leading-indicator milestones at days 30/60/90, an explicit opt-out, and for first hires a fixed ramp then performance pay."},
+    {"objection": "Hire the manager first", "response": "Build before hire; past hires struggled because they had to invent the system while closing."},
+    {"objection": "Need the CEO, owner or board", "response": "Offer to join that meeting, send a one-page summary, and book the date before ending the call."},
+    {"objection": "Industry case study?", "response": "Show the closest same-shape analog and the matching criteria you will screen for."},
+    {"objection": "We'll use an agency", "response": "Agencies need a proven internal process to work from; document it first, then outsource execution against it."}
+  ]
+}

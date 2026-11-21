@@ -27,15 +27,17 @@ const emailApiUrl = () => process.env.RN_EMAIL_API_URL?.trim() || "https://api.r
  * List-Unsubscribe-Post, so a mail app can show its own unsubscribe button. The same address
  * takes that one-click POST and the link in the email (GET): app/api/table/unsubscribe.
  */
-export async function sendEmail(to: string, subject: string, text: string, html: string, opts: { unsubscribeUrl?: string } = {}): Promise<boolean> {
+/** `replyTo` (a proposal): one plain address that replies go to instead of RN_EMAIL_REPLY_TO. */
+export async function sendEmail(to: string, subject: string, text: string, html: string, opts: { unsubscribeUrl?: string; replyTo?: string } = {}): Promise<boolean> {
   if (!emailEnabled()) return false;
   const unsub = /^https?:\/\/[^\s<>]+$/.test(opts.unsubscribeUrl ?? "") ? opts.unsubscribeUrl : undefined;
   const headers = unsub ? { headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {};
+  const reply = opts.replyTo && /^[^\s@<>,]+@[^\s@<>,]+\.[a-z]{2,}$/i.test(opts.replyTo) ? opts.replyTo : replyTo();
   try {
     const r = await fetch(emailApiUrl(), {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: process.env.RN_EMAIL_FROM, to: [to], subject, text, html, ...(replyTo() ? { reply_to: replyTo() } : {}), ...headers }),
+      body: JSON.stringify({ from: process.env.RN_EMAIL_FROM, to: [to], subject, text, html, ...(reply ? { reply_to: reply } : {}), ...headers }),
     });
     if (!r.ok) console.error("email send failed", r.status, (await r.text()).slice(0, 200));
     return r.ok;
