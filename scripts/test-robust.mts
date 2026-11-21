@@ -707,8 +707,13 @@ console.log("\nThe API's routes");
     "api/logo/[id]",
     "api/mcp",
     "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
+    // Smart ways in (lib/paths): the member's cookie, their own LinkedIn connections only.
+    "api/paths",
+    // Proposals (lib/proposals): the member's cookie for their own; api/sign: the signer's signed link (one send, 30 days) is the only key.
+    "api/proposals",
     // The radar: Send now (an admin's cookie), and the email's open pixel and tracked links (the radar's signature; a click only ever goes to a path in the app).
     "api/radar", "api/radar/go", "api/radar/open",
+    "api/sign",
     // api/table/jobs: Automatic jobs (lib/jobs.ts), the card and cadence changes (an admin's cookie), and the scheduler's own look (a key only this process holds).
     "api/table", "api/table/jobs", "api/table/lookup", "api/table/names", "api/table/scan", "api/table/unsubscribe",
   ];

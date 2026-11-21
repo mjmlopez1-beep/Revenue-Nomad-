@@ -441,7 +441,14 @@ async function main() {
   const knowOff = page(false);
   check("Crystal Ball's Last 30 days: the pill says the range", month.range === "30d" && knowOff.includes(`From your Crystal Ball · Last 30 days · ${month.rows.length} companies`), knowOff.slice(0, 400));
   check("Where you know someone cuts that range to the companies she knows someone at", inMonth === 2 && knowOn.includes("From your Crystal Ball · Last 30 days · 2 companies") && /Where you know someone\s*2/.test(knowOn), knowOn.slice(0, 400));
-  check("the three ranges are there with their counts", ["Today", "Last 7 days", "Last 30 days"].every((l) => knowOn.includes(l)) && (month.ranges ?? []).length === 3);
+  // The tabs show only when the ranges differ (todayModel.rangesWorthShowing): three equal counts say nothing new.
+  const { rangesWorthShowing } = await import("../app/post/todayModel.ts");
+  const tabsShown = rangesWorthShowing(month.ranges);
+  check(
+    "the three ranges are counted, and their tabs show only when the counts differ",
+    (month.ranges ?? []).length === 3 && (tabsShown ? ["Today", "Last 7 days", "Last 30 days"].every((l) => knowOn.includes(l)) : !knowOn.includes("Last 7 days")),
+    [tabsShown, (month.ranges ?? []).map((r) => r.companies)],
+  );
 
   /* ---------- 5. what to charge them ---------- */
   console.log("\nWhat to charge them");
