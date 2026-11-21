@@ -359,9 +359,15 @@ async function main() {
     check("a member still in onboarding has no trial", !(await state()).billing!.members[fay.id] && (await meOf(fay.token)).plan?.name === "free");
     await act(fay.token, { type: "onboardDraft", draft: { step: 1, function: "Marketing", title: "", icp: null, before: null, roles: true, email: true, clientCount: "0", looking: false, clients: [], views: [], saved: null, at: new Date().toISOString() } });
     check("onboarding's draft keeps the two answers", (await meOf(fay.token)).draft?.clientCount === "0" && (await meOf(fay.token)).draft?.looking === false);
+    const f1 = (await meOf(fay.token)).plan;
+    check("in onboarding the trial is ahead (onboarding's words for it): Free, none had yet, no card", f1?.name === "free" && !f1.hadTrial && !f1.trialStarted, f1);
     await act(fay.token, { type: "profile", function: "Marketing", clientCount: "0", looking: false });
     const f2 = (await meOf(fay.token)).plan;
     check("finishing onboarding starts the 21-day trial", f2?.name === "trial" && f2.trialDaysLeft === 21 && f2.notLooking, f2);
+    check("Home's one-time trial card is due once the trial starts", f2?.trialStarted === true, f2);
+    const seenStart = await act(fay.token, { type: "noticeSeen", kind: "trialStarted" });
+    check("Got it: the trial card is closed for good, kept in the plan's notices", seenStart.ok && !(await meOf(fay.token)).plan?.trialStarted && !!(await state()).billing!.members[fay.id].notices?.trialStartedSeen, seenStart);
+    check("Bo, whose trial started at his visit, gets the card too", (await meOf(BO)).plan?.trialStarted === true);
     const bad = await act(fay.token, { type: "profile", clientCount: "7" });
     check("a client count off the list is refused", !bad.ok);
   } else check("a new member could join", false);

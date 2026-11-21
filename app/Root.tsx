@@ -603,13 +603,21 @@ function App() {
    * onboarding sent on its own comes with one download in the background (skipped when one just landed).
    */
   const onboarded = useCallback(() => {
+    setObHold(false);
     if (Date.now() - lastLoad.current > 1500) sync();
   }, [sync]);
+  /**
+   * Onboarding's last step sends the profile as it shows (the trial starts, so Crystal Ball names its
+   * companies there): the member reads as onboarded from then on, and onboarding stays on screen until
+   * its own button (onDone). A reload from there opens the app.
+   */
+  const [obHold, setObHold] = useState(false);
+  const holdOnboarding = useCallback(() => setObHold(true), []);
   const onSkip = useCallback(() => {
     skipped.current = true;
   }, []);
 
-  const onboarding = !!view?.me && !view.me.onboarded && !fromMessageLink.current && !toMessage && !toWelcome;
+  const onboarding = !!view?.me && (!view.me.onboarded || obHold) && !fromMessageLink.current && !toMessage && !toWelcome;
   useEffect(() => {
     if (onboarding) firstRun.current = true;
   }, [onboarding]);
@@ -644,7 +652,7 @@ function App() {
   if (!view.me) return <Landing view={view} onSignedIn={joined} signInError={signInError} signInNote={linkNote} />;
   if (onboarding) {
     const Ob = onboardingNow ?? Onboarding;
-    return <Ob view={view} act={act} onDone={onboarded} onSkip={onSkip} viewReady={viewReady} />;
+    return <Ob view={view} act={act} onDone={onboarded} onSkip={onSkip} viewReady={viewReady} onHold={holdOnboarding} />;
   }
   // Done with onboarding before its first table landed: the app's frame until it does. The first screen draws without it.
   if (!viewReady && !partial) return <Skeleton member />;

@@ -12,13 +12,15 @@
  *
  * Each row (desktop) and card (phones) says what happened there and has one button. For a locked
  * company it goes by plan (Me.crystal, CrystalOpen.tsx): Trial and Pro "Open" (free, and the company
- * is theirs), Free "Open free · 1 left today" (one a UTC day, with everything on it), then "Upgrade
- * to open more" with the line under the heading; with billing off, Unlock company · 2 credits (the
- * record's own UnlockCompany, so the zero-credit wall and the daily limit work as everywhere). Open
- * for one the member knows. The server checks each free open is in their Crystal Ball. The row or card
- * itself opens the record, and closing it comes back here. A removable pill says what the list
- * is ("From your Crystal Ball · Last 7 days · 9 companies", "… · Nov 19 · 2 companies" for a day's
- * link); taking it off shows all companies. The three ranges are one tap each, with their counts.
+ * is theirs), Free "Open free · 1 left today" (one a UTC day, with everything on it), then the
+ * ordinary "Unlock · 2 credits" with the line under the heading and its Pro link; with billing off,
+ * Unlock company · 2 credits (the record's own UnlockCompany, so the zero-credit wall and the daily
+ * limit work as everywhere). Open for one the member knows. The server checks each free open is in
+ * their Crystal Ball. The row or card itself opens the company the way its button does where that is
+ * free (useCrystalClick), then the record, and closing it comes back here. A removable pill says what
+ * the list is ("From your Crystal Ball · Last 7 days · 9 companies", "… · Nov 19 · 2 companies" for a
+ * day's link); taking it off shows all companies. The three ranges are one tap each, with their
+ * counts, and stay out of the way when all three count the same companies.
  *
  * [google network] "Where you know someone": the list cut to the companies in the member's own
  * network (the rows that carry the "You know someone · Warm" chip); a chip beside the ranges turns
@@ -32,17 +34,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_INDUSTRIES } from "@/lib/tableFields";
-import { CRYSTAL_USED_LINE, YOUR_FEATURE, rangeLabel, yourFeature, type RadarRange, type RadarView } from "@/lib/radar/types";
+import { YOUR_FEATURE, FEATURE_NAME, rangeLabel, yourFeature, type RadarRange, type RadarView } from "@/lib/radar/types";
 import { IconChevron, IconX, post } from "../ui/shared";
 import { isOpenRole, type CoInfo, type Row } from "./model";
 import { useUi } from "./ui";
 import { DataTable, type SignalRows } from "./Tables";
 import { CardList } from "./Cards";
 import { UnlockCompany } from "./Drawer";
-import { CrystalOpen } from "./CrystalOpen";
+import { CrystalOpen, useCrystalClick } from "./CrystalOpen";
+import { CRYSTAL_PRO_LINK, rangesWorthShowing } from "./todayModel";
+import { COMPANY_PRICE_SAY } from "@/lib/tableFields";
 import { LeaderReport } from "./LeaderReport";
 import { plural } from "./hooks";
-import { ProRow, planDay } from "./Billing";
+import { ProRow, openPlans, planDay } from "./Billing";
 import { radarDelivery } from "./PartnersSwitch";
 import { KnowChip } from "./network/Network"; // [google network]
 import { useNetwork } from "./network/useNetwork"; // [google network]
@@ -172,7 +176,9 @@ export function RadarPage({
     },
     [openCompany],
   );
-  const openRow = useCallback((r: Row) => open(r.i.c.id), [open]);
+  // The row or card itself: free where the plan opens it free (Trial, Pro, Free's one a day), then the record.
+  const crystalClick = useCrystalClick();
+  const openRow = useCallback((r: Row) => void crystalClick(r.i.c.id, !!r.i.c.hidden, () => open(r.i.c.id)), [open, crystalClick]);
   const fnMine = view?.function ?? me.function ?? null;
   const crystal = me.crystal ?? null;
   // One button a company: a locked one opens from here by plan (CrystalOpen), else Unlock company (the record's own); Open for one the member knows.
@@ -181,7 +187,7 @@ export function RadarPage({
       i.c.hidden ? (
         crystal ? (
           <span className="rd-acts">
-            <CrystalOpen id={i.c.id} name={i.c.shownName} className="rd-open" onOpened={() => open(i.c.id)} />
+            <CrystalOpen id={i.c.id} name={i.c.shownName} className="rd-open" onOpened={() => open(i.c.id)} noPro />
           </span>
         ) : (
           <UnlockCompany id={i.c.id} rate={postedRate(i)} roles={i.engs.some(isOpenRole)} />
@@ -289,6 +295,7 @@ export function RadarPage({
             </button>
           )}
           {/* Today, Last 7 days, Last 30 days, each with its companies. A day's link (?sig=) shows that day in the pill, with none of them on. */}
+          {rangesWorthShowing(view.ranges) && (
           <div className="rd-days rd-ranges" role="group" aria-label="Pick a range">
             {(view.ranges ?? []).map((r) => (
               <button key={r.range} type="button" className={`chip rd-day${r.range === range ? " chip-on" : ""}`} aria-pressed={r.range === range} onClick={() => onRange(r.range)}>
@@ -299,13 +306,17 @@ export function RadarPage({
               </button>
             ))}
           </div>
+          )}
         </div>
       )}
 
-      {/* Free, after today's free company: the rest wait for tomorrow, or Pro. */}
+      {/* Free, after today's free company: the rest unlock as anywhere (2 credits each), or Pro opens them free. */}
       {view?.ready && me.crystal === "used" && (
         <p className="rd-note rd-used" role="status">
-          {CRYSTAL_USED_LINE}
+          Your free {FEATURE_NAME} company for today is used. The rest unlock for {COMPANY_PRICE_SAY} each.{" "}
+          <button type="button" className="rd-link" onClick={() => openPlans("crystal")}>
+            {CRYSTAL_PRO_LINK}
+          </button>
         </p>
       )}
 

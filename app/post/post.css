@@ -7381,3 +7381,22 @@ div.tp-pcard-when {
 .tp-app .ms-av {
   border-radius: 50% 50% 0 0;
 }
+
+/* Free, after today's free Crystal Ball company: the ordinary unlock leads, Pro is a quiet link beside it (CrystalOpen.tsx). */
+.cb-pro {
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  padding: 4px 2px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--pine);
+  cursor: pointer;
+  text-align: left;
+}
+.cb-pro:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

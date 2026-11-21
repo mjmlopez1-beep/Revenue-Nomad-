@@ -905,3 +905,39 @@
     min-height: 44px;
   }
 }
+
+/* The trial and its days left, on a phone only (the top bar's pill is in its More sheet there). Opens the plans. */
+.hm-trialpill {
+  display: none;
+  justify-self: start;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--pine);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pine);
+  cursor: pointer;
+}
+@media (max-width: 767px) {
+  .hm-trialpill {
+    display: inline-flex;
+  }
+}
+/* The trial's one-time card on Home, under the greeting. */
+.hm-trialcard p {
+  margin: 0;
+}
+/* A saved view's full criteria, under its short name. */
+.hm-vabout {
+  display: block;
+  margin: 2px 0 0 23px;
+  font-size: 12.5px;
+  line-height: 17px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: normal;
+}

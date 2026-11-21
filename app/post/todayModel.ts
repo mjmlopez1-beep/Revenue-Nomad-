@@ -5,6 +5,8 @@
  */
 import type { Me, PlanView } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
+import { FEATURE_NAME } from "@/lib/radar/types";
+import { COMPANY_PRICE } from "@/lib/tableFields";
 import type { MovesWire } from "@/lib/moves";
 import { isFirm, isOpenRole, namedFn, shown, type CoInfo } from "./model";
 
@@ -82,5 +84,95 @@ export function sinceWords(iso: string, now = new Date()): string {
   if (days === 1) return "Since yesterday";
   if (days < 7) return `Since ${d.toLocaleDateString("en-US", { weekday: "long" })}`;
   return `Since ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+}
+
+/* ---------- the first session: pure words and choices (scripts/test-today.mts checks them) ---------- */
+
+/**
+ * The one button on a locked Crystal Ball company, by plan (Me.crystal) and balance:
+ *   "crystal"  Trial and Pro "Open", Free "Open free · 1 left today": the free open from Crystal Ball;
+ *   "unlock"   Free once today's is used: the company's ordinary unlock, "Unlock · 2 credits" (the free
+ *              company of the day first, where one is left), with "Pro opens all of these free" beside it;
+ *   "wall"     the same, short of credits: the same words, and a click shows the zero-credit wall;
+ *   "later"    today's unlock limit binds: "Unlocks again tomorrow", nothing to click.
+ * Null: billing is off (the record's own Unlock company, as anywhere).
+ */
+export type CrystalButton = { kind: "crystal" | "unlock" | "wall" | "later"; label: string; pro: boolean };
+export const CRYSTAL_PRO_LINK = "Pro opens all of these free";
+export function crystalButton(me: Pick<Me, "crystal" | "credits" | "freeCompany" | "unlocksLeft">, price = COMPANY_PRICE): CrystalButton | null {
+  const mode = me.crystal ?? null;
+  if (!mode) return null;
+  if (mode === "all") return { kind: "crystal", label: "Open", pro: false };
+  if (mode === "one") return { kind: "crystal", label: "Open free · 1 left today", pro: false };
+  const free = !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= price;
+  if ((me.unlocksLeft ?? Infinity) < price && (me.credits >= price || !!me.freeCompany)) return { kind: "later", label: "Unlocks again tomorrow", pro: true };
+  if (free) return { kind: "unlock", label: "Unlock free · your company of the day", pro: true };
+  return { kind: me.credits >= price ? "unlock" : "wall", label: `Unlock · ${price} credits`, pro: true };
+}
+/** A click anywhere on a locked Crystal Ball company opens it free first where the plan does (Trial, Pro, Free's one a day); else it only opens the record, whose unlock states its cost. */
+export const rowOpensFree = (me: Pick<Me, "crystal">) => me.crystal === "all" || me.crystal === "one";
+/** Free, after today's free Crystal Ball company: the line under a move's or a card's button. */
+export const CRYSTAL_USED_UNLOCK = `Today's free ${FEATURE_NAME} company is used. This one unlocks for ${COMPANY_PRICE} credits.`;
+
+/**
+ * An open role's posted terms, as the member can see them once its company is open: "$150/hr · 20
+ * hours a week", "No rate posted · 10 hours a week". Null while the rate is still locked (the
+ * posting's unlock opens it with the posting).
+ */
+export function roleTermsLine(cells: Record<string, { s: string; v?: unknown } | undefined>): string | null {
+  const rate = cells.rate;
+  if (rate?.s === "locked") return null;
+  const r = rate?.s === "value" && typeof rate.v === "string" && rate.v.trim() ? rate.v.trim() : null;
+  const h = cells.hours?.s === "value" && Number(cells.hours.v) > 0 ? Number(cells.hours.v) : null;
+  return [r ?? "No rate posted", h ? `${h} ${h === 1 ? "hour" : "hours"} a week` : null].filter(Boolean).join(" · ");
+}
+
+/** Home's one-time card when the trial starts: "For 21 days every Crystal Ball company opens free (14 today). Open as many as you like." */
+export function trialCardLine(daysLeft: number | null, today: number): string {
+  const days = daysLeft && daysLeft > 0 ? daysLeft : 21;
+  return `For ${days === 1 ? "today" : `${days} days`} every ${FEATURE_NAME} company opens free${today > 0 ? ` (${today} today)` : ""}. Open as many as you like.`;
+}
+/** The trial on Home, for a phone (the top bar's pill is in its More sheet there): "Pro trial · 18 days left". Null off the trial. */
+export function trialPillWords(plan: Pick<PlanView, "name" | "trialDaysLeft"> | null | undefined): string | null {
+  if (!plan || plan.name !== "trial" || !plan.trialDaysLeft) return null;
+  return `Pro trial · ${plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`}`;
+}
+
+/** "Show you in the Fractionals directory?" waits on Home until the member has opened something, or comes back for a second visit. */
+export const showMeDue = (me: Pick<Me, "fractionals" | "unlocked" | "companiesUnlocked" | "holdersUnlocked">, sinceAt: string | null) =>
+  me.fractionals == null && (me.unlocked > 0 || (me.companiesUnlocked ?? 0) > 0 || (me.holdersUnlocked ?? 0) > 0 || !!sinceAt);
+
+/** Crystal Ball's Today / 7 days / 30 days: shown only when they list different numbers of companies (three equal counts say nothing). */
+export const rangesWorthShowing = (ranges: { companies: number }[] | undefined) => !!ranges && ranges.length > 1 && ranges.some((r) => r.companies !== ranges[0].companies);
+
+/** Home's line under the moves: tomorrow brings three more. */
+export const TOMORROW_LINE = "Tomorrow: 3 new moves.";
+
+/**
+ * Home's search: companies the member can see by name, and the Crystal Ball companies their plan
+ * names (Trial and Pro: RadarRow.name, still locked in the table), matched at the start of a word of
+ * the name. At most `max`, names that start with the text first. Nothing under 2 characters.
+ */
+export function nameMatches<T extends { id: string; name: string }>(q: string, list: T[], max = 4): T[] {
+  const k = q.trim().toLowerCase();
+  if (k.length < 2) return [];
+  const seen = new Set<string>();
+  const hits: { x: T; at: number }[] = [];
+  for (const x of list) {
+    if (!x.name || seen.has(x.id)) continue;
+    const n = x.name.toLowerCase();
+    const at = n.startsWith(k) ? 0 : n.split(/[^a-z0-9]+/).some((w) => w && w.startsWith(k)) || n.includes(` ${k}`) ? 1 : -1;
+    if (at < 0) continue;
+    seen.add(x.id);
+    hits.push({ x, at });
+  }
+  return hits.sort((a, b) => a.at - b.at).slice(0, max).map((h) => h.x);
+}
+/** The Crystal Ball companies Today's answer names for this member (their plan's names), for the search. */
+export function crystalNames(data: Pick<TodayData, "rows" | "moves"> | null): { id: string; name: string }[] {
+  if (!data) return [];
+  const out: { id: string; name: string }[] = [];
+  for (const r of [...(data.moves?.list.map((w) => w.row) ?? []), ...data.rows]) if (r.name) out.push({ id: r.id, name: r.name });
+  return out;
 }
 
