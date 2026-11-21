@@ -105,6 +105,8 @@ run crystal npx tsx scripts/test-crystal.mts
 run viewcache npx tsx scripts/test-viewcache.mts
 # Automatic jobs (lib/schedule.ts, lib/scheduler.ts, lib/jobs.ts, app/api/table/jobs, instrumentation.ts): each cadence's due and next run across day and week boundaries, env switches that keep a job off, a running job never started twice, cadence changes admin-only and checked, the timer never during a build or on a test server. In process, homepage reads replaced.
 run schedule npx tsx scripts/test-schedule.mts
+# The website finder (lib/websites): the candidate domains a name gives, never a private or loopback address (DNS that lies, redirects to one), parked, for-sale, directory and social pages and redirects to another brand turned down, the acceptance rules and their confidence, a country that conflicts, never overwriting a website or LinkedIn page, the 60-day retry, a dry run that writes nothing, the admin's finds and Undo, nothing of it in a member's table, the schedule's default and RN_WEBSITES. A fake DNS and HTTP layer and a server on 127.0.0.1; nothing leaves the machine.
+run websites npx tsx scripts/test-websites.mts
 # Crystal Ball's likelihood and timing (lib/radar/predict.ts): the rules by stage and ownership, the unknown-type blend, the Beta update, the timing curve, the ranking, Low off the email, the new seat and company facts (who introduced you stays the seat holder's), first sales hires and departed leaders. In process, fetch replaced.
 run predict npx tsx scripts/test-predict.mts
 # Recently hired (lib/hired.ts): the filter, its counts and sort, the address and saved views, the weekly email's line, the post in Slack and the connector's params, on a made-up seed with fetch replaced.

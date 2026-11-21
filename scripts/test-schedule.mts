@@ -39,7 +39,7 @@ Object.assign(process.env, {
   RN_DIGEST: "0",
   RN_FREE_COMPANY: "off",
 });
-const SWITCHES = ["RN_SCAN", "RN_RADAR", "RN_LEADERS", "RN_LEADERS_DAILY", "RN_FUNDING", "RN_ABOUT", "RN_SCHEDULER"];
+const SWITCHES = ["RN_SCAN", "RN_RADAR", "RN_LEADERS", "RN_LEADERS_DAILY", "RN_FUNDING", "RN_ABOUT", "RN_WEBSITES", "RN_SCHEDULER"];
 for (const k of [...SWITCHES, "RN_BILLING", "STRIPE_SECRET_KEY", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RESEND_API_KEY", "RN_EMAIL_FROM", "RN_PUBLIC_URL", "NEXT_PHASE"]) delete process.env[k];
 globalThis.fetch = (async () => new Response("ok", { status: 200 })) as typeof fetch;
 
@@ -76,6 +76,7 @@ async function main() {
   eq("funding filings each day from their hour", settingOf({}, "funding"), { every: "daily", hourUtc: FUNDING_HOUR_UTC });
   eq("About texts each day at 09:00 UTC, an hour no other job starts at", settingOf({}, "about"), { every: "daily", hourUtc: 9 });
   check("About's hour is no other job's", JOBS.filter((j) => j !== "about").every((j) => JOB_DEFAULTS[j].hourUtc !== JOB_DEFAULTS.about.hourUtc));
+  eq("the website finder each day at 03:00 UTC, off-peak and an hour no other job starts at", settingOf({}, "websites"), { every: "daily", hourUtc: 3 });
   eq("a stored setting that isn't valid reads as the default", settingOf({ radar: { every: "hourly" as never, hourUtc: 3 }, scan: { every: "daily", hourUtc: 25 } }, "radar"), JOB_DEFAULTS.radar);
   eq("  (an hour out of range too)", settingOf({ scan: { every: "daily", hourUtc: 25 } }, "scan"), JOB_DEFAULTS.scan);
   eq("an owner's setting is read", settingOf({ about: { every: "twice-weekly", hourUtc: 22 } }, "about"), { every: "twice-weekly", hourUtc: 22 });
@@ -147,8 +148,8 @@ async function main() {
 
   /* ---------- the env switches ---------- */
   console.log("\nEnv switches win");
-  eq("nothing set: scan, leaders, funding, About off; Crystal Ball on", JOBS.map((j) => envOff(j, {})), ["Off: set RN_SCAN=1 in Railway", null, "Off: set RN_LEADERS=1 in Railway", "Off: set RN_FUNDING=1 in Railway", "Off: set RN_ABOUT=1 in Railway"]);
-  eq("all on", JOBS.map((j) => envOff(j, { RN_SCAN: "1", RN_LEADERS: "1", RN_FUNDING: "1", RN_ABOUT: "1" })), [null, null, null, null, null]);
+  eq("nothing set: scan, leaders, funding, About, website finder off; Crystal Ball on", JOBS.map((j) => envOff(j, {})), ["Off: set RN_SCAN=1 in Railway", null, "Off: set RN_LEADERS=1 in Railway", "Off: set RN_FUNDING=1 in Railway", "Off: set RN_ABOUT=1 in Railway", "Off: set RN_WEBSITES=1 in Railway"]);
+  eq("all on", JOBS.map((j) => envOff(j, { RN_SCAN: "1", RN_LEADERS: "1", RN_FUNDING: "1", RN_ABOUT: "1", RN_WEBSITES: "1" })), [null, null, null, null, null, null]);
   eq("RN_RADAR=0 keeps Crystal Ball off", envOff("radar", { RN_RADAR: "0" }), "Off: remove RN_RADAR=0 in Railway");
   eq("RN_LEADERS_DAILY=0 keeps the daily read off", envOff("leaders", { RN_LEADERS: "1", RN_LEADERS_DAILY: "0" }), "Off: remove RN_LEADERS_DAILY=0 in Railway");
 
@@ -222,7 +223,7 @@ async function main() {
 
   process.env.RN_RADAR = "0";
   const started = await jobs.runDueJobs("https://post.example.com", real);
-  eq("every switch off: nothing starts, whatever is due", started, { scan: false, radar: false, leaders: false, funding: false, about: false });
+  eq("every switch off: nothing starts, whatever is due", started, { scan: false, radar: false, leaders: false, funding: false, about: false, websites: false });
   await new Promise((r) => setTimeout(r, 200));
   const s0 = await t.loadState();
   check("  and nothing ran", !s0.scan.lastRunAt && !s0.radar?.lastRunAt && !s0.about?.lastRun && !s0.funding?.lastRunAt && !s0.leadersDaily, { scan: s0.scan.lastRunAt, radar: s0.radar?.lastRunAt });
@@ -325,7 +326,7 @@ async function main() {
   const panel = await call(req("GET", "tok-ada-sched"));
   const rows = (panel.body.jobs as { id: string; every: string; hourUtc: number }[]) ?? [];
   eq("the admin's card: a row per job, in order", rows.map((r) => r.id), [...JOBS]);
-  eq("  with each cadence", rows.map((r) => `${r.every} ${r.hourUtc}`), ["weekly 12", "twice-weekly 8", "daily 6", "daily 6", "off 9"]);
+  eq("  with each cadence", rows.map((r) => `${r.every} ${r.hourUtc}`), ["weekly 12", "twice-weekly 8", "daily 6", "daily 6", "off 9", "daily 3"]);
   const fundOff = await call(req("POST", "tok-ada-sched", { op: "run", job: "funding" }));
   check("Run now for the funding filings: refused with RN_FUNDING off", fundOff.status === 400 && String(fundOff.body.error).includes("RN_FUNDING=1"), fundOff);
   eq("a member can't run it", (await call(req("POST", "tok-sal-sched", { op: "run", job: "funding" }))).status, 403);
