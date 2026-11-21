@@ -38,6 +38,11 @@
   --volt-ink: #0b6b45;
   --ember: #ff5a1f;
   --ember-ink: #b23a0a;
+  /* Illustration only (Fractions, app/landing/fractions): saffron is the crystal ball, sand the ground, faces and paper. */
+  --saffron: #ffc12e;
+  --saffron-hi: #ffe39a;
+  --sand: #f5ecd9;
+  --sand-deep: #ead9b6;
   --red: #d12f4a;
   --bg: #fafaf7;
   --surface: #ffffff;
