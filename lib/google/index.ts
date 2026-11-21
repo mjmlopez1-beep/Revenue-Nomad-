@@ -7,7 +7,7 @@
  * radar's shared model or the weekly email.
  */
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
-import { ActionError, isAdmin, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
+import { ActionError, fractionalInternals as F, isAdmin, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { functionOf, siteKey } from "../tableFields";
 import {
   CLAUDE_ENTRIES_MAX, CLAUDE_NEW_DAILY, CLAUDE_SAVES_DAILY, NOT_REL, NOT_REL_MAX, NOT_REL_WORDS, NOT_SEATS_MAX, SEAT_SURE_MEETINGS, SEAT_SURE_MONTHS, companyScore, companyTouch, companyWarmth, isDecisionMaker,
@@ -381,6 +381,112 @@ function heldSeats(seed: Seed, s: State, m: Member, want: Set<string>): Map<stri
   return held;
 }
 
+/* ---------- "You know this person": the member's own contacts who hold a seat ---------- */
+
+/** A name as matching reads it: accents and case folded, first and last word only ("Pat J. Lee" -> "pat lee"). Null for a one-word name. */
+export function nameMatchKey(name: string | null | undefined): string | null {
+  const w = String(name ?? "")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter(Boolean);
+  if (w.length < 2 || w[0].length < 2 || w[w.length - 1].length < 2) return null;
+  return `${w[0]} ${w[w.length - 1]}`;
+}
+/** A title that reads like a fractional's own: fractional, interim, part-time, an advisor, a consultant, "fCMO". */
+export const FRACTIONAL_TITLE = /\b(fractional|interim|part[- ]time|advis[eo]r|advisory|consultant|consulting|freelance|outsourced|on[- ]demand|f(cmo|cro|cfo|coo|cto|cpo))\b/i;
+
+/** Seat holder names on file, by nameMatchKey, per state: internal seat ids. Names come only from the seats on file (US seats for names from public profiles, as the seat files give them). */
+const holderNames = new WeakMap<State, Map<string, string[]>>();
+function holderNameIndex(seed: Seed, s: State): Map<string, string[]> {
+  let idx = holderNames.get(s);
+  if (idx) return idx;
+  idx = new Map();
+  for (const e of graphOf(seed, s).engagements.values()) {
+    const v = T.valueOf(e, s, "operator");
+    if (!v || v.status !== "live") continue;
+    const k = nameMatchKey(v.value);
+    if (k) idx.set(k, [...(idx.get(k) ?? []), e.id]);
+  }
+  holderNames.set(s, idx);
+  return idx;
+}
+/** Each member's seats (the seat holder resolves to them), per state: member id -> internal seat ids. */
+const memberSeats = new WeakMap<State, Map<string, string[]>>();
+function memberSeatIndex(seed: Seed, s: State): Map<string, string[]> {
+  let out = memberSeats.get(s);
+  if (out) return out;
+  out = new Map();
+  const idx = T.memberIndex(seed, s);
+  for (const e of graphOf(seed, s).engagements.values()) {
+    const h = T.seatHolder(s, idx, e.id, T.valueOf(e, s, "operator"));
+    if (h) out.set(h.id, [...(out.get(h.id) ?? []), e.id]);
+  }
+  memberSeats.set(s, out);
+  return out;
+}
+
+/** One of the member's own contacts who holds (or held) a seat: the company and seat (internal ids), and the person as the network keeps them. */
+export interface SeatMatch {
+  company: string;
+  seat: string;
+  fn: string | null;
+  now: boolean;
+  p: NetPerson;
+  via: "name" | "email";
+}
+
+/**
+ * "You know this person": the member's own contacts (every source of their network, at a company
+ * on Merlin or not) who hold or held a seat, matched two ways:
+ *   - by name: first and last name the same, accents and case folded, and their title reads like a
+ *     fractional's or is in the seat's function (so a common name alone never matches);
+ *   - by email: the address is a Merlin member's, and the seat is theirs.
+ * Only seats the member can see by name (the seat holder's cell is a value for them, at a company
+ * they can see), never their own seats. It reads this member's network and nothing of anyone else's, and it is
+ * shown to them alone (networkView); the connector never names these people.
+ */
+export function seatMatchesOf(seed: Seed, s: State, m: Member, n: MemberNetwork | undefined): SeatMatch[] {
+  if (!n) return [];
+  const g = graphOf(seed, s);
+  const idx = T.memberIndex(seed, s);
+  const names = holderNameIndex(seed, s);
+  const seatsOf = memberSeatIndex(seed, s);
+  const known = F.knownCompanies(g, s, idx, m);
+  const hidden = new Set(n.notPeople ?? []);
+  const byEmail = new Map(idx.all.filter((x) => x.email).map((x) => [x.email.trim().toLowerCase(), x]));
+  const pool = new Map<string, NetPerson>();
+  for (const id of networkIds(n)) for (const p of mergeCompany(n, id)?.people ?? []) if (!pool.has(p.key)) pool.set(p.key, p);
+  for (const p of mergedLoose(n)) if (!pool.has(p.key)) pool.set(p.key, p);
+  const out: SeatMatch[] = [];
+  const seen = new Set<string>();
+  for (const p of pool.values()) {
+    if (hidden.has(p.key)) continue;
+    const cands: { id: string; via: "name" | "email" }[] = [];
+    const who = p.email ? byEmail.get(p.email.trim().toLowerCase()) : undefined;
+    if (who && who.id !== m.id) for (const id of seatsOf.get(who.id) ?? []) cands.push({ id, via: "email" });
+    const k = nameMatchKey(p.name);
+    if (k && p.title) for (const id of names.get(k) ?? []) cands.push({ id, via: "name" });
+    for (const c of cands) {
+      const e = g.engagements.get(c.id);
+      if (!e || seen.has(`${p.key}|${e.id}`) || !known.has(e.companyId)) continue;
+      const v = T.valueOf(e, s, "operator");
+      const holder = T.seatHolder(s, idx, e.id, v);
+      if (holder?.id === m.id) continue;
+      const fn = T.fnOf(e, s);
+      if (c.via === "name" && !(FRACTIONAL_TITLE.test(p.title ?? "") || (!!fn && functionOf(p.title) === fn))) continue;
+      // Only a seat holder the member can see by name (bought, free, or a member who shows in the Fractionals directory).
+      if (T.cellOf(s, m, e, "engagement", "operator", idx).s !== "value") continue;
+      seen.add(`${p.key}|${e.id}`);
+      const status = T.live(e, s, "status");
+      const end = T.live(e, s, "end");
+      out.push({ company: e.companyId, seat: e.id, fn, now: status === "Active" || (status !== "Ended" && (!end || end === "Ongoing")), p, via: c.via });
+    }
+  }
+  return out;
+}
+
 const personView = (p: NetPerson, hidden: Set<string>, domain: string | undefined, nowMs: number) => ({
   name: p.name ?? null,
   title: p.title ?? null,
@@ -411,7 +517,10 @@ const personView = (p: NetPerson, hidden: Set<string>, domain: string | undefine
 export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, nowMs = Date.now(), m?: Member): (NetCompanyView & { internal: string })[] {
   if (!n) return [];
   const g = graphOf(seed, s);
-  const ids = [...networkIds(n)].filter((id) => g.companies.has(id));
+  // "You know this person": their own contacts who hold a seat, by company. A company the member can see joins their network this way, with that person.
+  const matches = new Map<string, SeatMatch[]>();
+  if (m) for (const x of seatMatchesOf(seed, s, m, n)) matches.set(x.company, [...(matches.get(x.company) ?? []), x]);
+  const ids = [...new Set([...networkIds(n), ...matches.keys()])].filter((id) => g.companies.has(id));
   const prof = m ? s.profiles[m.id] ?? {} : {};
   const fn = m ? (prof.function ?? null) : null;
   const icp = prof.icp && !icpIsEmpty(prof.icp) ? prof.icp : null;
@@ -423,17 +532,31 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
   const out: (NetCompanyView & { internal: string })[] = [];
   for (const id of ids) {
     const node = g.companies.get(id)!;
-    const c = mergeCompany(n, id);
-    if (!c) continue;
-    const score = companyScore(c, nowMs);
-    const people = c.people
+    const seatsHere = matches.get(id) ?? [];
+    const merged = mergeCompany(n, id);
+    if (!merged && !seatsHere.length) continue;
+    // Known only through a seat: the company as those people's own touches make it.
+    const c: NetCompany = merged ?? {
+      people: [],
+      meetings: seatsHere.reduce((a, x) => a + (x.p.meetings ?? 0), 0) || undefined,
+      emails: Math.max(0, ...seatsHere.map((x) => x.p.emails ?? 0)) || undefined,
+      last: seatsHere.map((x) => x.p.last).filter(Boolean).sort().pop(),
+      first: seatsHere.map((x) => x.p.first).filter(Boolean).sort()[0],
+    };
+    const seatOf = new Map<string, { id: string; fn: string | null; now: boolean }>();
+    for (const x of seatsHere) if (!seatOf.has(x.p.key) || (x.now && !seatOf.get(x.p.key)!.now)) seatOf.set(x.p.key, { id: T.pubId(x.seat), fn: x.fn, now: x.now });
+    const all = [...c.people, ...seatsHere.map((x) => x.p).filter((p, k, a) => !c.people.some((q) => q.key === p.key) && a.findIndex((q) => q.key === p.key) === k)];
+    const score = companyScore({ ...c, people: all }, nowMs);
+    const people = all
       .map((p) => ({ p, sc: warmthScore(p, nowMs), w: warmthFor(p, nowMs) }))
       .sort((a, b) => WARMTH_RANK[a.w] - WARMTH_RANK[b.w] || b.sc - a.sc || (b.p.last ?? "").localeCompare(a.p.last ?? ""))
-      .map(({ p }) => personView(p, hiddenPeople, c.domain, nowMs));
+      // A seat holder is the fractional there, not someone who decides: a "Fractional CMO" title is no decision maker's.
+      .map(({ p }) => ({ ...personView(p, hiddenPeople, c.domain, nowMs), ...(seatOf.has(p.key) ? { seat: seatOf.get(p.key)!, dm: false } : {}) }));
     const facts = { industry: T.live(node, s, "industry"), employees: T.live(node, s, "employees") };
     const mine = held.get(id);
     const said = n.notRel?.[id];
-    const judged = judgeCompany(c, facts, { mine: !!mine, nowMs });
+    // A company known only through a seat holder isn't judged by the people met there (there are none).
+    const judged = merged ? judgeCompany(c, facts, { mine: !!mine, nowMs }) : null;
     const set: SetView | null = said
       ? { kind: said, why: NOT_REL_WORDS[said], by: "you" }
       : judged && !isRel.has(id)
@@ -457,7 +580,7 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
       internal: id,
       name: node.name,
       site: siteKey(T.live(node, s, "website")),
-      warmth: companyWarmth(c, nowMs),
+      warmth: merged ? companyWarmth(c, nowMs) : (people[0]?.warmth ?? "Cold"),
       score,
       last: c.last ?? people.map((p) => p.last).filter(Boolean).sort().pop() ?? null,
       next: c.next ?? null,
@@ -471,7 +594,7 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
       seat: pattern ? { from: pattern.from, to: pattern.to } : null,
       industry: facts.industry,
       employees: facts.employees,
-      touch: touchWords(companyTouch(c), nowMs),
+      touch: merged ? touchWords(companyTouch(c), nowMs) : (people[0]?.why ?? ""),
       set,
       fit: icp && cf ? inIcp(icp, cf) : null,
       odds: odds.get(id) ?? null,
@@ -553,10 +676,9 @@ function introsOf(list: NetCompanyView[], loose: LooseView[]): IntroView[] {
   return out.sort((a, b) => WARMTH_RANK[a.warmth] - WARMTH_RANK[b.warmth] || a.name.localeCompare(b.name));
 }
 
-/** The member's people at no company on Merlin, merged across sources, warmest first. */
-function looseOf(n: MemberNetwork | undefined, nowMs: number): LooseView[] {
+/** The member's people at no company on Merlin, merged across sources (as their sources keep them). */
+function mergedLoose(n: MemberNetwork | undefined): LoosePerson[] {
   if (!n) return [];
-  const hidden = new Set(n.notPeople ?? []);
   const by = new Map<string, LoosePerson>();
   for (const src of [n.cal, n.con, n.gm]) {
     for (const p of src?.loose ?? []) {
@@ -581,7 +703,15 @@ function looseOf(n: MemberNetwork | undefined, nowMs: number): LooseView[] {
       for (const x of p.src) if (!was.src.includes(x)) was.src.push(x);
     }
   }
-  return [...by.values()]
+  return [...by.values()];
+}
+
+/** The member's people at no company on Merlin, merged across sources, warmest first. `atSeats`: keys of people now shown at a company where they hold a seat (left out here). */
+function looseOf(n: MemberNetwork | undefined, nowMs: number, atSeats: Set<string> = new Set()): LooseView[] {
+  if (!n) return [];
+  const hidden = new Set(n.notPeople ?? []);
+  return mergedLoose(n)
+    .filter((p) => !atSeats.has(p.key))
     .map((p) => ({ p, w: warmthFor(p, nowMs), sc: warmthScore(p, nowMs) }))
     .sort((a, b) => WARMTH_RANK[a.w] - WARMTH_RANK[b.w] || b.sc - a.sc)
     .map(({ p, w }) => ({
@@ -663,7 +793,9 @@ export async function networkView(token: string | null, nowMs = Date.now()): Pro
   const all = companiesOf(w.seed, w.s, n, nowMs, w.m);
   const companies = all.map(({ internal: _i, ...c }) => c); // eslint-disable-line @typescript-eslint/no-unused-vars
   const srcs = [n?.cal, n?.con, n?.gm, n?.claude];
-  const loose = looseOf(n, nowMs);
+  // Someone who holds a seat at a company they can see is listed there ("You know Pat"), not under "At companies not on Merlin yet".
+  const atSeats = new Set(all.flatMap((c) => c.people.filter((p) => p.seat).map((p) => p.key)));
+  const loose = looseOf(n, nowMs, atSeats);
   const view: NetworkView = {
     on: true,
     configured: googleConfigured(),

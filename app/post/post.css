@@ -7404,3 +7404,29 @@ div.tp-pcard-when {
 .tp-person-src {
   margin: 6px 0 0;
 }
+/* ---------- the record's way in: the buyer, where to look for them, and a seat holder the member knows ---------- */
+.tp-wayin-t {
+  font-weight: 400;
+  color: var(--body-ink);
+}
+.tp-wayin-know {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.tp-wayin-find .tp-reach .btn {
+  gap: 4px;
+}
+.tp-wayin-find .plus1 {
+  margin-left: 2px;
+  color: var(--volt-ink);
+  font-weight: 700;
+}
+.tp-dm-seat {
+  display: grid;
+  gap: 4px;
+}

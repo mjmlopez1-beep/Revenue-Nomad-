@@ -16,7 +16,7 @@ import { IconChevron, LockedName, initials, post, useToast } from "../ui/shared"
 import { HIDDEN_COMPANY } from "@/lib/tableFields";
 import { Sheet, useUi } from "./ui";
 import { useLayout } from "./hooks";
-import { partnerOpener, seatOpener } from "@/lib/partners";
+import { partnerOpener, seatOpener, type SharedCompanies } from "@/lib/partners";
 import "./messages.css";
 import { Prop, Spot } from "../ui/fractions/lazy";
 
@@ -638,11 +638,14 @@ export function ConnectButton({
   conversationId,
   label = "Connect",
   className = "btn btn-sm btn-pine",
+  shared,
 }: {
   member: { id: string; first: string };
   conversationId?: string | null;
   label?: React.ReactNode;
   className?: string;
+  /** Companies in the member's Crystal Ball this fractional serves (named only where the member has them unlocked): said in the first message. */
+  shared?: SharedCompanies | null;
 }) {
   const ui = useUi();
   const [open, setOpen] = useState(false);
@@ -665,7 +668,7 @@ export function ConnectButton({
           to={{ memberId: member.id }}
           first={member.first}
           about="From Fractionals: a fractional who serves the same kind of clients."
-          opener={partnerOpener({ first: member.first, myTitle: ui.me.title, myFn: ui.me.function, icp: ui.me.icp })}
+          opener={partnerOpener({ first: member.first, myTitle: ui.me.title, myFn: ui.me.function, icp: ui.me.icp, shared })}
           onClose={() => setOpen(false)}
           onSent={(c) => setSent(c.id)}
           restore={() => btn.current}

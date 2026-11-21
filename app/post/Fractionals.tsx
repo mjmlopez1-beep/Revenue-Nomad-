@@ -29,7 +29,7 @@ import { ConnectButton, openConversation } from "./Messages";
 import { Sheet, useUi } from "./ui";
 import { copyText, plural } from "./hooks";
 import { fmtStamp } from "./RoleDate";
-import { FR_TABS, startPlace, takeWantSeat, choiceCounts, frDefaults, frRows, headline, leadTitle, levelLine, tabCounts, type FrFilters, type FrTab } from "./fractionalsModel";
+import { FR_TABS, ballChip, startPlace, takeWantSeat, choiceCounts, frDefaults, frRows, headline, leadTitle, levelLine, tabCounts, type FrFilters, type FrTab } from "./fractionalsModel";
 import "./fractionals.css";
 import { Prop } from "../ui/fractions/lazy";
 
@@ -474,10 +474,21 @@ function Who({ r }: { r: FractionalRec }) {
       <span className="fr-who-t">
         {r.locked ? <LockedPerson seed={r.id} /> : <span className="fr-name">{r.name}</span>}
         <Status r={r} />
+        <BallChip r={r} />
       </span>
     </span>
   );
 }
+
+/** "Serves 2 of your Crystal Ball companies": counted from the seats the record lists, companies never named here. */
+function BallChip({ r }: { r: FractionalRec }) {
+  const words = ballChip(r);
+  if (!words) return null;
+  return <span className="fr-ball">{words}</span>;
+}
+
+/** What a first message says about the companies they serve in the member's Crystal Ball (names only where unlocked). */
+const sharedOf = (r: FractionalRec) => (r.ball ? { names: r.ball.names, now: r.ball.now } : null);
 
 function Clients({ r }: { r: FractionalRec }) {
   if (!r.clients?.line) return <span className="fr-muted">Not on file</span>;
@@ -569,7 +580,7 @@ function Action({ r, reload, wide }: { r: FractionalRec; reload: () => Promise<v
     );
   }
   if (r.onMerlin && r.memberId)
-    return <ConnectButton member={{ id: r.memberId, first: r.first ?? "them" }} conversationId={r.conversationId} label="Message" className={`btn btn-sm${w}`} />;
+    return <ConnectButton member={{ id: r.memberId, first: r.first ?? "them" }} conversationId={r.conversationId} label="Message" className={`btn btn-sm${w}`} shared={sharedOf(r)} />;
   if (r.invite)
     return (
       <>
@@ -606,6 +617,7 @@ function InviteSheet({ r, onClose, restore, reload }: { r: FractionalRec; onClos
           seat: r.fn && r.fn !== me.function ? r.fn : null,
           role: null,
           link,
+          shared: sharedOf(r),
         },
         me.voice ?? null,
       ).body,
@@ -761,6 +773,7 @@ function Record({
             <span className="fr-tag">Not on Merlin yet</span>
           )}
           {r.unlocked && <span className="fr-tag-note">You unlocked {they === "they" ? "them" : they}</span>}
+          <BallChip r={r} />
         </p>
         <div className="fr-ract">
           <Action r={r} reload={reload} />

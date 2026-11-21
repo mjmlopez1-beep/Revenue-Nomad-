@@ -591,6 +591,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
                 {x.name ?? "Someone you know"}
                 {x.title ? ` · ${x.title}` : ""}
                 {x.dm && <span className="nw-dm"> · Decision maker</span>}
+                {x.seat && <span className="nw-dm"> · {x.seat.now ? "Holds" : "Held"} their {x.seat.fn && x.seat.fn !== "Other" ? `${x.seat.fn} ` : ""}seat</span>}
               </span>
               <span className="nw-muted">
                 {x.why || [countsLine(x), x.both ? "replies both ways" : "", x.last ? `last ${daysAgo(x.last)}` : "", x.next ? `meeting ${daysAgo(x.next)}` : ""].filter(Boolean).join(" · ") || `From ${sources(x.src)}`}
@@ -628,7 +629,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
           <span className="nw-small">Merlin never sends for you. You review and send it yourself.</span>
         </div>
       )}
-      <p className="nw-small">Named for you free: you already know someone here. Only you see this.</p>
+      <p className="nw-small">{c.people.every((x) => x.seat) ? "From your own contacts. Only you see this." : "Named for you free: you already know someone here. Only you see this."}</p>
     </div>
   );
 }

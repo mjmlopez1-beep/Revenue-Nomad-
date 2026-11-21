@@ -250,6 +250,12 @@ async function main() {
   check("decision makers: CEO, Founder, CRO, VP Sales, Head of Growth; not an assistant", ["CEO", "Co-founder", "CRO", "VP Sales", "Head of Growth", "Chief Financial Officer"].every(types.isDecisionMaker) && !types.isDecisionMaker("Executive Assistant to the CEO") && !types.isDecisionMaker("Account Executive"));
 
   console.log("\nDomains and matching");
+  {
+    // "You know this person": a contact matches a seat holder by first and last name with a fractional's title or the seat's function, or by a member's email (lib/google seatMatchesOf; the flows are in test-moves.mts).
+    const G0 = await import("../lib/google/index.ts");
+    check("a seat holder's name matches on first and last word, case and accents folded", G0.nameMatchKey("Pat Lee") === "pat lee" && G0.nameMatchKey("PÁT  lee") === "pat lee" && G0.nameMatchKey("Pat J. Lee") === "pat lee" && G0.nameMatchKey("Pat") === null && G0.nameMatchKey("P Lee") === null && G0.nameMatchKey("Pat Leeson") !== "pat lee");
+    check("a fractional's title reads as one; an office manager's doesn't", ["Fractional CMO", "Interim CFO", "Part-time VP Sales", "Advisor", "GTM Consultant", "fCMO"].every((t) => G0.FRACTIONAL_TITLE.test(t)) && !["Office Manager", "VP Sales", "CEO", "Head of Growth"].some((t) => G0.FRACTIONAL_TITLE.test(t)));
+  }
   const own = new Set(["anaco.example"]);
   check("free mail, rooms and the member's own domain are no company", types.workDomain("a@gmail.com", own) === null && types.workDomain("r@resource.calendar.google.com", own) === null && types.workDomain("c@anaco.example", own) === null && types.workDomain("c@eu.anaco.example", own) === null && types.workDomain("d@acme.example", own) === "acme.example");
   const dir0 = C.makeDirectory([

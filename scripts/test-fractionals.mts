@@ -117,6 +117,8 @@ const members = [
   M("mem_fay", "Fay Free", "Fractional CMO"),
   M("mem_tia", "Tia Trial", "Fractional CMO"),
   M("mem_pru", "Pru Pro", "Fractional CMO"),
+  // Cass's Crystal Ball has three of Sam's companies (she opened one of them) and one of Dana's.
+  M("mem_cass", "Cass Crystal", "Fractional CMO"),
   ...[1, 2, 3, 4, 5, 6, 7].map((n) => M(`mem_inv${n}`, `Ivo Inviter${["", "one", "two", "three", "four", "five", "six", "seven"][n]}`, "Fractional COO")),
 ];
 const seed = { builtAt: ago(30 * DAY), members, companies, engagements, contacts: [] };
@@ -132,6 +134,7 @@ const ledger = [
   unlock("mem_robin", "c_gus1.identity", -2),
   unlock("mem_robin", "c_gus2.identity", -2),
   unlock("mem_mo", "c_bright.identity", -2),
+  unlock("mem_cass", "c_bright.identity", -2),
   unlock("mem_mo", "c_moon.identity", -2),
   // Mo bought the role half of Pat's Kitebright seat long ago (the bundle's other half).
   unlock("mem_mo", "c_kite.identity", -2),
@@ -162,6 +165,13 @@ writeFileSync(
     },
     // A member who joined today, with credits to spare: the first day's unlock limit.
     members: [{ id: "j_jo", name: "Jo Newcomer", email: "jo.new@example.com", title: "", token: "tok-jo", at: ago(HOUR), ipHash: "jojojojojojojojo" }],
+    // Cass's Crystal Ball today (lib/radar's kept rows): companies only, nothing about anyone in them.
+    radar: {
+      lastRunAt: null,
+      lastRunDay: null,
+      members: { mem_cass: { sent: {}, days: { [ahead(0).slice(0, 10)]: ["c_pollen", "c_bright", "c_vellum", "c_kite"].map((c) => ({ k: `t:mem_cass:${c}`, c, kind: "adjacent", l: "Hired a fractional CRO 2 months ago", b: "High", w: "Fractional CRO hired 2 months ago" })) } } },
+      stats: { runs: 0, sent: 0, emails: 0, slack: 0, instant: 0 },
+    },
     seatInvites: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ by: `mem_inv${n}`, engagementId: "e_cara_1", at: ago((10 - n) * DAY), note: `Hi Cara, it's Ivo ${n}. https://post.example.com/claim/x` })),
     billing: {
       members: {
@@ -202,6 +212,7 @@ const check = (name: string, ok: boolean, detail?: unknown) => {
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${ok || detail === undefined ? "" : `: ${JSON.stringify(detail).slice(0, 700)}`}`);
 };
 const keysIn = (text: string) => Object.values(K).filter((k) => text.includes(k));
+const same3 = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 async function main() {
   const core = await import("../lib/fractionalsCore");
@@ -502,6 +513,29 @@ async function main() {
   check("Different from yours leaves out the viewer's function", diff.length > 0 && diff.every((r) => !r.fns.includes("Marketing")) && all.some((r) => r.fns.includes("Marketing")));
   check("On Merlin and Unlocked tabs", onM.length > 0 && onM.every((r) => r.onMerlin) && unl.length > 0 && unl.every((r) => r.unlocked) && unl.every((r) => !!r.name), { on: onM.length, unl: unl.map((r) => r.name) });
   check("the line at the top", /^\d+ fractionals? serves? companies like yours\. \d+ (is|are) on Merlin\.$/.test(fm.headline(d.records, true)), fm.headline(d.records, true));
+
+  /* ---------- 8b. Serves your Crystal Ball companies ---------- */
+  console.log("\nServes your Crystal Ball companies");
+  {
+    const dc = await dirOf("mem_cass");
+    const samC = recOf(dc, "e_sam_pollen")!;
+    const danaC = recOf(dc, "e_dana_kite")!;
+    check("a fractional at three of her Crystal Ball companies: the count, with a current seat there", same3(samC.ball, { n: 3, now: true, names: ["Brightloom Learning"] }) && fm.ballChip(samC) === "Serves 3 of your Crystal Ball companies", samC.ball);
+    check("the companies are named only where she has them unlocked", !/Pollen Ledger|Vellum Insurance/.test(JSON.stringify(dc)) && samC.ball?.names.length === 1);
+    check("one company, and one past seat only: Served 1", fm.ballChip({ ball: { n: 1, now: false, names: [] } }) === "Served 1 of your Crystal Ball company" && fm.ballChip({}) === null);
+    check("Dana serves one of them (Kitebright, a locked company for Cass), counted and never named", !!danaC.ball && danaC.ball.n === 1 && danaC.ball.names.length === 0 && !/Kitebright/.test(JSON.stringify(dc)), danaC.ball);
+    check("records with none of her companies carry nothing (Sam, and three at Kitebright: Dana, Pat and Cara)", dc.records.filter((r) => r.ball).length === 4 && !recOf(dc, "e_lee_one")!.ball, dc.records.filter((r) => r.ball).length);
+    check("it is hers alone: Robin's directory has none of it", (await dirOf("mem_robin")).records.every((r) => !r.ball));
+    const P2 = await import("../lib/partners");
+    const named = P2.partnerOpener({ first: "Dana", myTitle: "Fractional CMO", shared: { names: ["Brightloom Learning"] } });
+    const generic = P2.partnerOpener({ first: "Dana", myTitle: "Fractional CMO", shared: { names: [] } });
+    check("the first message names those companies when she has them unlocked", /I see you've worked with Brightloom Learning, which is on my list too\./.test(named), named);
+    check("otherwise a line that names none", /It looks like we work around some of the same companies\./.test(generic) && !/Kitebright|Pollen/.test(generic), generic);
+    const NN = await import("../lib/moveNote");
+    const inv = (shared: { names: string[] } | null) =>
+      NN.draftNote({ kind: "peerInvite", company: "", to: { name: "Sam Brennick", email: null, from: "unlocked on Merlin" }, since: null, saw: null, me: { first: "Cass", name: "Cass Crystal", as: "a fractional CMO", fn: "Marketing", clients: null }, seat: null, role: null, link: "https://post.example.com/claim/x", shared }).body;
+    check("Invite to connect says the same: named, or generic, or the clients line without any", /worked with Brightloom Learning and Kitebright, which are on my list too/.test(inv({ names: ["Brightloom Learning", "Kitebright"] })) && /some of the same companies/.test(inv({ names: [] })) && /serve the same kind of clients/.test(inv(null)));
+  }
 
   /* ---------- 9. no person key anywhere ---------- */
   console.log("\nNo person key in any answer");

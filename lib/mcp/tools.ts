@@ -45,7 +45,7 @@ import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from 
 import { accountPathsLine, pathsLine } from "../paths"; // [smart ways in] counts only, never who
 // Today's moves and the voice their notes are written in (lib/moves.ts, lib/voice.ts): the member's own.
 import { movesFor } from "../movesView";
-import { knowLine, moveWithoutPerson } from "../moves";
+import { buyerWhat, findBuyer, hiredWords, isBuyer, knowLine, moveWithoutPerson, type FindBuyer } from "../moves";
 import { draftNote, noteFacts } from "../moveNote";
 import { VOICE_FIELDS, VoiceProblem, cleanVoice, styleOf, voiceRows } from "../voice";
 import { saveVoice, voiceOf } from "../table";
@@ -351,11 +351,28 @@ export function warmPaths(i: CoInfo, mv?: MemberView, base = publicBase() ?? "")
       who: [shown(p.cells.title), rel ? rel.toLowerCase() : null, e && shown(e.cells.function) ? `on the ${shown(e.cells.function)} seat` : null].filter(Boolean).join(", ") || "A person at the company",
       name: read(p.cells.name, personLocked(p, hidden, "name")),
       person_id: p.id,
+      // A decision maker at the company, or the exec who hired or managed a fractional on a seat (lib/moves isBuyer): the buyer, as the app counts them.
+      ...(isBuyer(p, !!e) ? { decision_maker: true } : {}),
       ...(p.cells.name.s === "locked" ? (hidden ? { unlock_first: company } : { unlock: { entity: "person", id: p.id, field: "name" }, opens: "their name and title, 1 credit" }) : {}),
     });
   }
-  return out.slice(0, 10);
+  // Nobody who decides on file at a company the member can see: where they can look (the app's "Find who runs Sales at Acme").
+  const find = hidden ? null : findBuyer(i.c, { function: mv?.view.me?.function ?? null });
+  const list = out.slice(0, find ? 9 : 10);
+  if (find) list.push({ who: "Nobody who decides is on file yet", find_the_buyer: findOut(find) });
+  return list;
 }
+
+/**
+ * "Find who runs Sales at Acme", for the connector: a LinkedIn people search and the company's own
+ * site. Links out for the member to open; Merlin reads nothing from them and they are not Merlin's data.
+ */
+const findOut = (f: FindBuyer): ToolOut => ({
+  what: f.label,
+  linkedin_people_search: f.linkedin,
+  ...(f.site ? { [f.site.label === "Their team page" ? "team_page" : "website"]: f.site.href } : {}),
+  then: "If the member finds who decides, add_person adds them (name, title, relationship Decision maker) and earns a credit for each fact. These links are a search the member opens, not facts Merlin holds.",
+});
 
 /**
  * What unlocking everything here would buy: one entry per purchase. An open role's posting, rate
@@ -1321,7 +1338,17 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
               relationship: knowLine(way.person),
               from: "what the member's own Claude saved to their network on Merlin",
             }
-          : way.kind === "holder"
+          : way.kind === "buyer"
+            ? {
+                kind: "the buyer: a decision maker on file",
+                who: buyerWhat(way),
+                ...(way.rel ? { relationship: way.rel } : {}),
+                name: way.name ?? (m.hidden ? "on file, opens after the company" : "locked, 1 credit opens this person's name and title together"),
+                ...(way.name && way.title ? { title: way.title } : {}),
+                ...(!m.hidden && (!way.name || way.email === "locked") ? { unlock: { entity: "person", id: way.personId, field: way.name ? "email" : "name" }, opens: way.name ? "their email, 1 credit" : "their name and title, 1 credit" } : {}),
+                email: way.email === "locked" ? "on file, 1 credit (after the name). The address stays on Merlin: the member sends from their own mail." : way.email ? "on file and unlocked: on Merlin's Home, where the member sends from their own mail" : "none on file",
+              }
+            : way.kind === "holder"
             ? {
                 kind: "the fractional who held a seat",
                 seat: [way.role, way.fn].filter(Boolean).join(", ") || "A fractional seat",
@@ -1336,6 +1363,8 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
                   posting: way.posting === "locked" ? LOCKED_ROLE : way.posting ?? (m.hidden ? "opens with the company" : "No posting link on file"),
                 }
               : { kind: "nothing on file yet", next: "The member can add who they know there on Merlin and earn a credit." },
+      // Nobody who decides is on file: where the member can look (links out, nothing Merlin read from them).
+      ...(m.find ? { find_the_buyer: findOut(m.find) } : {}),
       your_move: words.title,
       how: words.line,
       // Only when there is something to write: a locked company or a locked seat holder has no note yet.
@@ -1346,6 +1375,12 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
               situation:
                 facts.kind === "know"
                   ? "A note to someone the member knows there"
+                  : facts.kind === "knowHolder"
+                    ? "A note to someone the member knows who holds a seat there, asking who decides"
+                  : facts.kind === "buyer"
+                    ? "A first note to the decision maker on file, from the pattern the company fits"
+                  : facts.kind === "roleCold" && facts.to
+                    ? "A reply to the open role, to the decision maker on file"
                   : facts.kind === "intro"
                     ? "Asking someone the member knows for an introduction"
                     : facts.kind === "holderMessage"
@@ -1360,6 +1395,18 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
                 ...(facts.seat ? { seat: facts.seat } : {}),
                 ...(facts.role ? { open_role: facts.role } : {}),
                 ...(facts.link ? { claim_link: facts.link } : {}),
+                ...(facts.pattern
+                  ? {
+                      company_pattern: {
+                        industry: facts.pattern.industry,
+                        revenue: facts.pattern.revenue,
+                        hired: facts.pattern.hired ? hiredWords(facts.pattern.hired.role, facts.pattern.hired.fn).replace(/^their /, "a ") : null,
+                        no_fractional_seat_in_member_function: facts.pattern.gap,
+                        // Only then may a note say they have no leader there: their team page was read and names nobody.
+                        team_page_names_no_leader_in_member_function: facts.pattern.noLeader,
+                      },
+                    }
+                  : {}),
                 member: { first_name: facts.me.first, works_as: facts.me.as, ...(facts.me.clients ? { works_with: facts.me.clients } : {}) },
               },
               // Merlin's own draft greets them by name and says when they last met: for someone from Google it stays on Home.

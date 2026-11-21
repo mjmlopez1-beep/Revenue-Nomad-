@@ -1248,6 +1248,13 @@ export interface FractionalRec {
   conversationId?: string;
   /** Not on Merlin yet, and the viewer can invite them: a seat's claim link with the viewer's invite code, the seat it is for, and when they marked it sent. */
   invite?: { path: string; seat: string; at?: string };
+  /**
+   * They hold or held seats at companies in the viewer's Crystal Ball (any day it keeps): how many
+   * companies ("Serves 2 of your Crystal Ball companies"), whether one of those seats is current,
+   * and the names of the ones the viewer can see by name (unlocked, theirs, or someone they know
+   * there) for the prefilled message. A locked company is counted and never named. Left out at 0.
+   */
+  ball?: { n: number; now: boolean; names: string[] };
 }
 
 /** GET /api/table?fractionals=1: the directory. */

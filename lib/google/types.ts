@@ -504,6 +504,13 @@ export interface NetPersonView {
   org: string | null;
   /** The member said this person is not a relationship. */
   hidden: boolean;
+  /**
+   * They hold (or held) a seat at this company: the member's own contact matches a seat holder the
+   * member can see by name (first and last name, with a fractional title or one in the seat's
+   * function) or a member by email (lib/google seatMatches). The seat's public id, its function,
+   * and whether it is still going. Only this member sees it. Left out otherwise.
+   */
+  seat?: { id: string; fn: string | null; now: boolean };
 }
 
 /** What a person's title (or their firm) says they are: another fractional, an investor, a recruiter, someone selling. */

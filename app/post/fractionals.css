@@ -840,3 +840,17 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* "Serves 2 of your Crystal Ball companies". */
+.fr-ball {
+  justify-self: start;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  white-space: nowrap;
+}
