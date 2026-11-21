@@ -5369,6 +5369,8 @@ export async function perform(
           const persons = new Set<string>();
           /** Seats whose holder and role this purchase already covers. */
           const seatsBought = new Set<string>();
+          /** Fractionals (personIndex records) this purchase already covers: their other seats come with them. */
+          const fractionalsBought = new Set<string>();
           const free: { node: Node; field: string }[] = [];
           /**
            * What opens a fact comes first: a person's name and title before their LinkedIn, email and
@@ -5429,6 +5431,10 @@ export async function perform(
             if (it.entity === "engagement" && SEAT_BUNDLE.includes(f.key) && seatBundled(node, s)) {
               if (seatsBought.has(node.id)) return;
               seatsBought.add(node.id);
+              // Fractionals: two seats of one fractional in one request are one purchase (the first opens the rest, personHeld).
+              const who = personOf(s, node)?.gr.rid;
+              if (who && fractionalsBought.has(who)) return;
+              if (who) fractionalsBought.add(who);
               const lead = valueOf(node, s, "operator")?.by === me.id ? f.key : "operator";
               todo.push({ k: fkey(node.id, lead), node, entity: "engagement", field: lead, seat: true });
               return;
@@ -5564,6 +5570,12 @@ export async function perform(
               ...came.map((x) => changed("engagement", x.node, x.field)),
               ...personAlso.map((x) => changed("contact", x.node, x.field)),
               ...seatAlso.map((x) => changed("engagement", x.node, x.field)),
+              // Fractionals: the fractional's other seats, their name and role open with this one.
+              ...todo
+                .filter((t) => t.seat)
+                .flatMap((t) => (personOf(s, t.node)?.gr.seats ?? []).filter((id) => id !== t.node.id).map((id) => g.engagements.get(id)!))
+                .filter(Boolean)
+                .flatMap((e) => ["operator", "role"].map((field) => changed("engagement", e, field))),
               ...companies.flatMap((t) => [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", t.node, field))),
             ],
           };

@@ -42,7 +42,7 @@ const ahead = (ms: number) => new Date(t0 + ms).toISOString();
 const TEST_KEY = Buffer.alloc(32, 9).toString("base64");
 
 // Person keys: made up, but shaped as the importer writes them ("p_" + 20 hex).
-const K = { sam: "p_5a5a5a5a5a5a5a5a5a01", lee: "p_1e1e1e1e1e1e1e1e1e02", cara: "p_ca2aca2aca2aca2aca03", rae: "p_2ae02ae02ae02ae02a04", nia: "p_0a1a0a1a0a1a0a1a0a05", theo: "p_7e07e07e07e07e07e06" };
+const K = { gus: "p_9a59a59a59a59a59a07", sam: "p_5a5a5a5a5a5a5a5a5a01", lee: "p_1e1e1e1e1e1e1e1e1e02", cara: "p_ca2aca2aca2aca2aca03", rae: "p_2ae02ae02ae02ae02a04", nia: "p_0a1a0a1a0a1a0a1a0a05", theo: "p_7e07e07e07e07e07e06" };
 
 const co = (id: string, name: string, industry: string, employees: string, revenue: string, hq: string) => ({ id, fields: { name, website: `${id.slice(2)}.example`, industry, employees, revenue, hq } });
 const companies = [
@@ -58,6 +58,8 @@ const companies = [
   co("c_rae", "Sundial Metrics", "SaaS", "51–200", "$5M–$20M", "Minneapolis, MN"),
   co("c_nia", "Quarry Bay Software", "SaaS", "11–50", "$1M–$5M", "Portland, OR"),
   co("c_north", "Northwind Health", "Health Care", "201–500", "$20M–$50M", "Toronto, ON"),
+  co("c_gus1", "Glenrock Data", "SaaS", "51–200", "$5M–$20M", "Omaha, NE"),
+  co("c_gus2", "Gullwing Pay", "Fintech", "51–200", "$5M–$20M", "Tampa, FL"),
 ];
 const seat = (id: string, companyId: string, operator: string | null, role: string, fn: string, start: string, status: "Active" | "Ended", extra: Record<string, unknown> = {}) => ({
   id,
@@ -95,6 +97,9 @@ const engagements = [
   seat("e_nia_1", "c_nia", "Nia Notmine", "Fractional Head of Growth", "Growth", "2025-02", "Active", { key: K.nia }),
   seat("e_nia_2", "c_lantern", "Nia Notmine", "Fractional Head of Growth", "Growth", "2023-02", "Ended", { key: K.nia }),
   seat("e_nia_3", "c_north", "Nia Notmine", "Fractional Growth Lead", "Growth", "2021-02", "Ended", { key: K.nia }),
+  // Gus: two seats with one key, both at companies Robin knows (two seats of one fractional in one request).
+  seat("e_gus_1", "c_gus1", "Gus Twoseat", "Fractional VP Sales", "Sales", "2025-04", "Active", { key: K.gus }),
+  seat("e_gus_2", "c_gus2", "Gus Twoseat", "Fractional VP Sales", "Sales", "2023-04", "Ended", { key: K.gus }),
   // A seat with nobody named: no record.
   seat("e_nobody", "c_bright", null, "Fractional CMO", "Marketing", "2024-02", "Ended"),
 ];
@@ -124,6 +129,8 @@ const ledger = [
   unlock("mem_robin", "c_kite.identity", -2),
   unlock("mem_robin", "c_orchard.identity", -2),
   unlock("mem_robin", "c_lantern.identity", -2),
+  unlock("mem_robin", "c_gus1.identity", -2),
+  unlock("mem_robin", "c_gus2.identity", -2),
   unlock("mem_mo", "c_bright.identity", -2),
   unlock("mem_mo", "c_moon.identity", -2),
   // Mo bought the role half of Pat's Kitebright seat long ago (the bundle's other half).
@@ -342,6 +349,13 @@ async function main() {
   check("and every company of theirs stays locked", ["c_pollen", "c_bright", "c_vellum"].every((c) => coRec(zv, c).hidden === true));
   check("their name shows on each seat, at the locked companies too", ["e_sam_pollen", "e_sam_bright", "e_sam_vellum"].every((id) => engCell(zv, id, "operator").s === "value"));
   check("the credit history names it without a company", zv.ledger.some((l) => l.field === t.FRACTIONAL_LABEL && l.company === "" && l.delta === -1));
+
+  // Two seats of one fractional in one request (Unlock all, the connector's unlock of several): one purchase.
+  const g0 = await balance("mem_robin");
+  const both = await t.perform(ROBIN, { type: "unlockMany", items: ["e_gus_1", "e_gus_2"].map((id) => ({ entity: "engagement" as const, id: pub(id), field: "operator" })) }, BASE);
+  rv = await t.buildView(ROBIN);
+  check("two seats of one fractional in one request cost 1 credit, not 2", (await balance("mem_robin")) === g0 - 1 && ["e_gus_1", "e_gus_2"].every((id) => engCell(rv, id, "operator").s === "value"), { g0, now: await balance("mem_robin"), m: both.message });
+  check("and the answer carries the other seat's name and role", (both.cells ?? []).some((c) => c.id === pub("e_gus_2") && c.field === "role" && c.cell.s === "value"));
 
   // Out of credits, the daily limit, the first day's.
   const pipBefore = (await ledgerOf("mem_pip")).length;
