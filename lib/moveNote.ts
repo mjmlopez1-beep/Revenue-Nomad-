@@ -21,7 +21,7 @@ const lowerFirst = (v: string) => (/^[A-Z][a-z]/.test(v) ? v.charAt(0).toLowerCa
 
 /* ---------- the drafted note ---------- */
 
-export type NoteKind = "know" | "intro" | "holderMessage" | "holderInvite" | "role" | "roleCold";
+export type NoteKind = "know" | "intro" | "holderMessage" | "holderInvite" | "role" | "roleCold" | "peerInvite";
 
 /** Every fact a note may use. Each one is on the member's own screen already. */
 export interface NoteFacts {
@@ -192,6 +192,31 @@ function template(f: NoteFacts): Template {
         ],
         short: [0, 1, 4],
         ...(f.kind === "holderInvite" && f.link ? { tail: `Your seat is on Merlin, a data exchange for fractional operators. Claim it with this link and we're connected there.\n${f.link}` } : {}),
+      };
+    }
+    case "peerInvite": {
+      // Fractionals' Invite to connect: a fractional who serves the same kind of clients. `seat` is their side ("RevOps"), when known.
+      const kinds = f.me.clients ?? "the same kind of companies";
+      const side = f.seat ? ` on the ${f.seat} side` : "";
+      return {
+        subject: "Comparing notes on clients",
+        sentences: [
+          { casual: `I'm ${me} working with ${kinds}.`, neutral: `I'm ${me} and I work with ${kinds}.`, formal: `I'm ${me} and I work with ${kinds}.` },
+          {
+            casual: `Looks like you serve the same kind of clients${side}.`,
+            neutral: `It looks like you serve the same kind of clients${side}.`,
+            formal: `It appears you serve the same kind of clients${side}.`,
+          },
+          {
+            casual: "I'd love to compare notes on who we each work with and where we could bring each other in.",
+            neutral: "I'd like to compare notes on who we each work with and where we could bring each other in.",
+            formal: "I'd value comparing notes on who we each work with and where we might bring each other in.",
+          },
+          { casual: "No pitch, just two people serving the same clients.", neutral: "No pitch, just two people serving the same clients.", formal: "There's no pitch here, simply two people serving the same clients." },
+          { casual: "Up for connecting?", neutral: "Open to connecting?", formal: "Would you be open to connecting?" },
+        ],
+        short: [0, 1, 4],
+        ...(f.link ? { tail: `I'm on Merlin, a data exchange for fractional operators. Connect with me there:\n${f.link}` } : {}),
       };
     }
     case "role": {

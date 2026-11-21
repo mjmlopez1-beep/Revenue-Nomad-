@@ -129,7 +129,7 @@ export function inviteNote(o: SeatWords & { icp?: Icp | null; link: string }): s
 /** The first message to a member listed in Referral partners ("Connect"), about no seat. */
 export function partnerOpener(o: { first: string; myTitle?: string | null; myFn?: string | null; icp?: Icp | null }): string {
   const kinds = clientKinds(o.icp);
-  return `Hi ${o.first}, I'm ${myWords(o.myTitle, o.myFn)}${kinds ? ` working with ${kinds}` : ""}. I found you in Merlin's referral partners. Open to swapping notes and referrals?`;
+  return `Hi ${o.first}, I'm ${myWords(o.myTitle, o.myFn)}${kinds ? ` working with ${kinds}` : ""}. I found you in Merlin's Fractionals directory. Open to swapping notes and referrals?`;
 }
 
 /** A note as it is kept: line breaks kept, control characters and runs of blank lines gone, at most NOTE_MAX characters. */

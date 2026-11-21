@@ -122,6 +122,8 @@ import { networkKnown, type NetworkState } from "./google/types";
 // Your three moves today, and the voice its notes are written in: each member's own (lib/moves.ts, lib/voice.ts).
 import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type MoveLog } from "./moves";
 import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
+// Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
+import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -158,6 +160,12 @@ interface SeedEngagement {
    * never counted as new.
    */
   addedAt?: string;
+  /**
+   * The seat holder's one-way person key ("p_" + 20 hex, an HMAC of their profile id under the seed
+   * key, scripts/seat-import.mjs personKey): the same on each of one person's seats, current and past.
+   * Server only, for grouping one fractional's seats: never copied into the graph, a view or an export.
+   */
+  holderKey?: string;
 }
 interface SeedContact {
   id: string;
@@ -264,8 +272,14 @@ interface Profile {
   promo?: string;
   /** Who they hunt: their ideal client (lib/hunt.ts). */
   icp?: Icp | null;
-  /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. */
+  /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. Fractionals reads it as hidden too. */
   partnersOff?: boolean;
+  /**
+   * "Show me in the Fractionals directory": true shows their full name, their seats and the clients
+   * they serve to every member, free; false takes them out of the directory. Absent: not chosen yet
+   * (Home asks once), and they show by first name and last initial.
+   */
+  fractionals?: boolean;
   /** Turned off the next-client radar (Your profile, or the radar email's own unsubscribe link). See lib/radar. */
   radarOff?: boolean;
   /**
@@ -1238,7 +1252,120 @@ function graph(seed: Seed, s: State): Graph {
       delete e.holderFrom;
     }
   }
+  // Fractionals: each seat knows its graph, so a cell can find the fractional it belongs to (personIndex).
+  graphSeeds.set(g, seed);
+  for (const e of g.engagements.values()) engGraphs.set(e, g);
   return g;
+}
+
+/* ---------- one record per fractional (Fractionals, lib/fractionals.ts) ---------- */
+
+/** The seed and the graph each seat was built in, for personIndex (a cell is read from its node alone). */
+const graphSeeds = new WeakMap<Graph, Seed>();
+const engGraphs = new WeakMap<Node, Graph>();
+/** Each seat's one-way person key (SeedEngagement.holderKey), read defensively: only "p_" and hex. Never sent anywhere. */
+const holderKeyIndex = new WeakMap<Seed, Map<string, string>>();
+function seedHolderKeys(seed: Seed): Map<string, string> {
+  let m = holderKeyIndex.get(seed);
+  if (!m) {
+    m = new Map();
+    for (const e of seed.engagements) {
+      const k = (e as { holderKey?: unknown }).holderKey;
+      if (typeof k === "string" && /^[A-Za-z0-9_-]{4,80}$/.test(k)) m.set(e.id, k);
+    }
+    holderKeyIndex.set(seed, m);
+  }
+  return m;
+}
+/**
+ * The fractionals on file: named seats (a live seat-holder name, not an open role, not a
+ * full-time job) grouped into one record per person by lib/fractionalsCore.ts groupSeats: a
+ * member's seats together, then seats sharing a holderKey, else each seat on its own. `member`:
+ * the member the record is (their seats resolve to them). `rid`: the record's public id.
+ */
+interface PersonGroup {
+  seats: string[];
+  member: string | null;
+  rid: string;
+}
+interface PersonIdx {
+  groups: PersonGroup[];
+  groupOf: Map<string, number>;
+  byRid: Map<string, number>;
+}
+const personIdxs = new WeakMap<Graph, PersonIdx>();
+/** A record's public id: an HMAC of the member's id, or of its first seat's id. Never the person key. */
+const recordId = (member: string | null, seats: string[]) =>
+  `f_${createHmac("sha256", ID_KEY).update(member ? `fractional:m:${member}` : `fractional:s:${[...seats].sort()[0]}`).digest("base64url").slice(0, 12)}`;
+function personIndex(g: Graph, s: State): PersonIdx {
+  const hit = personIdxs.get(g);
+  if (hit) return hit;
+  const seed = graphSeeds.get(g)!;
+  const idx = memberIndex(seed, s);
+  const keys = seedHolderKeys(seed);
+  const links: SeatLink[] = [];
+  const memberOf = new Map<string, string>();
+  for (const e of g.engagements.values()) {
+    const op = valueOf(e, s, "operator");
+    if (!op || op.status !== "live" || !op.value.trim()) continue;
+    if (openByStatus(e, s)) continue;
+    const type = live(e, s, "type");
+    if (type && !FRACTIONAL_TYPES.includes(type)) continue;
+    const m = seatHolder(s, idx, e.id, op);
+    if (m) memberOf.set(e.id, m.id);
+    links.push({ id: e.id, member: m?.id ?? null, key: keys.get(e.id) ?? null });
+  }
+  const { groups, groupOf } = groupSeats(links, (m, id) => (s.notMine[m] ?? []).includes(id));
+  const out: PersonIdx = { groups: [], groupOf, byRid: new Map() };
+  for (const seats of groups) {
+    const member = seats.map((id) => memberOf.get(id)).find(Boolean) ?? null;
+    const rid = recordId(member, seats);
+    out.byRid.set(rid, out.groups.length);
+    out.groups.push({ seats, member, rid });
+  }
+  personIdxs.set(g, out);
+  return out;
+}
+/** The fractional a seat belongs to, read from the graph its node was built in. */
+function personOf(s: State, node: Node | undefined): { p: PersonIdx; gr: PersonGroup; g: Graph } | null {
+  const g = node ? engGraphs.get(node) : undefined;
+  if (!g || !graphSeeds.has(g)) return null;
+  const p = personIndex(g, s);
+  const gi = p.groupOf.get(node!.id);
+  return gi === undefined ? null : { p, gr: p.groups[gi], g };
+}
+/** The purchase of a fractional (one of their seats' "who held it", either half, or the person from Fractionals) is the member's. */
+function boughtSeat(s: State, memberId: string, g: Graph, engId: string): boolean {
+  if ((s.unlocks[fkey(engId, "operator")] ?? []).includes(memberId) || (s.unlocks[fkey(engId, "person")] ?? []).includes(memberId)) return true;
+  return (s.unlocks[fkey(engId, "role")] ?? []).includes(memberId) && seatBundled(g.engagements.get(engId), s);
+}
+/**
+ * The member bought this fractional (FRACTIONAL_BUNDLE): who held one of their seats (or its role,
+ * the other half of that one purchase), or the person on Fractionals. Then who held each of their
+ * seats, and each seat's role with it (SEAT_BUNDLE: holding the name half opens the role), shows
+ * to them at no charge. True on a seat of that fractional.
+ */
+function personHeld(s: State, me: Member | null, node: Node | undefined): boolean {
+  if (!me || !node) return false;
+  const at = personOf(s, node);
+  if (!at) return false;
+  return at.gr.seats.some((id) => boughtSeat(s, me.id, at.g, id));
+}
+/**
+ * A member who said "Show me in the Fractionals directory" (Profile.fractionals true) and has signed
+ * in: who held each of their seats, and the role, are free to every member (never signed out).
+ */
+function personShown(s: State, node: Node | undefined): boolean {
+  const at = personOf(s, node);
+  if (!at?.gr.member) return false;
+  const p = s.profiles[at.gr.member];
+  return p?.fractionals === true && !p.partnersOff;
+}
+/** The other free ways to see who held a seat and its role: the fractional bought, or shown in the directory. */
+function personFree(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): boolean {
+  if (!me || !node || entity !== "engagement" || (key !== "operator" && key !== "role")) return false;
+  if (key === "role" && !seatBundled(node, s)) return false;
+  return personShown(s, node) || personHeld(s, me, node);
 }
 
 /* ---------- seat-holder names from public profiles ---------- */
@@ -1328,7 +1455,8 @@ function takeNameOff(s: State, engId: string, how: NamesState["removed"][string]
   // The removed value keeps the seed's name off the seat. It holds no text: the name isn't kept anywhere it wasn't.
   s.values[k] = { value: "", by: "seed", at: now, status: "removed" };
   delete s.verifications[k];
-  const back = refundPaid(s, k, now, "name");
+  // A fractional bought on Fractionals through this seat ("<seat>.person") bought this name too: it comes back the same way.
+  const back = refundPaid(s, k, now, "name") + refundPaid(s, fkey(engId, "person"), now, "name");
   (s.names ??= emptyNames()).removed[engId] = { at: now, how };
   return back;
 }
@@ -1765,7 +1893,8 @@ function connectInvite(s: State, seed: Seed, g: Graph, invitee: Member, engId: s
   if (!inviter || !e) return null;
   s.seatInvites ??= [];
   let inv = s.seatInvites.find((x) => x.by === inviterId && x.engagementId === engId);
-  const paidForName = (s.unlocks[fkey(engId, "operator")] ?? []).includes(inviterId) || (s.unlocks[fkey(engId, "role")] ?? []).includes(inviterId);
+  const paidForName =
+    (s.unlocks[fkey(engId, "operator")] ?? []).includes(inviterId) || (s.unlocks[fkey(engId, "role")] ?? []).includes(inviterId) || personHeld(s, idx.byId.get(inviterId) ?? null, g.engagements.get(engId));
   if (!inv && !paidForName) return null;
   if (inv?.claimedBy) return null;
   // The name they invited came off the seat since (This is wrong, Remove my name): that invite no longer stands.
@@ -2197,6 +2326,8 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
  */
 function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex, free = false): Cell {
   if (entity === "engagement" && ((key === "end" && endFree(node, s)) || (key === "role" && scanRoleFree(node, s)))) free = true;
+  // Fractionals: a member shown in the directory has who held their seats, and the roles, free to every member.
+  if (!free && me && entity === "engagement" && (key === "operator" || (key === "role" && seatBundled(node, s))) && personShown(s, node)) free = true;
   const f = fieldDef(entity, key)!;
   const v = valueOf(node, s, f.key);
   if (!v) return { s: "empty" };
@@ -2219,7 +2350,12 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
     !!me &&
     !mine &&
     !!f.gated &&
-    ((s.unlocks[k] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key) || holdsSeatPartner(s, me, node, entity, key) || samePersonHeld(s, me, node, entity, key));
+    ((s.unlocks[k] ?? []).includes(me.id) ||
+      holdsPersonPartner(s, me, node, entity, key) ||
+      holdsSeatPartner(s, me, node, entity, key) ||
+      samePersonHeld(s, me, node, entity, key) ||
+      // Fractionals: the member bought this fractional (one of their seats, or the person): every seat of theirs shows who held it, with the role.
+      (entity === "engagement" && (key === "operator" || (key === "role" && seatBundled(node, s))) && personHeld(s, me, node)));
   if (!f.gated || mine || free || paid) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
     // Only to a viewer who sees the name: it is from public profiles and nobody has verified it yet (the Verify button).
@@ -2740,7 +2876,8 @@ function knownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<s
   for (const c of s.companies) if (c.by === me.id) out.add(c.id);
   for (const e of s.engagements) if (e.by === me.id) out.add(e.companyId);
   for (const k in s.values) if (s.values[k].by === me.id) add(nodeOfKey(k));
-  for (const k in s.unlocks) if (s.unlocks[k].includes(me.id)) add(nodeOfKey(k));
+  // A fractional bought on Fractionals (".person") names nobody's company: it opens no company.
+  for (const k in s.unlocks) if (s.unlocks[k].includes(me.id) && !k.endsWith(".person")) add(nodeOfKey(k));
   for (const b of s.benchRates) if (b.by === me.id) add(b.engagementId);
   for (const c of s.names?.claims ?? []) if (c.memberId === me.id && c.status === "approved") add(c.engagementId);
   for (const e of g.engagements.values()) if (!out.has(e.companyId) && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id) out.add(e.companyId);
@@ -2764,7 +2901,7 @@ function knowsCompany(g: Graph, s: State, idx: MemberIndex, me: Member, companyI
   for (const p of g.contacts.values()) if (p.companyId === companyId) ids.add(p.id);
   const at = (k: string) => ids.has(k.slice(0, k.lastIndexOf(".")));
   for (const k in s.values) if (at(k) && s.values[k].by === me.id) return true;
-  for (const k in s.unlocks) if (at(k) && s.unlocks[k].includes(me.id)) return true;
+  for (const k in s.unlocks) if (at(k) && !k.endsWith(".person") && s.unlocks[k].includes(me.id)) return true;
   if (s.benchRates.some((b) => b.by === me.id && !!b.engagementId && ids.has(b.engagementId))) return true;
   if ((s.names?.claims ?? []).some((c) => c.memberId === me.id && c.status === "approved" && ids.has(c.engagementId))) return true;
   return engs.some((e) => seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id);
@@ -3012,6 +3149,24 @@ function nobodyChanges(a: State, b: State, ga: Graph, gb: Graph): Set<string> | 
     }
     return null;
   };
+  // Fractionals: a seat's holder free to every member hangs on their whole record (personShown), so a
+  // change on one seat, or in "Show me in the Fractionals directory", reaches every seat of theirs.
+  const recordCos = (engId: string) => {
+    for (const [g, s] of [[ga, a], [gb, b]] as const) {
+      if (!graphSeeds.has(g)) continue;
+      const p = personIndex(g, s);
+      const gi = p.groupOf.get(engId);
+      if (gi !== undefined) for (const id of p.groups[gi].seats) out.add(g.engagements.get(id)!.companyId);
+    }
+  };
+  const showOf = (p: Profile | undefined) => `${p?.fractionals ?? ""}|${!!p?.partnersOff}`;
+  for (const id of new Set([...Object.keys(a.profiles ?? {}), ...Object.keys(b.profiles ?? {})])) {
+    if (showOf(a.profiles?.[id]) === showOf(b.profiles?.[id])) continue;
+    for (const [g, s] of [[ga, a], [gb, b]] as const) {
+      if (!graphSeeds.has(g)) continue;
+      for (const gr of personIndex(g, s).groups) if (gr.member === id) for (const e of gr.seats) out.add(g.engagements.get(e)!.companyId);
+    }
+  }
   for (const key of keys) {
     if (NOBODY_BLIND.has(key)) continue;
     const x = (a as unknown as Record<string, unknown>)[key];
@@ -3028,6 +3183,7 @@ function nobodyChanges(a: State, b: State, ga: Graph, gb: Graph): Set<string> | 
         const c = coOf(k.slice(0, k.lastIndexOf(".")));
         if (!c) return null;
         out.add(c);
+        if (key === "values" && k.endsWith(".operator")) recordCos(k.slice(0, k.lastIndexOf(".")));
       }
       continue;
     }
@@ -3121,6 +3277,11 @@ function ownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<str
   }
   for (const k in s.verifications) if (s.verifications[k].includes(me.id)) add(nodeOfKey(k));
   for (const k in s.unlocks) if (s.unlocks[k].includes(me.id)) add(nodeOfKey(k));
+  // Fractionals: a fractional they bought shows who held each of their seats, at every company those seats are at.
+  if (g.engagements.size && graphSeeds.has(g)) {
+    const p = personIndex(g, s);
+    for (const gr of p.groups) if (gr.seats.length > 1 && gr.seats.some((id) => boughtSeat(s, me.id, g, id))) for (const id of gr.seats) add(id);
+  }
   for (const c of s.names?.claims ?? []) if (c.memberId === me.id) add(c.engagementId);
   for (const x of s.seatInvites ?? []) if (x.by === me.id) add(x.engagementId);
   for (const [engId, note] of Object.entries(s.seatPrivate ?? {})) if (note.by === me.id) add(engId);
@@ -3687,7 +3848,7 @@ async function fullView(
       if (l.reason === "fill" && !l.undone) added++;
       if (l.reason === "unlock") {
         unlocked++;
-        if (l.ref.endsWith(".operator")) holdersUnlocked++;
+        if (l.ref.endsWith(".operator") || l.ref.endsWith(".person")) holdersUnlocked++;
         else if (l.ref.endsWith(".identity")) companiesUnlocked++;
       }
       const dot = l.ref.indexOf(".");
@@ -3749,6 +3910,11 @@ async function fullView(
         ledger.push({ at: l.at, delta: l.delta, reason: l.why === "crystal" ? CRYSTAL_LINE : CRYSTAL_FULL_LINE, company: companyNameOf(id), field: "" });
         continue;
       }
+      // A fractional bought on Fractionals: no company to name (it opened none).
+      if ((l.reason === "unlock" || l.reason === "refund") && field === "person" && !l.why) {
+        ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: "", field: FRACTIONAL_LABEL });
+        continue;
+      }
       // A fact the member took back (retract): "Took back the HQ", then "at Acme".
       if (l.reason === "reversal" && l.why === "retract") {
         ledger.push({ at: l.at, delta: l.delta, reason: `Took back ${say(entityOf(id), field)}`, company: companyNameOf(id), field: "" });
@@ -3796,6 +3962,8 @@ async function fullView(
       unread: unreadCount(s, me.id),
       messageEmail: !prof.messageEmailOff,
       partners: !prof.partnersOff,
+      // Fractionals: "Show me in the Fractionals directory" (null: not chosen yet). Referral partners' old switch off reads as out.
+      fractionals: prof.fractionals ?? (prof.partnersOff ? false : null),
       radar: !prof.radarOff,
       proInterest: !!prof.proInterest,
       // Who they hunt, and their saved views (one list with the connector's saved searches).
@@ -3885,8 +4053,12 @@ const NAME_REFUND = "Refund for a seat holder's name that came off";
 /** A person's name and title, and who held a seat with their role, as the credit history names the purchase (app/post/ledger.ts reads these). */
 const PERSON_PAIR_LABEL = "Person name and title";
 const SEAT_PAIR_LABEL = "Seat holder and role";
+/** A fractional bought on Fractionals: who held each of their seats, with the roles. */
+export const FRACTIONAL_LABEL = "A fractional's name and roles";
 const fieldLabel = (entity: Entity, field: string) =>
-  entity === "company" && field === "identity"
+  entity === "engagement" && field === "person"
+    ? FRACTIONAL_LABEL
+    : entity === "company" && field === "identity"
     ? HIDDEN_COMPANY
     : entity === "company" && field.startsWith(FT_LEADER_REF)
       ? `Full-time ${field.slice(FT_LEADER_REF.length)} leader`
@@ -4562,7 +4734,7 @@ export async function perform(
   const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
   // A move is at a company in the member's own Crystal Ball: read the same way.
   const movesMod = a?.type === "move" ? await import("./radar") : null;
-  const out = await mutate((s, seed): ActionResult & { refused?: string; connected?: string } => {
+  const out = await mutate((s, seed): ActionResult & { refused?: string; connected?: string; connectedAll?: string[] } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError("You're signed out. Sign in again to add, confirm or unlock.");
     const now = new Date().toISOString();
@@ -4636,6 +4808,8 @@ export async function perform(
           (field === "role" && (roleFree(g.engagements.get(id), s, tracks()) || scanRoleFree(g.engagements.get(id), s))) ||
           (field === "end" && endFree(g.engagements.get(id), s)) ||
           holdsSeatPartner(s, me, g.engagements.get(id), entity, field) ||
+          // Fractionals: a fractional they bought, or one shown in the directory (who held each seat, with the role).
+          personFree(s, me, g.engagements.get(id), entity, field) ||
           ownSeat(id)));
     /**
      * The member can see who this person is: their name and title, where on file, are the member's
@@ -4727,6 +4901,7 @@ export async function perform(
       refundUnlockers(k);
       const dot = k.lastIndexOf(".");
       if (k.slice(dot + 1) === "operator") {
+        personIdxs.delete(g);
         reopenIfUnheld(s, k.slice(0, dot), now);
         tracksNow = null; // it may have reopened, or closed for good when its posting was long gone
       }
@@ -4754,6 +4929,8 @@ export async function perform(
       return m;
     };
     let capped = false;
+    /** Activate your fractional profile: the seats of their own record are claimed together, past the daily claim limit (see the activate action). */
+    let activating = false;
     /** A claim on an open role was saved, and the role stays open (the account does not count yet, see trustOf). */
     let claimKept = false;
     /** This change is the member saying they took an open role ("I took this role"). */
@@ -4901,7 +5078,7 @@ export async function perform(
       const pubClaim = scanClaim && !!cur?.pub && linked?.id === me.id && sameName(cur.value, me.name);
       if (scanClaim) {
         if (cur && !pubClaim) throw new ActionError(SEAT_TAKEN);
-        if (claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
+        if (!activating && claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
       }
       // A seat holder can correct what our records or the scan say about their own seat.
       // What another member added still needs a report.
@@ -4950,6 +5127,8 @@ export async function perform(
         // A correction keeps what it replaced, so "Not my seat" can put it back. Editing it again keeps the first one's.
         ...(cur?.by === me.id ? (cur.prev ? { prev: cur.prev } : {}) : correction && cur ? { prev: { value: cur.value, by: cur.by, at: cur.at } } : {}),
       };
+      // Who holds a seat changed: the fractionals are read again (personIndex) for the rest of this action.
+      if (key === "operator") personIdxs.delete(g);
       if (scanClaim) {
         s.seatClaims = [...(s.seatClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: node.id, at: now }];
         // Claims other members made on the name it replaced are settled: the seat is its named fractional's.
@@ -5047,7 +5226,7 @@ export async function perform(
       return { node: into as Node, earned, merged: true, kept, typed };
     };
 
-    const run = (): ActionResult & { connected?: string } => {
+    const run = (): ActionResult & { connected?: string; connectedAll?: string[] } => {
       switch (a?.type) {
         case "fill": {
           const node = nodeOf(a.entity, a.id);
@@ -6150,15 +6329,19 @@ export async function perform(
           const link = via ? connectInvite(s, seed, g, me, e.id, via.id, now) : null;
           return {
             message:
-              (theirs
-                ? "It's yours. Your name matches the one on file, so it's verified now. Other members see it behind a 1 credit lock. Fill in what you know on Your seats."
-                : "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.") + connectedNote(link),
+              // Shown in the Fractionals directory, their name is free on their seats (personShown); otherwise behind the usual lock.
+              (s.profiles[me.id]?.fractionals === true
+                ? `It's yours.${theirs ? " Your name matches the one on file, so it's verified now." : ""} You're in the Fractionals directory, so other members see your name on it, free. Fill in what you know on Your seats.`
+                : theirs
+                  ? "It's yours. Your name matches the one on file, so it's verified now. Other members see it behind a 1 credit lock. Fill in what you know on Your seats."
+                  : "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.") + connectedNote(link),
             id: pubId(e.id),
             cells: ENG_KEYS.map((f) => changed("engagement", e, f)),
             ...(link?.conversationId ? { connected: link.conversationId } : {}),
           };
         }
         case "notMine": {
+          personIdxs.delete(g); // who holds the seat is about to change: read the fractionals again after it
           // "This isn't me": a seat matched to this member by name that they never held. On a seat
           // they put their own name on (one they claimed, an open role they took, one they added) the
           // app says "Not my seat" or "Remove this seat" (their own name, below).
@@ -6380,15 +6563,18 @@ export async function perform(
                 : `${YOUR_FEATURE} is off. We won't send it by email or Slack. ${FEATURE_NAME} in the app still lists what's new.`,
             };
           }
-          if (typeof a.partners === "boolean") {
+          // "Show me in the Fractionals directory" (Referral partners' switch, `partners`, is the same one now).
+          const show = typeof a.fractionals === "boolean" ? a.fractionals : typeof a.partners === "boolean" ? a.partners : null;
+          if (show !== null) {
             const p = { ...(s.profiles[me.id] ?? {}) };
-            if (a.partners) delete p.partnersOff;
+            p.fractionals = show;
+            if (show) delete p.partnersOff;
             else p.partnersOff = true;
             s.profiles[me.id] = p;
             return {
-              message: a.partners
-                ? "You're listed in Referral partners. Members see your first name, title, function and the kind of clients you want, never your email."
-                : "You're hidden from Referral partners. Members you already talk to can still write to you.",
+              message: show
+                ? "You're in the Fractionals directory. Members see your name, your seats and the clients you serve, free. Never your email."
+                : "You're out of the Fractionals directory. Members you already talk to can still write to you.",
             };
           }
           return { message: "Saved." };
@@ -6446,6 +6632,171 @@ export async function perform(
           for (const j of s.inviteJoins ?? []) if (j.by === me.id && j.told && !j.seen && ids.has(pubId(j.invitee))) j.seen = now;
           return { message: "" };
         }
+        case "activate": {
+          /*
+           * Activate your fractional profile (the claim link of a fractional with more than one seat,
+           * app/claim/Claim.tsx): every seat of their record they left ticked becomes theirs at once
+           * (a seat whose name on file is theirs; another name waits for an admin, as claimSeat), then
+           * they are connected with every member who invited them before now, and the invite bonus:
+           *  - the new member gets REFERRAL_BONUS once (referralBonus: from the inviter whose link
+           *    they joined with, else the first inviter), within the daily earning cap;
+           *  - each inviter gets REFERRAL_BONUS, at most ACTIVATE_INVITERS_PAID inviters for one
+           *    activation, each within their own REFERRAL_LIMIT a 30 days and daily cap, and none from
+           *    a network the new member joined from (the invite rule). Only a member who joined now
+           *    earns these: someone already on Merlin connects, with no bonus.
+           * `show`: "Show me in the Fractionals directory", ticked unless they untick it.
+           */
+          if (!opts.claimLink) throw new ActionError(UNKNOWN_ACTION);
+          const link = g.engagements.get(inId("engagement", a.engagementId));
+          if (!link) throw new ActionError(gone("engagement"));
+          const p = personIndex(g, s);
+          const gi = p.groupOf.get(link.id);
+          const all = gi === undefined ? [link.id] : p.groups[gi].seats;
+          const skip = new Set((Array.isArray(a.skip) ? a.skip : []).slice(0, 200).map((x) => String(x)));
+          const want = all.filter((id) => !skip.has(pubId(id)));
+          if (!want.length) throw new ActionError("Tick at least one seat that's yours, or use This isn't me.");
+          const idxNow = () => memberIndex(seed, s);
+          // Who invited them before now: each member's first standing invite on any of these seats, and whoever sent this link.
+          const via = opts.ref ? memberByInviteCode(seed, s, opts.ref) : null;
+          const inviters: { by: string; engId: string }[] = [];
+          for (const x of [...(s.seatInvites ?? [])].sort((u, v) => u.at.localeCompare(v.at)))
+            if (all.includes(x.engagementId) && !x.claimedBy && x.by !== me.id && !inviters.some((i) => i.by === x.by)) inviters.push({ by: x.by, engId: x.engagementId });
+          if (via && via.id !== me.id) {
+            const at = inviters.findIndex((i) => i.by === via.id);
+            const it = at >= 0 ? inviters.splice(at, 1)[0] : { by: via.id, engId: link.id };
+            inviters.unshift(it);
+          }
+          let claimed = 0;
+          let waits = 0;
+          let taken = 0;
+          activating = true;
+          try {
+            for (const id of want) {
+              const e = g.engagements.get(id)!;
+              const op = valueOf(e, s, "operator");
+              if (seatHolder(s, idxNow(), e.id, op)?.id === me.id) {
+                claimed++;
+                continue;
+              }
+              const pub = publicName(e, s);
+              if (e.source !== SEAT_SCAN || (op && !pub)) {
+                taken++;
+                continue;
+              }
+              if (pub && !sameName(pub.value, me.name)) {
+                // Someone else's name: an admin checks it first (claimSeat's rule), a few a day.
+                if (nameVerified(s, e.id) || claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) {
+                  taken++;
+                  continue;
+                }
+                if (!pendingClaimers(s, e.id).includes(me.id)) {
+                  const names = (s.names ??= emptyNames());
+                  names.claims.push({ memberId: me.id, engagementId: e.id, at: now, status: "pending", ...(via && via.id !== me.id ? { via: via.id } : {}) });
+                }
+                waits++;
+                continue;
+              }
+              setValue(e, "engagement", "operator", me.name, me);
+              claimed++;
+            }
+          } finally {
+            activating = false;
+          }
+          if (!claimed && !waits) throw new ActionError("None of these seats can be yours now. Another member holds them.");
+          // The invite bonus: only someone who joined Merlin now (a joined account, not paid an invite bonus before).
+          const joined = s.members.find((m) => m.id === me.id);
+          const fresh = !!joined && !s.referralPaid.includes(me.id);
+          let mine = 0;
+          const paidInviters = new Set<string>();
+          if (fresh && claimed) {
+            if (joined!.referredBy) {
+              const r = referralBonus(s, seed, me.id, now);
+              mine = r.paid;
+              if (r.inviter) paidInviters.add(joined!.referredBy);
+              else paidInviters.add(`skip:${joined!.referredBy}`);
+            } else if (inviters.length) {
+              s.referralPaid.push(me.id);
+              mine = grant(s, me.id, REFERRAL_BONUS, "referral", `${inviters[0].by}.referral`, now);
+            }
+            for (const inv of inviters) {
+              if (paidInviters.has(inv.by) || paidInviters.has(`skip:${inv.by}`)) continue;
+              if ([...paidInviters].filter((x) => !x.startsWith("skip:")).length >= ACTIVATE_INVITERS_PAID) break;
+              if (joined!.ipHash && networksOf(s, inv.by).has(joined!.ipHash)) continue;
+              if (inviteesPaid(s, inv.by, nowMs) >= REFERRAL_LIMIT) continue;
+              grant(s, inv.by, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
+              paidInviters.add(inv.by);
+            }
+          }
+          // A conversation with each of them (connectInvite: once, its first message their note), no bonus there: it is paid above.
+          let first: string | null = null;
+          const firsts: string[] = [];
+          const opened: string[] = [];
+          for (const inv of inviters) {
+            const c = connectInvite(s, seed, g, me, inv.engId, inv.by, now, false);
+            if (c?.conversationId && !first) first = c.conversationId;
+            if (c?.conversationId) opened.push(c.conversationId);
+            if (c) firsts.push(c.inviter);
+          }
+          // "Show me in the Fractionals directory": ticked unless they untick it.
+          const prof = { ...(s.profiles[me.id] ?? {}) };
+          prof.fractionals = a.show !== false;
+          if (prof.fractionals) delete prof.partnersOff;
+          else prof.partnersOff = true;
+          s.profiles[me.id] = prof;
+          personIdxs.delete(g);
+          const who = firsts.length ? ` You're connected with ${firsts.length === 1 ? firsts[0] : `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}`} in Messages.` : "";
+          const bonus = mine ? ` You got ${REFERRAL_BONUS} credits for joining${paidInviters.size ? ", and so did whoever invited you" : ""}.` : "";
+          return {
+            message:
+              `${claimed ? `${claimed === 1 ? "Your seat is" : `Your ${claimed} seats are`} on your profile now.` : ""}${waits ? ` ${waits === 1 ? "One seat waits" : `${waits} seats wait`} for an admin, because the name on file isn't yours.` : ""}${who}${bonus}`.trim(),
+            id: recordId(me.id, []),
+            ...(first ? { connected: first, connectedAll: opened } : {}),
+          };
+        }
+        case "unlockFractional": {
+          /*
+           * Fractionals: "Unlock · 1 credit" on someone not on Merlin yet. The same purchase as who held
+           * one of their seats (SEAT_BUNDLE), recorded on a seat of theirs at a company the member can
+           * see ("<seat>.operator", exactly as the seat's own unlock records it), else on one of their
+           * seats as "<seat>.person", which opens no company. Either way every seat of theirs shows who
+           * held it, with the role (personHeld), and a seat of theirs bought before opens this for free.
+           */
+          const p = personIndex(g, s);
+          const gi = p.byRid.get(String(a.id ?? ""));
+          if (gi === undefined) throw new ActionError("We couldn't find that fractional. Refresh the page and try again.");
+          const gr = p.groups[gi];
+          if (gr.member === me.id) throw new ActionError("That's you, so there's nothing to unlock.");
+          const seats = gr.seats.map((id) => g.engagements.get(id)).filter((e): e is EngNode => !!e);
+          const idxNow = memberIndex(seed, s);
+          const cellNow = (e: EngNode) => cellOf(s, me, e, "engagement", "operator", idxNow, freeFor("engagement", e.id, "operator"));
+          if (seats.some((e) => cellNow(e).s === "value")) throw new ActionError("You can already see who this is, so no credit was spent.");
+          const lockedSeats = seats.filter((e) => cellNow(e).s === "locked");
+          if (!lockedSeats.length) throw new ActionError("Nothing here is locked, so no credit was spent.");
+          const anchor = lockedSeats.find((e) => !hiddenFor(e.companyId));
+          const k = anchor ? fkey(anchor.id, "operator") : fkey(lockedSeats[0].id, "person");
+          const { left, firstDay } = unlockRoom(s, me.id, nowMs);
+          const bal = balance(s, me.id);
+          if (bal <= 0) {
+            const msg = "You're out of credits. Add a missing fact to earn one.";
+            if (!addSignal(s, me.id, "wall", "server", now)) throw new ActionError(msg);
+            refusal.message = msg;
+            return { message: "" };
+          }
+          if (left < 1)
+            throw new ActionError(
+              firstDay
+                ? `You've unlocked ${NEW_MEMBER_UNLOCK_MAX} facts today, the day-one limit. Your ${bal} credit${bal === 1 ? " is" : "s are"} here tomorrow.`
+                : `You've reached today's unlock limit. The limit is ${UNLOCK_DAILY_MAX} unlocks in 24 hours.`,
+            );
+          s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: k, at: now });
+          s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
+          const name = live(lockedSeats[0], s, "operator") ?? "them";
+          return {
+            message: `Unlocked ${name} for 1 credit. Their name and role show on each of their seats now.`,
+            id: gr.rid,
+            cells: seats.flatMap((e) => ["operator", "role"].map((f) => changed("engagement", e, f))),
+          };
+        }
         case "invite": {
           // Invite to connect: the member sent this seat's holder their note and claim link. One record per member and seat.
           const e = g.engagements.get(inId("engagement", a.engagementId));
@@ -6481,7 +6832,7 @@ export async function perform(
 
     const out = run();
     // Value in the trial's last days (a warm path unlocked: who held a seat or a person's name; an invite sent) extends it once.
-    if (billingLive() && (a.type === "invite" || s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && (l.ref.endsWith(".operator") || (l.ref.startsWith("p_") && l.ref.endsWith(".name"))))))
+    if (billingLive() && (a.type === "invite" || s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && (l.ref.endsWith(".operator") || l.ref.endsWith(".person") || (l.ref.startsWith("p_") && l.ref.endsWith(".name"))))))
       valueMoment(s, me.id, nowMs);
     if (movedRate && out.message) out.message += " This rate replaces the one you shared privately, which already earned its credit.";
     // A dry run throws, so the batch keeps nothing it wrote (see flush).
@@ -6497,7 +6848,7 @@ export async function perform(
       if (l.reason === "fill" && !l.undone) added++;
       else if (l.reason === "unlock") {
         unlocked++;
-        if (l.ref.endsWith(".operator")) holdersUnlocked++;
+        if (l.ref.endsWith(".operator") || l.ref.endsWith(".person")) holdersUnlocked++;
         else if (l.ref.endsWith(".identity")) companiesUnlocked++;
       }
     }
@@ -6521,6 +6872,10 @@ export async function perform(
     delete carried.connected;
     if (!opts.dryRun) void import("./messages").then((m) => m.afterConnect(id, origin)).catch((e) => console.error("connect notice failed", e));
   }
+  // Activate your fractional profile: every conversation it opened (one with each inviter) is announced too.
+  const all = (out as { connectedAll?: string[] }).connectedAll;
+  if (all?.length && !opts.dryRun)
+    for (const id of all.slice(1)) void import("./messages").then((m) => m.afterConnect(id, origin)).catch((e) => console.error("connect notice failed", e));
   // Alerts in Slack: another member unlocked who held a seat, or facts on it.
   if (!opts.dryRun && (a?.type === "unlock" || a?.type === "unlockMany") && out.cells?.length) {
     const cells = out.cells;
@@ -6595,6 +6950,9 @@ export const tableInternals = {
   belowLead, offBarRole, isUnseen, addSignal,
 };
 
+/** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
+export const fractionalInternals = { viewGraph, personIndex, boughtSeat, personShown, invitable, knownCompanies, openByStatus, stateNow: () => stateCache };
+
 /* ---------- claim links (/claim/<token>) and Remove my name ---------- */
 
 /** A graph's seat ids, kept with it, so seatForToken builds its index once per graph. */
@@ -6636,6 +6994,20 @@ export interface ClaimPage {
   email: boolean;
   /** The first name of the member whose invite code came with the link (?ref=), or null. */
   inviter: string | null;
+  /**
+   * Activate your fractional profile: the link's seat is one of several seats of one fractional
+   * (personIndex), still open to claim. Each seat that looks like theirs: its public id, role,
+   * function, dates, whether it's current, and its company's free facts ("Fintech · 51–200 · MA").
+   * The company's name only on the link's own seat, as the one-seat page names it: whoever holds a
+   * link sees no company an inviter hasn't seen. `inviter`: the member whose link this is (else the
+   * first to invite them), with their title, when they joined and their note without its link.
+   * `others`: how many more members invited them (a count, never who). Never the fractional's name.
+   */
+  person?: {
+    seats: { id: string; role: string | null; fn: string | null; start: string | null; end: string | null; now: boolean; company: string | null; facts: string; link: boolean }[];
+    inviter: { name: string; title: string; since: string | null; note: string | null } | null;
+    others: number;
+  };
 }
 export async function claimPage(token: unknown, memberToken: string | null, ref?: unknown): Promise<ClaimPage> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
@@ -6673,7 +7045,110 @@ export async function claimPage(token: unknown, memberToken: string | null, ref?
       start: live(e, s, "start"),
       named: !!publicName(e, s) || !!seedPublicName(seed, s, e.id),
     },
+    ...(status === "open" ? personPage(seed, s, g, e, locked, ref) : {}),
   };
+}
+
+/** The seats of the link's fractional still open to claim (a found seat, unclaimed), the link's own first: one seat is the one-seat page. */
+function activationSeats(s: State, g: Graph, e: EngNode): EngNode[] {
+  const at = personOf(s, e);
+  if (!at) return [e];
+  const open = at.gr.seats.map((id) => g.engagements.get(id)!).filter((x) => x && x.source === SEAT_SCAN && !!publicName(x, s));
+  return [e, ...open.filter((x) => x.id !== e.id)];
+}
+/** ClaimPage.person, for a fractional with more than one seat to claim. */
+function personPage(seed: Seed, s: State, g: Graph, e: EngNode, locked: boolean, ref: unknown): Pick<ClaimPage, "person"> {
+  const seats = activationSeats(s, g, e);
+  if (seats.length < 2) return {};
+  const idx = memberIndex(seed, s);
+  const facts = (x: EngNode) => {
+    const c = g.companies.get(x.companyId);
+    const geo = geoOf(c, s);
+    return [live(c, s, "industry"), live(c, s, "employees"), geo.region ?? geo.country].filter(Boolean).join(" · ");
+  };
+  const ids = new Set(seats.map((x) => x.id));
+  const invites = (s.seatInvites ?? []).filter((x) => ids.has(x.engagementId) && !x.claimedBy).sort((a, b) => a.at.localeCompare(b.at));
+  const via = memberByInviteCode(seed, s, ref);
+  const firstBy = via?.id ?? invites[0]?.by ?? null;
+  const who = firstBy ? idx.byId.get(firstBy) ?? null : null;
+  const others = new Set(invites.map((x) => x.by).filter((b) => b !== firstBy)).size;
+  const note = firstBy ? invites.find((x) => x.by === firstBy)?.note ?? null : null;
+  const prof = who ? s.profiles[who.id] ?? {} : {};
+  return {
+    person: {
+      seats: seats.map((x) => {
+        const end = live(x, s, "end");
+        const status = live(x, s, "status");
+        return {
+          id: pubId(x.id),
+          role: live(x, s, "role"),
+          fn: fnOf(x, s),
+          start: live(x, s, "start"),
+          end: end && end !== "Ongoing" ? end : null,
+          now: status !== "Ended" && (status === "Active" || !end || end === "Ongoing"),
+          company: x.id === e.id && !locked ? g.companies.get(x.companyId)?.name ?? null : null,
+          facts: facts(x),
+          link: x.id === e.id,
+        };
+      }),
+      inviter: who
+        ? {
+            name: who.name,
+            title: (prof.title || (who.title === "Member" ? "" : who.title) || "").trim(),
+            since: s.members.find((m) => m.id === who.id)?.at ?? null,
+            // Their note as they wrote it, without the claim link in it.
+            note: note ? tidy(note.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " "), 400) || null : null,
+          }
+        : null,
+      others,
+    },
+  };
+}
+
+/**
+ * Activate your fractional profile on a claim link (POST /api/table/names, op "activate"): the
+ * signed-in member claims every seat of the link's fractional they left ticked (perform's
+ * "activate"). The answer names the conversation it opened with the first inviter, and their record.
+ */
+export async function activateByToken(
+  memberToken: string | null,
+  token: unknown,
+  opts: { origin?: string; ref?: unknown; skip?: unknown; show?: boolean } = {},
+): Promise<ActionResult & { conversationId: string | null }> {
+  const id = await seatOfToken(token);
+  if (!id) throw new ActionError("That claim link didn't work. It may be cut short. Open the whole link from the message.");
+  const code = typeof opts.ref === "string" ? opts.ref.trim().slice(0, 40) : "";
+  const skip = Array.isArray(opts.skip) ? opts.skip.map((x) => String(x)).slice(0, 200) : [];
+  const out = await perform(memberToken, { type: "activate", engagementId: pubId(id), skip, show: opts.show !== false }, opts.origin, { claimLink: true, ...(code ? { ref: code } : {}) });
+  const carried = out as { connectedAll?: string[] };
+  return { ...out, conversationId: carried.connectedAll?.[0] ?? null };
+}
+
+/** The name on a claim link's seat, for joining from Activate your fractional profile (never sent to the page). */
+export async function seatNameForJoin(token: unknown): Promise<string | null> {
+  const id = await seatOfToken(token);
+  if (!id) return null;
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return seedPublicName(seed, s, id);
+}
+
+/**
+ * "Not mine" on one seat of the activation page: a name from public profiles on that seat, which must
+ * be one of the link's fractional's seats, comes off at once (takeNameOff, "notme"), with refunds.
+ */
+export async function nameOffSeat(token: unknown, seatPubId: unknown): Promise<{ done: boolean; why?: "invalid" | "held" | "unnamed" }> {
+  const id = await seatOfToken(token);
+  if (!id) return { done: false, why: "invalid" };
+  return mutate((s, seed) => {
+    const g = graph(seed, s);
+    const e = g.engagements.get(id);
+    if (!e) return { done: false, why: "invalid" as const };
+    const target = activationSeats(s, g, e).find((x) => pubId(x.id) === String(seatPubId ?? ""));
+    if (!target) return { done: false, why: "invalid" as const };
+    if (!seedPublicName(seed, s, target.id)) return { done: false, why: "held" as const };
+    takeNameOff(s, target.id, "notme", new Date().toISOString());
+    return { done: true };
+  });
 }
 
 /**
@@ -6731,7 +7206,13 @@ export async function nameOffByToken(token: unknown, how: "notme" | "remove", me
       const v = s.values[fkey(id, "operator")];
       return { done: false, why: v && v.status !== "removed" ? ("held" as const) : ("unnamed" as const) };
     }
+    // The link's fractional with more seats (Activate your fractional profile): "This isn't me" and
+    // "Remove my name" are about the person, so every seat of theirs still named from public profiles goes too.
+    const g = graph(seed, s);
+    const e = g.engagements.get(id);
+    const more = e ? activationSeats(s, g, e).filter((x) => x.id !== id && !!seedPublicName(seed, s, x.id)) : [];
     takeNameOff(s, id, how, now);
+    for (const x of more) takeNameOff(s, x.id, how, now);
     return { done: true };
   });
 }

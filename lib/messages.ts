@@ -329,7 +329,7 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           return { ...r, message: `Sent. ${name} will see it in Messages.` };
         }
         case "message.connect": {
-          // Connect on Referral partners: a member listed there, in a conversation about no seat. One per pair.
+          // Message from Fractionals (Connect on Referral partners before it): a member in the directory, in a conversation about no seat. One per pair.
           const them = idx.all.find((m) => T.pubId(m.id) === String(a.memberId ?? ""));
           if (!them) throw new ActionError("That member isn't on Merlin anymore.");
           if (them.id === me.id) throw new ActionError("That's you.");
@@ -340,7 +340,7 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           const pair = (c: StoredConversation) => (c.a === me.id && c.b === them.id) || (c.a === them.id && c.b === me.id);
           const existing = convs.find((c) => c.kind === "partners" && pair(c));
           if (existing) return write(existing, a.text);
-          if (s.profiles[them.id]?.partnersOff) throw new ActionError(`${name} isn't listed in Referral partners right now.`);
+          if (s.profiles[them.id]?.partnersOff || s.profiles[them.id]?.fractionals === false) throw new ActionError(`${name} isn't in the Fractionals directory right now.`);
           roomForOne();
           const c: StoredConversation = { id: newId("cv"), a: me.id, b: them.id, about: { companyId: "", engagementId: "" }, kind: "partners", messages: [], readAt: {}, status: "open", createdAt: now };
           convs.push(c);

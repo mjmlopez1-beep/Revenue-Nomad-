@@ -1,0 +1,514 @@
+/**
+ * Checks of Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts,
+ * lib/table.ts personIndex and the actions unlockFractional and activate), the directory's filters
+ * (app/post/fractionalsModel.ts), and the nav after the move (app/post/navModel.ts). No server:
+ * lib/table.ts runs in process on a made-up seed and seed key in a temporary data dir, billing live
+ * with made-up Stripe settings, fetch replaced, so nothing leaves the machine. Every person is made up.
+ *
+ *   npx tsx scripts/test-fractionals.mts      exits 1 on any failure
+ *
+ * Covered:
+ *  - grouping: a member's seats together, seats with one person key together, a named seat with
+ *    neither on its own, never two seats by name alone, never two members, never a seat a member
+ *    refused; levels, the clients line and the profile fit;
+ *  - who shows and how: a member shown in the directory (full name, seats free), one who hasn't
+ *    chosen (first name and last initial), one who said no (left out), someone not on Merlin yet
+ *    (locked: no name, first name or initials in the answer), the switch and Me.fractionals;
+ *  - every credit case: Unlock · 1 credit, recorded on a seat at a company the member knows, else
+ *    as a person that opens no company; the name and role on every seat of theirs after it; no second
+ *    charge from the directory or a seat; a seat bought before opens the record; a role bought
+ *    before (the other half of the bundle) too; no holderKey, no spread; out of credits; the daily
+ *    unlock limit and the first day's; Free, Trial and Pro pay the same and keep the free company of
+ *    the day; a name taken off gives the credit back;
+ *  - invites and activation: the activation page (who's waiting, the seats, one company named),
+ *    claiming every ticked seat past the daily claim limit, a conversation with each inviter, the
+ *    new member's bonus once, each inviter's, and the cap on inviters paid for one activation;
+ *  - Not mine, This isn't me, Remove my name on a fractional's link;
+ *  - an old one-seat claim link reads and claims as before;
+ *  - Referral partners' links open Fractionals with Different from yours; the rename to Decision makers;
+ *  - no person key in any answer: the table, the directory, Home's line, the claim page, the
+ *    connector, the export.
+ */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+const dir = mkdtempSync(path.join(tmpdir(), "rn-fractionals-"));
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+const t0 = Date.now();
+const ago = (ms: number) => new Date(t0 - ms).toISOString();
+const ahead = (ms: number) => new Date(t0 + ms).toISOString();
+const TEST_KEY = Buffer.alloc(32, 9).toString("base64");
+
+// Person keys: made up, but shaped as the importer writes them ("p_" + 20 hex).
+const K = { sam: "p_5a5a5a5a5a5a5a5a5a01", lee: "p_1e1e1e1e1e1e1e1e1e02", cara: "p_ca2aca2aca2aca2aca03", rae: "p_2ae02ae02ae02ae02a04", nia: "p_0a1a0a1a0a1a0a1a0a05", theo: "p_7e07e07e07e07e07e06" };
+
+const co = (id: string, name: string, industry: string, employees: string, revenue: string, hq: string) => ({ id, fields: { name, website: `${id.slice(2)}.example`, industry, employees, revenue, hq } });
+const companies = [
+  co("c_kite", "Kitebright", "SaaS", "51–200", "$5M–$20M", "Denver, CO"),
+  co("c_pollen", "Pollen Ledger", "Fintech", "51–200", "$5M–$20M", "Boston, MA"),
+  co("c_bright", "Brightloom Learning", "SaaS", "51–200", "$1M–$5M", "Raleigh, NC"),
+  co("c_vellum", "Vellum Insurance", "Insurance", "51–200", "$5M–$20M", "Hartford, CT"),
+  co("c_orchard", "Orchard Lane Software", "SaaS", "201–500", "$20M–$50M", "Chicago, IL"),
+  co("c_moon", "Moonridge Analytics", "SaaS", "51–200", "$5M–$20M", "Seattle, WA"),
+  co("c_tide", "Tidemark Pay", "Fintech", "51–200", "$5M–$20M", "Charlotte, NC"),
+  co("c_lantern", "Lanternfield Data", "SaaS", "51–200", "$5M–$20M", "Pittsburgh, PA"),
+  co("c_cara", "Copperline Pay", "Fintech", "11–50", "$1M–$5M", "Austin, TX"),
+  co("c_rae", "Sundial Metrics", "SaaS", "51–200", "$5M–$20M", "Minneapolis, MN"),
+  co("c_nia", "Quarry Bay Software", "SaaS", "11–50", "$1M–$5M", "Portland, OR"),
+  co("c_north", "Northwind Health", "Health Care", "201–500", "$20M–$50M", "Toronto, ON"),
+];
+const seat = (id: string, companyId: string, operator: string | null, role: string, fn: string, start: string, status: "Active" | "Ended", extra: Record<string, unknown> = {}) => ({
+  id,
+  companyId,
+  verified: false,
+  fields: { source: extra.source ?? "Seat scan", ...(operator ? { operator } : {}), role, function: fn, type: "Fractional", start, status, end: status === "Active" ? "Ongoing" : "2025" },
+  ...(extra.pub === false ? {} : operator && (extra.source ?? "Seat scan") === "Seat scan" ? { holderFrom: "public profile" } : {}),
+  ...(extra.key ? { holderKey: extra.key } : {}),
+});
+const engagements = [
+  // Sam Brennick: three seats, one person key, not on Merlin.
+  seat("e_sam_pollen", "c_pollen", "Sam Brennick", "Fractional Head of RevOps", "RevOps", "2026-02", "Active", { key: K.sam }),
+  seat("e_sam_bright", "c_bright", "Sam Brennick", "Fractional Head of RevOps", "RevOps", "2024-03", "Ended", { key: K.sam }),
+  seat("e_sam_vellum", "c_vellum", "Sam Brennick", "Fractional RevOps Lead", "RevOps", "2023-04", "Ended", { key: K.sam }),
+  // Pat Quill: the same name on two seats and no key: two records, never merged by name.
+  seat("e_pat_a", "c_orchard", "Pat Quill", "Fractional VP Sales", "Sales", "2025-01", "Active"),
+  seat("e_pat_b", "c_kite", "Pat Quill", "Fractional VP Sales", "Sales", "2022-01", "Ended"),
+  // Lee Single: one seat with a key.
+  seat("e_lee_one", "c_lantern", "Lee Single", "Fractional CFO", "Finance", "2025-06", "Active", { key: K.lee }),
+  // Members: Dana (shown in the directory), Theo (hasn't chosen), Ines (said no), Nell (never signed in).
+  seat("e_dana_kite", "c_kite", "Dana Whitfield", "Fractional CFO", "Finance", "2025-03", "Active", { source: "Member success story" }),
+  seat("e_dana_moon", "c_moon", "Dana Whitfield", "Fractional CFO", "Finance", "2023-02", "Ended", { source: "Member success story" }),
+  seat("e_theo_moon", "c_moon", "Theo Wrenshaw", "Fractional CRO", "Sales", "2025-09", "Active", { source: "Member success story", key: K.theo }),
+  // A seat of Theo's from the seat files, his key on it: it joins his record.
+  seat("e_theo_tide", "c_tide", "Theo Wrenshaw", "Fractional VP Sales", "Sales", "2022-05", "Ended", { key: K.theo }),
+  seat("e_ines_tide", "c_tide", "Ines Calderwood", "Fractional COO", "Operations", "2025-01", "Active", { source: "Member success story" }),
+  seat("e_nell_north", "c_north", "Nell Neversigned", "Fractional CMO", "Marketing", "2024-01", "Active", { source: "Member success story" }),
+  // Cara: two seats, seven members invited her (the cap on inviters paid).
+  seat("e_cara_1", "c_cara", "Cara Manyinvites", "Fractional CMO", "Marketing", "2025-02", "Active", { key: K.cara }),
+  seat("e_cara_2", "c_kite", "Cara Manyinvites", "Fractional CMO", "Marketing", "2021-02", "Ended", { key: K.cara }),
+  // Rae: two seats, for Remove my name and its refunds.
+  seat("e_rae_1", "c_rae", "Rae Removable", "Fractional VP Marketing", "Marketing", "2025-02", "Active", { key: K.rae }),
+  seat("e_rae_2", "c_orchard", "Rae Removable", "Fractional VP Marketing", "Marketing", "2023-02", "Ended", { key: K.rae }),
+  // Nia: three seats, for Not mine and an unticked seat.
+  seat("e_nia_1", "c_nia", "Nia Notmine", "Fractional Head of Growth", "Growth", "2025-02", "Active", { key: K.nia }),
+  seat("e_nia_2", "c_lantern", "Nia Notmine", "Fractional Head of Growth", "Growth", "2023-02", "Ended", { key: K.nia }),
+  seat("e_nia_3", "c_north", "Nia Notmine", "Fractional Growth Lead", "Growth", "2021-02", "Ended", { key: K.nia }),
+  // A seat with nobody named: no record.
+  seat("e_nobody", "c_bright", null, "Fractional CMO", "Marketing", "2024-02", "Ended"),
+];
+const M = (id: string, name: string, title: string) => ({ id, name, email: `${id}@example.com`, title, token: `tok-${id}` });
+const members = [
+  M("mem_robin", "Robin Kearney", "Fractional CMO"),
+  M("mem_mo", "Mo Lindqvist", "Fractional VP Sales"),
+  M("mem_zoe", "Zoe Okafor", "Fractional CRO"),
+  M("mem_dana", "Dana Whitfield", "Fractional CFO"),
+  M("mem_theo", "Theo Wrenshaw", "Fractional CRO"),
+  M("mem_ines", "Ines Calderwood", "Fractional COO"),
+  M("mem_nell", "Nell Neversigned", "Fractional CMO"),
+  M("mem_pip", "Pip Poorly", "Fractional CMO"),
+  M("mem_bo", "Bo Busy", "Fractional CMO"),
+  M("mem_fay", "Fay Free", "Fractional CMO"),
+  M("mem_tia", "Tia Trial", "Fractional CMO"),
+  M("mem_pru", "Pru Pro", "Fractional CMO"),
+  ...[1, 2, 3, 4, 5, 6, 7].map((n) => M(`mem_inv${n}`, `Ivo Inviter${["", "one", "two", "three", "four", "five", "six", "seven"][n]}`, "Fractional COO")),
+];
+const seed = { builtAt: ago(30 * DAY), members, companies, engagements, contacts: [] };
+writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
+
+const signedInIds = members.map((m) => m.id).filter((id) => id !== "mem_nell");
+const unlock = (memberId: string, ref: string, delta: number, at = ago(10 * DAY)) => ({ memberId, delta, reason: "unlock", ref, at });
+const ledger = [
+  unlock("mem_robin", "c_bright.identity", -2),
+  unlock("mem_robin", "c_kite.identity", -2),
+  unlock("mem_robin", "c_orchard.identity", -2),
+  unlock("mem_robin", "c_lantern.identity", -2),
+  unlock("mem_mo", "c_bright.identity", -2),
+  unlock("mem_mo", "c_moon.identity", -2),
+  // Mo bought the role half of Pat's Kitebright seat long ago (the bundle's other half).
+  unlock("mem_mo", "c_kite.identity", -2),
+  unlock("mem_mo", "e_pat_b.role", -1),
+  // Pip is out of credits; Bo used today's 100 unlocks.
+  { memberId: "mem_pip", delta: -25, reason: "adjust", ref: "starter.floor", at: ago(20 * DAY) },
+  { memberId: "mem_bo", delta: 200, reason: "topup", ref: "topup.bo", at: ago(5 * DAY) },
+  ...Array.from({ length: 100 }, (_, n) => unlock("mem_bo", `c_x${n}.identity`, -1, ago(HOUR))),
+  // The inviters each unlocked Cara's first seat's company and who held it.
+  ...[1, 2, 3, 4, 5, 6, 7].flatMap((n) => [unlock(`mem_inv${n}`, "c_cara.identity", -2), unlock(`mem_inv${n}`, "e_cara_1.operator", -1)]),
+];
+const unlocks: Record<string, string[]> = {};
+for (const l of ledger) if (l.reason === "unlock" && !l.ref.startsWith("c_x")) (unlocks[l.ref] ??= []).push(l.memberId);
+writeFileSync(
+  path.join(dir, "intel.json"),
+  JSON.stringify({
+    ledger,
+    values: {},
+    unlocks,
+    seen: Object.fromEntries(signedInIds.map((id) => [id, ago(HOUR)])),
+    profiles: {
+      ...Object.fromEntries(signedInIds.map((id) => [id, { onboarded: true }])),
+      mem_robin: { onboarded: true, function: "Marketing", title: "Fractional CMO", icp: { industries: ["SaaS"], employees: ["51–200"], revenue: [], countries: ["United States"] } },
+      mem_mo: { onboarded: true, function: "Sales", title: "Fractional VP Sales" },
+      mem_dana: { onboarded: true, function: "Finance", title: "Fractional CFO", fractionals: true, icp: { industries: ["SaaS", "Fintech"], employees: ["51–200"], revenue: [], countries: ["United States"] } },
+      mem_theo: { onboarded: true, function: "Sales", title: "Fractional CRO" },
+      mem_ines: { onboarded: true, function: "Operations", fractionals: false },
+    },
+    // A member who joined today, with credits to spare: the first day's unlock limit.
+    members: [{ id: "j_jo", name: "Jo Newcomer", email: "jo.new@example.com", title: "", token: "tok-jo", at: ago(HOUR), ipHash: "jojojojojojojojo" }],
+    seatInvites: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ by: `mem_inv${n}`, engagementId: "e_cara_1", at: ago((10 - n) * DAY), note: `Hi Cara, it's Ivo ${n}. https://post.example.com/claim/x` })),
+    billing: {
+      members: {
+        mem_tia: { trialStartedAt: ago(2 * DAY), trialEndsAt: ahead(12 * DAY) },
+        mem_pru: { proUntil: ahead(20 * DAY), paidSince: ago(10 * DAY), interval: "month" },
+      },
+      events: [],
+      payments: [],
+      ended: [],
+    },
+  }),
+);
+
+Object.assign(process.env, {
+  RN_DATA_DIR: dir,
+  RN_INTEL_SEED: path.join(dir, "intel-seed.json"),
+  RN_INTEL_SEED_KEY: TEST_KEY,
+  RN_STARTER_CREDITS: "25",
+  RN_ADMIN_EMAILS: "admin-fr@example.com",
+  RN_PUBLIC_URL: "https://post.example.com",
+  RN_LOGO_LOOKUP: "off",
+  RN_SCAN_TEST: "1",
+  RN_DIGEST: "0",
+  RN_BILLING: "1",
+  STRIPE_SECRET_KEY: "sk_test_fractionals",
+  STRIPE_WEBHOOK_SECRET: "whsec_test_fractionals",
+  STRIPE_PRICE_MONTH: "price_month_fractionals",
+  STRIPE_PRICE_YEAR: "price_year_fractionals",
+});
+for (const k of ["RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADAR", "RESEND_API_KEY", "RN_FREE_COMPANY", "RN_GOOGLE"]) delete process.env[k];
+globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
+
+let passes = 0;
+let failures = 0;
+const check = (name: string, ok: boolean, detail?: unknown) => {
+  if (ok) passes++;
+  else failures++;
+  console.log(`${ok ? "PASS" : "FAIL"} ${name}${ok || detail === undefined ? "" : `: ${JSON.stringify(detail).slice(0, 700)}`}`);
+};
+const keysIn = (text: string) => Object.values(K).filter((k) => text.includes(k));
+
+async function main() {
+  const core = await import("../lib/fractionalsCore");
+  const t = await import("../lib/table");
+  const fr = await import("../lib/fractionals");
+  const tools = await import("../lib/mcp/tools");
+  const { claimToken } = await import("../lib/claimToken");
+  const fm = await import("../app/post/fractionalsModel");
+  const nav = await import("../app/post/navModel");
+  const model = await import("../app/post/model");
+  const { PLACE_PAGES } = await import("../app/post/place");
+  const pub = t.tableInternals.pubId;
+  const BASE = "https://post.example.com";
+  const tok = (id: string) => (id === "j_jo" ? "tok-jo" : `tok-${id}`);
+
+  /* ---------- 1. pure: grouping, levels, clients ---------- */
+  console.log("\nGrouping");
+  {
+    const g = core.groupSeats([
+      { id: "a", member: "m1", key: null },
+      { id: "b", member: "m1", key: null },
+      { id: "c", member: null, key: "k1" },
+      { id: "d", member: null, key: "k1" },
+      { id: "e", member: null, key: null },
+      { id: "f", member: null, key: null },
+    ]);
+    const same = (x: string, y: string) => g.groupOf.get(x) === g.groupOf.get(y);
+    check("a member's seats are one record", same("a", "b"));
+    check("seats with one person key are one record", same("c", "d") && !same("a", "c"));
+    check("a named seat with neither is a record of its own", !same("e", "f") && !same("e", "a") && g.groups.length === 4, g.groups);
+    const h = core.groupSeats([
+      { id: "x", member: "m1", key: "k" },
+      { id: "y", member: null, key: "k" },
+      { id: "z", member: "m2", key: "k" },
+    ]);
+    check("a key joins a member's claimed seat and the rest of that person's seats", h.groupOf.get("x") === h.groupOf.get("y"));
+    check("a key never puts two members in one record", h.groupOf.get("x") !== h.groupOf.get("z"));
+    const r = core.groupSeats(
+      [
+        { id: "y", member: null, key: "k" },
+        { id: "x", member: "m1", key: "k" },
+      ],
+      (m, id) => m === "m1" && id === "y",
+    );
+    check("a seat the member said isn't theirs never joins them through a key", r.groupOf.get("x") !== r.groupOf.get("y"));
+    check("levels read from titles", core.levelOf("Fractional CFO") === "C-level" && core.levelOf("Fractional VP Sales") === "VP" && core.levelOf("Head of RevOps") === "Head" && core.levelOf("Fractional Marketing Director") === "Head" && core.levelOf("Fractional Growth Lead") === "Lead" && core.levelOf("Fractional Finance Manager") === null);
+    const c = core.clientsFromSeats([
+      { industry: "SaaS", employees: "51–200", revenue: null, country: "United States" },
+      { industry: "Fintech", employees: "51–200", revenue: null, country: "United States" },
+      { industry: "SaaS", employees: "11–50", revenue: null, country: "Canada" },
+      { industry: "Insurance", employees: null, revenue: null, country: null },
+    ]);
+    check("the clients line is one line: two industries and a count, the most common size, the places", core.clientsLine(c) === "SaaS, Fintech +1 · 51–200 · US, Canada", core.clientsLine(c));
+    const icp = { industries: ["SaaS"], employees: ["51–200"], revenue: [], countries: ["United States"] };
+    check("fits: a seat's company that matches and conflicts with nothing", core.fitsIcp(icp, null, [{ industry: "SaaS", employees: "201–500", revenue: null, country: null }]) === false && core.fitsIcp(icp, null, [{ industry: "SaaS", employees: "51–200", revenue: null, country: "United States" }]));
+    check("fits: what a member states overlaps on every part both name", core.fitsIcp(icp, core.clientsFromIcp({ industries: ["SaaS", "Fintech"], employees: [], revenue: [], countries: ["United States"] }), []) && !core.fitsIcp(icp, core.clientsFromIcp({ industries: ["Retail"], employees: [], revenue: [], countries: [] }), []));
+    check("a member who hasn't chosen shows as first name and last initial", core.shortName("Theo van Wrenshaw") === "Theo W.");
+  }
+
+  /* ---------- 2. the directory ---------- */
+  console.log("\nThe directory");
+  const ROBIN = tok("mem_robin");
+  const dirOf = async (who: string) => (await fr.fractionalsView(tok(who)))!;
+  const recOf = (d: Awaited<ReturnType<typeof dirOf>>, seatId: string) => d.records.find((r) => r.seats.some((s) => s.id === pub(seatId)));
+  let d = await dirOf("mem_robin");
+  const sam = recOf(d, "e_sam_pollen")!;
+  check("Sam's three seats, one person key, are one record", !!sam && sam.seats.length === 3 && sam.now === 1 && sam.past === 2, sam);
+  check("someone not on Merlin yet is locked: no name, first name or initials", !!sam && sam.locked === true && !sam.name && !sam.first && !sam.initials && !sam.onMerlin);
+  check("nothing of a locked name anywhere in the directory", !/Brennick|Sam Br/.test(JSON.stringify(d)));
+  check("function and level are free, read from the titles", sam.fn === "RevOps" && sam.level === "Head", [sam.fn, sam.level]);
+  check("the clients they serve, read from their seats, as one line", sam.clients?.from === "seats" && sam.clients.line.startsWith("Fintech") && sam.fits === true, sam.clients);
+  check("Pat's two seats with one name and no key stay two records", recOf(d, "e_pat_a")!.id !== recOf(d, "e_pat_b")!.id);
+  const dana = recOf(d, "e_dana_kite")!;
+  check("a member shown in the directory: full name, on Merlin, one record for both seats, what she states", dana?.name === "Dana Whitfield" && dana.onMerlin && !dana.locked && dana.seats.length === 2 && dana.clients?.from === "stated" && !!dana.memberId, dana);
+  const theo = recOf(d, "e_theo_moon")!;
+  check("a member who hasn't chosen: first name and last initial", theo?.name === "Theo W." && theo.onMerlin && !JSON.stringify(theo).includes("Wrenshaw"), theo);
+  check("a member's seat and a seat file's seat with his key are one record", theo.seats.length === 2 && recOf(d, "e_theo_tide")?.id === theo.id);
+  check("a member who said no is left out entirely", !recOf(d, "e_ines_tide"));
+  const nell = recOf(d, "e_nell_north")!;
+  check("a member who never signed in reads as Not on Merlin yet, locked", !!nell && !nell.onMerlin && nell.locked === true && !nell.name);
+  check("a seat with nobody named makes no record", !recOf(d, "e_nobody"));
+  check("no person key in the directory", keysIn(JSON.stringify(d)).length === 0);
+  check("the viewer's function comes with it (Different from yours)", d.fn === "Marketing");
+  // The table: Dana's name is free on her seats for every member; Theo's stays behind its lock.
+  let rv = await t.buildView(ROBIN);
+  const engCell = (v: Awaited<ReturnType<typeof t.buildView>>, seatId: string, f: string) => v.companies.flatMap((c) => c.engagements).find((e) => e.id === pub(seatId))!.cells[f];
+  const coRec = (v: Awaited<ReturnType<typeof t.buildView>>, coId: string) => v.companies.find((c) => c.id === pub(coId))!;
+  check("a member shown in the directory: who held her seats and the role are free", engCell(rv, "e_dana_kite", "operator").s === "value" && engCell(rv, "e_dana_moon", "role").s === "value" && !(engCell(rv, "e_dana_kite", "operator") as { paid?: boolean }).paid);
+  check("a member who hasn't chosen: who held his seat stays behind the lock", engCell(rv, "e_theo_moon", "operator").s === "locked");
+  check("no person key in the table", keysIn(JSON.stringify(rv)).length === 0);
+
+  /* ---------- 3. credits ---------- */
+  console.log("\nCredits");
+  const balance = async (who: string) => (await t.buildView(tok(who))).me!.credits;
+  const refusal = async (p: Promise<unknown>) => {
+    try {
+      await p;
+      return null;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+  const ledgerOf = async (who: string) => (await t.exportState()).ledger.filter((l) => l.memberId === who);
+  const b0 = await balance("mem_robin");
+  const u1 = await t.perform(ROBIN, { type: "unlockFractional", id: sam.id }, BASE);
+  check("Unlock · 1 credit", (await balance("mem_robin")) === b0 - 1 && /Sam Brennick for 1 credit/.test(u1.message), { b0, now: await balance("mem_robin"), m: u1.message });
+  const robinLedger = await ledgerOf("mem_robin");
+  check("recorded as who held a seat of theirs at a company Robin knows, the seat's own purchase", robinLedger.some((l) => l.ref === "e_sam_bright.operator" && l.delta === -1) && !robinLedger.some((l) => l.ref.endsWith(".person")));
+  rv = await t.buildView(ROBIN);
+  check(
+    "their name and role show on every seat of theirs, the locked company's too",
+    ["e_sam_pollen", "e_sam_bright", "e_sam_vellum"].every((id) => engCell(rv, id, "operator").s === "value" && engCell(rv, id, "role").s === "value"),
+  );
+  check("a locked company stays locked (its name, and its record)", coRec(rv, "c_pollen").hidden === true && coRec(rv, "c_vellum").hidden === true && !JSON.stringify(coRec(rv, "c_pollen")).includes("Pollen"));
+  d = await dirOf("mem_robin");
+  const samR = recOf(d, "e_sam_pollen")!;
+  check("the record opens: name, initials, unlocked, title, and Invite to connect by the known company's seat", samR.name === "Sam Brennick" && samR.initials === "SB" && samR.unlocked === true && samR.title === "Fractional Head of RevOps" && samR.invite?.seat === pub("e_sam_bright"), samR);
+  const b1 = await balance("mem_robin");
+  const r1 = await refusal(t.perform(ROBIN, { type: "unlockFractional", id: sam.id }, BASE));
+  check("unlocking them again charges nothing", !!r1 && /no credit was spent/.test(r1) && (await balance("mem_robin")) === b1, r1);
+  const r2 = await refusal(t.perform(ROBIN, { type: "unlock", entity: "engagement", id: pub("e_sam_vellum"), field: "operator" }, BASE));
+  const r3 = await refusal(t.perform(ROBIN, { type: "unlock", entity: "engagement", id: pub("e_sam_pollen"), field: "role" }, BASE));
+  check("who held another seat of theirs, or its role, charges nothing", !!r2 && /no credit was spent/i.test(r2) && !!r3 && /no credit was spent/i.test(r3) && (await balance("mem_robin")) === b1, [r2, r3]);
+  const dry = await t.perform(ROBIN, { type: "unlockMany", items: ["e_sam_pollen", "e_sam_vellum"].flatMap((id) => [{ entity: "engagement" as const, id: pub(id), field: "operator" }, { entity: "engagement" as const, id: pub(id), field: "role" }]) }, BASE, { dryRun: true });
+  check("Unlock all over their seats quotes nothing", (dry.spent ?? 0) === 0, dry);
+
+  // Mo buys who held one of Sam's seats on the company record: the record opens, with no second charge.
+  const MO = tok("mem_mo");
+  await t.perform(MO, { type: "unlock", entity: "engagement", id: pub("e_sam_bright"), field: "operator" }, BASE);
+  const moBal = await balance("mem_mo");
+  const dMo = await dirOf("mem_mo");
+  check("a seat bought on a company record opens their record", recOf(dMo, "e_sam_pollen")?.name === "Sam Brennick" && recOf(dMo, "e_sam_pollen")?.unlocked === true);
+  const r4 = await refusal(t.perform(MO, { type: "unlockFractional", id: sam.id }, BASE));
+  check("and the directory doesn't charge for it again", !!r4 && /no credit was spent/.test(r4) && (await balance("mem_mo")) === moBal, r4);
+  check("a role bought before (the other half of the seat's bundle) opens the record", recOf(dMo, "e_pat_b")?.name === "Pat Quill" && recOf(dMo, "e_pat_b")?.unlocked === true);
+  check("without a person key, it doesn't spread to a seat with the same name", recOf(dMo, "e_pat_a")?.locked === true && engCell(await t.buildView(MO), "e_pat_a", "operator").s === "locked");
+
+  // Zoe knows no company: the purchase is the person, and opens no company.
+  const ZOE = tok("mem_zoe");
+  const z0 = await balance("mem_zoe");
+  await t.perform(ZOE, { type: "unlockFractional", id: sam.id }, BASE);
+  const zl = await ledgerOf("mem_zoe");
+  const zv = await t.buildView(ZOE);
+  check("knowing none of their companies, it is recorded as the person (1 credit)", (await balance("mem_zoe")) === z0 - 1 && zl.some((l) => l.ref.endsWith(".person") && l.delta === -1));
+  check("and every company of theirs stays locked", ["c_pollen", "c_bright", "c_vellum"].every((c) => coRec(zv, c).hidden === true));
+  check("their name shows on each seat, at the locked companies too", ["e_sam_pollen", "e_sam_bright", "e_sam_vellum"].every((id) => engCell(zv, id, "operator").s === "value"));
+  check("the credit history names it without a company", zv.ledger.some((l) => l.field === t.FRACTIONAL_LABEL && l.company === "" && l.delta === -1));
+
+  // Out of credits, the daily limit, the first day's.
+  const pipBefore = (await ledgerOf("mem_pip")).length;
+  const rp = await refusal(t.perform(tok("mem_pip"), { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE));
+  check("out of credits: refused, nothing written", !!rp && /out of credits/i.test(rp) && (await ledgerOf("mem_pip")).length === pipBefore, rp);
+  const rb = await refusal(t.perform(tok("mem_bo"), { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE));
+  check("the daily unlock limit holds", !!rb && /unlock limit/i.test(rb), rb);
+  // Jo joined an hour ago: credits to spare (a top-up), and the first day's 25 unlocks used.
+  await t.tableInternals.mutate((st) => {
+    st.ledger.push(
+      { memberId: "j_jo", delta: 40, reason: "topup", ref: "topup.jo", at: ago(30 * 60 * 1000) },
+      ...Array.from({ length: 25 }, (_, n) => ({ memberId: "j_jo", delta: -1, reason: "unlock" as const, ref: `c_jo${n}.identity`, at: ago(30 * 60 * 1000) })),
+    );
+    return null;
+  });
+  const rj = await refusal(t.perform("tok-jo", { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE));
+  check("the first day's limit holds", !!rj && /day-one limit/i.test(rj), rj);
+
+  // Plans: Free, Trial and Pro pay the same, and the free company of the day stays.
+  const lee = recOf(d, "e_lee_one")!;
+  for (const who of ["mem_fay", "mem_tia", "mem_pru"]) {
+    const before = await t.buildView(tok(who));
+    await t.perform(tok(who), { type: "unlockFractional", id: lee.id }, BASE);
+    const after = await t.buildView(tok(who));
+    const l = (await ledgerOf(who)).filter((x) => x.ref.startsWith("e_lee_one"));
+    check(`${who === "mem_fay" ? "Free" : who === "mem_tia" ? "Trial" : "Pro"}: 1 credit, an ordinary unlock`, after.me!.credits === before.me!.credits - 1 && l.length === 1 && l[0].delta === -1 && !l[0].why, l);
+    if (who !== "mem_fay") check(`${who === "mem_tia" ? "Trial" : "Pro"}: the free company of the day is still left`, after.me!.freeCompany === true && before.me!.freeCompany === true);
+  }
+
+  /* ---------- 4. visibility and the switch ---------- */
+  console.log("\nWho shows");
+  const THEO = tok("mem_theo");
+  check("Me.fractionals: chosen yes, chosen no, not chosen", (await t.buildView(tok("mem_dana"))).me!.fractionals === true && (await t.buildView(tok("mem_ines"))).me!.fractionals === false && (await t.buildView(THEO)).me!.fractionals === null);
+  await t.perform(THEO, { type: "settings", fractionals: true }, BASE);
+  d = await dirOf("mem_robin");
+  rv = await t.buildView(ROBIN);
+  check("shown: his full name in the directory and on his seats, free", recOf(d, "e_theo_moon")?.name === "Theo Wrenshaw" && engCell(rv, "e_theo_moon", "operator").s === "value" && engCell(rv, "e_theo_tide", "operator").s === "value", [recOf(d, "e_theo_moon")?.name, engCell(rv, "e_theo_moon", "operator"), engCell(rv, "e_theo_tide", "operator")]);
+  check("signed out, nothing changes: no name", !JSON.stringify(await t.buildView(null)).includes("Wrenshaw"));
+  await t.perform(THEO, { type: "settings", fractionals: false }, BASE);
+  d = await dirOf("mem_robin");
+  rv = await t.buildView(ROBIN);
+  check("out: gone from the directory, and his seats back behind their lock", !recOf(d, "e_theo_moon") && engCell(rv, "e_theo_moon", "operator").s === "locked");
+  check("his own record still shows to him, marked hidden", (await dirOf("mem_theo")).records.find((r) => r.you)?.hidden === true);
+  const ri = await refusal(t.perform(ROBIN, { type: "message.connect", memberId: pub("mem_ines"), text: "Hello" } as never, BASE));
+  check("a member out of the directory can't be messaged from it", !!ri && /isn't in the Fractionals directory/.test(ri), ri);
+  await t.perform(THEO, { type: "settings", partners: true }, BASE);
+  check("Referral partners' old switch is the same one", (await t.buildView(THEO)).me!.fractionals === true);
+  const dm = await refusal(t.perform(ROBIN, { type: "unlockFractional", id: dana.id }, BASE));
+  check("a member shown in the directory has nothing to unlock", !!dm && /no credit was spent/.test(dm), dm);
+
+  /* ---------- 5. invites and activation ---------- */
+  console.log("\nInvites and activation");
+  const robinCode = t.inviteCode("mem_robin");
+  await t.perform(ROBIN, { type: "invite", engagementId: pub("e_sam_bright"), note: `Hi Sam, I'm a fractional CMO. Connect with me: ${BASE}/claim/${claimToken("e_sam_bright")}?ref=${robinCode}` }, BASE);
+  await t.perform(MO, { type: "invite", engagementId: pub("e_sam_bright"), note: "Hi Sam, Mo here." }, BASE);
+  const samTok = claimToken("e_sam_bright");
+  const page = await t.claimPage(samTok, null, robinCode);
+  check("a fractional with several seats: the activation page lists every seat that looks like theirs", page.status === "open" && page.person?.seats.length === 3, page);
+  check("only the link's own seat names its company", page.person!.seats.filter((x) => x.company).length === 1 && page.person!.seats.find((x) => x.link)?.company === "Brightloom Learning" && !JSON.stringify(page).includes("Pollen") && !JSON.stringify(page).includes("Vellum"));
+  check("who's waiting: the member whose link it is, and how many more", page.person!.inviter?.name === "Robin Kearney" && page.person!.others === 1 && /fractional CMO/.test(page.person!.inviter?.note ?? "") && !/claim\//.test(page.person!.inviter?.note ?? ""), page.person!.inviter);
+  check("never the fractional's name, and no person key", !JSON.stringify(page).includes("Brennick") && keysIn(JSON.stringify(page)).length === 0);
+  const samJoin = await t.joinMember("Sam Brennick", "sam.brennick@example.net", robinCode, "10.9.9.9");
+  const robin0 = await balance("mem_robin");
+  const mo0 = await balance("mem_mo");
+  const act = await t.activateByToken(samJoin.token, samTok, { origin: BASE, ref: robinCode, skip: [], show: true });
+  const samView = await t.buildView(samJoin.token);
+  check("activating claims every seat of theirs at once (past the 3 a day)", ["e_sam_pollen", "e_sam_bright", "e_sam_vellum"].every((id) => samView.companies.flatMap((c) => c.engagements).find((e) => e.id === pub(id))?.yours), act.message);
+  check("the first inviter's conversation comes back, and their record", !!act.conversationId && act.id === (await dirOf("mem_robin")).records.find((r) => r.name === "Sam Brennick")?.id, act);
+  const convs = (await t.exportState()).conversations ?? [];
+  check("a conversation with each member who invited them", convs.some((c) => c.a === "mem_robin" && c.b === samJoin.id) && convs.some((c) => c.a === "mem_mo" && c.b === samJoin.id));
+  const samLedger = await ledgerOf(samJoin.id);
+  check("the new member's bonus, once", samLedger.filter((l) => l.reason === "referral").reduce((n, l) => n + l.delta, 0) === 10, samLedger);
+  check("each inviter's bonus", (await balance("mem_robin")) === robin0 + 10 && (await balance("mem_mo")) === mo0 + 10, { robin: [robin0, await balance("mem_robin")], mo: [mo0, await balance("mem_mo")] });
+  check("they're in the directory, shown (the box was ticked)", samView.me!.fractionals === true && (await dirOf("mem_robin")).records.some((r) => r.name === "Sam Brennick" && r.onMerlin));
+  const again = await refusal(t.activateByToken(samJoin.token, samTok, { origin: BASE, ref: robinCode }));
+  check("activating again pays nobody twice", (await ledgerOf(samJoin.id)).filter((l) => l.reason === "referral").reduce((n, l) => n + l.delta, 0) === 10 && (await balance("mem_robin")) === robin0 + 10, again);
+
+  // Cara: seven members invited her. The bonus goes to at most ACTIVATE_INVITERS_PAID of them.
+  const caraTok = claimToken("e_cara_1");
+  const caraJoin = await t.joinMember("Cara Manyinvites", "cara.many@example.net", t.inviteCode("mem_inv1"), "10.8.8.8");
+  const invBefore = await Promise.all([1, 2, 3, 4, 5, 6, 7].map((n) => balance(`mem_inv${n}`)));
+  await t.activateByToken(caraJoin.token, caraTok, { origin: BASE, ref: t.inviteCode("mem_inv1"), skip: [], show: true });
+  const invAfter = await Promise.all([1, 2, 3, 4, 5, 6, 7].map((n) => balance(`mem_inv${n}`)));
+  const paid = invAfter.filter((x, i) => x === invBefore[i] + 10).length;
+  check(`the invite bonus goes to at most ${core.ACTIVATE_INVITERS_PAID} inviters for one activation`, paid === core.ACTIVATE_INVITERS_PAID && invAfter[0] === invBefore[0] + 10, { invBefore, invAfter });
+  check("the new member's own bonus is still once", (await ledgerOf(caraJoin.id)).filter((l) => l.reason === "referral").reduce((n, l) => n + l.delta, 0) === 10);
+  check("all seven are connected with her", ((await t.exportState()).conversations ?? []).filter((c) => c.b === caraJoin.id).length === 7);
+
+  /* ---------- 6. Not mine, This isn't me, Remove my name ---------- */
+  console.log("\nNot mine, This isn't me, Remove my name");
+  const niaTok = claimToken("e_nia_1");
+  const nm = await t.nameOffSeat(niaTok, pub("e_nia_3"));
+  const niaPage = await t.claimPage(niaTok, null, null);
+  check("Not mine: that seat's name comes off and it leaves the page", nm.done && niaPage.person?.seats.length === 2 && !niaPage.person.seats.some((x) => x.id === pub("e_nia_3")), niaPage.person);
+  const nmBad = await t.nameOffSeat(niaTok, pub("e_sam_pollen"));
+  check("Not mine only reaches a seat of the link's fractional", !nmBad.done);
+  const niaJoin = await t.joinMember("Nia Notmine", "nia.not@example.net", null, "10.7.7.7");
+  await t.activateByToken(niaJoin.token, niaTok, { origin: BASE, skip: [pub("e_nia_2")], show: false });
+  const niaView = await t.buildView(niaJoin.token);
+  const niaSeat = (id: string) => niaView.companies.flatMap((c) => c.engagements).find((e) => e.id === pub(id));
+  check("an unticked seat isn't claimed; the ticked one is", niaSeat("e_nia_1")?.yours === true && !niaSeat("e_nia_2")?.yours);
+  check("untick the directory box and they're out of it", niaView.me!.fractionals === false && !(await dirOf("mem_robin")).records.some((r) => r.seats.some((s) => s.id === pub("e_nia_1"))));
+
+  // Rae: Robin (a known company) and Zoe (the person) unlock her, then Remove my name on her link takes every name of hers off, with the credits back.
+  d = await dirOf("mem_robin");
+  const rae = recOf(d, "e_rae_1")!;
+  await t.perform(ROBIN, { type: "unlockFractional", id: rae.id }, BASE);
+  await t.perform(ZOE, { type: "unlockFractional", id: rae.id }, BASE);
+  const rb0 = await balance("mem_robin");
+  const zb0 = await balance("mem_zoe");
+  const off = await t.nameOffByToken(claimToken("e_rae_1"), "remove");
+  rv = await t.buildView(ROBIN);
+  check("Remove my name: every seat of theirs is unnamed now", off.done && ["e_rae_1", "e_rae_2"].every((id) => engCell(rv, id, "operator").s === "empty"));
+  check("and whoever paid to see it gets the credit back (the seat's own purchase and the person)", (await balance("mem_robin")) === rb0 + 1 && (await balance("mem_zoe")) === zb0 + 1, { robin: [rb0, await balance("mem_robin")], zoe: [zb0, await balance("mem_zoe")] });
+  check("their record is gone", !recOf(await dirOf("mem_robin"), "e_rae_1"));
+  const pat = await t.nameOffByToken(claimToken("e_pat_a"), "notme");
+  check("This isn't me on a one-seat link takes that name off, and only that seat's", pat.done && engCell(await t.buildView(MO), "e_pat_b", "operator").s === "value");
+
+  /* ---------- 7. an old claim link ---------- */
+  console.log("\nOld claim links");
+  const leePage = await t.claimPage(claimToken("e_lee_one"), null, null);
+  check("a one-seat link reads as before: no activation page", leePage.status === "open" && !leePage.person && leePage.seat?.named === true);
+  const leeJoin = await t.joinMember("Lee Single", "lee.single@example.net", null, "10.6.6.6");
+  const leeClaim = await t.claimByToken(leeJoin.token, claimToken("e_lee_one"), BASE);
+  check("and claims as before", /It's yours/.test(leeClaim.message) && !leeClaim.waiting, leeClaim);
+
+  /* ---------- 8. Referral partners' links, the nav, the rename ---------- */
+  console.log("\nLinks, nav and names");
+  const hrefs = { today: "/", companies: "/?t=c", engagements: "/?t=e", people: "/?t=p", hiring: "/?v=hiring", following: "/?v=following", page: (p: string) => `/?p=${p}` };
+  const navIn = (page: string) => ({ page, recordType: "companies", tab: "all", currentView: null, hrefs, admin: false, network: false, unread: 2, radarNew: 0, totals: null, hiringN: null, followingN: null, seatsMissing: null, credits: 10, views: [], inviteBonus: 10 }) as never;
+  const items = nav.navItems(navIn("partners"));
+  check("Referral partners' old address puts Fractionals on", items.find((x) => x.current)?.key === "fractionals" && nav.currentKey({ page: "partners", recordType: "companies", tab: "all", currentView: null } as never) === "fractionals");
+  check("?p=partners still reads as a place, so old links open (with Different from yours)", (PLACE_PAGES as readonly string[]).includes("partners") && fm.frDefaults(true, true).fn === "diff" && fm.frDefaults(true).fn === "any" && fm.frDefaults(true).fits === true);
+  check("no Referral partners item; Community holds Fractionals and Messages", !items.some((x) => x.key === "partners") && items.filter((x) => x.group === "community").map((x) => x.key).join() === "fractionals,messages");
+  check("People reads Decision makers in the sidebar and the list's name", items.find((x) => x.key === "people")?.label === "Decision makers" && model.RECORD_TYPES.find((x) => x.key === "people")?.label === "Decision makers");
+  check("Messages stays a tab on phones; Fractionals is under More", (nav.TAB_KEYS as readonly string[]).includes("messages") && !(nav.TAB_KEYS as readonly string[]).includes("fractionals"));
+  // The directory's own filters.
+  d = await dirOf("mem_robin");
+  const hasIcp = true;
+  const all = fm.frRows(d.records, "all", fm.frDefaults(false), d.fn, hasIcp);
+  const diff = fm.frRows(d.records, "all", { ...fm.frDefaults(false), fn: "diff" }, d.fn, hasIcp);
+  const onM = fm.frRows(d.records, "on", fm.frDefaults(false), d.fn, hasIcp);
+  const unl = fm.frRows(d.records, "unlocked", fm.frDefaults(false), d.fn, hasIcp);
+  check("Different from yours leaves out the viewer's function", diff.length > 0 && diff.every((r) => !r.fns.includes("Marketing")) && all.some((r) => r.fns.includes("Marketing")));
+  check("On Merlin and Unlocked tabs", onM.length > 0 && onM.every((r) => r.onMerlin) && unl.length > 0 && unl.every((r) => r.unlocked) && unl.every((r) => !!r.name), { on: onM.length, unl: unl.map((r) => r.name) });
+  check("the line at the top", /^\d+ fractionals? serves? companies like yours\. \d+ (is|are) on Merlin\.$/.test(fm.headline(d.records, true)), fm.headline(d.records, true));
+
+  /* ---------- 9. no person key anywhere ---------- */
+  console.log("\nNo person key in any answer");
+  const ctx = { member: (await t.memberForToken(ROBIN))!, origin: BASE };
+  const got = JSON.stringify([await tools.getCompany(ctx, { company: pub("c_bright") }), await tools.getCompany(ctx, { company: pub("c_pollen") })]);
+  check("the connector names Sam on his seats once he's bought, and carries no key", got.includes("Sam Brennick") && keysIn(got).length === 0);
+  const home = await fr.fractionalsHome(ROBIN);
+  check("Home's line: members who joined this week and serve the same kind of client", !!home && home.n >= 1 && keysIn(JSON.stringify(home)).length === 0, home);
+  const exp = JSON.stringify(await t.exportState());
+  check("the export carries no key", keysIn(exp).length === 0);
+  check("no answer above carried a key (the views of every member)", (await Promise.all(["mem_robin", "mem_mo", "mem_zoe", "mem_theo"].map(async (w) => JSON.stringify(await t.buildView(tok(w))) + JSON.stringify(await dirOf(w))))).every((x) => keysIn(x).length === 0));
+
+  console.log(`\n${passes} passed, ${failures} failed`);
+}
+
+main()
+  .catch((e) => {
+    failures++;
+    console.error("FAIL the suite threw", e);
+  })
+  .finally(() => {
+    rmSync(dir, { recursive: true, force: true });
+    process.exit(failures ? 1 : 0);
+  });
