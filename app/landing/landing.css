@@ -2447,6 +2447,10 @@ button.lp-fake-btn {
     padding: 0 16px;
     font-size: 15px;
   }
+  /* Room for the whole placeholder beside the button. */
+  .lp-join-input.input {
+    padding: 0 4px 0 10px;
+  }
   .lp-rec-head,
   .lp-rec-sec {
     padding-left: 16px;
@@ -2626,7 +2630,7 @@ button.lp-fake-btn {
     padding: 64px 0 40px;
   }
   .lp-final-in {
-    padding: 48px 20px;
+    padding: 48px 14px;
   }
   .lp-scrim {
     place-items: end stretch;

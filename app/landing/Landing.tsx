@@ -145,8 +145,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   const findCta = useRef<HTMLDivElement>(null);
   /** The hero's real example record: undefined until the Finder's first answer lands. */
   const [example, setExample] = useState<PreviewExample | null | undefined>(undefined);
-  /** Counts across every function, from the same answer. */
-  const [totals, setTotals] = useState<Totals | null>(null);
+  /** Counts across every function, from the same answer. Undefined while it loads, null when it could not be had. */
+  const [totals, setTotals] = useState<Totals | null | undefined>(undefined);
   const [heroIn, finalIn, findIn] = useInView(heroForm, finalForm, findCta);
   const formInView = heroIn || finalIn;
 
@@ -167,9 +167,10 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   const openSignIn = useCallback((note: string | null = null) => setSignIn({ open: true, note, tone: "info" }), []);
   const closeSignIn = useCallback(() => setSignIn({ open: false, note: null, tone: "info" }), []);
 
-  // All four are counted across every function. The first comes with the preview answer.
+  // All four are counted across every function. The first comes with the preview answer; if that
+  // can't be had (null), the companies on file stand in, named as what they are.
   const figures: [number | undefined, string][] = [
-    [totals?.anyHire, "companies have hired a fractional"],
+    totals === null ? [s?.companies, "companies on file"] : [totals?.anyHire, "companies have hired a fractional"],
     [s?.engagements, "seats on file"],
     [s?.openRoles, s?.openRoles === 1 ? "open role now" : "open roles now"],
     [totals?.functions ?? COVERED.length, "functions covered"],

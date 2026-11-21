@@ -368,6 +368,24 @@ async function flow() {
   check("the answer says it is an example", (await page.locator(".lp-res-eg").count()) === 1);
   check("the empty box shows an example question as a placeholder", (await page.locator(".lp-ask-ph").count()) === 1);
   check("an example is never kept for onboarding", (await page.evaluate(() => localStorage.getItem("tp_try_fn"))) === null);
+  // The placeholder moves through example questions, and stays still under prefers-reduced-motion.
+  const ph0 = await page.locator(".lp-ask-ph").innerText();
+  await page.waitForTimeout(3600);
+  check("the example question changes every few seconds", (await page.locator(".lp-ask-ph").innerText()) !== ph0, ph0);
+  {
+    const still = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    const p2 = await still.newPage();
+    await p2.goto(`${BASE}/`);
+    await settle(p2);
+    const a = await p2.locator(".lp-ask-ph").innerText();
+    await p2.waitForTimeout(3600);
+    check("and stays still under prefers-reduced-motion", (await p2.locator(".lp-ask-ph").innerText()) === a, a);
+    // The footer's logo loads late, and is there once the visitor reaches it.
+    await p2.locator(".lp-foot").scrollIntoViewIfNeeded();
+    await p2.waitForFunction(() => document.querySelector(".lp-foot img")?.complete && document.querySelector(".lp-foot img").naturalWidth > 0, null, { timeout: 5000 }).catch(() => {});
+    check("the footer's logo is lazy and loads when reached", await p2.evaluate(() => { const i = document.querySelector(".lp-foot img"); return i.loading === "lazy" && i.complete && i.naturalWidth > 0; }));
+    await still.close();
+  }
   await sel.selectOption("Finance");
   await page.waitForFunction(() => document.querySelector(".lp-res-fn")?.textContent === "Finance" && document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
   check("picking Finance asks the preview for Finance", asked.at(-1)?.get("fn") === "Finance", asked.at(-1)?.toString());

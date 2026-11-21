@@ -272,8 +272,8 @@ export interface FinderProps {
   ctaRef?: React.RefObject<HTMLDivElement | null>;
   /** The hero's example record, from the first answer that carries one (null when none fits). */
   onExample?: (x: PreviewExample | null) => void;
-  /** The counts across every function, from an answer with no industry or country picked. */
-  onTotals?: (t: Totals) => void;
+  /** The counts across every function, from an answer with no industry or country picked. Null: the first answer could not be had. */
+  onTotals?: (t: Totals | null) => void;
 }
 
 export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }: FinderProps) {
@@ -291,6 +291,8 @@ export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }:
   /** Which example question the empty box shows. */
   const [tick, setTick] = useState(0);
   const ctl = useRef<AbortController | null>(null);
+  /** The page has its totals: a later answer that fails takes nothing back. */
+  const sent = useRef(false);
   const id = useId();
 
   // The function picked on an earlier visit and today's example, once the page is in the browser.
@@ -324,13 +326,17 @@ export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }:
       .then((a: PreviewAnswer) => {
         if (c.signal.aborted || !a?.counts) return;
         if (a.example !== undefined) onExample?.(a.example);
-        if (!a.industry && !a.country) onTotals?.({ anyHire: a.counts.anyHire, repeat: a.counts.repeat, functions: a.options.functions.length });
+        if (!a.industry && !a.country) {
+          sent.current = true;
+          onTotals?.({ anyHire: a.counts.anyHire, repeat: a.counts.repeat, functions: a.options.functions.length });
+        }
         setAnswer(a);
         setFailed(false);
         setBusy(false);
       })
       .catch(() => {
         if (c.signal.aborted) return;
+        if (!sent.current) onTotals?.(null);
         setFailed(true);
         setBusy(false);
       });
