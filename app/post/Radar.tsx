@@ -17,6 +17,10 @@
  * is ("From your Crystal Ball · Nov 19 · 2 companies"); taking it off shows all companies. The
  * last 7 days are one tap each.
  *
+ * [google network] "Where you know someone": the day cut to the companies in the member's own
+ * network (the rows that carry the "You know someone · Warm" chip). The connect moment's button
+ * opens the page with it on; a chip beside the days turns it on and off. Nothing with RN_GOOGLE off.
+ *
  * Signals: radar_opened once per tab when the page shows, radar_clicked when a row is opened.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,6 +38,7 @@ import { LeaderReport } from "./LeaderReport";
 import { plural } from "./hooks";
 import { ProRow, planDay } from "./Billing";
 import { KnowChip } from "./network/Network"; // [google network]
+import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./radar.css";
 import { Bleed, Prop, Spot } from "../ui/fractions/lazy";
 
@@ -94,13 +99,15 @@ export function RadarPage({
   view,
   failed,
   reload,
-  rows,
+  rows: dayRows,
   me,
   phone,
   onBack,
   onProfile,
   onDay,
   openCompany,
+  know = false,
+  onKnow,
 }: {
   view: RadarView | null;
   failed: string | null;
@@ -114,9 +121,18 @@ export function RadarPage({
   onProfile: () => void;
   onDay: (day: string) => void;
   openCompany: (id: string) => void;
+  /** [google network] Only the companies where the member knows someone. */
+  know?: boolean;
+  onKnow?: (on: boolean) => void;
 }) {
   const ui = useUi();
   const [busy, setBusy] = useState(false);
+  // [google network] the member's own network: which of the day's companies they know someone at.
+  const net = useNetwork().view;
+  const knownIds = useMemo(() => new Set((net?.companies ?? []).map((c) => c.id)), [net]);
+  const knownN = useMemo(() => dayRows.filter((r) => knownIds.has(r.i.c.id)).length, [dayRows, knownIds]);
+  const knowOn = know && !!net;
+  const rows = useMemo(() => (knowOn ? dayRows.filter((r) => knownIds.has(r.i.c.id)) : dayRows), [knowOn, dayRows, knownIds]);
   useEffect(() => {
     if (!openedSent) (openedSent = true), signal("radar_opened", "app");
   }, []);
@@ -219,6 +235,15 @@ export function RadarPage({
               <IconX size={13} />
             </button>
           </span>
+          {/* [google network] the day cut to where they know someone (nothing with RN_GOOGLE off, or when they know nobody in it). */}
+          {net && onKnow && (knowOn || knownN > 0) && (
+            <button type="button" className={`chip rd-day rd-know${knowOn ? " chip-on" : ""}`} aria-pressed={knowOn} onClick={() => onKnow(!knowOn)}>
+              Where you know someone
+              <span className="num rd-day-n" aria-label={`, ${plural(knownN, "company", "companies")}`}>
+                {knownN}
+              </span>
+            </button>
+          )}
           <div className="rd-days" role="group" aria-label="Pick a day">
             {[...view.days, ...(view.days.some((d) => d.day === day) ? [] : [{ day, companies: n }])].map((d) => (
               <button key={d.day} type="button" className={`chip rd-day${d.day === day ? " chip-on" : ""}`} aria-pressed={d.day === day} onClick={() => onDay(d.day)}>
@@ -258,6 +283,15 @@ export function RadarPage({
         </p>
       ) : !view.ready ? (
         <StartRadar reload={reload} />
+      ) : !n && knowOn && dayRows.length > 0 ? (
+        <section className="tp-card rd-empty">
+          <p className="rd-note">
+            Nobody you know is at a company in {yourFeature} {day === view.today ? "today" : `on ${shortDay(day!)}`}.{" "}
+            <button type="button" className="rd-link" onClick={() => onKnow?.(false)}>
+              Show all {dayRows.length}
+            </button>
+          </p>
+        </section>
       ) : !n ? (
         <section className="tp-card rd-empty rd-empty-pic">
           <Spot name="ballEmpty" size={104} />

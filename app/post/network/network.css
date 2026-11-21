@@ -553,3 +553,583 @@
     margin-left: 42px;
   }
 }
+
+/* ----- the record: the people the member knows, first under the one "Your way in" heading ----- */
+.nw-wayin {
+  padding-bottom: 14px;
+}
+.nw-wayin > .nw-people {
+  margin-top: 0;
+}
+
+/* ----- the first number leads back to what Merlin found ----- */
+.nw-stat-b {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nw-stat-b:hover {
+  background: var(--pine-hover);
+}
+.nw-stat-b:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.nw-stat-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--volt);
+}
+
+/* ----- the connect moment (Found.tsx): the read in progress, then its result ----- */
+.nw-page.nw-page-found {
+  max-width: 900px;
+}
+.nf {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+.nf-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--volt-ink);
+}
+.nf-status-quiet {
+  color: var(--muted);
+}
+.nf-h {
+  margin: 6px 0 2px;
+  font-size: 36px;
+  line-height: 42px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  text-wrap: balance;
+  max-width: 640px;
+}
+.nf-h .num {
+  color: var(--volt-ink);
+}
+.nf-2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: 720px;
+}
+.nf-2-quiet {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--body-ink);
+}
+.nf-lead {
+  margin: 2px 0 0;
+  max-width: 640px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.nf-six {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+.nf-six li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  min-width: 0;
+  /* One line between cells, whatever the count: each cell draws its own right and bottom edge, and the list hides the outer ones. */
+  box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line);
+}
+/* An odd one out takes the whole last row. */
+.nf-six li:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.nf-six-t {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.nf-six-n {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nf-six-p {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nf-more {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.nf-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 20px;
+}
+.nf-cta .btn {
+  gap: 8px;
+}
+.nf-sp {
+  flex: 1;
+}
+.nf-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.nf-link:hover {
+  color: var(--pine-hover);
+}
+.nf-link-sm {
+  font-size: 13px;
+}
+.nf-private,
+.nf-fine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.nf-fine {
+  margin: 16px 0 0;
+}
+.nf-also {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 28px;
+}
+.nf-also > div {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.nf-also-n {
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.nf-also-l {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.nf-next {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px 24px;
+  margin: 24px 0 0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.nf-todo {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  list-style: none;
+  max-width: 640px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.nf-todo b {
+  color: var(--ink);
+}
+/* The read in progress. */
+.nf-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+}
+.nf-head-t {
+  flex: 1;
+  min-width: 0;
+}
+.nf-art {
+  flex: none;
+}
+.nf-steps {
+  display: grid;
+  gap: 0;
+  margin: 20px 0 0;
+  padding: 4px 18px;
+  list-style: none;
+  max-width: 640px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.nf-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--muted);
+}
+.nf-step + .nf-step {
+  border-top: 1px solid var(--line);
+}
+.nf-step-now {
+  color: var(--ink);
+  font-weight: 600;
+}
+.nf-step-done {
+  color: var(--body-ink);
+}
+.nf-step-m {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  color: var(--pine);
+}
+.nf-step-done .nf-step-m {
+  border-color: var(--volt);
+  background: var(--volt);
+}
+.nf-step-now .nf-step-m {
+  border-color: transparent;
+}
+.nf-spin {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--line);
+  border-top-color: var(--pine);
+  animation: nf-spin 0.9s linear infinite;
+}
+@keyframes nf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nf-spin {
+    animation-duration: 3s;
+  }
+}
+@media (max-width: 720px) {
+  .nf-h {
+    font-size: 28px;
+    line-height: 34px;
+  }
+  .nf-2 {
+    font-size: 18px;
+    line-height: 26px;
+  }
+  .nf-six {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nf-six li {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+  .nf-also {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin-top: 20px;
+  }
+  .nf-also > div {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 10px;
+  }
+  .nf-cta .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .nf-sp {
+    display: none;
+  }
+  .nf-private {
+    align-items: flex-start;
+  }
+  .nf-next {
+    grid-auto-flow: row;
+  }
+  .nf-art {
+    display: none;
+  }
+}
+
+/* ----- Confirm, don't type: seats the calendar suggests (SeatGuesses.tsx, on Your seats) ----- */
+.sg {
+  margin: 4px 0 20px;
+}
+.sg-top {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 20px 24px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.sg-top-t {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 20px;
+}
+.sg-h {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.sg-p {
+  margin: 6px 0 0;
+  max-width: 640px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.sg-art {
+  flex: none;
+}
+.sg-seat {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.sg-seat-done {
+  border-color: #bdefd8;
+}
+.sg-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.sg-who {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.sg-name {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.sg-line {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.sg-sp {
+  flex: 1;
+}
+.sg-less,
+.sg-added {
+  flex: none;
+  gap: 4px;
+}
+.sg-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+}
+.sg-facts dt {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.sg-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  color: var(--ink);
+  min-width: 0;
+}
+.sg-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.sg-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.sg-input {
+  flex: 1;
+  min-width: 160px;
+  height: 36px;
+}
+.sg-adds {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.sg-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sg-foot .btn-primary {
+  gap: 6px;
+}
+.sg-earn {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 320px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.sg-seat-done .sg-earn {
+  max-width: none;
+  flex: 1 1 260px;
+}
+.sg-plus {
+  flex: none;
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--volt);
+  color: var(--pine);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sg-fine {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 14px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.sg-fine svg {
+  flex: none;
+  margin-top: 4px;
+}
+@media (max-width: 720px) {
+  .sg-top {
+    padding: 16px 16px 0;
+    gap: 12px;
+  }
+  .sg-top-t {
+    padding-bottom: 16px;
+  }
+  .sg-h {
+    font-size: 20px;
+    line-height: 26px;
+  }
+  .sg-seat {
+    padding: 16px 16px 14px;
+  }
+  .sg-head {
+    align-items: flex-start;
+  }
+  .sg-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sg-foot .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 44px;
+  }
+  .sg-foot .sg-sp {
+    display: none;
+  }
+  .sg-earn {
+    max-width: none;
+    flex: 1 1 100%;
+  }
+}

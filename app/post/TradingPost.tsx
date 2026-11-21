@@ -685,6 +685,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    */
   const [sigDay, setSigDay] = useState<string | null>(place0.sig);
   const radar = useRadarDay(page === "radar", sigDay, [me.function, me.icp, me.before]);
+  // [google network] Crystal Ball cut to the companies where the member knows someone (the connect moment's button).
+  const [radarKnow, setRadarKnow] = useState(false);
   const radarList = useMemo(() => radarRows(radar.stale, rowsFor("companies", infos)), [radar.stale, infos]);
   /** The rows the open record steps through (J and K, "1 of 7"): the radar's day when it was opened from there. */
   const navRows = drawer?.returnTo === "radar" ? radarList : sorted;
@@ -2527,6 +2529,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               onProfile={() => setIcpOpen(true)}
               onDay={setSigDay}
               openCompany={openCompany}
+              know={radarKnow}
+              onKnow={setRadarKnow}
             />
           </main>
         ) : page === "billing" && me.plan ? (
@@ -2549,7 +2553,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               me={me}
               onBack={toBase}
               openCompany={openCompany}
-              onRadar={() => (setSigDay(null), setPage("radar"))}
+              onRadar={(know) => (setSigDay(null), setRadarKnow(!!know), setPage("radar"))}
               onSeats={() => openSeats()}
               onClaude={() => (setPage("integrations"), setTimeout(() => document.getElementById("claude-network")?.scrollIntoView({ block: "start" }), 400))}
               refresh={refresh}
@@ -2825,6 +2829,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             pos={drawerPos >= 0 ? { n: drawerPos + 1, of: navRows.length } : null}
             phone={phone}
             contact={contact}
+            benchmarks={view.benchmarks}
+            mySeats={seats}
             crystal={
               (drawer.returnTo === "radar" && radarList.some((r) => r.i.c.id === drawerInfo.c.id)) ||
               (drawer.returnTo === "today" && !!today.data?.rows.some((r) => r.id === drawerInfo.c.id))

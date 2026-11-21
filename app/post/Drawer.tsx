@@ -24,12 +24,12 @@ import { InviteConnect } from "./Invite";
 import { VerifyName } from "./Verify";
 import { AboutText } from "./About";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import type { Action, ActionResult, Cell, CompanyRec, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
+import type { Action, ActionResult, Benchmarks, Cell, CompanyRec, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FOUND_NOTE, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import {
   AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
-  seatMissingCount, shown, waitWords, fnGap, type CoInfo, type FactRef,
+  seatMissingCount, shown, waitWords, fnGap, type CoInfo, type FactRef, type SeatInfo,
 } from "./model";
 import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
@@ -40,7 +40,9 @@ import { CrystalOpen } from "./CrystalOpen";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
-import { WayIn } from "./network/Network"; // [google network]
+import { WayInPeople, wayInFrom } from "./network/Network"; // [google network]
+import { useNetCompany } from "./network/useNetwork"; // [google network]
+import { Charge } from "./Charge";
 import { Prop } from "../ui/fractions/lazy";
 
 /**
@@ -1272,19 +1274,23 @@ const WAY_IN_MAX = 3;
  * its seats and the next step with each. Named and on Merlin: Message. Named, not a member: Not
  * on Merlin yet · Invite to connect. Locked: who held it, 1 credit (after the company at a locked
  * one). Nobody named: Know who held it? Add them, +1. Then the seats, people and details.
+ *
+ * [google network] One section and one heading: the people the member already knows here come
+ * first, warmest first (their own network, nothing with RN_GOOGLE off), then the seats someone held.
  */
-function YourWayIn({ i, seats, children }: { i: CoInfo; seats: EngagementRec[]; children?: ReactNode }) {
+function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
   const ui = useUi();
   const [adding, setAdding] = useState<string | null>(null);
   const hidden = !!i.c.hidden;
   const mine = ui.me.function;
-  if (!seats.length) return <>{children}</>;
+  const net = useNetCompany(hidden ? null : i.c.id);
+  if (!seats.length && !net) return null;
   return (
     <section className="tp-dsec tp-wayin" aria-labelledby="tp-wayin-h">
       <h3 className="tp-dsec-h" id="tp-wayin-h">
-        Your way in
+        Your way in{net && <span className="nw-muted nw-way-from">{wayInFrom(net)}</span>}
       </h3>
-      {children}
+      {net && <WayInPeople c={net} company={i.c.name} />}
       {seats.map((e, k) => {
         const op = e.cells.operator;
         const name = op?.s === "value" ? op.v : null;
@@ -1568,6 +1574,8 @@ export function Drawer({
   phone,
   contact,
   crystal,
+  benchmarks,
+  mySeats,
 }: {
   i: CoInfo;
   focus: string | null;
@@ -1583,6 +1591,9 @@ export function Drawer({
    * used, and anywhere else, the record keeps its own Unlock company.
    */
   crystal?: boolean;
+  /** The rate benchmarks (View.benchmarks) and the member's own seats, for "What to charge them" (Charge.tsx). */
+  benchmarks?: Benchmarks;
+  mySeats?: SeatInfo[];
 }) {
   const ui = useUi();
   const c = i.c;
@@ -1909,10 +1920,9 @@ export function Drawer({
             </div>
           )}
           {/* [ux ws3] Your way in: who held the seats here and the next step with each, before About, seats and people. */}
-          <YourWayIn i={i} seats={wayInSeats}>
-            {/* [google network] who the member knows here (nothing with RN_GOOGLE off). */}
-            {!c.hidden && <WayIn companyId={c.id} company={c.name} />}
-          </YourWayIn>
+          <YourWayIn i={i} seats={wayInSeats} />
+          {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
+          <Charge i={i} benchmarks={benchmarks} seats={mySeats} />
           {/* About: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
           {(!c.hidden || c.cells.about?.s === "value") && (
             <section className="tp-dsec">

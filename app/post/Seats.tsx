@@ -28,6 +28,7 @@ import { FindSeats, seatsFound } from "../onboard/FindSeats";
 import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
 import { Prop, Spot } from "../ui/fractions/lazy";
+import { SeatGuesses } from "./network/SeatGuesses"; // [google network]
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
 interface Saved {
@@ -823,6 +824,8 @@ export function Seats({
   const me = ui.me;
   /** Seats taken off the list in this visit ("This isn't me"), with what the server said. */
   const [gone, setGone] = useState<Map<string, string>>(() => new Map());
+  // [google network] "We think you held these seats" is on the page: its card carries the page's one picture.
+  const [guessing, setGuessing] = useState(false);
   const [saved, setSaved] = useState<Record<string, Saved>>({});
   // What was missing on each seat when it first showed, and the order the seats showed in. Both
   // stay put for the visit, so nothing reorders under the member.
@@ -935,7 +938,7 @@ export function Seats({
   return (
     <div className="tp-page ys-page">
       {/* With seats: the Nomad on its seat. With none, the empty state's own picture is the page's one. */}
-      {!empty && <Prop name="seatYours" height={62} on="bg" ember className="tp-page-art" />}
+      {!empty && !guessing && <Prop name="seatYours" height={62} on="bg" ember className="tp-page-art" />}
       {/* From the zero-credits wall, the way out leads back to the record they were unlocking. */}
       <button type="button" className="tp-back" onClick={back ? back.go : onBack}>
         <IconChevron dir="left" /> {back ? `Back to ${back.name}` : "Back to the table"}
@@ -951,6 +954,8 @@ export function Seats({
           </button>
         </div>
       )}
+      {/* [google network] Seats the member's calendar suggests they held: Confirm or Not a seat (nothing with RN_GOOGLE off, or before they connect). */}
+      <SeatGuesses infos={infos ?? []} seats={seats} onShown={setGuessing} />
       {/*
         One place in the page for the search, empty or not, so a seat claimed from an empty page keeps
         its client card (the page fills in under it instead of starting the search over).
@@ -958,7 +963,7 @@ export function Seats({
       <div className={empty ? "ys-empty" : "ys-find-top"}>
         {empty && (
           <>
-            <Spot name="noSeats" size={112} ember className="ys-empty-art" />
+            {!guessing && <Spot name="noSeats" size={112} ember className="ys-empty-art" />}
             <h2 className="ys-empty-h">{waiting.length ? "No seat is confirmed as yours yet" : "We don't have a seat under your name yet"}</h2>
             <p>
               Type a client you worked with and we list the seats we found there. Claim yours, or add the one you held, and each answer you add earns a credit, {SEAT_YIELD}.
