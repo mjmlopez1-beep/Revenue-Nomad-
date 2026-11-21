@@ -473,8 +473,14 @@ export const INTRO_FIELD: FieldDef = {
   say: "who introduced you",
 };
 
-const FIELD_BY_KEY = new Map<string, FieldDef>([...ALL_FIELDS.map((x) => [`${x.entity}.${x.f.key}`, x.f] as const), ["engagement.introducedBy", INTRO_FIELD] as const]);
-export const fieldDef = (entity: string, key: string): FieldDef | undefined => FIELD_BY_KEY.get(`${entity}.${key}`);
+/** By entity, then key: a view looks a field up for every cell it builds, so without making `${entity}.${key}` each time. */
+const FIELD_BY_KEY = new Map<string, Map<string, FieldDef>>();
+for (const [entity, f] of [...ALL_FIELDS.map((x) => [x.entity, x.f] as const), ["engagement", INTRO_FIELD] as const]) {
+  let byKey = FIELD_BY_KEY.get(entity);
+  if (!byKey) FIELD_BY_KEY.set(entity, (byKey = new Map()));
+  byKey.set(f.key, f);
+}
+export const fieldDef = (entity: string, key: string): FieldDef | undefined => FIELD_BY_KEY.get(entity)?.get(key);
 
 /**
  * Control and bidi-override characters (they can visually reverse nearby text), removed

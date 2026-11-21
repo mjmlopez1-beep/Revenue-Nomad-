@@ -1977,10 +1977,52 @@ function inboxKey(emailRaw: string): string {
   return `${email.slice(0, at).split("+")[0].replace(/\./g, "")}@gmail.com`;
 }
 
+/**
+ * The committed state's values, confirmations and unlocks by record, then field: what
+ * s.values[fkey(id, field)] reads, without making that key for every read (a view reads a few
+ * million). The committed state is never changed in place (stateCache); a draft inside mutate()
+ * is, so it is read by its keys (byField). Kept for the latest state only.
+ */
+type ByRecord<T> = Map<string, Map<string, T>>;
+type Keyed = "values" | "verifications" | "unlocks";
+let recordIndex: { s: State; values?: ByRecord<FieldValue>; verifications?: ByRecord<string[]>; unlocks?: ByRecord<string[]> } | null = null;
+function byRecord<K extends Keyed>(s: State, which: K): ByRecord<State[K][string]> {
+  if (recordIndex?.s !== s) recordIndex = { s };
+  const kept = recordIndex[which] as ByRecord<State[K][string]> | undefined;
+  if (kept) return kept;
+  const all = s[which] as Record<string, State[K][string]>;
+  const out: ByRecord<State[K][string]> = new Map();
+  for (const k in all) {
+    // A field's key has no dot, so the last dot of a key is the one between the record and the field.
+    const dot = k.lastIndexOf(".");
+    if (dot < 0) continue;
+    const id = k.slice(0, dot);
+    let m = out.get(id);
+    if (!m) out.set(id, (m = new Map()));
+    m.set(k.slice(dot + 1), all[k]);
+  }
+  (recordIndex as Record<string, unknown>)[which] = out;
+  return out;
+}
+/** For the checks (scripts/test-viewcache.mts): while `f` runs, every read is by its key, as a draft is read. */
+let readByKey = false;
+export async function readingByKey<T>(f: () => Promise<T>): Promise<T> {
+  readByKey = true;
+  try {
+    return await f();
+  } finally {
+    readByKey = false;
+  }
+}
+/** s[which][fkey(id, field)], read through byRecord on the committed state. */
+function byField<K extends Keyed>(s: State, which: K, id: string, field: string): State[K][string] | undefined {
+  if (s === stateCache && !readByKey && !field.includes(".")) return byRecord(s, which).get(id)?.get(field);
+  return (s[which] as Record<string, State[K][string]>)[fkey(id, field)];
+}
 /** Effective value: a runtime value wins over the seed value. */
 function valueOf(node: Node | undefined, s: State, field: string): FieldValue | null {
   if (!node) return null;
-  const v = s.values[fkey(node.id, field)];
+  const v = byField(s, "values", node.id, field);
   if (v) return v.status === "removed" ? null : v;
   const sv = node.seedFields[field];
   if (!sv) return null;
@@ -2230,8 +2272,7 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (v.status === "reported") return { s: "reported", mine, ...(byMe ? { byMe } : {}) };
   // One report hides a fact only for the member who reported it.
   if (byMe) return { s: "reported", mine: false, byMe };
-  const k = fkey(node!.id, f.key);
-  const vers = s.verifications[k] ?? [];
+  const vers = byField(s, "verifications", node!.id, f.key) ?? [];
   // Only members' confirmations count. A fact from our own records or the scan says where it came from instead.
   const ver = vers.length;
   // (The "Active" a member's claim puts on an open role is written as the scan's, but no posting said it.)
@@ -2243,7 +2284,7 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
     !!me &&
     !mine &&
     !!f.gated &&
-    ((s.unlocks[k] ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key) || holdsSeatPartner(s, me, node, entity, key) || samePersonHeld(s, me, node, entity, key));
+    ((byField(s, "unlocks", node!.id, f.key) ?? []).includes(me.id) || holdsPersonPartner(s, me, node, entity, key) || holdsSeatPartner(s, me, node, entity, key) || samePersonHeld(s, me, node, entity, key));
   if (!f.gated || mine || free || paid) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
     // Only to a viewer who sees the name: it is from public profiles and nobody has verified it yet (the Verify button).
