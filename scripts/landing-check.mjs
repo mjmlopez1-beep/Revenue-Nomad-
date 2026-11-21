@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 /**
- * The signed-out landing page, checked in a real browser on a made-up seed: screenshots (full
- * page and first screen, phone and desktop), first paint on a throttled iPhone 13, the words in
- * the first phone screen, page weight, no sideways scroll at five widths, the page's words
- * with a few functions picked (nothing may say one function unless the visitor chose it), and
- * the page working: the function, the questions, the tabs, Refine, Sign in and joining.
+ * The signed-out landing page, checked in a real browser on a made-up seed: screenshots (the
+ * first screen and the whole page in parts, phone and desktop), first paint on a throttled
+ * iPhone 13, the words in the first phone screen, page weight, no sideways scroll at six
+ * widths, the pictures (none over text, text over one still 4.5:1, the hero's Nomad whole and
+ * its door on the record, at six widths), the page's words with a few functions picked (nothing
+ * may say one function unless the visitor chose it), and the page working: the function, the
+ * questions, the tabs, Refine, Sign in and joining.
  *
  *   npm run build
  *   TAG=after node scripts/landing-check.mjs          everything (OUT=<folder> for the screenshots)
- *   ONLY=paint|shots|words|weight|scroll|functions|flow   one part (or several, comma separated)
+ *   ONLY=paint|shots|words|weight|scroll|art|functions|flow   one part (or several, comma separated)
+ *   EXTRA=320,768,1024,2000   first screens at more widths      PART=3500   the height of a part, in CSS px
+ *   EXTRA_WHOLE=1             the whole page at those widths too
+ *   DEV=1                     `next dev` in place of `next start`, for a look while the page is being changed
  *
  * It writes its own made-up seed (fake companies at .example addresses, fake people, nobody
  * real) into a temporary data folder, starts `next start` on PORT (5940 by default) with the test
@@ -30,6 +35,10 @@ const OUT = process.env.OUT || path.join(tmpdir(), "landing-check");
 const TAG = process.env.TAG || "after";
 const ONLY = process.env.ONLY || "all";
 const RUNS = Number(process.env.RUNS || 5);
+/** The whole page is saved in parts this tall (CSS px), so each picture stays small enough to read. */
+const PART = Number(process.env.PART || 3500);
+/** Every width the layout is checked at. */
+const WIDTHS = [320, 390, 768, 1024, 1440, 2000];
 mkdirSync(OUT, { recursive: true });
 
 /* ---------- a made-up seed: every function has seats, some have open roles ---------- */
@@ -117,7 +126,7 @@ if (!process.env.BASE) {
   writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
   const env = { ...process.env, RN_DATA_DIR: dir, RN_INTEL_SEED: path.join(dir, "intel-seed.json"), RN_STARTER_CREDITS: "25", RN_ADMIN_EMAILS: "admin-lp@example.com", RN_SCAN_TEST: "1", RN_LOGO_LOOKUP: "off", RN_DIGEST: "0", RN_SUPPORT_EMAIL: "support-qa@example.com" };
   for (const k of ["RN_INTEL_SEED_KEY", "RESEND_API_KEY", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_GOOGLE", "RN_BILLING"]) delete env[k];
-  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });
+  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", process.env.DEV ? "dev" : "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });
   server.stdout.on("data", () => {});
   server.stderr.on("data", () => {});
   stop = () => {
@@ -148,21 +157,45 @@ async function settle(page) {
   await page.waitForTimeout(500);
 }
 
+/**
+ * The hero's record made shorter (no open role, nothing to do next) or taller (two more seats),
+ * in the page as it stands: the door and the Nomad are placed from the record, whatever its height.
+ */
+async function reshape(page, kind) {
+  await page.evaluate((k) => {
+    const rec = document.querySelector(".lp-hero .lp-rec");
+    const secs = [...rec.querySelectorAll(".lp-rec-sec")];
+    if (k === "short") {
+      if (secs.length > 1) secs[0].remove();
+      rec.querySelector(".lp-reach-wrap")?.remove();
+    } else {
+      const last = secs.at(-1);
+      last.after(last.cloneNode(true), last.cloneNode(true));
+    }
+  }, kind);
+  await page.waitForTimeout(150);
+}
+
 async function shots() {
-  for (const [name, opts] of [
-    ["390", { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: iphone.userAgent }],
-    ["1440", { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }],
-    // EXTRA=320,768,1024: more widths, for a look at the layout between the two.
+  for (const [name, opts, whole] of [
+    ["390", { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: iphone.userAgent }, true],
+    ["1440", { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }, true],
+    // EXTRA=320,768,1024,2000: the first screen at more widths, for a look at the layout between and beyond the two.
     ...(process.env.EXTRA ?? "")
       .split(",")
       .filter(Boolean)
-      .map((w) => [w, { viewport: { width: Number(w), height: 900 }, deviceScaleFactor: 1, isMobile: Number(w) < 768, hasTouch: Number(w) < 768 }]),
+      .map((w) => [w, { viewport: { width: Number(w), height: 900 }, deviceScaleFactor: 2, isMobile: Number(w) < 768, hasTouch: Number(w) < 768 }, !!process.env.EXTRA_WHOLE]),
   ]) {
     const ctx = await browser.newContext(opts);
     const page = await ctx.newPage();
     await page.goto(`${BASE}/`);
     await settle(page);
     await page.screenshot({ path: path.join(OUT, `${TAG}-first-${name}.png`) });
+    if (!whole) {
+      console.log(`shot ${TAG}-first-${name}.png`);
+      await ctx.close();
+      continue;
+    }
     // Lazy pictures load as the page scrolls by.
     await page.evaluate(async () => {
       for (let y = 0; y < document.documentElement.scrollHeight; y += 600) {
@@ -172,8 +205,22 @@ async function shots() {
       window.scrollTo(0, 0);
     });
     await page.waitForTimeout(600);
-    await page.screenshot({ path: path.join(OUT, `${TAG}-full-${name}.png`), fullPage: true });
-    console.log(`shot ${TAG}-first-${name}.png ${TAG}-full-${name}.png`);
+    // The whole page, in parts no taller than PART: one long picture is too tall to read.
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    const parts = Math.ceil(height / PART);
+    for (let k = 0; k < parts; k++) {
+      const y = k * PART;
+      await page.screenshot({ path: path.join(OUT, `${TAG}-full-${name}-part${k + 1}.png`), fullPage: true, clip: { x: 0, y, width: opts.viewport.width, height: Math.min(PART, height - y) } });
+    }
+    console.log(`shot ${TAG}-first-${name}.png ${TAG}-full-${name}-part1..${parts}.png (${height}px)`);
+    // The hero with a taller record, then a short one.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    for (const kind of ["tall", "short"]) {
+      if (kind === "short") await page.reload().then(() => settle(page));
+      await reshape(page, kind);
+      await page.locator(".lp-hero").screenshot({ path: path.join(OUT, `${TAG}-hero-${kind}-${name}.png`) });
+    }
+    console.log(`shot ${TAG}-hero-tall-${name}.png ${TAG}-hero-short-${name}.png`);
     await ctx.close();
   }
 }
@@ -283,10 +330,10 @@ async function weight() {
   await ctx.close();
 }
 
-/** No sideways scroll, and nothing wider than the screen, at five widths. */
+/** No sideways scroll, and nothing wider than the screen, at six widths. */
 async function scroll() {
   const out = {};
-  for (const w of [320, 390, 768, 1024, 1440]) {
+  for (const w of WIDTHS) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, deviceScaleFactor: 1, isMobile: w < 768, hasTouch: w < 768 });
     const page = await ctx.newPage();
     await page.goto(`${BASE}/`);
@@ -315,6 +362,162 @@ async function scroll() {
   }
   results.scroll = out;
   console.log("scroll", JSON.stringify(out));
+}
+
+/**
+ * The pictures (Fractions, inline SVG with class fx) at six widths. No shape may sit over text.
+ * Text that has a shape, or the hero's mint door, behind it must still be 4.5:1 on that colour.
+ * In the hero, the Nomad's stage is whole (inside the page, under the nav), its bottom edge is
+ * the record's top edge, the door is at least as wide as the record and runs to the hero's
+ * bottom edge. The same holds with the record made taller, and shorter.
+ */
+async function art() {
+  const out = {};
+  let fails = 0;
+  for (const w of WIDTHS) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: w < 768 ? 844 : 900 }, deviceScaleFactor: 1, isMobile: w < 768, hasTouch: w < 768 });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/`);
+    await settle(page);
+    const hero = () =>
+      page.evaluate(() => {
+        const box = (sel) => {
+          const e = [...document.querySelectorAll(sel)].find((x) => x.getBoundingClientRect().width > 0);
+          return e ? e.getBoundingClientRect() : null;
+        };
+        const stage = box(".lp-hero-stage");
+        const rec = box(".lp-hero .lp-rec");
+        const nav = box(".lp-nav");
+        const sec = document.querySelector(".lp-hero");
+        const h = sec.getBoundingClientRect();
+        // Just inside the door, beside the record's bottom and at the hero's bottom edge: the door is there.
+        window.scrollTo({ top: h.bottom + scrollY - innerHeight + 40, behavior: "instant" });
+        const r2 = box(".lp-hero .lp-rec");
+        const h2 = sec.getBoundingClientRect();
+        const s2 = box(".lp-hero-stage");
+        const doorAt = (y) => !!document.elementFromPoint(s2.left + 4, y)?.closest(".lp-hero-door");
+        const reach = doorAt(r2.bottom - 4) && doorAt(h2.bottom - 3);
+        window.scrollTo({ top: 0, behavior: "instant" });
+        return {
+          nomadWhole: !!stage && stage.left >= -0.5 && stage.right <= innerWidth + 0.5 && stage.top >= nav.bottom - 0.5 && stage.bottom <= h.bottom,
+          stageOnRecord: !!stage && !!rec && Math.abs(stage.bottom - rec.top) <= 1,
+          doorHoldsRecord: !!stage && !!rec && stage.left <= rec.left + 0.5 && stage.right >= rec.right - 0.5,
+          doorToTheBottom: reach,
+          stage: stage ? [stage.left, stage.top, stage.width, stage.height].map(Math.round) : null,
+          record: rec ? [rec.left, rec.top, rec.width, rec.height].map(Math.round) : null,
+        };
+      });
+    const got = await page.evaluate(async () => {
+      // Pictures take no taps, so the browser leaves them out of what is at a point. For this check they count.
+      const st = document.createElement("style");
+      st.textContent = ".fx,.fx *{pointer-events:auto!important}";
+      document.head.append(st);
+      const rgba = (c) => {
+        const m = /rgba?\(([^)]+)\)/.exec(c);
+        if (!m) return null;
+        const [r, g, b, a = "1"] = m[1].split(/[,/ ]+/).filter(Boolean);
+        return [Number(r), Number(g), Number(b), Number(a)];
+      };
+      const over = (top, under) => {
+        const a = top[3];
+        return [0, 1, 2].map((k) => top[k] * a + under[k] * (1 - a)).concat(1);
+      };
+      const lum = (c) => {
+        const v = c.slice(0, 3).map((x) => x / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+      };
+      const ratio = (a, b) => {
+        const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+        return (x + 0.05) / (y + 0.05);
+      };
+      const isArt = (el) => !!el.closest?.("svg.fx");
+      /** What an element paints at its own box: a shape's fill, its background, or its ::before's. */
+      const paint = (el) => {
+        if (isArt(el)) return el instanceof SVGSVGElement ? null : { c: rgba(getComputedStyle(el).fill), art: true };
+        const own = rgba(getComputedStyle(el).backgroundColor);
+        if (own && own[3] > 0) return { c: own, art: false };
+        const before = getComputedStyle(el, "::before");
+        const pc = before.content !== "none" && before.position === "absolute" ? rgba(before.backgroundColor) : null;
+        if (pc && pc[3] > 0) return { c: pc, art: el.classList.contains("lp-hero-door") };
+        return null;
+      };
+      const overText = [];
+      const low = [];
+      let onArt = 0;
+      const walk = document.createTreeWalker(document.querySelector(".lp"), NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      const nodes = [];
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) nodes.push(n);
+      for (const n of nodes) {
+        const text = n.textContent.replace(/\s+/g, " ").trim();
+        const el = n.parentElement;
+        if (!text || !el || el.closest("script, style, .sr-only, option, select, svg")) continue;
+        if (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+        el.scrollIntoView({ block: "center", behavior: "instant" });
+        range.selectNodeContents(n);
+        const ink0 = rgba(getComputedStyle(el).color);
+        if (!ink0) continue;
+        for (const r of range.getClientRects()) {
+          if (r.width < 2 || r.height < 2) continue;
+          for (const x of [r.left + 2, (r.left + r.right) / 2, r.right - 2]) {
+            const y = (r.top + r.bottom) / 2;
+            if (x < 0 || x >= innerWidth || y < 0 || y >= innerHeight) continue;
+            const stack = document.elementsFromPoint(x, y);
+            const at = stack.findIndex((e) => e === el || e.contains(el));
+            if (at < 0) continue;
+            const above = stack.slice(0, at).find(isArt);
+            if (above) {
+              overText.push(`${text.slice(0, 40)} <- ${above.closest("svg").getAttribute("class")}`);
+              continue;
+            }
+            // The first thing under the text that paints all of its colour, with anything see-through over it mixed in.
+            let bg = null;
+            let viaArt = false;
+            const veils = [];
+            for (const e of stack.slice(at)) {
+              const p = paint(e);
+              if (!p || !p.c) continue;
+              if (p.c[3] < 1) {
+                veils.push(p.c);
+                continue;
+              }
+              bg = p.c;
+              viaArt = p.art;
+              break;
+            }
+            if (!bg || !viaArt) continue;
+            for (const v of veils.reverse()) bg = over(v, bg);
+            onArt++;
+            const cr = ratio(over(ink0, bg), bg);
+            if (cr < 4.5) low.push(`${text.slice(0, 40)}: ${cr.toFixed(2)} on rgb(${bg.slice(0, 3).map(Math.round).join(",")})`);
+          }
+        }
+      }
+      window.scrollTo({ top: 0, behavior: "instant" });
+      await new Promise((r) => setTimeout(r, 100));
+      return {
+        pictures: document.querySelectorAll("svg.fx").length,
+        textOnArt: onArt,
+        overText: [...new Set(overText)].slice(0, 8),
+        lowContrast: [...new Set(low)].slice(0, 8),
+      };
+    });
+    const holds = (h) => h.nomadWhole && h.stageOnRecord && h.doorHoldsRecord && h.doorToTheBottom;
+    got.hero = await hero();
+    await reshape(page, "tall");
+    got.tall = await hero();
+    await page.reload();
+    await settle(page);
+    await reshape(page, "short");
+    got.short = await hero();
+    const ok = got.pictures > 0 && !got.overText.length && !got.lowContrast.length && holds(got.hero) && holds(got.tall) && holds(got.short);
+    if (!ok) fails++;
+    console.log(`${ok ? "ok  " : "FAIL"} pictures at ${w}: ${JSON.stringify(got)}`);
+    out[w] = got;
+    await ctx.close();
+  }
+  results.art = { fails, widths: out };
+  if (fails) process.exitCode = 1;
 }
 
 /** The page's words with no function picked, then with a few picked: which function names it says. */
@@ -420,6 +623,12 @@ async function flow() {
   const people = seed.engagements.map((e) => e.fields.operator).concat(seed.contacts.map((c) => c.fields.name)).filter(Boolean);
   check("no seat holder or hiring contact from the seed is on the page", !people.some((n) => text.includes(n)), people.filter((n) => text.includes(n)).slice(0, 3));
   check("no rate from the seed and no posting link is on the page", !/\$[89]k\/mo|\/jobs/.test(await page.content()));
+  // The feature pictures are invented and carry no label saying so, so they may hold no amount: a revenue band is the only money on them.
+  const feats = await page.locator("#features").innerText();
+  check("the feature pictures say nothing of samples or illustrations", !/sample|illustration|made up/i.test(feats), feats.match(/[^.\n]*(sample|illustration|made up)[^.\n]*/i)?.[0]);
+  const money = (feats.match(/[$€£]\s?[\d,.]+\s?[kKmMbB]?/g) ?? []).filter((x) => !/^\$\d+M$/.test(x));
+  check("and show no amount: the rates are drawn locked", money.length === 0 && (await page.locator(".lp-v-rates .lock-rest").count()) >= 3, money);
+  check("the hero's headline", (await page.locator(".lp-h1").innerText()).replace(/\s+/g, " ") === "Find your next fractional client and the way in" && (await page.locator(".lp-h1 em").innerText()) === "the way in");
   // Sign in opens and closes.
   await page.locator(".lp-nav-signin").click();
   check("Sign in opens its dialog", (await page.locator(".lp-dialog").count()) === 1);
@@ -439,7 +648,7 @@ async function flow() {
   if (fails) process.exitCode = 1;
 }
 
-const parts = { shots, paint, words, weight, scroll, functions, flow };
+const parts = { shots, paint, words, weight, scroll, art, functions, flow };
 for (const [name, run] of Object.entries(parts)) if (ONLY === "all" || ONLY.split(",").includes(name)) await run();
 writeFileSync(path.join(OUT, `${TAG}-results.json`), JSON.stringify(results, null, 2));
 console.log(`results in ${path.join(OUT, `${TAG}-results.json`)}`);
