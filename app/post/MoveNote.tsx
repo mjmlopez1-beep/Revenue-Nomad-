@@ -15,13 +15,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow } from "@/lib/radar/types";
-import { draftNote, gmailLink, knowLine, mailtoLink, noteFacts, type Move } from "@/lib/moves";
+import { knowLine, type Move } from "@/lib/moves";
+import { draftNote, gmailLink, mailtoLink, noteFacts } from "@/lib/moveNote";
 import { firstOf } from "@/lib/partners";
 import { IconExternal, initials, useToast } from "../ui/shared";
 import { copyText } from "./hooks";
 import { Sheet, useUi } from "./ui";
 import { startSeatMessage, openConversation } from "./Messages";
 import { VoiceLine } from "./Voice";
+import "./movenote.css";
 
 const MAX = 2000;
 

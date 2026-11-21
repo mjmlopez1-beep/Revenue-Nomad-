@@ -1,6 +1,6 @@
 /**
  * Checks of "Your three moves today" (lib/moves.ts, lib/movesView.ts, the "move" action), the
- * drafted note and its templates, the writing voice (lib/voice.ts, the "voice" action, the
+ * drafted note and its templates (lib/moveNote.ts), the writing voice (lib/voice.ts, the "voice" action, the
  * connector's save_my_voice, my_voice and todays_moves) and Home's one-time Pro welcome. No server:
  * lib/table.ts runs in process on a made-up seed in a temporary data dir, with fetch replaced, so
  * nothing leaves the machine. Billing is live with made-up Stripe settings (nothing reaches Stripe).
@@ -260,7 +260,7 @@ async function main() {
   const { firstPage } = await import("../lib/firstPage");
   const { movesFor } = await import("../lib/movesView");
   const { unpackCompany } = await import("../lib/viewWire");
-  const M = await import("../lib/moves");
+  const M = { ...(await import("../lib/moves")), ...(await import("../lib/moveNote")) };
   const V = await import("../lib/voice");
   const tools = await import("../lib/mcp/tools");
   type Move = import("../lib/moves").Move;

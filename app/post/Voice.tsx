@@ -19,6 +19,7 @@ import {
   greetingWords, phraseProblem, styleOf, voiceRows, type VoiceProfile, type VoiceStyle,
 } from "@/lib/voice";
 import "./moves.css";
+import "./movenote.css";
 import { IconCheck, timeAgo } from "../ui/shared";
 import { Sheet, UiCtx } from "./ui";
 

@@ -675,3 +675,61 @@ button.tp-plan:hover {
 .tp-phone .bl-status-art {
   display: none;
 }
+
+/* ---------- the Pro welcome on Home (Billing.tsx ProWelcome): once, The keep beside the words ---------- */
+.bl-hello {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.bl-hello-art {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+}
+.bl-hello-t {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.bl-hello-h {
+  margin: 0;
+  font-size: 19px;
+  line-height: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.bl-hello-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.bl-hello-list b {
+  color: var(--ink);
+}
+.bl-hello-acts {
+  display: flex;
+  margin-top: 2px;
+}
+@media (max-width: 899px) {
+  .bl-hello {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px;
+  }
+  .bl-hello-art {
+    max-width: 320px;
+  }
+}

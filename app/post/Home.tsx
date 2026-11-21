@@ -128,9 +128,10 @@ function GoLink({ to, className, children, label }: { to: Go; className?: string
 }
 
 /**
- * Home's first paint is its top: the greeting and today's moves. The rest (Get started, the search,
- * the four cards, since your last visit, the saved views) comes on the next frame, the first time
- * Home is drawn on a visit, so a phone paints sooner. Later visits to Home draw it all at once.
+ * Home's first paint is its top: the greeting and the first of today's moves. The rest (the other
+ * moves, Get started, the search, the four cards, since your last visit, the saved views) comes on
+ * the next frame, the first time Home is drawn on a visit, so a phone paints sooner. Later visits
+ * to Home draw it all at once.
  */
 let drawnOnce = false;
 function useAfterFirstPaint() {
@@ -215,6 +216,7 @@ export function HomePage(p: HomeProps) {
         wire={wire}
         onWire={setAfter}
         loading={loading}
+        rest={rest}
         dayN={dayN}
         integrations={p.integrations}
         onClaude={p.onClaude}

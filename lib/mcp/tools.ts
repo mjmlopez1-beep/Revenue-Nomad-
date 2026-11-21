@@ -43,7 +43,8 @@ import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
 // Today's moves and the voice their notes are written in (lib/moves.ts, lib/voice.ts): the member's own.
 import { movesFor } from "../movesView";
-import { draftNote, knowLine, noteFacts } from "../moves";
+import { knowLine } from "../moves";
+import { draftNote, noteFacts } from "../moveNote";
 import { VOICE_FIELDS, VoiceProblem, cleanVoice, styleOf, voiceRows } from "../voice";
 import { saveVoice, voiceOf } from "../table";
 

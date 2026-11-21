@@ -16,6 +16,7 @@
  * Free's one a day, then "Upgrade to open more"). People cost what they cost.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import type { Me } from "@/lib/tableTypes";
 import { CRYSTAL_USED_LINE, FEATURE_NAME } from "@/lib/radar/types";
 import { MOVES_MAX, buildMove, holderOnFile, knowLine, postedWords, type Move, type MoveWire, type MovesWire } from "@/lib/moves";
@@ -24,8 +25,14 @@ import { CompanyLogo, IconBriefcase, IconChevron, IconExternal, IconLock, IconPe
 import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { LeadAction } from "./Today";
-import { NoteSheet } from "./MoveNote";
 import "./moves.css";
+
+/*
+ * The note's sheet, its templates and the voice load on their own: Home paints without them, and
+ * they are fetched once Home's first paint is over, so Draft opens at once.
+ */
+const loadNote = () => import("./MoveNote");
+const NoteSheet = dynamic(() => loadNote().then((m) => m.NoteSheet), { ssr: false });
 
 /** A place on Home: a link where it is one, else a button (Home.tsx Go). */
 interface Go {
@@ -44,6 +51,7 @@ export function MovesSection({
   wire,
   onWire,
   loading,
+  rest,
   dayN,
   integrations,
   onClaude,
@@ -58,6 +66,8 @@ export function MovesSection({
   /** The server's answer to Done, Snooze or Undo: it takes the place of the one the page opened with. */
   onWire: (w: MovesWire) => void;
   loading: boolean;
+  /** Home's first paint is over (Home.tsx useAfterFirstPaint): until then only the first move is drawn, so a phone paints sooner. */
+  rest: boolean;
   /** Companies in Crystal Ball's day, for "All 14 in Crystal Ball". */
   dayN: number;
   integrations: Go;
@@ -83,6 +93,15 @@ export function MovesSection({
     return out.slice(0, MOVES_MAX);
   }, [now, byId, me]);
   const drafting = note ? moves.find((x) => x.m.id === note) ?? null : null;
+  // The note's sheet is fetched while the member reads their moves.
+  useEffect(() => {
+    if (!rest || !moves.length) return;
+    const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
+    const go = () => void loadNote().catch(() => {});
+    const t = setTimeout(() => (w.requestIdleCallback ? w.requestIdleCallback(go, { timeout: 2000 }) : go()), 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rest, moves.length > 0]);
   // A note's move left the list (done in another tab): its sheet closes.
   useEffect(() => {
     if (note && !drafting) setNote(null);
@@ -131,7 +150,7 @@ export function MovesSection({
         </div>
       ) : n ? (
         <ol className="mv-list">
-          {moves.map(({ m, w, i }, k) => (
+          {(rest ? moves : moves.slice(0, 1)).map(({ m, w, i }, k) => (
             <li key={m.id}>
               <MoveCard
                 n={k + 1}
