@@ -177,7 +177,25 @@ const seenByA = [];
 /** What A's tool calls sent: a word A typed itself (an alert named "Fractional VP Sales") is no leak when it comes back. */
 const sentByA = [];
 let aAccess = null;
+/**
+ * The server allows 60 tool calls a minute per member (lib/mcp/server.ts). The checks run faster than a person, so each
+ * run waits once it has made 55 calls in the last minute (the SDK client's own calls fit in the rest). The limits check itself is let through (noPace).
+ */
+let callTimes = [];
+const noPace = new Set();
+async function paced(access) {
+  if (noPace.has(access)) return;
+  // One window for every token: the limit is per member, and one member holds several tokens here (refreshes, the SDK client).
+  const now = Date.now();
+  callTimes = callTimes.filter((t) => now - t < 60_000);
+  if (callTimes.length >= 55) {
+    await new Promise((res) => setTimeout(res, 60_500 - (now - callTimes[0])));
+    callTimes.shift();
+  }
+  callTimes.push(Date.now());
+}
 async function tool(access, name, args = {}) {
+  await paced(access);
   const r = await rpc(access, "tools/call", { name, arguments: args });
   const text = r.json?.result?.content?.[0]?.text ?? "";
   if (access === aAccess) seenByA.push(text), sentByA.push(JSON.stringify(args));
@@ -814,6 +832,7 @@ async function main() {
 
   /* limits: 60 tool calls a minute */
   const lc = await connect(L, { name: "Limits" });
+  noPace.add(lc.access_token);
   let firstLimited = 0;
   for (let i = 1; i <= 61; i++) {
     const r = await tool(lc.access_token, "my_account");
