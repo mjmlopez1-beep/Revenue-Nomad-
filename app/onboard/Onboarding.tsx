@@ -46,6 +46,7 @@ import { contactOf, mailto } from "../landing/contact";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { invitedParts } from "@/lib/notify/format";
 import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
+import { Glyph, Texture, Trail, WelcomeBanner } from "../ui/fractions/art";
 
 export interface OnboardingProps {
   view: View;
@@ -439,7 +440,7 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
         </span>
         <span className="ob-credits num" title="Your balance">
           <span className="ob-coin" aria-hidden>
-            <IconCoin size={13} />
+            <Glyph name="credit" size={12} />
           </span>
           <span>
             <strong>{me.credits}</strong> credits
@@ -447,27 +448,16 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
         </span>
       </header>
 
+      {/* A quiet corner of the same pieces in the page's empty margin, on wide screens only. */}
+      <Texture kind="corner" on="bg" className="ob-corner" />
       <main className="ob-main">
         <div className="ob-card" ref={cardRef}>
-          {/* The welcome step opens on the mountain banner (scripts/make-banner.py makes the images). */}
-          {shown === 1 ? (
-            <img
-              className="ob-banner"
-              src="/brand/merlin-banner-onboarding.webp"
-              srcSet="/brand/merlin-banner-onboarding-1000.webp 1000w, /brand/merlin-banner-onboarding.webp 2000w"
-              sizes="(max-width: 640px) 100vw, 720px"
-              width={2000}
-              height={470}
-              alt=""
-              decoding="async"
-              fetchPriority="high"
-            />
-          ) : null}
+          {/* The welcome step opens on the Welcome scene (Fractions, app/ui/fractions): the Nomad waves you in. Drawn inline, so nothing is downloaded for it. */}
+          {shown === 1 ? <WelcomeBanner className="ob-banner" /> : null}
           <div className="ob-progress">
-            <div className="ob-dots" role="img" aria-label={`Step ${shown} of ${total}`}>
-              {Array.from({ length: total }, (_, i) => (
-                <i key={i} className={i + 1 === shown ? "now" : i + 1 < shown ? "done" : ""} />
-              ))}
+            {/* Progress as the trail: a step done is a step walked. The Nomad walks it from step 2 (on step 1 it is in the banner). */}
+            <div className="ob-dots ob-trail" role="img" aria-label={`Step ${shown} of ${total}`}>
+              <Trail done={shown - 1} total={total} walker={shown > 1} height={32} />
             </div>
             <span className="ob-step num" aria-hidden>
               Step {shown} of {total}
