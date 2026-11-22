@@ -6,8 +6,8 @@
  * way to make each.
  *
  * The page opens with one action, "New proposal from a call" (ProposalStart.tsx): the company,
- * the transcript or notes, a template (theirs or ours), Draft. "Send a document to sign" uploads a
- * PDF written anywhere and opens the field placer (DocBuilder.tsx). "My templates" holds the past
+ * the transcript or notes, a template (theirs or ours), Draft. "Send a contract to sign" opens Contracts
+ * (contracts/ContractsHome.tsx): drop a PDF, Merlin places the fields, review, send. "My templates" holds the past
  * proposals the member uploaded.
  *
  * A proposal opens as the client will read it, one document: tap a section to edit its text and
@@ -39,10 +39,10 @@ import { openPlans } from "./Billing";
 import { DocText, dayOf } from "../sign/doc";
 import type { CoInfo } from "./model";
 import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
-import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./ProposalStart";
+import { StartSheet, TEMPLATE_ACCEPT, uploadTemplate } from "./ProposalStart";
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder } from "./DocBuilder";
-import { ContractUpload } from "./ContractUpload";
+import { ContractsHome } from "./contracts/ContractsHome";
 import { ChangeItPanel, VersionsSheet } from "./ChangeIt";
 import { withChange, type ChangeProposal } from "@/lib/proposals/changeShape";
 import { LinkCompany } from "./ProposalLink";
@@ -94,7 +94,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   });
   const [fixFirst, setFixFirst] = useState<string[]>([]);
   const [templates, setTemplates] = useState(false);
-  // "Send a document to sign": the contract page (ContractUpload.tsx), and a line for the field placer when it opens from there.
+  // "Send a document to sign": Contracts (contracts/ContractsHome.tsx), and a line for the field placer when it opens from there.
   const [contract, setContract] = useState(false);
   const [docNotice, setDocNotice] = useState<string | null>(null);
   const reload = useCallback(async () => {
@@ -155,7 +155,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
     );
   if (contract && data)
     return (
-      <ContractUpload
+      <ContractsHome
         data={data}
         onBack={() => setContract(false)}
         onSaved={putDoc}
@@ -564,9 +564,6 @@ function Editor({
                   Delete
                 </button>
               )}
-              <button type="button" onClick={() => void buildInClaude(claudeRevise(p), toast)}>
-                Improve it in Claude
-              </button>
             </div>
           </details>
         </div>
@@ -652,10 +649,6 @@ function Editor({
     </div>
   );
 }
-
-/** The words to paste into Claude to work on a proposal already on Merlin. */
-const claudeRevise = (p: ProposalRec) =>
-  `Open my proposal "${p.title}" in Merlin (get_proposal with proposal_id ${p.id}). Check it against the checklist and my call, tighten it in my voice, keep the price and the day 30, 60 and 90 decisions, and save the changes with create_or_update_proposal. Show me before anything is sent.`;
 
 /** "3 things to fix": one line that opens into the list. */
 export function FixLine({ fixes, blanks }: { fixes: string[]; blanks: number }) {

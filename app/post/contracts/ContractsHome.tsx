@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * "Send a contract for signature" (Proposals): drop in a contract written anywhere, and Merlin
+ * Contracts: the home is a drop zone for a PDF and the contracts sent, with their status. Drop in
+ * a contract written anywhere, and Merlin
  * reads it (lib/documents/smart.ts), finds where everyone signs and places the fields. The review
  * shows the page with each field over its line, coloured by who fills it, who signs in order and
  * where each was found, how many fields were placed, a note drafted in the member's voice, and
@@ -11,19 +12,22 @@
  *
  * PDF only: Merlin has no way to turn a Word file into a PDF, so the drop zone says to save one
  * first. Placing the fields for you is Close (the trial included): without it, the upload opens
- * the field placer as before, with the Close prompt.
+ * the field placer as before, with the Close prompt. A contract in the list opens in the field
+ * placer (its fields, signers and audit trail). A page of its own: the left nav links it.
  */
 import { useRef, useState } from "react";
 import type { ProposalsView } from "@/lib/proposals/types";
 import type { DocField, DocumentRec } from "@/lib/documents/types";
 import type { SmartReading, SmartSigner } from "@/lib/documents/smart";
-import { IconChevron } from "../ui/shared";
-import { useToast } from "../ui/shared";
-import { PdfPages } from "../ui/PdfPages";
-import { openPlans } from "./Billing";
-import { dapi, uploadPdf } from "./DocBuilder";
-import { CloseBuildPrompt } from "./Proposals";
-import "../ui/pdf.css";
+import { IconChevron, useToast } from "../../ui/shared";
+import { PdfPages } from "../../ui/PdfPages";
+import { openPlans } from "../Billing";
+import { dapi, uploadPdf } from "../DocBuilder";
+import { CloseBuildPrompt } from "../Proposals";
+import { ProposalStatus } from "../ProposalParts";
+import { dayOf } from "../../sign/doc";
+import "../../ui/pdf.css";
+import "../proposals.css";
 
 /** Merlin couldn't find a signature line (lib/documents/smart.ts NOTHING_FOUND says the same). */
 export const NOTHING_FOUND = "Merlin couldn't find signature lines in this contract, so place the fields by hand.";
@@ -34,7 +38,7 @@ type Step = "drop" | "busy" | "review" | "sent";
 const first = (s: string) => s.trim().split(/\s+/)[0] || s;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 
-export function ContractUpload({
+export function ContractsHome({
   data,
   onBack,
   onManual,
@@ -42,7 +46,8 @@ export function ContractUpload({
   onOpenDoc,
 }: {
   data: ProposalsView;
-  onBack: () => void;
+  /** Back to where it was opened from, when it was (until Contracts has its own place in the nav). */
+  onBack?: () => void;
   /** The field placer, for this document, with a line to show at its top. */
   onManual: (d: DocumentRec, notice?: string) => void;
   onSaved: (d: DocumentRec) => void;
@@ -150,9 +155,11 @@ export function ContractUpload({
 
   return (
     <div className="page-wide pp-page cu-page">
-      <button type="button" className="page-back" onClick={onBack}>
-        <IconChevron dir="left" /> Proposals
-      </button>
+      {onBack && (
+        <button type="button" className="page-back" onClick={onBack}>
+          <IconChevron dir="left" /> Proposals
+        </button>
+      )}
       <header className="cu-head">
         <h1 className="cu-h1">Send a contract for signature</h1>
         <p className="cu-lead">Drop in a contract you wrote anywhere. Merlin reads it, finds where everyone signs, and places the fields for you.</p>
@@ -200,6 +207,30 @@ export function ContractUpload({
         <p className="pp-err" role="alert">
           {err}
         </p>
+      )}
+      {step === "drop" && data.documents.length > 0 && (
+        <section aria-labelledby="ch-sent-h">
+          <h2 className="ch-h2" id="ch-sent-h">
+            Your contracts
+          </h2>
+          <ul className="pp-list ch-list" aria-label="Your contracts">
+            {data.documents.map((d) => (
+              <li key={d.id}>
+                <button type="button" className="pp-row" onClick={() => onOpenDoc(d)}>
+                  <span className="pp-row-main">
+                    <span className="pp-row-t">{d.title}</span>
+                    <span className="pp-row-s">
+                      {d.company.name || d.fileName}
+                      {d.signers.length ? ` · ${d.signers.filter((x) => x.status === "signed").length} of ${d.signers.length} signed` : ""} ·{" "}
+                      {d.status === "draft" ? `Edited ${dayOf(d.updatedAt)}` : d.status === "signed" ? `Signed ${dayOf(d.completedAt)}` : `Sent ${dayOf(d.sentAt)}`}
+                    </span>
+                  </span>
+                  <ProposalStatus status={d.status} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {step === "review" && doc && r && (

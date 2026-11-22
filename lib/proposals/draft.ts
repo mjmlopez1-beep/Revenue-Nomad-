@@ -26,6 +26,11 @@ import { proposalKit, type ProposalKit } from "./kit";
 import { ProposalProblem, createProposal } from "./store";
 import type { ProposalRec } from "./types";
 import { AI_PACK_LINK, budgetOf, chargeIn, usedUpWords } from "./aiUsage";
+import { blanksOf, docFields } from "./library";
+import { extract } from "./extract";
+import { properCase, signerInCall, siteFromCall } from "./startCall";
+import { sectionsSoFar } from "./streamParse";
+import { LiveProblem, type Progress } from "./live";
 
 export const AI_OFF = "Drafting with Merlin isn't switched on yet. Draft it from the template, and Merlin fills in what it finds in the call.";
 export const AI_PLAN = `Drafting with Merlin is on Close: $${PRICES.closeMonth} a month.`;
@@ -54,7 +59,7 @@ export const DRAFT_SCHEMA = {
     title: str,
     blocks: { type: "array", items: { type: "object", additionalProperties: false, required: ["block_id", "title", "body"], properties: { block_id: str, title: str, body: str } } },
     fields: { type: "object", additionalProperties: false, required: Object.keys(FIELD_NAMES), properties: Object.fromEntries(Object.keys(FIELD_NAMES).map((k) => [k, str])) },
-    signer: { type: "object", additionalProperties: false, required: ["name", "title"], properties: { name: str, title: str } },
+    signer: { type: "object", additionalProperties: false, required: ["name", "title", "email"], properties: { name: str, title: str, email: str } },
     signer_on_call: { type: "string", enum: ["yes", "no", "unknown"] },
     notes: { type: "array", items: { type: "object", additionalProperties: false, required: ["key", "text"], properties: { key: str, text: str } } },
     to_fix: { type: "array", items: str },
@@ -68,7 +73,7 @@ const Draft = z.object({
     .min(1)
     .max(40),
   fields: z.record(z.string(), z.string().max(3000)),
-  signer: z.object({ name: z.string().max(200), title: z.string().max(200) }),
+  signer: z.object({ name: z.string().max(200), title: z.string().max(200), email: z.string().max(200).optional() }),
   signer_on_call: z.enum(["yes", "no", "unknown"]),
   notes: z.array(z.object({ key: z.string().max(60), text: z.string().max(2000) })).max(60),
   to_fix: z.array(z.string().max(400)).max(10),
@@ -83,7 +88,7 @@ How to write it:
 - Where something the document needs isn't in the call, write a short blank in double braces, like {{start.date}} or {{client.signerTitle}}, so the writer fills it before sending.
 - State one price for the option you recommend: a monthly fee with the hours or days it covers, inside the rate band unless the call gives a reason. A heavier build in months 1 to 3, then a lower fee from month 4. A short first term with notice and an out at day 90.
 - Milestones at day 30, 60 and 90, each ending in a decision the client makes.
-- Address it to the person who signs. If the person who signs wasn't on the call, say so in to_fix.
+- Address it to the person who signs, and return them in signer: their name and title as the call gives them, and their email only if it was said or written in the call (else ""). If the person who signs wasn't on the call, say so in to_fix.
 - Write plain text: a line starting "- " is a bullet, a blank line starts a new paragraph. No markdown headings, bold or tables.
 - Keep the writer's voice: their formality, length and phrases. Plain, short sentences.
 - Budget signals, who decides, sensitivities and internal politics are for the writer only: put them in notes (key "budget.signals", "decision.process", "sensitivities", "stakeholders" or "objectionsRaised"), never in the document.
@@ -156,8 +161,22 @@ export interface DraftArgs {
 /** Members with a draft on its way, so two at once can't both pass the budget. */
 const drafting = new Set<string>();
 
-/** Draft a whole proposal from a call with Claude, and save it as a draft. */
-export async function draftWithClaude(token: string | null, a: DraftArgs, origin?: string, nowMs = Date.now()): Promise<{ proposal: ProposalRec; toFix: string[] }> {
+export interface DraftResult {
+  proposal: ProposalRec;
+  toFix: string[];
+  /** The company wasn't found on Merlin by its name or the website the call gave: the member adds or picks it. */
+  company?: { linked: boolean; name: string; website: string | null };
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
+
+/**
+ * Draft a whole proposal from a call with Merlin's AI, and save it as a draft. With `progress`
+ * (the live view, lib/proposals/live.ts) the answer is streamed and each real step is reported:
+ * the call read, the goal and the signer found, the rate figure, each section as it is written.
+ */
+export async function draftWithClaude(token: string | null, a: DraftArgs, origin?: string, nowMs = Date.now(), progress?: Progress): Promise<DraftResult> {
   if (!aiConfigured()) throw new ProposalProblem(AI_OFF, 409);
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
@@ -177,23 +196,24 @@ export async function draftWithClaude(token: string | null, a: DraftArgs, origin
   if (transcript.length > MAX_TRANSCRIPT) throw new ProposalProblem("That transcript is longer than about three hours of talk. Paste the part about their business.");
   const templateId = a.templateId === "blank" || a.templateId === "" || a.templateId == null ? null : String(a.templateId);
   const companyId = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
-  const companyName = clip(String(a.companyName ?? "").trim(), 120);
+  const companyName = properCase(clip(String(a.companyName ?? "").trim(), 120));
   // The AI budget: refused only once nothing of it (or a pack) is left. Never a number in the words.
   const budget = budgetOf(s, me.id, nowMs);
   if (!budget.open) throw new ProposalProblem(usedUpWords(nowMs, budget.trial), 402, AI_PACK_LINK);
   if (drafting.has(me.id)) throw new ProposalProblem(AI_BUSY, 409);
   drafting.add(me.id);
   try {
-    return await draftNow(token, me.id, templateId, companyId, companyName, transcript, a, origin, nowMs);
+    progress?.step("read", `Reading the call · ${words(transcript).toLocaleString("en-US")} words`);
+    return await draftNow(token, { id: me.id, name: me.name, email: me.email }, templateId, companyId, companyName, transcript, a, origin, nowMs, progress);
   } finally {
     drafting.delete(me.id);
   }
 }
 
-/** The call to Claude, the saved draft, and its cost charged from the API's usage. */
+/** The call to the model, the saved draft, and its cost charged from the API's usage. */
 async function draftNow(
   token: string | null,
-  memberId: string,
+  me: { id: string; name: string; email: string },
   templateId: string | null,
   companyId: string | null,
   companyName: string,
@@ -201,22 +221,69 @@ async function draftNow(
   a: DraftArgs,
   origin: string | undefined,
   nowMs: number,
-): Promise<{ proposal: ProposalRec; toFix: string[] }> {
+  progress?: Progress,
+): Promise<DraftResult> {
+  // What Merlin's own rules find in the call, before the model writes: real steps, and the signer if the model leaves them out.
+  const ruled = signerInCall(transcript, me);
+  if (progress) {
+    const goal = extract(transcript, me.name).suggestions.find((x) => x.key === "goals.target" && x.buyer);
+    if (goal) progress.step("goals", `Found the goals: ${clip(goal.text.replace(/\s+/g, " "), 110)}`);
+    if (ruled.name) progress.step("signer", `Who's signing: ${ruled.name}${ruled.title ? `, ${ruled.title}` : ""}`);
+  }
   const kit = await proposalKit(token, { templateId, companyId, companyName });
+  if (progress && "function" in kit.rate_band && kit.rate_band.people) progress.step("rates", `Pricing from ${kit.rate_band.people} fractional ${kit.rate_band.function.toLowerCase()} leaders on Merlin`);
   const call = { date: clip(String(a.callDate ?? "").trim(), 40), with: clip(String(a.callWith ?? "").trim(), 120) };
 
   const testBase = aiTestBase();
-  const client = new Anthropic({ apiKey: String(process.env.ANTHROPIC_API_KEY).trim(), ...(testBase ? { baseURL: testBase } : {}), maxRetries: 2, timeout: 5 * 60_000 });
+  const client = new Anthropic({ apiKey: String(process.env.ANTHROPIC_API_KEY).trim(), ...(testBase ? { baseURL: testBase } : {}), maxRetries: progress ? 0 : 2, timeout: 5 * 60_000 });
+  const params = {
+    model: aiModel(),
+    max_tokens: 16000,
+    system: SYSTEM,
+    messages: [{ role: "user" as const, content: draftPrompt(kit, transcript, call) }],
+    output_config: { format: { type: "json_schema" as const, schema: DRAFT_SCHEMA as unknown as Record<string, unknown> } },
+  };
   let msg: Anthropic.Message;
+  let soFar = "";
   try {
-    msg = await client.messages.create({
-      model: aiModel(),
-      max_tokens: 16000,
-      system: SYSTEM,
-      messages: [{ role: "user", content: draftPrompt(kit, transcript, call) }],
-      output_config: { format: { type: "json_schema", schema: DRAFT_SCHEMA as unknown as Record<string, unknown> } },
-    });
+    if (progress) {
+      progress.step("write", "Writing the draft", "active");
+      const seen = new Map<number, { done: boolean; len: number }>();
+      const stream = client.messages.stream(params as Anthropic.MessageCreateParamsNonStreaming, { signal: progress.signal });
+      stream.on("text", (_delta, snapshot) => {
+        soFar = snapshot;
+        sectionsSoFar(snapshot, "block_id").forEach((sec, i) => {
+          const was = seen.get(i);
+          const key = `s${i}`;
+          if (!was) progress.section(key, sec.title, "active");
+          if (sec.body.length > (was?.len ?? 0)) progress.text(key, sec.body);
+          if (sec.done && !was?.done) progress.section(key, sec.title, "done");
+          seen.set(i, { done: sec.done, len: sec.body.length });
+        });
+      });
+      msg = await stream.finalMessage();
+    } else msg = await client.messages.create(params as Anthropic.MessageCreateParamsNonStreaming);
   } catch (e) {
+    if (progress?.signal.aborted) throw new ProposalProblem("Stopped. Nothing was saved.", 499);
+    // The stream dropped part way: what was written whole is kept, as a draft to finish.
+    const whole = progress ? sectionsSoFar(soFar, "block_id").filter((x) => x.done && x.body.trim()) : [];
+    if (whole.length) {
+      const at = new Date(nowMs).toISOString();
+      const kept = await createProposal(
+        token,
+        {
+          templateId,
+          companyId,
+          companyName,
+          blocks: whole.map((b) => ({ id: newBlockId(), blockId: blockDef(b.id) ? b.id : "custom", title: clip(b.title, 120) || "Section", body: clip(b.body.trim(), 8000) })),
+          notes: [{ key: "check", text: "The draft stopped before the end. Finish the last sections, or draft it again.", at }],
+          source: "claude",
+        },
+        origin,
+        nowMs,
+      );
+      throw new LiveProblem(`The draft stopped after ${whole.length} ${whole.length === 1 ? "section" : "sections"}. Merlin kept what was written.`, 502, { proposal: kept, toFix: ["The draft stopped before the end. Finish the last sections, or draft it again."], partial: true });
+    }
     // The status only: never the request, which holds the transcript.
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
       console.error("ai draft: the key was refused", e.status);
@@ -238,8 +305,14 @@ async function draftNow(
 
   const fields: Record<string, string> = {};
   for (const [k, key] of Object.entries(FIELD_NAMES)) if (d.fields[k]?.trim()) fields[key] = d.fields[k].trim();
-  if (d.signer.name.trim()) fields["client.signerName"] = d.signer.name.trim();
-  if (d.signer.title.trim()) fields["client.signerTitle"] = d.signer.title.trim();
+  // Who signs: the model's, else what Merlin's rules found in the call. An email only when the call has it.
+  const said = transcript.toLowerCase();
+  const sName = d.signer.name.trim() || ruled.name || "";
+  const sTitle = d.signer.title.trim() || (sName === ruled.name ? ruled.title ?? "" : "");
+  const sEmail = [d.signer.email?.trim().toLowerCase(), sName === ruled.name ? ruled.email : undefined].find((x) => !!x && EMAIL.test(x) && said.includes(x)) ?? "";
+  if (sName) fields["client.signerName"] = sName;
+  if (sTitle) fields["client.signerTitle"] = sTitle;
+  if (sEmail) fields["client.signerEmail"] = sEmail;
   if (!fields["discovery.callDate"] && call.date) fields["discovery.callDate"] = call.date;
   const blocks = d.blocks.map((b) => {
     const id = blockDef(b.block_id) ? b.block_id : "custom";
@@ -247,16 +320,20 @@ async function draftNow(
   });
   const at = new Date(nowMs).toISOString();
   const notes = [...d.notes.map((n) => ({ key: n.key, text: n.text, at })), ...d.to_fix.slice(0, 3).map((t) => ({ key: "check", text: t, at }))];
+  // The client's company: picked, else its name, else the website the call gives (the signer's domain), each as find_company finds it.
+  const site = companyId ? null : siteFromCall(transcript, me, sEmail || undefined);
   const proposal = await createProposal(
     token,
     {
       templateId,
       companyId,
       companyName,
+      companySite: site,
       title: d.title,
       fields,
       blocks,
       notes,
+      ...(sName && sEmail ? { signer: { name: sName, email: sEmail, ...(sTitle ? { title: sTitle } : {}) } } : {}),
       signerOnCall: d.signer_on_call === "yes" ? true : d.signer_on_call === "no" ? false : null,
       source: "claude",
     },
@@ -264,6 +341,11 @@ async function draftNow(
     nowMs,
   );
   // Saved: now it costs what the API says it used.
-  await T.mutate((s) => void chargeIn(s, memberId, nowMs, { inTok: msg.usage?.input_tokens ?? 0, outTok: msg.usage?.output_tokens ?? 0 }));
-  return { proposal, toFix: d.to_fix.slice(0, 3) };
+  await T.mutate((s) => void chargeIn(s, me.id, nowMs, { inTok: msg.usage?.input_tokens ?? 0, outTok: msg.usage?.output_tokens ?? 0 }));
+  if (progress) {
+    progress.step("write", "Writing the draft", "done");
+    const blanks = blanksOf(proposal.blocks, docFields(proposal)).length;
+    progress.step("ready", `Draft ready · ${proposal.blocks.length} sections · ${blanks} ${blanks === 1 ? "blank" : "blanks"} to fill`);
+  }
+  return { proposal, toFix: d.to_fix.slice(0, 3), ...(proposal.company.id ? {} : { company: { linked: false, name: proposal.company.name, website: site } }) };
 }

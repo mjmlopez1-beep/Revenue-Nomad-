@@ -33,6 +33,7 @@ import { CLOSE_BUILD, blocksOfMine, isMineId, templatesOf } from "./mine";
 import { aiConfigured } from "./aiConfig";
 import { AI_PACK_LINK, PACK_PRICE_USD, budgetOf, usedUpWords } from "./aiUsage";
 import { pipelineEvent } from "./pipelineHook";
+import { properCase } from "./startCall";
 import {
   CONSENT_VERSION,
   consentText,
@@ -434,7 +435,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
 /** A new proposal from a template (or blank), for a company on Merlin or one typed in. */
 export async function createProposal(
   token: string | null,
-  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string },
+  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; companySite?: string | null; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string },
   origin?: string,
   nowMs = Date.now(),
 ): Promise<ProposalRec> {
@@ -448,9 +449,11 @@ export async function createProposal(
   if (isMineId(templateId) && !mineT) throw new ProposalProblem("That template of yours isn't there anymore.", 404);
   if (templateId && !mineT && !templateDef(templateId)) throw new ProposalProblem("That template isn't in the library.");
   const picked = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
-  const typed = cleanLine(a.companyName, 120);
+  // A name typed all in lower case reads with capitals ("seven figure agency" is "Seven Figure Agency").
+  const typed = properCase(cleanLine(a.companyName, 120));
   // A company typed, not picked: its exact name or website links it, locked ones too (as find_company finds one), so the pipeline moves when it's signed.
-  const pub = picked ?? (typed ? await lookUpCompany(token, typed, origin) : null);
+  // Else the website a call gave (a draft from it: the signer's company domain), the same way.
+  const pub = picked ?? (typed ? await lookUpCompany(token, typed, origin) : null) ?? (a.companySite ? await lookUpCompany(token, a.companySite, origin) : null);
   const co = pub ? await companyFor(token!, pub) : null;
   if (picked && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
   const name = co ? co.name || typed : typed;

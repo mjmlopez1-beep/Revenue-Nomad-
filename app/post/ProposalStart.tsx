@@ -16,22 +16,22 @@
  * Without it, Merlin's own reader (lib/proposals/extract.ts) and what was agreed (readTerms) run
  * here in the browser, and only the lines it finds are saved. Either way the draft reads "Draft
  * ready": what was done, the things to check (anything the call didn't settle is a labelled blank,
- * never guessed), and where each part came from. "Build it in Claude" copies a prompt for the
- * member's own Claude.
+ * never guessed), and where each part came from.
  */
 import { useMemo, useRef, useState } from "react";
 import type { ProposalRec, ProposalsView, TemplateChoice } from "@/lib/proposals/types";
 import { DISCOVERY_TARGET, acceptInto, blanksInWords, blanksOf, docFields, fieldLabel } from "@/lib/proposals/library";
 import { extract, transcriptOk } from "@/lib/proposals/extract";
-import { bestTemplate, browserInflateRaw, docxText, readTerms } from "@/lib/proposals/startCall";
-import { IconCheck, IconChevron, IconExternal, useToast, errorText } from "../ui/shared";
+import { bestTemplate, browserInflateRaw, docxText, properCase, readTerms } from "@/lib/proposals/startCall";
+import { IconCheck, IconChevron, useToast, errorText } from "../ui/shared";
 import { useUi } from "./ui";
 import { MicButton, useSpeech } from "./ChangeIt";
-import { copyText } from "./hooks";
+import { LiveView, useLive } from "./Live";
+import { LinkCompany } from "./ProposalLink";
+import { AddCompany } from "./AddCompany";
 import type { CoInfo } from "./model";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-export const CLAUDE_NEW = "https://claude.ai/new";
 const AI_CONSENT = "Merlin writes the draft from the call. It keeps the draft, not the transcript.";
 
 const PACK_WORDS = "Add a $10 usage pack";
@@ -59,21 +59,6 @@ export async function uploadTemplate(f: File): Promise<{ id?: string; title?: st
 export const TEMPLATE_ACCEPT = ".docx,.pdf,.md,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/markdown,text/plain";
 
 const dayWords = (d: string) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
-
-/** The words to paste into Claude: the template, the company, the call. */
-export function claudePrompt(o: { template: TemplateChoice | null; company: string; date?: string; with?: string }): string {
-  const tpl = o.template ? (o.template.mine ? `my "${o.template.title}" template` : `the "${o.template.title.split(":")[0]}" template`) : "a blank template";
-  const call = `my ${o.date ? `${dayWords(o.date)} ` : "latest "}call${o.with ? ` with ${o.with}` : ""}`;
-  return `Use ${tpl} in Merlin and draft a proposal for ${o.company || "[the company]"} from ${call}. Find the call in my meeting notes. Call get_proposal_kit first, then write it in my voice using their own words, with the price stated and a decision at day 30, 60 and 90. Save it to Merlin with create_or_update_proposal and show me before anything is sent.`;
-}
-
-/** Copy the prompt and open Claude. */
-export async function buildInClaude(text: string, toast: (t: string, err?: boolean) => void) {
-  const w = window.open(CLAUDE_NEW, "_blank", "noopener");
-  const ok = await copyText(text);
-  toast(ok ? "Copied. Paste it into Claude, with Merlin connected." : "That didn't copy. Select the words and copy them yourself.", !ok);
-  void w;
-}
 
 /** Titles that sign: a line in the call that names one beside a name is the signer. */
 const SIGNER_TITLE = /\b(CEO|CFO|COO|CTO|CRO|CMO|CPO|Chief [A-Z][a-z]+(?: [A-Z][a-z]+)? Officer|Founder|Co-founder|Cofounder|President|Managing Director|General Manager|Owner|VP(?: of)? [A-Z][A-Za-z]+|Vice President(?: of)? [A-Z][A-Za-z]+|Head of [A-Z][A-Za-z]+)\b/;
@@ -138,7 +123,7 @@ export interface CallPick {
 export type GranolaSlot = (o: { companyId: string | null; signerEmail?: string; onPick: (c: CallPick) => void }) => React.ReactNode;
 
 type Source = "granola" | "paste" | "agreed";
-type Ready = { proposal: ProposalRec; toFix: string[]; done: string[]; check: string[]; used: { from: string; what: string }[] };
+type Ready = { proposal: ProposalRec; toFix: string[]; done: string[]; check: string[]; used: { from: string; what: string }[]; site?: string | null };
 
 const readable = (k: string) => fieldLabel(k).replace(/\s*\([^)]*\)$/, "").toLowerCase();
 const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
@@ -197,6 +182,8 @@ export function StartSheet({
   const fileRef = useRef<HTMLInputElement>(null);
   const tplRef = useRef<HTMLInputElement>(null);
   const speech = useSpeech((t) => setAgreed((x) => `${x} ${t}`.trim()));
+  const live = useLive();
+  const [addCo, setAddCo] = useState(false);
 
   const matches = q.trim().length >= 2 && !pick ? known.filter((i) => i.c.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6) : [];
   const picked = pick ? infos.find((i) => i.c.id === pick) : undefined;
@@ -290,21 +277,27 @@ export function StartSheet({
     const sign = signer.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(signer.email.trim()) ? { name: signer.name.trim(), email: signer.email.trim(), ...(signer.title.trim() ? { title: signer.title.trim() } : {}) } : null;
     const terms = hasCall ? readTerms(callText) : { fields: {}, checks: [] };
     if (ai) {
+      // Live: each real step as it happens (Live.tsx), and the sections filling in.
       setBusy("draft");
-      const r = await post<{ proposal: ProposalRec; toFix: string[] }>({ op: "draft", ...base, transcript: callText, callDate: dayWords(date) || undefined, callWith: signer.name || withWho.trim() || undefined, agree: true });
-      if (r.error) {
+      const end = await live.start({ op: "draft", ...base, transcript: callText, callDate: dayWords(date) || undefined, callWith: signer.name || withWho.trim() || undefined, agree: true });
+      const r = (end.ok ? end.result : end.result) as { proposal: ProposalRec; toFix: string[]; company?: { website: string | null } } | undefined;
+      if (!end.ok && !r?.proposal) {
         setBusy(null);
-        if (r.upgrade) return setUsedUp({ words: r.error, pack: r.upgrade, button: PACK_WORDS });
-        return setErr(r.error);
+        live.reset();
+        if (end.status === 402) return setUsedUp({ words: end.message, pack: "/?p=billing&plans=1&from=ai-pack", button: PACK_WORDS });
+        if (end.status === 499) return;
+        return setErr(end.message);
       }
-      let p = r.proposal;
+      let p = r!.proposal;
       if (sign && !p.signer) {
         const u = await post<ProposalRec>({ op: "update", id: p.id, signer: sign });
         if (!u.error) p = u;
       }
       setBusy(null);
       setText(""), setAgreed("");
-      return setReady(summarise(p, r.toFix ?? [], terms.checks));
+      live.reset();
+      const ready = summarise(p, r!.toFix ?? [], end.ok ? terms.checks : [end.message, ...terms.checks]);
+      return setReady({ ...ready, site: r!.company?.website ?? null });
     }
     // Merlin's own reader, in this browser: only the lines it finds are sent, never the transcript.
     let fields: Record<string, string> = {};
@@ -339,10 +332,9 @@ export function StartSheet({
     setReady(summarise(r, [], terms.checks));
   };
 
-  const title = picked && !picked.c.hidden ? `New proposal for ${picked.c.name}` : "New proposal from a call";
+  const title = picked && !picked.c.hidden ? `New proposal for ${picked.c.name}` : ready?.proposal.company.name ? `New proposal for ${ready.proposal.company.name}` : "New proposal from a call";
   const shownTpl = [...data.templates].sort((a, b) => (a.id === best.id && best.score >= 2 ? -1 : b.id === best.id && best.score >= 2 ? 1 : 0) || Number(b.mine) - Number(a.mine));
   const tplList = allTpl ? shownTpl : shownTpl.slice(0, 3);
-  const prompt = claudePrompt({ template, company, date, with: withWho.trim() });
   const signerFirst = (signer.name || "").split(/\s+/)[0];
 
   if (ready)
@@ -382,6 +374,15 @@ export function StartSheet({
                 <span>Read it through before you send it.</span>
               </div>
             )}
+            {/* Not on Merlin by its name or the website the call gave: add it or pick it, here (AddCompany.tsx). */}
+            {!ready.proposal.company.id && (
+              <LinkCompany
+                p={ready.proposal}
+                site={ready.site}
+                lead={ready.proposal.company.name ? `${ready.proposal.company.name} isn't linked to a company on Merlin yet, so your pipeline won't move when they sign.` : undefined}
+                onLinked={(r) => setReady({ ...ready, proposal: { ...ready.proposal, company: r.company } })}
+              />
+            )}
             <div className="sc-btns">
               <button type="button" className="btn btn-pine btn-lg" onClick={() => onMade(ready.proposal, ready.toFix)}>
                 Open the draft
@@ -403,6 +404,17 @@ export function StartSheet({
             ))}
           </section>
         </div>
+      </div>
+    );
+
+  if (live.state.status === "running" || (busy === "draft" && live.state.status !== "idle"))
+    return (
+      <div className="page-wide pp-page sc-page">
+        <header className="cu-head">
+          <h1 className="cu-h1">{title}</h1>
+          <p className="cu-lead">Merlin is drafting it from the call, in your template and your words.</p>
+        </header>
+        <LiveView state={live.state} title="Drafting your proposal" onCancel={() => void live.cancel()} />
       </div>
     );
 
@@ -430,6 +442,19 @@ export function StartSheet({
           <div className="pp-co">
             <input id="pp-co" className="input" aria-label="The company" autoComplete="off" placeholder="Search Merlin, or type its name" value={q} onChange={(e) => (setQ(e.target.value), picked?.c.hidden || setPick(null))} />
             {picked && <p className="pp-co-picked">{picked.c.hidden ? "A locked company on Merlin. Type its name: it stays on your proposal only." : "On Merlin: its facts fill in."}</p>}
+            {/* Nothing on Merlin by that name: add it from its website, here. */}
+            {!pick && q.trim().length >= 3 && matches.length === 0 &&
+              (addCo ? (
+                <AddCompany name={q.trim()} onCancel={() => setAddCo(false)} onAdded={(r) => (setPick(r.companyId), setQ(r.name), setAddCo(false), toast(r.added ? `Added ${r.name} to Merlin.` : `${r.name} was on Merlin already.`))} />
+              ) : (
+                <p className="pp-help">
+                  Not on Merlin yet?{" "}
+                  <button type="button" className="tp-flink" onClick={() => setAddCo(true)}>
+                    Add {properCase(q.trim())} to Merlin
+                  </button>{" "}
+                  or keep typing: Merlin links it when you draft, by its name or the website in the call.
+                </p>
+              ))}
             {matches.length > 0 && (
               <ul className="pp-co-list" role="listbox" aria-label="Companies on Merlin">
                 {matches.map((i) => (
@@ -624,12 +649,6 @@ export function StartSheet({
         </button>
         <span className="pp-muted">{ai ? "About 30 seconds. You review everything before it's sent." : "You review everything before it's sent."}</span>
       </div>
-      <p className="sc-claude">
-        Prefer your own Claude?{" "}
-        <button type="button" className="tp-flink" onClick={() => void buildInClaude(prompt, toast)}>
-          Build it there <IconExternal />
-        </button>
-      </p>
     </div>
   );
 }

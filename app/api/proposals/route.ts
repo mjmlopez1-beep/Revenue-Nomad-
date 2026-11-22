@@ -6,6 +6,7 @@ import { ProposalProblem, createProposal, deleteProposal, duplicateProposal, get
 import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
 import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
 import { acceptChange, proposeChange, restoreVersion, versionsOf } from "@/lib/proposals/change";
+import { addCompanyFor, siteName } from "@/lib/proposals/addCompany";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,9 @@ async function answer(work: () => Promise<unknown>) {
  *                  sections, fields and the numbers check. Nothing is saved. Close, metered like a draft; 409 when it's off.
  * POST { op: "change_accept", id, changes, fields?, instruction? }   Saved as a new version; the one before is kept.
  * POST { op: "versions", id }  The kept versions' text, to compare.  { op: "version_restore", id, version }
+ * POST { op: "site_name", website }   { website, name }: the website as its host, and the name its homepage gives (a short read).
+ * POST { op: "add_company", id?, name, website }   A client not on Merlin yet: added through Add a company (its rules and
+ *                  credits), or the one already there by that website or name, and the proposal linked to it.
  * POST { op: "duplicate" | "delete" | "void", id }
  * POST { op: "send", id, signer: { name, email, title? }, message? }   Trial and Pro (403 with `upgrade` on Free).
  */
@@ -102,6 +106,12 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(() => versionsOf(token, id, o));
     case "version_restore":
       return answer(() => restoreVersion(token, id, b.version, o));
+    case "site_name":
+      if (limited(`prop-site:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of websites in an hour. Type the name yourself.", 429);
+      return answer(() => siteName(b.website));
+    case "add_company":
+      if (limited(`prop-addco:${me.id}`, 20, 60 * 60_000)) return err("That's a lot of companies added in an hour. Try again later.", 429);
+      return answer(() => addCompanyFor(token, { proposalId: id || undefined, name: b.name, website: b.website }, o));
     case "agree_ai":
       return answer(async () => (await agreeToAi(token), { ok: true }));
     case "template_rename":

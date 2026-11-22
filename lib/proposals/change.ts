@@ -33,6 +33,8 @@ import { checkNumbers, type NumberCheck } from "./numbers";
 import { withChange, type ChangeProposal, type SectionChange } from "./changeShape";
 export { withChange, type ChangeProposal, type SectionChange };
 import type { ProposalBlock, ProposalRec, ProposalVersion, StoredProposal } from "./types";
+import { sectionsSoFar } from "./streamParse";
+import type { Progress } from "./live";
 
 export const CHANGE_OFF = "Asking Merlin to change it isn't switched on yet. You can edit any section directly.";
 export const CHANGE_PLAN = `Changing a proposal by asking is on Close: $${PRICES.closeMonth} a month. You can edit any section directly.`;
@@ -126,7 +128,7 @@ export function changePrompt(p: StoredProposal, voice: string | null, instructio
 const changing = new Set<string>();
 
 /** Ask Claude for the change. Nothing is saved; the member accepts or undoes it. */
-export async function proposeChange(token: string | null, id: string, a: { instruction?: unknown; agree?: unknown }, origin?: string, nowMs = Date.now()): Promise<ChangeProposal> {
+export async function proposeChange(token: string | null, id: string, a: { instruction?: unknown; agree?: unknown }, origin?: string, nowMs = Date.now(), progress?: Progress): Promise<ChangeProposal> {
   if (!aiConfigured()) throw new ProposalProblem(CHANGE_OFF, 409);
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberOf(seed, s, token);
@@ -147,17 +149,37 @@ export async function proposeChange(token: string | null, id: string, a: { instr
     const v = s.voice?.[me.id];
     const voice = v ? voiceSummary(styleOf(v), me.name) + (styleOf(v).phrases.length ? `. Phrases: ${styleOf(v).phrases.join("; ")}` : "") : null;
     const testBase = aiTestBase();
-    const client = new Anthropic({ apiKey: String(process.env.ANTHROPIC_API_KEY).trim(), ...(testBase ? { baseURL: testBase } : {}), maxRetries: 2, timeout: 3 * 60_000 });
+    const client = new Anthropic({ apiKey: String(process.env.ANTHROPIC_API_KEY).trim(), ...(testBase ? { baseURL: testBase } : {}), maxRetries: progress ? 0 : 2, timeout: 3 * 60_000 });
+    const params = {
+      model: aiModel(),
+      max_tokens: 12000,
+      system: SYSTEM,
+      messages: [{ role: "user" as const, content: changePrompt(p, voice, instruction) }],
+      output_config: { format: { type: "json_schema" as const, schema: CHANGE_SCHEMA as unknown as Record<string, unknown> } },
+    } as Anthropic.MessageCreateParamsNonStreaming;
     let msg: Anthropic.Message;
     try {
-      msg = await client.messages.create({
-        model: aiModel(),
-        max_tokens: 12000,
-        system: SYSTEM,
-        messages: [{ role: "user", content: changePrompt(p, voice, instruction) }],
-        output_config: { format: { type: "json_schema", schema: CHANGE_SCHEMA as unknown as Record<string, unknown> } },
-      });
+      if (progress) {
+        progress.step("read", `Reading your proposal · ${p.blocks.length} sections`);
+        progress.step("write", "Working out what to change", "active");
+        const seen = new Map<number, { done: boolean; len: number }>();
+        const stream = client.messages.stream(params, { signal: progress.signal });
+        stream.on("text", (_d, snap) => {
+          sectionsSoFar(snap, "section_id").forEach((sec, i) => {
+            const was = seen.get(i);
+            const key = `c${i}`;
+            const title = p.blocks.find((b) => b.id === sec.id)?.title ?? sec.title;
+            if (!was) progress.section(key, `Rewriting ${title}`, "active");
+            if (sec.body.length > (was?.len ?? 0)) progress.text(key, sec.body);
+            if (sec.done && !was?.done) progress.section(key, `Rewriting ${title}`, "done");
+            seen.set(i, { done: sec.done, len: sec.body.length });
+          });
+        });
+        msg = await stream.finalMessage();
+        progress.step("write", "Working out what to change", "done");
+      } else msg = await client.messages.create(params);
     } catch (e) {
+      if (progress?.signal.aborted) throw new ProposalProblem("Stopped. Nothing was changed.", 499);
       // The status only: never the request.
       if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
         console.error("ai change: the key was refused", e.status);
@@ -184,6 +206,7 @@ export async function proposeChange(token: string | null, id: string, a: { instr
       throw new ProposalProblem("The change didn't come back in a form Merlin can read. Try again.", 502);
     }
     const out = cleanChange(p, { changes: parsed.changes.map((c) => ({ id: c.section_id, title: c.title, body: c.body, summary: c.summary })), fields: parsed.fields }, instruction);
+    progress?.step("check", out.check.line);
     // It answered: it costs what the API says it used, whether or not the member accepts it.
     await T.mutate((st) => void chargeIn(st, me.id, nowMs, { inTok: msg.usage?.input_tokens ?? 0, outTok: msg.usage?.output_tokens ?? 0 }));
     return { ...out, unclear: parsed.unclear.trim() ? clip(parsed.unclear.trim(), 400) : out.changes.length || Object.keys(out.fields).length ? null : "Merlin didn't find anything to change for that. Say it another way, or edit the section directly." };

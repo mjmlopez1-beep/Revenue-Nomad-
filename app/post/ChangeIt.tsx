@@ -20,6 +20,7 @@ import { DocText, dayOf } from "../sign/doc";
 import { Sheet } from "./ui";
 import { openPlans } from "./Billing";
 import { api } from "./ProposalParts";
+import { LiveView, useLive } from "./Live";
 
 /** Said when asking isn't switched on (lib/proposals/change.ts CHANGE_OFF says the same). */
 export const CHANGE_OFF_WORDS = "Asking Merlin to change it isn't switched on yet. You can edit any section directly.";
@@ -104,14 +105,18 @@ export function ChangeItPanel({
   const others = data.proposals.filter((x) => x.id !== p.id);
   const ideas = useMemo(() => changeIdeas(p, usualTerms(others)), [p, others]);
   const signer = first(p.signer?.name || p.fields["client.signerName"]);
+  const live = useLive();
 
   const ask = async (instruction: string) => {
     if (!instruction.trim()) return setErr("Say what you want different, in a sentence.");
     setErr(null);
     setBusy("ask");
-    const r = await api<ChangeProposal>({ op: "change", id: p.id, instruction: instruction.trim(), agree: true });
+    // Live: the sections Merlin is rewriting show as it writes them, and the numbers check (Live.tsx).
+    const end = await live.start({ op: "change", id: p.id, instruction: instruction.trim(), agree: true });
     setBusy(null);
-    if (r.error) return setErr(r.error);
+    live.reset();
+    if (!end.ok) return end.status === 499 ? undefined : setErr(end.message);
+    const r = end.result as ChangeProposal;
     if (r.unclear && !r.changes.length) return setErr(r.unclear);
     setMore("");
     onPreview(r);
@@ -205,7 +210,7 @@ export function ChangeItPanel({
             <input id="ci-more" className="input" value={more} placeholder="Like: make the opt-in date day 40, not day 45" onChange={(e) => setMore(e.target.value)} disabled={!!busy} />
             <MicButton speech={speech} />
           </span>
-          {busy === "ask" && <span className="ci-hint">Merlin is making the change</span>}
+          {live.state.status === "running" && <LiveView compact state={live.state} title="Making the change" onCancel={() => void live.cancel()} />}
         </form>
       </section>
     );
@@ -234,6 +239,7 @@ export function ChangeItPanel({
         {saved ? "Change something else" : "Or say it your way"}
       </label>
       <textarea id="ci-ask" className="input ci-ask" rows={4} value={text} placeholder="Like: make it two phases, a 45-day assessment at a fixed fee, then the ongoing role if they opt in" onChange={(e) => setText(e.target.value)} disabled={!!busy} />
+      {live.state.status === "running" && <LiveView compact state={live.state} title="Making the change" onCancel={() => void live.cancel()} />}
       {err && <p className="pp-err">{err}</p>}
       <div className="ci-row">
         <MicButton speech={speech} />

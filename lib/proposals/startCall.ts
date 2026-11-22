@@ -144,3 +144,79 @@ export async function browserInflateRaw(data: Uint8Array): Promise<Uint8Array> {
   const out = new Response(new Blob([data as BlobPart]).stream().pipeThrough(ds));
   return new Uint8Array(await out.arrayBuffer());
 }
+
+/* ---------- who signs, and the client's website, from the call ---------- */
+
+const SIGNER_TITLE = /\b(CEO|CFO|COO|CTO|CRO|CMO|CPO|Chief [A-Z][a-z]+(?: [A-Z][a-z]+)? Officer|Founder|Co-founder|Cofounder|President|Managing Director|General Manager|Owner|VP(?: of)? [A-Z][A-Za-z]+|Vice President(?: of)? [A-Z][A-Za-z]+|Head of [A-Z][A-Za-z]+)\b/;
+const PERSON = "([A-Z][a-z'’-]+(?: [A-Z][a-z'’-]+){1,2})";
+const EMAIL_G = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+/** Mail hosts many people share: an address there says nothing about the company. */
+export const SHARED_MAIL = /^(gmail|googlemail|yahoo|hotmail|outlook|live|icloud|me|aol|proton|protonmail|hey|fastmail|zoho|gmx|mail|yandex)\./i;
+
+/**
+ * Who signs, from the call: a name beside a title ("Brian Hain, VP of Operations", "CEO Dana
+ * Whitfield", "I'm Dana, the CEO" is not enough: a full name is needed), not the member. Their
+ * email when it is on a line with their first name, or the only address in the call that isn't
+ * the member's. Nothing is guessed.
+ */
+export function signerInCall(text: string, me: { name: string; email?: string }): { name?: string; title?: string; email?: string } {
+  const mine = me.name.trim().toLowerCase();
+  const out: { name?: string; title?: string; email?: string } = {};
+  for (const line of String(text ?? "").split("\n")) {
+    const a = line.match(new RegExp(`${PERSON}\\s*(?:,|\\(|-|–|—)\\s*(?:the\\s+|our\\s+)?${SIGNER_TITLE.source}`));
+    const b = !a ? line.match(new RegExp(`${SIGNER_TITLE.source}\\s+${PERSON}`)) : null;
+    const [name, title] = a ? [a[1], a[2]] : b ? [b[2], b[1]] : [];
+    if (name && name.toLowerCase() !== mine && !mine.startsWith(name.toLowerCase())) {
+      out.name = name;
+      out.title = title;
+      break;
+    }
+  }
+  const mails = [...new Set((String(text ?? "").match(EMAIL_G) ?? []).map((x) => x.toLowerCase()))].filter((x) => x !== me.email?.toLowerCase());
+  const first = out.name?.split(/\s+/)[0]?.toLowerCase();
+  const near = first ? String(text).split("\n").find((l) => l.toLowerCase().includes(first) && EMAIL_G.test(l)) : undefined;
+  EMAIL_G.lastIndex = 0;
+  const nearMail = near?.match(EMAIL_G)?.find((x) => x.toLowerCase() !== me.email?.toLowerCase());
+  EMAIL_G.lastIndex = 0;
+  const byName = first ? mails.find((x) => x.split("@")[0].split(/[._-]/).includes(first)) : undefined;
+  const email = nearMail?.toLowerCase() ?? byName ?? (mails.length === 1 && out.name ? mails[0] : undefined);
+  if (email) out.email = email;
+  return out;
+}
+
+/** "sevenfigureagency.com/", "https://www.SevenFigureAgency.com/about" read "sevenfigureagency.com". Null when it isn't a website. */
+export function normaliseSite(raw: string): string | null {
+  const host = String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z]+:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/:\d+$/, "")
+    .replace(/\.$/, "");
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(host) && !host.includes("..") ? host : null;
+}
+
+/** The client's website from the call: a site named in it, else the signer's or another address's company domain (never a shared mail host, never the member's own). */
+export function siteFromCall(text: string, me: { email?: string }, signerEmail?: string): string | null {
+  const mine = me.email?.split("@")[1]?.toLowerCase();
+  const fromMail = (e?: string) => {
+    const d = e?.split("@")[1]?.toLowerCase();
+    return d && !SHARED_MAIL.test(d) && d !== mine ? normaliseSite(d) : null;
+  };
+  if (fromMail(signerEmail)) return fromMail(signerEmail);
+  const sites = [...String(text ?? "").matchAll(/\b(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|io|co|ai|net|org|agency|app|dev|us|uk|ca|de))\b(?!@)/gi)]
+    .filter((m) => !String(text).slice(Math.max(0, (m.index ?? 0) - 1), m.index).includes("@"))
+    .map((m) => normaliseSite(m[1]))
+    .filter((x): x is string => !!x && x !== mine && !SHARED_MAIL.test(`${x}.`));
+  if (sites.length) return sites[0];
+  for (const e of String(text ?? "").match(EMAIL_G) ?? []) if (fromMail(e)) return fromMail(e);
+  return null;
+}
+
+/** A name typed all in lower case reads with capitals: "seven figure agency" is "Seven Figure Agency". Anything else is left as typed. */
+export function properCase(name: string): string {
+  const t = String(name ?? "").trim();
+  if (!t || t !== t.toLowerCase() || !/[a-z]/.test(t)) return t;
+  return t.replace(/\b([a-z])([a-z']*)/g, (w, a: string, b: string, i: number) => (i > 0 && /^(and|of|the|for|in|on|at|de|la)$/.test(w) ? w : a.toUpperCase() + b)).replace(/\b(Llc|Inc|Ltd|Llp)\b/g, (w) => (w === "Llc" || w === "Llp" ? w.toUpperCase() : w));
+}

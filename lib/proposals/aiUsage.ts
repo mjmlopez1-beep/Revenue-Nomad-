@@ -15,7 +15,7 @@
  *
  * Members see a percentage only (aiMeter), never dollars or tokens, and no limit is advertised.
  * Pilot metrics' Health sums the month in counts and dollars for the owner (aiUsageTotals).
- * "Build it in Claude" (the copied prompt and the connector's kit) runs in the member's own Claude:
+ * The connector's kit (get_proposal_kit) runs in the member's own Claude:
  * free and unlimited, never metered here.
  *
  * State.aiUsage[memberId]. Theirs alone: never in another member's view or the export.
@@ -80,8 +80,8 @@ export const microsOf = (inTok: number, outTok: number) => Math.max(0, Math.roun
 /** The refusal at 100%, with the pack and the free way. */
 export const usedUpWords = (nowMs: number, trial = false) =>
   trial
-    ? `You've used your trial's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting, or build it in your own Claude with the connector, free.`
-    : `You've used this month's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting, or build it in your own Claude with the connector, free. It resets on ${dayWords(resetsOn(nowMs))}.`;
+    ? `You've used your trial's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting.`
+    : `You've used this month's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting. It resets on ${dayWords(resetsOn(nowMs))}.`;
 export const alertWords = (pct: number, trial = false) => (trial ? `You've used ${pct}% of your trial's AI usage` : `You've used ${pct}% of this month's AI usage`);
 
 const recOf = (s: Pick<State, "aiUsage">, memberId: string): AiUsageRec | null => s.aiUsage?.[memberId] ?? null;
@@ -170,7 +170,7 @@ export interface AiMeter {
   /** The day it starts again ("YYYY-MM-DD"), or null on a trial. */
   resetsOn: string | null;
   trial: boolean;
-  /** Nothing left: the draft button explains, with the pack and Build it in Claude. */
+  /** Nothing left: the draft button explains, with the pack. */
   usedUp: boolean;
   /** Past the month's usage, drafting goes on with a usage pack. */
   onPack: boolean;

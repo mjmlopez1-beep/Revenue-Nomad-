@@ -315,7 +315,7 @@ async function main() {
   check("  nor do the plan rows (and so the Terms) for Merlin's AI features", aiRows.length >= 4 && aiRows.every((r) => !r.some((c) => AIW.test(c))), aiRows);
   // The member's own Claude, through the connector, is the one place a proposal screen names it.
   const ownClaude = /Prefer your own Claude\?|Paste it into Claude, with Merlin connected|buildInClaude|BuildInClaude|in Claude\b(?=[^"]*")/g;
-  const ui = ["app/post/ContractUpload.tsx", "app/post/ChangeIt.tsx", "app/post/ProposalStart.tsx"].map((f) => {
+  const ui = ["app/post/contracts/ContractsHome.tsx", "app/post/ChangeIt.tsx", "app/post/ProposalStart.tsx", "app/post/Live.tsx", "app/post/AddCompany.tsx"].map((f) => {
     const src = readFileSync(path.join(import.meta.dirname, "..", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
     return [f, src.replace(ownClaude, "").replace(/const prompt = claudePrompt[^\n]*/g, "").replace(/export function claudePrompt[\s\S]*?\n}\n/, "").replace(/CLAUDE_NEW[^\n]*/g, "")] as const;
   });
