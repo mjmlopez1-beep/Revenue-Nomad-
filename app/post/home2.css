@@ -122,3 +122,8 @@
   .h2-lrow > span:nth-child(7) { grid-area: alert; }
 }
 .h2-likebtn { align-self: flex-start; margin-top: 10px; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--pine); background: var(--surface); color: var(--pine); font-size: 14px; font-weight: 700; }
+/* On Home's place (TradingPost's main): the new pages bring their own padding and ground. */
+.tp-app .tp-main-page.hm-page.h2-page { background: var(--bg); padding: 0; }
+.h2-page .h2 { margin: 0 auto; width: 100%; }
+.h2-page .fd { min-height: 100%; }
+.h2-h1:focus, .fd h1:focus { outline: none; }

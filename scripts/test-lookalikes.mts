@@ -84,7 +84,7 @@ check("a company sharing fewer than 3 traits is not listed", !ids.includes("c_qu
 check("the closest come first", ids[0] === "c_halcyon_freight" || ids[0] === "c_fernhill_software", ids);
 check("a locked company matches by its free facts and is never named", ids.includes("c_brightwater_labs") && look.ranked.find((x) => x.row.i.c.id === "c_brightwater_labs")!.row.i.c.name === "Locked company");
 const top = look.ranked[0];
-check("each row says why it matched", /^Same industry, same revenue, same size, same region and hired the same functions$/.test(top.why), top.why);
+check("each row says why it matched", /^Same industry, revenue, size, region and functions hired$/.test(top.why), top.why);
 check("and which past client it is like", top.like === "Northwind Clinics" || top.like === "Cedar and Pine", top.like);
 check("ranked by traits shared, most first", look.ranked.every((x, k, a) => k === 0 || a[k - 1].shared.length >= x.shared.length));
 

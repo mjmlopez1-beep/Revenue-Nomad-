@@ -102,7 +102,7 @@ export function profileWords(tokens: string[]): string {
   return `Built from ${n === 1 ? "1 past client" : `${n} past clients`}${chips.length ? `: ${chips.join(", ")}` : ", with nothing on file to match yet"}.`;
 }
 
-const WHY: Record<LikeTrait, string> = { industry: "same industry", employees: "same size", revenue: "same revenue", region: "same region", fns: "hired the same functions", repeat: "a repeat hirer" };
+const WHY: Record<LikeTrait, string> = { industry: "industry", employees: "size", revenue: "revenue", region: "region", fns: "functions hired", repeat: "a repeat hirer" };
 
 export interface LikeRow {
   row: Row;
@@ -122,8 +122,10 @@ export function rankLike(rows: Row[], tokens: string[], seeds: CoInfo[] = []): L
     if (seen.has(r.i.c.id)) continue;
     seen.add(r.i.c.id);
     const shared = likeShared(p, r);
-    const words = shared.map((k) => WHY[k]);
-    const why = words.length ? `${words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}` : words[0]}`.replace(/^./, (c) => c.toUpperCase()) : "";
+    // "Same industry, revenue, size and region", then "hired Sales" style parts as their own words.
+    const sameOf = shared.filter((k) => k !== "repeat").map((k) => WHY[k]);
+    const join = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] ?? "");
+    const why = [sameOf.length ? `Same ${join(sameOf)}` : "", shared.includes("repeat") ? "a repeat hirer" : ""].filter(Boolean).join(", ");
     const like = seeds.find((s) => shown(s.c.cells.industry) === shown(r.i.c.cells.industry) && !s.c.hidden) ?? seeds.find((s) => !s.c.hidden) ?? null;
     out.push({ row: r, shared, why, like: like ? like.c.name : null });
   }

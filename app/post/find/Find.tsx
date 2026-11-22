@@ -87,7 +87,8 @@ export function Find(p: FindProps) {
   const [kind, setKind] = useState<FindKind>("companies");
   const [f, setF] = useState<Filters>(() => ({ ...EMPTY_FILTERS, icp: hasIcp }));
   const [step, setStep] = useState<"filter" | "browse" | "lookup" | "save">("filter");
-  const [askOpen, setAskOpen] = useState(true);
+  // On a phone Ask opens on a tap, so the filters and the preview come first.
+  const [askOpen, setAskOpen] = useState(ui.layout !== "phone");
   const [panel, setPanel] = useState<"" | "saved">("");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("best");

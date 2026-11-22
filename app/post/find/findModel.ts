@@ -153,7 +153,7 @@ export function filterGroups(f: Filters, fc: Facets, me: Me, sets: Sets): Filter
         {
           name: "In the last",
           hint: "The seat started in this window.",
-          values: HIRED_WINDOWS.map((w) => ({ key: `hiredWithin:${w}`, label: `${w} months`, n: fc.hiredWithin[w] ?? 0, on: f.hiredWithin === w, flip: (x: Filters) => ({ ...x, hiredWithin: x.hiredWithin === w ? 0 : w }) })),
+          values: HIRED_WINDOWS.filter((w) => w > 0).map((w) => ({ key: `hiredWithin:${w}`, label: `${w} months`, n: fc.hiredWithin[w] ?? 0, on: f.hiredWithin === w, flip: (x: Filters) => ({ ...x, hiredWithin: x.hiredWithin === w ? 0 : w }) })),
         },
         { name: "Seat or open role in", hint: "Any seat in the function: hired, open or mentioned.", values: topValues("fn", f, fc, 9, (LIST_OPTIONS.fn as string[]).filter((x) => x !== "Other")) },
         { name: "Repeat hirer", hint: "2 or more fractional hires on file, or hires in 2 or more functions. Open roles do not count.", values: [signalValue("repeatHirer", f, fc)] },

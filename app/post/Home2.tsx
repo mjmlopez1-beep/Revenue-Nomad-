@@ -82,7 +82,7 @@ export function sixSteps(x: {
   const { me } = x;
   const icpDone = !icpEmpty(me.icp);
   const fn = me.function && me.function !== "Other" ? me.function : null;
-  const opened = (me.companiesUnlocked ?? 0) > 0 || x.infos.some((i) => i.c.unlocked);
+  const opened = (me.companiesUnlocked ?? 0) > 0 || me.unlocked > 0;
   const alertOn = listsOf(me).some((v) => v.alert.on);
   return [
     {
@@ -231,7 +231,7 @@ export function Home2(p: Home2Props) {
       {first && about && (
         <section aria-label="About this page" className="h2-about">
           <span>
-            <strong>What Home is for.</strong> Your day starts here. Ask Merlin for anything, work through what is due, and open your lists. Until you have deals of your own, the six steps below are your list for today.
+            <strong>What Home is for.</strong> Your day starts here. Ask Merlin for anything, work through what is due, and open your lists. Until you have deals of your own, the steps below are your list for today.
           </span>
           <button type="button" aria-label="Dismiss" className="h2-x" onClick={hideAbout}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -392,7 +392,7 @@ function SixSteps({ steps, big, onHide }: { steps: SixStep[]; big: boolean; onHi
                 {s.pill && !s.done && <span className={`h2-pill${s.pill.earn ? " volt" : " mint"}`}>{s.pill.text}</span>}
               </span>
               <span className="h2-gs-takes">
-                <strong>{s.done ? "You said:" : "Takes:"}</strong> {s.takes}
+                <strong>{s.done && s.key === "icp" ? "You said:" : "Takes:"}</strong> {s.takes}
               </span>
             </span>
             <span className="h2-gs-earns">
