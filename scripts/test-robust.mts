@@ -696,7 +696,8 @@ console.log("\nThe API's routes");
   walk(path.join(ROOT, "app", "api"));
   // Each answers only with its own proof: the member's cookie, the cron secret, an OAuth token or flow, an unsubscribe signature, Stripe's webhook signature. Health and the counts are public on purpose.
   const KNOWN = [
-    "api/billing", "api/billing/webhook",
+    // api/billing/ai-pack: the AI usage pack's checkout, the member's cookie (Pro + Close and the trial).
+    "api/billing", "api/billing/ai-pack", "api/billing/webhook",
     // Documents to sign (lib/documents): the member's cookie for their own uploads; api/documents/file: the member's cookie, the signer's own signing link, or the finished copy's link.
     "api/documents", "api/documents/file",
     // A link in the weekly email or an email's footer: a signed grant for one member, 7 days, used once (lib/emailIn.ts); it only ever goes to a path in the app.

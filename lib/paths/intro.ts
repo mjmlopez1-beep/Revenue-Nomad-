@@ -138,10 +138,13 @@ export function howThey(f: IntroFacts): string {
         : `${f.first} worked at ${f.bridge} with ${f.active ? `${poss(T)} ${fnSeat(f.fn)} lead` : `someone who held ${seat}`}.`;
     case "colleague":
       // The person on the other side holds a seat at the bridge now; the company's seat is theirs now, or was.
-      return `${f.first} works at ${f.bridge}, where ${f.other ?? (f.active ? `${poss(T)} ${fnSeat(f.fn)} lead` : `the person who held ${seat}`)} holds a seat now.`;
+      // Named (fellow fractionals are free once the company is open: PEERS_FREE), the sentence still says whose seat they hold or held.
+      if (f.other) return `${f.first} works at ${f.bridge}, where ${f.other}, who ${f.active ? "holds" : "held"} ${seat}, holds a seat now.`;
+      return `${f.first} works at ${f.bridge}, where ${f.active ? `${poss(T)} ${fnSeat(f.fn)} lead` : `the person who held ${seat}`} holds a seat now.`;
     case "prevco":
       if (f.leader) return `${f.first} works at ${f.bridge}, where ${f.other ? `${f.other}, one of ${poss(T)} leaders,` : `one of ${poss(T)} leaders`} also worked.`;
-      return `${f.first} works at ${f.bridge}, where ${f.other ?? `the person who ${f.active ? "holds" : "held"} ${seat}`} held a seat before.`;
+      if (f.other) return `${f.first} works at ${f.bridge}, where ${f.other}, who ${f.active ? "holds" : "held"} ${seat}, held a seat before.`;
+      return `${f.first} works at ${f.bridge}, where the person who ${f.active ? "holds" : "held"} ${seat} held a seat before.`;
     case "client":
       return `${f.first} serves ${at} too.`;
   }
