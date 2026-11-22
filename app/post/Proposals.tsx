@@ -476,17 +476,23 @@ async function latestOf(id: string): Promise<ProposalRec | null> {
     return null;
   }
 }
-/** What a change the server refused said, as text the member can copy and add again. */
-function unsavedText(body: Record<string, unknown>, now: ProposalRec): string {
+/**
+ * What a change the server refused said, as text the member can copy and add again. Only what this
+ * tab changed from the version it was editing (`base`) and that differs from the latest (`now`):
+ * sections it never touched are left out, so copying back can't undo another tab's edit.
+ */
+function unsavedText(body: Record<string, unknown>, now: ProposalRec, base: ProposalRec): string {
   const out: string[] = [];
-  if (typeof body.title === "string" && body.title !== now.title) out.push(`Title: ${body.title}`);
+  if (typeof body.title === "string" && body.title !== now.title && body.title !== base.title) out.push(`Title: ${body.title}`);
   if (Array.isArray(body.blocks))
     for (const b of body.blocks as ProposalBlock[]) {
+      const had = base.blocks.find((x) => x.id === b.id);
+      if (had && had.body === b.body && had.title === b.title) continue;
       const was = now.blocks.find((x) => x.id === b.id);
       if (!was || was.body !== b.body || was.title !== b.title) out.push(`${b.title}\n${b.body}`);
     }
   if (body.fields && typeof body.fields === "object")
-    for (const [k, v] of Object.entries(body.fields as Record<string, string>)) if (now.fields[k] !== v && v) out.push(`${fieldLabel(k)}: ${v}`);
+    for (const [k, v] of Object.entries(body.fields as Record<string, string>)) if (now.fields[k] !== v && base.fields[k] !== v && v) out.push(`${fieldLabel(k)}: ${v}`);
   return out.join("\n\n");
 }
 
@@ -593,7 +599,7 @@ function Editor({
           pending.current = { ...body, ...pending.current };
           return void (setSave("retrying"), (retryAt.current = setTimeout(() => void flush(), 4000)));
         }
-        const text = unsavedText(body, fresh);
+        const text = unsavedText(body, fresh, latest.current);
         pending.current = {};
         writeStash(id, null);
         take(fresh);

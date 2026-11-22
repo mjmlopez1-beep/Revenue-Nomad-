@@ -29,6 +29,7 @@
  * be turned off from the account menu (WCAG 2.1.4), for speech input and for anyone who
  * types into the page by accident.
  */
+import { okToLeave } from "./leaveGuard";
 import dynamic from "next/dynamic";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
@@ -1084,6 +1085,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     if (back) setPage(back);
   });
   const openPage = useStable((p: AppPage) => {
+    // An open proposal with an edit not saved yet, or typed text on the start sheet: ask first.
+    if (!okToLeave()) return;
     setEditor(null);
     setPop(null);
     setDrawer(null);
@@ -1740,6 +1743,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     void refresh();
   };
   const goHome = () => {
+    if (!okToLeave()) return;
     setPage("today");
     setDrawer(null);
     setQuery("");
@@ -2510,6 +2514,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   });
   /** Where an item goes, on a plain click (the link's own href is the same place). */
   const navTo = useStable((it: NavItem) => {
+    // Home asks in goHome itself.
+    if (it.key !== "today" && !okToLeave()) return;
     setEditor(null);
     setPop(null);
     setMoreOpen(false);

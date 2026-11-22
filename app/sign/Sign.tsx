@@ -133,9 +133,10 @@ export function SignView({ token }: { token: string }) {
   const panel = useRef<HTMLDivElement>(null);
   const cardGo = useRef<HTMLButtonElement>(null);
   // Keyboard focus: into each step's heading when it opens, back to the button that opened it when it closes.
-  const trigger = useRef<HTMLElement | null>(null);
+  // The opening button is remembered by the step it opened: the read view draws its buttons afresh on return.
+  const trigger = useRef<string | null>(null);
   const go = (to: "read" | "sign" | "decline" | "ask" | "handoff") => {
-    if (to !== "read" && step === "read") trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (to !== "read" && step === "read") trigger.current = to;
     setErr(null);
     setStep(to);
   };
@@ -151,9 +152,10 @@ export function SignView({ token }: { token: string }) {
     if (step !== "read") {
       panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       panel.current?.querySelector<HTMLElement>("[data-step-head]")?.focus({ preventScroll: true });
-    } else if (trigger.current?.isConnected) {
-      trigger.current.focus();
+    } else if (trigger.current) {
+      const key = trigger.current;
       trigger.current = null;
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-go="${key}"]`)?.focus());
     }
     // The code confirmed inside a step: on to that step's own heading.
   }, [step, v?.codeVerified]);
@@ -435,18 +437,18 @@ export function SignView({ token }: { token: string }) {
             </p>
           )}
           <div className="cv-acts">
-            <button ref={cardGo} type="button" className="cv-go" onClick={() => go("sign")}>
+            <button ref={cardGo} type="button" className="cv-go" data-go="sign" onClick={() => go("sign")}>
               Accept and sign
             </button>
-            <button type="button" className="cv-btn cv-btn-lg" onClick={() => go("ask")}>
+            <button type="button" className="cv-btn cv-btn-lg" data-go="ask" onClick={() => go("ask")}>
               Ask {fromFirst} a question
             </button>
             {v.handoffsLeft > 0 && (
-              <button type="button" className="cv-btn cv-btn-lg" onClick={() => go("handoff")}>
+              <button type="button" className="cv-btn cv-btn-lg" data-go="handoff" onClick={() => go("handoff")}>
                 Send to someone else to sign
               </button>
             )}
-            <button type="button" className="cv-decline" onClick={() => go("decline")}>
+            <button type="button" className="cv-decline" data-go="decline" onClick={() => go("decline")}>
               Decline
             </button>
           </div>
@@ -526,7 +528,7 @@ export function SignView({ token }: { token: string }) {
               </form>
             </li>
           </ol>
-          <button type="button" className="sg-link" onClick={() => go("decline")}>
+          <button type="button" className="sg-link" data-go="decline" onClick={() => go("decline")}>
             Decline instead
           </button>
         </div>
@@ -619,7 +621,7 @@ export function SignView({ token }: { token: string }) {
       </main>
       {open && step === "read" && !cardShows && (
         <div className="sg-bar">
-          <button type="button" className="btn btn-pine btn-lg" onClick={() => go("sign")}>
+          <button type="button" className="btn btn-pine btn-lg" data-go="sign" onClick={() => go("sign")}>
             Sign this proposal
           </button>
         </div>
