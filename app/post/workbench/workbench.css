@@ -10,7 +10,8 @@
 .wb {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 64px);
+  height: calc(100vh - 56px);
+  min-height: 560px;
   background: var(--surface);
   color: var(--body-ink);
   font-size: 14px;
@@ -332,20 +333,19 @@
 .wb-body {
   flex: 1;
   display: flex;
-  flex-wrap: wrap;
   align-items: stretch;
   min-height: 0;
 }
 .wb-main {
   flex: 999 1 520px;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
 }
 .wb-scroll {
-  overflow: auto;
-  max-height: calc(100vh - 280px);
-  min-height: 320px;
+  flex: none;
 }
 .wb-table {
   width: 100%;
@@ -565,9 +565,10 @@
 
 /* ----- Tools ----- */
 .wb-tools {
-  flex: 1 1 320px;
+  flex: 0 0 340px;
   max-width: 360px;
   min-width: 0;
+  overflow: auto;
   border-left: 1px solid var(--line);
   background: #fff;
   display: flex;
@@ -866,6 +867,18 @@
 }
 @media (max-width: 1100px) {
   .wb-tools {
+    flex-basis: 300px;
+  }
+}
+@media (max-width: 860px) {
+  .wb {
+    height: auto;
+  }
+  .wb-body {
+    flex-wrap: wrap;
+  }
+  .wb-tools {
+    flex: 1 1 100%;
     max-width: none;
     border-left: 0;
     border-top: 1px solid var(--line);

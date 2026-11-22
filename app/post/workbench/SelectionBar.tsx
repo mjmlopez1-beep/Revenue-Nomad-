@@ -102,7 +102,7 @@ export function SelectionBar({
     onDone?.({ done: out.done, spent: out.spent });
     if (out.stopped) toast(out.stopped, !out.done);
   };
-  const w = q ? quoteWords(q, noun) : null;
+  const w = q ? quoteWords(q, noun, type === "companies" && me.proOpens ? me.proOpens.left : null) : null;
   const picked = rows.length;
   const someOpen = rows.some((r) => !r.i.c.hidden);
   return (

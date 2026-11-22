@@ -32,10 +32,11 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString
 export const creditWords = (n: number) => (n ? plural(n, "credit") : "free");
 
 /** The quote in words: "6 credits for 5. You have 25, 19 after." and the stop, if any. */
-export function quoteWords(q: UnlockQuote, noun: [string, string]): { total: string; after: string; stop: string | null } {
+export function quoteWords(q: UnlockQuote, noun: [string, string], freeOpensLeft?: number | null): { total: string; after: string; stop: string | null } {
   const what = q.fits === 1 ? noun[0] : noun[1];
   const total = q.fits === 0 ? `None of these can open now` : q.cost ? `${plural(q.fits, what, what)} · ${plural(q.cost, "credit")}` : `${plural(q.fits, what, what)} · free`;
-  const after = q.cost ? `You have ${plural(q.credits, "credit")}. ${plural(q.after, "credit")} after.` : `You have ${plural(q.credits, "credit")}. Nothing is spent.`;
+  const opens = noun[0] === "company" && freeOpensLeft != null && q.fits > 0 ? ` Uses ${Math.min(q.fits, freeOpensLeft)} of today's ${freeOpensLeft} free opens left.` : "";
+  const after = q.cost ? `You have ${plural(q.credits, "credit")}. ${plural(q.after, "credit")} after.${opens}` : `No credits spent.${opens}`;
   const stop = q.stop ? (q.fits < q.asked ? `Only the first ${plural(q.fits, what, what)} fit. ${q.stop}` : q.stop) : null;
   return { total, after, stop };
 }
