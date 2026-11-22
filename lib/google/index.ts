@@ -11,8 +11,8 @@ import { ActionError, fractionalInternals as F, isAdmin, loadSeed, loadState, me
 import { functionOf, siteKey } from "../tableFields";
 import {
   CLAUDE_ENTRIES_MAX, CLAUDE_NEW_DAILY, CLAUDE_SAVES_DAILY, NOT_REL, NOT_REL_MAX, NOT_REL_WORDS, NOT_SEATS_MAX, SEAT_SURE_MEETINGS, SEAT_SURE_MONTHS, companyScore, companyTouch, companyWarmth, isDecisionMaker,
-  isFreeMail, mergeCompany, networkIds, networkOn, touchWords, warmthFor, warmthScore, WARMTH_RANK, domainOf, deleteDayOf, goneExpired,
-  type ClientView, type GoogleLink, type IntroView, type LinkView, type LoosePerson, type LooseView, type MemberNetwork, type NetCompany, type NetCompanyView, type NetPerson, type NetworkAnswer,
+  isFreeMail, mergeCompany, networkIds, networkOn, touchWords, warmthFor, warmthScore, WARMTH_RANK, domainOf, deleteDayOf, goneExpired, seatConfirmFields,
+  type ClientView, type GoogleLink, type IntroView, type LinkView, type LoosePerson, type LooseView, type MemberNetwork, type NetCompany, type NetCompanyView, type NetPerson, type NetPersonView, type NetworkAnswer,
   type NetworkView, type NotRelWhy, type SeatGuessView, type SetKind, type SetView, type SourceData, type SyncStage,
 } from "./types";
 import { domainName, judgeCompany, personKind, seatPattern } from "./judge";
@@ -594,7 +594,23 @@ const personView = (p: NetPerson, hidden: Set<string>, domain: string | undefine
   kind: personKind(p, domain),
   org: p.org ?? null,
   hidden: hidden.has(p.key),
+  first: p.first ?? null,
 });
+
+/**
+ * The member themself, as their own calendar and contacts can show them: their Merlin and Google
+ * addresses, and their first and last name. Their own work address at a client (a seat they hold)
+ * reads as someone there, so the name catches it. Never a suggestion, a way in or an introducer.
+ */
+export function selfTest(m: Member, n: MemberNetwork | undefined): (p: { email?: string | null; name?: string | null; key?: string }) => boolean {
+  const emails = new Set([m.email, n?.google?.email, n?.gmail?.email].filter((x): x is string => !!x).map((x) => x.trim().toLowerCase()));
+  const nk = nameMatchKey(m.name);
+  return (p) => {
+    const e = (p.email ?? (p.key && p.key.includes("@") ? p.key : "")).trim().toLowerCase();
+    if (e && emails.has(e)) return true;
+    return !!nk && nameMatchKey(p.name) === nk;
+  };
+}
 
 /**
  * The merged, matched companies of one member, warmest first. Names come from the table (the
@@ -613,11 +629,13 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
   const prof = m ? s.profiles[m.id] ?? {} : {};
   const fn = m ? (prof.function ?? null) : null;
   const icp = prof.icp && !icpIsEmpty(prof.icp) ? prof.icp : null;
-  const odds = m ? oddsFor(seed, s, ids, fn, nowMs, icp) : new Map();
+  const odds = m ? oddsFor(seed, s, ids, fn, nowMs, icp, m) : new Map();
   const ball = m ? crystalIdsOf(seed, s, m, nowMs) : new Set<string>();
   const held = m ? heldSeats(seed, s, m, new Set(ids)) : new Map<string, { id: string; active: boolean }>();
   const hiddenPeople = new Set(n.notPeople ?? []);
   const isRel = new Set(n.isRel ?? []);
+  // The member is never one of their own people (their address at a client, their own name).
+  const self = m ? selfTest(m, n) : () => false;
   const out: (NetCompanyView & { internal: string })[] = [];
   for (const id of ids) {
     const node = g.companies.get(id)!;
@@ -634,15 +652,20 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
     };
     const seatOf = new Map<string, { id: string; fn: string | null; now: boolean }>();
     for (const x of seatsHere) if (!seatOf.has(x.p.key) || (x.now && !seatOf.get(x.p.key)!.now)) seatOf.set(x.p.key, { id: T.pubId(x.seat), fn: x.fn, now: x.now });
-    const all = [...c.people, ...seatsHere.map((x) => x.p).filter((p, k, a) => !c.people.some((q) => q.key === p.key) && a.findIndex((q) => q.key === p.key) === k)];
+    const all = [...c.people, ...seatsHere.map((x) => x.p).filter((p, k, a) => !c.people.some((q) => q.key === p.key) && a.findIndex((q) => q.key === p.key) === k)].filter((p) => !self(p));
+    const mine = held.get(id);
+    // At their own seat: who is already on file there, so the seat's suggestions say what Add would do.
+    const onFile = m && mine ? T.onFileAt(seed, s, m.id, id) : null;
     const score = companyScore({ ...c, people: all }, nowMs);
     const people = all
       .map((p) => ({ p, sc: warmthScore(p, nowMs), w: warmthFor(p, nowMs) }))
       .sort((a, b) => WARMTH_RANK[a.w] - WARMTH_RANK[b.w] || b.sc - a.sc || (b.p.last ?? "").localeCompare(a.p.last ?? ""))
       // A seat holder is the fractional there, not someone who decides: a "Fractional CMO" title is no decision maker's.
-      .map(({ p }) => ({ ...personView(p, hiddenPeople, c.domain, nowMs), ...(seatOf.has(p.key) ? { seat: seatOf.get(p.key)!, dm: false } : {}) }));
+      .map(({ p }) => {
+        const f = onFile && p.name ? onFile(p.name) : null;
+        return { ...personView(p, hiddenPeople, c.domain, nowMs), ...(seatOf.has(p.key) ? { seat: seatOf.get(p.key)!, dm: false } : {}), ...(f ? { onFile: f } : {}) };
+      });
     const facts = { industry: T.live(node, s, "industry"), employees: T.live(node, s, "employees") };
-    const mine = held.get(id);
     const said = n.notRel?.[id];
     // A company known only through a seat holder isn't judged by the people met there (there are none).
     const judged = merged ? judgeCompany(c, facts, { mine: !!mine, nowMs }) : null;
@@ -748,10 +771,12 @@ function introsOf(list: NetCompanyView[], loose: LooseView[]): IntroView[] {
     seen.add(x.key);
     out.push(x);
   };
+  // Someone found at a company only through a seat they held there is listed where they are now (a seat still going) when there is one.
+  const pastOnly = (c: NetCompanyView, p: NetPersonView) => !!p.seat && !p.seat.now && list.some((o) => o !== c && o.people.some((q) => q.key === p.key && !!q.seat?.now));
   for (const c of list) {
     if (c.set?.by === "you") continue;
     const investorCo = c.set?.kind === "investor";
-    for (const p of c.people) {
+    for (const p of c.people.filter((x) => !pastOnly(c, x))) {
       if (p.hidden || !p.name) continue;
       const kind = investorCo || p.kind === "investor" ? "investor" : p.kind === "fractional" ? "fractional" : null;
       if (!kind) continue;
@@ -841,11 +866,12 @@ export function seatGuessesOf(seed: Seed, s: State, m: Member, list: (NetCompany
   const fn = prof.function ?? functionOf(title) ?? null;
   const recent = lastMonth(nowMs);
   const waiting = new Set((s.pendingSeats ?? []).map((p) => p.companyId));
+  const g = graphOf(seed, s);
   return maybe
     .filter((c) => !held.has(c.internal))
     .map((c): SeatGuessView => {
       const months = monthsBetween(c.seat!.from, c.seat!.to);
-      return {
+      const guess: SeatGuessView = {
         id: c.id,
         name: c.name,
         site: c.site,
@@ -863,7 +889,12 @@ export function seatGuessesOf(seed: Seed, s: State, m: Member, list: (NetCompany
         role: title || null,
         active: c.seat!.to >= recent || c.upcoming > 0,
         waits: waiting.has(c.internal),
+        claim: null,
       };
+      // The seat Confirm would claim, by the Add's own rule: what the card says is what Confirm does.
+      const at = [...g.engagements.values()].filter((e) => e.companyId === c.internal);
+      const hit = T.claimableSeats(at, s, m, seatConfirmFields(guess, m.name))[0];
+      return hit ? { ...guess, claim: T.pubId(hit.id) } : guess;
     })
     .sort((a, b) => Number(b.sure) - Number(a.sure) || b.meetings - a.meetings || a.name.localeCompare(b.name));
 }
@@ -890,7 +921,8 @@ export async function networkView(token: string | null, nowMs = Date.now()): Pro
   const srcs = [n?.cal, n?.con, n?.gm, n?.claude];
   // Someone who holds a seat at a company they can see is listed there ("You know Pat"), not under "At companies not on Merlin yet".
   const atSeats = new Set(all.flatMap((c) => c.people.filter((p) => p.seat).map((p) => p.key)));
-  const loose = looseOf(n, nowMs, atSeats);
+  const self = selfTest(w.m, n);
+  const loose = looseOf(n, nowMs, atSeats).filter((p) => !self(p));
   const view: NetworkView = {
     on: true,
     configured: googleConfigured(),

@@ -25,12 +25,14 @@ import { copyText } from "./hooks";
 import { Sheet, useUi } from "./ui";
 import { startSeatMessage, openConversation } from "./Messages";
 import { VoiceLine } from "./Voice";
+import { IntroBlock } from "./network/IntroWhy";
+import type { IntroPlanView } from "@/lib/paths/intro";
 import "./movenote.css";
 
 const MAX = 2000;
 
 export function NoteSheet({
-  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed,
+  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed, intro,
 }: {
   m: Move;
   row: RadarRow;
@@ -45,6 +47,8 @@ export function NoteSheet({
   facts?: NoteFacts | null;
   /** The last button's words (Your network has no move to mark done). */
   sentLabel?: string;
+  /** Your network: "Why Jake", and who this person can introduce the member to (lib/paths/intro.ts), or that the note asks generally. */
+  intro?: { plan: IntroPlanView | null; first: string; strength: string | null } | null;
 }) {
   const ui = useUi();
   const toast = useToast();
@@ -183,7 +187,24 @@ export function NoteSheet({
               {way.kind === "know" ? <span className={`mv-warm mv-warm-${way.person.warmth.toLowerCase()}`}>{way.person.warmth}</span> : null}
             </div>
           ) : null}
-          {m.why ? (
+          {intro ? (
+            facts.kind === "introAsk" || facts.kind === "ask" ? (
+              <IntroBlock plan={intro.plan} first={intro.first} strength={intro.strength} />
+            ) : (
+              <>
+                {m.why ? (
+                  <p className="mn-now">
+                    <b>Why now.</b> {m.why}
+                  </p>
+                ) : null}
+                {intro.plan || intro.strength ? (
+                  <p className="mn-now">
+                    <b>Why {intro.first}:</b> {intro.plan?.why ?? intro.strength}
+                  </p>
+                ) : null}
+              </>
+            )
+          ) : m.why ? (
             <p className="mn-now">
               <b>Why now.</b> {m.why}
             </p>

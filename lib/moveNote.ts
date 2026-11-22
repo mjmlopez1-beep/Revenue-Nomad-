@@ -15,13 +15,15 @@ import type { RadarKind, RadarRow } from "./radar/types";
 import { clientKinds, firstOf, myWords, seatWords, sharedLine, type SharedCompanies } from "./partners";
 import { NEUTRAL_VOICE, asSentence, expandContractions, phraseSlot, styleOf, type VoiceFormality, type VoiceProfile, type VoiceStyle } from "./voice";
 import { hiredWords, sinceMonth, type BuyerCtx, type Move, type MoveMe } from "./moves";
+import type { IntroAsk } from "./paths/intro";
 
 const flat = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim();
-const lowerFirst = (v: string) => (/^[A-Z][a-z]/.test(v) ? v.charAt(0).toLowerCase() + v.slice(1) : v);
+/** "Hired a ..." -> "hired a ...", "A fractional ..." -> "a fractional ...". "I", "SaaS" and "CRO" stay as they are. */
+const lowerFirst = (v: string) => (/^(?:[A-Z][a-z]|A\s)/.test(v) ? v.charAt(0).toLowerCase() + v.slice(1) : v);
 
 /* ---------- the drafted note ---------- */
 
-export type NoteKind = "know" | "knowHolder" | "intro" | "holderMessage" | "holderInvite" | "buyer" | "role" | "roleCold" | "ask" | "peerInvite";
+export type NoteKind = "know" | "knowHolder" | "intro" | "holderMessage" | "holderInvite" | "buyer" | "role" | "roleCold" | "ask" | "introAsk" | "peerInvite";
 
 /** Every fact a note may use. Each one is on the member's own screen already. */
 export interface NoteFacts {
@@ -50,6 +52,12 @@ export interface NoteFacts {
   held?: { seat: string; now: boolean } | null;
   /** "peerInvite": they serve companies in the member's Crystal Ball, named only where the member has them unlocked (lib/partners sharedLine). */
   shared?: SharedCompanies | null;
+  /**
+   * "introAsk": the specific ask for an introduction (lib/paths/intro.ts): the companies in the
+   * member's own list this person can introduce them to, named only where the member may see them,
+   * how the person reaches each, and who to meet. Without it, "ask" asks generally.
+   */
+  intro?: IntroAsk | null;
 }
 
 /** "SaaS", "software", "manufacturing": the industry as a note says it before "company". Null when it reads badly there. */
@@ -121,8 +129,11 @@ export function sawClause(row: RadarRow, company: string): string | null {
       const t = safeRole(head.replace(/^New open role:\s*/i, ""));
       return t ? `${company} posted an open ${t} role` : `${company} posted an open fractional role`;
     }
-    case "seat":
-      return `${lowerFirst(head)} at ${company}`;
+    case "seat": {
+      // "A fractional Sales seat ended" -> "that a fractional Sales seat ended at Acme": a clause after "I saw" that reads as English.
+      const rest = head.replace(/^(?:a|an|their|the)\s+/i, "");
+      return `that a ${lowerFirst(rest)} at ${company}`;
+    }
     case "funding":
       return `${company} just raised a round`;
     case "sales-build":
@@ -193,7 +204,7 @@ function template(f: NoteFacts): Template {
     ? { casual: `It's been a minute since ${f.since}.`, neutral: `It's been since ${f.since}, which is too long.`, formal: `It's been some time since we last spoke in ${f.since}.` }
     : { casual: "It's been a minute.", neutral: "It's been a little while.", formal: "It's been some time since we last spoke." };
   const saw: Tone = f.saw
-    ? { casual: `Saw ${f.saw}.`, neutral: `I saw ${f.saw}.`, formal: `I noticed that ${f.saw}.` }
+    ? { casual: `Saw ${f.saw}.`, neutral: `I saw ${f.saw}.`, formal: `I noticed that ${f.saw.replace(/^that /, "")}.` }
     : { casual: `${co} came up for me this week.`, neutral: `${co} came up for me this week.`, formal: `${co} came to my attention this week.` };
   switch (f.kind) {
     case "know":
@@ -390,6 +401,40 @@ function template(f: NoteFacts): Template {
           { casual: "Anyone come to mind? Happy to return the favor.", neutral: "Does anyone come to mind? I'm glad to return the favor.", formal: "Does anyone come to mind? I'd be glad to return the favor." },
         ],
         short: [1, 3, 4],
+      };
+    }
+    case "introAsk": {
+      // The specific ask: who this person can introduce the member to, and why each one now. Only named companies.
+      const [a, b] = f.intro?.lines ?? [];
+      if (!a) return template({ ...f, kind: "ask" });
+      const why: Tone = a.now
+        ? {
+            casual: `${a.company} ${a.now}. I work with teams like that as ${me}.`,
+            neutral: `${a.company} ${a.now}. I work with teams like that as ${me}.`,
+            formal: `${a.company} ${a.now}. I work with comparable teams as ${me}.`,
+          }
+        : {
+            casual: `${a.company} looks like a great fit for the work I do as ${me}.`,
+            neutral: `${a.company} looks like a strong fit for the work I do as ${me}.`,
+            formal: `${a.company} appears to be a strong fit for the work I do as ${me}.`,
+          };
+      const also: Tone = b
+        ? { casual: `${b.company} is on my list too. ${b.you}`, neutral: `${b.company} is on my list too. ${b.you}`, formal: `${b.company} is also on my list. ${b.you}` }
+        : { casual: "Happy to return the favor any time.", neutral: "I'm glad to return the favor.", formal: "I'd be glad to return the favor." };
+      return {
+        subject: `An intro at ${a.company}?`,
+        sentences: [
+          since,
+          { casual: a.you, neutral: a.you, formal: a.you },
+          why,
+          also,
+          {
+            casual: `Any chance you'd introduce me to ${a.to}?`,
+            neutral: `Would you introduce me to ${a.to}?`,
+            formal: `Would you be willing to introduce me to ${a.to}?`,
+          },
+        ],
+        short: [1, 2, 4],
       };
     }
     case "roleCold": {

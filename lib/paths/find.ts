@@ -108,6 +108,16 @@ export interface Contact {
   connected: string | null;
   /** The member they are, when they are one (by email, or a member the member messaged). */
   member: string | null;
+  /** From the member's own Google network, for how strong the relationship is: meetings, emails, both ways, first and last touch (YYYY-MM-DD). */
+  meetings?: number;
+  emails?: number;
+  both?: boolean;
+  firstMet?: string | null;
+  lastMet?: string | null;
+  /** The other keys this person was merged from (their LinkedIn row, their Google contact): the page finds them by any of them. */
+  aliases?: string[];
+  /** Seats (internal ids) Your network matched this contact to as their holder ("You know this person"). */
+  seats?: string[];
 }
 
 export interface Me {
@@ -174,6 +184,11 @@ interface Raw {
 /** The person on Merlin a contact is, matched precisely, or null. */
 export function personOfContact(w: World, c: Contact): string | null {
   if (c.member) return w.personOfMember.get(c.member) ?? null;
+  // Their own contact matched to a seat holder they can see by name (lib/google seatMatchesOf): that seat's person.
+  for (const id of c.seats ?? []) {
+    const p = w.seats.get(id)?.person;
+    if (p) return p;
+  }
   if (c.nameKey && c.companyId) {
     const hit = w.personByNameCo.get(nameCo(c.nameKey, c.companyId)) ?? [];
     if (new Set(hit).size === 1) return hit[0];
@@ -199,6 +214,27 @@ const overlaps = (a: WSeat, b: WSeat) => a.from !== null && b.from !== null && a
  * company; and how many there are in all at each.
  */
 export function findPaths(w: World, me: Me, contacts: Contact[]): Map<string, { paths: PathView[]; n: number; first: number }> {
+  return findAll(w, me, contacts).byCompany;
+}
+
+/** One company a contact is a way into: the best way through them there (lib/paths/intro.ts reads it). */
+export interface ContactTarget {
+  target: string;
+  degree: 1 | 2;
+  /** How strong the way in is, 0 to 1 (the kind, the tie, how recent), before the degree's bands (score). */
+  q: number;
+  score: number;
+  strength: PathView["strength"];
+  parts: Omit<Parts, "who" | "target">;
+}
+
+/**
+ * Every way in, both ways round: by company (findPaths), and by the person the member knows, each
+ * company they are a way into with the best way through them there, best first (the specific ask
+ * for an introduction, lib/paths/intro.ts). Contact keys only: a Fractionals directory member reached
+ * through a shared client is in byCompany alone.
+ */
+export function findAll(w: World, me: Me, contacts: Contact[]): { byCompany: Map<string, { paths: PathView[]; n: number; first: number }>; byContact: Map<string, ContactTarget[]> } {
   const raws: Raw[] = [];
   const nowIdx = w.nowIdx;
   const yearsAgo = (idx: number | null) => (idx === null ? 3 : Math.max(0, (nowIdx - idx) / 12));
@@ -227,12 +263,12 @@ export function findPaths(w: World, me: Me, contacts: Contact[]): Map<string, { 
     for (const l of leaders) {
       if (l.seat && (l.rel === "Hiring for the seat" || l.rel === "Reported to")) {
         const s = w.seats.get(l.seat);
-        add(l.companyId, 1, BASE.hired, recency(s?.active ? 0 : yearsAgo(s?.to ?? s?.from ?? null)), { kind: "hired", fn: s?.fn ?? null, rel: l.rel, year: s?.active ? null : yearOf(s?.from ?? null) });
+        add(l.companyId, 1, BASE.hired, recency(s?.active ? 0 : yearsAgo(s?.to ?? s?.from ?? null)), { kind: "hired", fn: s?.fn ?? null, rel: l.rel, year: s?.active ? null : yearOf(s?.from ?? null), ownSeat: l.seat, active: !!s?.active });
       } else if (l.rel === "Decision maker" && l.companyId !== c.companyId) add(l.companyId, 1, BASE.leads * 0.9, 0.9, { kind: "leads" });
     }
     const mySeats = pc ? (w.persons.get(pc)?.seats ?? []).map((id) => w.seats.get(id)!).filter(Boolean) : [];
     for (const s of mySeats)
-      add(s.companyId, 1, s.active ? BASE["seat-now"] : BASE["seat-past"], s.active ? 1 : recency(yearsAgo(s.to)), { kind: "seat", fn: s.fn, active: s.active, year: yearOf(s.from) });
+      add(s.companyId, 1, s.active ? BASE["seat-now"] : BASE["seat-past"], s.active ? 1 : recency(yearsAgo(s.to)), { kind: "seat", fn: s.fn, active: s.active, year: yearOf(s.from), ownSeat: s.id });
 
     /* 2nd degree through the seats someone else holds or held at the target. */
     const bridgeWords = (b: string) => {
@@ -265,6 +301,8 @@ export function findPaths(w: World, me: Me, contacts: Contact[]): Map<string, { 
               active: t.active,
               year: both ? null : yearOf(Math.max(s.from!, x.from!)),
               tYear: yearOf(t.from),
+              otherSeat: t.id,
+              bridgeId: s.companyId,
             });
           });
     // They work now where someone who holds or held a seat at the target holds one now (colleague) or held one before (prevco).
@@ -273,14 +311,14 @@ export function findPaths(w: World, me: Me, contacts: Contact[]): Map<string, { 
       for (const x of w.seatsAt.get(b) ?? [])
         across(x, b, (t) => {
           if (x.active)
-            add(t.companyId, 2, t.active ? BASE["colleague-now"] : BASE["colleague-past"], t.active ? 1 : recency(yearsAgo(t.to)), { kind: "colleague", bridge: bridgeWords(b), fn: t.fn, active: t.active, tYear: yearOf(t.from) });
+            add(t.companyId, 2, t.active ? BASE["colleague-now"] : BASE["colleague-past"], t.active ? 1 : recency(yearsAgo(t.to)), { kind: "colleague", bridge: bridgeWords(b), fn: t.fn, active: t.active, tYear: yearOf(t.from), otherSeat: t.id, bridgeId: b });
           else
-            add(t.companyId, 2, t.active ? BASE["prevco-now"] : BASE["prevco-past"], recency(yearsAgo(x.to)) * (t.active ? 1 : recency(yearsAgo(t.to))), { kind: "prevco", bridge: bridgeWords(b), fn: t.fn, active: t.active, year: yearOf(x.from), tYear: yearOf(t.from) });
+            add(t.companyId, 2, t.active ? BASE["prevco-now"] : BASE["prevco-past"], recency(yearsAgo(x.to)) * (t.active ? 1 : recency(yearsAgo(t.to))), { kind: "prevco", bridge: bridgeWords(b), fn: t.fn, active: t.active, year: yearOf(x.from), tYear: yearOf(t.from), otherSeat: t.id, bridgeId: b });
         });
       // ...or where one of the target's leaders on Merlin also worked (the same LinkedIn profile on both records).
       for (const l of w.leadersAt.get(b) ?? []) {
         if (!l.slug || l.slug === c.slug) continue;
-        for (const o of w.leadersBySlug.get(l.slug) ?? []) if (o.companyId !== b) add(o.companyId, 2, BASE["prevco-leader"], 0.9, { kind: "prevco", bridge: bridgeWords(b), leader: true });
+        for (const o of w.leadersBySlug.get(l.slug) ?? []) if (o.companyId !== b) add(o.companyId, 2, BASE["prevco-leader"], 0.9, { kind: "prevco", bridge: bridgeWords(b), leader: true, leaderId: o.id, bridgeId: b });
       }
     }
   }
@@ -311,13 +349,23 @@ export function findPaths(w: World, me: Me, contacts: Contact[]): Map<string, { 
     if (!was || r.degree < was.degree || (r.degree === was.degree && r.q > was.q)) m.set(k, r);
   }
   const out = new Map<string, { paths: PathView[]; n: number; first: number }>();
+  const byContact = new Map<string, ContactTarget[]>();
   for (const [target, m] of byTarget) {
     const list = [...m.values()].sort((a, b) => a.degree - b.degree || b.q - a.q || viaKey(a).localeCompare(viaKey(b)));
     const name = me.visible(target) ? (w.companies.get(target)?.name ?? null) : null;
     const paths = list.slice(0, COMPANY_PATHS_MAX).map((r, i) => viewOf(r, name, me, `${i}`));
     out.set(target, { paths, n: list.length, first: list.filter((r) => r.degree === 1).length });
+    for (const r of list) {
+      if (!("key" in r.via)) continue;
+      const score = scoreOf(r.degree, r.q);
+      const l = byContact.get(r.via.key);
+      const t: ContactTarget = { target, degree: r.degree, q: r.q, score, strength: strengthOf(r.degree, score), parts: r.parts };
+      if (l) l.push(t);
+      else byContact.set(r.via.key, [t]);
+    }
   }
-  return out;
+  for (const l of byContact.values()) l.sort((a, b) => b.score - a.score || a.target.localeCompare(b.target));
+  return { byCompany: out, byContact };
 }
 
 const DM_TITLE =
@@ -342,6 +390,7 @@ function viewOf(r: Raw, target: string | null, me: Me, key: string): PathView {
     line: lineOf(parts),
     action: actionOf(parts),
     via: {
+      key: c?.key ?? null,
       name,
       first,
       title: c?.title ?? null,

@@ -16,7 +16,8 @@
  * adjacent hire alone stays under High (UNKNOWN_CAP: nobody here has read who leads the function),
  * so a company reads the same band here as on Crystal Ball's page.
  */
-import { tableInternals as T, type Seed, type State } from "../table";
+import { tableInternals as T, type Member, type Seed, type State } from "../table";
+import { sameName } from "../personName";
 import { hireMonth, monthsAgo } from "../hired";
 import { HIRE_FRESH_MONTHS, END_FRESH_MONTHS, companyFacts, isLeaderRaw, observedTransitions, ownershipOf, stageOf } from "../radar/signals";
 import { bandOf, hireWhyNow, isStage, likelihood, ownerOf, timing, windowGone, agoWords } from "../radar/predict";
@@ -46,8 +47,24 @@ function seatsByCompany(g: G, s: State): Map<string, EngNode[]> {
   return m;
 }
 
-/** Each of `ids` (internal) scored for `fn`, or an empty map without a function. */
-export function oddsFor(seed: Seed, s: State, ids: Iterable<string>, fn: string | null, nowMs = Date.now(), icp: Icp | null = null): Map<string, HireOdds> {
+/**
+ * A seat the member holds or held: linked to them, held by them as the table reads its holder, or
+ * carrying their own name. Never a sign that a company is hiring them: their own ended seat is not
+ * an opening ("the seat may be open again"), and their own seat now is not someone else's.
+ */
+export function ownSeatTest(seed: Seed, s: State, m: Pick<Member, "id" | "name"> | null | undefined): (e: EngNode) => boolean {
+  if (!m) return () => false;
+  const idx = T.memberIndex(seed, s);
+  return (e) => {
+    const v = T.valueOf(e, s, "operator");
+    if (!v || v.status !== "live") return false;
+    if (v.memberId === m.id || T.seatHolder(s, idx, e.id, v)?.id === m.id) return true;
+    return !!v.value && sameName(v.value, m.name);
+  };
+}
+
+/** Each of `ids` (internal) scored for `fn`, or an empty map without a function. `m`: the member, whose own seats never count. */
+export function oddsFor(seed: Seed, s: State, ids: Iterable<string>, fn: string | null, nowMs = Date.now(), icp: Icp | null = null, m: Pick<Member, "id" | "name"> | null = null): Map<string, HireOdds> {
   const out = new Map<string, HireOdds>();
   const mine = named(fn);
   if (!mine) return out;
@@ -55,8 +72,10 @@ export function oddsFor(seed: Seed, s: State, ids: Iterable<string>, fn: string 
   const tracks = T.tracksOf(seed, s);
   const by = seatsByCompany(g, s);
   const counts = observedTransitions(seed, s);
+  const own = ownSeatTest(seed, s, m);
   for (const id of ids) {
-    const seats = by.get(id) ?? [];
+    // The member's own seats there (held now or before) say nothing about the company hiring them.
+    const seats = (by.get(id) ?? []).filter((e) => !own(e));
     const facts = companyFacts(g, s, id);
     if (!facts) continue;
     const owner = ownerOf(ownershipOf(s, id, seats));
@@ -80,7 +99,7 @@ export function oddsFor(seed: Seed, s: State, ids: Iterable<string>, fn: string 
       const ended = status === "Ended" || (!!end && monthsAgo(end, nowMs) > 0);
       if (efn === mine) {
         if (ended && end && monthsAgo(end, nowMs) <= END_FRESH_MONTHS)
-          take({ band: bandOf(SEAT_P), score: SEAT_P, why: `Their ${mine} seat ended ${agoWords(monthsAgo(end, nowMs))} · the seat may be open again`, saw: { kind: "seat", line: `A fractional ${mine} seat ended` } });
+          take({ band: bandOf(SEAT_P), score: SEAT_P, why: `Their ${mine} seat ended ${agoWords(monthsAgo(end, nowMs))} · the seat may be open again`, saw: { kind: "seat", line: `Their fractional ${mine} seat ended` } });
         else if (!ended) take({ band: "Low", score: HELD_SCORE, why: `Has a fractional ${mine} leader now`, saw: null });
         continue;
       }

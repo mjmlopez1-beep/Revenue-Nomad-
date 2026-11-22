@@ -887,6 +887,26 @@ async function main() {
   const seedS = { seed: await T.loadSeed(), s: await T.loadState() };
   const hanOwn = G.seatMatchesOf(seedS.seed, seedS.s, hanM, { con: { at: iso(0), unmatched: 0, real: 1, companies: {}, loose: [{ key: "han.moves@example.com", email: "han.moves@example.com", name: "Hana Holder", title: "Fractional CRO", src: ["contacts"] }] } });
   check("a member's own seat never matches their own contact", hanOwn.length === 0, hanOwn);
+
+  /* ---------- what a note says it saw, and the specific ask for an introduction ---------- */
+  console.log("\nWhat a note saw, said as English; the specific ask in every voice");
+  const seatRow = (l: string) => ({ id: "c_x", kinds: ["seat" as const], lines: [l] });
+  check("an ended seat reads \"that a fractional Sales seat ended at Acme\", never \"A fractional ...\" mid-sentence", M.sawClause(seatRow("A fractional Sales seat ended · 2 months ago"), "Acme") === "that a fractional Sales seat ended at Acme" && M.sawClause(seatRow("Their fractional Sales seat ended"), "Acme") === "that a fractional Sales seat ended at Acme", M.sawClause(seatRow("A fractional Sales seat ended"), "Acme"));
+  const seatFacts = { ...knowFacts, saw: M.sawClause(seatRow("A fractional Sales seat ended"), "Acme Robotics") };
+  const sawNotes = (["casual", "neutral", "formal"] as const).map((formality) => M.draftNote(seatFacts, { ...V.NEUTRAL_VOICE, formality, length: "medium" }).body);
+  check("in each tone: \"Saw that a\", \"I saw that a\", \"I noticed that a\", never \"that that\" or \"saw A\"", /Saw that a fractional Sales seat ended at Acme Robotics\./.test(sawNotes[0]) && /I saw that a fractional Sales seat ended at Acme Robotics\./.test(sawNotes[1]) && /I noticed that a fractional Sales seat ended at Acme Robotics\./.test(sawNotes[2]) && !sawNotes.some((b) => /that that|saw A |noticed that A /.test(b)), sawNotes);
+  const intro = {
+    lines: [
+      { company: "Acorn Ridge Logistics", you: "You worked with Dana Ruiz at Brightloop. Dana Ruiz is now at Acorn Ridge Logistics as their fractional CRO.", now: "hired a fractional CMO 1 month ago and has no Sales leader yet", person: "Dana Ruiz", to: "Dana Ruiz" },
+      { company: "Fernway Health", you: "You hold the fractional RevOps seat at Fernway Health.", now: null, person: null, to: "the team there" },
+    ],
+    locked: 1,
+  };
+  const askF = { ...knowFacts, kind: "introAsk" as const, intro };
+  const asks = [null, ...Object.values(VOICES)].map((v) => M.draftNote(askF, v));
+  check("the specific ask names who and where, why now, and asks for that introduction, in every voice", asks.every((d) => d.subject === "An intro at Acorn Ridge Logistics?" && /Dana Ruiz/.test(d.body) && /introduce me to Dana Ruiz\?/.test(d.body) && !/You see a lot of teams/.test(d.body)) && /Acorn Ridge Logistics hired a fractional CMO 1 month ago and has no Sales leader yet/.test(asks[0].body) && /Fernway Health is on my list too\. You hold the fractional RevOps seat at Fernway Health\./.test(asks[0].body), asks[0].body);
+  check("no em dash, no locked count in the words, contractions off where the voice says so", asks.every((d) => !/—/.test(d.body) && !/locked/.test(d.body)) && (["casual", "neutral", "formal"] as const).every((formality) => !CONTRACTION.test(M.draftNote(askF, { ...V.NEUTRAL_VOICE, formality, contractions: false }).body)));
+  check("with no lines it is the general ask, as before", /You see a lot of teams/.test(M.draftNote({ ...askF, intro: { lines: [], locked: 2 } }, null).body));
 }
 
 try {

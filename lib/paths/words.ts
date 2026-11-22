@@ -53,6 +53,15 @@ export interface Parts {
   leader?: boolean;
   /** client: the shared client's words. */
   shared?: string;
+  /**
+   * Internal ids the specific ask reads on the server (lib/paths/intro.ts) to name what the member
+   * may see: the seat on the other side, the bridge company, a leader record, the contact's own seat.
+   * Never in an answer: a PathView carries the words only.
+   */
+  otherSeat?: string;
+  bridgeId?: string;
+  leaderId?: string;
+  ownSeat?: string | null;
 }
 
 /** "Acme's", "Acme Robotics'", or "this company's". */

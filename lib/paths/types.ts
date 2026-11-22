@@ -16,6 +16,7 @@
  * for anyone else's results, and never sent through the connector by name.
  */
 import type { Warmth } from "../google/types";
+import type { IntroPlanView } from "./intro";
 
 /* ---------- what is kept ---------- */
 
@@ -87,6 +88,8 @@ export const FIRST_DEGREE: readonly PathKind[] = ["leads", "hired", "seat", "wor
 
 /** The person the path goes through, as the member's own list has them. */
 export interface PathVia {
+  /** The member's own key for this person (their contact's), for "Why Jake" (PathsView.people); null through the Fractionals directory. */
+  key: string | null;
   name: string;
   first: string;
   title: string | null;
@@ -154,6 +157,11 @@ export interface PathsView {
   targets: TargetView[];
   /** Public company id -> ways in there, every company with one, and how many are 1st degree. */
   counts: Record<string, { n: number; first: number }>;
+  /**
+   * The people the member knows who can introduce them to companies in their own list (Crystal
+   * Ball, saved views, their profile), strongest first, with the specific ask (lib/paths/intro.ts).
+   */
+  people: IntroPlanView[];
 }
 export type PathsAnswer = PathsView | { on: false };
 

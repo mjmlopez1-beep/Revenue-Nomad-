@@ -159,3 +159,65 @@
     flex: 1 1 100%;
   }
 }
+
+/* "Why Jake" (IntroWhy.tsx): the strength and who they can introduce the member to. */
+.ia-line {
+  display: block;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+}
+.ia-names {
+  display: block;
+  color: var(--muted);
+}
+.ia-block {
+  display: grid;
+  gap: 8px;
+}
+.ia-why,
+.ia-none {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.ia-none {
+  color: var(--muted);
+}
+.ia-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.ia-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.ia-co {
+  font-weight: 700;
+  color: var(--ink);
+}
+.ia-facts {
+  font-weight: 400;
+  color: var(--muted);
+}
+.ia-facts::before {
+  content: " · ";
+}
+.ia-now {
+  color: var(--volt-ink);
+}
+.ia-open {
+  color: var(--ember-ink);
+}
+
+.sp-why {
+  margin: 0;
+}

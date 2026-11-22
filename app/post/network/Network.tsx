@@ -331,7 +331,7 @@ export function NetworkPage({
             <>
               <TopNumbers n={nums} go={go} />
               <WarmPaths view={view} infos={infos} me={me} openCompany={openCompany} onProfile={onProfile} onClaude={onClaude} onEveryone={() => go("nw-everyone")} />
-              <Clients view={view} infos={infos} me={me} refresh={refresh} />
+              <Clients view={view} infos={infos} me={me} />
               <Introducers view={view} me={me} onClaude={onClaude} />
               <Everyone view={view} openCompany={openCompany} filter={filter} setFilter={setFilter} />
             </>
