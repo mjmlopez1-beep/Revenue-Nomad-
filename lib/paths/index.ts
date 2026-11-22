@@ -374,6 +374,8 @@ export function introPlansOf(seed: Seed, s: State, m: Member, f: Found, nowMs = 
     if (!e || !f.me.visible(e.companyId)) return { name: null, role: null };
     const vis = (k: string) => T.cellOf(s, m, e, "engagement", k, idx).s === "value";
     if (!vis("operator")) return { name: null, role: null };
+    // A holder who hides their name on their seats is never named here.
+    if (T.holderNameHidden(s, e)) return { name: null, role: vis("role") ? (T.live(e, s, "role") ?? null) : null };
     return { name: shownName(T.live(e, s, "operator") ?? "") || null, role: vis("role") ? (T.live(e, s, "role") ?? null) : null };
   };
   const leaderName = (pid: string | undefined): string | null => {

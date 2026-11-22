@@ -14,13 +14,14 @@ import { FREE_MCP_PER_DAY, PRICES, PRO_CREDITS, TIER_NAME } from "./rules";
 /** The three plans in order, with what each costs and one line on what you get. */
 export const PLANS = [
   { key: "free", name: "Free", month: 0, year: 0, line: `Credits to start, 1 for each fact you add, one ${FEATURE_NAME} company a day.` },
-  { key: "pro", name: TIER_NAME.pro, month: PRICES.month, year: PRICES.year, line: `Companies open free (${PRO_OPENS_DAILY} a day), every alert, rate ranges, ${PRO_CREDITS} credits a month.` },
+  { key: "pro", name: TIER_NAME.pro, month: PRICES.month, year: PRICES.year, line: `Any company opens free, up to ${PRO_OPENS_DAILY} a day, every alert, ${PRO_CREDITS} credits a month.` },
   { key: "close", name: TIER_NAME.close, month: PRICES.closeMonth, year: PRICES.closeYear, line: "Everything in Pro, plus proposals drafted from your call, sent and signed." },
 ] as const;
 
 /** [what, Free, Pro, Close]. */
 export const PLAN_ROWS: [string, string, string, string][] = [
-  ["Opening companies", `1 a day from ${FEATURE_NAME}, others ${COMPANY_PRICE} credits`, `Free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}`, `Free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}`],
+  // The same rule as OPENS_RULE, cell-sized.
+  ["Opening companies", `1 a day from ${FEATURE_NAME}, others ${COMPANY_PRICE} credits`, `Free, up to ${PRO_OPENS_DAILY} a day, ${FEATURE_NAME} not counted`, `Free, up to ${PRO_OPENS_DAILY} a day, ${FEATURE_NAME} not counted`],
   ["Fellow fractionals", "Free", "Free", "Free"],
   ["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"],
   ["Claude drafting and your own contracts", "In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"],

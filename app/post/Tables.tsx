@@ -31,7 +31,7 @@ import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage,
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
 import { VerifyName } from "./Verify";
-import { companyLater, fnChipPlan } from "./display";
+import { companyLater, fnChipPlan, freeCompanyNow } from "./display";
 import { leadPhrase, monthYear, type LeadLine } from "@/lib/leaders/types";
 import { Chip, LIKELIHOOD_TONE, type Likelihood } from "../ui/system";
 
@@ -313,6 +313,11 @@ export function HiddenCompany({ i, big, bare, quiet }: { i: CoInfo; big?: boolea
           <span className="tp-hidden-name" title={LOCKED_TIP}>
             <LockedName seed={i.c.id} shown={i.c.shownName} />
           </span>
+          {table && !quiet && !companyLater(ui.me) && (
+            <span className="tp-co-price" aria-hidden>
+              {freeCompanyNow(ui.me) ? "Free" : `${COMPANY_PRICE} credits`}
+            </span>
+          )}
         </span>
         {teaser}
         {table && !quiet && <UnlockCompanyCell i={i} />}

@@ -35,9 +35,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_INDUSTRIES } from "@/lib/tableFields";
 import { YOUR_FEATURE, FEATURE_NAME, rangeLabel, yourFeature, type RadarRange, type RadarView } from "@/lib/radar/types";
-import { IconChevron, IconX, post } from "../ui/shared";
+import { IconChevron, IconX, post, errorText } from "../ui/shared";
 import { isOpenRole, type CoInfo, type Row } from "./model";
-import { useUi } from "./ui";
+import { useUi, SecondaryCtx } from "./ui";
 import { DataTable, type SignalRows } from "./Tables";
 import { CardList } from "./Cards";
 import { UnlockCompany } from "./Drawer";
@@ -83,7 +83,7 @@ export function useRadarDay(active: boolean, day: string | null, range: RadarRan
       const r = await fetch(`/api/table?radar=1&range=${range ?? "auto"}${day ? `&day=${encodeURIComponent(day)}` : ""}`, { cache: "no-store" });
       const j = await r.json().catch(() => null);
       if (n !== want.current) return;
-      if (!r.ok || !j) return setFailed(j?.error || `${YOUR_FEATURE} didn't load. Try again.`);
+      if (!r.ok || !j) return setFailed(errorText(r.status, j?.error, `${YOUR_FEATURE} didn't load. Try again.`));
       setFailed(null);
       setData(j as RadarView);
     } catch {
@@ -187,9 +187,12 @@ export function RadarPage({
   const fnMine = view?.function ?? me.function ?? null;
   const crystal = me.crystal ?? null;
   // One button a company: a locked one opens from here by plan (CrystalOpen), else Unlock company (the record's own); Open for one the member knows.
+  // One filled button on the page: the first row's. The rest are outline (SecondaryCtx).
+  const firstRow = rows[0]?.i.c.id ?? null;
   const action = useCallback(
-    (i: CoInfo) =>
-      i.c.hidden ? (
+    (i: CoInfo) => (
+      <SecondaryCtx.Provider value={i.c.id !== firstRow}>
+      {i.c.hidden ? (
         crystal ? (
           <span className="rd-acts">
             {/* [smart ways in] "2 ways in through people you know" (nothing without any). */}
@@ -215,8 +218,10 @@ export function RadarPage({
           {/* Not my fit? Pass it to a peer (PeerSheets.tsx): free for them, a gift. */}
           <PassButton company={i.c.id} role={i.engs.find(isOpenRole)?.id ?? null} from="crystal" className="btn btn-sm rd-pass" />
         </span>
-      ),
-    [open, fnMine, crystal],
+      )}
+      </SecondaryCtx.Provider>
+    ),
+    [open, fnMine, crystal, firstRow],
   );
   // Over several days each company says which day its lines are from, beside the first one's band: "High · Yesterday · Fractional CMO hired…".
   const dated = !!view?.range && view.range !== "today";

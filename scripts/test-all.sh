@@ -177,6 +177,8 @@ run nudges npx tsx scripts/test-nudges.mts
 run nav npx tsx scripts/test-nav.mts
 # The QA fixes (scripts/test-qafix.mts): names that are a greeting or a page's words refused and hidden (and scripts/clean-bad-names.mjs on a copy), odd company names for review, outcomes counted only for stages that happened, no logo a 204, an unlock already done elsewhere a calm notice, Home's Crystal Ball line, ?sig= clamped; then in Chromium as a Pixel 7 on its own server: Back closes the sheet on top and keeps what was typed, its X never pops twice, a long search, logos, a used sign-in link, ?sig=2099-12-31.
 run qafix env QAFIX_PORT="$PORT" npx tsx scripts/test-qafix.mts
+# The QA fixes, batch B (scripts/test-qafixb.mts): Undo an unlock and the question before a spend, Unlock and send, Hide my name on my seats, the words (who sees a name, the free opens, PRO_STORY, plain words for a 500, the proposal's labelled blanks, Draft it's signer); then in Chromium at 1440 and as an iPhone 13: the top search keeps every letter and Add never opens, the price at rest, Undo, the full table failing then Try again, Fractionals at 1024, 44px targets.
+run qafixb env QAFIXB_PORT="$PORT" npx tsx scripts/test-qafixb.mts
 # 20 members acting at once on their own server: every answer carries the member's numbers and the table version, no server errors, at most one table a minute each.
 run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs
 

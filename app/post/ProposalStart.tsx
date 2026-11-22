@@ -16,7 +16,7 @@ import { useMemo, useRef, useState } from "react";
 import type { ProposalRec, ProposalsView, TemplateChoice } from "@/lib/proposals/types";
 import { DISCOVERY_TARGET, acceptInto } from "@/lib/proposals/library";
 import { extract, transcriptOk } from "@/lib/proposals/extract";
-import { IconCheck, IconExternal, useToast } from "../ui/shared";
+import { IconCheck, IconExternal, useToast, errorText } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { copyText } from "./hooks";
 import type { CoInfo } from "./model";
@@ -31,7 +31,7 @@ async function post<T>(body: Record<string, unknown>): Promise<T & { error?: str
   try {
     const r = await fetch("/api/proposals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
+    return r.ok ? j : { ...j, error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: NETWORK } as T & { error: string };
   }
@@ -42,7 +42,7 @@ export async function uploadTemplate(f: File): Promise<{ id?: string; title?: st
   try {
     const r = await fetch(`/api/proposals/template?name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { error: j.error || "That file didn't read. Try again." };
+    return r.ok ? j : { error: errorText(r.status, j.error, "That file didn't read. Try again.") };
   } catch {
     return { error: NETWORK };
   }
@@ -64,6 +64,57 @@ export async function buildInClaude(text: string, toast: (t: string, err?: boole
   const ok = await copyText(text);
   toast(ok ? "Copied. Paste it into Claude, with Merlin connected." : "That didn't copy. Select the words and copy them yourself.", !ok);
   void w;
+}
+
+/** Titles that sign: a line in the call that names one beside a name is the signer. */
+const SIGNER_TITLE = /\b(CEO|CFO|COO|CTO|CRO|CMO|CPO|Chief [A-Z][a-z]+(?: [A-Z][a-z]+)? Officer|Founder|Co-founder|Cofounder|President|Managing Director|General Manager|Owner|VP(?: of)? [A-Z][A-Za-z]+|Vice President(?: of)? [A-Z][A-Za-z]+|Head of [A-Z][A-Za-z]+)\b/;
+const PERSON = "([A-Z][a-z'’-]+(?: [A-Z][a-z'’-]+){1,2})";
+const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+
+/**
+ * Who signs, before "Draft it" sends the draft: the call's "with" line ("Avery Ashby, CEO"), else a
+ * name beside a title in the call itself ("Avery Ashby (CEO)", "CEO Avery Ashby"), else the company's
+ * decision maker on the record, where the member sees their name. The email is the call's (an
+ * address on a line with their first name, else the only one) or the record's. Nothing is guessed:
+ * what isn't found stays blank. Read here, in the browser: the call itself is never sent.
+ */
+export function signerFrom(o: { withWho: string; text: string; me: string; company?: CoInfo | null }): { name?: string; title?: string; email?: string } {
+  const out: { name?: string; title?: string; email?: string } = {};
+  const mine = o.me.trim().toLowerCase();
+  const take = (name: string, title?: string) => {
+    if (!name || name.trim().toLowerCase() === mine) return false;
+    out.name = name.trim();
+    if (title) out.title = title.trim();
+    return true;
+  };
+  const w = o.withWho.trim();
+  const wm = w.match(new RegExp(`^${PERSON}\\s*(?:,|\\(|-|\u2013|\u2014)\\s*([^),]+)\\)?`)) ?? w.match(new RegExp(`^${PERSON}$`));
+  if (wm) take(wm[1], wm[2]);
+  if (!out.name) {
+    for (const line of o.text.split("\n")) {
+      const a = line.match(new RegExp(`${PERSON}\\s*(?:,|\\(|-|\u2013|\u2014)\\s*${SIGNER_TITLE.source}`));
+      const b = !a ? line.match(new RegExp(`${SIGNER_TITLE.source}\\s+${PERSON}`)) : null;
+      if (a && take(a[1], a[2])) break;
+      if (b && take(b[2], b[1])) break;
+    }
+  }
+  // The company's decision maker on the record, when the call named nobody.
+  if (!out.name && o.company) {
+    const dm = o.company.c.people.find((p) => p.cells.relationship?.s === "value" && /decision maker/i.test(p.cells.relationship.v) && p.cells.name?.s === "value");
+    if (dm && dm.cells.name?.s === "value") {
+      take(dm.cells.name.v, dm.cells.title?.s === "value" ? dm.cells.title.v : undefined);
+      if (dm.cells.email?.s === "value") out.email = dm.cells.email.v;
+    }
+  }
+  if (!out.email) {
+    const first = out.name?.split(/\s+/)[0]?.toLowerCase();
+    const lines = o.text.split("\n");
+    const near = first ? lines.find((l) => l.toLowerCase().includes(first) && EMAIL.test(l)) : undefined;
+    const all = [...new Set((o.text.match(new RegExp(EMAIL.source, "g")) ?? []).map((x) => x.toLowerCase()))];
+    const email = near?.match(EMAIL)?.[0] ?? (all.length === 1 ? all[0] : undefined);
+    if (email && out.name) out.email = email;
+  }
+  return out;
 }
 
 export function StartSheet({
@@ -164,8 +215,13 @@ export function StartSheet({
       signerOnCall = ex.signerOnCall;
       if (date) fields["discovery.callDate"] = dayWords(date);
     }
+    // Who signs, from the call or the company's decision maker: filled once here, so the cover, Who signs and Send all start with it.
+    const signer = signerFrom({ withWho, text, me: data.me.name, company: picked ?? null });
+    if (signer.name && !fields["client.signerName"]) fields["client.signerName"] = signer.name;
+    if (signer.title && !fields["client.signerTitle"]) fields["client.signerTitle"] = signer.title;
+    if (signer.email && !fields["client.signerEmail"]) fields["client.signerEmail"] = signer.email;
     setBusy("draft");
-    const r = await post<ProposalRec>({ op: "create", ...base, ...(hasCall ? { fields, notes, signerOnCall } : {}) });
+    const r = await post<ProposalRec>({ op: "create", ...base, ...(hasCall ? { fields, notes, signerOnCall } : Object.keys(fields).length ? { fields } : {}) });
     setBusy(null);
     if (r.error) return setErr(r.error);
     setText("");

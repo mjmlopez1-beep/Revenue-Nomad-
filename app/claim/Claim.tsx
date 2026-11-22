@@ -22,7 +22,7 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import "./claim.css";
-import { Brand, IconCheck, fmtMonth, post } from "../ui/shared";
+import { Brand, IconCheck, fmtMonth, post, errorText } from "../ui/shared";
 import type { ClaimPage } from "@/lib/table";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { seatLine } from "./seatLine";
@@ -40,7 +40,7 @@ async function names<T = Record<string, unknown>>(body: Record<string, unknown>)
   try {
     const r = await fetch("/api/table/names", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
+    return r.ok ? j : { ...j, error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: NETWORK } as T & { error: string };
   }

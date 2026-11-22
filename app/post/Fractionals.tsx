@@ -23,11 +23,11 @@ import type { EngagementRec, FractionalRec, FractionalsView, Icp } from "@/lib/t
 import { clientKinds, myWords } from "@/lib/partners";
 import { draftNote } from "@/lib/moveNote";
 import { COMPANY_PRICE, REFERRAL_BONUS } from "@/lib/tableFields";
-import { CompanyLogo, IconCheck, IconChevron, IconFilter, IconLock, IconX, LockedName, fmtMonth, lockedLook, useToast } from "../ui/shared";
+import { CompanyLogo, IconCheck, IconChevron, IconFilter, IconLock, IconX, LockedName, fmtMonth, lockedLook, useToast, errorText } from "../ui/shared";
 import { countryOf, countryShort, regionOf, shown, type CoInfo } from "./model";
 import { ConnectButton, openConversation } from "./Messages";
 import { Sheet, useFocusTrap, useUi } from "./ui";
-import { copyText, plural } from "./hooks";
+import { copyText, plural, useMedia } from "./hooks";
 import { fmtStamp } from "./RoleDate";
 import { freeCompanyNow } from "./display";
 import { FR_TABS, ballChip, startPlace, takeWantSeat, choiceCounts, frDefaults, frRows, headline, leadTitle, levelLine, tabCounts, type FrFilters, type FrTab } from "./fractionalsModel";
@@ -49,7 +49,7 @@ function useFractionals(deps: unknown[]) {
     try {
       const r = await fetch("/api/table?fractionals=1", { cache: "no-store" });
       const j = await r.json().catch(() => null);
-      if (!r.ok || !j) return setFailed(j?.error || "Fractionals didn't load. Try again.");
+      if (!r.ok || !j) return setFailed(errorText(r.status, j?.error, "Fractionals didn't load. Try again."));
       setFailed(null);
       setData(j as FractionalsView);
     } catch {
@@ -75,6 +75,10 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
   // After activating, the welcome shows their record a click away (beside the conversation), so it doesn't open over it.
   const [openId, setOpenId] = useState<string | null>(addr.welcome ? null : addr.rec);
   const [filtersOpen, setFiltersOpen] = useState(!phone);
+  // Under 1280px the filters column would squeeze the table: they live behind a Filters button, in a sheet.
+  const narrow = useMedia("(max-width: 1279px)");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const side = filtersOpen && !narrow;
   const [n, setN] = useState(STEP);
   const myFn = data?.fn ?? me.function ?? null;
   useEffect(() => setF((x) => ({ ...x, fits: x.fits && hasIcp })), [hasIcp]);
@@ -206,8 +210,8 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
     );
 
   return (
-    <div className={`fr-page${filtersOpen ? "" : " fr-nofilters"}`}>
-      {filtersOpen ? (
+    <div className={`fr-page${side ? "" : " fr-nofilters"}`}>
+      {side ? (
         <aside className="fr-side" aria-label="Filters">
           <div className="fr-side-h">
             <h2>Filters</h2>
@@ -226,13 +230,27 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
           back={{ label: "Back to the table", onClick: onBack }}
           art={<Prop name="trailWinding" height={72} on="bg" />}
           actions={
-            !filtersOpen ? (
-              <button type="button" className="chip fr-showf" onClick={() => setFiltersOpen(true)}>
+            !side ? (
+              <button type="button" className="chip fr-showf" aria-expanded={narrow ? sheetOpen : undefined} onClick={() => (narrow ? setSheetOpen(true) : setFiltersOpen(true))}>
                 <IconFilter size={13} /> Filters
               </button>
             ) : undefined
           }
         />
+        {narrow && sheetOpen && (
+          <Sheet
+            title="Filters"
+            dialog
+            onClose={() => setSheetOpen(false)}
+            footer={
+              <button type="button" className="btn btn-pine btn-lg fr-wide" onClick={() => setSheetOpen(false)}>
+                Show {plural(rows.length, "fractional")}
+              </button>
+            }
+          >
+            <div className="fr-sheet-filters">{filters}</div>
+          </Sheet>
+        )}
         {addr.welcome && <Welcome m={addr.m} mine={records.find((r) => r.you) ?? null} onRecord={(id) => setOpenId(id)} />}
         {top}
         {tabs}

@@ -315,13 +315,13 @@ async function main() {
   check("three plans: Free $0, Pro $59 / $590, Close $79 / $790", JSON.stringify(compare.PLANS.map((p) => [p.name, p.month, p.year])) === JSON.stringify([["Free", 0, 0], ["Pro", 59, 590], ["Close", 79, 790]]), compare.PLANS);
   check("Proposals and e-signature: building is Close's after the trial", JSON.stringify(rowOf("Proposals and e-signature")) === JSON.stringify(["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"]));
   check("Claude drafting and your own contracts are Close's", JSON.stringify(rowOf("Claude drafting and your own contracts")?.slice(1)) === JSON.stringify(["In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"]));
-  check("Opening companies", JSON.stringify(rowOf("Opening companies")) === JSON.stringify(["Opening companies", "1 a day from Crystal Ball, others 2 credits", "Free, up to 15 a day plus all of Crystal Ball", "Free, up to 15 a day plus all of Crystal Ball"]));
+  check("Opening companies", JSON.stringify(rowOf("Opening companies")) === JSON.stringify(["Opening companies", "1 a day from Crystal Ball, others 2 credits", "Free, up to 15 a day, Crystal Ball not counted", "Free, up to 15 a day, Crystal Ball not counted"]));
   check("Fellow fractionals", JSON.stringify(rowOf("Fellow fractionals")) === JSON.stringify(["Fellow fractionals", "Free", "Free", "Free"]));
   check("Open roles are about alerts", JSON.stringify(rowOf("Open roles")) === JSON.stringify(["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"]));
   check("each plan has a short what-you-get line", compare.PLANS.every((p) => p.line.length > 20 && p.line.length < 100));
   const table = text(renderToStaticMarkup(React.createElement(B.CompareTable, { current: "free" })));
-  check("the comparison table shows the three plans and the rows", ["Free Pro Close", "Proposals and e-signature", "Every template, send and get signed, unlimited", "Free, up to 15 a day plus all of Crystal Ball", "Fellow fractionals", "Alerts as they open"].every((x) => table.includes(x)), table.slice(0, 400));
-  check("VALUE_LINE sells winning the client", B.VALUE_LINE === "Find the company before it posts, get in through the person who held the seat, and send the proposal they sign.");
+  check("the comparison table shows the three plans and the rows", ["Free Pro Close", "Proposals and e-signature", "Every template, send and get signed, unlimited", "Free, up to 15 a day, Crystal Ball not counted", "Fellow fractionals", "Alerts as they open"].every((x) => table.includes(x)), table.slice(0, 400));
+  check("VALUE_LINE sells winning the client", B.VALUE_LINE === "Find the company before it posts and get in through the person who held the seat. Close adds the proposal they sign.");
   const welcome = text(renderToStaticMarkup(React.createElement(B.ProWelcome, { plan: (await view(PRO)).me!.plan!, onSeen: () => {} })));
   check("the Pro welcome tells the same story, with the new rows", welcome.includes(rules.PRO_STORY) && /Opening companies\. Free, up to 15 a day/.test(welcome) && !/Proposals and e-signature/.test(welcome), welcome.slice(0, 300));
   const cardsFree = text(renderToStaticMarkup(React.createElement(B.PlanCards, { plan: (await view(FREE)).me!.plan!, from: "billing" })));
@@ -334,7 +334,7 @@ async function main() {
   check("paying for Close: a switch back to Pro", /Switch to Pro/.test(cardsClose) && /Your plan/.test(cardsClose), cardsClose);
   const { TrialEnded } = await import("../app/post/Today");
   const ended = text(renderToStaticMarkup(React.createElement(TrialEnded, { onSeePro: () => {}, onSeen: () => {} })));
-  check("the trial-ended card tells it too, with Close", ended.includes(rules.PRO_STORY) && /Close adds proposals drafted from your call, sent and signed/.test(ended) && /up to 15 a day/.test(ended), ended);
+  check("the trial-ended card tells it too, with Close", ended.includes(rules.PRO_STORY) && /Close adds the proposal they sign/.test(ended) && /up to 15 a day/.test(ended), ended);
 
   /* ---------- 6. the landing page's pricing ---------- */
   console.log("\n6. Pricing on the landing page");
@@ -381,7 +381,7 @@ async function main() {
   check("and tells the Pro story, framed by return", mail.text.includes("Pro is how you win the client: find the company before it posts") && mail.text.includes(emails.ONE_CLIENT));
   const endMail = emails.trialEndedEmail({ first: "Tia", counts, notLooking: false, rateLine: null, link: BASE });
   const lastMail = emails.trialEndingEmail({ first: "Tia", days: 1, notLooking: false, rateLine: null, link: BASE });
-  check("the trial-ended and last-day emails tell it too", endMail.text.includes("send the proposal they sign") && lastMail.text.includes("send the proposal they sign"));
+  check("the trial-ended and last-day emails tell it too", endMail.text.includes("Close adds the proposal they sign") && lastMail.text.includes("Close adds the proposal they sign"));
 
   /* ---------- 10. no Free earning taper, with the clock moved ---------- */
   console.log("\n10. Free keeps earning up to 25 a day, past the first 30 days too");

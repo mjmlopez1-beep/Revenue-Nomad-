@@ -32,7 +32,9 @@
 import dynamic from "next/dynamic";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
-import { CompanyLogo, IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
+import { CompanyLogo, IconChevron, IconFilter, IconPlus, IconSearch, IconX, SERVER_PROBLEM, calmRefusal, useToast, type Act, type View } from "../ui/shared";
+import { Problem } from "../ui/Problem";
+import { PageHead } from "../ui/system";
 import { useExactFind } from "../ui/find";
 import type { CompanyRec } from "@/lib/tableTypes";
 import {
@@ -47,7 +49,7 @@ import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBu
 import { wallBack, type WallBack } from "./earnBack";
 import { InvitePanel } from "./Invite";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
-import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
+import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, askSpend, cellFlags, markSpent, needsSpendConfirm, showUndo, spendWhat, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
 import { Seats } from "./Seats";
 import { earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar, useRadarNew } from "./TopBar";
@@ -72,7 +74,7 @@ import { HomePage, type HomeView } from "./Home";
 import { MoreSheet, Sidebar, TabBar } from "./Sidebar";
 import { navItems, type AppPageKey, type NavItem } from "./navModel";
 import { NudgeSlot, pickNudge } from "./nudges";
-import { COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
 import { BillingPage, PlansHost, ProTag, TrialBanner, TrialSummaryCard, buyTopup, openPlans } from "./Billing";
@@ -132,6 +134,8 @@ export interface TradingPostProps {
    * GET ?today=1 (Today's companies, with `today` its answer). Null once the whole table is here.
    */
   partial?: { first?: FirstList; today?: TodayView } | null;
+  /** The full view failed after its retries (Root's 2, 5 and 15 seconds): what waits for it says so, and this tries again. */
+  fullFailed?: (() => void) | null;
   /** Called once the first screen is drawn (Root asks for the full view then). */
   onDrawn?: () => void;
 }
@@ -305,6 +309,13 @@ const entryDepth = () => {
   return typeof d === "number" ? d : 0;
 };
 const here = () => window.location.pathname + window.location.search;
+/** The top bar's search on another page goes to the table after this pause in typing (or on Enter). */
+const SEARCH_PAUSE_MS = 600;
+/** After a search moves the page, the single-letter shortcuts stay off this long. */
+const SEARCH_QUIET_MS = 1200;
+/** A field someone types in: their cursor is never taken from it. */
+const isTextField = (el: Element | null) =>
+  !!el && el !== document.body && !!(el as HTMLElement).closest?.("input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']), textarea, select, [contenteditable='true']");
 /**
  * What an address opens over the table: its page (?p=), else a record (?c=), else nothing. Two
  * entries at depth 1 with different ones are two places (one record to the next, J and K, is not).
@@ -315,7 +326,7 @@ const pageOf = (search: string) => {
 };
 
 
-export default function TradingPost({ view, act, refresh, signOut, start, partial = null, onDrawn }: TradingPostProps) {
+export default function TradingPost({ view, act, refresh, signOut, start, partial = null, onDrawn, fullFailed = null }: TradingPostProps) {
   const me = view.me!;
   /** The whole table is still on its way: what needs it waits ("Loading all companies"), the first screen draws from what is here. */
   const waiting = !!partial;
@@ -797,6 +808,27 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   }, [tab, phone, page]);
 
   /* ----- a page opens at its top; the table comes back where it was ----- */
+  /** When a search last moved the page (the top bar's after a pause or Enter, Home's on Enter): the single-letter shortcuts stay off for a moment after. */
+  const searchNavAt = useRef(0);
+  /** The last field the member focused, so a search field they left for a moment still keeps the shortcuts off. */
+  const lastFocus = useRef<Element | null>(null);
+  /** Keep the cursor in a search field after a search moved the page: the one that has it, else the table's, the caret after the text. */
+  const keepSearchFocus = useStable((tries = 0) => {
+    const a = document.activeElement;
+    if (a instanceof HTMLInputElement && a.type === "search" && a.isConnected) return;
+    // The table's search may draw a frame or two after the page moved (a phone's list): wait for it, briefly.
+    // The first search on screen (a phone has the top bar's and the list's, one of them hidden).
+    const el = [searchRef.current, ...document.querySelectorAll<HTMLInputElement>(".tp-search input[type='search']")].find((x) => !!x && x.isConnected && x.offsetParent !== null) ?? null;
+    if (!el) {
+      if (tries < 20) requestAnimationFrame(() => keepSearchFocus(tries + 1));
+      return;
+    }
+    el.focus({ preventScroll: true });
+    const n = el.value.length;
+    try {
+      el.setSelectionRange(n, n);
+    } catch {}
+  });
   // Where the table was scrolled to, while this load has seen it. Null after a reload on a page: then the table's own history entry says (tpY).
   const tableY = useRef<number | null>(page === "table" ? 0 : null);
   const pageNow = useRef(onScreen);
@@ -815,6 +847,13 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     pageNow.current = onScreen;
     const saved = typeof window.history.state?.tpY === "number" ? (window.history.state.tpY as number) : 0;
     window.scrollTo(0, onScreen === "table" ? tableY.current ?? saved : 0);
+    // A search moved the page: the cursor stays in a search field with every letter typed (never the heading, or the next letters fire the shortcuts).
+    if (Date.now() - searchNavAt.current < SEARCH_QUIET_MS) {
+      keepSearchFocus();
+      return;
+    }
+    // Someone typing in a field keeps their cursor.
+    if (isTextField(document.activeElement)) return;
     // Say where we are: the page's own heading takes focus, and the tab title follows.
     const h = document.querySelector<HTMLElement>(onScreen === "table" ? "#tp-h1" : ".tp-main-page h1");
     if (h) {
@@ -955,8 +994,18 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const firstUnlock = me.unlocked === 0;
   const flagOn = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which], ...keys]) }));
   const flagOff = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which]].filter((k) => !keys.includes(k))) }));
+  /** What an unlock will likely cost, before the server says: a company COMPANY_PRICE (free while a free open is left, or from Crystal Ball), any other fact 1. */
+  const costOf = (t: FactRef, from?: "crystal") => (t.field === "identity" ? (from === "crystal" || freeCompanyNow(me) ? 0 : COMPANY_PRICE) : 1);
+  /** Ask first when the spend calls for it (the session's first, or 2 credits or more): false when the member says Not now. */
+  const confirmSpend = async (cost: number, what: string) => !needsSpendConfirm(cost) || me.credits < cost || (await askSpend({ cost, what, credits: me.credits }));
+  /** After a spend: its toast says what it opened, with Undo for 10 seconds (the server's undoUnlock). */
+  const spent = (message: string, at: string) => {
+    markSpent();
+    showUndo(message, () => act({ type: "undoUnlock", at }));
+  };
   const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void; from?: "crystal" }): Promise<boolean> => {
     const k = cellKey(t.id, t.field);
+    if (!(await confirmSpend(costOf(t, opts?.from), spendWhat(t)))) return false;
     flagOn("busy", [k]);
     const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field, ...(opts?.from ? { from: opts.from } : {}) }, { quiet: true, silentError: true });
     flagOff("busy", [k]);
@@ -970,18 +1019,24 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     const plain = /^Unlocked [^,]+ for 1 credit\.$/.test(r.message) && !/ and /.test(r.message);
     // A member's first unlock is a moment: its toast carries the open lock (Fractions, quiet on a dark surface).
     const first = firstUnlock ? { art: <Spot name="unlocked" size={44} on="pine" ember /> } : undefined;
-    if (t.field === "identity" || (/^Unlocked/.test(r.message) && !plain)) toast(r.message, false, first);
+    // Credits spent: the toast always comes, with Undo.
+    if (r.undo) spent(firstUnlock ? `${r.message} It stays unlocked for you.` : r.message, r.undo);
+    else if (t.field === "identity" || (/^Unlocked/.test(r.message) && !plain)) toast(r.message, false, first);
     else if (firstUnlock) toast("Unlocked, and it stays unlocked for you. Add a fact you know and you earn the credit back.", false, first);
     cellFlags.set((f) => (f.pulse === k ? { pulse: null } : {}));
     flagOn("flash", [k]);
     setTimeout(() => flagOff("flash", [k]), 2200);
     return true;
   });
-  const unlockMany = useStable(async (items: FactRef[]) => {
+  const unlockMany = useStable(async (items: FactRef[], opts?: { confirmed?: boolean; cost?: number }) => {
     const keys = items.map((t) => cellKey(t.id, t.field));
+    const cost = opts?.cost ?? items.reduce((n, t) => n + costOf(t), 0);
+    if (!opts?.confirmed && !(await confirmSpend(cost, items.length === 1 ? spendWhat(items[0]) : `these ${items.length} facts`))) return false;
     flagOn("busy", keys);
-    const r = await act({ type: "unlockMany", items: items.map(({ entity, id, field }) => ({ entity, id, field })) });
+    const r = await act({ type: "unlockMany", items: items.map(({ entity, id, field }) => ({ entity, id, field })) }, { quiet: true });
     flagOff("busy", keys);
+    if (r.ok && r.undo) spent(r.message, r.undo);
+    else if (r.ok && r.message) toast(r.message);
     if (r.ok) {
       flagOn("flash", keys);
       setTimeout(() => flagOff("flash", keys), 2200);
@@ -1478,6 +1533,28 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     } else go();
   });
 
+  /**
+   * The top bar's search typed on another page (Home, a page, a record over them): the table lists it once
+   * the typing pauses, or at once on Enter. Clearing it before then stays where it is.
+   */
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchToTable = useStable((v: string, now?: boolean) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+    if (!v.trim()) return;
+    const go = () => {
+      searchTimer.current = null;
+      searchNavAt.current = Date.now();
+      if (live.current.drawer?.over) setDrawer(null);
+      if (live.current.page !== "table") setPage("table");
+    };
+    if (now) go();
+    else searchTimer.current = setTimeout(go, SEARCH_PAUSE_MS);
+  });
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+  }, []);
+
   /* ----- keyboard ----- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1504,6 +1581,18 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       if (s.addOpts || s.editor || s.keysOff) return;
+      // Never while a search is in play: just after a search moved the page, or while a search field is still the last thing focused.
+      // A letter typed in that moment, before the cursor is back in the search, goes into the search.
+      if (Date.now() - searchNavAt.current < SEARCH_QUIET_MS) {
+        if (e.key.length === 1) {
+          e.preventDefault();
+          setQuery((q) => q + e.key);
+          keepSearchFocus();
+        }
+        return;
+      }
+      const last = lastFocus.current;
+      if (last instanceof HTMLInputElement && last.type === "search" && last.isConnected) return;
       if (e.key === "/") {
         e.preventDefault();
         focusSearch();
@@ -1522,8 +1611,23 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         step(-1);
       }
     };
+    // The last field focused. A press anywhere outside a search field (the page, a button) ends the search's hold on the shortcuts.
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target as Element | null;
+      if (t && t !== document.body) lastFocus.current = t;
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t?.closest?.("input[type='search']")) lastFocus.current = null;
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("pointerdown", onDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("pointerdown", onDown, true);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /** The state the window listeners read when they run. */
@@ -2569,11 +2673,13 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           query={query}
           setQuery={(v) => {
             setQuery(v);
-            if (page !== "table") setPage("table");
-            // A search lists in the table: a record opened over Home or Crystal Ball closes first.
-            if (drawer?.over) setDrawer(null);
+            // A search lists in the table: from another page it goes there once the typing pauses (or on Enter), the cursor and every letter kept.
+            if (page !== "table" || drawer?.over) searchToTable(v);
           }}
-          onSearchEnter={() => setFindNow(Date.now())}
+          onSearchEnter={() => {
+            if (page !== "table" || drawer?.over) searchToTable(query, true);
+            setFindNow(Date.now());
+          }}
           searchRef={searchRef}
           phone={phone}
           brand={!navSide}
@@ -2654,6 +2760,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                 // Home's search reads every company: the saved view, the profile and the filters are off for it (they come back when it is cleared).
                 setSearchWide(true);
                 setQuery(text);
+                // The table's search takes the cursor with the text, so typing on carries on there.
+                searchNavAt.current = Date.now();
                 setPage("table");
                 setFindNow(Date.now());
               }}
@@ -2663,7 +2771,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </main>
         ) : waiting && onScreen !== "table" ? (
           <main className="tp-main tp-main-page">
-            <AllLoading />
+            {/* A page about companies waits for all of them; any other page shows its own head while the table lands. */}
+            {onScreen === "radar" || onScreen === "getin" ? <AllLoading failed={fullFailed} /> : <PageWait title={PAGE_TITLE[onScreen]} failed={fullFailed} />}
           </main>
         ) : page === "credits" ? (
           <main className="tp-main tp-main-page">
@@ -2821,7 +2930,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             {followLine}
             <div id="tp-results" tabIndex={-1} className="tp-presults">
               {foundStrip}
-              {listWaits ? <AllLoading phone /> : empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
+              {listWaits ? <AllLoading phone failed={fullFailed} /> : empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
             </div>
             {more}
             {scanNote}
@@ -2904,7 +3013,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               <div className="tp-frame-box" ref={frameBoxRef}>
                 <div className="tp-frame" ref={frameRef} id="tp-results" tabIndex={-1}>
                   {foundStrip}
-                  {listWaits ? <AllLoading /> : empty || (
+                  {listWaits ? <AllLoading failed={fullFailed} /> : empty || (
                     <>
                       <DataTable
                         type={list.type}
@@ -3220,7 +3329,13 @@ function CreditLine({ me, onShowAdd, label, inCard }: { me: Me; onShowAdd: () =>
  * Before the whole table is here (only the first screen's companies are): a list or a page that
  * needs all of them says so, in the shape of what is coming. It lands in a second or two.
  */
-function AllLoading({ phone }: { phone?: boolean }) {
+function AllLoading({ phone, failed }: { phone?: boolean; failed?: (() => void) | null }) {
+  if (failed)
+    return (
+      <Problem title="All companies didn't load" onRetry={failed} on="white">
+        {SERVER_PROBLEM}
+      </Problem>
+    );
   return (
     <div className="tp-allwait" role="status" aria-busy>
       <p className="tp-allwait-t">Loading all companies…</p>
@@ -3233,6 +3348,30 @@ function AllLoading({ phone }: { phone?: boolean }) {
             </div>
           ))
         : null}
+    </div>
+  );
+}
+
+/**
+ * A page that isn't about companies, before the whole table is here: its own head and a few quiet
+ * lines where its content will be (never "Loading all companies…"). After the retries, Try again.
+ */
+function PageWait({ title, failed }: { title: string; failed?: (() => void) | null }) {
+  return (
+    <div className="page-wide tp-pagewait">
+      <PageHead title={title} />
+      {failed ? (
+        <Problem title="This page didn't load" onRetry={failed} on="white">
+          {SERVER_PROBLEM}
+        </Problem>
+      ) : (
+        <div className="tp-pagewait-lines" role="status" aria-busy aria-label={`Loading ${title}`}>
+          <span className="td-skel" style={{ width: "70%", height: 18 }} />
+          <span className="td-skel" style={{ width: "92%" }} />
+          <span className="td-skel" style={{ width: "84%" }} />
+          <span className="td-skel" style={{ width: "60%" }} />
+        </div>
+      )}
     </div>
   );
 }

@@ -124,7 +124,9 @@ const initialsOf = (name: string) =>
     .toUpperCase();
 
 /** Out of the directory: they said no, or turned Referral partners off, or closed their account (State.closures). */
-const hiddenMember = (s: State, id: string) => !!s.closures?.[id] || s.profiles[id]?.fractionals === false || (s.profiles[id]?.fractionals === undefined && !!s.profiles[id]?.partnersOff);
+/** A member who hides their name on their seats is out of it too: the directory is names and seats. */
+const hiddenMember = (s: State, id: string) =>
+  !!s.closures?.[id] || !!s.profiles[id]?.nameHidden || s.profiles[id]?.fractionals === false || (s.profiles[id]?.fractionals === undefined && !!s.profiles[id]?.partnersOff);
 
 /** The viewer's Crystal Ball companies (internal ids, every day it keeps). Empty when it can't be read. */
 function ballOf(seed: Seed, s: State, me: Member, nowMs: number): Set<string> {

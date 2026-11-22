@@ -2,7 +2,7 @@
 
 /** Member settings shown on Your credits: the way to Notifications (every email and Slack post), the sign-in link actions, and closing the account. */
 import { useState } from "react";
-import { post, useToast } from "../ui/shared";
+import { post, useToast, errorText } from "../ui/shared";
 import "./pages.css";
 
 /**
@@ -126,7 +126,7 @@ export function CloseAccount({ startAsking = false }: { startAsking?: boolean })
       const j = (await r.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!r.ok) {
         setBusy(false);
-        return toast(j.error ?? "That didn't go through. Try again.", true);
+        return toast(errorText(r.status, j.error, "That didn't go through. Try again."), true);
       }
       window.location.assign("/?closed=1");
     } catch {

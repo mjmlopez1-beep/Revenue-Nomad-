@@ -11,7 +11,7 @@
  * gets it back masked. Reads and writes /api/integrations.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { IconChevron, useToast } from "../ui/shared";
+import { IconChevron, useToast, errorText } from "../ui/shared";
 import { useCopy } from "./Credits";
 import { UseInClaude } from "./UseInClaude";
 import { ProRow, UpgradeNote, planDay } from "./Billing";
@@ -65,7 +65,7 @@ async function call(body: Record<string, unknown>): Promise<Answer> {
   try {
     const r = await fetch("/api/integrations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const j = (await r.json().catch(() => ({}))) as Answer;
-    return r.ok ? j : { error: j.error || "That didn't go through. Try again." };
+    return r.ok ? j : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." };
   }

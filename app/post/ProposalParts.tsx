@@ -12,7 +12,7 @@ import { DISCOVERY_LABELS, DISCOVERY_TARGET, blanksInWords } from "@/lib/proposa
 import { extract, transcriptOk, type Extraction, type Suggestion } from "@/lib/proposals/extract";
 import type { adviceFromView } from "@/lib/proposals/rates";
 import { PRICES } from "@/lib/billing/rules";
-import { IconCheck, IconPlus, IconX, useToast } from "../ui/shared";
+import { IconCheck, IconPlus, IconX, useToast, errorText } from "../ui/shared";
 import { Chip, STATUS_TONE, StatusChip, type Status } from "../ui/system";
 import { Sheet } from "./ui";
 import { openPlans } from "./Billing";
@@ -33,7 +33,7 @@ export async function api<T>(body: Record<string, unknown>): Promise<T & { error
   try {
     const r = await fetch("/api/proposals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
+    return r.ok ? j : { ...j, error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: NETWORK } as T & { error: string };
   }

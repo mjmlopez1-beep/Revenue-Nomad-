@@ -18,7 +18,7 @@ import type { ProposalsView } from "@/lib/proposals/types";
 import { SENDER_DUTY } from "@/lib/proposals/types";
 import { FIELD_KINDS, FIELD_SAY, FIELD_SIZE, type DocField, type DocumentRec, type FieldKind } from "@/lib/documents/types";
 import { PRICES } from "@/lib/billing/rules";
-import { IconCheck, IconChevron, IconPlus, IconX, useToast } from "../ui/shared";
+import { IconCheck, IconChevron, IconPlus, IconX, useToast, errorText } from "../ui/shared";
 import { PdfPages } from "../ui/PdfPages";
 import { Sheet } from "./ui";
 import { openPlans } from "./Billing";
@@ -37,7 +37,7 @@ export async function uploadPdf(f: File): Promise<DocumentRec | { error: string 
   try {
     const r = await fetch(`/api/documents?op=upload&name=${encodeURIComponent(f.name)}`, { method: "POST", headers: { "Content-Type": "application/pdf" }, body: f });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { error: j.error || "That PDF didn't upload. Try again." };
+    return r.ok ? j : { error: errorText(r.status, j.error, "That PDF didn't upload. Try again.") };
   } catch {
     return { error: NETWORK };
   }
@@ -46,7 +46,7 @@ async function dapi<T>(body: Record<string, unknown>): Promise<T & { error?: str
   try {
     const r = await fetch("/api/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
+    return r.ok ? j : { ...j, error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: NETWORK } as T & { error: string };
   }

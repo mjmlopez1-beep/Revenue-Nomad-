@@ -26,13 +26,13 @@ import { VerifyName } from "./Verify";
 import { AboutText } from "./About";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Benchmarks, Cell, CompanyRec, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_USED, FOUND_NOTE, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_USED, FOUND_NOTE, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity, NAME_HIDDEN } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import {
   AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
   seatMissingCount, shown, waitWords, fnGap, type CoInfo, type FactRef, type SeatInfo,
 } from "./model";
-import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, GET_COMPANY_CREDITS, earnNote, shortLabel, useUi, type Ui } from "./ui";
+import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, GET_COMPANY_CREDITS, earnNote, needsSpendConfirm, shortLabel, useUi, type Ui, usePine } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
 import { LEADERS_SOURCE, LEADERS_SOURCE_SAY, checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
@@ -105,6 +105,9 @@ interface DrawerEnv {
   hidden: boolean;
   /** Company pick lists earn here without the daily limit of 5 (see pickExempt). */
   exempt: boolean;
+  /** The company's id, and whether it is named for one search only (CompanyRec.found): writing to its seat holders unlocks it first. */
+  companyId?: string;
+  found?: boolean;
 }
 const EnvCtx = createContext<DrawerEnv>({ touch: false, phone: false, contact: null, company: "", hidden: false, exempt: false });
 const useEnv = () => useContext(EnvCtx);
@@ -898,7 +901,8 @@ function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
     );
   const go = async () => {
     setBusy(true);
-    await ui.unlockMany(plan.items);
+    // Asked here already (ask), or too small to ask (unlockMany asks itself when it should).
+    await ui.unlockMany(plan.items, { confirmed: ask, cost });
     setBusy(false);
     setAsk(false);
   };
@@ -912,9 +916,9 @@ function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
       className={`btn${bar ? " tp-ua-bar" : ""}`}
       disabled={busy}
       aria-busy={busy}
-      aria-expanded={cost >= 3 ? ask : undefined}
+      aria-expanded={needsSpendConfirm(cost) ? ask : undefined}
       aria-label={busy ? "Unlocking" : `Unlock all ${facts} locked facts here for ${price}`}
-      onClick={() => (cost >= 3 ? setAsk(true) : go())}
+      onClick={() => (needsSpendConfirm(cost) ? setAsk(true) : go())}
     >
       {busy ? (
         "Unlocking"
@@ -1177,7 +1181,15 @@ function Reach({ e, name, member, emailTo, known = false, more = true }: { e: En
   return (
     <div className="tp-reach">
       {member ? (
-        <MessageButton engagementId={e.id} name={name} company={env.company} role={shown(e.cells.role)} fn={shown(e.cells.function)} />
+        <MessageButton
+          engagementId={e.id}
+          name={name}
+          company={env.company}
+          role={shown(e.cells.role)}
+          fn={shown(e.cells.function)}
+          // Named for this search only: the company opens first (free on a free open), then the message goes.
+          unlockFirst={env.found && env.companyId ? { entity: "company", id: env.companyId, field: "identity" } : null}
+        />
       ) : e.invite ? (
         <>
           {/* [ux ws3] One meaning: named, and not a member yet. */}
@@ -1521,7 +1533,8 @@ export function YourWayIn({ i, seats }: { i: CoInfo; seats: EngagementRec[] }) {
                     <span>{knowSeatLine({ name: known.name!, warmth: known.warmth, seat: known.seat })} Only you see this.</span>
                   </span>
                 )}
-                {!(op?.s === "value" && op.member?.you) && (
+                {/* A holder who hides their name has no way to reach them here. */}
+                {!(op?.s === "value" && op.member?.you) && name !== NAME_HIDDEN && (
                   <Reach
                     e={e}
                     name={name}
@@ -1590,7 +1603,7 @@ function EngagementCard({ e, companyId, company, focus, coPeople = [], wayIn = f
   const fnRender = (v: string) => <span className={`chip tp-fn${v === ui.me.function ? " tp-fn-me" : ""}`}>{v}</span>;
   // Nobody reaches out to themselves, and a hidden company's seat holders open after the company. Nobody named: no next step here (the claim below stays).
   // [ux ws3] A seat listed under Your way in has its next step there.
-  const reach = !wayIn && op && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
+  const reach = !wayIn && op && op !== NAME_HIDDEN && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
     <Reach e={e} name={op} member={!!(opCell?.s === "value" && opCell.member)} emailTo={e.invite ? emailOnFile([...e.people, ...coPeople], op) : null} />
   );
   // Anything paid on a seat at a locked company opens after the company (an open role's posting and rate come with it).
@@ -1730,6 +1743,7 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
  */
 export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: boolean; roles: boolean; bar?: boolean }) {
   const ui = useUi();
+  const pine = usePine();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const busy = ui.busy.has(cellKey(id, "identity"));
@@ -1747,7 +1761,7 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
       <button
         ref={ref}
         type="button"
-        className={`btn btn-pine${bar ? " tp-uc-bar" : ""}`}
+        className={`btn ${pine}${bar ? " tp-uc-bar" : ""}`}
         disabled={busy || later}
         aria-busy={busy}
         aria-label={busy || later || broke ? text : `${free ? `Unlock company free. ${unlockFreeWords(ui.me)}` : UNLOCK_ROLE_SAY}. ${included}.`}
@@ -1854,6 +1868,8 @@ export function Drawer({
     company: c.hidden ? "this company" : c.name,
     hidden: !!c.hidden,
     exempt: pickExempt(i),
+    companyId: c.id,
+    found: !!c.found,
   };
 
   // A locked company's record opened: counted for Pilot metrics' demand (once a member, company and day; counts only).
@@ -1870,8 +1886,12 @@ export function Drawer({
       const { focus: f, id, phone: p } = last.current;
       setTimeout(() => {
         const a = document.activeElement;
-        if (a && a !== document.body && a.isConnected) return;
+        // On a phone, or where the member put the cursor on purpose (a field, a dialog, a page's own heading after a page change), it stays.
+        // Otherwise (Esc or the X, even with the focus wandered off to the sidebar) it goes back to the row that opened the record.
+        const kept = !!a && a !== document.body && a.isConnected && (p || !!a.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], .tp-modal, .tp-sheet, h1"));
+        if (kept) return;
         const row = (f && document.querySelector<HTMLElement>(`[data-row="${f}"]`)) || document.querySelector<HTMLElement>(`[data-row="${id}"]`);
+        if (!row && a && a !== document.body && a.isConnected) return;
         const el = row && row.tabIndex >= 0 ? row : opener?.isConnected ? opener : null;
         el?.focus({ preventScroll: p });
       });

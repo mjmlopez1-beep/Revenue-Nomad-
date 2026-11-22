@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GetInView, PlanLine, WayInView } from "@/lib/paths/types";
 import type { StepOp } from "@/lib/paths/plan";
+import { errorText } from "../../ui/shared";
 
 export const WAY_EVENT = "rn-way";
 /** Open Your way into a company (its public id), from anywhere in the app. */
@@ -87,7 +88,7 @@ export async function wayPost(company: string, op: WayDo): Promise<{ view?: WayI
     const r = await fetch("/api/paths", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "way", company, ...op }) });
     const j = (await r.json().catch(() => ({}))) as { way?: WayInView; message?: string; error?: string };
     if (r.ok) void loadPlans(true);
-    return r.ok ? { view: j.way, message: j.message } : { error: j.error || "That didn't go through. Try again." };
+    return r.ok ? { view: j.way, message: j.message } : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." };
   }

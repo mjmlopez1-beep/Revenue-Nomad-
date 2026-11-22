@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import type { CompanyPathsView, PathsAnswer, PathsView } from "@/lib/paths/types";
 import type { IntroPlanView } from "@/lib/paths/intro";
+import { errorText } from "../../ui/shared";
 
 type Snap = { answer: PathsAnswer | null; failed: boolean; version: number };
 let snap: Snap = { answer: null, failed: false, version: 0 };
@@ -39,7 +40,7 @@ export async function pathsAct(op: "import" | "delete", csv?: string): Promise<{
     const r = await fetch("/api/paths", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(op === "import" ? { op, csv } : { op }) });
     const j = (await r.json().catch(() => ({}))) as { view?: PathsAnswer; message?: string; error?: string };
     if (j.view) set(j.view);
-    return r.ok ? { message: j.message } : { error: j.error || "That didn't go through. Try again." };
+    return r.ok ? { message: j.message } : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." };
   }

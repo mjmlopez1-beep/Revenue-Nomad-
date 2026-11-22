@@ -945,3 +945,15 @@ button.tp-plan:hover {
     margin: 0 0 6px;
   }
 }
+
+/* Phones: the top bar's Upgrade pill and the plan interval chips are 44px targets. */
+@media (max-width: 767px) {
+  .tp-plan-phone,
+  .tp-top-phone .tp-plan {
+    min-height: 44px;
+  }
+  .bl-interval .chip {
+    min-height: 44px;
+    padding: 0 14px;
+  }
+}

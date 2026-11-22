@@ -11,11 +11,13 @@
  * bottom, above the keyboard.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import type { ConversationRec, MessageRec, ReportedMessage } from "@/lib/tableTypes";
-import { IconChevron, LockedName, initials, post, useToast } from "../ui/shared";
-import { HIDDEN_COMPANY } from "@/lib/tableFields";
+import type { ConversationRec, Me, MessageRec, ReportedMessage } from "@/lib/tableTypes";
+import { IconChevron, LockedName, initials, post, useToast, errorText } from "../ui/shared";
+import { COMPANY_PRICE_SAY, HIDDEN_COMPANY } from "@/lib/tableFields";
 import { Sheet, useFocusTrap, useUi } from "./ui";
 import { useLayout } from "./hooks";
+import { freeCompanyNow } from "./display";
+import type { FactRef } from "./model";
 import { partnerOpener, seatOpener, type SharedCompanies } from "@/lib/partners";
 import "./messages.css";
 import { IntroLine } from "./IntroLine";
@@ -179,7 +181,7 @@ function useConversations() {
     try {
       const r = await fetch("/api/table?messages=1", { cache: "no-store" });
       const j = await r.json();
-      if (!r.ok) return setFailed(j?.error || "Messages didn't load. Try again.");
+      if (!r.ok) return setFailed(errorText(r.status, j?.error, "Messages didn't load. Try again."));
       setFailed(null);
       setList(j.conversations ?? []);
       remember(j.conversations ?? []);
@@ -582,7 +584,22 @@ function Thread({
  * CMO seat at Acme…", lib/partners.ts seatOpener). Once a conversation about this seat exists it
  * becomes "Open conversation" (with the unread count when they replied), never a second opener.
  */
-export function MessageButton({ engagementId, name, company, role, fn }: { engagementId: string; name: string; company: string; role: string | null; fn: string | null }) {
+export function MessageButton({
+  engagementId,
+  name,
+  company,
+  role,
+  fn,
+  unlockFirst,
+}: {
+  engagementId: string;
+  name: string;
+  company: string;
+  role: string | null;
+  fn: string | null;
+  /** What has to open before the message can go (a company named for one search only): the sheet's button unlocks it, then sends. */
+  unlockFirst?: FactRef | null;
+}) {
   const ui = useUi();
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -602,10 +619,19 @@ export function MessageButton({ engagementId, name, company, role, fn }: { engag
           opener={seatOpener({ first, role, fn, company, myTitle: ui.me.title, myFn: ui.me.function })}
           onClose={() => setOpen(false)}
           restore={() => btn.current}
+          unlockFirst={unlockFirst ?? null}
         />
       )}
     </>
   );
+}
+
+/** The server's refusal when who held a seat is still locked for the member (lib/messages.ts message.start). */
+export const SEAT_LOCKED_FIRST = /^Unlock who held this seat first/;
+/** "Unlock and send"'s price: a company free on a free open, else its price; any other fact 1 credit. */
+export function unlockSendPrice(me: Me, t: FactRef): string {
+  if (t.field === "identity") return freeCompanyNow(me) ? "free" : COMPANY_PRICE_SAY;
+  return "1 credit";
 }
 
 /** "Open conversation", with what happened last in it, where a conversation with them already exists. */
@@ -694,6 +720,7 @@ function Compose({
   onClose,
   onSent,
   restore,
+  unlockFirst,
 }: {
   /** A seat holder (a conversation about their seat), or a member from Referral partners (about no seat). */
   to: { engagementId: string } | { memberId: string };
@@ -704,12 +731,19 @@ function Compose({
   onClose: () => void;
   onSent?: (c: ConversationRec) => void;
   restore: () => HTMLElement | null;
+  /** Unlock this first, then send (the button says "Unlock and send" with the price). */
+  unlockFirst?: FactRef | null;
 }) {
   const ui = useUi();
   const toast = useToast();
   const [text, setText] = useState(opener);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /**
+   * What has to open before this can be sent: given, or learned from the server's refusal (who held
+   * the seat is locked for the member). The message stays as typed; the button unlocks, then sends.
+   */
+  const [needs, setNeeds] = useState<FactRef | null>(unlockFirst ?? null);
   const id = useId();
   const len = [...text].length;
   const submit = async (e?: React.FormEvent) => {
@@ -717,8 +751,19 @@ function Compose({
     if (busy || !text.trim() || len > MAX) return;
     setBusy(true);
     setErr(null);
+    if (needs) {
+      // Unlock first (it asks before a spend, and can be undone), then send what was typed.
+      const ok = await ui.unlock(needs);
+      if (ok === false) return setBusy(false);
+      setNeeds(null);
+    }
     const r = await send("engagementId" in to ? { type: "message.start", engagementId: to.engagementId, text: text.trim() } : { type: "message.connect", memberId: to.memberId, text: text.trim() });
     setBusy(false);
+    if (r.error && "engagementId" in to && SEAT_LOCKED_FIRST.test(r.error)) {
+      // Never a dead end: the same sheet unlocks who held the seat and sends, the text kept.
+      setNeeds({ entity: "engagement", id: to.engagementId, field: "operator" });
+      return setErr(`To write to ${first}, unlock who held this seat first. Your message is kept.`);
+    }
     if (r.error) return setErr(r.error);
     const c = r.conversation;
     if (c) {
@@ -741,7 +786,7 @@ function Compose({
             Cancel
           </button>
           <button type="submit" form={`${id}-f`} className="btn btn-pine" disabled={busy || !text.trim() || len > MAX} aria-busy={busy}>
-            {busy ? "Sending" : "Send"}
+            {busy ? "Sending" : needs ? `Unlock and send · ${unlockSendPrice(ui.me, needs)}` : "Send"}
           </button>
         </div>
       }

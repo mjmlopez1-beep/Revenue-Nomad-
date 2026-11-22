@@ -131,6 +131,8 @@ function holderOf(cx: Cx, seatId: string | undefined | null): { name: string | n
   const vis = (k: string) => T.cellOf(cx.s, cx.m, e, "engagement", k, cx.idx).s === "value";
   if (!vis("operator")) return { name: null, role: null };
   if (T.valueOf(e, cx.s, "operator")?.pub && !publicNameOk(cx, e.companyId)) return { name: null, role: null };
+  // A holder who hides their name on their seats is never named here.
+  if (T.holderNameHidden(cx.s, e)) return { name: null, role: vis("role") ? (T.live(e, cx.s, "role") ?? null) : null };
   return { name: shownName(T.live(e, cx.s, "operator") ?? "") || null, role: vis("role") ? (T.live(e, cx.s, "role") ?? null) : null };
 }
 

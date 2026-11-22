@@ -26,11 +26,11 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, OPENS_RULE } from "@/lib/tableFields";
 import { PRO_STORY, TRIAL_NAME } from "@/lib/billing/rules";
 import { CompanyLogo, IconLock, LockedName, val } from "../ui/shared";
 import { countryOf, hireLine, isOpenRole, shown, type CoInfo } from "./model";
-import { useUi, ZeroCredits } from "./ui";
+import { useUi, ZeroCredits, usePine } from "./ui";
 import { companyLater, freeCompanyNow, unlockFreeWords } from "./display";
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
@@ -152,12 +152,13 @@ function warmSeat(i: CoInfo, me: Pick<Me, "before" | "function">) {
  */
 export function LeadAction({ i, row, onOpen, compact, cls }: { i: CoInfo; row: RadarRow | null; onOpen: () => void; compact?: boolean; /** The button's classes after "btn", in place of the card's or the row's (a move's primary button). */ cls?: string }) {
   const ui = useUi();
+  const pine = usePine();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const c = i.c;
   if (!c.hidden)
     return (
-      <button type="button" className={cls !== undefined ? `btn btn-pine ${cls}` : compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} onClick={onOpen}>
+      <button type="button" className={cls !== undefined ? `btn ${pine} ${cls}` : compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} onClick={onOpen}>
         Open
       </button>
     );
@@ -174,7 +175,7 @@ export function LeadAction({ i, row, onOpen, compact, cls }: { i: CoInfo; row: R
   const label = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : free ? (compact ? "Unlock free" : ui.me.proOpens ? unlockFreeWords(ui.me) : "Unlock free · your company of the day") : `Unlock · ${COMPANY_PRICE_SAY}`;
   return (
     <>
-      <button ref={ref} type="button" className={cls !== undefined ? `btn btn-pine ${cls}` : compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} disabled={busy || later} aria-busy={busy} onClick={unlock}>
+      <button ref={ref} type="button" className={cls !== undefined ? `btn ${pine} ${cls}` : compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} disabled={busy || later} aria-busy={busy} onClick={unlock}>
         {label}
       </button>
       {zero && ui.me.credits < COMPANY_PRICE && ref.current && <ZeroCredits anchor={ref.current} id={c.id} need={COMPANY_PRICE} onClose={() => setZero(false)} />}
@@ -291,8 +292,7 @@ export function TrialEnded({ onSeePro, onSeen, art }: { onSeePro: () => void; on
         <strong>You kept:</strong> your credits, fellow fractionals free, 1 saved view with the weekly email, {FEATURE_NAME} each morning with one company a day fully open.
       </p>
       <p>
-        <strong>Pro wins clients:</strong> {PRO_STORY} Companies open free (up to {PRO_OPENS_DAILY} a day, plus all of {FEATURE_NAME}) and open roles reach you the moment
-        they post. Close adds proposals drafted from your call, sent and signed.
+        <strong>Pro wins clients:</strong> {PRO_STORY} {OPENS_RULE} Open roles reach you the moment they post.
       </p>
       <div className="td-acts">
         <button type="button" className="btn btn-pine" onClick={onSeePro}>

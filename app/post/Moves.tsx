@@ -29,7 +29,7 @@ import { MOVES_MAX, buildMove, buyerWhat, holderOnFile, knowLine, moveSent, post
 import { webLink } from "@/lib/links";
 import { CompanyLogo, IconBriefcase, IconChevron, IconExternal, IconLock, IconPencil, LockedName, initials, useToast } from "../ui/shared";
 import type { CoInfo } from "./model";
-import { useUi } from "./ui";
+import { SecondaryCtx, useUi } from "./ui";
 import { LeadAction } from "./Today";
 import { useCrystalClick } from "./CrystalOpen";
 import { CRYSTAL_USED_UNLOCK, roleTermsLine, TOMORROW_LINE } from "./todayModel";
@@ -350,30 +350,31 @@ function MoveCard({
   const postSeat = m.way.kind === "role" ? m.way.seatId : m.open?.seatId ?? null;
   const postBusy = !!postSeat && ["posting", "rate", "hours"].some((f) => ui.busy.has(`${postSeat}.${f}`));
   const posting = m.open && m.open.posting && m.open.posting !== "locked" ? webLink(m.open.posting) : null;
-  // The one button.
+  // The one button: pine on the first move, outline on the others (one filled button on Home).
+  const pine = n > 1 ? "btn-outline" : "btn-pine";
   let main: ReactNode;
   if (roleStep && role)
     main = roleLink ? (
-      <a className="btn btn-pine mv-main" href={roleLink} target="_blank" rel="noreferrer" onClick={markRoleSeen}>
+      <a className={`btn ${pine} mv-main`} href={roleLink} target="_blank" rel="noreferrer" onClick={markRoleSeen}>
         Open the posting <IconExternal size={12} />
         <span className="sr-only"> (opens in a new tab)</span>
       </a>
     ) : (
-      <button type="button" className="btn btn-pine mv-main" disabled={roleBusy} aria-busy={roleBusy} onClick={() => void ui.unlock({ entity: "engagement", id: role.seatId, field: "posting" })}>
+      <button type="button" className={`btn ${pine} mv-main`} disabled={roleBusy} aria-busy={roleBusy} onClick={() => void ui.unlock({ entity: "engagement", id: role.seatId, field: "posting" })}>
         {roleBusy ? "Unlocking" : "See the posting · 1 credit"}
       </button>
     );
   else if (m.do === "open") main = <LeadAction i={i} row={w.row} onOpen={onOpen} cls="mv-main" />;
   else if (m.do === "record")
     main = (
-      <button type="button" className="btn btn-pine mv-main" onClick={onOpen}>
+      <button type="button" className={`btn ${pine} mv-main`} onClick={onOpen}>
         Open
       </button>
     );
   else if (m.do === "seeHolder" && m.way.kind === "holder") {
     const seatId = m.way.seatId;
     main = (
-      <button type="button" className="btn btn-pine mv-main" disabled={seatBusy} aria-busy={seatBusy} onClick={() => void ui.unlock({ entity: "engagement", id: seatId, field: "operator" })}>
+      <button type="button" className={`btn ${pine} mv-main`} disabled={seatBusy} aria-busy={seatBusy} onClick={() => void ui.unlock({ entity: "engagement", id: seatId, field: "operator" })}>
         {seatBusy ? "Unlocking" : "See who held it · 1 credit"}
       </button>
     );
@@ -382,30 +383,31 @@ function MoveCard({
     const personId = m.way.personId;
     const buyerBusy = ui.busy.has(`${personId}.name`) || ui.busy.has(`${personId}.title`);
     main = (
-      <button type="button" className="btn btn-pine mv-main" disabled={buyerBusy} aria-busy={buyerBusy} onClick={() => void ui.unlock({ entity: "contact", id: personId, field: "name" })}>
+      <button type="button" className={`btn ${pine} mv-main`} disabled={buyerBusy} aria-busy={buyerBusy} onClick={() => void ui.unlock({ entity: "contact", id: personId, field: "name" })}>
         {buyerBusy ? "Unlocking" : `${m.way.rel === "Hiring for the seat" ? "See who hired them" : "See who decides"} · 1 credit`}
       </button>
     );
   } else if (m.do === "find" && m.find) {
     main = (
-      <a className="btn btn-pine mv-main" href={m.find.linkedin} target="_blank" rel="noreferrer">
+      <a className={`btn ${pine} mv-main`} href={m.find.linkedin} target="_blank" rel="noreferrer">
         Search LinkedIn <IconExternal size={12} />
       </a>
     );
   } else if (m.do === "seePosting" && postSeat) {
     const seatId = postSeat;
     main = (
-      <button type="button" className="btn btn-pine mv-main" disabled={postBusy} aria-busy={postBusy} onClick={() => void ui.unlock({ entity: "engagement", id: seatId, field: "posting" })}>
+      <button type="button" className={`btn ${pine} mv-main`} disabled={postBusy} aria-busy={postBusy} onClick={() => void ui.unlock({ entity: "engagement", id: seatId, field: "posting" })}>
         {postBusy ? "Unlocking" : "See the posting · 1 credit"}
       </button>
     );
   } else
     main = (
-      <button type="button" className="btn btn-pine mv-main" onClick={onDraft}>
+      <button type="button" className={`btn ${pine} mv-main`} onClick={onDraft}>
         <IconPencil size={14} /> Draft
       </button>
     );
   return (
+    <SecondaryCtx.Provider value={n > 1}>
     <section className="mv-card" aria-label={`Move ${n}: ${m.title}`}>
       <div className="mv-co">
         <span className="mv-label mv-row">
@@ -474,6 +476,7 @@ function MoveCard({
         ) : null}
       </div>
     </section>
+    </SecondaryCtx.Provider>
   );
 }
 

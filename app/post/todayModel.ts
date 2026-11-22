@@ -6,7 +6,7 @@
 import type { Me, PlanView } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { COMPANY_PRICE } from "@/lib/tableFields";
+import { COMPANY_PRICE, OPENS_RULE } from "@/lib/tableFields";
 import { TRIAL_NAME } from "@/lib/billing/rules";
 import type { MovesWire } from "@/lib/moves";
 import { isFirm, isOpenRole, namedFn, shown, type CoInfo } from "./model";
@@ -132,10 +132,10 @@ export function roleTermsLine(cells: Record<string, { s: string; v?: unknown } |
   return [r ?? "No rate posted", h ? `${h} ${h === 1 ? "hour" : "hours"} a week` : null].filter(Boolean).join(" · ");
 }
 
-/** Home's one-time card when the trial starts: "For 21 days every Crystal Ball company opens free (14 today). Open as many as you like." */
+/** Home's one-time card when the trial starts: "Your trial runs 21 days. On Pro, Close and the trial, any company opens free, … 14 left today." (OPENS_RULE) */
 export function trialCardLine(daysLeft: number | null, today: number): string {
   const days = daysLeft && daysLeft > 0 ? daysLeft : 21;
-  return `For ${days === 1 ? "today" : `${days} days`} every ${FEATURE_NAME} company opens free${today > 0 ? ` (${today} today)` : ""}. Open as many as you like.`;
+  return `Your trial runs ${days === 1 ? "until tomorrow" : `${days} more days`}. ${OPENS_RULE}${today > 0 ? ` ${today} left today.` : ""}`;
 }
 /** The trial on Home, for a phone (the top bar's pill is in its More sheet there): "Close trial · 18 days left". Null off the trial. */
 export function trialPillWords(plan: Pick<PlanView, "name" | "trialDaysLeft"> | null | undefined): string | null {

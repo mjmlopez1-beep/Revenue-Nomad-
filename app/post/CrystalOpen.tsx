@@ -17,7 +17,7 @@
  */
 import { useCallback, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
-import { useUi, ZeroCredits } from "./ui";
+import { usePine, useUi, ZeroCredits } from "./ui";
 import { cellKey } from "./model";
 import { openPlans } from "./Billing";
 import { CRYSTAL_PRO_LINK, crystalButton, rowOpensFree } from "./todayModel";
@@ -43,12 +43,13 @@ export function CrystalOpen({
   noPro?: boolean;
 }) {
   const ui = useUi();
+  const pine = usePine();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const b = crystalButton(ui.me);
   const busy = ui.busy.has(cellKey(id, "identity"));
   if (!b) return null;
-  const cls = `btn btn-pine${bar ? " tp-uc-bar" : ""} ${className}`.trim();
+  const cls = `btn ${pine}${bar ? " tp-uc-bar" : ""} ${className}`.trim();
   if (b.kind !== "crystal") {
     const unlock = async () => {
       if (b.kind === "wall") return setZero(true);

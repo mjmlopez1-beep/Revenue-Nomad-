@@ -12,9 +12,15 @@
   grid-template-columns: minmax(0, 1fr);
 }
 .fr-side {
+  min-width: 0;
+  overflow-wrap: anywhere;
   border-right: 1px solid var(--line);
   padding: 20px 20px 48px;
   background: var(--surface);
+}
+.fr-sheet-filters {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .fr-side-h {
   display: flex;
@@ -174,13 +180,16 @@
   color: var(--muted);
   margin-left: 2px;
 }
+/* The table keeps a readable width: narrower than that, it scrolls sideways in its own frame (never the page). */
 .fr-tablewrap {
   border: 1px solid var(--line);
   border-radius: var(--r-card);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .fr-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   table-layout: fixed;
 }
