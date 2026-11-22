@@ -12,6 +12,9 @@
  */
 import type { FrozenDoc } from "./types";
 
+/** First letter up: "a written readout" reads as a sentence. */
+const cap = (t: string) => t.replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+
 export type Para = { kind: "p"; lines: string[] } | { kind: "list"; items: string[] };
 
 /** Plain text as paragraphs and bullet lists. */
@@ -203,7 +206,7 @@ export function phases(text: string): Phase[] | null {
           const title = c > 0 && c < 60 ? pre.slice(0, c).trim() : pre.split(/[.;]/)[0].trim();
           const item = c > 0 && c < 60 ? pre.slice(c + 1).trim() : pre.slice(title.length).replace(/^[.;]\s*/, "").trim();
           const tm = title.match(/^((?:weeks?|days?|months?)\s+[\d\s to–-]+),\s*(.+)$/i);
-          phase.streams.push({ title: tm ? tm[2].replace(/^\w/, (x) => x.toUpperCase()) : title, when: tm ? tm[1].trim().replace(/^\w/, (x) => x.toUpperCase()) : "", items: item ? [item] : [], deliverable: deliverable.trim() });
+          phase.streams.push({ title: cap(tm ? tm[2] : title), when: tm ? cap(tm[1].trim()) : "", items: item ? [cap(item)] : [], deliverable: cap(deliverable.trim()) });
         } else phase.items.push(b);
       } else if (/^deliverables?:/i.test(t) && phase.streams.length) phase.streams[phase.streams.length - 1].deliverable = t.replace(/^deliverables?:\s*/i, "");
       else phase.text += (phase.text ? "\n" : "") + t;
@@ -218,7 +221,7 @@ export function milestones(text: string): { rest: string; items: { when: string;
   const rest: string[] = [];
   for (const l of text.split("\n")) {
     const m = l.trim().replace(/^[-•]\s+/, "").match(/^((?:by\s+)?(?:day|week|month|q)\s*\d+[^:.]{0,16}|[A-Z][a-z]{2,8}\s+\d{1,2}(?:,\s*\d{4})?)\s*[:.–-]\s+(.+)$/i);
-    if (m) items.push({ when: m[1].replace(/^\w/, (c) => c.toUpperCase()), text: m[2] });
+    if (m) items.push({ when: cap(m[1]), text: cap(m[2]) });
     else rest.push(l);
   }
   return items.length >= 2 ? { rest: rest.join("\n").trim(), items } : null;

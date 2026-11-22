@@ -496,7 +496,7 @@ function Options({ p, pick, rec, from, onPick, onAddOn, live }: { p: Pricing; pi
             const on = pick.addOnIds.includes(a.id);
             return (
               <label key={a.id} className="cv-add" htmlFor={`cv-add-${a.id}`} data-section={`addon-${a.id}`}>
-                <input id={`cv-add-${a.id}`} type="checkbox" checked={on} disabled={!live} readOnly={!live} onChange={(e) => onAddOn?.(a.id, e.target.checked)} />
+                <input id={`cv-add-${a.id}`} type="checkbox" checked={on} disabled={!live} readOnly={!live} onChange={live ? (e) => onAddOn?.(a.id, e.target.checked) : undefined} />
                 <span className="cv-add-t">
                   <span className="cv-add-n">
                     {a.name} · {priced(a.price, a.billing)}

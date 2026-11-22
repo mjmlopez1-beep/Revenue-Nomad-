@@ -208,7 +208,7 @@ async function main() {
   check("1 option: one price, no cards to pick, no table", count(one, 'data-section="option-') === 1 && !one.includes('role="radio"') && !one.includes("cv-table") && one.includes("Hours and investment") && one.includes("Add if useful"));
   check("the page's sections in order, each with a stable data-section", ["header", "scope", "what_we_heard", "the_math", "team", "phases_workstreams", "milestones", "success_measures", "assume", "invest", "terms", "sign"].every((id, i, a) => three.indexOf(`data-section="${id}"`) >= 0 && (i === 0 || three.indexOf(`data-section="${id}"`) > three.indexOf(`data-section="${a[i - 1]}"`))));
   check("01 Scope: the math as stat cards", count(three, "cv-stat-v") === 3 && three.includes("17% → 28%"));
-  check("the plan: phases, workstreams that open and close, deliverables", count(three, 'class="cv-stream"') === 2 && three.includes("Phase 1") && three.includes("Phase 2") && three.includes("Deliverable.") && three.includes("the documented sales process"));
+  check("the plan: phases, workstreams that open and close, deliverables", count(three, 'class="cv-stream"') === 2 && three.includes("Phase 1") && three.includes("Phase 2") && three.includes("Deliverable.") && three.includes("The documented sales process"));
   check("milestones and success measures in their own shapes", count(three, "cv-mile-w") === 3 && three.includes("By day 90.") && count(three, 'class="cv-col"') === 2);
   check("03 the agreement as parts that open, the first open", count(three, 'class="cv-legal-part"') === 3 && three.includes("1. Services") && /<details class="cv-legal-part" open=""/.test(three));
   check("the header: both parties and the cover's headline, not its 'Prepared for' lines", three.includes("Jordan Avery, Fractional CRO · prepared for Dana Whitfield, CEO, Cedar and Pine Software") && three.includes("A revenue program to get Cedar and Pine to $30M ARR") && !three.includes("Prepared by Jordan"));
@@ -218,6 +218,18 @@ async function main() {
   const old = render({ ...fullDoc(), blocks: fullDoc().blocks.map(({ kind: _k, ...b }) => b) as never });
   check("a send from before kinds were kept: placed by its library title", old.includes('data-section="terms"') && old.includes('data-section="milestones"'));
   const signedView = render(fullDoc(clean), { optionId: "o_full", addOnIds: ["a_hire"] }, false);
+  // The signed copy is server-rendered: not one event handler may reach a host element there.
+  const handlers: string[] = [];
+  const walk2 = (n: unknown): void => {
+    if (Array.isArray(n)) return n.forEach(walk2);
+    if (!n || typeof n !== "object" || !("type" in n)) return;
+    const el = n as { type: unknown; props: Record<string, unknown> };
+    if (typeof el.type === "function") return walk2((el.type as (p: unknown) => unknown)(el.props));
+    for (const [k, v] of Object.entries(el.props ?? {})) if (k !== "children" && typeof v === "function") handlers.push(`${String(el.type)}.${k}`);
+    walk2(el.props?.children);
+  };
+  walk2(React.createElement(PV.ProposalView, { doc: fullDoc(clean), choice: { optionId: "o_full", addOnIds: ["a_hire"] }, sign: null }).type === PV.ProposalView ? PV.ProposalView({ doc: fullDoc(clean), choice: { optionId: "o_full", addOnIds: ["a_hire"] }, sign: null }) : null);
+  check("read only (the server-rendered signed copy): no event handler on any element", handlers.length === 0, handlers);
   check("signed (read only): no buttons to pick, the choice marked, add-ons fixed", !signedView.includes('role="radio"') && signedView.includes("Chosen") && /<input[^>]*disabled=""[^>]*checked=""/.test(signedView) && signedView.includes("The investment signed"));
 
   /* ---------- the flow ---------- */

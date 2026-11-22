@@ -910,3 +910,9 @@ button.cv-opt {
     break-inside: avoid;
   }
 }
+/* On a wider screen the top bar's "Review and sign" does the sticky bar's job. */
+@media (min-width: 640px) {
+  .cv-main ~ .sg-bar {
+    display: none;
+  }
+}
