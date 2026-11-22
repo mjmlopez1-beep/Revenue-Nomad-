@@ -18,7 +18,7 @@
  * member, the export, the table).
  */
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
@@ -352,6 +352,78 @@ async function main() {
   check("an expired link says so", (await S.docSignerView(t4, who, BASE, Date.now() + 31 * DAY)).status === "expired" && (await refused(S.docRequestCode(t4, who, Date.now() + 31 * DAY)))?.includes("expired"));
   check("a tampered link: nothing", (await refused(S.docSignerView(`${t4.slice(0, -3)}abc`, who, BASE)))?.includes("doesn't work") && (await refused(S.docSignerView("ds_notarealsigner.1.x", who, BASE)))?.includes("doesn't work"));
   check("a proposal's link isn't a document's", !S.isDocToken("s_abcdefghijkl.x.y") && S.isDocToken(t4));
+
+  /* ================= signing integrity (QA DG-06, DG-08, DG-09) ================= */
+  console.log("\nsigning integrity");
+  // One signer, a signature field and a name field, sent, the code confirmed: ready to sign.
+  const oneSigner = async (title: string, name: string, email: string) => {
+    let x = await S.uploadDocument(PAT, `${title}.pdf`, original, BASE);
+    x = await S.updateDocument(PAT, x.id, { signers: [{ id: "new_s", name, email }], fields: [{ page: 0, x: 0.1, y: 0.7, w: 0.4, h: 0.06, kind: "signature", signer: "new_s" }, { page: 0, x: 0.1, y: 0.8, w: 0.4, h: 0.03, kind: "name", signer: "new_s" }] }, BASE);
+    const mk = mails.length;
+    await S.sendDocument(PAT, x.id, {}, BASE);
+    const tk = tokenOf(mails.slice(mk).find((m) => m.to === email.toLowerCase())!.text);
+    await S.docSignerView(tk, who, BASE);
+    await S.docRequestCode(tk, who);
+    await S.docVerifyCode(tk, lastTo(email.toLowerCase())!.text.match(/Your code: (\d{6})/)![1], who, BASE);
+    return { doc: x, tok: tk };
+  };
+  // DG-06: ten drawn signatures, ten different drawings, at once, for one signer.
+  const race = await oneSigner("race", "Rae Racer", "rae@racer.example");
+  const drawings = Array.from({ length: 10 }, (_, i) => png(40 + i * 3, 12 + i));
+  const results = await Promise.allSettled(drawings.map((p) => S.docSign(race.tok, { name: "Rae Racer", method: "drawn", png: p, consent: true, hash: race.doc.sha256, values: {} }, who, BASE)));
+  const won = results.filter((x) => x.status === "fulfilled");
+  check("DG-06: ten drawn signatures at once: exactly one signs, the rest are refused", won.length === 1 && results.filter((x) => x.status === "rejected").every((x) => /signed it already|isn't open|finished|signed/i.test(String((x as PromiseRejectedResult).reason?.message))), results.map((x) => x.status === "fulfilled" ? "ok" : (x as PromiseRejectedResult).reason?.message));
+  const raceDir = path.join(dir, "documents", race.doc.id);
+  const sigFiles = readdirSync(raceDir);
+  const raceSigner = (await T.loadState()).documents!.find((x) => x.id === race.doc.id)!.signers[0];
+  const onDisk = readFileSync(path.join(raceDir, `sig-${raceSigner.id}.png`));
+  const which = drawings.findIndex((p) => Buffer.from(p.split(",")[1], "base64").equals(onDisk));
+  check("DG-06: one drawing on disk, whole, and no temporary file left behind", which >= 0 && !sigFiles.some((n) => n.endsWith(".tmp")) && sigFiles.filter((n) => n.startsWith("sig-")).length === 1, sigFiles);
+  const raceFinal = await PDFDocument.load(readFileSync(path.join(raceDir, "final.pdf")));
+  const xo = raceFinal.getPage(0).node.Resources()?.lookup((await import("pdf-lib")).PDFName.of("XObject"));
+  check("DG-06: the final PDF carries the drawing that was recorded (its size)", !!xo && (() => {
+    const [w, h] = [40 + which * 3, 12 + which];
+    const s = Buffer.from(raceFinal.context.enumerateIndirectObjects().map(([, o]) => String((o as { dict?: unknown }).dict ?? "")).join(" "));
+    return s.includes(`/Width ${w}`) && s.includes(`/Height ${h}`);
+  })(), which);
+  // DG-08: a broken drawing is refused, not stamped as a typed name under "drew their signature".
+  const bad = await oneSigner("bad png", "Bea Broken", "bea@broken.example");
+  const fake = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("not really a png at all, just junk after the magic")]).toString("base64")}`;
+  check("DG-08: a fake PNG (the magic, then junk) is refused", (await refused(S.docSign(bad.tok, { name: "Bea Broken", method: "drawn", png: fake, consent: true, hash: bad.doc.sha256, values: {} }, who, BASE)))?.includes("drawing didn't come through"));
+  const cut = png(60, 20);
+  const truncated = `data:image/png;base64,${Buffer.from(cut.split(",")[1], "base64").subarray(0, 50).toString("base64")}`;
+  check("DG-08: a cut-off PNG is refused too, and a GIF", (await refused(S.docSign(bad.tok, { name: "Bea Broken", method: "drawn", png: truncated, consent: true, hash: bad.doc.sha256, values: {} }, who, BASE)))?.includes("drawing didn't come through") && (await refused(S.docSign(bad.tok, { name: "Bea Broken", method: "drawn", png: "data:image/gif;base64,R0lGODlhAQABAAAAACw=", consent: true, hash: bad.doc.sha256, values: {} }, who, BASE)))?.includes("drawing didn't come through"));
+  check("nothing of the refused drawings was kept", !readdirSync(path.join(dir, "documents", bad.doc.id)).some((n) => n.startsWith("sig-")));
+  // DG-08: names outside Latin print as themselves.
+  const ar = await oneSigner("arabic", "سام سينر", "sam@signer.example");
+  await S.docSign(ar.tok, { name: "سام سينر", method: "typed", consent: true, hash: ar.doc.sha256, values: {} }, who, BASE);
+  const arBytes = readFileSync(path.join(dir, "documents", ar.doc.id, "final.pdf"));
+  const arText = await textOf(arBytes);
+  const arabic = /[؀-ۿﹰ-ﻼ]/;
+  check("DG-08: an Arabic name prints in Arabic, not ???, on the page and in the audit trail", arabic.test(arText[0]) && !arText[0].includes("???") && arabic.test(arText.slice(2).join(" ")) && !/\?\?\? \?\?\?\?/.test(arText.join(" ")), arText[0].slice(0, 200));
+  check("DG-08: in the bundled Unicode font (DejaVu Sans, subset)", Buffer.from(arBytes).toString("latin1").includes("DejaVuSans") && existsSync(path.join(process.cwd(), "public/fonts/DejaVuSans.ttf")) && existsSync(path.join(process.cwd(), "public/fonts/DejaVuSans-LICENSE.txt")));
+  // Shaped and read in order: the glyphs pdf.js reads back, laid out again, are the letters as typed.
+  const arDoc = await pdfjs.getDocument({ data: new Uint8Array(arBytes), verbosity: 0 }).promise;
+  const arItems = ((await (await arDoc.getPage(1)).getTextContent()).items as { str: string }[]).map((x) => x.str).filter((t) => arabic.test(t));
+  check("DG-08: the name's letters come back from the file (shaped, right to left)", arItems.length >= 2 && arItems.every((t) => [...t.normalize("NFKC")].filter((c) => c.trim()).sort().join("") === [..."سام سينر"].filter((c) => c.trim()).sort().join("")), arItems);
+  const he = await oneSigner("hebrew", "Zoë Łukasz שלום", "zoe@signer.example");
+  await S.docSign(he.tok, { name: "Zoë Łukasz שלום", method: "typed", consent: true, hash: he.doc.sha256, values: {} }, who, BASE);
+  const heText = (await textOf(readFileSync(path.join(dir, "documents", he.doc.id, "final.pdf")))).join(" ");
+  check("Latin Extended and Hebrew print too", heText.includes("Łukasz") && heText.includes("Zoë") && /[֐-׿]/.test(heText), heText.slice(0, 200));
+  const cjk = await oneSigner("cjk", "山田 太郎", "taro@signer.example");
+  await S.docSign(cjk.tok, { name: "山田 太郎", method: "typed", consent: true, hash: cjk.doc.sha256, values: {} }, who, BASE);
+  const cjkText = await textOf(readFileSync(path.join(dir, "documents", cjk.doc.id, "final.pdf")));
+  check("a CJK name (outside the bundled font): its fields show the signer's email, never ???", cjkText[0].includes("taro@signer.example") && !cjkText[0].includes("??"), cjkText[0].slice(0, 200));
+  check("and the audit trail says so, with the name as typed in Unicode", cjkText.slice(2).join(" ").includes("can't print") && cjkText.slice(2).join(" ").includes("U+5C71 U+7530 U+0020 U+592A U+90CE"), cjkText.slice(2).join(" ").slice(0, 400));
+  // DG-09: bidi overrides and zero-width characters never reach a title or a text.
+  const bidi = await S.uploadDocument(PAT, "‮gnp.exe.pdf", original, BASE);
+  check("DG-09: an uploaded file name with a right-to-left override: the title and file name have none", !/[‪-‮]/.test(bidi.title) && !/[‪-‮]/.test(bidi.fileName) && bidi.title === "gnp.exe", [bidi.title, bidi.fileName]);
+  const bidi2 = await S.updateDocument(PAT, bidi.id, { title: "Pay​ment ⁦terms⁩﻿ ‭now‬" }, BASE);
+  check("DG-09: a title with zero-width and isolate characters: cleaned", bidi2.title === "Payment terms now", JSON.stringify(bidi2.title));
+  check("DG-09: proposals' text and titles too", (() => {
+    const t = PS.proposalInternals.cleanText("a‮b‍c⁧d﻿e‏f", 100);
+    return t === "abcdef" && PS.proposalInternals.cleanLine("‮ Title ​", 50) === "Title";
+  })());
 
   /* ================= privacy ================= */
   console.log("\nprivacy");

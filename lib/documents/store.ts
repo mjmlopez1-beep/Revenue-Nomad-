@@ -22,8 +22,8 @@ import { upgradeUrl } from "../plan";
 import { PRO_SEND, EMAIL_OFF, ProposalProblem, SIGN_DAYS, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, proposalInternals as PI, type Client } from "../proposals/store";
 import { pipelineEvent } from "../proposals/pipelineHook";
 import { CONSENT_VERSION, consentText } from "../proposals/types";
-import { DOC_MAX_BYTES, SIG_MAX_BYTES, readFinal, readOriginal, readSignature, removeFiles, saveFinal, saveOriginal, saveSignature } from "./files";
-import { PdfProblem, buildFinal, inspectPdf, sha256, shown } from "./pdf";
+import { DOC_MAX_BYTES, SIG_MAX_BYTES, commitSignature, dropSignature, readFinal, readOriginal, readSignature, removeFiles, saveFinal, saveOriginal, stageSignature } from "./files";
+import { PdfProblem, buildFinal, checkPng, inspectPdf, sha256, shown } from "./pdf";
 import { docCodeEmail, docDeclinedEmail, docDoneEmail, docInviteEmail } from "./emails";
 import { FIELD_KINDS, type DocCopy, type DocEvent, type DocField, type DocSigner, type DocSignerRec, type DocSignerView, type DocStatus, type DocumentRec, type StoredDocument } from "./types";
 
@@ -565,11 +565,13 @@ export async function docVerifyCode(token: unknown, raw: unknown, who: Client, o
 }
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-/** A drawn signature as sent by the page: a PNG data URL, small. */
-function pngOf(raw: unknown): Buffer {
+const NO_DRAWING = "The drawing didn't come through. Draw it again, or type your name instead.";
+/** A drawn signature as sent by the page: a PNG data URL, small, that decodes as a real image (a broken or fake one is refused, not stamped as a typed name). */
+async function pngOf(raw: unknown): Promise<Buffer> {
   const m = String(raw ?? "").match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
   const b = m ? Buffer.from(m[1], "base64") : Buffer.alloc(0);
-  if (!b.length || b.length > SIG_MAX_BYTES || !b.subarray(0, 8).equals(PNG)) throw new ProposalProblem("The drawing didn't come through. Draw it again, or type your name instead.");
+  if (!b.length || b.length > SIG_MAX_BYTES || !b.subarray(0, 8).equals(PNG)) throw new ProposalProblem(NO_DRAWING);
+  if (!(await checkPng(b))) throw new ProposalProblem(NO_DRAWING);
   return b;
 }
 
@@ -591,10 +593,11 @@ export async function docSign(token: unknown, a: DocSignArgs, who: Client, origi
   const s0 = await loadState();
   const f0 = resolve(s0, token);
   const from = await fromOf(s0, f0.d);
-  const png = method === "drawn" ? pngOf(a.png) : null;
+  const png = method === "drawn" ? await pngOf(a.png) : null;
   const raw = (a.values && typeof a.values === "object" && !Array.isArray(a.values) ? a.values : {}) as Record<string, unknown>;
   const now = new Date(nowMs).toISOString();
-  if (png && signerState(f0, nowMs) === "open" && f0.x.codeVerifiedAt) await saveSignature(f0.d.id, f0.x.id, png);
+  // The drawing is written aside first, and moved into place only by the request that records the signature: one that loses the race never overwrites the winner's.
+  const staged = png && signerState(f0, nowMs) === "open" && f0.x.codeVerifiedAt ? await stageSignature(f0.d.id, f0.x.id, png) : null;
   const out = await T.mutate((s) => {
     const f = resolve(s, token);
     const st = signerState(f, nowMs);
@@ -621,10 +624,15 @@ export async function docSign(token: unknown, a: DocSignArgs, who: Client, origi
     f.x.signed = { at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), name, method, consent: consentText(from.name || "the sender", "document"), consentVersion: CONSENT_VERSION, hash: f.d.sha256 };
     ev(f.d, "signed", now, { ...who, who: f.x.email, note: method === "drawn" ? `drew their signature as "${name}"` : `typed name "${name}"` });
     f.d.updatedAt = now;
+    if (method === "drawn" && !staged) throw new ProposalProblem(NO_DRAWING);
     const done = allSigned(f.d);
     if (done) pipelineEvent(s, f.d.memberId, f.d.companyId, "signed", now, { document: { to: null } });
-    return { done, docId: f.d.id, view: viewOf(f, from, nowMs, origin) };
+    return { done, docId: f.d.id, signerId: f.x.id, view: viewOf(f, from, nowMs, origin) };
+  }).catch(async (e) => {
+    await dropSignature(staged);
+    throw e;
   });
+  if (staged) await commitSignature(out.docId, out.signerId, staged);
   if (out.done) await finish(out.docId, origin);
   else await notify(out.docId, origin, nowMs);
   return out.done ? docSignerView(token, who, origin, nowMs) : out.view;

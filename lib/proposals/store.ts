@@ -245,7 +245,13 @@ export async function getProposal(token: string | null, id: string, origin?: str
 
 /* ---------- cleaning what comes in ---------- */
 
-const CTRL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+/**
+ * Control characters, and the invisible ones that can reorder or hide what a reader sees: bidi
+ * embeddings and overrides (U+202A to U+202E), isolates (U+2066 to U+2069), zero-width spaces,
+ * joiners and marks (U+200B to U+200F) and the BOM (U+FEFF). A title like "\u202Egnp.exe.pdf"
+ * would otherwise read as something else. Proposals and documents (their text and titles) alike.
+ */
+const CTRL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
 const cleanText = (raw: unknown, max: number) =>
   String(raw ?? "")
     .replace(/\r\n?/g, "\n")

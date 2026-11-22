@@ -5,6 +5,7 @@
  * in the state, the repo, the export or a backup of the state. Served only through
  * app/api/documents/file, to the member who uploaded it or a signer with their link.
  */
+import { randomBytes } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { DATA_DIR } from "../table";
@@ -22,11 +23,19 @@ const folder = (id: string) => {
   return path.join(root(), id);
 };
 
+/** A temporary name of its own for each write: two writes at once (in one process or two) never share one, so neither can move the other's half-written file into place. */
+const tmpName = (file: string) => `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+
 async function put(file: string, bytes: Uint8Array): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-  const tmp = `${file}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, bytes, { mode: 0o600 });
-  await fs.rename(tmp, file);
+  const tmp = tmpName(file);
+  try {
+    await fs.writeFile(tmp, bytes, { mode: 0o600 });
+    await fs.rename(tmp, file);
+  } catch (e) {
+    await fs.rm(tmp, { force: true }).catch(() => {});
+    throw e;
+  }
 }
 const get = async (file: string): Promise<Buffer | null> => fs.readFile(file).catch(() => null);
 
@@ -34,10 +43,26 @@ export const saveOriginal = (id: string, bytes: Uint8Array) => put(path.join(fol
 export const readOriginal = (id: string) => get(path.join(folder(id), "original.pdf"));
 export const saveFinal = (id: string, bytes: Uint8Array) => put(path.join(folder(id), "final.pdf"), bytes);
 export const readFinal = (id: string) => get(path.join(folder(id), "final.pdf"));
-export function saveSignature(id: string, signerId: string, png: Uint8Array) {
+/**
+ * A drawn signature written aside, before the signature is recorded: only the request that wins
+ * the record moves it into place (commitSignature), so a request that lost the race never
+ * overwrites the winner's drawing. The loser's file is dropped (dropSignature).
+ */
+export async function stageSignature(id: string, signerId: string, png: Uint8Array): Promise<string> {
   if (!SID.test(signerId)) throw new Error("bad signer id");
-  return put(path.join(folder(id), `sig-${signerId}.png`), png);
+  const file = path.join(folder(id), `sig-${signerId}.png`);
+  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  const staged = tmpName(file);
+  await fs.writeFile(staged, png, { mode: 0o600 });
+  return staged;
 }
+export async function commitSignature(id: string, signerId: string, staged: string): Promise<void> {
+  if (!SID.test(signerId)) throw new Error("bad signer id");
+  const file = path.join(folder(id), `sig-${signerId}.png`);
+  if (path.dirname(staged) !== path.dirname(file) || !path.basename(staged).startsWith(`${path.basename(file)}.`)) throw new Error("bad staged file");
+  await fs.rename(staged, file);
+}
+export const dropSignature = (staged: string | null) => (staged ? fs.rm(staged, { force: true }).catch(() => {}) : Promise.resolve());
 export function readSignature(id: string, signerId: string) {
   if (!SID.test(signerId)) return Promise.resolve(null);
   return get(path.join(folder(id), `sig-${signerId}.png`));
