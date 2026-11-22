@@ -73,7 +73,11 @@ export function ToolsPanel({
                 <span className={`wb-cost ${it.tone}`}>{it.cost}</span>
               </button>
             ))}
-            {!items.length && <p className="wb-empty">Nothing matches that. Try a column, such as decision maker or rate.</p>}
+            {!items.length && (
+              <p className="wb-empty">
+                {q ? "Nothing matches that. Try a column, such as decision maker or rate." : `Columns are added on the Companies list. Here, the columns picker shows what this list has.`}
+              </p>
+            )}
           </div>
         </div>
       )}
