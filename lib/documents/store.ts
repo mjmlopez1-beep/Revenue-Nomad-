@@ -16,10 +16,10 @@
  * only while it is live and their turn), and /signed/<document id>.<HMAC> for the finished file.
  */
 import { randomBytes, randomInt } from "crypto";
-import { loadSeed, loadState, tableInternals as T, type State } from "../table";
+import { loadSeed, loadState, memberByToken, tableInternals as T, type State } from "../table";
 import { emailEnabled, sendEmail, MAX_ATTACHMENT_BYTES } from "../email";
 import { upgradeUrl } from "../plan";
-import { PRO_SEND, EMAIL_OFF, ProposalProblem, SIGN_DAYS, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, proposalInternals as PI, type Client } from "../proposals/store";
+import { PRO_SEND, EMAIL_OFF, ProposalProblem, expMsOf, expiredAt, expiryFor, linkDaysOf, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, proposalInternals as PI, type Client } from "../proposals/store";
 import { pipelineEvent } from "../proposals/pipelineHook";
 import { CONSENT_VERSION, consentText } from "../proposals/types";
 import { DOC_MAX_BYTES, SIG_MAX_BYTES, commitSignature, dropSignature, readFinal, readOriginal, readSignature, removeFiles, saveFinal, saveOriginal, stageSignature } from "./files";
@@ -27,7 +27,6 @@ import { PdfProblem, buildFinal, checkPng, inspectPdf, sha256, shown } from "./p
 import { docCodeEmail, docDeclinedEmail, docDoneEmail, docInviteEmail } from "./emails";
 import { FIELD_KINDS, type DocCopy, type DocEvent, type DocField, type DocSigner, type DocSignerRec, type DocSignerView, type DocStatus, type DocumentRec, type StoredDocument } from "./types";
 
-const DAY = 86_400_000;
 export const DOC_LIMITS = { documents: 200, signers: 10, fields: 300, title: 160, label: 60, text: 200, message: 600, reason: 1000 } as const;
 
 const newId = (p: string) => `${p}${randomBytes(9).toString("base64url")}`;
@@ -37,7 +36,7 @@ const { mac, same, cleanLine, cleanSigner, emailHint, base, onFree, titleOf, mem
 
 export const docSignToken = (signerId: string, expMs: number) => `${signerId}.${expMs.toString(36)}.${mac(`rn-dsign:${signerId}:${expMs}`)}`;
 export const docCopyToken = (docId: string) => `${docId}.${mac(`rn-dsigned:${docId}`)}`;
-const signLinkOf = (origin: string | undefined, d: StoredDocument, x: DocSigner) => `${base(origin)}/sign/${docSignToken(x.id, Date.parse(d.expiresAt!))}`;
+const signLinkOf = (origin: string | undefined, d: StoredDocument, x: DocSigner) => `${base(origin)}/sign/${docSignToken(x.id, expMsOf(d.expiresAt))}`;
 export const docCopyLink = (origin: string | undefined, d: { id: string }) => `${base(origin)}/signed/${docCopyToken(d.id)}`;
 export const docDownloadLink = (origin: string | undefined, d: { id: string }) => `${base(origin)}/api/documents/file?c=${encodeURIComponent(docCopyToken(d.id))}`;
 
@@ -64,7 +63,7 @@ export function docStatus(d: StoredDocument, nowMs = Date.now()): DocStatus {
   if (d.signers.some((x) => x.declined)) return "declined";
   if (d.voided) return "void";
   if (!d.sentAt) return "draft";
-  if (d.expiresAt && nowMs > Date.parse(d.expiresAt)) return "expired";
+  if (expiredAt(d.expiresAt, nowMs)) return "expired";
   return d.signers.some((x) => x.viewedAt) ? "viewed" : "sent";
 }
 const live = (d: StoredDocument, nowMs: number) => ["sent", "viewed"].includes(docStatus(d, nowMs));
@@ -351,7 +350,7 @@ async function notify(docId: string, origin: string | undefined, nowMs: number):
   const ok: string[] = [];
   const title = titleOf(s, { id: d.memberId, title: "" } as Parameters<typeof titleOf>[1]);
   for (const x of want) {
-    const mail = docInviteEmail({ signer: x.name, member: m?.name ?? "Your contact", memberTitle: title, title: d.title, link: signLinkOf(origin, d, x), expiresAt: d.expiresAt!, note: d.message, after: d.ordered ? prev : null, self: !!x.sender });
+    const mail = docInviteEmail({ signer: x.name, member: m?.name ?? "Your contact", memberTitle: title, title: d.title, link: signLinkOf(origin, d, x), expiresAt: d.expiresAt ?? null, note: d.message, after: d.ordered ? prev : null, self: !!x.sender });
     if (await sendEmail(x.email, mail.subject, mail.text, mail.html, m?.email && !x.sender ? { replyTo: m.email } : {})) ok.push(x.id);
   }
   if (ok.length) {
@@ -365,7 +364,8 @@ async function notify(docId: string, origin: string | undefined, nowMs: number):
 }
 
 /** Send it: the signers' links by email, in turn. Trial and Pro. */
-export async function sendDocument(token: string | null, id: string, a: { message?: unknown } = {}, origin?: string, nowMs = Date.now()): Promise<{ document: DocumentRec; message: string }> {
+export async function sendDocument(token: string | null, id: string, a: { message?: unknown; linkDays?: unknown } = {}, origin?: string, nowMs = Date.now()): Promise<{ document: DocumentRec; message: string }> {
+  const days = linkDaysOf(a.linkDays);
   const seed = await loadSeed();
   const s0 = await loadState();
   const me0 = memberOf(seed, s0, token);
@@ -380,7 +380,7 @@ export async function sendDocument(token: string | null, id: string, a: { messag
     if (why) throw new ProposalProblem(why);
     if (a.message !== undefined) d.message = cleanLine(a.message, DOC_LIMITS.message);
     d.sentAt = now;
-    d.expiresAt = new Date(nowMs + SIGN_DAYS * DAY).toISOString();
+    d.expiresAt = expiryFor(days, nowMs);
     d.updatedAt = now;
     ev(d, "sent", now, { note: d.signers.map((x) => x.email).join(", ") });
     const to = d.signers.find((x) => !x.sender) ?? d.signers[0];
@@ -397,7 +397,7 @@ export async function sendDocument(token: string | null, id: string, a: { messag
   }
   const d = await getDocument(token, id, origin, nowMs);
   const firsts = d.signers.filter((x) => x.notifiedAt).map((x) => x.name);
-  return { document: d, message: `Sent to ${firsts.join(" and ")}${d.ordered && d.signers.length > 1 ? ". The others get it in turn" : ""}. The links work for ${SIGN_DAYS} days.` };
+  return { document: d, message: `Sent to ${firsts.join(" and ")}${d.ordered && d.signers.length > 1 ? ". The others get it in turn" : ""}. ${days ? `The links work for ${days} days.` : "The links have no end date."}` };
 }
 
 /** The member's own signing link, when they sign it too and it is their turn. */
@@ -431,7 +431,7 @@ function resolve(s: State, raw: unknown): Found {
   for (const d of s.documents ?? []) {
     const x = d.signers.find((y) => y.id === t.signerId);
     if (x) {
-      if (!d.expiresAt || Date.parse(d.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
+      if (!d.sentAt || d.expiresAt === undefined || expMsOf(d.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
       return { d, x };
     }
   }
@@ -444,7 +444,7 @@ function signerState(f: Found, nowMs: number): DocSignerView["status"] {
   if (x.signed) return "signed";
   if (d.signers.some((y) => y.declined)) return "declined";
   if (d.voided) return "void";
-  if (nowMs > Date.parse(d.expiresAt!)) return "expired";
+  if (expiredAt(d.expiresAt, nowMs)) return "expired";
   return turnOf(d).includes(x) ? "open" : "waiting";
 }
 
@@ -584,16 +584,36 @@ export interface DocSignArgs {
   hash?: unknown;
 }
 
-/** Sign: the signer's own fields filled, the signature adopted. The last signature finishes the document. */
-export async function docSign(token: unknown, a: DocSignArgs, who: Client, origin?: string, nowMs = Date.now()): Promise<DocSignerView> {
+/**
+ * The sender's saved signature (lib/proposals/memberSig.ts), when the signer is the member who sent
+ * it and is signed in to Merlin in this browser (`me`, their sign-in cookie): one click to sign.
+ */
+async function savedFor(s: State, f: Found, me: string | null | undefined) {
+  if (!f.x.sender || !me) return null;
+  const m = memberByToken(await loadSeed(), me, s);
+  if (!m || m.id !== f.d.memberId) return null;
+  const { savedSignatureOf } = await import("../proposals/memberSig");
+  return savedSignatureOf(s, m.id);
+}
+/** The saved signature for the signing page, as it shows it. */
+export async function docSavedSignature(token: unknown, me: string | null | undefined): Promise<DocSignerView["saved"]> {
+  const s = await loadState();
+  const sv = await savedFor(s, resolve(s, token), me).catch(() => null);
+  return sv ? { kind: sv.sig.kind, typed: sv.sig.typed ?? null, img: sv.png ? `data:image/png;base64,${sv.png.toString("base64")}` : null } : null;
+}
+
+/** Sign: the signer's own fields filled, the signature adopted. The last signature finishes the document. `me`: the sign-in cookie, for the sender's saved signature (method "saved"). */
+export async function docSign(token: unknown, a: DocSignArgs, who: Client, origin?: string, nowMs = Date.now(), me?: string | null): Promise<DocSignerView> {
   const name = cleanLine(a.name, 100);
   if (!NAME.test(name)) throw new ProposalProblem("Type your full name, first and last.");
   if (a.consent !== true) throw new ProposalProblem("Tick the box to agree to sign electronically.");
-  const method = a.method === "drawn" ? "drawn" : "typed";
   const s0 = await loadState();
   const f0 = resolve(s0, token);
+  const saved = a.method === "saved" ? await savedFor(s0, f0, me) : null;
+  if (a.method === "saved" && !saved) throw new ProposalProblem("Your saved signature isn't here. Sign in to Merlin in this browser, or draw or type it.");
+  const method = saved ? saved.sig.kind : a.method === "drawn" ? "drawn" : "typed";
   const from = await fromOf(s0, f0.d);
-  const png = method === "drawn" ? await pngOf(a.png) : null;
+  const png = saved ? saved.png : method === "drawn" ? await pngOf(a.png) : null;
   const raw = (a.values && typeof a.values === "object" && !Array.isArray(a.values) ? a.values : {}) as Record<string, unknown>;
   const now = new Date(nowMs).toISOString();
   // The drawing is written aside first, and moved into place only by the request that records the signature: one that loses the race never overwrites the winner's.
@@ -622,7 +642,7 @@ export async function docSign(token: unknown, a: DocSignArgs, who: Client, origi
     }
     f.x.values = values;
     f.x.signed = { at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), name, method, consent: consentText(from.name || "the sender", "document"), consentVersion: CONSENT_VERSION, hash: f.d.sha256 };
-    ev(f.d, "signed", now, { ...who, who: f.x.email, note: method === "drawn" ? `drew their signature as "${name}"` : `typed name "${name}"` });
+    ev(f.d, "signed", now, { ...who, who: f.x.email, note: saved ? `applied their saved signature (${method}) as "${name}"` : method === "drawn" ? `drew their signature as "${name}"` : `typed name "${name}"` });
     f.d.updatedAt = now;
     if (method === "drawn" && !staged) throw new ProposalProblem(NO_DRAWING);
     const done = allSigned(f.d);
@@ -683,13 +703,15 @@ export function finish(docId: string, origin?: string): Promise<void> {
     const m = await memberFor(await loadSeed(), d.memberId);
     const sender = { name: m?.name ?? "", email: m?.email ?? "", title: titleOf(s, { id: d.memberId, title: "" } as Parameters<typeof titleOf>[1]) };
     const consentVersion = d.signers.map((x) => x.signed!.consentVersion).sort().pop() ?? CONSENT_VERSION;
-    const fin = await buildFinal(original, { doc: d, signatures: sigs, sender, consentText: consentText(sender.name || "the sender", "document"), consentVersion });
+    const fin = await buildFinal(original, { doc: d, signatures: sigs, sender, consentText: consentText(sender.name || "the sender", "document"), consentVersion, seal: { checkUrl: `${base(origin)}/check` } });
     await saveFinal(d.id, fin.bytes);
     const at = new Date().toISOString();
+    // The seal's record (lib/seal.ts): the file's SHA-256 and the printed digest, signed with Merlin's key.
+    const seal = fin.digest ? (await import("../seal")).sealRec({ digest: fin.digest, sha256: fin.sha256, bytes: fin.bytes }, at) : undefined;
     const ok = await T.mutate((st) => {
       const dd = (st.documents ?? []).find((x) => x.id === docId);
       if (!dd || dd.completed) return false;
-      dd.completed = { at, sha256: fin.sha256, signedPagesSha256: fin.signedPagesSha256, size: fin.bytes.length };
+      dd.completed = { at, sha256: fin.sha256, signedPagesSha256: fin.signedPagesSha256, size: fin.bytes.length, ...(seal ? { seal } : {}) };
       ev(dd, "completed", at, { note: `final file SHA-256 ${fin.sha256}` });
       dd.updatedAt = at;
       return true;
@@ -740,6 +762,7 @@ export async function docCopy(raw: unknown, origin?: string): Promise<DocCopy | 
     completedAt: dd.completed.at,
     download: docDownloadLink(origin, dd),
     events: dd.events.map((e) => ({ ...e })),
+    sealed: dd.completed.seal ? { at: dd.completed.seal.at, check: `${base(origin)}/check` } : null,
   };
 }
 

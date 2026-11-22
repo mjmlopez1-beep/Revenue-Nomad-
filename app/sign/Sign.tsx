@@ -14,10 +14,13 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { IconCheck } from "../ui/shared";
 import { Logo } from "../ui/Logo";
 import { Spot } from "../ui/fractions/art";
-import type { SignerView } from "@/lib/proposals/types";
-import { DocBlocks, dayOf } from "./doc";
+import type { Choice, SignerView } from "@/lib/proposals/types";
+import { choiceRec, startOption } from "@/lib/proposals/pricing";
+import { dayOf } from "./doc";
+import { Parties, ProposalView, memberState } from "./ProposalView";
 import { ActivityNotice, useProposalActivity } from "./activity";
 import "./sign.css";
+import "./clientview.css";
 
 const NETWORK = "We couldn't reach the server. Check your connection and try again.";
 const NAME_RE = /^\p{L}[\p{L}'’.-]*(?: +\p{L}[\p{L}'’.-]*)+$/u;
@@ -104,13 +107,18 @@ const STATUS_SAY: Record<SignerView["status"], { h: string; p: string }> = {
   declined: { h: "You declined this proposal", p: "The sender knows. If you change your mind, ask them for a new one." },
   void: { h: "This proposal was withdrawn", p: "The sender withdrew it, so it can't be signed. Ask them if you expected to sign it." },
   changed: { h: "There's a newer version", p: "The sender changed this proposal after sending it, so this version can't be signed. They'll send you the new one." },
-  expired: { h: "This link has expired", p: "Links to sign work for 30 days. Ask the sender for a new one." },
+  expired: { h: "This link has expired", p: "This link has stopped working. Ask the sender for a new one." },
+  passed: { h: "You passed this on to sign", p: "They have their own link now, with the same email code check. This one is read only." },
 };
 
 export function SignView({ token }: { token: string }) {
   const [v, setV] = useState<SignerView | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
-  const [step, setStep] = useState<"read" | "sign" | "decline">("read");
+  const [step, setStep] = useState<"read" | "sign" | "decline" | "ask" | "handoff">("read");
+  // Ask a question (sent to the member by email), or pass it to someone else to sign.
+  const [question, setQuestion] = useState("");
+  const [asked, setAsked] = useState<string | null>(null);
+  const [next, setNext] = useState({ name: "", title: "", email: "", note: "" });
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Which step an error belongs to: it shows there, and only there.
@@ -120,6 +128,8 @@ export function SignView({ token }: { token: string }) {
   const [agree, setAgree] = useState(false);
   const [name, setName] = useState("");
   const [reason, setReason] = useState("");
+  // The option and add-ons picked (a proposal with options): theirs to change until they sign.
+  const [choice, setChoice] = useState<Choice | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const cardGo = useRef<HTMLButtonElement>(null);
   const cardShows = useOnScreen(cardGo, !!v && v.status === "open" && step === "read");
@@ -127,7 +137,7 @@ export function SignView({ token }: { token: string }) {
   useProposalActivity(token, { enabled: v?.status === "open" });
 
   useEffect(() => {
-    void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : setV(r)));
+    void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setChoice(r.choice ?? (r.doc.pricing ? { optionId: startOption(r.doc.pricing), addOnIds: [] } : null)))));
   }, [token]);
   useEffect(() => {
     if (step !== "read") panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -168,51 +178,352 @@ export function SignView({ token }: { token: string }) {
   };
   const open = v.status === "open";
   const nameOk = NAME_RE.test(name.trim());
+  const fromFirst = d.from.name.split(" ")[0] || d.from.name;
+  const picked = d.pricing && choice ? choiceRec(d.pricing, choice) : null;
+  const pickTo = (c: Choice) => {
+    if (!open) return;
+    setChoice(c);
+    // Kept on the server, so the page opens on it again; the choice signed is the one sent with the signature.
+    void call({ token, op: "choose", choice: c }).then((r) => {
+      if (r.error) setErr(r.error), setErrAt("choose");
+      else if (errAt === "choose") setErr(null);
+    });
+  };
+  const accepting = picked ? (
+    <>
+      You&#39;re accepting <strong>{picked.summary}</strong>
+      {picked.addOns.length || picked.once ? `, ${picked.total} in all,` : ""} on the terms above.
+    </>
+  ) : (
+    <>You&#39;re accepting this proposal, on the terms above.</>
+  );
+
+  const signPanel = (
+    <div ref={panel} className="cv-accept" id="sg-panel">
+      {step === "ask" ? (
+        asked ? (
+          <div className="cv-wait" role="status">
+            <span className="cv-wait-h">Sent to {asked}. They&#39;ll reply by email.</span>
+            <button type="button" className="sg-link" onClick={() => (setStep("read"), setAsked(null), setQuestion(""))}>
+              Back to the proposal
+            </button>
+          </div>
+        ) : (
+          <form
+            className="sg-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const r = await run("ask", { op: "ask", question });
+              if (r) setAsked((r as unknown as { to: string }).to || fromFirst);
+            }}
+          >
+            <h2 className="cv-h2">Ask {fromFirst} a question</h2>
+            <label className="sg-label" htmlFor="sg-q">
+              Your question. {fromFirst} replies to your email.
+            </label>
+            <textarea id="sg-q" className="input sg-area" rows={4} maxLength={2000} value={question} onChange={(e) => setQuestion(e.target.value)} />
+            {err && errAt === "ask" && (
+              <p className="sg-err" role="alert">
+                {err}
+              </p>
+            )}
+            <div className="sg-row">
+              <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
+                Back
+              </button>
+              <button type="submit" className="btn btn-lg" aria-busy={busy === "ask"} disabled={!!busy || !question.trim()}>
+                {busy === "ask" ? "Sending" : "Send the question"}
+              </button>
+            </div>
+          </form>
+        )
+      ) : step === "handoff" ? (
+        <form
+          className="sg-form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const r = await run("handoff", { op: "handoff", signer: { name: next.name.trim(), title: next.title.trim(), email: next.email.trim() }, note: next.note });
+            if (r) setV(r), window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
+          <h2 className="cv-h2">Send to someone else to sign</h2>
+          <p className="sg-help">They get their own link, and confirm their email with a code before signing. Yours becomes read only. {fromFirst} is told.</p>
+          {(["name", "title", "email"] as const).map((k) => (
+            <label key={k} className="sg-label">
+              {k === "name" ? "Their full name" : k === "title" ? "Their title" : "Their email"}
+              <input className="input" type={k === "email" ? "email" : "text"} autoComplete="off" maxLength={k === "email" ? 160 : 100} value={next[k]} onChange={(e) => setNext({ ...next, [k]: e.target.value })} />
+            </label>
+          ))}
+          <label className="sg-label">
+            A note for them (optional)
+            <textarea className="input sg-area" rows={2} maxLength={600} value={next.note} onChange={(e) => setNext({ ...next, note: e.target.value })} />
+          </label>
+          {err && errAt === "handoff" && (
+            <p className="sg-err" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="sg-row">
+            <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
+              Back
+            </button>
+            <button type="submit" className="btn btn-lg" aria-busy={busy === "handoff"} disabled={!!busy || !NAME_RE.test(next.name.trim()) || !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(next.email.trim())}>
+              {busy === "handoff" ? "Sending" : `Send to ${next.name.trim().split(" ")[0] || "them"}`}
+            </button>
+          </div>
+        </form>
+      ) : step === "decline" ? (
+        <form
+          className="sg-form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const r = await run("decline", { op: "decline", reason });
+            if (r) setV(r);
+          }}
+        >
+          <h2 className="cv-h2">Decline this proposal</h2>
+          <label className="sg-label" htmlFor="sg-reason">
+            Tell {fromFirst} why (optional)
+          </label>
+          <textarea id="sg-reason" className="input sg-area" rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
+          {err && errAt === "decline" && (
+            <p className="sg-err" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="sg-row">
+            <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
+              Back
+            </button>
+            <button type="submit" className="btn btn-lg sg-red" aria-busy={busy === "decline"} disabled={!!busy}>
+              {busy === "decline" ? "Declining" : "Decline"}
+            </button>
+          </div>
+        </form>
+      ) : step === "read" ? (
+        <>
+          <h2 className="cv-h2">Accept and sign</h2>
+          <span className="cv-accept-l">{accepting}</span>
+          <Parties doc={d} client={{ state: "here", name: v.signer.name, title: v.signer.title }} member={{ state: memberState(v.memberMode, v.member, false), sig: v.member }} />
+          {err && errAt === "choose" && (
+            <p className="sg-err" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="cv-acts">
+            <button ref={cardGo} type="button" className="cv-go" onClick={() => setStep("sign")}>
+              Accept and sign
+            </button>
+            <button type="button" className="cv-btn cv-btn-lg" onClick={() => (setStep("ask"), setErr(null))}>
+              Ask {fromFirst} a question
+            </button>
+            {v.handoffsLeft > 0 && (
+              <button type="button" className="cv-btn cv-btn-lg" onClick={() => (setStep("handoff"), setErr(null))}>
+                Send to someone else to sign
+              </button>
+            )}
+            <button type="button" className="cv-decline" onClick={() => setStep("decline")}>
+              Decline
+            </button>
+          </div>
+          <span className="cv-fine">
+            Next you&#39;ll get a code by email at {v.emailHint}, then type your full name. {v.sealOnSign ? "You'll receive a sealed copy as soon as you sign." : "You'll get the signed copy by email as soon as you sign."}
+          </span>
+        </>
+      ) : (
+        <div className="sg-steps">
+          <h2 className="cv-h2">Sign this proposal</h2>
+          <span className="cv-accept-l">{accepting}</span>
+          <ol className="sg-ol">
+            <li className="sg-step" data-done={v.codeVerified}>
+              <span className="sg-num" aria-hidden>
+                {v.codeVerified ? <IconCheck size={14} /> : 1}
+              </span>
+              <div className="sg-stepbody">
+                <h3 className="sg-h3">Confirm your email</h3>
+                {v.codeVerified ? (
+                  <p className="sg-help">Confirmed: {v.emailHint}</p>
+                ) : !sentTo && !v.codeSent ? (
+                  <>
+                    <p className="sg-help">We&#39;ll email a 6-digit code to {v.emailHint}.</p>
+                    <button
+                      type="button"
+                      className="btn btn-lg"
+                      aria-busy={busy === "code"}
+                      disabled={!!busy}
+                      onClick={async () => {
+                        const r = await run("code", { op: "code" });
+                        if (r) setSentTo(r.emailHint ?? v.emailHint);
+                      }}
+                    >
+                      {busy === "code" ? "Sending" : "Email me a code"}
+                    </button>
+                    {err && (errAt === "code" || errAt === "verify") && (
+                      <p className="sg-err" role="alert">
+                        {err}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <form
+                    className="sg-form"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const r = await run("verify", { op: "verify", code });
+                      if (r) setV(r);
+                    }}
+                  >
+                    <label className="sg-label" htmlFor="sg-code">
+                      The code we sent to {sentTo ?? v.emailHint}
+                    </label>
+                    <input
+                      id="sg-code"
+                      className="input sg-code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      autoFocus
+                    />
+                    {err && (errAt === "code" || errAt === "verify") && (
+                      <p className="sg-err" role="alert">
+                        {err}
+                      </p>
+                    )}
+                    <div className="sg-row">
+                      <button type="submit" className="btn btn-lg" aria-busy={busy === "verify"} disabled={!!busy || code.length !== 6}>
+                        {busy === "verify" ? "Checking" : "Confirm"}
+                      </button>
+                      <button
+                        type="button"
+                        className="sg-link"
+                        disabled={!!busy}
+                        onClick={async () => {
+                          const r = await run("code", { op: "code" });
+                          if (r) setSentTo(r.emailHint ?? v.emailHint), setCode("");
+                        }}
+                      >
+                        Send a new code
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </li>
+            <li className="sg-step" data-off={!v.codeVerified} data-done={agree}>
+              <span className="sg-num" aria-hidden>
+                {agree ? <IconCheck size={14} /> : 2}
+              </span>
+              <div className="sg-stepbody">
+                <h3 className="sg-h3">Agree to sign electronically</h3>
+                <ConsentBox text={v.consent} checked={agree} disabled={!v.codeVerified} onChange={setAgree} />
+              </div>
+            </li>
+            <li className="sg-step" data-off={!v.codeVerified || !agree}>
+              <span className="sg-num" aria-hidden>
+                3
+              </span>
+              <form
+                className="sg-stepbody sg-form"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const r = await run("sign", { op: "sign", name: name.trim(), consent: agree, hash: v.hash, ...(choice ? { choice } : {}) });
+                  if (r) setV(r), setChoice(r.choice), window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                <h3 className="sg-h3">Type your full name</h3>
+                <input
+                  id="sg-name"
+                  className="input sg-name"
+                  aria-label="Your full name"
+                  autoComplete="name"
+                  maxLength={100}
+                  placeholder={d.to.name}
+                  value={name}
+                  disabled={!v.codeVerified || !agree}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <div className="sg-sig" aria-label="Your signature" data-empty={!name.trim()}>
+                  <span className="sg-sig-name">{name.trim() || "Your signature"}</span>
+                  <span className="sg-sig-line">Signature · {dayOf(new Date().toISOString())}</span>
+                </div>
+                {err && errAt === "sign" && (
+                  <p className="sg-err" role="alert">
+                    {err}
+                  </p>
+                )}
+                <button type="submit" className="btn btn-pine btn-lg sg-wide" aria-busy={busy === "sign"} disabled={!!busy || !v.codeVerified || !agree || !nameOk}>
+                  {busy === "sign" ? "Signing" : "Sign"}
+                </button>
+                <p className="sg-fine">
+                  Signing records the time, this device&#39;s IP address and browser, {picked ? "the option you picked, " : ""}and the document&#39;s fingerprint (SHA-256): <span className="sg-hash">{v.hash}</span>
+                </p>
+              </form>
+            </li>
+          </ol>
+          <button type="button" className="sg-link" onClick={() => (setStep("decline"), setErr(null))}>
+            Decline instead
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const signedPart =
+    v.status === "signed" && v.awaitingMember ? (
+      <div className="cv-accept">
+        <div className="cv-wait" role="status">
+          <span className="cv-wait-h">Signed by you · waiting for {d.from.name} to countersign</span>
+          <span className="cv-fine">
+            {v.signedChoice ? `You chose ${v.signedChoice.summary}: ${v.signedChoice.total}. That's locked now. ` : ""}
+            {fromFirst} countersigns next. You&#39;ll both get the {v.sealOnSign ? "sealed" : "signed"} copy by email as soon as they do.
+          </span>
+        </div>
+        <Parties doc={d} client={{ state: "signed", name: v.signedName, title: v.signer.title, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
+      </div>
+    ) : v.status === "signed" ? (
+      <div className="cv-accept">
+        <div className="cv-done">
+          <span className="cv-done-h">Signed. Thank you, {(v.signedName ?? d.to.name).split(" ")[0]}.</span>
+          <span className="cv-done-p">
+            {v.signedChoice ? `You chose ${v.signedChoice.summary}: ${v.signedChoice.total}. ` : ""}
+            {v.sealed ? "Your sealed copy is on its way to your email, and here to download." : "Your signed copy, with its audit trail, is on its way to your email."} {fromFirst} has been told.
+          </span>
+          <div className="cv-acts">
+            {v.sealed && (
+              <a className="cv-btn" href={v.sealed.pdf}>
+                Download the signed PDF
+              </a>
+            )}
+            {v.copyUrl && (
+              <a className="cv-btn" href={v.copyUrl}>
+                Open the signed copy
+              </a>
+            )}
+          </div>
+        </div>
+        <Parties doc={d} client={{ state: "signed", name: v.signedName, title: v.signer.title, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
+      </div>
+    ) : (
+      <div className="cv-accept">
+        <h2 className="cv-h2">{v.status === "passed" && v.passedTo ? `You passed this to ${v.passedTo.name} to sign` : STATUS_SAY[v.status].h}</h2>
+        <span className="cv-fine">{STATUS_SAY[v.status].p}</span>
+      </div>
+    );
 
   return (
     <div className="sg">
       <SignTop />
-      <main className="sg-main">
-        <section className="sg-card sg-head" aria-labelledby="sg-title">
-          <p className="sg-from">Proposal from</p>
-          <p className="sg-sender">{d.from.name}</p>
-          {d.from.title && <p className="sg-sender-t">{d.from.title}</p>}
-          <h1 className="sg-title" id="sg-title">
-            {d.title}
-          </h1>
-          <dl className="sg-meta">
-            <div>
-              <dt>Prepared for</dt>
-              <dd>
-                {d.to.name}
-                {d.to.title ? `, ${d.to.title}` : ""}
-                {d.company ? ` · ${d.company}` : ""}
-              </dd>
-            </div>
-            <div>
-              <dt>Sent</dt>
-              <dd>
-                {dayOf(d.preparedAt)} · Version {d.version}
-              </dd>
-            </div>
-            {open && (
-              <div>
-                <dt>Sign by</dt>
-                <dd>{dayOf(v.expiresAt)}</dd>
-              </div>
-            )}
-          </dl>
-        </section>
-
+      <main className="sg-main cv-main">
         {!open && (
           <section className="sg-card sg-state" data-status={v.status}>
-            {v.status === "signed" && (
-              <SignedArt />
-            )}
-            <h2 className="sg-h">{STATUS_SAY[v.status].h}</h2>
+            {v.status === "signed" && <SignedArt />}
+            <h2 className="sg-h">{v.status === "passed" && v.passedTo ? `You passed this to ${v.passedTo.name} to sign` : v.awaitingMember ? `Signed by you · waiting for ${d.from.name} to countersign` : STATUS_SAY[v.status].h}</h2>
             <p className="sg-p">
               {v.status === "signed" && v.signedName ? `Signed by ${v.signedName} on ${dayOf(v.signedAt)}. ` : ""}
-              {STATUS_SAY[v.status].p}
+              {v.awaitingMember ? `You'll both get the ${v.sealOnSign ? "sealed" : "signed"} copy by email once ${fromFirst} countersigns.` : STATUS_SAY[v.status].p}
             </p>
             {v.copyUrl && (
               <a className="btn btn-pine btn-lg sg-wide" href={v.copyUrl}>
@@ -222,190 +533,15 @@ export function SignView({ token }: { token: string }) {
           </section>
         )}
 
-        <article className="sg-card sg-doc" aria-label="The proposal">
-          <DocBlocks blocks={d.blocks} />
-        </article>
-
-        {open && (
-          <div ref={panel} className="sg-card sg-panel" id="sg-panel">
-            {step === "decline" ? (
-              <form
-                className="sg-form"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const r = await run("decline", { op: "decline", reason });
-                  if (r) setV(r);
-                }}
-              >
-                <h2 className="sg-h2">Decline this proposal</h2>
-                <label className="sg-label" htmlFor="sg-reason">
-                  Tell {d.from.name.split(" ")[0]} why (optional)
-                </label>
-                <textarea id="sg-reason" className="input sg-area" rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
-                {err && errAt === "decline" && (
-                  <p className="sg-err" role="alert">
-                    {err}
-                  </p>
-                )}
-                <div className="sg-row">
-                  <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
-                    Back
-                  </button>
-                  <button type="submit" className="btn btn-lg sg-red" aria-busy={busy === "decline"} disabled={!!busy}>
-                    {busy === "decline" ? "Declining" : "Decline"}
-                  </button>
-                </div>
-              </form>
-            ) : step === "read" ? (
-              <div className="sg-ready">
-                <h2 className="sg-h2">Ready to sign?</h2>
-                <p className="sg-help">It takes a minute. We confirm it&#39;s you with a code sent to {v.emailHint}.</p>
-                <button ref={cardGo} type="button" className="btn btn-pine btn-lg sg-wide" onClick={() => setStep("sign")}>
-                  Sign this proposal
-                </button>
-                <button type="button" className="sg-link" onClick={() => setStep("decline")}>
-                  Decline
-                </button>
-              </div>
-            ) : (
-              <div className="sg-steps">
-                <h2 className="sg-h2">Sign this proposal</h2>
-                <ol className="sg-ol">
-                  <li className="sg-step" data-done={v.codeVerified}>
-                    <span className="sg-num" aria-hidden>
-                      {v.codeVerified ? <IconCheck size={14} /> : 1}
-                    </span>
-                    <div className="sg-stepbody">
-                      <h3 className="sg-h3">Confirm your email</h3>
-                      {v.codeVerified ? (
-                        <p className="sg-help">Confirmed: {v.emailHint}</p>
-                      ) : !sentTo && !v.codeSent ? (
-                        <>
-                          <p className="sg-help">We&#39;ll email a 6-digit code to {v.emailHint}.</p>
-                          <button
-                            type="button"
-                            className="btn btn-lg"
-                            aria-busy={busy === "code"}
-                            disabled={!!busy}
-                            onClick={async () => {
-                              const r = await run("code", { op: "code" });
-                              if (r) setSentTo(r.emailHint ?? v.emailHint);
-                            }}
-                          >
-                            {busy === "code" ? "Sending" : "Email me a code"}
-                          </button>
-                          {err && (errAt === "code" || errAt === "verify") && (
-                            <p className="sg-err" role="alert">
-                              {err}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <form
-                          className="sg-form"
-                          onSubmit={async (e) => {
-                            e.preventDefault();
-                            const r = await run("verify", { op: "verify", code });
-                            if (r) setV(r);
-                          }}
-                        >
-                          <label className="sg-label" htmlFor="sg-code">
-                            The code we sent to {sentTo ?? v.emailHint}
-                          </label>
-                          <input
-                            id="sg-code"
-                            className="input sg-code"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            pattern="[0-9]*"
-                            maxLength={6}
-                            value={code}
-                            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                            autoFocus
-                          />
-                          {err && (errAt === "code" || errAt === "verify") && (
-                            <p className="sg-err" role="alert">
-                              {err}
-                            </p>
-                          )}
-                          <div className="sg-row">
-                            <button type="submit" className="btn btn-lg" aria-busy={busy === "verify"} disabled={!!busy || code.length !== 6}>
-                              {busy === "verify" ? "Checking" : "Confirm"}
-                            </button>
-                            <button
-                              type="button"
-                              className="sg-link"
-                              disabled={!!busy}
-                              onClick={async () => {
-                                const r = await run("code", { op: "code" });
-                                if (r) setSentTo(r.emailHint ?? v.emailHint), setCode("");
-                              }}
-                            >
-                              Send a new code
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </div>
-                  </li>
-                  <li className="sg-step" data-off={!v.codeVerified} data-done={agree}>
-                    <span className="sg-num" aria-hidden>
-                      {agree ? <IconCheck size={14} /> : 2}
-                    </span>
-                    <div className="sg-stepbody">
-                      <h3 className="sg-h3">Agree to sign electronically</h3>
-                      <ConsentBox text={v.consent} checked={agree} disabled={!v.codeVerified} onChange={setAgree} />
-                    </div>
-                  </li>
-                  <li className="sg-step" data-off={!v.codeVerified || !agree}>
-                    <span className="sg-num" aria-hidden>
-                      3
-                    </span>
-                    <form
-                      className="sg-stepbody sg-form"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        const r = await run("sign", { op: "sign", name: name.trim(), consent: agree, hash: v.hash });
-                        if (r) setV(r), window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                    >
-                      <h3 className="sg-h3">Type your full name</h3>
-                      <input
-                        id="sg-name"
-                        className="input sg-name"
-                        aria-label="Your full name"
-                        autoComplete="name"
-                        maxLength={100}
-                        placeholder={d.to.name}
-                        value={name}
-                        disabled={!v.codeVerified || !agree}
-                        onChange={(e) => setName(e.target.value)}
-                      />
-                      <div className="sg-sig" aria-label="Your signature" data-empty={!name.trim()}>
-                        <span className="sg-sig-name">{name.trim() || "Your signature"}</span>
-                        <span className="sg-sig-line">Signature · {dayOf(new Date().toISOString())}</span>
-                      </div>
-                      {err && errAt === "sign" && (
-                        <p className="sg-err" role="alert">
-                          {err}
-                        </p>
-                      )}
-                      <button type="submit" className="btn btn-pine btn-lg sg-wide" aria-busy={busy === "sign"} disabled={!!busy || !v.codeVerified || !agree || !nameOk}>
-                        {busy === "sign" ? "Signing" : "Sign"}
-                      </button>
-                      <p className="sg-fine">
-                        Signing records the time, this device&#39;s IP address and browser, and the document&#39;s fingerprint (SHA-256): <span className="sg-hash">{v.hash}</span>
-                      </p>
-                    </form>
-                  </li>
-                </ol>
-                <button type="button" className="sg-link" onClick={() => (setStep("decline"), setErr(null))}>
-                  Decline instead
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+        <ProposalView
+          doc={d}
+          openUntil={open ? v.expiresAt ?? "none" : null}
+          canSign={open}
+          choice={choice}
+          onPick={open && d.pricing ? (id) => pickTo({ optionId: id, addOnIds: choice?.addOnIds ?? [] }) : undefined}
+          onAddOn={open && d.pricing ? (id, on) => pickTo({ optionId: choice?.optionId ?? startOption(d.pricing!), addOnIds: on ? [...(choice?.addOnIds ?? []), id] : (choice?.addOnIds ?? []).filter((x) => x !== id) }) : undefined}
+          sign={open ? signPanel : signedPart}
+        />
 
         <footer className="sg-foot">
           <p>

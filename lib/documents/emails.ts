@@ -18,7 +18,7 @@ const foot = () => {
 };
 
 /** To a signer, when it is their turn. */
-export function docInviteEmail(o: { signer: string; member: string; memberTitle: string; title: string; link: string; expiresAt: string; note?: string; after?: string | null; self?: boolean }): Mail {
+export function docInviteEmail(o: { signer: string; member: string; memberTitle: string; title: string; link: string; expiresAt: string | null; note?: string; after?: string | null; self?: boolean }): Mail {
   const member = oneLine(o.member).slice(0, 80);
   const title = oneLine(o.title).slice(0, 160);
   const subject = o.self ? `Your turn to sign ${title}` : `${member} sent you ${title} to sign`;
@@ -26,7 +26,7 @@ export function docInviteEmail(o: { signer: string; member: string; memberTitle:
     ? `You added yourself as a signer of ${title}. ${o.after ? `${oneLine(o.after)} signed it, so it's your turn.` : "It's your turn."}`
     : `${member}${o.memberTitle ? `, ${oneLine(o.memberTitle).slice(0, 80)},` : ""} sent you ${title} to sign.${o.after ? ` ${oneLine(o.after)} signed it already.` : ""}`;
   const how = "Read it and sign online. No account needed: we confirm it's you with a code sent to this email.";
-  const until = `The link works until ${day(o.expiresAt)}.`;
+  const until = o.expiresAt ? `The link works until ${day(o.expiresAt)}.` : "The link has no end date.";
   const note = o.self ? "" : oneLine(o.note ?? "").slice(0, 600);
   const f = foot();
   const text = [`Hi ${first(o.signer)},`, "", lead, ...(note ? ["", note] : []), "", how, "", o.link, "", until, "", ...f.text].join("\n");

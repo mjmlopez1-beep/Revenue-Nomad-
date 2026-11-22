@@ -168,6 +168,8 @@ run proposals npx tsx scripts/test-proposals.mts
 run documents npx tsx scripts/test-documents.mts
 # After it goes out (lib/close, app/api/sign/activity): beacon validation and rate limits, readers by a cookie (never an IP), section and option time capped by the time that passed, the follow-up rules, alerts (first open, a new reader, engaged at most once in 6 hours, signed and the pipeline at Won, each channel's switch, Slack only when connected), reminders (day 2, day 7, before the link closes, off per proposal, stopped on sign, decline and withdraw), the renewal and its copy, the Close gate, a document moving to Won, privacy, the plan rows. In process, email and Slack to fakes.
 run activity npx tsx scripts/test-activity.mts
+# What the client sees and signs (app/sign, lib/proposals/pricing.ts, sections.ts, pdf.ts, lib/seal.ts, app/check): 1, 2 and 3 options and a short one-price proposal rendered with their sections and data-section ids, add-on totals, the pick changing until signed and locked after, the choice in the signed record, the member's view and both emails, the sealed PDF with Unicode names, the seal (a match, an altered byte, an unknown file), /check storing nothing, the seal key without RN_SEAL_KEY, documents sealed too, and the Close gates. In process, PDFs made here, email to a fake endpoint.
+run clientview npx tsx scripts/test-clientview.mts
 # Saved views: rename, the same view twice, remove and Undo, on the server and through the connector, on a made-up seed.
 run views npx tsx scripts/test-views.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.

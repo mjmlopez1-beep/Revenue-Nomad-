@@ -707,6 +707,8 @@ console.log("\nThe API's routes");
     "api/activity",
     // api/billing/ai-pack: the AI usage pack's checkout, the member's cookie (Close and the trial).
     "api/billing", "api/billing/ai-pack", "api/billing/webhook",
+    // Check a copy (/check, lib/seal.ts): public on purpose; the PDF is hashed in memory and kept nowhere, and the answer names only who signed and when.
+    "api/check",
     // Documents to sign (lib/documents): the member's cookie for their own uploads; api/documents/file: the member's cookie, the signer's own signing link, or the finished copy's link.
     "api/documents", "api/documents/file",
     // A link in the weekly email or an email's footer: a signed grant for one member, 7 days, used once (lib/emailIn.ts); it only ever goes to a path in the app.
@@ -727,9 +729,10 @@ console.log("\nThe API's routes");
     "api/proposals/template",
     // The radar: Send now (an admin's cookie), and the email's open pixel and tracked links (the radar's signature; a click only ever goes to a path in the app).
     "api/radar", "api/radar/go", "api/radar/open",
+    // api/sign/pdf: the sealed PDF of a signed proposal, with the signed copy's own link.
     "api/sign",
     // The signing page's reading beacons (lib/close): a valid, live signing link is the only key; a random reader cookie, never the IP.
-    "api/sign/activity",
+    "api/sign/activity", "api/sign/pdf",
     // api/table/jobs: Automatic jobs (lib/jobs.ts), the card and cadence changes (an admin's cookie), and the scheduler's own look (a key only this process holds).
     "api/table", "api/table/jobs", "api/table/lookup", "api/table/names", "api/table/scan", "api/table/unsubscribe",
   ];

@@ -21,6 +21,7 @@ import path from "path";
 import { crc32, inflateSync } from "zlib";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { finishSeal, placeSeal } from "../seal";
 import type { DocField, StoredDocument } from "./types";
 
 export class PdfProblem extends Error {}
@@ -277,6 +278,8 @@ export interface StampInput {
   sender: { name: string; email: string; title: string };
   consentText: string;
   consentVersion: string;
+  /** Seal the file (lib/seal.ts): its fingerprint printed on the audit page, and where to check a copy. */
+  seal?: { checkUrl: string };
 }
 
 const INK = rgb(0.04, 0.1, 0.075);
@@ -349,7 +352,7 @@ export const codePoints = (s: string) => [...s].map((c) => `U+${c.codePointAt(0)
  * the bytes, the SHA-256 of the signed pages alone (before the audit trail was added) and of the
  * whole file.
  */
-export async function buildFinal(original: Uint8Array, a: StampInput): Promise<{ bytes: Uint8Array; signedPagesSha256: string; sha256: string }> {
+export async function buildFinal(original: Uint8Array, a: StampInput): Promise<{ bytes: Uint8Array; signedPagesSha256: string; sha256: string; digest?: string }> {
   const pdf = await PDFDocument.load(original, { updateMetadata: false });
   const sig = await pdf.embedFont(StandardFonts.TimesRomanBoldItalic);
   const body = await pdf.embedFont(StandardFonts.Helvetica);
@@ -423,7 +426,12 @@ export async function buildFinal(original: Uint8Array, a: StampInput): Promise<{
   text(d.sha256, { font: mono, size: 8.5, gap: 4 });
   text("The signed pages, with every value stamped in (this file without its audit trail):", { color: MUTED });
   text(signedPagesSha256, { font: mono, size: 8.5, gap: 4 });
-  text("The fingerprint of this whole file can't be printed inside it. Merlin records it at completion and shows it in the email that carried this file and on the signed copy's page.", { color: MUTED, gap: 4 });
+  text(
+    a.seal
+      ? "This whole file's fingerprint is in the seal at the end of this trail. Merlin also records it at completion and shows it in the email that carried this file and on the signed copy's page."
+      : "The fingerprint of this whole file can't be printed inside it. Merlin records it at completion and shows it in the email that carried this file and on the signed copy's page.",
+    { color: MUTED, gap: 4 },
+  );
   rule();
   text("Sender", { size: 11, font: bold, gap: 2 });
   text(`${a.sender.name}${a.sender.title ? `, ${a.sender.title}` : ""} <${a.sender.email}>`, { gap: 2 });
@@ -453,6 +461,18 @@ export async function buildFinal(original: Uint8Array, a: StampInput): Promise<{
     rule();
     text("Some characters in this file (Chinese, Japanese or Korean, or emoji) are outside its fonts and print as ?. Merlin keeps every value exactly as typed.", { size: 8.5, color: MUTED });
   }
+  if (a.seal) {
+    rule();
+    need(70);
+    text("Sealed by Merlin", { size: 11, font: bold, color: PINE, gap: 2 });
+    text("The SHA-256 of this file, with the 64 characters below read as zeros:", { size: 8.5, color: MUTED });
+    need(14);
+    await placeSeal(pdf, page, M, y - 9, 8);
+    y -= 14;
+    text(`Any change to this file breaks the seal. Check this copy at ${a.seal.checkUrl}: drop the PDF there to see whether it matches what was signed.`, { size: 8.5 });
+    const fin = finishSeal(await pdf.save({ useObjectStreams: false }));
+    return { bytes: fin.bytes, signedPagesSha256, sha256: fin.sha256, digest: fin.digest };
+  }
   const bytes = await pdf.save({ useObjectStreams: false });
   return { bytes, signedPagesSha256, sha256: sha256(bytes) };
 }
@@ -472,3 +492,7 @@ export const EVENT_WORDS: Record<string, string> = {
   copy_sent: "Final copy emailed",
   expired_open: "Opened after the link expired",
 };
+
+/** The text machinery, shared with the signed proposal's PDF (lib/proposals/pdf.ts): runs in the standard fonts or DejaVu Sans, measured and wrapped. */
+export type { Ink };
+export const pdfText = { runs, wrap, drawRuns, widthOf, latinOk, printable };

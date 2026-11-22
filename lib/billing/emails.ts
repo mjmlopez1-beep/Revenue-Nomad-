@@ -36,7 +36,7 @@ interface CountState {
   seatInvites?: { by: string; at: string }[];
   ledger: { memberId: string; reason: string; at: string; ref?: string; delta?: number }[];
   pipeline?: Record<string, { entries: { dates: { sent?: string } }[] }>;
-  proposals?: { memberId: string; sends: { sentAt: string; expiresAt: string; signed?: unknown; declined?: unknown; voided?: unknown }[] }[];
+  proposals?: { memberId: string; sends: { sentAt: string; expiresAt: string | null; signed?: unknown; declined?: unknown; voided?: unknown }[] }[];
   connector?: { alerts?: Record<string, unknown[]> };
 }
 
@@ -64,7 +64,7 @@ export function valueCounts(s: CountState, seedTracks: Map<string, { firstSeen: 
     proposalsOut: (s.proposals ?? []).filter((p) => {
       if (p.memberId !== memberId) return false;
       const x = p.sends[p.sends.length - 1];
-      return !!x && !x.signed && !x.declined && !x.voided && Date.parse(x.expiresAt) > to;
+      return !!x && !x.signed && !x.declined && !x.voided && (x.expiresAt === null || Date.parse(x.expiresAt) > to);
     }).length,
     savedViews: (s.connector?.alerts?.[memberId] ?? []).length,
   };

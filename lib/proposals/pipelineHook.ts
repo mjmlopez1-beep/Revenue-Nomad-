@@ -68,7 +68,8 @@ export function wonTermsOf(p: Pick<StoredProposal, "fields" | "version" | "signe
 function proposalAt(state: State, memberId: string, companyId: string, kind: PipelineKind, at: string): StoredProposal | null {
   const mine = (state.proposals ?? []).filter((p) => p.memberId === memberId && p.companyId === companyId);
   const when = (p: StoredProposal) =>
-    p.sends.some((x) => (kind === "signed" ? x.signed?.at : kind === "declined" ? x.declined?.at : x.sentAt) === at);
+    // A countersigned proposal's Won is at the member's countersignature.
+    p.sends.some((x) => (kind === "signed" ? x.signed?.at === at || x.member?.at === at : (kind === "declined" ? x.declined?.at : x.sentAt) === at));
   return mine.find(when) ?? [...mine].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
 }
 

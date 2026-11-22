@@ -36,6 +36,7 @@ import { LeadCard, TrialEnded, factsOf, type TodayData } from "./Today";
 import { MovesSection } from "./Moves";
 import { FollowUps } from "./FollowUps";
 import { CloseOnHome } from "./Activity";
+import { CountersignDue } from "./MySignature";
 import { FromYourPeers } from "./HomePeers";
 import { RouteMove } from "./network/Ways";
 import { ProWelcome, TrialSummaryCard } from "./Billing";
@@ -330,6 +331,8 @@ export function HomePage(p: HomeProps) {
       {p.proWelcome && me.plan ? <ProWelcome plan={me.plan} onSeen={p.onProSeen} /> : null}
 
       {/* Your pipeline's follow-ups due, above the moves (FollowUps.tsx), read once Home's first paint is over. Nothing when none is due. */}
+      {/* A proposal the client signed over a day ago that waits for their countersignature (MySignature.tsx). */}
+      {rest && (me.plan?.canClose ?? true) && <CountersignDue />}
       {rest && <FollowUps me={me} byId={byId} openCompany={p.openCompany} />}
       {/* After a proposal went out (Activity.tsx): renewals due and the latest proposal notifications. Nothing on Free or Pro, or with none. */}
       {rest && <CloseOnHome />}

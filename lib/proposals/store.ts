@@ -21,22 +21,30 @@
  */
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { ActionError, loadSeed, loadState, memberByToken, perform, viewPatch, tableInternals as T, type Member, type Seed, type State } from "../table";
-import { emailEnabled, sendEmail } from "../email";
+import { MAX_ATTACHMENT_BYTES, emailEnabled, sendEmail } from "../email";
 import { FIND_MIN, functionOf } from "../tableFields";
 import { PRICES } from "../billing/rules";
 import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
 import { TEMPLATES, blanksInWords, blanksOf, blockDef, docFields, fieldDefaults, rendered, templateBlocks, templateDef } from "./library";
 export { docFields };
-import { codeEmail, declinedEmail, proposalEmail, signedEmail } from "./emails";
+import { codeEmail, countersignEmail, declinedEmail, handoffEmail, proposalEmail, questionEmail, signedEmail } from "./emails";
 import { CLOSE_BUILD, blocksOfMine, isMineId, templatesOf } from "./mine";
 import { aiConfigured } from "./aiConfig";
 import { AI_PACK_LINK, PACK_PRICE_USD, budgetOf, usedUpWords } from "./aiUsage";
 import { pipelineEvent } from "./pipelineHook";
+import { PricingProblem, choiceRec, cleanPricing, validChoice } from "./pricing";
+import { commitSendSignature, dropStaged, readSealedPdf, readSendSignature, saveSealedPdf, stageSendSignature } from "./files";
+import { dataUrl, savedSignatureOf, sha as shaOf, signatureInput, signatureViewOf } from "./memberSig";
 import {
   CONSENT_VERSION,
+  MEMBER_CONSENT,
+  MEMBER_CONSENT_VERSION,
   consentText,
+  type MemberSignMode,
+  type MemberSigned,
   type AuditEvent,
+  type Choice,
   type FrozenDoc,
   type ProposalBlock,
   type ProposalRec,
@@ -89,8 +97,25 @@ const base = (origin?: string) => (publicBase() ?? origin ?? "").replace(/\/$/, 
 
 export const signToken = (sendId: string, expMs: number) => `${sendId}.${expMs.toString(36)}.${mac(`rn-sign:${sendId}:${expMs}`)}`;
 export const copyToken = (sendId: string) => `${sendId}.${mac(`rn-signed:${sendId}`)}`;
-export const signLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/sign/${signToken(x.id, Date.parse(x.expiresAt))}`;
+/** A link's expiry in its token: the time, or 0 for no end date. */
+export const expMsOf = (expiresAt: string | null | undefined) => (expiresAt ? Date.parse(expiresAt) : 0);
+export const expiredAt = (expiresAt: string | null | undefined, nowMs: number) => !!expiresAt && nowMs > Date.parse(expiresAt);
+export const signLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/sign/${signToken(x.id, expMsOf(x.expiresAt))}`;
+/** The link length picked when sending: 14, 30, 60 or 90 days, or 0 for no end date. 30 unless picked. */
+export function linkDaysOf(raw: unknown): number {
+  if (raw === undefined || raw === null || raw === "") return SIGN_DAYS;
+  const n = Number(raw);
+  if (![14, 30, 60, 90, 0].includes(n)) throw new ProposalProblem("Pick how long the link works: 14, 30, 60 or 90 days, or no end date.");
+  return n;
+}
+export const expiryFor = (days: number, nowMs: number) => (days === 0 ? null : new Date(nowMs + days * DAY).toISOString());
+/** "The link works until May 31, 2027." or "The link has no end date." */
+export const untilWords = (expiresAt: string | null) => (expiresAt ? `The link works until ${fmtDay(Date.parse(expiresAt))}.` : "The link has no end date.");
 export const copyLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/signed/${copyToken(x.id)}`;
+/** The sealed PDF's download, with the signed copy's key. */
+export const pdfLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/api/sign/pdf?c=${copyToken(x.id)}`;
+/** Where anyone checks a copy of a sealed PDF. */
+export const checkLink = (origin?: string) => `${base(origin)}/check`;
 
 /** A signing link's send id and expiry, when its HMAC holds. */
 export function readSignToken(raw: unknown): { sendId: string; expMs: number } | null {
@@ -114,7 +139,8 @@ export const hashDoc = (d: FrozenDoc) => createHash("sha256").update(JSON.string
 
 const fmtDay = (ms: number) => new Date(ms).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-function freeze(p: StoredProposal, signer: SignerInfo, now: string): FrozenDoc {
+/** The document as sent. `close`: the member has Close now, so the client picks from its options (a Free or Pro proposal stays one price). */
+function freeze(p: StoredProposal, signer: SignerInfo, now: string, close: boolean): FrozenDoc {
   const f = docFields({ ...p, signer });
   return {
     title: p.title,
@@ -122,7 +148,8 @@ function freeze(p: StoredProposal, signer: SignerInfo, now: string): FrozenDoc {
     company: p.companyName,
     from: { name: f["provider.name"] || "", title: f["provider.title"] || "" },
     to: { name: signer.name, title: signer.title ?? "", email: signer.email },
-    blocks: rendered(p.blocks, f),
+    blocks: rendered(p.blocks, f).map((b, i) => ({ ...b, kind: p.blocks[i].blockId })),
+    ...(close && p.pricing?.options.length ? { pricing: structuredClone(p.pricing) } : {}),
     preparedAt: now,
   };
 }
@@ -133,7 +160,7 @@ function sendStatus(x: StoredSend, nowMs: number): Exclude<ProposalStatus, "draf
   if (x.signed) return "signed";
   if (x.declined) return "declined";
   if (x.voided) return "void";
-  if (nowMs > Date.parse(x.expiresAt)) return "expired";
+  if (expiredAt(x.expiresAt, nowMs)) return "expired";
   return x.viewedAt ? "viewed" : "sent";
 }
 /** The send of the proposal's current version (the newest), if it has one. */
@@ -144,6 +171,19 @@ export const statusOf = (p: StoredProposal, nowMs = Date.now()): ProposalStatus 
   return x ? sendStatus(x, nowMs) : "draft";
 };
 const isSigned = (p: StoredProposal) => p.sends.some((x) => !!x.signed);
+
+/**
+ * Where a send's signing stands. "client_signed" is the countersign mode's wait: the client signed,
+ * the member hasn't yet. Only "fully_signed" seals it, emails the sealed copy, moves the pipeline to
+ * Won and starts anything that counts from the signature (fullySignedAt). Other branches use these:
+ * an alert's wording, the pipeline's move.
+ */
+export type SigningState = "open" | "client_signed" | "fully_signed";
+export const signingState = (x: StoredSend): SigningState => (!x.signed ? "open" : x.memberMode === "after" && !x.member ? "client_signed" : "fully_signed");
+export const fullySigned = (x: StoredSend) => signingState(x) === "fully_signed";
+export const awaitingMember = (x: StoredSend) => signingState(x) === "client_signed";
+/** When it became fully signed: the countersignature, else the client's signature. */
+export const fullySignedAt = (x: StoredSend): string | null => (!fullySigned(x) ? null : x.memberMode === "after" ? x.member!.at : x.signed!.at);
 
 function sendRec(x: StoredSend, nowMs: number, origin?: string): ProposalSendRec {
   const st = sendStatus(x, nowMs);
@@ -163,6 +203,13 @@ function sendRec(x: StoredSend, nowMs: number, origin?: string): ProposalSendRec
     voidedAt: x.voided?.at ?? null,
     hash: x.hash,
     copyUrl: x.signed ? copyLink(origin, x) : null,
+    choice: x.signed?.choice ? structuredClone(x.signed.choice) : null,
+    sealed: x.seal ? { at: x.seal.at, pdf: pdfLink(origin, x), sha256: x.seal.sha256 } : null,
+    passedFrom: x.passedFrom ? { name: x.passedFrom.name, at: x.passedFrom.at } : null,
+    passedTo: x.passedTo ? { name: x.passedTo.name, at: x.passedTo.at } : null,
+    memberMode: x.memberMode ?? "none",
+    memberSignedAt: x.member?.at ?? null,
+    waiting: awaitingMember(x) ? "member" : null,
     events: x.events.map((e) => ({ ...e })),
   };
 }
@@ -180,6 +227,8 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
     notes: p.notes.map((n) => ({ ...n })),
     signerOnCall: p.signerOnCall,
     signer: p.signer ? { ...p.signer } : null,
+    pricing: p.pricing ? structuredClone(p.pricing) : null,
+    memberSign: p.memberSign ?? "now",
     version: p.version,
     status: statusOf(p, nowMs),
     createdAt: p.createdAt,
@@ -226,6 +275,7 @@ export async function listProposals(token: string | null, origin?: string, nowMs
       .map((p) => recOf(p, nowMs, origin)),
     documents: docRecsOf(s, me.id, nowMs, origin),
     templates: templateChoices(s, me.id, free),
+    mySignature: await signatureViewOf(s, me.id, { name: me.name, title: titleOf(s, me) }),
     ai: !aiConfigured() ? "off" : free ? "plan" : "on",
     aiAgreed: !!s.aiDrafts?.[me.id],
     // The AI usage all used: the words the draft gives (no numbers), and the pack's button and link.
@@ -322,10 +372,16 @@ export interface ProposalPatch {
   companyId?: unknown;
   /** Where fields set here came from (claude, discovery, rate, manual). */
   source?: string;
+  /** The options and add-ons the client picks from (Close; lib/proposals/pricing.ts), or null for one price. */
+  pricing?: unknown;
+  /** The member's own signature on the next send: "now", "after" or "none". */
+  memberSign?: unknown;
 }
 
 /** The document's parts, to tell whether a change touches what the client reads. */
-const docPart = (p: StoredProposal) => JSON.stringify([p.title, p.blocks, p.fields, p.signer, p.companyName]);
+const docPart = (p: StoredProposal) => JSON.stringify([p.title, p.blocks, p.fields, p.signer, p.companyName, p.pricing ?? null, p.memberSign ?? null]);
+const MODES: MemberSignMode[] = ["now", "after", "none"];
+const modeOf = (raw: unknown): MemberSignMode | undefined => (MODES.includes(raw as MemberSignMode) ? (raw as MemberSignMode) : undefined);
 
 function applyPatch(p: StoredProposal, a: ProposalPatch, now: string, nowMs: number): void {
   if (isSigned(p)) throw new ProposalProblem("It's signed, so it can't change. Duplicate it to start a new one.");
@@ -353,6 +409,22 @@ function applyPatch(p: StoredProposal, a: ProposalPatch, now: string, nowMs: num
   if (a.signerOnCall !== undefined) p.signerOnCall = a.signerOnCall === true ? true : a.signerOnCall === false ? false : null;
   if (a.signer !== undefined) p.signer = a.signer === null ? null : cleanSigner(a.signer);
   if (a.companyName !== undefined && !p.companyId) p.companyName = cleanLine(a.companyName, 120);
+  if (a.pricing !== undefined) {
+    let pr;
+    try {
+      pr = cleanPricing(a.pricing);
+    } catch (e) {
+      if (e instanceof PricingProblem) throw new ProposalProblem(e.message);
+      throw e;
+    }
+    if (pr) p.pricing = pr;
+    else delete p.pricing;
+  }
+  if (a.memberSign !== undefined) {
+    const m = modeOf(a.memberSign);
+    if (!m) throw new ProposalProblem("Pick how you sign: now, after they sign, or not at all.");
+    p.memberSign = m;
+  }
   p.updatedAt = now;
   // A change to what the client reads, after this version went out: a new version, and the old link stops.
   if (docPart(p) !== before && p.sends.some((x) => x.version === p.version)) {
@@ -421,9 +493,9 @@ export async function linkProposal(token: string | null, id: string, a: { compan
     if (!p.companyName) p.companyName = co.name || cleanLine(a.name, 120);
     p.updatedAt = now;
     // Already out, or signed: the pipeline catches up, as if it had been linked from the start.
-    const signed = p.sends.find((x) => x.signed);
+    const signed = p.sends.find((x) => fullySigned(x));
     const out = currentSend(p);
-    if (signed?.signed) pipelineEvent(s, me.id, p.companyId, "signed", signed.signed.at);
+    if (signed) pipelineEvent(s, me.id, p.companyId, "signed", fullySignedAt(signed)!);
     else if (live(out, nowMs)) pipelineEvent(s, me.id, p.companyId, "proposal_sent", out.sentAt);
     return recOf(p, nowMs, origin);
   });
@@ -558,11 +630,29 @@ export async function voidProposal(token: string | null, id: string, origin?: st
   });
 }
 
+/** The member's signature on a send, bound to its document's hash as the client's is. */
+function memberSigned(who: { name: string; title: string }, how: MemberSigned["how"], kind: "typed" | "drawn", typed: string | undefined, png: Uint8Array | null, hash: string, at: string, c: Client): MemberSigned {
+  return {
+    name: who.name,
+    title: who.title,
+    at,
+    how,
+    kind,
+    ...(kind === "typed" && typed ? { typed } : {}),
+    ...(kind === "drawn" && png ? { pngSha256: shaOf(png) } : {}),
+    ip: (c.ip ?? "").slice(0, 64),
+    ua: (c.ua ?? "").slice(0, 300),
+    consent: MEMBER_CONSENT,
+    consentVersion: MEMBER_CONSENT_VERSION,
+    hash,
+  };
+}
+
 /** Send the current version to the client who signs: a signed link by email, good for SIGN_DAYS. */
 export async function sendProposal(
   token: string | null,
   id: string,
-  a: { signer?: unknown; message?: unknown },
+  a: { signer?: unknown; message?: unknown; memberSign?: unknown; linkDays?: unknown; who?: Client },
   origin?: string,
   nowMs = Date.now(),
 ): Promise<{ proposal: ProposalRec; message: string }> {
@@ -573,9 +663,21 @@ export async function sendProposal(
   if (!emailEnabled()) throw new ProposalProblem(EMAIL_OFF);
   const now = new Date(nowMs).toISOString();
   const note = cleanLine(a.message, LIMITS.message);
+  const days = linkDaysOf(a.linkDays);
+  if (a.memberSign !== undefined && !modeOf(a.memberSign)) throw new ProposalProblem("Pick how you sign: now, after they sign, or not at all.");
+  // Their own signature: as picked here, else as kept on the proposal, else now when they have a saved one (none otherwise, as before).
+  const p0 = mine(s0, me0, id);
+  const saved = await savedSignatureOf(s0, me0.id);
+  const mode: MemberSignMode = modeOf(a.memberSign) ?? p0.memberSign ?? (saved ? "now" : "none");
+  if (mode === "now" && !saved) throw new ProposalProblem("Set your signature first, or pick I'll countersign after they sign, or No signature from me.");
+  // The drawing goes with the send, as it is now: replacing the saved one later never changes what was signed.
+  const sendId = `s_${randomBytes(9).toString("base64url")}`;
+  const staged = mode === "now" && saved?.png ? await stageSendSignature(sendId, saved.png) : null;
+  const who = a.who ?? { ip: "", ua: "" };
   const out = await T.mutate((s) => {
     const me = memberOf(seed, s, token);
     const p = mine(s, me, id);
+    if (modeOf(a.memberSign) && a.memberSign !== p.memberSign && !isSigned(p)) p.memberSign = mode;
     if (isSigned(p)) throw new ProposalProblem("It's signed already.");
     const signer = a.signer !== undefined ? cleanSigner(a.signer) : p.signer;
     if (!signer) throw new ProposalProblem("Type the name and email of the person who signs.");
@@ -587,22 +689,36 @@ export async function sendProposal(
     if (cur) p.version++;
     const blanks = blanksOf(p.blocks, docFields(p));
     if (blanks.length) throw new ProposalProblem(`Fill the ${blanks.length === 1 ? "last blank" : `${blanks.length} blanks`} first: ${blanksInWords(blanks, 5)}.`);
-    const doc = freeze(p, signer, now);
+    const close = !onFree(s, me.id, nowMs);
+    const doc = freeze(p, signer, now, close);
     const x: StoredSend = {
-      id: `s_${randomBytes(9).toString("base64url")}`,
+      id: sendId,
       version: p.version,
       signer,
       doc,
       hash: hashDoc(doc),
       sentAt: now,
-      expiresAt: new Date(nowMs + SIGN_DAYS * DAY).toISOString(),
+      expiresAt: expiryFor(days, nowMs),
       events: [{ kind: "sent", at: now, note: signer.email }],
+      ...(close ? { close: true } : {}),
+      // The member's own signature is Close: frozen into the send, a change after needs a new version.
+      memberMode: close ? mode : "none",
     };
+    if (close && mode === "now") {
+      const sv = s.memberSignatures?.[me.id];
+      if (!sv || sv.at !== saved!.sig.at) throw new ProposalProblem("Your signature changed while sending. Try again.", 409);
+      x.member = memberSigned({ name: me.name, title: titleOf(s, me) }, "saved_at_send", sv.kind, sv.typed, saved!.png, x.hash, now, who);
+      x.events.push({ kind: "member_signed", at: now, note: `${me.name} applied their saved signature (${sv.kind}) when sending`, ...(who.ip ? { ip: who.ip.slice(0, 64) } : {}), ...(who.ua ? { ua: who.ua.slice(0, 300) } : {}) });
+    }
     p.sends.push(x);
     p.updatedAt = now;
     pipelineEvent(s, me.id, p.companyId, "proposal_sent", now);
     return { p, x: structuredClone(x), me, title: titleOf(s, me) };
+  }).catch(async (e) => {
+    await dropStaged(staged);
+    throw e;
   });
+  if (staged) await commitSendSignature(sendId, staged);
   const mail = proposalEmail({ signer: out.x.signer.name, member: out.me.name, memberTitle: out.title, title: out.x.doc.title, company: out.x.doc.company, link: signLink(origin, out.x), expiresAt: out.x.expiresAt, note });
   const ok = await sendEmail(out.x.signer.email, mail.subject, mail.text, mail.html, { replyTo: out.me.email });
   if (!ok) {
@@ -614,7 +730,7 @@ export async function sendProposal(
     });
     throw new ProposalProblem("The email didn't go out. Try again in a moment.", 502);
   }
-  return { proposal: await getProposal(token, id, origin, nowMs), message: `Sent to ${out.x.signer.name} at ${out.x.signer.email}. The link works for ${SIGN_DAYS} days.` };
+  return { proposal: await getProposal(token, id, origin, nowMs), message: `Sent to ${out.x.signer.name} at ${out.x.signer.email}. ${out.x.expiresAt ? `The link works for ${days} days.` : "The link has no end date."}` };
 }
 
 /* ---------- the client's side ---------- */
@@ -631,15 +747,16 @@ const GONE = "This link doesn't work. Ask the sender for a new one.";
 function resolve(s: State, raw: unknown): Found {
   const t = readSignToken(raw);
   const f = t ? findSend(s, t.sendId) : null;
-  if (!t || !f || Date.parse(f.x.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
+  if (!t || !f || expMsOf(f.x.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
   return f;
 }
 function signerStatus(f: Found, nowMs: number): SignerView["status"] {
   const { x } = f;
   if (x.signed) return "signed";
   if (x.declined) return "declined";
+  if (x.passedTo) return "passed";
   if (x.voided) return x.voided.why === "changed" ? "changed" : "void";
-  if (nowMs > Date.parse(x.expiresAt)) return "expired";
+  if (expiredAt(x.expiresAt, nowMs)) return "expired";
   return "open";
 }
 const emailHint = (e: string) => {
@@ -653,6 +770,9 @@ function viewOf(f: Found, nowMs: number, origin?: string): SignerView {
   const { x } = f;
   return {
     status: signerStatus(f, nowMs),
+    signer: { name: x.signer.name, title: x.signer.title ?? "" },
+    passedTo: x.passedTo ? { name: x.passedTo.name } : null,
+    handoffsLeft: Math.max(0, HANDOFFS - (x.handoffs ?? 0)),
     doc: structuredClone(x.doc),
     hash: x.hash,
     emailHint: emailHint(x.signer.email),
@@ -665,8 +785,25 @@ function viewOf(f: Found, nowMs: number, origin?: string): SignerView {
     declinedAt: x.declined?.at ?? null,
     expiresAt: x.expiresAt,
     copyUrl: x.signed ? copyLink(origin, x) : null,
+    choice: x.signed?.choice ? { optionId: x.signed.choice.optionId, addOnIds: x.signed.choice.addOns.map((a) => a.id) } : x.choice ? { ...x.choice, addOnIds: [...x.choice.addOnIds] } : null,
+    signedChoice: x.signed?.choice ? structuredClone(x.signed.choice) : null,
+    sealed: x.seal ? { at: x.seal.at, pdf: pdfLink(origin, x) } : null,
+    sealOnSign: !!x.close,
+    memberMode: x.memberMode ?? "none",
+    member: memberOut(x),
+    awaitingMember: awaitingMember(x),
   };
 }
+/** The member's side of a send for a page: a drawn signature's image is added by withMemberImg (it is a file). */
+const memberOut = (x: StoredSend): SignerView["member"] =>
+  x.member ? { name: x.member.name, title: x.member.title, at: x.member.at, how: x.member.how, kind: x.member.kind, typed: x.member.typed ?? null, img: null } : null;
+/** A view with the member's drawn signature as an image. */
+async function withMemberImg<V extends { member: SignerView["member"] }>(v: V, sendId: string | null | undefined): Promise<V> {
+  if (!sendId || !v.member || v.member.kind !== "drawn") return v;
+  const png = await readSendSignature(sendId).catch(() => null);
+  return png ? { ...v, member: { ...v.member, img: dataUrl(png) } } : v;
+}
+const sendIdOf = (token: unknown) => readSignToken(token)?.sendId ?? null;
 
 export interface Client {
   ip: string;
@@ -675,6 +812,9 @@ export interface Client {
 
 /** The signing page: the document as sent, read-only. The first open goes on the audit trail. */
 export async function signerView(token: unknown, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+  return withMemberImg(await signerViewOf(token, who, origin, nowMs), sendIdOf(token));
+}
+async function signerViewOf(token: unknown, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
   const s = await loadState();
   const f0 = resolve(s, token);
   if (signerStatus(f0, nowMs) === "open" && f0.x.viewedAt) return viewOf(f0, nowMs, origin);
@@ -697,7 +837,9 @@ const notOpen = (st: SignerView["status"]) =>
         ? "The sender changed this proposal, so this version can't be signed. They'll send you the new one."
         : st === "void"
           ? "The sender withdrew this proposal, so it can't be signed."
-          : "This link has expired. Ask the sender for a new one.";
+          : st === "passed"
+            ? "You passed this proposal to someone else to sign, so it can't be signed here."
+            : "This link has expired. Ask the sender for a new one.";
 
 /** Email the signer a 6-digit code (15 minutes, CODE_TRIES tries), to confirm the address is theirs. */
 export async function requestCode(token: unknown, who: Client, nowMs = Date.now()): Promise<{ sent: true; emailHint: string }> {
@@ -743,13 +885,44 @@ export async function verifyCode(token: unknown, raw: unknown, who: Client, orig
   });
   // A wrong try is kept (it counts), and then told.
   if ("error" in r) throw new ProposalProblem(r.error!, 401);
-  return r.view;
+  return withMemberImg(r.view!, sendIdOf(token));
 }
 
 /** A full name as typed: two words or more, letters, at most 100 characters. */
 const NAME = /^\p{L}[\p{L}'’.-]*(?: +\p{L}[\p{L}'’.-]*)+$/u;
 
-export async function signProposal(token: unknown, a: { name?: unknown; consent?: unknown; hash?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+const PICK_FIRST = "Pick one of the options first.";
+/**
+ * The client picks an option and any add-ons (a proposal with options, Close). Theirs to change
+ * until they sign; refused after. Kept on the send, so the page opens on it again. Not on the
+ * audit trail: the choice signed is, with the signature.
+ */
+export async function chooseOption(token: unknown, raw: unknown, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+  return withMemberImg(await chooseOf(token, raw, origin, nowMs), sendIdOf(token));
+}
+async function chooseOf(token: unknown, raw: unknown, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+  return T.mutate((s) => {
+    const f = resolve(s, token);
+    const st = signerStatus(f, nowMs);
+    if (st !== "open") throw new ProposalProblem(st === "signed" ? "It's signed, so the choice can't change now." : notOpen(st), 409);
+    if (!f.x.doc.pricing) throw new ProposalProblem("This proposal has one price, so there's nothing to pick.");
+    const c = validChoice(f.x.doc.pricing, raw);
+    if (!c) throw new ProposalProblem("That option isn't in this proposal. Reload the page and pick again.");
+    f.x.choice = c;
+    return viewOf(f, nowMs, origin);
+  });
+}
+
+/** The choice a signature takes: the one sent with it, else the one kept, else the only option there is. */
+function choiceAtSigning(x: StoredSend, raw: unknown): Choice | null {
+  const p = x.doc.pricing;
+  if (!p) return null;
+  const c = validChoice(p, raw ?? x.choice) ?? (p.options.length === 1 ? { optionId: p.options[0].id, addOnIds: [] } : null);
+  if (!c) throw new ProposalProblem(PICK_FIRST);
+  return c;
+}
+
+export async function signProposal(token: unknown, a: { name?: unknown; consent?: unknown; hash?: unknown; choice?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
   const name = cleanLine(a.name, 100);
   if (!NAME.test(name)) throw new ProposalProblem("Type your full name, first and last, as your signature.");
   if (a.consent !== true) throw new ProposalProblem("Tick the box to agree to sign electronically.");
@@ -762,27 +935,340 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
     // The document shown is the one signed: the hash the page showed must be this send's, and the content must still hash to it.
     if (typeof a.hash !== "string" || !same(a.hash, f.x.hash) || hashDoc(f.x.doc) !== f.x.hash) throw new ProposalProblem("This page is out of date. Reload it to read the proposal again before you sign.", 409);
     const consent = consentText(f.x.doc.from.name || "the sender");
-    f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email };
-    ev(f.x, "signed", now, { ...who, note: `typed name "${name}"` });
+    const picked = choiceAtSigning(f.x, a.choice);
+    const choice = picked && f.x.doc.pricing ? choiceRec(f.x.doc.pricing, picked) : undefined;
+    f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email, ...(choice ? { choice } : {}) };
+    if (picked) f.x.choice = picked;
+    ev(f.x, "signed", now, { ...who, note: `typed name "${name}"${choice ? `; chose ${choice.summary}, ${choice.total}` : ""}` });
     f.p.updatedAt = now;
-    pipelineEvent(s, f.p.memberId, f.p.companyId, "signed", now);
+    // Countersign mode: the pipeline moves to Won at the member's countersignature, not here.
+    if (fullySigned(f.x)) pipelineEvent(s, f.p.memberId, f.p.companyId, "signed", now);
     return { x: structuredClone(f.x), memberId: f.p.memberId, proposalId: f.p.id, view: viewOf(f, nowMs, origin) };
   });
-  // The signed copy to both sides.
   const seed = await loadSeed();
   const m = await memberFor(seed, out.memberId);
+  // Countersign mode: the member is told to countersign; the client hears that it comes next. No seal, no copy yet.
+  if (awaitingMember(out.x)) {
+    const ch = out.x.signed!.choice;
+    const toMember = countersignEmail({ to: "member", name: m?.name ?? out.x.doc.from.name, member: out.x.doc.from.name, signer: out.x.signed!.name, title: out.x.doc.title, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}&countersign=1`, ...(ch ? { choice: `${ch.summary}. Total: ${ch.total}.` } : {}) });
+    const toClient = countersignEmail({ to: "signer", name: out.x.signer.name, member: out.x.doc.from.name, signer: out.x.signed!.name, title: out.x.doc.title, link: copyLink(origin, out.x), ...(ch ? { choice: `${ch.summary}. Total: ${ch.total}.` } : {}) });
+    if (m?.email) await sendEmail(m.email, toMember.subject, toMember.text, toMember.html);
+    await sendEmail(out.x.signer.email, toClient.subject, toClient.text, toClient.html, m?.email ? { replyTo: m.email } : {});
+    return withMemberImg(out.view, out.x.id);
+  }
+  return withMemberImg(await completeSigned(out.x.id, m, origin, out.view), out.x.id);
+}
+
+/**
+ * Fully signed (the client's signature, and the member's when it was asked for): the sealed PDF
+ * (Close) and the signed copy to both sides, with it attached. Once per send.
+ */
+async function completeSigned<V extends SignerView | null>(sendId: string, m: { name: string; email: string } | null, origin: string | undefined, view: V): Promise<V> {
+  const f0 = findSend(await loadState(), sendId);
+  if (!f0 || !fullySigned(f0.x)) return view;
+  const out = { x: structuredClone(f0.x) };
+  // Close: the sealed PDF of the proposal as signed, before the emails, so they carry it.
+  const sealed = out.x.close ? await ensureSeal(out.x.id, origin) : null;
   const copy = copyLink(origin, out.x);
+  const attach = !!sealed && sealed.bytes.length <= MAX_ATTACHMENT_BYTES;
   const sent: string[] = [];
+  const ch = out.x.signed!.choice;
   for (const to of [{ k: "signer" as const, email: out.x.signer.email, name: out.x.signer.name }, ...(m?.email ? [{ k: "member" as const, email: m.email, name: m.name }] : [])]) {
-    const mail = signedEmail({ to: to.k, name: to.name, member: out.x.doc.from.name, signer: out.x.signed!.name, title: out.x.doc.title, signedAt: out.x.signed!.at, copy, hash: out.x.hash });
-    if (await sendEmail(to.email, mail.subject, mail.text, mail.html, to.k === "signer" && m?.email ? { replyTo: m.email } : {})) sent.push(to.k === "signer" ? "the signer" : "the sender");
+    const mail = signedEmail({
+      to: to.k,
+      name: to.name,
+      member: out.x.doc.from.name,
+      signer: out.x.signed!.name,
+      title: out.x.doc.title,
+      signedAt: out.x.signed!.at,
+      copy,
+      hash: out.x.hash,
+      ...(ch ? { choice: `${ch.summary}. Total: ${ch.total}.` } : {}),
+      ...(sealed ? { sealed: { pdf: pdfLink(origin, out.x), sha256: sealed.seal.sha256, check: checkLink(origin), attached: attach } } : {}),
+    });
+    const files = attach ? { attachments: [{ filename: sealedName(out.x.doc.title), content: sealed!.bytes }] } : {};
+    if (await sendEmail(to.email, mail.subject, mail.text, mail.html, { ...(to.k === "signer" && m?.email ? { replyTo: m.email } : {}), ...files })) sent.push(to.k === "signer" ? "the signer" : "the sender");
   }
   if (sent.length)
     await T.mutate((s) => {
       const f = findSend(s, out.x.id);
-      if (f) ev(f.x, "copy_sent", new Date().toISOString(), { note: `to ${sent.join(" and ")}` });
+      if (f) ev(f.x, "copy_sent", new Date().toISOString(), { note: `to ${sent.join(" and ")}${attach ? ", with the sealed PDF attached" : ""}` });
     });
-  return out.view;
+  return view && sealed ? { ...view, sealed: { at: sealed.seal.at, pdf: pdfLink(origin, out.x) } } : view;
+}
+
+/* ---------- the member's countersignature ---------- */
+
+const countersigning = new Map<string, Promise<ProposalRec>>();
+/**
+ * The member countersigns (countersign mode, after the client signed): their saved signature in
+ * one click, or one drawn or typed now (saved for next time when `save`). Only the member who sent
+ * it; a second click, or two at once, get the first one's result (one winner, the documents'
+ * pattern for the drawing). Then it is fully signed: sealed, both emailed, the pipeline to Won.
+ */
+export async function countersignProposal(
+  token: string | null,
+  id: string,
+  a: { method?: unknown; png?: unknown; typed?: unknown; consent?: unknown; save?: unknown; who?: Client },
+  origin?: string,
+  nowMs = Date.now(),
+): Promise<ProposalRec> {
+  const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
+  const me0 = memberOf(seed, s0, token);
+  const p0 = mine(s0, me0, id);
+  const key = `${me0.id}:${id}`;
+  const running = countersigning.get(key);
+  if (running) return running;
+  const job = (async () => {
+    const x0 = currentSendOf(p0);
+    if (x0?.member && x0.memberMode === "after") return recOf(p0, nowMs, origin);
+    if (!x0 || !awaitingMember(x0)) throw new ProposalProblem(x0?.signed ? "It's fully signed already." : "There's nothing to countersign yet: it waits for the client's signature.", 409);
+    // Saved: one click. Else drawn or typed now, with the consent.
+    const saved = a.method === "saved" || a.method === undefined ? await savedSignatureOf(s0, me0.id) : null;
+    if ((a.method === "saved" || a.method === undefined) && !saved) throw new ProposalProblem("Set your signature first: draw or type it, then countersign.");
+    if (!saved && a.consent !== true) throw new ProposalProblem("Tick the box to agree to sign electronically.");
+    const input = saved ? (saved.sig.kind === "drawn" ? { kind: "drawn" as const, png: saved.png! } : { kind: "typed" as const, typed: saved.sig.typed! }) : await signatureInput(a);
+    const png = input.kind === "drawn" ? input.png : null;
+    const staged = png ? await stageSendSignature(x0.id, png) : null;
+    const now = new Date(nowMs).toISOString();
+    const who = a.who ?? { ip: "", ua: "" };
+    const won = await T.mutate((s) => {
+      const me = memberOf(seed, s, token);
+      const p = mine(s, me, id);
+      const x = p.sends.find((y) => y.id === x0.id);
+      if (!x) throw new ProposalProblem("That proposal changed. Open it again.", 409);
+      if (x.member) return false;
+      if (!awaitingMember(x)) throw new ProposalProblem("There's nothing to countersign.", 409);
+      x.member = memberSigned({ name: me.name, title: titleOf(s, me) }, saved ? "saved" : input.kind, input.kind, input.kind === "typed" ? input.typed : undefined, png, x.hash, now, who);
+      x.events.push({ kind: "countersigned", at: now, note: `${me.name} countersigned (${saved ? `saved signature, ${input.kind}` : input.kind})`, ...(who.ip ? { ip: who.ip.slice(0, 64) } : {}), ...(who.ua ? { ua: who.ua.slice(0, 300) } : {}) });
+      p.updatedAt = now;
+      pipelineEvent(s, me.id, p.companyId, "signed", now);
+      return true;
+    }).catch(async (e) => {
+      await dropStaged(staged);
+      throw e;
+    });
+    if (won && staged) await commitSendSignature(x0.id, staged);
+    else await dropStaged(staged);
+    if (won && !saved && a.save === true) {
+      const { setMySignature } = await import("./memberSig");
+      await setMySignature(token, { method: input.kind, png: png ? dataUrl(png) : undefined, typed: input.kind === "typed" ? input.typed : undefined, consent: true }, origin, nowMs).catch(() => null);
+    }
+    if (won) await completeSigned(x0.id, await memberFor(seed, me0.id), origin, null);
+    return getProposal(token, id, origin, nowMs);
+  })().finally(() => countersigning.delete(key));
+  countersigning.set(key, job);
+  return job;
+}
+const currentSendOf = (p: StoredProposal) => [...p.sends].reverse().find((x) => x.version === p.version) ?? null;
+
+/** Proposals the client signed more than `hours` ago that wait for the member's countersignature: Home shows them. Never countersigned for them. */
+export async function countersignDue(token: string | null, hours = 24, nowMs = Date.now()): Promise<{ id: string; title: string; signer: string; signedAt: string }[]> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberOf(seed, s, token);
+  return (s.proposals ?? [])
+    .filter((p) => p.memberId === me.id)
+    .flatMap((p) => p.sends.filter((x) => awaitingMember(x) && nowMs - Date.parse(x.signed!.at) >= hours * 3_600_000).map((x) => ({ id: p.id, title: x.doc.title, signer: x.signed!.name, signedAt: x.signed!.at })))
+    .sort((a, b) => a.signedAt.localeCompare(b.signedAt));
+}
+
+/** The sealed PDF's file name: the title, then "signed". */
+export const sealedName = (title: string) => `${title.replace(/[^\p{L}\p{N} ._-]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Proposal"} (signed).pdf`;
+
+const sealing = new Map<string, Promise<{ seal: import("./types").SealRec; bytes: Uint8Array } | null>>();
+/**
+ * The sealed PDF of a signed send made under Close (lib/proposals/pdf.ts, lib/seal.ts): built once,
+ * kept on the volume, its seal on the send. Safe to call again: the kept file comes back. Null when
+ * it isn't a Close send, isn't signed, or the PDF couldn't be built (the signature stands either way).
+ */
+export function ensureSeal(sendId: string, origin?: string): Promise<{ seal: import("./types").SealRec; bytes: Uint8Array } | null> {
+  const running = sealing.get(sendId);
+  if (running) return running;
+  const job = (async () => {
+    const s = await loadState();
+    const f = findSend(s, sendId);
+    if (!f?.x.signed || !f.x.close || !fullySigned(f.x)) return null;
+    if (f.x.seal) {
+      const kept = await readSealedPdf(sendId);
+      return kept ? { seal: f.x.seal, bytes: new Uint8Array(kept) } : null;
+    }
+    const m = await memberFor(await loadSeed(), f.p.memberId);
+    const sender = { name: m?.name ?? f.x.doc.from.name, email: m?.email ?? "", title: titleOf(s, { id: f.p.memberId, title: "" } as Member) || f.x.doc.from.title };
+    const [{ buildProposalPdf }, { sealRec }] = await Promise.all([import("./pdf"), import("../seal")]);
+    const memberPng = f.x.member?.kind === "drawn" ? await readSendSignature(sendId) : null;
+    const fin = await buildProposalPdf({ send: f.x, sender, consentVersion: f.x.signed.consentVersion, checkUrl: checkLink(origin), memberPng });
+    await saveSealedPdf(sendId, fin.bytes);
+    const rec = sealRec(fin, fullySignedAt(f.x) ?? f.x.signed.at);
+    const kept = await T.mutate((st) => {
+      const g = findSend(st, sendId);
+      if (!g?.x.signed) return null;
+      if (g.x.seal) return g.x.seal;
+      g.x.seal = rec;
+      return rec;
+    });
+    return kept && kept.id === rec.id ? { seal: rec, bytes: fin.bytes } : kept ? { seal: kept, bytes: new Uint8Array((await readSealedPdf(sendId)) ?? fin.bytes) } : null;
+  })()
+    .catch((e) => (console.error("proposal seal failed", sendId, (e as Error)?.message), null))
+    .finally(() => sealing.delete(sendId));
+  sealing.set(sendId, job);
+  return job;
+}
+
+/** The sealed PDF from the signed copy's link. Null: no such link, or no sealed PDF (a send without Close). */
+export async function sealedPdf(raw: unknown, origin?: string): Promise<{ bytes: Uint8Array; name: string } | null> {
+  const id = readCopyToken(raw);
+  const f = id ? findSend(await loadState(), id) : null;
+  if (!f?.x.signed || !f.x.close || !fullySigned(f.x)) return null;
+  const r = await ensureSeal(f.x.id, origin);
+  return r ? { bytes: r.bytes, name: sealedName(f.x.doc.title) } : null;
+}
+
+/* ---------- the client asks a question, or passes it to someone else to sign ---------- */
+
+/** At most this many hand-offs on one proposal's link, and this many questions a day on one link. */
+export const HANDOFFS = 3;
+export const QUESTIONS_A_DAY = 5;
+export const QUESTION_MAX = 2000;
+
+export interface ClientQuestionEvent {
+  sendId: string;
+  proposalId: string;
+  memberId: string;
+  signer: { name: string; email: string };
+  title: string;
+  text: string;
+  at: string;
+}
+export interface HandOffEvent {
+  fromSendId: string;
+  toSendId: string;
+  proposalId: string;
+  memberId: string;
+  from: { name: string; email: string };
+  to: { name: string; email: string; title?: string };
+  title: string;
+  at: string;
+}
+/**
+ * What other parts of Merlin do when a client asks a question or passes a proposal on (alerts,
+ * for one). Called after the step is recorded and the member's email has gone; never throws into it.
+ */
+const proposalHooks: { onClientQuestion: (e: ClientQuestionEvent) => unknown; onHandOff: (e: HandOffEvent) => unknown } = { onClientQuestion: () => {}, onHandOff: () => {} };
+export function setProposalHooks(h: Partial<typeof proposalHooks>): void {
+  Object.assign(proposalHooks, h);
+}
+const callHook = async (fn: () => unknown) => {
+  try {
+    await fn();
+  } catch (e) {
+    console.error("proposal hook failed", (e as Error)?.message);
+  }
+};
+
+/**
+ * "Ask a question": the client's question, emailed to the member with the client's name, the
+ * proposal's title and a link to it in Merlin, reply-to the client's own address (the member just
+ * replies; the client never sees the member's address). On the audit trail. QUESTIONS_A_DAY a link.
+ */
+export async function askQuestion(token: unknown, raw: unknown, who: Client, origin?: string, nowMs = Date.now()): Promise<{ sent: true; to: string }> {
+  const text = cleanText(raw, QUESTION_MAX + 1).trim();
+  if (!text) throw new ProposalProblem("Type your question first.");
+  if (text.length > QUESTION_MAX) throw new ProposalProblem(`Keep it under ${QUESTION_MAX.toLocaleString("en-US")} characters.`);
+  if (!emailEnabled()) throw new ProposalProblem("Email isn't working on our side right now. Try again later.", 503);
+  const now = new Date(nowMs).toISOString();
+  const out = await T.mutate((s) => {
+    const f = resolve(s, token);
+    const st = signerStatus(f, nowMs);
+    if (st !== "open" && st !== "signed") throw new ProposalProblem(notOpen(st), 409);
+    const recent = (f.x.questions ?? []).filter((t) => nowMs - Date.parse(t) < DAY);
+    if (recent.length >= QUESTIONS_A_DAY) throw new ProposalProblem(`That's ${QUESTIONS_A_DAY} questions today on this link, which is the most. Try again tomorrow.`, 429);
+    f.x.questions = [...recent, now];
+    ev(f.x, "question", now, { ...who, note: text.length > 300 ? `${text.slice(0, 300)}…` : text });
+    return { sendId: f.x.id, proposalId: f.p.id, memberId: f.p.memberId, signer: { name: f.x.signer.name, email: f.x.signer.email }, title: f.x.doc.title, from: f.x.doc.from.name };
+  });
+  const m = await memberFor(await loadSeed(), out.memberId);
+  if (!m?.email) throw new ProposalProblem("Your question didn't go out. Try again in a moment.", 502);
+  const mail = questionEmail({ member: m.name, signer: out.signer.name, title: out.title, question: text, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}` });
+  if (!(await sendEmail(m.email, mail.subject, mail.text, mail.html, { replyTo: out.signer.email }))) throw new ProposalProblem("Your question didn't go out. Try again in a moment.", 502);
+  await callHook(() => proposalHooks.onClientQuestion({ sendId: out.sendId, proposalId: out.proposalId, memberId: out.memberId, signer: out.signer, title: out.title, text, at: now }));
+  return { sent: true, to: (out.from || m.name).split(" ")[0] };
+}
+
+/**
+ * "Send to someone else to sign": a new link to the person named, with the same document (same
+ * hash: the member's signature on it still holds), the option picked so far, and the same email
+ * code before signing. This link turns read only ("You passed this to …"). The member is told.
+ * At most HANDOFFS on one proposal; not after signing or declining; never to the member.
+ */
+export async function handOff(token: unknown, a: { signer?: unknown; note?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+  const signer = cleanSigner(a.signer);
+  const note = cleanLine(a.note, LIMITS.message);
+  if (!emailEnabled()) throw new ProposalProblem("Email isn't working on our side right now. Try again later.", 503);
+  const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
+  const f0 = resolve(s0, token);
+  const m0 = await memberFor(seed, f0.p.memberId);
+  const NOT_SENDER = "Pass it to someone at your company, not to the person who sent it.";
+  if (m0?.email && m0.email.toLowerCase() === signer.email) throw new ProposalProblem(NOT_SENDER);
+  if (signer.email === f0.x.signer.email) throw new ProposalProblem("That's the address this link went to. Type the email of the person who signs instead.");
+  const newId = `s_${randomBytes(9).toString("base64url")}`;
+  // The member's drawn signature goes with the new link (the same document, the same hash).
+  const sigPng = f0.x.member?.kind === "drawn" ? await readSendSignature(f0.x.id) : null;
+  const staged = sigPng ? await stageSendSignature(newId, sigPng) : null;
+  const now = new Date(nowMs).toISOString();
+  const out = await T.mutate((s) => {
+    const f = resolve(s, token);
+    const st = signerStatus(f, nowMs);
+    if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
+    const n = f.x.handoffs ?? 0;
+    if (n >= HANDOFFS) throw new ProposalProblem(`This proposal was passed on ${HANDOFFS} times, which is the most. Ask ${f.x.doc.from.name || "the sender"} for a new link.`, 409);
+    const x = f.x;
+    const y: StoredSend = {
+      id: newId,
+      version: x.version,
+      signer,
+      doc: structuredClone(x.doc),
+      hash: x.hash,
+      sentAt: now,
+      expiresAt: x.expiresAt,
+      events: [{ kind: "sent", at: now, note: `${signer.email}, passed on by ${x.signer.name}` }],
+      ...(x.close ? { close: true } : {}),
+      ...(x.memberMode ? { memberMode: x.memberMode } : {}),
+      ...(x.member ? { member: structuredClone(x.member) } : {}),
+      ...(x.choice ? { choice: structuredClone(x.choice) } : {}),
+      passedFrom: { name: x.signer.name, email: x.signer.email, at: now, sendId: x.id },
+      handoffs: n + 1,
+    };
+    x.passedTo = { name: signer.name, email: signer.email, ...(signer.title ? { title: signer.title } : {}), at: now, sendId: newId };
+    x.voided = { at: now, why: "passed" };
+    ev(x, "passed", now, { ...who, note: `${x.signer.name} passed it to ${signer.name}${signer.title ? `, ${signer.title}` : ""} <${signer.email}>` });
+    f.p.sends.push(y);
+    f.p.signer = signer;
+    f.p.updatedAt = now;
+    return { y: structuredClone(y), from: { name: x.signer.name, email: x.signer.email }, proposalId: f.p.id, memberId: f.p.memberId, view: viewOf(f, nowMs, origin) };
+  }).catch(async (e) => {
+    await dropStaged(staged);
+    throw e;
+  });
+  if (staged) await commitSendSignature(newId, staged);
+  const toNew = handoffEmail({ to: "signer", name: signer.name, from: out.from.name, member: out.y.doc.from.name, title: out.y.doc.title, link: signLink(origin, out.y), expiresAt: out.y.expiresAt, note });
+  if (!(await sendEmail(signer.email, toNew.subject, toNew.text, toNew.html, m0?.email ? { replyTo: m0.email } : {}))) {
+    // It never reached them: taken back, and this link works again.
+    await T.mutate((s) => {
+      const f = findSend(s, out.y.id);
+      const g = findSend(s, f0.x.id);
+      if (f) f.p.sends = f.p.sends.filter((z) => z.id !== out.y.id), (f.p.signer = f0.x.signer);
+      if (g) delete g.x.passedTo, delete g.x.voided, ev(g.x, "passed", new Date().toISOString(), { note: "The email to the new signer didn't go out, so this link works again" });
+    });
+    throw new ProposalProblem("The email to them didn't go out. Check the address and try again.", 502);
+  }
+  if (m0?.email) {
+    const toMember = handoffEmail({ to: "member", name: m0.name, from: out.from.name, member: out.y.doc.from.name, title: out.y.doc.title, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}`, expiresAt: out.y.expiresAt, note, newSigner: `${signer.name}${signer.title ? `, ${signer.title}` : ""}` });
+    await sendEmail(m0.email, toMember.subject, toMember.text, toMember.html);
+  }
+  await callHook(() =>
+    proposalHooks.onHandOff({ fromSendId: f0.x.id, toSendId: newId, proposalId: out.proposalId, memberId: out.memberId, from: out.from, to: { name: signer.name, email: signer.email, ...(signer.title ? { title: signer.title } : {}) }, title: out.y.doc.title, at: now }),
+  );
+  return withMemberImg(out.view, f0.x.id);
 }
 
 export async function declineProposal(token: unknown, a: { reason?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
@@ -803,16 +1289,32 @@ export async function declineProposal(token: unknown, a: { reason?: unknown }, w
     const mail = declinedEmail({ member: m.name, signer: out.signer, title: out.title, reason, app: `${base(origin)}/?p=proposals` });
     await sendEmail(m.email, mail.subject, mail.text, mail.html);
   }
-  return out.view;
+  return withMemberImg(out.view, sendIdOf(token));
 }
 
-/** The signed copy, from its own link: the document, the signature and the audit trail. Null: no such signed copy. */
-export async function signedCopy(raw: unknown): Promise<SignedCopy | null> {
+/** The signed copy, from its own link: the document, the signature, the audit trail and the sealed PDF (Close). Null: no such signed copy. */
+export async function signedCopy(raw: unknown, origin?: string): Promise<SignedCopy | null> {
   const id = readCopyToken(raw);
   if (!id) return null;
-  const f = findSend(await loadState(), id);
+  let f = findSend(await loadState(), id);
   if (!f?.x.signed) return null;
-  return { doc: structuredClone(f.x.doc), hash: f.x.hash, hashNow: hashDoc(f.x.doc), signed: { ...f.x.signed }, events: f.x.events.map((e) => ({ ...e })), sentAt: f.x.sentAt, sendId: f.x.id };
+  // A Close send whose PDF didn't get made at signing: made now.
+  if (f.x.close && !f.x.seal && fullySigned(f.x) && (await ensureSeal(f.x.id, origin))) f = findSend(await loadState(), id)!;
+  const x = f.x;
+  return withMemberImg({
+    doc: structuredClone(x.doc),
+    hash: x.hash,
+    hashNow: hashDoc(x.doc),
+    signed: structuredClone(x.signed!),
+    events: x.events.map((e) => ({ ...e })),
+    sentAt: x.sentAt,
+    sendId: x.id,
+    sealed: x.seal ? { at: x.seal.at, pdf: pdfLink(origin, x), sha256: x.seal.sha256, check: checkLink(origin), events: x.events.filter((e) => Date.parse(e.at) <= Date.parse(x.seal!.at)).length } : null,
+    memberMode: x.memberMode ?? "none",
+    member: memberOut(x),
+    awaitingMember: awaitingMember(x),
+    signer: { name: x.signer.name, title: x.signer.title ?? "" },
+  }, x.id);
 }
 
 /* ---------- helpers ---------- */

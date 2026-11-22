@@ -94,10 +94,11 @@ export interface StoredDocument {
   createdAt: string;
   updatedAt: string;
   sentAt?: string;
-  expiresAt?: string;
+  /** When the links stop working; null: no end date (picked when sending). Absent until it is sent. */
+  expiresAt?: string | null;
   voided?: { at: string };
   /** The final PDF: the fields stamped in and the audit trail page added. */
-  completed?: { at: string; sha256: string; signedPagesSha256: string; size: number };
+  completed?: { at: string; sha256: string; signedPagesSha256: string; size: number; seal?: import("../proposals/types").SealRec };
   events: DocEvent[];
 }
 
@@ -167,6 +168,8 @@ export interface DocSignerView {
   signedAt: string | null;
   expiresAt: string | null;
   copyUrl: string | null;
+  /** The sender's own saved signature, when they are this signer and signed in here: one click to use it. */
+  saved?: { kind: "typed" | "drawn"; typed: string | null; img: string | null } | null;
 }
 
 /** The completed document's page (/signed/<token>): who signed, the hashes, and the download. */
@@ -182,4 +185,6 @@ export interface DocCopy {
   download: string;
   events: DocEvent[];
   id: string;
+  /** Sealed (lib/seal.ts): anyone can check a copy at `check`. Null for a document finished before seals. */
+  sealed: { at: string; check: string } | null;
 }

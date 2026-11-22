@@ -35,14 +35,128 @@ export interface SignerInfo {
   title?: string;
 }
 
+/* ---------- the member's own signature (Close) ---------- */
+
+/**
+ * A member's saved signature (lib/proposals/memberSig.ts), set once and replaced at will: typed (the
+ * words, drawn in a script face) or drawn (a PNG on the data volume, never in the state). Private to
+ * them; deleted with their account. `consent` is what they agreed to when they saved it.
+ */
+export interface SavedSignature {
+  kind: "typed" | "drawn";
+  /** The words, for a typed one. */
+  typed?: string;
+  /** SHA-256 of the PNG, for a drawn one. */
+  sha256?: string;
+  at: string;
+  consentVersion: string;
+}
+/** The member's signature as their app and the pages show it: a drawn one as a data URL. */
+export interface SignatureView {
+  kind: "typed" | "drawn";
+  typed: string | null;
+  img: string | null;
+  at: string;
+  name: string;
+  title: string;
+}
+/**
+ * Per proposal, the member's own signature: applied when they send ("now"), after the client
+ * signs ("after", a countersignature), or none (prepared and sent by them, as before).
+ */
+export type MemberSignMode = "now" | "after" | "none";
+export const MEMBER_SIGN_SAY: Record<MemberSignMode, string> = { now: "Add my signature now", after: "I'll countersign after they sign", none: "No signature from me" };
+
+/** How long a signing link works, picked per send: days, or 0 for no end date. 30 unless the member picks another. */
+export const LINK_DAYS = [14, 30, 60, 90, 0] as const;
+export type LinkDays = (typeof LINK_DAYS)[number];
+export const LINK_DAYS_SAY: Record<LinkDays, string> = { 14: "14 days", 30: "30 days", 60: "60 days", 90: "90 days", 0: "No end date" };
+/** What the member agrees to when they save a signature or countersign. Bump MEMBER_CONSENT_VERSION when the words change. */
+export const MEMBER_CONSENT_VERSION = "2026-11-22";
+export const MEMBER_CONSENT =
+  "I agree to sign electronically. Applying my saved signature to a proposal I send or countersign, or drawing or typing it there, is my signature, legally binding with the same effect as signing by hand, for me and for any business I sign for. Merlin records when and how it was applied, with a fingerprint of the exact document.";
+/** The member's signature on one send: applied at send, or a countersignature after the client's. */
+export interface MemberSigned {
+  name: string;
+  title: string;
+  at: string;
+  /** How: their saved signature applied when they sent it, or at countersigning, or drawn or typed then. */
+  how: "saved_at_send" | "saved" | "drawn" | "typed";
+  kind: "typed" | "drawn";
+  typed?: string;
+  /** SHA-256 of the drawing kept with the send (lib/proposals/files.ts). */
+  pngSha256?: string;
+  ip: string;
+  ua: string;
+  consent: string;
+  consentVersion: string;
+  /** The document it signed: the send's hash, as the client's signature keeps it. */
+  hash: string;
+}
+
 /** One event on a send's audit trail. */
 export interface AuditEvent {
-  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent";
+  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent" | "member_signed" | "countersigned" | "question" | "passed";
   at: string;
   ip?: string;
   ua?: string;
   /** A short note: who voided it, why, which address an email went to. */
   note?: string;
+}
+
+/* ---------- pricing the client picks from (Close) ---------- */
+
+/** How an option or add-on is billed: every month, or once. */
+export type Billing = "month" | "once";
+export const BILLING_SAY: Record<Billing, string> = { month: "a month", once: "once" };
+
+/** One way to work together, with its price. A proposal has 1, 2 or 3 (lib/proposals/pricing.ts). */
+export interface PriceOption {
+  /** "o" and a few characters, kept across edits so a choice names it. */
+  id: string;
+  name: string;
+  /** Whole dollars. */
+  price: number;
+  billing: Billing;
+  /** A short line under the price ("Months 1 to 3, then $11,000 a month"). */
+  note?: string;
+  /** One line on what it is. */
+  about?: string;
+  /** What's included, one line each: the comparison table's rows. */
+  included: string[];
+  recommended?: boolean;
+}
+/** Something the client can add to any option. */
+export interface PriceAddOn {
+  id: string;
+  name: string;
+  price: number;
+  billing: Billing;
+  about?: string;
+}
+export interface Pricing {
+  options: PriceOption[];
+  addOns: PriceAddOn[];
+}
+/** What the client picked: one option (by id) and any add-ons. */
+export interface Choice {
+  optionId: string;
+  addOnIds: string[];
+}
+/** A choice in words and numbers, as signed: what the signed record, the emails and the PDF say. */
+export interface ChoiceRec {
+  optionId: string;
+  option: string;
+  price: number;
+  billing: Billing;
+  addOns: { id: string; name: string; price: number; billing: Billing }[];
+  /** Dollars a month and dollars once, all in. */
+  monthly: number;
+  once: number;
+  /** "$15,000 a month, plus $6,000 once". */
+  total: string;
+  /** "Assessment + Fractional CRO ($15,000 a month) with Sales hiring support". */
+  summary: string;
 }
 
 /** The exact document the client is shown and signs. Its SHA-256 (hashDoc) goes on the audit trail. */
@@ -52,8 +166,31 @@ export interface FrozenDoc {
   company: string;
   from: { name: string; title: string };
   to: { name: string; title: string; email: string };
-  blocks: { title: string; text: string }[];
+  /** `kind` is the library block's id ("the_math", "terms", "custom"): where the client's page places it. Sends from before it have none. */
+  blocks: { title: string; text: string; kind?: string }[];
+  /** The options and add-ons the client picks from (Close): absent for a single-price proposal. */
+  pricing?: Pricing;
   preparedAt: string;
+}
+
+/**
+ * The seal on a final PDF (lib/seal.ts): the SHA-256 of the file as delivered, the SHA-256 printed
+ * on its audit page (the file with those 64 characters read as zeros), and Merlin's Ed25519
+ * signature over both, so /check can tell anyone whether a copy is the one sealed.
+ */
+export interface SealRec {
+  /** "sl_" and 12 characters. */
+  id: string;
+  /** SHA-256 of the whole file, hex. */
+  sha256: string;
+  /** SHA-256 printed on the audit page, hex. */
+  digest: string;
+  size: number;
+  at: string;
+  /** The first 16 hex characters of the SHA-256 of the public key. */
+  keyId: string;
+  /** Ed25519 over sealMessage(), base64url. */
+  sig: string;
 }
 
 /** One send of one version to one signer. The link is signed and expires (lib/proposals/links.ts). */
@@ -65,15 +202,32 @@ export interface StoredSend {
   /** SHA-256 of the canonical JSON of `doc`, hex. */
   hash: string;
   sentAt: string;
-  expiresAt: string;
+  /** When the link stops working; null: no end date (the member picked it). */
+  expiresAt: string | null;
   viewedAt?: string;
   /** The email code: an HMAC of the 6 digits, when it was sent, wrong tries since. */
   code?: { hash: string; at: string; tries: number };
   codesSent?: string[];
   codeVerifiedAt?: string;
-  signed?: { name: string; at: string; ip: string; ua: string; consent: string; consentVersion: string; hash: string; email: string };
+  signed?: { name: string; at: string; ip: string; ua: string; consent: string; consentVersion: string; hash: string; email: string; choice?: ChoiceRec };
   declined?: { at: string; reason: string; ip: string; ua: string };
-  voided?: { at: string; why: "member" | "changed" };
+  voided?: { at: string; why: "member" | "changed" | "passed" };
+  /** The client passed it to someone else to sign: this link is read only now, and `to` has the new one. */
+  passedTo?: { name: string; email: string; title?: string; at: string; sendId: string };
+  /** This send came from a hand-off: who passed it on, and how many hand-offs there have been (at most 3). */
+  passedFrom?: { name: string; email: string; at: string; sendId: string };
+  handoffs?: number;
+  /** When the client asked a question here (a few a day at most). */
+  questions?: string[];
+  /** Sent while the member had Close (canClose, the trial too): the client picks from its options, and the signed copy is a sealed PDF. */
+  close?: boolean;
+  /** What the client has picked so far: theirs to change until they sign. */
+  choice?: Choice;
+  /** The sealed PDF of the proposal as signed (lib/proposals/pdf.ts), kept on the data volume. */
+  seal?: SealRec;
+  /** The member's own signature on this send (frozen at send): when, and their signature once applied. Absent: none, as before. */
+  memberMode?: MemberSignMode;
+  member?: MemberSigned;
   events: AuditEvent[];
 }
 
@@ -104,6 +258,10 @@ export interface StoredProposal {
   createdAt: string;
   updatedAt: string;
   sends: StoredSend[];
+  /** The options and add-ons the client picks from (Close). Absent: one price, in the proposal's own words. */
+  pricing?: Pricing;
+  /** The member's own signature for the next send. Absent: "now" when they have a saved signature, else "none". */
+  memberSign?: MemberSignMode;
 }
 
 /* ---------- what the member's app gets ---------- */
@@ -122,7 +280,7 @@ export interface ProposalSendRec {
   signer: SignerInfo;
   status: Exclude<ProposalStatus, "draft">;
   sentAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   viewedAt: string | null;
   codeVerifiedAt: string | null;
   signedAt: string | null;
@@ -133,6 +291,17 @@ export interface ProposalSendRec {
   hash: string;
   /** The signed copy with its audit trail (signed only). */
   copyUrl: string | null;
+  /** What the client picked and signed (a proposal with options). */
+  choice: ChoiceRec | null;
+  /** The sealed PDF (Close): its download and when it was sealed. */
+  sealed: { at: string; pdf: string; sha256: string } | null;
+  /** Passed on by the client: who passed it, and (on the earlier send) who it went to. */
+  passedFrom: { name: string; at: string } | null;
+  passedTo: { name: string; at: string } | null;
+  /** The member's own signature on this send: the mode frozen, when they signed, and "member" while the client has signed and it waits for the member's countersignature. */
+  memberMode: MemberSignMode;
+  memberSignedAt: string | null;
+  waiting: "member" | null;
   events: AuditRow[];
 }
 
@@ -147,6 +316,10 @@ export interface ProposalRec {
   notes: DiscoveryNote[];
   signerOnCall: boolean | null;
   signer: SignerInfo | null;
+  /** Options and add-ons for the client to pick from (Close), or null for one price. */
+  pricing: Pricing | null;
+  /** The member's own signature for the next send, as it will be frozen (MemberSignMode). */
+  memberSign: MemberSignMode;
   version: number;
   status: ProposalStatus;
   createdAt: string;
@@ -211,12 +384,20 @@ export interface ProposalsView {
   email: boolean;
   /** The member's own name and title, for "Prepared by". */
   me: { name: string; title: string; function: string | null; email: string };
+  /** Their saved signature (Close), or null. */
+  mySignature: SignatureView | null;
 }
 
 /* ---------- what the client who signs gets ---------- */
 
 export interface SignerView {
-  status: "open" | "signed" | "declined" | "void" | "changed" | "expired";
+  status: "open" | "signed" | "declined" | "void" | "changed" | "expired" | "passed";
+  /** Who signs on this link (the addressee, or who it was passed to), for the signature card. */
+  signer: { name: string; title: string };
+  /** This link was passed to someone else to sign. */
+  passedTo: { name: string } | null;
+  /** Hand-offs left on this link (at most 3 in all). */
+  handoffsLeft: number;
   doc: FrozenDoc;
   hash: string;
   /** The signer's email, partly hidden ("da***@acme.com"), for "we sent a code to". */
@@ -229,8 +410,21 @@ export interface SignerView {
   signedAt: string | null;
   signedName: string | null;
   declinedAt: string | null;
-  expiresAt: string;
+  expiresAt: string | null;
   copyUrl: string | null;
+  /** What they have picked so far (open), or what they signed. Null: a single price, or nothing picked yet. */
+  choice: Choice | null;
+  /** The choice as signed, in words. */
+  signedChoice: ChoiceRec | null;
+  /** The sealed PDF, once signed (Close). */
+  sealed: { at: string; pdf: string } | null;
+  /** Signing makes a sealed PDF (sent under Close). */
+  sealOnSign: boolean;
+  /** The member's side: their mode, and their signature once applied (a drawn one as a data URL). */
+  memberMode: MemberSignMode;
+  member: { name: string; title: string; at: string; how: MemberSigned["how"]; kind: "typed" | "drawn"; typed: string | null; img: string | null } | null;
+  /** The client signed; the member countersigns next. */
+  awaitingMember: boolean;
 }
 
 /** The signed copy's page: the document, the signature and the audit trail. */
@@ -243,6 +437,12 @@ export interface SignedCopy {
   events: AuditRow[];
   sentAt: string;
   sendId: string;
+  /** The sealed PDF (Close): download, when, its SHA-256 and where to check a copy. */
+  sealed: { at: string; pdf: string; sha256: string; check: string; events: number } | null;
+  memberMode: MemberSignMode;
+  member: SignerView["member"];
+  awaitingMember: boolean;
+  signer: { name: string; title: string };
 }
 
 /**

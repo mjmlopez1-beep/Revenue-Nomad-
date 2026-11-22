@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { signedCopy } from "@/lib/proposals/store";
-import type { SignedCopy } from "@/lib/proposals/types";
+import { MEMBER_CONSENT, MEMBER_CONSENT_VERSION, type SignedCopy } from "@/lib/proposals/types";
 import { SignLegal, SignTop } from "../../sign/Sign";
-import { DocBlocks, EVENT_SAY, dayOf, stamp } from "../../sign/doc";
+import { EVENT_SAY, dayOf, stamp } from "../../sign/doc";
+import { Parties, ProposalView, SealCard, memberState } from "../../sign/ProposalView";
 import { PrintButton } from "../Print";
 import { DocCopyPage } from "../DocCopy";
 import "../../sign/sign.css";
+import "../../sign/clientview.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Signed copy · Revenue Nomad", robots: { index: false, follow: false }, openGraph: null, twitter: null };
@@ -22,7 +24,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
   if (/^dc_/.test(String(token ?? ""))) return <DocCopyPage token={String(token).slice(0, 120)} />;
   let c: SignedCopy | null = null;
   try {
-    c = await signedCopy(String(token ?? "").slice(0, 120));
+    c = await signedCopy(String(token ?? "").slice(0, 120), process.env.RN_PUBLIC_URL);
   } catch (e) {
     console.error("signed copy could not be read", e);
   }
@@ -44,7 +46,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
   return (
     <div className="sg sg-copy">
       <SignTop />
-      <main className="sg-main">
+      <main className="sg-main cv-main">
         <section className="sg-card sg-head">
           <p className="sg-from">Signed copy · Proposal from</p>
           <p className="sg-sender">{d.from.name}</p>
@@ -66,24 +68,44 @@ export default async function Page({ params }: { params: Promise<{ token: string
               </dd>
             </div>
           </dl>
+          {c.signed.choice && (
+            <p className="sg-p">
+              Chose {c.signed.choice.summary}. Total: {c.signed.choice.total}.
+            </p>
+          )}
           <div className="sg-noprint">
-            <PrintButton />
+            <PrintButton quiet={!!c.sealed} />
           </div>
         </section>
 
-        <article className="sg-card sg-doc" aria-label="The proposal as signed">
-          <DocBlocks blocks={d.blocks} />
-        </article>
+        {c.awaitingMember && (
+          <section className="sg-card cv-wait" role="status">
+            <span className="cv-wait-h">Signed by {c.signed.name} · waiting for {d.from.name} to countersign</span>
+            <span className="cv-fine">The sealed copy comes by email to you both once they do.</span>
+          </section>
+        )}
+        {c.sealed && <SealCard at={c.sealed.at} signers={[c.signed.name, ...(c.member ? [c.member.name] : [])]} events={c.sealed.events} pdf={c.sealed.pdf} check={c.sealed.check} />}
+
+        <ProposalView
+          doc={d}
+          choice={c.signed.choice ? { optionId: c.signed.choice.optionId, addOnIds: c.signed.choice.addOns.map((a) => a.id) } : null}
+          sign={
+            <div className="cv-accept">
+              <h2 className="cv-h2">Signatures</h2>
+              <Parties doc={d} client={{ state: "signed", name: c.signed.name, title: c.signer.title, at: c.signed.at }} member={{ state: memberState(c.memberMode, c.member, true), sig: c.member }} />
+            </div>
+          }
+        />
 
         <section className="sg-card sg-signed" aria-labelledby="sg-sigh">
           <h2 className="sg-h2" id="sg-sigh">
-            Signature
+            {c.member ? "Signatures" : "Signature"}
           </h2>
           <div className="sg-sig sg-sig-done">
             <span className="sg-sig-name">{c.signed.name}</span>
             <span className="sg-sig-line">
               {c.signed.name}
-              {d.to.title ? `, ${d.to.title}` : ""} · {stamp(c.signed.at)}
+              {c.signer.title ? `, ${c.signer.title}` : ""} · {stamp(c.signed.at)}
             </span>
           </div>
           <dl className="sg-facts">
@@ -106,6 +128,38 @@ export default async function Page({ params }: { params: Promise<{ token: string
               </dd>
             </div>
           </dl>
+          {c.member && (
+            <>
+              <div className="sg-sig sg-sig-done">
+                {c.member.kind === "drawn" && c.member.img ? <img src={c.member.img} alt={`${c.member.name}'s signature`} className="cv-sigimg" /> : <span className="sg-sig-name">{c.member.typed ?? c.member.name}</span>}
+                <span className="sg-sig-line">
+                  {c.member.name}
+                  {c.member.title ? `, ${c.member.title}` : ""} · {stamp(c.member.at)}
+                </span>
+              </div>
+              <dl className="sg-facts">
+                <div>
+                  <dt>How</dt>
+                  <dd>
+                    {c.member.how === "saved_at_send"
+                      ? "Their saved signature, applied when they sent it"
+                      : c.member.how === "saved"
+                        ? "Their saved signature, applied as a countersignature"
+                        : c.member.how === "drawn"
+                          ? "Drawn, as a countersignature"
+                          : "Typed, as a countersignature"}
+                    , signed in to Merlin as the sender
+                  </dd>
+                </div>
+                <div>
+                  <dt>Consent to sign electronically</dt>
+                  <dd>
+                    {MEMBER_CONSENT} <span className="sg-muted">(version {MEMBER_CONSENT_VERSION})</span>
+                  </dd>
+                </div>
+              </dl>
+            </>
+          )}
         </section>
 
         <section className="sg-card sg-audit" aria-labelledby="sg-audh">

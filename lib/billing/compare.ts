@@ -31,6 +31,8 @@ export const PLAN_ROWS: [string, string, string, string][] = [
   ["Know when they open it and what they read", "In your trial only", "In your trial only", "Opens, new readers and time on each section and price, with when to follow up"],
   ["Reminders until they sign", "In your trial only", "In your trial only", "Sent for you on day 2 and day 7, and before the link closes"],
   ["Renewal reminders", "In your trial only", "In your trial only", "30 days before the term ends, with the renewal drafted"],
+  ["Give them options to pick from", "In your trial only", "In your trial only", "Up to 3 options and add-ons: they pick one, see the total and sign it"],
+  ["Sealed PDF anyone can check", "In your trial only", "In your trial only", "Every signed proposal and document, sealed and emailed to both sides"],
   ["Saved views", "1, with the weekly email", "As many as you want, with alerts", "As many as you want, with alerts"],
   [FEATURE_NAME, "Every signal each morning, one company a day fully open", "Every company in it open free, signals in Slack as they happen", "Every company in it open free, signals in Slack as they happen"],
   ["Rate benchmarks", "Medians by function", "Ranges by function and client size", "Ranges by function and client size"],

@@ -34,7 +34,7 @@ async function answer(work: () => Promise<unknown>) {
  * GET ?id=ID                                   DocumentRec
  * POST ?op=upload&name=<file name>, the PDF as the body (up to RN_DOC_MAX_MB, 15 MB)   DocumentRec, a draft
  * POST { op: "update", id, title?, fields?, signers?, ordered?, companyId?, companyName?, message? }   drafts only
- * POST { op: "send", id, message? }            Trial and Pro (403 with `upgrade` on Free)
+ * POST { op: "send", id, message?, linkDays? }   linkDays: 14, 30 (the default), 60, 90, or 0 for no end date            Trial and Pro (403 with `upgrade` on Free)
  * POST { op: "void" | "delete" | "copy" | "mylink", id }
  */
 export const GET = guarded(async (req: NextRequest) => {
@@ -74,7 +74,7 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(() => updateDocument(token, id, { title: b.title, fields: b.fields, signers: b.signers, ordered: b.ordered, companyId: b.companyId, companyName: b.companyName, message: b.message }, o));
     case "send":
       if (limited(`doc-send:${me.id}`, 20, 60 * 60_000)) return err("That's 20 sends in an hour, which is the limit. Try again later.", 429);
-      return answer(() => sendDocument(token, id, { message: b.message }, o));
+      return answer(() => sendDocument(token, id, { message: b.message, linkDays: b.linkDays }, o));
     case "void":
       return answer(() => voidDocument(token, id, o));
     case "delete":

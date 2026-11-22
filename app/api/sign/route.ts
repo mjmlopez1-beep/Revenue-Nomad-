@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { clientIp, limited } from "@/lib/rateLimit";
-import { ProposalProblem, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
-import { docDecline, docRequestCode, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
+import { ProposalProblem, askQuestion, chooseOption, handOff, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
+import { docDecline, docRequestCode, docSavedSignature, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
 import { afterSignerStep } from "@/lib/close/server";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,10 @@ const err = (message: string, status = 400) => NextResponse.json({ error: messag
  * POST { token, op: "view" }                      SignerView (the first open is noted)
  * POST { token, op: "code" }                      email a 6-digit code to the signer
  * POST { token, op: "verify", code }              confirm it
- * POST { token, op: "sign", name, consent, hash } sign: the full name typed, consent true, the hash of the document shown
+ * POST { token, op: "ask", question }             a question to the member, by email (reply-to the signer)
+ * POST { token, op: "handoff", signer: { name, email, title? }, note? }   pass it to someone else to sign
+ * POST { token, op: "choose", choice }            pick an option and add-ons ({ optionId, addOnIds }), until signed
+ * POST { token, op: "sign", name, consent, hash, choice? } sign: the full name typed, consent true, the hash of the document shown, the option picked
  * POST { token, op: "decline", reason? }
  *
  * A document's link (a "ds_" token, lib/documents/store.ts) takes the same steps, and signs with
@@ -49,8 +52,11 @@ export const POST = guarded(async (req: NextRequest) => {
   try {
     if (doc)
       switch (b.op) {
-        case "view":
-          return NextResponse.json(await docSignerView(token, who, o), { headers: NO_STORE });
+        case "view": {
+          // The sender signing their own document, signed in here: their saved signature, for one click.
+          const v = await docSignerView(token, who, o);
+          return NextResponse.json({ ...v, saved: await docSavedSignature(token, req.cookies.get("rn_table")?.value) }, { headers: NO_STORE });
+        }
         case "code":
           if (limited(`sign-code:${ip}`, 10, 60 * 60_000)) return err("That's a lot of codes from here in an hour. Use the newest one, or try again later.", 429);
           return NextResponse.json(await docRequestCode(token, who), { headers: NO_STORE });
@@ -58,7 +64,7 @@ export const POST = guarded(async (req: NextRequest) => {
           if (limited(`sign-verify:${ip}`, 20, 10 * 60_000)) return err("That's a lot of tries. Wait 10 minutes, then try again.", 429);
           return NextResponse.json(await docVerifyCode(token, b.code, who, o), { headers: NO_STORE });
         case "sign":
-          return done(await docSign(token, { name: b.name, method: b.method, png: b.png, values: b.values, consent: b.consent, hash: b.hash }, who, o));
+          return done(await docSign(token, { name: b.name, method: b.method, png: b.png, values: b.values, consent: b.consent, hash: b.hash }, who, o, undefined, req.cookies.get("rn_table")?.value));
         case "decline":
           return done(await docDecline(token, { reason: b.reason }, who, o));
         default:
@@ -73,8 +79,17 @@ export const POST = guarded(async (req: NextRequest) => {
       case "verify":
         if (limited(`sign-verify:${ip}`, 20, 10 * 60_000)) return err("That's a lot of tries. Wait 10 minutes, then try again.", 429);
         return NextResponse.json(await verifyCode(token, b.code, who, o), { headers: NO_STORE });
+      case "ask":
+        // A question to the member, by email (lib/proposals/store.ts askQuestion: a few a day on one link too).
+        if (limited(`sign-ask:${ip}`, 10, 60 * 60_000)) return err("That's a lot of questions from here in an hour. Try again later.", 429);
+        return NextResponse.json(await askQuestion(token, b.question, who, o), { headers: NO_STORE });
+      case "handoff":
+        if (limited(`sign-handoff:${ip}`, 5, 60 * 60_000)) return err("That's a lot from here in an hour. Try again later.", 429);
+        return NextResponse.json(await handOff(token, { signer: b.signer, note: b.note }, who, o), { headers: NO_STORE });
+      case "choose":
+        return NextResponse.json(await chooseOption(token, b.choice, o), { headers: NO_STORE });
       case "sign":
-        return done(await signProposal(token, { name: b.name, consent: b.consent, hash: b.hash }, who, o));
+        return done(await signProposal(token, { name: b.name, consent: b.consent, hash: b.hash, choice: b.choice }, who, o));
       case "decline":
         return done(await declineProposal(token, { reason: b.reason }, who, o));
       default:

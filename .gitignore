@@ -22,3 +22,7 @@ data/intel-seed.key
 
 # private data exports (rates, surveys). Never commit.
 data/*.private.*
+data/seal-key.pem
+data/proposals/
+data/documents/
+data/members/

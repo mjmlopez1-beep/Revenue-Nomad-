@@ -102,4 +102,8 @@ export const EVENT_SAY: Record<string, string> = {
   voided: "Voided",
   expired_open: "Opened after the link expired",
   copy_sent: "Signed copy emailed",
+  question: "A question to the sender",
+  passed: "Passed to someone else to sign",
+  member_signed: "Signed by the sender when sending",
+  countersigned: "Countersigned by the sender",
 };

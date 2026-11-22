@@ -8,6 +8,7 @@
  * On phones a returning member comes for the history, so it follows the balance, and the
  * rules fold into one closed "How credits work".
  */
+import { SignatureSettings } from "./MySignature";
 import { useEffect, useRef, useState } from "react";
 import type { LedgerRow, View } from "@/lib/tableTypes";
 import { COMPANY_PRICE, EARN_CAP, FREE_EARN_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef, OPENS_RULE } from "@/lib/tableFields";
@@ -451,6 +452,7 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
           {signinCard}
           <NotificationsCard onOpen={onNotifications} />
           <ConnectedApps onHowTo={onUseInClaude} />
+          {(me.plan?.canClose ?? true) && <SignatureSettings />}
           <DataLink />
           <CloseAccount />
         </>
@@ -463,6 +465,7 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
           </div>
           <NotificationsCard onOpen={onNotifications} />
           <ConnectedApps onHowTo={onUseInClaude} />
+          {(me.plan?.canClose ?? true) && <SignatureSettings />}
           <DataLink />
           {review}
           {history}
