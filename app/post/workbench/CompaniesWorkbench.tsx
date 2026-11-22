@@ -268,6 +268,12 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
     setRun(null);
     if (x.col === "company" && x.done && first && !opened) setOpened(x.scope.find((r) => r.i.c.hidden)?.i.c.id ?? null);
   };
+  // A column a run just filled comes into view.
+  useEffect(() => {
+    if (!fresh.size) return;
+    const t = setTimeout(() => document.querySelector(".wb-th-fresh")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }), 80);
+    return () => clearTimeout(t);
+  }, [fresh]);
   const runStatus = (() => {
     if (!lastRun) return null;
     const def = columnOf(type, lastRun.col);
@@ -288,7 +294,21 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
     return (
       <div className="wb wb-phone">
         <h1 className="sr-only">{TYPE_TITLE[type]}</h1>
-        {first && hasIcp && <p className="wb-icp-line">Filtered to your ideal client, from what you said when you signed up.</p>}
+        <div className="wb-phone-bar">
+          <label className="wb-phone-view">
+            <span>View</span>
+            <select value={viewKey} onChange={(e) => setViewKey(e.target.value as ViewKey)}>
+              {views.map((v) => (
+                <option key={v.key} value={v.key}>
+                  {v.label}
+                  {v.n !== undefined ? ` · ${v.n}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="wb-phone-n num">{sorted.length.toLocaleString("en-US")} {sorted.length === 1 ? "row" : "rows"}</span>
+        </div>
+        {first && viewKey === "icp" && hasIcp && <p className="wb-icp-line">Filtered to your ideal client, from what you said when you signed up.</p>}
         <CardList type={type} rows={inView} me={me} onOpen={openRow} tab={tab} />
         {sorted.length > limit && (
           <button type="button" className="btn wb-more" onClick={() => setLimit((n) => n + pageSize)}>

@@ -180,7 +180,16 @@ async function main() {
   check("Who held the seat is free, Decision maker, Work email and Rate paid 1 / row", it(ctxFree, "en-held")?.cost === "Free" && ["en-dm", "en-email", "en-rate"].every((id) => it(ctxFree, id)?.cost === "1 / row"));
   check("New executive and funding are Pro on Free and say where they come from", it(ctxFree, "sig-leader")?.cost === "Pro" && /company websites Merlin reads/.test(it(ctxFree, "sig-leader")!.sub) && /SEC/.test(it(ctxFree, "sig-funding")!.label));
   const words = JSON.stringify(TL.toolItems("companies", ctxTrial as never));
-  check("left out: the research column, Closest evidence, Import a CSV, Export, Send to Slack, any AI allowance", !/researches|Closest evidence|Import a CSV|Export|Slack|AI allowance/i.test(words));
+  check("left out: the research column, Import a CSV, Export, Send to Slack, any AI allowance", !/researches|Import a CSV|Export|Slack|AI allowance|download/i.test(words));
+  const { readdirSync } = await import("node:fs");
+  const wbDir = path.join(process.cwd(), "app/post/workbench");
+  const shownWords = readdirSync(wbDir)
+    .filter((f) => f.endsWith(".tsx"))
+    .map((f) => readFileSync(path.join(wbDir, f), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""))
+    .join("\n");
+  check("no Export, CSV or download anywhere in the workbench's screens (the owner's decision)", !/>\s*Export|"Export|Export CSV|\bCSV\b|[Dd]ownload/.test(shownWords));
+  const ev = it(ctxFree, "en-evidence");
+  check("Closest evidence: shown with the Close pill off Close, never hidden", ev?.cost === "Close" && ev?.tone === "gate" && it(ctxTrial, "en-evidence")?.tone === "free");
   check("Sources: Your contacts only with Your network on", !TL.toolItems("companies", ctxFree as never).some((x) => x.id === "src-network") && TL.toolItems("companies", { ...ctxFree, network: true } as never).some((x) => x.id === "src-network"));
   check("the search box finds across tabs", TL.itemsFor("companies", ctxTrial as never, "you", "email").some((x) => x.id === "en-email"));
   const north = rows0.find((r) => r.i.c.id === pub(cid(0)))!;
