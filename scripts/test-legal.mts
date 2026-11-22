@@ -142,6 +142,15 @@ async function main() {
     net.includes('href="/privacy#google"') && net.includes("How Merlin uses your Google data") && (net.match(/<GooglePolicyLink \/>/g) ?? []).length >= 3,
     (net.match(/<GooglePolicyLink \/>/g) ?? []).length,
   );
+  const flat = (f: string) => src(f).replace(/\s+/g, " ");
+  check(
+    "the data page and its notes say the AI usage metering: numbers only, never a word of the call or the draft",
+    flat("app/data/DataFlows.tsx").includes("Merlin keeps for each draft only how much it used, as numbers: never a word of the call or the draft") && src("docs/data-flows.md").includes("never a word of the call or the draft") && src("docs/data-flows.md").includes("`State.aiUsage`"),
+  );
+  check(
+    "the data page and its notes say Peers: shown to the members in it, nothing outside but the email, the export without what members wrote",
+    flat("app/data/DataFlows.tsx").includes("Inside Merlin: Peers") && flat("app/data/DataFlows.tsx").includes("Only the members in it see it") && flat("app/data/DataFlows.tsx").includes("leaves out what members wrote") && src("docs/data-flows.md").includes("## 4. Inside Merlin: Peers") && src("docs/data-flows.md").includes("leaves out what members wrote"),
+  );
   check("the data page links both", src("app/data/DataFlows.tsx").includes('href="/privacy"') && src("app/data/DataFlows.tsx").includes('href="/terms"'));
 
   console.log("\nThe verification kit");

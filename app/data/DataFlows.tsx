@@ -34,7 +34,7 @@ const SERVICES: Service[] = [
   },
   {
     who: "Resend (email)",
-    gets: "Each email Merlin sends: the address, the subject and the text. Sign-in links and codes, a note that a member wrote to you with the first 200 characters of their message, the weekly email, Crystal Ball emails, and plan notices.",
+    gets: "Each email Merlin sends: the address, the subject and the text. Sign-in links and codes, a note that a member wrote to you with the first 200 characters of their message, a lead or a team-up a fellow fractional sent you through Peers with their note, the weekly email, Crystal Ball emails, and plan notices.",
     why: "Sending Merlin's email.",
     when: "Only while email is set up.",
   },
@@ -95,6 +95,10 @@ export function DataFlows() {
               API to write it. Merlin keeps the draft, not the transcript. It is off unless Revenue Nomad switches it on, and each member agrees before their first draft.
             </p>
             <p className="cl-p">
+              To meter each member&apos;s monthly AI usage, Merlin keeps for each draft only how much it used, as numbers: never a word of the call or the draft. You see
+              the share of this month&apos;s AI usage you have used in Plan and billing.
+            </p>
+            <p className="cl-p">
               AI comes in only when a member adds Merlin to their own assistant, such as Claude or ChatGPT, with Merlin&apos;s connector. The assistant then asks
               Merlin&apos;s tools as that member, and gets only what those tools return to that member: what they would see in the app, with the same locks and credits. That
               happens under the member&apos;s own account with their assistant.
@@ -138,6 +142,17 @@ export function DataFlows() {
             </ul>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-peers">
+            <h2 className="df-h" id="df-peers">
+              Inside Merlin: Peers
+            </h2>
+            <p className="cl-p">
+              When you pass a lead to another fractional, team up with one on a company, or post in a circle, Merlin keeps who, which company and what you wrote. Only
+              the members in it see it: the two of you for a lead or a team-up, a circle&apos;s members for its posts. None of it goes to an outside service, except the
+              email that tells the other member, and Revenue Nomad&apos;s copy for admins leaves out what members wrote.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-off">
             <h2 className="df-h" id="df-off">
               Who can switch it off
@@ -146,7 +161,8 @@ export function DataFlows() {
             <ul className="df-bullets">
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps. Disconnect any assistant you added.</li>
-              <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link.</li>
+              <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
+              <li>Peers: mute a member, or leave a circle.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
