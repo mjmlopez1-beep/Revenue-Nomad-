@@ -10,9 +10,14 @@
  * notes, Start a proposal (Close), Pass as a lead.
  *
  * Left out, with nothing behind them yet (BUILD_PLAN part 6): "Ask Merlin, a column Merlin
- * researches" (no research agent on the server), Closest evidence (Evidence is Stage 5), Import a
- * CSV (only the LinkedIn connections file reads today), Export CSV (the owner's question 5: no plan
- * allows it yet) and Send to Slack (no list post exists).
+ * researches" (no research agent on the server), Import a
+ * CSV (only the LinkedIn connections file reads today) and Send to Slack (no list post exists).
+ * There is no Export, CSV or download anywhere: members cannot export data from Merlin (the owner's decision).
+ *
+ * Closest evidence and Match my evidence are Evidence Bank's, a Close feature (the owner's
+ * decision): on Close and the Close trial they say Evidence Bank is coming (its store is Stage 5,
+ * so the column has nothing to fill yet); on Free and Pro they show with the Close pill and open the
+ * upgrade, never hidden.
  */
 import { COMPANY_PRICE, PRO_OPENS_DAILY } from "@/lib/tableFields";
 import type { Me } from "@/lib/tableTypes";
@@ -46,7 +51,8 @@ export type ToolDo =
   | { kind: "type"; type: RecordType }
   | { kind: "page"; page: "network" | "proposals" | "pipeline" }
   | { kind: "alert"; trigger: "role" | "seat" | "leader" | "funding" }
-  | { kind: "action"; action: "pipeline" | "notes" | "pass" | "proposal" };
+  | { kind: "action"; action: "pipeline" | "notes" | "pass" | "proposal" }
+  | { kind: "evidence" };
 
 export interface ToolItem {
   id: string;
@@ -102,6 +108,15 @@ export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
           { id: "en-dm", tab: "enrich" as const, label: "Decision maker", sub: "Name and title of who hires, one purchase", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "decider" } },
           { id: "en-email", tab: "enrich" as const, label: "Work email", sub: "Needs the decision maker's name first", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "email" } },
           { id: "en-rate", tab: "enrich" as const, label: "Rate paid", sub: "What the latest seat paid, where a member shared it", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "rate" } },
+          {
+            id: "en-evidence",
+            tab: "enrich" as const,
+            label: "Closest evidence",
+            sub: ctx.close ? "Your Evidence Bank case most like each company. Coming with Evidence Bank" : "Your case most like each company, from Evidence Bank",
+            cost: "Close",
+            tone: (ctx.close ? "free" : "gate") as CostTone,
+            do: { kind: "evidence" as const },
+          },
           { id: "en-motion", tab: "enrich" as const, label: "Sales motion", sub: "How the company sells, where members added it", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "motion" } },
         ]
       : []),

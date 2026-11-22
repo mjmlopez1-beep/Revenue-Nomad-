@@ -61,6 +61,7 @@ import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
 import { CardList } from "./Cards";
+import { CompaniesWorkbench } from "./workbench/CompaniesWorkbench";
 import { Drawer } from "./Drawer";
 import { MyCredits, signInLink, useCopy } from "./Credits";
 import { FitWhyCtx, IcpPill, IcpSheet, SaveViewSheet, SavedViewList, SavedViewsSheet, type ProfileEdit } from "./Hunt";
@@ -345,6 +346,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   }, []);
   const layout = useLayout();
   const phone = layout === "phone";
+  // [ui2B, temporary] ?p=wb opens the Companies workbench, only in a build made with NEXT_PUBLIC_RN_UI2_WB=1.
+  const [wbOn] = useState(() => process.env.NEXT_PUBLIC_RN_UI2_WB === "1" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "wb");
   const touch = useMedia("(hover: none) and (pointer: coarse)");
   const toast = useToast();
   const copy = useCopy();
@@ -2872,6 +2875,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               onClaude={() => (setPage("integrations"), setTimeout(() => document.getElementById("claude-network")?.scrollIntoView({ block: "start" }), 400))}
               refresh={refresh}
             />
+          </main>
+        ) : wbOn && page === "table" ? (
+          // [ui2B, temporary] The Companies workbench behind ?p=wb, only in a build with NEXT_PUBLIC_RN_UI2_WB=1. The page registry replaces this at the merge.
+          <main className="tp-main tp-main-page wb-host">
+            <CompaniesWorkbench view={view} infos={infos} me={me} openCompany={openCompany} openPage={openPage} refresh={refresh} network={!!network} onEditIcp={() => setIcpOpen(true)} />
           </main>
         ) : phone ? (
           <main className="tp-main tp-main-phone">
