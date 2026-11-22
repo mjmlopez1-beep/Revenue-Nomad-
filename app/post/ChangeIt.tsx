@@ -23,7 +23,7 @@ import { api } from "./ProposalParts";
 
 /** Said when asking isn't switched on (lib/proposals/change.ts CHANGE_OFF says the same). */
 export const CHANGE_OFF_WORDS = "Asking Merlin to change it isn't switched on yet. You can edit any section directly.";
-const CONSENT = "Merlin sends this proposal, the lines you kept from the call and your request to Anthropic's API to make the change.";
+const CONSENT = "Merlin makes the change from this proposal, the lines you kept from the call and your request.";
 
 type SpeechRec = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null };
 type SpeechCtor = new () => SpeechRec;

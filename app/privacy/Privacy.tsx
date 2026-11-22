@@ -33,8 +33,8 @@ const PROCESSORS: { who: string; gets: string }[] = [
     gets: "Only if you connect Google: your sign-in and Merlin's read-only requests, sent with your own access. Nothing about other members goes to Google.",
   },
   {
-    who: "Anthropic (drafting with Claude)",
-    gets: "Only if you turn on drafting with Claude in Proposals, and only for the draft you ask for: the call's transcript or notes you paste, and the draft's inputs (the template, the company's facts you can see, the rate range, your name, title and writing voice). It is sent to Anthropic's API to write the draft. Merlin keeps the draft, not the transcript.",
+    who: "Anthropic (the AI service that writes Merlin's drafts)",
+    gets: "Only when Merlin drafts or changes a proposal for you, and only for that request: the call's transcript or notes you give it and the draft's inputs (the template, the company's facts you can see, the rate range, your name, title and writing voice), or the proposal and the change you ask for. It is sent to Anthropic's API to write the text. Anthropic's API terms don't let it train its models on this. Merlin keeps the draft, not the transcript.",
   },
   {
     who: "Your own AI assistant",
@@ -74,8 +74,8 @@ export function PrivacyView({ support }: { support: string | null }) {
             <li>Your pipeline: the companies you reached out to, its stages, your notes and follow-ups.</li>
             <li>
               Your proposals: drafts, the lines you accept from a call, and what you send for signature. A call&apos;s transcript is read in your browser and not sent to
-              Merlin, and only the lines you use are saved. If you turn on drafting with Claude, the transcript and the draft&apos;s inputs are sent to Anthropic&apos;s API
-              to write that draft, and are not kept by Merlin. Only the draft is saved.
+              Merlin, and only the lines you use are saved. If Merlin drafts it for you, the transcript and the draft&apos;s inputs are sent to Anthropic&apos;s API, the AI
+              service Merlin uses, to write that draft, and are not kept by Merlin. Only the draft is saved.
             </li>
             <li>Your own templates, if you upload a past proposal: the headings and text read from it. The file itself is not kept.</li>
             <li>
@@ -154,8 +154,8 @@ export function PrivacyView({ support }: { support: string | null }) {
           <li>We never sell personal data.</li>
           <li>We never use Google data for advertising, and we show no ads.</li>
           <li>
-            We never use any data to train AI models. Merlin&apos;s server calls no AI model and sends nothing to a model provider, except when you turn on drafting with
-            Claude for a proposal: then that draft&apos;s inputs go to Anthropic&apos;s API, and the transcript is not kept.
+            We never use any data to train AI models. Merlin&apos;s server calls no AI model and sends nothing to a model provider, except when Merlin drafts or changes
+            a proposal for you: then that request&apos;s inputs go to Anthropic&apos;s API, and the transcript is not kept.
           </li>
           <li>We never show your Google data, your LinkedIn import, your pipeline or your writing voice to another member.</li>
           <li>We never read the text or subject of an email, or a meeting&apos;s title, description or location.</li>
@@ -315,7 +315,7 @@ export function PrivacyView({ support }: { support: string | null }) {
           <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
           <li>A signed proposal and its audit trail: kept with the signed copy for both parties.</li>
           <li>A document you uploaded: a draft until you delete it, with its file. A signed one is kept with its final PDF and audit trail for everyone who signed it.</li>
-          <li>A transcript you draft from with Claude: not kept. Only the draft is.</li>
+          <li>A transcript Merlin drafts from: not kept. Only the draft is.</li>
           <li>
             Closing your account: Close my account, on Your credits, closes it at once. You are signed out, you leave Peers and the Fractionals directory, and Merlin
             stops emailing you. For 30 days you, with the link we email you, or we can bring it back. After 30 days Merlin deletes your personal data: your profile,

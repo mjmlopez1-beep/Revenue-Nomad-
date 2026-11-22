@@ -27,10 +27,10 @@ import { ProposalProblem, createProposal } from "./store";
 import type { ProposalRec } from "./types";
 import { AI_PACK_LINK, budgetOf, chargeIn, usedUpWords } from "./aiUsage";
 
-export const AI_OFF = "Drafting with Claude isn't switched on for Merlin. Use Draft without it, or Build it in Claude.";
-export const AI_PLAN = `Drafting with Claude is on Close: $${PRICES.closeMonth} a month. Build it in Claude works on every plan.`;
+export const AI_OFF = "Drafting with Merlin isn't switched on yet. Draft it from the template, and Merlin fills in what it finds in the call.";
+export const AI_PLAN = `Drafting with Merlin is on Close: $${PRICES.closeMonth} a month.`;
 export const AI_BUSY = "A draft is on its way already. Wait for it, then draft the next one.";
-export const AI_CONSENT = "To draft it, Merlin sends this transcript and the draft's inputs to Anthropic's API. Merlin keeps the draft, not the transcript.";
+export const AI_CONSENT = "Merlin writes the draft from the call. It keeps the draft, not the transcript.";
 
 /** What the model returns: key fields under plain names, mapped to the proposal's {{keys}}. */
 const FIELD_NAMES: Record<string, string> = {
@@ -111,8 +111,8 @@ export function draftPrompt(kit: ProposalKit, transcript: string, call: { date?:
 
 /** The model's answer as a checked draft, or a sentence on what went wrong. */
 export function readDraft(msg: Pick<Anthropic.Message, "content" | "stop_reason">): DraftOut {
-  if (msg.stop_reason === "refusal") throw new ProposalProblem("Claude didn't draft this one. Draft it without Claude, or try Build it in Claude.", 502);
-  if (msg.stop_reason === "max_tokens") throw new ProposalProblem("The draft ran too long and stopped. Try a shorter transcript, or Build it in Claude.", 502);
+  if (msg.stop_reason === "refusal") throw new ProposalProblem("Merlin couldn't draft this one. Draft it from the template instead.", 502);
+  if (msg.stop_reason === "max_tokens") throw new ProposalProblem("The draft ran too long and stopped. Try a shorter transcript.", 502);
   const text = msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
@@ -220,19 +220,19 @@ async function draftNow(
     // The status only: never the request, which holds the transcript.
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
       console.error("ai draft: the key was refused", e.status);
-      throw new ProposalProblem("Drafting with Claude isn't set up right on Merlin. Draft it without Claude for now.", 503);
+      throw new ProposalProblem("Drafting with Merlin isn't set up right yet. Draft it from the template for now.", 503);
     }
-    if (e instanceof Anthropic.RateLimitError) throw new ProposalProblem("Claude is busy right now. Try again in a minute.", 503);
+    if (e instanceof Anthropic.RateLimitError) throw new ProposalProblem("Merlin's drafting is busy right now. Try again in a minute.", 503);
     if (e instanceof Anthropic.BadRequestError || e instanceof Anthropic.NotFoundError) {
       console.error("ai draft: the request was refused", e.status);
-      throw new ProposalProblem("Claude couldn't take that request. Try a shorter transcript, or Build it in Claude.", 502);
+      throw new ProposalProblem("Merlin couldn't take that request. Try a shorter transcript.", 502);
     }
     if (e instanceof Anthropic.APIError) {
       console.error("ai draft failed", e.status);
-      throw new ProposalProblem("Claude didn't answer. Try again in a moment.", 502);
+      throw new ProposalProblem("The draft didn't come back. Try again in a moment.", 502);
     }
     console.error("ai draft failed", (e as Error)?.name);
-    throw new ProposalProblem("Claude didn't answer. Try again in a moment.", 502);
+    throw new ProposalProblem("The draft didn't come back. Try again in a moment.", 502);
   }
   const d = readDraft(msg);
 

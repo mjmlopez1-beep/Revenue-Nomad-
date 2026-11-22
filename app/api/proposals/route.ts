@@ -91,7 +91,7 @@ export const POST = guarded(async (req: NextRequest) => {
       );
     case "draft":
       // What a member may draft is their AI budget (lib/proposals/aiUsage.ts, in draftWithClaude). This only slows a burst of tries.
-      if (limited(`prop-draft:${me.id}`, 12, 60 * 60_000)) return err("That's a lot of drafts at once. Give it a few minutes, then try again, or Build it in Claude.", 429);
+      if (limited(`prop-draft:${me.id}`, 12, 60 * 60_000)) return err("That's a lot of drafts at once. Give it a few minutes, then try again.", 429);
       return answer(() => draftWithClaude(token, { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, transcript: b.transcript, callDate: b.callDate, callWith: b.callWith, agree: b.agree }, o));
     case "change":
       if (limited(`prop-change:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of changes at once. Give it a few minutes, then try again.", 429);

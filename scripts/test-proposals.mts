@@ -714,7 +714,7 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   const av0 = await S.listProposals(PAT, BASE);
   check("Trial: on, and not agreed yet", av0.ai === "on" && av0.aiAgreed === false);
   const aiAsk = await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
-  check("it asks first: the transcript goes to Anthropic only after the member agrees", aiAsk?.status === 428 && /Anthropic's API/.test(aiAsk.message) && aiCalls.length === 0, aiAsk?.message);
+  check("it asks first: the transcript goes to Anthropic only after the member agrees", aiAsk?.status === 428 && aiAsk.message.startsWith(D.AI_CONSENT) && !/Claude|Anthropic/.test(aiAsk.message) && aiCalls.length === 0, aiAsk?.message);
   check("a few lines aren't enough to draft from", (await refused(D.draftWithClaude(PAT, { companyId: ACME, transcript: "Hi there.", agree: true }, BASE)))?.includes("isn't enough"));
   // A voice of her own, so the kit carries it.
   await T.tableInternals.mutate((st) => {
@@ -789,8 +789,8 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   const u1 = (await T.loadState()).aiUsage!.mem_pat;
   check("allowed just under 100%, and the call may take it past", aiCalls.length === callsB + 1 && u1.trialMicros === 2_999_999 + 400_000, u1.trialMicros);
   const over = await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
-  check("refused at 100%, with the pack and Build it in Claude, and Claude isn't called", over?.status === 402 && over.message === AU.usedUpWords(Date.now(), true) && /usage pack/.test(over.message) && /Build it in Claude, free/.test(over.message) && over.upgrade === AU.AI_PACK_LINK && aiCalls.length === callsB + 1, over?.message);
-  check("the month's words name the day it resets", /^You've used this month's AI usage\. Add a \$10 usage pack to keep drafting, or Build it in Claude, free\. It resets on December 1\.$/.test(AU.usedUpWords(Date.UTC(2026, 10, 22))));
+  check("refused at 100%, with the pack and Build it in Claude, and Claude isn't called", over?.status === 402 && over.message === AU.usedUpWords(Date.now(), true) && /usage pack/.test(over.message) && /build it in your own Claude with the connector, free/.test(over.message) && over.upgrade === AU.AI_PACK_LINK && aiCalls.length === callsB + 1, over?.message);
+  check("the month's words name the day it resets", /^You've used this month's AI usage\. Add a \$10 usage pack to keep drafting, or build it in your own Claude with the connector, free\. It resets on December 1\.$/.test(AU.usedUpWords(Date.UTC(2026, 10, 22))));
   const lv = await S.listProposals(PAT, BASE);
   check("the page knows: the words and the pack's button, never a number", lv.aiUsedUp?.words === over?.message && lv.aiUsedUp?.button === "Add a $10 usage pack" && lv.aiUsedUp.pack === AU.AI_PACK_LINK && readFileSync("app/post/ProposalStart.tsx", "utf8").includes(`const PACK_WORDS = "${lv.aiUsedUp?.button}"`));
   // A pack: once per payment, used after the budget, never expiring.

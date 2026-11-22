@@ -32,7 +32,7 @@ import type { CoInfo } from "./model";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
 export const CLAUDE_NEW = "https://claude.ai/new";
-const AI_CONSENT = "Claude reads the transcript through Anthropic's API to write the draft. Merlin keeps the draft, not the transcript.";
+const AI_CONSENT = "Merlin writes the draft from the call. It keeps the draft, not the transcript.";
 
 const PACK_WORDS = "Add a $10 usage pack";
 
@@ -603,7 +603,7 @@ export function StartSheet({
         <label className="pp-ai">
           <input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
           <span>
-            <b>Draft the whole proposal with Claude</b>
+            <b>Draft the whole proposal with Merlin</b>
             <span className="pp-muted">{callText.trim().length < 200 ? "Needs a few more lines than this. Merlin fills the template from what you wrote instead." : AI_CONSENT}</span>
           </span>
         </label>
@@ -620,13 +620,16 @@ export function StartSheet({
       {err && <p className="pp-err">{err}</p>}
       <div className="sc-go">
         <button type="button" className="btn btn-pine btn-lg" aria-busy={busy === "draft"} disabled={!!busy || (!company && !pick) || aiOut} onClick={() => void draft()}>
-          {busy === "draft" ? (ai ? "Claude is drafting it" : "Drafting") : hasCall ? "Draft it" : "Start from the template"}
+          {busy === "draft" ? (ai ? "Merlin is drafting it" : "Drafting") : hasCall ? "Draft it" : "Start from the template"}
         </button>
         <span className="pp-muted">{ai ? "About 30 seconds. You review everything before it's sent." : "You review everything before it's sent."}</span>
-        <button type="button" className="tp-flink sc-claude" onClick={() => void buildInClaude(prompt, toast)}>
-          Or build it in Claude <IconExternal />
-        </button>
       </div>
+      <p className="sc-claude">
+        Prefer your own Claude?{" "}
+        <button type="button" className="tp-flink" onClick={() => void buildInClaude(prompt, toast)}>
+          Build it there <IconExternal />
+        </button>
+      </p>
     </div>
   );
 }

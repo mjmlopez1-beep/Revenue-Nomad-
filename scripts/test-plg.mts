@@ -314,7 +314,7 @@ async function main() {
   // Three plans: Free, Pro, Close. Sending for signature, Claude drafting and your own contracts are Close.
   check("three plans: Free $0, Pro $59 / $590, Close $79 / $790", JSON.stringify(compare.PLANS.map((p) => [p.name, p.month, p.year])) === JSON.stringify([["Free", 0, 0], ["Pro", 59, 590], ["Close", 79, 790]]), compare.PLANS);
   check("Proposals and e-signature: building is Close's after the trial", JSON.stringify(rowOf("Proposals and e-signature")) === JSON.stringify(["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"]));
-  check("Claude drafting and your own contracts are Close's", JSON.stringify(rowOf("Claude drafting and your own contracts")?.slice(1)) === JSON.stringify(["In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"]));
+  check("Merlin drafting and your own contracts are Close's", JSON.stringify(rowOf("Merlin drafting and your own contracts")?.slice(1)) === JSON.stringify(["In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"]));
   check("Opening companies", JSON.stringify(rowOf("Opening companies")) === JSON.stringify(["Opening companies", "1 a day from Crystal Ball, others 2 credits", "Free, up to 15 a day, Crystal Ball not counted", "Free, up to 15 a day, Crystal Ball not counted"]));
   check("Fellow fractionals", JSON.stringify(rowOf("Fellow fractionals")) === JSON.stringify(["Fellow fractionals", "Free", "Free", "Free"]));
   check("Open roles are about alerts", JSON.stringify(rowOf("Open roles")) === JSON.stringify(["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"]));
@@ -326,7 +326,7 @@ async function main() {
   check("the Pro welcome tells the same story, with the new rows", welcome.includes(rules.PRO_STORY) && /Opening companies\. Free, up to 15 a day/.test(welcome) && !/Proposals and e-signature/.test(welcome), welcome.slice(0, 300));
   const cardsFree = text(renderToStaticMarkup(React.createElement(B.PlanCards, { plan: (await view(FREE)).me!.plan!, from: "billing" })));
   check("the plans: all three, each upgrade button with what you get", /Choose Pro\b/.test(cardsFree) && /Choose Close/.test(cardsFree) && compare.PLANS.every((p) => cardsFree.includes(p.line)) && /\$590 a year/.test(cardsFree) && /\$790 a year/.test(cardsFree), cardsFree);
-  check("under Close: what Claude does, then the AI pack, with no draft numbers or limit", cardsFree.includes("Claude drafts your proposals from your calls Need more AI usage? Add a pack anytime for $10.") && !/\d+ Claude drafts|drafts a month|limit/i.test(cardsFree));
+  check("under Close: what Claude does, then the AI pack, with no draft numbers or limit", cardsFree.includes("Merlin drafts your proposals from your calls Need more AI usage? Add a pack anytime for $10.") && !/\d+ Claude drafts|drafts a month|limit/i.test(cardsFree));
   const payingPro = { ...(await view(PRO)).me!.plan!, subscribed: true, tier: "pro" as const, closeOpen: true, interval: "month" as const };
   const cardsPro = text(renderToStaticMarkup(React.createElement(B.PlanCards, { plan: payingPro, from: "proposals" })));
   check("paying for Pro: Pro is your plan, Close an upgrade on the same subscription", /Your plan/.test(cardsPro) && /Upgrade to Close/.test(cardsPro) && /\$79 a month/.test(cardsPro), cardsPro);
@@ -432,7 +432,7 @@ async function main() {
   const proOut = text(cardOf(cardsTrialPro, "pro"));
   check(
     "  the trial's Pro card lists what Pro leaves out, and only Pro's card does",
-    /Not in Pro, only in Close: Sending for signature Your own templates Claude drafting The pipeline moving to Won when they sign/.test(proOut) &&
+    /Not in Pro, only in Close: Sending for signature Your own templates Merlin drafting The pipeline moving to Won when they sign/.test(proOut) &&
       text(cardOf(cardsTrialClose, "pro")).includes("Sending for signature") &&
       !cardOf(cardsTrialPro, "close").includes("data-pro-leaves-out") &&
       !cardsFree.includes("Not in Pro"),

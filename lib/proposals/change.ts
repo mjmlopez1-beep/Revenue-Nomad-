@@ -36,7 +36,7 @@ import type { ProposalBlock, ProposalRec, ProposalVersion, StoredProposal } from
 
 export const CHANGE_OFF = "Asking Merlin to change it isn't switched on yet. You can edit any section directly.";
 export const CHANGE_PLAN = `Changing a proposal by asking is on Close: $${PRICES.closeMonth} a month. You can edit any section directly.`;
-export const CHANGE_CONSENT = "Merlin sends this proposal, the lines you kept from the call and your request to Anthropic's API to make the change. Nothing is kept there.";
+export const CHANGE_CONSENT = "Merlin makes the change from this proposal, the lines you kept from the call and your request. Nothing changes until you accept it.";
 export const CHANGE_BUSY = "A change is on its way already. Wait for it, then ask for the next one.";
 /** The most versions kept a proposal: the oldest go first. */
 export const VERSIONS_KEPT = 20;
@@ -163,12 +163,12 @@ export async function proposeChange(token: string | null, id: string, a: { instr
         console.error("ai change: the key was refused", e.status);
         throw new ProposalProblem("Changing it by asking isn't set up right on Merlin. Edit the sections directly for now.", 503);
       }
-      if (e instanceof Anthropic.RateLimitError) throw new ProposalProblem("Claude is busy right now. Try again in a minute.", 503);
+      if (e instanceof Anthropic.RateLimitError) throw new ProposalProblem("Merlin is busy right now. Try again in a minute.", 503);
       if (e instanceof Anthropic.APIError) console.error("ai change failed", e.status);
       else console.error("ai change failed", (e as Error)?.name);
-      throw new ProposalProblem("Claude didn't answer. Try again in a moment, or edit the sections directly.", 502);
+      throw new ProposalProblem("The change didn't come back. Try again in a moment, or edit the sections directly.", 502);
     }
-    if (msg.stop_reason === "refusal") throw new ProposalProblem("Claude didn't make that change. Edit the sections directly.", 502);
+    if (msg.stop_reason === "refusal") throw new ProposalProblem("Merlin couldn't make that change. Edit the sections directly.", 502);
     const text = msg.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)

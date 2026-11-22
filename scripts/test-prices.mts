@@ -242,8 +242,8 @@ async function main() {
   check("the trial is the Close trial, in one constant", R.TRIAL_NAME === "Close trial" && R.TRIAL_LABEL === `${R.TRIAL_DAYS}-day Close trial` && R.keepWords("close") === "Keep Close" && R.keepWords("pro") === "Keep Pro");
   check(
     "what Pro leaves out is each a row where Close does more than Pro",
-    CP.PRO_LEAVES_OUT.join("|") === "Sending for signature|Your own templates|Claude drafting|The pipeline moving to Won when they sign" &&
-      [/e-signature/, /own templates/, /^Claude drafting/, /^Pipeline after a signature/].every((re) => CP.CLOSE_ADDS.some(([what, , close]) => re.test(what) || re.test(close))) &&
+    CP.PRO_LEAVES_OUT.join("|") === "Sending for signature|Your own templates|Merlin drafting|The pipeline moving to Won when they sign" &&
+      [/e-signature/, /own templates/, /^Merlin drafting/, /^Pipeline after a signature/].every((re) => CP.CLOSE_ADDS.some(([what, , close]) => re.test(what) || re.test(close))) &&
       CP.CLOSE_ADDS.some(([what, pro]) => /signature/i.test(what) && pro === "In your trial only"),
     CP.CLOSE_ADDS,
   );

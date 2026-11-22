@@ -46,7 +46,12 @@ export function readTerms(text: string): AgreedTerms {
     if (fields[k]) return;
     fields[k] = v;
     const m = s.match(said);
-    if (m && HEDGE.test(s.slice(Math.max(0, (m.index ?? 0) - 20), (m.index ?? 0) + m[0].length + 6))) checks.push(`They said "${s.slice(Math.max(0, (m.index ?? 0) - 12), (m.index ?? 0) + m[0].length).replace(/^\S*\s/, "").trim()}". The draft says ${v}.`);
+    const at = m?.index ?? 0;
+    if (m && HEDGE.test(s.slice(Math.max(0, at - 20), at + m[0].length + 6))) {
+      // The words as said, from the hedge before them when there is one.
+      const from = at > 12 ? s.slice(at - 12, at + m[0].length).replace(/^\S*\s/, "") : s.slice(0, at + m[0].length);
+      checks.push(`They said "${from.trim().replace(/^./, (c) => c.toLowerCase())}". The draft says ${v}.`);
+    }
   };
   for (const s of sentences) {
     const monthly = s.match(new RegExp(`${AMOUNT}\\s*(?:a|per|\\/|each)\\s*(?:month|mo)\\b|${AMOUNT}\\s*monthly|monthly (?:fee|retainer|rate) (?:of|is|at)\\s*${AMOUNT}`, "i"));

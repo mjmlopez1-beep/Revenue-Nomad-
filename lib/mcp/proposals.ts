@@ -405,6 +405,8 @@ const changeOut = (c: ChangeProposal) => ({
 /** A change in plain words, or sections the client rewrote: shown, checked, and saved as a new version only with apply. */
 export async function changeProposalTool(ctx: Ctx, a: ChangeArgs): Promise<ToolOut> {
   const token = ctx.member.token;
+  const v = await wrap(() => listProposals(token, ctx.origin));
+  if (!v.canBuild) throw new ToolProblem(`${CLOSE_BUILD} ${upgradeUrl((publicBase() ?? ctx.origin ?? "").replace(/\/$/, ""), "proposals")}`);
   const p = await wrap(() => getProposal(token, String(a.proposal_id ?? ""), ctx.origin));
   let c: ChangeProposal;
   if (a.sections?.length || (a.fields && Object.keys(a.fields).length)) {

@@ -80,8 +80,8 @@ export const microsOf = (inTok: number, outTok: number) => Math.max(0, Math.roun
 /** The refusal at 100%, with the pack and the free way. */
 export const usedUpWords = (nowMs: number, trial = false) =>
   trial
-    ? `You've used your trial's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting, or Build it in Claude, free.`
-    : `You've used this month's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting, or Build it in Claude, free. It resets on ${dayWords(resetsOn(nowMs))}.`;
+    ? `You've used your trial's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting, or build it in your own Claude with the connector, free.`
+    : `You've used this month's AI usage. Add a $${PACK_PRICE_USD} usage pack to keep drafting, or build it in your own Claude with the connector, free. It resets on ${dayWords(resetsOn(nowMs))}.`;
 export const alertWords = (pct: number, trial = false) => (trial ? `You've used ${pct}% of your trial's AI usage` : `You've used ${pct}% of this month's AI usage`);
 
 const recOf = (s: Pick<State, "aiUsage">, memberId: string): AiUsageRec | null => s.aiUsage?.[memberId] ?? null;

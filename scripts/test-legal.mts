@@ -73,8 +73,8 @@ async function main() {
   check("each source: members, public company websites, job boards, Google, the LinkedIn export, signers", ["From you, when you are a member", "Company websites", "job boards", "From Google, only if you connect it", "From your LinkedIn export, only if you upload it", "From people who sign a proposal"].every((t) => pt.includes(t)));
   check("every processor is named", ["Railway", "Backup storage", "Resend", "Stripe", "Slack", "Google", "Your own AI assistant"].every((t) => pt.includes(t)));
   check(
-    "drafting with Claude: the transcript and the draft's inputs go to Anthropic's API, and Merlin doesn't keep the transcript",
-    pt.includes("Anthropic (drafting with Claude)") && pt.includes("If you turn on drafting with Claude, the transcript and the draft's inputs are sent to Anthropic's API") && pt.includes("are not kept by Merlin") && pt.includes("A transcript you draft from with Claude: not kept"),
+    "Merlin drafting: Anthropic named as the AI service, the transcript and the draft's inputs go to its API, it doesn't train on them, and Merlin doesn't keep the transcript",
+    pt.includes("Anthropic (the AI service that writes Merlin's drafts)") && pt.includes("If Merlin drafts it for you, the transcript and the draft's inputs are sent to Anthropic's API") && pt.includes("don't let it train its models") && pt.includes("are not kept by Merlin") && pt.includes("A transcript Merlin drafts from: not kept"),
   );
   check("documents to sign: stored privately, for the member and the people they send it to", pt.includes("Documents you upload to be signed") && pt.includes("stored privately on Merlin's server") && pt.includes("a proposal or a document for signature") && pt.includes("drawn signature"));
   check("the version was bumped for it", PRIVACY_VERSION === "1.2");

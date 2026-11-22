@@ -813,7 +813,7 @@ export function AiUsageCard({ ai }: { ai: NonNullable<PlanView["ai"]> }) {
       </div>
       <p className="cr-note bl-ai-line">{line}</p>
       {ai.usedUp ? (
-        <p className="cr-note">You&apos;ve used it all. Build it in Claude still works, free.</p>
+        <p className="cr-note">You&apos;ve used it all. Add a pack to keep Merlin drafting, or edit your proposals by hand.</p>
       ) : ai.onPack ? (
         <p className="cr-note">This month&apos;s is used: your usage pack keeps you drafting.</p>
       ) : null}
@@ -969,7 +969,7 @@ export function BillingPage({ view, refresh }: { view: View; refresh: () => Prom
           <h2 className="tp-card-h" id="bl-ai-kept-h">
             Your AI usage pack is kept
           </h2>
-          <p className="cr-note">Drafting with Claude is on Close. Your pack never expires: it&apos;s used once you&apos;re on Close. Build it in Claude works on every plan, free.</p>
+          <p className="cr-note">Drafting with Merlin is on Close. Your pack never expires: it&apos;s used once you&apos;re on Close.</p>
         </section>
       )}
 

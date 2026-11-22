@@ -75,7 +75,9 @@ export function checkNumbers(sections: { title: string; text: string }[]): Numbe
   if (daySet.length > 1) problems.push(`The opt-in day reads ${daySet.map((d) => `day ${d}`).join(" and ")} in different places.`);
   const sumFixed = [...new Set(fixed.map((f) => f.n))].reduce((a, b) => a + b, 0);
   const mo = monthly[0]?.n ?? null;
-  const months = termSet.length === 1 ? termSet[0] : null;
+  // The months the monthly fee runs: the one term said, else the one said beside the fee.
+  const near = [...new Set(terms.filter((t) => t.at === monthly[0]?.at).map((t) => t.n))];
+  const months = termSet.length === 1 ? termSet[0] : near.length === 1 ? near[0] : null;
   let equation = "";
   if (mo && months) {
     const total = sumFixed + mo * months;
