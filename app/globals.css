@@ -83,6 +83,15 @@
   --row-hover: #f6f8f7;
   --row-on: #eef4f1;
   --t: 0.15s;
+  /* Ink at 6%: the quietest tint, for a monogram tile (see the tints under "monograms"). */
+  --ink-6: rgba(10, 26, 19, 0.06);
+  /*
+   * Page widths (docs/design-system.md). Narrow: a page you read or fill in (settings, a form,
+   * credits, notifications). Wide: a page of lists, boards and cards (Home, pipeline, network).
+   * The table and the record keep their own full width.
+   */
+  --page-narrow: 760px;
+  --page-wide: 1160px;
   color-scheme: light;
 }
 
@@ -720,15 +729,15 @@ span.locked-site {
   text-shadow: 0 0 0.5em rgba(91, 102, 97, 0.45);
   text-shadow: 0 0 0.5em color-mix(in srgb, var(--locked-ink) 36%, transparent);
 }
-/* The logo when the company has none to show: a soft tile in its own color with a quiet building, never letters (they would read as a real mark). */
+/* A locked company's logo when it has none to show: one neutral tile with the lock, the same for every locked company. Never letters (they would read as a real mark), never a colour of its own. */
 .logo.logo-locked {
   border-color: transparent;
-  background: hsl(var(--lk, 160) 45% 92%);
-  color: hsl(var(--lk, 160) 30% 42%);
+  background: var(--surface-2);
+  color: var(--muted);
 }
 .logo-locked-in {
   display: inline-flex;
-  opacity: 0.55;
+  opacity: 0.8;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -871,4 +880,428 @@ span.locked-site {
   display: grid;
   place-items: center;
   color: var(--muted);
+}
+
+/* =========================================================================================
+ * The system (docs/design-system.md). Phase 2 moves every page onto these; until then they sit
+ * beside the area styles and change nothing that doesn't use them.
+ * ========================================================================================= */
+
+/* ---------- page wrappers: centred, 24px from the top bar ---------- */
+.page-narrow,
+.page-wide {
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 0 48px;
+}
+.page-narrow {
+  max-width: var(--page-narrow);
+}
+.page-wide {
+  max-width: var(--page-wide);
+}
+@media (max-width: 767px) {
+  .page-narrow,
+  .page-wide {
+    padding: 16px 0 32px;
+  }
+}
+
+/* ---------- type: one class a role, sizes 12/13/14/15/17/22/28 only ---------- */
+.t-page {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.t-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.t-section {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.t-sub {
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.t-body {
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.t-ui {
+  font-size: 14px;
+  line-height: 20px;
+}
+.t-label {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--body-ink);
+}
+.t-hint {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.t-caption {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+/* A number: the figures face (tabular digits, the comma and period at their own width). */
+.t-num {
+  font-family: var(--font-num);
+}
+@media (max-width: 767px) {
+  .t-page {
+    font-size: 24px;
+    line-height: 30px;
+  }
+}
+
+/* ---------- buttons: .btn plus one tone and one size ----------
+ * One filled button a view. Pine is the primary. Volt only where a credit is earned (Add what
+ * you know, Add this seat). Outline is the default .btn; ghost has no edge; danger is outline in red.
+ * Sizes: .btn-sm 32, .btn (or .btn-md) 40, .btn-lg 48. Phones raise every target to 44 (post.css). */
+.btn-volt {
+  background: var(--volt);
+  border-color: var(--volt);
+  color: var(--pine);
+}
+.btn-volt:hover,
+.btn-volt:active {
+  background: var(--volt-hover);
+  border-color: var(--volt-hover);
+}
+.btn-outline {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.btn-danger {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--red);
+}
+.btn-danger:hover {
+  border-color: var(--red);
+}
+.btn-md {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.btn-block {
+  width: 100%;
+}
+
+/* ---------- card and callout ---------- */
+/* The one card: white, a hairline, 10px corners, 20 by 24 inside. No shadow. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: 20px 24px;
+}
+/* A note inside a page or a card: a tint, no edge. Mint for good news and earning, sand for everything else. */
+.callout {
+  border-radius: var(--r-card);
+  padding: 14px 16px;
+  background: var(--volt-soft);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+.callout-sand {
+  background: var(--sand);
+}
+@media (max-width: 767px) {
+  .card {
+    padding: 16px;
+  }
+}
+
+/* ---------- chips: the tones the Chip component uses ---------- */
+/* .chip is the outline, .chip-on pine fill, .chip-volt mint fill, .chip-ember solid ember (above). */
+.chip .fx-glyph {
+  flex: none;
+}
+
+/* ---------- stat: a number and its label, never a filled tile ---------- */
+.stat {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-width: 0;
+}
+.stat-n {
+  font-family: var(--font-num);
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.stat-l {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.stat-a {
+  justify-self: start;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 40px;
+}
+
+/* ---------- empty state: a Spot at 128, a 17/24 title, 15/24 words, one pine button ---------- */
+.empty-state {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  max-width: 560px;
+}
+.empty-state.card {
+  padding: 28px 32px 32px;
+}
+.empty-state .fx-spot {
+  margin: -8px 0 4px;
+}
+.empty-state p {
+  max-width: 480px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.empty-state .btn {
+  margin-top: 8px;
+}
+@media (max-width: 767px) {
+  .empty-state.card {
+    padding: 20px 16px 24px;
+  }
+}
+
+/* ---------- page head ---------- */
+.page-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main art" "main act";
+  column-gap: 24px;
+  row-gap: 12px;
+  margin: 0 0 24px;
+}
+.page-head-main {
+  grid-area: main;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  min-width: 0;
+}
+.page-head-art {
+  grid-area: art;
+  justify-self: end;
+  align-self: start;
+}
+.page-head-act {
+  grid-area: act;
+  justify-self: end;
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.page-head-lead {
+  max-width: 640px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px -2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  padding: 6px 2px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: none;
+  cursor: pointer;
+}
+.page-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+@media (max-width: 767px) {
+  .page-head {
+    grid-template-areas: "main art" "act act";
+    column-gap: 12px;
+  }
+  .page-head-art .fx-prop {
+    height: 44px;
+    width: auto;
+  }
+  .page-head-act {
+    justify-self: start;
+  }
+  .page-back {
+    min-height: 44px;
+  }
+}
+
+/* ---------- the logo, drawn inline (app/ui/Logo.tsx) ---------- */
+.logo-svg {
+  display: block;
+  flex: none;
+  max-width: none;
+  height: auto;
+}
+
+/* ---------- monograms: a company or a person with no picture ----------
+ * Brand tints only, never a hue of their own: pine 8%, mint soft, sand, saffron light, ink 6%,
+ * with pine or ink letters (app/ui/shared.tsx MONO_TINTS). */
+
+/* ---------- the win moment (app/ui/WonMoment.tsx) ---------- */
+.won {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 24px;
+  padding: 16px 24px 16px 16px;
+  border: 1px solid var(--pine-14);
+  border-radius: var(--r-card);
+  background: var(--volt-soft);
+}
+.won-t {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  min-width: 0;
+}
+.won-k {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+.won-h {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.won-v {
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.won-btn {
+  margin-top: 12px;
+}
+.won-compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border-color: var(--line);
+  background: var(--surface);
+}
+.won-compact .won-art {
+  justify-self: center;
+}
+.won-compact .won-h {
+  font-size: 17px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+}
+.won-compact .won-v {
+  font-size: 13px;
+  line-height: 20px;
+}
+@media (max-width: 767px) {
+  .won {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+  .won:not(.won-compact) .won-art {
+    height: 120px;
+    width: auto;
+  }
+}
+
+/* ---------- a page that could not show (app/ui/Problem.tsx) ---------- */
+.problem {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 48px 16px;
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+.problem .fx-spot {
+  margin-bottom: -4px;
+}
+.problem-h {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.problem-p {
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--body-ink);
+}
+.problem-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pine-bar {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 max(16px, env(safe-area-inset-left));
+  background: var(--pine);
+  --focus: var(--volt);
+}
+.pine-bar-home {
+  display: flex;
+  border-radius: 4px;
 }

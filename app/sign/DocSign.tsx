@@ -256,7 +256,7 @@ export function DocSignView({ token }: { token: string }) {
         {!open && (
           <section className="sg-card sg-state" data-status={v.status}>
             {(v.status === "signed" || v.status === "done") && (
-              <SignedArt />
+              <SignedArt on={v.status === "signed" ? "mint" : "white"} />
             )}
             <h2 className="sg-h">{SAY[v.status].h}</h2>
             <p className="sg-p">{SAY[v.status].p}</p>

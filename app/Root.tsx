@@ -27,6 +27,8 @@ import type { TradingPostProps } from "./post/TradingPost";
 import type { OnboardingProps } from "./onboard/Onboarding";
 import type { Me } from "@/lib/tableTypes";
 import { sigDayOf, yourFeature } from "@/lib/radar/types";
+import { Logo } from "./ui/Logo";
+import { Problem } from "./ui/Problem";
 
 /* ---------- loading: the shape of what is coming, not a line of gray text ---------- */
 
@@ -72,29 +74,42 @@ const writeHint = (member: boolean) => {
   } catch {}
 };
 
+/*
+ * The real chrome, drawn before the app's code is here, so nothing changes colour when it lands:
+ * for a member the light top bar (56px, white, a hairline under it), the sidebar from 1024px with
+ * the lockup at its top (the lockup moves into the top bar under 1024px, as the app's does), and
+ * gray lines where the rows will be. For anyone else the landing page's pine bar with the white lockup.
+ */
 const SKELETON_CSS = `
 .sk{min-height:100vh;background:var(--bg)}
-.sk-bar{height:56px;background:var(--pine)}
-.sk-lp .sk-bar{height:64px}
-.sk-body{display:flex}
-.sk-rail{width:264px;flex:none;min-height:calc(100vh - 56px);border-right:1px solid var(--line);background:var(--surface);padding:24px 20px;display:grid;align-content:start;gap:14px}
+.sk-body{display:flex;min-height:100vh}
+.sk-rail{width:232px;flex:none;border-right:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column}
+.sk-rail-top{height:56px;display:flex;align-items:center;padding:0 10px 0 16px;flex:none}
+.sk-rail-lines{padding:16px 20px;display:grid;align-content:start;gap:18px}
+.sk-col{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--surface)}
+.sk-top{height:56px;flex:none;display:flex;align-items:center;gap:16px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+.sk-top-logo{display:none}
+.sk-search{display:block;flex:0 1 520px;height:36px;border-radius:8px;background:var(--surface-2)}
 .sk-main{flex:1;min-width:0;padding:20px 24px}
-.sk-line{height:12px;border-radius:6px;background:var(--line)}
+.sk-line{display:block;height:12px;border-radius:6px;background:var(--line)}
 .sk-frame{margin-top:20px;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
 .sk-row{height:44px;display:flex;align-items:center;gap:24px;padding:0 16px;border-top:1px solid var(--line)}
 .sk-row:first-child{border-top:0}
 .sk-row .sk-line:first-child{width:22%}
 .sk-row .sk-line{width:12%}
 .sk-cards{display:none}
-.sk-msg{display:grid;justify-items:center;gap:16px;padding:48px 24px;text-align:center;color:var(--body-ink,#2b3631);font-size:16px;line-height:24px}
+.sk-lpbar{height:64px;background:var(--pine)}
+.sk-lpbar-in{max-width:1180px;height:100%;margin:0 auto;padding:0 32px;display:flex;align-items:center}
 .sk-hero{max-width:720px;margin:72px auto 0;padding:0 24px;display:grid;gap:16px}
 .sk-hero .sk-line{height:20px}
 @keyframes sk-fade{50%{opacity:.55}}
 .sk-line{animation:sk-fade 1.6s ease-in-out infinite}
 @media (prefers-reduced-motion: reduce){.sk-line{animation:none}}
-@media (max-width:1279px){.sk-rail{display:none}}
+@media (max-width:1023px){.sk-rail{display:none}.sk-top-logo{display:flex}}
 @media (max-width:767px),(pointer:coarse) and (max-height:599px){
-  .sk-body{display:block}
+  .sk-col{background:var(--bg)}
+  .sk-top{padding:0 14px}
+  .sk-search{display:none}
   .sk-main{padding:12px 16px}
   .sk-frame{display:none}
   .sk-cards{display:grid;gap:12px;margin-top:16px}
@@ -103,11 +118,16 @@ const SKELETON_CSS = `
   .sk-card .sk-line{width:80%}
   .sk-hero{margin-top:40px}
 }
+@media (max-width:640px){.sk-lpbar{height:56px}.sk-lpbar-in{padding:0 16px}.sk-lpbar .logo-svg{height:40px!important;width:auto!important}}
 `;
 
-/** The page before the view arrives: the app's frame for a member, the landing's bar for anyone else. A message replaces the rows when loading failed. */
+/**
+ * The page before the view arrives: the app's frame for a member, the landing's bar for anyone
+ * else. `problem` (Merlin did not load, too many requests) takes the place of the rows, in the
+ * same frame, so a retry that works changes nothing around it.
+ */
 const noSubscribe = () => () => {};
-function Skeleton({ member, children }: { member?: boolean; children?: React.ReactNode }) {
+function Skeleton({ member, problem }: { member?: boolean; problem?: React.ReactNode }) {
   // The server's HTML can't read the hint, so it draws the landing's bar; the browser corrects it as it hydrates.
   const hinted = useSyncExternalStore(noSubscribe, likelyMember, () => false);
   const app = member ?? hinted;
@@ -119,41 +139,72 @@ function Skeleton({ member, children }: { member?: boolean; children?: React.Rea
         <span className="sk-line" />
       </div>
     ));
-  return (
-    <div className={`sk${app ? "" : " sk-lp"}`} role={children ? undefined : "status"} aria-busy={!children}>
-      <style>{SKELETON_CSS}</style>
-      <div className="sk-bar" />
-      {children ? (
-        <div className="sk-msg" role="alert">
-          {children}
+  if (!app)
+    return (
+      <div className="sk sk-lp" role={problem ? undefined : "status"} aria-busy={!problem}>
+        <style>{SKELETON_CSS}</style>
+        <div className="sk-lpbar">
+          <div className="sk-lpbar-in">
+            <Logo tone="white" height={54} />
+          </div>
         </div>
-      ) : app ? (
-        <div className="sk-body">
-          <div className="sk-rail" aria-hidden>
+        {problem ?? (
+          <div className="sk-hero">
+            <span className="sr-only">Opening Merlin</span>
+            <span className="sk-line" style={{ width: "80%" }} aria-hidden />
+            <span className="sk-line" style={{ width: "60%" }} aria-hidden />
+            <span className="sk-line" style={{ width: "40%", height: 12 }} aria-hidden />
+          </div>
+        )}
+      </div>
+    );
+  return (
+    <div className="sk" role={problem ? undefined : "status"} aria-busy={!problem}>
+      <style>{SKELETON_CSS}</style>
+      <div className="sk-body">
+        <div className="sk-rail" aria-hidden>
+          <div className="sk-rail-top">
+            <Logo height={30} label={null} />
+          </div>
+          <div className="sk-rail-lines">
             {Array.from({ length: 9 }, (_, k) => (
               <span key={k} className="sk-line" style={{ width: `${50 + ((k * 37) % 40)}%` }} />
             ))}
           </div>
-          <div className="sk-main">
-            <span className="sr-only">Opening Merlin</span>
-            <span className="sk-line" style={{ display: "block", width: 280, maxWidth: "70%", height: 16 }} aria-hidden />
-            <div className="sk-frame" aria-hidden>
-              {bars(12, "sk-row")}
-            </div>
-            <div className="sk-cards" aria-hidden>
-              {bars(3, "sk-card")}
-            </div>
+        </div>
+        <div className="sk-col">
+          <div className="sk-top">
+            <span className="sk-top-logo">
+              <Logo height={30} />
+            </span>
+            <span className="sk-search" aria-hidden />
           </div>
+          {problem ?? (
+            <div className="sk-main">
+              <span className="sr-only">Opening Merlin</span>
+              <span className="sk-line" style={{ width: 280, maxWidth: "70%", height: 16 }} aria-hidden />
+              <div className="sk-frame" aria-hidden>
+                {bars(12, "sk-row")}
+              </div>
+              <div className="sk-cards" aria-hidden>
+                {bars(3, "sk-card")}
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="sk-hero">
-          <span className="sr-only">Opening Merlin</span>
-          <span className="sk-line" style={{ width: "80%" }} aria-hidden />
-          <span className="sk-line" style={{ width: "60%" }} aria-hidden />
-          <span className="sk-line" style={{ width: "40%", height: 12 }} aria-hidden />
-        </div>
-      )}
+      </div>
     </div>
+  );
+}
+
+/** Why the first load failed, in the words a member reads: the title says what happened, the server's own sentence says what to do. */
+function loadProblem(f: { text: string; status: number }, retry: () => void) {
+  const title = f.status === 429 ? "Too many requests at once" : f.status === 503 ? "Merlin can't open right now" : "Merlin did not load";
+  const body = f.text.replace(/^Merlin did not load\.\s*/, "");
+  return (
+    <Problem title={title} onRetry={retry}>
+      {body}
+    </Problem>
   );
 }
 
@@ -290,7 +341,7 @@ function reuse(prev: View | null, next: View): View {
 function App() {
   const [view, setView] = useState<View | null>(null);
   /** Why the first load failed (nothing on screen yet). */
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ text: string; status: number } | null>(null);
   // A ?k= sign-in link that failed: the landing page opens Sign in with this message.
   const [signInError, setSignInError] = useState<string | null>(null);
   // A link to a conversation (?p=messages, from a message email). Signed out, Sign in opens with a note.
@@ -390,7 +441,7 @@ function App() {
           void refreshRef.current();
         }, Math.min(r.retryAfter, 120) * 1000);
       }
-      if (!loaded.current) setFailed(r.error);
+      if (!loaded.current) setFailed({ text: r.error, status: r.status });
       else if (r.status === 503 && !toldBusy.current) {
         toldBusy.current = true;
         toast(r.error, true);
@@ -656,12 +707,7 @@ function App() {
 
   if (!view)
     return failed ? (
-      <Skeleton>
-        <p>{failed}</p>
-        <button type="button" className="btn" onClick={load}>
-          Try again
-        </button>
-      </Skeleton>
+      <Skeleton problem={loadProblem(failed, load)} />
     ) : guest ? (
       <Landing view={null} onSignedIn={joined} signInNote={linkNote} />
     ) : (

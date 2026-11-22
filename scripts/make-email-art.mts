@@ -9,6 +9,7 @@
  *   hero-morning@2x.png, hero-quiet@2x.png   1200 x 400 (shown 600 x 200)
  *   icon-<kind>@2x.png, icon-<kind>@3x.png   80 and 120 square (shown 40): the email uses 2x, Slack and the app can take 3x
  *   merlin@2x.png                            the lockup on pine for the header, from public/brand/merlin-lockup-on-dark.png
+ *   ../header/<kind>@2x.png                  1200 x 240 (shown 600 x 120): the header strip of every other email (mail.ts HEADERS)
  * and, with sheet_dir, icons-sheet.png there: every icon at 32, 40 and 80px on white, on the
  * email's page colour and on its dark-mode page.
  *
@@ -21,12 +22,15 @@ import { mkdirSync, readFileSync, statSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ICON, ICON_KINDS, icon, solid, type IconKind } from "../app/ui/fractions/icons";
-import { HEROES, STRIP, type HeroKind } from "../app/ui/fractions/mail";
+import { HEADER, HEADERS, HEADER_KINDS, HEROES, STRIP, type HeroKind } from "../app/ui/fractions/mail";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const OUT = join(ROOT, "public/email/crystal-ball");
+/** The header strip of every other email (sign-in, messages, proposals, the plan, the weekly email). */
+const HDR = join(ROOT, "public/email/header");
 const sheetDir = process.argv[2] ? resolve(process.argv[2]) : null;
 mkdirSync(OUT, { recursive: true });
+mkdirSync(HDR, { recursive: true });
 
 const req = createRequire(import.meta.url);
 let pw: typeof import("playwright");
@@ -54,6 +58,10 @@ for (const kind of Object.keys(HEROES) as HeroKind[]) {
   const f = join(OUT, `hero-${kind}@2x.png`);
   sizes.push([f, await raster(solid(HEROES[kind](), STRIP.w, STRIP.h, { w: 1200, h: 400 }, 1.6), 1200, 400, f, 64)]);
 }
+for (const kind of HEADER_KINDS) {
+  const f = join(HDR, `${kind}@2x.png`);
+  sizes.push([f, await raster(solid(HEADERS[kind](), HEADER.w, HEADER.h, { w: 1200, h: 240 }, 1.6), 1200, 240, f, 64)]);
+}
 for (const kind of ICON_KINDS) {
   for (const [scale, px] of [[2, 80], [3, 120]] as const) {
     const f = join(OUT, `icon-${kind}@${scale}x.png`);
@@ -62,7 +70,7 @@ for (const kind of ICON_KINDS) {
 }
 // The lockup, white on pine: 2x of 96 by 28. Painted onto pine so it never shows a transparent edge.
 const lock = join(OUT, "merlin@2x.png");
-execFileSync("convert", [join(ROOT, "public/brand/merlin-lockup-on-dark.png"), "-background", "#073f2f", "-alpha", "remove", "-alpha", "off", "-filter", "Lanczos", "-resize", "192x56!", "-strip", "-colors", "32", "-define", "png:compression-level=9", `PNG8:${lock}`]);
+execFileSync("convert", [join(ROOT, "public/brand/merlin-lockup-on-dark.png"), "-background", "#073f2f", "-alpha", "remove", "-alpha", "off", "-filter", "Lanczos", "-resize", "192x56!", "-strip", "-dither", "None", "-colors", "32", "-define", "png:compression-level=9", `PNG8:${lock}`]);
 sizes.push([lock, statSync(lock).size]);
 
 if (sheetDir) {

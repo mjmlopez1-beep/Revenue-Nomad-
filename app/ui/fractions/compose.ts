@@ -213,6 +213,25 @@ const castle: SceneFn = (m, sq) => {
 export const SCENES = { wayIn, trialEnding, allQuiet, notFound, welcome, castle };
 
 /**
+ * The win: the keep you were trying to get into, the trail of your steps ending at its open door,
+ * the ball lit behind it (360 by 200). Drawn quiet for the win cards (WonMoment), with no field and
+ * no violets: the keep alone, on the surface it is given. Its one home is a deal Merlin saw won.
+ */
+export const WON_BOX = { w: 360, h: 200 } as const;
+export const wonKeep = (m: Way): string => {
+  const gy = 184;
+  return [
+    q(0, 0, 96, "tl", m.tone),
+    h(250, 60, 124, "u", m.tone),
+    s(0, gy, 360, 16, m.ground),
+    place(keep(m), 196, gy, 0.215),
+    steps(walk([14, gy - 8], [["L", 104, gy - 8]], 24), 6, m.dark),
+    spark(44, 64, 10, m.acc),
+    spark(338, 40, 7, m.spark),
+  ].join("");
+};
+
+/**
  * Welcome as a banner (960 by 226, the first-run card's top): the same parts as the scene, set
  * again on the grid for a strip, the door cropped by the top edge. With its own field.
  */

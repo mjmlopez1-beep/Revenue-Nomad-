@@ -19,7 +19,7 @@ import {
 } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import type { ActionResult, Cell, EngagementRec } from "@/lib/tableTypes";
-import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, hue, initials, post, val } from "../ui/shared";
+import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, monoTint, initials, post, val } from "../ui/shared";
 import { COMPANY_FILL, deriveAll, shown, type CoInfo } from "./model";
 import { useExactFind } from "../ui/find";
 import { SeatHolderInput, Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
@@ -658,7 +658,7 @@ function EngagementForm({
           {asMe ? (
             <>
               <div className="tp-seat-linked">
-                <span className="tp-seat-av" style={{ background: `hsl(${hue(ui.me.name)} 45% 90%)`, color: `hsl(${hue(ui.me.name)} 45% 28%)` }}>
+                <span className="tp-seat-av" style={monoTint(ui.me.name)}>
                   {initials(ui.me.name)}
                 </span>
                 <span className="tp-seat-who">

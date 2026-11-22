@@ -11,7 +11,8 @@
  * time, IP address and browser (lib/proposals/store.ts), and checks the document's SHA-256 at signing.
  */
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Brand, IconCheck } from "../ui/shared";
+import { IconCheck } from "../ui/shared";
+import { Logo } from "../ui/Logo";
 import { Spot } from "../ui/fractions/art";
 import type { SignerView } from "@/lib/proposals/types";
 import { DocBlocks, dayOf } from "./doc";
@@ -33,7 +34,7 @@ async function call<T = SignerView>(body: Record<string, unknown>): Promise<T & 
 export function SignTop() {
   return (
     <header className="sg-top">
-      <Brand dark size={30} />
+      <Logo tone="white" height={30} />
       <span className="sg-secure">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="5" y="11" width="14" height="10" rx="2" />
@@ -82,8 +83,9 @@ export function ConsentBox({ text, checked, disabled, onChange }: { text: string
   );
 }
 
-/** Signed: the quiet Fractions spot for a thing done, in place of a bare check. */
-export const SignedArt = () => <Spot name="factAdded" size={88} on="white" className="sg-done-art" />;
+/** Signed: the lock is open, a Fractions spot holding the screen's one ember, in place of a bare check.
+ * `on` is the card it sits on: the mint signed card (the default), or white. */
+export const SignedArt = ({ on = "mint" }: { on?: "mint" | "white" }) => <Spot name="unlocked" size={112} on={on} ember className="sg-done-art" />;
 
 /** Merlin's Privacy Policy and Terms, under every state of the signing page and the signed copy. */
 export function SignLegal() {

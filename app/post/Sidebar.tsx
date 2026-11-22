@@ -14,6 +14,7 @@
  */
 import { useRef, type ReactNode, type RefObject } from "react";
 import { Brand, IconChevron, initials } from "../ui/shared";
+import { Logo } from "../ui/Logo";
 import { Sheet } from "./ui";
 import { plural } from "./hooks";
 import { TAB_KEYS, moreOn, planLine, type NavIcon as NavIconName, type NavItem } from "./navModel";
@@ -326,7 +327,7 @@ export function Sidebar({
             onHome();
           }}
         >
-          {collapsed ? <Brand size={28} kind="mark" /> : <Brand size={30} />}
+          {collapsed ? <Brand size={28} kind="mark" /> : <Logo height={30} />}
         </a>
         <button
           type="button"

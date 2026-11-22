@@ -4,13 +4,12 @@
  * a link to its page), and a decline to the member. The same look as every Merlin email
  * (lib/email.ts) and the proposal emails, each with a plain-text twin. The member's name leads.
  */
-import { MAIL, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine } from "../email";
+import { MAIL, escHtml, footerNote, mailButton, mailCallout, mailCode, mailH, mailLinkLine, mailP, mailShell, mailSmall, oneLine } from "../email";
 
 export type Mail = { subject: string; text: string; html: string };
 const from = "Sent with Merlin, from Revenue Nomad. Merlin keeps the signed copy and its audit trail.";
-const small = (html: string) => `<p style="margin:0 0 4px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">${html}</p>`;
-const linkLine = (url: string) =>
-  `<p style="margin:0 0 16px;font-family:${MAIL.mono};font-size:13px;line-height:20px;word-break:break-all"><a href="${escHtml(url)}" style="color:${MAIL.pine};text-decoration:underline">${escHtml(url)}</a></p>`;
+const small = (html: string) => mailSmall(html);
+const linkLine = (url: string) => mailLinkLine(url);
 const first = (name: string) => oneLine(name).split(" ")[0].slice(0, 40) || "there";
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 const foot = () => {
@@ -35,14 +34,14 @@ export function docInviteEmail(o: { signer: string; member: string; memberTitle:
     mailP(`Hi ${escHtml(first(o.signer))},`),
     mailH(o.self ? "Your turn to sign" : `${escHtml(member)} sent you a document to sign`),
     mailP(escHtml(lead)),
-    note ? mailP(escHtml(note), "padding:12px 16px;background:#F3F5F4;border-radius:8px;") : "",
+    note ? mailCallout(escHtml(note), "page") : "",
     mailP(escHtml(how), "margin-bottom:24px;"),
     mailButton(o.link, "Review and sign", "margin:0 0 24px"),
     small("If the button doesn&#39;t work, paste this link into your browser."),
     linkLine(o.link),
     small(escHtml(until)),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, art: "proposal", footer: f.lines }) };
 }
 
 /** To a signer: the 6-digit code. */
@@ -55,10 +54,10 @@ export function docCodeEmail(o: { member: string; title: string; code: string })
   const body = [
     mailH("Your code to sign"),
     mailP(escHtml(lead)),
-    `<p style="margin:0 0 24px;font-family:${MAIL.mono};font-size:32px;line-height:40px;font-weight:700;letter-spacing:0.18em;color:${MAIL.ink}">${escHtml(o.code)}</p>`,
+    mailCode(o.code),
     small(escHtml(why)),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: `Your code: ${o.code}`, body, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: `Your code: ${o.code}`, body, art: "door", footer: f.lines }) };
 }
 
 /** To everyone once all have signed: the final PDF (attached when it fits) and its page. */
@@ -82,7 +81,7 @@ export function docDoneEmail(o: { name: string; title: string; signers: string[]
     linkLine(o.copy),
     small(`Final file fingerprint (SHA-256): <span style="font-family:${MAIL.mono};word-break:break-all">${escHtml(o.sha256)}</span>`),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.copy, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.copy, art: "signed", footer: f.lines }) };
 }
 
 /** To the member: a signer declined. */
@@ -97,9 +96,9 @@ export function docDeclinedEmail(o: { member: string; signer: string; title: str
     mailP(`Hi ${escHtml(first(o.member))},`),
     mailH(escHtml(`${oneLine(o.signer)} declined`)),
     mailP(escHtml(lead)),
-    reason ? mailP(`Their reason: ${escHtml(reason)}`, "padding:12px 16px;background:#F3F5F4;border-radius:8px;") : "",
+    reason ? mailCallout(`Their reason: ${escHtml(reason)}`, "page") : "",
     mailP(escHtml(next), "margin-bottom:24px;"),
     mailButton(o.app, "Open Proposals", "margin:0 0 8px"),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.app, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.app, art: "proposal", footer: f.lines }) };
 }

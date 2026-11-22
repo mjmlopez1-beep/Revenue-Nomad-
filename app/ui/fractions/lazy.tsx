@@ -86,6 +86,11 @@ export function Divider(p: ComponentProps<Kit["Divider"]>) {
   const k = useKit();
   return k ? <k.Divider {...p} /> : <Hold className={cx("fx-divider", p.className)} w="100%" h={24} />;
 }
+export function WonArt(p: ComponentProps<Kit["WonArt"]>) {
+  const k = useKit();
+  const h = p.height ?? 160;
+  return k ? <k.WonArt {...p} /> : <Hold className={cx("fx-scene fx-won", p.className)} w={Math.round((h * 360) / 200)} h={h} />;
+}
 /* Sized and placed by CSS, out of the flow: nothing to hold. */
 export function Strip(p: ComponentProps<Kit["Strip"]>) {
   const k = useKit();

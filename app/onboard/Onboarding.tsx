@@ -36,7 +36,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./onboard.css";
-import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, LockedName, post, val, type Act, type View } from "../ui/shared";
+import { CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, LockedName, post, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
 import type { Icp, OnboardDraft } from "@/lib/tableTypes";
 import { CLIENT_COUNTS } from "@/lib/tableTypes";
@@ -56,6 +56,7 @@ import { moveWhy } from "@/lib/moves";
 import type { RadarRow } from "@/lib/radar/types";
 import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
 import { Glyph, Trail, WelcomeBanner } from "../ui/fractions/art";
+import { Logo } from "../ui/Logo";
 
 export interface OnboardingProps {
   view: View;
@@ -502,7 +503,7 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
     <div className="ob">
       <header className="ob-top">
         <span className="ob-brand">
-          <Brand size={36} />
+          <Logo height={36} />
         </span>
         <span className="ob-credits num" title="Your balance">
           <span className="ob-coin" aria-hidden>

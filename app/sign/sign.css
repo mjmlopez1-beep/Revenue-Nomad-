@@ -1,4 +1,5 @@
 /* The client's signing page, the signed copy, and a proposal's text wherever it is read (sg-). Phone first: 16px gutters, 48px targets, one column. */
+@import "../ui/fractions/fractions.css";
 .sg {
   min-height: 100vh;
   background: var(--bg);
@@ -218,16 +219,9 @@
   border-color: #bdefd8;
   background: var(--volt-soft);
 }
-.sg-done {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 8px;
-  border-radius: 50%;
-  background: var(--volt);
-  color: var(--pine);
+/* Signed: the lock is open (a Fractions spot on the mint card, its one picture). */
+.sg-done-art {
+  margin: -8px 0 4px -8px;
 }
 .sg-wide {
   width: 100%;
@@ -508,7 +502,8 @@
     color: var(--ink);
     border-bottom: 1px solid var(--line);
   }
-  .sg-top img {
+  .sg-top img,
+  .sg-top svg {
     filter: invert(1);
   }
   .sg-noprint,
@@ -540,10 +535,6 @@
 .sg-consent-more {
   display: none;
   margin-top: 6px;
-}
-.sg-done-art {
-  display: block;
-  margin: 0 auto 8px;
 }
 @media (max-width: 600px) {
   .sg-consent[data-open="false"] .sg-consent-rest {

@@ -484,8 +484,10 @@
     height: 56px;
     padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   }
-  .ob-top img {
-    height: 15px !important;
+  /* The logo stays readable on a phone: never under 96px wide. */
+  .ob-top .logo-svg {
+    height: 30px !important;
+    width: auto !important;
   }
   /* The product name goes under the logo, so both fit beside the balance from 320px up. */
   .ob-brand {
