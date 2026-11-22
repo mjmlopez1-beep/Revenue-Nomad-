@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { signedCopy } from "@/lib/proposals/store";
-import type { SignedCopy } from "@/lib/proposals/types";
+import { MEMBER_CONSENT, MEMBER_CONSENT_VERSION, type SignedCopy } from "@/lib/proposals/types";
 import { SignLegal, SignTop } from "../../sign/Sign";
 import { EVENT_SAY, dayOf, stamp } from "../../sign/doc";
-import { Parties, ProposalView, SealCard } from "../../sign/ProposalView";
+import { Parties, ProposalView, SealCard, memberState } from "../../sign/ProposalView";
 import { PrintButton } from "../Print";
 import { DocCopyPage } from "../DocCopy";
 import "../../sign/sign.css";
@@ -78,7 +78,13 @@ export default async function Page({ params }: { params: Promise<{ token: string
           </div>
         </section>
 
-        {c.sealed && <SealCard at={c.sealed.at} signers={[c.signed.name]} events={c.sealed.events} pdf={c.sealed.pdf} check={c.sealed.check} />}
+        {c.awaitingMember && (
+          <section className="sg-card cv-wait" role="status">
+            <span className="cv-wait-h">Signed by {c.signed.name} · waiting for {d.from.name} to countersign</span>
+            <span className="cv-fine">The sealed copy comes by email to you both once they do.</span>
+          </section>
+        )}
+        {c.sealed && <SealCard at={c.sealed.at} signers={[c.signed.name, ...(c.member ? [c.member.name] : [])]} events={c.sealed.events} pdf={c.sealed.pdf} check={c.sealed.check} />}
 
         <ProposalView
           doc={d}
@@ -86,14 +92,14 @@ export default async function Page({ params }: { params: Promise<{ token: string
           sign={
             <div className="cv-accept">
               <h2 className="cv-h2">Signatures</h2>
-              <Parties doc={d} client={`Signed ${stamp(c.signed.at)}`} member={`Sent ${stamp(c.sentAt)}`} />
+              <Parties doc={d} client={{ state: "signed", name: c.signed.name, at: c.signed.at }} member={{ state: memberState(c.memberMode, c.member, true), sig: c.member }} />
             </div>
           }
         />
 
         <section className="sg-card sg-signed" aria-labelledby="sg-sigh">
           <h2 className="sg-h2" id="sg-sigh">
-            Signature
+            {c.member ? "Signatures" : "Signature"}
           </h2>
           <div className="sg-sig sg-sig-done">
             <span className="sg-sig-name">{c.signed.name}</span>
@@ -122,6 +128,38 @@ export default async function Page({ params }: { params: Promise<{ token: string
               </dd>
             </div>
           </dl>
+          {c.member && (
+            <>
+              <div className="sg-sig sg-sig-done">
+                {c.member.kind === "drawn" && c.member.img ? <img src={c.member.img} alt={`${c.member.name}'s signature`} className="cv-sigimg" /> : <span className="sg-sig-name">{c.member.typed ?? c.member.name}</span>}
+                <span className="sg-sig-line">
+                  {c.member.name}
+                  {c.member.title ? `, ${c.member.title}` : ""} · {stamp(c.member.at)}
+                </span>
+              </div>
+              <dl className="sg-facts">
+                <div>
+                  <dt>How</dt>
+                  <dd>
+                    {c.member.how === "saved_at_send"
+                      ? "Their saved signature, applied when they sent it"
+                      : c.member.how === "saved"
+                        ? "Their saved signature, applied as a countersignature"
+                        : c.member.how === "drawn"
+                          ? "Drawn, as a countersignature"
+                          : "Typed, as a countersignature"}
+                    , signed in to Merlin as the sender
+                  </dd>
+                </div>
+                <div>
+                  <dt>Consent to sign electronically</dt>
+                  <dd>
+                    {MEMBER_CONSENT} <span className="sg-muted">(version {MEMBER_CONSENT_VERSION})</span>
+                  </dd>
+                </div>
+              </dl>
+            </>
+          )}
         </section>
 
         <section className="sg-card sg-audit" aria-labelledby="sg-audh">

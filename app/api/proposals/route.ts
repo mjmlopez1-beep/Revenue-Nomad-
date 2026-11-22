@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
-import { limited } from "@/lib/rateLimit";
+import { clientIp, limited } from "@/lib/rateLimit";
 import { memberForToken } from "@/lib/table";
-import { ProposalProblem, createProposal, deleteProposal, duplicateProposal, getProposal, linkProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
+import { ProposalProblem, countersignDue, countersignProposal, createProposal, deleteProposal, duplicateProposal, getProposal, linkProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
+import { deleteMySignature, getMySignature, myTitle, setMySignature } from "@/lib/proposals/memberSig";
 import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
 import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
 
@@ -46,7 +47,10 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName? }
  *                  A change to what the client reads, after a version went out, makes a new version and voids the old link.
  * POST { op: "duplicate" | "delete" | "void", id }
- * POST { op: "send", id, signer: { name, email, title? }, message? }   Trial and Pro (403 with `upgrade` on Free).
+ * POST { op: "send", id, signer: { name, email, title? }, message?, memberSign? }   Trial and Pro (403 with `upgrade` on Free). memberSign: "now" | "after" | "none".
+ * POST { op: "countersign", id, method?: "saved" | "drawn" | "typed", png?, typed?, consent?, save? }   The sender countersigns after the client signed.
+ * POST { op: "signature_get" } | { op: "signature_set", method: "drawn" | "typed", png?, typed?, consent: true } | { op: "signature_delete" }   Their saved signature (Close).
+ * GET ?countersign=due   Proposals the client signed over 24 hours ago that wait for their countersignature (Home).
  */
 export const GET = guarded(async (req: NextRequest) => {
   const token = req.cookies.get(COOKIE)?.value ?? null;
@@ -54,6 +58,7 @@ export const GET = guarded(async (req: NextRequest) => {
   if (!me) return err("You're signed out. Sign in again to see your proposals.", 401);
   if (limited(`prop-get:${me.id}`, 120, 60_000)) return err(SLOW, 429);
   const id = req.nextUrl.searchParams.get("id");
+  if (req.nextUrl.searchParams.get("countersign") === "due") return answer(async () => ({ due: await countersignDue(token) }));
   return answer(() => (id ? getProposal(token, id, origin(req)) : listProposals(token, origin(req))));
 });
 
@@ -74,6 +79,7 @@ export const POST = guarded(async (req: NextRequest) => {
   if (!b || typeof b !== "object") return err("That didn't go through. Refresh the page and try again.");
   const id = typeof b.id === "string" ? b.id : "";
   const o = origin(req);
+  const who = { ip: clientIp(req), ua: (req.headers.get("user-agent") ?? "").slice(0, 300) };
   if (b.op !== "draft" && text.length > MAX_BODY) return err("That's too much to save at once. Shorten it, then try again.", 413);
   switch (b.op) {
     case "create":
@@ -95,7 +101,7 @@ export const POST = guarded(async (req: NextRequest) => {
     case "template_delete":
       return answer(async () => (await deleteTemplate(token, id), { ok: true }));
     case "update":
-      return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, source: typeof b.source === "string" ? b.source : undefined }, o));
+      return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, pricing: b.pricing, memberSign: b.memberSign, source: typeof b.source === "string" ? b.source : undefined }, o));
     case "link":
       // Not linked to a company yet: the one picked (companyId), or its exact name or website (name), as find_company finds it.
       return answer(() => linkProposal(token, id, { companyId: b.companyId, name: b.name }, o));
@@ -107,7 +113,15 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(() => voidProposal(token, id, o));
     case "send":
       if (limited(`prop-send:${me.id}`, 20, 60 * 60_000)) return err("That's 20 sends in an hour, which is the limit. Try again later.", 429);
-      return answer(() => sendProposal(token, id, { signer: b.signer, message: b.message }, o));
+      return answer(() => sendProposal(token, id, { signer: b.signer, message: b.message, memberSign: b.memberSign, who }, o));
+    case "countersign":
+      return answer(() => countersignProposal(token, id, { method: b.method, png: b.png, typed: b.typed, consent: b.consent, save: b.save, who }, o));
+    case "signature_get":
+      return answer(async () => ({ signature: await getMySignature(token), name: me.name, title: await myTitle(token) }));
+    case "signature_set":
+      return answer(async () => ({ signature: await setMySignature(token, { method: b.method, png: b.png, typed: b.typed, consent: b.consent }, o) }));
+    case "signature_delete":
+      return answer(async () => (await deleteMySignature(token), { signature: null }));
     default:
       return err("That didn't go through. Refresh the page and try again.");
   }

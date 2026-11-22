@@ -542,7 +542,7 @@ function Editor({
         </div>
       </header>
 
-      {p.send && <SendStatus p={p} />}
+      {p.send && <SendStatus p={p} onChange={(r) => (setP(r), onSaved(r))} />}
       {/* Not linked to a company on Merlin: the pipeline can't move when they sign, so the member picks it (ProposalLink.tsx). */}
       {!p.company.id && <LinkCompany p={p} onLinked={(r) => (setP((cur) => ({ ...cur, company: r.company })), onSaved(r))} />}
       {locked && <CloseBuildPrompt />}

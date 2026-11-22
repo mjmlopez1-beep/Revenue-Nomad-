@@ -48,8 +48,8 @@ const initialsOf = (n: string) =>
     .join("")
     .slice(0, 4);
 
-/** A box to draw a signature in with a finger or a mouse. Gives a PNG, or null when empty. */
-function DrawPad({ onChange }: { onChange: (png: string | null) => void }) {
+/** A box to draw a signature in with a finger or a mouse. Gives a PNG, or null when empty. Also the member's own signature (app/post/MySignature.tsx). */
+export function DrawPad({ onChange }: { onChange: (png: string | null) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const any = useRef(false);
@@ -129,6 +129,9 @@ export function DocSignView({ token }: { token: string }) {
   const [method, setMethod] = useState<"typed" | "drawn">("typed");
   const [png, setPng] = useState<string | null>(null);
   const [adopted, setAdopted] = useState(false);
+  // The sender signing their own document while signed in here: their saved signature, in one click.
+  const [saved, setSaved] = useState<DocSignerView["saved"]>(null);
+  const [useSaved, setUseSaved] = useState(false);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [reason, setReason] = useState("");
   const panel = useRef<HTMLDivElement>(null);
@@ -136,7 +139,7 @@ export function DocSignView({ token }: { token: string }) {
   const cardShows = useOnScreen(cardGo, !!v && v.status === "open" && step === "read");
 
   useEffect(() => {
-    void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setName(r.me.name))));
+    void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setName(r.me.name), setSaved(r.saved ?? null))));
   }, [token]);
   useEffect(() => {
     if (step !== "read") panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -398,12 +401,22 @@ export function DocSignView({ token }: { token: string }) {
                       {adopted ? (
                         <>
                           <div className="sg-sig ds-sig-done">{method === "drawn" && png ? <img src={png} alt="Your signature" className="ds-sigimg" /> : <span className="sg-sig-name">{name}</span>}</div>
-                          <button type="button" className="sg-link" onClick={() => setAdopted(false)}>
+                          <button type="button" className="sg-link" onClick={() => (setAdopted(false), setUseSaved(false))}>
                             Change it
                           </button>
                         </>
                       ) : (
                         <>
+                          {saved && (
+                            <button
+                              type="button"
+                              className="btn btn-lg"
+                              disabled={!v.codeVerified || !agree}
+                              onClick={() => (setMethod(saved.kind), setPng(saved.img), setUseSaved(true), setAdopted(true))}
+                            >
+                              Use my saved signature
+                            </button>
+                          )}
                           <label className="sg-label" htmlFor="ds-name">
                             Your full name
                           </label>
@@ -478,7 +491,7 @@ export function DocSignView({ token }: { token: string }) {
             onClick={async () => {
               const vals: Record<string, string | boolean> = {};
               for (const f of mine) if (f.kind === "text" || f.kind === "checkbox" || f.kind === "initials") vals[f.id] = f.kind === "initials" ? String(values[f.id] ?? initialsOf(name)) : (values[f.id] ?? (f.kind === "checkbox" ? false : ""));
-              const r = await run("sign", { op: "sign", name: name.trim(), method, png: method === "drawn" ? png : undefined, values: vals, consent: agree, hash: v.sha256 });
+              const r = await run("sign", { op: "sign", name: name.trim(), method: useSaved ? "saved" : method, png: method === "drawn" && !useSaved ? png : undefined, values: vals, consent: agree, hash: v.sha256 });
               if (r) setV(r), window.scrollTo({ top: 0, behavior: "smooth" });
             }}
           >

@@ -916,3 +916,46 @@ button.cv-opt {
     display: none;
   }
 }
+
+/* Both sides' signatures. */
+.cv-party[data-state="here"] {
+  border: 1px dashed #808a85;
+}
+.cv-party[data-state="after"],
+.cv-party[data-state="waiting"] {
+  background: #f3f5f4;
+}
+.cv-sigmark {
+  display: flex;
+  align-items: flex-end;
+  min-height: 48px;
+  margin: 2px 0;
+  border-bottom: 1px solid #cdd4d0;
+}
+.cv-sigimg {
+  max-width: 100%;
+  max-height: 56px;
+}
+.cv-script {
+  color: #10284a;
+  font-family: "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", "Apple Chancery", cursive;
+  font-size: 26px;
+  line-height: 44px;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+.cv-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: #f3f5f4;
+  border: 1px solid var(--line);
+}
+.cv-wait-h {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 800;
+  color: #0a1a13;
+}

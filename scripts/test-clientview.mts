@@ -21,6 +21,7 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { crc32, deflateSync } from "node:zlib";
 
 const dir = mkdtempSync(path.join(tmpdir(), "rn-clientview-"));
 const DAY = 86_400_000;
@@ -93,6 +94,23 @@ const refused = async (p: Promise<unknown>) => p.then(() => null, (e: Error) => 
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(path.join(d, f)).isDirectory() ? walk(path.join(d, f)) : [path.join(d, f)]));
+
+/** A small PNG drawn here (a signature), as a data URL. */
+function png(w = 60, h = 16, seed = 3): string {
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]);
+    const c = Buffer.alloc(4);
+    c.writeUInt32BE(crc32(td) >>> 0);
+    return Buffer.concat([len, td, c]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0), ihdr.writeUInt32BE(h, 4), (ihdr[8] = 8), (ihdr[9] = 6);
+  const rows = Buffer.concat(Array.from({ length: h }, (_, y) => Buffer.concat([Buffer.from([0]), Buffer.concat(Array.from({ length: w }, (_, x) => Buffer.from((x + y * seed) % 7 === 0 ? [10, 26, 19, 255] : [0, 0, 0, 0])))])));
+  const b = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
+  return `data:image/png;base64,${b.toString("base64")}`;
+}
 
 /* ---------- the made-up proposal ---------- */
 
@@ -410,6 +428,135 @@ async function main() {
   const gm = mails.slice(m7).filter((m) => /^Signed: /.test(m.subject));
   check("…signed as today: no choice, no sealed PDF, no attachment", gsv.status === "signed" && !gsv.signedChoice && !gsv.sealed && gm.length === 2 && gm.every((m) => !m.attachments?.length && !/chose/i.test(m.text)) && (await S.sealedPdf(S.copyToken((await T.loadState()).proposals!.find((q) => q.id === g.id)!.sends[0].id), BASE)) === null);
   check("the plans table: both Close rows, Free and Pro in the trial only", ["Give them options to pick from", "Sealed PDF anyone can check"].every((w) => CP.PLAN_ROWS.some((r) => r[0] === w && r[1] === "In your trial only" && r[2] === "In your trial only") && CP.CLOSE_ADDS.some((r) => r[0] === w)) && CP.LANDING_ROWS.every((r) => !/options to pick|Sealed PDF/.test(r[0])));
+  /* ---------- the member's own signature ---------- */
+
+  const MS = await import("../lib/proposals/memberSig");
+  const H = await import("../lib/proposals/pipelineHook");
+  const pipe: { kind: string; at: string }[] = [];
+  H.setPipelineHook((st, memberId, companyId, kind, at, from) => (pipe.push({ kind, at }), H.proposalToPipeline(st, memberId, companyId, kind, at, from)));
+  const CEDAR = T.tableInternals.pubId("c_cedar");
+  check("saved signature: none to start", (await MS.getMySignature(JOR)) === null);
+  check("saved signature: consent required", /agree/.test(String(await refused(MS.setMySignature(JOR, { method: "typed", typed: "Jordan Avery" }, BASE)))));
+  check("saved signature: Free (after the trial) gets the Close prompt", /Close/.test(String(await refused(MS.setMySignature(FRE, { method: "typed", typed: "Fred Free", consent: true }, BASE)))));
+  const st1 = await MS.setMySignature(JOR, { method: "typed", typed: "Jordan Avery", consent: true }, BASE);
+  check("saved signature: typed, with the name and title from the profile", st1.kind === "typed" && st1.typed === "Jordan Avery" && st1.name === "Jordan Avery" && st1.title === "Fractional CRO" && st1.img === null);
+  check("saved signature: a broken drawing refused", /drawing/.test(String(await refused(MS.setMySignature(JOR, { method: "drawn", png: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==", consent: true }, BASE)))));
+  const sigA = png(60, 16, 3);
+  const st2 = await MS.setMySignature(JOR, { method: "drawn", png: sigA, consent: true }, BASE);
+  const sigFile = path.join(dir, "members", "mem_jor", "signature.png");
+  check("saved signature: replaced by a drawing, kept on the volume, private, its fingerprint in the state", st2.kind === "drawn" && st2.img === sigA && (statSync(sigFile).mode & 0o777) === 0o600 && (await T.loadState()).memberSignatures?.mem_jor?.sha256 === sha(readFileSync(sigFile)));
+  check("saved signature: never in the admin export", !JSON.stringify(await T.exportState()).includes("memberSignatures"));
+  await MS.deleteMySignature(JOR);
+  check("saved signature: deleted, the file too", (await MS.getMySignature(JOR)) === null && !existsSync(sigFile));
+  await MS.setMySignature(JOR, { method: "drawn", png: sigA, consent: true }, BASE);
+
+  // Sign it now: applied at send, bound to the document's hash.
+  const sendTo = async (pricing: unknown, memberSign: string | undefined, blocks = BLOCKS.slice(9)) => {
+    const q = await S.createProposal(JOR, { companyId: CEDAR, title: "Cedar and Pine Software · Revenue Program" }, BASE);
+    await S.updateProposal(JOR, q.id, { blocks, signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example", title: "CEO" }, ...(pricing ? { pricing } : {}) }, BASE);
+    const mk = mails.length;
+    await S.sendProposal(JOR, q.id, { ...(memberSign ? { memberSign } : {}), who: { ip: "198.51.100.9", ua: "Mozilla/5.0 (member)" } }, BASE);
+    const lk = mails.slice(mk).find((m) => m.to === "dana@cedarandpine.example")!.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)![1];
+    return { id: q.id, link: lk };
+  };
+  const signAs = async (lk: string, choice?: unknown) => {
+    const v = await S.signerView(lk, who, BASE);
+    const mk = mails.length;
+    await S.requestCode(lk, who);
+    await S.verifyCode(lk, mails.slice(mk).find((m) => m.to === "dana@cedarandpine.example")!.text.match(/\b(\d{6})\b/)![1], who, BASE);
+    const mk2 = mails.length;
+    const r = await S.signProposal(lk, { name: "Dana Whitfield", consent: true, hash: v.hash, ...(choice ? { choice } : {}) }, who, BASE);
+    return { r, mails: mails.slice(mk2) };
+  };
+  const sendOf = async (id: string) => (await T.loadState()).proposals!.find((q) => q.id === id)!.sends.at(-1)!;
+  const now1 = await sendTo(OPTIONS, undefined);
+  const xs = await sendOf(now1.id);
+  check("sign it now (the default with a saved signature): applied at send, bound to the hash, on the audit trail", xs.memberMode === "now" && xs.member?.how === "saved_at_send" && xs.member.hash === xs.hash && xs.member.kind === "drawn" && xs.member.ip === "198.51.100.9" && xs.events.some((e) => e.kind === "member_signed"));
+  check("…the drawing kept with the send, so replacing the saved one changes nothing signed", sha(readFileSync(path.join(dir, "proposals", xs.id, "member-sig.png"))) === xs.member!.pngSha256);
+  const nv = await S.signerView(now1.link, who, BASE);
+  check("the client's page: the member's side signed, with the drawing", nv.memberMode === "now" && nv.member?.name === "Jordan Avery" && nv.member.img === sigA && !nv.awaitingMember);
+  const partiesNow = renderToStaticMarkup(React.createElement(PV.Parties, { doc: nv.doc, client: { state: "here" }, member: { state: PV.memberState(nv.memberMode, nv.member, false), sig: nv.member } }));
+  check("…its signature cards: the member signed, the client 'Signs here'", partiesNow.includes("Signs here") && partiesNow.includes("Signed ") && partiesNow.includes(`src="${sigA}"`) && partiesNow.includes("Jordan Avery, Fractional CRO"));
+  pipe.length = 0;
+  await MS.setMySignature(JOR, { method: "typed", typed: "Jordan Avery", consent: true }, BASE);
+  const s1 = await signAs(now1.link, { optionId: "o_lead", addOnIds: [] });
+  const xs1 = await sendOf(now1.id);
+  check("…the client signs: complete at once (sealed, Won, both emails with the PDF)", s1.r.status === "signed" && !s1.r.awaitingMember && !!xs1.seal && pipe.some((e) => e.kind === "signed") && s1.mails.filter((m) => /^Signed: /.test(m.subject) && m.attachments?.length === 1).length === 2);
+  check("…the member's signature on it is still the drawing it was sent with", xs1.member?.kind === "drawn");
+  const pdfNow = await textOf((await S.sealedPdf(S.copyToken(xs1.id), BASE))!.bytes);
+  const pdfNowAll = pdfNow.all.replace(/\s+/g, " ");
+  check("…the PDF: both signatures side by side, how each was made, both consents", pdfNowAll.includes("Signed when sent") && pdfNowAll.includes("Sender, who signs too") && pdfNowAll.includes("their saved signature, applied when they sent it") && pdfNowAll.includes("The consent the sender agreed to") && pdfNowAll.includes("The consent the signer agreed to") && pdfNowAll.includes("Dana Whitfield"), pdfNowAll.slice(-1500));
+  const cpNow = await S.signedCopy(S.copyToken(xs1.id), BASE);
+  check("…the signed copy: the member's signature with its drawing", cpNow?.member?.how === "saved_at_send" && !!cpNow.member.img && cpNow.memberMode === "now");
+
+  // Countersign after they sign.
+  pipe.length = 0;
+  const af = await sendTo(OPTIONS, "after");
+  const xa = await sendOf(af.id);
+  check("countersign mode: frozen into the send, nothing applied yet", xa.memberMode === "after" && !xa.member);
+  const av = await S.signerView(af.link, who, BASE);
+  check("…the client's page: 'Countersigns after you'", renderToStaticMarkup(React.createElement(PV.Parties, { doc: av.doc, client: { state: "here" }, member: { state: PV.memberState(av.memberMode, av.member, false), sig: av.member } })).includes("Countersigns after you"));
+  check("…countersigning before the client signs is refused", /nothing to countersign/.test(String(await refused(S.countersignProposal(JOR, af.id, { method: "saved" }, BASE)))));
+  const sa = await signAs(af.link, { optionId: "o_full", addOnIds: ["a_hire"] });
+  const xa1 = await sendOf(af.id);
+  check("…the client signed: not sealed, not Won, no sealed PDF yet", sa.r.awaitingMember && !xa1.seal && !pipe.some((e) => e.kind === "signed") && (await S.sealedPdf(S.copyToken(xa1.id), BASE)) === null && S.signingState(xa1) === "client_signed" && !S.fullySigned(xa1) && S.fullySignedAt(xa1) === null);
+  const toMem = sa.mails.find((m) => m.to === "jor.cv@example.com");
+  const toCli = sa.mails.find((m) => m.to === "dana@cedarandpine.example");
+  check("…the member: 'Dana signed. Countersign to finish.' with the one link; the client: waiting for the member", /^Dana signed\. Countersign to finish/.test(toMem?.subject ?? "") && toMem!.text.includes(`/?p=proposals&pr=${af.id}&countersign=1`) && /waiting for Jordan Avery to countersign/.test(toCli?.subject ?? "") && sa.mails.every((m) => !m.attachments?.length), sa.mails.map((m) => m.subject));
+  const ra = await S.getProposal(JOR, af.id, BASE);
+  check("…status for the member: signed, waiting for them; for the client: signed by them, waiting for the member", ra.send?.status === "signed" && ra.send.waiting === "member" && sa.r.awaitingMember && readFileSync("app/post/ProposalParts.tsx", "utf8").includes("waiting for your signature.") && readFileSync("app/sign/Sign.tsx", "utf8").includes("Signed by you · waiting for {d.from.name} to countersign"));
+  check("…the client's choice stays locked", /can't change now/.test(String(await refused(S.chooseOption(af.link, { optionId: "o_assess", addOnIds: [] }, BASE)))));
+  check("…Home shows it after 24 hours, not before", (await S.countersignDue(JOR, 24)).length === 0 && (await S.countersignDue(JOR, 24, Date.now() + 25 * 3_600_000)).some((d) => d.id === af.id));
+  check("…only the member who sent it can countersign", /isn't there anymore/.test(String(await refused(S.countersignProposal(FRE, af.id, { method: "saved" }, BASE)))));
+  const mc = mails.length;
+  const [c1r, c2r] = await Promise.all([S.countersignProposal(JOR, af.id, { method: "saved", who: { ip: "198.51.100.9", ua: "member" } }, BASE), S.countersignProposal(JOR, af.id, { method: "saved" }, BASE)]);
+  const c3r = await S.countersignProposal(JOR, af.id, { method: "saved" }, BASE);
+  const xa2 = await sendOf(af.id);
+  check("…a double click is safe: one countersignature, one Won, one set of emails", xa2.events.filter((e) => e.kind === "countersigned").length === 1 && pipe.filter((e) => e.kind === "signed").length === 1 && mails.slice(mc).filter((m) => /^Signed: /.test(m.subject)).length === 2 && c1r.send?.waiting === null && c2r.send?.memberSignedAt === c3r.send?.memberSignedAt);
+  check("…countersigned: then sealed, Won at the countersignature, the PDF to both", !!xa2.seal && xa2.member?.how === "saved" && xa2.member.hash === xa2.hash && S.fullySignedAt(xa2) === xa2.member.at && pipe.find((e) => e.kind === "signed")?.at === xa2.member.at && mails.slice(mc).filter((m) => m.attachments?.length === 1).length === 2);
+  const pdfAf = (await textOf((await S.sealedPdf(S.copyToken(xa2.id), BASE))!.bytes)).all.replace(/\s+/g, " ");
+  check("…the PDF: the countersignature, how, and the client's choice", pdfAf.includes("Countersigned") && pdfAf.includes("applied as a countersignature after the client signed") && pdfAf.includes("Full GTM Program") && pdfAf.includes("Jordan Avery"));
+  check("…the copy checks out", (await SEAL.checkCopy((await S.sealedPdf(S.copyToken(xa2.id), BASE))!.bytes)).result === "match");
+  // Countersign with no saved signature: drawn there, saved for next time.
+  await MS.deleteMySignature(JOR);
+  const af2 = await sendTo(null, "after");
+  await signAs(af2.link);
+  check("…no saved signature: a one-click countersign is refused in words", /Set your signature first/.test(String(await refused(S.countersignProposal(JOR, af2.id, { method: "saved" }, BASE)))));
+  check("…drawn there without consent refused", /agree/.test(String(await refused(S.countersignProposal(JOR, af2.id, { method: "drawn", png: sigA }, BASE)))));
+  await S.countersignProposal(JOR, af2.id, { method: "drawn", png: sigA, consent: true, save: true }, BASE);
+  const xa3 = await sendOf(af2.id);
+  check("…drawn there: countersigned, and saved for next time", xa3.member?.how === "drawn" && !!xa3.seal && (await MS.getMySignature(JOR))?.kind === "drawn");
+
+  // Sign it now with no saved signature: refused, the other choices still work.
+  await MS.deleteMySignature(JOR);
+  check("sign it now without a saved signature: refused in words", /Set your signature first/.test(String(await refused(sendTo(null, "now")))));
+  await MS.setMySignature(JOR, { method: "drawn", png: sigA, consent: true }, BASE);
+
+  // A void, and a change after sending: the signature goes with the old send and is applied again to the new one.
+  const rv = await sendTo(null, "now");
+  const old1 = await sendOf(rv.id);
+  await S.voidProposal(JOR, rv.id, BASE);
+  await S.sendProposal(JOR, rv.id, {}, BASE);
+  const new1 = await sendOf(rv.id);
+  const allRv = (await T.loadState()).proposals!.find((q) => q.id === rv.id)!;
+  check("void then send again: the old send keeps its signature and trail, the new one gets it again for its own hash", new1.id !== old1.id && allRv.sends[0].member?.hash === old1.hash && allRv.sends[0].events.some((e) => e.kind === "member_signed") && new1.member?.hash === new1.hash && new1.member.how === "saved_at_send" && new1.version > old1.version);
+  await S.updateProposal(JOR, rv.id, { title: "Cedar and Pine Software · Revenue Program, revised" }, BASE);
+  const changed = (await T.loadState()).proposals!.find((q) => q.id === rv.id)!;
+  check("a change after sending: a new version, the sent one voided with its signature kept", changed.version === new1.version + 1 && changed.sends.at(-1)!.voided?.why === "changed" && !!changed.sends.at(-1)!.member);
+  await S.updateProposal(JOR, rv.id, { memberSign: "after" }, BASE);
+  check("the choice of how the member signs is part of the version", (await S.getProposal(JOR, rv.id, BASE)).memberSign === "after");
+  await S.sendProposal(JOR, rv.id, {}, BASE);
+  check("…sent again: the new choice frozen into the new send", (await sendOf(rv.id)).memberMode === "after" && !(await sendOf(rv.id)).member);
+
+  // No signature from me: today's behaviour.
+  const no = await sendTo(null, "none");
+  const nov = await S.signerView(no.link, who, BASE);
+  check("no signature from me: the member's card says prepared and sent by", nov.memberMode === "none" && !nov.member && renderToStaticMarkup(React.createElement(PV.Parties, { doc: nov.doc, client: { state: "here" }, member: { state: PV.memberState(nov.memberMode, nov.member, false), sig: nov.member } })).includes("Prepared and sent by"));
+  const sno = await signAs(no.link);
+  const xno = await sendOf(no.id);
+  check("…signed: complete at once, as before, no member signature anywhere", sno.r.status === "signed" && !sno.r.awaitingMember && !xno.member && !!xno.seal && !(await textOf((await S.sealedPdf(S.copyToken(xno.id), BASE))!.bytes)).all.includes("Sender, who signs too"));
+  H.setPipelineHook(H.proposalToPipeline);
+
   const LIB = await import("../lib/proposals/library");
   check("the page's own copy of the library's block titles matches templates.json", LIB.BLOCKS.every((b) => SEC.kindOf({ title: b.title }) === b.id));
   check("no outside calls", others === 0, others);

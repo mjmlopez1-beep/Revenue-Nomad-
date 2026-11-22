@@ -25,3 +25,4 @@ data/*.private.*
 data/seal-key.pem
 data/proposals/
 data/documents/
+data/members/

@@ -544,28 +544,62 @@ function InvestText({ b }: { b: Placed }) {
 
 /* ---------- the parties, for the signatures ---------- */
 
-export function Parties({ doc: d, client, member }: { doc: FrozenDoc; client: ReactNode; member: ReactNode }) {
+type Sig = { kind: "typed" | "drawn"; typed: string | null; img: string | null };
+/** A signature as signed: the drawing, or the words in the script face. */
+const SigMark = ({ sig, name }: { sig: Sig | null; name: string }) => (
+  <span className="cv-sigmark">{sig?.kind === "drawn" && sig.img ? <img src={sig.img} alt={`${name}'s signature`} className="cv-sigimg" /> : <span className="cv-script">{sig?.typed ?? name}</span>}</span>
+);
+
+/**
+ * Both sides' signature cards, as each stands: the client's "Signs here" or their signature; the
+ * member's signature (signed as sent, or countersigned), "Countersigns after you", "Countersigns
+ * next" once the client signed, or "Prepared and sent by" when they don't sign.
+ */
+export function Parties({
+  doc: d,
+  client,
+  member,
+}: {
+  doc: FrozenDoc;
+  client: { state: "here" | "signed"; name?: string | null; at?: string | null };
+  member: { state: "signed" | "after" | "waiting" | "none"; sig?: (Sig & { name: string; title: string; at: string; how: string }) | null };
+}) {
+  const ms = member.state === "signed" ? member.sig ?? null : null;
   return (
     <div className="cv-grid cv-grid-260">
-      <div className="cv-party cv-party-me">
+      <div className="cv-party" data-state={client.state === "here" ? "here" : "signed"}>
         <span className="cv-party-co">{d.company || "For the client"}</span>
+        {client.state === "signed" && <SigMark sig={null} name={client.name ?? d.to.name} />}
         <strong>
-          {d.to.name}
+          {client.state === "signed" ? client.name ?? d.to.name : d.to.name}
           {d.to.title ? `, ${d.to.title}` : ""}
         </strong>
-        <span className="cv-party-s">{client}</span>
+        <span className="cv-party-s">{client.state === "here" ? "Signs here" : `Signed ${dayOf(client.at ?? null)}`}</span>
       </div>
-      <div className="cv-party">
-        <span className="cv-party-co">Prepared and sent by</span>
+      <div className="cv-party" data-state={member.state}>
+        <span className="cv-party-co">{member.state === "none" ? "Prepared and sent by" : d.from.name}</span>
+        {ms && <SigMark sig={ms} name={ms.name} />}
         <strong>
-          {d.from.name}
-          {d.from.title ? `, ${d.from.title}` : ""}
+          {ms ? ms.name : d.from.name}
+          {(ms ? ms.title : d.from.title) ? `, ${ms ? ms.title : d.from.title}` : ""}
         </strong>
-        <span className="cv-party-s">{member}</span>
+        <span className="cv-party-s">
+          {ms
+            ? `${ms.how === "saved_at_send" ? "Signed" : "Countersigned"} ${dayOf(ms.at)}`
+            : member.state === "after"
+              ? "Countersigns after you"
+              : member.state === "waiting"
+                ? `Countersigns next`
+                : `Sent ${dayOf(d.preparedAt)}`}
+        </span>
       </div>
     </div>
   );
 }
+
+/** The member's card state for a send. */
+export const memberState = (mode: "now" | "after" | "none", member: unknown, clientSigned: boolean): "signed" | "after" | "waiting" | "none" =>
+  member ? "signed" : mode === "after" ? (clientSigned ? "waiting" : "after") : "none";
 
 /* ---------- the seal ---------- */
 

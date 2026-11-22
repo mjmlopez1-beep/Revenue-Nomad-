@@ -137,7 +137,7 @@ import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionals
 // Peers: leads passed, teams and circles (lib/peersCore.ts, lib/peers.ts).
 import type { PeersState } from "./peersCore";
 
-import type { MyTemplate, StoredProposal } from "./proposals/types";
+import type { MyTemplate, SavedSignature, StoredProposal } from "./proposals/types";
 import { aiMeter, budgetOf as aiBudgetOf, noticeSeenIn as aiNoticeSeenIn, type AiUsageRec } from "./proposals/aiUsage";
 import { aiConfigured } from "./proposals/aiConfig";
 import type { StoredDocument } from "./documents/types";
@@ -606,6 +606,8 @@ export interface State extends MessagingState {
   proposals?: StoredProposal[];
   /** Documents to sign (lib/documents): each member's own uploads, their fields, signers and audit trails. The PDFs are files on the volume, never here. Private like proposals. */
   documents?: StoredDocument[];
+  /** Each member's saved signature (lib/proposals/memberSig.ts), by member id: typed words, or a drawn one's fingerprint (the PNG is a file on the volume). Private like proposals. */
+  memberSignatures?: Record<string, SavedSignature>;
   /** "My templates" (lib/proposals/mine.ts): each member's own past proposals, read into sections, by member id. Private like proposals. */
   myTemplates?: Record<string, MyTemplate[]>;
   /** When each member agreed that a transcript may go to Anthropic's API to write a draft (lib/proposals/draft.ts), by member id. */
@@ -7617,7 +7619,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7666,7 +7668,7 @@ export const ACCOUNT_CLOSED_JOIN = "This account was closed. Use the restore lin
  * added to companies stay, attributed to nobody (FORMER_MEMBER), and so do benchmark rates.
  * Returns the sealed Google tokens (for the caller to revoke) and the document ids.
  */
-function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { googleTokens: string[]; documentIds: string[]; sendIds: string[] } {
+function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { memberId: string; googleTokens: string[]; documentIds: string[]; sendIds: string[] } {
   const net = s.network?.[id] as { google?: { token?: string }; gmail?: { token?: string } } | undefined;
   const googleTokens = [net?.google?.token, net?.gmail?.token].filter((x): x is string => !!x);
   const documentIds = (s.documents ?? []).filter((d) => d.memberId === id).map((d) => d.id);
@@ -7756,7 +7758,9 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { google
     delete c.mail;
   }
   memberIndexCache = null;
-  return { googleTokens, documentIds, sendIds };
+  // Their saved signature (its PNG file is removed by the caller).
+  if (s.memberSignatures) delete s.memberSignatures[id];
+  return { memberId: id, googleTokens, documentIds, sendIds };
 }
 
 /** A closed account's inbox hash is blocked: Merlin sends it nothing (lib/email.ts setMailBlock). */

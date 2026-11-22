@@ -167,6 +167,8 @@ export interface DocSignerView {
   signedAt: string | null;
   expiresAt: string | null;
   copyUrl: string | null;
+  /** The sender's own saved signature, when they are this signer and signed in here: one click to use it. */
+  saved?: { kind: "typed" | "drawn"; typed: string | null; img: string | null } | null;
 }
 
 /** The completed document's page (/signed/<token>): who signed, the hashes, and the download. */

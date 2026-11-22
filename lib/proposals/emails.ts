@@ -120,6 +120,35 @@ export function signedEmail(o: {
   return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.copy, art: "signed", footer: f.lines }) };
 }
 
+/**
+ * Countersign mode, once the client signed: to the member, "Dana signed. Countersign to finish."
+ * with the one link that opens the proposal to countersign; to the client, that it comes next.
+ * The sealed copy follows the countersignature (signedEmail).
+ */
+export function countersignEmail(o: { to: "member" | "signer"; name: string; member: string; signer: string; title: string; link: string; choice?: string }): Mail {
+  const signerFirst = oneLine(o.signer).split(" ")[0] || "They";
+  const member = oneLine(o.member);
+  const title = oneLine(o.title).slice(0, 140);
+  const subject = o.to === "member" ? `${signerFirst} signed. Countersign to finish: ${title}`.slice(0, 200) : `Signed by you, waiting for ${member} to countersign: ${title}`.slice(0, 200);
+  const lead =
+    o.to === "member"
+      ? `${oneLine(o.signer)} signed ${title}. Countersign to finish: it's sealed and you both get the signed PDF as soon as you do.`
+      : `You signed ${title}. ${member} countersigns next, and then you both get the sealed copy by email.`;
+  const chose = o.choice ? `${o.to === "member" ? `${signerFirst} chose` : "You chose"} ${oneLine(o.choice).slice(0, 400)}` : "";
+  const f = foot();
+  const text = [`Hi ${first(o.name)},`, "", lead, ...(chose ? ["", chose] : []), "", o.link, "", ...f.text].join("\n");
+  const body = [
+    mailP(`Hi ${escHtml(first(o.name))},`),
+    mailH(o.to === "member" ? `${escHtml(signerFirst)} signed. Countersign to finish.` : "You signed"),
+    mailP(escHtml(lead)),
+    chose ? mailCallout(escHtml(chose), "page") : "",
+    mailButton(o.link, o.to === "member" ? "Countersign" : "See what you signed", "margin:8px 0 24px"),
+    small("If the button doesn&#39;t work, paste this link into your browser."),
+    linkLine(o.link),
+  ].join("\n");
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, art: "signed", footer: f.lines }) };
+}
+
 /** To the member: the client declined, with their reason when they gave one. */
 export function declinedEmail(o: { member: string; signer: string; title: string; reason: string; app: string }): Mail {
   const subject = `${oneLine(o.signer).slice(0, 80)} declined ${oneLine(o.title).slice(0, 120)}`;

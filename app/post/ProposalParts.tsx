@@ -7,7 +7,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiscoveryNote, ProposalRec, SignerInfo } from "@/lib/proposals/types";
-import { SENDER_DUTY } from "@/lib/proposals/types";
+import { SENDER_DUTY, type MemberSignMode } from "@/lib/proposals/types";
+import { Countersign, YourSignatureChoice, useMySignature } from "./MySignature";
 import { DISCOVERY_LABELS, DISCOVERY_TARGET, blanksInWords } from "@/lib/proposals/library";
 import { extract, transcriptOk, type Extraction, type Suggestion } from "@/lib/proposals/extract";
 import type { adviceFromView } from "@/lib/proposals/rates";
@@ -289,11 +290,14 @@ export function SendSheet({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const ok = s.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s.email.trim()) && blanks.length === 0 && canSend && email;
+  // Their own signature on it (MySignature.tsx): now, after the client's, or none.
+  const [mode, setMode] = useState<MemberSignMode>(p.memberSign ?? "now");
+  const [mySig, setMySig] = useMySignature();
+  const ok = s.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s.email.trim()) && blanks.length === 0 && canSend && email && (mode !== "now" || !!mySig.sig);
   const go = async () => {
     setBusy(true);
     setErr(null);
-    const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note });
+    const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note, memberSign: mode });
     setBusy(false);
     if (r.error) return setErr(r.error);
     onSent(r.proposal, r.message);
@@ -331,6 +335,7 @@ export function SendSheet({
           <span className="pp-field-l">A note above the link (optional)</span>
           <textarea className="input pp-note" rows={2} maxLength={600} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Great talking today. Here's the plan we discussed." />
         </label>
+        {canSend && mySig.loaded && <YourSignatureChoice mode={mode} onMode={setMode} sig={mySig.sig} onSig={setMySig} name={mySig.name} title={mySig.title} />}
         {blanks.length > 0 && (
           <p className="pp-warn">
             {blanks.length === 1 ? "1 blank" : `${blanks.length} blanks`} to fill first: {blanksInWords(blanks)}. Tap a section to fill it.
@@ -351,11 +356,13 @@ export function SendSheet({
   );
 }
 
-export function SendStatus({ p }: { p: ProposalRec }) {
+export function SendStatus({ p, onChange }: { p: ProposalRec; onChange?: (r: ProposalRec) => void }) {
   const x = p.send!;
   const line =
-    x.status === "signed"
-      ? `Signed by ${x.signedName} on ${dayOf(x.signedAt)}.`
+    x.status === "signed" && x.waiting === "member"
+      ? `Signed by ${x.signedName} · waiting for your signature.`
+      : x.status === "signed"
+      ? `Signed by ${x.signedName} on ${dayOf(x.signedAt)}${x.memberSignedAt ? `, and by you on ${dayOf(x.memberSignedAt)}` : ""}.`
       : x.status === "declined"
         ? `${x.signer.name} declined on ${dayOf(x.declinedAt)}${x.declineReason ? `: "${x.declineReason}"` : "."}`
         : x.status === "void"
@@ -375,6 +382,8 @@ export function SendStatus({ p }: { p: ProposalRec }) {
           </a>
         )}
       </div>
+      {x.waiting === "member" && onChange && <Countersign p={p} onDone={onChange} />}
+      {x.memberMode === "now" && x.memberSignedAt && x.status !== "signed" && <p className="pp-muted">You signed it as you sent it, on {dayOf(x.memberSignedAt)}.</p>}
       {x.choice && (
         <p className="pp-status-l">
           {x.signer.name.split(" ")[0]} chose {x.choice.summary}. Total: {x.choice.total}.

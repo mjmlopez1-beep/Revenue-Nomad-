@@ -106,3 +106,142 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* The member's own signature (MySignature.tsx, ms-). */
+.ms,
+.ms-set,
+.ms-pad,
+.ms-choice,
+.ms-counter {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.ms-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ms-opt {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: start;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.ms-opt[data-on="true"] {
+  border: 2px solid var(--pine);
+  padding: 9px 11px;
+}
+.ms-opt input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--pine);
+}
+.ms-opt strong {
+  display: block;
+  font-size: 15px;
+  color: var(--ink);
+}
+.ms-say {
+  display: block;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.ms-have {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.ms-shown {
+  display: inline-flex;
+  align-items: flex-end;
+  min-height: 52px;
+  padding: 0 8px;
+  border-bottom: 2px solid var(--ink);
+}
+.ms-img {
+  max-height: 60px;
+  max-width: 260px;
+}
+.ms-script {
+  color: #10284a;
+  font-family: "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", "Apple Chancery", cursive;
+  font-size: 28px;
+  line-height: 48px;
+  font-style: italic;
+}
+.ms-who {
+  font-size: 14px;
+  color: var(--muted);
+}
+.ms-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ms-acts .btn,
+.ms-counter .btn {
+  min-height: 44px;
+}
+.ms-consent {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 19px;
+  cursor: pointer;
+}
+.ms-consent input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--pine);
+}
+.ms-counter {
+  margin-top: 10px;
+  padding: 14px;
+  border: 2px solid var(--pine);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.ms-counter-h {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.ms-due {
+  display: grid;
+  gap: 8px;
+}
+.ms-due-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 14px 16px;
+  border: 2px solid var(--pine);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: 15px;
+}
+.ms-due-row .btn {
+  min-height: 44px;
+}
+.ms-settings {
+  display: grid;
+  gap: 10px;
+}

@@ -17,7 +17,7 @@ import { Spot } from "../ui/fractions/art";
 import type { Choice, SignerView } from "@/lib/proposals/types";
 import { choiceRec, startOption } from "@/lib/proposals/pricing";
 import { dayOf } from "./doc";
-import { Parties, ProposalView } from "./ProposalView";
+import { Parties, ProposalView, memberState } from "./ProposalView";
 import "./sign.css";
 import "./clientview.css";
 
@@ -224,7 +224,7 @@ export function SignView({ token }: { token: string }) {
         <>
           <h2 className="cv-h2">Accept and sign</h2>
           <span className="cv-accept-l">{accepting}</span>
-          <Parties doc={d} client="Signs here" member={`Sent ${dayOf(d.preparedAt)}`} />
+          <Parties doc={d} client={{ state: "here" }} member={{ state: memberState(v.memberMode, v.member, false), sig: v.member }} />
           {err && errAt === "choose" && (
             <p className="sg-err" role="alert">
               {err}
@@ -384,7 +384,18 @@ export function SignView({ token }: { token: string }) {
   );
 
   const signedPart =
-    v.status === "signed" ? (
+    v.status === "signed" && v.awaitingMember ? (
+      <div className="cv-accept">
+        <div className="cv-wait" role="status">
+          <span className="cv-wait-h">Signed by you · waiting for {d.from.name} to countersign</span>
+          <span className="cv-fine">
+            {v.signedChoice ? `You chose ${v.signedChoice.summary}: ${v.signedChoice.total}. That's locked now. ` : ""}
+            {fromFirst} countersigns next. You&#39;ll both get the {v.sealOnSign ? "sealed" : "signed"} copy by email as soon as they do.
+          </span>
+        </div>
+        <Parties doc={d} client={{ state: "signed", name: v.signedName, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
+      </div>
+    ) : v.status === "signed" ? (
       <div className="cv-accept">
         <div className="cv-done">
           <span className="cv-done-h">Signed. Thank you, {(v.signedName ?? d.to.name).split(" ")[0]}.</span>
@@ -405,7 +416,7 @@ export function SignView({ token }: { token: string }) {
             )}
           </div>
         </div>
-        <Parties doc={d} client={`Signed ${dayOf(v.signedAt)}`} member={`Sent ${dayOf(d.preparedAt)}`} />
+        <Parties doc={d} client={{ state: "signed", name: v.signedName, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
       </div>
     ) : (
       <div className="cv-accept">
@@ -421,10 +432,10 @@ export function SignView({ token }: { token: string }) {
         {!open && (
           <section className="sg-card sg-state" data-status={v.status}>
             {v.status === "signed" && <SignedArt />}
-            <h2 className="sg-h">{STATUS_SAY[v.status].h}</h2>
+            <h2 className="sg-h">{v.awaitingMember ? `Signed by you · waiting for ${d.from.name} to countersign` : STATUS_SAY[v.status].h}</h2>
             <p className="sg-p">
               {v.status === "signed" && v.signedName ? `Signed by ${v.signedName} on ${dayOf(v.signedAt)}. ` : ""}
-              {STATUS_SAY[v.status].p}
+              {v.awaitingMember ? `You'll both get the ${v.sealOnSign ? "sealed" : "signed"} copy by email once ${fromFirst} countersigns.` : STATUS_SAY[v.status].p}
             </p>
             {v.copyUrl && (
               <a className="btn btn-pine btn-lg sg-wide" href={v.copyUrl}>

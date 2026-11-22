@@ -42,6 +42,8 @@ export const EVENT_WORDS: Record<string, string> = {
   voided: "Voided",
   expired_open: "Opened after the link expired",
   copy_sent: "Signed copy emailed",
+  member_signed: "Signed by the sender when sending",
+  countersigned: "Countersigned by the sender",
 };
 
 export interface ProposalPdfInput {
@@ -50,6 +52,8 @@ export interface ProposalPdfInput {
   consentVersion: string;
   /** Where anyone checks a copy ("https://…/check"). */
   checkUrl: string;
+  /** The member's drawn signature on this send, when they drew one. */
+  memberPng?: Uint8Array | null;
 }
 
 /** The final PDF, sealed. Returns its bytes, the digest printed on it and its SHA-256. */
@@ -71,7 +75,7 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const mono = await pdf.embedFont(StandardFonts.Courier);
   const script = await pdf.embedFont(StandardFonts.TimesRomanBoldItalic);
-  const all = JSON.stringify([d, sig.name, x.events.map((e) => e.note), a.sender]);
+  const all = JSON.stringify([d, sig.name, x.events.map((e) => e.note), a.sender, x.member?.typed, x.member?.name]);
   const uf = [...all].some((c) => !latinOk(c)) ? unicodeFont() : null;
   if (uf) pdf.registerFontkit(fontkit);
   const ink: Ink = { uni: uf ? await pdf.embedFont(uf.bytes, { subset: true }) : null, has: uf?.has ?? (() => false), lost: false };
@@ -244,12 +248,32 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
     { t: `${sig.name}${d.to.title ? `, ${d.to.title}` : ""}`, size: 9.5, font: bold, color: INK },
     { t: `Signed ${stampWhen(sig.at)}`, size: 8.5, font: body, color: MUTED },
   ]);
-  cell(M + colW + 18, [
-    { t: "Prepared and sent by", size: 8.5, font: body, color: MUTED },
-    { t: `${d.from.name}${d.from.title ? `, ${d.from.title}` : ""}`, size: 11, font: bold, color: INK },
-    { t: `Sent ${stampWhen(x.sentAt)}`, size: 8.5, font: body, color: MUTED },
-    { t: a.sender.email, size: 8.5, font: body, color: MUTED },
-  ]);
+  const mem = x.member;
+  if (mem) {
+    // The member's signature beside the client's: typed in the script face, or their drawing.
+    const typedSize = mem.typed ? Math.min(20, Math.max(10, 20 * Math.min(1, (colW - 20) / Math.max(1, widthOf(ink, script, mem.typed, 20))))) : 20;
+    cell(M + colW + 18, [
+      { t: d.from.name ? `For ${d.from.name}` : "The consultant", size: 8.5, font: body, color: MUTED },
+      { t: mem.kind === "typed" && mem.typed ? mem.typed : " ", size: typedSize, font: script, color: INK },
+      { t: `${mem.name}${mem.title ? `, ${mem.title}` : ""}`, size: 9.5, font: bold, color: INK },
+      { t: `${mem.how === "saved_at_send" ? "Signed when sent" : "Countersigned"} ${stampWhen(mem.at)}`, size: 8.5, font: body, color: MUTED },
+    ]);
+    if (mem.kind === "drawn" && a.memberPng) {
+      try {
+        const img = await pdf.embedPng(a.memberPng);
+        const sc = Math.min((colW - 20) / img.width, 26 / img.height);
+        page.drawImage(img, { x: M + colW + 28, y: top - 48, width: img.width * sc, height: img.height * sc });
+      } catch {
+        /* a broken drawing: the name and date below still say who signed and when */
+      }
+    }
+  } else
+    cell(M + colW + 18, [
+      { t: "Prepared and sent by", size: 8.5, font: body, color: MUTED },
+      { t: `${d.from.name}${d.from.title ? `, ${d.from.title}` : ""}`, size: 11, font: bold, color: INK },
+      { t: `Sent ${stampWhen(x.sentAt)}`, size: 8.5, font: body, color: MUTED },
+      { t: a.sender.email, size: 8.5, font: body, color: MUTED },
+    ]);
   y = top - 108;
   if (choice) text(`Accepted: ${choice.summary}. Total: ${choice.total}.`, { size: 9.5, color: INK });
 
@@ -269,14 +293,30 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   text(`Consent to sign electronically, version ${sig.consentVersion}. The document they signed: ${sig.hash}.`, { size: 9, indent: 12, color: MUTED });
   if (!nameOk) text(`Their name as typed has characters this file's fonts can't print, so the signature shows their email. The name as typed, in Unicode: ${codePoints(sig.name)}.`, { size: 9, indent: 12, color: MUTED });
   if (choice) text(`They chose ${choice.summary}. Total: ${choice.total}.`, { size: 9, indent: 12, gap: 2 });
-  text("Sender", { size: 11, font: bold, color: INK, gap: 2 });
-  text(`${a.sender.name}${a.sender.title ? `, ${a.sender.title}` : ""} <${a.sender.email}>. Sent ${stampWhen(x.sentAt)}.`, { size: 9.5, gap: 4 });
+  text(mem ? "Sender, who signs too" : "Sender", { size: 11, font: bold, color: INK, gap: 2 });
+  text(`${a.sender.name}${a.sender.title ? `, ${a.sender.title}` : ""} <${a.sender.email}>. Sent ${stampWhen(x.sentAt)}.`, { size: 9.5, gap: mem ? 1 : 4 });
+  if (mem) {
+    const how =
+      mem.how === "saved_at_send"
+        ? "their saved signature, applied when they sent it"
+        : mem.how === "saved"
+          ? "their saved signature, applied as a countersignature after the client signed"
+          : mem.how === "drawn"
+            ? "drawing their signature, as a countersignature after the client signed"
+            : `typing "${mem.typed ?? mem.name}", as a countersignature after the client signed`;
+    text(`Signed ${stampWhen(mem.at)} with ${how} (${mem.kind}). Signed in to Merlin as the sender. IP ${mem.ip || "not recorded"}. Browser: ${mem.ua || "not recorded"}.`, { size: 9, indent: 12 });
+    text(`Consent to sign electronically, version ${mem.consentVersion}. The document they signed: ${mem.hash}.`, { size: 9, indent: 12, color: MUTED, gap: 4 });
+  }
   rule(6);
   text("Everything, in order", { size: 11, font: bold, color: INK, gap: 2 });
   for (const e of x.events) text(`${stampWhen(e.at)}  ${EVENT_WORDS[e.kind] ?? e.kind}${e.note ? `: ${e.note}` : ""}${e.ip ? `  IP ${e.ip}` : ""}${e.ua ? `  ${e.ua}` : ""}`, { size: 8, color: BODY });
   rule(6);
   text(`The consent the signer agreed to (version ${a.consentVersion})`, { size: 11, font: bold, color: INK, gap: 2 });
   text(sig.consent, { size: 8, color: MUTED });
+  if (mem) {
+    text(`The consent the sender agreed to (version ${mem.consentVersion})`, { size: 11, font: bold, color: INK, gap: 2 });
+    text(mem.consent, { size: 8, color: MUTED });
+  }
   rule(6);
   need(90);
   page.drawRectangle({ x: M, y: y - 82, width: W - 2 * M, height: 82, color: WASH });

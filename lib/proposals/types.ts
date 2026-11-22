@@ -35,9 +35,63 @@ export interface SignerInfo {
   title?: string;
 }
 
+/* ---------- the member's own signature (Close) ---------- */
+
+/**
+ * A member's saved signature (lib/proposals/memberSig.ts), set once and replaced at will: typed (the
+ * words, drawn in a script face) or drawn (a PNG on the data volume, never in the state). Private to
+ * them; deleted with their account. `consent` is what they agreed to when they saved it.
+ */
+export interface SavedSignature {
+  kind: "typed" | "drawn";
+  /** The words, for a typed one. */
+  typed?: string;
+  /** SHA-256 of the PNG, for a drawn one. */
+  sha256?: string;
+  at: string;
+  consentVersion: string;
+}
+/** The member's signature as their app and the pages show it: a drawn one as a data URL. */
+export interface SignatureView {
+  kind: "typed" | "drawn";
+  typed: string | null;
+  img: string | null;
+  at: string;
+  name: string;
+  title: string;
+}
+/**
+ * Per proposal, the member's own signature: applied when they send ("now"), after the client
+ * signs ("after", a countersignature), or none (prepared and sent by them, as before).
+ */
+export type MemberSignMode = "now" | "after" | "none";
+export const MEMBER_SIGN_SAY: Record<MemberSignMode, string> = { now: "Sign it now", after: "Countersign after they sign", none: "No signature from me" };
+/** What the member agrees to when they save a signature or countersign. Bump MEMBER_CONSENT_VERSION when the words change. */
+export const MEMBER_CONSENT_VERSION = "2026-11-22";
+export const MEMBER_CONSENT =
+  "I agree to sign electronically. Applying my saved signature to a proposal I send or countersign, or drawing or typing it there, is my signature, legally binding with the same effect as signing by hand, for me and for any business I sign for. Merlin records when and how it was applied, with a fingerprint of the exact document.";
+/** The member's signature on one send: applied at send, or a countersignature after the client's. */
+export interface MemberSigned {
+  name: string;
+  title: string;
+  at: string;
+  /** How: their saved signature applied when they sent it, or at countersigning, or drawn or typed then. */
+  how: "saved_at_send" | "saved" | "drawn" | "typed";
+  kind: "typed" | "drawn";
+  typed?: string;
+  /** SHA-256 of the drawing kept with the send (lib/proposals/files.ts). */
+  pngSha256?: string;
+  ip: string;
+  ua: string;
+  consent: string;
+  consentVersion: string;
+  /** The document it signed: the send's hash, as the client's signature keeps it. */
+  hash: string;
+}
+
 /** One event on a send's audit trail. */
 export interface AuditEvent {
-  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent";
+  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent" | "member_signed" | "countersigned";
   at: string;
   ip?: string;
   ua?: string;
@@ -158,6 +212,9 @@ export interface StoredSend {
   choice?: Choice;
   /** The sealed PDF of the proposal as signed (lib/proposals/pdf.ts), kept on the data volume. */
   seal?: SealRec;
+  /** The member's own signature on this send (frozen at send): when, and their signature once applied. Absent: none, as before. */
+  memberMode?: MemberSignMode;
+  member?: MemberSigned;
   events: AuditEvent[];
 }
 
@@ -190,6 +247,8 @@ export interface StoredProposal {
   sends: StoredSend[];
   /** The options and add-ons the client picks from (Close). Absent: one price, in the proposal's own words. */
   pricing?: Pricing;
+  /** The member's own signature for the next send. Absent: "now" when they have a saved signature, else "none". */
+  memberSign?: MemberSignMode;
 }
 
 /* ---------- what the member's app gets ---------- */
@@ -223,6 +282,10 @@ export interface ProposalSendRec {
   choice: ChoiceRec | null;
   /** The sealed PDF (Close): its download and when it was sealed. */
   sealed: { at: string; pdf: string; sha256: string } | null;
+  /** The member's own signature on this send: the mode frozen, when they signed, and "member" while the client has signed and it waits for the member's countersignature. */
+  memberMode: MemberSignMode;
+  memberSignedAt: string | null;
+  waiting: "member" | null;
   events: AuditRow[];
 }
 
@@ -239,6 +302,8 @@ export interface ProposalRec {
   signer: SignerInfo | null;
   /** Options and add-ons for the client to pick from (Close), or null for one price. */
   pricing: Pricing | null;
+  /** The member's own signature for the next send, as it will be frozen (MemberSignMode). */
+  memberSign: MemberSignMode;
   version: number;
   status: ProposalStatus;
   createdAt: string;
@@ -303,6 +368,8 @@ export interface ProposalsView {
   email: boolean;
   /** The member's own name and title, for "Prepared by". */
   me: { name: string; title: string; function: string | null; email: string };
+  /** Their saved signature (Close), or null. */
+  mySignature: SignatureView | null;
 }
 
 /* ---------- what the client who signs gets ---------- */
@@ -331,6 +398,11 @@ export interface SignerView {
   sealed: { at: string; pdf: string } | null;
   /** Signing makes a sealed PDF (sent under Close). */
   sealOnSign: boolean;
+  /** The member's side: their mode, and their signature once applied (a drawn one as a data URL). */
+  memberMode: MemberSignMode;
+  member: { name: string; title: string; at: string; how: MemberSigned["how"]; kind: "typed" | "drawn"; typed: string | null; img: string | null } | null;
+  /** The client signed; the member countersigns next. */
+  awaitingMember: boolean;
 }
 
 /** The signed copy's page: the document, the signature and the audit trail. */
@@ -345,6 +417,9 @@ export interface SignedCopy {
   sendId: string;
   /** The sealed PDF (Close): download, when, its SHA-256 and where to check a copy. */
   sealed: { at: string; pdf: string; sha256: string; check: string; events: number } | null;
+  memberMode: MemberSignMode;
+  member: SignerView["member"];
+  awaitingMember: boolean;
 }
 
 /**

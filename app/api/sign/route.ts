@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { ProposalProblem, chooseOption, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
-import { docDecline, docRequestCode, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
+import { docDecline, docRequestCode, docSavedSignature, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
 
 export const dynamic = "force-dynamic";
 
@@ -47,8 +47,11 @@ export const POST = guarded(async (req: NextRequest) => {
   try {
     if (doc)
       switch (b.op) {
-        case "view":
-          return NextResponse.json(await docSignerView(token, who, o), { headers: NO_STORE });
+        case "view": {
+          // The sender signing their own document, signed in here: their saved signature, for one click.
+          const v = await docSignerView(token, who, o);
+          return NextResponse.json({ ...v, saved: await docSavedSignature(token, req.cookies.get("rn_table")?.value) }, { headers: NO_STORE });
+        }
         case "code":
           if (limited(`sign-code:${ip}`, 10, 60 * 60_000)) return err("That's a lot of codes from here in an hour. Use the newest one, or try again later.", 429);
           return NextResponse.json(await docRequestCode(token, who), { headers: NO_STORE });
@@ -56,7 +59,7 @@ export const POST = guarded(async (req: NextRequest) => {
           if (limited(`sign-verify:${ip}`, 20, 10 * 60_000)) return err("That's a lot of tries. Wait 10 minutes, then try again.", 429);
           return NextResponse.json(await docVerifyCode(token, b.code, who, o), { headers: NO_STORE });
         case "sign":
-          return NextResponse.json(await docSign(token, { name: b.name, method: b.method, png: b.png, values: b.values, consent: b.consent, hash: b.hash }, who, o), { headers: NO_STORE });
+          return NextResponse.json(await docSign(token, { name: b.name, method: b.method, png: b.png, values: b.values, consent: b.consent, hash: b.hash }, who, o, undefined, req.cookies.get("rn_table")?.value), { headers: NO_STORE });
         case "decline":
           return NextResponse.json(await docDecline(token, { reason: b.reason }, who, o), { headers: NO_STORE });
         default:

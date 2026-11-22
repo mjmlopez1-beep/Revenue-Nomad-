@@ -16,7 +16,7 @@
  * only while it is live and their turn), and /signed/<document id>.<HMAC> for the finished file.
  */
 import { randomBytes, randomInt } from "crypto";
-import { loadSeed, loadState, tableInternals as T, type State } from "../table";
+import { loadSeed, loadState, memberByToken, tableInternals as T, type State } from "../table";
 import { emailEnabled, sendEmail, MAX_ATTACHMENT_BYTES } from "../email";
 import { upgradeUrl } from "../plan";
 import { PRO_SEND, EMAIL_OFF, ProposalProblem, SIGN_DAYS, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, proposalInternals as PI, type Client } from "../proposals/store";
@@ -584,16 +584,36 @@ export interface DocSignArgs {
   hash?: unknown;
 }
 
-/** Sign: the signer's own fields filled, the signature adopted. The last signature finishes the document. */
-export async function docSign(token: unknown, a: DocSignArgs, who: Client, origin?: string, nowMs = Date.now()): Promise<DocSignerView> {
+/**
+ * The sender's saved signature (lib/proposals/memberSig.ts), when the signer is the member who sent
+ * it and is signed in to Merlin in this browser (`me`, their sign-in cookie): one click to sign.
+ */
+async function savedFor(s: State, f: Found, me: string | null | undefined) {
+  if (!f.x.sender || !me) return null;
+  const m = memberByToken(await loadSeed(), me, s);
+  if (!m || m.id !== f.d.memberId) return null;
+  const { savedSignatureOf } = await import("../proposals/memberSig");
+  return savedSignatureOf(s, m.id);
+}
+/** The saved signature for the signing page, as it shows it. */
+export async function docSavedSignature(token: unknown, me: string | null | undefined): Promise<DocSignerView["saved"]> {
+  const s = await loadState();
+  const sv = await savedFor(s, resolve(s, token), me).catch(() => null);
+  return sv ? { kind: sv.sig.kind, typed: sv.sig.typed ?? null, img: sv.png ? `data:image/png;base64,${sv.png.toString("base64")}` : null } : null;
+}
+
+/** Sign: the signer's own fields filled, the signature adopted. The last signature finishes the document. `me`: the sign-in cookie, for the sender's saved signature (method "saved"). */
+export async function docSign(token: unknown, a: DocSignArgs, who: Client, origin?: string, nowMs = Date.now(), me?: string | null): Promise<DocSignerView> {
   const name = cleanLine(a.name, 100);
   if (!NAME.test(name)) throw new ProposalProblem("Type your full name, first and last.");
   if (a.consent !== true) throw new ProposalProblem("Tick the box to agree to sign electronically.");
-  const method = a.method === "drawn" ? "drawn" : "typed";
   const s0 = await loadState();
   const f0 = resolve(s0, token);
+  const saved = a.method === "saved" ? await savedFor(s0, f0, me) : null;
+  if (a.method === "saved" && !saved) throw new ProposalProblem("Your saved signature isn't here. Sign in to Merlin in this browser, or draw or type it.");
+  const method = saved ? saved.sig.kind : a.method === "drawn" ? "drawn" : "typed";
   const from = await fromOf(s0, f0.d);
-  const png = method === "drawn" ? await pngOf(a.png) : null;
+  const png = saved ? saved.png : method === "drawn" ? await pngOf(a.png) : null;
   const raw = (a.values && typeof a.values === "object" && !Array.isArray(a.values) ? a.values : {}) as Record<string, unknown>;
   const now = new Date(nowMs).toISOString();
   // The drawing is written aside first, and moved into place only by the request that records the signature: one that loses the race never overwrites the winner's.
@@ -622,7 +642,7 @@ export async function docSign(token: unknown, a: DocSignArgs, who: Client, origi
     }
     f.x.values = values;
     f.x.signed = { at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), name, method, consent: consentText(from.name || "the sender", "document"), consentVersion: CONSENT_VERSION, hash: f.d.sha256 };
-    ev(f.d, "signed", now, { ...who, who: f.x.email, note: method === "drawn" ? `drew their signature as "${name}"` : `typed name "${name}"` });
+    ev(f.d, "signed", now, { ...who, who: f.x.email, note: saved ? `applied their saved signature (${method}) as "${name}"` : method === "drawn" ? `drew their signature as "${name}"` : `typed name "${name}"` });
     f.d.updatedAt = now;
     if (method === "drawn" && !staged) throw new ProposalProblem(NO_DRAWING);
     const done = allSigned(f.d);
