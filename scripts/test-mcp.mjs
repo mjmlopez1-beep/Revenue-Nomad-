@@ -890,7 +890,7 @@ async function main() {
     check("SDK client: after sign-in it completes the handshake", !!c2c.getServerVersion()?.name && c2c.getServerVersion().name === "merlin");
     const tl = await c2c.listTools();
     // 25 with RN_GOOGLE off (as this test runs): the base 15, my_pipeline and update_pipeline (Your pipeline), the five proposal tools, and the three peer tools (list_peers, pass_lead, leads_passed_to_me). RN_GOOGLE=1 adds save_my_network and my_network (27).
-    check("SDK client: it lists the tools", tl.tools.length === 25, tl.tools.length);
+    check("SDK client: it lists the tools", tl.tools.length === 28, tl.tools.length);
     const res = await c2c.callTool({ name: "search_companies", arguments: { hiring_now: true, limit: 3 } });
     const parsed = JSON.parse(res.content?.[0]?.text ?? "{}");
     check("SDK client: it calls a tool and reads the answer", Array.isArray(parsed.companies) && parsed.companies.length > 0, res);

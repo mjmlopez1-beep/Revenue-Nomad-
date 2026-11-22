@@ -721,6 +721,8 @@ console.log("\nThe API's routes");
     "api/paths",
     // Proposals (lib/proposals): the member's cookie for their own; api/sign: the signer's signed link (one send, 30 days) is the only key.
     "api/proposals",
+    // Merlin drafting and changing a proposal, live (lib/proposals/live.ts): the member's cookie, and only their own jobs.
+    "api/proposals/live",
     // My templates (lib/proposals/mine.ts): a past proposal the member uploads, read into sections, their cookie only.
     "api/proposals/template",
     // The radar: Send now (an admin's cookie), and the email's open pixel and tracked links (the radar's signature; a click only ever goes to a path in the app).

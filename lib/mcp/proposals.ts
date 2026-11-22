@@ -37,7 +37,7 @@ import { SENDER_DUTY } from "../proposals/types";
 import { memberView } from "./view";
 import { DISCOVERY_TARGET as TARGET, acceptInto, fieldLabel } from "../proposals/library";
 import { extract, MAX_TRANSCRIPT } from "../proposals/extract";
-import { readTerms } from "../proposals/startCall";
+import { readTerms, siteFromCall } from "../proposals/startCall";
 import { CHANGE_CONSENT, CHANGE_OFF, acceptChange, checkChange, proposeChange, type ChangeProposal } from "../proposals/change";
 import { aiConfigured } from "../proposals/aiConfig";
 import { getDocument, sendDocument, notReadyOf } from "../documents/store";
@@ -362,7 +362,7 @@ export async function draftFromCall(ctx: Ctx, a: FromCallArgs): Promise<ToolOut>
   const p = await wrap(() =>
     createProposal(
       ctx.member.token,
-      { templateId, companyId: a.company_id, companyName: a.company_name, fields, notes, signerOnCall: ex.signerOnCall, ...(signer?.email ? { signer: { name: signer.name, email: signer.email, ...(signer.title ? { title: signer.title } : {}) } } : {}), source: "discovery" },
+      { templateId, companyId: a.company_id, companyName: a.company_name, companySite: a.company_id ? null : siteFromCall(transcript, ctx.member, signer?.email), fields, notes, signerOnCall: ex.signerOnCall, ...(signer?.email ? { signer: { name: signer.name, email: signer.email, ...(signer.title ? { title: signer.title } : {}) } } : {}), source: "discovery" },
       ctx.origin,
     ),
   );
