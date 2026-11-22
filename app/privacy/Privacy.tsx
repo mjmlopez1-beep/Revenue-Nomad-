@@ -313,8 +313,11 @@ export function PrivacyView({ support }: { support: string | null }) {
           <li>A document you uploaded: a draft until you delete it, with its file. A signed one is kept with its final PDF and audit trail for everyone who signed it.</li>
           <li>A transcript you draft from with Claude: not kept. Only the draft is.</li>
           <li>
-            Closing your account: there is no button for this yet. <ContactLine support={support} subject="Close my Merlin account" /> We will close it, delete your private data and
-            tell you what we have to keep, such as payment records.
+            Closing your account: Close my account, on Your credits, closes it at once. You are signed out, you leave Peers and the Fractionals directory, and Merlin
+            stops emailing you. For 30 days you, with the link we email you, or we can bring it back. After 30 days Merlin deletes your personal data: your profile,
+            your Google and LinkedIn imports and your network, the messages you wrote, your proposals and documents, your AI usage log and your saved views. Facts
+            you added to companies stay, with your name taken off. Payment records Stripe and we must keep for the law stay. You can also ask us:{" "}
+            <ContactLine support={support} subject="Close my Merlin account" />
           </li>
           <li>Backups: deleted data can remain in backup copies until those are deleted. Copies on Merlin&apos;s own server are kept for 14 days.</li>
         </ul>

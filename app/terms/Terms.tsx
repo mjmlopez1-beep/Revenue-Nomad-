@@ -225,11 +225,15 @@ export function TermsView({ support, starter }: { support: string | null; starte
       body: (
         <>
           <p className="cl-p">
-            You can stop using Merlin at any time. To close your account, <ContactLine support={support} subject="Close my Merlin account" />
+            You can stop using Merlin at any time. Close my account, on Your credits, closes your account at once: you are signed out, you leave Peers and the
+            Fractionals directory, and Merlin stops emailing you. For 30 days you can bring it back with the link we email you when it closes, or by writing to us,
+            and so can we. After 30 days Merlin deletes your personal data, and the account can&apos;t come back. A paid plan stops renewing when the account closes.
+            You can also ask us to close it: <ContactLine support={support} subject="Close my Merlin account" />
           </p>
           <p className="cl-p">
             We may suspend or close an account that breaks these terms, puts members or Merlin at risk, or that the law requires us to. We may also stop offering Merlin, and
-            will tell members first. When an account closes, its credits end with it. What you added to the exchange can stay, under the licence above.
+            will tell members first. When an account closes, its credits end with it. What you added to the exchange stays, under the licence above, with your name
+            taken off once your personal data is deleted.
           </p>
         </>
       ),

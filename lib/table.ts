@@ -66,7 +66,7 @@ import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual 
 import { iconDomains } from "./companyIcons";
 import { readRate } from "./rates";
 import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
-import { emailEnabled, sendEmail } from "./email";
+import { emailEnabled, sendEmail, setMailBlock } from "./email";
 import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles, scanSources, type ScanSource } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
@@ -605,7 +605,34 @@ export interface State extends MessagingState {
    * draft, a circle post) is members' writing: it leaves the export without it, as messages do.
    */
   peers?: PeersState;
+  /**
+   * Accounts their member (or an admin) closed (lib/account.ts), by member id: closed at once
+   * (signed out, out of Peers and the directory, no email), restorable until purgeAt, then their
+   * personal data is deleted (purgeMember) and only this row is left, with purgedAt. `restore` is
+   * the SHA-256 of the restore link's key and `mail` of their inbox key (no address is kept here).
+   */
+  closures?: Record<string, AccountClosure>;
 }
+
+/** State.closures[memberId]. */
+export interface AccountClosure {
+  at: string;
+  /** When the scheduled job deletes their personal data (CLOSURE_DAYS after `at`). */
+  purgeAt: string;
+  by: "member" | "admin";
+  /** SHA-256 (hex) of the restore link's key, emailed at closure. Gone once restored or purged. */
+  restore?: string;
+  /** SHA-256 (hex) of their inbox key: no email goes to that address while the account is closed. */
+  mail?: string;
+  /** Their personal data was deleted on this date: the account can't come back. */
+  purgedAt?: string;
+}
+/** Days from closing an account to deleting its personal data. Until then the owner, an admin or the member's restore link brings it back. */
+export const CLOSURE_DAYS = 30;
+/** Who a fact or record is attributed to after its member's account was deleted: nobody (no member has this id). */
+export const FORMER_MEMBER = "m_former";
+/** An inbox key's hash, for State.closures' mail guard. */
+export const mailHashOf = (email: string) => createHash("sha256").update(`rn-closed-mail:${inboxKey(email)}`).digest("hex");
 
 /** State.salesBuild[companyId]. */
 export interface SalesBuildRecord {
@@ -1785,6 +1812,11 @@ const firmsInReview = (seed: Seed, s: State) => new Set([...(seed.firmReview ?? 
  * back with the token that works now.
  */
 export const memberByToken = (seed: Seed, token: string | null | undefined, s?: State): Member | null => {
+  const m = memberByTokenRaw(seed, token, s);
+  // A closed account (State.closures) is signed out everywhere at once, until it is restored.
+  return m && s?.closures?.[m.id] ? null : m;
+};
+const memberByTokenRaw = (seed: Seed, token: string | null | undefined, s?: State): Member | null => {
   if (!token) return null;
   const over = s?.tokens;
   if (over) {
@@ -2401,7 +2433,8 @@ let memberIndexCache: { seed: Seed; s: State; idx: MemberIndex } | null = null;
 /** Every member (seed and joined), by id and by normalized name. Rebuilt when the state changes. */
 function memberIndex(seed: Seed, s: State): MemberIndex {
   if (memberIndexCache && memberIndexCache.seed === seed && memberIndexCache.s === s) return memberIndexCache.idx;
-  const all = [...seed.members, ...s.members].filter((m) => m.name?.trim());
+  // A closed account is nobody on Merlin while it is closed: out of Peers, the directory, every list and every email (State.closures).
+  const all = [...seed.members, ...s.members].filter((m) => m.name?.trim() && !s.closures?.[m.id]);
   const byId = new Map(all.map((m) => [m.id, m]));
   const byName = new Map<string, Member[]>();
   for (const m of all) {
@@ -2728,6 +2761,8 @@ export async function joinMember(
     const seedMember = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
     const joined = s.members.find((m) => inboxKey(m.email) === inbox);
     if (seedMember || joined) {
+      const closed = s.closures?.[(seedMember ?? joined)!.id];
+      if (closed && !closed.purgedAt) throw new ActionError(ACCOUNT_CLOSED_JOIN);
       // A member back through the survey link: their code waits for checkout too.
       if (emailEnabled() && cleanPromo(promoRaw)) setPromo(s, (seedMember ?? joined)!.id, cleanPromo(promoRaw));
       if (emailEnabled()) return { ...(seedMember ? withToken(seedMember, s) : joined)!, existing: true }; // route emails them a sign-in link
@@ -7490,6 +7525,120 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   };
 }
 
+/* ---------- a closed account's personal data, deleted (lib/account.ts) ---------- */
+
+/** Said to someone who joins or signs in with a closed account's address. */
+export const ACCOUNT_CLOSED_JOIN = "This account was closed. Use the restore link we emailed when it closed, or write to us to restore it within 30 days.";
+
+/**
+ * CLOSURE_DAYS after an account closed (lib/account.ts purgeDue, on the job scheduler's tick):
+ * delete the member's personal data, in the draft (inside mutate). Gone: their profile and account
+ * record, their Google connection and what it read (Your network), their LinkedIn connections
+ * import (State.paths), their messages (what they wrote; a conversation left with nothing goes),
+ * their peers' notes, posts, teams and circle places, proposals and documents (with the documents'
+ * files: their ids are returned for the caller to remove), My templates, the AI usage log and
+ * agreement, saved views and connected apps, their pipeline, moves, voice, Slack and webhooks,
+ * Crystal Ball, credits and unlock history, sign-in links and networks. Facts and records they
+ * added to companies stay, attributed to nobody (FORMER_MEMBER), and so do benchmark rates.
+ * Returns the sealed Google tokens (for the caller to revoke) and the document ids.
+ */
+function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { googleTokens: string[]; documentIds: string[] } {
+  const net = s.network?.[id] as { google?: { token?: string }; gmail?: { token?: string } } | undefined;
+  const googleTokens = [net?.google?.token, net?.gmail?.token].filter((x): x is string => !!x);
+  const documentIds = (s.documents ?? []).filter((d) => d.memberId === id).map((d) => d.id);
+  const del = <T>(rec: Record<string, T> | undefined) => {
+    if (rec) delete rec[id];
+  };
+  // Their profile, account record and sign-in.
+  del(s.profiles);
+  s.members = s.members.filter((m) => m.id !== id);
+  // A seed member's seed token never works again: a random one stands in its place.
+  if (seed.members.some((m) => m.id === id)) s.tokens = { ...(s.tokens ?? {}), [id]: randomBytes(18).toString("base64url") };
+  else del(s.tokens);
+  if (s.signins) s.signins = s.signins.filter((x) => x.memberId !== id);
+  del(s.ips);
+  del(s.seen);
+  del(s.follows);
+  del(s.notMine);
+  del(s.found);
+  del(s.findMisses);
+  del(s.digest?.members);
+  // Google, LinkedIn, the network, and everything private to them.
+  del(s.network);
+  del((s as State & { paths?: Record<string, unknown> }).paths);
+  del(s.moves);
+  del(s.pipeline);
+  del(s.voice);
+  del(s.myTemplates);
+  del(s.aiDrafts);
+  del(s.aiUsage);
+  del(s.integrations?.members);
+  del(s.radar?.members);
+  del(s.billing?.members);
+  if (s.connector) {
+    del(s.connector.alerts);
+    s.connector.grants = s.connector.grants.filter((x) => x.memberId !== id);
+  }
+  s.proposals = (s.proposals ?? []).filter((p) => p.memberId !== id);
+  s.documents = (s.documents ?? []).filter((d) => d.memberId !== id);
+  // Their credits and what they bought: their own history only.
+  s.ledger = s.ledger.filter((l) => l.memberId !== id);
+  s.held = s.held.filter((h) => h.memberId !== id);
+  for (const k of Object.keys(s.unlocks)) if (s.unlocks[k].includes(id)) s.unlocks[k] = s.unlocks[k].filter((x) => x !== id);
+  for (const k of Object.keys(s.verifications)) if (s.verifications[k].includes(id)) s.verifications[k] = s.verifications[k].filter((x) => x !== id);
+  s.reportLog = s.reportLog.filter((r) => r.memberId !== id);
+  s.signals = s.signals.filter((x) => x.memberId !== id);
+  s.referralPaid = s.referralPaid.filter((x) => x !== id);
+  if (s.roleClaims) s.roleClaims = s.roleClaims.filter((x) => x.memberId !== id);
+  if (s.seatClaims) s.seatClaims = s.seatClaims.filter((x) => x.memberId !== id);
+  if (s.pendingSeats) s.pendingSeats = s.pendingSeats.filter((x) => x.memberId !== id);
+  if (s.lockedViews) s.lockedViews = s.lockedViews.filter((x) => x.memberId !== id);
+  if (s.seatInvites) s.seatInvites = s.seatInvites.filter((x) => x.by !== id);
+  if (s.inviteJoins) s.inviteJoins = s.inviteJoins.filter((x) => x.by !== id && x.invitee !== id);
+  if (s.seatPrivate) for (const [k, v] of Object.entries(s.seatPrivate)) if (v.by === id) delete s.seatPrivate[k];
+  // Messages they wrote go; a conversation left with nothing goes too. Their blocks and reports go.
+  if (s.conversations) {
+    for (const c of s.conversations) if (c.a === id || c.b === id) c.messages = c.messages.filter((m) => m.by !== id);
+    s.conversations = s.conversations.filter((c) => !((c.a === id || c.b === id) && c.messages.length === 0));
+  }
+  del(s.blocks);
+  if (s.messageReports) s.messageReports = s.messageReports.filter((r) => (r as { by?: string }).by !== id);
+  // Peers: what they wrote (a pass's note, a circle post), their teams and circle places, mutes.
+  if (s.peers) {
+    for (const q of s.peers.passes) if (q.by === id) q.note = "";
+    s.peers.teams = s.peers.teams.filter((t) => t.by !== id && t.with !== id);
+    for (const c of s.peers.circles) {
+      c.members = c.members.filter((m) => m.id !== id);
+      c.posts = c.posts.filter((x) => x.by !== id);
+    }
+    del(s.peers.mutes);
+    del(s.peers.seen);
+  }
+  // Facts and records they added to companies stay, attributed to nobody.
+  for (const v of Object.values(s.values)) {
+    if (v.by === id) v.by = FORMER_MEMBER;
+    if ((v as { memberId?: string }).memberId === id) delete (v as { memberId?: string }).memberId;
+  }
+  for (const list of [s.companies, s.engagements, s.contacts] as { by: string }[][]) for (const x of list) if (x.by === id) x.by = FORMER_MEMBER;
+  for (const b of s.benchRates) if (b.by === id) b.by = FORMER_MEMBER;
+  const c = s.closures?.[id];
+  if (c) {
+    c.purgedAt = nowIso;
+    delete c.restore;
+    delete c.mail;
+  }
+  memberIndexCache = null;
+  return { googleTokens, documentIds };
+}
+
+/** A closed account's inbox hash is blocked: Merlin sends it nothing (lib/email.ts setMailBlock). */
+setMailBlock((to) => {
+  const cl = stateCache?.closures;
+  if (!cl) return false;
+  const h = mailHashOf(to);
+  return Object.values(cl).some((c) => c.mail === h && !c.purgedAt);
+});
+
 /**
  * Peers (lib/peers.ts): a lead a peer passed opens its company for the member it went to, free and
  * outside the daily limits, as Unlock company would (its name, website and the postings and posted
@@ -7534,6 +7683,9 @@ export const tableInternals = {
   refundOwnEmails, privateMemberKeys,
   // Peers (lib/peers.ts): a passed lead's company opens for the peer free; the passer's credits go within the daily earning cap.
   giftCompany, grant, knownCompanies, releaseHeld,
+  // Closing an account (lib/account.ts): its personal data deleted after CLOSURE_DAYS; the member index rebuilt after a restore.
+  purgeMember,
+  memberIndexReset: () => void (memberIndexCache = null),
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
@@ -9837,7 +9989,8 @@ function privateMemberKeys(seed: Seed, s: State): Set<string> {
   const out = new Set<string>();
   for (const m of [...seed.members, ...s.members]) {
     const p = s.profiles[m.id];
-    if (p && (p.fractionals === false || p.partnersOff)) {
+    // A closed account keeps out of view like a member who said no (State.closures).
+    if (s.closures?.[m.id] || (p && (p.fractionals === false || p.partnersOff))) {
       const k = nameKey(m.name);
       if (k) out.add(k);
     }

@@ -99,6 +99,10 @@ export async function createSignIn(memberId: string, purpose: "signin" | "join")
 
 /** Use a one-time link. The member it signs in (with their personal token), or null when it expired, was used or never existed. */
 export async function redeemLink(token: string): Promise<Member | null> {
+  const m = await redeemLinkRaw(token);
+  return m && (await loadState()).closures?.[m.id] ? null : m;
+}
+async function redeemLinkRaw(token: string): Promise<Member | null> {
   if (!isOneTimeToken(token)) return null;
   const id = hashToken(token);
   return T.mutate((s, seed) => {
@@ -122,6 +126,11 @@ export async function redeemLink(token: string): Promise<Member | null> {
  * every link waiting for that member, and a link with 5 wrong tries is gone.
  */
 export async function redeemCode(emailRaw: string, codeRaw: string): Promise<Member | null> {
+  const m = await redeemCodeRaw(emailRaw, codeRaw);
+  // A closed account signs in again only through its restore link (lib/account.ts).
+  return m && (await loadState()).closures?.[m.id] ? null : m;
+}
+async function redeemCodeRaw(emailRaw: string, codeRaw: string): Promise<Member | null> {
   const code = String(codeRaw ?? "").replace(/\D/g, "");
   if (code.length !== 6) return null;
   const inbox = T.inboxKey(String(emailRaw ?? ""));

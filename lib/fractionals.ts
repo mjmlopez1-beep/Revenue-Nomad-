@@ -23,7 +23,7 @@
  * Never a person key, a source id, an email, or a member's Google network.
  */
 import { claimToken } from "./claimToken";
-import { fractionalInternals as F, inviteCode, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
+import { fractionalInternals as F, inviteCode, loadSeed, normName, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import { clientsFromIcp, clientsFromSeats, clientsLine, fitsIcp, levelOf, levelRank, shortName, type ClientCo, type Clients, type Level } from "./fractionalsCore";
 import { PEERS_FREE, functionOf } from "./tableFields";
 import { crystalCompanyIds } from "./radar";
@@ -123,8 +123,8 @@ const initialsOf = (name: string) =>
     .join("")
     .toUpperCase();
 
-/** Out of the directory: they said no, or turned Referral partners off. */
-const hiddenMember = (s: State, id: string) => s.profiles[id]?.fractionals === false || (s.profiles[id]?.fractionals === undefined && !!s.profiles[id]?.partnersOff);
+/** Out of the directory: they said no, or turned Referral partners off, or closed their account (State.closures). */
+const hiddenMember = (s: State, id: string) => !!s.closures?.[id] || s.profiles[id]?.fractionals === false || (s.profiles[id]?.fractionals === undefined && !!s.profiles[id]?.partnersOff);
 
 /** The viewer's Crystal Ball companies (internal ids, every day it keeps). Empty when it can't be read. */
 function ballOf(seed: Seed, s: State, me: Member, nowMs: number): Set<string> {
@@ -153,9 +153,12 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
     const at = c.messages[c.messages.length - 1]?.at ?? c.createdAt;
     if (!lastWith.has(other) || lastWith.get(other)!.at < at) lastWith.set(other, { id: c.id, at });
   }
+  // A closed account is nobody on Merlin (lib/table.ts memberIndex leaves it out): its seats never show it by name here either.
+  const closedNames = new Set([...seed.members, ...s.members].filter((m) => s.closures?.[m.id]).map((m) => normName(m.name)).filter(Boolean));
   const out: FractionalRec[] = [];
   for (const b of base) {
     const you = b.member?.id === me.id;
+    if (!you && closedNames.size && closedNames.has(normName(b.name ?? ""))) continue;
     if (b.member && !you && b.on && (hiddenMember(s, b.member.id) || blocks(b.member.id, me.id) || blocks(me.id, b.member.id))) continue;
     const engs = b.seats.map((id) => g.engagements.get(id)!);
     const bought = !you && b.seats.some((id) => F.boughtSeat(s, me.id, g, id));

@@ -17,7 +17,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { freeCompanyNow, freeTodayWords } from "./display";
 import { CRYSTAL_FREE_TODAY, FEATURE_NAME } from "@/lib/radar/types";
 import { Pro, useUi } from "./ui";
-import { DataLink, NotificationsCard, SignInActions } from "./Settings";
+import { CloseAccount, DataLink, NotificationsCard, SignInActions } from "./Settings";
 import { ReportedMessages } from "./Messages";
 import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
@@ -452,6 +452,7 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
           <NotificationsCard onOpen={onNotifications} />
           <ConnectedApps onHowTo={onUseInClaude} />
           <DataLink />
+          <CloseAccount />
         </>
       ) : (
         <>
@@ -465,6 +466,7 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
           <DataLink />
           {review}
           {history}
+          <CloseAccount />
         </>
       )}
       <Pro where="my_credits" />

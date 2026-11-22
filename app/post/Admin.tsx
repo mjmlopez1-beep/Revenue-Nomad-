@@ -741,6 +741,64 @@ function PublicNames({ n, refresh }: { n: NonNullable<AdminStats["names"]>; refr
 const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
 /** Billing, while it is live (lib/billing): plans, trial-to-paid, recurring revenue, churn, top-ups. Counts and money only. */
+interface ClosedRow {
+  memberId: string;
+  name: string;
+  at: string;
+  purgeAt: string;
+  by: "member" | "admin";
+  purged: boolean;
+}
+
+/** Closed accounts (lib/account.ts): when each closed, the day its personal data goes, and Restore until then. */
+function ClosedAccounts() {
+  const [rows, setRows] = useState<ClosedRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const load = async () => {
+    const r = await fetch("/api/account?closed=1", { headers: { accept: "application/json" } }).catch(() => null);
+    const j = r?.ok ? ((await r.json()) as { closed: ClosedRow[] }) : null;
+    setRows(j?.closed ?? []);
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  if (!rows?.length) return null;
+  const day = (iso: string) => iso.slice(0, 10);
+  const restore = async (x: ClosedRow) => {
+    setBusy(x.memberId);
+    const r = await fetch("/api/account", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "restore", memberId: x.memberId }) }).catch(() => null);
+    const j = (await r?.json().catch(() => ({}))) as { message?: string; error?: string } | undefined;
+    setBusy(null);
+    setNote(j?.message ?? j?.error ?? "That didn't go through.");
+    await load();
+  };
+  return (
+    <Card title="Closed accounts" span={3}>
+      <ul className="tp-pm-list" data-closed-accounts>
+        {rows.map((x) => (
+          <li key={x.memberId}>
+            {x.purged ? (
+              <span>Closed {day(x.at)}, personal data deleted</span>
+            ) : (
+              <>
+                <span>
+                  {x.name || "A member"}, closed {day(x.at)}
+                  {x.by === "admin" ? " by an admin" : ""}. Personal data goes {day(x.purgeAt)}.
+                </span>{" "}
+                <button type="button" className="btn btn-sm" disabled={busy === x.memberId} onClick={() => void restore(x)}>
+                  {busy === x.memberId ? "Restoring" : "Restore"}
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      {note && <p className="tp-small muted">{note}</p>}
+    </Card>
+  );
+}
+
 function BillingCard({ b }: { b: NonNullable<NonNullable<View["admin"]>["billing"]> }) {
   return (
     <Card title="Billing" span={6}>
@@ -940,6 +998,7 @@ export function Admin({ view, refresh }: { view: View; refresh: () => Promise<vo
         </Card>
 
         {a.recentAdds && <RecentAdds rows={a.recentAdds} />}
+        <ClosedAccounts />
         {a.roleClaims && <RoleClaims rows={a.roleClaims} />}
         {a.seatClaims && <RoleClaims rows={a.seatClaims.map((c) => ({ ...c, closed: false }))} seats />}
         {a.names && <PublicNames n={a.names} refresh={refresh} />}
