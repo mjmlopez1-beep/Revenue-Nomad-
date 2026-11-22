@@ -134,7 +134,8 @@ export interface MemberIntegrations {
 export interface IntegrationsState {
   members: Record<string, MemberIntegrations>;
   /** Counts only, for the pilot metrics. */
-  stats: { sent: Partial<Record<AlertKind | "test", number>>; failed: number; connects: number; removes: number };
+  /** `proposal`: Close's proposal alerts (lib/close), which keep their own switches. */
+  stats: { sent: Partial<Record<AlertKind | "test" | "proposal", number>>; failed: number; connects: number; removes: number };
   /** The app's address as last seen, for the links in alerts when RN_PUBLIC_URL isn't set. */
   origin?: string;
 }

@@ -309,6 +309,38 @@ async function sendNow(memberId: string, kind: AlertKind, items: AlertItem[]): P
   for (const { r } of results) if (!r.ok) console.error(`alert not delivered (${kind}): ${r.error}`);
 }
 
+/**
+ * Post one ready alert now to the member's working destinations, and record how it went: Close's
+ * proposal alerts (lib/close/server.ts), which keep their own switches and batching. False when
+ * nothing is connected or nothing took it.
+ */
+export function postNow(memberId: string, a: Alert): Promise<boolean> {
+  return track(
+    (async () => {
+      if (!integrationsAllowed(memberId)) return false;
+      const s = await loadState();
+      const dests = live(s.integrations?.members[memberId]);
+      if (!dests.length) return false;
+      const now = new Date().toISOString();
+      const results = await Promise.all(dests.map(async (d) => ({ url: d.url, r: await post(d.kind, d.url, a, now) })));
+      await T.mutate((d) => {
+        const st = integ(d);
+        const cur = st.members[memberId];
+        for (const { url, r } of results) {
+          const dest = [cur?.slack, cur?.webhook].find((x) => x?.url === url);
+          if (dest) record(dest, r, now);
+          if (r.ok) st.stats.sent.proposal = (st.stats.sent.proposal ?? 0) + 1;
+          else st.stats.failed++;
+        }
+      });
+      return results.some((x) => x.r.ok);
+    })(),
+  );
+}
+
+/** The member has a working Slack or webhook connected. */
+export const connectedFor = (s: State, memberId: string) => live(s.integrations?.members[memberId]).length > 0;
+
 let timer: ReturnType<typeof setTimeout> | null = null;
 let timerAt = Infinity;
 function wakeAt(ms: number) {

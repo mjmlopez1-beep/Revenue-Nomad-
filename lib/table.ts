@@ -139,6 +139,7 @@ import type { PeersState } from "./peersCore";
 
 import type { MyTemplate, StoredProposal } from "./proposals/types";
 import { aiMeter, budgetOf as aiBudgetOf, noticeSeenIn as aiNoticeSeenIn, type AiUsageRec } from "./proposals/aiUsage";
+import type { CloseState } from "./close/types";
 import { aiConfigured } from "./proposals/aiConfig";
 import type { StoredDocument } from "./documents/types";
 // The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
@@ -612,6 +613,11 @@ export interface State extends MessagingState {
   aiDrafts?: Record<string, string>;
   /** Each member's Claude usage on Merlin's server, metered in micro-dollars, with their packs and notices (lib/proposals/aiUsage.ts), by member id. Numbers only. Theirs alone: never in another member's view or the export. */
   aiUsage?: Record<string, AiUsageRec>;
+  /**
+   * After a proposal or document goes out (lib/close): its readers' activity (by proposal or document id), the
+   * member's in-app notifications and alert switches (by member id). Private like proposals: never in the export.
+   */
+  close?: CloseState;
   /**
    * Peers (lib/peersCore.ts, lib/peers.ts): leads passed between members, teams pursuing a company
    * together, circles and their monthly threads, mutes. The text in them (a pass's note, a team's
@@ -7617,7 +7623,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7698,6 +7704,12 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { google
   del(s.myTemplates);
   del(s.aiDrafts);
   del(s.aiUsage);
+  // Their proposals' reading activity, notifications and alert switches (lib/close).
+  if (s.close) {
+    for (const [k, a] of Object.entries(s.close.items)) if (a.memberId === id) delete s.close.items[k];
+    del(s.close.inbox);
+    del(s.close.prefs);
+  }
   del(s.integrations?.members);
   del(s.radar?.members);
   del(s.billing?.members);

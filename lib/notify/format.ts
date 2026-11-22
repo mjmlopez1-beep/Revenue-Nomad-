@@ -14,7 +14,8 @@ import { radarAlert } from "../radar/format";
 import type { RadarItem } from "../radar/types";
 
 export interface Alert {
-  kind: AlertKind | "test";
+  /** `proposal`: Close's proposal alerts (lib/close/alerts.ts). */
+  kind: AlertKind | "test" | "proposal";
   count: number;
   headline: string;
   lines: string[];
