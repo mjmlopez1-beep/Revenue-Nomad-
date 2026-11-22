@@ -156,7 +156,7 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
       </button>
       <span className="pl-card-to">{e.stage === "reach" ? "A lead a peer passed you. Nothing sent yet." : `To ${e.to.label} · ${CHANNEL_WORDS[e.channel]}`}</span>
       {(CLOSED as string[]).includes(e.stage) ? <StageChip stage={e.stage} /> : null}
-      {e.how && <span className="pl-how">{e.how}</span>}
+      {e.how && e.stage !== "reach" && <span className="pl-how">{e.how}</span>}
       {(e.lead || e.team) && (
         <span className="pl-peer">
           {e.lead ? `Passed to you by ${e.lead.by.split(" ")[0]}` : ""}
