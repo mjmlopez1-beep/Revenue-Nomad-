@@ -38,6 +38,7 @@ export type ReadOutcome =
   | { key: string; s: "found"; email: string; page: string; how: OwnHow; site: string; pages: number; lookedUp?: string }
   | { key: string; s: Exclude<OwnStatus, "found">; pages: number; site?: string; why?: string };
 
+
 export interface ReadOpts {
   fetch?: FetchOpts;
   delayMs?: number;
@@ -151,7 +152,7 @@ export async function readOwnSite(t: ReadTarget, o: ReadOpts = {}): Promise<Read
   if (d.ok) return { ...base, s: "found", email: d.email, page: d.page, how: d.how, site: home.host.replace(/^www\./, ""), ...(lookedUp ? { lookedUp } : {}) };
   // Nothing at all, and robots.txt kept us off every page past the homepage: say so.
   if (d.s === "no email" && blocked && pages.length === 1) return { ...base, s: "robots", site: lookedUp };
-  return { ...base, s: d.s, site: lookedUp };
+  return { ...base, s: d.s, site: lookedUp, ...(d.s === "email not theirs" ? { why: d.why } : {}) };
 }
 
 const key = (u: URL) => `${u.host.replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;

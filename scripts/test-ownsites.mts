@@ -234,6 +234,23 @@ check("the only personal-looking address on a one-person site that names them", 
 const unnamed = d([["https://u.test/", page(`<p>We help B2B founders.</p><a href="mailto:hello@u.test">hello@u.test</a>`)]], "u.test", "Uma Nolan");
 check("a generic address on a site that doesn't name them: rejected", !unnamed.ok && unnamed.s === "email not theirs", unnamed);
 eq("no address at all: no email", d([["https://n.test/", page(`<p>Hi</p>`)]], "n.test", "Nia Bell"), { ok: false, s: "no email", found: 0 });
+const gm = d([["https://g.test/", page(`<p>Gwen Harlow, fractional CMO.</p><a href="mailto:gwen.harlow@gmail.com">gwen.harlow@gmail.com</a>`)]], "g.test", "Gwen Harlow");
+check("their whole name at a personal provider, on their own site: accepted, marked name match, personal address", gm.ok && gm.email === "gwen.harlow@gmail.com" && gm.how === "name match, personal address", gm);
+const gm2 = d([["https://g2.test/", page(`<p>Gwen Harlow</p><a href="mailto:gharlow77@outlook.com">write</a>`)]], "g2.test", "Gwen Harlow");
+check("first initial and last name with digits at a personal provider: accepted", gm2.ok && gm2.email === "gharlow77@outlook.com" && gm2.how === "name match, personal address", gm2);
+const gmFirst = d([["https://g3.test/", page(`<p>Gwen Harlow</p><a href="mailto:gwen@gmail.com">write</a>`)]], "g3.test", "Gwen Harlow");
+check("a first name alone at a personal provider: rejected, why personal address, not their whole name", !gmFirst.ok && gmFirst.s === "email not theirs" && gmFirst.why === "personal address, not their whole name", gmFirst);
+const gmInit = d([["https://g4.test/", page(`<p>Gwen Harlow</p><a href="mailto:gh@yahoo.com">write</a>`)]], "g4.test", "Gwen Harlow");
+check("initials at a personal provider: rejected", !gmInit.ok, gmInit);
+const gmOther = d([["https://g5.test/", page(`<p>Gwen Harlow</p><a href="mailto:pat.lee@gmail.com">write</a>`)]], "g5.test", "Gwen Harlow");
+check("someone else's whole name at a personal provider: rejected", !gmOther.ok, gmOther);
+const ownFirst = d([["https://g6.test/", page(`<p>Gwen Harlow</p><a href="mailto:gwen.harlow@gmail.com">a</a> <a href="mailto:gwen@g6.test">b</a>`)]], "g6.test", "Gwen Harlow");
+check("an address at the site's own domain comes before a personal provider's", ownFirst.ok && ownFirst.email === "gwen@g6.test" && ownFirst.how === "name match", ownFirst);
+check("why: only other companies' addresses", !other.ok && other.s === "email not theirs" && other.why === "only other companies' addresses", other);
+check("why: role address on a team site", !big.ok && big.s === "email not theirs" && big.why === "role address on a team site", big);
+check("why: role address, site doesn't name them", !unnamed.ok && unnamed.s === "email not theirs" && unnamed.why === "role address, site doesn't name them", unnamed);
+const elses = d([["https://e.test/", page(`<p>Meet the team: Ivy Cole, Ron Dale</p><a href="mailto:ron@e.test">ron</a>`)]], "e.test", "Ivy Cole");
+check("why: someone else's address on a team site", !elses.ok && elses.s === "email not theirs" && elses.why === "someone else's address on a team site", elses);
 
 /* ---------- the mock web ---------- */
 
@@ -372,7 +389,7 @@ console.log = realLog;
 console.error = realErr;
 check("it starts once", started === true && again === false, { started, again });
 const doneLine = logs.find((l) => l.startsWith("ownsites dry run (RN_OWNSITES_DRYRUN=50) done: "));
-check("its log: a progress line every so many people and one at the end, the counts by reason and by how", !!doneLine && logs.some((l) => /RN_OWNSITES_DRYRUN=50\): \d+ of \d+ tried: .*s so far$/.test(l)) && /tried: \d+ no site found, \d+ site unreachable, \d+ blocked by robots, \d+ no email on site, \d+ accepted \(\d+ name match, \d+ only address on a one-person site, \d+ generic on a one-person site\), \d+ rejected \(not theirs\); \d+ pages read; [\d.]+s; nothing made usable$/.test(doneLine ?? ""), logs);
+check("its log: a progress line every so many people and one at the end, the counts by reason and by how", !!doneLine && logs.some((l) => /RN_OWNSITES_DRYRUN=50\): \d+ of \d+ tried: .*s so far$/.test(l)) && /tried: \d+ no site found, \d+ site unreachable, \d+ blocked by robots, \d+ no email on site, \d+ accepted \(\d+ name match, \d+ only address on a one-person site, \d+ generic on a one-person site, \d+ name match on a personal address\), \d+ rejected \(not theirs\); \d+ pages read; [\d.]+s; nothing made usable$/.test(doneLine ?? ""), logs);
 check("its log names nobody: no email, no domain, no name, no firm", logs.every((l) => !secretsIn(l).length), logs.map((l) => [l, secretsIn(l)]));
 const dryRun = stateOnDisk().ownSitesJob?.lastDry;
 eq(

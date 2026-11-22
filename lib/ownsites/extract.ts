@@ -14,7 +14,11 @@
  *    this is its only personal-looking address, or
  *  - "generic on a one-person site": a role address (info@, hello@, contact@ ...) on a site that
  *    names the person, looks like one person's and has no better address.
- * Otherwise it is "email not theirs" (emails there, none theirs) or "no email".
+ * Or, on their own site, a personal mail provider's address (gmail.com, outlook.com ...) that is
+ * plainly theirs: "name match, personal address", its part before the @ holding both their first
+ * and last name (first.last, firstlast, flast, first_last ...). A first name alone or initials there
+ * are not enough: a provider's address is anyone's.
+ * Otherwise it is "email not theirs" (emails there, none theirs, with why: counts for the log) or "no email".
  */
 import { cleanText, decodeEntities } from "../about/extract";
 import { registrable } from "../about/fetch";
@@ -27,6 +31,13 @@ export const ROLE_LOCALS = new Set([
   "customerservice", "customer", "general", "booking", "bookings", "book", "partners", "partnerships", "invoices", "orders", "newsletter", "news", "events", "feedback",
   "ops", "operations", "start", "talk", "connect", "letstalk", "workwithus", "studio", "agency", "group", "hola", "bonjour", "welcome", "reception", "frontdesk",
 ]);
+/** Personal mail providers: an address there is the person's only when it spells their whole name. */
+export const PERSONAL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com", "ymail.com", "icloud.com", "me.com", "mac.com",
+  "aol.com", "proton.me", "protonmail.com", "pm.me", "fastmail.com", "zoho.com", "gmx.com", "hey.com", "comcast.net", "att.net", "verizon.net", "sbcglobal.net",
+]);
+export const isPersonalDomain = (domain: string) => PERSONAL_DOMAINS.has(domain.toLowerCase());
+
 /** Never an address at all: placeholders and image names a site's text carries. */
 const JUNK_LOCAL = /^(you|your|yourname|your\.name|name|firstname|first\.last|john\.?doe|jane\.?doe|example|user|username|someone|email|test)$/i;
 const JUNK_DOMAIN = /(^|\.)(example\.(com|org|net)|domain\.com|email\.com|yourdomain\.com|yoursite\.com|sentry\.io|wixpress\.com|sentry-next\.wixpress\.com)$/i;
@@ -120,6 +131,30 @@ export function personLocals(name: string): Set<string> {
   return out;
 }
 
+/** The local parts that spell the whole name (first and last both in it): what a personal provider's address must be. */
+export function fullNameLocals(name: string): Set<string> {
+  const w = nameWords(name);
+  const out = new Set<string>();
+  if (w.length < 2) return out;
+  const f = w[0];
+  const l = w[w.length - 1];
+  if (f.length < 2 || l.length < 2) return out;
+  for (const x of [`${f}.${l}`, `${f}-${l}`, `${f}_${l}`, `${f}${l}`, `${f[0]}${l}`, `${f[0]}.${l}`, `${l}.${f}`, `${l}${f}`, `${l}_${f}`]) out.add(x);
+  const mids = w.slice(1, -1);
+  if (mids.length) {
+    out.add(`${f}${mids.join("")}${l}`);
+    out.add(`${f}.${mids.map((m) => m[0]).join("")}.${l}`);
+    out.add(`${f}${mids.map((m) => m[0]).join("")}${l}`);
+  }
+  return out;
+}
+
+/** Whether a personal provider's local part is this person's: the whole name, digits after it allowed. */
+export function fullNameMatches(local: string, name: string): boolean {
+  const lp = local.toLowerCase().replace(/\+.*$/, "").replace(/\d+$/, "").replace(/[._-]$/, "");
+  return lp.length >= 4 && fullNameLocals(name).has(lp);
+}
+
 /** Whether a local part is this person's. Digits after it ("jane2") are allowed; nothing else. */
 export function localMatches(local: string, name: string): boolean {
   const lp = local.toLowerCase().replace(/\+.*$/, "").replace(/\d+$/, "");
@@ -173,8 +208,26 @@ export interface SitePage {
 }
 
 export type Decision =
-  | { ok: true; email: string; page: string; how: "name match" | "only address on a one-person site" | "generic on a one-person site" }
-  | { ok: false; s: "no email" | "email not theirs"; found: number };
+  | { ok: true; email: string; page: string; how: "name match" | "only address on a one-person site" | "generic on a one-person site" | "name match, personal address" }
+  | { ok: false; s: "no email"; found: number }
+  | { ok: false; s: "email not theirs"; found: number; why: RejectWhy };
+
+/** Why a site's addresses were none of them the person's. Counts of these go in the log, nothing else. */
+export type RejectWhy =
+  | "personal address, not their whole name"
+  | "only other companies' addresses"
+  | "role address, site doesn't name them"
+  | "role address on a team site"
+  | "someone else's address, site doesn't name them"
+  | "someone else's address on a team site";
+export const REJECT_WHYS: RejectWhy[] = [
+  "personal address, not their whole name",
+  "only other companies' addresses",
+  "role address, site doesn't name them",
+  "role address on a team site",
+  "someone else's address, site doesn't name them",
+  "someone else's address on a team site",
+];
 
 /** The order a person's own addresses are preferred in: the fullest form of the name first. */
 function nameRank(local: string, name: string): number {
@@ -200,6 +253,7 @@ export function decide(pages: SitePage[], site: string, name: string): Decision 
   const local = (e: string) => e.split("@")[0];
   const mine = here.filter((x) => localMatches(local(x.email), name)).sort((a, b) => nameRank(local(a.email), name) - nameRank(local(b.email), name));
   if (mine.length) return { ok: true, email: mine[0].email, page: mine[0].page, how: "name match" };
+  const personalMine = all.filter((x) => isPersonalDomain(x.email.split("@")[1]) && fullNameMatches(local(x.email), name));
   const text = texts.join(" \n ");
   const named = namesPerson(text, name);
   const personal = here.filter((x) => !isRole(local(x.email)));
@@ -210,7 +264,13 @@ export function decide(pages: SitePage[], site: string, name: string): Decision 
     roles.sort((a, b) => (ROLE_ORDER.indexOf(local(a.email)) + 1 || 99) - (ROLE_ORDER.indexOf(local(b.email)) + 1 || 99));
     if (roles.length) return { ok: true, email: roles[0].email, page: roles[0].page, how: "generic on a one-person site" };
   }
-  return { ok: false, s: "email not theirs", found: all.length };
+  // Their whole name at a personal provider, on their own site: theirs, after anything at the site's own domain.
+  if (personalMine.length) return { ok: true, email: personalMine[0].email, page: personalMine[0].page, how: "name match, personal address" };
+  let why: RejectWhy;
+  if (!here.length) why = all.some((x) => isPersonalDomain(x.email.split("@")[1])) ? "personal address, not their whole name" : "only other companies' addresses";
+  else if (!personal.length) why = named ? "role address on a team site" : "role address, site doesn't name them";
+  else why = named ? "someone else's address on a team site" : "someone else's address, site doesn't name them";
+  return { ok: false, s: "email not theirs", found: all.length, why };
 }
 
 /* ---------- which pages to read ---------- */

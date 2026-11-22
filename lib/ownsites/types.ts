@@ -31,8 +31,8 @@ export interface OwnProspect {
 }
 
 /** Why an email was accepted. */
-export type OwnHow = "name match" | "only address on a one-person site" | "generic on a one-person site";
-export const OWN_HOWS: OwnHow[] = ["name match", "only address on a one-person site", "generic on a one-person site"];
+export type OwnHow = "name match" | "only address on a one-person site" | "generic on a one-person site" | "name match, personal address";
+export const OWN_HOWS: OwnHow[] = ["name match", "only address on a one-person site", "generic on a one-person site", "name match, personal address"];
 
 /** One found email (State.ownEmails, by person key). `pending`: a dry run found it; it is never usable. */
 export interface OwnEmail {
@@ -77,11 +77,13 @@ export interface OwnRunSummary {
   robots: number;
   noEmail: number;
   notTheirs: number;
+  /** The rejected ones by why (lib/ownsites/extract RejectWhy). Counts only. */
+  rejectWhy?: Record<string, number>;
   pages: number;
 }
 export const emptyRun = (startedAt: string, dry: boolean): OwnRunSummary => ({
-  startedAt, endedAt: null, dry, total: 0, tried: 0, accepted: 0, byHow: { "name match": 0, "only address on a one-person site": 0, "generic on a one-person site": 0 },
-  noSite: 0, unreachable: 0, robots: 0, noEmail: 0, notTheirs: 0, pages: 0,
+  startedAt, endedAt: null, dry, total: 0, tried: 0, accepted: 0, byHow: { "name match": 0, "only address on a one-person site": 0, "generic on a one-person site": 0, "name match, personal address": 0 },
+  noSite: 0, unreachable: 0, robots: 0, noEmail: 0, notTheirs: 0, rejectWhy: {}, pages: 0,
 });
 
 /** State.ownSitesJob. */
@@ -131,9 +133,15 @@ export function runWords(r: OwnRunSummary): string {
   const n = (x: number) => x.toLocaleString("en-US");
   return (
     `${n(r.tried)} of ${n(r.total)} tried: ${n(r.noSite)} no site found, ${n(r.unreachable)} site unreachable, ${n(r.robots)} blocked by robots, ${n(r.noEmail)} no email on site, ` +
-    `${n(r.accepted)} accepted (${n(r.byHow["name match"])} name match, ${n(r.byHow["only address on a one-person site"])} only address on a one-person site, ${n(r.byHow["generic on a one-person site"])} generic on a one-person site), ` +
+    `${n(r.accepted)} accepted (${n(r.byHow["name match"])} name match, ${n(r.byHow["only address on a one-person site"])} only address on a one-person site, ${n(r.byHow["generic on a one-person site"])} generic on a one-person site, ${n(r.byHow["name match, personal address"] ?? 0)} name match on a personal address), ` +
     `${n(r.notTheirs)} rejected (not theirs)`
   );
+}
+
+/** Why the rejected ones were rejected, in one line, most first: "120 role address on a team site, 80 ...". Counts only. */
+export function rejectWords(r: OwnRunSummary): string {
+  const e = Object.entries(r.rejectWhy ?? {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  return e.length ? e.map(([k, v]) => `${v.toLocaleString("en-US")} ${k}`).join(", ") : "none";
 }
 
 /**

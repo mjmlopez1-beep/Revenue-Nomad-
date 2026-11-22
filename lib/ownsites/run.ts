@@ -19,7 +19,7 @@ import { isDue, settingOf } from "../schedule";
 import { loadState } from "../table";
 import { readOwnSite, type ReadOpts, type ReadOutcome } from "./read";
 import { claimDry, clientSites, ownTargets, saveOwn } from "./store";
-import { DAILY_BATCH, dryRunCount, emptyRun, ownSitesEnabled, ownSitesProgress, runWords, type OwnRunSummary } from "./types";
+import { DAILY_BATCH, dryRunCount, emptyRun, ownSitesEnabled, ownSitesProgress, rejectWords, runWords, type OwnRunSummary } from "./types";
 
 export const CONCURRENCY = 4;
 export const DELAY_MS = 500;
@@ -68,6 +68,7 @@ function tally(run: OwnRunSummary, x: ReadOutcome) {
       break;
     case "email not theirs":
       run.notTheirs++;
+      if (x.why) (run.rejectWhy ??= {})[x.why] = (run.rejectWhy[x.why] ?? 0) + 1;
       break;
   }
 }
@@ -120,6 +121,7 @@ export function runOwnSites(o: RunOpts = {}): Promise<OwnRunSummary> {
       await saving;
       await saveOwn([], dry, now(), run).catch((e) => console.error("ownsites: saving the run failed", e instanceof Error ? e.message : "error"));
       log(`${label} done: ${runWords(run)}; ${run.pages} pages read; ${secs()}s${dry ? "; nothing made usable" : ""}`);
+      if (run.notTheirs) log(`${label} rejected by why: ${rejectWords(run)}`);
       return { ...run };
     } finally {
       ownSitesProgress.running = false;
