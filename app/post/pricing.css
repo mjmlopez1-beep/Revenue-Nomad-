@@ -100,3 +100,9 @@
     flex: 1 1 120px;
   }
 }
+/* The send status's sealed PDF row (ProposalParts.tsx SendStatus). */
+.pp-seal-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

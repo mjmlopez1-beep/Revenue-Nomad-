@@ -74,7 +74,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
             </p>
           )}
           <div className="sg-noprint">
-            <PrintButton />
+            <PrintButton quiet={!!c.sealed} />
           </div>
         </section>
 

@@ -383,12 +383,14 @@ export function SendStatus({ p }: { p: ProposalRec }) {
       {x.sealed && (
         <div className="pp-status-row">
           <p className="pp-muted">Sealed by Merlin. Any change to the PDF breaks the seal.</p>
-          <a className="btn btn-sm" href={x.sealed.pdf}>
-            Download the signed PDF
-          </a>
-          <a className="btn btn-sm" href="/check" target="_blank" rel="noreferrer">
-            Check a copy
-          </a>
+          <span className="pp-seal-acts">
+            <a className="btn btn-sm" href={x.sealed.pdf}>
+              Download the signed PDF
+            </a>
+            <a className="btn btn-sm" href="/check" target="_blank" rel="noreferrer">
+              Check a copy
+            </a>
+          </span>
         </div>
       )}
       <details className="pp-trail">

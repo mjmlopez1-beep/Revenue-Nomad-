@@ -106,7 +106,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
           <div className="cv-chips">
             <span className="cv-chip">Sent {dayOf(d.preparedAt)}</span>
             {openUntil && <span className="cv-chip">Open until {dayOf(openUntil)}</span>}
-            {rec && <span className="cv-chip">{many ? `${p!.options.length} options to pick from` : priced(rec.price, rec.billing)}</span>}
+            {rec && <span className="cv-chip">{many && live ? `${p!.options.length} options to pick from` : live ? priced(rec.price, rec.billing) : rec.total}</span>}
           </div>
         </header>
 
