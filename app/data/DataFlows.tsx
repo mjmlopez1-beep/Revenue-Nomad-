@@ -153,6 +153,21 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-ways">
+            <h2 className="df-h" id="df-ways">
+              Inside Merlin: Your way in
+            </h2>
+            <p className="cl-p">
+              When you go with a route into a company, Merlin keeps your plan: which route, when you chose it, the step you are on, your plan B, and what happened at
+              each step. It keeps who the route goes through as codes, never as names, and works the names out each time it shows you the plan. Only you see your plan.
+            </p>
+            <p className="cl-p">
+              What happened at each step is also counted without anyone in it (how many people were in between, how warm each link was, whether the last person decides),
+              so the estimate gets better as members record what worked. No member, company or person is in those counts. Deleting your Google network or your contacts
+              file deletes the plans that went through them, and closing your account deletes all of them.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-off">
             <h2 className="df-h" id="df-off">
               Who can switch it off
@@ -161,6 +176,7 @@ export function DataFlows() {
             <ul className="df-bullets">
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps. Disconnect any assistant you added.</li>
+              <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
               <li>Peers: mute a member, or leave a circle.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>

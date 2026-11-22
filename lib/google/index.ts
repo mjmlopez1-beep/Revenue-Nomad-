@@ -21,6 +21,7 @@ import { companyFacts } from "../radar/signals";
 import { icpIsEmpty, inIcp, warmthMultiplier } from "../radar/match";
 import { crystalCompanyIds } from "../radar";
 import * as P from "../pipeline";
+import { forgetSource as forgetRouteSource } from "../paths/plan";
 import {
   MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailTester, googleConfigured, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
 } from "./config";
@@ -381,13 +382,16 @@ function peopleOf(srcs: (SourceData | undefined)[]): { names: Set<string>; email
  * entries go, the rest keep their stages and dates without the person's name, title or "Detected
  * from"). Smart ways in (lib/paths), "You know this person", Your way in, moves and Crystal Ball's
  * "You know someone" are worked out from the network when asked for and never kept, so they go
- * with it. The LinkedIn import (State.paths) is the member's own upload, with its own Delete.
+ * with it, and so does a plan for a way in whose route went through someone from Google (State.routes).
+ * The LinkedIn import (State.paths) is the member's own upload, with its own Delete.
  */
 function forgetIn(s: State, memberId: string, what: "everything" | "google" | "gmail") {
   const n = netOf(s, memberId);
   const gmailOnly = what === "gmail";
   const log = s.pipeline?.[memberId];
   if (log) P.forgetGoogle(log, { gmail: true, calendar: !gmailOnly, google: !gmailOnly, ...peopleOf(gmailOnly ? [n?.gm] : [n?.cal, n?.con, n?.gm]) });
+  // Your way in (lib/paths/plan.ts): a plan whose route went through someone from Google goes with it.
+  if (!gmailOnly) forgetRouteSource(s.routes, memberId, "google");
   access.delete(`${memberId}:gmail`);
   if (gmailOnly) {
     if (n) {

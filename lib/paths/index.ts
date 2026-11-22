@@ -31,6 +31,7 @@ import { findAll, type Contact, type ContactTarget, type Me } from "./find";
 import { firstWord, personKey } from "./match";
 import { cleanPersonName } from "../personName";
 import { directoryOf, worldOf } from "./world";
+import { forgetSource } from "./plan";
 import {
   FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, waysWords,
   type CompanyPathsView, type LinkedInRow, type MemberPaths, type PathsAnswer, type PathsState, type PathView, type TargetView,
@@ -43,7 +44,7 @@ type WithPaths = State & { paths?: PathsState; network?: Record<string, MemberNe
 const pathsOf = (s: State, id: string): MemberPaths | undefined => (s as WithPaths).paths?.[id];
 const allPaths = (s: State) => ((s as WithPaths).paths ??= {});
 
-async function who(token: string | null): Promise<{ seed: Seed; s: State; m: Member } | null> {
+export async function who(token: string | null): Promise<{ seed: Seed; s: State; m: Member } | null> {
   if (!token) return null;
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = memberByToken(seed, token, s);
@@ -87,6 +88,8 @@ export async function deleteConnections(token: string | null): Promise<PathsAnsw
   await T.mutate((s) => {
     const all = allPaths(s);
     const p = all[w.m.id];
+    // Your way in (lib/paths/plan.ts): a plan whose route went through a LinkedIn connection goes with the file.
+    forgetSource(s.routes, w.m.id, "linkedin");
     if (!p) return;
     delete p.linkedin;
     if (!(p.imports ?? []).length) delete all[w.m.id];
@@ -97,7 +100,7 @@ export async function deleteConnections(token: string | null): Promise<PathsAnsw
 /* ---------- the member's own people ---------- */
 
 /** A name as it reads: pronouns, nicknames and credentials out ("Pat Sample, CPA" is Pat Sample). */
-const shownName = (raw: string) => {
+export const shownName = (raw: string) => {
   const c = cleanPersonName(raw);
   return "name" in c ? c.name : raw.replace(/\s+/g, " ").trim();
 };
@@ -148,6 +151,9 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
       was.connected ??= c.connected;
       was.member ??= c.member;
       was.nameKey ??= c.nameKey;
+      was.msgCount ??= c.msgCount;
+      was.msgLast ??= c.msgLast;
+      was.conv ??= c.conv;
       return;
     }
     out.set(c.key, c);
@@ -167,6 +173,7 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
     const c: Contact = {
       key: `m:${other}`, name: om.name, first: firstWord(om.name), nameKey: personKey(om.name), title: null, companyId: null, email: om.email?.toLowerCase() ?? null,
       slug: null, linkedin: null, src: ["messages"], warmth, why: `Messages on Merlin, last ${lastWords(last, nowMs) ?? "a while ago"}`, met: true, connected: null, member: other,
+      msgCount: cv.messages.filter((x) => !x.removed).length, msgLast: last.slice(0, 10), conv: cv.id,
     };
     const was = out.get(c.key);
     if (!was || ["Hot", "Warm", "Fading"].indexOf(warmth) < ["Hot", "Warm", "Fading"].indexOf(was.warmth ?? "Fading")) {
@@ -221,7 +228,7 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
 
 /* ---------- the member's ways in ---------- */
 
-interface Found {
+export interface Found {
   byCompany: Map<string, { paths: PathView[]; n: number; first: number }>;
   /** Contact key -> the companies they are a way into, best first (the specific ask, introPlansOf). */
   byContact: Map<string, ContactTarget[]>;
@@ -262,7 +269,7 @@ function meOf(seed: Seed, s: State, m: Member, nowMs: number): Me {
 }
 
 /** The member's ways in, once per state and day. */
-function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found {
+export function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found {
   let per = found.get(s);
   if (!per) found.set(s, (per = new Map()));
   const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}`;
@@ -279,7 +286,7 @@ function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found {
 }
 
 /** Saved views a company matches by free facts: an open role or a seat there in the view's function, the company's facts in its lists. */
-function viewsMatching(seed: Seed, s: State, views: SavedSearch[], companyId: string): string | null {
+export function viewsMatching(seed: Seed, s: State, views: SavedSearch[], companyId: string): string | null {
   if (!views.length) return null;
   const g = T.graph(seed, s);
   const c = g.companies.get(companyId);
@@ -296,7 +303,7 @@ function viewsMatching(seed: Seed, s: State, views: SavedSearch[], companyId: st
   return null;
 }
 
-const factsOf = (seed: Seed, s: State, id: string) => {
+export const factsOf = (seed: Seed, s: State, id: string) => {
   const c = T.graph(seed, s).companies.get(id);
   return [T.live(c, s, "industry"), T.live(c, s, "employees")].filter(Boolean).join(" · ");
 };
@@ -305,7 +312,7 @@ const factsOf = (seed: Seed, s: State, id: string) => {
 
 const ROLE_HEAD = /^\s*(new open role|open role)\s*:\s*/i;
 /** A Crystal Ball row's line as a clause after the company: "hired a fractional CMO 1 month ago", "posted an open VP Sales role". */
-function nowClause(row: RadarSentRow | undefined): string | null {
+export function nowClause(row: RadarSentRow | undefined): string | null {
   const head = (row?.l ?? "").split(" · ")[0].trim();
   if (!row || !head) return null;
   if (row.kind === "role") {

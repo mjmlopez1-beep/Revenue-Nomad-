@@ -191,6 +191,7 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
       ...(intro ? { intro: { id: intro.id, by: introWho(intro), status: intro.status } } : {}),
       ...(e.lead ? { lead: { id: e.lead.passId, by: idx.byId.get(e.lead.by)?.name ?? "A former member" } } : {}),
       ...(teamAt.has(e.companyId) ? { team: teamAt.get(e.companyId)! } : {}),
+      ...(e.route ? { route: true } : {}),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     });

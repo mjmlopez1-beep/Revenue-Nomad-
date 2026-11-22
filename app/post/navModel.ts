@@ -12,13 +12,13 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
-export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals", "peers"] as const;
+export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals", "peers", "getin"] as const;
 export type AppPageKey = (typeof APP_PAGES)[number];
 
 export type NavGroup = "home" | "find" | "community" | "yours" | "earn" | "foot";
 export type NavIcon =
   | "home" | "companies" | "seats" | "people" | "radar" | "hiring" | "views" | "view" | "following" | "yourseats" | "messages" | "network"
-  | "add" | "partners" | "rates" | "invite" | "integrations" | "notifications" | "billing" | "credits" | "metrics" | "fractionals" | "pipeline" | "proposals";
+  | "add" | "partners" | "rates" | "invite" | "integrations" | "notifications" | "billing" | "credits" | "metrics" | "fractionals" | "pipeline" | "proposals" | "getin";
 
 export interface NavItem {
   /** "today", "companies", "radar", "view:<id>" and the rest: data-nav in the page, and the key the tests use. */
@@ -122,6 +122,8 @@ export function navItems(x: NavInput): NavItem[] {
     { key: "engagements", label: "Seats", group: "find", icon: "seats", href: x.hrefs.engagements, page: "table", count: t ? t.engagements : null },
     { key: "people", label: "Decision makers", group: "find", icon: "people", href: x.hrefs.people, page: "table", count: t ? t.people : null },
     { key: "radar", label: FEATURE_NAME, group: "find", icon: "radar", href: x.hrefs.page("radar"), page: "radar", badge: x.radarNew, badgeOf: "new today" },
+    // Where you can get in (network/Ways.tsx): every company that fits, by the member's best way in. With Your network, like the paths it is built from.
+    ...(x.network ? [{ key: "getin", label: "Where you can get in", group: "find" as const, icon: "getin" as const, href: x.hrefs.page("getin"), page: "getin" as const }] : []),
     { key: "hiring", label: "Hiring now", group: "find", icon: "hiring", href: x.hrefs.hiring, page: "table", count: x.hiringN },
     // Community: Peers (fellow fractionals to work with; every fractional on file is a tab there), and the conversations with them.
     { key: "peers", label: "Peers", group: "community", icon: "fractionals", href: x.hrefs.page("peers"), page: "peers", badge: x.peersNew ?? 0, badgeOf: "new from your peers" },

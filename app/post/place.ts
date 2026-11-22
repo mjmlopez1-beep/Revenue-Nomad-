@@ -25,11 +25,11 @@ import { holderSeen, personSeen, stepOneKind, type StepOne } from "./getStarted"
 export const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
 
 /** The pages a place can name (?p=). Today and the table are the two without one. */
-export const PLACE_PAGES = ["seats", "credits", "rates", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals", "peers"] as const;
+export const PLACE_PAGES = ["seats", "credits", "rates", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals", "peers", "getin"] as const;
 export type PlacePage = (typeof PLACE_PAGES)[number];
 
 /** The address keys that name a place in the app. With none of them, / opens Today. */
-export const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade", "plans"];
+export const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade", "plans", "w"];
 
 /**
  * Where a member lands with nothing in the address bar: their first view (the saved view

@@ -43,7 +43,7 @@ export interface AddOpts {
 }
 
 /** A page that replaces the table. */
-export type AppPage = "rates" | "credits" | "seats" | "metrics" | "messages" | "partners" | "network" | "fractionals" | "peers" | "integrations" | "notifications" | "pipeline" | "proposals";
+export type AppPage = "rates" | "credits" | "seats" | "metrics" | "messages" | "partners" | "network" | "fractionals" | "peers" | "integrations" | "notifications" | "pipeline" | "proposals" | "getin";
 
 export interface Ui {
   me: Me;

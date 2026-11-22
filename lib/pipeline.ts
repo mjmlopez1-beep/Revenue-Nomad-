@@ -180,6 +180,8 @@ export interface PipelineEntry {
   introId?: string;
   /** A lead a peer passed (lib/peers.ts LeadPass): its id and the member who passed it. A win here is counted for them too. */
   lead?: { passId: string; by: string };
+  /** The member went with a route in (lib/paths/plan.ts, Your way in): when. The plan itself is State.routes. */
+  route?: { at: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -291,6 +293,17 @@ export function openEntry(
     if (o.lead && !had.lead) had.lead = o.lead;
     if (o.conversationId && !had.conversationId) had.conversationId = o.conversationId;
     if (o.to?.memberId && !had.to.memberId) had.to = { ...had.to, ...o.to };
+    // A route the member went with and hasn't acted on yet (routeEntry): this is its first send, not a follow-up.
+    if (had.route && had.stage === "sent" && !had.dates.sent) {
+      had.dates.sent = at;
+      had.via.sent = o.via;
+      had.channel = o.channel;
+      if (o.to && !had.to.name && !had.to.memberId) had.to = { ...had.to, ...o.to };
+      had.lastOut = at;
+      had.due = nextDue("sent", atMs);
+      logLine(had, `Sent ${CHANNEL_HOW[o.channel]}`, o.nowMs);
+      return { entry: had, created: false };
+    }
     if (atMs - Date.parse(had.lastOut) < SAME_SEND_MS) return { entry: had, created: false };
     if (had.stage === "quiet") {
       moveTo(had, "sent", o.via, atMs, o.nowMs);
@@ -328,6 +341,43 @@ export function openEntry(
     const closed = log.entries.filter((e) => !isOpen(e.stage) && e.stage !== "won").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
     for (const c of closed.slice(0, log.entries.length - PIPELINE_LIMITS.entries)) log.entries.splice(log.entries.indexOf(c), 1);
   }
+  return { entry, created: true };
+}
+
+/**
+ * Go with a route (Your way in, lib/paths/plan.ts): the company's open deal takes the route, or a
+ * new deal waits at Sent with nothing sent yet (no send date, no follow-up due) until the member's
+ * first step goes out, which openEntry then counts as its first send. Nothing is sent here.
+ */
+export function routeEntry(log: PipelineLog, o: { id: string; companyId: string; channel: Channel; source: Source; nowMs: number }): { entry: PipelineEntry; created: boolean } {
+  const had = log.entries.find((e) => e.companyId === o.companyId && (isOpen(e.stage) || e.stage === "quiet"));
+  if (had) {
+    if (!had.route) logLine(had, "Chose a route in", o.nowMs);
+    had.route = { at: iso(o.nowMs) };
+    had.updatedAt = iso(o.nowMs);
+    return { entry: had, created: false };
+  }
+  const entry: PipelineEntry = {
+    id: o.id,
+    companyId: o.companyId,
+    stage: "sent",
+    channel: o.channel,
+    to: {},
+    source: o.source,
+    dates: {},
+    via: {},
+    due: null,
+    follow: 0,
+    lastOut: iso(o.nowMs),
+    seen: {},
+    notes: [],
+    log: [],
+    route: { at: iso(o.nowMs) },
+    createdAt: iso(o.nowMs),
+    updatedAt: iso(o.nowMs),
+  };
+  logLine(entry, "Chose a route in", o.nowMs);
+  log.entries.push(entry);
   return { entry, created: true };
 }
 
@@ -875,7 +925,9 @@ export function followUpWords(f: Pick<FollowUpItem, "stage" | "channel" | "to" |
 }
 
 /** The next step on an entry, in a few words ("Follow up Nov 24", "Book a meeting", "Add it as your seat"), or null when there is none. */
-export function nextStep(e: Pick<PipelineEntry, "stage" | "due" | "seatId">, nowMs: number): string | null {
+export function nextStep(e: Pick<PipelineEntry, "stage" | "due" | "seatId"> & Partial<Pick<PipelineEntry, "route" | "dates">>, nowMs: number): string | null {
+  // A route chosen and not acted on yet: its first step (the words name nobody, so the connector can read them too).
+  if (e.route && e.stage === "sent" && e.dates && !e.dates.sent) return "Take the first step of your route";
   const today = dayOf(nowMs);
   const when = e.due ? (e.due < today ? "overdue" : e.due === today ? "today" : shortDay(e.due)) : null;
   switch (e.stage) {
@@ -1061,6 +1113,8 @@ export interface PipelineRec {
   lead?: { id: string; by: string };
   /** A team at this company (lib/peers.ts): "Teamed with Ana". */
   team?: { id: string; with: string };
+  /** The member went with a route in here (Your way in): the card draws the route line (app/post/network/Ways.tsx RouteLine). */
+  route?: boolean;
   createdAt: string;
   updatedAt: string;
 }

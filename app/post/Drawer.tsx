@@ -45,6 +45,7 @@ import { atTime, plural, useMedia } from "./hooks";
 import { UNLOCKS_LEFT_TIP, companyLater, freeCompanyNow, marksConfirmed, postingToOpen, proOpensUsed, unlockFreeWords, unlocksLeft, unlocksLeftWords } from "./display";
 import { WayInPeople, wayInFrom } from "./network/Network"; // [google network]
 import { SmartWaysIn } from "./network/SmartPaths"; // [smart ways in]
+import { RecordWays } from "./network/Ways";
 import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { WarmthChip } from "./network/parts"; // [google network]
 import { Charge } from "./Charge";
@@ -2169,8 +2170,8 @@ export function Drawer({
               <AboutText id={c.id} cell={c.cells.about} as={c.hidden ? "locked" : c.found ? "found" : "open"} />
             </section>
           )}
-          {/* [smart ways in] the member's best ways in through people they know (SmartPaths.tsx), after About and above Your way in. */}
-          <SmartWaysIn i={i} />
+          {/* Your ways in (network/Ways.tsx): the member's plan, or the route Merlin recommends, the others folded; Smart ways in (SmartPaths.tsx) while there is no route. After About and above Your way in. */}
+          <RecordWays i={i} fallback={<SmartWaysIn i={i} />} />
           {/* [ux ws3] Your way in: who held the seats here and the next step with each, after About and before seats and people. */}
           <YourWayIn i={i} seats={wayInSeats} />
           {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}

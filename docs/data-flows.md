@@ -55,6 +55,15 @@ Not called: no AI model provider (except Anthropic's API for drafting with Claud
 - None of it goes to an outside service, except the Peers notices by email (part 3). The admin export keeps who and which company and leaves out what members wrote (`lib/table.ts` `exportState`).
 - Names in Peers follow the Fractionals directory (`lib/fractionals.ts`): a member who said no to the directory is left out, and names taken off with Remove my name, outside the US or unverified are not on file.
 
+### Your way in
+
+- Your way into a company, Where you can get in, Home's move and the pipeline's route line (`lib/paths/ways.ts`, `app/post/network/Ways.tsx`) are worked out when asked for, from what Smart ways in already reads: the member's own Google network (counts and dates only, never an email's text or subject or a meeting's title), their own LinkedIn import, when and how often they messaged members on Merlin (never what was said), and Merlin's shared seats, leaders and members. Each route's Est. success is a pure function of those (`lib/paths/rank.ts`).
+- When the member goes with a route, Merlin keeps their plan (`State.routes[memberId][companyId]`, `lib/paths/plan.ts`): the route's id and hop ids (hashes, never a name, an email or a profile address), when it was chosen, the step they are on, plan B, a log of what happened (the kind of event and the step, no text), the outcome of each step and the estimate when chosen. Names are worked out each time the plan is shown, by the naming rules that hold then. It goes on the company's deal in their pipeline (`PipelineEntry.route`). The plan is the member's alone: never in another member's view, the shared table or the admin export (`lib/table.ts` `exportState`).
+- The outcomes are also counted anonymously for calibrating the estimate (`State.routeStats`): how often each outcome happened, by the step's shape only (people in between, the link's word, whether the last person decides, the estimate). No member, company, person or route is in it, and it stays when an account closes. It goes to no outside service.
+- Deleting: Disconnect and delete everything on Your network deletes every plan whose route went through someone from Google (`lib/google/index.ts` `forgetIn`); deleting the LinkedIn import deletes every plan through a connection from it (`lib/paths/index.ts` `deleteConnections`); closing an account deletes all of the member's plans (`lib/paths/plan.ts` `forgetMember`). A member can also drop a plan (`POST /api/paths { op: "way", do: "drop" }`); the deal stays in their pipeline.
+- The connector's `ways_in` (`lib/mcp/ways.ts`, only with `RN_GOOGLE=1`) gives the routes with Est. success and steps, and never names a person from the member's own Google network or LinkedIn import.
+- **To confirm:** account closure is not built yet; when it is, it must call `forgetMember` on `State.routes`.
+
 ## 5. Who can switch a feature off
 
 ### The owner (server settings, all checked in the code)
@@ -83,6 +92,7 @@ Not called: no AI model provider (except Anthropic's API for drafting with Claud
 - Google: Your network, Disconnect and delete everything. Merlin revokes its token at Google and deletes what it kept, what their assistant saved there included, and what came from Google on Your pipeline: an entry Gmail opened that the member never acted on in Merlin goes, the rest keep their stages and dates without the contact's name, title, email or Gmail and calendar details (`app/post/network/Network.tsx`, `POST /api/integrations/google { op: "disconnect" }`, `lib/google/index.ts` `forgetIn`, `lib/pipeline.ts` `forgetGoogle`). Drop Gmail does the same for Gmail alone.
 - Google, access removed in the member's Google Account: the next read marks the connection Needs reconnecting and records the day (`GoogleLink.goneAt`), and Your network shows when Merlin will delete it. If the member doesn't reconnect within 30 days, Merlin deletes what it read from Google the same way, and keeps only what their assistant saved (`lib/google/index.ts` `expireRevoked`, run by the automatic jobs' timer in `lib/jobs.ts`, before the daily reads and before the member's own view).
 - Assistants: Your credits, Connected apps, Disconnect.
+- Your way in: drop a plan on its page (the deal stays); deleting Google or the LinkedIn import deletes the plans through them.
 - Email: switches for the weekly email and message emails in Your credits; Crystal Ball's email has its own unsubscribe link. Peers emails have their own switch in Notifications (`Me.peerEmail`).
 - Peers: a member can mute another member, and leave a circle.
 - Slack and webhooks: removed in Integrations.

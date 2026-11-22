@@ -131,6 +131,7 @@ import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type M
 // Your pipeline (lib/pipeline.ts): each member's own deals, moved by what Merlin sees. A move's note used opens its entry.
 import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, openEntry, pipelineHidden, type PipelineLog } from "./pipeline";
 import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
+import type { RouteStats, RoutesState } from "./paths/plan";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 // Peers: leads passed, teams and circles (lib/peersCore.ts, lib/peers.ts).
@@ -587,6 +588,14 @@ export interface State extends MessagingState {
    * Private to them: never in another member's view, the shared table, the export or an admin's panel.
    */
   voice?: Record<string, VoiceProfile>;
+  /**
+   * Your way in (lib/paths/plan.ts): each member's chosen route at a company, its step, plan B, log
+   * and outcomes, by member id then company id. Hop ids only, never a name. Private to them: never
+   * in another member's view, the shared table or the export; account closure deletes it.
+   */
+  routes?: RoutesState;
+  /** The outcomes of plans' steps, counted by the step's shape only (lib/paths/plan.ts statKey): no member, company or person. For calibrating Est. success. */
+  routeStats?: RouteStats;
   /** Automatic jobs (lib/schedule.ts): the cadences the owner changed in Pilot metrics. The rest follow JOB_DEFAULTS. */
   schedule?: ScheduleState;
   /** Proposals (lib/proposals): each member's own, with their sends and audit trails. Private to them: never in another member's view, the shared table, the export or an admin's panel. */
@@ -7493,9 +7502,9 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
-  // Each member's pipeline (their deals, notes and intros) is theirs alone as well.
+  // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,

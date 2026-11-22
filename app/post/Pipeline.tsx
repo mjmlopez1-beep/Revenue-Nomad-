@@ -9,6 +9,7 @@
  * for this member, and what connecting Gmail would add.
  */
 import { useMemo, useState } from "react";
+import { RouteLine } from "./network/Ways";
 import dynamic from "next/dynamic";
 import { CHANNEL_WORDS, LINE, STAGE_WORDS, monthWords, shortDay, type IntroRec, type PipelineRec, type PipelineView, type Stage } from "@/lib/pipeline";
 import { CompanyLogo, IconPencil, LockedName, useToast } from "../ui/shared";
@@ -157,6 +158,8 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
       </span>
       {(CLOSED as string[]).includes(e.stage) ? <StageChip stage={e.stage} /> : null}
       {e.how && <span className="pl-how">{e.how}</span>}
+      {/* Your way in (network/Ways.tsx): the route the member went with here, and its step. */}
+      {e.route && <RouteLine company={e.company} />}
       {(e.lead || e.team) && (
         <span className="pl-peer">
           {e.lead ? `Passed to you by ${e.lead.by.split(" ")[0]}` : ""}
@@ -166,7 +169,7 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
       )}
       {e.stage === "won" ? (
         <span className="pl-card-next">{e.won ? monthWords(e.won.monthly) : e.seat ? "Your seat here is confirmed" : "Add the terms and your seat"}</span>
-      ) : e.next ? (
+      ) : e.next && !(e.route && !e.dates.sent) ? (
         <span className={`pl-card-next${due ? " pl-due" : ""}`}>{e.next}</span>
       ) : null}
       <div className="pl-card-acts">

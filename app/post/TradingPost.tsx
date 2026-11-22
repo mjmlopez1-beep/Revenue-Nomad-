@@ -79,6 +79,8 @@ import { BillingPage, PlansHost, ProTag, TrialBanner, TrialSummaryCard, buyTopup
 import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { freeCompanyNow } from "./display";
 import { NetworkPage } from "./network/Network"; // [google network]
+import { GetInPage, WayInPage } from "./network/Ways";
+import { WAY_EVENT } from "./network/useWays";
 import { PipelinePage } from "./Pipeline";
 import { usePeersNew } from "./peersStore";
 import { usePipeline } from "./pipelineStore";
@@ -215,7 +217,8 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // "notifications": Notifications (Notifications.tsx): every email and Slack post, and how often.
 // "pipeline": Your pipeline (Pipeline.tsx).
 // "proposals": Proposals (Proposals.tsx), the member's own.
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals" | "peers";
+// "getin": Where you can get in, and Your way into one company (?w=<company>) (network/Ways.tsx), only with RN_GOOGLE=1.
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals" | "peers" | "getin";
 
 /* ---------- the place in the address bar ---------- */
 
@@ -238,6 +241,7 @@ const PAGE_TITLE: Record<Page, string> = {
   network: "Your network",
   pipeline: "Your pipeline",
   proposals: "Proposals",
+  getin: "Where you can get in",
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -268,7 +272,7 @@ const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "u
 const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
 
 /** The address for a place, leaving out what the member's defaults already say. Today's is / alone; the table's never is (?p=table at its defaults). */
-function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null; range?: RadarRange | null; pt?: boolean }): string {
+function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null; range?: RadarRange | null; pt?: boolean; w?: string | null }): string {
   const d = defaultsFor(me);
   const q = new URLSearchParams();
   if (x.v !== d.v) q.set("v", x.v);
@@ -284,6 +288,8 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   else if (x.p === "fractionals" || (x.p === "peers" && x.pt)) q.set("p", "peers"), q.set("pt", "all");
   else if (x.p !== "table" && x.p !== "today") q.set("p", x.p);
   // The radar's day (an email's link) or the range the member picked, so a reload opens the same companies. The default range says nothing.
+  // Your way into one company: its public id.
+  if (x.p === "getin" && x.w) q.set("w", x.w);
   if (x.p === "radar" && x.sig) q.set("sig", x.sig);
   else if (x.p === "radar" && x.range) q.set("range", x.range);
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
@@ -374,6 +380,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [page, setPage] = useState<Page>(() =>
     start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"),
   );
+  /** Where you can get in shows one company's way in: ?p=getin&w=<company>. Home, the pipeline and a record open it (openWay). */
+  const [wayCo, setWayCo] = useState<string | null>(() => (typeof window !== "undefined" && place0.p === "getin" ? new URLSearchParams(window.location.search).get("w") : null));
   /** Peers shows its Every fractional view (the directory): ?p=peers&pt=all, and the directory's old addresses. */
   const [peersAll, setPeersAll] = useState(() => !!place0.pt);
   /** The page level with the table under a record or a page (Today or the table): where Back and a page's own Back go. */
@@ -1021,8 +1029,24 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     // The directory is Peers' Every fractional view now.
     if (p === "fractionals" || p === "partners") return setPeersAll(true), setPage("peers");
     if (p === "peers") setPeersAll(false);
+    if (p === "getin") setWayCo(null);
     setPage(p === "metrics" && !view.admin ? "table" : p);
   });
+  // Your way into a company, from Home's move, a pipeline card or a record (network/useWays.ts openWay).
+  useEffect(() => {
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (typeof id !== "string" || !id) return;
+      setEditor(null);
+      setPop(null);
+      setDrawer(null);
+      setWayCo(id);
+      setPage("getin");
+      window.scrollTo?.(0, 0);
+    };
+    window.addEventListener(WAY_EVENT, on);
+    return () => window.removeEventListener(WAY_EVENT, on);
+  }, []);
   const openSeats = useStable((engagementId?: string) => {
     // From the zero-credits wall: the fact the member wanted, so Your seats can bring them back to it.
     const from = wallBack.take();
@@ -1291,7 +1315,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const navOpen = (page !== "table" && page !== "today") || !!drawer;
   const overlayOpen = layout !== "desktop" && !!(editor || pop || sortOpen || addOpts || sideOverlay);
   const depth = (navOpen ? 1 : 0) + (overlayOpen ? 1 : 0);
-  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay, range: radarRange, pt: peersAll });
+  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay, range: radarRange, pt: peersAll, w: wayCo });
   const urlRef = useRef(url);
   urlRef.current = url;
   const depthRef = useRef(depth);
@@ -2702,6 +2726,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         ) : page === "proposals" ? (
           <main className="tp-main tp-main-page">
             <ProposalsPage view={view} infos={infos} />
+          </main>
+        ) : page === "getin" ? (
+          // Where you can get in, and Your way into one company (network/Ways.tsx). With Your network on.
+          <main className="tp-main tp-main-page">
+            {wayCo ? <WayInPage company={wayCo} phone={phone} infos={infos} onBack={() => setWayCo(null)} /> : <GetInPage infos={infos} phone={phone} openCompany={openCompany} />}
           </main>
         ) : page === "network" ? (
           // [google network] Your network: the member's own, from Google and their own Claude.
