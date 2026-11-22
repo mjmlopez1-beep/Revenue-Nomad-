@@ -4,6 +4,7 @@ import { clientIp, limited } from "@/lib/rateLimit";
 import { ProposalProblem, askQuestion, chooseOption, handOff, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
 import { docDecline, docRequestCode, docSavedSignature, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
 import { afterSignerStep } from "@/lib/close/server";
+import { badShape } from "@/lib/proposals/signShape";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,9 @@ export const POST = guarded(async (req: NextRequest) => {
     return err("That didn't go through. Refresh the page and try again.");
   }
   if (!b || typeof b !== "object") return err("That didn't go through. Refresh the page and try again.");
+  // Each field's type, before anything reads it: a question, a reason or a name sent as an object is refused, never turned into "[object Object]".
+  const shape = badShape(b);
+  if (shape) return err(shape);
   const token = typeof b.token === "string" ? b.token.slice(0, 120) : "";
   const who = { ip, ua: (req.headers.get("user-agent") ?? "").slice(0, 300) };
   const o = origin(req);

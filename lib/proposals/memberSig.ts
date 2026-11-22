@@ -19,13 +19,16 @@ import { ProposalProblem, proposalInternals as PI } from "./store";
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 export const NO_DRAWING = "The drawing didn't come through. Draw it again, or type your name instead.";
+/** A drawn signature bigger than SIG_MAX_BYTES: its own words, with the limit. */
+export const DRAWING_TOO_BIG = `That drawing is too big to save. Keep it under ${Math.round(SIG_MAX_BYTES / 1024)} KB: draw it again a little smaller, or type your name instead.`;
 const NAME = /^\p{L}[\p{L}'’.-]*(?: +\p{L}[\p{L}'’.-]*)+$/u;
 
 /** A drawn signature as a page sends it: a small PNG data URL that really decodes. */
 export async function pngFromDataUrl(raw: unknown): Promise<Buffer> {
   const m = String(raw ?? "").match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
   const b = m ? Buffer.from(m[1], "base64") : Buffer.alloc(0);
-  if (!b.length || b.length > SIG_MAX_BYTES || !b.subarray(0, 8).equals(PNG)) throw new ProposalProblem(NO_DRAWING);
+  if (b.length > SIG_MAX_BYTES) throw new ProposalProblem(DRAWING_TOO_BIG, 413);
+  if (!b.length || !b.subarray(0, 8).equals(PNG)) throw new ProposalProblem(NO_DRAWING);
   if (!(await checkPng(b))) throw new ProposalProblem(NO_DRAWING);
   return b;
 }

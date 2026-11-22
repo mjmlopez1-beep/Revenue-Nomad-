@@ -150,7 +150,8 @@ export function blockFields(b: ProposalBlock): { key: string; label: string; sou
     if (seen.has(key)) continue;
     seen.add(key);
     const f = def?.fields.find((x) => x.key === key) ?? BLOCKS.flatMap((x) => x.fields).find((x) => x.key === key);
-    out.push({ key, label: f?.label ?? EXTRA_LABELS[key] ?? key, source: f?.source ?? "manual", type: f?.type ?? "text" });
+    // A blank the draft made up ("start.date") reads as words ("Start date"), never its key.
+    out.push({ key, label: f?.label ?? fieldLabel(key), source: f?.source ?? "manual", type: f?.type ?? "text" });
   }
   return out;
 }
@@ -164,13 +165,18 @@ export function fieldLabel(key: string): string {
   const f = BLOCKS.flatMap((x) => x.fields).find((x) => x.key === key);
   if (f?.label) return f.label;
   if (EXTRA_LABELS[key]) return EXTRA_LABELS[key];
-  const words = (key.split(".").pop() ?? key)
+  // The namespace a key starts with ("pricing.", "client.") says nothing to a person; the rest does ("start.date" is "Start date").
+  const parts = key.split(".").filter(Boolean);
+  const said = parts.length > 1 && NAMESPACES.has(parts[0].toLowerCase()) ? parts.slice(1) : parts;
+  const words = said
+    .join(" ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
     .toLowerCase()
     .trim();
   return words ? words[0].toUpperCase() + words.slice(1) : key;
 }
+const NAMESPACES = new Set(["client", "provider", "company", "pricing", "proposal", "term", "terms", "goals", "goal", "deal", "call", "signer", "member", "me", "you"]);
 /** Blanks in words, first few by name: "Headline, Signer name and 3 more". */
 export function blanksInWords(keys: string[], n = 4): string {
   const l = keys.slice(0, n).map((k) => fieldLabel(k).replace(/\s*\([^)]*\)$/, ""));

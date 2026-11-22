@@ -10,7 +10,7 @@ import { guarded } from "@/lib/apiGuard";
 import { ActionError } from "@/lib/table";
 import { publicOrigin } from "@/lib/mcp/http";
 import { limited } from "@/lib/rateLimit";
-import { AI_PACK_CLOSE, billingAction, upgradeLink } from "@/lib/billing/server";
+import { AI_PACK_CLOSE, SIGNED_OUT, billingAction, upgradeLink } from "@/lib/billing/server";
 
 export const dynamic = "force-dynamic";
 const COOKIE = "rn_table";
@@ -26,7 +26,7 @@ export const POST = guarded(async (req: NextRequest) => {
   try {
     return NextResponse.json(await billingAction(token, "aipack", {}, publicOrigin(req)), { headers: noStore });
   } catch (e) {
-    if (e instanceof ActionError) return e.message === AI_PACK_CLOSE ? fail(e.message, 403, upgradeLink("proposals", publicOrigin(req))) : fail(e.message);
+    if (e instanceof ActionError) return e.message === AI_PACK_CLOSE ? fail(e.message, 403, upgradeLink("proposals", publicOrigin(req))) : fail(e.message, e.message === SIGNED_OUT ? 401 : 400);
     throw e;
   }
 });

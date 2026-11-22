@@ -31,6 +31,7 @@ import { docCopyLink, docSignToken, docStatus, readDocCopyToken, readDocSignToke
 import { proposalEmail } from "../proposals/emails";
 import { docInviteEmail } from "../documents/emails";
 import { docFields } from "../proposals/library";
+import { arrange } from "../proposals/sections";
 import { pipelineEvent } from "../proposals/pipelineHook";
 import { CLOSE_BUILD } from "../proposals/mine";
 import type { ProposalRec, StoredProposal, StoredSend } from "../proposals/types";
@@ -77,6 +78,12 @@ const signedBase = (_it: ItemActivity | null | undefined, p: StoredProposal): st
 const waitsForMember = (p: StoredProposal | null | undefined): boolean => {
   const x = p ? signedSend(p) : null;
   return !!x && awaitingMember(x);
+};
+/** An item's activity as one link saw it: its readers and their visits only (after a hand-off, the new signer's link). */
+const onLinks = (it: ItemActivity, links: string[]): ItemActivity => {
+  const readers = it.readers.filter((r) => links.includes(r.link));
+  const ids = new Set(readers.map((r) => r.id));
+  return { ...it, readers, visits: it.visits.filter((v) => ids.has(v.r)) };
 };
 const devOf = (cookie: string) => createHmac("sha256", T.ID_KEY).update(`rn-reader:${cookie}`).digest("base64url").slice(0, 22);
 const COOKIE_RE = /^[A-Za-z0-9_-]{22,43}$/;
@@ -151,13 +158,27 @@ function labeller(t: Target) {
       if (m) return blocks[+m[1]]?.title?.slice(0, CAPS.label) ?? null;
       const hit = blocks.find((b) => slug(b.title) === id);
       if (hit) return hit.title.slice(0, CAPS.label);
+      // The client's page tags each section with its place (lib/proposals/sections.ts arrange): only those ids, with the document's own titles. Anything else is dropped.
+      return pageSections(t.x.doc).get(id)?.slice(0, CAPS.label) ?? null;
     }
     // An option or add-on the proposal itself offers (lib/proposals/pricing.ts): its own name, whatever the page said.
     const pr = t.x.doc.pricing;
     const own = kind === "opt" ? pr?.options.find((o) => o.id === id)?.name : kind === "addon" ? pr?.addOns.find((o) => o.id === id)?.name : undefined;
-    if (own) return own.slice(0, CAPS.label);
-    return fromPage ?? null;
+    // An option or add-on the proposal doesn't offer: dropped, whatever the page called it.
+    void fromPage;
+    return own ? own.slice(0, CAPS.label) : null;
   };
+}
+
+/** The section ids the client's page uses for a proposal (app/sign/ProposalView.tsx data-section), with their titles. */
+function pageSections(d: StoredSend["doc"]): Map<string, string> {
+  const a = arrange(d);
+  const m = new Map<string, string>();
+  if (a.cover?.title) m.set("header", a.cover.title);
+  if (a.invest.length) m.set("invest", "Timeline and investment");
+  if (a.sign.length) m.set("sign", "Signatures");
+  for (const x of [...a.scope, ...a.invest, ...a.terms, ...a.sign]) m.set(x.id, x.title);
+  return m;
 }
 
 /* ---------- the beacon ---------- */
@@ -259,7 +280,8 @@ function ruleInputOf(s: State, it: ItemActivity | null, kind: "proposal" | "docu
     const d2 = !it?.reminders.off.d2 && !it?.reminders.sent[`${x.id}:d2`] && !x.viewedAt;
     const st = statusOf(p, nowMs);
     // A link with no end date never expires, whatever an older status function says.
-    return { a: it, status: st === "expired" && linkEnd(x.expiresAt) === null ? (x.viewedAt ? "viewed" : "sent") : st, sentAt: x.sentAt, signer: x.signer.name, company: p.companyName, reminderComing: d2, declineReason: x.declined?.reason ?? null, nowMs };
+    // Passed on to someone else: what the new signer's link shows, not who read the old one.
+    return { a: it && x.passedFrom ? onLinks(it, [x.id]) : it, status: st === "expired" && linkEnd(x.expiresAt) === null ? (x.viewedAt ? "viewed" : "sent") : st, sentAt: x.sentAt, signer: x.signer.name, company: p.companyName, reminderComing: d2, declineReason: x.declined?.reason ?? null, nowMs };
   }
   const d = (s.documents ?? []).find((x) => x.id === id);
   if (!d) return null;
@@ -652,7 +674,7 @@ async function mineOf(token: string | null, id: string) {
   return { seed, s, me, p: p ?? null, d: d ?? null };
 }
 
-const STATUS_WORDS: Record<string, string> = { draft: "Draft", sent: "Sent · not opened", viewed: "Viewed · not signed", signed: "Signed", declined: "Declined", void: "Withdrawn", expired: "Expired" };
+const STATUS_WORDS: Record<string, string> = { draft: "Draft", sent: "Sent · not opened", viewed: "Viewed · not signed", client_signed: "Client signed · your turn to countersign", signed: "Signed", declined: "Declined", void: "Withdrawn", expired: "Expired" };
 
 /** The activity view of one proposal or document of the member's (the Insights page). */
 export async function activityView(token: string | null, id: string, origin?: string, nowMs = Date.now()): Promise<ActivityView> {
@@ -717,7 +739,8 @@ export async function activityView(token: string | null, id: string, origin?: st
   base.options = Object.entries(a.options).map(([oid, o]) => ({ id: oid, label: o.label, ms: o.ms, picks: o.picks, words: o.picks ? `picked ${timesWords(o.picks)}` : o.ms >= 15_000 ? `read ${minWords(o.ms)}` : "glanced" }));
   base.addons = Object.values(a.addons).map((o) => ({ label: o.label, on: o.now }));
   base.stats = {
-    opens: a.readers.filter((r) => r.signer).reduce((n, r) => n + r.visits, 0),
+    // The signer's own opens, on their own link: after a hand-off, the first signer's opens stay theirs.
+    opens: a.readers.filter((r) => r.signer && (!x || r.link === x.id)).reduce((n, r) => n + r.visits, 0),
     readers: a.readers.length,
     ms: totalMs(a),
     option: optionNow(a),
@@ -737,8 +760,10 @@ export async function activityView(token: string | null, id: string, origin?: st
   const signedAtMs = Date.parse((p ? signedSend(p)?.signed?.at : d?.completed?.at) ?? "");
   for (const dl of a.downloads) tl.push({ at: dl.at, text: `${nameOf(dl.r)} downloaded ${Number.isFinite(signedAtMs) && Date.parse(dl.at) >= signedAtMs ? "the signed PDF" : "it"}` });
   if (p && x) {
-    tl.push({ at: x.sentAt, text: "You sent it" });
+    // Sent, then each hand-off along the way, each at its own time.
+    for (const y of p.sends.filter((z) => z.version === x.version)) tl.push(y.passedFrom ? { at: y.sentAt, strong: firstName(y.passedFrom.name), text: ` passed it to ${y.signer.name}` } : { at: y.sentAt, text: "You sent it" });
     if (x.signed) tl.push({ at: x.signed.at, strong: firstName(x.signed.name), text: " signed it" });
+    if (x.member && x.memberMode === "after") tl.push({ at: x.member.at, text: "You countersigned it" });
     if (x.declined) tl.push({ at: x.declined.at, text: `${firstName(x.signer.name)} declined it` });
     if (x.voided?.why === "member") tl.push({ at: x.voided.at, text: "You withdrew it" });
   } else if (d) {
@@ -780,7 +805,9 @@ export async function inboxView(token: string | null, nowMs = Date.now()): Promi
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberOf(seed, s, token);
   const open = T.closeNow(s, me.id, nowMs);
-  const items = [...(s.close?.inbox?.[me.id] ?? [])].sort((a, b) => b.at.localeCompare(a.at));
+  // Only notifications about a proposal or document still there (a deleted one's go with it).
+  const ids = new Set([...(s.proposals ?? []).filter((p) => p.memberId === me.id).map((p) => p.id), ...(s.documents ?? []).filter((d) => d.memberId === me.id).map((d) => d.id)]);
+  const items = [...(s.close?.inbox?.[me.id] ?? [])].filter((x) => ids.has(x.item)).sort((a, b) => b.at.localeCompare(a.at));
   const renewals: CloseInboxView["renewals"] = [];
   if (open)
     for (const p of s.proposals ?? []) {

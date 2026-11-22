@@ -558,7 +558,7 @@ export const POST = guarded(async (req: NextRequest) => {
   const me = await memberForToken(token);
   if (!me) {
     if (limited(`act:ip:${ip}`, 60, 60_000)) return err(SLOW, 429);
-    return err(SIGNED_OUT);
+    return err(SIGNED_OUT, 401);
   }
   if (limited(`act:${me.id}`, 240, 60_000)) return err(SLOW, 429);
   const action = body.action as Action;

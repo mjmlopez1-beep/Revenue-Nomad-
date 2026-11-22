@@ -138,6 +138,8 @@ async function main() {
     { id: "s5", blockId: "custom", title: "Terms", body: "Six months, then month to month." },
   ];
   let p = await PS.createProposal(JOR, { companyId: CEDAR, title: "Fractional VP Sales", blocks, fields: { "pricing.monthlyFee": "$12,000", "term.initialMonths": "6" } }, BASE);
+  // The option and add-on the client's page names: the beacon counts only ids the proposal itself offers.
+  p = await PS.updateProposal(JOR, p.id, { pricing: { options: [{ id: "operator", name: "Operator", price: 12000 }], addOns: [{ id: "hiring", name: "Sales hiring support", price: 3000 }] } }, BASE);
   const sent = await PS.sendProposal(JOR, p.id, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example", title: "COO" } }, BASE, t0);
   p = sent.proposal;
   const tok = signTok(lastTo("dana@cedarandpine.example")?.text ?? "");
@@ -413,6 +415,8 @@ async function main() {
   let w = await PS.createProposal(JOR, { companyId: CEDAR, title: "Pipeline sprint", blocks, fields: {} }, BASE);
   w = (await PS.sendProposal(JOR, w.id, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example" } }, BASE, t0)).proposal;
   const wtok = signTok(lastTo("dana@cedarandpine.example")?.text ?? "");
+  await PS.requestCode(wtok, who, t0 + DAY);
+  await PS.verifyCode(wtok, lastTo("dana@cedarandpine.example")?.text.match(/Your code: (\d{6})/)?.[1] ?? "", who, BASE, t0 + DAY);
   await PS.declineProposal(wtok, { reason: "Not this quarter" }, who, BASE, t0 + DAY);
   await C.afterSignerStep(wtok, BASE, t0 + DAY);
   await settle();
@@ -592,19 +596,14 @@ async function main() {
   // Sent for the member to countersign after the client (closeC3's "after"): the store's own signature events tell lib/close (closeHooks).
   cs = (await PS.sendProposal(JOR, cs.id, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example", title: "COO" }, memberSign: "after" }, BASE, t0)).proposal;
   const cstok = signTok(lastTo("dana@cedarandpine.example")?.text ?? "");
-  check("a question's email is off by default, the rest on", C.prefsOf(undefined).question.email === false && C.prefsOf(undefined).question.app && C.prefsOf(undefined).question.slack && C.prefsOf(undefined).passed.email && C.prefsOf(undefined).countersign.email);
+  check("every email switch is on by default (a question, a hand-off and countersign come in one email each, the proposal's own)", C.prefsOf(undefined).question.email === true && C.prefsOf(undefined).question.app && C.prefsOf(undefined).question.slack && C.prefsOf(undefined).passed.email && C.prefsOf(undefined).countersign.email);
   let sq = slack.length;
   let mq = mails.length;
   check("afterClientAsked: told", (await C.afterClientAsked(cs.id, { by: "Dana Whitfield", text: "Can we start in January?" }, t0 + DAY)) === true);
   await settle();
   const qs = slack.slice(sq).find((x) => /asked a question/.test(x.text));
   check("a question: Dana Whitfield asked a question about Revenue operations reset, the question quoted", !!qs && qs.text.startsWith("Dana Whitfield asked a question about Revenue operations reset") && JSON.stringify(qs.blocks).includes("Can we start in January?"), qs?.text);
-  check("a question: in Merlin, no email by default", (await C.inboxView(JOR)).items.some((x) => x.head === "Question:" && x.text === "Dana Whitfield asked about Revenue operations reset") && !mails.slice(mq).some((m) => /asked a question/.test(m.subject)));
-  await C.setPref(JOR, "question", "email", true);
-  mq = mails.length;
-  await C.afterClientAsked(cs.id, { by: "Dana Whitfield", text: "And the notice period?" }, t0 + DAY + HOUR);
-  await settle();
-  check("a question's email when the member turns it on", mails.slice(mq).some((m) => m.subject === "Dana Whitfield asked a question about Revenue operations reset" && /And the notice period/.test(m.text)));
+  check("a question: in Merlin, and the alert sends no second email (the question's own email is the one)", (await C.inboxView(JOR)).items.some((x) => x.head === "Question:" && x.text === "Dana Whitfield asked about Revenue operations reset") && !mails.slice(mq).some((m) => /asked a question/.test(m.subject)));
   sq = slack.length;
   check("afterPassedOn: told", (await C.afterPassedOn(cs.id, { by: "Dana Whitfield", to: "Sam Lee" }, t0 + 2 * DAY)) === true);
   await settle();

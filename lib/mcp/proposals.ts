@@ -29,7 +29,7 @@ import { adviceFromView } from "../proposals/rates";
 import { KEY_FIELDS, proposalKit } from "../proposals/kit";
 import { templatesOf } from "../proposals/mine";
 import { loadState } from "../table";
-import { CLOSE_BUILD, ProposalProblem, createProposal, docFields, getProposal, linkDaysOf, listProposals, sendProposal, updateProposal } from "../proposals/store";
+import { CLOSE_BUILD, ProposalProblem, STALE, createProposal, docFields, getProposal, linkDaysOf, listProposals, sendProposal, updateProposal } from "../proposals/store";
 import { PricingProblem, cleanPricing, priced } from "../proposals/pricing";
 import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
@@ -50,6 +50,7 @@ const wrap = async <T>(work: () => Promise<T>): Promise<T> => {
   try {
     return await work();
   } catch (e) {
+    if (e instanceof ProposalProblem && e.message === STALE) throw new ToolProblem("The member changed this proposal on Merlin since you read it. Read it again with get_proposal, then apply your change to what's there.");
     if (e instanceof ProposalProblem) throw new ToolProblem(e.upgrade ? `${e.message} ${e.upgrade}` : e.message);
     throw e;
   }
@@ -157,6 +158,7 @@ async function proposalOut(ctx: Ctx, p: ProposalRec): Promise<ToolOut> {
     template_id: p.templateId,
     status: p.status,
     version: p.version,
+    revision: p.rev,
     signer: p.signer,
     signer_on_call: p.signerOnCall,
     blocks: p.blocks.map((b) => ({ block_id: b.blockId, title: b.title, body: b.body, reads: rendered([b], f)[0].text })),
@@ -229,6 +231,8 @@ export interface UpsertArgs {
   pricing?: PricingArgs | null;
   /** How long the signing link works once sent: 14, 30, 60 or 90 days, or 0 for no end date. */
   link_days?: number;
+  /** The revision get_proposal returned: given and not the latest (the member edited it since), the change is refused, so nothing they wrote is undone. */
+  revision?: number;
   proposal_id?: string;
   template_id?: string;
   company_id?: string;
@@ -289,6 +293,8 @@ export async function createOrUpdateProposal(ctx: Ctx, a: UpsertArgs): Promise<T
           ...(a.company_name !== undefined ? { companyName: a.company_name } : {}),
           ...(a.company_id ? { companyId: a.company_id } : {}),
           ...extras(cur),
+          // The revision Claude read (else the one just read here): a change the member made since is never written over.
+          rev: a.revision ?? cur.rev,
           source: "claude",
         },
         ctx.origin,
@@ -594,6 +600,7 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
         "Save the proposal you drafted (usually from get_proposal_kit and the member's call) on Merlin, where the member edits it, and it is sent and signed. Without proposal_id it starts one: template_id from list_proposal_templates (or none for a blank page) and the company (company_id from search_companies, or company_name). fields fills the {{keys}} (\"goals.target\", \"pains\" with one item a line, \"pricing.monthlyFee\" like \"$12,000\"). blocks replaces the block list in order (block_id, and title and body when you write them; body may use {{keys}}). notes are lines from the call the member agreed to keep (key from the template's from_a_call list): paraphrase them, never paste the transcript, and never send the whole transcript. signer is the person who signs for the client: send it to them, not a go-between. pricing gives the client options to pick from instead of one price (1 to 3 options and up to 6 add-ons; they pick one on the proposal's page, see the total and sign that choice; send the whole set each time, null for one price again). link_days sets how long the signing link works once it is sent (14, 30, 60 or 90, or 0 for no end date). Saving after it was sent makes a new version and the old link stops working. Returns the proposal with its blanks, checklist and risk flags. Building proposals is Close (the trial included): on another plan it refuses with the upgrade link, and the member's saved templates stay stored for when they upgrade.",
       inputSchema: {
         proposal_id: z.string().optional(),
+        revision: z.number().int().optional().describe("The revision get_proposal returned. When the member changed the proposal on Merlin since, the save is refused: read it again with get_proposal and apply your change to what's there."),
         template_id: z.string().optional().describe("A template id, for a new proposal: Merlin's, or one of the member's own (mt_...)."),
         company_id: z.string().optional().describe("The company's id on Merlin, for a new proposal."),
         company_name: z.string().optional().describe("The client's name when it isn't on Merlin."),

@@ -169,12 +169,14 @@ export function checkPdf(bytes: Uint8Array, find: (by: { sha256?: string; digest
 
 /** Every sealed file in the state: signed proposals and completed documents. */
 export function sealedIn(s: {
-  proposals?: { sends: { seal?: SealRec; signed?: { name: string; at: string } }[] }[];
+  proposals?: { sends: { seal?: SealRec; signed?: { name: string; at: string }; member?: { name: string; at: string } }[] }[];
   documents?: { completed?: { seal?: SealRec }; signers: { signed?: { name: string; at: string } }[] }[];
 }): (by: { sha256?: string; digest?: string }) => SealedFile | null {
   return (by) => {
     const hit = (r?: SealRec) => !!r && ((!!by.sha256 && r.sha256 === by.sha256) || (!!by.digest && r.digest === by.digest));
-    for (const p of s.proposals ?? []) for (const x of p.sends) if (hit(x.seal) && x.signed) return { seal: x.seal!, signers: [{ name: x.signed.name, at: x.signed.at }] };
+    for (const p of s.proposals ?? []) for (const x of p.sends) if (hit(x.seal) && x.signed)
+          // Every signer, in the order they signed: the client, and the member when they signed it too (as they sent it, or countersigned after).
+          return { seal: x.seal!, signers: [{ name: x.signed.name, at: x.signed.at }, ...(x.member ? [{ name: x.member.name, at: x.member.at }] : [])].sort((a, b) => a.at.localeCompare(b.at)) };
     for (const d of s.documents ?? [])
       if (hit(d.completed?.seal)) return { seal: d.completed!.seal!, signers: d.signers.flatMap((x) => (x.signed ? [{ name: x.signed.name, at: x.signed.at }] : [])) };
     return null;

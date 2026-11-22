@@ -248,6 +248,11 @@ async function main() {
     { id: "s3", blockId: "custom", title: "Terms", body: "Three months to start. 30 days notice." },
   ];
   const signer = { name: "Dana Whitfield", email: "dana@cedarpine.example", title: "COO" };
+  /** The email code on this link: asked for, then typed (asking, passing on and declining need it, as signing does). */
+  const confirmed = async (tok: string, email: string, nowMs: number) => {
+    await PS.requestCode(tok, who, nowMs);
+    return PS.verifyCode(tok, lastTo(email)?.text.match(/Your code: (\d{6})/)?.[1] ?? "", who, BASE, nowMs);
+  };
   /** The client's steps to a signature on this link: the code, then their name. */
   const clientSigns = async (tok: string, email: string, name: string, nowMs: number, choice?: unknown) => {
     await PS.requestCode(tok, who, nowMs);
@@ -375,6 +380,7 @@ async function main() {
   let cs = await PS.createProposal(JOR, { companyId: CEDAR, title: "Revenue operations reset", blocks, fields: { "pricing.monthlyFee": "$9,000", "term.initialMonths": "3" } }, BASE);
   cs = (await PS.sendProposal(JOR, cs.id, { signer, memberSign: "after" }, BASE, t0)).proposal;
   const cstok = signTok(lastTo("dana@cedarpine.example")?.text ?? "");
+  await confirmed(cstok, "dana@cedarpine.example", t0 + DAY);
   sq = slack.length;
   await PS.askQuestion(cstok, "Can we start in January?", who, BASE, t0 + DAY);
   await settle();
@@ -390,6 +396,7 @@ async function main() {
   check("  a custom hook still replaces the defaults (and they go back)", await (async () => {
     const seen: string[] = [];
     PS.setProposalHooks({ onClientQuestion: (e) => void seen.push(e.text) });
+    await confirmed(samTok, "sam@cedarpine.example", t0 + 2 * DAY + HOUR);
     const n = slack.length;
     await PS.askQuestion(samTok, "One more thing?", who, BASE, t0 + 2 * DAY + HOUR);
     await settle();

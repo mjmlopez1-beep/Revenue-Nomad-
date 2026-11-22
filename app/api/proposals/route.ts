@@ -6,6 +6,7 @@ import { ProposalProblem, countersignDue, countersignProposal, createProposal, d
 import { deleteMySignature, getMySignature, myTitle, setMySignature } from "@/lib/proposals/memberSig";
 import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
 import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
+import { DRAWING_TOO_BIG } from "@/lib/proposals/memberSig";
 import { acceptChange, proposeChange, restoreVersion, versionsOf } from "@/lib/proposals/change";
 import { addCompanyFor, siteName } from "@/lib/proposals/addCompany";
 
@@ -15,6 +16,11 @@ const COOKIE = "rn_table";
 const MAX_BODY = 256 * 1024;
 /** A draft from a call carries the transcript (lib/proposals/extract.ts MAX_TRANSCRIPT, about three hours of talk). */
 const MAX_DRAFT_BODY = 900 * 1024;
+/** The op of a body too big to parse, read from its text (a drawn signature's is the big one), or "". */
+const opOf = (text: string | null) => (text ? text.match(/"op"\s*:\s*"([a-z_]{1,30})"/)?.[1] ?? "" : "");
+/** What a body too big says, by what it was: a drawn signature has its own words, with the limit; the transcript's are only for a draft. */
+const TOO_MUCH = (op: string) =>
+  op === "signature_set" || op === "countersign" ? DRAWING_TOO_BIG : op === "draft" ? "That's too much to send at once. Paste the part of the call about their business." : "That's too much to save at once. Shorten it, then try again.";
 const NO_STORE = { "cache-control": "no-store" };
 const origin = (req: NextRequest) =>
   process.env.RN_PUBLIC_URL?.replace(/\/$/, "") ||
@@ -76,9 +82,9 @@ export const POST = guarded(async (req: NextRequest) => {
   const me = await memberForToken(token);
   if (!me) return err("You're signed out. Sign in again to work on proposals.", 401);
   if (limited(`prop-post:${me.id}`, 120, 60_000)) return err(SLOW, 429);
-  if (Number(req.headers.get("content-length") ?? 0) > MAX_DRAFT_BODY) return err("That's too much to send at once. Paste the part of the call about their business.", 413);
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_DRAFT_BODY) return err(TOO_MUCH(opOf(null)), 413);
   const text = await req.text();
-  if (text.length > MAX_DRAFT_BODY) return err("That's too much to send at once. Paste the part of the call about their business.", 413);
+  if (text.length > MAX_DRAFT_BODY) return err(TOO_MUCH(opOf(text)), 413);
   let b: Record<string, unknown>;
   try {
     b = JSON.parse(text);
@@ -89,7 +95,7 @@ export const POST = guarded(async (req: NextRequest) => {
   const id = typeof b.id === "string" ? b.id : "";
   const o = origin(req);
   const who = { ip: clientIp(req), ua: (req.headers.get("user-agent") ?? "").slice(0, 300) };
-  if (b.op !== "draft" && text.length > MAX_BODY) return err("That's too much to save at once. Shorten it, then try again.", 413);
+  if (b.op !== "draft" && text.length > MAX_BODY) return err(TOO_MUCH(typeof b.op === "string" ? b.op : ""), 413);
   switch (b.op) {
     case "create":
       return answer(() =>
@@ -107,11 +113,11 @@ export const POST = guarded(async (req: NextRequest) => {
       if (limited(`prop-change:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of changes at once. Give it a few minutes, then try again.", 429);
       return answer(() => proposeChange(token, id, { instruction: b.instruction, agree: b.agree }, o));
     case "change_accept":
-      return answer(() => acceptChange(token, id, { changes: b.changes, fields: b.fields, instruction: b.instruction }, o));
+      return answer(() => acceptChange(token, id, { changes: b.changes, fields: b.fields, instruction: b.instruction, rev: b.rev }, o));
     case "versions":
       return answer(() => versionsOf(token, id, o));
     case "version_restore":
-      return answer(() => restoreVersion(token, id, b.version, o));
+      return answer(() => restoreVersion(token, id, b.version, o, undefined, b.rev));
     case "site_name":
       if (limited(`prop-site:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of websites in an hour. Type the name yourself.", 429);
       return answer(() => siteName(b.website));
@@ -125,7 +131,7 @@ export const POST = guarded(async (req: NextRequest) => {
     case "template_delete":
       return answer(async () => (await deleteTemplate(token, id), { ok: true }));
     case "update":
-      return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, pricing: b.pricing, memberSign: b.memberSign, source: typeof b.source === "string" ? b.source : undefined }, o));
+      return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, pricing: b.pricing, memberSign: b.memberSign, rev: b.rev, source: typeof b.source === "string" ? b.source : undefined }, o));
     case "link":
       // Not linked to a company yet: the one picked (companyId), or its exact name or website (name), as find_company finds it.
       return answer(() => linkProposal(token, id, { companyId: b.companyId, name: b.name }, o));

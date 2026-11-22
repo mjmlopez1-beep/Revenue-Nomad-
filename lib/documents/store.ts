@@ -19,7 +19,7 @@ import { randomBytes, randomInt } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type State } from "../table";
 import { emailEnabled, sendEmail, MAX_ATTACHMENT_BYTES } from "../email";
 import { upgradeUrl } from "../plan";
-import { PRO_SEND, EMAIL_OFF, ProposalProblem, expMsOf, expiredAt, expiryFor, linkDaysOf, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, proposalInternals as PI, type Client } from "../proposals/store";
+import { PRO_SEND, EMAIL_OFF, ProposalProblem, expMsOf, expiredAt, expiryFor, linkDaysOf, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, dropItemRecords, proposalInternals as PI, type Client } from "../proposals/store";
 import { pipelineEvent } from "../proposals/pipelineHook";
 import { CONSENT_VERSION, consentText } from "../proposals/types";
 import { DOC_MAX_BYTES, SIG_MAX_BYTES, commitSignature, dropSignature, readFinal, readOriginal, readSignature, removeFiles, saveFinal, saveOriginal, stageSignature } from "./files";
@@ -284,6 +284,7 @@ export async function deleteDocument(token: string | null, id: string, nowMs = D
     if (st === "signed") throw new ProposalProblem("A signed document is kept as the record of what was agreed.");
     if (st === "sent" || st === "viewed") throw new ProposalProblem("It's out for signature. Void it first.");
     s.documents = (s.documents ?? []).filter((x) => x !== d);
+    dropItemRecords(s, d.memberId, d.id);
   });
   await removeFiles(id).catch(() => {});
 }
@@ -674,6 +675,8 @@ export async function docDecline(token: unknown, a: { reason?: unknown }, who: C
     const f = resolve(s, token);
     const st = signerState(f, nowMs);
     if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
+    // Declining speaks for the signer named, so it needs the email code first, as signing does.
+    if (!f.x.codeVerifiedAt) throw new ProposalProblem("Confirm your email with the code first.", 401);
     f.x.declined = { at: now, reason, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300) };
     ev(f.d, "declined", now, { ...who, who: f.x.email, ...(reason ? { note: reason } : {}) });
     f.d.updatedAt = now;

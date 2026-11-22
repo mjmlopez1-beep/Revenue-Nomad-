@@ -231,7 +231,8 @@ export interface StoredSend {
   events: AuditEvent[];
 }
 
-export type ProposalStatus = "draft" | "sent" | "viewed" | "signed" | "declined" | "void" | "expired";
+/** client_signed: the client signed and the member's countersignature is still to come (countersign mode). signed: fully signed. */
+export type ProposalStatus = "draft" | "sent" | "viewed" | "client_signed" | "signed" | "declined" | "void" | "expired";
 
 export interface StoredProposal {
   id: string;
@@ -257,6 +258,8 @@ export interface StoredProposal {
   version: number;
   createdAt: string;
   updatedAt: string;
+  /** Goes up by one on every change to the proposal: a write that read an older one is refused (409), so two tabs never undo each other. Absent: 0. */
+  rev?: number;
   sends: StoredSend[];
   /** The options and add-ons the client picks from (Close). Absent: one price, in the proposal's own words. */
   pricing?: Pricing;
@@ -275,6 +278,8 @@ export interface ProposalVersion {
   title: string;
   blocks: ProposalBlock[];
   fields: Record<string, string>;
+  /** The options and add-ons as they were (null: one price). Absent on versions kept before pricing was. */
+  pricing?: Pricing | null;
   /** What the next version changed, in a line ("Scope is now two phases"). */
   note: string;
 }
@@ -335,12 +340,16 @@ export interface ProposalRec {
   pricing: Pricing | null;
   /** The member's own signature for the next send, as it will be frozen (MemberSignMode). */
   memberSign: MemberSignMode;
+  /** The member picked how they sign this one (else memberSign is the default, "now"). */
+  memberSignPicked?: boolean;
   /** How long the next send's link works: 14, 30 (unless picked), 60 or 90 days, or 0 for no end date. */
   linkDays: LinkDays;
   version: number;
   status: ProposalStatus;
   createdAt: string;
   updatedAt: string;
+  /** The proposal's revision (StoredProposal.rev): send it back as `rev` with a change, and a change made elsewhere since is refused with 409. */
+  rev: number;
   /** The current send, if any; then every earlier one, newest first. */
   send: ProposalSendRec | null;
   history: ProposalSendRec[];

@@ -16,7 +16,7 @@ import { guarded } from "@/lib/apiGuard";
 import { ActionError } from "@/lib/table";
 import { publicOrigin } from "@/lib/mcp/http";
 import { limited } from "@/lib/rateLimit";
-import { billingAction, type BillingOp } from "@/lib/billing/server";
+import { SIGNED_OUT, billingAction, type BillingOp } from "@/lib/billing/server";
 
 export const dynamic = "force-dynamic";
 const COOKIE = "rn_table";
@@ -43,7 +43,8 @@ export const POST = guarded(async (req: NextRequest) => {
   try {
     return NextResponse.json(await billingAction(token, op, { interval: body!.interval, code: body!.code, tier: body!.tier }, publicOrigin(req)), { headers: noStore });
   } catch (e) {
-    if (e instanceof ActionError) return fail(e.message);
+    // A cookie that names nobody is signed out too: 401, as with no cookie at all.
+    if (e instanceof ActionError) return fail(e.message, e.message === SIGNED_OUT ? 401 : 400);
     throw e;
   }
 });

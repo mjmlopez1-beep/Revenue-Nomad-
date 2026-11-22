@@ -91,12 +91,35 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   const need = (h: number) => {
     if (y - h < M) newPage();
   };
+  /**
+   * Never a "?": a run of characters no font in this file can draw (Chinese, Japanese, Korean,
+   * emoji) prints as its Unicode code points, so a name typed in them stays exact on the page. The
+   * name itself is kept exactly as typed in the record, the audit trail and the document's hash.
+   */
+  let bracketed = false;
+  const safe = (t: string) => {
+    let out = "";
+    let run = "";
+    let pend = "";
+    const flush = () => {
+      if (run) (out += `[${codePoints(run)}]`), (bracketed = true);
+      run = "";
+    };
+    for (const c of t) {
+      if (c === " " && run) pend += c;
+      else if (!c.trim() || printable(ink, c)) flush(), (out += pend + c), (pend = "");
+      // A space between two of them stays in the bracket, so a whole name is one.
+      else (run += pend + c), (pend = "");
+    }
+    flush();
+    return out + pend;
+  };
   type T = { size?: number; font?: PDFFont; color?: ReturnType<typeof rgb>; gap?: number; indent?: number; width?: number; lead?: number };
   const text = (t: string, o: T = {}) => {
     const size = o.size ?? 10;
     const font = o.font ?? body;
     const lead = o.lead ?? 1.45;
-    for (const l of wrap(ink, font, t, size, o.width ?? W - 2 * M - (o.indent ?? 0))) {
+    for (const l of wrap(ink, font, safe(t), size, o.width ?? W - 2 * M - (o.indent ?? 0))) {
       need(size * lead);
       drawRuns(page, ink, font, l, { x: M + (o.indent ?? 0), y: y - size, size, color: o.color ?? BODY });
       y -= size * lead;
@@ -236,7 +259,7 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   const cell = (x0: number, lines: { t: string; size: number; font: PDFFont; color: ReturnType<typeof rgb> }[]) => {
     let yy = top - 12;
     for (const l of lines) {
-      for (const w of wrap(ink, l.font, l.t, l.size, colW - 20).slice(0, 2)) {
+      for (const w of wrap(ink, l.font, l.font === script ? l.t : safe(l.t), l.size, colW - 20).slice(0, 2)) {
         drawRuns(page, ink, l.font, w, { x: x0 + 10, y: yy - l.size, size: l.size, color: l.color });
         yy -= l.size * 1.4;
       }
@@ -257,7 +280,7 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
     const typedSize = mem.typed ? Math.min(20, Math.max(10, 20 * Math.min(1, (colW - 20) / Math.max(1, widthOf(ink, script, mem.typed, 20))))) : 20;
     cell(M + colW + 18, [
       { t: d.from.name ? `For ${d.from.name}` : "The consultant", size: 8.5, font: body, color: MUTED },
-      { t: mem.kind === "typed" && mem.typed ? mem.typed : " ", size: typedSize, font: script, color: INK },
+      { t: mem.kind === "typed" && mem.typed ? (printable(ink, mem.typed) ? mem.typed : a.sender.email || " ") : " ", size: typedSize, font: script, color: INK },
       { t: `${mem.name}${mem.title ? `, ${mem.title}` : ""}`, size: 9.5, font: bold, color: INK },
       { t: `${mem.how === "saved_at_send" ? "Signed when sent" : "Countersigned"} ${stampWhen(mem.at)}`, size: 8.5, font: body, color: MUTED },
     ]);
@@ -294,7 +317,7 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   text(`${x.signer.name}${x.signer.title ? `, ${x.signer.title}` : ""} <${x.signer.email}>`, { font: bold, size: 9.5, color: INK, gap: 1 });
   text(`Signed ${stampWhen(sig.at)} by typing "${sig.name}". Email confirmed with a 6-digit code: ${sig.email}. IP ${sig.ip || "not recorded"}. Browser: ${sig.ua || "not recorded"}.`, { size: 9, indent: 12 });
   text(`Consent to sign electronically, version ${sig.consentVersion}. The document they signed: ${sig.hash}.`, { size: 9, indent: 12, color: MUTED });
-  if (!nameOk) text(`Their name as typed has characters this file's fonts can't print, so the signature shows their email. The name as typed, in Unicode: ${codePoints(sig.name)}.`, { size: 9, indent: 12, color: MUTED });
+  if (!nameOk) text(`Their name as typed has characters this file's fonts can't print, so the signature shows their email and the name prints as its code points. The name as typed, in Unicode: ${codePoints(sig.name)}.`, { size: 9, indent: 12, color: MUTED });
   if (choice) text(`They chose ${choice.summary}. Total: ${choice.total}.`, { size: 9, indent: 12, gap: 2 });
   text(mem ? "Sender, who signs too" : "Sender", { size: 11, font: bold, color: INK, gap: 2 });
   text(`${a.sender.name}${a.sender.title ? `, ${a.sender.title}` : ""} <${a.sender.email}>. Sent ${stampWhen(x.sentAt)}.`, { size: 9.5, gap: mem ? 1 : 4 });
@@ -331,7 +354,7 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   y -= 14;
   text(`Any change to this file breaks the seal. Check this copy at ${a.checkUrl}: drop the PDF there to see whether it matches what was signed.`, { size: 8.5, color: INK, indent: 10, width: W - 2 * M - 20 });
   y -= 10;
-  if (ink.lost) text("Some characters in this file (Chinese, Japanese or Korean, or emoji) are outside its fonts and print as ?. Merlin keeps every value exactly as typed.", { size: 8, color: MUTED });
+  if (ink.lost || bracketed) text("Some characters in this file (Chinese, Japanese or Korean, or emoji) are outside its fonts and print as their Unicode code points in brackets, like [U+738B]. Merlin keeps every value exactly as typed.", { size: 8, color: MUTED });
 
   // Page numbers on every page.
   const pages = pdf.getPages();

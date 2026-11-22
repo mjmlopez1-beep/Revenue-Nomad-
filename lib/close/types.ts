@@ -176,7 +176,7 @@ export const ALERT_ROWS: { kind: CloseAlertKind; label: string; line: string }[]
   { kind: "open", label: "First open", line: "The first time they open it." },
   { kind: "engaged", label: "Engaged: time to follow up", line: "When what they read says it's time, at most once every 6 hours for each proposal." },
   { kind: "reader", label: "Someone new opened it", line: "A new person opens the link, say a forward to their boss." },
-  { kind: "question", label: "They asked a question", line: "A question on the proposal. The question itself already comes by email." },
+  { kind: "question", label: "They asked a question", line: "A question on the proposal. The email has the question, and your reply goes straight to them." },
   { kind: "passed", label: "Passed to someone else to sign", line: "They sent it on to the person who signs." },
   { kind: "countersign", label: "Signed, your turn to countersign", line: "They signed. It's finished once you countersign." },
   { kind: "signed", label: "Signed or declined", line: "As it happens. The signed copy and a decline always come by email too." },
@@ -185,8 +185,11 @@ export const ALERT_ROWS: { kind: CloseAlertKind; label: string; line: string }[]
 
 /** A member's switches: on unless turned off (or off by default here). Slack only goes out when Slack is connected. */
 export type AlertPrefs = Partial<Record<CloseAlertKind, Partial<Record<Channel, boolean>>>>;
-/** Off until turned on: a question's email (the question itself already comes by email from the proposal). */
-export const DEFAULT_OFF: AlertPrefs = { question: { email: false } };
+/**
+ * Off until turned on: none now. A question, a hand-off and "your turn to countersign" each come in
+ * one email, the proposal's own (lib/proposals/store.ts), and its email switch here turns that one off.
+ */
+export const DEFAULT_OFF: AlertPrefs = {};
 export const prefOn = (p: AlertPrefs | undefined, kind: CloseAlertKind, ch: Channel): boolean => p?.[kind]?.[ch] ?? DEFAULT_OFF[kind]?.[ch] !== false;
 
 /** One notification in Merlin. */

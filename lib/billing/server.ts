@@ -24,7 +24,7 @@ const dayWords = (iso: string) => {
 };
 const NOT_LIVE = "Plans aren't open yet.";
 const CLOSE_NOT_LIVE = "Close isn't open yet.";
-const SIGNED_OUT = "You're signed out. Sign in again to manage your plan.";
+export const SIGNED_OUT = "You're signed out. Sign in again to manage your plan.";
 
 /** The member behind a billing ref, customer or subscription. */
 function memberOf(s: State, all: { id: string }[]) {

@@ -480,6 +480,10 @@ async function main() {
   d = await S.updateProposal(PAT, d.id, { setFields: Object.fromEntries(L.blanksOf(d.blocks, L.docFields({ ...d, signer: { name: "Dana Whitfield", email: "dana@acmerobotics.example" } })).map((k) => [k, k.startsWith("pricing.") ? "$4,000" : `Filled ${k}`])) }, BASE);
   await S.sendProposal(PAT, d.id, { signer: { name: "Dana Whitfield", email: "dana@acmerobotics.example" } }, BASE);
   const dtok = tokenOf(lastMail("dana@acmerobotics.example")!.text);
+  // Declining needs the email code first, as signing does.
+  check("decline before the email code: refused", /Confirm your email with the code first/.test(String(await refused(S.declineProposal(dtok, { reason: "No" }, who, BASE)))) && (await S.signerView(dtok, who, BASE)).status === "open");
+  await S.requestCode(dtok, who);
+  await S.verifyCode(dtok, lastMail("dana@acmerobotics.example")!.text.match(/\b(\d{6})\b/)![1], who, BASE);
   const m2 = mails.length;
   const dv = await S.declineProposal(dtok, { reason: "We're going to wait until next quarter." }, who, BASE);
   check("declined, with the reason", dv.status === "declined" && (await S.getProposal(PAT, d.id, BASE)).send!.declineReason === "We're going to wait until next quarter.");
@@ -967,7 +971,7 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
 
   /* ================= blanks in words, the signer from the deal, the signing page's errors ================= */
   console.log("\nwords and the signer");
-  check("a blank in words: the library's label, never its key", L.fieldLabel("client.signerName") === "Signer name" && L.fieldLabel("discovery.callDate") === "Discovery call date" && L.fieldLabel("start.date") === "Date" && L.fieldLabel("term.optOutDay") !== "term.optOutDay");
+  check("a blank in words: the library's label, never its key", L.fieldLabel("client.signerName") === "Signer name" && L.fieldLabel("discovery.callDate") === "Discovery call date" && L.fieldLabel("start.date") === "Start date" && L.fieldLabel("term.optOutDay") !== "term.optOutDay");
   check("blanks in words: the first few by name, then a count", L.blanksInWords(["headline", "client.signerName", "client.signerTitle", "discovery.callDate", "pains", "seats"]) === "Outcome headline, Signer name, Signer title, Discovery call date and 2 more", L.blanksInWords(["headline", "client.signerName", "client.signerTitle", "discovery.callDate", "pains", "seats"]));
   const blankP = await S.createProposal(PAT, { templateId: "fractional-sales-leader", companyName: "Keyless Holdings" }, BASE);
   const blankErr = (await refused(S.sendProposal(PAT, blankP.id, { signer: { name: "Kim Key", email: "kim@keyless.example" } }, BASE))) ?? "";

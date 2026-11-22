@@ -504,7 +504,7 @@ async function main() {
   const toCli = sa.mails.find((m) => m.to === "dana@cedarandpine.example");
   check("…the member: 'Dana signed. Countersign to finish.' with the one link; the client: waiting for the member", /^Dana signed\. Countersign to finish/.test(toMem?.subject ?? "") && toMem!.text.includes(`/?p=proposals&pr=${af.id}&countersign=1`) && /waiting for Jordan Avery to countersign/.test(toCli?.subject ?? "") && sa.mails.every((m) => !m.attachments?.length), sa.mails.map((m) => m.subject));
   const ra = await S.getProposal(JOR, af.id, BASE);
-  check("…status for the member: signed, waiting for them; for the client: signed by them, waiting for the member", ra.send?.status === "signed" && ra.send.waiting === "member" && sa.r.awaitingMember && readFileSync("app/post/ProposalParts.tsx", "utf8").includes("waiting for your signature.") && readFileSync("app/sign/Sign.tsx", "utf8").includes("Signed by you · waiting for {d.from.name} to countersign"));
+  check("…status for the member: client signed, their turn to countersign (never plain Signed); for the client: signed by them, waiting for the member", ra.status === "client_signed" && ra.send?.status === "client_signed" && ra.send.waiting === "member" && sa.r.awaitingMember && readFileSync("app/post/ProposalParts.tsx", "utf8").includes("waiting for your signature.") && readFileSync("app/sign/Sign.tsx", "utf8").includes("Signed by you · waiting for {d.from.name} to countersign"));
   check("…the client's choice stays locked", /can't change now/.test(String(await refused(S.chooseOption(af.link, { optionId: "o_assess", addOnIds: [] }, BASE)))));
   check("…Home shows it after 24 hours, not before", (await S.countersignDue(JOR, 24)).length === 0 && (await S.countersignDue(JOR, 24, Date.now() + 25 * 3_600_000)).some((d) => d.id === af.id));
   check("…only the member who sent it can countersign", /isn't there anymore/.test(String(await refused(S.countersignProposal(FRE, af.id, { method: "saved" }, BASE)))));
@@ -582,6 +582,18 @@ async function main() {
   const qs: { text: string; sendId: string }[] = [];
   const hand: { from: string; to: string }[] = [];
   S.setProposalHooks({ onClientQuestion: (e) => qs.push({ text: e.text, sendId: e.sendId }), onHandOff: (e) => hand.push({ from: e.from.email, to: e.to.email }) });
+  /** The email code on a link, asked for and typed: asking, passing on and declining need it, as signing does. */
+  const confirm = async (link: string, email: string) => {
+    const m0 = mails.length;
+    await S.requestCode(link, who);
+    return S.verifyCode(link, mails.slice(m0).find((m) => m.to === email)?.text.match(/\b(\d{6})\b/)?.[1] ?? "", who, BASE);
+  };
+  const mq0 = mails.length;
+  check("a question before the email code: refused, nothing emailed", /Confirm your email with the code first/.test(String(await refused(S.askQuestion(llink, "Before the code?", who, BASE)))) && mails.length === mq0 && qs.length === 0);
+  check("…a question that isn't text: refused, never '[object Object]'", /as text/.test(String(await refused(S.askQuestion(llink, { x: 1 }, who, BASE)))) && /as text/.test(String(await refused(S.askQuestion(llink, 42, who, BASE)))));
+  const { badShape } = await import("../lib/proposals/signShape");
+  check("…the sign route checks every field's type first", badShape({ token: "t", op: "ask", question: { x: 1 } }) === "Type your question as text." && /reason as text/.test(badShape({ op: "decline", reason: ["no"] }) ?? "") && !!badShape({ op: "handoff", signer: "Sam" }) && !!badShape({ op: "handoff", signer: { name: { a: 1 }, email: "s@x.example" } }) && !!badShape({ op: "sign", consent: "yes" }) && !!badShape({ op: "verify", code: 123456 }) && !!badShape({ op: "choose", choice: { optionId: 1 } }) && badShape({ token: "t", op: "ask", question: "Fine?" }) === null && badShape({ op: "handoff", signer: { name: "Sam Lee", email: "s@x.example" }, note: "hi" }) === null);
+  await confirm(llink, "dana@cedarandpine.example");
   check("a question: empty refused, too long refused", /Type your question/.test(String(await refused(S.askQuestion(llink, "  ", who, BASE)))) && /under 2,000/.test(String(await refused(S.askQuestion(llink, "x".repeat(2001), who, BASE)))));
   const mq = mails.length;
   const asked = await S.askQuestion(llink, "Can we start on‮ January 5 instead?​", who, BASE);
@@ -599,11 +611,18 @@ async function main() {
   const ho = await sendTo(OPTIONS, "now");
   const hx0 = await sendOf(ho.id);
   await S.chooseOption(ho.link, { optionId: "o_full", addOnIds: ["a_board"] }, BASE);
+  const mh0 = mails.length;
+  check("a hand-off before the email code: refused, the link stays the named signer's", /Confirm your email with the code first/.test(String(await refused(S.handOff(ho.link, { signer: { name: "Sam Stranger", email: "sam@elsewhere.example" } }, who, BASE)))) && mails.length === mh0 && (await S.signerView(ho.link, who, BASE)).status === "open" && hand.length === 0);
+  const dl0 = await sendTo(null, "none");
+  check("…decline before the email code: refused, the link still open", /Confirm your email with the code first/.test(String(await refused(S.declineProposal(dl0.link, { reason: "no" }, who, BASE)))) && (await S.signerView(dl0.link, who, BASE)).status === "open");
+  await confirm(ho.link, "dana@cedarandpine.example");
   check("a hand-off: not to the member's own address", /not to the person who sent it/.test(String(await refused(S.handOff(ho.link, { signer: { name: "Jordan Avery", email: "jor.cv@example.com" } }, who, BASE)))));
   check("…not to the same address", /That's the address this link went to/.test(String(await refused(S.handOff(ho.link, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example" } }, who, BASE)))));
   const mh = mails.length;
   const passedView = await S.handOff(ho.link, { signer: { name: "Raj Mehta", title: "CFO", email: "raj@cedarandpine.example" }, note: "Raj signs for us." }, who, BASE);
   const hm = mails.slice(mh);
+  check("…the member gets one email about it, not two", hm.filter((m) => m.to === "jor.cv@example.com").length === 1, hm.map((m) => [m.to, m.subject]));
+  check("…the passed link has no hand-offs left; the new one has 2 (counted along the chain)", passedView.handoffsLeft === 0 && (await S.signerView(ho.link, who, BASE)).handoffsLeft === 0);
   const rajMail = hm.find((m) => m.to === "raj@cedarandpine.example");
   const rajLink = rajMail?.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)?.[1] ?? "";
   check("…the original link is read only: 'You passed this to Raj Mehta'", passedView.status === "passed" && passedView.passedTo?.name === "Raj Mehta" && /passed this proposal to someone else/.test(String(await refused(S.chooseOption(ho.link, { optionId: "o_lead", addOnIds: [] }, BASE)))) && /passed this proposal/.test(String(await refused(S.requestCode(ho.link, who)))));
@@ -615,6 +634,7 @@ async function main() {
   const hrec = await S.getProposal(JOR, ho.id, BASE);
   check("…the member's view shows the current signer", hrec.send?.signer.email === "raj@cedarandpine.example" && hrec.send.passedFrom?.name === "Dana Whitfield" && hrec.send.status === "sent");
   const rv0 = await S.signerView(rajLink, who, BASE);
+  check("…the new link: 2 hand-offs left", rv0.handoffsLeft === 2);
   check("…the new signer: same code check, can change the pick", rv0.status === "open" && rv0.signer.name === "Raj Mehta" && rv0.signer.title === "CFO" && (await S.chooseOption(rajLink, { optionId: "o_lead", addOnIds: [] }, BASE)).choice?.optionId === "o_lead" && /code first/.test(String(await refused(S.signProposal(rajLink, { name: "Raj Mehta", consent: true, hash: rv0.hash }, who, BASE)))));
   const mr = mails.length;
   await S.requestCode(rajLink, who);
@@ -629,11 +649,15 @@ async function main() {
   // At most 3 hand-offs on one proposal.
   const ch = await sendTo(null, "none");
   let lk = ch.link;
+  let holder = "dana@cedarandpine.example";
   for (const [n, e] of [["Ann One", "ann@cedarandpine.example"], ["Ben Two", "ben@cedarandpine.example"], ["Cy Three", "cy@cedarandpine.example"]]) {
+    await confirm(lk, holder);
+    holder = e;
     const mk = mails.length;
     await S.handOff(lk, { signer: { name: n, email: e } }, who, BASE);
     lk = mails.slice(mk).find((m) => m.to === e)!.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)![1];
   }
+  await confirm(lk, holder);
   check("…at most 3 hand-offs on one proposal", /passed on 3 times/.test(String(await refused(S.handOff(lk, { signer: { name: "Di Four", email: "di@cedarandpine.example" } }, who, BASE)))) && (await S.signerView(lk, who, BASE)).handoffsLeft === 0);
   S.setProposalHooks({ onClientQuestion: () => {}, onHandOff: () => {} });
 

@@ -221,7 +221,8 @@ export function alertWords(f: AlertFacts, notifications: string): AlertOut {
       const text = cut(q.text, 280);
       return {
         slack: { kind: "proposal", count: 1, headline, lines: text ? [`"${text}"`] : [], url: f.url, button: "See activity", footer: "Proposal alerts from Merlin. Change them in Notifications." },
-        email: mail(headline, `${headline}.`, text ? [mailQuote(escHtml(text))] : [], text ? ["", `"${text}"`] : [], "Open in Merlin"),
+        // The question itself comes by email from the proposal (lib/proposals/store.ts askQuestion), reply-to the client: one email, not two.
+        email: null,
         inbox: { kind: "question", item: f.item, head: "Question:", text: `${by} asked about ${cut(f.title, 80)}` },
       };
     }
@@ -232,7 +233,8 @@ export function alertWords(f: AlertFacts, notifications: string): AlertOut {
       const headline = `${by} passed ${cut(f.title, 120)} to ${to} to sign`;
       return {
         slack: { kind: "proposal", count: 1, headline, lines: [`${firstName(to) || to} gets the signing link now. Follow up with them, not ${firstName(by) || by}.`], url: f.url, button: "See activity", footer: "Proposal alerts from Merlin. Change them in Notifications." },
-        email: mail(headline, `${headline}.`, [], [], "See activity"),
+        // The proposal's own email says it (lib/proposals/store.ts handOff): one email, not two.
+        email: null,
         inbox: { kind: "passed", item: f.item, head: "Passed on:", text: `${firstName(by) || by} to ${to}` },
       };
     }
@@ -241,7 +243,8 @@ export function alertWords(f: AlertFacts, notifications: string): AlertOut {
       const headline = `${by} signed. Countersign to finish.`;
       return {
         slack: { kind: "proposal", count: 1, headline, lines: [`${company ? `${company}, ` : ""}${cut(f.title, 120)}. It moves to Won once you countersign.`], url: f.url, button: "Countersign", footer: "Proposal alerts from Merlin. Change them in Notifications." },
-        email: mail(headline, `${by} signed ${cut(f.title, 120)}. It's finished, and your pipeline moves to Won, once you countersign.`, [], [], "Countersign"),
+        // The proposal's own countersign email says it (lib/proposals/store.ts signProposal): one email, not two.
+        email: null,
         inbox: { kind: "countersign", item: f.item, head: `Signed by ${firstName(by) || by}:`, text: "countersign to finish" },
       };
     }

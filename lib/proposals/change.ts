@@ -224,12 +224,12 @@ export async function checkChange(token: string | null, id: string, a: { changes
 }
 
 const keep = (p: StoredProposal, now: string, note: string) => {
-  const v: ProposalVersion = { version: p.version, at: now, title: p.title, blocks: structuredClone(p.blocks), fields: { ...p.fields }, note: PI.cleanLine(note, 300) };
+  const v: ProposalVersion = { version: p.version, at: now, title: p.title, blocks: structuredClone(p.blocks), fields: { ...p.fields }, pricing: p.pricing ? structuredClone(p.pricing) : null, note: PI.cleanLine(note, 300) };
   p.versions = [...(p.versions ?? []).filter((x) => x.version !== p.version), v].slice(-VERSIONS_KEPT);
 };
 
 /** Accept a change: the sections and fields saved as a new version, the one before kept. */
-export async function acceptChange(token: string | null, id: string, a: { changes?: unknown; fields?: unknown; instruction?: unknown }, origin?: string, nowMs = Date.now()): Promise<{ proposal: ProposalRec; saved: { version: number; previous: number; changed: number }; check: NumberCheck }> {
+export async function acceptChange(token: string | null, id: string, a: { changes?: unknown; fields?: unknown; instruction?: unknown; rev?: unknown }, origin?: string, nowMs = Date.now()): Promise<{ proposal: ProposalRec; saved: { version: number; previous: number; changed: number }; check: NumberCheck }> {
   const seed = await loadSeed();
   const now = new Date(nowMs).toISOString();
   return T.mutate((s) => {
@@ -237,6 +237,7 @@ export async function acceptChange(token: string | null, id: string, a: { change
     PI.buildGate(s, me.id, nowMs, origin);
     const p = PI.mine(s, me, id);
     if (PI.isSigned(p)) throw new ProposalProblem("It's signed, so it can't change. Duplicate it to start a new one.");
+    PI.checkRev(p, a.rev);
     const c = cleanChange(p, a, String(a.instruction ?? ""));
     if (!c.changes.length && !Object.keys(c.fields).length) throw new ProposalProblem("There's nothing to save: the sections read the same.");
     const previous = p.version;
@@ -251,7 +252,7 @@ export async function acceptChange(token: string | null, id: string, a: { change
 }
 
 /** Bring back an earlier version, as a new version. The current one is kept too. */
-export async function restoreVersion(token: string | null, id: string, version: unknown, origin?: string, nowMs = Date.now()): Promise<ProposalRec> {
+export async function restoreVersion(token: string | null, id: string, version: unknown, origin?: string, nowMs = Date.now(), rev?: unknown): Promise<ProposalRec> {
   const seed = await loadSeed();
   const now = new Date(nowMs).toISOString();
   return T.mutate((s) => {
@@ -259,11 +260,13 @@ export async function restoreVersion(token: string | null, id: string, version: 
     PI.buildGate(s, me.id, nowMs, origin);
     const p = PI.mine(s, me, id);
     if (PI.isSigned(p)) throw new ProposalProblem("It's signed, so it can't change. Duplicate it to start a new one.");
+    PI.checkRev(p, rev);
     const v = (p.versions ?? []).find((x) => x.version === Number(version));
     if (!v) throw new ProposalProblem("That version isn't kept anymore.", 404);
     const previous = p.version;
     keep(p, now, `Version ${v.version} brought back.`);
-    PI.applyPatch(p, { title: v.title, blocks: structuredClone(v.blocks), fields: { ...v.fields }, source: "manual" }, now, nowMs);
+    // The options and add-ons come back with it (a version kept before pricing was kept leaves them as they are).
+    PI.applyPatch(p, { title: v.title, blocks: structuredClone(v.blocks), fields: { ...v.fields }, ...(v.pricing !== undefined ? { pricing: v.pricing ? structuredClone(v.pricing) : null } : {}), source: "manual" }, now, nowMs);
     if (p.version === previous) p.version++;
     return recOf(p, nowMs, origin);
   });

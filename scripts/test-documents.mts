@@ -329,6 +329,11 @@ async function main() {
   check("all at once: both get their link", both.map((m) => m.to).sort().join() === "ann@lee.example,ben@ode.example");
   const annTok = tokenOf(both.find((m) => m.to === "ann@lee.example")!.text);
   const benTok = tokenOf(both.find((m) => m.to === "ben@ode.example")!.text);
+  // Declining needs the email code first, as signing does.
+  check("decline before the email code: refused", /Confirm your email with the code first/.test(String(await refused(S.docDecline(annTok, { reason: "No" }, who, BASE)))));
+  const mc = mails.length;
+  await S.docRequestCode(annTok, who);
+  await S.docVerifyCode(annTok, mails.slice(mc).find((m) => m.to === "ann@lee.example")!.text.match(/\b(\d{6})\b/)![1], who, BASE);
   const m4 = mails.length;
   const dv = await S.docDecline(annTok, { reason: "We need a shorter term." }, who, BASE);
   check("decline: her view, the member emailed with the reason", dv.status === "declined" && mails.slice(m4).some((m) => m.to === "pat.docs@example.com" && /Ann Lee declined nda/.test(m.subject) && /shorter term/.test(m.text)));

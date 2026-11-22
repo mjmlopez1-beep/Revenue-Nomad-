@@ -23,7 +23,7 @@ export const ENGAGED_KEYS = ["options", "pricing", "quiet", "opened_not_signed"]
 
 export interface RuleInput {
   a: ItemActivity | null | undefined;
-  status: "draft" | "sent" | "viewed" | "signed" | "declined" | "void" | "expired";
+  status: "draft" | "sent" | "viewed" | "client_signed" | "signed" | "declined" | "void" | "expired";
   sentAt: string | null;
   signer: string | null;
   company: string;
@@ -39,7 +39,7 @@ export function suggest(x: RuleInput): Suggestion | null {
   const first = firstName(x.signer) || "there";
   const a = x.a ?? null;
   if (x.status === "draft" || x.status === "void") return null;
-  if (x.status === "signed") return null;
+  if (x.status === "signed" || x.status === "client_signed") return null;
   if (x.status === "declined")
     return {
       key: "declined",

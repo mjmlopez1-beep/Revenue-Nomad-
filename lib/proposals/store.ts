@@ -37,6 +37,7 @@ import { PricingProblem, choiceRec, cleanPricing, validChoice } from "./pricing"
 import { commitSendSignature, dropStaged, readSealedPdf, readSendSignature, saveSealedPdf, stageSendSignature } from "./files";
 import { dataUrl, savedSignatureOf, sha as shaOf, signatureInput, signatureViewOf } from "./memberSig";
 import { properCase } from "./startCall";
+import { prefOn, type CloseAlertKind } from "../close/types";
 import {
   CONSENT_VERSION,
   MEMBER_CONSENT,
@@ -159,7 +160,8 @@ function freeze(p: StoredProposal, signer: SignerInfo, now: string, close: boole
 /* ---------- status ---------- */
 
 function sendStatus(x: StoredSend, nowMs: number): Exclude<ProposalStatus, "draft"> {
-  if (x.signed) return "signed";
+  // Countersign mode, the client signed: not "signed" until the member countersigns too.
+  if (x.signed) return awaitingMember(x) ? "client_signed" : "signed";
   if (x.declined) return "declined";
   if (x.voided) return "void";
   if (expiredAt(x.expiresAt, nowMs)) return "expired";
@@ -231,11 +233,13 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
     signer: p.signer ? { ...p.signer } : null,
     pricing: p.pricing ? structuredClone(p.pricing) : null,
     memberSign: p.memberSign ?? "now",
+    memberSignPicked: !!p.memberSign,
     linkDays: p.linkDays ?? SIGN_DAYS,
     version: p.version,
     status: statusOf(p, nowMs),
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
+    rev: p.rev ?? 0,
     send: cur ? sendRec(cur, nowMs, origin) : null,
     history: p.sends
       .filter((x) => x !== cur)
@@ -381,8 +385,24 @@ export interface ProposalPatch {
   pricing?: unknown;
   /** The member's own signature on the next send: "now", "after" or "none". */
   memberSign?: unknown;
+  /** The revision this change was made on (ProposalRec.rev). Given and not the latest: refused with 409 (STALE). */
+  rev?: unknown;
   /** How long the next send's link works: 14, 30, 60 or 90 days, or 0 for no end date. Not part of what the client reads: no new version. */
   linkDays?: unknown;
+}
+
+/** A change to the proposal: its time, and its revision up by one (StoredProposal.rev). Every write goes through here. */
+export const touch = (p: StoredProposal, now: string) => {
+  p.updatedAt = now;
+  p.rev = (p.rev ?? 0) + 1;
+};
+/** What a tab or the connector says it read; a newer proposal means someone else changed it since. */
+export const STALE = "This proposal changed in another tab or window. Merlin loaded the latest.";
+export function checkRev(p: StoredProposal, raw: unknown): void {
+  if (raw === undefined || raw === null || raw === "") return;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) throw new ProposalProblem("That change didn't come through. Reload the proposal and try again.");
+  if (n !== (p.rev ?? 0)) throw new ProposalProblem(STALE, 409);
 }
 
 /** The document's parts, to tell whether a change touches what the client reads. */
@@ -433,7 +453,7 @@ function applyPatch(p: StoredProposal, a: ProposalPatch, now: string, nowMs: num
     p.memberSign = m;
   }
   if (a.linkDays !== undefined) p.linkDays = linkDaysOf(a.linkDays) as LinkDays;
-  p.updatedAt = now;
+  touch(p, now);
   // A change to what the client reads, after this version went out: a new version, and the old link stops.
   if (docPart(p) !== before && p.sends.some((x) => x.version === p.version)) {
     for (const x of p.sends) if (live(x, nowMs)) (x.voided = { at: now, why: "changed" }), x.events.push({ kind: "voided", at: now, note: "A new version replaced it" });
@@ -499,7 +519,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
     p.companyId = co.internal;
     p.companyPub = pub;
     if (!p.companyName) p.companyName = co.name || cleanLine(a.name, 120);
-    p.updatedAt = now;
+    touch(p, now);
     // Already out, or signed: the pipeline catches up, as if it had been linked from the start.
     const signed = p.sends.find((x) => fullySigned(x));
     const out = currentSend(p);
@@ -529,8 +549,9 @@ export async function createProposal(
   // A name typed all in lower case reads with capitals ("seven figure agency" is "Seven Figure Agency").
   const typed = properCase(cleanLine(a.companyName, 120));
   // A company typed, not picked: its exact name or website links it, locked ones too (as find_company finds one), so the pipeline moves when it's signed.
-  // Else the website a call gave (a draft from it: the signer's company domain), the same way.
-  const pub = picked ?? (typed ? await lookUpCompany(token, typed, origin) : null) ?? (a.companySite ? await lookUpCompany(token, a.companySite, origin) : null);
+  // With no name typed, the website a call gave (a draft from it: the signer's company domain), the same way.
+  // A name typed wins: it links only on its own exact match, never to the call's company instead (then "Add <name> to Merlin" is offered as before).
+  const pub = picked ?? (typed ? await lookUpCompany(token, typed, origin) : a.companySite ? await lookUpCompany(token, a.companySite, origin) : null);
   const co = pub ? await companyFor(token!, pub) : null;
   if (picked && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
   const name = co ? co.name || typed : typed;
@@ -588,6 +609,7 @@ export async function updateProposal(token: string | null, id: string, a: Propos
     const me = memberOf(seed, s, token);
     buildGate(s, me.id, nowMs, origin);
     const p = mine(s, me, id);
+    checkRev(p, a.rev);
     applyPatch(p, a, now, nowMs);
     return recOf(p, nowMs, origin);
   });
@@ -623,7 +645,15 @@ export async function deleteProposal(token: string | null, id: string): Promise<
     const p = mine(s, memberOf(seed, s, token), id);
     if (isSigned(p)) throw new ProposalProblem("A signed proposal is kept as the record of what was agreed.");
     s.proposals = (s.proposals ?? []).filter((x) => x !== p);
+    dropItemRecords(s, p.memberId, p.id);
   });
+}
+/** A deleted proposal's or document's notifications (the bell, the inbox) and its activity go with it. */
+export function dropItemRecords(s: State, memberId: string, itemId: string): void {
+  const c = s.close;
+  if (!c) return;
+  if (c.inbox?.[memberId]) c.inbox[memberId] = c.inbox[memberId].filter((x) => x.item !== itemId);
+  if (c.items?.[itemId]) delete c.items[itemId];
 }
 
 /** Void the live link: the client can't open or sign it any more. */
@@ -636,7 +666,7 @@ export async function voidProposal(token: string | null, id: string, origin?: st
     if (!live(x, nowMs)) throw new ProposalProblem(isSigned(p) ? "It's signed already, so it can't be voided." : "There's no sent link to void.");
     x.voided = { at: now, why: "member" };
     x.events.push({ kind: "voided", at: now, note: "Voided by the sender" });
-    p.updatedAt = now;
+    touch(p, now);
     return recOf(p, nowMs, origin);
   });
 }
@@ -702,6 +732,18 @@ export async function sendProposal(
     const blanks = blanksOf(p.blocks, docFields(p));
     if (blanks.length) throw new ProposalProblem(`Fill the ${blanks.length === 1 ? "last blank" : `${blanks.length} blanks`} first: ${blanksInWords(blanks, 5)}.`);
     const close = !onFree(s, me.id, nowMs);
+    if (close && p.pricing) {
+      // An option or add-on left without its own name or price would reach the client as "Add-on 1 · $0": said which, first.
+      const unnamed = /^(Option|Add-on) \d+$/;
+      for (const [i, o] of p.pricing.options.entries()) {
+        if (unnamed.test(o.name)) throw new ProposalProblem(`Give option ${i + 1} a name first.`);
+        if (!(o.price > 0)) throw new ProposalProblem(`Give ${o.name} a price first.`);
+      }
+      for (const [i, o] of p.pricing.addOns.entries()) {
+        if (unnamed.test(o.name)) throw new ProposalProblem(`Give add-on ${i + 1} a name first.`);
+        if (!(o.price > 0)) throw new ProposalProblem(`Give ${o.name} a price first.`);
+      }
+    }
     const doc = freeze(p, signer, now, close);
     const x: StoredSend = {
       id: sendId,
@@ -723,7 +765,7 @@ export async function sendProposal(
       x.events.push({ kind: "member_signed", at: now, note: `${me.name} applied their saved signature (${sv.kind}) when sending`, ...(who.ip ? { ip: who.ip.slice(0, 64) } : {}), ...(who.ua ? { ua: who.ua.slice(0, 300) } : {}) });
     }
     p.sends.push(x);
-    p.updatedAt = now;
+    touch(p, now);
     pipelineEvent(s, me.id, p.companyId, "proposal_sent", now);
     return { p, x: structuredClone(x), me, title: titleOf(s, me) };
   }).catch(async (e) => {
@@ -775,6 +817,17 @@ const emailHint = (e: string) => {
   const [u, d] = e.split("@");
   return `${u.slice(0, 2)}${"*".repeat(Math.max(1, Math.min(6, u.length - 2)))}@${d}`;
 };
+/**
+ * The member's email switch for one of the proposal's own emails to them (Notifications): a question,
+ * a hand-off, "your turn to countersign". Each of those comes in this one email only (lib/close
+ * sends no second copy), so its switch is read here. The signed copy and a decline always go.
+ */
+const wantsEmail = (s: State, memberId: string, kind: CloseAlertKind) => prefOn(s.close?.prefs?.[memberId], kind, "email");
+/** Asking, passing it on and declining speak for the named signer, so they need the email code first, as signing does. */
+export const CODE_FIRST = "Confirm your email with the code first.";
+const needCode = (x: StoredSend) => {
+  if (!x.codeVerifiedAt) throw new ProposalProblem(CODE_FIRST, 401);
+};
 const ev = (x: StoredSend, kind: AuditEvent["kind"], at: string, meta: { ip?: string; ua?: string; note?: string } = {}) =>
   x.events.push({ kind, at, ...(meta.ip ? { ip: meta.ip.slice(0, 64) } : {}), ...(meta.ua ? { ua: meta.ua.slice(0, 300) } : {}), ...(meta.note ? { note: meta.note } : {}) });
 
@@ -784,7 +837,8 @@ function viewOf(f: Found, nowMs: number, origin?: string): SignerView {
     status: signerStatus(f, nowMs),
     signer: { name: x.signer.name, title: x.signer.title ?? "" },
     passedTo: x.passedTo ? { name: x.passedTo.name } : null,
-    handoffsLeft: Math.max(0, HANDOFFS - (x.handoffs ?? 0)),
+    // Counted along the chain (each new link carries the count so far); a link passed on has none left.
+    handoffsLeft: signerStatus(f, nowMs) === "passed" ? 0 : Math.max(0, HANDOFFS - (x.handoffs ?? 0)),
     doc: structuredClone(x.doc),
     hash: x.hash,
     emailHint: emailHint(x.signer.email),
@@ -943,7 +997,7 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
     const f = resolve(s, token);
     const st = signerStatus(f, nowMs);
     if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
-    if (!f.x.codeVerifiedAt) throw new ProposalProblem("Confirm your email with the code first.", 401);
+    needCode(f.x);
     // The document shown is the one signed: the hash the page showed must be this send's, and the content must still hash to it.
     if (typeof a.hash !== "string" || !same(a.hash, f.x.hash) || hashDoc(f.x.doc) !== f.x.hash) throw new ProposalProblem("This page is out of date. Reload it to read the proposal again before you sign.", 409);
     const consent = consentText(f.x.doc.from.name || "the sender");
@@ -952,10 +1006,10 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
     f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email, ...(choice ? { choice } : {}) };
     if (picked) f.x.choice = picked;
     ev(f.x, "signed", now, { ...who, note: `typed name "${name}"${choice ? `; chose ${choice.summary}, ${choice.total}` : ""}` });
-    f.p.updatedAt = now;
+    touch(f.p, now);
     // Countersign mode: the pipeline moves to Won at the member's countersignature, not here.
     if (fullySigned(f.x)) pipelineEvent(s, f.p.memberId, f.p.companyId, "signed", now);
-    return { x: structuredClone(f.x), memberId: f.p.memberId, proposalId: f.p.id, view: viewOf(f, nowMs, origin) };
+    return { x: structuredClone(f.x), memberId: f.p.memberId, proposalId: f.p.id, view: viewOf(f, nowMs, origin), mail: wantsEmail(s, f.p.memberId, "countersign") };
   });
   const seed = await loadSeed();
   const m = await memberFor(seed, out.memberId);
@@ -965,7 +1019,7 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
     const ch = out.x.signed!.choice;
     const toMember = countersignEmail({ to: "member", name: m?.name ?? out.x.doc.from.name, member: out.x.doc.from.name, signer: out.x.signed!.name, title: out.x.doc.title, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}&countersign=1`, ...(ch ? { choice: `${ch.summary}. Total: ${ch.total}.` } : {}) });
     const toClient = countersignEmail({ to: "signer", name: out.x.signer.name, member: out.x.doc.from.name, signer: out.x.signed!.name, title: out.x.doc.title, link: copyLink(origin, out.x), ...(ch ? { choice: `${ch.summary}. Total: ${ch.total}.` } : {}) });
-    if (m?.email) await sendEmail(m.email, toMember.subject, toMember.text, toMember.html);
+    if (m?.email && out.mail) await sendEmail(m.email, toMember.subject, toMember.text, toMember.html);
     await sendEmail(out.x.signer.email, toClient.subject, toClient.text, toClient.html, m?.email ? { replyTo: m.email } : {});
     await callHook(() => proposalHooks.onSigned({ ...signedFacts, state: "client_signed" }));
     return withMemberImg(out.view, out.x.id);
@@ -1057,7 +1111,7 @@ export async function countersignProposal(
       if (!awaitingMember(x)) throw new ProposalProblem("There's nothing to countersign.", 409);
       x.member = memberSigned({ name: me.name, title: titleOf(s, me) }, saved ? "saved" : input.kind, input.kind, input.kind === "typed" ? input.typed : undefined, png, x.hash, now, who);
       x.events.push({ kind: "countersigned", at: now, note: `${me.name} countersigned (${saved ? `saved signature, ${input.kind}` : input.kind})`, ...(who.ip ? { ip: who.ip.slice(0, 64) } : {}), ...(who.ua ? { ua: who.ua.slice(0, 300) } : {}) });
-      p.updatedAt = now;
+      touch(p, now);
       pipelineEvent(s, me.id, p.companyId, "signed", now);
       return true;
     }).catch(async (e) => {
@@ -1210,6 +1264,7 @@ const callHook = async (fn: () => unknown) => {
  * replies; the client never sees the member's address). On the audit trail. QUESTIONS_A_DAY a link.
  */
 export async function askQuestion(token: unknown, raw: unknown, who: Client, origin?: string, nowMs = Date.now()): Promise<{ sent: true; to: string }> {
+  if (raw !== undefined && raw !== null && typeof raw !== "string") throw new ProposalProblem("Type your question as text.");
   const text = cleanText(raw, QUESTION_MAX + 1).trim();
   if (!text) throw new ProposalProblem("Type your question first.");
   if (text.length > QUESTION_MAX) throw new ProposalProblem(`Keep it under ${QUESTION_MAX.toLocaleString("en-US")} characters.`);
@@ -1219,16 +1274,18 @@ export async function askQuestion(token: unknown, raw: unknown, who: Client, ori
     const f = resolve(s, token);
     const st = signerStatus(f, nowMs);
     if (st !== "open" && st !== "signed") throw new ProposalProblem(notOpen(st), 409);
+    needCode(f.x);
     const recent = (f.x.questions ?? []).filter((t) => nowMs - Date.parse(t) < DAY);
     if (recent.length >= QUESTIONS_A_DAY) throw new ProposalProblem(`That's ${QUESTIONS_A_DAY} questions today on this link, which is the most. Try again tomorrow.`, 429);
     f.x.questions = [...recent, now];
     ev(f.x, "question", now, { ...who, note: text.length > 300 ? `${text.slice(0, 300)}…` : text });
-    return { sendId: f.x.id, proposalId: f.p.id, memberId: f.p.memberId, signer: { name: f.x.signer.name, email: f.x.signer.email }, title: f.x.doc.title, from: f.x.doc.from.name };
+    return { sendId: f.x.id, proposalId: f.p.id, memberId: f.p.memberId, signer: { name: f.x.signer.name, email: f.x.signer.email }, title: f.x.doc.title, from: f.x.doc.from.name, mail: wantsEmail(s, f.p.memberId, "question") };
   });
   const m = await memberFor(await loadSeed(), out.memberId);
   if (!m?.email) throw new ProposalProblem("Your question didn't go out. Try again in a moment.", 502);
   const mail = questionEmail({ member: m.name, signer: out.signer.name, title: out.title, question: text, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}` });
-  if (!(await sendEmail(m.email, mail.subject, mail.text, mail.html, { replyTo: out.signer.email }))) throw new ProposalProblem("Your question didn't go out. Try again in a moment.", 502);
+  // The member turned this email off in Notifications: the question is in Merlin, and nothing is emailed.
+  if (out.mail && !(await sendEmail(m.email, mail.subject, mail.text, mail.html, { replyTo: out.signer.email }))) throw new ProposalProblem("Your question didn't go out. Try again in a moment.", 502);
   await callHook(() => proposalHooks.onClientQuestion({ sendId: out.sendId, proposalId: out.proposalId, memberId: out.memberId, signer: out.signer, title: out.title, text, at: now }));
   return { sent: true, to: (out.from || m.name).split(" ")[0] };
 }
@@ -1245,6 +1302,8 @@ export async function handOff(token: unknown, a: { signer?: unknown; note?: unkn
   if (!emailEnabled()) throw new ProposalProblem("Email isn't working on our side right now. Try again later.", 503);
   const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
   const f0 = resolve(s0, token);
+  // Only the named signer, confirmed by the email code, can pass it on: a forwarded link can't move signing elsewhere.
+  if (signerStatus(f0, nowMs) === "open") needCode(f0.x);
   const m0 = await memberFor(seed, f0.p.memberId);
   const NOT_SENDER = "Pass it to someone at your company, not to the person who sent it.";
   if (m0?.email && m0.email.toLowerCase() === signer.email) throw new ProposalProblem(NOT_SENDER);
@@ -1258,6 +1317,7 @@ export async function handOff(token: unknown, a: { signer?: unknown; note?: unkn
     const f = resolve(s, token);
     const st = signerStatus(f, nowMs);
     if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
+    needCode(f.x);
     const n = f.x.handoffs ?? 0;
     if (n >= HANDOFFS) throw new ProposalProblem(`This proposal was passed on ${HANDOFFS} times, which is the most. Ask ${f.x.doc.from.name || "the sender"} for a new link.`, 409);
     const x = f.x;
@@ -1282,8 +1342,8 @@ export async function handOff(token: unknown, a: { signer?: unknown; note?: unkn
     ev(x, "passed", now, { ...who, note: `${x.signer.name} passed it to ${signer.name}${signer.title ? `, ${signer.title}` : ""} <${signer.email}>` });
     f.p.sends.push(y);
     f.p.signer = signer;
-    f.p.updatedAt = now;
-    return { y: structuredClone(y), from: { name: x.signer.name, email: x.signer.email }, proposalId: f.p.id, memberId: f.p.memberId, view: viewOf(f, nowMs, origin) };
+    touch(f.p, now);
+    return { y: structuredClone(y), from: { name: x.signer.name, email: x.signer.email }, proposalId: f.p.id, memberId: f.p.memberId, view: viewOf(f, nowMs, origin), mail: wantsEmail(s, f.p.memberId, "passed") };
   }).catch(async (e) => {
     await dropStaged(staged);
     throw e;
@@ -1300,7 +1360,7 @@ export async function handOff(token: unknown, a: { signer?: unknown; note?: unkn
     });
     throw new ProposalProblem("The email to them didn't go out. Check the address and try again.", 502);
   }
-  if (m0?.email) {
+  if (m0?.email && out.mail) {
     const toMember = handoffEmail({ to: "member", name: m0.name, from: out.from.name, member: out.y.doc.from.name, title: out.y.doc.title, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}`, expiresAt: out.y.expiresAt, note, newSigner: `${signer.name}${signer.title ? `, ${signer.title}` : ""}` });
     await sendEmail(m0.email, toMember.subject, toMember.text, toMember.html);
   }
@@ -1317,9 +1377,10 @@ export async function declineProposal(token: unknown, a: { reason?: unknown }, w
     const f = resolve(s, token);
     const st = signerStatus(f, nowMs);
     if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
+    needCode(f.x);
     f.x.declined = { at: now, reason, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300) };
     ev(f.x, "declined", now, { ...who, ...(reason ? { note: reason } : {}) });
-    f.p.updatedAt = now;
+    touch(f.p, now);
     pipelineEvent(s, f.p.memberId, f.p.companyId, "declined", now);
     return { memberId: f.p.memberId, signer: f.x.signer.name, title: f.x.doc.title, view: viewOf(f, nowMs, origin) };
   });
@@ -1365,4 +1426,4 @@ async function memberFor(seed: Seed, id: string): Promise<{ name: string; email:
 }
 
 /** What lib/documents shares with proposals: the same links' keys, checks and clean-up. */
-export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, buildGate, titleOf, memberOf, memberFor, EMAIL, NAME, mine, applyPatch, isSigned };
+export const proposalInternals = { touch, checkRev, mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, buildGate, titleOf, memberOf, memberFor, EMAIL, NAME, mine, applyPatch, isSigned };
