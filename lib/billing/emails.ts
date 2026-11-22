@@ -7,7 +7,7 @@
  * on Free is a fine answer, a pause is there, and nothing pushes.
  */
 import { MAIL, escHtml, footerNote, mailButton, mailH, mailList, mailP, mailShell, oneLine } from "../email";
-import { PRICES, PRO_STORY, TOPUP_CREDITS, keepWords, type Tier } from "./rules";
+import { PRICES, PRO_STORY, TOPUP_CREDITS, TRIAL_NAME, keepWords, type Tier } from "./rules";
 import { COMPANY_PRICE_SAY, functionOf } from "../tableFields";
 import { FEATURE_NAME } from "../radar/types";
 
@@ -113,25 +113,25 @@ export const ONE_CLIENT = "One client pays for years of Pro.";
 
 /** The annual line first, then monthly. `rateLine`: "Less than an hour of your time a month." when their rate says so. */
 const priceWords = (rateLine: string | null) =>
-  `Pro is $${PRICES.year} a year, which is 2 months free, or $${PRICES.month} a month. Pro + Close, with proposals sent and signed, is $${PRICES.closeYear} a year or $${PRICES.closeMonth} a month.${rateLine ? ` ${rateLine}` : ""}`;
+  `Pro is $${PRICES.year} a year, which is 2 months free, or $${PRICES.month} a month. Close, with proposals sent and signed, is $${PRICES.closeYear} a year or $${PRICES.closeMonth} a month.${rateLine ? ` ${rateLine}` : ""}`;
 
-/** What to keep, in the trial-ending emails: Pro by default, Pro + Close for an active Close user (lib/billing/rules.ts keepTier). */
+/** What to keep, in the trial-ending emails: Pro by default, Close for an active Close user (lib/billing/rules.ts keepTier). */
 const keepLine = (keep: Tier | undefined) =>
   keep === "close"
-    ? `After it ends you're on Free, unless you keep Pro + Close. You've been building proposals in Merlin: Pro + Close keeps them going, drafted from your call, sent and signed, with everything in Pro.`
+    ? `After it ends you're on Free, unless you keep Close. You've been building proposals in Merlin: Close keeps them going, drafted from your call, sent and signed, with everything in Pro.`
     : `After it ends you're on Free, unless you keep Pro. Pro is how you win the client: ${lowerFirst(PRO_STORY)}`;
 
 /** The trial ends in `days` days (3, or 1 on the last day). `keep`: the plan it names (Pro unless they used Close for real). */
 export function trialEndingEmail(o: { first: string; days: number; notLooking: boolean; rateLine: string | null; link: string; keep?: Tier }) {
   const first = oneLine(o.first).slice(0, 40) || "there";
   const when = o.days <= 1 ? "tomorrow" : `in ${o.days} days`;
-  const subject = o.days <= 1 ? "Your Pro trial ends tomorrow" : `Your Pro trial ends in ${o.days} days`;
+  const subject = o.days <= 1 ? `Your ${TRIAL_NAME} ends tomorrow` : `Your ${TRIAL_NAME} ends in ${o.days} days`;
   const link = oneLine(o.link);
   const lead = o.notLooking
     ? `Nothing to do: when it ends you stay on Free, with your saved view and the weekly email. No card, no charge.`
     : keepLine(o.keep).replace("After it ends", "After that");
   const offer = o.notLooking ? `If your book fills up again later, Pro is a click away.` : `${priceWords(o.rateLine)} ${ONE_CLIENT}`;
-  const text = [`Hi ${first},`, "", `Your Merlin Pro trial ends ${when}.`, "", lead, "", offer, "", link, "", "--", WHY].join("\n");
+  const text = [`Hi ${first},`, "", `Your Merlin ${TRIAL_NAME} ends ${when}.`, "", lead, "", offer, "", link, "", "--", WHY].join("\n");
   const html = shell(subject, lead, [mailP(`Hi ${escHtml(first)},`), mailH(escHtml(subject)), mailP(escHtml(lead)), mailP(escHtml(offer), "margin-bottom:24px;"), mailButton(link, o.notLooking ? "Open Merlin" : keepWords(o.keep ?? "pro"), "margin:0 0 8px")], link);
   return { subject, text, html };
 }
@@ -143,7 +143,7 @@ export function trialEndingEmail(o: { first: string; days: number; notLooking: b
 export function trialReceiptEmail(o: { first: string; days: number; counts: ValueCounts; rateLine: string | null; link: string; keep?: Tier }) {
   const first = oneLine(o.first).slice(0, 40) || "there";
   const lines = valueLines(o.counts);
-  const subject = `Your Pro trial ends in ${o.days} days`;
+  const subject = `Your ${TRIAL_NAME} ends in ${o.days} days`;
   const link = oneLine(o.link);
   const lead = lines.length ? "Here's what your trial gave you so far:" : `Your trial is still yours for a few days. ${PRO_STORY}`;
   // The loss in plain terms: what they used, and what locks when it ends.
@@ -172,7 +172,7 @@ export function trialReceiptEmail(o: { first: string; days: number; counts: Valu
 export function trialEndedEmail(o: { first: string; counts: ValueCounts; notLooking: boolean; rateLine: string | null; link: string }) {
   const first = oneLine(o.first).slice(0, 40) || "there";
   const lines = valueLines(o.counts);
-  const subject = "Your Pro trial is over";
+  const subject = `Your ${TRIAL_NAME} is over`;
   const link = oneLine(o.link);
   const lead = `You're on Free now. Your credits, your saved view and the weekly email stay, and one ${FEATURE_NAME} company a day opens free, with everything on it. Nothing was charged.`;
   const got = lines.length ? "In your trial:" : null;

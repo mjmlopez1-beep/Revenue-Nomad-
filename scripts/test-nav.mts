@@ -168,7 +168,7 @@ async function main() {
   check("no Plan and billing while billing is off", !member.some((it) => it.key === "billing"));
   check("no Your network while it is off", !member.some((it) => it.key === "network"));
   check("an admin gets Pilot metrics, in the foot", all.find((it) => it.key === "metrics")?.group === "foot");
-  check("the plan's line: the trial's days left", nm.planLine(trial) === "Pro trial · 9 days left" && nm.planLine({ ...trial, trialDaysLeft: 1 }) === "Pro trial · last day" && nm.planLine({ ...trial, name: "pro" }) === "Pro" && nm.planLine(undefined) === null);
+  check("the plan's line: the trial's days left", nm.planLine(trial) === "Close trial · 9 days left" && nm.planLine({ ...trial, trialDaysLeft: 1 }) === "Close trial · last day" && nm.planLine({ ...trial, name: "pro" }) === "Pro" && nm.planLine(undefined) === null);
 
   // Exactly one item on, the right one.
   const on = (x: Partial<NavInput>) => nm.navItems(input({ admin: true, plan: trial, network: true, ...x })).filter((it) => it.current).map((it) => it.key);

@@ -9,12 +9,12 @@
  *   Pro    $59 a month or $590 a year: unlimited saved views, every alert in Slack, the Claude
  *          connector without the daily cap, the benchmarks' ranges by client size, the radar's signals
  *          in Slack as they happen (everyone gets every signal each morning), and 100 credits each paid month.
- *   Pro + Close  $79 a month or $790 a year: everything in Pro, plus proposals end to end (Claude
+ *   Close  $79 a month or $790 a year: everything in Pro, plus proposals end to end (Claude
  *          drafting from a call, your own templates and contracts, unlimited send for signature,
  *          the pipeline moving itself on a signature). The same 100 credits a month. canClose() is
  *          the one gate. Pro and Close move into each other on the same subscription (prorated).
  *   Top-up $19 for 50 credits, once, on any plan.
- *   Trial  21 days of Pro + Close (the top tier), no card, from the end of onboarding. Extended once by 7 days when, in its
+ *   Trial  the 21-day Close trial (TRIAL_LABEL, the top tier), no card, from the end of onboarding. Extended once by 7 days when, in its
  *          last 4 days, the member opens a conversation, unlocks a warm path or sends an invite.
  *          It ends quietly into Free. Pro can be bought at any point in it: with more than 48 hours
  *          left, the subscription starts in Stripe's trialing status with trial_end at the trial's
@@ -24,17 +24,17 @@
 import { billingLive, planOf, pausedAt, type PlanRecord } from "../plan";
 
 export const PRICES = { month: 59, year: 590, closeMonth: 79, closeYear: 790, topup: 19, aiPack: 10 } as const;
-/** The plans page's lines under Pro + Close: what it does, then (smaller) the AI usage pack, once, on Pro + Close or the trial. No amount or limit is stated. */
+/** The plans page's lines under Close: what it does, then (smaller) the AI usage pack, once, on Close or the trial. No amount or limit is stated. */
 export const CLOSE_AI_LINE = "Claude drafts your proposals from your calls";
 export const AI_PACK_LINE = `Need more AI usage? Add a pack anytime for $${PRICES.aiPack}.`;
 /**
- * The paid tiers: Pro ($59, $590 a year) and Pro + Close ($79, $790 a year), the same 100 credits
+ * The paid tiers: Pro ($59, $590 a year) and Close ($79, $790 a year), the same 100 credits
  * a month. Close adds proposals end to end: Claude drafting from a call, your own templates, your
  * own contracts with signature fields, unlimited send for signature, and the pipeline moving itself
  * when something is signed. The trial is Close. PlanRecord.tier says which a subscription is.
  */
 export type Tier = "pro" | "close";
-export const TIER_NAME: Record<Tier, string> = { pro: "Pro", close: "Pro + Close" };
+export const TIER_NAME: Record<Tier, string> = { pro: "Pro", close: "Close" };
 /** What a tier costs per interval, in dollars. */
 export const tierPrice = (tier: Tier, interval: "month" | "year") => (tier === "close" ? (interval === "year" ? PRICES.closeYear : PRICES.closeMonth) : interval === "year" ? PRICES.year : PRICES.month);
 /** Pro sold as winning clients: the plans, the Pro welcome, the trial-ended card and the trial emails say it the same way. */
@@ -44,6 +44,10 @@ export const SUMMARY_DAYS = 4;
 export const TOPUP_CREDITS = 50;
 export const PRO_CREDITS = 100;
 export const TRIAL_DAYS = 21;
+/** The trial is the Close plan: what every screen, email and page calls it ("Your Close trial ends ..."). */
+export const TRIAL_NAME = `${TIER_NAME.close} trial`;
+/** With its length: "21-day Close trial". */
+export const TRIAL_LABEL = `${TRIAL_DAYS}-day ${TRIAL_NAME}`;
 export const EXTEND_DAYS = 7;
 /** The trial is extended when value happens in its last this-many days. */
 export const EXTEND_WINDOW_DAYS = 4;
@@ -139,12 +143,12 @@ export function keepTrialEnd(rec: PlanRecord | undefined, nowMs: number): number
 /** Subscribed during the trial, and paid Pro hasn't started yet: nothing charged, the first charge still to come. */
 export const proStartsLater = (rec: PlanRecord | undefined, nowMs: number) => !!rec?.proStartsAt && ms(rec.proStartsAt) > nowMs && !rec.invoiceId;
 
-/* ---------- Pro + Close ---------- */
+/* ---------- Close ---------- */
 
 /**
  * The one gate for every Close feature (proposals sent for signature, Claude drafting, your own
  * templates and contracts, the pipeline moving on a signature): true on an active trial (the trial
- * is Close), on a paid Pro + Close subscription, and for a member who was on paid Pro before Close
+ * is Close), on a paid Close subscription, and for a member who was on paid Pro before Close
  * existed until their next renewal (PlanRecord.closeUntil). False on Free and on plain Pro. While
  * billing isn't live nothing is gated, so it is true.
  */
@@ -168,16 +172,16 @@ export interface CloseUse {
 }
 /**
  * The "active Close user" threshold: the trial's plans sheet, Home's trial card, the trial nudge and
- * the trial-ending emails nudge toward Pro by default, and toward Pro + Close once the member has
+ * the trial-ending emails nudge toward Pro by default, and toward Close once the member has
  * used Close for real. Active is any one thing sent for signature (a proposal or a document), or
  * CLOSE_ACTIVE_MIN or more of the other Close actions together (a proposal or document made, a
  * draft written with Claude). One proposal made and left alone is not enough.
  */
 export const CLOSE_ACTIVE_MIN = 2;
 export const closeActive = (u: CloseUse): boolean => u.sent > 0 || u.made + u.drafted >= CLOSE_ACTIVE_MIN;
-/** The plan the trial nudges toward: Pro, or Pro + Close for an active Close user. */
+/** The plan the trial nudges toward: Pro, or Close for an active Close user. */
 export const keepTier = (u: CloseUse): Tier => (closeActive(u) ? "close" : "pro");
-/** "Keep Pro" or "Keep Pro + Close". */
+/** "Keep Pro" or "Keep Close". */
 export const keepWords = (t: Tier) => `Keep ${TIER_NAME[t]}`;
 
 /** The tier a member is on now, for the plans and the gates' words: Free, Pro, or Close (the trial is Close). */
@@ -360,7 +364,7 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
         if (str(o.subscription)) rec.subscriptionId = str(o.subscription)!;
         const interval = meta.interval === "year" ? "year" : "month";
         rec.interval = interval;
-        // Pro or Pro + Close, as checkout was asked for (metadata tier).
+        // Pro or Close, as checkout was asked for (metadata tier).
         rec.tier = metaTier(meta) ?? "pro";
         const settled = o.payment_status === "paid" || o.payment_status === "no_payment_required";
         const trialEnd = metaTrialEnd(meta);
@@ -444,7 +448,7 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
       if (str(o.customer)) rec.customerId = str(o.customer)!;
       const interval = subInterval(o);
       if (interval) rec.interval = interval;
-      // An upgrade to Pro + Close, or back to Pro, changes the subscription's price: its tier follows.
+      // An upgrade to Close, or back to Pro, changes the subscription's price: its tier follows.
       const subTier = ctx.tierOf?.(subPrice(o)) ?? metaTier(o.metadata);
       if (subTier) rec.tier = subTier;
       const end = unix(subPeriodEnd(o));

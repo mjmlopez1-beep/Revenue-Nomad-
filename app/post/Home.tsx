@@ -45,6 +45,7 @@ import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
 import { Bleed, NomadArt, Prop, Scene, Spot, Strip } from "../ui/fractions/lazy";
 import { PageHead } from "../ui/system";
+import { TRIAL_NAME } from "@/lib/billing/rules";
 import "./home.css";
 
 /* ---------- Fractionals on Home ---------- */
@@ -455,7 +456,7 @@ function TrialStarted({ days, today, radar, onSeen }: { days: number | null; tod
   return (
     <section className="td-trial hm-trialcard" aria-labelledby="hm-trialcard-h">
       <p className="td-trial-h" id="hm-trialcard-h">
-        Your Pro trial is on.
+        Your {TRIAL_NAME} is on.
       </p>
       <p>{trialCardLine(days, today)}</p>
       <div className="td-acts">

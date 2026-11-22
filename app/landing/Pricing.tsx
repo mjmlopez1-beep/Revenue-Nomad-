@@ -1,12 +1,12 @@
 /**
- * The landing page's pricing: Free, Pro and Pro + Close in a few rows, framed by return. The rows
+ * The landing page's pricing: Free, Pro and Close in a few rows, framed by return. The rows
  * and plans are the app's own (lib/billing/compare.ts), the prices and the trial the billing rules'
  * (lib/billing/rules.ts), so the page can't say what the plans don't. No rate is cited: the page
  * reads no rate benchmarks (they are for members), so it makes no claim about what a client pays.
  * Flat prices only: no fee on what a member wins.
  */
 import { LANDING_ROWS, PLANS } from "@/lib/billing/compare";
-import { PRO_STORY, TRIAL_DAYS } from "@/lib/billing/rules";
+import { PRO_STORY, TRIAL_LABEL } from "@/lib/billing/rules";
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 
@@ -44,7 +44,7 @@ export default function Pricing({ starter, onJoin }: { starter: number; onJoin: 
             </div>
           ))}
         </div>
-        <p className="lp-price-trial num">{TRIAL_DAYS}-day trial of Pro + Close, no card. It ends into Free on its own.</p>
+        <p className="lp-price-trial num">{TRIAL_LABEL}, no card. It ends into Free on its own.</p>
         <table className="lp-price-table">
           <thead>
             <tr>
@@ -66,7 +66,7 @@ export default function Pricing({ starter, onJoin }: { starter: number; onJoin: 
                 <td data-cap="Pro" className="lp-price-procell">
                   {pro}
                 </td>
-                <td data-cap="Pro + Close" className="lp-price-procell">
+                <td data-cap="Close" className="lp-price-procell">
                   {close}
                 </td>
               </tr>
@@ -75,7 +75,7 @@ export default function Pricing({ starter, onJoin }: { starter: number; onJoin: 
         </table>
         <div className="lp-price-go">
           <button type="button" className="btn btn-pine" onClick={onJoin}>
-            Start free, with the {TRIAL_DAYS}-day trial
+            Start free, with the {TRIAL_LABEL}
           </button>
         </div>
       </div>

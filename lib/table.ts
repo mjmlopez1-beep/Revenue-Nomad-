@@ -1062,10 +1062,10 @@ export async function loadState(): Promise<State> {
         if (STARTER_CREDITS + sum < 0) s.ledger.push({ memberId, delta: -(STARTER_CREDITS + sum), reason: "adjust", ref: "starter.floor", at });
     }
     s.flags.starterFloor = STARTER_CREDITS;
-    // Pro + Close arrived: anyone already on paid Pro stays on Pro, with Close until their next renewal (grandfatherClose). Once.
+    // Close arrived: anyone already on paid Pro stays on Pro, with Close until their next renewal (grandfatherClose). Once.
     if (!s.flags.closeTier) {
       const n = s.billing ? grandfatherClose(s.billing, Date.now()) : 0;
-      if (n) console.log(`Kept ${n} paid Pro member${n === 1 ? "" : "s"} on Pro, with Pro + Close until their next renewal.`);
+      if (n) console.log(`Kept ${n} paid Pro member${n === 1 ? "" : "s"} on Pro, with Close until their next renewal.`);
       s.flags.closeTier = true;
     }
     // To reach out arrived (lib/pipeline.ts): peers' leads stored at Sent though nothing went out from the member yet move there. Once; every other deal stays.
@@ -8393,7 +8393,7 @@ function closeUseOf(s: State, memberId: string, sinceIso: string): CloseUse {
   const drafted = (s.aiUsage?.[memberId]?.log ?? []).filter((l) => l.at >= sinceIso).length;
   return { made, drafted, sent };
 }
-/** The plan the trial nudges toward (PlanView.keep): Pro + Close for an active Close user in their trial, else Pro. */
+/** The plan the trial nudges toward (PlanView.keep): Close for an active Close user in their trial, else Pro. */
 function keepOf(s: State, memberId: string): "pro" | "close" {
   const rec = planRec(s, memberId);
   return keepTier(closeUseOf(s, memberId, rec?.trialStartedAt ?? "1970-01-01T00:00:00.000Z"));
@@ -8439,7 +8439,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     notLooking: prof.looking === false,
     annualLine: annualLine(hourlyOf(ownRate(s, memberId))),
     prices: { month: PRICES.month, year: PRICES.year, closeMonth: PRICES.closeMonth, closeYear: PRICES.closeYear, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
-    // Pro or Pro + Close (the trial is Close), whether Close features are open now, and whether Close can be bought.
+    // Pro or Close (the trial is Close), whether Close features are open now, and whether Close can be bought.
     tier: tierNow(rec, nowMs),
     keep: keepOf(s, memberId),
     canClose: canClose(rec, nowMs),

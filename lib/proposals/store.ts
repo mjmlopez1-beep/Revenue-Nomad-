@@ -59,14 +59,14 @@ export const CODE_TRIES = 5;
 export const CODES_PER_HOUR = 5;
 export const LIMITS = { proposals: 200, blocks: 40, title: 160, body: 8000, fields: 300, fieldKey: 60, fieldValue: 3000, notes: 300, note: 400, reason: 1000, message: 600 } as const;
 /**
- * Building proposals in Merlin is Pro + Close (lib/billing/rules.ts canClose, closeNow here): the
+ * Building proposals in Merlin is Close (lib/billing/rules.ts canClose, closeNow here): the
  * trial is Close, so during it a member builds, saves My templates and sends. Once it ends, without
- * Pro + Close: no new proposal (blank, from Merlin's templates or their own), no edits, no saved
+ * Close: no new proposal (blank, from Merlin's templates or their own), no edits, no saved
  * template added, no kit for their Claude. What they made stays stored, never deleted, and comes
- * back when they upgrade. Sending for signature and Claude drafting are Pro + Close too.
+ * back when they upgrade. Sending for signature and Claude drafting are Close too.
  */
 export { CLOSE_BUILD };
-export const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year.`;
+export const PRO_SEND = `Sending for signature is on Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year.`;
 export const EMAIL_OFF = "Email isn't set up on Merlin yet, so a proposal can't go out for signature.";
 
 /** A problem to tell the member or the client in a sentence. `status` for the route. */
@@ -201,9 +201,9 @@ const memberOf = (seed: Seed, s: State, token: string | null): Member => {
 };
 const titleOf = (s: State, me: Member) => s.profiles[me.id]?.title || (me.title === "Member" ? "" : me.title) || "";
 const fnOf = (s: State, me: Member) => s.profiles[me.id]?.function ?? functionOf(me.title) ?? null;
-/** Not on Pro + Close now (Free and Pro alike, after the trial): proposals are read only. The one gate is canClose. */
+/** Not on Close now (Free and Pro alike, after the trial): proposals are read only. The one gate is canClose. */
 const onFree = (s: State, memberId: string, nowMs: number) => !T.closeNow(s, memberId, nowMs);
-/** Building (a new proposal, an edit, a copy, a saved template, the kit) needs Pro + Close: else the upgrade prompt. */
+/** Building (a new proposal, an edit, a copy, a saved template, the kit) needs Close: else the upgrade prompt. */
 export function buildGate(s: State, memberId: string, nowMs: number, origin?: string): void {
   if (onFree(s, memberId, nowMs)) throw new ProposalProblem(CLOSE_BUILD, 403, upgradeUrl(base(origin), "proposals"));
 }
@@ -378,7 +378,7 @@ export async function createProposal(
 ): Promise<ProposalRec> {
   const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
   const me0 = memberOf(seed, s0, token);
-  // A new proposal, blank, from Merlin's templates or from their own: Pro + Close (the trial is Close).
+  // A new proposal, blank, from Merlin's templates or from their own: Close (the trial is Close).
   buildGate(s0, me0.id, nowMs, origin);
   const templateId = a.templateId === null || a.templateId === undefined || a.templateId === "" || a.templateId === "blank" ? null : String(a.templateId);
   // One of the member's own templates (My templates): its sections.

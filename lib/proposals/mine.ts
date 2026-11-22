@@ -14,10 +14,10 @@ import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
 
 /**
- * Building proposals in Merlin is Pro + Close (lib/billing/rules.ts canClose): what the upgrade
+ * Building proposals in Merlin is Close (lib/billing/rules.ts canClose): what the upgrade
  * prompt says wherever building is refused (lib/proposals/store.ts buildGate, saveGate here).
  */
-export const CLOSE_BUILD = `Building proposals in Merlin is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. Your proposals and saved templates are kept, and come back when you upgrade.`;
+export const CLOSE_BUILD = `Building proposals in Merlin is on Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. Your proposals and saved templates are kept, and come back when you upgrade.`;
 import type { MyTemplate, ProposalBlock } from "./types";
 
 /** The most templates a member keeps. */
@@ -34,8 +34,8 @@ export class MineProblem extends Error {
 }
 
 /**
- * Saving a template of theirs is Pro + Close (the trial is Close): during the trial a member saves
- * My templates; after it, without Pro + Close, they stay stored (never deleted) but none is added or
+ * Saving a template of theirs is Close (the trial is Close): during the trial a member saves
+ * My templates; after it, without Close, they stay stored (never deleted) but none is added or
  * renamed until they upgrade.
  */
 function saveGate(s: Parameters<typeof T.closeNow>[0], memberId: string, nowMs: number) {

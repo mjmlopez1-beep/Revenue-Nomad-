@@ -2,8 +2,8 @@
  * Plan and billing, for the signed-in member (the app's cookie). Only while billing is live
  * (RN_BILLING=1 with Stripe set up); otherwise every call answers that plans aren't open.
  *
- * POST { op: "checkout", interval: "month" | "year", tier?: "pro" | "close", code? }  { url } of Stripe Checkout for Pro or Pro + Close
- * POST { op: "tier", tier: "pro" | "close" }                 move the subscription between Pro and Pro + Close (prorated)
+ * POST { op: "checkout", interval: "month" | "year", tier?: "pro" | "close", code? }  { url } of Stripe Checkout for Pro or Close
+ * POST { op: "tier", tier: "pro" | "close" }                 move the subscription between Pro and Close (prorated)
  * POST { op: "topup" }                                        { url } of Stripe Checkout for 50 credits
  * POST { op: "aipack" }                                       { url } of Stripe Checkout for the AI usage pack (also POST /api/billing/ai-pack)
  * POST { op: "portal" }                                       { url } of the Stripe Customer Portal

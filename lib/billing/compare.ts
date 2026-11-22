@@ -1,10 +1,11 @@
 /**
- * Free, Pro and Pro + Close, row by row: the plans sheet and Plan and billing (app/post/Billing.tsx
+ * Free, Pro and Close, row by row: the plans sheet and Plan and billing (app/post/Billing.tsx
  * CompareTable), the Pro welcome, and the landing page's pricing (app/landing/Pricing.tsx) read
  * these rows, so they never say different things. Pure (no I/O), shared by server and client.
  *
- * Pro is sold as winning clients: opening the company and the person who held the seat. Pro +
- * Close adds the proposal they sign. Flat prices only: no fee on what a member wins, anywhere.
+ * Pro is sold as winning clients: opening the company and the person who held the seat. Close
+ * adds the proposal they sign. Flat prices only: no fee on what a member wins, anywhere. The Terms
+ * of Service (app/terms/Terms.tsx) draw Pro and Close from these too.
  */
 import { FEATURE_NAME } from "../radar/types";
 import { COMPANY_PRICE, PRO_OPENS_DAILY } from "../tableFields";
@@ -17,7 +18,7 @@ export const PLANS = [
   { key: "close", name: TIER_NAME.close, month: PRICES.closeMonth, year: PRICES.closeYear, line: "Everything in Pro, plus proposals drafted from your call, sent and signed." },
 ] as const;
 
-/** [what, Free, Pro, Pro + Close]. */
+/** [what, Free, Pro, Close]. */
 export const PLAN_ROWS: [string, string, string, string][] = [
   ["Opening companies", `1 a day from ${FEATURE_NAME}, others ${COMPANY_PRICE} credits`, `Free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}`, `Free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}`],
   ["Fellow fractionals", "Free", "Free", "Free"],
@@ -36,3 +37,12 @@ export const PLAN_ROWS: [string, string, string, string][] = [
 
 /** The rows the landing page leads with: the ones that win a client, first. */
 export const LANDING_ROWS = PLAN_ROWS.slice(0, 6);
+
+/** The rows where Close does more than Pro: [what, Pro, Close]. The Terms of Service list them under Close. */
+export const CLOSE_ADDS: [string, string, string][] = PLAN_ROWS.filter((r) => r[2] !== r[3]).map(([what, , pro, close]) => [what, pro, close]);
+
+/**
+ * What Pro doesn't include that Close does, in a few words each: the Pro card on the trial's plans
+ * sheet and the Terms of Service. Each is one of CLOSE_ADDS (scripts/test-prices.mts checks it).
+ */
+export const PRO_LEAVES_OUT = ["Sending for signature", "Your own templates", "Claude drafting", "The pipeline moving itself when they sign"] as const;

@@ -1,5 +1,5 @@
 /**
- * A member's plan: Free, Pro trial, or Pro. The one place that answers "is this member on Pro
+ * A member's plan: Free, the Close trial, Pro or Close. The one place that answers "is this member on Pro
  * right now", so billing (lib/billing) and the radar (lib/radar, instant delivery for Pro) agree.
  *
  * Paid plans only exist while billing is switched on (RN_BILLING=1). With it off, nobody is on a
@@ -36,7 +36,7 @@ export interface PlanRecord {
   proStartsAt?: string;
   /** "month" | "year", for the billing page. */
   interval?: "month" | "year";
-  /** The paid tier: "pro" ($59) or "close" (Pro + Close, $79). Left out: Pro (records from before Close). See lib/billing/rules.ts canClose. */
+  /** The paid tier: "pro" ($59) or "close" (Close, $79). Left out: Pro (records from before Close). See lib/billing/rules.ts canClose. */
   tier?: "pro" | "close";
   /** On paid Pro before Close existed: Close features until this date (the end of the period then paid for), then plain Pro. */
   closeUntil?: string;

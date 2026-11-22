@@ -27,7 +27,7 @@ export function ProposalStatus({ status }: { status: ProposalRec["status"] }) {
 }
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year.`;
+const PRO_SEND = `Sending for signature is on Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year.`;
 
 export async function api<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
   try {
@@ -311,7 +311,7 @@ export function SendSheet({
           </button>
         ) : (
           <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("proposals")}>
-            See Pro + Close: ${PRICES.closeMonth} a month
+            See the Close plan: ${PRICES.closeMonth} a month
           </button>
         )
       }

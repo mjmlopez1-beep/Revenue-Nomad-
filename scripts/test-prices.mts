@@ -234,6 +234,35 @@ async function main() {
     /the role is 1 credit on its own/.test(fq.get("What does a seat cost to see?") ?? "") && /the role is free/.test(faq(true).get("What does a seat cost to see?") ?? ""),
   );
   check("no line says one credit shows one thing, or that most seat holders are members", ![...fq.values()].some((a) => /one thing|Most seat holders are/.test(a)));
+
+  console.log("\nThe plans' names: Free, Pro and Close, and the Close trial");
+  const R = await import("../lib/billing/rules");
+  const CP = await import("../lib/billing/compare");
+  check("the third plan is Close, its prices unchanged", R.TIER_NAME.close === "Close" && R.TIER_NAME.pro === "Pro" && CP.PLANS.map((p) => p.name).join(",") === "Free,Pro,Close" && R.PRICES.month === 59 && R.PRICES.year === 590 && R.PRICES.closeMonth === 79 && R.PRICES.closeYear === 790);
+  check("the trial is the Close trial, in one constant", R.TRIAL_NAME === "Close trial" && R.TRIAL_LABEL === `${R.TRIAL_DAYS}-day Close trial` && R.keepWords("close") === "Keep Close" && R.keepWords("pro") === "Keep Pro");
+  check(
+    "what Pro leaves out is each a row where Close does more than Pro",
+    CP.PRO_LEAVES_OUT.join("|") === "Sending for signature|Your own templates|Claude drafting|The pipeline moving itself when they sign" &&
+      [/e-signature/, /own templates/, /^Claude drafting/, /^Pipeline on a signature/].every((re) => CP.CLOSE_ADDS.some(([what, , close]) => re.test(what) || re.test(close))) &&
+      CP.CLOSE_ADDS.some(([what, pro]) => /signature/i.test(what) && pro === "In your trial only"),
+    CP.CLOSE_ADDS,
+  );
+  // Every file a member could read from (pages, components, emails, the connector's words, the Terms, the Privacy Policy, /data, the docs) is scanned, comments too.
+  const { readdirSync, readFileSync, statSync } = await import("node:fs");
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+  const files: string[] = [];
+  const walk = (d: string) => {
+    for (const n of readdirSync(d)) {
+      const f = path.join(d, n);
+      if (statSync(f).isDirectory()) walk(f);
+      else if (/\.(tsx?|mts|mjs|css|md)$/.test(n)) files.push(f);
+    }
+  };
+  for (const d of ["app", "lib", "docs"]) walk(path.join(root, d));
+  files.push(path.join(root, "README.md"));
+  const OLD = /Pro ?\+ ?Close|Pro\+Close|Pro trial|trial of Pro|days of Pro\b/;
+  const stale = files.filter((f) => OLD.test(readFileSync(f, "utf8"))).map((f) => path.relative(root, f));
+  check("no user-facing string says Pro + Close or Pro trial anymore", stale.length === 0 && files.length > 100, stale);
 }
 
 main()

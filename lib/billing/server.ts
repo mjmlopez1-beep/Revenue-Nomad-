@@ -23,7 +23,7 @@ const dayWords = (iso: string) => {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", ...(d.getUTCFullYear() === new Date().getUTCFullYear() ? {} : { year: "numeric" }), timeZone: "UTC" });
 };
 const NOT_LIVE = "Plans aren't open yet.";
-const CLOSE_NOT_LIVE = "Pro + Close isn't open yet.";
+const CLOSE_NOT_LIVE = "Close isn't open yet.";
 const SIGNED_OUT = "You're signed out. Sign in again to manage your plan.";
 
 /** The member behind a billing ref, customer or subscription. */
@@ -73,8 +73,8 @@ function rateLineOf(s: State, memberId: string): string | null {
 /* ---------- the member's actions ---------- */
 
 export type BillingOp = "checkout" | "topup" | "portal" | "cancel" | "keep" | "pause" | "resume" | "tier" | "aipack";
-/** Said when someone not on Pro + Close (or the trial) asks for the AI usage pack. */
-export const AI_PACK_CLOSE = "The AI usage pack is for Pro + Close, where Claude drafts your proposals from your calls. Move to Pro + Close first.";
+/** Said when someone not on Close (or the trial) asks for the AI usage pack. */
+export const AI_PACK_CLOSE = "The AI usage pack is for Close, where Claude drafts your proposals from your calls. Move to Close first.";
 
 /**
  * One billing action for the signed-in member. Checkout, top-up and portal answer with a Stripe
@@ -95,14 +95,14 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
       case "checkout": {
         const tier: Tier = body.tier === "close" ? "close" : "pro";
         if (tier === "close" && !stripe.closeReady()) throw new ActionError(CLOSE_NOT_LIVE);
-        // Already paying: Pro and Pro + Close move on the same subscription (the tier op), not a second one.
+        // Already paying: Pro and Close move on the same subscription (the tier op), not a second one.
         if (planOf(rec, nowMs) === "pro" && rec?.subscriptionId) throw new ActionError(`You're on ${TIER_NAME[rec.tier ?? "pro"]} already. Change your plan on Plan and billing.`);
         // During the trial with more than 48 hours left, the first charge waits for its end (keepTrialEnd).
         // The code they typed, else the one they arrived with (?code=, kept from the landing page through joining).
         return { url: await stripe.checkoutPro(who, body.interval === "year" ? "year" : "month", base, cleanPromo(body.code) || promoOf(s, me.id), keepTrialEnd(rec, nowMs), tier) };
       }
       case "tier": {
-        // Upgrade from Pro to Pro + Close, or back, on the subscription they have: Stripe prorates.
+        // Upgrade from Pro to Close, or back, on the subscription they have: Stripe prorates.
         const tier: Tier = body.tier === "close" ? "close" : "pro";
         if (!rec?.subscriptionId || planOf(rec, nowMs) !== "pro") throw new ActionError("There's no paid plan to change. Choose a plan first.");
         if ((rec.tier ?? "pro") === tier) throw new ActionError(`You're on ${TIER_NAME[tier]} already.`);
@@ -119,7 +119,7 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
         return {
           message:
             tier === "close"
-              ? `You're on Pro + Close now: $${tierPrice("close", interval)} a ${interval}, with the difference for this ${interval} charged today.`
+              ? `You're on Close now: $${tierPrice("close", interval)} a ${interval}, with the difference for this ${interval} charged today.`
               : `You're on Pro now: $${tierPrice("pro", interval)} a ${interval}. What you paid over goes toward your next invoice.`,
         };
       }
@@ -127,7 +127,7 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
         if (!stripe.topupReady()) throw new ActionError("Top-ups aren't open yet.");
         return { url: await stripe.checkoutTopup(who, base) };
       case "aipack":
-        // Only on Pro + Close or the trial (canClose): anyone else is shown the Close upgrade.
+        // Only on Close or the trial (canClose): anyone else is shown the Close upgrade.
         if (!canClose(rec, nowMs)) throw new ActionError(AI_PACK_CLOSE);
         if (!stripe.aiPackReady()) throw new ActionError("The AI usage pack isn't open yet.");
         return { url: await stripe.checkoutAiPack(who, base) };
@@ -291,7 +291,7 @@ export async function sweep(nowIso?: string, origin?: string): Promise<{ sent: n
           from: rec.trialStartedAt ?? rec.trialEndsAt,
           till: rec.trialEndsAt,
           days: Math.max(1, Math.ceil(left / DAY)),
-          // The plan the emails name: Pro, or Pro + Close for an active Close user (lib/billing/rules.ts keepTier).
+          // The plan the emails name: Pro, or Close for an active Close user (lib/billing/rules.ts keepTier).
           keep: T.keepOf(s, id),
         });
       }

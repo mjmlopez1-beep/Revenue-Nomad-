@@ -67,7 +67,7 @@ export const OBJECTIONS = lib.objectionLibrary;
 export const blockDef = (id: string): LibBlock | undefined => BLOCKS.find((b) => b.id === id);
 export const templateDef = (id: string | null | undefined): LibTemplate | undefined => TEMPLATES.find((t) => t.id === id);
 
-/** An id kept from when Free had one template. Building proposals is Pro + Close now (lib/proposals/store.ts buildGate): no template opens without it. */
+/** An id kept from when Free had one template. Building proposals is Close now (lib/proposals/store.ts buildGate): no template opens without it. */
 export const FREE_TEMPLATE = "fractional-sales-leader";
 
 /** A block's guidance in a template: the template's own words where it has them. */

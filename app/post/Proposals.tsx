@@ -17,8 +17,8 @@
  * after sending makes a new version (the server voids the old link), so a sent proposal opens
  * read-only until the member says to change it.
  *
- * Building is Pro + Close (ProposalsView.canBuild; the trial is Close). After the trial, without it,
- * the page lists what they made, read only, with the Pro + Close prompt (CloseBuildPrompt): New
+ * Building is Close (ProposalsView.canBuild; the trial is Close). After the trial, without it,
+ * the page lists what they made, read only, with the Close prompt (CloseBuildPrompt): New
  * proposal and My templates' upload open the plans, and their saved templates stay listed, kept
  * for when they upgrade.
  */
@@ -47,16 +47,16 @@ import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
 /** The upgrade prompt where building is refused (lib/proposals/mine.ts CLOSE_BUILD says the same). */
-export const CLOSE_BUILD_WORDS = `Building proposals in Merlin is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. Your proposals and saved templates are kept, and come back when you upgrade.`;
+export const CLOSE_BUILD_WORDS = `Building proposals in Merlin is on Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. Your proposals and saved templates are kept, and come back when you upgrade.`;
 
-/** The Pro + Close prompt where building is refused: the plan tag, the words, See Pro + Close. */
+/** The Close prompt where building is refused: the plan tag, the words, See the Close plan. */
 export function CloseBuildPrompt({ compact }: { compact?: boolean }) {
   return (
     <div className="pp-free" data-plan="free" data-close-build role="status">
-      <span className="bl-tag bl-tag-lock">Pro + Close</span>
+      <span className="bl-tag bl-tag-lock">Close</span>
       <p>{compact ? CLOSE_BUILD_WORDS.split(". Your")[0] + "." : CLOSE_BUILD_WORDS}</p>
       <button type="button" className="btn btn-sm" onClick={() => openPlans("proposals")}>
-        See Pro + Close
+        See the Close plan
       </button>
     </div>
   );
@@ -266,7 +266,7 @@ function TemplatesSheet({ data, onClose, onChange }: { data: ProposalsView; onCl
           </button>
         ) : (
           <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("proposals")}>
-            See Pro + Close
+            See the Close plan
           </button>
         )
       }
@@ -337,7 +337,7 @@ function Editor({
 
   const signed = p.status === "signed";
   const out = p.status === "sent" || p.status === "viewed";
-  // Without Pro + Close (after the trial) a proposal opens read only, with the prompt.
+  // Without Close (after the trial) a proposal opens read only, with the prompt.
   const locked = !data.canBuild;
   const readOnly = signed || (out && !changing) || locked;
   const fields = useMemo(() => docFields(p), [p]);

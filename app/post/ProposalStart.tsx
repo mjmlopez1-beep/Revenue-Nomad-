@@ -275,7 +275,7 @@ export function StartSheet({
             <button key={t.id} type="button" role="radio" aria-checked={tpl === t.id} className="pp-tplchip" data-on={tpl === t.id} data-mine={t.mine} disabled={!t.open} onClick={() => setTpl(t.id)} title={t.about}>
               {t.mine && <span className="pp-yours">Yours</span>}
               <span className="pp-tplchip-t">{t.title.split(":")[0]}</span>
-              {!t.open && <span className="bl-tag bl-tag-lock">Pro + Close</span>}
+              {!t.open && <span className="bl-tag bl-tag-lock">Close</span>}
             </button>
           ))}
           <button type="button" className="pp-tplchip pp-tplchip-add" aria-busy={busy === "template"} disabled={!!busy} onClick={() => tplRef.current?.click()}>
@@ -299,7 +299,7 @@ export function StartSheet({
             Draft fills the template from what Merlin finds in the call, read in this browser and not kept. For a full first draft in your words, use Build it in Claude.
           </p>
         )}
-        {data.ai === "plan" && <p className="pp-help">Drafting with Claude on Merlin is on Pro + Close. Build it in Claude works on every plan.</p>}
+        {data.ai === "plan" && <p className="pp-help">Drafting with Claude on Merlin is on Close. Build it in Claude works on every plan.</p>}
         <p className="pp-help pp-claude-how">
           Build it in Claude copies a prompt for Claude with your meeting notes connected. It needs Merlin connected to Claude once:{" "}
           <button type="button" className="tp-flink" onClick={() => (onClose(), ui.openPage("integrations"))}>

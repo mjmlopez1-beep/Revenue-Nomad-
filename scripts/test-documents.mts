@@ -208,7 +208,7 @@ async function main() {
   const fd = await S.uploadDocument(FRE, "free.pdf", original, BASE);
   check("Free: can upload and prepare a document", fd.status === "draft");
   const fsend = await S.sendDocument(FRE, fd.id, {}, BASE).then(() => null, (e: InstanceType<typeof PS.ProposalProblem>) => e);
-  check("Free: sending is Pro + Close's, with the price and the upgrade link", fsend?.status === 403 && /on Pro \+ Close: \$79 a month/.test(fsend.message) && /p=billing/.test(fsend.upgrade ?? ""), fsend?.message);
+  check("Free: sending is Close's, with the price and the upgrade link", fsend?.status === 403 && /on Close: \$79 a month/.test(fsend.message) && /p=billing/.test(fsend.upgrade ?? ""), fsend?.message);
   const nod = await S.uploadDocument(PAT, "nobody.pdf", original, BASE);
   check("no signers: can't go out", (await refused(S.sendDocument(PAT, nod.id, {}, BASE)))?.includes("Add who signs"));
   await S.updateDocument(PAT, nod.id, { signers: [{ id: "new_a", name: "Ann Lee", email: "ann@lee.example" }], fields: [{ page: 0, x: 0.1, y: 0.1, w: 0.2, h: 0.03, kind: "date", signer: "new_a" }] }, BASE);

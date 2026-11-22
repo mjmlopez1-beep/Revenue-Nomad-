@@ -9,7 +9,7 @@
  *   PlansHost     the plans sheet, opened with openPlans(from): the top bar's Upgrade, the account
  *                 menu, the trial, a second saved view, the full benchmarks, Slack and Claude limits,
  *                 out of credits. Free against Pro in plain words, yearly first.
- *   PlanPill      the top bar's way in: "Pro trial · 12 days left" with Upgrade, or Upgrade to Pro.
+ *   PlanPill      the top bar's way in: "Close trial · 12 days left" with Upgrade, or Upgrade to Pro.
  *   TrialBanner   the trial's last 3 days, over the table.
  *   UpgradeNote   one calm line where Free stops (with a lock), or, in the trial, where Pro is in use.
  *   ProTag, ProLock, ProRow   a Pro feature marked where it sits: on Free locked, with a lock and
@@ -25,12 +25,12 @@ import { IconCheck, IconLock, IconX, useToast } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { PLANS, PLAN_ROWS } from "@/lib/billing/compare";
-import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY, TIER_NAME, keepWords } from "@/lib/billing/rules";
+import { PLANS, PLAN_ROWS, PRO_LEAVES_OUT } from "@/lib/billing/compare";
+import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY, TIER_NAME, TRIAL_NAME, keepWords } from "@/lib/billing/rules";
 
 /**
  * The plan the trial nudges toward (PlanView.keep, lib/billing/rules.ts keepTier): Pro by default,
- * Pro + Close once the member is an active Close user in the trial. Its name and its button.
+ * Close once the member is an active Close user in the trial. Its name and its button.
  */
 const keepOf = (plan: PlanView): "pro" | "close" => (plan.keep === "close" ? "close" : "pro");
 export const keepName = (plan: PlanView) => TIER_NAME[keepOf(plan)];
@@ -109,7 +109,7 @@ function useBilling() {
 
 /* ---------- Free against Pro ---------- */
 
-/** Free, Pro and Pro + Close, row by row (lib/billing/compare.ts, shared with the landing page's pricing). */
+/** Free, Pro and Close, row by row (lib/billing/compare.ts, shared with the landing page's pricing). */
 export const ROWS = PLAN_ROWS;
 
 export function CompareTable({ current }: { current?: "free" | "pro" | "close" }) {
@@ -135,7 +135,7 @@ export function CompareTable({ current }: { current?: "free" | "pro" | "close" }
             <td data-cap="Pro" className="bl-pro">
               {pro}
             </td>
-            <td data-cap="Pro + Close" className="bl-pro bl-close">
+            <td data-cap="Close" className="bl-pro bl-close">
               {close}
             </td>
           </tr>
@@ -163,8 +163,8 @@ export function ProWelcome({ plan, onSeen }: { plan: PlanView; onSeen: () => voi
       <div className="bl-hello-t">
         <p className="bl-hello-h" id="bl-hello-h">
           {plan.proStartsAt
-            ? `You're on ${close ? "Pro + Close" : "Pro"}. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.`
-            : `You're on ${close ? "Pro + Close" : "Pro"}. Everything here is yours.`}
+            ? `You're on ${close ? "Close" : "Pro"}. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.`
+            : `You're on ${close ? "Close" : "Pro"}. Everything here is yours.`}
         </p>
         {/* Pro sold as winning clients, in the plans' own words. */}
         <p className="bl-hello-story">{PRO_STORY}</p>
@@ -204,10 +204,10 @@ export const VALUE_LINE = PRO_STORY;
 function leadFor(plan: PlanView, a: Ask): string {
   if (plan.name === "trial") {
     const when = plan.trialDaysLeft === 1 ? "tomorrow" : `on ${day(plan.trialEndsAt)}`;
-    if (plan.notLooking) return `Your Pro trial ends ${when}. Nothing to do: you stay on Free, with no charge. Pro is here for when you want it, and it pauses any month your book is full.`;
+    if (plan.notLooking) return `Your ${TRIAL_NAME} ends ${when}. Nothing to do: you stay on Free, with no charge. Pro is here for when you want it, and it pauses any month your book is full.`;
     if (a.from === "trial" || a.from === "billing")
       return keepOf(plan) === "close"
-        ? `All of Pro + Close is yours until your trial ends ${when}. You've been building proposals in Merlin: keep Pro + Close now and it carries straight on after, with nothing to do that day.`
+        ? `All of Close is yours until your trial ends ${when}. You've been building proposals in Merlin: keep Close now and it carries straight on after, with nothing to do that day.`
         : `All of Pro is yours until your trial ends ${when}. Keep it now and it carries straight on after, with nothing to do that day.`;
     if (a.from === "credits") return `Pro adds ${plan.prices.proCredits} credits each paid month, on top of what you earn. They start with your first paid month.`;
     return `${leadFor({ ...plan, name: "free", notLooking: false }, a)} It's yours in the trial until ${day(plan.trialEndsAt)}.`;
@@ -225,16 +225,17 @@ function leadFor(plan: PlanView, a: Ask): string {
   if (a.from === "crystal") return `Free opens one ${FEATURE_NAME} company a day, with everything on it. Pro opens every company in your ${FEATURE_NAME} free.`;
   if (a.from === "proposals")
     return plan.hadTrial || plan.name !== "free"
-      ? "Building proposals in Merlin is on Pro + Close: new ones, from Merlin's templates or your own. It drafts them from your call, opens your own templates and contracts, and sends them for e-signature. Your proposals and saved templates are kept, and come back when you upgrade."
-      : "Your 21-day trial is Pro + Close: build proposals, save your own templates, draft from your call, send, and get it signed. After it, building proposals is on Pro + Close.";
+      ? "Building proposals in Merlin is on Close: new ones, from Merlin's templates or your own. It drafts them from your call, opens your own templates and contracts, and sends them for e-signature. Your proposals and saved templates are kept, and come back when you upgrade."
+      : "Your 21-day trial is Close: build proposals, save your own templates, draft from your call, send, and get it signed. After it, building proposals is on Close.";
   return VALUE_LINE;
 }
 
 /**
- * The three plans side by side, yearly or monthly: Free, Pro and Pro + Close, each with its price and
+ * The three plans side by side, yearly or monthly: Free, Pro and Close, each with its price and
  * one line on what you get. Buying starts Checkout; a member already paying moves between Pro and
- * Pro + Close on the same subscription (the tier op, prorated). From a Close moment (proposals) Pro +
- * Close leads.
+ * Close on the same subscription (the tier op, prorated). From a Close moment (proposals) Close
+ * leads. In the trial (which is Close) the Pro card lists what Pro leaves out (PRO_LEAVES_OUT), so
+ * choosing Pro says what stops when the trial ends.
  */
 export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansFrom; onDone?: () => void }) {
   const { busy, run } = useBilling();
@@ -248,7 +249,7 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
   const applied = !!plan.code && code.trim().toUpperCase() === plan.code.code;
   // Paying now (not in the trial): the other paid tier is a move on the same subscription.
   const paying = plan.subscribed && plan.name === "pro";
-  // In the trial the lead plan (its tag, the highlight and the primary button) is the one the trial nudges toward: Pro, or Pro + Close for an active Close user.
+  // In the trial the lead plan (its tag, the highlight and the primary button) is the one the trial nudges toward: Pro, or Close for an active Close user.
   const lead: "pro" | "close" = from === "proposals" ? "close" : plan.name === "trial" ? keepOf(plan) : plan.tier === "pro" ? "close" : "pro";
   const yearly = interval === "year";
   const priceOf = (p: (typeof PLANS)[number]) => (yearly ? p.year : p.month);
@@ -273,7 +274,7 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
                 ? "Your plan"
                 : paying
                   ? p.key === "close"
-                    ? "Upgrade to Pro + Close"
+                    ? "Upgrade to Close"
                     : "Switch to Pro"
                   : `Choose ${p.name}`;
           const op = `${paying ? "tier" : "checkout"}${paying ? "" : interval}`;
@@ -286,6 +287,16 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
                 {p.key !== "free" && <span> {yearly ? "a year" : "a month"}</span>}
               </p>
               <p className="bl-plan-sub">{p.line}</p>
+              {p.key === "pro" && plan.name === "trial" && (
+                <div className="bl-plan-out" data-pro-leaves-out>
+                  <p className="bl-plan-out-h">Not in {TIER_NAME.pro}, only in {TIER_NAME.close}:</p>
+                  <ul>
+                    {PRO_LEAVES_OUT.map((x) => (
+                      <li key={x}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {p.key === "close" && (
                 <>
                   <p className="bl-plan-ai" data-close-ai>
@@ -321,7 +332,7 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
         <p className="bl-charge" role="note">
           <IconCheck size={14} />
           {plan.firstChargeAt
-            ? `Your trial is Pro + Close. You won't be charged until it ends on ${day(plan.firstChargeAt)}, and you keep every day of it.`
+            ? `Your trial is Close. You won't be charged until it ends on ${day(plan.firstChargeAt)}, and you keep every day of it.`
             : "Your trial ends within two days, so the first charge is today. Your plan carries on without a break."}
         </p>
       )}
@@ -347,7 +358,7 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
 }
 
 /**
- * The AI usage pack: $10, once (POST /api/billing/ai-pack). On Pro + Close and the trial a button;
+ * The AI usage pack: $10, once (POST /api/billing/ai-pack). On Close and the trial a button;
  * anyone else is shown the Close upgrade instead. Nothing until its price is set up. No amount or limit is said.
  */
 export function AiPackLine({ plan }: { plan: PlanView }) {
@@ -369,7 +380,7 @@ export function AiPackLine({ plan }: { plan: PlanView }) {
   return (
     <div className="bl-topup" data-ai-pack-buy>
       <p className="bl-topup-t">
-        <strong>{CLOSE_AI_LINE}.</strong> {plan.canClose ? AI_PACK_LINE : "On Pro + Close."}
+        <strong>{CLOSE_AI_LINE}.</strong> {plan.canClose ? AI_PACK_LINE : "On Close."}
       </p>
       {plan.canClose ? (
         <button type="button" className="btn btn-sm" disabled={busy} aria-busy={busy} onClick={() => void buy()}>
@@ -377,7 +388,7 @@ export function AiPackLine({ plan }: { plan: PlanView }) {
         </button>
       ) : (
         <button type="button" className="btn btn-sm btn-pine" onClick={() => openPlans("proposals")}>
-          See Pro + Close
+          See the Close plan
         </button>
       )}
     </div>
@@ -405,7 +416,7 @@ function TopupLine({ plan, emphasis }: { plan: PlanView; emphasis?: boolean }) {
 function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: () => void }) {
   // The plans show on the trial too, any day of it: bought then, nothing is charged until it ends (PlanView.firstChargeAt).
   const onPro = plan.name === "pro";
-  // On Pro (not Close): Pro + Close is still there to move to.
+  // On Pro (not Close): Close is still there to move to.
   const canMove = onPro && plan.tier === "pro" && !plan.proStartsAt;
   const trial = plan.name === "trial";
   // "Your trial ends soon" only in the trial's last 3 days: on day 1 it would read as a countdown.
@@ -418,10 +429,10 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
         <p className="bl-lead">
           {onPro
             ? plan.proStartsAt
-              ? `You're on ${plan.tier === "close" ? "Pro + Close" : "Pro"}. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.`
+              ? `You're on ${plan.tier === "close" ? "Close" : "Pro"}. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.`
               : plan.tier === "close"
-                ? "You're on Pro + Close. Everything here is yours."
-                : `You're on Pro. Pro + Close adds proposals drafted from your call, sent and signed${plan.closeUntil ? `, and it's yours until ${day(plan.closeUntil)}` : ""}.`
+                ? "You're on Close. Everything here is yours."
+                : `You're on Pro. Close adds proposals drafted from your call, sent and signed${plan.closeUntil ? `, and it's yours until ${day(plan.closeUntil)}` : ""}.`
             : leadFor(plan, a)}
         </p>
         {!plan.notLooking && !onPro && a.from !== "billing" && a.from !== "trial" && <p className="bl-value">{VALUE_LINE}</p>}
@@ -474,7 +485,7 @@ export function PlansHost({ me }: { me: Me }) {
 /* ---------- the top bar's way in ---------- */
 
 /**
- * Always one tap from Pro, in the top bar next to the credits: on the trial "Pro trial · 12 days
+ * Always one tap from Pro, in the top bar next to the credits: on the trial "Close trial · 12 days
  * left" with Upgrade (stronger in its last 3 days), on Free "Upgrade to Pro", nothing on Pro.
  * Phones get a short "Upgrade" chip. Nothing while billing is off. Mounted in the top bar (TopBar.tsx).
  */
@@ -488,17 +499,17 @@ export function PlanPill({ plan, phone }: { plan?: PlanView; phone?: boolean }) 
   if (plan.name === "trial") {
     const left = plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`;
     const cls = `tp-plan tp-plan-trial${plan.ending ? " end" : ""}`;
-    const label = `Pro trial, ${left}. Upgrade to Pro`;
+    const label = `${TRIAL_NAME}, ${left}. Upgrade to Pro`;
     if (phone)
       return (
-        <button type="button" className={`${cls} tp-plan-phone`} onClick={() => openPlans("trial")} aria-label={label} title={`Pro trial, ${left}`}>
+        <button type="button" className={`${cls} tp-plan-phone`} onClick={() => openPlans("trial")} aria-label={label} title={`${TRIAL_NAME}, ${left}`}>
           <PhoneWords />
         </button>
       );
     return (
-      <button type="button" className={cls} onClick={() => openPlans("trial")} aria-label={label} title={`Your Pro trial ends ${day(plan.trialEndsAt)}`}>
+      <button type="button" className={cls} onClick={() => openPlans("trial")} aria-label={label} title={`Your ${TRIAL_NAME} ends ${day(plan.trialEndsAt)}`}>
         <span className="tp-plan-t">
-          Pro trial · <span className="num">{left}</span>
+          {TRIAL_NAME} · <span className="num">{left}</span>
         </span>
         <span className="tp-plan-go">Upgrade</span>
       </button>
@@ -549,18 +560,18 @@ export function TrialBanner({ plan }: { plan?: PlanView }) {
   return (
     <div className="tp-strip bl-banner" role="status">
       <span className="bl-banner-tag" aria-hidden>
-        Pro trial
+        {TRIAL_NAME}
       </span>
       <span className="tp-strip-t">
         {plan.notLooking ? (
-          <>Your Pro trial {when}. Nothing to do: you stay on Free, with no charge.</>
+          <>Your {TRIAL_NAME} {when}. Nothing to do: you stay on Free, with no charge.</>
         ) : plan.summary ? (
           <>
-            Your Pro trial {when}.{got}
+            Your {TRIAL_NAME} {when}.{got}
           </>
         ) : (
           <>
-            Your Pro trial {when}.{got} Then you&apos;re on Free, unless you keep {keepName(plan)}.
+            Your {TRIAL_NAME} {when}.{got} Then you&apos;re on Free, unless you keep {keepName(plan)}.
           </>
         )}
       </span>
@@ -590,7 +601,7 @@ export function TrialSummaryCard({ plan }: { plan?: PlanView }) {
     <section className="bl-sum" aria-labelledby="bl-sum-h" data-trial-summary>
       <div className="bl-sum-t">
         <p className="bl-sum-h" id="bl-sum-h">
-          Your Pro trial {when}.
+          Your {TRIAL_NAME} {when}.
         </p>
         {plan.summary.used && (
           <p className="bl-sum-p">
@@ -825,10 +836,10 @@ function Status({ plan }: { plan: PlanView }) {
     return (
       <>
         <p className="bl-status-h">
-          Pro trial <span className="bl-days num">{plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`}</span>
+          {TRIAL_NAME} <span className="bl-days num">{plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`}</span>
         </p>
         <p className="bl-status-p">
-          Your trial is Pro + Close, proposals included. It ends on {day(plan.trialEndsAt)}. Nothing to do: when it ends you&apos;re on Free, and no card is asked.
+          Your trial is Close, proposals included. It ends on {day(plan.trialEndsAt)}. Nothing to do: when it ends you&apos;re on Free, and no card is asked.
           {plan.trialExtended ? " We added a week because you were in the middle of something." : ""}
           {plan.firstChargeAt && !plan.notLooking ? ` Keep Pro now and nothing is charged until ${day(plan.firstChargeAt)}.` : ""}
         </p>
@@ -858,8 +869,8 @@ function Status({ plan }: { plan: PlanView }) {
     const kind = plan.interval === "year" ? "yearly" : "monthly";
     return (
       <>
-        <p className="bl-status-h">{plan.proStartsAt ? `${plan.tier === "close" ? "Pro + Close" : "Pro"} starts ${day(plan.proStartsAt)}, ${kind}` : `${plan.tier === "close" ? "Pro + Close" : "Pro"}, ${kind}`}</p>
-        {plan.closeUntil && <p className="bl-status-p">Pro + Close is yours until {day(plan.closeUntil)}, your next renewal. Then you&apos;re on Pro, unless you move to Pro + Close.</p>}
+        <p className="bl-status-h">{plan.proStartsAt ? `${plan.tier === "close" ? "Close" : "Pro"} starts ${day(plan.proStartsAt)}, ${kind}` : `${plan.tier === "close" ? "Close" : "Pro"}, ${kind}`}</p>
+        {plan.closeUntil && <p className="bl-status-p">Close is yours until {day(plan.closeUntil)}, your next renewal. Then you&apos;re on Pro, unless you move to Close.</p>}
         <p className="bl-status-p">
           {plan.proStartsAt
             ? plan.cancelAt
@@ -1041,15 +1052,15 @@ export function BillingPage({ view, refresh }: { view: View; refresh: () => Prom
 
       <section className="tp-card bl-what" aria-labelledby="bl-what-h">
         <h2 className="tp-card-h" id="bl-what-h">
-          Free, Pro and Pro + Close
+          Free, Pro and Close
         </h2>
         {!plan.notLooking && <p className="cr-note">{VALUE_LINE}</p>}
-        {/* Paying now: move between Pro and Pro + Close here, on the same subscription. */}
+        {/* Paying now: move between Pro and Close here, on the same subscription. */}
         {plan.subscribed && plan.name === "pro" && !plan.proStartsAt && !plan.cancelAt && <PlanCards plan={plan} from="billing" onDone={refresh} />}
         <CompareTable current={plan.tier} />
         {plan.name === "pro" && (
           <p className="tp-small muted bl-check">
-            <IconCheck size={13} /> Everything in the {plan.tier === "close" ? "Pro + Close" : "Pro"} column is yours.
+            <IconCheck size={13} /> Everything in the {plan.tier === "close" ? "Close" : "Pro"} column is yours.
           </p>
         )}
       </section>

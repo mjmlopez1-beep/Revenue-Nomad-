@@ -1,12 +1,15 @@
 /**
- * Merlin's Terms of Service. The numbers are read from the rules the server runs (lib/billing/rules.ts,
+ * Merlin's Terms of Service. The paid plans (Pro and Close) are drawn from lib/billing/compare.ts
+ * PLANS and PLAN_ROWS, the rows the plans sheet and the landing page read, so the Terms say what
+ * each plan really does. The numbers are read from the rules the server runs (lib/billing/rules.ts,
  * lib/tableFields.ts EARN_CAP, lib/proposals SIGN_DAYS and SENDER_DUTY), so the page can't drift from
- * what Merlin does. Cancellation and refunds say only what the billing code does: Pro runs to the end
+ * what Merlin does. Cancellation and refunds say only what the billing code does: a paid plan runs to the end
  * of the period paid for, then Free, and Merlin makes no refunds of its own. The governing law is
  * Connecticut's, where Revenue Nomad is registered (GOVERNING_LAW), with disputes in the state and
  * federal courts located in Connecticut.
  */
-import { EXTEND_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PAUSE_MONTHS, PRICES, PRO_CREDITS, TOPUP_CREDITS, TRIAL_DAYS } from "@/lib/billing/rules";
+import { EXTEND_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PAUSE_MONTHS, PRICES, TIER_NAME, TOPUP_CREDITS, TRIAL_LABEL } from "@/lib/billing/rules";
+import { CLOSE_ADDS, PLANS, PLAN_ROWS, PRO_LEAVES_OUT } from "@/lib/billing/compare";
 import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
 import { SENDER_DUTY } from "@/lib/proposals/types";
 import { ContactLine, LegalShell, TERMS_VERSION, type Part } from "../legal/LegalShell";
@@ -15,6 +18,41 @@ import { ContactLine, LegalShell, TERMS_VERSION, type Part } from "../legal/Lega
 export const GOVERNING_LAW = "the State of Connecticut";
 /** Where disputes are heard. */
 export const DISPUTE_COURTS = "the state and federal courts located in Connecticut";
+/** "Sending for signature, your own templates, Claude drafting and the pipeline moving itself when they sign". */
+const sayList = (xs: readonly string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+/** What Pro leaves out that Close has, in the Terms' words (lib/billing/compare.ts PRO_LEAVES_OUT). */
+export const PRO_LEAVES_OUT_SAY = sayList(PRO_LEAVES_OUT.map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)));
+
+/** A paid plan in the Terms: its price and line from PLANS, and its column of PLAN_ROWS. */
+function PaidPlan({ k }: { k: "pro" | "close" }) {
+  const p = PLANS.find((x) => x.key === k)!;
+  const col = k === "pro" ? 2 : 3;
+  return (
+    <li data-terms-plan={k}>
+      <h3 className="df-h3">{p.name}</h3>
+      <p>
+        ${p.month} a month or ${p.year} a year. {p.line}
+      </p>
+      <ul className="df-bullets">
+        {PLAN_ROWS.map((r) => (
+          <li key={r[0]}>
+            {r[0]}: {r[col]}.
+          </li>
+        ))}
+      </ul>
+      {k === "pro" ? (
+        <p>
+          {PRO_LEAVES_OUT_SAY} are not on {TIER_NAME.pro}. They are on {TIER_NAME.close}.
+        </p>
+      ) : (
+        <p>
+          What {TIER_NAME.close} adds to {TIER_NAME.pro}: {CLOSE_ADDS.map(([what]) => what.toLowerCase()).join("; ")}.
+        </p>
+      )}
+    </li>
+  );
+}
+
 /** How long a signing link works (lib/proposals/store.ts SIGN_DAYS; that module reads the server's state, so the number is repeated here and checked by scripts/test-legal.mts). */
 export const SIGN_LINK_DAYS = 30;
 
@@ -64,17 +102,12 @@ export function TermsView({ support, starter }: { support: string | null; starte
             <li>
               <h3 className="df-h3">Trial</h3>
               <p>
-                {TRIAL_DAYS} days of Pro when you finish onboarding, with no card. It may run {EXTEND_DAYS} days longer, once. When it ends you are on Free, and nothing is
-                charged unless you chose Pro.
+                A {TRIAL_LABEL} when you finish onboarding, with no card: everything in {TIER_NAME.close} while it runs. It may run {EXTEND_DAYS} days longer, once. When it
+                ends you are on Free, and nothing is charged unless you chose {TIER_NAME.pro} or {TIER_NAME.close}.
               </p>
             </li>
-            <li>
-              <h3 className="df-h3">Pro</h3>
-              <p>
-                ${PRICES.month} a month or ${PRICES.year} a year. {PRO_CREDITS} credits with each paid month, unlimited saved views, every alert in Slack, the full rate
-                benchmarks, the connector without Free&apos;s daily limit, and sending proposals for signature.
-              </p>
-            </li>
+            <PaidPlan k="pro" />
+            <PaidPlan k="close" />
             <li>
               <h3 className="df-h3">Top-up</h3>
               <p>
@@ -98,10 +131,10 @@ export function TermsView({ support, starter }: { support: string | null; starte
       title: "Paid plans and cancellation",
       body: (
         <ul className="df-bullets">
-          <li>Stripe takes the payment. Pro renews by itself each month or each year, until you cancel.</li>
-          <li>You can cancel at any time in Plan and billing. Pro carries on to the end of the period you paid for, then you are on Free. Nothing more is charged.</li>
-          <li>If you chose Pro during your trial, nothing is charged until the trial ends. Cancel before then and nothing is charged.</li>
-          <li>You can pause Pro for {PAUSE_MONTHS} month: Free with no charge, then Pro comes back by itself.</li>
+          <li>Stripe takes the payment. A paid plan ({TIER_NAME.pro} or {TIER_NAME.close}) renews by itself each month or each year, until you cancel.</li>
+          <li>You can cancel at any time in Plan and billing. Your plan carries on to the end of the period you paid for, then you are on Free. Nothing more is charged.</li>
+          <li>If you chose a paid plan during your trial, nothing is charged until the trial ends. Cancel before then and nothing is charged.</li>
+          <li>You can pause your plan for {PAUSE_MONTHS} month: Free with no charge, then your plan comes back by itself.</li>
           <li>Invoices and your card are in Stripe&apos;s billing portal, from Plan and billing.</li>
           <li>Payments are not refunded, in full or in part, except where the law requires it.</li>
           <li>Credits you hold stay on your account when you move to Free. Top-up credits don&apos;t expire.</li>
@@ -312,7 +345,7 @@ export function TermsView({ support, starter }: { support: string | null; starte
       version={TERMS_VERSION}
       intro={
         <p className="cl-p">
-          The short version: add only what you are allowed to share, use the data fairly and lawfully, check what matters before you rely on it, and cancel Pro whenever you
+          The short version: add only what you are allowed to share, use the data fairly and lawfully, check what matters before you rely on it, and cancel a paid plan whenever you
           like.
         </p>
       }

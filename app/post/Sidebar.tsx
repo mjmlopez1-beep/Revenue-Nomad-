@@ -283,7 +283,7 @@ function NavLists({ items, onNav, compact, onManageViews }: { items: NavItem[]; 
   );
 }
 
-/** The plan in the foot: "Pro trial · 9 days left" and Upgrade, Free and Upgrade, or Pro. */
+/** The plan in the foot: "Close trial · 9 days left" and Upgrade, Free and Upgrade, or Pro. */
 function PlanFoot({ plan, onUpgrade, compact }: { plan?: PlanView; onUpgrade: () => void; compact?: boolean }) {
   if (!plan || plan.name === "pro" || compact) return null;
   return (

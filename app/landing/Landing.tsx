@@ -25,7 +25,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
 import { Brand, IconLock, Num, type View } from "../ui/shared";
 import { EARN_CAP, FUNCTIONS, REFERRAL_BONUS } from "@/lib/tableFields";
-import { TRIAL_DAYS } from "@/lib/billing/rules";
+import { TRIAL_LABEL } from "@/lib/billing/rules";
 import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
 import { Questions } from "./Questions";
@@ -253,7 +253,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" />
               </div>
               <p className="lp-hero-free num">
-                Free plan, {starter} credits to start. {TRIAL_DAYS}-day Pro trial, no card.
+                Free plan, {starter} credits to start. {TRIAL_LABEL}, no card.
               </p>
               <p className="lp-hero-member">
                 Already a member?{" "}
@@ -441,7 +441,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 Find the companies that hire <em>your function</em>
               </h2>
               <p className="lp-final-sub num">
-                Free plan, {starter} credits to start. {TRIAL_DAYS}-day Pro trial, no card.
+                Free plan, {starter} credits to start. {TRIAL_LABEL}, no card.
               </p>
               <div className="lp-final-form" ref={finalForm}>
                 <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />

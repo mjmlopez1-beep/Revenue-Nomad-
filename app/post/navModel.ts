@@ -9,6 +9,7 @@
  */
 import type { PlanView } from "@/lib/tableTypes";
 import { FEATURE_NAME } from "@/lib/radar/types";
+import { TRIAL_NAME } from "@/lib/billing/rules";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
@@ -95,10 +96,10 @@ export interface NavInput {
   inviteBonus: number;
 }
 
-/** "Pro trial · 9 days left", "Pro", "Free": the plan's line in the sidebar's foot. */
+/** "Close trial · 9 days left", "Pro", "Free": the plan's line in the sidebar's foot. */
 export function planLine(plan: PlanView | undefined): string | null {
   if (!plan) return null;
-  if (plan.name === "trial") return `Pro trial · ${plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft ?? 0} days left`}`;
+  if (plan.name === "trial") return `${TRIAL_NAME} · ${plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft ?? 0} days left`}`;
   return plan.name === "pro" ? "Pro" : "Free";
 }
 

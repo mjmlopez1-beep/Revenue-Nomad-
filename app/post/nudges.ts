@@ -4,7 +4,7 @@
  * One nudge at a time. A screen has at most one line that asks the member to do something
  * (Today and the table render one NudgeSlot in place of stacked banners). pickNudge is pure, so
  * scripts/test-nudges.mts checks it with no browser. In this order:
- *   1. the Pro trial ends in 3 days or fewer (Today only),
+ *   1. the Close trial ends in 3 days or fewer (Today only),
  *   2. 3 credits or fewer,
  *   3. an empty profile (no Ideal Fractional Profile),
  *   4. the next Get started step, as one line ("Next: Find your seats · up to ~12 credits a seat"),
@@ -16,6 +16,7 @@
  */
 import { createElement as h, useEffect, useSyncExternalStore } from "react";
 import type { PlanView } from "@/lib/tableTypes";
+import { TRIAL_NAME } from "@/lib/billing/rules";
 
 export type NudgeKind = "trial" | "credits" | "profile" | "step";
 export interface Nudge {
@@ -59,10 +60,10 @@ export function pickNudge(x: NudgeInput): Nudge | null {
   if (x.page === "today" && plan?.name === "trial" && plan.ending && plan.trialDaysLeft != null && !(plan.summary && !plan.notLooking)) {
     const when = plan.trialDaysLeft <= 1 ? "ends tomorrow" : `ends in ${plan.trialDaysLeft} days`;
     return plan.notLooking
-      ? { kind: "trial", text: `Your Pro trial ${when}. Nothing to do: you stay on Free, with no charge.`, cta: "See plans", action: "plans" }
+      ? { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Nothing to do: you stay on Free, with no charge.`, cta: "See plans", action: "plans" }
       : plan.keep === "close"
-        ? { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro + Close.`, cta: "Keep Pro + Close", action: "plans" }
-        : { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans" };
+        ? { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Then you're on Free, unless you keep Close.`, cta: "Keep Close", action: "plans" }
+        : { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans" };
   }
   if (x.credits <= LOW_CREDITS) {
     // At 0: three ways out in one line (earn one, the top-up, Pro).

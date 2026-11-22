@@ -842,7 +842,7 @@ button.tp-plan:hover {
   margin-top: 6px;
 }
 
-/* ---------- three plans (PlanCards): Free, Pro, Pro + Close ---------- */
+/* ---------- three plans (PlanCards): Free, Pro, Close ---------- */
 .bl-interval {
   display: flex;
   gap: 6px;
@@ -872,7 +872,7 @@ button.tp-plan:hover {
   }
 }
 
-/* Under Pro + Close: what it does, then the AI usage pack in smaller words. */
+/* Under Close: what it does, then the AI usage pack in smaller words. */
 .bl-plan-ai {
   margin: 6px 0 0;
   font-size: 14px;
@@ -882,6 +882,25 @@ button.tp-plan:hover {
 .bl-plan-pack {
   margin-top: 2px;
   font-size: 12px;
+}
+/* In the trial (which is Close): what Pro leaves out, under the Pro card's line. */
+.bl-plan-out {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+}
+.bl-plan-out-h {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.bl-plan-out ul {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+.bl-plan-out li + li {
+  margin-top: 2px;
 }
 
 /* Three cards side by side: a long button label wraps inside its card instead of running past it. */
@@ -901,8 +920,8 @@ button.tp-plan:hover {
 
 /*
  * Phones: the three-plan comparison (CompareTable, .bl-compare-3) stacks each row as its label,
- * then three labelled lines, Free, Pro and Pro + Close, each its name then its value. Two columns
- * would put Pro + Close under Free.
+ * then three labelled lines, Free, Pro and Close, each its name then its value. Two columns
+ * would put Close under Free.
  */
 @media (max-width: 767px) {
   .bl-compare-3 tbody tr {

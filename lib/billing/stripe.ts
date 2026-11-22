@@ -7,8 +7,8 @@
  *   STRIPE_WEBHOOK_SECRET   the webhook endpoint's signing secret (whsec_...)
  *   STRIPE_PRICE_MONTH      the price id of Pro monthly ($59)
  *   STRIPE_PRICE_YEAR       the price id of Pro yearly ($590)
- *   STRIPE_PRICE_CLOSE_MONTH  the price id of Pro + Close monthly ($79)
- *   STRIPE_PRICE_CLOSE_YEAR   the price id of Pro + Close yearly ($790). Without both there is no Close checkout.
+ *   STRIPE_PRICE_CLOSE_MONTH  the price id of Close monthly ($79)
+ *   STRIPE_PRICE_CLOSE_YEAR   the price id of Close yearly ($790). Without both there is no Close checkout.
  *   STRIPE_PRICE_TOPUP      the price id of the one-time top-up ($19 for 50 credits). Without it there is no top-up.
  *   STRIPE_PRICE_AIPACK     the price id of the one-time AI usage pack ($10). Without it there is none.
  *   RN_SURVEY_CODE          the code survey respondents type (e.g. RN-SURVEY10). Members can type any promotion code at checkout.
@@ -59,7 +59,7 @@ const PRICE_ENV: Record<PriceKey, string> = { month: "STRIPE_PRICE_MONTH", year:
 const price = (k: PriceKey) => process.env[PRICE_ENV[k]]?.trim() ?? "";
 export const topupReady = () => !!price("topup");
 export const aiPackReady = () => !!price("aipack");
-/** Pro + Close can be bought: both its prices are set up. */
+/** Close can be bought: both its prices are set up. */
 export const closeReady = () => !!price("closeMonth") && !!price("closeYear");
 /** The price id for a tier and interval. */
 export const priceFor = (tier: "pro" | "close", interval: "month" | "year") => price(tier === "close" ? (interval === "year" ? "closeYear" : "closeMonth") : interval);
@@ -159,7 +159,7 @@ export async function portal(customerId: string, base: string): Promise<string> 
 }
 
 /**
- * Move a subscription between Pro and Pro + Close at the same interval: its one item takes the
+ * Move a subscription between Pro and Close at the same interval: its one item takes the
  * other price, with Stripe's proration (an upgrade invoices the difference now, a downgrade credits
  * it to the next invoice). The tier goes in the metadata too, so the webhook reads it.
  */

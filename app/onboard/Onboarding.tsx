@@ -51,7 +51,7 @@ import { ICP_SKIPPED } from "@/app/post/getStarted";
 import { contactOf, mailto } from "../landing/contact";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { invitedParts } from "@/lib/notify/format";
-import { TRIAL_DAYS } from "@/lib/billing/rules";
+import { TRIAL_DAYS, TRIAL_LABEL, TRIAL_NAME } from "@/lib/billing/rules";
 import { moveWhy } from "@/lib/moves";
 import type { RadarRow } from "@/lib/radar/types";
 import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
@@ -636,7 +636,7 @@ function seatsLine(seats: number, published: number, scanned: number): string {
 function StepYou({
   first, seats, published, scanned, credits, trial, invited, fn, setFn, title, setTitle, onNext,
 }: {
-  /** The Pro trial starts when they finish here (billing live): what a company costs reads for it. */
+  /** The Close trial starts when they finish here (billing live): what a company costs reads for it. */
   trial: boolean;
   first: string;
   /** Seats on file that carry the member's name. */
@@ -685,7 +685,7 @@ function StepYou({
             {credits} {credits === 1 ? "credit" : "credits"}
           </strong>
           {trial
-            ? `. A company is 2 credits. Your ${TRIAL_DAYS}-day Pro trial starts when you finish here, no card, and on it every company in your Crystal Ball opens free. One more credit shows who held a seat there.`
+            ? `. A company is 2 credits. Your ${TRIAL_LABEL} starts when you finish here, no card, and on it every company in your Crystal Ball opens free. One more credit shows who held a seat there.`
             : ". A company is 2 credits, and one each day is free (on the Free plan, the one you pick in your Crystal Ball). One more credit shows who held a seat there."}
         </span>
       </p>
@@ -961,7 +961,7 @@ function StepFirstView({
       {rows ? (
         <>
           <p className="ob-fv-lead">
-            Companies most likely to hire {nfn ? `a fractional ${nfn} leader` : "you"} next, and why now. Your {trialDays}-day Pro trial is on, so each one opens free.
+            Companies most likely to hire {nfn ? `a fractional ${nfn} leader` : "you"} next, and why now. Your {trialDays}-day {TRIAL_NAME} is on, so each one opens free.
           </p>
           <ul className="ob-fv-rows" aria-label="The top companies in your Crystal Ball">
             {ballTop.map((r) => (

@@ -649,8 +649,8 @@ async function main() {
   const boPaid = (await meOf(BO)).plan!;
   check("the first paid invoice: 100 credits, Pro to the year's end, the wait over", fp.status === 200 && (await meOf(BO)).credits === boCredits0 + 100 && boPaid.name === "pro" && !boPaid.proStartsAt && Math.floor(Date.parse(boPaid.proUntil!) / 1000) === boEndS + 365 * 86_400, { fp, boPaid });
 
-  /* ---------- Pro + Close ---------- */
-  console.log("\nPro + Close: the tier, its checkout, events, upgrade and downgrade, the one gate");
+  /* ---------- Close ---------- */
+  console.log("\nClose: the tier, its checkout, events, upgrade and downgrade, the one gate");
   {
     const N = Date.now();
     const trialRec = R.startTrial(undefined, N)!;
@@ -658,7 +658,7 @@ async function main() {
     check("Free is refused", !R.canClose(undefined, N) && !R.canClose({ trialStartedAt: iso(N - 30 * DAY), trialEndsAt: iso(N - 9 * DAY) }, N) && R.tierNow(undefined, N) === "free");
     const proRec = { proUntil: iso(N + 20 * DAY), paidSince: iso(N - 10 * DAY), tier: "pro" as const };
     check("plain Pro is refused", !R.canClose(proRec, N) && R.tierNow(proRec, N) === "pro");
-    check("paid Pro + Close has it", R.canClose({ ...proRec, tier: "close" }, N) && R.tierNow({ ...proRec, tier: "close" }, N) === "close");
+    check("paid Close has it", R.canClose({ ...proRec, tier: "close" }, N) && R.tierNow({ ...proRec, tier: "close" }, N) === "close");
     check("the prices: $79 a month, $790 a year, the same 100 credits", R.PRICES.closeMonth === 79 && R.PRICES.closeYear === 790 && R.tierPrice("close", "year") === 790 && R.tierPrice("pro", "month") === 59 && R.PRO_CREDITS === 100);
     // Paid Pro from before Close: stays on Pro, with Close until the next renewal.
     const gb = R.emptyBilling();
@@ -673,7 +673,7 @@ async function main() {
     const cb = R.emptyBilling();
     const cctx = (nowMs: number) => ({ nowMs, memberOf: () => "mem_x", tierOf: S.tierOfPrice });
     R.applyEvent(cb, ev("evt_c1", "checkout.session.completed", { id: "cs_c1", mode: "subscription", client_reference_id: "rn_ref_x", customer: "cus_x", subscription: "sub_x", payment_status: "paid", metadata: { interval: "month", tier: "close" } }), cctx(N));
-    check("checkout for Pro + Close: on Close at once", cb.members.mem_x.tier === "close" && R.canClose(cb.members.mem_x, N) && plan.planOf(cb.members.mem_x, N) === "pro");
+    check("checkout for Close: on Close at once", cb.members.mem_x.tier === "close" && R.canClose(cb.members.mem_x, N) && plan.planOf(cb.members.mem_x, N) === "pro");
     R.applyEvent(cb, ev("evt_c2", "customer.subscription.updated", { id: "sub_x", customer: "cus_x", status: "active", items: { data: [{ price: { id: "price_month_test", recurring: { interval: "month" } }, current_period_end: Math.floor((N + 30 * DAY) / 1000) }] } }), cctx(N));
     check("a downgrade (the subscription's price is Pro's): on Pro, Close closed", cb.members.mem_x.tier === "pro" && !R.canClose(cb.members.mem_x, N));
     R.applyEvent(cb, ev("evt_c3", "customer.subscription.updated", { id: "sub_x", customer: "cus_x", status: "active", items: { data: [{ price: { id: "price_close_month_test", recurring: { interval: "month" } }, current_period_end: Math.floor((N + 30 * DAY) / 1000) }] } }), cctx(N));
@@ -685,7 +685,7 @@ async function main() {
     calls.length = 0;
     await server.billingAction(CY, "checkout", { interval: "month", tier: "close" }, "https://post.example.com");
     const ckc = new URLSearchParams(calls[0]?.body ?? "");
-    check("checkout for Pro + Close: Close's monthly price, the tier in both metadata", ckc.get("line_items[0][price]") === "price_close_month_test" && ckc.get("metadata[tier]") === "close" && ckc.get("subscription_data[metadata][tier]") === "close", calls[0]?.body);
+    check("checkout for Close: Close's monthly price, the tier in both metadata", ckc.get("line_items[0][price]") === "price_close_month_test" && ckc.get("metadata[tier]") === "close" && ckc.get("subscription_data[metadata][tier]") === "close", calls[0]?.body);
     calls.length = 0;
     await server.billingAction(CY, "checkout", { interval: "year" }, "https://post.example.com");
     check("checkout for Pro is as before: Pro's price, tier pro", new URLSearchParams(calls[0]?.body ?? "").get("line_items[0][price]") === "price_year_test" && new URLSearchParams(calls[0]?.body ?? "").get("metadata[tier]") === "pro");
@@ -707,7 +707,7 @@ async function main() {
     calls.length = 0;
     const up = await server.billingAction(DI, "tier", { tier: "close" });
     const upBody = new URLSearchParams(calls.find((c) => c.method === "POST")?.body ?? "");
-    check("upgrade on the same subscription: Close's yearly price, invoiced now", /Pro \+ Close now: \$790 a year/.test(up.message ?? "") && calls[0]?.method === "GET" && upBody.get("items[0][id]") === "si_test_1" && upBody.get("items[0][price]") === "price_close_year_test" && upBody.get("proration_behavior") === "always_invoice", { up, calls });
+    check("upgrade on the same subscription: Close's yearly price, invoiced now", /Close now: \$790 a year/.test(up.message ?? "") && calls[0]?.method === "GET" && upBody.get("items[0][id]") === "si_test_1" && upBody.get("items[0][price]") === "price_close_year_test" && upBody.get("proration_behavior") === "always_invoice", { up, calls });
     const diClose = (await meOf(DI)).plan!;
     check("  Close at once: canClose, and proposals send", diClose.tier === "close" && diClose.canClose && (await P.listProposals(DI)).canSend, diClose);
     const again = await server.billingAction(DI, "tier", { tier: "close" }).then(() => null, (e: Error) => e.message);
@@ -720,7 +720,7 @@ async function main() {
     const noSub = await server.billingAction(CY, "tier", { tier: "close" }).then(() => null, (e: Error) => e.message);
     check("no subscription to move: refused", /no paid plan/.test(noSub ?? ""), noSub);
 
-    // The AI usage pack: $10, once, on Pro + Close or the trial; the top-up's pattern.
+    // The AI usage pack: $10, once, on Close or the trial; the top-up's pattern.
     console.log("\nThe AI usage pack");
     check("its price and the plans' words, with no amount or limit", R.PRICES.aiPack === 10 && R.CLOSE_AI_LINE === "Claude drafts your proposals from your calls" && R.AI_PACK_LINE === "Need more AI usage? Add a pack anytime for $10." && !/\d+ (drafts|requests|tokens)|limit/i.test(R.AI_PACK_LINE + R.CLOSE_AI_LINE));
     const refusedFree = await server.billingAction(CY, "aipack", {}).then(() => null, (e: Error) => e.message);

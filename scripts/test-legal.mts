@@ -11,11 +11,12 @@
  *   BASE=http://localhost:4600 SUPPORT_EMAIL=support-qa@example.com npx tsx scripts/test-legal.mts
  */
 import { readFileSync } from "node:fs";
-import { EXTEND_DAYS, PRICES, PRO_CREDITS, TOPUP_CREDITS, TRIAL_DAYS } from "../lib/billing/rules";
+import { EXTEND_DAYS, PRICES, TIER_NAME, TOPUP_CREDITS, TRIAL_LABEL } from "../lib/billing/rules";
+import { CLOSE_ADDS, PLANS, PLAN_ROWS } from "../lib/billing/compare";
 import { SENDER_DUTY } from "../lib/proposals/types";
 import { MAIN_SCOPES, SCOPE_GMAIL } from "../lib/google/config";
 import { GOOGLE_POLICY_URL, LIMITED_USE } from "../app/privacy/Privacy";
-import { DISPUTE_COURTS, GOVERNING_LAW, SIGN_LINK_DAYS } from "../app/terms/Terms";
+import { DISPUTE_COURTS, GOVERNING_LAW, PRO_LEAVES_OUT_SAY, SIGN_LINK_DAYS } from "../app/terms/Terms";
 import { LEGAL_EFFECTIVE, LEGAL_EFFECTIVE_WORDS, PRIVACY_VERSION, TERMS_VERSION } from "../app/legal/LegalShell";
 
 const BASE = (process.env.BASE || "http://localhost:4600").replace(/\/+$/, "");
@@ -112,7 +113,28 @@ async function main() {
   check("the effective date and version", tb.includes(`dateTime="${LEGAL_EFFECTIVE}"`) && tt.includes(`Effective ${LEGAL_EFFECTIVE_WORDS}`) && tt.includes(`Version ${TERMS_VERSION}`));
   check(
     "the plans' numbers are the billing rules' own",
-    [`$${PRICES.month} a month`, `$${PRICES.year} a year`, `$${PRICES.topup} for ${TOPUP_CREDITS} credits`, `${PRO_CREDITS} credits with each paid month`, `${TRIAL_DAYS} days of Pro`, `${EXTEND_DAYS} days longer`].every((x) => tt.includes(x)),
+    [`$${PRICES.month} a month or $${PRICES.year} a year`, `$${PRICES.closeMonth} a month or $${PRICES.closeYear} a year`, `$${PRICES.topup} for ${TOPUP_CREDITS} credits`, `A ${TRIAL_LABEL} when you finish onboarding`, `${EXTEND_DAYS} days longer`].every((x) => tt.includes(x)),
+  );
+  // Pro and Close in the Terms are lib/billing/compare.ts's own: each plan's price and line, and its column of every row.
+  const planText = (k: "pro" | "close") => {
+    const from = tb.indexOf(`data-terms-plan="${k}"`);
+    const to = k === "pro" ? tb.indexOf('data-terms-plan="close"') : tb.indexOf("Top-up", from);
+    return from < 0 || to < 0 ? "" : textOf(tb.slice(from, to));
+  };
+  const [proT, closeT] = [planText("pro"), planText("close")];
+  check(
+    "Terms and lib/billing/compare.ts agree: Pro's and Close's names, prices, lines and every row",
+    (["pro", "close"] as const).every((k) => {
+      const p = PLANS.find((x) => x.key === k)!;
+      const t = k === "pro" ? proT : closeT;
+      return t.includes(p.name) && t.includes(`$${p.month} a month or $${p.year} a year. ${p.line}`) && PLAN_ROWS.every((r) => t.includes(`${r[0]}: ${r[k === "pro" ? 2 : 3]}.`));
+    }),
+    [proT.slice(0, 400), closeT.slice(0, 400)],
+  );
+  check(
+    "Pro can't send for signature in the Terms; Close can",
+    proT.includes(`${PRO_LEAVES_OUT_SAY} are not on ${TIER_NAME.pro}`) && /^Sending for signature/.test(PRO_LEAVES_OUT_SAY) && !/sending proposals for signature/i.test(proT) && CLOSE_ADDS.every(([what]) => closeT.includes(what.toLowerCase())) && closeT.includes("send and get signed"),
+    proT,
   );
   check("the sender's duty, word for word from the proposals", tt.includes(SENDER_DUTY));
   check("signing links' days match the server's", /export const SIGN_DAYS = (\d+);/.exec(src("lib/proposals/store.ts"))?.[1] === String(SIGN_LINK_DAYS) && tt.includes(`Signing links work for ${SIGN_LINK_DAYS} days`));

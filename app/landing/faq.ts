@@ -4,7 +4,7 @@
  * scripts/test-prices.mts can check what they say about prices.
  */
 import { COMPANY_PRICE_SAY, EARN_CAP, PRO_OPENS_DAILY, REFERRAL_BONUS } from "@/lib/tableFields";
-import { PRICES, TOPUP_CREDITS, TRIAL_DAYS } from "@/lib/billing/rules";
+import { PRICES, TOPUP_CREDITS, TRIAL_LABEL } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
 import { FEATURE_NAME } from "@/lib/radar/types";
 
@@ -101,7 +101,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does it cost?",
-      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Other companies are ${COMPANY_PRICE_SAY}. Pro opens companies free, up to ${PRO_OPENS_DAILY} a day plus every company in your ${FEATURE_NAME}: $${PRICES.month} a month or $${PRICES.year} a year. Pro + Close adds proposals drafted from your call, sent and signed: $${PRICES.closeMonth} a month or $${PRICES.closeYear} a year. Every new member starts with a ${TRIAL_DAYS}-day trial of Pro + Close, no card needed, and it ends into Free on its own. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
+      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Other companies are ${COMPANY_PRICE_SAY}. Pro opens companies free, up to ${PRO_OPENS_DAILY} a day plus every company in your ${FEATURE_NAME}: $${PRICES.month} a month or $${PRICES.year} a year. Close adds proposals drafted from your call, sent and signed: $${PRICES.closeMonth} a month or $${PRICES.closeYear} a year. Every new member starts with a ${TRIAL_LABEL}, no card needed, and it ends into Free on its own. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
     ],
   ];
 }

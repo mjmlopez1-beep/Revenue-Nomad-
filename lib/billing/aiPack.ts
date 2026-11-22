@@ -1,5 +1,5 @@
 /**
- * The AI usage pack ($10, once, on Pro + Close or the trial): what happens when its payment goes
+ * The AI usage pack ($10, once, on Close or the trial): what happens when its payment goes
  * through. It records the event, once per payment ref, in State.billing.aiPacks, and grants the
  * member the pack's Claude usage (lib/proposals/aiUsage.ts grantAiPack: PACK_MICROS, 4,700,000
  * micro-dollars, once per ref). Pure: it changes the billing state (and the usage state) it is given (the webhook calls it inside the table's write

@@ -23,6 +23,7 @@
 import { randomBytes } from "crypto";
 import { ActionError, FREE_COMPANY_USED, PRO_OPEN_FREE, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
+import { TRIAL_NAME } from "../billing/rules";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
@@ -840,7 +841,7 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
       ? {
           plan:
             me.plan.name === "trial"
-              ? `Pro trial, ${me.plan.trialDaysLeft} ${me.plan.trialDaysLeft === 1 ? "day" : "days"} left. It ends on Free with no charge. To keep Pro: ${upgradeUrl(publicBase() ?? ctx.origin, "claude_account")}`
+              ? `${TRIAL_NAME}, ${me.plan.trialDaysLeft} ${me.plan.trialDaysLeft === 1 ? "day" : "days"} left. It ends on Free with no charge. To keep Pro: ${upgradeUrl(publicBase() ?? ctx.origin, "claude_account")}`
               : me.plan.name === "pro"
                 ? me.plan.proStartsAt
                   ? `Pro, ${me.plan.interval === "year" ? "yearly" : "monthly"}. It starts with its first charge on ${me.plan.proStartsAt.slice(0, 10)}, when the trial ends.`

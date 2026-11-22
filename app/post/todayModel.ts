@@ -7,6 +7,7 @@ import type { Me, PlanView } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
 import { FEATURE_NAME } from "@/lib/radar/types";
 import { COMPANY_PRICE } from "@/lib/tableFields";
+import { TRIAL_NAME } from "@/lib/billing/rules";
 import type { MovesWire } from "@/lib/moves";
 import { isFirm, isOpenRole, namedFn, shown, type CoInfo } from "./model";
 
@@ -136,10 +137,10 @@ export function trialCardLine(daysLeft: number | null, today: number): string {
   const days = daysLeft && daysLeft > 0 ? daysLeft : 21;
   return `For ${days === 1 ? "today" : `${days} days`} every ${FEATURE_NAME} company opens free${today > 0 ? ` (${today} today)` : ""}. Open as many as you like.`;
 }
-/** The trial on Home, for a phone (the top bar's pill is in its More sheet there): "Pro trial · 18 days left". Null off the trial. */
+/** The trial on Home, for a phone (the top bar's pill is in its More sheet there): "Close trial · 18 days left". Null off the trial. */
 export function trialPillWords(plan: Pick<PlanView, "name" | "trialDaysLeft"> | null | undefined): string | null {
   if (!plan || plan.name !== "trial" || !plan.trialDaysLeft) return null;
-  return `Pro trial · ${plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`}`;
+  return `${TRIAL_NAME} · ${plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`}`;
 }
 
 /** "Show you in the Fractionals directory?" waits on Home until the member has opened something, or comes back for a second visit. */

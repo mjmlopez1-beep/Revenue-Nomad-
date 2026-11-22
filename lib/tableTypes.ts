@@ -448,7 +448,7 @@ export interface PlanView {
   /** The annual plan framed by their own rate ("Less than an hour of your time a month."), when they have a rate. */
   annualLine: string | null;
   prices: { month: number; year: number; closeMonth: number; closeYear: number; topup: number; topupCredits: number; proCredits: number };
-  /** The tier now: Free, Pro, or Pro + Close ("close"; the trial is Close). */
+  /** The tier now: Free, Pro, or Close ("close"; the trial is Close). */
   tier: "free" | "pro" | "close";
   /**
    * The plan the trial nudges toward (lib/billing/rules.ts keepTier): "close" once the member is an
@@ -457,13 +457,13 @@ export interface PlanView {
    * the trial nudge and the trial-ending emails all follow it.
    */
   keep: "pro" | "close";
-  /** Close features are open now (lib/billing/rules.ts canClose): the trial, paid Pro + Close, or grandfathered Pro. */
+  /** Close features are open now (lib/billing/rules.ts canClose): the trial, paid Close, or grandfathered Pro. */
   canClose: boolean;
   /** On Pro from before Close: Close features until this date (the next renewal). Left out otherwise. */
   closeUntil?: string;
-  /** Pro + Close can be bought (its prices are set up). */
+  /** Close can be bought (its prices are set up). */
   closeOpen: boolean;
-  /** The AI usage pack can be bought (its price is set up). Only on Pro + Close or the trial (canClose). */
+  /** The AI usage pack can be bought (its price is set up). Only on Close or the trial (canClose). */
   aiPack: boolean;
   /**
    * The survey code the member arrived with (?code=RN-SURVEY10, kept from the landing page

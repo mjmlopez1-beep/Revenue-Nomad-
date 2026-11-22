@@ -3,7 +3,7 @@
  * it costs: each call's usage.input_tokens at USD_PER_M_IN and usage.output_tokens at
  * USD_PER_M_OUT, from the API's own answer, kept in micro-dollars (whole numbers).
  *
- *  - Budget: members on Pro + Close (lib/billing/rules.ts canClose, everyone while billing is
+ *  - Budget: members on Close (lib/billing/rules.ts canClose, everyone while billing is
  *    off) get MONTH_BUDGET_MICROS of Claude cost a UTC calendar month, starting again on the 1st.
  *    An active trial gets TRIAL_BUDGET_MICROS in total instead.
  *  - Packs: grantAiPack adds PACK_MICROS (a $PACK_PRICE_USD purchase), once per payment reference.
@@ -174,7 +174,7 @@ export interface AiMeter {
   usedUp: boolean;
   /** Past the month's usage, drafting goes on with a usage pack. */
   onPack: boolean;
-  /** "Add an AI usage pack, $10" is offered: on Pro + Close and the trial (canClose). */
+  /** "Add an AI usage pack, $10" is offered: on Close and the trial (canClose). */
   canAddPack: boolean;
   /** A one-time notice to show: "You've used 75% of this month's AI usage". */
   notice: AiAlert | null;

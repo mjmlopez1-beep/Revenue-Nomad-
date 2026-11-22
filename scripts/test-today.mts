@@ -211,7 +211,7 @@ async function firstSession(t: typeof import("../lib/table"), radar: typeof impo
   // The trial's one-time card and the phone's pill.
   check("the trial card's line", m.trialCardLine(21, 14) === "For 21 days every Crystal Ball company opens free (14 today). Open as many as you like.", m.trialCardLine(21, 14));
   check("with nothing today it leaves the count out", m.trialCardLine(20, 0) === "For 20 days every Crystal Ball company opens free. Open as many as you like.", m.trialCardLine(20, 0));
-  check("the phone's trial pill", m.trialPillWords({ name: "trial", trialDaysLeft: 18 }) === "Pro trial · 18 days left" && m.trialPillWords({ name: "trial", trialDaysLeft: 1 }) === "Pro trial · last day");
+  check("the phone's trial pill", m.trialPillWords({ name: "trial", trialDaysLeft: 18 }) === "Close trial · 18 days left" && m.trialPillWords({ name: "trial", trialDaysLeft: 1 }) === "Close trial · last day");
   check("no pill off the trial", m.trialPillWords({ name: "free", trialDaysLeft: null }) === null && m.trialPillWords({ name: "pro", trialDaysLeft: null }) === null && m.trialPillWords(undefined) === null);
 
   // "Show you in the Fractionals directory?" waits for a first unlock or a second visit.

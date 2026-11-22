@@ -65,7 +65,7 @@ export async function proposalKit(token: string | null, a: { templateId?: string
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (!me) throw new ProposalProblem("You're signed out. Sign in again.", 401);
-  // The kit is for building a proposal: Pro + Close and the trial (lib/billing/rules.ts canClose), else the upgrade prompt.
+  // The kit is for building a proposal: Close and the trial (lib/billing/rules.ts canClose), else the upgrade prompt.
   buildGate(s, me.id, Date.now());
   const tid = a.templateId || null;
   let template: ProposalKit["template"];
@@ -129,7 +129,7 @@ export async function proposalKit(token: string | null, a: { templateId?: string
   };
 }
 
-/** Every template a member can start from: theirs, then the library's. Without Pro + Close none is open (theirs stay stored). */
+/** Every template a member can start from: theirs, then the library's. Without Close none is open (theirs stay stored). */
 export function templateChoices(s: Awaited<ReturnType<typeof loadState>>, memberId: string, free: boolean) {
   return [
     ...templatesOf(s, memberId).map((t) => ({ id: t.id, title: t.title, about: t.fileName, mine: true, open: !free, sections: t.blocks.length })),

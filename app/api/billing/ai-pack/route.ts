@@ -1,5 +1,5 @@
 /**
- * The AI usage pack: $10, once, for the signed-in member on Pro + Close or an active trial
+ * The AI usage pack: $10, once, for the signed-in member on Close or an active trial
  * (lib/billing/rules.ts canClose). The same checkout as the top-up.
  *
  * POST {}   { url } of Stripe Checkout for the pack, or { error, upgrade } with the Close upgrade's

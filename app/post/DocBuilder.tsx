@@ -654,13 +654,13 @@ function DocSendSheet({ d, canSend, email, issues, onClose, onSent }: { d: Docum
           </button>
         ) : (
           <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("proposals")}>
-            See Pro + Close: ${PRICES.closeMonth} a month
+            See the Close plan: ${PRICES.closeMonth} a month
           </button>
         )
       }
     >
       <div className="pp-send-body">
-        {!canSend && <p className="pp-warn">Sending documents for signature is on Pro + Close: ${PRICES.closeMonth} a month. You can prepare them on Free and Pro.</p>}
+        {!canSend && <p className="pp-warn">Sending documents for signature is on Close: ${PRICES.closeMonth} a month. You can prepare them on Free and Pro.</p>}
         {!email && canSend && <p className="pp-warn">Email isn&#39;t set up on Merlin yet, so a document can&#39;t go out for signature.</p>}
         <p className="pp-help">
           {d.ordered && d.signers.length > 1 ? "Each signer gets an email with their own link in turn, when the one before has signed." : "Each signer gets an email with their own link."} They confirm their email with a
