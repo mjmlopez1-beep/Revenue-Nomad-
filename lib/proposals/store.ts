@@ -189,6 +189,7 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
       .filter((x) => x !== cur)
       .reverse()
       .map((x) => sendRec(x, nowMs, origin)),
+    ...(p.versions?.length ? { versions: [...p.versions].reverse().map((v) => ({ version: v.version, at: v.at, note: v.note })) } : {}),
   };
 }
 
@@ -529,6 +530,7 @@ export async function duplicateProposal(token: string | null, id: string, origin
     const p = mine(s, me, id);
     if ((s.proposals ?? []).filter((x) => x.memberId === me.id).length >= LIMITS.proposals) throw new ProposalProblem(`You have ${LIMITS.proposals} proposals, which is the most. Delete an old draft first.`);
     const copy: StoredProposal = { ...structuredClone(p), id: newId("pr_"), title: `${p.title} (copy)`.slice(0, LIMITS.title), version: 1, sends: [], createdAt: now, updatedAt: now };
+    delete copy.versions;
     s.proposals!.push(copy);
     return recOf(copy, nowMs, origin);
   });
@@ -824,4 +826,4 @@ async function memberFor(seed: Seed, id: string): Promise<{ name: string; email:
 }
 
 /** What lib/documents shares with proposals: the same links' keys, checks and clean-up. */
-export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, buildGate, titleOf, memberOf, memberFor, EMAIL, NAME };
+export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, buildGate, titleOf, memberOf, memberFor, EMAIL, NAME, mine, applyPatch, isSigned };

@@ -104,6 +104,19 @@ export interface StoredProposal {
   createdAt: string;
   updatedAt: string;
   sends: StoredSend[];
+  /** Earlier versions kept when a change was accepted or a version restored (lib/proposals/change.ts), oldest first. */
+  versions?: ProposalVersion[];
+}
+
+/** A version kept so it can be compared or restored: what the document said, and what changed after it. */
+export interface ProposalVersion {
+  version: number;
+  at: string;
+  title: string;
+  blocks: ProposalBlock[];
+  fields: Record<string, string>;
+  /** What the next version changed, in a line ("Scope is now two phases"). */
+  note: string;
 }
 
 /* ---------- what the member's app gets ---------- */
@@ -154,6 +167,8 @@ export interface ProposalRec {
   /** The current send, if any; then every earlier one, newest first. */
   send: ProposalSendRec | null;
   history: ProposalSendRec[];
+  /** Earlier versions that can be compared and restored, newest first (their text: POST op "versions"). */
+  versions?: { version: number; at: string; note: string }[];
 }
 
 /**

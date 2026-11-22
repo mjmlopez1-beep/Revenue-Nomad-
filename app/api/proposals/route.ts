@@ -5,6 +5,7 @@ import { memberForToken } from "@/lib/table";
 import { ProposalProblem, createProposal, deleteProposal, duplicateProposal, getProposal, linkProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
 import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
 import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
+import { acceptChange, proposeChange, restoreVersion, versionsOf } from "@/lib/proposals/change";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,10 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "template_rename", id, title } | { op: "template_delete", id }   My templates (uploads: /api/proposals/template).
  * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName? }
  *                  A change to what the client reads, after a version went out, makes a new version and voids the old link.
+ * POST { op: "change", id, instruction, agree? }   Change it by talking (lib/proposals/change.ts): Claude's proposed
+ *                  sections, fields and the numbers check. Nothing is saved. Close, metered like a draft; 409 when it's off.
+ * POST { op: "change_accept", id, changes, fields?, instruction? }   Saved as a new version; the one before is kept.
+ * POST { op: "versions", id }  The kept versions' text, to compare.  { op: "version_restore", id, version }
  * POST { op: "duplicate" | "delete" | "void", id }
  * POST { op: "send", id, signer: { name, email, title? }, message? }   Trial and Pro (403 with `upgrade` on Free).
  */
@@ -88,6 +93,15 @@ export const POST = guarded(async (req: NextRequest) => {
       // What a member may draft is their AI budget (lib/proposals/aiUsage.ts, in draftWithClaude). This only slows a burst of tries.
       if (limited(`prop-draft:${me.id}`, 12, 60 * 60_000)) return err("That's a lot of drafts at once. Give it a few minutes, then try again, or Build it in Claude.", 429);
       return answer(() => draftWithClaude(token, { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, transcript: b.transcript, callDate: b.callDate, callWith: b.callWith, agree: b.agree }, o));
+    case "change":
+      if (limited(`prop-change:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of changes at once. Give it a few minutes, then try again.", 429);
+      return answer(() => proposeChange(token, id, { instruction: b.instruction, agree: b.agree }, o));
+    case "change_accept":
+      return answer(() => acceptChange(token, id, { changes: b.changes, fields: b.fields, instruction: b.instruction }, o));
+    case "versions":
+      return answer(() => versionsOf(token, id, o));
+    case "version_restore":
+      return answer(() => restoreVersion(token, id, b.version, o));
     case "agree_ai":
       return answer(async () => (await agreeToAi(token), { ok: true }));
     case "template_rename":

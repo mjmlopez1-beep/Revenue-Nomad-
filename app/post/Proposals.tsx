@@ -43,6 +43,8 @@ import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./Pr
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder } from "./DocBuilder";
 import { ContractUpload } from "./ContractUpload";
+import { ChangeItPanel, VersionsSheet } from "./ChangeIt";
+import { withChange, type ChangeProposal } from "@/lib/proposals/changeShape";
 import { LinkCompany } from "./ProposalLink";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
@@ -345,6 +347,10 @@ function Editor({
   const [sending, setSending] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  // Change it by talking (ChangeIt.tsx): a change shown before it's accepted, the one just saved, and Compare versions.
+  const [preview, setPreview] = useState<ChangeProposal | null>(null);
+  const [savedChange, setSavedChange] = useState<{ version: number; previous: number; changed: number } | null>(null);
+  const [compare, setCompare] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(p);
   latest.current = p;
@@ -356,6 +362,21 @@ function Editor({
   const locked = !data.canBuild;
   const readOnly = signed || (out && !changing) || locked;
   const fields = useMemo(() => docFields(p), [p]);
+  // With a change shown, the document reads as it would after it (the changed sections marked) and can't be edited until it's accepted or undone.
+  const shown = useMemo(() => (preview ? withChange(p, preview.changes, preview.fields) : null), [p, preview]);
+  const shownFields = useMemo(() => (shown ? docFields({ ...p, fields: shown.fields }) : fields), [shown, p, fields]);
+  const marked = useMemo(() => new Set(preview ? [...preview.changes.map((c) => c.id), ...(shown ? shown.blocks.filter((b) => b.id.startsWith("nw")).map((b) => b.id) : [])] : []), [preview, shown]);
+  const changeIt = (
+    <ChangeItPanel
+      p={p}
+      data={data}
+      readOnly={readOnly}
+      preview={preview}
+      saved={savedChange}
+      onPreview={(c) => (void flush(), setPreview(c), setSavedChange(null))}
+      onAccepted={(r, sv) => (setP(r), onSaved(r), setPreview(null), setSavedChange(sv))}
+    />
+  );
   const checks = useMemo(() => checklist({ ...p, fields }), [p, fields]);
   const advice = useMemo(() => adviceFromView(view, p), [view, p]);
   const flags = useMemo(() => riskFlags(p, advice.suggestion?.high ?? null), [p, advice]);
@@ -428,6 +449,7 @@ function Editor({
 
   const side = (
     <aside className="pp-side" aria-label="Sections and tools">
+      {!phone && changeIt}
       <section className="pp-card pp-outline" aria-labelledby="pp-ol-h">
         <h2 className="pp-h2" id="pp-ol-h">
           Sections
@@ -500,6 +522,11 @@ function Editor({
               {p.company.name || "No company yet"} · Version {p.version}
               {t ? ` · ${t.title.split(":")[0]}` : ""}
             </span>
+            {!!p.versions?.length && (
+              <button type="button" className="tp-flink" onClick={() => setCompare(true)}>
+                Compare versions
+              </button>
+            )}
             <span className="pp-save" aria-live="polite">
               {save === "saving" ? "Saving" : save === "error" ? "Not saved" : readOnly ? "" : "Saved"}
             </span>
@@ -563,12 +590,26 @@ function Editor({
           <p>Signed, so it&#39;s kept as it was signed. Duplicate it to start the next one, an addendum or a new term.</p>
         </div>
       )}
+      {savedChange && (
+        <div className="pp-banner" role="status">
+          <p>
+            <strong>
+              {savedChange.changed} {savedChange.changed === 1 ? "change" : "changes"} saved as version {savedChange.version}.
+            </strong>{" "}
+            Version {savedChange.previous} is kept if you want it back.
+          </p>
+          <button type="button" className="btn btn-sm" onClick={() => setCompare(true)}>
+            Compare versions
+          </button>
+        </div>
+      )}
       {!signed && <FixLine fixes={fixes} blanks={blanks.length} />}
+      {phone && changeIt}
 
       <div className="pp-edit">
         <article className="pp-card pp-docview sg-doc" aria-label="The proposal as the client reads it">
-          {p.blocks.map((b) => (
-            <Section key={b.id} b={b} fields={fields} p={p} readOnly={readOnly} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
+          {(shown?.blocks ?? p.blocks).map((b) => (
+            <Section key={b.id} b={b} fields={shownFields} p={p} readOnly={readOnly || !!preview} mark={marked.has(b.id)} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
           ))}
           {/* Peers: a team pursuing this company together can add its "Your team" section (PeerSheets.tsx). */}
           {!readOnly && <TeamBlockOffer company={p.company.id} has={p.blocks.some((b) => b.title === "Your team")} onAdd={(b) => setBlocks([...p.blocks, b])} />}
@@ -594,6 +635,7 @@ function Editor({
         </Sheet>
       )}
 
+      {compare && <VersionsSheet p={p} onClose={() => setCompare(false)} onRestored={(r) => (setP(r), onSaved(r), setCompare(false), setSavedChange(null), toast(`Brought back as version ${r.version}.`))} />}
       {sending && (
         <SendSheet
           p={p}
@@ -656,6 +698,7 @@ function Section({
   p,
   fields,
   readOnly,
+  mark = false,
   editing,
   onEdit,
   onDone,
@@ -666,6 +709,8 @@ function Section({
   p: ProposalRec;
   fields: Record<string, string>;
   readOnly: boolean;
+  /** Changed by a change shown before it's accepted (ChangeIt.tsx): sand, with a "Changed" tag. */
+  mark?: boolean;
   editing: boolean;
   onEdit: () => void;
   onDone: () => void;
@@ -675,7 +720,7 @@ function Section({
   const text = fill(b.body, fields);
   if (!editing || readOnly)
     return (
-      <section id={`sec-${b.id}`} className="sg-block pp-sec" data-ro={readOnly}>
+      <section id={`sec-${b.id}`} className="sg-block pp-sec" data-ro={readOnly} data-changed={mark || undefined}>
         {!readOnly ? (
           <button type="button" className="pp-sec-hit" aria-label={`Edit ${b.title}`} onClick={onEdit}>
             <h2 className="sg-block-h">
@@ -690,7 +735,10 @@ function Section({
           </button>
         ) : (
           <>
-            <h2 className="sg-block-h">{b.title}</h2>
+            <h2 className="sg-block-h">
+              {b.title}
+              {mark && <span className="pp-changed">Changed</span>}
+            </h2>
             <div className="sg-text">
               <DocText text={text} />
             </div>
