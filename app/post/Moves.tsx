@@ -456,8 +456,9 @@ function MoveCard({
           {main}
           {/* Done and Snooze stay side by side, under a long button when the row is too narrow for all three. */}
           <span className="mv-later">
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={onDone} aria-label={`Done: ${m.title}`}>
-              Done
+            {/* The member marks it done themselves (they may have made the move outside Merlin); the toast has Undo. */}
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={onDone} aria-label={`Mark as done: ${m.title}`}>
+              Mark as done
             </button>
             <button type="button" className="btn btn-ghost" disabled={busy} onClick={onSnooze} aria-label={`Snooze ${m.name ?? "this company"} for 7 days`}>
               Snooze

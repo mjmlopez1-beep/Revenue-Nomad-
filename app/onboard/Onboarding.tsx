@@ -717,7 +717,8 @@ function StepYou({
             {credits} {credits === 1 ? "credit" : "credits"}
           </strong>
           {trial
-            ? `. A company is 2 credits, and your ${TRIAL_LABEL} starts when you finish here, no card. ${OPENS_RULE}`
+            ? // The price once, for this member's plan: the trial's free opens (the 2-credit price is for after them, and for Free).
+              `. Your ${TRIAL_LABEL} starts when you finish here, no card. ${OPENS_RULE}`
             : `. A company is 2 credits, and on the Free plan one ${FEATURE_NAME} company a day opens free. ${seatNameWho()}`}
         </span>
       </p>

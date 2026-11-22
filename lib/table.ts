@@ -7312,7 +7312,8 @@ export async function perform(
           return {
             message:
               op === "done"
-                ? `Done. ${n === 1 ? "That's your first move this month." : `That's ${n} moves this month.`}`
+                ? // The member says they made it (in Merlin or outside it): the words say it was marked, not that Merlin saw it done.
+                  `Marked as done. ${n === 1 ? "That's your first move this month." : `That's ${n} moves this month.`}`
                 : op === "snooze"
                   ? `Snoozed for ${SNOOZE_DAYS} days.`
                   : "Back in your moves.",
@@ -7896,7 +7897,7 @@ export async function claimPathFor(engagementPubId: string): Promise<string | nu
 export interface ClaimPage {
   status: "invalid" | "open" | "held" | "yours" | "waiting" | "signin";
   /** `ended`: the seat's status is Ended, and `end` its end month or year when on file (the page reads "2023 to 2025", not "since 2023"). */
-  seat: { role: string | null; fn: string | null; company: string | null; start: string | null; end?: string | null; ended?: boolean; named: boolean } | null;
+  seat: { role: string | null; fn: string | null; company: string | null; start: string | null; end?: string | null; ended?: boolean; named: boolean; found: ClaimFound } | null;
   me: { first: string } | null;
   /** Sign-in links go by email (an email provider is set up). */
   email: boolean;
@@ -7917,6 +7918,9 @@ export interface ClaimPage {
     others: number;
   };
 }
+/** Where Merlin found a seat, for the claim page's one line about it: public sources (the seat scan, published work), or a member who added it. */
+export type ClaimFound = "public" | "member";
+const claimFound = (e: EngNode): ClaimFound => (e.source === "Member added" ? "member" : "public");
 export async function claimPage(token: unknown, memberToken: string | null, ref?: unknown): Promise<ClaimPage> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, memberToken, s);
@@ -7953,6 +7957,7 @@ export async function claimPage(token: unknown, memberToken: string | null, ref?
       start: live(e, s, "start"),
       ...(live(e, s, "status") === "Ended" ? { ended: true, end: hireMonth(live(e, s, "end")) ? live(e, s, "end") : null } : {}),
       named: !!publicName(e, s) || !!seedPublicName(seed, s, e.id),
+      found: claimFound(e),
     },
     ...(status === "open" ? personPage(seed, s, g, e, locked, ref) : {}),
   };

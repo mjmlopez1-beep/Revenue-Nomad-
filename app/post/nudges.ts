@@ -78,6 +78,17 @@ export function pickNudge(x: NudgeInput): Nudge | null {
   return null;
 }
 
+/**
+ * The table's slot (TradingPost nudgeFor): which nudge shows is chosen from the balance as the list
+ * opened (`x.credits`), so an unlock never pushes the rows; a credits line then reads the balance
+ * now (`creditsNow`), one source with the top bar's pill (never "2 credits left" beside 0).
+ */
+export function pickSlotNudge(x: NudgeInput, creditsNow: number): Nudge | null {
+  const n = pickNudge(x);
+  if (n?.kind !== "credits" || creditsNow === x.credits) return n;
+  return pickNudge({ ...x, credits: creditsNow });
+}
+
 /* ---------- the trial line is showing ---------- */
 
 let trialShowing = 0;

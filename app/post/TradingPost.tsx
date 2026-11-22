@@ -73,7 +73,7 @@ import { rolesSince, useTodayData } from "./Today";
 import { HomePage, type HomeView } from "./Home";
 import { MoreSheet, Sidebar, TabBar } from "./Sidebar";
 import { navItems, type AppPageKey, type NavItem } from "./navModel";
-import { NudgeSlot, pickNudge } from "./nudges";
+import { NudgeSlot, pickSlotNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
@@ -1006,9 +1006,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     markSpent();
     showUndo(message, () => act({ type: "undoUnlock", at }));
   };
-  const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void; from?: "crystal" }): Promise<boolean> => {
+  const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void; from?: "crystal"; asked?: boolean }): Promise<boolean> => {
     const k = cellKey(t.id, t.field);
-    if (!(await confirmSpend(costOf(t, opts?.from), spendWhat(t)))) return false;
+    if (!opts?.asked && !(await confirmSpend(costOf(t, opts?.from), spendWhat(t)))) return false;
     flagOn("busy", [k]);
     const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field, ...(opts?.from ? { from: opts.from } : {}) }, { quiet: true, silentError: true });
     flagOff("busy", [k]);
@@ -1881,7 +1881,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const nudgeFor = (where: "today" | "table") => {
     const m = where === "today" ? me : slotMe;
     const next = checkOff || (where === "today" && (homeSteps || steps.next?.action === "unlock")) || (waiting && !pf) ? null : steps.next;
-    return pickNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined });
+    // The slot is chosen from the balance as the list opened; its credits line reads the balance now (pickSlotNudge).
+    return pickSlotNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined }, me.credits);
   };
   /** What a nudge's button does. Unknown actions open the page of that name, or do nothing. */
   const runNudge = useStable((action: string) => {

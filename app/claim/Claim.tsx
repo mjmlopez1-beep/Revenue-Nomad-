@@ -25,7 +25,7 @@ import "./claim.css";
 import { Brand, IconCheck, fmtMonth, post, errorText } from "../ui/shared";
 import type { ClaimPage } from "@/lib/table";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
-import { seatLine } from "./seatLine";
+import { foundLine, seatLine } from "./seatLine";
 
 type Done = { title: string; text: string; seats?: boolean; messages?: boolean };
 /** A claim's answer from the server: claimed now, or waiting for an admin (the name on the seat isn't theirs). */
@@ -184,6 +184,9 @@ function Activate({
       <h2 className="cl-h2">
         We found {p.seats.length} fractional seats that look like yours
       </h2>
+      <p className="cl-from" data-found="public">
+        {foundLine("public")}
+      </p>
       <ul className="cl-seats">
         {p.seats.map((x) => {
           const on = !skip.has(x.id);
@@ -550,9 +553,12 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
     const holder = info.status === "signin";
     body = (
       <>
-        {info.inviter && <p className="cl-from">{info.inviter} sent you this link.</p>}
         <h1 className="cl-h">Is this your seat?</h1>
         <p className="cl-seat">{seatLine(info.seat)}</p>
+        {/* Where Merlin found it, and who sent the link when it carries an invite. */}
+        <p className="cl-from" data-found={info.seat.found}>
+          {foundLine(info.seat.found, info.inviter)}
+        </p>
         {holder ? (
           <p className="cl-p">
             It&apos;s on Merlin already, under the name of the fractional who held it. If that&apos;s you, sign in and it&apos;s yours to fill in.
