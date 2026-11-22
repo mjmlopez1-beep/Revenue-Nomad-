@@ -1,0 +1,509 @@
+/* After it goes out (Activity.tsx): the activity panel, the alerts grid, Home's renewal and notifications. Insights.dc.html and InsightsPhone.dc.html. */
+
+.ac {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+  min-width: 0;
+}
+.ac-skel {
+  height: 220px;
+  margin: 16px 0;
+  border-radius: 14px;
+  background: var(--row-hover);
+}
+.ac-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.ac-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--r-chip);
+  background: var(--pine);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ac-h {
+  margin: 0;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.ac-h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.ac-small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.ac-p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+}
+.ac-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.ac-row .btn {
+  min-height: 44px;
+}
+
+/* When to follow up: the card with the pine border. */
+.ac-follow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 24px 28px;
+  border: 2px solid var(--pine);
+  border-radius: 14px;
+  background: var(--surface);
+  scroll-margin-top: 80px;
+}
+.ac-follow-main {
+  flex: 999 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ac-follow-draft {
+  flex: 1 1 340px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ac-points {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 22px;
+}
+.ac-why {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--muted);
+}
+.ac-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f3f5f4;
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--ink);
+}
+
+/* The counts. */
+.ac-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.ac-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.ac-stat b {
+  font-family: var(--font-num);
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 800;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ac-stat > span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ac-short {
+  display: none;
+}
+
+.ac-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  align-items: flex-start;
+}
+.ac-time {
+  flex: 999 1 520px;
+  min-width: 0;
+  padding: 22px 24px;
+}
+.ac-side {
+  flex: 1 1 320px;
+  min-width: 0;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ac-side .pp-card {
+  padding: 20px;
+}
+
+/* Where they spent their time. */
+.ac-bars {
+  display: grid;
+  grid-template-columns: minmax(90px, 150px) minmax(0, 1fr) 64px;
+  gap: 12px 14px;
+  align-items: center;
+  font-size: 14px;
+}
+.ac-bar-row {
+  display: contents;
+}
+.ac-bar-l {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ac-bar {
+  height: 12px;
+  border-radius: 6px;
+  background: #f3f5f4;
+  overflow: hidden;
+}
+.ac-bar span {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--pine);
+}
+.ac-bar-v {
+  text-align: right;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ac-bar-row[data-top="true"] .ac-bar-v {
+  color: var(--ink);
+  font-weight: 700;
+}
+.ac-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ac-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+}
+.ac-chip[data-on="lead"] {
+  border-color: var(--pine);
+  background: var(--pine);
+  color: #fff;
+  font-weight: 700;
+}
+.ac-chip[data-on="picked"] {
+  border-color: var(--pine);
+  color: var(--pine);
+  font-weight: 700;
+}
+
+/* The timeline and the reminders. */
+.ac-tl {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.ac-tl li {
+  display: flex;
+  gap: 10px;
+}
+.ac-tl-at {
+  flex: 0 0 auto;
+  min-width: 88px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.ac-rem .ac-p {
+  margin-bottom: 10px;
+}
+.ac-rem-list {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.ac-rem-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+.ac-rem-st {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ac-rem-st[data-state="sent"] {
+  color: var(--pine);
+  font-weight: 700;
+}
+.ac-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.ac-check input,
+.ac-grid-c input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--pine);
+}
+.ac-renew[data-due="true"] {
+  border: 2px solid var(--pine);
+}
+.ac-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ac-ask .input {
+  min-height: 44px;
+}
+.ac-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ac-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.ac-gate p {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Notifications: the grid. */
+.ac-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 56px);
+  gap: 8px 6px;
+  align-items: center;
+  font-size: 14px;
+}
+.ac-grid-row {
+  display: contents;
+}
+.ac-grid-h {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ac-grid-l {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink);
+  padding: 6px 0;
+}
+.ac-grid-d {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--muted);
+}
+.ac-grid-c {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* Home. */
+.ac-home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 0 20px;
+}
+.ac-renewcard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 2px solid var(--pine);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.ac-renewcard-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ac-renewcard .ac-h {
+  font-size: 21px;
+  line-height: 27px;
+}
+.ac-inbox {
+  padding: 16px;
+}
+.ac-inbox ul {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.ac-inbox li + li {
+  border-top: 1px solid var(--line);
+}
+.ac-inbox-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ac-inbox-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  min-width: 0;
+}
+.ac-dot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.ac-dot[data-new="true"] {
+  background: var(--pine);
+}
+.ac-unread {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Phone: one column, three counts, short times (InsightsPhone.dc.html). */
+@media (max-width: 720px) {
+  .ac-follow {
+    padding: 16px;
+    gap: 12px;
+  }
+  .ac-h {
+    font-size: 19px;
+    line-height: 25px;
+  }
+  .ac-follow-draft .btn-pine {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .ac-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .ac-stat {
+    padding: 10px;
+    border-radius: 10px;
+  }
+  .ac-stat b {
+    font-size: 22px;
+    line-height: 28px;
+  }
+  .ac-stat > span {
+    font-size: 12px;
+  }
+  .ac-stat-opt {
+    display: none;
+  }
+  .ac-long {
+    display: none;
+  }
+  .ac-short {
+    display: inline;
+  }
+  .ac-time,
+  .ac-side .pp-card {
+    padding: 16px;
+  }
+  .ac-side {
+    max-width: none;
+  }
+  .ac-bars {
+    grid-template-columns: 104px minmax(0, 1fr) 44px;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .ac-bar,
+  .ac-bar span {
+    height: 10px;
+  }
+  .ac-tl-at {
+    min-width: 72px;
+  }
+  .ac-grid {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 48px);
+  }
+}
