@@ -111,6 +111,9 @@ async function main() {
   check("/terms answers 200", t.status === 200, t.status);
   check("its title and heading", /<title>Terms of Service · Merlin<\/title>/.test(t.html) && tt.includes("Terms of Service"));
   check("the effective date and version", tb.includes(`dateTime="${LEGAL_EFFECTIVE}"`) && tt.includes(`Effective ${LEGAL_EFFECTIVE_WORDS}`) && tt.includes(`Version ${TERMS_VERSION}`));
+  // The Terms changed (account closure, Connecticut law, the plans' descriptions, the pipeline row): version 1.1, effective the same day.
+  check("the Terms' version was bumped for it: 1.1, effective November 22, 2026", TERMS_VERSION === "1.1" && LEGAL_EFFECTIVE === "2026-11-22" && LEGAL_EFFECTIVE_WORDS === "November 22, 2026" && tt.includes("Version 1.1") && !tt.includes("Version 1.0"));
+  check("the Terms' plans say the pipeline row as compare.ts does: You move it, Moves to Won when they sign", tt.includes("Pipeline after a signature: You move it.") && tt.includes("Pipeline after a signature: Moves to Won when they sign.") && !/Moves itself when they sign|moving itself/.test(tt));
   check(
     "the plans' numbers are the billing rules' own",
     [`$${PRICES.month} a month or $${PRICES.year} a year`, `$${PRICES.closeMonth} a month or $${PRICES.closeYear} a year`, `$${PRICES.topup} for ${TOPUP_CREDITS} credits`, `A ${TRIAL_LABEL} when you finish onboarding`, `${EXTEND_DAYS} days longer`].every((x) => tt.includes(x)),
