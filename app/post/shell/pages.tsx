@@ -36,7 +36,7 @@ import type { SixSteps } from "../getStarted";
 import { MyCredits } from "../Credits";
 import { MessagesPage } from "../Messages";
 import { RadarPage } from "../Radar";
-import { BillingPage } from "../Billing";
+import { BillingPage, openPlans } from "../Billing";
 import { Seats } from "../Seats";
 import { PipelinePage } from "../Pipeline";
 import { GetInPage, WayInPage } from "../network/Ways";
@@ -216,6 +216,8 @@ export interface PageDef {
   crumbs?: ShellPage[];
   /** The page draws its own header (Home's greeting). It places ctx.headerActions itself. */
   ownHeader?: boolean;
+  /** The page places its own "what this page is for" strip (shell/PageStrip.tsx); else the shell draws it under the header. */
+  ownStrip?: boolean;
   /** Classes on its <main> besides "tp-main tp-main-page". */
   mainClass?: string | ((c: AppCtx) => string);
   /** Draw it only when this holds (Pilot metrics for admins, Plan and billing while billing is live); else the table, as before. */
@@ -352,6 +354,31 @@ function NetworkP() {
   );
 }
 
+/**
+ * Evidence Bank (Close): private case studies that fill the Proof part of a proposal. Its page comes
+ * in Stage 5; until then this says so plainly. Without Close it offers the upgrade, as the rail does.
+ */
+function EvidenceSoon() {
+  const c = useApp();
+  const close = !c.me.plan || c.me.plan.tier === "close";
+  return (
+    <div className="ws-soon">
+      <h1>Evidence Bank</h1>
+      <p>Your private case studies: the problem, what you did, and the numbers before and after. The client name stays hidden unless you show it. Each case fills the Proof part of the proposals you send.</p>
+      {close ? (
+        <p>Evidence Bank is being built. Your seats will each start a draft case here.</p>
+      ) : (
+        <>
+          <p>Evidence Bank is part of the Close plan, with proposals and contracts.</p>
+          <button type="button" className="btn btn-pine" onClick={() => openPlans("proposals")}>
+            See the Close plan
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -378,6 +405,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2",
   network: { title: "Your network", component: NetworkP },
   // The new look's pages (RN_UI2): each opens its home of today until its own exists.
   warm: { title: "Warm paths", component: GetInP, needsTable: true },
+  evidence: { title: "Evidence Bank", component: EvidenceSoon },
   alerts: { title: "Alerts and workflows", component: NotificationsP },
   agent: { title: "Agent access", component: IntegrationsP },
   settings: { title: "Settings", component: IntegrationsP },

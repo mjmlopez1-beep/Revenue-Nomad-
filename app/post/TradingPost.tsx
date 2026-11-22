@@ -54,7 +54,7 @@ import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } 
 import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, askSpend, cellFlags, markSpent, needsSpendConfirm, showUndo, spendWhat, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
 import { Seats } from "./Seats";
 import { earnRoom, pickMove, useMoveDismissals } from "./NextMove";
-import { AvatarMenu, CreditsPopover, TopBar, useRadarNew } from "./TopBar";
+import { AvatarMenu, CreditsPill, CreditsPopover, TopBar, TopHosts, useRadarNew } from "./TopBar";
 import { MessagesPage, useUnread } from "./Messages";
 import { RadarPage, radarRows, useRadarDay } from "./Radar";
 import { SIG_DAY_RE, YOUR_FEATURE, type RadarRange } from "@/lib/radar/types";
@@ -74,7 +74,12 @@ import { Strip, sinceText } from "./Guide";
 import { rolesSince, useTodayData } from "./Today";
 import { HomePage, type HomeView } from "./Home";
 import { MoreSheet, Sidebar, TabBar } from "./Sidebar";
-import { navItems, type AppPageKey, type NavItem } from "./navModel";
+import { currentKey2, navItems, navItems2, type AppPageKey, type NavItem, type NavItem2 } from "./navModel";
+import { MoreSheet2, TabBar2 } from "./Sidebar";
+import { Rail } from "./shell/Rail";
+import { HeaderActions, ShellHeader, type Crumb } from "./shell/Header";
+import { Bell } from "./shell/Bell";
+import { PageStrip } from "./shell/PageStrip";
 import { NudgeSlot, pickSlotNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
@@ -210,7 +215,7 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // Every page but "today" and "table" is drawn from the registry (shell/pages.tsx PAGES).
 type Page = ShellPage;
 /** The page an old page key opens with the new look off (a new page's old home). */
-const OLD_PAGE: Partial<Record<Page, Page>> = { warm: "getin", alerts: "notifications", agent: "integrations", settings: "integrations", find: "table" };
+const OLD_PAGE: Partial<Record<Page, Page>> = { warm: "getin", alerts: "notifications", agent: "integrations", settings: "integrations", find: "table", evidence: "today" };
 /** The page `p` opens in the look on screen (`ui2`: the new look). A page whose new one isn't built yet and stands in for the table (Find, for now) opens the table. */
 const pageFor = (p: Page, ui2: boolean): Page => (ui2 ? (opensTable(p) ? "table" : ui2PageOf(p)) : OLD_PAGE[p] ?? p);
 
@@ -236,6 +241,7 @@ const PAGE_TITLE: Record<Page, string> = {
   pipeline: "Your pipeline",
   proposals: "Proposals",
   getin: "Where you can get in",
+  evidence: "Evidence Bank",
   find: "Find",
   warm: "Warm paths",
   alerts: "Alerts and workflows",
@@ -2925,6 +2931,143 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   );
 
   /*
+   * ----- the new look's way around (RN_UI2): the rail, the header, the tab bar and More -----
+   * navModel.ts navItems2, drawn by shell/Rail.tsx and Sidebar.tsx TabBar2 and MoreSheet2.
+   */
+  /** Close is the member's (or the Close trial, or billing is off and nothing is gated): Evidence Bank is theirs. */
+  const closeOn = !me.plan || me.plan.tier === "close";
+  /** Proposals on its Contracts screen (?p=proposals&ct=1): the rail marks Contracts. */
+  const onContracts = page === "proposals" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ct") === "1";
+  /** Proposals at its list or at Contracts, as an address. */
+  const proposalsHref = (ct: boolean) => {
+    const u = new URLSearchParams((placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p: "proposals", all: allFns }).split("?")[1] ?? ""));
+    for (const k of ["pr", "dc", "new", "ct"]) u.delete(k);
+    if (ct) u.set("ct", "1");
+    return `${typeof window === "undefined" ? "/" : window.location.pathname}?${u.toString()}`;
+  };
+  /** A page drawn again from its start (Proposals moving between its list and Contracts from the rail). */
+  const [pageBump, setPageBump] = useState(0);
+  const hiringHot = !!hiringNav && emberTaken === 0;
+  const nav2 = navItems2({
+    page: onScreen as never,
+    recordType,
+    tab,
+    contracts: onContracts,
+    hrefs: {
+      today: pageHref("today"),
+      companies: tableHref("companies", listTab),
+      engagements: tableHref("engagements", listTab),
+      people: tableHref("people", listTab),
+      hiring: tableHref("engagements", "hiring", hiringFilters, null, false),
+      find: opensTable("find") ? tableHref("companies", listTab) : placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p: "find", all: allFns }),
+      contracts: proposalsHref(true),
+      page: (x) => (x === "proposals" ? proposalsHref(false) : placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p: x as Page, all: allFns })),
+    },
+    admin: !!me.admin && !!view.admin,
+    close: closeOn,
+    network: !!network,
+    networkN: network ? network.companies.length : null,
+    totals: waiting && !pf ? null : totals,
+    hiringN: hiringNav,
+    hiringHot,
+    radarN: today.data ? today.data.newCount || today.data.total || null : null,
+    pipelineN: pipelineOpen,
+    unread,
+    credits: me.credits,
+  });
+  const navOn2 = nav2.find((it) => it.current) ?? null;
+  const navTo2 = useStable((it: NavItem2) => {
+    const k = it.key;
+    if (k !== "today" && !okToLeave()) return;
+    setEditor(null);
+    setPop(null);
+    setMoreOpen(false);
+    setSideOverlay(false);
+    if (k === "today") return goHome();
+    if (k === "hiring") return seeOpenRoles();
+    // Evidence Bank is Close's: without it, the upgrade (the page itself comes in Stage 5).
+    if (k === "evidence" && it.gated) return openPlans("proposals");
+    // Find, while its page is the table's search and filters: the table, with the cursor in its search.
+    if (k === "find" && opensTable("find")) {
+      setDrawer(null);
+      setSearchTab(null);
+      setRecordType("companies");
+      setTabPicked(listTab);
+      setPage("table");
+      return void setTimeout(focusSearch, 80);
+    }
+    setDrawer(null);
+    if (k === "companies" || k === "engagements" || k === "people") {
+      setQuery("");
+      setSearchTab(null);
+      setRecordType(k);
+      setTabPicked(listTab);
+      setPage("table");
+      return;
+    }
+    if (k === "proposals" || k === "contracts") {
+      // Proposals reads its screen from the address when it opens (Proposals.tsx): the address first, then the page, drawn again.
+      const href = proposalsHref(k === "contracts");
+      try {
+        if (here() !== href) window.history.pushState({ tpd: 1 }, "", href);
+      } catch {}
+      setPageBump((n) => n + 1);
+      return setPage("proposals");
+    }
+    if (k === "radar") setSigDay(null);
+    if (k === "fractionals") setPeersAll(false);
+    if (k === "warm") setWayCo(null);
+    if (it.page !== "table" && (it.page !== "metrics" || view.admin)) setPage(it.page as Page);
+  });
+  /** The header's place: Home / the list / the view on screen, or Home / the page. */
+  const headTitle = (() => {
+    if (onScreen === "table") {
+      const v = views.find((x) => x.id === currentView);
+      if (v) return v.name;
+      if (tab === "hiring") return "Hiring now";
+      const t = TABS.find((x) => x.key === tab);
+      return tab === "all" || !t ? `All ${(recordType === "people" ? "people" : TYPE_TITLE[recordType]).toLowerCase()}` : t.label;
+    }
+    if (onScreen === "today") return "Home";
+    return navOn2 && onScreen !== "seats" && onScreen !== "network" && onScreen !== "billing" ? navOn2.label : PAGE_TITLE[onScreen];
+  })();
+  const headCrumbs: Crumb[] =
+    onScreen === "today"
+      ? []
+      : [
+          { label: "Home", href: pageHref("today"), go: goHome },
+          ...(onScreen === "table" && navOn2 && navOn2.key !== "hiring" ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
+          ...((onScreen === "seats" || onScreen === "network" || onScreen === "billing") && navOn2 ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
+        ];
+  const goPeers = () => openShellPage("peers");
+  const bellEl = (
+    <Bell
+      counts={{ unread, peers: peersNew, follows: since.n, roles: rolesNew, radar: radarNew }}
+      fn={namedFn(me.function)}
+      ember={emberTaken + (hiringHot ? 1 : 0) < 2}
+      go={{
+        messages: () => openShellPage("messages"),
+        peers: goPeers,
+        following: () => navTo(nav.find((x) => x.key === "following")!),
+        hiring: seeOpenRoles,
+        radar: () => (setDrawer(null), setSigDay(null), setPage("radar")),
+        alerts: () => openShellPage("alerts"),
+      }}
+    />
+  );
+  const headerActions = (
+    <HeaderActions
+      phone={phone}
+      bell={bellEl}
+      credits={<CreditsPill me={me} onClick={() => setPop((p) => (p === "credits" ? null : "credits"))} btnRef={creditsRef} unlockTip={unlockLimitLine(me, view.ledger)} />}
+      onAdd={() => openAdd()}
+    />
+  );
+  /** The strip on a page that doesn't place its own: the rail item's key ("engagements" is Seats, "today" is Home). */
+  const stripKey = onScreen === "today" ? "home" : navOn2 ? ({ engagements: "seats" } as Record<string, string>)[navOn2.key] ?? navOn2.key : null;
+  const stripOwn = stripKey === "pipeline" ? pipelineOpen : stripKey === "seats" ? (onScreen === "seats" ? seatStats.n : null) : undefined;
+
+  /*
    * ----- the page registry (shell/pages.tsx) -----
    * Every page but Home and the table is an entry there, drawn with this context. The new look's
    * own pages (home2, companies2, find2) take Home's and the table's place once they have a component.
@@ -2932,8 +3075,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [stripsGone, setStripsGone] = useState<string[]>([]);
   const sixDoneKey = `tp_six_done_${me.id}`;
   const six = useMemo(
-    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
-    [me, seatStats.n, stepSeen, sixDoneKey],
+    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, close: closeOn, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
+    [me, seatStats.n, stepSeen, closeOn, sixDoneKey],
   );
   useEffect(() => {
     if (!ui2) return;
@@ -2947,6 +3090,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     if (k === "seat") return seatStats.n > 0 ? openSeats() : openSeatSearch();
     if (k === "network") return openPage("network");
     if (k === "open") return stepOne();
+    if (k === "evidence") return openShellPage("evidence");
     if (k === "alert") {
       // A list already saved with its email off: open it, and its sheet, where the email is switched on. Else the table on the first view, and Save this view.
       const quiet = views.find((v) => !v.email);
@@ -3071,7 +3215,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       setWayCo,
     },
     legacy: { home: homeEl, table: tableEl },
-    headerActions: null,
+    headerActions,
     start: {
       six,
       run: (k) => runSix(k),
@@ -3090,6 +3234,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /** The new look's Home and Companies workbench, once they exist (shell/pages.tsx home2, companies2). */
   const Home2 = ui2 ? pageDef("home2")?.component ?? null : null;
   const Companies2 = ui2 && onScreen === "table" && recordType === "companies" ? pageDef("companies2")?.component ?? null : null;
+  /** The entry on screen (Home's, the workbench's or the page's): whether it draws its own header and strip. */
+  const defShown = onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 ? pageDef("companies2") : null) : defNow;
+  const headOwn = !!defShown?.ownHeader && !!defShown.component;
 
   /* ----- layout ----- */
   return (
@@ -3097,12 +3244,26 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       <CellUiCtx.Provider value={cellUi}>
       <FitWhyCtx.Provider value={fitWhy}>
       <AppCtxProvider value={ctx}>
-      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
+      <div className={`tp-app tp-${layout}${ui2 ? " tp-ui2" : ""}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
         {/* The first Tab stop: past the sidebar, to the list or the page. */}
         <a href={page === "table" ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
           {page === "table" ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
         </a>
-        {navSide && (
+        {navSide && ui2 && (
+          <Rail
+            items={nav2}
+            me={me}
+            onNav={navTo2}
+            onHome={goHome}
+            onUpgrade={() => openPlans(me.plan?.name === "trial" ? "trial" : "billing")}
+            onAccount={() => setPop((p) => (p === "menu" ? null : "menu"))}
+            accountRef={menuRef}
+            six={six}
+            showStart={!ctx.start.hidden}
+            onStart={() => (six.next ? runSix(six.next.key) : goHome())}
+          />
+        )}
+        {navSide && !ui2 && (
           <Sidebar
             items={nav}
             me={me}
@@ -3117,6 +3278,23 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           />
         )}
         <div className="tp-col">
+        {ui2 ? (
+          <>
+            {!headOwn && (
+              <ShellHeader
+                crumbs={headCrumbs}
+                title={headTitle}
+                phone={phone}
+                onHome={goHome}
+                search={!phone && onScreen === "table" && !Companies2 ? searchField : undefined}
+                actions={headerActions}
+                hosts={<TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />}
+              />
+            )}
+            {headOwn && <TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />}
+            {stripKey && !defShown?.ownStrip && !(onScreen === "table" && recordOpen && phone) && <PageStrip page={stripKey} own={stripOwn} />}
+          </>
+        ) : (
         <TopBar
           me={me}
           query={query}
@@ -3147,6 +3325,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           onMessagesPage={page === "messages"}
           unlockTip={unlockLimitLine(me, view.ledger)}
         />
+        )}
         {me.asMember && (
           <div className="tp-asmember" role="status">
             <span>You&apos;re seeing what members see.</span>
@@ -3165,7 +3344,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </main>
         ) : PageNow ? (
           <main className={`tp-main tp-main-page${pageMain ? ` ${pageMain}` : ""}`}>
-            <PageNow />
+            <PageNow key={`${onScreen}:${pageBump}`} />
           </main>
         ) : Companies2 ? (
           <Companies2 />
@@ -3173,8 +3352,22 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           tableEl
         )}
         </div>
-        {!navSide && <TabBar items={nav} onNav={navTo} onMore={() => (setPop(null), setMoreOpen((x) => !x))} moreRef={moreRef} moreOpen={moreOpen} />}
-        {moreOpen && !navSide && (
+        {!navSide && ui2 && <TabBar2 items={nav2} onNav={navTo2} onMore={() => (setPop(null), setMoreOpen((x) => !x))} moreRef={moreRef} moreOpen={moreOpen} />}
+        {moreOpen && !navSide && ui2 && (
+          <MoreSheet2
+            items={nav2}
+            me={me}
+            onNav={navTo2}
+            onClose={() => setMoreOpen(false)}
+            onUpgrade={() => openPlans(me.plan?.name === "trial" ? "trial" : "billing")}
+            onAccount={() => {
+              setMoreOpen(false);
+              setTimeout(() => setPop("menu"), 60);
+            }}
+          />
+        )}
+        {!navSide && !ui2 && <TabBar items={nav} onNav={navTo} onMore={() => (setPop(null), setMoreOpen((x) => !x))} moreRef={moreRef} moreOpen={moreOpen} />}
+        {moreOpen && !navSide && !ui2 && (
           <MoreSheet
             items={nav}
             me={me}

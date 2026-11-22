@@ -29,11 +29,11 @@ export const PLACE_PAGES = ["seats", "credits", "rates", "metrics", "messages", 
 export type PlacePage = (typeof PLACE_PAGES)[number];
 
 /**
- * The pages the new look adds (RN_UI2, lib/ui2.ts): Find, Warm paths, Alerts and workflows, Agent
- * access, Settings. Read from the address only with the new look on; with it off they are unknown
+ * The pages the new look adds (RN_UI2, lib/ui2.ts): Find, Warm paths, Evidence Bank, Alerts and
+ * workflows, Agent access, Settings. Read from the address only with the new look on; with it off they are unknown
  * pages, as before. Contracts (?p=contracts) is Proposals' own screen (?p=proposals&ct=1) for now.
  */
-export const UI2_PAGES = ["find", "warm", "alerts", "agent", "settings"] as const;
+export const UI2_PAGES = ["find", "warm", "evidence", "alerts", "agent", "settings"] as const;
 export type Ui2Page = (typeof UI2_PAGES)[number];
 /**
  * Under the new look an old address opens the page that is its new home (BUILD_PLAN part 2):

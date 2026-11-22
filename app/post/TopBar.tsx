@@ -796,3 +796,17 @@ export function TopBar({
     </header>
   );
 }
+
+/**
+ * What the top bar hosts (the help sheet, the Undo toast, the spend question), for the new look's
+ * header (shell/Header.tsx), which stands in for the top bar and must host them the same way.
+ */
+export function TopHosts({ me, contact, emailOn, starter }: { me: Me; contact?: Contact; emailOn?: boolean; starter?: number }) {
+  return (
+    <>
+      <HelpHost me={me} contact={contact} emailOn={emailOn} starter={starter} />
+      <UndoHost />
+      <SpendHost />
+    </>
+  );
+}

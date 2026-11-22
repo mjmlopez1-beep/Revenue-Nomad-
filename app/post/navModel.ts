@@ -173,3 +173,158 @@ export function navMatches(text: string, items: NavItem[]): NavItem[] {
     })
     .slice(0, 3);
 }
+
+/* ---------- the new look's rail (RN_UI2, Rail.dc.html) ---------- */
+
+/** Every page the new look draws or names: the old pages and its own (place.ts UI2_PAGES). */
+export const APP_PAGES2 = [...APP_PAGES, "find", "warm", "evidence", "alerts", "agent", "settings"] as const;
+export type AppPageKey2 = (typeof APP_PAGES2)[number];
+
+/** The rail's groups, top to bottom: the two at the top, then Data, Signals, Close, Community, Automate, Workspace. */
+export const GROUPS2 = [
+  { key: "top", label: null },
+  { key: "data", label: "Data" },
+  { key: "signals", label: "Signals" },
+  { key: "close", label: "Close" },
+  { key: "community", label: "Community" },
+  { key: "automate", label: "Automate" },
+  { key: "workspace", label: "Workspace" },
+] as const;
+export type NavGroup2 = (typeof GROUPS2)[number]["key"];
+
+export type NavIcon2 =
+  | "home" | "find" | "companies" | "people" | "seats" | "radar" | "hiring" | "warm" | "pipeline" | "proposals" | "contracts" | "evidence"
+  | "fractionals" | "messages" | "alerts" | "agent" | "rates" | "credits" | "settings" | "metrics";
+
+export interface NavItem2 {
+  /** data-nav in the page, and the key the tests use. */
+  key: string;
+  label: string;
+  group: NavGroup2;
+  icon: NavIcon2;
+  /** Every item is a place (a real link). */
+  href: string;
+  /** The page it opens. */
+  page: AppPageKey2;
+  /** A muted number after the label (null: not known yet, nothing drawn). */
+  count?: number | null;
+  /** A pill instead of the count: "hot" ember (Hiring now, with open roles), "new" volt (just shipped), "beta" quiet, "plan" the plan it needs (Close). */
+  pill?: { text: string; kind: "hot" | "new" | "beta" | "plan" };
+  /** The member's plan doesn't include it: a click opens the upgrade path (Evidence Bank without Close). */
+  gated?: boolean;
+  /** What the count or the pill says, for screen readers ("13 open roles"). */
+  spoken?: string;
+  current: boolean;
+  admin?: boolean;
+}
+
+export interface NavInput2 {
+  page: AppPageKey2;
+  recordType: RecordType;
+  tab: Tab;
+  /** Proposals is on its Contracts screen (?p=proposals&ct=1). */
+  contracts?: boolean;
+  hrefs: {
+    today: string;
+    companies: string;
+    engagements: string;
+    people: string;
+    hiring: string;
+    /** Find, while its page is the table's search and filters, is the table's address. */
+    find: string;
+    contracts: string;
+    page: (p: AppPageKey2) => string;
+  };
+  admin: boolean;
+  /** The member has Close (or the Close trial, or billing is off): Evidence Bank is theirs. */
+  close: boolean;
+  /** Your network is on (RN_GOOGLE): Warm paths is listed. */
+  network: boolean;
+  networkN?: number | null;
+  totals: Record<RecordType, number> | null;
+  hiringN: number | null;
+  /** Hiring now's count is ember (no more urgent thing has the ember on screen). */
+  hiringHot?: boolean;
+  /** Companies in the member's Crystal Ball range (null until known). */
+  radarN?: number | null;
+  pipelineN?: number | null;
+  proposalsN?: number | null;
+  fractionalsN?: number | null;
+  unread: number;
+  credits: number;
+}
+
+/** The rail item on for a place: exactly one (the tests check every place). */
+export function currentKey2(x: Pick<NavInput2, "page" | "recordType" | "tab" | "contracts">): string {
+  switch (x.page) {
+    case "today":
+      return "today";
+    case "table":
+      if (x.tab === "hiring") return "hiring";
+      return x.recordType;
+    case "seats":
+      return "engagements";
+    case "getin":
+    case "network":
+    case "warm":
+      return "warm";
+    case "proposals":
+      return x.contracts ? "contracts" : "proposals";
+    case "peers":
+    case "partners":
+    case "fractionals":
+      return "fractionals";
+    case "notifications":
+    case "alerts":
+      return "alerts";
+    case "integrations":
+    case "settings":
+      return "settings";
+    case "billing":
+    case "credits":
+      return "credits";
+    default:
+      return x.page;
+  }
+}
+
+/** The rail, top to bottom (Rail.dc.html). Warm paths needs Your network. Evidence Bank is Close's: without it, the item carries the plan's pill and opens the upgrade. */
+export function navItems2(x: NavInput2): NavItem2[] {
+  const on = currentKey2(x);
+  const t = x.totals;
+  const p = x.hrefs.page;
+  const items: Omit<NavItem2, "current">[] = [
+    { key: "today", label: "Home", group: "top", icon: "home", href: x.hrefs.today, page: "today" },
+    { key: "find", label: "Find", group: "top", icon: "find", href: x.hrefs.find, page: "find" },
+    { key: "companies", label: "Companies", group: "data", icon: "companies", href: x.hrefs.companies, page: "table", count: t ? t.companies : null },
+    { key: "people", label: "People", group: "data", icon: "people", href: x.hrefs.people, page: "table", count: t ? t.people : null },
+    { key: "engagements", label: "Seats", group: "data", icon: "seats", href: x.hrefs.engagements, page: "table", count: t ? t.engagements : null },
+    { key: "radar", label: FEATURE_NAME, group: "signals", icon: "radar", href: p("radar"), page: "radar", count: x.radarN ?? null, spoken: x.radarN ? `${x.radarN} companies` : undefined },
+    {
+      key: "hiring", label: "Hiring now", group: "signals", icon: "hiring", href: x.hrefs.hiring, page: "table",
+      ...(x.hiringN && x.hiringHot ? { pill: { text: x.hiringN.toLocaleString("en-US"), kind: "hot" as const } } : { count: x.hiringN }),
+      spoken: x.hiringN != null ? `${x.hiringN} open roles` : undefined,
+    },
+    ...(x.network ? [{ key: "warm", label: "Warm paths", group: "signals" as const, icon: "warm" as const, href: p("warm"), page: "warm" as const, count: x.networkN ?? null }] : []),
+    { key: "pipeline", label: "Pipeline", group: "close", icon: "pipeline", href: p("pipeline"), page: "pipeline", count: x.pipelineN ?? null, spoken: x.pipelineN ? `${x.pipelineN} open deals` : undefined },
+    { key: "proposals", label: "Proposals", group: "close", icon: "proposals", href: p("proposals"), page: "proposals", count: x.proposalsN ?? null },
+    { key: "contracts", label: "Contracts", group: "close", icon: "contracts", href: x.hrefs.contracts, page: "proposals", pill: { text: "New", kind: "new" } },
+    {
+      key: "evidence", label: "Evidence Bank", group: "close", icon: "evidence", href: p("evidence"), page: "evidence",
+      pill: x.close ? { text: "New", kind: "new" } : { text: "Close", kind: "plan" }, ...(x.close ? {} : { gated: true, spoken: "on the Close plan" }),
+    },
+    { key: "fractionals", label: "Fractionals", group: "community", icon: "fractionals", href: p("peers"), page: "peers", count: x.fractionalsN ?? null },
+    { key: "messages", label: "Messages", group: "community", icon: "messages", href: p("messages"), page: "messages", count: x.unread || null, spoken: x.unread ? `${x.unread} unread` : undefined },
+    { key: "alerts", label: "Alerts and workflows", group: "automate", icon: "alerts", href: p("alerts"), page: "alerts", pill: { text: "Beta", kind: "beta" } },
+    { key: "agent", label: "Agent access", group: "automate", icon: "agent", href: p("agent"), page: "agent" },
+    { key: "rates", label: "Rate benchmarks", group: "workspace", icon: "rates", href: p("rates"), page: "rates" },
+    { key: "credits", label: "Credits and usage", group: "workspace", icon: "credits", href: p("credits"), page: "credits", count: x.credits, spoken: `${x.credits} credits` },
+    { key: "settings", label: "Settings", group: "workspace", icon: "settings", href: p("settings"), page: "settings" },
+    ...(x.admin ? [{ key: "metrics", label: "Pilot metrics", group: "workspace" as const, icon: "metrics" as const, href: p("metrics"), page: "metrics" as const, admin: true }] : []),
+  ];
+  return items.map((it) => ({ ...it, current: it.key === on }));
+}
+
+/** The phone's tab bar in the new look: these four, then More (the rest, in its groups). */
+export const TAB_KEYS2 = ["today", "companies", "radar", "messages"] as const;
+export const moreOn2 = (items: NavItem2[]) => !items.some((it) => it.current && (TAB_KEYS2 as readonly string[]).includes(it.key));
