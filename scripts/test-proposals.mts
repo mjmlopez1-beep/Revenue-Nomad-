@@ -701,6 +701,29 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   check("switch off: nothing went to Anthropic", aiCalls.length === 6);
   setEnv(true);
 
+  // The day's cap: 15 drafts with Claude a member a UTC day, kept in the state. Failed drafts give theirs back.
+  const today = new Date().toISOString().slice(0, 10);
+  const stCap = JSON.parse(readFileSync(path.join(dir, "intel.json"), "utf8"));
+  check("the day's count is in the state: 2 drafts made, the 4 that failed gave theirs back", D.DRAFTS_A_DAY === 15 && stCap.aiDraftDays?.mem_pat?.day === today && stCap.aiDraftDays.mem_pat.n === 2, stCap.aiDraftDays);
+  await T.tableInternals.mutate((st) => {
+    (st.aiDraftDays ??= {}).mem_pat = { day: today, n: 14 };
+  });
+  const nCap = (await S.listProposals(PAT, BASE)).proposals.length;
+  const callsCap = aiCalls.length;
+  await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE);
+  check("the 15th draft of the day goes through", aiCalls.length === callsCap + 1 && (await S.listProposals(PAT, BASE)).proposals.length === nCap + 1 && D.draftsToday(await T.loadState(), "mem_pat") === 15);
+  const capErr = await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
+  check("the 16th is refused with a plain sentence, and Claude isn't called", capErr?.status === 429 && capErr.message === D.AI_CAP && /15 drafts with Claude today/.test(capErr.message) && /Build it in Claude/.test(capErr.message) && aiCalls.length === callsCap + 1 && (await S.listProposals(PAT, BASE)).proposals.length === nCap + 1, capErr?.message);
+  check("the cap is the member's own: another member's day isn't touched", D.draftsToday(await T.loadState(), "mem_oth") === 0);
+  const tomorrow = Date.now() + 24 * 60 * 60_000;
+  await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE, tomorrow);
+  check("the next UTC day starts again at 1", aiCalls.length === callsCap + 2 && D.draftsToday(await T.loadState(), "mem_pat", tomorrow) === 1);
+  check("the day's count never leaves in the export", !("aiDraftDays" in (await T.exportState())));
+  // Build it in Claude (the copied prompt and the connector's kit, below) runs in the member's own Claude: no cap, even at 15.
+  await T.tableInternals.mutate((st) => {
+    (st.aiDraftDays ??= {}).mem_pat = { day: today, n: 15 };
+  });
+
   // The connector's kit: one call, by template id or by the name the member said.
   const kctx = { member: (await T.memberForToken(PAT))!, origin: BASE };
   const kit = await C.getProposalKit(kctx, { template: "sprint 90", company_id: ACME });
@@ -710,6 +733,7 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   const fkctx = { member: (await T.memberForToken(FRE))!, origin: BASE };
   check("get_proposal_kit on Free: Merlin's other templates are Pro's", (await refused(C.getProposalKit(fkctx, { template: "sprint-90" })))?.includes("On Free"));
   check("the kit and the server's draft read the same inputs", JSON.stringify(Object.keys(await K.proposalKit(PAT, { templateId: "sprint-90", companyId: ACME })).sort()) === JSON.stringify(Object.keys(kitJson).sort()));
+  check("Build it in Claude isn't capped: the kit still comes at 15 drafts today", D.draftsToday(await T.loadState(), "mem_pat") === 15 && !!(await C.getProposalKit(kctx, { template: "sprint 90", company_id: ACME })).template);
 
   /* ================= My templates ================= */
   console.log("\nmy templates");

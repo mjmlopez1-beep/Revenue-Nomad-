@@ -40,6 +40,7 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "draft", templateId?, companyId?, companyName?, transcript, callDate?, callWith?, agree? }
  *                  Draft the whole proposal with Claude (lib/proposals/draft.ts, RN_AI_DRAFTS). The transcript is
  *                  used for this request only and never kept. { proposal, toFix }.
+ *                  At most DRAFTS_A_DAY (15) a member a UTC day; the 16th is refused (429) with a plain sentence.
  * POST { op: "agree_ai" }   They agree a transcript may go to Anthropic's API to write a draft.
  * POST { op: "template_rename", id, title } | { op: "template_delete", id }   My templates (uploads: /api/proposals/template).
  * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName? }
@@ -84,7 +85,8 @@ export const POST = guarded(async (req: NextRequest) => {
         ),
       );
     case "draft":
-      if (limited(`prop-draft:${me.id}`, 30, 24 * 60 * 60_000)) return err("That's 30 drafts with Claude today, which is the limit. Draft without Claude, or Build it in Claude.", 429);
+      // The day's cap (DRAFTS_A_DAY, kept in the state) is in draftWithClaude. This one only slows a run of tries, failed ones too.
+      if (limited(`prop-draft:${me.id}`, 30, 24 * 60 * 60_000)) return err("That's a lot of tries at drafting with Claude today. Draft without Claude, or Build it in Claude.", 429);
       return answer(() => draftWithClaude(token, { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, transcript: b.transcript, callDate: b.callDate, callWith: b.callWith, agree: b.agree }, o));
     case "agree_ai":
       return answer(async () => (await agreeToAi(token), { ok: true }));

@@ -590,6 +590,8 @@ export interface State extends MessagingState {
   myTemplates?: Record<string, MyTemplate[]>;
   /** When each member agreed that a transcript may go to Anthropic's API to write a draft (lib/proposals/draft.ts), by member id. */
   aiDrafts?: Record<string, string>;
+  /** How many proposals each member drafted with Claude on Merlin's server on a UTC day (lib/proposals/draft.ts DRAFTS_A_DAY), by member id. Theirs alone like aiDrafts. */
+  aiDraftDays?: Record<string, { day: string; n: number }>;
 }
 
 /** State.salesBuild[companyId]. */
@@ -7304,7 +7306,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well.
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiDraftDays: _aiDraftDays, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars

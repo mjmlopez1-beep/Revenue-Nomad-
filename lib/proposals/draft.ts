@@ -10,6 +10,10 @@
  * The transcript is used for this one request only. It is never written to the state, a file or a
  * log: only the draft is kept. The member agrees once, first, that a transcript goes to Anthropic
  * to write a draft (State.aiDrafts). With the switch off, nothing here runs.
+ *
+ * Each member drafts at most DRAFTS_A_DAY proposals with Claude a UTC day (State.aiDraftDays). A
+ * draft takes its place before the call and gives it back when no draft comes of it. "Build it in
+ * Claude" (the copied prompt and the connector's kit) runs in the member's own Claude and has no cap.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
@@ -24,6 +28,9 @@ import type { ProposalRec } from "./types";
 
 export const AI_OFF = "Drafting with Claude isn't switched on for Merlin. Use Draft without it, or Build it in Claude.";
 export const AI_PLAN = `Drafting with Claude is on Pro: $${PRICES.month} a month. Build it in Claude works on every plan.`;
+/** Drafts with Claude a member can make a UTC day. */
+export const DRAFTS_A_DAY = 15;
+export const AI_CAP = `That's ${DRAFTS_A_DAY} drafts with Claude today, which is the limit. You can draft with Claude again tomorrow. For now, use Draft without it, or Build it in Claude.`;
 export const AI_CONSENT = "To draft it, Merlin sends this transcript and the draft's inputs to Anthropic's API. Merlin keeps the draft, not the transcript.";
 
 /** What the model returns: key fields under plain names, mapped to the proposal's {{keys}}. */
@@ -136,6 +143,32 @@ export async function agreeToAi(token: string | null, nowMs = Date.now()): Promi
   });
 }
 
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** How many drafts with Claude this member made on nowMs's UTC day. */
+export function draftsToday(s: { aiDraftDays?: Record<string, { day: string; n: number }> }, memberId: string, nowMs = Date.now()): number {
+  const c = s.aiDraftDays?.[memberId];
+  return c && c.day === utcDay(nowMs) ? c.n : 0;
+}
+
+/** Takes one of today's drafts for the member, in the state's queue so two at once can't pass the cap. False when none is left. */
+async function takeDraft(memberId: string, nowMs: number): Promise<boolean> {
+  return T.mutate((s) => {
+    const n = draftsToday(s, memberId, nowMs);
+    if (n >= DRAFTS_A_DAY) return false;
+    (s.aiDraftDays ??= {})[memberId] = { day: utcDay(nowMs), n: n + 1 };
+    return true;
+  });
+}
+
+/** Gives back a draft taken today when no draft came of it. */
+async function giveBackDraft(memberId: string, nowMs: number): Promise<void> {
+  await T.mutate((s) => {
+    const c = s.aiDraftDays?.[memberId];
+    if (c && c.day === utcDay(nowMs) && c.n > 0) c.n -= 1;
+  });
+}
+
 export interface DraftArgs {
   templateId?: unknown;
   companyId?: unknown;
@@ -168,6 +201,26 @@ export async function draftWithClaude(token: string | null, a: DraftArgs, origin
   const templateId = a.templateId === "blank" || a.templateId === "" || a.templateId == null ? null : String(a.templateId);
   const companyId = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
   const companyName = clip(String(a.companyName ?? "").trim(), 120);
+  if (!(await takeDraft(me.id, nowMs))) throw new ProposalProblem(AI_CAP, 429);
+  try {
+    return await draftNow(token, templateId, companyId, companyName, transcript, a, origin, nowMs);
+  } catch (e) {
+    await giveBackDraft(me.id, nowMs);
+    throw e;
+  }
+}
+
+/** The call to Claude and the saved draft, once today's draft is taken. */
+async function draftNow(
+  token: string | null,
+  templateId: string | null,
+  companyId: string | null,
+  companyName: string,
+  transcript: string,
+  a: DraftArgs,
+  origin: string | undefined,
+  nowMs: number,
+): Promise<{ proposal: ProposalRec; toFix: string[] }> {
   const kit = await proposalKit(token, { templateId, companyId, companyName });
   const call = { date: clip(String(a.callDate ?? "").trim(), 40), with: clip(String(a.callWith ?? "").trim(), 120) };
 
