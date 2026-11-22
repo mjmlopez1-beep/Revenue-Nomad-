@@ -121,6 +121,8 @@ const preloadLater = (admin: boolean) => {
 };
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
+// Stage 1 (Builder C): try the new Home and Find at ?p=home2 / ?p=find2 while RN_UI2 is not off. The merge replaces this with the page registry.
+import { TRY2_START, Try2, ui2Mode, type Try2Page } from "./find/Try2";
 
 export interface TradingPostProps {
   view: View;
@@ -397,6 +399,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [page, setPage] = useState<Page>(() =>
     start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"),
   );
+  // Stage 1 (Builder C): the new Home or Find, on Home's place, while RN_UI2 is not off.
+  const [try2, setTry2] = useState<Try2Page | null>(null);
+  useEffect(() => {
+    if (TRY2_START) void ui2Mode().then((m) => m !== "off" && (setTry2(TRY2_START), setPage("today")));
+  }, []);
   /** Where you can get in shows one company's way in: ?p=getin&w=<company>. Home, the pipeline and a record open it (openWay). */
   const [wayCo, setWayCo] = useState<string | null>(() => (typeof window !== "undefined" && place0.p === "getin" ? new URLSearchParams(window.location.search).get("w") : null));
   /** Peers shows its Every fractional view (the directory): ?p=peers&pt=all, and the directory's old addresses. */
@@ -756,6 +763,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const setSigDay = useCallback((d: string | null, r: RadarRange | null = null) => (setSigDayRaw(d), setRadarRange(d ? null : r)), []);
   /** The page on screen: the table's own place, except under a record opened from Home or Crystal Ball, which opens over that page. */
   const onScreen: Page = page === "table" && drawer?.over ? drawer.over : page;
+  useEffect(() => {
+    if (onScreen !== "today") setTry2(null);
+  }, [onScreen]);
   // A record opened from Crystal Ball (or an email's card straight to it) keeps the day's companies loaded: its Open reads them.
   const radar = useRadarDay(onScreen === "radar" || drawer?.returnTo === "radar", sigDay, radarRange, [me.function, me.icp, me.before]);
   // [google network] Crystal Ball cut to the companies where the member knows someone (the connect moment's button).
@@ -2725,7 +2735,13 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         )}
 
         {onScreen === "today" ? (
-          <main className="tp-main tp-main-page td-page hm-page">
+          <main className={`tp-main tp-main-page td-page hm-page${try2 ? " h2-page" : ""}`}>
+            {((home) =>
+              try2 ? (
+                <Try2 which={try2} setWhich={setTry2} home={home.props} checks={steps.steps} openView={openView} go={(p) => (setDrawer(null), setPage(p as Page))} onProfile={() => setIcpOpen(true)} runNudge={runNudge} />
+              ) : (
+                home
+              ))(
             <HomePage
               me={me}
               infos={infos}
@@ -2784,7 +2800,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               }}
               nav={nav}
               onNav={navTo}
-            />
+            />,
+            )}
           </main>
         ) : waiting && onScreen !== "table" ? (
           <main className="tp-main tp-main-page">
