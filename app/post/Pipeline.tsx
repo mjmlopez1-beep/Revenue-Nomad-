@@ -2,7 +2,7 @@
 
 /**
  * Your pipeline (?p=pipeline, under Yours): every company the member reached out to, by stage, as
- * Merlin moved it. Stages are columns on a wide screen and a grouped list on a phone, each with its
+ * Merlin moved it, and first the leads peers passed them, at To reach out until their note goes out. Stages are columns on a wide screen and a grouped list on a phone, each with its
  * count, then the closed ones (Went quiet, Lost, Not now), the intros, and the month's value of
  * what they won. Read-only: each card says how Merlin knows ("Detected from your Gmail on Nov 21",
  * "From your calendar"), and carries its one-tap corrections. The page says what Merlin can see
@@ -26,6 +26,7 @@ const WonSheet = dynamic(() => import("./WonSheet").then((m) => m.WonSheet), { s
 
 const CLOSED: Stage[] = ["quiet", "lost", "notnow"];
 const EMPTY_WORDS: Partial<Record<Stage, string>> = {
+  reach: "When a peer passes you a lead.",
   sent: "Mark a note sent and it lands here.",
   replied: "Merlin moves a deal here when they write back.",
   meeting: "From your calendar, when you meet.",
@@ -44,14 +45,14 @@ export function PipelinePage({ infos, openCompany, onIntegrations }: { infos: Co
     for (const e of view?.entries ?? []) m.set(e.stage, [...(m.get(e.stage) ?? []), e]);
     return m;
   }, [view]);
-  const open = (["sent", "replied", "meeting", "proposal"] as Stage[]).reduce((n, s) => n + (view?.counts[s] ?? 0), 0);
+  const open = (["reach", "sent", "replied", "meeting", "proposal"] as Stage[]).reduce((n, s) => n + (view?.counts[s] ?? 0), 0);
   const closed = CLOSED.flatMap((s) => byStage.get(s) ?? []);
   const rec = (id: string | null) => (id ? view?.entries.find((e) => e.id === id) ?? null : null);
   const drafted = rec(drafting);
   const won = rec(winning);
   return (
     <div className="page-wide pl-page">
-      <PageHead title="Your pipeline" lead="Merlin moves each deal by itself: Sent when your note goes out, Replied when they write back, Meeting from your calendar. You only say Lost or Not now." />
+      <PageHead title="Your pipeline" lead="Merlin moves each deal by itself: a peer's lead waits at To reach out, then Sent when your note goes out, Replied when they write back, Meeting from your calendar. You only say Lost or Not now." />
       {view && <Sees v={view} onIntegrations={onIntegrations} />}
       {!view ? (
         failed ? (
@@ -65,6 +66,7 @@ export function PipelinePage({ infos, openCompany, onIntegrations }: { infos: Co
         <>
           <div className="stats pl-stats">
             <Stat n={open} label="open" />
+            {(view.counts.reach ?? 0) > 0 && <Stat n={view.counts.reach} label="to reach out" />}
             <Stat n={view.due.length} label={view.due.length === 1 ? "follow-up due" : "follow-ups due"} />
             <Stat n={view.counts.won} label={`won${view.wonMonthly > 0 ? `, ${monthWords(view.wonMonthly)}` : ""}`} />
           </div>
@@ -170,6 +172,11 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
         <span className={`pl-card-next${due ? " pl-due" : ""}`}>{e.next}</span>
       ) : null}
       <div className="pl-card-acts">
+        {e.stage === "reach" && (
+          <button type="button" className="btn btn-sm btn-pine" onClick={onOpen} data-reach>
+            <IconPencil size={13} /> Write your note
+          </button>
+        )}
         {due && (
           <button type="button" className="btn btn-sm btn-pine" onClick={onDraft}>
             <IconPencil size={13} /> Follow up

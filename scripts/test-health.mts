@@ -192,7 +192,7 @@ async function main() {
   const row = (rows: { label: string; n: number; unit?: string }[] | null, label: string) => rows?.find((x) => x.label === label);
   check(
     "outcomes: wired, every count 0 with nobody's pipeline, no share with nothing to divide by",
-    Array.isArray(h.outcomes) && h.outcomes.length === 24 && row(h.outcomes, "Won from a signed proposal")?.n === 0 && h.outcomes.every((x) => x.n === 0) && !h.outcomes.some((x) => x.unit === "%") && row(h.outcomes, "Deals")?.n === 0,
+    Array.isArray(h.outcomes) && h.outcomes.length === 25 && row(h.outcomes, "Won from a signed proposal")?.n === 0 && h.outcomes.every((x) => x.n === 0) && !h.outcomes.some((x) => x.unit === "%") && row(h.outcomes, "Deals")?.n === 0,
     h.outcomes,
   );
 
@@ -324,6 +324,7 @@ async function main() {
       // Peers (lib/peers.ts): counts only.
       { label: "Leads passed to a peer", n: 0 },
       { label: "Leads a peer took", n: 0 },
+      { label: "Leads waiting at To reach out", n: 0 },
       { label: "Leads passed that were won", n: 0 },
       { label: "Teams formed", n: 0 },
       { label: "Teams active now", n: 0 },

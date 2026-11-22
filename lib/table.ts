@@ -129,7 +129,7 @@ import { networkKnown, networkOn, type NetworkState } from "./google/types";
 // Your three moves today, and the voice its notes are written in: each member's own (lib/moves.ts, lib/voice.ts).
 import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type MoveLog } from "./moves";
 // Your pipeline (lib/pipeline.ts): each member's own deals, moved by what Merlin sees. A move's note used opens its entry.
-import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, openEntry, pipelineHidden, type PipelineLog } from "./pipeline";
+import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, migrateLeadsToReach, openEntry, pipelineHidden, type PipelineLog } from "./pipeline";
 import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
@@ -475,7 +475,7 @@ export interface State extends MessagingState {
   /** Weekly email: last run, emails sent in all, and each member's last one. */
   digest: { lastSentAt: string | null; sent: number; members: Record<string, string> };
   /** One-time changes already applied. starterFloor: the starter balance the floor was last applied at. */
-  flags: { starterFloor?: number; closeTier?: boolean };
+  flags: { starterFloor?: number; closeTier?: boolean; reachStage?: boolean };
   /** The Claude connector: connected apps (token hashes only) and saved searches. See lib/mcp. */
   connector?: ConnectorState;
   /** Fractional firms kept because a member holds a seat there (lib/firmRemoval.ts), for an admin to review. */
@@ -1031,6 +1031,13 @@ export async function loadState(): Promise<State> {
       const n = s.billing ? grandfatherClose(s.billing, Date.now()) : 0;
       if (n) console.log(`Kept ${n} paid Pro member${n === 1 ? "" : "s"} on Pro, with Pro + Close until their next renewal.`);
       s.flags.closeTier = true;
+    }
+    // To reach out arrived (lib/pipeline.ts): peers' leads stored at Sent though nothing went out from the member yet move there. Once; every other deal stays.
+    if (!s.flags.reachStage) {
+      let n = 0;
+      for (const log of Object.values(s.pipeline ?? {})) n += migrateLeadsToReach(log);
+      if (n) console.log(`Moved ${n} lead${n === 1 ? "" : "s"} a peer passed, not written to yet, to To reach out.`);
+      s.flags.reachStage = true;
     }
     // An ongoing seat's end month is free now. Whoever paid to see one gets that credit back, once.
     if (seedNow) {

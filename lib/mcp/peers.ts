@@ -46,6 +46,7 @@ function leadOut(l: LeadRec): ToolOut {
     ...(l.note && l.side === "to-you" ? { note: l.note } : {}),
     status: l.status === "new" ? "waiting for an answer" : l.status === "taken" ? "taken into the pipeline" : "passed on",
     ...(l.won ? { won: true } : {}),
+    ...(l.side === "to-you" && l.stage ? { pipeline_stage: l.stage } : {}),
     passed: l.at.slice(0, 10),
   };
 }
@@ -105,7 +106,8 @@ export async function leadsPassedToMe(ctx: Ctx): Promise<ToolOut> {
   return {
     passed_to_you: v.inbox.map(leadOut),
     you_passed: v.sent.map(leadOut),
-    how_to_use: "A lead a peer passed opens free for the member: no credits. The member takes it into their pipeline, or not, in Peers on Merlin.",
+    how_to_use:
+      "A lead a peer passed opens free for the member: no credits. The member takes it into their pipeline, or not, in Peers on Merlin. A lead they took waits at To reach out (pipeline_stage) until their note goes out, then Merlin moves it to Sent by itself.",
   };
 }
 
@@ -144,7 +146,7 @@ export function registerPeerTools(server: McpServer, ctx: Ctx, run: Run): void {
     "leads_passed_to_me",
     {
       title: "Leads passed to me",
-      description: "Leads peers passed the member (each company opens free for them), and the ones the member passed, with what came of each. Costs nothing.",
+      description: "Leads peers passed the member (each company opens free for them), and the ones the member passed, with what came of each. A lead the member took shows its stage in their pipeline: To reach out until their note goes out, then Sent and on. Costs nothing.",
       inputSchema: {},
       annotations: { title: "Leads passed to me", ...READ },
     },

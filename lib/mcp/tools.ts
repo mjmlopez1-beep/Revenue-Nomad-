@@ -1320,6 +1320,7 @@ export async function myPipeline(ctx: Ctx): Promise<ToolOut> {
       log: e.log.slice(-10).map((l) => `${l.at.slice(0, 10)}: ${l.text}`),
       ...(e.won ? { won: { rate: e.won.pricing === "hourly" ? `$${e.won.rate}/hr` : `$${e.won.rate}/mo`, ...(e.won.hours ? { hours_a_week: e.won.hours } : {}), month_value: monthWords(e.won.monthly), through_merlin: e.won.merlin } } : {}),
       ...(e.intro ? { intro: { by: e.intro.by, status: e.intro.status } } : {}),
+      ...(e.lead ? { passed_by_peer: e.lead.by.split(" ")[0] } : {}),
     })),
     follow_ups_due: due.map((f) => ({ entry_id: f.entryId, company_id: f.companyPub, follow_up: f.title, line: f.line, due: f.due })),
     intros: v.intros.map((i) => ({
@@ -1334,7 +1335,7 @@ export async function myPipeline(ctx: Ctx): Promise<ToolOut> {
     won_month_value: monthWords(v.wonMonthly),
     merlin_sees: v.sees.gmail ? "notes and messages on Merlin, the calendar and Gmail headers" : v.sees.calendar ? "notes and messages on Merlin and the calendar (Gmail isn't connected, so replies by email aren't seen)" : "notes and messages on Merlin",
     how_to_use:
-      "This is the member's own pipeline. Merlin moves the stages by itself: Sent when a drafted note or a message goes out, Replied when an email comes in from the company (when Gmail is connected) or they reply on Merlin, Meeting from the calendar, Proposal and Won from a proposal, and Went quiet after the follow-ups go unanswered. The member only ever marks Lost or Not now, and adds notes: update_pipeline does those three things and nothing else. Never guess a locked company's name, and never name the person you know there: their name is on Merlin. Nothing here costs a credit.",
+      "This is the member's own pipeline. Merlin moves the stages by itself: a lead a peer passed waits at To reach out until the member writes to them, Sent when a drafted note or a message goes out, Replied when an email comes in from the company (when Gmail is connected) or they reply on Merlin, Meeting from the calendar, Proposal and Won from a proposal, and Went quiet after the follow-ups go unanswered. The member only ever marks Lost or Not now, and adds notes: update_pipeline does those three things and nothing else. Never guess a locked company's name, and never name the person you know there: their name is on Merlin. Nothing here costs a credit.",
   };
 }
 

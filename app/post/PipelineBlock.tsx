@@ -27,7 +27,7 @@ export function PipelineBlock({ i }: { i: CoInfo }) {
   const [winning, setWinning] = useState(false);
   const all = (view?.entries ?? []).filter((e) => e.company === i.c.id);
   // The open deal there, else the latest.
-  const rec = all.find((e) => ["sent", "replied", "meeting", "proposal"].includes(e.stage)) ?? all[0];
+  const rec = all.find((e) => ["reach", "sent", "replied", "meeting", "proposal"].includes(e.stage)) ?? all[0];
   if (!rec) return null;
   const due = view?.due.find((f) => f.id === rec.id) ?? null;
   return (
