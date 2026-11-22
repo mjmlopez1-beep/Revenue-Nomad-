@@ -18,7 +18,8 @@ interface App {
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(new Date(iso).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
 
-export function ConnectedApps({ onHowTo }: { onHowTo?: () => void }) {
+/** `onApps`: told the list each time it loads or changes (Integrations' Claude chip follows it). */
+export function ConnectedApps({ onHowTo, onApps }: { onHowTo?: () => void; onApps?: (apps: App[]) => void }) {
   const toast = useToast();
   const [apps, setApps] = useState<App[] | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
@@ -34,6 +35,10 @@ export function ConnectedApps({ onHowTo }: { onHowTo?: () => void }) {
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (apps) onApps?.(apps);
+  }, [apps, onApps]);
 
   const disconnect = async (app: App) => {
     setBusy(app.id);
@@ -91,7 +96,7 @@ export function ConnectedApps({ onHowTo }: { onHowTo?: () => void }) {
                   </div>
                 ) : (
                   <button type="button" className="btn btn-sm" onClick={() => setAsking(a.id)}>
-                    Revoke
+                    Disconnect
                   </button>
                 )}
               </li>

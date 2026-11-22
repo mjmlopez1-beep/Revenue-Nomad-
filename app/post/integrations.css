@@ -375,3 +375,12 @@
   flex: none;
   min-height: 36px;
 }
+
+/* The top row's status line under a card's description: what is connected, when it was last used. */
+.in-pick-s {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--volt-ink);
+  overflow-wrap: anywhere;
+}

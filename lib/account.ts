@@ -118,6 +118,8 @@ export async function closeAccount(token: string | null, o: { origin?: string; m
     const m = anyMember(seed, s, id)!;
     (s.closures ??= {})[id] = { at, purgeAt, by, restore: hashKey(key), ...(m.email ? { mail: mailHashOf(m.email) } : {}) };
     rotate(s, seed, id);
+    // A Granola key (lib/granola) is deleted at once, not after the 30 days: restored, the member connects it again.
+    delete (s as State & { granola?: Record<string, unknown> }).granola?.[id];
     const sub = s.billing?.members[id];
     return { email: m.email, name: m.name, id, sub: sub?.subscriptionId && !sub.cancelAt ? sub.subscriptionId : null };
   });

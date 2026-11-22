@@ -716,6 +716,8 @@ console.log("\nThe API's routes");
     "api/health", "api/integrations",
     // [google network] Your network (lib/google): the member's cookie, and Google's OAuth flow (a one-time state bound to the member and the browser).
     "api/integrations/google", "api/integrations/google/callback", "api/integrations/google/start",
+    // Granola (lib/granola): the member's cookie for their own key and calls; off (404) unless RN_GRANOLA=1.
+    "api/integrations/granola/[op]",
     "api/integrations/slack/callback", "api/integrations/slack/start",
     // A company's logo by its public id, as image bytes (lib/logo.ts): public on purpose, it names nothing.
     "api/logo/[id]",

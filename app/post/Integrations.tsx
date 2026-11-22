@@ -17,7 +17,12 @@ import { UseInClaude } from "./UseInClaude";
 import { ProRow, UpgradeNote, planDay } from "./Billing";
 import { useUi } from "./ui";
 import type { DestView, IntegrationsView } from "@/lib/notify/types";
-import { ClaudeNetworkPrompt, GoogleSection } from "./network/Network"; // [google network]
+import { ClaudeNetworkPrompt, GoogleG, GoogleSection } from "./network/Network"; // [google network]
+import { useNetwork } from "./network/useNetwork";
+import { ConnectedApps } from "./ConnectedApps";
+import { GranolaMark, GranolaSection } from "./GranolaSection";
+import { useGranola } from "./granolaClient";
+import { claudePick, googlePick, granolaPick, slackPick, type AppGrant, type PickStatus } from "./integrationsModel";
 import { VoicePrompt } from "./Voice";
 import "./connect.css";
 import "./pages.css";
@@ -108,6 +113,23 @@ function HookMark() {
       <path d="M6.5 13.5A3 3 0 1 0 10 18h7" />
       <path d="M17 12a3 3 0 1 1 0 6" />
     </svg>
+  );
+}
+
+/** One card on the top row: the mark, the name, what it does, its honest status, and a tap that goes to its section. */
+function PickCard({ mark, name, desc, st, onClick }: { mark: ReactNode; name: string; desc: string; st: PickStatus; onClick: () => void }) {
+  return (
+    <button type="button" className="tp-card in-pick" onClick={onClick} data-pick={name.toLowerCase()} data-status={st.chip}>
+      <span className="in-mark" aria-hidden>
+        {mark}
+      </span>
+      <span className="in-pick-t">
+        <span className="in-pick-h">{name}</span>
+        <span className="in-pick-d">{desc}</span>
+        {st.line && <span className="in-pick-s">{st.line}</span>}
+      </span>
+      <Chip tone={st.tone}>{st.chip}</Chip>
+    </button>
   );
 }
 
@@ -313,6 +335,10 @@ export function Integrations({
   const [busy, setBusy] = useState<string | null>(null);
   const claudeRef = useRef<HTMLElement>(null);
   const slackRef = useRef<HTMLElement>(null);
+  // The top row's other statuses: assistants with an active grant (GET /api/oauth/apps), Google (RN_GOOGLE), Granola (RN_GRANOLA).
+  const [apps, setApps] = useState<AppGrant[] | null>(null);
+  const net = useNetwork();
+  const gr = useGranola();
   const [notice, setNotice] = useState<SlackNotice | null>(null);
   // The "Add to Slack" answer: shown once, and taken off the address so a reload doesn't show it again.
   useEffect(() => {
@@ -326,6 +352,17 @@ export function Integrations({
         window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
       }
     } catch {}
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    fetch("/api/oauth/apps", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { apps: [] }))
+      .then((j: { apps?: AppGrant[] }) => live && setApps(j.apps ?? []))
+      .catch(() => live && setApps([]));
+    return () => {
+      live = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -371,32 +408,25 @@ export function Integrations({
   const slack = view?.slack ?? null;
   const hook = view?.webhook ?? null;
   const anyOn = !!(slack || hook);
+  const googleSt = googlePick(net.off ? { on: false } : net.view, net.failed);
+  const granolaSt = granolaPick(gr.status, gr.failed);
+  const jumpTo = (id: string) => jump(document.getElementById(id));
 
   return (
     <div className="page-narrow in-page">
       <PageHead title="Integrations" lead="Get a Slack post when something needs you, and ask the table from Claude in your own words." art={<Prop name="join" height={72} on="bg" />} />
 
       <div className="in-picks">
-        <button type="button" className="tp-card in-pick" onClick={() => jump(slackRef.current)}>
-          <span className="in-mark" aria-hidden>
-            <SlackMark />
-          </span>
-          <span className="in-pick-t">
-            <span className="in-pick-h">Slack</span>
-            <span className="in-pick-d">Alerts for new open roles in your function, new messages, and fractionals who engage your seats.</span>
-          </span>
-          <Chip tone={slack && !slack.broken ? "mint" : "outline"}>{!view ? "…" : slack ? (slack.broken ? "Stopped" : "Connected") : "Not set up"}</Chip>
-        </button>
-        <button type="button" className="tp-card in-pick" onClick={() => jump(claudeRef.current)}>
-          <span className="in-mark" aria-hidden>
-            <ClaudeMark />
-          </span>
-          <span className="in-pick-t">
-            <span className="in-pick-h">Claude</span>
-            <span className="in-pick-d">Ask the table from Claude, ChatGPT, Claude Code or Cursor. It asks before it spends a credit.</span>
-          </span>
-          <Chip>Connector</Chip>
-        </button>
+        <PickCard
+          mark={<SlackMark />}
+          name="Slack"
+          desc="Alerts for new open roles in your function, new messages, and fractionals who engage your seats."
+          st={slackPick(view)}
+          onClick={() => jump(slackRef.current)}
+        />
+        <PickCard mark={<ClaudeMark />} name="Claude" desc="Ask the table from Claude, ChatGPT, Claude Code or Cursor. It asks before it spends a credit." st={claudePick(apps)} onClick={() => jump(claudeRef.current)} />
+        {googleSt && <PickCard mark={<GoogleG size={22} />} name="Google" desc="Who you already know at companies on Merlin, from your calendar and contacts." st={googleSt} onClick={() => jumpTo("google")} />}
+        {granolaSt && <PickCard mark={<GranolaMark />} name="Granola" desc="Start a proposal from a call Granola recorded." st={granolaSt} onClick={() => jumpTo("granola")} />}
       </div>
 
       <section className="in-section" id="slack" ref={slackRef} aria-labelledby="in-slack-h">
@@ -579,6 +609,9 @@ export function Integrations({
       {/* [google network] Google Calendar and Contacts (nothing with RN_GOOGLE off). */}
       <GoogleSection onNetwork={onNetwork ?? onBack} />
 
+      {/* Granola: a personal API key, for starting a proposal from a call (nothing with RN_GRANOLA off). */}
+      <GranolaSection />
+
       <section className="in-section" id="claude" ref={claudeRef} aria-labelledby="in-claude-h">
         <h2 className="in-h" id="in-claude-h">
           Use it in Claude
@@ -589,6 +622,8 @@ export function Integrations({
           free="On Free, Claude can ask Merlin 20 times a day. Pro has no daily cap."
           desc={plan?.name === "trial" ? `Claude can ask Merlin as often as you need, in your trial until ${planDay(plan.trialEndsAt)}. On Free it's 20 times a day.` : "Claude can ask Merlin as often as you need."}
         />
+        {/* The assistants connected now, each with Disconnect (the top row's Claude chip follows this list). */}
+        <ConnectedApps onApps={setApps} />
         <UseInClaude embedded onBack={onBack} onCredits={onCredits} />
         {/* [google network] the prompt for adding a Gmail network through the member's own Claude. */}
         <ClaudeNetworkPrompt />
