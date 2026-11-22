@@ -113,7 +113,8 @@ export function RatePanel({ advice, fn }: { advice: ReturnType<typeof adviceFrom
 /* ---------- who signs ---------- */
 
 export function SignerCard({ p, readOnly, onSigner, onOnCall }: { p: ProposalRec; readOnly: boolean; onSigner: (s: SignerInfo | null) => void; onOnCall: (v: boolean | null) => void }) {
-  const [s, setS] = useState({ name: p.signer?.name ?? "", email: p.signer?.email ?? "", title: p.signer?.title ?? "" });
+  // Who the draft found signs (its cover's name and title, an email the call gave) fills in until they're set: anything unknown stays blank.
+  const [s, setS] = useState({ name: p.signer?.name ?? p.fields["client.signerName"] ?? "", email: p.signer?.email ?? p.fields["client.signerEmail"] ?? "", title: p.signer?.title ?? p.fields["client.signerTitle"] ?? "" });
   const commit = (next = s) => {
     const ok = next.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(next.email.trim());
     if (ok) onSigner({ name: next.name.trim(), email: next.email.trim(), ...(next.title.trim() ? { title: next.title.trim() } : {}) });
@@ -128,7 +129,7 @@ export function SignerCard({ p, readOnly, onSigner, onOnCall }: { p: ProposalRec
       {(["name", "title", "email"] as const).map((k) => (
         <label key={k} className="pp-field">
           <span className="pp-field-l">{k === "name" ? "Name" : k === "title" ? "Title" : "Email"}</span>
-          <input className="input" type={k === "email" ? "email" : "text"} value={s[k]} readOnly={readOnly} autoComplete="off" onChange={(e) => setS({ ...s, [k]: e.target.value })} onBlur={() => commit()} />
+          <input className="input" type={k === "email" ? "email" : "text"} value={s[k]} placeholder={k === "email" && s.name && !s.email ? "Not in the call yet: type it" : undefined} readOnly={readOnly} autoComplete="off" onChange={(e) => setS({ ...s, [k]: e.target.value })} onBlur={() => commit()} />
         </label>
       ))}
       <div className="pp-oncall">

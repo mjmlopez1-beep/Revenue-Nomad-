@@ -36,7 +36,7 @@ export interface KitSection {
 export interface ProposalKit {
   template: { id: string | null; title: string; mine: boolean; best_for?: string; stage?: string; pricing_guidance?: string; length_target?: string; sections: KitSection[] };
   winning_patterns: string[];
-  rate_band: { function: string; revenue_band: string; market: string; your_price?: string; your_rate?: string; shape: string[]; template_guidance?: string } | { note: string; shape: string[] };
+  rate_band: { function: string; revenue_band: string; market: string; people?: number; your_price?: string; your_rate?: string; shape: string[]; template_guidance?: string } | { note: string; shape: string[] };
   company: { id: string | null; name: string; locked: boolean; facts: Record<string, string> };
   me: { name: string; title: string; function: string | null };
   voice: { summary: string; formality: string; length: string; contractions: boolean; exclamations: string; phrases: string[] } | null;
@@ -115,6 +115,7 @@ export async function proposalKit(token: string | null, a: { templateId?: string
           function: sug.fn,
           revenue_band: sug.band ?? "every size",
           market: sug.says,
+          ...(sug.figure.n ? { people: sug.figure.n } : {}),
           ...(sug.sits ? { your_price: sug.sits } : {}),
           ...(sug.own ? { your_rate: `$${sug.own.amount.toLocaleString("en-US")} ${sug.own.kind === "hourly" ? "an hour" : "a month"} (the member's own, for them alone)` } : {}),
           shape: advice.shape,

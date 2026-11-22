@@ -74,7 +74,7 @@ function rateLineOf(s: State, memberId: string): string | null {
 
 export type BillingOp = "checkout" | "topup" | "portal" | "cancel" | "keep" | "pause" | "resume" | "tier" | "aipack";
 /** Said when someone not on Close (or the trial) asks for the AI usage pack. */
-export const AI_PACK_CLOSE = "The AI usage pack is for Close, where Claude drafts your proposals from your calls. Move to Close first.";
+export const AI_PACK_CLOSE = "The AI usage pack is for Close, where Merlin drafts your proposals from your calls. Move to Close first.";
 
 /**
  * One billing action for the signed-in member. Checkout, top-up and portal answer with a Stripe

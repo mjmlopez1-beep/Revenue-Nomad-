@@ -25,7 +25,7 @@ import { billingLive, planOf, pausedAt, type PlanRecord } from "../plan";
 
 export const PRICES = { month: 59, year: 590, closeMonth: 79, closeYear: 790, topup: 19, aiPack: 10 } as const;
 /** The plans page's lines under Close: what it does, then (smaller) the AI usage pack, once, on Close or the trial. No amount or limit is stated. */
-export const CLOSE_AI_LINE = "Claude drafts your proposals from your calls";
+export const CLOSE_AI_LINE = "Merlin drafts your proposals from your calls";
 export const AI_PACK_LINE = `Need more AI usage? Add a pack anytime for $${PRICES.aiPack}.`;
 /**
  * The paid tiers: Pro ($59, $590 a year) and Close ($79, $790 a year), the same 100 credits

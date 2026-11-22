@@ -91,7 +91,7 @@ export function DataFlows() {
               When an AI model is used
             </h2>
             <p className="cl-p">
-              Merlin&apos;s server calls no AI model, with one exception a member turns on: drafting a proposal with Claude. Then that one draft&apos;s inputs (the call&apos;s
+              Merlin&apos;s server calls no AI model, with one exception: Merlin drafting or changing a proposal for a member. Then that one request&apos;s inputs (the call&apos;s
               transcript or notes, the template, the company&apos;s facts the member can see, the rate range, their name, title and writing voice) go to Anthropic&apos;s
               API to write it. Merlin keeps the draft, not the transcript. It is off unless Revenue Nomad switches it on, and each member agrees before their first draft.
             </p>

@@ -7,7 +7,7 @@
  *   RN_AI_MODEL         which model drafts (required: Merlin names none of its own)
  *
  * Off, Proposals keeps its own reader of a transcript (lib/proposals/extract.ts, in the member's
- * browser) and offers "Build it in Claude" with the connector instead. Tests point the API at a
+ * browser). Tests point the API at a
  * fake with RN_AI_TEST_BASE_URL, read only on a test server (RN_SCAN_TEST=1).
  */
 export const aiModel = () => String(process.env.RN_AI_MODEL ?? "").trim();

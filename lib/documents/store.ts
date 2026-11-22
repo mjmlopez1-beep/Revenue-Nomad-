@@ -230,7 +230,8 @@ function cleanFields(raw: unknown, d: StoredDocument, signers: DocSigner[], ids:
     const w = num(o.w, 0.01, 1);
     const h = num(o.h, 0.008, 1);
     const label = cleanLine(o.label, DOC_LIMITS.label);
-    return [{ id, page, kind, signer: signer.id, x: num(o.x, 0, 1 - w), y: num(o.y, 0, 1 - h), w, h, required: o.required !== false, ...(label ? { label } : {}) }];
+    const prefill = kind === "text" ? cleanLine(o.prefill, DOC_LIMITS.text) : "";
+    return [{ id, page, kind, signer: signer.id, x: num(o.x, 0, 1 - w), y: num(o.y, 0, 1 - h), w, h, required: o.required !== false, ...(label ? { label } : {}), ...(prefill ? { prefill } : {}) }];
   });
 }
 
@@ -337,6 +338,12 @@ export function notReady(d: StoredDocument): string | null {
     if (!mineF.some((f) => f.kind === "signature")) return `Place a Signature field for ${x.name}.`;
   }
   return null;
+}
+
+/** Why one of the member's drafts can't go out yet, or null (the connector asks before it sends). */
+export async function notReadyOf(token: string | null, id: string): Promise<string | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return notReady(mineDoc(s, memberOf(seed, s, token).id, id));
 }
 
 /** Email the link to each signer whose turn it is and who hasn't had it. Returns how many went out. */

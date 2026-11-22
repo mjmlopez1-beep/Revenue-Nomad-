@@ -24,8 +24,11 @@ export const PLAN_ROWS: [string, string, string, string][] = [
   ["Opening companies", `1 a day from ${FEATURE_NAME}, others ${COMPANY_PRICE} credits`, `Free, up to ${PRO_OPENS_DAILY} a day, ${FEATURE_NAME} not counted`, `Free, up to ${PRO_OPENS_DAILY} a day, ${FEATURE_NAME} not counted`],
   ["Fellow fractionals", "Free", "Free", "Free"],
   ["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"],
-  ["Claude drafting and your own contracts", "In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"],
+  ["Merlin drafting and your own contracts", "In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"],
   ["Pipeline after a signature", "You move it", "You move it", "Moves to Won when they sign"],
+  ["Drop in a contract, fields placed for you", "In your trial only", "In your trial only", "Merlin finds where everyone signs, places the fields and drafts the note"],
+  ["Change it by talking", "In your trial only", "In your trial only", "Say or type a change: Merlin rewrites the sections, checks the numbers and keeps each version"],
+  ["Start from the call", "In your trial only", "In your trial only", "Paste the transcript or say what was agreed: a draft in your template, the blanks labelled"],
   ["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"],
   // After it goes out (lib/close). Below the landing page's six rows, so the landing page leads as before.
   ["Know when they open it and what they read", "In your trial only", "In your trial only", "Opens, new readers and time on each section and price, with when to follow up"],
@@ -42,8 +45,10 @@ export const PLAN_ROWS: [string, string, string, string][] = [
   ["Messages, Recently hired", "Included", "Included", "Included"],
 ];
 
+/** Close's ways of getting a contract out, in the plans sheet and the Terms; the landing page keeps its six. */
+const CLOSE_DETAIL = new Set(["Drop in a contract, fields placed for you", "Change it by talking", "Start from the call"]);
 /** The rows the landing page leads with: the ones that win a client, first. */
-export const LANDING_ROWS = PLAN_ROWS.slice(0, 6);
+export const LANDING_ROWS = PLAN_ROWS.filter((r) => !CLOSE_DETAIL.has(r[0])).slice(0, 6);
 
 /** The rows where Close does more than Pro: [what, Pro, Close]. The Terms of Service list them under Close. */
 export const CLOSE_ADDS: [string, string, string][] = PLAN_ROWS.filter((r) => r[2] !== r[3]).map(([what, , pro, close]) => [what, pro, close]);
@@ -52,4 +57,4 @@ export const CLOSE_ADDS: [string, string, string][] = PLAN_ROWS.filter((r) => r[
  * What Pro doesn't include that Close does, in a few words each: the Pro card on the trial's plans
  * sheet and the Terms of Service. Each is one of CLOSE_ADDS (scripts/test-prices.mts checks it).
  */
-export const PRO_LEAVES_OUT = ["Sending for signature", "Your own templates", "Claude drafting", "The pipeline moving to Won when they sign"] as const;
+export const PRO_LEAVES_OUT = ["Sending for signature", "Your own templates", "Merlin drafting", "The pipeline moving to Won when they sign"] as const;

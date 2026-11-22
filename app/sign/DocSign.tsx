@@ -142,7 +142,8 @@ export function DocSignView({ token }: { token: string }) {
   useProposalActivity(token, { enabled: v?.status === "open" || v?.status === "waiting" });
 
   useEffect(() => {
-    void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setName(r.me.name), setSaved(r.saved ?? null))));
+    // A text field Merlin filled in for them to check (a title) starts with that text.
+    void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setName(r.me.name), setSaved(r.saved ?? null), setValues(Object.fromEntries((r.fields ?? []).flatMap((f) => (f.prefill ? [[f.id, f.prefill]] : [])))))));
   }, [token]);
   useEffect(() => {
     if (step !== "read") panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });

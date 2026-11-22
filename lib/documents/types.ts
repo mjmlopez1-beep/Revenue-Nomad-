@@ -39,6 +39,8 @@ export interface DocField {
   required: boolean;
   /** For a text field: what to type ("Start date"). */
   label?: string;
+  /** For a text field: what it starts filled in with, for the signer to check ("CEO"). */
+  prefill?: string;
 }
 
 export interface DocEvent {

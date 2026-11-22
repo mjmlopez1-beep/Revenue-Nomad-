@@ -36,6 +36,7 @@ import { pipelineEvent } from "./pipelineHook";
 import { PricingProblem, choiceRec, cleanPricing, validChoice } from "./pricing";
 import { commitSendSignature, dropStaged, readSealedPdf, readSendSignature, saveSealedPdf, stageSendSignature } from "./files";
 import { dataUrl, savedSignatureOf, sha as shaOf, signatureInput, signatureViewOf } from "./memberSig";
+import { properCase } from "./startCall";
 import {
   CONSENT_VERSION,
   MEMBER_CONSENT,
@@ -238,6 +239,7 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
       .filter((x) => x !== cur)
       .reverse()
       .map((x) => sendRec(x, nowMs, origin)),
+    ...(p.versions?.length ? { versions: [...p.versions].reverse().map((v) => ({ version: v.version, at: v.at, note: v.note })) } : {}),
   };
 }
 
@@ -284,6 +286,7 @@ export async function listProposals(token: string | null, origin?: string, nowMs
     canBuild: !free,
     templatesOpen: free ? [] : TEMPLATES.map((t) => t.id),
     email: emailEnabled(),
+    voice: !!s.voice?.[me.id],
     me: { name: me.name, title: titleOf(s, me), function: fnOf(s, me), email: me.email },
   };
 }
@@ -504,7 +507,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
 /** A new proposal from a template (or blank), for a company on Merlin or one typed in. */
 export async function createProposal(
   token: string | null,
-  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string },
+  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; companySite?: string | null; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string },
   origin?: string,
   nowMs = Date.now(),
 ): Promise<ProposalRec> {
@@ -518,9 +521,11 @@ export async function createProposal(
   if (isMineId(templateId) && !mineT) throw new ProposalProblem("That template of yours isn't there anymore.", 404);
   if (templateId && !mineT && !templateDef(templateId)) throw new ProposalProblem("That template isn't in the library.");
   const picked = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
-  const typed = cleanLine(a.companyName, 120);
+  // A name typed all in lower case reads with capitals ("seven figure agency" is "Seven Figure Agency").
+  const typed = properCase(cleanLine(a.companyName, 120));
   // A company typed, not picked: its exact name or website links it, locked ones too (as find_company finds one), so the pipeline moves when it's signed.
-  const pub = picked ?? (typed ? await lookUpCompany(token, typed, origin) : null);
+  // Else the website a call gave (a draft from it: the signer's company domain), the same way.
+  const pub = picked ?? (typed ? await lookUpCompany(token, typed, origin) : null) ?? (a.companySite ? await lookUpCompany(token, a.companySite, origin) : null);
   const co = pub ? await companyFor(token!, pub) : null;
   if (picked && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
   const name = co ? co.name || typed : typed;
@@ -601,6 +606,7 @@ export async function duplicateProposal(token: string | null, id: string, origin
     const p = mine(s, me, id);
     if ((s.proposals ?? []).filter((x) => x.memberId === me.id).length >= LIMITS.proposals) throw new ProposalProblem(`You have ${LIMITS.proposals} proposals, which is the most. Delete an old draft first.`);
     const copy: StoredProposal = { ...structuredClone(p), id: newId("pr_"), title: `${p.title} (copy)`.slice(0, LIMITS.title), version: 1, sends: [], createdAt: now, updatedAt: now };
+    delete copy.versions;
     s.proposals!.push(copy);
     return recOf(copy, nowMs, origin);
   });
@@ -1326,4 +1332,4 @@ async function memberFor(seed: Seed, id: string): Promise<{ name: string; email:
 }
 
 /** What lib/documents shares with proposals: the same links' keys, checks and clean-up. */
-export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, buildGate, titleOf, memberOf, memberFor, EMAIL, NAME };
+export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, buildGate, titleOf, memberOf, memberFor, EMAIL, NAME, mine, applyPatch, isSigned };

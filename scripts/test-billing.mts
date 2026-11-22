@@ -722,7 +722,7 @@ async function main() {
 
     // The AI usage pack: $10, once, on Close or the trial; the top-up's pattern.
     console.log("\nThe AI usage pack");
-    check("its price and the plans' words, with no amount or limit", R.PRICES.aiPack === 10 && R.CLOSE_AI_LINE === "Claude drafts your proposals from your calls" && R.AI_PACK_LINE === "Need more AI usage? Add a pack anytime for $10." && !/\d+ (drafts|requests|tokens)|limit/i.test(R.AI_PACK_LINE + R.CLOSE_AI_LINE));
+    check("its price and the plans' words, with no amount or limit", R.PRICES.aiPack === 10 && R.CLOSE_AI_LINE === "Merlin drafts your proposals from your calls" && R.AI_PACK_LINE === "Need more AI usage? Add a pack anytime for $10." && !/\d+ (drafts|requests|tokens)|limit/i.test(R.AI_PACK_LINE + R.CLOSE_AI_LINE));
     const refusedFree = await server.billingAction(CY, "aipack", {}).then(() => null, (e: Error) => e.message);
     const refusedPro = await server.billingAction(DI, "aipack", {}).then(() => null, (e: Error) => e.message);
     check("refused on Free and on plain Pro, with the Close upgrade's words", refusedFree === server.AI_PACK_CLOSE && refusedPro === server.AI_PACK_CLOSE, [refusedFree, refusedPro]);

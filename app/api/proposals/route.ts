@@ -6,6 +6,8 @@ import { ProposalProblem, countersignDue, countersignProposal, createProposal, d
 import { deleteMySignature, getMySignature, myTitle, setMySignature } from "@/lib/proposals/memberSig";
 import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
 import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
+import { acceptChange, proposeChange, restoreVersion, versionsOf } from "@/lib/proposals/change";
+import { addCompanyFor, siteName } from "@/lib/proposals/addCompany";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +37,7 @@ async function answer(work: () => Promise<unknown>) {
  *
  * GET              ProposalsView: every proposal of theirs, newest first, and what their plan allows.
  * GET ?id=ID       ProposalRec: one of theirs.
- * POST { op: "create", templateId?, companyId?, companyName?, title?, fields?, notes?, signerOnCall? }
+ * POST { op: "create", templateId?, companyId?, companyName?, title?, fields?, notes?, signerOnCall?, signer? }
  *                  templateId: a library template, one of theirs ("mt_..."), or none. fields and notes: what the
  *                  member kept from a call read in their browser (lib/proposals/extract.ts), never the transcript.
  * POST { op: "draft", templateId?, companyId?, companyName?, transcript, callDate?, callWith?, agree? }
@@ -46,6 +48,13 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "template_rename", id, title } | { op: "template_delete", id }   My templates (uploads: /api/proposals/template).
  * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName? }
  *                  A change to what the client reads, after a version went out, makes a new version and voids the old link.
+ * POST { op: "change", id, instruction, agree? }   Change it by talking (lib/proposals/change.ts): Claude's proposed
+ *                  sections, fields and the numbers check. Nothing is saved. Close, metered like a draft; 409 when it's off.
+ * POST { op: "change_accept", id, changes, fields?, instruction? }   Saved as a new version; the one before is kept.
+ * POST { op: "versions", id }  The kept versions' text, to compare.  { op: "version_restore", id, version }
+ * POST { op: "site_name", website }   { website, name }: the website as its host, and the name its homepage gives (a short read).
+ * POST { op: "add_company", id?, name, website }   A client not on Merlin yet: added through Add a company (its rules and
+ *                  credits), or the one already there by that website or name, and the proposal linked to it.
  * POST { op: "duplicate" | "delete" | "void", id }
  * POST { op: "send", id, signer: { name, email, title? }, message?, memberSign?, linkDays? }   Trial and Pro (403 with `upgrade` on Free). memberSign: "now" | "after" | "none".
  * POST { op: "countersign", id, method?: "saved" | "drawn" | "typed", png?, typed?, consent?, save? }   The sender countersigns after the client signed.
@@ -86,14 +95,29 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(() =>
         createProposal(
           token,
-          { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, title: b.title, fields: b.fields, notes: b.notes, signerOnCall: b.signerOnCall, ...(b.fields || b.notes ? { source: "discovery" } : {}) },
+          { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, title: b.title, fields: b.fields, notes: b.notes, signerOnCall: b.signerOnCall, ...(b.signer ? { signer: b.signer } : {}), ...(b.fields || b.notes ? { source: "discovery" } : {}) },
           o,
         ),
       );
     case "draft":
       // What a member may draft is their AI budget (lib/proposals/aiUsage.ts, in draftWithClaude). This only slows a burst of tries.
-      if (limited(`prop-draft:${me.id}`, 12, 60 * 60_000)) return err("That's a lot of drafts at once. Give it a few minutes, then try again, or Build it in Claude.", 429);
+      if (limited(`prop-draft:${me.id}`, 12, 60 * 60_000)) return err("That's a lot of drafts at once. Give it a few minutes, then try again.", 429);
       return answer(() => draftWithClaude(token, { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, transcript: b.transcript, callDate: b.callDate, callWith: b.callWith, agree: b.agree }, o));
+    case "change":
+      if (limited(`prop-change:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of changes at once. Give it a few minutes, then try again.", 429);
+      return answer(() => proposeChange(token, id, { instruction: b.instruction, agree: b.agree }, o));
+    case "change_accept":
+      return answer(() => acceptChange(token, id, { changes: b.changes, fields: b.fields, instruction: b.instruction }, o));
+    case "versions":
+      return answer(() => versionsOf(token, id, o));
+    case "version_restore":
+      return answer(() => restoreVersion(token, id, b.version, o));
+    case "site_name":
+      if (limited(`prop-site:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of websites in an hour. Type the name yourself.", 429);
+      return answer(() => siteName(b.website));
+    case "add_company":
+      if (limited(`prop-addco:${me.id}`, 20, 60 * 60_000)) return err("That's a lot of companies added in an hour. Try again later.", 429);
+      return answer(() => addCompanyFor(token, { proposalId: id || undefined, name: b.name, website: b.website }, o));
     case "agree_ai":
       return answer(async () => (await agreeToAi(token), { ok: true }));
     case "template_rename":

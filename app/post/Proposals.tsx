@@ -6,8 +6,8 @@
  * way to make each.
  *
  * The page opens with one action, "New proposal from a call" (ProposalStart.tsx): the company,
- * the transcript or notes, a template (theirs or ours), Draft. "Send a document to sign" uploads a
- * PDF written anywhere and opens the field placer (DocBuilder.tsx). "My templates" holds the past
+ * the transcript or notes, a template (theirs or ours), Draft. "Send a contract to sign" opens Contracts
+ * (contracts/ContractsHome.tsx): drop a PDF, Merlin places the fields, review, send. "My templates" holds the past
  * proposals the member uploaded.
  *
  * A proposal opens as the client will read it, one document: tap a section to edit its text and
@@ -39,9 +39,12 @@ import { openPlans } from "./Billing";
 import { DocText, dayOf } from "../sign/doc";
 import type { CoInfo } from "./model";
 import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
-import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./ProposalStart";
+import { StartSheet, TEMPLATE_ACCEPT, uploadTemplate } from "./ProposalStart";
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
-import { DocBuilder, uploadPdf } from "./DocBuilder";
+import { DocBuilder } from "./DocBuilder";
+import { ContractsHome } from "./contracts/ContractsHome";
+import { ChangeItPanel, VersionsSheet } from "./ChangeIt";
+import { withChange, type ChangeProposal } from "@/lib/proposals/changeShape";
 import { LinkCompany } from "./ProposalLink";
 import { ActivityPanel, takeItem, useOpenItem } from "./Activity";
 import { PricingEditor } from "./PricingEditor";
@@ -95,8 +98,9 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   });
   const [fixFirst, setFixFirst] = useState<string[]>([]);
   const [templates, setTemplates] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const pdfRef = useRef<HTMLInputElement>(null);
+  // "Send a document to sign": Contracts (contracts/ContractsHome.tsx), and a line for the field placer when it opens from there.
+  const [contract, setContract] = useState(false);
+  const [docNotice, setDocNotice] = useState<string | null>(null);
   const reload = useCallback(async () => {
     const r = await load();
     if ("error" in r) setError(r.error);
@@ -113,15 +117,6 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
     if (data) startDone();
   }, [data]);
 
-  const pickPdf = async (f: File | undefined) => {
-    if (!f) return;
-    setUploading(true);
-    const r = await uploadPdf(f);
-    setUploading(false);
-    if ("error" in r) return toast(r.error, true);
-    putDoc(r);
-    setOpenDoc(r.id);
-  };
 
   if (open && data)
     return (
@@ -141,13 +136,35 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
     return (
       <DocBuilder
         key={doc.id}
+        notice={docNotice}
         initial={doc}
         data={data}
         infos={infos}
         onSaved={putDoc}
-        onBack={() => setOpenDoc(null)}
+        onBack={() => (setOpenDoc(null), setDocNotice(null))}
         onGone={(id) => (setData((d) => (d ? { ...d, documents: d.documents.filter((x) => x.id !== id) } : d)), setOpenDoc(null))}
         onOpen={(x) => (putDoc(x), setOpenDoc(x.id))}
+      />
+    );
+  if (starting && data && data.canBuild)
+    return (
+      <StartSheet
+        data={data}
+        infos={infos}
+        companyId={starting.companyId}
+        onClose={() => setStarting(null)}
+        onTemplate={(t) => setData((d) => (d ? { ...d, templates: [t, ...d.templates] } : d))}
+        onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenId(p.id))}
+      />
+    );
+  if (contract && data)
+    return (
+      <ContractsHome
+        data={data}
+        onBack={() => setContract(false)}
+        onSaved={putDoc}
+        onManual={(x, notice) => (putDoc(x), setDocNotice(notice ?? null), setContract(false), setOpenDoc(x.id))}
+        onOpenDoc={(x) => (putDoc(x), setDocNotice(null), setContract(false), setOpenDoc(x.id))}
       />
     );
 
@@ -170,14 +187,13 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
       />
       <div className="pp-hero">
         <div className="pp-hero-more">
-          <button type="button" className="tp-flink" aria-busy={uploading} disabled={!data || uploading} onClick={() => pdfRef.current?.click()}>
-            {uploading ? "Uploading the PDF" : "Send a document to sign"}
+          <button type="button" className="tp-flink" disabled={!data} onClick={() => setContract(true)}>
+            Send a contract to sign
           </button>
           <span aria-hidden>·</span>
           <button type="button" className="tp-flink" disabled={!data} onClick={() => setTemplates(true)}>
             My templates{mine.length ? ` (${mine.length})` : ""}
           </button>
-          <input ref={pdfRef} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => (void pickPdf(e.target.files?.[0]), (e.target.value = ""))} />
         </div>
       </div>
       {data && !data.canBuild && <CloseBuildPrompt />}
@@ -231,16 +247,6 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
             ),
           )}
         </ul>
-      )}
-      {starting && data && data.canBuild && (
-        <StartSheet
-          data={data}
-          infos={infos}
-          companyId={starting.companyId}
-          onClose={() => setStarting(null)}
-          onTemplate={(t) => setData((d) => (d ? { ...d, templates: [t, ...d.templates] } : d))}
-          onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenId(p.id))}
-        />
       )}
       {templates && data && <TemplatesSheet data={data} onClose={() => setTemplates(false)} onChange={(t) => setData((d) => (d ? { ...d, templates: t } : d))} />}
     </div>
@@ -346,6 +352,10 @@ function Editor({
   const [sending, setSending] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  // Change it by talking (ChangeIt.tsx): a change shown before it's accepted, the one just saved, and Compare versions.
+  const [preview, setPreview] = useState<ChangeProposal | null>(null);
+  const [savedChange, setSavedChange] = useState<{ version: number; previous: number; changed: number } | null>(null);
+  const [compare, setCompare] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(p);
   latest.current = p;
@@ -357,6 +367,21 @@ function Editor({
   const locked = !data.canBuild;
   const readOnly = signed || (out && !changing) || locked;
   const fields = useMemo(() => docFields(p), [p]);
+  // With a change shown, the document reads as it would after it (the changed sections marked) and can't be edited until it's accepted or undone.
+  const shown = useMemo(() => (preview ? withChange(p, preview.changes, preview.fields) : null), [p, preview]);
+  const shownFields = useMemo(() => (shown ? docFields({ ...p, fields: shown.fields }) : fields), [shown, p, fields]);
+  const marked = useMemo(() => new Set(preview ? [...preview.changes.map((c) => c.id), ...(shown ? shown.blocks.filter((b) => b.id.startsWith("nw")).map((b) => b.id) : [])] : []), [preview, shown]);
+  const changeIt = (
+    <ChangeItPanel
+      p={p}
+      data={data}
+      readOnly={readOnly}
+      preview={preview}
+      saved={savedChange}
+      onPreview={(c) => (void flush(), setPreview(c), setSavedChange(null))}
+      onAccepted={(r, sv) => (setP(r), onSaved(r), setPreview(null), setSavedChange(sv))}
+    />
+  );
   const checks = useMemo(() => checklist({ ...p, fields }), [p, fields]);
   const advice = useMemo(() => adviceFromView(view, p), [view, p]);
   const flags = useMemo(() => riskFlags(p, advice.suggestion?.high ?? null), [p, advice]);
@@ -429,6 +454,7 @@ function Editor({
 
   const side = (
     <aside className="pp-side" aria-label="Sections and tools">
+      {!phone && changeIt}
       <section className="pp-card pp-outline" aria-labelledby="pp-ol-h">
         <h2 className="pp-h2" id="pp-ol-h">
           Sections
@@ -501,6 +527,11 @@ function Editor({
               {p.company.name || "No company yet"} · Version {p.version}
               {t ? ` · ${t.title.split(":")[0]}` : ""}
             </span>
+            {!!p.versions?.length && (
+              <button type="button" className="tp-flink" onClick={() => setCompare(true)}>
+                Compare versions
+              </button>
+            )}
             <span className="pp-save" aria-live="polite">
               {save === "saving" ? "Saving" : save === "error" ? "Not saved" : readOnly ? "" : "Saved"}
             </span>
@@ -537,9 +568,6 @@ function Editor({
                   Delete
                 </button>
               )}
-              <button type="button" onClick={() => void buildInClaude(claudeRevise(p), toast)}>
-                Improve it in Claude
-              </button>
             </div>
           </details>
         </div>
@@ -566,12 +594,26 @@ function Editor({
           <p>Signed, so it&#39;s kept as it was signed. Duplicate it to start the next one, an addendum or a new term.</p>
         </div>
       )}
+      {savedChange && (
+        <div className="pp-banner" role="status">
+          <p>
+            <strong>
+              {savedChange.changed} {savedChange.changed === 1 ? "change" : "changes"} saved as version {savedChange.version}.
+            </strong>{" "}
+            Version {savedChange.previous} is kept if you want it back.
+          </p>
+          <button type="button" className="btn btn-sm" onClick={() => setCompare(true)}>
+            Compare versions
+          </button>
+        </div>
+      )}
       {!signed && <FixLine fixes={fixes} blanks={blanks.length} />}
+      {phone && changeIt}
 
       <div className="pp-edit">
         <article className="pp-card pp-docview sg-doc" aria-label="The proposal as the client reads it">
-          {p.blocks.map((b) => (
-            <Section key={b.id} b={b} fields={fields} p={p} readOnly={readOnly} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
+          {(shown?.blocks ?? p.blocks).map((b) => (
+            <Section key={b.id} b={b} fields={shownFields} p={p} readOnly={readOnly || !!preview} mark={marked.has(b.id)} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
           ))}
           {/* Close: options and add-ons the client picks from (PricingEditor.tsx). */}
           {(data.canBuild || p.pricing) && <PricingEditor value={p.pricing} readOnly={readOnly} onChange={(pricing) => change({ pricing }, { pricing })} />}
@@ -599,6 +641,7 @@ function Editor({
         </Sheet>
       )}
 
+      {compare && <VersionsSheet p={p} onClose={() => setCompare(false)} onRestored={(r) => (setP(r), onSaved(r), setCompare(false), setSavedChange(null), toast(`Brought back as version ${r.version}.`))} />}
       {sending && (
         <SendSheet
           p={p}
@@ -614,10 +657,6 @@ function Editor({
     </div>
   );
 }
-
-/** The words to paste into Claude to work on a proposal already on Merlin. */
-const claudeRevise = (p: ProposalRec) =>
-  `Open my proposal "${p.title}" in Merlin (get_proposal with proposal_id ${p.id}). Check it against the checklist and my call, tighten it in my voice, keep the price and the day 30, 60 and 90 decisions, and save the changes with create_or_update_proposal. Show me before anything is sent.`;
 
 /** "3 things to fix": one line that opens into the list. */
 export function FixLine({ fixes, blanks }: { fixes: string[]; blanks: number }) {
@@ -661,6 +700,7 @@ function Section({
   p,
   fields,
   readOnly,
+  mark = false,
   editing,
   onEdit,
   onDone,
@@ -671,6 +711,8 @@ function Section({
   p: ProposalRec;
   fields: Record<string, string>;
   readOnly: boolean;
+  /** Changed by a change shown before it's accepted (ChangeIt.tsx): sand, with a "Changed" tag. */
+  mark?: boolean;
   editing: boolean;
   onEdit: () => void;
   onDone: () => void;
@@ -680,7 +722,7 @@ function Section({
   const text = fill(b.body, fields);
   if (!editing || readOnly)
     return (
-      <section id={`sec-${b.id}`} className="sg-block pp-sec" data-ro={readOnly}>
+      <section id={`sec-${b.id}`} className="sg-block pp-sec" data-ro={readOnly} data-changed={mark || undefined}>
         {!readOnly ? (
           <button type="button" className="pp-sec-hit" aria-label={`Edit ${b.title}`} onClick={onEdit}>
             <h2 className="sg-block-h">
@@ -695,7 +737,10 @@ function Section({
           </button>
         ) : (
           <>
-            <h2 className="sg-block-h">{b.title}</h2>
+            <h2 className="sg-block-h">
+              {b.title}
+              {mark && <span className="pp-changed">Changed</span>}
+            </h2>
             <div className="sg-text">
               <DocText text={text} />
             </div>
