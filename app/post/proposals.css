@@ -1258,3 +1258,28 @@ textarea.pp-field-in {
     opacity: 1;
   }
 }
+
+/* ---------- Not linked to a company yet (ProposalLink.tsx) ---------- */
+.pp-banner-link {
+  border: 1px solid var(--line-strong);
+}
+.pp-link-form {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.pp-link-row {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.pp-link-row .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pp-link-err {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--red);
+}

@@ -541,6 +541,53 @@ async function main() {
   for (let i = 0; i < 4; i++) await S.requestCode(ktok, who);
   check("at most 5 codes an hour", (await refused(S.requestCode(ktok, who)))?.includes("5 codes in an hour"));
 
+  /* ================= proposals land in the pipeline (QA: a typed company never linked) ================= */
+  console.log("\nproposals land in the pipeline");
+  const hidDeals = async () => ((await T.loadState()).pipeline?.mem_pat?.entries ?? []).filter((e) => e.companyId === "c_hid");
+  const byName = await S.createProposal(PAT, { companyName: "Quillmoor Systems" }, BASE);
+  check("a company typed by its exact name links it, a locked one too, under the name she typed", byName.company.id === HID && byName.company.name === "Quillmoor Systems", byName.company);
+  check("its free facts fill in from the record", byName.fields["company.revenue"] === "$20M–$50M", byName.fields);
+  const bySite = await S.createProposal(PAT, { companyName: "quillmoor.example" }, BASE);
+  check("its website links it too", bySite.company.id === HID, bySite.company);
+  await S.deleteProposal(PAT, bySite.id);
+  const partial = await S.createProposal(PAT, { companyName: "Quillmoor" }, BASE);
+  check("a part of a name links nothing: not linked yet", partial.company.id === null && partial.company.name === "Quillmoor" && S.NOT_LINKED === "Not linked to a company yet. Your pipeline won't move when they sign.", partial.company);
+  const pUnl = await C.getProposalTool({ member: (await T.memberForToken(PAT))!, origin: BASE }, { proposal_id: partial.id });
+  check("the connector says it isn't linked, and how to link it", /Not linked to a company on Merlin yet/.test(String(pUnl.pipeline)) && !("company_id" in pUnl), pUnl.pipeline);
+  // Sent and signed while unlinked: the pipeline hears nothing.
+  const fillP = Object.fromEntries(L.blanksOf(partial.blocks, L.docFields({ ...partial, signer: { name: "Wes Quill", email: "wes@quillmoor.example" } })).map((k) => [k, k.startsWith("pricing.") ? "$7,000" : `Filled ${k}`]));
+  await S.updateProposal(PAT, partial.id, { setFields: fillP }, BASE);
+  const pipeU = pipe.length;
+  await S.sendProposal(PAT, partial.id, { signer: { name: "Wes Quill", email: "wes@quillmoor.example" } }, BASE);
+  const utok = tokenOf(lastMail("wes@quillmoor.example")!.text);
+  await S.requestCode(utok, who);
+  const ucode = lastMail("wes@quillmoor.example")!.text.match(/\b(\d{6})\b/)![1];
+  await S.verifyCode(utok, ucode, who, BASE);
+  const uview = await S.signerView(utok, who, BASE);
+  await S.signProposal(utok, { name: "Wes Quill", consent: true, hash: uview.hash }, who, BASE);
+  check("sent and signed while not linked: the pipeline heard nothing", pipe.length === pipeU && (await hidDeals()).length === 0);
+  check("another member can't link it", !!(await refused(S.linkProposal(OTH, partial.id, { name: "Quillmoor Systems" }, BASE))));
+  check("a name that finds nothing says so, and links nothing", /didn't find one company/.test((await refused(S.linkProposal(PAT, partial.id, { name: "Quillmoor" }, BASE))) ?? ""));
+  const linked = await S.linkProposal(PAT, partial.id, { name: "Quillmoor Systems" }, BASE);
+  const hd = await hidDeals();
+  check("Pick the company: linked, what the client read unchanged (same version, same name)", linked.company.id === HID && linked.company.name === "Quillmoor" && linked.version === 1 && linked.status === "signed", linked.company);
+  check("signed before it was linked: the pipeline catches up, Won from the proposal", hd.length === 1 && hd[0].stage === "won" && hd[0].via.won === "proposal" && pipe.at(-1)?.kind === "signed", hd.map((e) => [e.stage, e.via]));
+  const again2 = await S.linkProposal(PAT, partial.id, { name: "Quillmoor Systems" }, BASE);
+  check("linking again changes nothing", again2.company.id === HID && (await hidDeals()).length === 1 && pipe.length === pipeU + 1);
+  // A typed name that links: sent moves it to Proposal, signed to Won (as a proposal picked from Merlin).
+  const fillN = Object.fromEntries(L.blanksOf(byName.blocks, L.docFields({ ...byName, signer: { name: "Wes Quill", email: "wes2@quillmoor.example" } })).map((k) => [k, k.startsWith("pricing.") ? "$7,000" : `Filled ${k}`]));
+  await S.updateProposal(PAT, byName.id, { setFields: fillN }, BASE);
+  await S.sendProposal(PAT, byName.id, { signer: { name: "Wes Quill", email: "wes2@quillmoor.example" } }, BASE);
+  check("a typed name that linked: sent moves the pipeline to Proposal", (await hidDeals()).some((e) => e.stage === "proposal" && e.via.proposal === "proposal"), (await hidDeals()).map((e) => e.stage));
+  const ntok = tokenOf(lastMail("wes2@quillmoor.example")!.text);
+  await S.requestCode(ntok, who);
+  await S.verifyCode(ntok, lastMail("wes2@quillmoor.example")!.text.match(/\b(\d{6})\b/)![1], who, BASE);
+  await S.signProposal(ntok, { name: "Wes Quill", consent: true, hash: (await S.signerView(ntok, who, BASE)).hash }, who, BASE);
+  check("and signed moves it to Won", (await hidDeals()).filter((e) => e.stage === "won").length === 2, (await hidDeals()).map((e) => e.stage));
+  // The editor shows the warning with a way to pick the company.
+  const ed = readFileSync(path.join(process.cwd(), "app/post/ProposalLink.tsx"), "utf8") + readFileSync(path.join(process.cwd(), "app/post/Proposals.tsx"), "utf8");
+  check("the editor warns when it isn't linked, with Pick the company", ed.includes("Not linked to a company yet. Your pipeline won't move when they sign.") && ed.includes("Pick the company") && /!p\.company\.id && <LinkCompany/.test(ed) && /op: "link"/.test(ed));
+
   /* ================= the connector ================= */
   console.log("\nthe connector");
   const ctx = { member: (await T.memberForToken(PAT))!, origin: BASE };

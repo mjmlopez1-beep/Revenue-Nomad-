@@ -20,9 +20,9 @@
  * from then on); and a copy both sides keep (emailed, printable, with the audit trail).
  */
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "crypto";
-import { loadSeed, loadState, memberByToken, viewPatch, tableInternals as T, type Member, type Seed, type State } from "../table";
+import { ActionError, loadSeed, loadState, memberByToken, perform, viewPatch, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { emailEnabled, sendEmail } from "../email";
-import { functionOf } from "../tableFields";
+import { FIND_MIN, functionOf } from "../tableFields";
 import { PRICES } from "../billing/rules";
 import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
@@ -312,6 +312,8 @@ export interface ProposalPatch {
   signerOnCall?: unknown;
   signer?: unknown;
   companyName?: unknown;
+  /** The company on Merlin to link it to (its public id), when it isn't linked yet (linkProposal). */
+  companyId?: unknown;
   /** Where fields set here came from (claude, discovery, rate, manual). */
   source?: string;
 }
@@ -369,6 +371,58 @@ export async function companyFor(token: string, pub: string): Promise<{ internal
   return { internal, name: c.hidden ? "" : c.name, hidden: !!c.hidden, facts };
 }
 
+/**
+ * A company typed by name or website, looked up as find_company looks it up (the action "find":
+ * its exact full name or its website, locked companies too, with find's daily limits). One match is
+ * its public id; none, several or a refusal is null, and the proposal stays unlinked.
+ */
+export async function lookUpCompany(token: string | null, typed: string, origin?: string): Promise<string | null> {
+  const text = String(typed ?? "").trim();
+  if (!token || text.length < FIND_MIN) return null;
+  try {
+    const r = await perform(token, { type: "find", text }, origin, { asMember: true });
+    return r.found !== "none" && r.ids?.length === 1 ? r.ids[0] : null;
+  } catch (e) {
+    if (e instanceof ActionError) return null;
+    throw e;
+  }
+}
+
+/** What NOT_LINKED says: the proposal names no company on Merlin, so the pipeline can't move. */
+export const NOT_LINKED = "Not linked to a company yet. Your pipeline won't move when they sign.";
+
+/**
+ * Link a proposal to its company on Merlin: a company the member picked (its public id), or the
+ * name or website they typed, found as find_company finds it. What the client reads doesn't
+ * change (the company's name on the proposal stays as typed), so no new version. A proposal out
+ * for signature, or signed, moves the pipeline as it would have: Proposal, or Won.
+ */
+export async function linkProposal(token: string | null, id: string, a: { companyId?: unknown; name?: unknown }, origin?: string, nowMs = Date.now()): Promise<ProposalRec> {
+  const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
+  const me0 = memberOf(seed, s0, token);
+  const p0 = mine(s0, me0, id);
+  const pub = typeof a.companyId === "string" && a.companyId ? a.companyId : await lookUpCompany(token, String(a.name ?? p0.companyName ?? ""), origin);
+  if (!pub) throw new ProposalProblem("Merlin didn't find one company by that exact name or website. Type its full name or its website, or pick it from the list.");
+  const co = await companyFor(token!, pub);
+  if (!co) throw new ProposalProblem("That company isn't on Merlin. Type its full name or its website.");
+  const now = new Date(nowMs).toISOString();
+  return T.mutate((s) => {
+    const me = memberOf(seed, s, token);
+    const p = mine(s, me, id);
+    if (p.companyId === co.internal) return recOf(p, nowMs, origin);
+    p.companyId = co.internal;
+    p.companyPub = pub;
+    if (!p.companyName) p.companyName = co.name || cleanLine(a.name, 120);
+    p.updatedAt = now;
+    // Already out, or signed: the pipeline catches up, as if it had been linked from the start.
+    const signed = p.sends.find((x) => x.signed);
+    const out = currentSend(p);
+    if (signed?.signed) pipelineEvent(s, me.id, p.companyId, "signed", signed.signed.at);
+    else if (live(out, nowMs)) pipelineEvent(s, me.id, p.companyId, "proposal_sent", out.sentAt);
+    return recOf(p, nowMs, origin);
+  });
+}
+
 /** A new proposal from a template (or blank), for a company on Merlin or one typed in. */
 export async function createProposal(
   token: string | null,
@@ -385,10 +439,12 @@ export async function createProposal(
   const mineT = isMineId(templateId) ? templatesOf(s0, me0.id).find((t) => t.id === templateId) : undefined;
   if (isMineId(templateId) && !mineT) throw new ProposalProblem("That template of yours isn't there anymore.", 404);
   if (templateId && !mineT && !templateDef(templateId)) throw new ProposalProblem("That template isn't in the library.");
-  const pub = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
-  const co = pub ? await companyFor(token!, pub) : null;
-  if (pub && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
+  const picked = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
   const typed = cleanLine(a.companyName, 120);
+  // A company typed, not picked: its exact name or website links it, locked ones too (as find_company finds one), so the pipeline moves when it's signed.
+  const pub = picked ?? (typed ? await lookUpCompany(token, typed, origin) : null);
+  const co = pub ? await companyFor(token!, pub) : null;
+  if (picked && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
   const name = co ? co.name || typed : typed;
   const now = new Date(nowMs).toISOString();
   return T.mutate((s) => {
@@ -415,7 +471,7 @@ export async function createProposal(
       id: newId("pr_"),
       memberId: me.id,
       companyId: co?.internal ?? null,
-      companyPub: co ? pub : null,
+      companyPub: co ? pub! : null,
       companyName: name,
       templateId,
       title: cleanLine(a.title, LIMITS.title) || `${t ? t.title.split(":")[0] : mineT ? mineT.title : "Proposal"}${name ? ` for ${name}` : ""}`.slice(0, LIMITS.title),
@@ -440,13 +496,22 @@ export async function createProposal(
 export async function updateProposal(token: string | null, id: string, a: ProposalPatch, origin?: string, nowMs = Date.now()): Promise<ProposalRec> {
   const seed = await loadSeed();
   const now = new Date(nowMs).toISOString();
-  return T.mutate((s) => {
+  const rec = await T.mutate((s) => {
     const me = memberOf(seed, s, token);
     buildGate(s, me.id, nowMs, origin);
     const p = mine(s, me, id);
     applyPatch(p, a, now, nowMs);
     return recOf(p, nowMs, origin);
   });
+  // A company picked or typed for a proposal not linked yet: linked (linkProposal), quietly when a typed name matches nothing.
+  const want = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
+  if (rec.company.id || (!want && a.companyName === undefined) || (!want && !rec.company.name)) return rec;
+  try {
+    return await linkProposal(token, id, want ? { companyId: want } : { name: rec.company.name }, origin, nowMs);
+  } catch (e) {
+    if (e instanceof ProposalProblem && !want) return rec;
+    throw e;
+  }
 }
 
 export async function duplicateProposal(token: string | null, id: string, origin?: string, nowMs = Date.now()): Promise<ProposalRec> {

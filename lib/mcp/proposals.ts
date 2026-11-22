@@ -138,7 +138,9 @@ async function proposalOut(ctx: Ctx, p: ProposalRec): Promise<ToolOut> {
     proposal_id: p.id,
     title: p.title,
     company: p.company.name || "Not named yet",
-    ...(p.company.id ? { company_id: p.company.id } : {}),
+    ...(p.company.id
+      ? { company_id: p.company.id }
+      : { pipeline: "Not linked to a company on Merlin yet, so the member's pipeline won't move when they sign. Pass company_id (from find_company or search_companies), or the company's exact full name or website as company_name." }),
     template_id: p.templateId,
     status: p.status,
     version: p.version,
@@ -230,6 +232,7 @@ export async function createOrUpdateProposal(ctx: Ctx, a: UpsertArgs): Promise<T
           ...(a.signer ? { signer: a.signer } : {}),
           ...(a.signer_on_call !== undefined ? { signerOnCall: a.signer_on_call } : {}),
           ...(a.company_name !== undefined ? { companyName: a.company_name } : {}),
+          ...(a.company_id ? { companyId: a.company_id } : {}),
           source: "claude",
         },
         ctx.origin,

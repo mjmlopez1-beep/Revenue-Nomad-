@@ -41,6 +41,7 @@ import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
 import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./ProposalStart";
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder, uploadPdf } from "./DocBuilder";
+import { LinkCompany } from "./ProposalLink";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
@@ -530,6 +531,8 @@ function Editor({
       </header>
 
       {p.send && <SendStatus p={p} />}
+      {/* Not linked to a company on Merlin: the pipeline can't move when they sign, so the member picks it (ProposalLink.tsx). */}
+      {!p.company.id && <LinkCompany p={p} onLinked={(r) => (setP((cur) => ({ ...cur, company: r.company })), onSaved(r))} />}
       {locked && <CloseBuildPrompt />}
       {out && !changing && !locked && (
         <div className="pp-banner" role="status">

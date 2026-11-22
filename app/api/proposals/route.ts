@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { limited } from "@/lib/rateLimit";
 import { memberForToken } from "@/lib/table";
-import { ProposalProblem, createProposal, deleteProposal, duplicateProposal, getProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
+import { ProposalProblem, createProposal, deleteProposal, duplicateProposal, getProposal, linkProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
 import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
 import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
 
@@ -96,6 +96,9 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(async () => (await deleteTemplate(token, id), { ok: true }));
     case "update":
       return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, source: typeof b.source === "string" ? b.source : undefined }, o));
+    case "link":
+      // Not linked to a company yet: the one picked (companyId), or its exact name or website (name), as find_company finds it.
+      return answer(() => linkProposal(token, id, { companyId: b.companyId, name: b.name }, o));
     case "duplicate":
       return answer(() => duplicateProposal(token, id, o));
     case "delete":
