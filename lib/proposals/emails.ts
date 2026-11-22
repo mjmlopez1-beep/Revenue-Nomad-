@@ -66,23 +66,55 @@ export function codeEmail(o: { member: string; title: string; code: string }): M
 }
 
 /** To both sides once it is signed: the signed copy, with its audit trail. */
-export function signedEmail(o: { to: "member" | "signer"; name: string; member: string; signer: string; title: string; signedAt: string; copy: string; hash: string }): Mail {
+export function signedEmail(o: {
+  to: "member" | "signer";
+  name: string;
+  member: string;
+  signer: string;
+  title: string;
+  signedAt: string;
+  copy: string;
+  hash: string;
+  /** What they picked: "Option (price) with add-on. Total: …". */
+  choice?: string;
+  /** The sealed PDF (Close): its download, its SHA-256, where to check a copy, and whether it is attached. */
+  sealed?: { pdf: string; sha256: string; check: string; attached: boolean };
+}): Mail {
   const subject = `Signed: ${oneLine(o.title).slice(0, 140)}`;
   const lead =
     o.to === "member"
       ? `${oneLine(o.signer)} signed ${oneLine(o.title)} on ${day(o.signedAt)}.`
       : `You signed ${oneLine(o.title)} from ${oneLine(o.member)} on ${day(o.signedAt)}. Here is your copy.`;
-  const keep = "The signed copy shows the proposal as it was signed, the signature and the audit trail: when it was sent, opened, the email confirmed and signed. Print it or save it as a PDF from that page.";
+  const chose = o.choice ? `${o.to === "member" ? `${oneLine(o.signer).split(" ")[0]} chose` : "You chose"} ${oneLine(o.choice).slice(0, 400)}` : "";
+  const keep = o.sealed
+    ? `${o.sealed.attached ? "The sealed PDF is attached" : "Download the sealed PDF from the signed copy's page"}: the proposal as it was signed, the signature and the audit trail on its last page. Any change to the file breaks the seal. Anyone can check a copy at ${o.sealed.check}.`
+    : "The signed copy shows the proposal as it was signed, the signature and the audit trail: when it was sent, opened, the email confirmed and signed. Print it or save it as a PDF from that page.";
   const f = foot();
-  const text = [`Hi ${first(o.name)},`, "", lead, "", keep, "", o.copy, "", `Document fingerprint (SHA-256): ${o.hash}`, "", ...f.text].join("\n");
+  const text = [
+    `Hi ${first(o.name)},`,
+    "",
+    lead,
+    ...(chose ? ["", chose] : []),
+    "",
+    keep,
+    "",
+    o.copy,
+    ...(o.sealed ? ["", `Sealed PDF: ${o.sealed.pdf}`, `Sealed PDF fingerprint (SHA-256): ${o.sealed.sha256}`] : []),
+    "",
+    `Document fingerprint (SHA-256): ${o.hash}`,
+    "",
+    ...f.text,
+  ].join("\n");
   const body = [
     mailP(`Hi ${escHtml(first(o.name))},`),
     mailH(o.to === "member" ? "It&#39;s signed" : "Your signed copy"),
     mailP(escHtml(lead)),
+    chose ? mailCallout(escHtml(chose), "page") : "",
     mailP(escHtml(keep), "margin-bottom:24px;"),
-    mailButton(o.copy, "Open the signed copy", "margin:0 0 24px"),
-    small("If the button doesn&#39;t work, paste this link into your browser."),
+    o.sealed ? mailButton(o.sealed.pdf, "Download the signed PDF", "margin:0 0 16px") : mailButton(o.copy, "Open the signed copy", "margin:0 0 24px"),
+    small(o.sealed ? "The signed copy&#39;s page, with who signed and when:" : "If the button doesn&#39;t work, paste this link into your browser."),
     linkLine(o.copy),
+    o.sealed ? small(`Sealed PDF fingerprint (SHA-256): <span style="font-family:${MAIL.mono};word-break:break-all">${escHtml(o.sealed.sha256)}</span>`) : "",
     small(`Document fingerprint (SHA-256): <span style="font-family:${MAIL.mono};word-break:break-all">${escHtml(o.hash)}</span>`),
   ].join("\n");
   return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.copy, art: "signed", footer: f.lines }) };

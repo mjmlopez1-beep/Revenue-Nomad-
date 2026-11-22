@@ -683,13 +683,15 @@ export function finish(docId: string, origin?: string): Promise<void> {
     const m = await memberFor(await loadSeed(), d.memberId);
     const sender = { name: m?.name ?? "", email: m?.email ?? "", title: titleOf(s, { id: d.memberId, title: "" } as Parameters<typeof titleOf>[1]) };
     const consentVersion = d.signers.map((x) => x.signed!.consentVersion).sort().pop() ?? CONSENT_VERSION;
-    const fin = await buildFinal(original, { doc: d, signatures: sigs, sender, consentText: consentText(sender.name || "the sender", "document"), consentVersion });
+    const fin = await buildFinal(original, { doc: d, signatures: sigs, sender, consentText: consentText(sender.name || "the sender", "document"), consentVersion, seal: { checkUrl: `${base(origin)}/check` } });
     await saveFinal(d.id, fin.bytes);
     const at = new Date().toISOString();
+    // The seal's record (lib/seal.ts): the file's SHA-256 and the printed digest, signed with Merlin's key.
+    const seal = fin.digest ? (await import("../seal")).sealRec({ digest: fin.digest, sha256: fin.sha256, bytes: fin.bytes }, at) : undefined;
     const ok = await T.mutate((st) => {
       const dd = (st.documents ?? []).find((x) => x.id === docId);
       if (!dd || dd.completed) return false;
-      dd.completed = { at, sha256: fin.sha256, signedPagesSha256: fin.signedPagesSha256, size: fin.bytes.length };
+      dd.completed = { at, sha256: fin.sha256, signedPagesSha256: fin.signedPagesSha256, size: fin.bytes.length, ...(seal ? { seal } : {}) };
       ev(dd, "completed", at, { note: `final file SHA-256 ${fin.sha256}` });
       dd.updatedAt = at;
       return true;
@@ -740,6 +742,7 @@ export async function docCopy(raw: unknown, origin?: string): Promise<DocCopy | 
     completedAt: dd.completed.at,
     download: docDownloadLink(origin, dd),
     events: dd.events.map((e) => ({ ...e })),
+    sealed: dd.completed.seal ? { at: dd.completed.seal.at, check: `${base(origin)}/check` } : null,
   };
 }
 

@@ -45,6 +45,61 @@ export interface AuditEvent {
   note?: string;
 }
 
+/* ---------- pricing the client picks from (Close) ---------- */
+
+/** How an option or add-on is billed: every month, or once. */
+export type Billing = "month" | "once";
+export const BILLING_SAY: Record<Billing, string> = { month: "a month", once: "once" };
+
+/** One way to work together, with its price. A proposal has 1, 2 or 3 (lib/proposals/pricing.ts). */
+export interface PriceOption {
+  /** "o" and a few characters, kept across edits so a choice names it. */
+  id: string;
+  name: string;
+  /** Whole dollars. */
+  price: number;
+  billing: Billing;
+  /** A short line under the price ("Months 1 to 3, then $11,000 a month"). */
+  note?: string;
+  /** One line on what it is. */
+  about?: string;
+  /** What's included, one line each: the comparison table's rows. */
+  included: string[];
+  recommended?: boolean;
+}
+/** Something the client can add to any option. */
+export interface PriceAddOn {
+  id: string;
+  name: string;
+  price: number;
+  billing: Billing;
+  about?: string;
+}
+export interface Pricing {
+  options: PriceOption[];
+  addOns: PriceAddOn[];
+}
+/** What the client picked: one option (by id) and any add-ons. */
+export interface Choice {
+  optionId: string;
+  addOnIds: string[];
+}
+/** A choice in words and numbers, as signed: what the signed record, the emails and the PDF say. */
+export interface ChoiceRec {
+  optionId: string;
+  option: string;
+  price: number;
+  billing: Billing;
+  addOns: { id: string; name: string; price: number; billing: Billing }[];
+  /** Dollars a month and dollars once, all in. */
+  monthly: number;
+  once: number;
+  /** "$15,000 a month, plus $6,000 once". */
+  total: string;
+  /** "Assessment + Fractional CRO ($15,000 a month) with Sales hiring support". */
+  summary: string;
+}
+
 /** The exact document the client is shown and signs. Its SHA-256 (hashDoc) goes on the audit trail. */
 export interface FrozenDoc {
   title: string;
@@ -52,8 +107,31 @@ export interface FrozenDoc {
   company: string;
   from: { name: string; title: string };
   to: { name: string; title: string; email: string };
-  blocks: { title: string; text: string }[];
+  /** `kind` is the library block's id ("the_math", "terms", "custom"): where the client's page places it. Sends from before it have none. */
+  blocks: { title: string; text: string; kind?: string }[];
+  /** The options and add-ons the client picks from (Close): absent for a single-price proposal. */
+  pricing?: Pricing;
   preparedAt: string;
+}
+
+/**
+ * The seal on a final PDF (lib/seal.ts): the SHA-256 of the file as delivered, the SHA-256 printed
+ * on its audit page (the file with those 64 characters read as zeros), and Merlin's Ed25519
+ * signature over both, so /check can tell anyone whether a copy is the one sealed.
+ */
+export interface SealRec {
+  /** "sl_" and 12 characters. */
+  id: string;
+  /** SHA-256 of the whole file, hex. */
+  sha256: string;
+  /** SHA-256 printed on the audit page, hex. */
+  digest: string;
+  size: number;
+  at: string;
+  /** The first 16 hex characters of the SHA-256 of the public key. */
+  keyId: string;
+  /** Ed25519 over sealMessage(), base64url. */
+  sig: string;
 }
 
 /** One send of one version to one signer. The link is signed and expires (lib/proposals/links.ts). */
@@ -71,9 +149,15 @@ export interface StoredSend {
   code?: { hash: string; at: string; tries: number };
   codesSent?: string[];
   codeVerifiedAt?: string;
-  signed?: { name: string; at: string; ip: string; ua: string; consent: string; consentVersion: string; hash: string; email: string };
+  signed?: { name: string; at: string; ip: string; ua: string; consent: string; consentVersion: string; hash: string; email: string; choice?: ChoiceRec };
   declined?: { at: string; reason: string; ip: string; ua: string };
   voided?: { at: string; why: "member" | "changed" };
+  /** Sent while the member had Close (canClose, the trial too): the client picks from its options, and the signed copy is a sealed PDF. */
+  close?: boolean;
+  /** What the client has picked so far: theirs to change until they sign. */
+  choice?: Choice;
+  /** The sealed PDF of the proposal as signed (lib/proposals/pdf.ts), kept on the data volume. */
+  seal?: SealRec;
   events: AuditEvent[];
 }
 
@@ -104,6 +188,8 @@ export interface StoredProposal {
   createdAt: string;
   updatedAt: string;
   sends: StoredSend[];
+  /** The options and add-ons the client picks from (Close). Absent: one price, in the proposal's own words. */
+  pricing?: Pricing;
 }
 
 /* ---------- what the member's app gets ---------- */
@@ -133,6 +219,10 @@ export interface ProposalSendRec {
   hash: string;
   /** The signed copy with its audit trail (signed only). */
   copyUrl: string | null;
+  /** What the client picked and signed (a proposal with options). */
+  choice: ChoiceRec | null;
+  /** The sealed PDF (Close): its download and when it was sealed. */
+  sealed: { at: string; pdf: string; sha256: string } | null;
   events: AuditRow[];
 }
 
@@ -147,6 +237,8 @@ export interface ProposalRec {
   notes: DiscoveryNote[];
   signerOnCall: boolean | null;
   signer: SignerInfo | null;
+  /** Options and add-ons for the client to pick from (Close), or null for one price. */
+  pricing: Pricing | null;
   version: number;
   status: ProposalStatus;
   createdAt: string;
@@ -231,6 +323,14 @@ export interface SignerView {
   declinedAt: string | null;
   expiresAt: string;
   copyUrl: string | null;
+  /** What they have picked so far (open), or what they signed. Null: a single price, or nothing picked yet. */
+  choice: Choice | null;
+  /** The choice as signed, in words. */
+  signedChoice: ChoiceRec | null;
+  /** The sealed PDF, once signed (Close). */
+  sealed: { at: string; pdf: string } | null;
+  /** Signing makes a sealed PDF (sent under Close). */
+  sealOnSign: boolean;
 }
 
 /** The signed copy's page: the document, the signature and the audit trail. */
@@ -243,6 +343,8 @@ export interface SignedCopy {
   events: AuditRow[];
   sentAt: string;
   sendId: string;
+  /** The sealed PDF (Close): download, when, its SHA-256 and where to check a copy. */
+  sealed: { at: string; pdf: string; sha256: string; check: string; events: number } | null;
 }
 
 /**

@@ -206,7 +206,7 @@ export async function purgeDue(nowMs = Date.now()): Promise<number> {
     const due = Object.entries(s0.closures ?? {}).filter(([, c]) => !c.purgedAt && Date.parse(c.purgeAt) <= nowMs).map(([id]) => id);
     if (!due.length) return 0;
     const done = await T.mutate((s, seed) => {
-      const out: { googleTokens: string[]; documentIds: string[] }[] = [];
+      const out: { googleTokens: string[]; documentIds: string[]; sendIds: string[] }[] = [];
       for (const id of due) {
         const c = s.closures?.[id];
         if (!c || c.purgedAt || Date.parse(c.purgeAt) > nowMs) continue;
@@ -223,6 +223,11 @@ export async function purgeDue(nowMs = Date.now()): Promise<number> {
     if (docs.length) {
       const { removeFiles } = await import("./documents/files");
       await Promise.all(docs.map((id) => removeFiles(id).catch(() => undefined)));
+    }
+    const sends = done.flatMap((d) => d.sendIds);
+    if (sends.length) {
+      const { removeSealedPdf } = await import("./proposals/files");
+      await Promise.all(sends.map((id) => removeSealedPdf(id)));
     }
     if (done.length) console.log(`Deleted the personal data of ${done.length} account${done.length === 1 ? "" : "s"} closed ${CLOSURE_DAYS} days ago.`);
     return done.length;

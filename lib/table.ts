@@ -7666,10 +7666,12 @@ export const ACCOUNT_CLOSED_JOIN = "This account was closed. Use the restore lin
  * added to companies stay, attributed to nobody (FORMER_MEMBER), and so do benchmark rates.
  * Returns the sealed Google tokens (for the caller to revoke) and the document ids.
  */
-function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { googleTokens: string[]; documentIds: string[] } {
+function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { googleTokens: string[]; documentIds: string[]; sendIds: string[] } {
   const net = s.network?.[id] as { google?: { token?: string }; gmail?: { token?: string } } | undefined;
   const googleTokens = [net?.google?.token, net?.gmail?.token].filter((x): x is string => !!x);
   const documentIds = (s.documents ?? []).filter((d) => d.memberId === id).map((d) => d.id);
+  // Their proposals' sealed PDFs (lib/proposals/files.ts), removed by the caller.
+  const sendIds = (s.proposals ?? []).filter((p) => p.memberId === id).flatMap((p) => p.sends.filter((x) => x.seal).map((x) => x.id));
   const del = <T>(rec: Record<string, T> | undefined) => {
     if (rec) delete rec[id];
   };
@@ -7754,7 +7756,7 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { google
     delete c.mail;
   }
   memberIndexCache = null;
-  return { googleTokens, documentIds };
+  return { googleTokens, documentIds, sendIds };
 }
 
 /** A closed account's inbox hash is blocked: Merlin sends it nothing (lib/email.ts setMailBlock). */

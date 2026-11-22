@@ -97,7 +97,7 @@ export interface StoredDocument {
   expiresAt?: string;
   voided?: { at: string };
   /** The final PDF: the fields stamped in and the audit trail page added. */
-  completed?: { at: string; sha256: string; signedPagesSha256: string; size: number };
+  completed?: { at: string; sha256: string; signedPagesSha256: string; size: number; seal?: import("../proposals/types").SealRec };
   events: DocEvent[];
 }
 
@@ -182,4 +182,6 @@ export interface DocCopy {
   download: string;
   events: DocEvent[];
   id: string;
+  /** Sealed (lib/seal.ts): anyone can check a copy at `check`. Null for a document finished before seals. */
+  sealed: { at: string; check: string } | null;
 }

@@ -21,7 +21,7 @@
  */
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { ActionError, loadSeed, loadState, memberByToken, perform, viewPatch, tableInternals as T, type Member, type Seed, type State } from "../table";
-import { emailEnabled, sendEmail } from "../email";
+import { MAX_ATTACHMENT_BYTES, emailEnabled, sendEmail } from "../email";
 import { FIND_MIN, functionOf } from "../tableFields";
 import { PRICES } from "../billing/rules";
 import { upgradeUrl } from "../plan";
@@ -33,10 +33,13 @@ import { CLOSE_BUILD, blocksOfMine, isMineId, templatesOf } from "./mine";
 import { aiConfigured } from "./aiConfig";
 import { AI_PACK_LINK, PACK_PRICE_USD, budgetOf, usedUpWords } from "./aiUsage";
 import { pipelineEvent } from "./pipelineHook";
+import { PricingProblem, choiceRec, cleanPricing, validChoice } from "./pricing";
+import { readSealedPdf, saveSealedPdf } from "./files";
 import {
   CONSENT_VERSION,
   consentText,
   type AuditEvent,
+  type Choice,
   type FrozenDoc,
   type ProposalBlock,
   type ProposalRec,
@@ -91,6 +94,10 @@ export const signToken = (sendId: string, expMs: number) => `${sendId}.${expMs.t
 export const copyToken = (sendId: string) => `${sendId}.${mac(`rn-signed:${sendId}`)}`;
 export const signLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/sign/${signToken(x.id, Date.parse(x.expiresAt))}`;
 export const copyLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/signed/${copyToken(x.id)}`;
+/** The sealed PDF's download, with the signed copy's key. */
+export const pdfLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/api/sign/pdf?c=${copyToken(x.id)}`;
+/** Where anyone checks a copy of a sealed PDF. */
+export const checkLink = (origin?: string) => `${base(origin)}/check`;
 
 /** A signing link's send id and expiry, when its HMAC holds. */
 export function readSignToken(raw: unknown): { sendId: string; expMs: number } | null {
@@ -114,7 +121,8 @@ export const hashDoc = (d: FrozenDoc) => createHash("sha256").update(JSON.string
 
 const fmtDay = (ms: number) => new Date(ms).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-function freeze(p: StoredProposal, signer: SignerInfo, now: string): FrozenDoc {
+/** The document as sent. `close`: the member has Close now, so the client picks from its options (a Free or Pro proposal stays one price). */
+function freeze(p: StoredProposal, signer: SignerInfo, now: string, close: boolean): FrozenDoc {
   const f = docFields({ ...p, signer });
   return {
     title: p.title,
@@ -122,7 +130,8 @@ function freeze(p: StoredProposal, signer: SignerInfo, now: string): FrozenDoc {
     company: p.companyName,
     from: { name: f["provider.name"] || "", title: f["provider.title"] || "" },
     to: { name: signer.name, title: signer.title ?? "", email: signer.email },
-    blocks: rendered(p.blocks, f),
+    blocks: rendered(p.blocks, f).map((b, i) => ({ ...b, kind: p.blocks[i].blockId })),
+    ...(close && p.pricing?.options.length ? { pricing: structuredClone(p.pricing) } : {}),
     preparedAt: now,
   };
 }
@@ -163,6 +172,8 @@ function sendRec(x: StoredSend, nowMs: number, origin?: string): ProposalSendRec
     voidedAt: x.voided?.at ?? null,
     hash: x.hash,
     copyUrl: x.signed ? copyLink(origin, x) : null,
+    choice: x.signed?.choice ? structuredClone(x.signed.choice) : null,
+    sealed: x.seal ? { at: x.seal.at, pdf: pdfLink(origin, x), sha256: x.seal.sha256 } : null,
     events: x.events.map((e) => ({ ...e })),
   };
 }
@@ -180,6 +191,7 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
     notes: p.notes.map((n) => ({ ...n })),
     signerOnCall: p.signerOnCall,
     signer: p.signer ? { ...p.signer } : null,
+    pricing: p.pricing ? structuredClone(p.pricing) : null,
     version: p.version,
     status: statusOf(p, nowMs),
     createdAt: p.createdAt,
@@ -322,10 +334,12 @@ export interface ProposalPatch {
   companyId?: unknown;
   /** Where fields set here came from (claude, discovery, rate, manual). */
   source?: string;
+  /** The options and add-ons the client picks from (Close; lib/proposals/pricing.ts), or null for one price. */
+  pricing?: unknown;
 }
 
 /** The document's parts, to tell whether a change touches what the client reads. */
-const docPart = (p: StoredProposal) => JSON.stringify([p.title, p.blocks, p.fields, p.signer, p.companyName]);
+const docPart = (p: StoredProposal) => JSON.stringify([p.title, p.blocks, p.fields, p.signer, p.companyName, p.pricing ?? null]);
 
 function applyPatch(p: StoredProposal, a: ProposalPatch, now: string, nowMs: number): void {
   if (isSigned(p)) throw new ProposalProblem("It's signed, so it can't change. Duplicate it to start a new one.");
@@ -353,6 +367,17 @@ function applyPatch(p: StoredProposal, a: ProposalPatch, now: string, nowMs: num
   if (a.signerOnCall !== undefined) p.signerOnCall = a.signerOnCall === true ? true : a.signerOnCall === false ? false : null;
   if (a.signer !== undefined) p.signer = a.signer === null ? null : cleanSigner(a.signer);
   if (a.companyName !== undefined && !p.companyId) p.companyName = cleanLine(a.companyName, 120);
+  if (a.pricing !== undefined) {
+    let pr;
+    try {
+      pr = cleanPricing(a.pricing);
+    } catch (e) {
+      if (e instanceof PricingProblem) throw new ProposalProblem(e.message);
+      throw e;
+    }
+    if (pr) p.pricing = pr;
+    else delete p.pricing;
+  }
   p.updatedAt = now;
   // A change to what the client reads, after this version went out: a new version, and the old link stops.
   if (docPart(p) !== before && p.sends.some((x) => x.version === p.version)) {
@@ -587,7 +612,8 @@ export async function sendProposal(
     if (cur) p.version++;
     const blanks = blanksOf(p.blocks, docFields(p));
     if (blanks.length) throw new ProposalProblem(`Fill the ${blanks.length === 1 ? "last blank" : `${blanks.length} blanks`} first: ${blanksInWords(blanks, 5)}.`);
-    const doc = freeze(p, signer, now);
+    const close = !onFree(s, me.id, nowMs);
+    const doc = freeze(p, signer, now, close);
     const x: StoredSend = {
       id: `s_${randomBytes(9).toString("base64url")}`,
       version: p.version,
@@ -597,6 +623,7 @@ export async function sendProposal(
       sentAt: now,
       expiresAt: new Date(nowMs + SIGN_DAYS * DAY).toISOString(),
       events: [{ kind: "sent", at: now, note: signer.email }],
+      ...(close ? { close: true } : {}),
     };
     p.sends.push(x);
     p.updatedAt = now;
@@ -665,6 +692,10 @@ function viewOf(f: Found, nowMs: number, origin?: string): SignerView {
     declinedAt: x.declined?.at ?? null,
     expiresAt: x.expiresAt,
     copyUrl: x.signed ? copyLink(origin, x) : null,
+    choice: x.signed?.choice ? { optionId: x.signed.choice.optionId, addOnIds: x.signed.choice.addOns.map((a) => a.id) } : x.choice ? { ...x.choice, addOnIds: [...x.choice.addOnIds] } : null,
+    signedChoice: x.signed?.choice ? structuredClone(x.signed.choice) : null,
+    sealed: x.seal ? { at: x.seal.at, pdf: pdfLink(origin, x) } : null,
+    sealOnSign: !!x.close,
   };
 }
 
@@ -749,7 +780,35 @@ export async function verifyCode(token: unknown, raw: unknown, who: Client, orig
 /** A full name as typed: two words or more, letters, at most 100 characters. */
 const NAME = /^\p{L}[\p{L}'’.-]*(?: +\p{L}[\p{L}'’.-]*)+$/u;
 
-export async function signProposal(token: unknown, a: { name?: unknown; consent?: unknown; hash?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+const PICK_FIRST = "Pick one of the options first.";
+/**
+ * The client picks an option and any add-ons (a proposal with options, Close). Theirs to change
+ * until they sign; refused after. Kept on the send, so the page opens on it again. Not on the
+ * audit trail: the choice signed is, with the signature.
+ */
+export async function chooseOption(token: unknown, raw: unknown, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+  return T.mutate((s) => {
+    const f = resolve(s, token);
+    const st = signerStatus(f, nowMs);
+    if (st !== "open") throw new ProposalProblem(st === "signed" ? "It's signed, so the choice can't change now." : notOpen(st), 409);
+    if (!f.x.doc.pricing) throw new ProposalProblem("This proposal has one price, so there's nothing to pick.");
+    const c = validChoice(f.x.doc.pricing, raw);
+    if (!c) throw new ProposalProblem("That option isn't in this proposal. Reload the page and pick again.");
+    f.x.choice = c;
+    return viewOf(f, nowMs, origin);
+  });
+}
+
+/** The choice a signature takes: the one sent with it, else the one kept, else the only option there is. */
+function choiceAtSigning(x: StoredSend, raw: unknown): Choice | null {
+  const p = x.doc.pricing;
+  if (!p) return null;
+  const c = validChoice(p, raw ?? x.choice) ?? (p.options.length === 1 ? { optionId: p.options[0].id, addOnIds: [] } : null);
+  if (!c) throw new ProposalProblem(PICK_FIRST);
+  return c;
+}
+
+export async function signProposal(token: unknown, a: { name?: unknown; consent?: unknown; hash?: unknown; choice?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
   const name = cleanLine(a.name, 100);
   if (!NAME.test(name)) throw new ProposalProblem("Type your full name, first and last, as your signature.");
   if (a.consent !== true) throw new ProposalProblem("Tick the box to agree to sign electronically.");
@@ -762,27 +821,96 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
     // The document shown is the one signed: the hash the page showed must be this send's, and the content must still hash to it.
     if (typeof a.hash !== "string" || !same(a.hash, f.x.hash) || hashDoc(f.x.doc) !== f.x.hash) throw new ProposalProblem("This page is out of date. Reload it to read the proposal again before you sign.", 409);
     const consent = consentText(f.x.doc.from.name || "the sender");
-    f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email };
-    ev(f.x, "signed", now, { ...who, note: `typed name "${name}"` });
+    const picked = choiceAtSigning(f.x, a.choice);
+    const choice = picked && f.x.doc.pricing ? choiceRec(f.x.doc.pricing, picked) : undefined;
+    f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email, ...(choice ? { choice } : {}) };
+    if (picked) f.x.choice = picked;
+    ev(f.x, "signed", now, { ...who, note: `typed name "${name}"${choice ? `; chose ${choice.summary}, ${choice.total}` : ""}` });
     f.p.updatedAt = now;
     pipelineEvent(s, f.p.memberId, f.p.companyId, "signed", now);
     return { x: structuredClone(f.x), memberId: f.p.memberId, proposalId: f.p.id, view: viewOf(f, nowMs, origin) };
   });
+  // Close: the sealed PDF of the proposal as signed, before the emails, so they carry it.
+  const sealed = out.x.close ? await ensureSeal(out.x.id, origin) : null;
   // The signed copy to both sides.
   const seed = await loadSeed();
   const m = await memberFor(seed, out.memberId);
   const copy = copyLink(origin, out.x);
+  const attach = !!sealed && sealed.bytes.length <= MAX_ATTACHMENT_BYTES;
   const sent: string[] = [];
+  const ch = out.x.signed!.choice;
   for (const to of [{ k: "signer" as const, email: out.x.signer.email, name: out.x.signer.name }, ...(m?.email ? [{ k: "member" as const, email: m.email, name: m.name }] : [])]) {
-    const mail = signedEmail({ to: to.k, name: to.name, member: out.x.doc.from.name, signer: out.x.signed!.name, title: out.x.doc.title, signedAt: out.x.signed!.at, copy, hash: out.x.hash });
-    if (await sendEmail(to.email, mail.subject, mail.text, mail.html, to.k === "signer" && m?.email ? { replyTo: m.email } : {})) sent.push(to.k === "signer" ? "the signer" : "the sender");
+    const mail = signedEmail({
+      to: to.k,
+      name: to.name,
+      member: out.x.doc.from.name,
+      signer: out.x.signed!.name,
+      title: out.x.doc.title,
+      signedAt: out.x.signed!.at,
+      copy,
+      hash: out.x.hash,
+      ...(ch ? { choice: `${ch.summary}. Total: ${ch.total}.` } : {}),
+      ...(sealed ? { sealed: { pdf: pdfLink(origin, out.x), sha256: sealed.seal.sha256, check: checkLink(origin), attached: attach } } : {}),
+    });
+    const files = attach ? { attachments: [{ filename: sealedName(out.x.doc.title), content: sealed!.bytes }] } : {};
+    if (await sendEmail(to.email, mail.subject, mail.text, mail.html, { ...(to.k === "signer" && m?.email ? { replyTo: m.email } : {}), ...files })) sent.push(to.k === "signer" ? "the signer" : "the sender");
   }
   if (sent.length)
     await T.mutate((s) => {
       const f = findSend(s, out.x.id);
-      if (f) ev(f.x, "copy_sent", new Date().toISOString(), { note: `to ${sent.join(" and ")}` });
+      if (f) ev(f.x, "copy_sent", new Date().toISOString(), { note: `to ${sent.join(" and ")}${attach ? ", with the sealed PDF attached" : ""}` });
     });
-  return out.view;
+  return { ...out.view, sealed: sealed ? { at: sealed.seal.at, pdf: pdfLink(origin, out.x) } : out.view.sealed };
+}
+
+/** The sealed PDF's file name: the title, then "signed". */
+export const sealedName = (title: string) => `${title.replace(/[^\p{L}\p{N} ._-]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Proposal"} (signed).pdf`;
+
+const sealing = new Map<string, Promise<{ seal: import("./types").SealRec; bytes: Uint8Array } | null>>();
+/**
+ * The sealed PDF of a signed send made under Close (lib/proposals/pdf.ts, lib/seal.ts): built once,
+ * kept on the volume, its seal on the send. Safe to call again: the kept file comes back. Null when
+ * it isn't a Close send, isn't signed, or the PDF couldn't be built (the signature stands either way).
+ */
+export function ensureSeal(sendId: string, origin?: string): Promise<{ seal: import("./types").SealRec; bytes: Uint8Array } | null> {
+  const running = sealing.get(sendId);
+  if (running) return running;
+  const job = (async () => {
+    const s = await loadState();
+    const f = findSend(s, sendId);
+    if (!f?.x.signed || !f.x.close) return null;
+    if (f.x.seal) {
+      const kept = await readSealedPdf(sendId);
+      return kept ? { seal: f.x.seal, bytes: new Uint8Array(kept) } : null;
+    }
+    const m = await memberFor(await loadSeed(), f.p.memberId);
+    const sender = { name: m?.name ?? f.x.doc.from.name, email: m?.email ?? "", title: titleOf(s, { id: f.p.memberId, title: "" } as Member) || f.x.doc.from.title };
+    const [{ buildProposalPdf }, { sealRec }] = await Promise.all([import("./pdf"), import("../seal")]);
+    const fin = await buildProposalPdf({ send: f.x, sender, consentVersion: f.x.signed.consentVersion, checkUrl: checkLink(origin) });
+    await saveSealedPdf(sendId, fin.bytes);
+    const rec = sealRec(fin, f.x.signed.at);
+    const kept = await T.mutate((st) => {
+      const g = findSend(st, sendId);
+      if (!g?.x.signed) return null;
+      if (g.x.seal) return g.x.seal;
+      g.x.seal = rec;
+      return rec;
+    });
+    return kept && kept.id === rec.id ? { seal: rec, bytes: fin.bytes } : kept ? { seal: kept, bytes: new Uint8Array((await readSealedPdf(sendId)) ?? fin.bytes) } : null;
+  })()
+    .catch((e) => (console.error("proposal seal failed", sendId, (e as Error)?.message), null))
+    .finally(() => sealing.delete(sendId));
+  sealing.set(sendId, job);
+  return job;
+}
+
+/** The sealed PDF from the signed copy's link. Null: no such link, or no sealed PDF (a send without Close). */
+export async function sealedPdf(raw: unknown, origin?: string): Promise<{ bytes: Uint8Array; name: string } | null> {
+  const id = readCopyToken(raw);
+  const f = id ? findSend(await loadState(), id) : null;
+  if (!f?.x.signed || !f.x.close) return null;
+  const r = await ensureSeal(f.x.id, origin);
+  return r ? { bytes: r.bytes, name: sealedName(f.x.doc.title) } : null;
 }
 
 export async function declineProposal(token: unknown, a: { reason?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
@@ -806,13 +934,25 @@ export async function declineProposal(token: unknown, a: { reason?: unknown }, w
   return out.view;
 }
 
-/** The signed copy, from its own link: the document, the signature and the audit trail. Null: no such signed copy. */
-export async function signedCopy(raw: unknown): Promise<SignedCopy | null> {
+/** The signed copy, from its own link: the document, the signature, the audit trail and the sealed PDF (Close). Null: no such signed copy. */
+export async function signedCopy(raw: unknown, origin?: string): Promise<SignedCopy | null> {
   const id = readCopyToken(raw);
   if (!id) return null;
-  const f = findSend(await loadState(), id);
+  let f = findSend(await loadState(), id);
   if (!f?.x.signed) return null;
-  return { doc: structuredClone(f.x.doc), hash: f.x.hash, hashNow: hashDoc(f.x.doc), signed: { ...f.x.signed }, events: f.x.events.map((e) => ({ ...e })), sentAt: f.x.sentAt, sendId: f.x.id };
+  // A Close send whose PDF didn't get made at signing: made now.
+  if (f.x.close && !f.x.seal && (await ensureSeal(f.x.id, origin))) f = findSend(await loadState(), id)!;
+  const x = f.x;
+  return {
+    doc: structuredClone(x.doc),
+    hash: x.hash,
+    hashNow: hashDoc(x.doc),
+    signed: structuredClone(x.signed!),
+    events: x.events.map((e) => ({ ...e })),
+    sentAt: x.sentAt,
+    sendId: x.id,
+    sealed: x.seal ? { at: x.seal.at, pdf: pdfLink(origin, x), sha256: x.seal.sha256, check: checkLink(origin), events: x.events.filter((e) => Date.parse(e.at) <= Date.parse(x.seal!.at)).length } : null,
+  };
 }
 
 /* ---------- helpers ---------- */
