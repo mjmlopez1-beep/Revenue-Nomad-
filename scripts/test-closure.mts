@@ -14,7 +14,7 @@
  *  - the home page's note after closing (?closed=1) and for an expired restore link (?restore=gone).
  * In process, on a made-up seed; email to a fake endpoint, fetch replaced.
  */
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -215,10 +215,16 @@ async function main() {
   check("the landing page draws the note in the design system's sand Callout, as a status, above the hero", /accountNoteOf\(window\.location\.search\)/.test(landing) && /<Callout tone="sand" role="status" className="lp-account-note">\s*\{accountNote\}\s*<\/Callout>/.test(landing) && landing.indexOf("lp-account-note") < landing.indexOf("lp-h1") && /\.lp-account-note \{/.test(src("app/landing/landing.css")));
 
   console.log(`\n${passes} passed, ${failures} failed`);
-  process.exit(failures ? 1 : 0);
+  done(failures ? 1 : 0);
+}
+
+/** The made-up data folder goes when the checks end, passed or not. */
+function done(code: number): never {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  process.exit(code);
 }
 
 main().catch((e) => {
   console.error(e);
-  process.exit(1);
+  done(1);
 });
