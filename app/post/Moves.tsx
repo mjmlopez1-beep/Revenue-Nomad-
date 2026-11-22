@@ -35,6 +35,7 @@ import { useCrystalClick } from "./CrystalOpen";
 import { CRYSTAL_USED_UNLOCK, roleTermsLine, TOMORROW_LINE } from "./todayModel";
 import { loadPipeline } from "./pipelineStore";
 import "./moves.css";
+import { Chip, WarmthChip } from "../ui/system";
 
 /*
  * The note's sheet, its templates and the voice load on their own: Home paints without them, and
@@ -504,7 +505,7 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
           </div>
         </div>
         <p className="mv-who-line">
-          <span className={`mv-warm mv-warm-${p.warmth.toLowerCase()}`}>{p.warmth}</span>
+          <WarmthChip warmth={p.warmth} />
           <span>{knowLine(p)}</span>
         </p>
       </>
@@ -552,7 +553,7 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
           </div>
         </div>
         <p className="mv-who-line">
-          <span className="mv-warm mv-warm-warm">The buyer</span>
+          <Chip tone="mint">The buyer</Chip>
           <span>{upperFirst(what)}</span>
         </p>
         {way.email === "locked" && (
@@ -594,7 +595,7 @@ function WayIn({ m, companyId }: { m: Move; companyId: string }) {
           </div>
         </div>
         <p className="mv-who-line">
-          {way.member ? <span className="mv-warm mv-warm-warm">On Merlin</span> : <span className="mv-warm mv-warm-fading">Not on Merlin yet</span>}
+          {way.member ? <Chip tone="mint">On Merlin</Chip> : <Chip>Not on Merlin yet</Chip>}
           <span>{way.member ? "Message them there" : way.invite?.at ? "You invited them" : way.invite ? "Your note invites them" : "Held the seat"}</span>
         </p>
         <Find m={m} companyId={companyId} />

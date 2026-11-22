@@ -1134,7 +1134,7 @@ function AddPersonForm({ companyId, engagementId, onDone, initial }: { companyId
         </div>
       ) : (
         <div className="tp-pform-foot">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={busy} aria-busy={busy}>
+          <button type="submit" className="btn btn-volt btn-sm" disabled={busy} aria-busy={busy}>
             {busy ? "Adding" : "Add this person"} {!busy && filled > 0 && room > 0 && <span className="num">+{Math.min(filled, room)}</span>}
           </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => (filled > 0 ? setDiscard(true) : onDone())}>
@@ -1185,12 +1185,12 @@ function Reach({ e, name, member, emailTo, known = false, more = true }: { e: En
         </>
       ) : known && emailTo ? (
         // In the member's own contacts, with an address: they write from their own mail.
-        <a className="btn btn-sm btn-primary" href={`mailto:${encodeURIComponent(emailTo)}`}>
+        <a className="btn btn-sm btn-pine" href={`mailto:${encodeURIComponent(emailTo)}`}>
           Email {first}
         </a>
       ) : (
         li && (
-          <a className="btn btn-sm btn-primary" href={li} target="_blank" rel="noreferrer">
+          <a className="btn btn-sm btn-pine" href={li} target="_blank" rel="noreferrer">
             Find them on LinkedIn <IconExternal size={11} />
           </a>
         )
@@ -1252,7 +1252,7 @@ function ClaimRole({ id }: { id: string }) {
       <div className="tp-frow-ask tp-claim-ask" role="group" aria-label="I took this role">
         <p>Mark this role as yours? Your name goes on the seat, and it moves to Your seats. You can mark one open role a day.</p>
         <span className="tp-frow-ask-acts">
-          <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy} aria-busy={busy} onClick={claim}>
+          <button type="button" className="btn btn-sm btn-volt" autoFocus disabled={busy} aria-busy={busy} onClick={claim}>
             {busy ? "Saving" : "Yes, I took it"}
           </button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={cancel}>
@@ -1336,7 +1336,7 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
           <p aria-busy="true">Checking the seat</p>
         )}
         <span className="tp-frow-ask-acts">
-          <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy || !info} aria-busy={busy} onClick={claim}>
+          <button type="button" className="btn btn-sm btn-volt" autoFocus disabled={busy || !info} aria-busy={busy} onClick={claim}>
             {busy ? "Saving" : "Yes, it's my seat"}
           </button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={info ? notMe : cancel}>
@@ -1402,7 +1402,7 @@ function WayInBuyer({ i, b, onDraft }: { i: CoInfo; b: BuyerOnFile; onDraft: (b:
             {title ? <span className="tp-wayin-t"> · {title}</span> : null}
           </span>
           <div className="tp-reach">
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => onDraft(b)}>
+            <button type="button" className="btn btn-sm btn-pine" onClick={() => onDraft(b)}>
               Draft a note to {firstOfName(name)}
             </button>
             {email?.s === "locked" && (
@@ -1443,7 +1443,7 @@ function WayInFind({ i }: { i: CoInfo }) {
         <AddPersonForm companyId={i.c.id} engagementId={null} onDone={() => setAdding(false)} initial={{ relationship: "Decision maker" }} />
       ) : (
         <div className="tp-reach">
-          <a className="btn btn-sm btn-primary" href={f.linkedin} target="_blank" rel="noreferrer">
+          <a className="btn btn-sm btn-pine" href={f.linkedin} target="_blank" rel="noreferrer">
             Search LinkedIn <IconExternal size={11} />
           </a>
           {f.site && (
@@ -2022,7 +2022,7 @@ export function Drawer({
         <>
           {openPosting()}
           {/* The top bar's "Add what you know" starts from a search. This one adds to the company on screen. */}
-          <button type="button" className={`btn${posting ? "" : " btn-primary"}`} onClick={() => ui.openAdd({ companyId: c.id })}>
+          <button type="button" className={`btn${posting ? "" : " btn-volt"}`} onClick={() => ui.openAdd({ companyId: c.id })}>
             <IconPlus size={14} /> Add to this company
           </button>
           <UnlockAll plan={plan} />
@@ -2314,7 +2314,7 @@ export function Drawer({
             ) : (
               <>
                 {plan.items.length > 0 ? <UnlockAll plan={plan} bar /> : <span className="tp-rsheet-none">Nothing locked here</span>}
-                <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
+                <button type="button" className="btn btn-volt" onClick={() => ui.openAdd({ companyId: c.id })}>
                   <IconPlus size={14} /> Add
                 </button>
               </>

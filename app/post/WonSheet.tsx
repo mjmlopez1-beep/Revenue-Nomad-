@@ -58,11 +58,11 @@ export function WonSheet({ rec, onClose }: { rec: PipelineRec; onClose: () => vo
       footer={
         <div className="pl-won-foot">
           {!rec.seat && (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void addSeat()}>
+            <button type="button" className="btn btn-volt" disabled={busy} onClick={() => void addSeat()}>
               Add it as your seat
             </button>
           )}
-          <button type="button" className={`btn${rec.seat ? " btn-primary" : ""}`} disabled={busy || !rate} aria-busy={busy} onClick={() => void save().then((ok) => ok && rec.seat && onClose())}>
+          <button type="button" className={`btn${rec.seat ? " btn-volt" : ""}`} disabled={busy || !rate} aria-busy={busy} onClick={() => void save().then((ok) => ok && rec.seat && onClose())}>
             {saved ? "Save the terms" : "Save the terms only"}
           </button>
         </div>

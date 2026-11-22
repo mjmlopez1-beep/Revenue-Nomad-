@@ -13,9 +13,18 @@ import { extract, transcriptOk, type Extraction, type Suggestion } from "@/lib/p
 import type { adviceFromView } from "@/lib/proposals/rates";
 import { PRICES } from "@/lib/billing/rules";
 import { IconCheck, IconPlus, IconX, useToast } from "../ui/shared";
+import { Chip, STATUS_TONE, StatusChip, type Status } from "../ui/system";
 import { Sheet } from "./ui";
 import { openPlans } from "./Billing";
 import { EVENT_SAY, dayOf, stamp } from "../sign/doc";
+
+/** The status words proposals and documents share. */
+export const STATUS: Record<ProposalRec["status"], string> = { draft: "Draft", sent: "Sent", viewed: "Viewed", signed: "Signed", declined: "Declined", void: "Voided", expired: "Expired" };
+/** A proposal's or a document's status on the system's scale (Signed pine, Viewed mint, the rest outline). */
+export function ProposalStatus({ status }: { status: ProposalRec["status"] }) {
+  const w = STATUS[status];
+  return w in STATUS_TONE ? <StatusChip status={w as Status} /> : <Chip>{w}</Chip>;
+}
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
 const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;

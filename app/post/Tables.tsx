@@ -33,6 +33,7 @@ import { useFitWhy } from "./Hunt";
 import { VerifyName } from "./Verify";
 import { companyLater, fnChipPlan } from "./display";
 import { leadPhrase, monthYear, type LeadLine } from "@/lib/leaders/types";
+import { Chip, LIKELIHOOD_TONE, type Likelihood } from "../ui/system";
 
 /**
  * How fractional friendly a company is, as a plain label. Hover for the reason and the score.
@@ -535,7 +536,11 @@ export function SignalLines({ lines, notes }: { lines: string[]; notes?: string[
             </span>
             {note && (
               <span className="rd-note-line" title={note}>
-                {band && <span className={`rd-band rd-band-${band.toLowerCase()}`}>{band}</span>}
+                {band && (
+                  <Chip tone={band in LIKELIHOOD_TONE ? LIKELIHOOD_TONE[band as Likelihood] : "outline"} className="rd-band">
+                    {band}
+                  </Chip>
+                )}
                 <span className="rd-why-now">{cut > 0 ? note.slice(cut + 3) : note}</span>
               </span>
             )}

@@ -3,16 +3,6 @@
  * day switcher over them. Desktop and tablet: the companies table with its own columns (what
  * happened, and the one button). Phones: one card a company, the button full width, 44px taps.
  */
-.tp-page.rd-page {
-  max-width: 1440px;
-}
-.rd-lead {
-  margin: -6px 0 16px;
-  max-width: 70ch;
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--body-ink);
-}
 .rd-note {
   margin: 0;
   font-size: 15px;
@@ -132,28 +122,12 @@
   color: var(--muted);
   white-space: normal;
 }
-.rd-band {
-  display: inline-block;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 18px;
+/* Crystal Ball's likelihood in a dense line: the system's chip (High pine, Medium mint, Low outline), smaller. */
+.rd-band.chip {
+  height: 20px;
+  padding: 0 6px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-.rd-band-high {
-  background: var(--pine);
-  color: #fff;
-}
-.rd-band-medium {
-  background: var(--volt-soft);
-  color: var(--volt-ink);
-}
-.rd-band-low {
-  background: transparent;
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 .rd-legend {
   margin: -8px 0 16px;
@@ -311,46 +285,9 @@
 }
 
 /* ---- [ux ws3] one line, then "How it ranks"; any company for now; the two questions inline ---- */
-.rd-lead {
-  margin-bottom: 8px;
-}
-/*
- * The header card (Fractions, quiet): title, line and "How it ranks" on a white card, the ball at
- * its far end on a nested corner. Nothing of it reaches the day chips or the table under it.
- */
-.rd-head {
-  position: relative;
-  overflow: hidden;
-  margin: 4px 0 16px;
-  padding: 14px 20px 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--surface);
-}
-.rd-head > :not(.fx) {
-  position: relative;
-}
-.rd-head .tp-page-h {
-  margin: 0 0 12px;
-}
-.rd-head .rd-lead,
-.rd-head .rd-how {
-  max-width: min(70ch, calc(100% - 200px));
-}
-.rd-head .rd-how {
-  margin-bottom: 0;
-}
-.rd-head:not(:has(.rd-how)) {
-  padding-bottom: 8px;
-}
-.rd-head-bleed {
-  max-width: 320px;
-}
-.rd-head-ball {
-  position: absolute;
-  right: 26px;
-  top: 50%;
-  transform: translateY(-50%);
+/* How it ranks sits close under the page head. */
+.page-head + .rd-how {
+  margin-top: -16px;
 }
 /* How it ranks, opened: the compass (fit: which way to go next) beside the words. */
 .rd-how-art {
@@ -365,35 +302,6 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px 20px;
-}
-/* Phones: no card (the page's first card stays where it was), the ball small beside the title. */
-.tp-phone .rd-head {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  overflow: visible;
-}
-.tp-phone .rd-head-bleed {
-  display: none;
-}
-.tp-phone .rd-head-ball {
-  top: -30px;
-  right: 0;
-  transform: none;
-  height: 44px;
-  width: auto;
-}
-.tp-phone .rd-head .rd-lead,
-.tp-phone .rd-head .rd-how {
-  max-width: none;
-}
-.tp-phone .rd-head .rd-how {
-  margin-bottom: 16px;
-}
-.tp-phone .rd-head .tp-page-h {
-  margin: 8px 0 16px;
 }
 .tp-phone .rd-empty-pic {
   grid-template-columns: minmax(0, 1fr);

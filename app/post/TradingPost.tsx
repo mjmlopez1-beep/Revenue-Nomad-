@@ -2643,7 +2643,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </main>
         ) : page === "credits" ? (
           <main className="tp-main tp-main-page">
-            <MyCredits view={view} onBack={toBase} refresh={refresh} onUseInClaude={() => setPage("integrations")} onNotifications={() => setPage("notifications")} />
+            <MyCredits view={view} refresh={refresh} onUseInClaude={() => setPage("integrations")} onNotifications={() => setPage("notifications")} />
           </main>
         ) : page === "integrations" ? (
           <main className="tp-main tp-main-page">
@@ -2651,15 +2651,15 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </main>
         ) : page === "notifications" ? (
           <main className="tp-main tp-main-page">
-            <Notifications view={view} onBack={toBase} onIntegrations={() => setPage("integrations")} />
+            <Notifications view={view} onIntegrations={() => setPage("integrations")} />
           </main>
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
-            <Benchmarks view={view} refresh={refresh} onBack={toBase} />
+            <Benchmarks view={view} refresh={refresh} />
           </main>
         ) : page === "metrics" && view.admin ? (
           <main className="tp-main tp-main-page">
-            <Admin view={view} refresh={refresh} onBack={toBase} />
+            <Admin view={view} refresh={refresh} />
           </main>
         ) : page === "messages" ? (
           <main className="tp-main tp-main-page">
@@ -2685,23 +2685,23 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </main>
         ) : page === "billing" && me.plan ? (
           <main className="tp-main tp-main-page">
-            <BillingPage view={view} refresh={refresh} onBack={toBase} />
+            <BillingPage view={view} refresh={refresh} />
           </main>
         ) : page === "peers" || page === "fractionals" || page === "partners" ? (
           <main className={`tp-main tp-main-page${peersAll || page !== "peers" ? " fr-main" : ""}`}>
-            <PeersPage infos={infos} waiting={waiting} all={peersAll || page !== "peers"} onAll={setPeersAll} onBack={toBase} onProfile={() => setIcpOpen(true)} openCompany={openCompany} />
+            <PeersPage infos={infos} waiting={waiting} all={peersAll || page !== "peers"} onAll={setPeersAll} onProfile={() => setIcpOpen(true)} openCompany={openCompany} />
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
-            <Seats seats={seats} infos={infos} focus={seatFocus} onBack={toBase} search={seatCtx.search} back={seatBack} />
+            <Seats seats={seats} infos={infos} focus={seatFocus} search={seatCtx.search} back={seatBack} />
           </main>
         ) : page === "pipeline" ? (
           <main className="tp-main tp-main-page">
-            <PipelinePage infos={infos} onBack={toBase} openCompany={openCompany} onIntegrations={() => setPage("integrations")} />
+            <PipelinePage infos={infos} openCompany={openCompany} onIntegrations={() => setPage("integrations")} />
           </main>
         ) : page === "proposals" ? (
           <main className="tp-main tp-main-page">
-            <ProposalsPage view={view} infos={infos} onBack={toBase} />
+            <ProposalsPage view={view} infos={infos} />
           </main>
         ) : page === "network" ? (
           // [google network] Your network: the member's own, from Google and their own Claude.
@@ -2799,7 +2799,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             {proFoot}
             {/* The main action, labeled and in thumb reach (DSGNP-8). Not while searching: the keyboard has that space. It steps aside while the first card is under it. */}
             {fabShown && (
-              <button ref={fabRef} type="button" className={`btn btn-primary tp-fab${fabAside ? " tp-fab-aside" : ""}`} onClick={() => openAdd()}>
+              <button ref={fabRef} type="button" className={`btn btn-volt tp-fab${fabAside ? " tp-fab-aside" : ""}`} onClick={() => openAdd()}>
                 <IconPlus size={18} /> Add what you know
               </button>
             )}

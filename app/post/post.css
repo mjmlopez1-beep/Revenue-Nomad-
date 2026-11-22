@@ -48,6 +48,12 @@
   overflow-y: auto;
   padding: 24px 24px 64px;
 }
+/* The system's page wrappers (globals.css): the page column already sits them 24px under the top bar (16 on a phone). */
+.tp-main-page > .page-narrow,
+.tp-main-page > .page-wide {
+  padding-top: 0;
+  padding-bottom: 0;
+}
 .tp-main-phone {
   display: block;
   padding: 0 0 48px;
@@ -4015,7 +4021,7 @@ button.tp-fs-row:active {
   color: var(--red);
   font-weight: 600;
 }
-.tp-modal-actions .btn-primary:disabled {
+.tp-modal-actions .btn-volt:disabled {
   cursor: default;
 }
 /* Nothing new went in: the panel is plain, not the volt "added". */
@@ -4091,57 +4097,11 @@ button.tp-fs-row:active {
 }
 
 /* ---------- your credits page ---------- */
-.tp-page {
-  max-width: 960px;
-  margin: 0 auto;
-}
-.tp-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  padding: 6px 0;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-  color: var(--pine);
-}
-.tp-back:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.tp-page-h {
-  margin: 8px 0 16px;
-  font-size: 28px;
-  line-height: 34px;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-}
+/* Pages sit in the system's .page-narrow or .page-wide (globals.css) and open with PageHead (app/ui/system.tsx). */
 .tp-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-}
-.tp-stat {
-  min-width: 0;
-  padding: 16px 20px 18px;
-  border-radius: var(--r-card);
-  background: var(--surface);
-  border: 1px solid var(--line);
-}
-/* Big numbers: the text face at 800 with figures that line up. */
-.tp-stat-n {
-  font-size: 32px;
-  line-height: 36px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  font-family: var(--font-num);
-  color: var(--ink);
-}
-.tp-stat-n.ember {
-  color: var(--ember-ink);
 }
 .tp-stat-of {
   font-size: 15px;
@@ -4149,12 +4109,18 @@ button.tp-fs-row:active {
   letter-spacing: 0;
   color: var(--muted);
 }
-.tp-stat-l {
-  margin: 4px 0 0;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-  color: var(--muted);
+/* Your credits' numbers: the system's Stat (no tile), each with the lines that explain it. */
+.cr-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 24px;
+  margin: 0 0 8px;
+}
+.cr-stat {
+  min-width: 0;
+}
+.cr-low {
+  color: var(--ember-ink);
 }
 .cr-stat-sub {
   margin-top: 6px;
@@ -4259,8 +4225,9 @@ button.tp-fs-row:active {
   gap: 12px;
   margin-top: 12px;
 }
+/* The system's card (globals.css .card): white, a hairline, 10px corners, 20 by 24 inside (16 on a phone). */
 .tp-card {
-  padding: 20px;
+  padding: 20px 24px;
   border-radius: var(--r-card);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -4453,13 +4420,6 @@ button.tp-fs-row:active {
 @media (max-width: 767px) {
   .tp-card {
     padding: 16px;
-  }
-  .tp-stat {
-    padding: 14px 16px 16px;
-  }
-  .tp-stat-n {
-    font-size: 28px;
-    line-height: 32px;
   }
   /* Phones: the time moves under the line it belongs to, so the amount and balance keep their columns. */
   .tp-ltable thead th:first-child,
@@ -5196,9 +5156,6 @@ button.tp-fsheet-row:disabled {
   width: 44px;
   height: 44px;
 }
-.tp-phone .tp-back {
-  min-height: 44px;
-}
 @media (max-width: 767px), (pointer: coarse) and (max-height: 599px) {
   .tp-menu .tp-menu-item {
     min-height: 44px;
@@ -5551,7 +5508,7 @@ button.tp-fsheet-row:disabled {
   min-height: 48px;
   flex: 1;
 }
-.tp-rsheet-bar > .btn-primary {
+.tp-rsheet-bar > .btn-volt {
   flex: none;
   min-width: 112px;
 }
@@ -5584,7 +5541,7 @@ button.tp-fsheet-row:disabled {
   color: var(--muted);
 }
 @media (max-width: 360px) {
-  .tp-rsheet-bar > .btn-primary {
+  .tp-rsheet-bar > .btn-volt {
     min-width: 0;
     padding: 0 12px;
   }
@@ -5864,15 +5821,12 @@ button.tp-fsheet-row:disabled {
   }
 }
 @media (max-width: 767px) {
-  .tp-stats {
+  .tp-stats,
+  .cr-stats {
     grid-template-columns: 1fr 1fr;
   }
   .tp-linkcards {
     grid-template-columns: 1fr;
-  }
-  .tp-page-h {
-    font-size: 24px;
-    line-height: 30px;
   }
   .tp-review-row {
     grid-template-columns: 1fr;
@@ -6457,7 +6411,7 @@ div.tp-pcard-when {
 }
 .tp-rsheet .btn-sm,
 .tp-rsheet .tp-dbar .tp-followbtn,
-.tp-phone .tp-page .btn-sm {
+.tp-phone .tp-main-page .btn-sm {
   min-height: 44px;
 }
 .tp-brand-phone {
@@ -7351,32 +7305,6 @@ div.tp-pcard-when {
   background: var(--surface);
 }
 
-/*
- * ---------- pictures on the pages (Fractions, the quiet register: app/ui/fractions/art.tsx) ----------
- * A page's one lead prop floats at the far end of its header (the back link and the title), so the
- * words wrap beside it and never run under it. It ends 24px or more above the page's first card.
- * A taller one (tp-page-art-tall) is for a page whose header has a paragraph under the title.
- */
-.tp-page-art {
-  float: right;
-  margin: 2px 0 0 20px;
-}
-.tp-page-art-tall {
-  margin-top: 6px;
-}
-/* Phones: small beside a short title, and none where the title or the prop is long. */
-.tp-phone .tp-page-art {
-  height: 44px;
-  width: auto;
-  margin: 4px 0 0 12px;
-}
-.tp-phone .tp-page-art-tall {
-  height: 52px;
-}
-.tp-phone .tp-page-art-wide {
-  display: none;
-}
-
 /* The record's locked prompt: the door beside the words (the only picture in the record). */
 .tp-hidden-pic {
   display: flow-root;
@@ -7437,4 +7365,41 @@ div.tp-pcard-when {
 .tp-dm-seat {
   display: grid;
   gap: 4px;
+}
+
+/* ---------- phones: the system's 44px (docs/design-system.md) ----------
+ * Every button on a phone is 44px tall (.btn-sm and .btn grow to it). Chips and rows that are
+ * tapped grow too; small text controls keep their size and get a 44px hit area around them. */
+@media (max-width: 767px) {
+  .tp-app .btn,
+  .tp-sheet .btn,
+  .tp-rsheet .btn,
+  .tp-modal .btn {
+    min-height: 44px;
+  }
+  .rd-day,
+  .pl-card-co,
+  .tp-legal a {
+    min-height: 44px;
+  }
+  .tp-legal a {
+    display: inline-flex;
+    align-items: center;
+  }
+  .rd-pill-x,
+  .ca-link,
+  .tp-bm-later-go {
+    position: relative;
+  }
+  .rd-pill-x::after,
+  .ca-link::after,
+  .tp-bm-later-go::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
 }

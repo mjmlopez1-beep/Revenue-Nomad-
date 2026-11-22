@@ -27,6 +27,7 @@ import { ProTag, UpgradeNote, openPlans } from "./Billing";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
 import { Prop } from "../ui/fractions/lazy";
+import { PageHead } from "../ui/system";
 
 /** Whole dollars with separators ("$7,500", "$205"). Amounts arrive rounded to $250 or $5, so nothing is rounded again here. */
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -227,7 +228,7 @@ export function ShareRate({ refresh, inline, onDone, idp: idpGiven, revenue: rev
         </p>
       )}
       <div className="tp-bm-share-foot">
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <button type="submit" className="btn btn-volt" disabled={busy}>
           {busy ? "Sharing" : "Share privately"}
         </button>
         <span className="tp-bm-earn">
@@ -328,7 +329,7 @@ function MyRates({ rates, view }: { rates: BenchRate[]; view: View }) {
   );
 }
 
-export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () => Promise<void>; onBack: () => void }) {
+export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promise<void> }) {
   const ui = useUi();
   const [band, setBand] = useState("All");
   const [sharing, setSharing] = useState(false);
@@ -349,18 +350,19 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
   const indexShown = stats.some((s) => s.indexed && s.median !== undefined);
   const withoutYours = stats.some((s) => s.withoutYours);
   return (
-    <div className="tp-page bm-page">
-      <Prop name="bars" height={84} on="bg" ember className="tp-page-art tp-page-art-tall" />
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Rate benchmarks</h1>
-      <p className="tp-bm-lead">
-        What fractionals charge, by function and by the client&apos;s revenue.{" "}
-        {b.total
-          ? `${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} on file so far, from seats, rates members shared privately and Revenue Nomad's Rate Index. Each person counts once in a figure, however many rates they shared.`
-          : "No rates yet. Yours can be the first."}
-      </p>
+    <div className="page-wide bm-page">
+      <PageHead
+        title="Rate benchmarks"
+        lead={
+          <>
+            What fractionals charge, by function and by the client&apos;s revenue.{" "}
+            {b.total
+              ? `${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} on file so far, from seats, rates members shared privately and Revenue Nomad's Rate Index. Each person counts once in a figure, however many rates they shared.`
+              : "No rates yet. Yours can be the first."}
+          </>
+        }
+        art={<Prop name="bars" height={84} on="bg" ember />}
+      />
       {b.limited ? (
         // Free while billing is live: the median by function. The range and the client-size rows are Pro's:
         // the sizes stay in place, locked, and open the plans. The server sends no client-size rows on Free.

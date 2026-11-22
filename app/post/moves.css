@@ -279,32 +279,8 @@
   font-size: 13px;
   color: var(--muted);
 }
-.mv-warm {
+.mv-who-line > .chip {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-.mv-warm-hot {
-  background: var(--pine);
-  color: var(--volt);
-}
-.mv-warm-warm {
-  background: var(--volt-soft);
-  color: var(--volt-ink);
-}
-.mv-warm-fading {
-  background: var(--surface-2);
-  color: var(--muted);
-}
-.mv-warm-cold {
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 .mv-do-t {
   font-size: 17px;

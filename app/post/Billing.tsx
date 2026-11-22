@@ -21,7 +21,7 @@
  */
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Me, PlanView, View } from "@/lib/tableTypes";
-import { IconCheck, IconChevron, IconLock, IconX, useToast } from "../ui/shared";
+import { IconCheck, IconLock, IconX, useToast } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
@@ -30,6 +30,7 @@ import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY } from "@/lib/billing/ru
 import { EARN_ONE, PRO_COMPANIES_FREE, topupWords, useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
 import { NomadArt, Prop, Scene } from "../ui/fractions/lazy";
+import { PageHead } from "../ui/system";
 
 /** Where the plans were opened from: an upgrade moment. */
 export type PlansFrom = "trial" | "views" | "bench" | "credits" | "slack" | "claude" | "radar" | "crystal" | "proposals" | "billing";
@@ -616,7 +617,7 @@ export function GetCredits({ plan, onEarn, className }: { plan?: PlanView; onEar
   return (
     <div className={`bl-get${className ? ` ${className}` : ""}`} role="group" aria-label="Ways to get credits">
       {onEarn && (
-        <button type="button" className="btn btn-sm btn-primary" onClick={onEarn}>
+        <button type="button" className="btn btn-sm btn-volt" onClick={onEarn}>
           {EARN_ONE}
         </button>
       )}
@@ -878,7 +879,7 @@ function Status({ plan }: { plan: PlanView }) {
   );
 }
 
-export function BillingPage({ view, refresh, onBack }: { view: View; refresh: () => Promise<void>; onBack: () => void }) {
+export function BillingPage({ view, refresh }: { view: View; refresh: () => Promise<void> }) {
   const toast = useToast();
   const plan = view.me?.plan;
   const { busy, run } = useBilling();
@@ -902,13 +903,12 @@ export function BillingPage({ view, refresh, onBack }: { view: View; refresh: ()
   if (!plan) return null;
   const paidPlan = plan.subscribed && (plan.name === "pro" || plan.pause === "now");
   return (
-    <div className="tp-page bl-page">
+    <div className="page-narrow bl-page">
       {/* Pro is the door with the saffron lining; a trial is its calendar. */}
-      {plan.name === "pro" ? <Prop name="doorOpen" pro height={62} on="bg" className="tp-page-art" /> : plan.name === "trial" ? <Prop name="calendar" height={58} on="bg" ember={!plan.ending} className="tp-page-art" /> : <Prop name="doorAjar" pro height={60} on="bg" className="tp-page-art" />}
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Plan and billing</h1>
+      <PageHead
+        title="Plan and billing"
+        art={plan.name === "pro" ? <Prop name="doorOpen" pro height={72} on="bg" /> : plan.name === "trial" ? <Prop name="calendar" height={72} on="bg" ember={!plan.ending} /> : <Prop name="doorAjar" pro height={72} on="bg" />}
+      />
 
       <section className={`tp-card bl-status bl-status-${plan.name}`} aria-label="Your plan">
         <div className="bl-status-t">

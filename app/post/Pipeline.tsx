@@ -11,7 +11,8 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { CHANNEL_WORDS, LINE, STAGE_WORDS, monthWords, shortDay, type IntroRec, type PipelineRec, type PipelineView, type Stage } from "@/lib/pipeline";
-import { CompanyLogo, IconChevron, IconPencil, LockedName, useToast } from "../ui/shared";
+import { CompanyLogo, IconPencil, LockedName, useToast } from "../ui/shared";
+import { EmptyState, PageHead, Stat } from "../ui/system";
 import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { pipelineAct, usePipeline } from "./pipelineStore";
@@ -32,7 +33,7 @@ const EMPTY_WORDS: Partial<Record<Stage, string>> = {
   won: "When it's signed, or you add your seat there.",
 };
 
-export function PipelinePage({ infos, onBack, openCompany, onIntegrations }: { infos: CoInfo[]; onBack: () => void; openCompany: (id: string) => void; onIntegrations: () => void }) {
+export function PipelinePage({ infos, openCompany, onIntegrations }: { infos: CoInfo[]; openCompany: (id: string) => void; onIntegrations: () => void }) {
   const ui = useUi();
   const { view, failed } = usePipeline();
   const byId = useMemo(() => new Map(infos.map((x) => [x.c.id, x])), [infos]);
@@ -49,29 +50,29 @@ export function PipelinePage({ infos, onBack, openCompany, onIntegrations }: { i
   const drafted = rec(drafting);
   const won = rec(winning);
   return (
-    <div className="tp-page pl-page">
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Your pipeline</h1>
-      <p className="pl-lead">Merlin moves each deal by itself: Sent when your note goes out, Replied when they write back, Meeting from your calendar. You only say Lost or Not now.</p>
+    <div className="page-wide pl-page">
+      <PageHead title="Your pipeline" lead="Merlin moves each deal by itself: Sent when your note goes out, Replied when they write back, Meeting from your calendar. You only say Lost or Not now." />
       {view && <Sees v={view} onIntegrations={onIntegrations} />}
       {!view ? (
-        <p className="pl-empty">{failed ? "Your pipeline didn't load. Reload the page to try again." : "Loading your pipeline"}</p>
+        failed ? (
+          <EmptyState spot="offline" title="Your pipeline didn't load" role="alert">
+            Reload the page to try again.
+          </EmptyState>
+        ) : (
+          <p className="pl-empty">Loading your pipeline</p>
+        )
       ) : (
         <>
-          <div className="pl-stats num" role="list">
-            <span role="listitem">
-              <b>{open}</b> open
-            </span>
-            <span role="listitem">
-              <b>{view.due.length}</b> {view.due.length === 1 ? "follow-up due" : "follow-ups due"}
-            </span>
-            <span role="listitem">
-              <b>{view.counts.won}</b> won{view.wonMonthly > 0 ? `, ${monthWords(view.wonMonthly)}` : ""}
-            </span>
+          <div className="stats pl-stats">
+            <Stat n={open} label="open" />
+            <Stat n={view.due.length} label={view.due.length === 1 ? "follow-up due" : "follow-ups due"} />
+            <Stat n={view.counts.won} label={`won${view.wonMonthly > 0 ? `, ${monthWords(view.wonMonthly)}` : ""}`} />
           </div>
-          {!view.entries.length && <p className="pl-empty">Nothing here yet. Use a drafted note on Home and the company lands here at Sent.</p>}
+          {!view.entries.length && (
+            <EmptyState spot="noFollows" title="No deals yet" framed={false}>
+              Use a drafted note on Home and the company lands here at Sent.
+            </EmptyState>
+          )}
           <div className="pl-board">
             {LINE.map((s) => {
               const list = byStage.get(s) ?? [];

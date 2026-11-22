@@ -53,7 +53,8 @@ import { useNetwork } from "./network/useNetwork"; // [google network]
 import { PathsChip, usePathIds } from "./network/SmartPaths"; // [smart ways in]
 import { PassButton } from "./PeerSheets";
 import "./radar.css";
-import { Bleed, Prop, Spot } from "../ui/fractions/lazy";
+import { Prop, Spot } from "../ui/fractions/lazy";
+import { LikelihoodChip, PageHead } from "../ui/system";
 
 let openedSent = false;
 const signal = (name: "radar_opened" | "radar_clicked", where: string) => void post({ action: { type: "signal", name, where } });
@@ -248,19 +249,14 @@ export function RadarPage({
   const what = range ? rangeLabel(range) : day ? shortDay(day) : "";
   const when = range === "today" || (!range && day === view?.today) ? "today" : range ? `in the ${rangeLabel(range).toLowerCase()}` : day ? `on ${shortDay(day)}` : "";
   return (
-    <div className="tp-page rd-page">
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> All companies
-      </button>
-      {/* The header card: the words first, the ball at its far end on a nested corner. With nothing today, the empty state's picture is the page's one. */}
-      <header className="rd-head">
-      <Bleed kind="BR" on="white" className="rd-head-bleed" />
-      {view?.ready && !n ? null : <Prop name={glow ? "ballGlow" : "ballPlain"} height={glow ? 92 : 64} className="rd-head-ball" />}
-      <h1 className="tp-page-h">{YOUR_FEATURE}</h1>
+    <div className="page-wide rd-page">
+      {/* The ball at the head's far end. With nothing today, the empty state's picture is the page's one. */}
+      <PageHead
+        title={YOUR_FEATURE}
+        lead={<>Companies {view?.anyCompany || !view?.ready ? "" : "in your profile "}most likely to hire a fractional {fn ?? "leader like you"} next.</>}
+        art={view?.ready && !n ? undefined : <Prop name={glow ? "ballGlow" : "ballPlain"} height={glow ? 92 : 72} on="bg" />}
+      />
       {/* [ux ws3] One line, then the rest behind "How it ranks". */}
-      <p className="rd-lead">
-        Companies {view?.anyCompany || !view?.ready ? "" : "in your profile "}most likely to hire a fractional {fn ?? "leader like you"} next.
-      </p>
       {view?.ready && (
         <details className="rd-how">
           <summary>How it ranks</summary>
@@ -272,11 +268,10 @@ export function RadarPage({
             {me.crystal === "all" ? "Open any of them right here, free." : me.crystal ? "Open one a day right here, free, with everything on it." : "Unlock any of them right here."}
           </p>
           <p className="rd-legend">
-            <span className="rd-band rd-band-high">High</span> <span className="rd-band rd-band-medium">Medium</span> come by email. <span className="rd-band rd-band-low">Low</span> is only here.
+            <LikelihoodChip band="High" /> <LikelihoodChip band="Medium" /> come by email. <LikelihoodChip band="Low" /> is only here.
           </p>
         </details>
       )}
-      </header>
       {view?.anyCompany && (
         <p className="rd-any" role="note">
           <span>Any company for now. Set your profile to narrow it and get it by email.</span>{" "}
@@ -359,7 +354,7 @@ export function RadarPage({
           </p>
           <div className="rd-know-acts">
             {onWarm && (
-              <button type="button" className="btn btn-primary" onClick={onWarm}>
+              <button type="button" className="btn btn-pine" onClick={onWarm}>
                 See your warm paths
               </button>
             )}
@@ -470,7 +465,7 @@ function StartRadar({ reload }: { reload: () => void }) {
           })}
         </div>
       </div>
-      <button type="button" className="btn btn-primary rd-btn" disabled={!fn || busy} aria-busy={busy} onClick={() => void go()}>
+      <button type="button" className="btn btn-pine rd-btn" disabled={!fn || busy} aria-busy={busy} onClick={() => void go()}>
         {busy ? "Starting" : "Show my Crystal Ball"}
       </button>
     </section>

@@ -22,6 +22,7 @@ import { ReportedMessages } from "./Messages";
 import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
 import { Prop, Spot } from "../ui/fractions/lazy";
+import { PageHead, Stat } from "../ui/system";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
 export const signInLink = (token: string) => `${window.location.origin}/?k=${token}`;
@@ -262,7 +263,7 @@ function Review({ view }: { view: View }) {
 
 /* ---------- the page ---------- */
 
-export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotifications }: { view: View; onBack: () => void; refresh?: () => Promise<void>; onUseInClaude?: () => void; onNotifications?: () => void }) {
+export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { view: View; refresh?: () => Promise<void>; onUseInClaude?: () => void; onNotifications?: () => void }) {
   const ui = useUi();
   const me = ui.me;
   const phone = ui.layout === "phone";
@@ -302,21 +303,24 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
   ];
 
   const tiles = (
-    <div className="tp-stats cr-stats">
-      <div className="tp-stat cr-balance">
-        <div className={`tp-stat-n num${me.credits <= 3 ? " ember" : ""}`}>{me.credits}</div>
-        <div className="tp-stat-l">{me.credits === 1 ? "Credit to spend" : "Credits to spend"}</div>
+    <div className="stats cr-stats">
+      <div className="cr-stat cr-balance">
+        <Stat n={<span className={me.credits <= 3 ? "cr-low" : undefined}>{me.credits}</span>} label={me.credits === 1 ? "Credit to spend" : "Credits to spend"} />
         {me.credits <= 3 && !owed && <div className="cr-stat-sub">{capped ? `You can earn again ${atTime(me.earnResetsAt)}.` : "Add a fact you know and you earn one."}</div>}
         {freeCompanyNow(me) && <div className="cr-stat-sub">Plus {freeTodayWords(me)}: {me.proOpens ? "they open for no credits" : "unlock one company for no credits"}.</div>}
         {me.crystal === "one" && <div className="cr-stat-sub">Plus {CRYSTAL_FREE_TODAY}: open one company there with everything on it.</div>}
         {!!me.pending && <div className="cr-stat-sub">+{me.pending} when confirmed: facts on a seat of yours at a company new to Merlin.</div>}
       </div>
-      <div className="tp-stat">
-        <div className="tp-stat-n num">
-          {me.earned24h}
-          <span className="tp-stat-of"> of {me.earnCap}</span>
-        </div>
-        <div className="tp-stat-l">Earned today</div>
+      <div className="cr-stat">
+        <Stat
+          n={
+            <>
+              {me.earned24h}
+              <span className="tp-stat-of"> of {me.earnCap}</span>
+            </>
+          }
+          label="Earned today"
+        />
         <div className="cr-bar" role="img" aria-label={`${me.earned24h} of ${me.earnCap} credits earned today`}>
           <span style={{ width: `${Math.min(100, (me.earned24h / me.earnCap) * 100)}%` }} />
         </div>
@@ -327,14 +331,8 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
           </div>
         )}
       </div>
-      <div className="tp-stat">
-        <div className="tp-stat-n num">{me.added}</div>
-        <div className="tp-stat-l">{me.added === 1 ? "Fact you added" : "Facts you added"}</div>
-      </div>
-      <div className="tp-stat">
-        <div className="tp-stat-n num">{me.unlocked}</div>
-        <div className="tp-stat-l">{me.unlocked === 1 ? "Fact you unlocked" : "Facts you unlocked"}</div>
-      </div>
+      <Stat n={me.added} label={me.added === 1 ? "Fact you added" : "Facts you added"} />
+      <Stat n={me.unlocked} label={me.unlocked === 1 ? "Fact you unlocked" : "Facts you unlocked"} />
     </div>
   );
 
@@ -400,7 +398,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
       actions={
         share ? (
           <>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => void shareInvite(invite)}>
+            <button type="button" className="btn btn-pine btn-sm" onClick={() => void shareInvite(invite)}>
               Share invite link
             </button>
             <button type="button" className="btn btn-sm" onClick={() => copy(invite, "Invite link copied.")}>
@@ -408,7 +406,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
             </button>
           </>
         ) : (
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => copy(invite, "Invite link copied.")}>
+          <button type="button" className="btn btn-pine btn-sm" onClick={() => copy(invite, "Invite link copied.")}>
             Copy invite link
           </button>
         )
@@ -444,13 +442,9 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
   );
 
   return (
-    <div className="tp-page cr-page">
+    <div className="page-narrow cr-page">
       {/* The balance as coins seen edge on; at zero, the empty stack with one coin to earn. Drawn calm: a low balance is already ember. */}
-      {me.credits <= 0 ? <Spot name="noCredits" size={64} on="bg" className="tp-page-art" /> : <Prop name="coinStack" height={60} on="bg" className="tp-page-art" />}
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Your credits</h1>
+      <PageHead title="Your credits" art={me.credits <= 0 ? <Spot name="noCredits" size={72} on="bg" /> : <Prop name="coinStack" height={72} on="bg" />} />
       {tiles}
       {limits}
       {phone ? (

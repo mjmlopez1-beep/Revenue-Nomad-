@@ -62,7 +62,7 @@ export function FollowUpSheet({ f, rec, me, onClose }: { f: FollowUpRec | null; 
       footer={
         <div className="mn-foot">
           <div className="mn-acts">
-            <a className="btn btn-primary mn-go" href={gmailLink(null, subject, body)} target="_blank" rel="noreferrer" onClick={() => void used(false)}>
+            <a className="btn btn-pine mn-go" href={gmailLink(null, subject, body)} target="_blank" rel="noreferrer" onClick={() => void used(false)}>
               <IconExternal size={14} /> Open in Gmail
             </a>
             <button type="button" className="btn mn-go" onClick={() => void copy()}>

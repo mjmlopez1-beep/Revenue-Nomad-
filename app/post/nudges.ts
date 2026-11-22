@@ -115,7 +115,7 @@ export function NudgeSlot({ nudge, onAction, onClose }: { nudge: Nudge | null; o
           "span",
           { className: "nudge-choices", role: "group", "aria-label": "Ways to get credits" },
           ...nudge.choices.map((c) =>
-            h("button", { key: c.action, type: "button", className: `btn btn-sm nudge-go${c.tone === "earn" ? " btn-primary" : c.tone === "pine" ? " btn-pine" : ""}`, onClick: () => onAction(c.action) }, c.label),
+            h("button", { key: c.action, type: "button", className: `btn btn-sm nudge-go${c.tone === "earn" ? " btn-volt" : c.tone === "pine" ? " btn-pine" : ""}`, onClick: () => onAction(c.action) }, c.label),
           ),
         )
       : null,

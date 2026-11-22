@@ -3,9 +3,14 @@
 .nw-page {
   max-width: 760px;
 }
-.nw-h1 {
-  margin: 6px 0 16px;
+.nw-head .t-page {
   text-wrap: balance;
+}
+.nw-status + .nw-head {
+  margin-top: 6px;
+}
+.nw-hero .nw-head {
+  margin: 0;
 }
 .nw-h2 {
   margin: 0;
@@ -53,13 +58,6 @@
   line-height: 22px;
   color: var(--body-ink);
 }
-.nw-lead {
-  margin: 0 0 16px;
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--body-ink);
-  max-width: 620px;
-}
 .nw-row {
   display: flex;
   gap: 8px;
@@ -92,14 +90,6 @@
   align-items: flex-start;
   gap: 14px;
   margin-top: 12px;
-}
-.nw-hero .nw-h1 {
-  margin: 0;
-  font-size: 30px;
-  line-height: 36px;
-}
-.nw-hero .nw-lead {
-  margin: 0;
 }
 .nw-new {
   background: var(--volt-soft);
@@ -308,7 +298,6 @@
   line-height: 18px;
   color: var(--muted);
 }
-.nw-warm,
 .nw-know {
   flex: none;
   display: inline-flex;
@@ -551,10 +540,6 @@
 @media (max-width: 720px) {
   .nw-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .nw-hero .nw-h1 {
-    font-size: 28px;
-    line-height: 32px;
   }
   .btn.nw-connect {
     width: 100%;
@@ -1074,7 +1059,7 @@
   align-items: center;
   gap: 8px;
 }
-.sg-foot .btn-primary {
+.sg-foot .btn-volt {
   gap: 6px;
 }
 .sg-earn {
@@ -1478,7 +1463,7 @@ button.np-co-name:hover {
   .np-acts .btn {
     flex: 1 1 auto;
   }
-  .np-co .nw-warm {
+  .np-co .chip {
     align-self: flex-start;
   }
 }

@@ -8,39 +8,19 @@
  */
 
 /* ---------- Your seats page ---------- */
-.tp-page.ys-page {
-  max-width: 760px;
-}
 .ys-lead {
   max-width: 640px;
   margin: -4px 0 12px;
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--body-ink);
-}
-.ys-empty {
-  display: grid;
-  justify-items: start;
-  gap: 8px;
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--surface);
   font-size: 15px;
   line-height: 24px;
   color: var(--body-ink);
 }
-.ys-empty-art {
-  margin: -12px 0 0;
+/* No seat yet: the system's empty state (a card), with the search for seats under its words. */
+.ys-empty {
+  max-width: none;
 }
-.ys-empty-h {
-  font-size: 19px;
-  line-height: 26px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.ys-empty .btn {
-  margin-top: 8px;
+.ys-empty > p {
+  max-width: none;
 }
 
 /* Progress stays in view while the member works down the page: how much is filled in, and what today can still earn. */

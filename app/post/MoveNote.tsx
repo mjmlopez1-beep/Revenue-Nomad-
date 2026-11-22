@@ -27,6 +27,7 @@ import { startSeatMessage, openConversation } from "./Messages";
 import { VoiceLine } from "./Voice";
 import { IntroBlock } from "./network/IntroWhy";
 import { STRENGTH_WORDS, type Warmth } from "@/lib/google/types";
+import { WarmthChip, type Strength } from "../ui/system";
 import type { IntroPlanView } from "@/lib/paths/intro";
 import "./movenote.css";
 
@@ -37,11 +38,7 @@ const MAX = 2000;
  * relationship is), the strength words: Strong, Good, Fading or Cold, in the same colours as the warmth.
  */
 export function WhoWarmth({ w, strength }: { w: Warmth; strength?: boolean }) {
-  return (
-    <span className={`mv-warm mv-warm-${w.toLowerCase()}`} data-warmth={w}>
-      {strength ? STRENGTH_WORDS[w] : w}
-    </span>
-  );
+  return <WarmthChip warmth={strength ? (STRENGTH_WORDS[w] as Strength) : w} />;
 }
 
 export function NoteSheet({
@@ -136,16 +133,16 @@ export function NoteSheet({
         <div className="mn-foot">
           <div className="mn-acts">
             {posting && (
-              <a className="btn btn-primary mn-go" href={posting} target="_blank" rel="noreferrer">
+              <a className="btn btn-pine mn-go" href={posting} target="_blank" rel="noreferrer">
                 <IconExternal size={14} /> Open the posting
               </a>
             )}
             {onMerlin && (
-              <button type="button" className="btn btn-primary mn-go" disabled={busy || !body.trim() || len > MAX} aria-busy={busy} onClick={() => void sendOnMerlin()}>
+              <button type="button" className="btn btn-pine mn-go" disabled={busy || !body.trim() || len > MAX} aria-busy={busy} onClick={() => void sendOnMerlin()}>
                 {busy ? "Sending" : "Message on Merlin"}
               </button>
             )}
-            <a className={`btn${onMerlin || posting ? "" : " btn-primary"} mn-go`} href={gmailLink(to?.email, subject, body)} target="_blank" rel="noreferrer" onClick={record}>
+            <a className={`btn${onMerlin || posting ? "" : " btn-pine"} mn-go`} href={gmailLink(to?.email, subject, body)} target="_blank" rel="noreferrer" onClick={record}>
               <IconExternal size={14} /> Open in Gmail
             </a>
             <button type="button" className="btn mn-go" onClick={() => void copy()}>

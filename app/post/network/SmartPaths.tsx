@@ -60,7 +60,7 @@ export function PathRow({ p, compact = false }: { p: PathView; compact?: boolean
           <p>{p.note.body}</p>
           <div className="nw-row nw-wrap">
             {mail && (
-              <a className="btn btn-sm btn-primary" href={mail}>
+              <a className="btn btn-sm btn-pine" href={mail}>
                 Open in your email
               </a>
             )}
@@ -178,7 +178,7 @@ export function LinkedInImport() {
         </div>
       ) : (
         <div className="nw-row nw-wrap sp-row">
-          <button type="button" className={`btn${li ? "" : " btn-primary"}`} disabled={!!busy || view.importsLeft <= 0} aria-busy={busy === "read"} onClick={() => file.current?.click()}>
+          <button type="button" className={`btn${li ? "" : " btn-pine"}`} disabled={!!busy || view.importsLeft <= 0} aria-busy={busy === "read"} onClick={() => file.current?.click()}>
             {busy === "read" ? "Reading your connections" : li ? "Upload a newer file" : "Choose Connections.csv"}
           </button>
           {li && (

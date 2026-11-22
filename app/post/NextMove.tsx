@@ -124,7 +124,7 @@ export function NextMove({
         <p className="nm-p">{copy.line}</p>
         {note && <p className="nm-p nm-note">{note}</p>}
       </div>
-      <button type="button" className="btn btn-primary nm-go" onClick={copy.go}>
+      <button type="button" className={`btn ${kind === "roles" ? "btn-pine" : "btn-volt"} nm-go`} onClick={copy.go}>
         {copy.button}
       </button>
       <button type="button" className="tp-iconbtn tp-iconbtn-sm nm-x" aria-label="Dismiss" onClick={() => onDismiss(kind)}>

@@ -25,7 +25,8 @@ import { BLOCKS, DISCOVERY_TARGET, acceptInto, blanksOf, blockDef, blockFields, 
 import { adviceFromView } from "@/lib/proposals/rates";
 import { PRICES } from "@/lib/billing/rules";
 import { IconCheck, IconChevron, IconPencil, IconPlus, IconX, useToast } from "../ui/shared";
-import { Prop, Spot } from "../ui/fractions/art";
+import { Prop } from "../ui/fractions/art";
+import { EmptyState, PageHead } from "../ui/system";
 import { Sheet } from "./ui";
 import { useMedia } from "./hooks";
 import { openPlans } from "./Billing";
@@ -33,7 +34,7 @@ import { DocText, dayOf } from "../sign/doc";
 import type { CoInfo } from "./model";
 import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
 import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./ProposalStart";
-import { AddBlock, AutoText, CallPanel, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
+import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder, uploadPdf } from "./DocBuilder";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
@@ -52,22 +53,11 @@ async function load(): Promise<ProposalsView | { error: string }> {
   }
 }
 
-/** The status words both kinds share. */
-export const STATUS: Record<ProposalRec["status"], { say: string; cls: string }> = {
-  draft: { say: "Draft", cls: "chip-outline" },
-  sent: { say: "Sent", cls: "" },
-  viewed: { say: "Viewed", cls: "" },
-  signed: { say: "Signed", cls: "chip-volt" },
-  declined: { say: "Declined", cls: "pp-chip-lost" },
-  void: { say: "Voided", cls: "chip-outline" },
-  expired: { say: "Expired", cls: "chip-outline" },
-};
-
 type Row = { kind: "proposal"; p: ProposalRec; at: string } | { kind: "document"; d: DocumentRec; at: string };
 
 /* ================= the page ================= */
 
-export function ProposalsPage({ view, infos, onBack }: { view: View; infos: CoInfo[]; onBack: () => void }) {
+export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) {
   const toast = useToast();
   const [data, setData] = useState<ProposalsView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,17 +132,18 @@ export function ProposalsPage({ view, infos, onBack }: { view: View; infos: CoIn
   const mine = data?.templates.filter((t) => t.mine) ?? [];
 
   return (
-    <div className="tp-page pp-page">
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
+    <div className="page-wide pp-page">
+      <PageHead
+        title="Proposals"
+        lead="Drop in the call, pick a template, and Merlin drafts it in your words with the price and the next 90 days. Send it for signature, and your pipeline moves."
+        art={<Prop name="ledger" height={72} on="bg" />}
+        actions={
+          <button type="button" className="btn btn-pine btn-lg pp-hero-go" onClick={() => setStarting({ companyId: null })} disabled={!data}>
+            <IconPlus /> New proposal from a call
+          </button>
+        }
+      />
       <div className="pp-hero">
-        <Prop name="ledger" height={64} on="bg" className="tp-page-art" />
-        <h1 className="tp-page-h">Proposals</h1>
-        <p className="pp-lead">Drop in the call, pick a template, and Merlin drafts it in your words with the price and the next 90 days. Send it for signature, and your pipeline moves.</p>
-        <button type="button" className="btn btn-pine btn-lg pp-hero-go" onClick={() => setStarting({ companyId: null })} disabled={!data}>
-          <IconPlus /> New proposal from a call
-        </button>
         <div className="pp-hero-more">
           <button type="button" className="tp-flink" aria-busy={uploading} disabled={!data || uploading} onClick={() => pdfRef.current?.click()}>
             {uploading ? "Uploading the PDF" : "Send a document to sign"}
@@ -176,11 +167,9 @@ export function ProposalsPage({ view, infos, onBack }: { view: View; infos: CoIn
       {error && <p className="pp-err">{error}</p>}
       {!data && !error && <div className="pp-skel" aria-busy="true" />}
       {data && rows.length === 0 && (
-        <div className="pp-empty">
-          <Spot name="noMessages" size={112} ember className="pp-empty-art" />
-          <h2>Nothing sent yet</h2>
-          <p>Proposals sent within 48 hours of the call win more often. Start from the call while it&#39;s fresh.</p>
-        </div>
+        <EmptyState spot="noMessages" title="Nothing sent yet">
+          Proposals sent within 48 hours of the call win more often. Start from the call while it&#39;s fresh.
+        </EmptyState>
       )}
       {rows.length > 0 && (
         <ul className="pp-list" aria-label="Proposals and documents">
@@ -195,7 +184,7 @@ export function ProposalsPage({ view, infos, onBack }: { view: View; infos: CoIn
                       {r.p.status === "draft" ? `Edited ${dayOf(r.p.updatedAt)}` : r.p.status === "signed" ? `Signed ${dayOf(r.p.send?.signedAt)}` : `Sent ${dayOf(r.p.send?.sentAt)}`}
                     </span>
                   </span>
-                  <span className={`chip ${STATUS[r.p.status].cls}`}>{STATUS[r.p.status].say}</span>
+                  <ProposalStatus status={r.p.status} />
                 </button>
               </li>
             ) : (
@@ -209,7 +198,7 @@ export function ProposalsPage({ view, infos, onBack }: { view: View; infos: CoIn
                       {r.d.status === "draft" ? `Edited ${dayOf(r.d.updatedAt)}` : r.d.status === "signed" ? `Signed ${dayOf(r.d.completedAt)}` : `Sent ${dayOf(r.d.sentAt)}`}
                     </span>
                   </span>
-                  <span className={`chip ${STATUS[r.d.status].cls}`}>{STATUS[r.d.status].say}</span>
+                  <ProposalStatus status={r.d.status} />
                 </button>
               </li>
             ),
@@ -452,8 +441,8 @@ function Editor({
   );
 
   return (
-    <div className="tp-page pp-page pp-editing">
-      <button type="button" className="tp-back" onClick={() => (void flush(), onBack())}>
+    <div className="page-wide pp-page pp-editing">
+      <button type="button" className="page-back" onClick={() => (void flush(), onBack())}>
         <IconChevron dir="left" /> All proposals
       </button>
       <header className="pp-top">
@@ -471,7 +460,7 @@ function Editor({
             }}
           />
           <p className="pp-top-s">
-            <span className={`chip ${STATUS[p.status].cls}`}>{STATUS[p.status].say}</span>
+            <ProposalStatus status={p.status} />
             <span>
               {p.company.name || "No company yet"} · Version {p.version}
               {t ? ` · ${t.title.split(":")[0]}` : ""}

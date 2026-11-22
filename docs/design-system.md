@@ -2,8 +2,8 @@
 
 The rules every Merlin surface keeps: the app, the landing page, the emails, the link preview.
 The best surfaces already follow them (the landing page, onboarding, the Crystal Ball email, the
-empty states, the 404). New work starts here, and phase 2 of the studio pass moves every older page
-onto these pieces.
+empty states, the 404), and since phase 2 of the studio pass every signed-in page does: each opens
+with `PageHead` in `.page-narrow` or `.page-wide`. New work starts here.
 
 Tokens live in `app/globals.css`. Components live in `app/ui/` (`system.tsx`, `Logo.tsx`,
 `Problem.tsx`, `WonMoment.tsx`). Pictures come from Fractions (`app/ui/fractions/`). Emails are
@@ -71,8 +71,9 @@ the title of a problem page; the landing page keeps its display sizes).
 
 `.btn` plus at most one tone and one size.
 
-- Tones: `.btn-pine` (primary), `.btn-volt` (earning; `.btn-primary` is the same), `.btn-outline`
-  (the default `.btn`), `.btn-ghost`, `.btn-danger` (outline, red words).
+- Tones: `.btn-pine` (primary), `.btn-volt` (earning; `.btn-primary` is the same, kept for the
+  landing page; the member's app says `.btn-volt`), `.btn-outline` (the default `.btn`), `.btn-ghost`,
+  `.btn-danger` (outline, red words).
 - Sizes: `.btn-sm` 32, `.btn` or `.btn-md` 40, `.btn-lg` 48. Phones raise every target to 44.
 - **One filled button a view.** Pine for the primary action. Volt only where the click earns a
   credit. Everything else is outline or ghost.

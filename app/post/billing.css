@@ -507,12 +507,13 @@ button.tp-plan:hover {
   color: var(--volt);
   font-weight: 700;
 }
+/* The trial's last days: Upgrade is the pine primary (volt is for earning only). */
 .tp-plan-trial.end {
-  border-color: var(--volt);
+  border-color: var(--pine);
 }
 .tp-plan-trial.end .tp-plan-go {
-  background: var(--volt);
-  color: var(--pine);
+  background: var(--pine);
+  color: #fff;
 }
 .tp-plan-free {
   padding: 0 12px;
@@ -539,8 +540,8 @@ button.tp-plan:hover {
   font-weight: 700;
 }
 .tp-plan-trial.end.tp-plan-phone {
-  background: var(--volt);
-  color: var(--pine);
+  background: var(--pine);
+  color: #fff;
 }
 /* Desktop under 1180px: the trial's words go, Upgrade stays (the days are in its title and spoken name). */
 @media (max-width: 1179px) {

@@ -26,6 +26,7 @@ import { FEATURE_NAME, RADAR_EVERY_WHEN, RADAR_EVERY_WORDS, type RadarEmail } fr
 import "./pages.css";
 import "./integrations.css";
 import "./notifications.css";
+import { PageHead } from "../ui/system";
 
 /** An on and off switch, labelled by its row's title and described by its line (as on Integrations). */
 export function Switch({ id, on, onChange, busy }: { id: string; on: boolean; onChange: (next: boolean) => void; busy?: boolean }) {
@@ -96,7 +97,7 @@ function Row({ id, title, desc, children, note }: { id: string; title: ReactNode
   );
 }
 
-export function Notifications({ view, onBack, onIntegrations }: { view: View; onBack: () => void; onIntegrations: () => void }) {
+export function Notifications({ view, onIntegrations }: { view: View; onIntegrations: () => void }) {
   const ui = useUi();
   const toast = useToast();
   const me = ui.me;
@@ -141,12 +142,8 @@ export function Notifications({ view, onBack, onIntegrations }: { view: View; on
   const proNow = plan?.name === "pro" || plan?.name === "trial";
 
   return (
-    <div className="tp-page nt-page">
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Notifications</h1>
-      <p className="uc-lead">What Merlin sends you, by email and in Slack, and how often. Each change saves at once.</p>
+    <div className="page-narrow nt-page">
+      <PageHead title="Notifications" lead="What Merlin sends you, by email and in Slack, and how often. Each change saves at once." />
 
       <section className="nt-section" aria-labelledby="nt-email-h">
         <h2 className="in-h" id="nt-email-h">

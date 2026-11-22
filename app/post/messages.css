@@ -353,28 +353,6 @@
 .ms-reply-note.bad {
   color: var(--red);
 }
-.ms-empty {
-  max-width: 520px;
-  padding: 32px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--surface);
-}
-.ms-empty-art {
-  margin: -12px 0 8px;
-}
-.ms-empty h2 {
-  margin: 0 0 8px;
-  font-size: 22px;
-  line-height: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.ms-empty p {
-  margin: 0 0 16px;
-  color: var(--body-ink);
-}
-
 /* Phones: the list fills the page, a conversation fills the screen with the reply box at the bottom. */
 .tp-phone .ms-list {
   border: 1px solid var(--line);

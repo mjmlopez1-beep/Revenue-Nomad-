@@ -20,6 +20,7 @@ import { Clients, Everyone, Introducers, TopNumbers, WarmPaths } from "./Paths";
 import { NO_FILTER, setWords, topNumbers, type EveryoneFilter } from "./model";
 import { HiddenPaths, LinkedInImport } from "./SmartPaths"; // [smart ways in]
 import "./network.css";
+import { PageHead } from "../../ui/system";
 
 const START = "/api/integrations/google/start";
 const sources = (src: NetSource[]) => src.map((s) => SOURCE_WORDS[s]).join(", ");
@@ -89,14 +90,14 @@ export function ReadsList({ gmail = false }: { gmail?: boolean }) {
 
 function ConnectButton({ label = "Connect Google", href = START, onClick }: { label?: string; href?: string; onClick?: () => void }) {
   return onClick ? (
-    <button type="button" className="btn btn-primary nw-connect" onClick={onClick}>
+    <button type="button" className="btn btn-pine nw-connect" onClick={onClick}>
       <span className="nw-g" aria-hidden>
         <GoogleG />
       </span>
       {label}
     </button>
   ) : (
-    <a className="btn btn-primary nw-connect" href={href}>
+    <a className="btn btn-pine nw-connect" href={href}>
       <span className="nw-g" aria-hidden>
         <GoogleG />
       </span>
@@ -264,10 +265,13 @@ export function NetworkPage({
   // The moment is on screen: while the first read runs, when it failed, or its result.
   const inMoment = !!view && connected && moment !== null;
   return (
-    <div className={`tp-page nw-page${inMoment ? " nw-page-found" : ""}`}>
-      <button type="button" className="tp-back" onClick={inMoment && moment === "again" ? () => leave() : onBack}>
-        <IconChevron dir="left" /> {inMoment && moment === "again" ? "Your network" : "All companies"}
-      </button>
+    <div className={`page-wide nw-page${inMoment ? " nw-page-found" : ""}`}>
+      {/* What Merlin found again is a step under Your network: its way back. Your network itself is a top-level page. */}
+      {inMoment && moment === "again" ? (
+        <button type="button" className="page-back" onClick={() => leave()}>
+          <IconChevron dir="left" /> Your network
+        </button>
+      ) : null}
       {/* "Google is connected" is the moment's own first line. */}
       <Notice n={inMoment && notice === "connected" ? null : notice} onClose={() => setNotice(null)} />
       {!view ? (
@@ -311,18 +315,17 @@ export function NetworkPage({
               </>
             ) : null}
           </span>
-          <h1 className="tp-page-h nw-h1">
-            {companies.length
-              ? "Where you have a way in"
-              : view.syncing
-                ? "Your network"
-                : "No one you know is at a company on Merlin yet"}
-          </h1>
-          {companies.length > 0 && (
-            <p className="nw-lead">
-              From your {g ? "calendar and contacts" : "Gmail, via your Claude"}: you know someone at {companies.length} {companies.length === 1 ? "company" : "companies"} on Merlin. Only you see this.
-            </p>
-          )}
+          <PageHead
+            className="nw-head"
+            title={companies.length ? "Where you have a way in" : view.syncing ? "Your network" : "No one you know is at a company on Merlin yet"}
+            lead={
+              companies.length > 0 ? (
+                <>
+                  From your {g ? "calendar and contacts" : "Gmail, via your Claude"}: you know someone at {companies.length} {companies.length === 1 ? "company" : "companies"} on Merlin. Only you see this.
+                </>
+              ) : undefined
+            }
+          />
           {g?.status === "reconnect" && <Reconnect what="Google" note={goneNote("Google", g)} href={START} />}
           {view.gmail?.status === "reconnect" && g?.status !== "reconnect" && (
             <Reconnect what="Gmail" label="Reconnect Gmail (test access lasts 7 days)" note={goneNote("Gmail", view.gmail)} href={`${START}?gmail=1`} />
@@ -419,10 +422,11 @@ function ConnectHero({ view, onClaude }: { view: NetworkView; onClaude: () => vo
   return (
     <div className="nw-hero">
       <span className="nw-new">New · Your network</span>
-      <h1 className="tp-page-h nw-h1">See where you already have a way in</h1>
-      <p className="nw-lead">
-        Connect your Google account and Merlin shows your warm paths into companies likely to hire you, the clients your calendar shows, and the people who can introduce you.
-      </p>
+      <PageHead
+        className="nw-head"
+        title="See where you already have a way in"
+        lead="Connect your Google account and Merlin shows your warm paths into companies likely to hire you, the clients your calendar shows, and the people who can introduce you."
+      />
       <ReadsList />
       {view.configured ? <ConnectButton /> : <p className="nw-muted">Google isn&apos;t set up on Merlin yet. Ask us to switch it on.</p>}
       <p className="nw-small">Read-only. Takes a minute or two to map. Disconnect and delete everything any time.</p>
@@ -631,7 +635,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
           <p>{note.trim()}</p>
           <div className="nw-row nw-wrap">
             {p.email && (
-              <a className="btn btn-sm btn-primary" href={`mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("Catching up")}&body=${encodeURIComponent(note)}`}>
+              <a className="btn btn-sm btn-pine" href={`mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("Catching up")}&body=${encodeURIComponent(note)}`}>
                 Open in your email
               </a>
             )}
@@ -747,7 +751,7 @@ export function ClaudeNetworkPrompt() {
       </p>
       <blockquote className="nw-prompt">{CLAUDE_PROMPT}</blockquote>
       <div className="nw-row nw-wrap">
-        <button type="button" className="btn btn-primary" onClick={() => void copy(CLAUDE_PROMPT, "Copied. Paste it into Claude.")}>
+        <button type="button" className="btn btn-pine" onClick={() => void copy(CLAUDE_PROMPT, "Copied. Paste it into Claude.")}>
           Copy the prompt
         </button>
       </div>

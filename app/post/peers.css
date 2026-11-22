@@ -3,11 +3,6 @@
 .pe-page {
   max-width: 1040px;
 }
-.pe-intro {
-  margin: 4px 0 16px;
-  color: var(--body-ink);
-  max-width: 62ch;
-}
 .pe-tabs {
   display: flex;
   gap: 4px;
@@ -91,11 +86,8 @@
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
 }
-.pe-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  padding: 14px;
+.pe-card.card {
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -150,30 +142,16 @@
   gap: 6px;
   min-width: 0;
 }
-.pe-chip {
-  display: inline-block;
+/* A Chip (app/ui/system.tsx) that wraps: a peer's why can be a sentence. */
+.pe-chip.chip {
+  height: auto;
+  min-height: 24px;
   max-width: 100%;
+  padding: 3px 8px;
   white-space: normal;
   overflow-wrap: anywhere;
   font-size: 12px;
   line-height: 16px;
-  padding: 2px 8px;
-  border-radius: var(--r-chip);
-  background: var(--row-on);
-  color: var(--body-ink);
-}
-.pe-chip-known {
-  background: var(--sand);
-  color: var(--pine);
-}
-.pe-chip-why {
-  background: var(--row-hover);
-  border: 1px solid var(--line);
-}
-.pe-chip-best {
-  background: var(--pine);
-  color: #fff;
-  font-weight: 650;
 }
 .pe-line {
   margin: 0;
@@ -228,20 +206,8 @@
   cursor: pointer;
 }
 .pe-empty {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 16px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-card);
-  color: var(--body-ink);
+  max-width: none;
 }
-.pe-empty p {
-  margin: 0;
-  flex: 1 1 240px;
-}
-
 /* Leads. */
 .pe-leads {
   list-style: none;
@@ -646,5 +612,26 @@ p.pe-lead {
   }
   .pe-leave {
     margin-left: 0;
+  }
+}
+
+/* Phones: 44px to the thumb. The tabs grow; the small text controls get a 44px hit area around them. */
+@media (max-width: 767px) {
+  .pe-tab {
+    min-height: 44px;
+  }
+  .pe-thread,
+  .pe-mute {
+    position: relative;
+  }
+  .pe-thread::after,
+  .pe-mute::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: 44px;
+    transform: translate(-50%, -50%);
   }
 }

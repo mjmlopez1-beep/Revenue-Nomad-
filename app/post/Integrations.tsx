@@ -24,6 +24,7 @@ import "./pages.css";
 import "./integrations.css";
 import { Prop } from "../ui/fractions/lazy";
 import { FEATURE_NAME } from "@/lib/radar/types";
+import { Chip, PageHead } from "../ui/system";
 
 const WEBHOOK_EXAMPLE = JSON.stringify(
   {
@@ -117,7 +118,7 @@ function Connected({ d, label, onTest, onRemove, busy }: { d: DestView; label: s
   return (
     <div className="in-conn">
       <div className="in-conn-top">
-        <span className={`chip ${trouble ? "chip-outline" : "chip-volt"}`}>{d.broken ? "Stopped" : trouble ? "Last try failed" : "Connected"}</span>
+        <Chip tone={trouble ? "outline" : "mint"}>{d.broken ? "Stopped" : trouble ? "Last try failed" : "Connected"}</Chip>
         <code className="mono in-masked" title="Only the end of the URL is shown. The rest stays on our side.">
           {d.masked}
         </code>
@@ -372,13 +373,8 @@ export function Integrations({
   const anyOn = !!(slack || hook);
 
   return (
-    <div className="tp-page in-page">
-      <Prop name="join" height={72} on="bg" className="tp-page-art tp-page-art-tall" />
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Integrations</h1>
-      <p className="uc-lead">Get a Slack post when something needs you, and ask the table from Claude in your own words.</p>
+    <div className="page-narrow in-page">
+      <PageHead title="Integrations" lead="Get a Slack post when something needs you, and ask the table from Claude in your own words." art={<Prop name="join" height={72} on="bg" />} />
 
       <div className="in-picks">
         <button type="button" className="tp-card in-pick" onClick={() => jump(slackRef.current)}>
@@ -389,7 +385,7 @@ export function Integrations({
             <span className="in-pick-h">Slack</span>
             <span className="in-pick-d">Alerts for new open roles in your function, new messages, and fractionals who engage your seats.</span>
           </span>
-          <span className={`chip ${slack && !slack.broken ? "chip-volt" : "chip-outline"}`}>{!view ? "…" : slack ? (slack.broken ? "Stopped" : "Connected") : "Not set up"}</span>
+          <Chip tone={slack && !slack.broken ? "mint" : "outline"}>{!view ? "…" : slack ? (slack.broken ? "Stopped" : "Connected") : "Not set up"}</Chip>
         </button>
         <button type="button" className="tp-card in-pick" onClick={() => jump(claudeRef.current)}>
           <span className="in-mark" aria-hidden>
@@ -399,7 +395,7 @@ export function Integrations({
             <span className="in-pick-h">Claude</span>
             <span className="in-pick-d">Ask the table from Claude, ChatGPT, Claude Code or Cursor. It asks before it spends a credit.</span>
           </span>
-          <span className="chip chip-outline">Connector</span>
+          <Chip>Connector</Chip>
         </button>
       </div>
 

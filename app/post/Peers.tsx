@@ -25,10 +25,11 @@ import { Avatar, PassSheet, TeamSheet, TeamSpace } from "./PeerSheets";
 import { peersAct, takePeersWant, usePeers } from "./peersStore";
 import { Fractionals } from "./Fractionals";
 import type { CoInfo } from "./model";
-import { Prop, Spot } from "../ui/fractions/lazy";
+import { Prop } from "../ui/fractions/lazy";
+import { Chip, EmptyState, PageHead } from "../ui/system";
 import "./peers.css";
 
-export function PeersPage({ infos, waiting, all, onAll, onBack, onProfile, openCompany }: { infos: CoInfo[]; waiting?: boolean; all: boolean; onAll: (on: boolean) => void; onBack: () => void; onProfile: () => void; openCompany: (id: string) => void }) {
+export function PeersPage({ infos, waiting, all, onAll, onProfile, openCompany }: { infos: CoInfo[]; waiting?: boolean; all: boolean; onAll: (on: boolean) => void; onProfile: () => void; openCompany: (id: string) => void }) {
   const { view, failed } = usePeers();
   const [space, setSpace] = useState<string | null>(null);
   const [focusLead, setFocusLead] = useState<string | null>(null);
@@ -53,13 +54,8 @@ export function PeersPage({ infos, waiting, all, onAll, onBack, onProfile, openC
   const newLeads = view?.inbox.filter((l) => l.status === "new") ?? [];
   const asks = view?.teams.filter((t) => !t.invited && t.status === "invited") ?? [];
   return (
-    <div className="tp-page pe-page">
-      <Prop name="camp" height={62} on="bg" className="tp-page-art" />
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Peers</h1>
-      <p className="pe-intro">Fractionals to do your best work with. Pass a lead that isn&apos;t your fit, team up on a pitch, and keep a small circle close.</p>
+    <div className="page-wide pe-page">
+      <PageHead title="Peers" lead={<>Fractionals to do your best work with. Pass a lead that isn&apos;t your fit, team up on a pitch, and keep a small circle close.</>} art={<Prop name="camp" height={72} on="bg" />} />
       <div className="pe-tabs" role="tablist" aria-label="Which peers">
         <button type="button" role="tab" aria-selected className="pe-tab on">
           Your peers
@@ -106,10 +102,9 @@ export function PeersPage({ infos, waiting, all, onAll, onBack, onProfile, openC
                 ))}
               </ul>
             ) : (
-              <div className="pe-empty">
-                <Spot name="noMessages" size={96} ember className="pe-empty-art" />
-                <p>{view.sources.linkedin || view.sources.google ? "Nobody you know is a fractional on Merlin yet. Invite them from Every fractional." : "Bring in your LinkedIn connections or connect Google in Your network, and the fractionals you already know show here."}</p>
-              </div>
+              <EmptyState spot="noMessages" title="No fractionals you know yet" framed={false} ember={false} className="pe-empty">
+                {view.sources.linkedin || view.sources.google ? "Nobody you know is a fractional on Merlin yet. Invite them from Every fractional." : "Bring in your LinkedIn connections or connect Google in Your network, and the fractionals you already know show here."}
+              </EmptyState>
             )}
           </section>
 
@@ -125,13 +120,9 @@ export function PeersPage({ infos, waiting, all, onAll, onBack, onProfile, openC
                 ))}
               </ul>
             ) : (
-              <div className="pe-empty">
-                <Spot name="noResults" size={96} className="pe-empty-art" />
-                <p>No one yet. Say who you serve, and Merlin looks again.</p>
-                <button type="button" className="btn btn-sm" onClick={onProfile}>
-                  Say who you serve
-                </button>
-              </div>
+              <EmptyState spot="noResults" title="No one yet" framed={false} ember={false} className="pe-empty" action={{ label: "Say who you serve", onClick: onProfile }}>
+                Say who you serve, and Merlin looks again.
+              </EmptyState>
             )}
           </section>
 
@@ -195,7 +186,7 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
   const [sheet, setSheet] = useState<"pass" | "team" | null>(null);
   const to = r.memberId ? { id: r.memberId, first: r.first } : null;
   return (
-    <li className="pe-card">
+    <li className="card pe-card">
       <div className="pe-card-top">
         <Avatar name={r.name} initials={r.initials} />
         <div className="pe-card-who">
@@ -209,10 +200,14 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
         )}
       </div>
       <div className="pe-chips">
-        {r.fn && <span className="pe-chip">{[r.level, r.fn].filter(Boolean).join(" · ")}</span>}
-        {r.known && <span className="pe-chip pe-chip-known">{r.known.from.map((f) => KNOWN_WORDS[f]).join(", ")}</span>}
-        {r.why && <span className="pe-chip pe-chip-why">{r.why}</span>}
-        {!r.onMerlin && <span className="pe-chip">Not on Merlin yet</span>}
+        {r.fn && <Chip className="pe-chip">{[r.level, r.fn].filter(Boolean).join(" · ")}</Chip>}
+        {r.known && (
+          <Chip tone="mint" className="pe-chip">
+            {r.known.from.map((f) => KNOWN_WORDS[f]).join(", ")}
+          </Chip>
+        )}
+        {r.why && <Chip className="pe-chip">{r.why}</Chip>}
+        {!r.onMerlin && <Chip className="pe-chip">Not on Merlin yet</Chip>}
       </div>
       {r.working.length > 0 && (
         <p className="pe-line">

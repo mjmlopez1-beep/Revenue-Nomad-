@@ -20,6 +20,7 @@ import "./verify.css";
 import { NetworkMetrics } from "./network/Network"; // [google network]
 import { AutoJobs } from "./AdminJobs";
 import { Health } from "./AdminHealth";
+import { PageHead, Stat } from "../ui/system";
 
 const n0 = (n: number) => n.toLocaleString("en-US");
 /** Facts added for each fact unlocked, to two places. No unlocks yet reads as a dash. */
@@ -43,11 +44,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function Tile({ value, label, sub }: { value: string; label: string; sub?: string }) {
   return (
-    <div className="tp-stat">
-      <div className="tp-stat-n">
-        <Num>{value}</Num>
-      </div>
-      <div className="tp-stat-l">{label}</div>
+    <div className="tp-pm-stat">
+      <Stat n={<Num>{value}</Num>} label={label} />
       {sub && <div className="tp-pm-sub">{sub}</div>}
     </div>
   );
@@ -763,22 +761,21 @@ function BillingCard({ b }: { b: NonNullable<NonNullable<View["admin"]>["billing
   );
 }
 
-export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Promise<void>; onBack: () => void }) {
+export function Admin({ view, refresh }: { view: View; refresh: () => Promise<void> }) {
   const a = view.admin;
   if (!a) return null;
   const act = a.activity;
   const places = Object.entries(a.pro.byWhere).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]));
   return (
-    <div className="tp-page tp-pm">
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <div className="tp-pm-head">
-        <h1 className="tp-page-h">Pilot metrics</h1>
-        <a className="btn btn-sm" href="/api/table?export=1" download>
-          Download backup
-        </a>
-      </div>
+    <div className="page-wide tp-pm">
+      <PageHead
+        title="Pilot metrics"
+        actions={
+          <a className="btn btn-sm" href="/api/table?export=1" download>
+            Download backup
+          </a>
+        }
+      />
       {/* Health first: what's working, what isn't, and the numbers behind it (lib/health.ts). */}
       {a.health && <Health h={a.health} />}
       {/* Then the background jobs: what runs on its own, how often, and Run now. */}

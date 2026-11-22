@@ -8,10 +8,17 @@
 import { useState } from "react";
 import { STAGE_WORDS, shortDay, type PipelineRec } from "@/lib/pipeline";
 import { useToast } from "../ui/shared";
+import { Chip, STATUS_TONE, type ChipTone } from "../ui/system";
 import { pipelineAct } from "./pipelineStore";
 
+/** A deal's stage on the status scale (app/ui/system.tsx): Won pine, moving (Replied, Meeting, Proposal) mint, the rest outline. */
+const STAGE_TONE: Record<PipelineRec["stage"], ChipTone> = { sent: STATUS_TONE.Sent, replied: STATUS_TONE.Viewed, meeting: STATUS_TONE.Viewed, proposal: STATUS_TONE.Viewed, won: STATUS_TONE.Won, lost: STATUS_TONE.Lost, quiet: "outline", notnow: "outline" };
 export function StageChip({ stage }: { stage: PipelineRec["stage"] }) {
-  return <span className={`pl-stage pl-stage-${stage}`}>{STAGE_WORDS[stage]}</span>;
+  return (
+    <Chip tone={STAGE_TONE[stage]} className="pl-stage">
+      {STAGE_WORDS[stage]}
+    </Chip>
+  );
 }
 
 const FIX_WORDS: Record<PipelineRec["fix"][number], string> = {

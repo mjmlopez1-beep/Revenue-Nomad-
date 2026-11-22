@@ -1839,7 +1839,7 @@ export function FactEditor({
             <div className="tp-ed-foot">
               <span className={noteCls}>{note}</span>
               {simple && (
-                <button type="button" className="btn btn-primary btn-lg" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
+                <button type="button" className="btn btn-volt btn-lg" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
                   {saving ? "Saving" : saveLabel}
                 </button>
               )}
@@ -1860,7 +1860,7 @@ export function FactEditor({
           <span className="tp-ed-foot-r">
             <span className={noteCls}>{saving && !simple ? "Saving" : note}</span>
             {simple && (
-              <button type="button" className="btn btn-primary btn-sm" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
+              <button type="button" className="btn btn-volt btn-sm" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
                 {saving ? "Saving" : saveLabel}
               </button>
             )}

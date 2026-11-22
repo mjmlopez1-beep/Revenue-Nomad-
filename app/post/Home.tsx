@@ -43,6 +43,7 @@ import { openPlans } from "./Billing";
 import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
 import { Bleed, NomadArt, Prop, Scene, Spot, Strip } from "../ui/fractions/lazy";
+import { PageHead } from "../ui/system";
 import "./home.css";
 
 /* ---------- Fractionals on Home ---------- */
@@ -285,21 +286,30 @@ export function HomePage(p: HomeProps) {
   return (
     <div className="hm">
       {p.nudge ? <div className="hm-nudge">{p.nudge}</div> : null}
-      <header className="hm-hello">
-        {/* The band's picture: a scene at the far end on a wide screen, a plain corner on a narrow one. Never under the words. */}
-        <Strip kind={quietDay ? "night" : "morning"} on="mint" className="hm-hello-art" />
-        <Bleed kind="BR" on="mint" className="hm-hello-corner" />
-        <h1 className="hm-h1">
-          {hello}, {firstName(me.name)}
-        </h1>
-        <p className="hm-sub">{sub}</p>
-        {/* A phone keeps the top bar's trial pill in its More sheet: the trial and its days left show here. */}
-        {trialPillWords(me.plan) ? (
-          <button type="button" className="hm-trialpill" onClick={() => openPlans("trial")}>
-            {trialPillWords(me.plan)}
-          </button>
-        ) : null}
-      </header>
+      {/* The page head on its mint band. The band's picture: a scene at the far end on a wide screen, a plain corner on a narrow one. Never under the words. */}
+      <PageHead
+        className="hm-hello"
+        title={
+          <>
+            {hello}, {firstName(me.name)}
+          </>
+        }
+        lead={sub}
+        art={
+          <>
+            <Strip kind={quietDay ? "night" : "morning"} on="mint" className="hm-hello-art" />
+            <Bleed kind="BR" on="mint" className="hm-hello-corner" />
+          </>
+        }
+        actions={
+          // A phone keeps the top bar's trial pill in its More sheet: the trial and its days left show here.
+          trialPillWords(me.plan) ? (
+            <button type="button" className="hm-trialpill" onClick={() => openPlans("trial")}>
+              {trialPillWords(me.plan)}
+            </button>
+          ) : undefined
+        }
+      />
       {/* The trial's last 4 days: what they used, and what locks when it ends (PlanView.summary). */}
       <TrialSummaryCard plan={me.plan} />
       {p.trialStarted && me.plan?.name === "trial" ? <TrialStarted days={me.plan.trialDaysLeft} today={dayN} radar={p.radar} onSeen={p.onTrialStartSeen} /> : null}

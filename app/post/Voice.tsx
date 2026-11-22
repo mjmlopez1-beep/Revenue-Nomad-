@@ -277,7 +277,7 @@ export function VoicePrompt() {
       </p>
       <blockquote className="vo-prompt">{VOICE_PROMPT}</blockquote>
       <div className="vo-acts">
-        <button type="button" className="btn btn-primary" onClick={() => void copy()}>
+        <button type="button" className="btn btn-pine" onClick={() => void copy()}>
           {copied ? "Copied. Paste it into Claude." : "Copy the prompt"}
         </button>
         <button type="button" className="btn" onClick={() => setEdit(true)}>

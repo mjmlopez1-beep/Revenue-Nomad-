@@ -19,7 +19,8 @@ import { useLayout } from "./hooks";
 import { partnerOpener, seatOpener, type SharedCompanies } from "@/lib/partners";
 import "./messages.css";
 import { IntroLine } from "./IntroLine";
-import { Prop, Spot } from "../ui/fractions/lazy";
+import { Prop } from "../ui/fractions/lazy";
+import { EmptyState, PageHead } from "../ui/system";
 
 const MAX = 2000;
 
@@ -289,30 +290,18 @@ export function MessagesPage({ onBack, openCompany }: { onBack: () => void; open
   );
 
   const empty = (
-    <div className="ms-empty">
-      <Spot name="noMessages" size={112} ember className="ms-empty-art" />
-      <h2>No messages yet</h2>
-      <p>When you unlock who held a seat and they&apos;re a member, you can write to them from the record. Their replies land here.</p>
-      <button type="button" className="btn btn-pine" onClick={onBack}>
-        Go to the table
-      </button>
-    </div>
+    <EmptyState spot="noMessages" title="No messages yet" action={{ label: "Go to the table", onClick: onBack }}>
+      When you unlock who held a seat and they&apos;re a member, you can write to them from the record. Their replies land here.
+    </EmptyState>
   );
 
   return (
-    <div className="tp-page ms-page">
-      {list?.length ? <Prop name="bubbles" height={56} on="bg" className="tp-page-art" /> : null}
-      <button type="button" className="tp-back" onClick={onBack}>
-        <IconChevron dir="left" /> Back to the table
-      </button>
-      <h1 className="tp-page-h">Messages</h1>
+    <div className="page-wide ms-page">
+      <PageHead title="Messages" art={list?.length ? <Prop name="bubbles" height={72} on="bg" /> : undefined} />
       {failed && !list ? (
-        <div className="ms-empty" role="alert">
-          <p>{failed}</p>
-          <button type="button" className="btn" onClick={() => void load()}>
-            Try again
-          </button>
-        </div>
+        <EmptyState spot="offline" title="Your messages didn't load" role="alert" action={{ label: "Try again", onClick: () => void load() }}>
+          {failed}
+        </EmptyState>
       ) : !list ? (
         <p className="muted" role="status">
           Opening your messages

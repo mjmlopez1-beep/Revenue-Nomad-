@@ -883,8 +883,8 @@ span.locked-site {
 }
 
 /* =========================================================================================
- * The system (docs/design-system.md). Phase 2 moves every page onto these; until then they sit
- * beside the area styles and change nothing that doesn't use them.
+ * The system (docs/design-system.md). Every signed-in page is on these (phase 2): its width, its
+ * PageHead, its cards, chips, numbers and empty states.
  * ========================================================================================= */
 
 /* ---------- page wrappers: centred, 24px from the top bar ---------- */
@@ -1125,6 +1125,7 @@ span.locked-site {
   display: grid;
   gap: 8px;
   justify-items: start;
+  align-content: start;
   min-width: 0;
 }
 .page-head-art {

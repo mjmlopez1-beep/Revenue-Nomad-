@@ -756,7 +756,7 @@ export function TopBar({
         {/* Only while billing is live (Me.plan): the trial's days with Upgrade, or Upgrade to Pro. Nothing on Pro. */}
         <PlanPill plan={me.plan} />
         <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
-        <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
+        <button type="button" className="btn btn-volt tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>
         </button>

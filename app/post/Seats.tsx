@@ -28,6 +28,7 @@ import { FindSeats, seatsFound } from "../onboard/FindSeats";
 import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
 import { Prop, Spot } from "../ui/fractions/lazy";
+import { PageHead } from "../ui/system";
 import { SeatGuesses } from "./network/SeatGuesses"; // [google network]
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
@@ -140,7 +141,7 @@ function MultiAsk({ t, f, initial, onSaved }: { t: FactRef; f: FieldDef; initial
         ))}
       </div>
       <div className="ys-inputrow">
-        <button type="button" className="btn btn-primary ys-save" disabled={!picked.length || !!busy || value === (initial ?? "")} onClick={() => save(value)}>
+        <button type="button" className="btn btn-volt ys-save" disabled={!picked.length || !!busy || value === (initial ?? "")} onClick={() => save(value)}>
           {busy ? "Saving" : "Save"}
         </button>
       </div>
@@ -207,7 +208,7 @@ function TextAsk({ t, f, initial, onSaved }: { t: FactRef; f: FieldDef; initial?
           onChange={(e) => (setV(e.target.value), setErr(null))}
         />
         {hours && <span className="ys-unit">hours a week</span>}
-        <button type="submit" className="btn btn-primary ys-save" disabled={!v.trim() || !!busy || (initial !== undefined && v.trim() === initial)}>
+        <button type="submit" className="btn btn-volt ys-save" disabled={!v.trim() || !!busy || (initial !== undefined && v.trim() === initial)}>
           {busy ? "Saving" : "Save"}
         </button>
       </form>
@@ -231,7 +232,7 @@ function MonthAsk({ t, f, initial, onSaved }: { t: FactRef; f: FieldDef; initial
         }}
       >
         <MonthYear value={v} label={f.label} onChange={(x) => (setV(x), setErr(null))} disabled={!!busy} invalid={!!err} />
-        <button type="submit" className="btn btn-primary ys-save" disabled={!v || !!busy || v === initial}>
+        <button type="submit" className="btn btn-volt ys-save" disabled={!v || !!busy || v === initial}>
           {busy && busy !== "Ongoing" ? "Saving" : "Save"}
         </button>
         {f.kind === "monthOrOngoing" && (
@@ -312,7 +313,7 @@ function RateAsk({ t, pricing, initial, onSaved }: { t: FactRef; pricing: string
       />
       {initial === undefined && <RateWho value={who} onChange={(w) => (setWho(w), setErr(null))} disabled={busy} />}
       <Err text={err} />
-      <button type="submit" className="btn btn-primary ys-save" disabled={!text || !who || busy || text === initial}>
+      <button type="submit" className="btn btn-volt ys-save" disabled={!text || !who || busy || text === initial}>
         {busy ? "Saving" : initial !== undefined ? "Save" : who === "bench" ? "Share for the benchmarks" : who === "record" ? "Add to the seat" : "Save rate"}
         {earns && !busy && <span className="ys-plus num">+1</span>}
       </button>
@@ -806,14 +807,12 @@ function FindSeatsHere({ infos, autoFocus, empty }: { infos: CoInfo[]; autoFocus
 export function Seats({
   seats,
   focus,
-  onBack,
   infos,
   search = false,
   back = null,
 }: {
   seats: SeatInfo[];
   focus: string | null;
-  onBack: () => void;
   infos?: CoInfo[];
   /** Open on the search for seats the member held. */
   search?: boolean;
@@ -936,14 +935,9 @@ export function Seats({
   // The search, at the top of the page (the whole page while nothing is under their name yet).
   const find = infos && <FindSeatsHere infos={infos} autoFocus={search} empty={empty} />;
   return (
-    <div className="tp-page ys-page">
-      {/* With seats: the Nomad on its seat. With none, the empty state's own picture is the page's one. */}
-      {!empty && !guessing && <Prop name="seatYours" height={62} on="bg" ember className="tp-page-art" />}
-      {/* From the zero-credits wall, the way out leads back to the record they were unlocking. */}
-      <button type="button" className="tp-back" onClick={back ? back.go : onBack}>
-        <IconChevron dir="left" /> {back ? `Back to ${back.name}` : "Back to the table"}
-      </button>
-      <h1 className="tp-page-h">Your seats</h1>
+    <div className="page-narrow ys-page">
+      {/* With seats: the Nomad on its seat. With none, the empty state's own picture is the page's one. From the zero-credits wall, the way out leads back to the record they were unlocking. */}
+      <PageHead title="Your seats" back={back ? { label: `Back to ${back.name}`, onClick: back.go } : undefined} art={!empty && !guessing ? <Prop name="seatYours" height={72} on="bg" ember /> : undefined} />
       {back && me.credits > 0 && (
         <div className="ys-backup" role="status">
           <span>
@@ -960,11 +954,11 @@ export function Seats({
         One place in the page for the search, empty or not, so a seat claimed from an empty page keeps
         its client card (the page fills in under it instead of starting the search over).
       */}
-      <div className={empty ? "ys-empty" : "ys-find-top"}>
+      <div className={empty ? "empty-state card ys-empty" : "ys-find-top"}>
         {empty && (
           <>
-            {!guessing && <Spot name="noSeats" size={112} ember className="ys-empty-art" />}
-            <h2 className="ys-empty-h">{waiting.length ? "No seat is confirmed as yours yet" : "We don't have a seat under your name yet"}</h2>
+            {!guessing && <Spot name="noSeats" size={128} ember />}
+            <h2 className="t-section">{waiting.length ? "No seat is confirmed as yours yet" : "We don't have a seat under your name yet"}</h2>
             <p>
               Type a client you worked with and we list the seats we found there. Claim yours, or add the one you held, and each answer you add earns a credit, {SEAT_YIELD}.
             </p>

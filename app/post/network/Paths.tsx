@@ -35,6 +35,7 @@ import { usePlan } from "./usePaths";
 import { IntroLine } from "./IntroWhy";
 import type { IntroPlanView } from "@/lib/paths/intro";
 import { NO_FILTER, SIZE_GROUPS, bestPerson, clientRows, everyone, fitWords, introWho, setWords, warmRows, type EveryoneFilter, type WarmFilter } from "./model";
+import { Chip, LIKELIHOOD_TONE } from "../../ui/system";
 
 const NoteSheet = dynamic(() => import("../MoveNote").then((m) => m.NoteSheet), { ssr: false });
 
@@ -166,7 +167,10 @@ function WarmRow({ c, info, onNote, onOpen }: { c: NetCompanyView; info: CoInfo 
           </button>
           {likely && (
             <span className="np-why">
-              <span className={`rd-band rd-band-${likely.band.toLowerCase()}`}>{BAND_WORD[likely.band]}</span> {likely.why}
+              <Chip tone={LIKELIHOOD_TONE[likely.band]} className="rd-band">
+                {BAND_WORD[likely.band]}
+              </Chip>{" "}
+              {likely.why}
             </span>
           )}
           {(fit || c.ball) && <span className="np-fit">{[fit, c.ball ? "In your Crystal Ball" : null].filter(Boolean).join(" · ")}</span>}
@@ -264,7 +268,7 @@ export function WarmPaths({ view, infos, me, openCompany, onProfile, onClaude, o
           </p>
           <div className="nw-row nw-wrap">
             {!fn || noProfile ? (
-              <button type="button" className="btn btn-sm btn-primary" onClick={onProfile}>
+              <button type="button" className="btn btn-sm btn-pine" onClick={onProfile}>
                 {fn ? "Set your profile" : "Tell Merlin your function"}
               </button>
             ) : null}

@@ -666,19 +666,37 @@ async function main() {
   check("with none it says so plainly, and offers the next step", /None of the companies you know/.test(text(empty)) && /See everyone you know/.test(text(empty)) && !empty.includes("data-warm="));
   // How strong a relationship is, in introfix's words: the chip says Strong, Good, Fading or Cold in the warmth's colours (never "Hot"), and the line beside it doesn't say it twice.
   const P8 = await import("../app/post/network/parts.tsx");
-  const chipsOf = (html: string) => [...html.replace(/<!-- -->/g, "").matchAll(/class="np-p-why"><span class="nw-warm nw-l-(\w+)" data-warmth="(\w+)">([^<]+)<\/span>([^<]*)<\/span>/g)].map(([, cls, w, word, line]) => ({ cls, w: w as import("../lib/google/types").Warmth, word, line: line.trim() }));
+  // The chips are the system's WarmthChip (app/ui/system.tsx): the strength word on the warmth's tone (Strong pine as Hot, Good mint as Warm, Fading and Cold outline).
+  const SYS8 = await import("../app/ui/system.tsx");
+  const TONE_CLASS: Record<string, string> = { pine: "chip chip-on", mint: "chip chip-volt", outline: "chip" };
+  const strengthWords = Object.values(types.STRENGTH_WORDS) as string[];
+  const chipsOf = (html: string) => [...html.replace(/<!-- -->/g, "").matchAll(/class="np-p-why"><span class="(chip[^"]*)"><span class="fx fx-glyph"[^>]*><\/span>([^<]+)<\/span>([^<]*)<\/span>/g)].map(([, cls, word, line]) => ({ cls, word, line: line.trim() }));
   const warmChips = chipsOf(warmHtml);
-  check("a warm path's person: the chip says how strong (Strong, Good, Fading, Cold) in the warmth's colours, never Hot", warmChips.length > 0 && warmChips.every((c) => c.cls === c.w.toLowerCase() && c.word === types.STRENGTH_WORDS[c.w]) && !/>(Hot|Warm)</.test(warmHtml.replace(/<!-- -->/g, "")), warmChips);
+  check("a warm path's person: the chip says how strong (Strong, Good, Fading, Cold) in the warmth's colours, never Hot", warmChips.length > 0 && warmChips.every((c) => strengthWords.includes(c.word) && c.cls === TONE_CLASS[SYS8.STRENGTH_TONE[c.word as keyof typeof SYS8.STRENGTH_TONE]]) && !/>(Hot|Warm)</.test(warmHtml.replace(/<!-- -->/g, "")), warmChips);
   check("the strength line beside the chip doesn't say the word again", warmChips.every((c) => c.line.length > 0 && !c.line.endsWith(`· ${c.word}`)), warmChips.map((c) => c.line));
-  check("every grade's chip in strength words, in the same colours as before", (["Hot", "Warm", "Fading", "Cold"] as const).every((w) => renderToStaticMarkup(React.createElement(P8.WarmthChip, { w, strength: true })) === `<span class="nw-warm nw-l-${w.toLowerCase()}" data-warmth="${w}">${types.STRENGTH_WORDS[w]}</span>`) && renderToStaticMarkup(React.createElement(P8.WarmthChip, { w: "Hot" })).includes(">Hot<"));
+  const chipClass = (html: string) => /^<span class="(chip[^"]*)">/.exec(html)?.[1];
+  check(
+    "every grade's chip in strength words, in the same colours as its warmth (the system's WarmthChip)",
+    (["Hot", "Warm", "Fading", "Cold"] as const).every((w) => {
+      const strong = renderToStaticMarkup(React.createElement(P8.WarmthChip, { w, strength: true }));
+      const plain = renderToStaticMarkup(React.createElement(P8.WarmthChip, { w }));
+      return strong === renderToStaticMarkup(React.createElement(SYS8.WarmthChip, { warmth: types.STRENGTH_WORDS[w] as never })) && strong.endsWith(`>${types.STRENGTH_WORDS[w]}</span>`) && chipClass(strong) === chipClass(plain);
+    }) && renderToStaticMarkup(React.createElement(P8.WarmthChip, { w: "Hot" })).includes(">Hot<"),
+  );
   check("besideChip drops only the chip's own word", P8.besideChip("47 meetings since Dec 2024, last Oct 23 · Strong", "Hot") === "47 meetings since Dec 2024, last Oct 23" && P8.besideChip("In your contacts · Cold", "Warm") === "In your contacts · Cold");
   const introHtml = render(me8, React.createElement(PT.Introducers, { view: cv, me: me8, onClaude: noop }));
   const introChips = chipsOf(introHtml);
-  check("the intro card: the chip says how strong too, never Hot", (introChips.length > 0 && introChips.every((c) => c.cls === c.w.toLowerCase() && c.word === types.STRENGTH_WORDS[c.w] && !c.line.endsWith(`· ${c.word}`))), [cv.intros.length, introChips]);
+  check("the intro card: the chip says how strong too, never Hot", (introChips.length > 0 && introChips.every((c) => strengthWords.includes(c.word) && c.cls === TONE_CLASS[SYS8.STRENGTH_TONE[c.word as keyof typeof SYS8.STRENGTH_TONE]] && !c.line.endsWith(`· ${c.word}`))) && !/>(Hot|Warm)</.test(introHtml.replace(/<!-- -->/g, "")), [cv.intros.length, introChips]);
   // The note sheet from Your network (it has the intro): the chip by the person says how strong. From a move, the move card's word.
   const MN8 = await import("../app/post/MoveNote.tsx");
   const src8 = readFileSync("app/post/MoveNote.tsx", "utf8");
-  check("the note sheet from Your network: the chip says how strong, in the same colour", (["Hot", "Warm", "Fading", "Cold"] as const).every((w) => renderToStaticMarkup(React.createElement(MN8.WhoWarmth, { w, strength: true })) === `<span class="mv-warm mv-warm-${w.toLowerCase()}" data-warmth="${w}">${types.STRENGTH_WORDS[w]}</span>`) && /<WhoWarmth w=\{way\.person\.warmth\} strength=\{!!intro\} \/>/.test(src8));
+  check(
+    "the note sheet from Your network: the chip says how strong, in the same colour",
+    (["Hot", "Warm", "Fading", "Cold"] as const).every((w) => {
+      const strong = renderToStaticMarkup(React.createElement(MN8.WhoWarmth, { w, strength: true }));
+      return strong === renderToStaticMarkup(React.createElement(P8.WarmthChip, { w, strength: true })) && chipClass(strong) === chipClass(renderToStaticMarkup(React.createElement(MN8.WhoWarmth, { w })));
+    }) && /<WhoWarmth w=\{way\.person\.warmth\} strength=\{!!intro\} \/>/.test(src8),
+  );
   check("the note sheet from a move keeps the move card's word", renderToStaticMarkup(React.createElement(MN8.WhoWarmth, { w: "Hot" })).includes(">Hot<"));
   // Crystal Ball's Where you know someone with nobody known leads to the warm paths, never a blank page.
   const niaBall = (await radar.radarView(TOK("nia"), null, undefined, "today"))!;

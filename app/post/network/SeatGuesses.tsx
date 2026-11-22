@@ -138,7 +138,7 @@ function GuessCard({
         {g.active ? ", still active" : ` to ${monthYear(g.to)}`}. You can change any of it after.
       </p>
       <div className="sg-foot">
-        <button type="button" className="btn btn-primary" disabled={!!busy || !canConfirm || editing} aria-busy={busy === "yes"} onClick={() => onConfirm(role.trim() || null)}>
+        <button type="button" className="btn btn-volt" disabled={!!busy || !canConfirm || editing} aria-busy={busy === "yes"} onClick={() => onConfirm(role.trim() || null)}>
           <IconCheck size={14} /> {busy === "yes" ? "Adding" : "Confirm this seat"}
         </button>
         <button type="button" className="btn btn-ghost" disabled={!!busy} aria-busy={busy === "no"} onClick={onNo}>

@@ -114,22 +114,9 @@
   min-width: 0;
   padding: 16px 32px 64px;
 }
-.fr-head {
-  position: relative;
-}
-.fr-titlerow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.fr-h {
-  margin: 2px 0 12px;
-}
-.fr-art {
-  position: absolute;
-  top: 0;
-  right: 0;
-  pointer-events: none;
+/* The directory's head is the system's PageHead; it sits closer to the tools under it. */
+.fr-head.page-head {
+  margin-bottom: 16px;
 }
 .fr-top {
   display: flex;
@@ -673,8 +660,8 @@
   display: block;
   padding: 8px 16px 40px;
 }
-.fr-phone .fr-h {
-  margin: 8px 0 4px;
+.fr-phone .fr-head.page-head {
+  margin: 0 0 4px;
 }
 .fr-phone-line {
   margin: 0 0 12px;
@@ -694,7 +681,7 @@
 .fr-pchip {
   flex: none;
   gap: 6px;
-  height: 40px;
+  height: 44px;
 }
 .fr-cards {
   display: grid;

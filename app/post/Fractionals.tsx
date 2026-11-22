@@ -33,6 +33,7 @@ import { freeCompanyNow } from "./display";
 import { FR_TABS, ballChip, startPlace, takeWantSeat, choiceCounts, frDefaults, frRows, headline, leadTitle, levelLine, tabCounts, type FrFilters, type FrTab } from "./fractionalsModel";
 import "./fractionals.css";
 import { Prop } from "../ui/fractions/lazy";
+import { PageHead } from "../ui/system";
 
 /** A seat the record asks for: the company's info and the seat, from the member's own table. */
 type SeatAt = { i: CoInfo; e: EngagementRec };
@@ -164,7 +165,7 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
   if (phone)
     return (
       <div className="fr-page fr-phone">
-        <h1 className="tp-page-h fr-h">Fractionals</h1>
+        <PageHead title="Fractionals" className="fr-head" />
         {addr.welcome && <Welcome m={addr.m} mine={records.find((r) => r.you) ?? null} onRecord={(id) => setOpenId(id)} />}
         <p className="fr-phone-line">{data ? headline(records, hasIcp) : failed ?? "Finding fractionals"}</p>
         <div className="fr-pchips">
@@ -218,22 +219,20 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
         </aside>
       ) : null}
       <section className="fr-body" aria-labelledby="fr-h">
-        <div className="fr-head">
-          <button type="button" className="tp-back" onClick={onBack}>
-            <IconChevron dir="left" /> Back to the table
-          </button>
-          <div className="fr-titlerow">
-            <h1 className="tp-page-h fr-h" id="fr-h">
-              Fractionals
-            </h1>
-            {!filtersOpen && (
+        <PageHead
+          id="fr-h"
+          className="fr-head"
+          title="Fractionals"
+          back={{ label: "Back to the table", onClick: onBack }}
+          art={<Prop name="trailWinding" height={72} on="bg" />}
+          actions={
+            !filtersOpen ? (
               <button type="button" className="chip fr-showf" onClick={() => setFiltersOpen(true)}>
                 <IconFilter size={13} /> Filters
               </button>
-            )}
-          </div>
-          <Prop name="trailWinding" height={64} on="bg" className="fr-art" />
-        </div>
+            ) : undefined
+          }
+        />
         {addr.welcome && <Welcome m={addr.m} mine={records.find((r) => r.you) ?? null} onRecord={(id) => setOpenId(id)} />}
         {top}
         {tabs}

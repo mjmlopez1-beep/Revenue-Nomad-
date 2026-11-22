@@ -7,6 +7,7 @@
 import { IconChevron } from "../ui/shared";
 import { useCopy } from "./Credits";
 import "./connect.css";
+import { PageHead } from "../ui/system";
 
 /**
  * Questions to paste into Claude. One that names a company is a template with the blanks in
@@ -37,20 +38,13 @@ function Code({ text, label, block = false }: { text: string; label: string; blo
 }
 
 /** `embedded`: inside the Integrations page, which has its own back link and heading. */
-export function UseInClaude({ onBack, onCredits, embedded = false }: { onBack: () => void; onCredits: () => void; embedded?: boolean }) {
+export function UseInClaude({ onCredits, embedded = false }: { onBack?: () => void; onCredits: () => void; embedded?: boolean }) {
   const copy = useCopy();
   const address = `${typeof window === "undefined" ? "" : window.location.origin}/api/mcp`;
   const cursorJson = JSON.stringify({ mcpServers: { "merlin": { url: address } } }, null, 2);
   return (
-    <div className={embedded ? "uc-page uc-embedded" : "tp-page uc-page"}>
-      {!embedded && (
-        <>
-          <button type="button" className="tp-back" onClick={onBack}>
-            <IconChevron dir="left" /> Back to the table
-          </button>
-          <h1 className="tp-page-h">Use it in Claude</h1>
-        </>
-      )}
+    <div className={embedded ? "uc-page uc-embedded" : "page-narrow uc-page"}>
+      {!embedded && <PageHead title="Use it in Claude" />}
       <p className="uc-lead">
         Connect Merlin to Claude and ask the table in your own words. It searches as you, sees what you&apos;ve unlocked, and can add what you know. It asks before it
         spends a credit.

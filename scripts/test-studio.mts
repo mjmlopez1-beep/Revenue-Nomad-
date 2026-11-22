@@ -16,12 +16,23 @@
  *   - monogram tiles take brand tints only, a locked logo is one neutral tile
  *   - Chip, Stat, EmptyState, PageHead, Logo and WonMoment render; WonMoment is in Home's won card
  *     and the pipeline's Won column; the loading shell draws the lockup
+ *   - phase 2: every signed-in page renders a PageHead in the system's page width, no hand-made
+ *     title or back link; numbers are Stats and empty lists EmptyStates; no volt button that earns
+ *     nothing (Open in Gmail and the rest are pine), btn-volt only where a credit is earned; status,
+ *     stage, likelihood and strength chips from system.tsx; 44px buttons on a phone
  */
 import * as ReactNS from "react";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import Module, { register } from "node:module";
 import { join, resolve } from "node:path";
+
+// The pages import their stylesheets: in this process a stylesheet is nothing.
+(Module as unknown as { _extensions: Record<string, (m: { exports: unknown }) => void> })._extensions[".css"] = (m) => {
+  m.exports = {};
+};
+register(`data:text/javascript,${encodeURIComponent('export async function load(url, ctx, next) { return /\\.css(\\?|$)/.test(url) ? { format: "module", source: "", shortCircuit: true } : next(url, ctx); }')}`);
 
 // The app's components are compiled with the classic JSX transform here: React must be a global.
 (globalThis as { React?: unknown }).React = ReactNS;
@@ -245,6 +256,89 @@ const { WonMoment } = await import("../app/ui/WonMoment");
       docSign.includes('<SignedArt on={v.status === "signed" ? "mint" : "white"} />') &&
       !sign.includes('className="sg-done"'),
   );
+}
+
+/* ---------- phase 2: every signed-in page on the system ---------- */
+console.log("Pages");
+{
+  const src = (f: string) => readFileSync(join(ROOT, f), "utf8");
+  // Each signed-in page draws its title with PageHead, inside the system's page width (Home's band has its own).
+  const PAGES: [string, string, "page-wide" | "page-narrow" | null][] = [
+    ["Home", "app/post/Home.tsx", null],
+    ["Your pipeline", "app/post/Pipeline.tsx", "page-wide"],
+    ["Proposals", "app/post/Proposals.tsx", "page-wide"],
+    ["Peers", "app/post/Peers.tsx", "page-wide"],
+    ["Fractionals", "app/post/Fractionals.tsx", null],
+    ["Your seats", "app/post/Seats.tsx", "page-narrow"],
+    ["Your credits", "app/post/Credits.tsx", "page-narrow"],
+    ["Plan and billing", "app/post/Billing.tsx", "page-narrow"],
+    ["Notifications", "app/post/Notifications.tsx", "page-narrow"],
+    ["Messages", "app/post/Messages.tsx", "page-wide"],
+    ["Integrations", "app/post/Integrations.tsx", "page-narrow"],
+    ["Use it in Claude", "app/post/UseInClaude.tsx", "page-narrow"],
+    ["Rate benchmarks", "app/post/Benchmarks.tsx", "page-wide"],
+    ["Crystal Ball", "app/post/Radar.tsx", "page-wide"],
+    ["Pilot metrics", "app/post/Admin.tsx", "page-wide"],
+    ["Your network", "app/post/network/Network.tsx", "page-wide"],
+  ];
+  for (const [name, file, width] of PAGES) {
+    const s = src(file);
+    check(`${name}: renders a PageHead`, /<PageHead\b/.test(s) && /import \{[^}]*\bPageHead\b[^}]*\} from "(\.\.\/)+ui\/system"/.test(s));
+    check(`${name}: no hand-made page title or old back link`, !/<h1\b/.test(s) && !/tp-page-h|className="tp-back"|className="tp-page /.test(s));
+    if (width) check(`${name}: the system's page width (${width})`, s.includes(`"${width} `) || s.includes(`\`${width} `) || s.includes(`"${width}"`));
+  }
+  check("no page draws its own title anywhere in the app", readdirSync(join(ROOT, "app/post"), { recursive: true }).filter((f) => String(f).endsWith(".tsx")).every((f) => !/tp-page-h\b/.test(src(join("app/post", String(f))))));
+  // A top-level page has no back link; a nested one carries it in PageHead (Your seats back to a record, the directory under Peers).
+  check("a nested page's way back goes through PageHead", /back=\{back \? \{ label: `Back to \$\{back\.name\}`, onClick: back\.go \} : undefined\}/.test(src("app/post/Seats.tsx")) && /back=\{\{ label: "Back to the table", onClick: onBack \}\}/.test(src("app/post/Fractionals.tsx")));
+
+  // Numbers are Stats, empty lists EmptyStates.
+  check("Your pipeline's numbers are Stats and its empty states EmptyStates", (src("app/post/Pipeline.tsx").match(/<Stat /g) ?? []).length === 3 && (src("app/post/Pipeline.tsx").match(/<EmptyState /g) ?? []).length === 2 && !src("app/post/Pipeline.tsx").includes("pl-stats num"));
+  check("Your credits' and Pilot metrics' numbers are Stats, never a filled tile", /<Stat n=\{me\.added\}/.test(src("app/post/Credits.tsx")) && /<Stat n=\{<Num>\{value\}<\/Num>\} label=\{label\} \/>/.test(src("app/post/Admin.tsx")) && !/className="tp-stat[" ]/.test(src("app/post/Credits.tsx") + src("app/post/Admin.tsx")));
+  check("Proposals, Messages and Peers use EmptyState, Peers' spots calm beside the head's prop", /<EmptyState spot="noMessages" title="Nothing sent yet">/.test(src("app/post/Proposals.tsx")) && /<EmptyState spot="noMessages" title="No messages yet"/.test(src("app/post/Messages.tsx")) && (src("app/post/Peers.tsx").match(/<EmptyState [^>]*ember=\{false\}/g) ?? []).length === 2);
+
+  // Volt is for earning only: no btn-primary in the member's app, and btn-volt only on the buttons that earn a credit.
+  const files = readdirSync(join(ROOT, "app/post"), { recursive: true })
+    .map(String)
+    .filter((f) => /\.(tsx|ts)$/.test(f));
+  const volt: Record<string, number> = {};
+  for (const f of files) {
+    const s = src(join("app/post", f));
+    const n = (s.match(/btn-volt/g) ?? []).length;
+    if (n) volt[f] = n;
+  }
+  check("no btn-primary in the member's app (volt says btn-volt where a credit is earned)", files.every((f) => !src(join("app/post", f)).includes("btn-primary")) && !src("app/ui/system.tsx").includes("btn-primary"));
+  // Each one earns: Add what you know (top bar, the phone's button, the record twice, the add flow), a fact or a seat saved (Your seats, the editor, the record's person), claiming or confirming a seat, Add it as your seat, Share a rate, Earn credits, the earning next move and nudge.
+  const EARNS: Record<string, number> = { "AddModal.tsx": 5, "Benchmarks.tsx": 1, "Billing.tsx": 1, "Drawer.tsx": 5, "NextMove.tsx": 1, "Seats.tsx": 4, "TopBar.tsx": 1, "TradingPost.tsx": 1, "WonSheet.tsx": 2, "network/SeatGuesses.tsx": 1, "nudges.ts": 1, "ui.tsx": 2 };
+  check("btn-volt only on the buttons that earn a credit", JSON.stringify(Object.fromEntries(Object.entries(volt).sort())) === JSON.stringify(Object.fromEntries(Object.entries(EARNS).sort())), volt);
+  check("the next move is volt only when it earns (seats), pine for open roles", src("app/post/NextMove.tsx").includes('className={`btn ${kind === "roles" ? "btn-pine" : "btn-volt"} nm-go`}'));
+  check("a nudge is volt only when its tone is earn", /c\.tone === "earn" \? " btn-volt" : c\.tone === "pine" \? " btn-pine"/.test(src("app/post/nudges.ts")));
+  const gmail = [src("app/post/MoveNote.tsx"), src("app/post/FollowUpSheet.tsx")].map((s) => s.match(/<a className=[^\n]*\n\s*<IconExternal size=\{14\} \/> Open in Gmail/)?.[0] ?? "");
+  check("Open in Gmail is a pine primary or an outline secondary, never volt", gmail.every((g) => g && /btn-pine|className=\{`btn\$\{/.test(g) && !/btn-volt|btn-primary/.test(g)), gmail);
+  check("the other buttons that earn nothing are pine: post on Merlin, open the posting, draft a note, connect Google, copy a prompt, Show my Crystal Ball", /btn btn-pine mn-go" disabled=\{busy \|\| !body\.trim\(\)/.test(src("app/post/MoveNote.tsx")) && /<a className="btn btn-pine mn-go" href=\{posting\}/.test(src("app/post/MoveNote.tsx")) && /btn btn-sm btn-pine" onClick=\{\(\) => onDraft\(b\)\}/.test(src("app/post/Drawer.tsx")) && (src("app/post/network/Network.tsx").match(/btn btn-pine nw-connect/g) ?? []).length === 2 && /btn btn-pine" onClick=\{\(\) => void copy\(\)\}/.test(src("app/post/Voice.tsx")) && /btn btn-pine rd-btn/.test(src("app/post/Radar.tsx")) && /btn btn-pine btn-sm" onClick=\{\(\) => void shareInvite/.test(src("app/post/Credits.tsx")));
+  const billingCss = src("app/post/billing.css");
+  check("the trial's last days: Upgrade is pine, not volt", /\.tp-plan-trial\.end \.tp-plan-go \{\s*background: var\(--pine\);/.test(billingCss) && /\.tp-plan-trial\.end\.tp-plan-phone \{\s*background: var\(--pine\);/.test(billingCss));
+  const css = ["app/post/post.css", "app/post/pages.css", "app/post/home.css", "app/post/pipeline.css", "app/post/proposals.css", "app/post/peers.css", "app/post/radar.css", "app/post/network/network.css"].map(src).join("\n");
+  check("no stylesheet still styles .btn-primary in the member's app", !/\.btn-primary\b/.test(css));
+  check("no pink chip: a declined proposal is an outline chip", !src("app/post/proposals.css").includes("pp-chip-lost") && !/#fdecef|#f2c4cd/i.test(src("app/post/proposals.css")));
+
+  // The scales come from system.tsx.
+  const PP = await import("../app/post/ProposalParts");
+  const status = (s: string) => renderToStaticMarkup(h(PP.ProposalStatus, { status: s as never }));
+  check("a proposal's status is the system's StatusChip: Signed pine, Viewed mint, Draft, Sent and Declined outline, Voided and Expired outline", status("signed") === '<span class="chip chip-on">Signed</span>' && status("viewed") === '<span class="chip chip-volt">Viewed</span>' && ["draft", "sent", "declined"].every((x) => status(x) === `<span class="chip">${x[0].toUpperCase()}${x.slice(1)}</span>`) && status("void") === '<span class="chip">Voided</span>' && status("expired") === '<span class="chip">Expired</span>', ["signed", "viewed", "declined", "void"].map(status));
+  const PLP = await import("../app/post/PipelineParts");
+  const stage = (s: string) => renderToStaticMarkup(h(PLP.StageChip, { stage: s as never }));
+  check("a deal's stage on the status scale: Won pine, Replied, Meeting and Proposal mint, the rest outline", stage("won") === '<span class="chip chip-on pl-stage">Won</span>' && ["replied", "meeting", "proposal"].every((x) => stage(x).startsWith('<span class="chip chip-volt pl-stage">')) && ["sent", "lost", "notnow", "quiet"].every((x) => stage(x).startsWith('<span class="chip pl-stage">')), ["won", "replied", "lost"].map(stage));
+  check("Crystal Ball's likelihood words are the system's chips (High pine, Medium mint, Low outline)", src("app/post/Radar.tsx").includes('<LikelihoodChip band="High" /> <LikelihoodChip band="Medium" /> come by email. <LikelihoodChip band="Low" />') && /LIKELIHOOD_TONE\[likely\.band\]/.test(src("app/post/network/Paths.tsx")) && /LIKELIHOOD_TONE\[band as Likelihood\]/.test(src("app/post/Tables.tsx")) && !/className=\{?[`"]rd-band rd-band-/.test(src("app/post/Radar.tsx") + src("app/post/Tables.tsx") + src("app/post/network/Paths.tsx")));
+  const NP = await import("../app/post/network/parts");
+  const strong = (["Hot", "Warm", "Fading", "Cold"] as const).map((w) => renderToStaticMarkup(h(NP.WarmthChip, { w, strength: true })));
+  check("strength chips say Strong, Good, Fading or Cold, on the system's WarmthChip", strong.every((x, i) => x === renderToStaticMarkup(h(sys.WarmthChip, { warmth: (["Strong", "Good", "Fading", "Cold"] as const)[i] }))), strong);
+  check("the move card's warmth is the system's chip too", /<WarmthChip warmth=\{p\.warmth\} \/>/.test(src("app/post/Moves.tsx")) && !src("app/post/Moves.tsx").includes("mv-warm"));
+
+  // Phones: 44px to the thumb.
+  const post = src("app/post/post.css");
+  check("phones: every button in the app, a sheet or a dialog is 44px tall", /@media \(max-width: 767px\) \{\s*\.tp-app \.btn,\s*\.tp-sheet \.btn,\s*\.tp-rsheet \.btn,\s*\.tp-modal \.btn \{\s*min-height: 44px;/.test(post));
+  check("the page column holds the system's page wrappers 24px under the top bar, with no second padding", /\.tp-main-page > \.page-narrow,\s*\.tp-main-page > \.page-wide \{\s*padding-top: 0;/.test(post));
+  check("a page head's words sit at its top, whatever the art beside them", /\.page-head-main \{[^}]*align-content: start;/.test(src("app/globals.css")));
 }
 
 /* ---------- the loading shell and the problem pages ---------- */

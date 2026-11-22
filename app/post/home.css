@@ -5,7 +5,7 @@
   padding: 16px 40px 72px;
 }
 .hm {
-  max-width: 1040px;
+  max-width: var(--page-wide);
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -20,17 +20,23 @@
 
 /* The greeting and the search. */
 /* The greeting's band: mint tint, the words first, a small scene at its far end (art.tsx Strip, the quiet register on mint). */
-.hm-hello {
+/* Home's page head (app/ui/system.tsx PageHead) on its band. */
+.hm-hello.page-head {
   position: relative;
-  display: grid;
-  gap: 6px;
+  margin: 0;
+  row-gap: 8px;
   padding: 16px 20px;
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: var(--volt-soft);
   overflow: hidden;
 }
-.hm-hello > :not(.fx) {
+.hm-hello > .page-head-main,
+.hm-hello > .page-head-act {
   position: relative;
+}
+/* The art slot holds the band's pictures, laid on the band itself. */
+.hm-hello > .page-head-art {
+  position: static;
 }
 /* The scene stands on the band's bottom edge, as tall as the band. Shown only where the band is wide enough to keep it clear of the words. */
 .hm-hello-art {
@@ -44,20 +50,7 @@
 .hm-hello-corner {
   display: none;
 }
-.hm-h1 {
-  margin: 0;
-  font-size: 30px;
-  line-height: 36px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-.hm-sub {
-  margin: 0;
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--muted);
-}
+
 .hm-ask {
   position: relative;
 }
@@ -730,16 +723,22 @@
   .hm {
     gap: 22px;
   }
-  .hm-hello {
+  .hm-hello.page-head {
+    row-gap: 6px;
     padding: 8px 14px 10px;
   }
-  .hm-h1 {
-    font-size: 25px;
-    line-height: 31px;
+  /* The trial pill keeps its size on the band (the first move stays on the first screen), with a 44px hit area. */
+  .hm-trialpill {
+    position: relative;
   }
-  .hm-sub {
-    font-size: 15px;
-    line-height: 22px;
+  .hm-trialpill::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 44px;
+    transform: translateY(-50%);
   }
   .hm-hello + .hm-ask {
     margin-top: -8px;
@@ -940,4 +939,18 @@
   font-weight: 400;
   color: var(--muted);
   white-space: normal;
+}
+
+/* Phones: 44px to the thumb (the trial pill, the section links, the tabs, the saved views' names and switches, the search). */
+@media (max-width: 767px) {
+  .hm-tab {
+    min-width: 44px;
+  }
+  .hm-more,
+  .hm-tab,
+  .hm-switch,
+  .hm-vname,
+  .hm-ask-in {
+    min-height: 44px;
+  }
 }

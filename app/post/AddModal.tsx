@@ -307,7 +307,7 @@ function NewCompany({
         <Chips options={RN_REVENUE} value={revenue} onPick={setRevenue} label="Revenue" />
       </div>
       <div className="tp-modal-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <button type="submit" className="btn btn-volt" disabled={busy}>
           {busy ? "Adding" : "Add this company"}
         </button>
         <EarnLine n={n} err={err} empty={earnNote(ui.me).capped ? `You've earned today's ${ui.me.earnCap} credits. What you add still saves.` : "The website, industry, size and revenue each earn 1 credit."} />
@@ -431,7 +431,7 @@ function ClaimFirst({ i, seats: all, onClaimed }: { i: CoInfo; seats: Engagement
                   <p aria-busy="true">Checking the seat</p>
                 )}
                 <span className="tp-frow-ask-acts">
-                  <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy || !info} aria-busy={busy} onClick={() => claim(e.id)}>
+                  <button type="button" className="btn btn-sm btn-volt" autoFocus disabled={busy || !info} aria-busy={busy} onClick={() => claim(e.id)}>
                     {busy ? "Saving" : "Yes, it's my seat"}
                   </button>
                   <button type="button" className="btn btn-sm btn-ghost" disabled={busy} onClick={() => (info ? notMine(e.id) : close())}>
@@ -778,7 +778,7 @@ function EngagementForm({
         </section>
       )}
       <div className="tp-modal-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy || !filled.length}>
+        <button type="submit" className="btn btn-volt" disabled={busy || !filled.length}>
           {busy ? "Adding" : "Add this seat"}
         </button>
         <EarnLine n={answers} err={err} empty={emptyLine} />
@@ -899,7 +899,7 @@ function PersonForm({ i, onDone, draft, setDraft }: { i: CoInfo; onDone: (s: Sen
         </div>
       )}
       <div className="tp-modal-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy || !filled.length}>
+        <button type="submit" className="btn btn-volt" disabled={busy || !filled.length}>
           {busy ? "Adding" : "Add this person"}
         </button>
         <EarnLine n={filled.length} err={err} empty={earnNote(ui.me).capped ? "Start with their name." : "Start with their name. Each answer earns 1 credit."} />
@@ -1290,7 +1290,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
                     <IconCheck size={13} /> We already have {lookup.existing.name}. Add what you know to it, so everything about the company stays in one place.
                   </p>
                   <div className="tp-exists-acts">
-                    <button type="button" className="btn btn-sm btn-primary" onClick={() => pick(lookup.existing!.id)}>
+                    <button type="button" className="btn btn-sm btn-volt" onClick={() => pick(lookup.existing!.id)}>
                       Add to {lookup.existing.name.length > 22 ? "it" : lookup.existing.name}
                     </button>
                     <button type="button" className="btn btn-sm" onClick={() => leave(() => (ui.openCompany(lookup.existing!.id), onClose()))}>

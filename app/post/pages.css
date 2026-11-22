@@ -212,18 +212,7 @@
 
 /* ---------- pilot metrics (admins) ---------- */
 /* An internal report: denser than a member page, same type and chips, no ember. */
-.tp-pm-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 8px 0 16px;
-}
-.tp-pm-head .tp-page-h {
-  margin: 0;
-}
-.tp-phone .tp-pm-head .btn {
+.tp-phone .tp-pm .tp-pm-select {
   min-height: 44px;
 }
 .tp-pm-sub {

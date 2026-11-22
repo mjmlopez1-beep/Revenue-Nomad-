@@ -16,6 +16,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { PASS_CREDIT, passNote, type PassFrom, type PeerPick, type PeerPicks, type TeamRec } from "@/lib/peersCore";
 import { IconUsers, IconX, useToast } from "../ui/shared";
+import { Chip } from "../ui/system";
 import { Sheet, useUi } from "./ui";
 import { loadPicks, peersAct, usePeers } from "./peersStore";
 import { openConversation } from "./Messages";
@@ -85,9 +86,13 @@ function PickList({ picks, value, onPick, label }: { picks: PeerPick[]; value: s
             <b>{p.name}</b>
             <span>{[p.title || (p.fn ? `Fractional ${p.fn}` : ""), p.why].filter(Boolean).join(" · ")}</span>
           </span>
-          {p.best && <span className="pe-chip pe-chip-best">Best fit</span>}
-          {p.passed && <span className="pe-chip">Passed before</span>}
-          {p.teamed && <span className="pe-chip">On a team here</span>}
+          {p.best && (
+            <Chip tone="pine" className="pe-chip">
+              Best fit
+            </Chip>
+          )}
+          {p.passed && <Chip className="pe-chip">Passed before</Chip>}
+          {p.teamed && <Chip className="pe-chip">On a team here</Chip>}
         </button>
       ))}
     </div>

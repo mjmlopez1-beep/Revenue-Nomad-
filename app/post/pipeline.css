@@ -4,35 +4,10 @@
  * 6/8/10, no shadows. Stages are columns on a wide screen and a grouped list on a phone.
  */
 
-/* ---------- a stage ---------- */
+/* ---------- a stage: a Chip on the status scale (PipelineParts.tsx StageChip) ---------- */
 .pl-stage {
-  display: inline-block;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  line-height: 20px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  background: var(--surface-2);
-  color: var(--body-ink);
-  vertical-align: 2px;
-}
-.pl-stage-replied,
-.pl-stage-meeting,
-.pl-stage-proposal {
-  background: var(--volt-soft);
-  color: var(--volt-ink);
-}
-.pl-stage-won {
-  background: var(--pine);
-  color: #fff;
-}
-.pl-stage-lost,
-.pl-stage-notnow,
-.pl-stage-quiet {
-  background: var(--surface-2);
-  color: var(--muted);
+  height: 22px;
+  font-size: 12px;
 }
 .pl-how {
   font-size: 12.5px;
@@ -200,43 +175,24 @@
 }
 
 /* ---------- the page ---------- */
-.tp-page.pl-page {
-  max-width: 1240px;
-}
-.pl-lead,
+/* What Merlin sees, a hint under the page head. */
 .pl-sees {
-  max-width: 720px;
-  font-size: 15px;
-  line-height: 23px;
-  color: var(--body-ink);
-}
-.pl-lead {
-  margin: -4px 0 6px;
-}
-.pl-sees {
-  font-size: 13.5px;
+  max-width: 640px;
+  margin: -12px 0 20px;
+  font-size: 13px;
   line-height: 20px;
   color: var(--muted);
-  margin: 0 0 14px;
 }
 .pl-empty {
   margin: 12px 0;
   font-size: 15px;
   color: var(--muted);
 }
-.pl-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 20px;
-  margin: 0 0 16px;
-  font-size: 14px;
-  color: var(--muted);
+.pl-page > .empty-state {
+  margin: 0 0 24px;
 }
-.pl-stats b {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--ink);
-  letter-spacing: -0.02em;
+.pl-stats {
+  margin: 0 0 20px;
 }
 .pl-board {
   display: grid;

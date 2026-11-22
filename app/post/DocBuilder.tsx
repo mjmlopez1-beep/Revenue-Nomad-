@@ -24,6 +24,7 @@ import { Sheet } from "./ui";
 import { openPlans } from "./Billing";
 import { dayOf, stamp } from "../sign/doc";
 import type { CoInfo } from "./model";
+import { ProposalStatus } from "./ProposalParts";
 import "../ui/pdf.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -52,7 +53,6 @@ async function dapi<T>(body: Record<string, unknown>): Promise<T & { error?: str
 }
 
 type LocalSigner = { id: string; name: string; email: string; title?: string };
-const STATUS_SAY: Record<DocumentRec["status"], string> = { draft: "Draft", sent: "Sent", viewed: "Viewed", signed: "Signed", declined: "Declined", void: "Voided", expired: "Expired" };
 const SIGNER_SAY = { waiting: "Waiting for their turn", sent: "Link sent", viewed: "Opened it", signed: "Signed", declined: "Declined" } as const;
 const EVENT_WORDS: Record<string, string> = {
   uploaded: "Uploaded",
@@ -284,15 +284,15 @@ export function DocBuilder({
   };
 
   return (
-    <div className="tp-page pp-page pp-editing df-page">
-      <button type="button" className="tp-back" onClick={() => (void flush(), onBack())}>
+    <div className="page-wide pp-page pp-editing df-page">
+      <button type="button" className="page-back" onClick={() => (void flush(), onBack())}>
         <IconChevron dir="left" /> All proposals
       </button>
       <header className="pp-top">
         <div className="pp-top-main">
           <input className="pp-title df-title" aria-label="Document title" value={title} readOnly={!draft} maxLength={160} onChange={(e) => setTitle(e.target.value)} />
           <p className="pp-top-s">
-            <span className={`chip ${d.status === "signed" ? "chip-volt" : d.status === "declined" ? "pp-chip-lost" : d.status === "draft" || d.status === "void" || d.status === "expired" ? "chip-outline" : ""}`}>{STATUS_SAY[d.status]}</span>
+            <ProposalStatus status={d.status} />
             <span>
               Document · {d.fileName} · {d.pages.length} {d.pages.length === 1 ? "page" : "pages"}
             </span>
