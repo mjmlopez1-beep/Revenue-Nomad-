@@ -10,18 +10,19 @@
  *                     Insights.dc.html, phone as InsightsPhone.dc.html (one column, three counts).
  *   ProposalAlerts    the Notifications grid: each proposal alert in Slack, by email and in Merlin.
  *   CloseOnHome       Home: renewals due (Start the renewal) and the latest proposal notifications.
+ *   ProposalBell      the top bar's bell: the same notifications, with the unread count, in a panel.
  *
  * Close only (canClose; the trial counts): off it, the panel is the upgrade prompt and Home shows nothing.
  * Everything comes from GET/POST /api/activity.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ActivityView, CloseInboxView, ReminderRow } from "@/lib/close/types";
-import { ALERT_ROWS, CHANNELS, type Channel } from "@/lib/close/types";
+import { ALERT_ROWS, CHANNELS, NO_END_WORDS, type Channel } from "@/lib/close/types";
 import type { ProposalRec } from "@/lib/proposals/types";
 import { minShort, minWords } from "@/lib/close/activity";
 import { errorText, useToast } from "../ui/shared";
 import { openPlans } from "./Billing";
-import { useUi } from "./ui";
+import { UiCtx, useUi } from "./ui";
 import "./activity.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -41,10 +42,25 @@ async function api<T>(body?: Record<string, unknown>, id?: string): Promise<T | 
 
 let want: { pr?: string; dc?: string } | null = null;
 let startUsed = false;
-/** Open Proposals on this proposal or document. */
-export function openItem(ui: { openPage: (p: "proposals") => void }, x: { pr?: string; dc?: string }) {
+const OPEN_EVENT = "rn-open-item";
+/** Open Proposals on this proposal or document (Proposals already open hears it through useOpenItem). */
+export function openItem(ui: { openPage: (p: "proposals") => void } | null, x: { pr?: string; dc?: string }) {
+  if (!ui) return window.location.assign(`/?p=proposals&${x.pr ? `pr=${encodeURIComponent(x.pr)}` : `dc=${encodeURIComponent(x.dc ?? "")}`}`);
   want = x;
   ui.openPage("proposals");
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT));
+}
+/** Proposals, already open: switch to what openItem asked for. */
+export function useOpenItem(open: (x: { pr?: string; dc?: string }) => void) {
+  useEffect(() => {
+    const on = () => {
+      const x = want;
+      want = null;
+      if (x) open(x);
+    };
+    window.addEventListener(OPEN_EVENT, on);
+    return () => window.removeEventListener(OPEN_EVENT, on);
+  }, [open]);
 }
 /** The proposal (pr) or document (dc) to open, once: one picked in the app, else the address's (?p=proposals&dc=ID). */
 export function takeItem(k: "pr" | "dc"): string | null {
@@ -133,7 +149,7 @@ export function ActivityPanel({ kind, id, version, onOpen, quiet }: { kind: "pro
           <span>
             Sent {day(v.sentAt)} to {v.signer.name}
             {v.signer.title ? `, ${v.signer.title}` : ""}
-            {!done && v.expiresAt ? ` · link open until ${day(v.expiresAt)}` : ""}
+            {!done ? (v.expiresAt ? ` · link open until ${day(v.expiresAt)}` : ` · ${NO_END_WORDS}`) : ""}
           </span>
         )}
       </p>
@@ -552,6 +568,129 @@ export function CloseOnHome() {
             </button>
           )}
         </section>
+      )}
+    </div>
+  );
+}
+
+/* ================= the top bar's bell ================= */
+
+const IconBell = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </svg>
+);
+
+/**
+ * The bell in the top bar (desktop and phone): the proposal notifications (opened, a new reader,
+ * follow up, a question, passed on, signed or declined, countersign, renewal, reminders sent),
+ * newest first, with the unread count. Merlin has no other in-app notification store, so these are
+ * the proposal ones. Each opens what it's about and is marked read; Mark all read; read state is
+ * kept per member on the server. A real button with the count in its label; the panel is a dialog
+ * that Escape or a click outside closes, focus back on the bell. Nothing on Free or Pro.
+ */
+export function ProposalBell({ phone }: { phone?: boolean }) {
+  const ui = useContext(UiCtx);
+  const [v, setV] = useState<CloseInboxView | null>(null);
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const load = useCallback(() => {
+    void api<CloseInboxView>().then((r) => !("error" in r) && setV(r));
+  }, []);
+  useEffect(() => {
+    load();
+    const t = window.setInterval(() => document.visibilityState === "visible" && load(), 120_000);
+    window.addEventListener("focus", load);
+    return () => (window.clearInterval(t), window.removeEventListener("focus", load));
+  }, [load]);
+  const close = useCallback((back = true) => {
+    setOpen(false);
+    if (back) btn.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    panel.current?.focus();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && (e.preventDefault(), close());
+    const down = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!panel.current?.contains(t) && !btn.current?.contains(t)) close(false);
+    };
+    document.addEventListener("keydown", key);
+    document.addEventListener("mousedown", down);
+    return () => (document.removeEventListener("keydown", key), document.removeEventListener("mousedown", down));
+  }, [open, close]);
+  if (!v?.open) return null;
+  const unread = v.unread;
+  const read = (ids?: string[]) => {
+    setV({ ...v, unread: ids ? v.items.filter((x) => !x.read && !ids.includes(x.id)).length : 0, items: v.items.map((x) => (!ids || ids.includes(x.id) ? { ...x, read: true } : x)) });
+    void api({ op: "read", ...(ids ? { ids } : {}) });
+  };
+  return (
+    <div className={`ac-bell${phone ? " ac-bell-phone" : ""}`}>
+      <button
+        ref={btn}
+        type="button"
+        className={`tp-iconbtn tp-has-badge${unread ? " on" : ""}`}
+        aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls="ac-bell-panel"
+        title={unread ? `${unread} unread` : "Notifications"}
+        onClick={() => (open ? close() : (setOpen(true), load()))}
+      >
+        <IconBell />
+        {unread > 0 && (
+          <span className="tp-badge tp-badge-dot num" aria-hidden>
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div ref={panel} id="ac-bell-panel" className="ac-bell-panel" role="dialog" aria-labelledby="ac-bell-h" tabIndex={-1}>
+          <div className="ac-bell-head">
+            <h2 className="ac-h3" id="ac-bell-h">
+              Notifications{unread ? <span className="ac-unread">{unread} new</span> : null}
+            </h2>
+            {unread > 0 && (
+              <button type="button" className="tp-flink" onClick={() => read()}>
+                Mark all read
+              </button>
+            )}
+          </div>
+          {v.items.length === 0 ? (
+            <p className="ac-p ac-bell-empty">Nothing yet. When a client opens, reads, asks or signs a proposal, it shows here.</p>
+          ) : (
+            <ul className="ac-bell-list">
+              {v.items.map((x) => (
+                <li key={x.id}>
+                  <button
+                    type="button"
+                    className="ac-inbox-row"
+                    onClick={() => {
+                      if (!x.read) read([x.id]);
+                      close(false);
+                      openItem(ui, x.item.startsWith("dc_") ? { dc: x.item } : { pr: x.item });
+                    }}
+                  >
+                    <span className="ac-dot" data-new={!x.read} aria-hidden />
+                    <span className="ac-inbox-t">
+                      <span>
+                        {!x.read && <span className="sr-only">New: </span>}
+                        <strong>{x.head}</strong> {x.text}
+                      </span>
+                      <span className="ac-small">
+                        {when(x.at)}
+                        {x.sub ? ` · ${x.sub}` : ""}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

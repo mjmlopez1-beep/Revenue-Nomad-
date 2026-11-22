@@ -43,7 +43,7 @@ import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./Pr
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder, uploadPdf } from "./DocBuilder";
 import { LinkCompany } from "./ProposalLink";
-import { ActivityPanel, takeItem } from "./Activity";
+import { ActivityPanel, takeItem, useOpenItem } from "./Activity";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
@@ -86,6 +86,8 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   // A proposal the address named (the connector's edit link), or the company "Write a proposal" was pressed on.
   const [openId, setOpenId] = useState<string | null>(() => takeItem("pr") ?? startProposal());
   const [openDoc, setOpenDoc] = useState<string | null>(() => takeItem("dc"));
+  // The bell or Home opened one while Proposals was already open.
+  useOpenItem(useCallback((x: { pr?: string; dc?: string }) => (x.pr ? (setOpenDoc(null), setOpenId(x.pr)) : (setOpenId(null), setOpenDoc(x.dc ?? null))), []));
   const [starting, setStarting] = useState<{ companyId: string | null } | null>(() => {
     const c = takeWantCompany();
     return c ? { companyId: c } : null;

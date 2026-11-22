@@ -15,6 +15,7 @@ import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, SpendHost, UndoHost, owedText } from "./ui";
 import { PlanPill } from "./Billing";
+import { ProposalBell } from "./Activity";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
@@ -737,6 +738,7 @@ export function TopBar({
               <button type="button" className={`tp-iconbtn${searchInList ? " tp-search-icon-list" : ""}`} aria-label="Search" onClick={() => setSearchOpen(true)}>
                 <IconSearch size={18} />
               </button>
+              <ProposalBell phone />
               <PlanPill plan={me.plan} phone />
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
             </div>
@@ -758,6 +760,8 @@ export function TopBar({
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>
         </button>
+        {/* Proposal notifications (Activity.tsx, lib/close): Close only, nothing otherwise. */}
+        <ProposalBell />
         {onMessages && <MessagesBtn unread={unread} onClick={onMessages} here={onMessagesPage} />}
       </div>
       {hosts}
