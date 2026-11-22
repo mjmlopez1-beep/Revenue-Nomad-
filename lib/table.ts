@@ -145,6 +145,7 @@ import type { StoredDocument } from "./documents/types";
 // The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
 // inside the same change that sends, signs or declines. Registered once, when the server loads this module.
 import { proposalToPipeline, setPipelineHook } from "./proposals/pipelineHook";
+import { ui2Me, ui2Setting } from "./ui2";
 setPipelineHook(proposalToPipeline);
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -348,6 +349,10 @@ interface Profile {
   /** Onboarding's "How many clients do you have now?" (CLIENT_COUNTS) and "Are you looking for a new client?". */
   clientCount?: string;
   looking?: boolean;
+  /** "Try the new Merlin" (lib/ui2.ts): the new look, while RN_UI2 is optin. */
+  ui2?: boolean;
+  /** The "what this page is for" strips they dismissed in the new look (page keys, lib/ui2.ts). */
+  stripsOff?: string[];
 }
 /** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
 interface RoleTrack {
@@ -4450,6 +4455,8 @@ async function fullView(
       ...(s.voice?.[me.id] ? { voice: { ...s.voice[me.id], phrases: [...(s.voice[me.id].phrases ?? [])] } } : {}),
       clientCount: prof.clientCount ?? null,
       looking: typeof prof.looking === "boolean" ? prof.looking : null,
+      // The new look (RN_UI2): nothing at all while the flag is off.
+      ...ui2Me(prof),
       // Their plan, only while billing is live (lib/billing). Without it nothing is gated.
       ...(billingLive() ? { plan: planView(s, me.id, nowMs, { tracks, fnOfEng: (engId) => { const e = g.engagements.get(engId); return e ? fnOf(e, s) : null; } }) } : {}),
       // Only the viewer's own. Nobody else's private rate ever leaves the server.
@@ -4489,6 +4496,7 @@ async function fullView(
     reported,
     email: emailEnabled(),
     contact: contactInfo(),
+    ...(meRec?.ui2 ? { ui2: true } : {}),
     ...(me && scan ? { ...(bench ? { benchmarks: freeNow(s, me.id, nowMs) ? freeBenchmarks(benchmarks(seed, g, s, me.id)) : benchmarks(seed, g, s, me.id) } : {}), scan } : {}),
     ...(me && scan && admin && !only
       ? {
@@ -7260,6 +7268,15 @@ export async function perform(
                 ? "You're in the Fractionals directory. Members see your name, your seats and the clients you serve, free. Never your email."
                 : "You're out of the Fractionals directory. Members you already talk to can still write to you.",
             };
+          }
+          // The new look (lib/ui2.ts): "Try the new Merlin", "Back to the old look", and the page strips dismissed.
+          {
+            const u = ui2Setting(a, s.profiles[me.id] ?? {});
+            if (u && "refused" in u) throw new ActionError(u.refused);
+            if (u) {
+              s.profiles[me.id] = u.profile;
+              return { message: u.message };
+            }
           }
           return { message: "Saved." };
         }

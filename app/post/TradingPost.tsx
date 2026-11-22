@@ -44,7 +44,8 @@ import {
   icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CheckStep, type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
-import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, weekN, type FirstList } from "./place";
+import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, ui2PageOf, weekN, type FirstList, type Ui2Page } from "./place";
+import { ui2Action } from "@/lib/ui2";
 import { alertView } from "../onboard/suggest"; // [ux ws3]
 import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, startSteps, stepOneKind, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
@@ -223,7 +224,14 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // "pipeline": Your pipeline (Pipeline.tsx).
 // "proposals": Proposals (Proposals.tsx), the member's own.
 // "getin": Where you can get in, and Your way into one company (?w=<company>) (network/Ways.tsx), only with RN_GOOGLE=1.
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals" | "peers" | "getin";
+// The new look (RN_UI2, lib/ui2.ts) adds "find", "warm", "alerts", "agent" and "settings" (place.ts UI2_PAGES); old pages with a new home open it (ui2PageOf).
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals" | "peers" | "getin" | Ui2Page;
+/** The page an old page key opens with the new look off (a new page's old home). */
+const OLD_PAGE: Partial<Record<Page, Page>> = { warm: "getin", alerts: "notifications", agent: "integrations", settings: "integrations", find: "table" };
+/** Find's own page isn't built yet: under the new look "find" opens the table (its search and filters) for now. */
+const FIND_PLACEHOLDER = true;
+/** The page `p` opens in the look on screen (`ui2`: the new look). */
+const pageFor = (p: Page, ui2: boolean): Page => (ui2 ? (p === "find" && FIND_PLACEHOLDER ? "table" : ui2PageOf(p)) : OLD_PAGE[p] ?? p);
 
 /* ---------- the place in the address bar ---------- */
 
@@ -247,6 +255,11 @@ const PAGE_TITLE: Record<Page, string> = {
   pipeline: "Your pipeline",
   proposals: "Proposals",
   getin: "Where you can get in",
+  find: "Find",
+  warm: "Warm paths",
+  alerts: "Alerts and workflows",
+  agent: "Agent access",
+  settings: "Settings",
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -271,7 +284,7 @@ const presetsOff = (me: Me) => new Set((store.get(presetOffKey(me)) ?? "").split
 const defaultsFor = (me: Me) => placeDefaults(me, presetsOff(me));
 const sortDefault = (me: Me, v: Tab, f?: Filters): SortKey => placeSortDefault(me, v, f, presetsOff(me));
 /** A place as an address query: the URL's own (read on mount and on Back and Forward), or a saved view's. */
-const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "undefined" ? "" : window.location.search, presetsOff(me), from);
+const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "undefined" ? "" : window.location.search, presetsOff(me), from, { ui2: !!me.ui2 });
 
 /** The address is Today's: no place in it. */
 const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
@@ -294,7 +307,7 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   else if (x.p !== "table" && x.p !== "today") q.set("p", x.p);
   // The radar's day (an email's link) or the range the member picked, so a reload opens the same companies. The default range says nothing.
   // Your way into one company: its public id.
-  if (x.p === "getin" && x.w) q.set("w", x.w);
+  if ((x.p === "getin" || x.p === "warm") && x.w) q.set("w", x.w);
   if (x.p === "radar" && x.sig) q.set("sig", x.sig);
   else if (x.p === "radar" && x.range) q.set("range", x.range);
   // Proposals keeps its own screen in the address (an open proposal, document, the start sheet, Contracts: app/post/Proposals.tsx), so a reload reopens it.
@@ -350,7 +363,19 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const copy = useCopy();
 
   /* ----- the place: from the address bar, else the member's onboarding answers ----- */
-  const [place0] = useState(() => readPlace(me));
+  const [place0] = useState(() => {
+    const x = readPlace(me);
+    // The new look's ?p=contracts is Proposals on its Contracts screen, which reads ?p=proposals&ct=1 (Proposals.tsx): the address says so before it draws.
+    if (x.ct && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "contracts") {
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set("p", "proposals");
+        u.searchParams.set("ct", "1");
+        window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+      } catch {}
+    }
+    return x;
+  });
   /** Opened from an old "Use it in Claude" link: Integrations opens at the Claude section. */
   const [claudeLink, setClaudeLink] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "claude");
   const [recordType, setRecordType] = useState<RecordType>(place0.t);
@@ -394,11 +419,21 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * Pro, today's one on Free) and closing it shows the day. A company not on file opens the day alone.
    */
   const [deepRadar] = useState(() => place0.p === "radar" && !!place0.c && start !== "seats" && view.companies.some((c) => c.id === place0.c));
-  const [page, setPage] = useState<Page>(() =>
-    start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"),
+  const [page, setPageRaw] = useState<Page>(() =>
+    pageFor(start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"), !!me.ui2),
   );
+  /** The new look is on (Me.ui2, RN_UI2): its shell, and old pages open their new home. */
+  const ui2 = !!me.ui2;
+  const ui2Ref = useRef(ui2);
+  ui2Ref.current = ui2;
+  /** Every page change goes through here: with the new look an old page opens its new home (place.ts ui2PageOf), without it a new page its old one. */
+  const setPage = useCallback((p: Page) => setPageRaw(pageFor(p, ui2Ref.current)), []);
+  // The member switched the look (the member menu): the page on screen moves to its home in the other look.
+  useEffect(() => {
+    setPageRaw((p) => pageFor(p, ui2));
+  }, [ui2]);
   /** Where you can get in shows one company's way in: ?p=getin&w=<company>. Home, the pipeline and a record open it (openWay). */
-  const [wayCo, setWayCo] = useState<string | null>(() => (typeof window !== "undefined" && place0.p === "getin" ? new URLSearchParams(window.location.search).get("w") : null));
+  const [wayCo, setWayCo] = useState<string | null>(() => (typeof window !== "undefined" && (place0.p === "getin" || place0.p === "warm") ? new URLSearchParams(window.location.search).get("w") : null));
   /** Peers shows its Every fractional view (the directory): ?p=peers&pt=all, and the directory's old addresses. */
   const [peersAll, setPeersAll] = useState(() => !!place0.pt);
   /** The page level with the table under a record or a page (Today or the table): where Back and a page's own Back go. */
@@ -2483,7 +2518,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const pipe = usePipeline(page === "pipeline").view;
   const pipelineOpen = pipe ? pipe.counts.sent + pipe.counts.replied + pipe.counts.meeting + pipe.counts.proposal : null;
   const nav = navItems({
-    page,
+    // Under the new look the old sidebar's items name a new page by its old one.
+    page: (OLD_PAGE[page] ?? page) as AppPageKey,
     recordType,
     tab,
     currentView,
@@ -2789,17 +2825,17 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         ) : waiting && onScreen !== "table" ? (
           <main className="tp-main tp-main-page">
             {/* A page about companies waits for all of them; any other page shows its own head while the table lands. */}
-            {onScreen === "radar" || onScreen === "getin" ? <AllLoading failed={fullFailed} /> : <PageWait title={PAGE_TITLE[onScreen]} failed={fullFailed} />}
+            {onScreen === "radar" || onScreen === "getin" || onScreen === "warm" ? <AllLoading failed={fullFailed} /> : <PageWait title={PAGE_TITLE[onScreen]} failed={fullFailed} />}
           </main>
         ) : page === "credits" ? (
           <main className="tp-main tp-main-page">
             <MyCredits view={view} refresh={refresh} onUseInClaude={() => setPage("integrations")} onNotifications={() => setPage("notifications")} />
           </main>
-        ) : page === "integrations" ? (
+        ) : page === "integrations" || page === "settings" || page === "agent" ? (
           <main className="tp-main tp-main-page">
-            <Integrations onBack={toBase} onCredits={() => setPage("credits")} section={claudeLink ? "claude" : undefined} onNetwork={() => setPage("network")} onNotifications={() => setPage("notifications")} />
+            <Integrations onBack={toBase} onCredits={() => setPage("credits")} section={claudeLink || page === "agent" ? "claude" : undefined} onNetwork={() => setPage("network")} onNotifications={() => setPage("notifications")} />
           </main>
-        ) : page === "notifications" ? (
+        ) : page === "notifications" || page === "alerts" ? (
           <main className="tp-main tp-main-page">
             <Notifications view={view} onIntegrations={() => setPage("integrations")} />
           </main>
@@ -2853,7 +2889,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           <main className="tp-main tp-main-page">
             <ProposalsPage view={view} infos={infos} />
           </main>
-        ) : page === "getin" ? (
+        ) : page === "getin" || page === "warm" ? (
           // Where you can get in, and Your way into one company (network/Ways.tsx). With Your network on.
           <main className="tp-main tp-main-page">
             {wayCo ? <WayInPage company={wayCo} phone={phone} infos={infos} onBack={() => setWayCo(null)} /> : <GetInPage infos={infos} phone={phone} openCompany={openCompany} />}
@@ -3252,6 +3288,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                     },
                   ]
                 : []),
+              // RN_UI2=optin: the member tries the new look, or goes back to the old one (lib/ui2.ts). Kept on their profile, so a second device agrees.
+              ...(me.ui2Optin ? [{ group: "The new look", label: ui2 ? "Back to the old look" : "Try the new Merlin", onClick: () => void act(ui2Action({ ui2: !ui2 })) }] : []),
               // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
               ...(me.admin || me.asMember ? [{ group: "Admin", label: "See what members see", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
             ]}

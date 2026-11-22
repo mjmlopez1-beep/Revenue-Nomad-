@@ -28,6 +28,23 @@ export const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
 export const PLACE_PAGES = ["seats", "credits", "rates", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals", "peers", "getin"] as const;
 export type PlacePage = (typeof PLACE_PAGES)[number];
 
+/**
+ * The pages the new look adds (RN_UI2, lib/ui2.ts): Find, Warm paths, Alerts and workflows, Agent
+ * access, Settings. Read from the address only with the new look on; with it off they are unknown
+ * pages, as before. Contracts (?p=contracts) is Proposals' own screen (?p=proposals&ct=1) for now.
+ */
+export const UI2_PAGES = ["find", "warm", "alerts", "agent", "settings"] as const;
+export type Ui2Page = (typeof UI2_PAGES)[number];
+/**
+ * Under the new look an old address opens the page that is its new home (BUILD_PLAN part 2):
+ * Where you can get in is Warm paths, Integrations is Settings, the old "Use it in Claude" link
+ * (?p=claude) is Agent access, Notifications is Alerts and workflows. The rest keep their page,
+ * and the nav marks their new item (navModel.ts currentKey2).
+ */
+export const UI2_FROM_OLD: Partial<Record<string, Ui2Page>> = { getin: "warm", integrations: "settings", claude: "agent", notifications: "alerts" };
+/** The page an old page key opens with the new look on (itself when it has no new home). */
+export const ui2PageOf = <T extends string>(p: T): T | Ui2Page => UI2_FROM_OLD[p] ?? p;
+
 /** The address keys that name a place in the app. With none of them, / opens Today. */
 export const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade", "plans", "w"];
 
@@ -72,8 +89,13 @@ export const placeSortDefault = (me: Me, v: Tab, f: Filters | undefined, off: Se
   v === "hiring" ? "newest" : f && hiredOn(f) ? "hired" : placeDefaults(me, off).s;
 
 export type Place = ReturnType<typeof parsePlace>;
-/** A place from an address query: `search` is the address's own, or `from` a saved view's (never Today). */
-export function parsePlace(me: Me, search: string, off: Set<string>, from?: string) {
+/**
+ * A place from an address query: `search` is the address's own, or `from` a saved view's (never Today).
+ * `opts.ui2`: the new look is on, so its pages are places too and old pages open their new home
+ * (UI2_FROM_OLD; ?p=contracts is Proposals at Contracts, `ct`). Off, the place is exactly as before.
+ */
+export function parsePlace(me: Me, search: string, off: Set<string>, from?: string, opts?: { ui2?: boolean }) {
+  const ui2 = !!opts?.ui2;
   const d = placeDefaults(me, off);
   const q = new URLSearchParams(from ?? search);
   const t = (Object.keys(TYPE_PARAM) as RecordType[]).find((k) => TYPE_PARAM[k] === q.get("t")) ?? d.t;
@@ -87,15 +109,26 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
   // and so does an older email's "See who" (?upgrade=radar).
   // A day still to come, or one that is no date (?sig=2099-12-31, 2026-13-45), is no day of the radar: a future day reads as today.
   const sig = sigDayOf(q.get("sig"));
-  const p0: PlacePage | null = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PLACE_PAGES.find((x) => x === q.get("p")) ?? null;
+  const raw = q.get("p");
+  const asked = ui2 && raw === "contracts" ? "proposals" : raw;
+  const p0: PlacePage | Ui2Page | null = sig
+    ? "radar"
+    : raw === "claude"
+      ? ui2 ? "agent" : "integrations"
+      : !raw && q.get("upgrade") === "radar"
+        ? "radar"
+        : PLACE_PAGES.find((x) => x === asked) ?? (ui2 ? UI2_PAGES.find((x) => x === asked) : undefined) ?? null;
   // The Fractionals directory (and Referral partners before it) lives in Peers now: their old addresses open Peers' Every fractional.
-  const p: PlacePage | null = p0 === "fractionals" || p0 === "partners" ? "peers" : p0;
+  const p1: PlacePage | Ui2Page | null = p0 === "fractionals" || p0 === "partners" ? "peers" : p0;
+  const p: PlacePage | Ui2Page | null = ui2 && p1 ? ui2PageOf(p1) : p1;
+  // ?p=contracts (the new look): Proposals, on Contracts.
+  const ct = ui2 && (raw === "contracts" || (raw === "proposals" && q.get("ct") === "1"));
   const pt = p === "peers" && (p0 !== "peers" || q.get("pt") === "all");
   // The radar's range the member picked (?p=radar&range=7d); a day (?sig=) wins.
   const range = p === "radar" && !sig ? radarRangeOf(q.get("range")) : null;
   // Nothing in the address that names a place (?c=, ?p=, ?v= and the rest): Today, the home. "?p=table" is the table at its defaults.
   const home = !from && !PLACE_KEYS.some((k) => q.has(k));
-  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, ...(range ? { range } : {}), ...(pt ? { pt: true } : {}), home };
+  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, ...(range ? { range } : {}), ...(pt ? { pt: true } : {}), ...(ct ? { ct: true } : {}), home };
 }
 /** The address names no place: / opens Today. */
 export const isHome = (search: string) => {
