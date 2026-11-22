@@ -119,7 +119,7 @@ Upload as Unlisted. Paste the link in the verification form.
 
 ### Owner, before submitting
 
-- [ ] Fill in the Terms' governing law (`GOVERNING_LAW` in `app/terms/Terms.tsx`), redeploy, and check `/terms` no longer shows "To confirm".
+- [x] The Terms' governing law is set: the State of Connecticut, disputes in the state and federal courts located in Connecticut (`GOVERNING_LAW`, `DISPUTE_COURTS` in `app/terms/Terms.tsx`).
 - [ ] Have a lawyer read `/privacy` and `/terms` (the list under "To confirm" below).
 - [ ] Set `RN_SUPPORT_EMAIL` on the production server, so `/privacy` and `/terms` show the address (without it they say "Write to us from revenuenomad.com").
 - [ ] Production runs at `https://merlin.revenuenomad.com` with `RN_PUBLIC_URL` set to it; `/privacy` and `/terms` open signed out.
@@ -155,7 +155,7 @@ Upload as Unlisted. Paste the link in the verification form.
 
 These are not on the public pages, or are phrased there conservatively, until someone confirms them.
 
-- **Governing law:** the Terms show `[To confirm: State of ___]` until `GOVERNING_LAW` is set.
+- **Governing law:** set to the State of Connecticut, where Revenue Nomad is registered, with disputes in the state and federal courts located in Connecticut.
 - **Support address:** `RN_SUPPORT_EMAIL` must be set in production; the pages read it at run time.
 - **Closing an account:** there is no in-app button. The policy says to write to us and that we will say what we keep (such as payment records). The process, how long it takes, and what stays (ledger rows, facts other members unlocked, signed proposals) need deciding.
 - **Backups:** daily snapshots on the server are kept 14 days (`lib/backup.ts`). The off-site bucket keeps a file per day with no expiry set in Merlin, and it holds Google network data. Set a lifecycle rule on the bucket (for example 30 days), then the policy can name the number. Whether the off-site copy needs its own encryption is for the owner.

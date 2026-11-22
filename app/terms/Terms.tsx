@@ -2,21 +2,24 @@
  * Merlin's Terms of Service. The numbers are read from the rules the server runs (lib/billing/rules.ts,
  * lib/tableFields.ts EARN_CAP, lib/proposals SIGN_DAYS and SENDER_DUTY), so the page can't drift from
  * what Merlin does. Cancellation and refunds say only what the billing code does: Pro runs to the end
- * of the period paid for, then Free, and Merlin makes no refunds of its own. The governing law is the
- * owner's to fill in (GOVERNING_LAW); until then the page shows a placeholder.
+ * of the period paid for, then Free, and Merlin makes no refunds of its own. The governing law is
+ * Connecticut's, where Revenue Nomad is registered (GOVERNING_LAW), with disputes in the state and
+ * federal courts located in Connecticut.
  */
 import { EXTEND_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PAUSE_MONTHS, PRICES, PRO_CREDITS, TOPUP_CREDITS, TRIAL_DAYS } from "@/lib/billing/rules";
 import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
 import { SENDER_DUTY } from "@/lib/proposals/types";
 import { ContactLine, LegalShell, TERMS_VERSION, type Part } from "../legal/LegalShell";
 
-/** The owner fills this in, e.g. "the State of Delaware". Null shows the placeholder. */
-export const GOVERNING_LAW: string | null = null;
+/** Revenue Nomad is registered in Connecticut: its law governs these terms. */
+export const GOVERNING_LAW = "the State of Connecticut";
+/** Where disputes are heard. */
+export const DISPUTE_COURTS = "the state and federal courts located in Connecticut";
 /** How long a signing link works (lib/proposals/store.ts SIGN_DAYS; that module reads the server's state, so the number is repeated here and checked by scripts/test-legal.mts). */
 export const SIGN_LINK_DAYS = 30;
 
 export function TermsView({ support, starter }: { support: string | null; starter: number }) {
-  const law = GOVERNING_LAW ?? "[To confirm: State of ___]";
+  const law = GOVERNING_LAW;
   const parts: Part[] = [
     {
       id: "agree",
@@ -274,8 +277,8 @@ export function TermsView({ support, starter }: { support: string | null; starte
       title: "Governing law",
       body: (
         <p className="cl-p">
-          These terms are governed by the laws of {law}, without regard to its conflict of law rules. Any dispute will be heard in the courts there, unless the law where you
-          live says otherwise.
+          These terms are governed by the laws of {law}, without regard to its conflict of law rules. Any dispute will be heard in {DISPUTE_COURTS}, unless the law
+          where you live says otherwise.
         </p>
       ),
     },
