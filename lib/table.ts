@@ -103,7 +103,7 @@ import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
 import { healthStats } from "./health";
 import {
-  ENDING_DAYS, SUMMARY_DAYS, canClose, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
+  ENDING_DAYS, SUMMARY_DAYS, canClose, keepTier, type CloseUse, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
 import { aiPackReady, closeReady, surveyCode } from "./billing/stripe";
@@ -7518,7 +7518,7 @@ export const tableInternals = {
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
   geoOf, firmsInReview,
   // Plans (lib/billing): the value moment that extends a trial, the saved views Free alerts on, Free's limits, the member's opaque billing ref.
-  valueMoment, alertViewsOf, freeNow, closeNow, billingRef, balance, grantPlanCredits,
+  valueMoment, alertViewsOf, freeNow, closeNow, closeUseOf, keepOf, billingRef, balance, grantPlanCredits,
   // The next-client radar (lib/radar) reads hires and open roles the way the table does, and records its product signals.
   belowLead, offBarRole, isUnseen, addSignal,
   // How a Crystal Ball company opens for the member today (its email's buttons say the same).
@@ -8203,6 +8203,31 @@ export const TRIAL_CARD_DAYS = 3;
 /** Home's one-time trial card is due: on the trial, started in the last TRIAL_CARD_DAYS, and not closed (PlanRecord.notices.trialStartedSeen). */
 const trialCardDue = (rec: PlanRecord | undefined, name: PlanView["name"], nowMs: number): boolean =>
   name === "trial" && !!rec?.trialStartedAt && !rec.notices?.trialStartedSeen && nowMs - Date.parse(rec.trialStartedAt) < TRIAL_CARD_DAYS * DAY_MS;
+/**
+ * What a member did with Close features since `sinceIso` (lib/billing/rules.ts CloseUse), counts
+ * only: proposals and documents made, Claude drafts (each metered call), and sends for signature.
+ */
+function closeUseOf(s: State, memberId: string, sinceIso: string): CloseUse {
+  let made = 0;
+  let sent = 0;
+  for (const p of s.proposals ?? []) {
+    if (p.memberId !== memberId) continue;
+    if (p.createdAt >= sinceIso) made++;
+    sent += p.sends.filter((x) => x.sentAt >= sinceIso).length;
+  }
+  for (const d of s.documents ?? []) {
+    if (d.memberId !== memberId) continue;
+    if (d.createdAt >= sinceIso) made++;
+    if (d.sentAt && d.sentAt >= sinceIso) sent++;
+  }
+  const drafted = (s.aiUsage?.[memberId]?.log ?? []).filter((l) => l.at >= sinceIso).length;
+  return { made, drafted, sent };
+}
+/** The plan the trial nudges toward (PlanView.keep): Pro + Close for an active Close user in their trial, else Pro. */
+function keepOf(s: State, memberId: string): "pro" | "close" {
+  const rec = planRec(s, memberId);
+  return keepTier(closeUseOf(s, memberId, rec?.trialStartedAt ?? "1970-01-01T00:00:00.000Z"));
+}
 /** Me.plan: what the Plan and billing page, the banner and the upgrade moments read. */
 function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: Tracks; fnOfEng: (engId: string) => string | null }): PlanView {
   const rec = planRec(s, memberId);
@@ -8246,6 +8271,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     prices: { month: PRICES.month, year: PRICES.year, closeMonth: PRICES.closeMonth, closeYear: PRICES.closeYear, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
     // Pro or Pro + Close (the trial is Close), whether Close features are open now, and whether Close can be bought.
     tier: tierNow(rec, nowMs),
+    keep: keepOf(s, memberId),
     canClose: canClose(rec, nowMs),
     ...(rec?.closeUntil && Date.parse(rec.closeUntil) > nowMs && rec.tier !== "close" ? { closeUntil: rec.closeUntil } : {}),
     closeOpen: closeReady(),

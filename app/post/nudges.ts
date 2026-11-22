@@ -60,7 +60,9 @@ export function pickNudge(x: NudgeInput): Nudge | null {
     const when = plan.trialDaysLeft <= 1 ? "ends tomorrow" : `ends in ${plan.trialDaysLeft} days`;
     return plan.notLooking
       ? { kind: "trial", text: `Your Pro trial ${when}. Nothing to do: you stay on Free, with no charge.`, cta: "See plans", action: "plans" }
-      : { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans" };
+      : plan.keep === "close"
+        ? { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro + Close.`, cta: "Keep Pro + Close", action: "plans" }
+        : { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans" };
   }
   if (x.credits <= LOW_CREDITS) {
     // At 0: three ways out in one line (earn one, the top-up, Pro).

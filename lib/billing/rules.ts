@@ -157,6 +157,29 @@ export function canClose(rec: PlanRecord | undefined, nowMs: number): boolean {
   return !!rec!.closeUntil && nowMs < ms(rec!.closeUntil);
 }
 
+/**
+ * What a member did with Close features in their trial, counts only (lib/table.ts closeUseOf):
+ * proposals and documents they made, Claude drafts, and things they sent for signature.
+ */
+export interface CloseUse {
+  made: number;
+  drafted: number;
+  sent: number;
+}
+/**
+ * The "active Close user" threshold: the trial's plans sheet, Home's trial card, the trial nudge and
+ * the trial-ending emails nudge toward Pro by default, and toward Pro + Close once the member has
+ * used Close for real. Active is any one thing sent for signature (a proposal or a document), or
+ * CLOSE_ACTIVE_MIN or more of the other Close actions together (a proposal or document made, a
+ * draft written with Claude). One proposal made and left alone is not enough.
+ */
+export const CLOSE_ACTIVE_MIN = 2;
+export const closeActive = (u: CloseUse): boolean => u.sent > 0 || u.made + u.drafted >= CLOSE_ACTIVE_MIN;
+/** The plan the trial nudges toward: Pro, or Pro + Close for an active Close user. */
+export const keepTier = (u: CloseUse): Tier => (closeActive(u) ? "close" : "pro");
+/** "Keep Pro" or "Keep Pro + Close". */
+export const keepWords = (t: Tier) => `Keep ${TIER_NAME[t]}`;
+
 /** The tier a member is on now, for the plans and the gates' words: Free, Pro, or Close (the trial is Close). */
 export function tierNow(rec: PlanRecord | undefined, nowMs: number): "free" | Tier {
   const plan = planOf(rec, nowMs);

@@ -450,6 +450,13 @@ export interface PlanView {
   prices: { month: number; year: number; closeMonth: number; closeYear: number; topup: number; topupCredits: number; proCredits: number };
   /** The tier now: Free, Pro, or Pro + Close ("close"; the trial is Close). */
   tier: "free" | "pro" | "close";
+  /**
+   * The plan the trial nudges toward (lib/billing/rules.ts keepTier): "close" once the member is an
+   * active Close user in their trial (anything sent for signature, or 2 or more proposals, documents
+   * or Claude drafts), else "pro". The plans sheet's lead plan and primary button, Home's trial card,
+   * the trial nudge and the trial-ending emails all follow it.
+   */
+  keep: "pro" | "close";
   /** Close features are open now (lib/billing/rules.ts canClose): the trial, paid Pro + Close, or grandfathered Pro. */
   canClose: boolean;
   /** On Pro from before Close: Close features until this date (the next renewal). Left out otherwise. */
