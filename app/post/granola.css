@@ -111,9 +111,13 @@
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 10px;
 }
+.gr-calls > li {
+  display: flex;
+}
 .gr-call {
   box-sizing: border-box;
   width: 100%;
+  flex: 1 1 auto;
   min-height: 96px;
   display: flex;
   flex-direction: column;
@@ -187,6 +191,11 @@
   color: var(--ink);
 }
 .gr-err p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.gr-err-line {
   margin: 0;
   font-size: 14px;
   line-height: 20px;

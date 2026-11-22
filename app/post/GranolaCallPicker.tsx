@@ -22,9 +22,9 @@
  *   onPaste     the fallback: switch to pasting a transcript (the link shows only when given)
  *   onConnect   open Integrations at the Granola card (default: the app's own page switch)
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { CallsAnswer, GranolaCall, GranolaTranscript } from "@/lib/granola/types";
-import { useUi } from "./ui";
+import { UiCtx } from "./ui";
 import { openPlans } from "./Billing";
 import { fetchCalls, fetchTranscript, loadGranola, useGranola } from "./granolaClient";
 import { callLine, callTitle } from "./granolaWords";
@@ -50,7 +50,8 @@ const EMAIL = /^[^\s@<>()",;]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
 export function GranolaCallPicker({ companyId, email, companyName, pickedId, onPick, onPaste, onConnect }: GranolaCallPickerProps) {
   const { status } = useGranola();
-  const ui = useUi();
+  // Inside the app the page switch; on its own, the Integrations address.
+  const ui = useContext(UiCtx);
   const [titles, setTitles] = useState(false);
   const [by, setBy] = useState<By>(() => (companyId ? { company: companyId } : email ? { email } : { recent: true }));
   const [load, setLoad] = useState<Load>({ state: "idle" });
@@ -82,7 +83,7 @@ export function GranolaCallPicker({ companyId, email, companyName, pickedId, onP
 
   if (!status || !status.on) return status ? null : <p className="gr-quiet">Looking for your Granola calls…</p>;
 
-  const toIntegrations = () => (onConnect ? onConnect() : ui.openPage("integrations"));
+  const toIntegrations = () => (onConnect ? onConnect() : ui ? ui.openPage("integrations") : window.location.assign("/?p=integrations"));
   const paste = onPaste ? (
     <button type="button" className="tp-flink gr-paste" onClick={onPaste}>
       Paste a transcript instead
@@ -235,7 +236,7 @@ export function GranolaCallPicker({ companyId, email, companyName, pickedId, onP
             })}
           </ul>
           {pickErr && (
-            <p className="in-err" role="alert">
+            <p className="gr-err gr-err-line" role="alert">
               {pickErr}
             </p>
           )}
