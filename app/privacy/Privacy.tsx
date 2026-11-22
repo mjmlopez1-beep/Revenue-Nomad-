@@ -123,9 +123,14 @@ export function PrivacyView({ support }: { support: string | null }) {
             signature, what they filled in, the consent they agreed to, and a fingerprint (SHA-256) of the exact document. This audit trail is kept with the signed copy
             and shared with everyone who signed it.
           </p>
+          <p className="cl-p">
+            While the link is open, the sender also sees when it was opened, how many people opened it, and roughly how long each section and price option was read,
+            so they know when to follow up. The page says so near its foot. Merlin tells one reader&apos;s browser from another with a random id in a cookie on the
+            signing page, keeps only a scrambled form of it, and never uses the IP address or a fingerprint of the device for this. Only the sender sees it.
+          </p>
           <h3 className="df-h3">When you use the site</h3>
           <p className="cl-p">
-            Merlin sets a sign-in cookie for members, and short-lived cookies while you connect Google or Slack. It saves a few preferences in your browser&apos;s own
+            Merlin sets a sign-in cookie for members, short-lived cookies while you connect Google or Slack, and on a signing page the reader cookie above. It saves a few preferences in your browser&apos;s own
             storage. It uses your IP address, in memory only, to limit how often requests can be made. Merlin loads no outside scripts, fonts, analytics, trackers or ad tags.
           </p>
         </>

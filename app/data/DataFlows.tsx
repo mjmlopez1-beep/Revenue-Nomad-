@@ -5,6 +5,7 @@
  * docs/data-flows.md: keep the two in step. Phone first. Its styles are imported by page.tsx.
  */
 import { Brand } from "../ui/shared";
+import { DISCLOSURE_LONG, disclosureText } from "@/lib/close/types";
 
 type Service = { who: string; gets: string; why: string; when?: string };
 
@@ -34,7 +35,7 @@ const SERVICES: Service[] = [
   },
   {
     who: "Resend (email)",
-    gets: "Each email Merlin sends: the address, the subject and the text. Sign-in links and codes, a note that a member wrote to you with the first 200 characters of their message, a lead or a team-up a fellow fractional sent you through Peers with their note, the weekly email, Crystal Ball emails, and plan notices.",
+    gets: "Each email Merlin sends: the address, the subject and the text. Sign-in links and codes, a note that a member wrote to you with the first 200 characters of their message, a lead or a team-up a fellow fractional sent you through Peers with their note, the weekly email, Crystal Ball emails, plan notices, proposals and their reminders to the person who signs, and proposal alerts to the member who sent it.",
     why: "Sending Merlin's email.",
     when: "Only while email is set up.",
   },
@@ -46,7 +47,7 @@ const SERVICES: Service[] = [
   },
   {
     who: "Slack, and webhooks a member adds",
-    gets: "The alerts that member turned on: new roles, messages, seats and Crystal Ball, with the companies that member can see and links back to Merlin. Company icons in Slack come from Merlin's own address.",
+    gets: "The alerts that member turned on: new roles, messages, seats, Crystal Ball and their proposal alerts (opened, a new reader, time to follow up, signed, renewal), with the companies that member can see and links back to Merlin. Company icons in Slack come from Merlin's own address.",
     why: "Alerts where the member asked for them.",
     when: "Only for members who connect Slack or add a webhook.",
   },
@@ -168,6 +169,23 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-readers">
+            <h2 className="df-h" id="df-readers">
+              Inside Merlin: proposal readers
+            </h2>
+            <p className="cl-p">{DISCLOSURE_LONG}</p>
+            <p className="cl-p">
+              What is collected: that the proposal or document was opened, which section or page and which price option was on screen while the reader was active, in
+              seconds, an option picked, an add-on chosen, and a download. A random id in a cookie, sent only to Merlin&apos;s own address for this, tells one
+              reader&apos;s browser from another, so a forward opened somewhere else counts as a new reader. Merlin keeps only a scrambled form of that id, never the IP
+              address and never a fingerprint of the device. Nothing is counted once it is signed, declined, withdrawn or expired.
+            </p>
+            <p className="cl-p">
+              Why: so the member who sent it knows when it was opened and what was read, and when to follow up. Only that member sees it. It is kept with the proposal,
+              capped, and deleted with it. The page tells the client, near its foot: &ldquo;{disclosureText()}&rdquo;
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-off">
             <h2 className="df-h" id="df-off">
               Who can switch it off
@@ -180,6 +198,7 @@ export function DataFlows() {
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
               <li>Peers: mute a member, or leave a circle.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>
+              <li>Proposal alerts: each one on or off for Slack, email and Merlin in Notifications. Reminders to the person who signs: off for each proposal on its activity page.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
               <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection and the connections file you uploaded, your network, your pipeline and plans for a way in, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>

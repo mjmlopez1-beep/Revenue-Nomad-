@@ -232,6 +232,11 @@ export function TermsView({ support, starter }: { support: string | null; starte
             they confirmed, the time, their IP address and device, and a fingerprint of the exact document, and keeps the signed copy and its audit trail for you both.
             Signing links work for {SIGN_LINK_DAYS} days.
           </p>
+          <p className="cl-p">
+            On Close, Merlin shows you when your client opens it, how many people read it and how long they spend on each section and price, and tells your client so
+            on the page. It can remind them to sign on day 2 and day 7 and before the link closes, which you can turn off for each proposal, and it reminds you 30 days
+            before a signed term ends.
+          </p>
           <p className="cl-p">Before you send, you confirm what Merlin asks of every sender:</p>
           <p className="lg-key">{SENDER_DUTY}</p>
           <p className="cl-p">
