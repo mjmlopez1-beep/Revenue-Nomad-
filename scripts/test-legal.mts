@@ -73,6 +73,15 @@ async function main() {
   check("every processor is named", ["Railway", "Backup storage", "Resend", "Stripe", "Slack", "Google", "Your own AI assistant"].every((t) => pt.includes(t)));
   check("never sells, never trains, the server calls no AI model", pt.includes("We never sell personal data") && pt.includes("We never use any data to train AI models") && pt.includes("calls no AI model"));
   check("deletion: Disconnect, the LinkedIn import, Remove my name, closing an account", ["Disconnect and delete everything", "Delete removes the file", "Remove my name", "Closing your account"].every((t) => pt.includes(t)));
+  // Own sites (lib/ownsites): one plain sentence, in the policy, the data page and the doc, with version 1.2.
+  const ownLine = "Merlin also reads the email addresses that fractionals publish on their own business websites";
+  check(
+    "own sites: the policy says Merlin reads the emails fractionals publish on their own business websites, US only, to invite them and show members, removable at /remove; version 1.2",
+    PRIVACY_VERSION === "1.2" &&
+      pt.includes(`${ownLine}, for people in the United States only, to invite them to claim their seats and to show members. Anyone can remove their name and email at Remove my name.`) &&
+      src("app/data/DataFlows.tsx").includes(`${ownLine}, US only, to invite them to claim their seats and to show members. Anyone can remove their name and email at /remove.`) &&
+      src("docs/data-flows.md").includes("the email addresses that fractionals publish on their own business websites, US only, to invite them to claim their seats and to show members, and anyone can remove their name and email at `/remove`"),
+  );
   check(
     "deletion of Google data: the pipeline is cleared too, and access removed at Google means deleted after 30 days",
     ["That includes what came from Google on Your pipeline", "An entry Merlin opened from your Gmail alone is deleted", "without the contact's name, title or email from Google", "If you don't reconnect within 30 days of that date, Merlin deletes what it read from Google", "Merlin deletes it 30 days after it finds the access removed"].every((t) => pt.includes(t)),

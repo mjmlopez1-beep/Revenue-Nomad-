@@ -236,7 +236,7 @@ check("it prints counts, never a name", /rows written: 8\b/.test(outreach.stdout
 const oText = existsSync(outCsv) ? readFileSync(outCsv, "utf8") : "";
 const oRows = oText.trim().split("\n").slice(1);
 check("one row per named seat", oRows.length === 8, oRows.length);
-check("the header names its columns", oText.startsWith("first_name,full_name,company,role,start_month,claim_link,sales_navigator_lead,message"));
+check("the header names its columns", oText.startsWith("first_name,full_name,company,role,start_month,claim_link,sales_navigator_lead,email,email_from,message"));
 check("a row has the first name, the claim link and the lead link", oText.includes(`Zelda,${P.zelda},Alpha Fixture Co,Fractional VP Sales,Apr 2025,https://merlin.example.com/claim/${claimTok(seat("fx-a1")[1])},https://www.linkedin.com/sales/lead/NAVLEAD0001,`), oRows[0]);
 check("the message greets them, says it's free, and never where the name came from", /"?Hi Zelda, your seat as Fractional VP Sales at Alpha Fixture Co is on Merlin/.test(oText) && /free/.test(oText) && !/public profile|Sales Nav|LinkedIn profile|found you/i.test(oText.split("\n").map((l) => l.split(",https://www.linkedin.com")[0]).join("\n").replace(/sales_navigator_lead/, "")));
 const inRepo = spawnSync(process.execPath, [path.join(ROOT, "scripts", "claim-outreach.mjs"), path.join(ROOT, "outreach-test.csv"), "--csv", csvPath, "--seed", seedPath], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });

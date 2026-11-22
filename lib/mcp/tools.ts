@@ -32,6 +32,7 @@ import {
 } from "@/app/post/model";
 import { LEADERS_SOURCE, LEADERS_SOURCE_SAY, checkedWords, leadItems, ledFullTimeWords, monthYear } from "../leaders/types";
 import { likelyWords } from "../leaders/likely";
+import { OWNSITE_SAY } from "../ownsites/types";
 import { cleanWindow } from "../hired";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
 import { sameView } from "../hunt";
@@ -240,6 +241,8 @@ export function personOut(p: PersonRec, seatId?: string | null, hidden = false):
     ...readAll(p.cells, PERSON_KEYS, (f) => personLocked(p, hidden, f)),
     ...(p.source === LEADERS_SOURCE ? { source: LEADERS_SOURCE_SAY, ...(p.site?.at ? { source_read: dayOfIso(p.site.at) } : {}), ...(!hidden && p.site?.url ? { source_page: p.site.url } : {}) } : {}),
     ...(likely ? { email_is: `${likelyWords(likely)}. Not verified.`, email_verified: false } : {}),
+    // The seat holder's email read from their own firm's website (lib/ownsites), locked like any email.
+    ...(email && (email.s === "locked" || email.s === "value") && email.from === "ownsite" ? { email_is: `${OWNSITE_SAY}: the address they publish on their own firm's website.` } : {}),
   };
 }
 

@@ -14,6 +14,7 @@ import { fundingEnabled } from "./funding/types";
 import { aboutEnabled, aboutProgress } from "./about/types";
 import { leadersEnabled, leadersProgress } from "./leaders/types";
 import { runWords, websitesEnabled, websitesProgress } from "./websites/types";
+import { ownSitesEnabled, ownSitesProgress, dryRunCount, runWords as ownWords } from "./ownsites/types";
 import { JOBS, JOB_WORDS, TICK_MS, envOff, jobsRuntime, nextRunAt, settingOf, type JobId, type JobRow, type JobSetting, type JobsPanel } from "./schedule";
 
 const HOUR = 60 * 60 * 1000;
@@ -33,10 +34,13 @@ export async function runDueJobs(origin?: string, nowMs = Date.now()): Promise<R
     funding: () => maybeFunding(nowMs),
     about: () => (aboutEnabled() ? import("./about/run").then((m) => m.maybeAbout({ nowMs })) : false),
     websites: () => (websitesEnabled() ? import("./websites/run").then((m) => m.maybeWebsites({ nowMs })) : false),
+    ownsites: () => (ownSitesEnabled() ? import("./ownsites/run").then((m) => m.maybeOwnSites({ nowMs })) : false),
   };
   const out = {} as Record<JobId, boolean>;
   // Not a job of its own: Google access removed 30 days ago means Merlin deletes what it read from it (lib/google expireRevoked).
   await expireGoogle(nowMs);
+  // Not a job of its own either: RN_OWNSITES_DRYRUN=N runs the own-sites reader once, in the background, after the server starts.
+  if (dryRunCount()) await import("./ownsites/run").then((m) => m.maybeOwnSitesDry()).catch((e) => console.error("ownsites dry run check failed", e instanceof Error ? e.message : "error"));
   await Promise.all(
     JOBS.map(async (job) => {
       try {
@@ -83,6 +87,8 @@ function dueFrom(s: State, job: JobId): number {
       return Date.parse(s.about?.lastRun?.startedAt ?? "");
     case "websites":
       return Date.parse(s.websites?.lastRun?.startedAt ?? "");
+    case "ownsites":
+      return Date.parse(s.ownSitesJob?.lastRun?.startedAt ?? "");
   }
 }
 
@@ -128,6 +134,12 @@ function lastOf(s: State, job: JobId): { at: string | null; note: string | null;
       if (!r.endedAt && !websitesProgress.running) return { at: r.startedAt, note: `Stopped before the end, ${n0(r.done)} of ${n0(r.total)} read`, failed: true };
       return { at: r.startedAt, note: runWords(r), failed: false };
     }
+    case "ownsites": {
+      const r = s.ownSitesJob?.lastRun;
+      if (!r) return { at: null, note: null, failed: false };
+      if (!r.endedAt && !ownSitesProgress.running) return { at: r.startedAt, note: `Stopped before the end, ${n0(r.tried)} of ${n0(r.total)} read`, failed: true };
+      return { at: r.startedAt, note: ownWords(r), failed: false };
+    }
   }
 }
 
@@ -138,6 +150,7 @@ const runningNow: Record<JobId, () => boolean> = {
   funding: fundingRunning,
   about: () => aboutProgress.running,
   websites: () => websitesProgress.running,
+  ownsites: () => ownSitesProgress.running,
 };
 
 /** Whether "Run now" can start the job on this server (the scan and Crystal Ball always can; the rest need their switch). */
@@ -148,6 +161,7 @@ const canRun: Record<JobId, () => string | null> = {
   funding: () => (fundingEnabled() ? null : "Set RN_FUNDING=1 in Railway first."),
   about: () => (aboutEnabled() ? null : "Set RN_ABOUT=1 in Railway first."),
   websites: () => (websitesEnabled() ? null : "Set RN_WEBSITES=1 in Railway first. Dry run works now: it writes nothing."),
+  ownsites: () => (ownSitesEnabled() ? null : "Set RN_OWNSITES=1 in Railway first. Dry run works now: what it finds stays unusable."),
 };
 
 /** The website finder's last dry run, in this process: its counts, or how far it has got. */
@@ -158,6 +172,15 @@ function dryNote(): string | null {
   if (!d) return null;
   const hit = d.done ? Math.round((100 * d.found) / d.done) : 0;
   return `Dry run ${d.startedAt.slice(0, 10)}: ${runWords(d)} (${hit}% found). Nothing was saved.`;
+}
+
+/** The own-sites reader's last dry run (counts only), or how far one going now has got. */
+function ownDryNote(s: State): string | null {
+  const live = ownSitesProgress.running && ownSitesProgress.run?.dry ? ownSitesProgress.run : null;
+  if (live) return `Dry run going: ${ownWords(live)}`;
+  const d = s.ownSitesJob?.lastDry;
+  if (!d) return null;
+  return `Dry run ${d.startedAt.slice(0, 10)}: ${ownWords(d)}. Nothing was made usable.`;
 }
 
 /** One row of the Automatic jobs card. Pure apart from the env switches and what is running in this process. */
@@ -188,6 +211,7 @@ export function jobRow(s: State, job: JobId, nowMs: number): JobRow {
     lastFailed: last.failed,
     nextAt: next === null ? null : new Date(next).toISOString(),
     ...(job === "websites" ? { canDry: !running, dryNote: dryNote() } : {}),
+    ...(job === "ownsites" ? { canDry: !running, dryNote: ownDryNote(s) } : {}),
   };
 }
 

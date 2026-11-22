@@ -111,6 +111,8 @@ import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE, radarPrefs, radarStats, 
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./websites/types";
+// Own sites: emails fractionals publish on their own firm's website (lib/ownsites), shown only with RN_OWNSITES=1.
+import { OWNSITE_RELATIONSHIP, OWNSITE_SOURCE, ownSitesEnabled, type OwnEmail, type OwnSiteLink, type OwnSitesState } from "./ownsites/types";
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, KNOWN_DAYS as LEADERS_KNOWN_DAYS, DAILY_BATCH as LEADERS_DAILY_BATCH, READER_VERSION as LEADERS_READER_VERSION, leadersEnabled, leadersProgress, fnKnow, memberRoles, reportsOf, teamReadAt, CONFIRM_MEMBERS,
   type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
@@ -208,6 +210,12 @@ export interface Seed {
   removedFirms?: RemovedFirms;
   /** Firms the cleanup kept because a member published a seat or a story there, for an admin to review. */
   firmReview?: FirmReview[];
+  /**
+   * Each named United States seat holder's own firm (scripts/add-own-sites.mjs), by person key
+   * (SeedEngagement.holderKey): its website, or its name for the job to find. Never California.
+   * Server only, for lib/ownsites: never in the graph, a view or an export.
+   */
+  ownSites?: Record<string, OwnSiteLink>;
 }
 
 interface Added {
@@ -464,6 +472,14 @@ export interface State extends MessagingState {
   about?: AboutState;
   /** The website finder (lib/websites): each company's last try (found, with its confidence; none; undone), and the last run. Admins only. The websites are values by "found". */
   websites?: WebsitesState;
+  /**
+   * Emails fractionals publish on their own firm's website (lib/ownsites), by person key: the
+   * address, the page, when, how it was accepted, the site; `pending` from a dry run (never usable).
+   * Shown only with RN_OWNSITES=1, as an unlockable email on the seat holder's record (ownSitePeople).
+   */
+  ownEmails?: Record<string, OwnEmail>;
+  /** The own-sites job (lib/ownsites): each person's last try, the last run and dry run, the start-up dry runs done. Admins only. */
+  ownSitesJob?: OwnSitesState;
   /**
    * Who leads each function, read from each company's own website (lib/leaders), by internal
    * company id: the function, level, full-time or fractional, since when and the page, and for
@@ -1227,7 +1243,19 @@ type EngNode = Node & { companyId: string; verified: boolean; source: string; ho
  * person was read), when, and how. `likely`: their email is a likely one from the pattern of the
  * emails members added at the company's domain (seedFields.email), this many on file.
  */
-type PersonNode = Node & { companyId: string; engagementId: string | null; source: string; site?: { url: string; page?: string; at: string; how: LeaderHow }; likely?: number };
+type PersonNode = Node & {
+  companyId: string;
+  engagementId: string | null;
+  source: string;
+  site?: { url: string; page?: string; at: string; how: LeaderHow };
+  likely?: number;
+  /**
+   * The seat holder, with the email they publish on their own firm's website (ownSitePeople,
+   * lib/ownsites): their seat (the name shows as its seat holder does), and the ids of this person's
+   * records on their other seats (an email paid for on one is theirs on every one).
+   */
+  own?: { seat: EngNode; peers: string[] };
+};
 interface Graph {
   companies: Map<string, CompanyNode>;
   engagements: Map<string, EngNode>;
@@ -1314,6 +1342,8 @@ function graph(seed: Seed, s: State): Graph {
       delete e.holderFrom;
     }
   }
+  // The seat holder's email from their own firm's website, only with RN_OWNSITES=1 (lib/ownsites).
+  if (s.ownEmails && ownSitesEnabled()) ownSitePeople(seed, s, g);
   // Fractionals: each seat knows its graph, so a cell can find the fractional it belongs to (personIndex).
   graphSeeds.set(g, seed);
   for (const e of g.engagements.values()) engGraphs.set(e, g);
@@ -1520,6 +1550,8 @@ function takeNameOff(s: State, engId: string, how: NamesState["removed"][string]
   // A fractional bought on Fractionals through this seat ("<seat>.person") bought this name too: it comes back the same way.
   const back = refundPaid(s, k, now, "name") + refundPaid(s, fkey(engId, "person"), now, "name");
   (s.names ??= emptyNames()).removed[engId] = { at: now, how };
+  // Their email from their own website goes with the name, on every seat of theirs, and is never read again.
+  if (seedCache) ownEmailOff(s, seedCache.seed, engId, now);
   return back;
 }
 
@@ -2429,6 +2461,15 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
  * of a seat Revenue Nomad found that nobody is named on (scanRoleFree).
  */
 function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex, free = false): Cell {
+  // A seat holder's record from their own website (ownSitePeople): their name is who held the seat and their title its role,
+  // shown and sold with the seat (SEAT_BUNDLE), never apart.
+  const own = entity === "contact" ? (node as PersonNode | undefined)?.own : undefined;
+  if (own && (key === "name" || key === "title")) {
+    const c = cellOf(s, me, own.seat, "engagement", key === "name" ? "operator" : "role", idx);
+    if (c.s === "value") return { s: "value", v: c.v, ver: c.ver, from: "research" };
+    if (c.s === "locked") return { s: "locked", ver: c.ver, from: "research" };
+    return c.s === "reported" ? { s: "locked", ver: 0, from: "research" } : c;
+  }
   if (entity === "engagement" && ((key === "end" && endFree(node, s)) || (key === "role" && scanRoleFree(node, s)))) free = true;
   // Fractionals: a member shown in the directory has who held their seats, and the roles, free to every member.
   if (!free && me && entity === "engagement" && (key === "operator" || (key === "role" && seatBundled(node, s))) && personShown(s, node)) free = true;
@@ -2450,7 +2491,11 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   // A leader read from the company's website says so, and a likely email says how many emails on file it was read from.
   const site = entity === "contact" && v.by === "seed" ? (node as PersonNode).site : undefined;
   const likely = site && key === "email" && (node as PersonNode).likely ? (node as PersonNode).likely! : 0;
-  const from = likely
+  // The seat holder's email read from their own firm's website (lib/ownsites): "From their website".
+  const ownEmail = !!own && key === "email" && v.by === "seed";
+  const from = ownEmail
+    ? ({ from: "ownsite" } as const)
+    : likely
     ? ({ from: "pattern", likely } as const)
     : site
       ? ({ from: "website" } as const)
@@ -2468,6 +2513,7 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
       holdsPersonPartner(s, me, node, entity, key) ||
       holdsSeatPartner(s, me, node, entity, key) ||
       samePersonHeld(s, me, node, entity, key) ||
+      ownEmailHeld(s, me, node, entity, key) ||
       // Fractionals: the member bought this fractional (one of their seats, or the person): every seat of theirs shows who held it, with the role.
       (entity === "engagement" && (key === "operator" || (key === "role" && seatBundled(node, s))) && personHeld(s, me, node)));
   if (!f.gated || mine || free || paid) {
@@ -4799,6 +4845,8 @@ export const COMPANY_LOCKED_ADD = `This company is locked. Unlock it for ${COMPA
 export const PLACEHOLDER_REFUSED = "That reads like an example name, not a real company. Type the name the company goes by.";
 /** A person's title, email, phone or LinkedIn from a member who can't see who the person is (the same words as NAME_FIRST_ADD). */
 export const FILL_NAME_FIRST = NAME_FIRST_ADD;
+/** Adding to a seat holder's record from their own website (ownSitePeople): it is built from the seat. */
+export const OWN_RECORD_NO_ADD = "This record comes from the seat. Add what you know as a new person on the seat.";
 /** The same, on a person with no name on file. */
 const FILL_NO_NAME = "Add their name first. Then you can add what you know about them.";
 /** A person's facts that only someone who can see who they are can add (the fill action). */
@@ -4937,7 +4985,8 @@ export async function perform(
      * role they hold, and (SEAT_SCAN_ROLE_FREE) the role of a found seat nobody is named on.
      */
     const freeFor = (entity: Entity, id: string, field: string) =>
-      (entity === "contact" && (holdsPersonPartner(s, me, g.contacts.get(id), entity, field) || samePersonHeld(s, me, g.contacts.get(id), entity, field))) ||
+      (entity === "contact" &&
+        (holdsPersonPartner(s, me, g.contacts.get(id), entity, field) || samePersonHeld(s, me, g.contacts.get(id), entity, field) || ownEmailHeld(s, me, g.contacts.get(id), entity, field))) ||
       (entity === "engagement" &&
         ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) ||
           (field === "role" && (roleFree(g.engagements.get(id), s, tracks()) || scanRoleFree(g.engagements.get(id), s))) ||
@@ -4954,7 +5003,8 @@ export async function perform(
      * it, and the screen shows no lock for it (the same test as personUnseen in app/post/model.ts).
      */
     const knowsPerson = (node: Node) =>
-      PERSON_BUNDLE.every((f) => {
+      // A seat holder's record from their own website: they know who it is once the seat shows who held it.
+      (node as PersonNode).own ? ownNameSeen(s, me, node) : PERSON_BUNDLE.every((f) => {
         const v = valueOf(node, s, f);
         return (
           !v ||
@@ -5392,19 +5442,23 @@ export async function perform(
             };
           }
           const f = fieldOf(a.entity, a.field);
+          // A seat holder's record from their own website is Merlin's, built from the seat: what members know goes on the seat, or as a person of their own.
+          if (a.entity === "contact" && (node as PersonNode).own) throw new ActionError(OWN_RECORD_NO_ADD);
           // A person's title, email, phone and LinkedIn come only from a member who can see who the
           // person is: nobody knows the email of someone they can't name. Seeing the name means having
           // added it, paid for it, or paid for the title that comes with it (PERSON_BUNDLE).
           if (a.entity === "contact" && FILL_NEEDS_NAME.includes(f.key)) {
             const nv = valueOf(node, s, "name");
             if (!nv) throw new ActionError(FILL_NO_NAME);
-            const seesName =
-              nv.status === "live" &&
-              !nv.reporters?.includes(me.id) &&
-              (nv.by === me.id ||
-                (s.unlocks[fkey(node.id, "name")] ?? []).includes(me.id) ||
-                holdsPersonPartner(s, me, node, "contact", "name") ||
-                samePersonHeld(s, me, node, "contact", "name"));
+            // A seat holder's record from their own website: seeing who held the seat is seeing the name.
+            const seesName = (node as PersonNode).own
+              ? ownNameSeen(s, me, node)
+              : nv.status === "live" &&
+                !nv.reporters?.includes(me.id) &&
+                (nv.by === me.id ||
+                  (s.unlocks[fkey(node.id, "name")] ?? []).includes(me.id) ||
+                  holdsPersonPartner(s, me, node, "contact", "name") ||
+                  samePersonHeld(s, me, node, "contact", "name"));
             if (!seesName) throw new ActionError(FILL_NAME_FIRST);
           }
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
@@ -5531,6 +5585,12 @@ export async function perform(
           };
           const waiting: { it: (typeof items)[number]; node: Node }[] = [];
           const take = (it: (typeof items)[number], node: Node, last: boolean) => {
+            // A seat holder's record from their own website: its name and title are who held the seat and its role, one purchase on the seat.
+            const ownRec = it.entity === "contact" ? (node as PersonNode).own : undefined;
+            if (ownRec && PERSON_BUNDLE.includes(it.field)) {
+              take({ ...it, entity: "engagement", id: pubId(ownRec.seat.id), field: "operator" } as (typeof items)[number], ownRec.seat, last);
+              return;
+            }
             if (it.entity === "company" && (it.field === "identity" || IDENTITY_FIELDS.has(it.field))) {
               // Unlock company keeps it named in the tables, so it is for sale while the tables lock it (a lookup by name included).
               if (lockedFor(node.id)) bundle(node);
@@ -7173,6 +7233,8 @@ export const tableInternals = {
   belowLead, offBarRole, isUnseen, addSignal,
   // How a Crystal Ball company opens for the member today (its email's buttons say the same).
   crystalOf,
+  // Own sites (lib/ownsites): Undo takes every found email back, with refunds; members whose own choice keeps them out of view are never read.
+  refundOwnEmails, privateMemberKeys,
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
@@ -9464,6 +9526,101 @@ function keepNamesWhereAllowed(s: State, seed: Seed, node: Node | undefined, com
   if (rec.top && !ok(rec.top.name)) delete rec.top;
   return namedLeaders(rec).length;
 }
+/* ---------- the seat holder's email from their own website (lib/ownsites) ---------- */
+
+/** The record of a seat holder's email from their own website, on one seat: one per seat, so the seat's own record shows it. */
+const ownPersonId = (seatId: string) => `p_own_${seatId}`;
+/** Each person key's seats on the seed (SeedEngagement.holderKey), built once per seed. */
+const seatsByKeyIndex = new WeakMap<Seed, Map<string, string[]>>();
+function seatsByKey(seed: Seed): Map<string, string[]> {
+  let m = seatsByKeyIndex.get(seed);
+  if (!m) {
+    m = new Map();
+    for (const [seatId, k] of seedHolderKeys(seed)) {
+      const l = m.get(k);
+      if (l) l.push(seatId);
+      else m.set(k, [seatId]);
+    }
+    seatsByKeyIndex.set(seed, m);
+  }
+  return m;
+}
+
+/**
+ * The seat holder's email from their own firm's website (State.ownEmails, lib/ownsites), as a
+ * person on each of their seats: the seat holder, their name as the seat shows it (it opens with
+ * who held the seat, never apart), and the email, 1 credit once the name shows, like anyone's. Only
+ * with RN_OWNSITES=1 (graph() calls this only then), never a dry run's find (pending), only for a
+ * person the import linked (Seed.ownSites: the United States, never California), only on a seat
+ * whose name from public profiles still stands (not claimed by a member, not taken off with Remove
+ * my name), and never for a member whose own choice keeps them out of view.
+ */
+function ownSitePeople(seed: Seed, s: State, g: Graph) {
+  const links = seed.ownSites;
+  if (!links) return;
+  let priv: Set<string> | null = null;
+  const bySeat = seatsByKey(seed);
+  for (const [k, em] of Object.entries(s.ownEmails ?? {})) {
+    if (!em?.email || em.pending || !links[k]) continue;
+    const peers: string[] = [];
+    for (const seatId of bySeat.get(k) ?? []) {
+      const e = g.engagements.get(seatId);
+      const v = valueOf(e, s, "operator");
+      if (!e || !v?.pub || v.status !== "live") continue;
+      priv ??= privateMemberKeys(seed, s);
+      if (priv.has(nameKey(v.value))) continue;
+      const id = ownPersonId(seatId);
+      if (g.contacts.has(id)) continue;
+      peers.push(id);
+      g.contacts.set(id, {
+        id,
+        seedFields: { name: v.value, relationship: OWNSITE_RELATIONSHIP, email: em.email },
+        companyId: e.companyId,
+        engagementId: e.id,
+        source: OWNSITE_SOURCE,
+        own: { seat: e, peers },
+      });
+    }
+  }
+}
+
+/** Whether `me` sees the seat holder this own-site record is (the seat's holder cell shows them the name). */
+function ownNameSeen(s: State, me: Member | null, node: Node | undefined): boolean {
+  const own = (node as PersonNode | undefined)?.own;
+  return !!own && cellOf(s, me, own.seat, "engagement", "operator").s === "value";
+}
+/** The member paid for this seat holder's email on another of their seats: it is theirs on this one too. */
+function ownEmailHeld(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): boolean {
+  const own = (node as PersonNode | undefined)?.own;
+  if (!me || !own || entity !== "contact" || key !== "email") return false;
+  return own.peers.some((id) => id !== node!.id && (s.unlocks[fkey(id, "email")] ?? []).includes(me.id));
+}
+
+/** Every unlock of a seat holder's email from their website (on these seats, or all), refunded and forgotten. Returns how many members got a credit back. */
+function refundOwnEmails(s: State, now: string, seatIds?: string[], why: LedgerEntry["why"] | null = "name"): number {
+  const only = seatIds ? new Set(seatIds.map((x) => fkey(ownPersonId(x), "email"))) : null;
+  let n = 0;
+  for (const k of Object.keys(s.unlocks)) {
+    if (!k.startsWith("p_own_") || !k.endsWith(".email") || (only && !only.has(k))) continue;
+    n += refundPaid(s, k, now, why ?? undefined);
+  }
+  return n;
+}
+
+/**
+ * Remove my name (and "Not me", "This is wrong", an admin taking a name off): the person's email
+ * from their website goes too, on every seat of theirs, with refunds, and the job never reads their
+ * site again (State.ownSitesJob marks them removed).
+ */
+function ownEmailOff(s: State, seed: Seed, engId: string, now: string) {
+  const k = seedHolderKeys(seed).get(engId);
+  if (!k || (!s.ownEmails?.[k] && !seed.ownSites?.[k])) return;
+  if (s.ownEmails) delete s.ownEmails[k];
+  const job = (s.ownSitesJob ??= { people: {}, lastRun: null, lastDry: null, dryDone: [] });
+  job.people[k] = { s: "removed", at: now };
+  refundOwnEmails(s, now, seatsByKey(seed).get(k) ?? [engId]);
+}
+
 /** The email on file is a likely one built from the pattern (lib/leaders/likely.ts), not a fact anyone added. */
 const likelyGuess = (node: Node, s: State) => !!(node as PersonNode).likely && !byField(s, "values", node.id, "email");
 

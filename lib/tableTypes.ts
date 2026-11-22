@@ -32,7 +32,7 @@ export type Cell =
   | {
       s: "locked";
       ver: number;
-      from?: "records" | "posting" | "research" | "website" | "pattern";
+      from?: "records" | "posting" | "research" | "website" | "pattern" | "ownsite";
       /** A likely email (from "pattern"): how many members' emails at the company's domain follow its pattern. Never a verified email. */
       likely?: number;
     }
@@ -49,7 +49,7 @@ export type Cell =
        * read from its team page or a press release, lib/leaders: "Company website"). "pattern": a likely email for a leader from the
        * company's website, built from the pattern of the emails members added at its domain (`likely` says how many).
        */
-      from?: "records" | "posting" | "research" | "website" | "pattern";
+      from?: "records" | "posting" | "research" | "website" | "pattern" | "ownsite";
       /** A likely email: how many emails on file at the company's domain follow its pattern. It is never shown as verified. */
       likely?: number;
       /** The viewer spent a credit to see this value (it counts in their Unlocked list). Free values never carry it. */

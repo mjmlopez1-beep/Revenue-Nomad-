@@ -10,6 +10,9 @@
  * The website finder also has "Dry run" (reads and checks, writes nothing, works with RN_WEBSITES
  * off) and, below the rows, its recent finds with Undo (GET ?finds=websites). Admins only: members
  * never see this card, a find's confidence or how a website was found.
+ *
+ * Own sites has the same Dry run (what it finds stays unusable), and below the rows its counts, a
+ * short sample of the emails it found (the owner's eyes only) and Undo, which takes every one back.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Action } from "@/lib/tableTypes";
@@ -221,6 +224,130 @@ function WebsiteFinds({ stamp }: { stamp: string }) {
   );
 }
 
+interface OwnRow {
+  name: string;
+  email: string;
+  site: string;
+  page: string;
+  how: string;
+  at: string;
+  pending: boolean;
+}
+interface OwnData {
+  stats: { linked: number; withSite: number; firmOnly: number; usable: number; pending: number; byHow: Record<string, number>; misses: Record<string, number>; removed: number; undone: number };
+  rows: OwnRow[];
+  total: number;
+  usable: boolean;
+}
+
+/** Own sites: counts, a short sample of found emails (admins only) and Undo for all of them. Read when opened. */
+function OwnSiteFinds({ stamp }: { stamp: string }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<OwnData | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/table/jobs?finds=ownsites", { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      setData(await res.json());
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
+  }, []);
+  useEffect(() => {
+    if (open) void load();
+  }, [open, stamp, load]);
+  const undo = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/table/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "undoOwnSites" }) });
+      const j = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+      toast(j.message || j.error || (res.ok ? "Taken back." : "That didn't go through. Try again."), !res.ok);
+      setAsk(false);
+      await load();
+    } catch {
+      toast("We couldn't reach Merlin. Check your connection and try again.", true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const n = (x: number) => x.toLocaleString("en-US");
+  const st = data?.stats;
+  return (
+    <details className="tp-small" style={{ marginTop: 8 }} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>Own sites: counts and found emails</summary>
+      {!data || !st ? (
+        <p className="tp-small muted">{failed ? "The counts couldn't be loaded. Try again." : "Loading."}</p>
+      ) : (
+        <>
+          <p className="tp-small" style={{ margin: "6px 0" }}>
+            {n(st.linked)} people linked to their own firm ({n(st.withSite)} with a site, {n(st.firmOnly)} by firm name). {n(st.usable)} emails found
+            {st.usable ? ` (${Object.entries(st.byHow).map(([k, v]) => `${n(v)} ${k}`).join(", ")})` : ""}, {n(st.pending)} from dry runs (not usable). Not found:{" "}
+            {Object.entries(st.misses).map(([k, v]) => `${n(v)} ${k}`).join(", ")}. {n(st.removed)} removed their name, {n(st.undone)} taken back.
+          </p>
+          <p className="tp-small muted">{data.usable ? "Found emails are usable now (RN_OWNSITES=1)." : "Found emails aren't usable: RN_OWNSITES is off, so members see none of them."}</p>
+          {data.rows.length ? (
+            <div style={{ overflowX: "auto" }}>
+              <table className="tp-small" style={{ borderCollapse: "collapse", marginTop: 6 }}>
+                <thead>
+                  <tr>
+                    {["Seat holder", "Email", "Site", "How", "When"].map((h) => (
+                      <th key={h} style={{ textAlign: "left", padding: "2px 8px 2px 0" }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((r) => (
+                    <tr key={`${r.email}-${r.at}`}>
+                      <td style={{ padding: "2px 8px 2px 0" }}>{r.name || "Name off"}</td>
+                      <td style={{ padding: "2px 8px 2px 0" }}>{r.email}</td>
+                      <td style={{ padding: "2px 8px 2px 0" }}>
+                        <a href={r.page} target="_blank" rel="noopener noreferrer nofollow">
+                          {r.site}
+                        </a>
+                      </td>
+                      <td style={{ padding: "2px 8px 2px 0" }}>
+                        {r.how}
+                        {r.pending ? " · dry run" : ""}
+                      </td>
+                      <td style={{ padding: "2px 8px 2px 0" }}>{when(r.at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {data.total > data.rows.length && <p className="tp-small muted">The newest {data.rows.length} of {n(data.total)}.</p>}
+            </div>
+          ) : (
+            <p className="tp-small muted">No emails found yet.</p>
+          )}
+          {data.total > 0 &&
+            (ask ? (
+              <p className="tp-small" style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 6 }}>
+                Take back all {n(data.total)} found emails? Anyone who paid for one gets the credit back.
+                <button type="button" className="btn btn-sm" disabled={busy} aria-busy={busy} onClick={() => void undo()}>
+                  Take them all back
+                </button>
+                <button type="button" className="btn btn-sm btn-ghost" disabled={busy} onClick={() => setAsk(false)}>
+                  Keep them
+                </button>
+              </p>
+            ) : (
+              <button type="button" className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => setAsk(true)}>
+                Undo
+              </button>
+            ))}
+        </>
+      )}
+    </details>
+  );
+}
+
 export function AutoJobs({ refresh }: { refresh: () => Promise<void> }) {
   const ui = useUi();
   const toast = useToast();
@@ -308,6 +435,7 @@ export function AutoJobs({ refresh }: { refresh: () => Promise<void> }) {
               <Row key={r.id} r={r} timerOn={panel.timer.on} busy={busy === r.id} onChange={(every, hourUtc) => void change(r, every, hourUtc)} onRun={(dry) => void run(r, dry)} />
             ))}
           </ul>
+          {panel.jobs.some((j) => j.id === "ownsites") && <OwnSiteFinds stamp={JSON.stringify(panel.jobs.find((j) => j.id === "ownsites")?.lastAt ?? "") + (panel.jobs.find((j) => j.id === "ownsites")?.dryNote ?? "")} />}
           {panel.jobs.some((j) => j.id === "websites") && <WebsiteFinds stamp={JSON.stringify(panel.jobs.find((j) => j.id === "websites")?.lastAt ?? "") + (panel.jobs.find((j) => j.id === "websites")?.dryNote ?? "")} />}
           <p className="tp-small muted tp-pm-foot" role="status">
             {panel.timer.on

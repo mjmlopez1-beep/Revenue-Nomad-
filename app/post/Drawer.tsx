@@ -36,6 +36,7 @@ import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCre
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
 import { LEADERS_SOURCE, LEADERS_SOURCE_SAY, checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
+import { OWNSITE_SAY, OWNSITE_SOURCE } from "@/lib/ownsites/types";
 import { likelyWords } from "@/lib/leaders/likely";
 import { LeaderReport } from "./LeaderReport";
 import { CrystalOpen } from "./CrystalOpen";
@@ -218,6 +219,8 @@ function factInfo(t: FactRef, cell: Cell, ui: Ui, own: boolean, listed: boolean,
     ? ""
     : v.from === "pattern"
       ? `${likelyWords(v.likely ?? 0)}. Not verified`
+      : v.from === "ownsite"
+        ? OWNSITE_SAY
       : v.from === "website"
         ? LEADERS_SOURCE_SAY
         : v.from === "records"
@@ -265,6 +268,13 @@ function Provenance({ cell, source }: { cell: Cell; source: string }) {
     return (
       <span className="tp-from" title="From the job posting">
         From the posting
+      </span>
+    );
+  // An email read from the seat holder's own website says so.
+  if (cell.from === "ownsite")
+    return (
+      <span className="tp-from" title={`${OWNSITE_SAY}: the address they publish on their own firm's website.`}>
+        {OWNSITE_SAY}
       </span>
     );
   // A likely email always says so, confirmed or not: it is never shown as verified.
@@ -993,10 +1003,11 @@ function PersonCard({ p, inSeat, anchor = true }: { p: PersonRec; inSeat?: boole
         render={personRender}
         pair={PERSON_BUNDLE}
         waits={waits}
-        noAdd={unseen ? PERSON_NO_ADD : []}
+        noAdd={p.source === OWNSITE_SOURCE ? personFields(p) : unseen ? PERSON_NO_ADD : []}
         labels={likelyCell(p.cells.email) ? { email: "Likely email" } : undefined}
       />
       {p.source === LEADERS_SOURCE && <SiteSource p={p} />}
+      {p.source === OWNSITE_SOURCE && <p className="tp-dsec-note tp-person-src">Email: {OWNSITE_SAY}, the address they publish on their own firm&apos;s website.</p>}
     </div>
   );
 }

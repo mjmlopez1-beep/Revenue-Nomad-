@@ -13,8 +13,10 @@
  * --state  optional: a copy of the runtime state (the admin export, or intel.json). Seats a member
  *          claimed, and names taken off, are left out. Without it every named seat is in.
  *
- * Columns: first name, full name, company, role, start month, claim link, Sales Navigator lead link
- * and a ready-to-send message. The claim link is
+ * Columns: first name, full name, company, role, start month, claim link, Sales Navigator lead link,
+ * email (the address they publish on their own firm's website, lib/ownsites, from --state: a real
+ * run's find only, never a dry run's, and only with RN_OWNSITES=1 set for this script as on the
+ * server) with where it came from, and a ready-to-send message. The claim link is
  * ${RN_PUBLIC_URL || "https://table-pilot.up.railway.app"}/claim/<token>, the token worked out the
  * way the server does (lib/claimToken.ts, from the seed key: RN_INTEL_SEED_KEY, else
  * data/intel-seed.key). The lead link is the one place the file's profile id goes, and only here.
@@ -109,7 +111,11 @@ const companies = new Map(seed.companies.map((c) => [c.id, c]));
 const base = (process.env.RN_PUBLIC_URL || "https://table-pilot.up.railway.app").replace(/\/+$/, "");
 
 const counts = { us: 0, notOnSeed: 0, notNamed: 0, claimed: 0, removed: 0, noLead: 0, written: 0 };
-const lines = [["first_name", "full_name", "company", "role", "start_month", "claim_link", "sales_navigator_lead", "message"].join(",")];
+const lines = [["first_name", "full_name", "company", "role", "start_month", "claim_link", "sales_navigator_lead", "email", "email_from", "message"].join(",")];
+/** Emails from their own websites (State.ownEmails by person key): usable ones only, and only with the switch on. */
+const ownEmails = process.env.RN_OWNSITES === "1" ? state?.ownEmails ?? {} : {};
+const ownLinked = seed.ownSites ?? {};
+counts.withEmail = 0;
 for (const r of csvRows) {
   if (String(r.country ?? "").trim() !== "United States") continue;
   counts.us++;
@@ -146,14 +152,17 @@ for (const r of csvRows) {
     "Operators share what they know about fractional work to earn credits, and see which companies hire fractionals, what they've paid and which roles are open now. " +
     `Claiming your seat is free and takes a minute. ${link} ` +
     "Not you, or would you rather not be listed? The same link takes your name off.";
-  lines.push([first, name, company, role, monthText(e.fields.start), link, lead ? `https://www.linkedin.com/sales/lead/${lead}` : "", message].map(csvCell).join(","));
+  const own = e.holderKey && ownLinked[e.holderKey] ? ownEmails[e.holderKey] : null;
+  const email = own && !own.pending && own.email ? own.email : "";
+  if (email) counts.withEmail++;
+  lines.push([first, name, company, role, monthText(e.fields.start), link, lead ? `https://www.linkedin.com/sales/lead/${lead}` : "", email, email ? "their website" : "", message].map(csvCell).join(","));
   counts.written++;
 }
 
 mkdirSync(path.dirname(out), { recursive: true });
 writeFileSync(out, lines.join("\n") + "\n", { mode: 0o600 });
 console.log(`United States rows: ${counts.us}`);
-console.log(`rows written: ${counts.written}${counts.noLead ? ` (${counts.noLead} without a lead link)` : ""}`);
+console.log(`rows written: ${counts.written}${counts.noLead ? ` (${counts.noLead} without a lead link)` : ""}; with an email from their website: ${counts.withEmail}`);
 console.log(`left out: ${counts.notOnSeed} not on the seed, ${counts.notNamed} with no name on the seat, ${counts.claimed} claimed by a member, ${counts.removed} taken off`);
 console.log(`claim links point at ${base}`);
 console.log("wrote the file (outside the repo). It names people: keep it to yourself.");

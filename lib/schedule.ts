@@ -16,7 +16,7 @@
  * The env switches still win: a job whose switch is off never runs on its own (envOff).
  */
 
-export const JOBS = ["scan", "radar", "leaders", "funding", "about", "websites"] as const;
+export const JOBS = ["scan", "radar", "leaders", "funding", "about", "websites", "ownsites"] as const;
 export type JobId = (typeof JOBS)[number];
 
 export const CADENCES = ["daily", "twice-weekly", "weekly", "off"] as const;
@@ -36,6 +36,7 @@ export type ScheduleState = Partial<Record<JobId, JobSetting>>;
  * UTC (DAILY_HOUR_UTC, FUNDING_HOUR_UTC), and the About texts each day at 09:00, clear of the others.
  * The website finder (lib/websites) came later: each day at 03:00 UTC, off-peak in Europe and the
  * Americas, so its ~300 companies a run (about 12 days for 3,500) read while sites are quiet.
+ * Own sites (lib/ownsites) came after it: each day at 04:00 UTC, 200 fractionals' own firm sites a run.
  */
 export const JOB_DEFAULTS: Record<JobId, JobSetting> = {
   scan: { every: "weekly", hourUtc: 12 },
@@ -44,6 +45,7 @@ export const JOB_DEFAULTS: Record<JobId, JobSetting> = {
   funding: { every: "daily", hourUtc: 6 },
   about: { every: "daily", hourUtc: 9 },
   websites: { every: "daily", hourUtc: 3 },
+  ownsites: { every: "daily", hourUtc: 4 },
 };
 
 /** The names and the few words Pilot metrics shows for each job. */
@@ -54,6 +56,7 @@ export const JOB_WORDS: Record<JobId, { name: string; what: string }> = {
   funding: { name: "Funding filings", what: "Reads the day's SEC Form D filings for new raises." },
   about: { name: "About texts", what: "Reads the homepage of companies with no About yet, or an old one." },
   websites: { name: "Website finder", what: "Finds the website of companies with none, from their name. Admins only: members never see how a website was found." },
+  ownsites: { name: "Own sites", what: "Reads fractionals' own firm websites for the email they publish there, US only. Members see it locked on the seat holder's record, From their website." },
 };
 
 /** The words for each cadence: the select's, and in a sentence ("runs every day at 9:00 AM"). */
@@ -140,6 +143,8 @@ export function envOff(job: JobId, env: Record<string, string | undefined> = pro
       return env.RN_ABOUT === "1" ? null : "Off: set RN_ABOUT=1 in Railway";
     case "websites":
       return env.RN_WEBSITES === "1" ? null : "Off: set RN_WEBSITES=1 in Railway";
+    case "ownsites":
+      return env.RN_OWNSITES === "1" ? null : "Off: set RN_OWNSITES=1 in Railway";
   }
 }
 

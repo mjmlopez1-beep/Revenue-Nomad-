@@ -28,7 +28,7 @@ Every outside host the server calls, from `lib/` and `app/api/`:
 
 | Service | Hosts | What it receives | Why | When |
 |---|---|---|---|---|
-| Company websites | each company's own domain | GET requests from the server with a plain User-Agent (`Merlin-About/1.0`, or a generic one for careers pages). No member data. | About texts (`lib/about`), who leads each function and the top leader, with the name and title as the page prints them, kept only for companies with a US headquarters and never for someone who used Remove my name (`lib/leaders`, `lib/table.ts` `saveLeaders`), finding a company's website from its name (`lib/websites`), careers page links (`lib/scan/sources/ats.ts`), posting checks (`lib/scan/posting.ts`), company icons (`lib/logo.ts`), the Add form's prefill from a website a member pastes (`lib/companyLookup.ts`). robots.txt is read first for About, leaders, the website finder and icons. | About: `RN_ABOUT=1`. Leaders: `RN_LEADERS=1`. Website finder: `RN_WEBSITES=1`. Careers and posting checks: with the scan. Icons: unless `RN_LOGO_LOOKUP=off`. Add form: when a member uses it. |
+| Company websites | each company's own domain | GET requests from the server with a plain User-Agent (`Merlin-About/1.0`, or a generic one for careers pages). No member data. | About texts (`lib/about`), who leads each function and the top leader, with the name and title as the page prints them, kept only for companies with a US headquarters and never for someone who used Remove my name (`lib/leaders`, `lib/table.ts` `saveLeaders`), finding a company's website from its name (`lib/websites`), the email addresses that fractionals publish on their own business websites, US only, to invite them to claim their seats and to show members, and anyone can remove their name and email at `/remove` (`lib/ownsites`, read only with `RN_OWNSITES=1`, which also makes them usable), careers page links (`lib/scan/sources/ats.ts`), posting checks (`lib/scan/posting.ts`), company icons (`lib/logo.ts`), the Add form's prefill from a website a member pastes (`lib/companyLookup.ts`). robots.txt is read first for About, leaders, the website finder, own sites and icons. | About: `RN_ABOUT=1`. Leaders: `RN_LEADERS=1`. Website finder: `RN_WEBSITES=1`. Own sites: `RN_OWNSITES=1` (a dry run with `RN_OWNSITES_DRYRUN=N` makes nothing usable). Careers and posting checks: with the scan. Icons: unless `RN_LOGO_LOOKUP=off`. Add form: when a member uses it. |
 | Job boards | www.fractionaljobs.io, findfractionaljobs.com, remotive.com, remoteok.com, weworkremotely.com, boards-api.greenhouse.io (boards in `RN_GREENHOUSE_BOARDS`), freehire.me (only with `RN_FREEHIRE_KEY`) | Requests for public listings. freehire gets Merlin's API key. No member data. | The weekly scan of open roles (`lib/scan/collect.ts`). | `RN_SCAN=1` or a cron call with `RN_CRON_SECRET`. |
 | Applicant tracking systems | boards-api.greenhouse.io, api.lever.co, api.ashbyhq.com, apply.workable.com, api.smartrecruiters.com, `<board>.recruitee.com`, `<board>.jobs.personio.de`, `<board>.breezy.hr`, `<board>.teamtailor.com` | Requests for a company's public job feed, including the board names Merlin guesses from a company's domain or name. That tells the system which companies Merlin looks at, not anything about members. | Open roles at companies already on Merlin, and whether a role is still open. | With the scan. |
 | SEC EDGAR | efts.sec.gov, www.sec.gov | Requests for daily Form D indexes and filings, with a User-Agent naming Merlin and a contact address. No member data. | Funding events (`lib/funding`). | `RN_FUNDING=1`. |
@@ -58,6 +58,7 @@ Not called: no AI model provider, no analytics, no ad network, no icon service, 
 | `RN_GOOGLE_GMAIL=1` | off unless set | Offering Gmail headers (and only to `RN_GOOGLE_GMAIL_TESTERS`). | `lib/google/config.ts` |
 | `RN_LEADERS=1` | off unless set | Reading leadership pages. `RN_LEADERS_DAILY=0` stops only the daily batch. | `lib/leaders/types.ts`, `lib/schedule.ts` |
 | `RN_WEBSITES=1` | off unless set | The website finder. | `lib/websites/types.ts` |
+| `RN_OWNSITES=1` | off unless set | Own sites: the daily read of fractionals' own firm websites for the email they publish, and showing it (locked, "From their website"). `RN_OWNSITES_DRYRUN=N` reads up to N once after a start and makes nothing usable. | `lib/ownsites/types.ts` |
 | `RN_ABOUT=1` | off unless set | About texts from homepages. | `lib/about/types.ts` |
 | `RN_FUNDING=1` | off unless set | SEC Form D reads. | `lib/funding/types.ts` |
 | `RN_SCAN=1` | off unless set | The weekly scan on its own timer. A cron call with `RN_CRON_SECRET` can still run it. | `lib/table.ts` `maybeScan`, `lib/schedule.ts` |
@@ -66,7 +67,7 @@ Not called: no AI model provider, no analytics, no ad network, no icon service, 
 | `RN_LOGO_LOOKUP=off` | on | Reading icons from company websites. Icons already kept still show; the rest are lettered tiles. | `lib/logo.ts` |
 | `RN_BILLING=1` | off unless set | Payments, trials, Stripe calls. | `lib/plan.ts` |
 | `RESEND_API_KEY` unset | off unless set | All email. | `lib/email.ts` |
-| Automatic jobs (Pilot metrics) | | An admin can set each job (scan, Crystal Ball, leaders, funding, About, website finder) to off. The env switches still win. | `lib/schedule.ts`, `app/post/AdminJobs.tsx` |
+| Automatic jobs (Pilot metrics) | | An admin can set each job (scan, Crystal Ball, leaders, funding, About, website finder, own sites) to off. Own sites' Undo takes every found email back, with refunds. The env switches still win. | `lib/schedule.ts`, `app/post/AdminJobs.tsx` |
 
 - The connector has no server switch: it is on for every member, and each member controls their own connections. **To confirm:** whether the owner wants an off switch for it.
 
@@ -77,6 +78,6 @@ Not called: no AI model provider, no analytics, no ad network, no icon service, 
 - Assistants: Your credits, Connected apps, Disconnect.
 - Email: switches for the weekly email and message emails in Your credits; Crystal Ball's email has its own unsubscribe link.
 - Slack and webhooks: removed in Integrations.
-- A name on a seat: `/remove`, no account needed, or Remove my name on a claim link.
+- A name on a seat, and the email read from their own website with it: `/remove`, no account needed, or Remove my name on a claim link (`lib/table.ts` `ownEmailOff`).
 - A fact just added: Undo takes it back with its credit until someone unlocks or confirms it.
 - Closing an account: there is no in-app button today; the member writes to support. **To confirm:** the process and how long it takes, and what is kept (ledger rows, facts others unlocked) after an account closes.

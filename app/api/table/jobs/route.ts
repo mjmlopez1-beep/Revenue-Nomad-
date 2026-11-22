@@ -13,6 +13,10 @@
  *                                   and checks and writes nothing (works with the switch off).
  * GET ?finds=websites               admins: the website finder's recent finds (lib/websites/store.ts).
  * POST { op: "undoWebsite", companyId }         admins: take one find back.
+ * POST { op: "run", job: "ownsites", dry? }      admins: "Run now" for own sites (RN_OWNSITES=1), or
+ *                                   its "Dry run" (what it finds is stored pending, never usable).
+ * GET ?finds=ownsites               admins: own sites' counts and a short sample of found emails (lib/ownsites/store.ts).
+ * POST { op: "undoOwnSites" }                    admins: take every found email back, with refunds.
  */
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -24,6 +28,7 @@ import { jobsPanel, schedulerTick, setCadence } from "@/lib/jobs";
 import { jobsRuntime, parseSetting } from "@/lib/schedule";
 import { fundingEnabled } from "@/lib/funding/types";
 import { websitesEnabled, websitesProgress } from "@/lib/websites/types";
+import { DAILY_BATCH as OWN_BATCH, ownSitesEnabled, ownSitesProgress } from "@/lib/ownsites/types";
 
 export const dynamic = "force-dynamic";
 const COOKIE = "rn_table";
@@ -52,6 +57,11 @@ export const GET = guarded(async (req: NextRequest) => {
   if (req.nextUrl.searchParams.get("finds") === "websites") {
     const { websiteFinds } = await import("@/lib/websites/store");
     return NextResponse.json(await websiteFinds(), { headers: noStore });
+  }
+  if (req.nextUrl.searchParams.get("finds") === "ownsites") {
+    const { ownSample, ownStats } = await import("@/lib/ownsites/store");
+    const [stats, sample] = await Promise.all([ownStats(), ownSample()]);
+    return NextResponse.json({ stats, ...sample, usable: ownSitesEnabled() }, { headers: noStore });
   }
   return NextResponse.json(await jobsPanel(), { headers: noStore });
 });
@@ -91,6 +101,23 @@ export const POST = guarded(async (req: NextRequest) => {
       { message: dry ? "Dry run started. It reads and checks up to 300 companies and saves nothing. The counts show here when it ends." : "Started. It reads up to 300 companies, so give it a while." },
       { headers: noStore },
     );
+  }
+  if (body?.op === "run" && body.job === "ownsites") {
+    const dry = body.dry === true;
+    if (!dry && !ownSitesEnabled()) return fail("Own sites is off. Set RN_OWNSITES=1 in Railway to turn it on, or press Dry run: what it finds stays unusable.");
+    if (ownSitesProgress.running) return NextResponse.json({ message: "Already running." }, { headers: noStore });
+    const { runOwnSites } = await import("@/lib/ownsites/run");
+    void runOwnSites({ dry, limit: OWN_BATCH }).catch((e) => console.error("ownsites run failed", e instanceof Error ? e.message : "error"));
+    return NextResponse.json(
+      { message: dry ? `Dry run started. It reads up to ${OWN_BATCH} sites and makes nothing usable. The counts show here when it ends.` : `Started. It reads up to ${OWN_BATCH} sites, so give it a while.` },
+      { headers: noStore },
+    );
+  }
+  if (body?.op === "undoOwnSites") {
+    if (ownSitesProgress.running) return fail("Own sites is running. Undo once it ends.");
+    const { undoOwnEmails } = await import("@/lib/ownsites/store");
+    const n = await undoOwnEmails(a.me.id);
+    return NextResponse.json({ message: n ? `Took back ${n.toLocaleString("en-US")} found emails. Anyone who paid for one got the credit back. Merlin won't read those sites again on its own.` : "There were no found emails to take back." }, { headers: noStore });
   }
   if (body?.op === "undoWebsite") {
     if (typeof body.companyId !== "string" || !body.companyId) return fail("Pick a find to take back.");

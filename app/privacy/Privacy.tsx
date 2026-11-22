@@ -88,6 +88,10 @@ export function PrivacyView({ support }: { support: string | null }) {
             or we check it. We may write to someone named on a seat so they can claim it or take their name off. Anyone can take their name off a seat at{" "}
             <a href="/remove">Remove my name</a>, with no account.
           </p>
+          <p className="cl-p">
+            Merlin also reads the email addresses that fractionals publish on their own business websites, for people in the United States only, to invite them to claim their seats and to show members. Anyone can remove their name and email at{" "}
+            <a href="/remove">Remove my name</a>.
+          </p>
           <h3 className="df-h3">From Google, only if you connect it</h3>
           <p className="cl-p">
             Read-only access to your calendar and contacts. Exactly what Merlin reads, and what it never reads, is in <a href="#google">Google user data</a>.
@@ -286,7 +290,7 @@ export function PrivacyView({ support }: { support: string | null }) {
           <li>Gmail, for test members: Drop Gmail deletes what it found, on Your pipeline too. If Gmail&apos;s access ends and you don&apos;t reconnect it within 30 days, Merlin deletes what it found.</li>
           <li>What your assistant saved: Delete on Your network removes it.</li>
           <li>Your LinkedIn import: Delete removes the file and everything worked out from it. Uploading a new file replaces the old one.</li>
-          <li>Your name on a seat, or as a company&apos;s leader: <a href="/remove">Remove my name</a> takes it off at once, and it stays off.</li>
+          <li>Your name on a seat, or as a company&apos;s leader, and an email read from your own website: <a href="/remove">Remove my name</a> takes them off at once, and they stay off.</li>
           <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
           <li>A signed proposal and its audit trail: kept with the signed copy for both parties.</li>
           <li>

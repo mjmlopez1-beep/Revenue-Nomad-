@@ -13,7 +13,7 @@ const SERVICES: Service[] = [
   {
     who: "Company websites",
     gets: "A request from Merlin's server for public pages: a company's homepage, its team or leadership pages, its careers page, its icon, and a website a member pastes into the Add form. No member data goes with it.",
-    why: "About texts, who leads each function and the company (their name and title as the company prints them, kept only for companies with a US headquarters), open roles, a company's icon, and finding a company's website. Page reads check robots.txt first.",
+    why: "About texts, who leads each function and the company (their name and title as the company prints them, kept only for companies with a US headquarters), open roles, a company's icon, and finding a company's website. Merlin also reads the email addresses that fractionals publish on their own business websites, US only, to invite them to claim their seats and to show members. Anyone can remove their name and email at /remove. Page reads check robots.txt first.",
   },
   {
     who: "Job boards and applicant tracking systems",
@@ -144,7 +144,7 @@ export function DataFlows() {
               <li>Assistants: Your credits, Connected apps. Disconnect any assistant you added.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>
-              <li>Your name on a seat: take it off at Remove my name, no account needed.</li>
+              <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
               <li>Your account: to close it, write to us.</li>
             </ul>
