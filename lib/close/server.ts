@@ -218,7 +218,7 @@ function engagedFacts(s: State, t: Pick<Target, "kind" | "itemId"> & Partial<Tar
     kind: "engaged",
     url: appPath(t, "&draft=1"),
     suggestion: sug,
-    visits: totalVisits(it),
+    visits: pv.lastN || totalVisits(it),
     ...(pv.n ? { pricing: { label: pv.label, ms: pv.lastMs } } : {}),
     looked: optionsLooked(it).map((o) => o.label),
     adds: addonsOn(it),
@@ -579,7 +579,9 @@ export async function activityView(token: string | null, id: string, origin?: st
   base.timeline = tl.sort((m, n) => n.at.localeCompare(m.at)).slice(0, 40);
   const inp = ruleInputOf(s, it, base.kind, id, nowMs);
   base.suggestion = inp ? suggest(inp) : null;
-  base.reminders = status === "draft" ? [] : reminderRows(links, it, nowMs);
+  const remRows = status === "draft" ? [] : reminderRows(links, it, nowMs);
+  // Signed, declined or withdrawn with none sent: nothing to list.
+  base.reminders = remRows.every((r) => r.state === "stopped") ? [] : remRows;
   if (base.suggestion?.draft && base.signer?.email) {
     const q = new URLSearchParams({ view: "cm", fs: "1", to: base.signer.email, su: `Re: ${base.title}`, body: base.suggestion.draft });
     base.gmail = `https://mail.google.com/mail/?${q.toString()}`;
@@ -604,7 +606,7 @@ export async function inboxView(token: string | null, nowMs = Date.now()): Promi
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberOf(seed, s, token);
   const open = T.closeNow(s, me.id, nowMs);
-  const items = [...(s.close?.inbox?.[me.id] ?? [])].reverse();
+  const items = [...(s.close?.inbox?.[me.id] ?? [])].sort((a, b) => b.at.localeCompare(a.at));
   const renewals: CloseInboxView["renewals"] = [];
   if (open)
     for (const p of s.proposals ?? []) {

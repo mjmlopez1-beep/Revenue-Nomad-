@@ -58,7 +58,7 @@ export function suggest(x: RuleInput): Suggestion | null {
   const others = readers.filter((r) => !r.signer);
   const lastAt = a ? lastActivity(a) : null;
   const visits = a ? totalVisits(a) : 0;
-  const pv = a ? pricingVisits(a) : { n: 0, lastAt: null, lastMs: 0, label: "Pricing" };
+  const pv = a ? pricingVisits(a) : { n: 0, lastAt: null, lastMs: 0, label: "Pricing", lastN: 0 };
   const looked = a ? optionsLooked(a) : [];
   const adds = a ? addonsOn(a) : [];
   const newest = [...others].sort((p, q) => q.firstAt.localeCompare(p.firstAt))[0];
@@ -68,7 +68,8 @@ export function suggest(x: RuleInput): Suggestion | null {
   if (a && pv.n >= RULES.PRICING_VISITS && pv.lastAt && x.nowMs - Date.parse(pv.lastAt) < 7 * DAY) {
     const soon = x.nowMs - Date.parse(pv.lastAt) < 12 * 3_600_000;
     const when = soon ? "Follow up tomorrow morning" : "Follow up today";
-    const visitLine = `${ordinal(visits)[0].toUpperCase()}${ordinal(visits).slice(1)} visit ${agoWords(pv.lastAt, x.nowMs)}, ${minSentence(pv.lastMs)} on ${pv.label}`;
+    const nth = ordinal(pv.lastN || visits);
+    const visitLine = `${nth[0].toUpperCase()}${nth.slice(1)} visit ${agoWords(pv.lastAt, x.nowMs)}, ${minSentence(pv.lastMs)} on ${pv.label}`;
     if (looked.length >= 2) {
       const [o1, o2] = looked;
       const picks = looked.filter((o) => o.picks > 0);

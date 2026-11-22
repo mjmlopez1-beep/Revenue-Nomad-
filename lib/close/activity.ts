@@ -244,23 +244,26 @@ export const PRICING = /pric|\bfees?\b|invest|\bcosts?\b|budget|\brates?\b|\bopt
 export const pricingIds = (a: ItemActivity): string[] => Object.entries(a.sections).filter(([, s]) => PRICING.test(s.label)).map(([id]) => id);
 
 /** Visits that spent SEEN_MS or more on a pricing section (or on the options). */
-export function pricingVisits(a: ItemActivity): { n: number; lastAt: string | null; lastMs: number; label: string } {
+export function pricingVisits(a: ItemActivity): { n: number; lastAt: string | null; lastMs: number; label: string; lastN: number } {
   const ids = new Set(pricingIds(a));
   let n = 0;
   let lastAt: string | null = null;
   let lastMs = 0;
+  // The reader's own visit number of the last one ("their third visit").
+  let lastN = 0;
   for (const v of a.visits) {
     const ms = Object.entries(v.secs).reduce((t, [id, x]) => t + (ids.has(id) ? x : 0), 0);
     if (ms >= SEEN_MS) {
       n++;
       lastAt = v.end;
       lastMs = ms;
+      lastN = v.n;
     }
   }
   // Visits trimmed off the list still count on the sections themselves.
   const counted = Math.max(n, ...[...ids].map((id) => a.sections[id]?.visits ?? 0), 0);
   const label = [...ids].map((id) => a.sections[id]).sort((x, y) => y.ms - x.ms)[0]?.label ?? "Pricing";
-  return { n: counted, lastAt, lastMs, label };
+  return { n: counted, lastAt, lastMs, label, lastN };
 }
 
 /** Options they looked at for a while, or picked, most first. */
