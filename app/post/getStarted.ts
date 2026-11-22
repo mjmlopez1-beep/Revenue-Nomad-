@@ -166,35 +166,47 @@ export function sameBuy(t: FactRef): string[] {
 /* ---------- the steps, with a goalpost that stays put ---------- */
 
 /** What a Get started step or the next-step nudge runs. */
-export type StepAction = "unlock" | "seats" | "fillSeats" | "holder" | "invite";
+export type StepAction = "unlock" | "seats" | "fillSeats" | "holder" | "invite" | "note" | "connect";
+
+/** Get started's three steps (activation): open a company, send a first note, bring your network in. */
+export const STEP_LABELS = { unlock: "Open a company", note: "Send your first note", network: "Connect Google" } as const;
+export const NOTE_HINT = "a note drafted for you on Home";
+export const NETWORK_HINT = "or upload your LinkedIn connections";
 
 /**
- * Get started as the app shows it. Step 1 is "Unlock a company" and ticks on any company unlock
- * (or a seat holder seen, which needs one): it never turns into another step once the member did
- * what it said. Steps 2 and 3 are checkSteps' (Find your seats, Invite a fractional). `next` is the
- * one thing to do now, for the nudge slot: step 1 while it is open, then "Fill in your seats",
- * then "See who held a seat" (only ever a nudge: a company is open and a seat holder at one is
- * still locked), then the first step not done, then nothing.
+ * Get started as the app shows it: Open a company · Send your first note · Connect Google (or
+ * upload LinkedIn), "1 of 3" on Home. Step 1 ticks on any company opened (or a seat holder seen,
+ * which needs one) and never turns into another step once done; step 2 on a first note out (a deal
+ * at Sent in their pipeline, an invite or a conversation: Me.started.note); step 3 on Google
+ * connected or LinkedIn connections uploaded (Me.started.network), left out while Your network
+ * isn't on. `next` is the one thing to do now, for the nudge slot: the first step not done, then
+ * "Fill in your seats" and "Find your seats" (the earn prompts, kept outside the steps), then nothing.
  */
 export function startSteps(
-  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid"> & Partial<Pick<Me, "freeCompany" | "unlocksLeft" | "crystal">>,
+  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid"> & Partial<Pick<Me, "freeCompany" | "unlocksLeft" | "crystal" | "proOpens" | "started">>,
   o: { seatsHeld: number; seatsLeft: number; earn: number; stuck?: Set<string>; seen?: boolean; stepOne?: StepOne },
 ): { steps: CheckStep[]; next: { label: string; hint: string; action: StepAction } | null } {
   const base = checkSteps(me, { ...o, stepOne: "holder" });
   const holders = me.holdersUnlocked ?? 0;
   const opened = holders + (me.companiesUnlocked ?? 0) > 0 || !!o.seen || !!o.stuck?.has("unlock");
-  const free = !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE;
+  const free = me.proOpens ? me.proOpens.left > 0 : !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE;
   // On Free (billing live) the free one a day is Crystal Ball's: the step says so, and opens Crystal Ball (TradingPost stepOne).
-  // On Trial and Pro every Crystal Ball company opens free: the step says that first, and opens Crystal Ball too.
-  const one: CheckStep = { key: "unlock", done: opened, label: "Unlock a company", hint: me.crystal === "all" ? CRYSTAL_ALL_FREE : free ? "1 free company today" : me.crystal === "one" ? CRYSTAL_FREE_TODAY : `costs ${COMPANY_PRICE_SAY}` };
-  // Every company is open already and none was unlocked: nothing for step 1 to point at, so it is left out.
-  const steps = [...(!opened && o.stepOne === "none" ? [] : [one]), ...base.steps.filter((x) => x.key !== "unlock")];
-  const act: Record<CheckStep["key"], StepAction> = { unlock: "unlock", seat: "seats", invite: "invite" };
+  // On Trial and Pro companies open free: the step says that first, and opens Crystal Ball too.
+  const one: CheckStep = {
+    key: "unlock",
+    done: opened,
+    label: STEP_LABELS.unlock,
+    hint: me.crystal === "all" ? CRYSTAL_ALL_FREE : free ? (me.proOpens ? "free on your plan" : "1 free company today") : me.crystal === "one" ? CRYSTAL_FREE_TODAY : `costs ${COMPANY_PRICE_SAY}`,
+  };
+  const note: CheckStep = { key: "note", done: !!me.started?.note || !!o.stuck?.has("note"), label: STEP_LABELS.note, hint: NOTE_HINT };
+  const network: CheckStep = { key: "network", done: !!me.started?.network || !!o.stuck?.has("network"), label: STEP_LABELS.network, hint: NETWORK_HINT };
+  // Every company is open already and none was opened: nothing for step 1 to point at, so it is left out. So is step 3 while Your network is off.
+  const steps = [...(!opened && o.stepOne === "none" ? [] : [one]), note, ...(me.started?.networkOff ? [] : [network])];
+  const act: Record<CheckStep["key"], StepAction> = { unlock: "unlock", seat: "seats", invite: "invite", note: "note", network: "connect" };
   const up = steps.find((x) => !x.done);
-  if (up?.key === "unlock") return { steps, next: { label: up.label, hint: up.hint, action: "unlock" } };
+  if (up) return { steps, next: { label: up.label, hint: up.hint, action: act[up.key] } };
+  // Every step done: the earn prompts (fill in the seats on file, else find one).
   const fill = base.nudge ? { ...base.nudge, action: "fillSeats" as const } : null;
-  const holder = opened && holders === 0 && !o.seen && o.stepOne === "holder" ? { label: "See who held a seat", hint: "1 credit", action: "holder" as const } : null;
-  // Find your seats is the step that pays: it comes before who held a seat.
-  const seats = up?.key === "seat" ? { label: up.label, hint: up.hint, action: "seats" as const } : null;
-  return { steps, next: fill ?? seats ?? holder ?? (up ? { label: up.label, hint: up.hint, action: act[up.key] } : null) };
+  const seats = o.seatsHeld === 0 ? { label: "Find your seats", hint: "up to ~12 credits a seat", action: "seats" as const } : null;
+  return { steps, next: fill ?? seats };
 }

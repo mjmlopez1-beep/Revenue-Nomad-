@@ -273,6 +273,19 @@ export const HIDDEN_COMPANY = "Locked company";
 export const COMPANY_PRICE = 2;
 /** "2 credits", for copy. */
 export const COMPANY_PRICE_SAY = `${COMPANY_PRICE} credits`;
+/**
+ * Pro and the trial open any company free, up to this many a UTC day (fair use). Companies opened
+ * from Crystal Ball don't count and stay free. Past it a company is COMPANY_PRICE again until tomorrow.
+ */
+export const PRO_OPENS_DAILY = 15;
+/** Said at a company once today's free opens on Pro are used. */
+export const PRO_OPENS_USED = `You've opened ${PRO_OPENS_DAILY} companies today. More open tomorrow, or use ${COMPANY_PRICE_SAY}.`;
+/**
+ * Fellow fractionals are free to see, on every plan (the owner's call): who held a seat and the
+ * role they held open at no charge once the member can see the company, and Fractionals never
+ * costs a credit. Contact details and the company's own people keep their price.
+ */
+export const PEERS_FREE = true;
 
 /*
  * Finding a company by its exact name or website (the action "find", GET /api/table?find=): it
@@ -288,6 +301,15 @@ export const FOUND_NOTE = "Found by its exact name";
 
 /** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;
+/*
+ * Free plan earning taper (the owner may drop it: set FREE_TAPER_CAP to EARN_CAP to turn it off).
+ * After a member's first FREE_TAPER_DAYS, facts about other people's companies earn up to
+ * FREE_TAPER_CAP a day; facts on their own seats, and confirmations, still earn up to EARN_CAP.
+ */
+export const FREE_TAPER_DAYS = 30;
+export const FREE_TAPER_CAP = 10;
+/** The taper as members read it (the Credits page, the cap messages). */
+export const TAPER_RULE = `On Free, after your first ${FREE_TAPER_DAYS} days, facts about other people's companies earn up to ${FREE_TAPER_CAP} credits a day. Facts on your own seats, and confirmations, still earn up to ${EARN_CAP}.`;
 /** Credits for inviting a fellow fractional, paid to both once the new member adds their first fact. */
 export const REFERRAL_BONUS = 10;
 /** Paid invites per member per 30 days. */

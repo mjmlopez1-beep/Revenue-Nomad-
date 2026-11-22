@@ -26,13 +26,13 @@ import { VerifyName } from "./Verify";
 import { AboutText } from "./About";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, ActionResult, Benchmarks, Cell, CompanyRec, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, FOUND_NOTE, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_USED, FOUND_NOTE, FRACTIONAL_TYPES, RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import {
   AFTER_COMPANY, AFTER_NAME, COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, PERSON_NO_ADD, cellKey, personBothLocked, personUnseen, fitReason, isOpenSeat, namedFn, seatBundled,
   seatMissingCount, shown, waitWords, fnGap, type CoInfo, type FactRef, type SeatInfo,
 } from "./model";
-import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
+import { Anchored, FactCell, FactValue, Pro, QuietLock, Sheet, YourSeat, ZeroCredits, GET_COMPANY_CREDITS, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, OnTheTeam, storyTag, storyTitle } from "./Tables";
 import { LEADERS_SOURCE, LEADERS_SOURCE_SAY, checkedWords, isFractionalLead, leadItems, ledFullTimeWords, monthYear } from "@/lib/leaders/types";
@@ -42,7 +42,7 @@ import { LeaderReport } from "./LeaderReport";
 import { CrystalOpen } from "./CrystalOpen";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
-import { UNLOCKS_LEFT_TIP, UNLOCK_FREE, freeCompanyNow, marksConfirmed, postingToOpen, unlocksLeft, unlocksLeftWords } from "./display";
+import { UNLOCKS_LEFT_TIP, companyLater, freeCompanyNow, marksConfirmed, postingToOpen, proOpensUsed, unlockFreeWords, unlocksLeft, unlocksLeftWords } from "./display";
 import { WayInPeople, wayInFrom } from "./network/Network"; // [google network]
 import { SmartWaysIn } from "./network/SmartPaths"; // [smart ways in]
 import { useNetCompany } from "./network/useNetwork"; // [google network]
@@ -1329,7 +1329,7 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
           <p role="alert">{err}</p>
         ) : info ? (
           <p>
-            <b>Is this you?</b> {claimLine(info, company, seat)}. Claim it? Other members will see your name on it, behind a 1 credit lock.
+            <b>Is this you?</b> {claimLine(info, company, seat)}. Claim it? Other members who can see the company will see your name on it. Fellow fractionals are free to see.
           </p>
         ) : (
           <p aria-busy="true">Checking the seat</p>
@@ -1735,10 +1735,11 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
   const free = freeCompanyNow(ui.me);
   const broke = !free && ui.me.credits < COMPANY_PRICE;
   // Today's unlocks are used up (a company counts as COMPANY_PRICE of them, the free one too): the button says when, and spends nothing.
-  const later = (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || !!ui.me.freeCompany);
-  const label = free ? UNLOCK_FREE : UNLOCK_COMPANY;
+  const later = companyLater(ui.me);
+  const label = free ? unlockFreeWords(ui.me) : UNLOCK_COMPANY;
   const included = !roles ? "Name, website and logo" : rate ? "Job posting and rate included" : "Job posting included";
-  const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? "Earn credits to unlock" : label;
+  // Short of the price: "Get 2 credits" opens the ways to get them (earn one, the top-up, Pro).
+  const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? GET_COMPANY_CREDITS : label;
   return (
     <>
       <button
@@ -1747,7 +1748,7 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
         className={`btn btn-pine${bar ? " tp-uc-bar" : ""}`}
         disabled={busy || later}
         aria-busy={busy}
-        aria-label={busy || later || broke ? text : `${free ? "Unlock company free, your 1 free company today" : UNLOCK_ROLE_SAY}. ${included}.`}
+        aria-label={busy || later || broke ? text : `${free ? `Unlock company free. ${unlockFreeWords(ui.me)}` : UNLOCK_ROLE_SAY}. ${included}.`}
         onClick={() => {
           if (free || ui.me.credits >= COMPANY_PRICE) return ui.unlock({ entity: "company", id, field: "identity" }, { onWall: () => setZero(true) });
           sendSignal("wall", "identity");
@@ -1757,13 +1758,15 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
         {bar && !busy && !later && !broke ? (
           // A phone's sticky bar: the price on one line, what comes with it on a small second line.
           <span className="tp-ua-two">
-            <span>{free ? UNLOCK_FREE : UNLOCK_ROLE_SHORT}</span>
+            <span>{free ? unlockFreeWords(ui.me) : UNLOCK_ROLE_SHORT}</span>
             <span className="tp-ua-cost">{included}</span>
           </span>
         ) : (
           text
         )}
       </button>
+      {/* Pro's fair use: today's free opens are used, so this one costs the usual price. */}
+      {!busy && !later && proOpensUsed(ui.me) && <span className="tp-uc-fair tp-small muted">{PRO_OPENS_USED}</span>}
       {zero && ui.me.credits < COMPANY_PRICE && ref.current && <ZeroCredits anchor={ref.current} id={id} need={COMPANY_PRICE} onClose={() => setZero(false)} />}
     </>
   );
@@ -2134,8 +2137,8 @@ export function Drawer({
               {/* The locked prompt's picture: the door, closed. The only art in the record. */}
               <Prop name="doorClosed" height={44} className="tp-hidden-art" />
               {hiringHere
-                ? `Unlock to see the company's name, website and job postings${postedRate ? ", with the posted rate" : ""}. Its open roles are free to read. Who held each seat opens after that, 1 credit each.`
-                : "Unlock to see the company's name, website and job postings. Who held each seat opens after that, 1 credit each."}
+                ? `Unlock to see the company's name, website and job postings${postedRate ? ", with the posted rate" : ""}. Its open roles are free to read. Who held each seat shows free after that.`
+                : "Unlock to see the company's name, website and job postings. Who held each seat shows free after that."}
             </p>
           )}
           {c.found && (

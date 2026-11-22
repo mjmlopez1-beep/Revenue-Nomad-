@@ -34,7 +34,7 @@ import { plural, useMedia } from "./hooks";
 import { LeadCard, TrialEnded, factsOf, type TodayData } from "./Today";
 import { MovesSection } from "./Moves";
 import { FollowUps } from "./FollowUps";
-import { ProWelcome } from "./Billing";
+import { ProWelcome, TrialSummaryCard } from "./Billing";
 import type { MovesWire } from "@/lib/moves";
 import { crystalLine, crystalNames, nameMatches, showMeDue, trialCardLine, trialPillWords, sinceWords } from "./todayModel";
 import { openPlans } from "./Billing";
@@ -298,6 +298,8 @@ export function HomePage(p: HomeProps) {
           </button>
         ) : null}
       </header>
+      {/* The trial's last 4 days: what they used, and what locks when it ends (PlanView.summary). */}
+      <TrialSummaryCard plan={me.plan} />
       {p.trialStarted && me.plan?.name === "trial" ? <TrialStarted days={me.plan.trialDaysLeft} today={dayN} radar={p.radar} onSeen={p.onTrialStartSeen} /> : null}
       {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} art={<Scene kind="trialEnding" square pro on="mint" className="td-trial-art" />} /> : null}
       {p.proWelcome && me.plan ? <ProWelcome plan={me.plan} onSeen={p.onProSeen} /> : null}

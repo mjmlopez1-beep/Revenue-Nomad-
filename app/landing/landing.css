@@ -3036,3 +3036,130 @@ button.lp-fake-btn {
     font-size: 16px;
   }
 }
+
+/* ---------- pricing: Free against Pro (Pricing.tsx) ---------- */
+.lp-price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 960px;
+  margin: 0 auto 12px;
+}
+.lp-price-trial {
+  max-width: 960px;
+  margin: 0 auto 24px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--muted);
+}
+.lp-price-plan {
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.lp-price-pro {
+  border-color: var(--pine);
+  box-shadow: inset 0 0 0 1px var(--pine);
+}
+.lp-price-name {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.lp-price-pro .lp-price-name {
+  color: var(--pine);
+}
+.lp-price-n {
+  margin: 0;
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.lp-price-n span {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.lp-price-sub {
+  margin: 6px 0 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.lp-price-table {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  border-collapse: collapse;
+  font-size: 15px;
+  line-height: 22px;
+}
+.lp-price-table th,
+.lp-price-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.lp-price-table thead th {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.lp-price-table tbody th {
+  font-weight: 700;
+  color: var(--ink);
+  width: 28%;
+}
+.lp-price-table td {
+  color: var(--body-ink);
+}
+.lp-price-procell {
+  color: var(--pine);
+  font-weight: 600;
+}
+.lp-price-go {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+@media (max-width: 599px) {
+  .lp-price-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-price-table thead {
+    display: none;
+  }
+  .lp-price-table tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-bottom: 1px solid var(--line);
+    padding: 10px 0;
+  }
+  .lp-price-table th,
+  .lp-price-table td {
+    border: 0;
+    padding: 2px 4px;
+  }
+  .lp-price-table tbody th {
+    grid-column: 1 / -1;
+    width: auto;
+    padding-bottom: 4px;
+  }
+  .lp-price-table td::before {
+    content: attr(data-cap);
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .lp-price-go .btn {
+    width: 100%;
+  }
+}

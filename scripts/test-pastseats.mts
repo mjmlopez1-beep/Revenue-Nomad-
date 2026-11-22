@@ -498,15 +498,16 @@ const vSeat = (psid: string) => v.companies.flatMap((c) => c.engagements).find((
 const ks = vSeat("PSFX-001");
 check("an ended seat reads as Revenue Nomad research's, status Ended, its start free", ks?.source === "Seat scan" && ks.cells.status?.s === "value" && ks.cells.status.v === "Ended" && ks.cells.start?.s === "value" && ks.cells.start.v === "2022", ks?.cells);
 check("its dated end is a paid fact (locked)", ks.cells.end?.s === "locked", ks.cells.end);
-check("a named ended seat: its holder locked, with the role, and claimable while unverified", ks.cells.operator?.s === "locked" && ks.cells.role?.s === "locked" && !!ks.claimable, ks);
+// Fellow fractionals are free (PEERS_FREE): the member opened these companies, so who held the seat shows, with the role.
+check("a named ended seat: its holder free with the role once the company is open, unverified, and claimable", ks.cells.operator?.s === "value" && ks.cells.operator.v === P.zelda && ks.cells.operator.unverified === true && ks.cells.role?.s === "value" && !!ks.claimable, ks);
 check("an unnamed ended seat: its role free, its holder empty and claimable", vSeat("PSFX-002").cells.role?.s === "value" && (vSeat("PSFX-002").cells.operator?.s ?? "empty") === "empty" && !!vSeat("PSFX-002").claimable, vSeat("PSFX-002").cells);
 check("a company whose only seat ended counts one fractional hire (Past seat or Recent seat, fractional friendly)", vCo(corvidId).friendly.fractional === 1 && vCo(corvidId).friendly.functions.includes("Sales") && ["High", "Medium"].includes(vCo(corvidId).friendly.tier ?? ""), vCo(corvidId).friendly);
-check("no person's name in the view before an unlock", !PEOPLE.some((p) => JSON.stringify(v).includes(p)));
+check("no other person's name in the view: only who held seats at the companies the member opened", PEOPLE.filter((p) => JSON.stringify(v).includes(p)).every((p) => p === P.zelda || p === P.pella), PEOPLE.filter((p) => JSON.stringify(v).includes(p)));
 const c0 = v.me.credits;
-let r = (await T.perform(sm.token, { type: "unlock", entity: "engagement", id: ks.id, field: "operator" })) as { cells?: { field: string; cell: Cell }[] };
+const already = await T.perform(sm.token, { type: "unlock", entity: "engagement", id: ks.id, field: "operator" }).then(() => null, (e: Error) => e.message);
 v = await view();
-const op = r.cells?.find((x) => x.field === "operator")?.cell;
-check("the holder's name on an ended seat unlocks for 1 credit, unverified, like any seat holder", v.me.credits === c0 - 1 && op?.s === "value" && op.v === P.zelda && op.unverified === true, { credits: [c0, v.me.credits], op });
+check("the holder's name on an ended seat costs nothing: nothing to unlock", /Nothing here is locked/.test(already ?? "") && v.me.credits === c0, { credits: [c0, v.me.credits], already });
+let r: { cells?: { field: string; cell: Cell }[] };
 const c1 = v.me.credits;
 r = (await T.perform(sm.token, { type: "unlock", entity: "engagement", id: ks.id, field: "end" })) as { cells?: { field: string; cell: Cell }[] };
 v = await view();

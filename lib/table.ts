@@ -77,7 +77,7 @@ import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type F
 import {
   ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
-  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, type Entity,
+  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, FREE_TAPER_DAYS, FREE_TAPER_CAP, TAPER_RULE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -103,11 +103,11 @@ import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
 import { healthStats } from "./health";
 import {
-  ENDING_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
+  ENDING_DAYS, SUMMARY_DAYS, canClose, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
-import { surveyCode } from "./billing/stripe";
-import { valueCounts, valueLines } from "./billing/emails";
+import { aiPackReady, closeReady, surveyCode } from "./billing/stripe";
+import { trialSummary, valueCounts, valueLines } from "./billing/emails";
 import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE, radarPrefs, radarStats, type RadarEmail, type RadarState, type RadarStats } from "./radar/types";
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
@@ -125,7 +125,7 @@ import { fundingAdminStats, type FundingState } from "./funding/types";
 import { inSlot } from "./viewQueue";
 import { isDue, settingOf, type ScheduleState } from "./schedule";
 // [google network] companies a member knows someone at are named for them free (lib/google/types.ts).
-import { networkKnown, type NetworkState } from "./google/types";
+import { networkKnown, networkOn, type NetworkState } from "./google/types";
 // Your three moves today, and the voice its notes are written in: each member's own (lib/moves.ts, lib/voice.ts).
 import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type MoveLog } from "./moves";
 // Your pipeline (lib/pipeline.ts): each member's own deals, moved by what Merlin sees. A move's note used opens its entry.
@@ -470,7 +470,7 @@ export interface State extends MessagingState {
   /** Weekly email: last run, emails sent in all, and each member's last one. */
   digest: { lastSentAt: string | null; sent: number; members: Record<string, string> };
   /** One-time changes already applied. starterFloor: the starter balance the floor was last applied at. */
-  flags: { starterFloor?: number };
+  flags: { starterFloor?: number; closeTier?: boolean };
   /** The Claude connector: connected apps (token hashes only) and saved searches. See lib/mcp. */
   connector?: ConnectorState;
   /** Fractional firms kept because a member holds a seat there (lib/firmRemoval.ts), for an admin to review. */
@@ -1015,6 +1015,12 @@ export async function loadState(): Promise<State> {
         if (STARTER_CREDITS + sum < 0) s.ledger.push({ memberId, delta: -(STARTER_CREDITS + sum), reason: "adjust", ref: "starter.floor", at });
     }
     s.flags.starterFloor = STARTER_CREDITS;
+    // Pro + Close arrived: anyone already on paid Pro stays on Pro, with Close until their next renewal (grandfatherClose). Once.
+    if (!s.flags.closeTier) {
+      const n = s.billing ? grandfatherClose(s.billing, Date.now()) : 0;
+      if (n) console.log(`Kept ${n} paid Pro member${n === 1 ? "" : "s"} on Pro, with Pro + Close until their next renewal.`);
+      s.flags.closeTier = true;
+    }
     // An ongoing seat's end month is free now. Whoever paid to see one gets that credit back, once.
     if (seedNow) {
       const back = refundOngoingEnds(s, seedNow);
@@ -1514,6 +1520,38 @@ function personFree(s: State, me: Member | null, node: Node | undefined, entity:
   if (!me || !node || entity !== "engagement" || (key !== "operator" && key !== "role")) return false;
   if (key === "role" && !seatBundled(node, s)) return false;
   return personShown(s, node) || personHeld(s, me, node);
+}
+/**
+ * A member who keeps out of the Fractionals directory (they said no, or turned Referral partners
+ * off): their privacy choice, so who held their seats keeps its price for others.
+ */
+function peerPrivate(s: State, node: Node | undefined): boolean {
+  const at = personOf(s, node);
+  if (!at?.gr.member) return false;
+  const p = s.profiles[at.gr.member];
+  return p?.fractionals === false || (p?.fractionals === undefined && !!p?.partnersOff);
+}
+/** The company of a seat is open to the member (identityHidden reads the state the seat was built in). */
+function seatCompanySeen(s: State, me: Member, node: Node): boolean {
+  const g = engGraphs.get(node);
+  const seed = g ? graphSeeds.get(g) : undefined;
+  if (!g || !seed) return false;
+  // identityHidden reads no tracks.
+  return !identityHidden(g, s, memberIndex(seed, s), null as unknown as Tracks, me, (node as EngNode).companyId);
+}
+/**
+ * Fellow fractionals are free to see (PEERS_FREE): who held a seat and the role they held (a seat
+ * whose holder is on file) open at no charge to a signed-in member once the company is open to
+ * them (`visible`, else read from the state). Not for a member who keeps out of the directory
+ * (peerPrivate). Names that Remove my name took off, the US-only names rule and
+ * RN_UNVERIFIED_NAMES_UNTIL already leave no name on the seat to show.
+ */
+function peerFree(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, visible?: boolean): boolean {
+  if (!PEERS_FREE || !me || !node || entity !== "engagement") return false;
+  if (key !== "operator" && !(key === "role" && seatBundled(node, s))) return false;
+  const op = valueOf(node, s, "operator");
+  if (!op || op.status !== "live" || peerPrivate(s, node)) return false;
+  return visible ?? seatCompanySeen(s, me, node);
 }
 
 /* ---------- seat-holder names from public profiles ---------- */
@@ -2156,9 +2194,11 @@ function pickExempt(s: State, memberId: string, seatAt: Set<string>): (companyId
 function unlockRoom(s: State, memberId: string, nowMs: number): { left: number; firstDay: boolean } {
   let used = 0;
   // Counted in credits: a company (COMPANY_PRICE) counts as that many unlocks, so day one's limit stays the starter credits.
-  // The free company of the day counts the same as a paid one. A company opened free from Crystal Ball doesn't count (the member's own Crystal Ball bounds those).
+  // The free company of the day counts the same as a paid one. A company opened free from Crystal Ball doesn't count (the member's own Crystal Ball bounds those),
+  // and nor do Pro's free opens (PRO_OPENS_DAILY bounds those).
+  const pro = proOpens(s, memberId, nowMs);
   for (const l of s.ledger)
-    if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY && !CRYSTAL_WHY.has(l.why ?? "")) used += l.why === "free" ? COMPANY_PRICE : Math.max(1, -l.delta);
+    if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY && !CRYSTAL_WHY.has(l.why ?? "") && !(pro && l.why === "free")) used += l.why === "free" ? COMPANY_PRICE : Math.max(1, -l.delta);
   const joinedAt = s.members.find((m) => m.id === memberId)?.at;
   const firstDay = !!joinedAt && nowMs - Date.parse(joinedAt) < DAY;
   return { left: Math.max(0, (firstDay ? NEW_MEMBER_UNLOCK_MAX : UNLOCK_DAILY_MAX) - used), firstDay };
@@ -2172,11 +2212,70 @@ function unlockRoom(s: State, memberId: string, nowMs: number): { left: number; 
  * Ball's, opened in full from Crystal Ball only (crystalOf).
  */
 function freeCompanyLeft(s: State, memberId: string, nowMs: number): boolean {
+  return freeCompaniesLeft(s, memberId, nowMs) > 0;
+}
+/**
+ * Free company opens left today (UTC day). Trial and Pro (billing live): PRO_OPENS_DAILY a day, any
+ * company, fair use (Crystal Ball's stay free and don't count). Billing off: the one free company
+ * of the day, as before. Free while billing is live: none (its free one is Crystal Ball's).
+ */
+function freeCompaniesLeft(s: State, memberId: string, nowMs: number): number {
   // A test server only (RN_SCAN_TEST=1): RN_FREE_COMPANY=off leaves it out, for the suites that check what paid unlocks cost.
-  if (process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off") return false;
-  if (gated(planRec(s, memberId), nowMs)) return false;
+  if (process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off") return 0;
+  if (gated(planRec(s, memberId), nowMs)) return 0;
   const today = new Date(nowMs).toISOString().slice(0, 10);
-  return !s.ledger.some((l) => l.memberId === memberId && l.reason === "unlock" && l.why === "free" && l.at.slice(0, 10) === today);
+  const used = s.ledger.filter((l) => l.memberId === memberId && l.reason === "unlock" && l.why === "free" && l.at.slice(0, 10) === today).length;
+  return Math.max(0, (proOpens(s, memberId, nowMs) ? PRO_OPENS_DAILY : 1) - used);
+}
+/** Pro and the trial with billing live: companies open free, up to PRO_OPENS_DAILY a UTC day (freeCompaniesLeft). */
+const proOpens = (s: State, memberId: string, nowMs: number) => billingLive() && hasPro(planRec(s, memberId), nowMs);
+
+/*
+ * The Free plan's earning taper (FREE_TAPER_DAYS, FREE_TAPER_CAP in lib/tableFields.ts). Kept here
+ * on its own so it can be taken out in one place: taperOn, taperOwn, taperEarned and the check in
+ * perform's awardFill.
+ */
+/** Free (billing live) past the member's first FREE_TAPER_DAYS (from joining, else the trial's start; a seed member with neither is past them). */
+function taperOn(s: State, memberId: string, nowMs: number): boolean {
+  if (FREE_TAPER_CAP >= EARN_CAP || !gated(planRec(s, memberId), nowMs)) return false;
+  const since = s.members.find((m) => m.id === memberId)?.at ?? planRec(s, memberId)?.trialStartedAt;
+  return !since || nowMs - Date.parse(since) >= FREE_TAPER_DAYS * DAY;
+}
+/** The companies whose facts are the member's own for the taper: one they added, or one where they added or hold a seat. */
+function taperOwn(s: State, g: Graph, idx: MemberIndex, memberId: string): Set<string> {
+  const out = new Set<string>();
+  for (const c of s.companies) if (c.by === memberId) out.add(c.id);
+  for (const e of s.engagements) if (e.by === memberId) out.add(e.companyId);
+  for (const e of g.engagements.values()) if (!out.has(e.companyId) && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === memberId) out.add(e.companyId);
+  return out;
+}
+/** Credits earned in the rolling 24 hours from facts about other people's companies (what the taper caps). A benchmark-only rate is the member's own. */
+function taperEarned(s: State, g: Graph, own: Set<string>, memberId: string, nowMs: number): number {
+  let n = 0;
+  for (const l of s.ledger) {
+    if (l.memberId !== memberId || l.reason !== "fill" || l.delta <= 0 || l.undone || nowMs - Date.parse(l.at) >= DAY || l.ref.startsWith("bench.")) continue;
+    const co = refCompany(s, g, l.ref);
+    if (co && !own.has(co)) n += l.delta;
+  }
+  return n;
+}
+/** Said when the taper stopped a credit. */
+export const TAPER_NOTE = TAPER_RULE;
+
+/** Me's plan counts: Pro's free company opens left today, and the taper while it applies. */
+function planCounts(s: State, g: Graph, idx: MemberIndex, memberId: string, nowMs: number): Pick<Me, "proOpens" | "taper"> {
+  const out: Pick<Me, "proOpens" | "taper"> = {};
+  if (proOpens(s, memberId, nowMs)) out.proOpens = { left: freeCompaniesLeft(s, memberId, nowMs), of: PRO_OPENS_DAILY };
+  if (taperOn(s, memberId, nowMs)) out.taper = { cap: FREE_TAPER_CAP, earned: taperEarned(s, g, taperOwn(s, g, idx, memberId), memberId, nowMs) };
+  return out;
+}
+/** Get started's last two steps (Me.started): a first note out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections in. */
+function startedOf(s: State, memberId: string): NonNullable<Me["started"]> {
+  const note =
+    (s.pipeline?.[memberId]?.entries ?? []).some((e) => !!e.dates?.sent) || (s.seatInvites ?? []).some((x) => x.by === memberId) || (s.conversations ?? []).some((c) => c.a === memberId);
+  const net = s.network?.[memberId];
+  const network = !!net?.google || !!net?.gmail || !!(s as State & { paths?: Record<string, { linkedin?: unknown }> }).paths?.[memberId]?.linkedin;
+  return { note, network, ...(networkOn() ? {} : { networkOff: true }) };
 }
 /** Company unlocks from Crystal Ball (LedgerEntry.why): they cost nothing and the day's limit doesn't count them. */
 const CRYSTAL_WHY = new Set(["crystal", "crystalFull"]);
@@ -2195,6 +2294,8 @@ function crystalOf(s: State, memberId: string, nowMs: number): "all" | "one" | "
 }
 /** The credit history's words for it (LedgerRow.reason). */
 export const FREE_COMPANY_LINE = "Free company of the day";
+/** The same on Trial and Pro, where companies open free up to PRO_OPENS_DAILY a day. */
+export const PRO_OPEN_LINE = "Opened free on Pro";
 /** The credit history's words for a company opened free from Crystal Ball (Trial and Pro), and for Free's one a day. */
 export const CRYSTAL_LINE = `Opened free from ${FEATURE_NAME}`;
 export const CRYSTAL_FULL_LINE = `Free ${FEATURE_NAME} company of the day`;
@@ -2204,6 +2305,12 @@ export const CRYSTAL_USED = CRYSTAL_USED_LINE;
 export const CRYSTAL_NOT_IN = `That company isn't in your ${FEATURE_NAME}, so it doesn't open free. Unlock it for ${COMPANY_PRICE_SAY}.`;
 /** Said after the unlock that used it. */
 export const FREE_COMPANY_USED = "That was your free company today, so it cost no credits. The next one is free tomorrow.";
+/** Fractionals: a fellow fractional's name and work history cost nothing (PEERS_FREE). */
+export const FRACTIONALS_FREE = "Fellow fractionals are free to see on Merlin, so nothing was spent.";
+/** Trial and Pro: said after a company opened free (PRO_OPENS_DAILY a day), with how many are left today. */
+export const PRO_OPEN_FREE = "Free on Pro.";
+export const proOpenLine = (left: number) =>
+  left > 0 ? `${PRO_OPEN_FREE} ${left} more ${left === 1 ? "company opens" : "companies open"} free today.` : `${PRO_OPEN_FREE} That was the last of today's ${PRO_OPENS_DAILY}. More open free tomorrow.`;
 
 /** What a member sees of their balance: never a negative number. A shortfall is shown as credits owed. */
 const shownBalance = (bal: number) => ({ credits: Math.max(0, bal), owed: Math.max(0, -bal) });
@@ -2514,14 +2621,16 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
  * One field as `me` sees it. `free` shows a gated fact without an unlock: a seat holder's own
  * seat, or the posting of a role the weekly scan closed (see postingFree). An end month that says
  * no more than the status (endFree) is always free, and so, with SEAT_SCAN_ROLE_FREE, is the role
- * of a seat Revenue Nomad found that nobody is named on (scanRoleFree).
+ * of a seat Revenue Nomad found that nobody is named on (scanRoleFree). With PEERS_FREE, who held a
+ * seat and the role they held are free to a signed-in member at a company they can see (peerFree):
+ * `peer` says whether they see it, else it is read from the state.
  */
-function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex, free = false): Cell {
+function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex, free = false, peer?: boolean): Cell {
   // A seat holder's record from their own website (ownSitePeople): their name is who held the seat and their title its role,
   // shown and sold with the seat (SEAT_BUNDLE), never apart.
   const own = entity === "contact" ? (node as PersonNode | undefined)?.own : undefined;
   if (own && (key === "name" || key === "title")) {
-    const c = cellOf(s, me, own.seat, "engagement", key === "name" ? "operator" : "role", idx);
+    const c = cellOf(s, me, own.seat, "engagement", key === "name" ? "operator" : "role", idx, false, peer);
     if (c.s === "value") return { s: "value", v: c.v, ver: c.ver, from: "research" };
     if (c.s === "locked") return { s: "locked", ver: c.ver, from: "research" };
     return c.s === "reported" ? { s: "locked", ver: 0, from: "research" } : c;
@@ -2529,6 +2638,8 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (entity === "engagement" && ((key === "end" && endFree(node, s)) || (key === "role" && scanRoleFree(node, s)))) free = true;
   // Fractionals: a member shown in the directory has who held their seats, and the roles, free to every member.
   if (!free && me && entity === "engagement" && (key === "operator" || (key === "role" && seatBundled(node, s))) && personShown(s, node)) free = true;
+  // Fellow fractionals: who held a seat, with the role, free once the member sees the company.
+  if (!free && peerFree(s, me, node, entity, key, peer)) free = true;
   const f = fieldDef(entity, key)!;
   const v = valueOf(node, s, f.key);
   if (!v) return { s: "empty" };
@@ -3804,8 +3915,10 @@ async function fullView(
   let hiddenForMe = 0;
   const idx = memberIndex(seed, s);
   const tracks = tracksOf(seed, s);
+  /** The company being built is open to the viewer (known, or named in this answer): its seat holders show free (peerFree). */
+  let peerVis = false;
   const cell = (node: Node | undefined, entity: Entity, key: string, free = false): Cell => {
-    const c = cellOf(s, me, node, entity, key, idx, free);
+    const c = cellOf(s, me, node, entity, key, idx, free, peerVis);
     if (c.s === "reported" && !c.mine && me && valueOf(node, s, key)?.status === "live") hiddenForMe++;
     return c;
   };
@@ -3862,6 +3975,7 @@ async function fullView(
   for (const c of g.companies.values()) {
     if (only && !only.has(c.id)) continue;
     builtIds.add(c.id);
+    peerVis = !!me && (admin || !!known?.has(c.id) || !!found?.has(c.id));
     const facts = { known: 0, locked: 0, missing: 0 };
     /** `addable`: an empty fact here is one the viewer can add (a seat's facts are its holder's alone). */
     const count = (cells: Record<string, Cell>, defs: typeof COMPANY_F, addable = true) => {
@@ -4160,7 +4274,7 @@ async function fullView(
       }
       // The free company of the day: "Free company of the day", then the company (theirs now).
       if (l.reason === "unlock" && l.why === "free") {
-        ledger.push({ at: l.at, delta: l.delta, reason: FREE_COMPANY_LINE, company: companyNameOf(id), field: "" });
+        ledger.push({ at: l.at, delta: l.delta, reason: proOpens(s, me.id, nowMs) ? PRO_OPEN_LINE : FREE_COMPANY_LINE, company: companyNameOf(id), field: "" });
         continue;
       }
       // Opened free from Crystal Ball (Trial and Pro), or Free's one Crystal Ball company of the day, then the company (theirs now).
@@ -4197,6 +4311,8 @@ async function fullView(
       unlocksLeft: unlockRoom(s, me.id, nowMs).left,
       freeCompany: freeCompanyLeft(s, me.id, nowMs),
       ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)),
+      ...planCounts(s, g, idx, me.id, nowMs),
+      started: startedOf(s, me.id),
       sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, pickExempt(s, me.id, ownSeatAt)).earned),
       earned24h: earned,
       earnCap: EARN_CAP,
@@ -5124,6 +5240,8 @@ export async function perform(
           holdsSeatPartner(s, me, g.engagements.get(id), entity, field) ||
           // Fractionals: a fractional they bought, or one shown in the directory (who held each seat, with the role).
           personFree(s, me, g.engagements.get(id), entity, field) ||
+          // Fellow fractionals: free once the company is open to the member.
+          peerFree(s, me, g.engagements.get(id), entity, field, !hiddenFor(companyOf("engagement", id))) ||
           ownSeat(id)));
     /**
      * The member can see who this person is: their name and title, where on file, are the member's
@@ -5274,6 +5392,9 @@ export async function perform(
      * joined, and not on a seat they made themselves: a client they add with their own seat is not it.
      */
     let referralOk = false;
+    /** The taper (taperOn): the member's own companies, read once, and whether it stopped a credit. */
+    let taperOwnNow: Set<string> | undefined;
+    let taperCapped = false;
     const noteReferral = (ref: string) => {
       if (referralOk) return;
       const rec = refRecord(ref);
@@ -5300,6 +5421,12 @@ export async function perform(
         const today = fillsToday(s, me.id, nowMs);
         if (today.length >= FILL_DAILY_MAX && !ownSeat(refRecord(ref)) && today.filter((l) => !ownSeat(refRecord(l.ref))).length >= FILL_DAILY_MAX)
           throw new ActionError(`You've added ${FILL_DAILY_MAX} facts today, and that's the daily limit. Add more tomorrow. You can still fill in the seats you hold.`);
+        // The Free plan's taper: past the first FREE_TAPER_DAYS, facts about other people's companies earn up to FREE_TAPER_CAP a day.
+        if (earns && taperOn(s, me.id, nowMs)) {
+          const own = (taperOwnNow ??= taperOwn(s, g, memberIndex(seed, s), me.id));
+          const co = refCompany(s, g, ref);
+          if (co && !own.has(co) && taperEarned(s, g, own, me.id, nowMs) >= FREE_TAPER_CAP) (earns = false), (taperCapped = true);
+        }
       }
       // At a company where the member's own new seat waits to be confirmed: no credit yet, paid when it is (confirmSeat).
       if (!ref.startsWith("bench.") && waitsAt(ref)) {
@@ -5488,6 +5615,8 @@ export async function perform(
       // Under the daily cap, so the reason was the pick-list limit: say that, and what still earns.
       if (sellCapped && earning(s, me.id, nowMs).earned < EARN_CAP)
         return ` Only ${SELL_EARN_MAX} answers for ${PICKS} earn a credit each day, so this one didn't earn. ${SELL_STILL_EARNS}`;
+      // Under the daily cap, stopped by the Free plan's taper: say so, and what still earns.
+      if (taperCapped && earning(s, me.id, nowMs).earned < EARN_CAP) return ` No credit ${some ? "for the rest" : "this time"}. ${TAPER_NOTE}`;
       // The limit has one name everywhere ("earned today"). The client adds when earning opens again (Me.earnResetsAt), in the member's own time zone.
       return ` No credit ${some ? "for the rest" : "this time"}, because you've earned today's ${EARN_CAP}.`;
     };
@@ -5622,7 +5751,8 @@ export async function perform(
             const coLocked = lockedFor(co.id);
             const sees = (entity: Entity, node: Node, field: string) => {
               const v = valueOf(node, s, field);
-              return !v || v.status !== "live" || v.by === me.id || (s.unlocks[fkey(node.id, field)] ?? []).includes(me.id) || freeFor(entity, node.id, field);
+              // Who held a seat, with the role, is free once the company opens (PEERS_FREE): nothing to give there.
+              return !v || v.status !== "live" || v.by === me.id || (s.unlocks[fkey(node.id, field)] ?? []).includes(me.id) || freeFor(entity, node.id, field) || peerFree(s, me, node, entity, field, true);
             };
             const open: { entity: Entity; node: Node; field: string }[] = [];
             for (const e of g.engagements.values()) if (e.companyId === co.id) for (const f of ENG_GATED) if (!sees("engagement", e, f)) open.push({ entity: "engagement", node: e, field: f });
@@ -5637,7 +5767,12 @@ export async function perform(
             for (const x of open) give(fkey(x.node.id, x.field));
             return {
               message: `Opened ${co.name} with everything on it, free: your ${FEATURE_NAME} company for today. Pro opens every company in your ${FEATURE_NAME}.`,
-              cells: [...open.map((x) => changed(x.entity, x.node, x.field)), ...(coLocked ? [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", co, field)) : [])],
+              cells: [
+                ...open.map((x) => changed(x.entity, x.node, x.field)),
+                ...(coLocked ? [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", co, field)) : []),
+                // Who held each seat there, with the role, shows free now that the company is open.
+                ...(PEERS_FREE && coLocked ? [...g.engagements.values()].filter((e) => e.companyId === co.id && valueOf(e, s, "operator")?.status === "live").flatMap((e) => ["operator", "role"].map((field) => changed("engagement", e, field))) : []),
+              ],
             };
           };
           /**
@@ -5760,6 +5895,8 @@ export async function perform(
             // Who held a seat and their role: one purchase, whichever was asked for, recorded on the seat holder
             // (unless the name is the member's own), so it counts as a seat holder unlocked.
             if (it.entity === "engagement" && SEAT_BUNDLE.includes(f.key) && seatBundled(node, s)) {
+              // Fellow fractionals: free once the company opens, and this request opens it.
+              if (peerFree(s, me, node, "engagement", f.key, true) && todo.some((t) => t.k === fkey(companyOf("engagement", node.id), "identity"))) return;
               if (seatsBought.has(node.id)) return;
               seatsBought.add(node.id);
               // Fractionals: two seats of one fractional in one request are one purchase (the first opens the rest, personHeld).
@@ -5799,12 +5936,18 @@ export async function perform(
           // What this unlock costs: 1 credit per fact, with each open role one purchase, and COMPANY_PRICE for each company.
           // A company opened from Crystal Ball on Trial or Pro (crystalFree) costs nothing and isn't counted toward the day's limit.
           const fromBall = (t: { field: string; node: Node }) => t.field === "identity" && crystalFree.has(t.node.id);
-          // The first other company of the member's UTC day is free (freeCompanyLeft); it still counts toward the day's limit.
-          const freeK = freeCompanyLeft(s, me.id, nowMs) ? todo.find((t) => t.field === "identity" && !fromBall(t))?.k ?? null : null;
+          // Free opens (freeCompaniesLeft): on Trial and Pro the first PRO_OPENS_DAILY other companies of the UTC day, which
+          // don't count toward the day's limit; with billing off the first one, which still does.
+          const pro = proOpens(s, me.id, nowMs);
+          const opensLeft = freeCompaniesLeft(s, me.id, nowMs);
+          const freeKs = new Set(todo.filter((t) => t.field === "identity" && !fromBall(t)).slice(0, opensLeft).map((t) => t.k));
+          const freeK = freeKs.size ? [...freeKs][0] : null;
           const units = (t: { field: string; node: Node }) => (fromBall(t) ? 0 : t.field === "identity" ? COMPANY_PRICE : 1);
-          const cost = (t: { k: string; field: string; node: Node }) => (t.k === freeK ? 0 : units(t));
+          const cost = (t: { k: string; field: string; node: Node }) => (freeKs.has(t.k) ? 0 : units(t));
           const need = todo.reduce((n, t) => n + cost(t), 0);
-          const room = todo.reduce((n, t) => n + units(t), 0);
+          const room = todo.reduce((n, t) => n + (pro && freeKs.has(t.k) ? 0 : units(t)), 0);
+          // Past today's free opens on Pro, a company is COMPANY_PRICE again: a company in this request that pays says so.
+          const proPast = pro && todo.some((t) => t.field === "identity" && !fromBall(t) && !freeKs.has(t.k));
           if (room) {
             // Accounts in their first 24 hours get a lower daily limit (unlockRoom).
             const { left, firstDay } = unlockRoom(s, me.id, nowMs);
@@ -5832,7 +5975,7 @@ export async function perform(
             }
           }
           for (const t of todo) {
-            s.ledger.push({ memberId: me.id, delta: cost(t) ? -cost(t) : 0, reason: "unlock", ref: t.k, at: now, ...(t.k === freeK ? { why: "free" as const } : fromBall(t) ? { why: "crystal" as const } : {}) });
+            s.ledger.push({ memberId: me.id, delta: cost(t) ? -cost(t) : 0, reason: "unlock", ref: t.k, at: now, ...(freeKs.has(t.k) ? { why: "free" as const } : fromBall(t) ? { why: "crystal" as const } : {}) });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
           /** Open a fact at no further charge. False when there is nothing there. */
@@ -5892,7 +6035,10 @@ export async function perform(
             message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""},` : ""}${price}.${noCharge}`;
           } else if (todo.length === 1 && companies.length) message = `Unlocked ${companyName(todo[0])}${price}.`;
           // The free company of the day: no credits for it, and it is said so. So is a company opened from Crystal Ball.
-          if (freeK) message += ` ${FREE_COMPANY_USED}`;
+          // Trial and Pro: free up to PRO_OPENS_DAILY a day, then said once the day's are used.
+          if (freeK && pro) message += ` ${proOpenLine(opensLeft - freeKs.size)}`;
+          else if (freeK) message += ` ${FREE_COMPANY_USED}`;
+          if (proPast) message += ` ${PRO_OPENS_USED}`;
           if (ballOpened) message += ` ${ballOpened === 1 ? "The company" : `${ballOpened} companies`} opened free from your ${FEATURE_NAME}.`;
           return {
             message,
@@ -5908,6 +6054,12 @@ export async function perform(
                 .filter(Boolean)
                 .flatMap((e) => ["operator", "role"].map((field) => changed("engagement", e, field))),
               ...companies.flatMap((t) => [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", t.node, field))),
+              // Fellow fractionals: who held each seat there, with the role, shows now that the company is open.
+              ...(PEERS_FREE
+                ? companies.flatMap((t) =>
+                    [...g.engagements.values()].filter((e) => e.companyId === t.node.id && valueOf(e, s, "operator")?.status === "live").flatMap((e) => ["operator", "role"].map((field) => changed("engagement", e, field))),
+                  )
+                : []),
             ],
           };
         }
@@ -6296,7 +6448,12 @@ export async function perform(
             (s.unlocks[k] ?? []).includes(me.id) ||
             paidRole ||
             (a.entity === "contact" && (holdsPersonPartner(s, me, node, a.entity, f.key) || samePersonHeld(s, me, node, a.entity, f.key))) ||
-            (a.entity === "engagement" && holdsSeatPartner(s, me, node, a.entity, f.key));
+            (a.entity === "engagement" && holdsSeatPartner(s, me, node, a.entity, f.key)) ||
+            // Fellow fractionals are free (PEERS_FREE): who held a seat, with the role, counts as paid for by whoever paid for the company.
+            (a.entity === "engagement" &&
+              SEAT_BUNDLE.includes(f.key) &&
+              peerFree(s, me, node, a.entity, f.key, !hiddenFor((node as EngNode).companyId)) &&
+              (s.unlocks[fkey((node as EngNode).companyId, "identity")] ?? []).includes(me.id));
           const own = a.entity === "engagement" && ownSeat(node.id);
           const canSee = !f.gated || paid || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee) throw new ActionError("There's nothing here to report. You can only report a fact you can see.");
@@ -6659,8 +6816,8 @@ export async function perform(
               (s.profiles[me.id]?.fractionals === true
                 ? `It's yours.${theirs ? " Your name matches the one on file, so it's verified now." : ""} You're in the Fractionals directory, so other members see your name on it, free. Fill in what you know on Your seats.`
                 : theirs
-                  ? "It's yours. Your name matches the one on file, so it's verified now. Other members see it behind a 1 credit lock. Fill in what you know on Your seats."
-                  : "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.") + connectedNote(link),
+                  ? "It's yours. Your name matches the one on file, so it's verified now. Other members who can see the company see it. Fill in what you know on Your seats."
+                  : "It's yours. Other members who can see the company see your name on it. Fill in what you know on Your seats.") + connectedNote(link),
             id: pubId(e.id),
             cells: ENG_KEYS.map((f) => changed("engagement", e, f)),
             ...(link?.conversationId ? { connected: link.conversationId } : {}),
@@ -7149,6 +7306,8 @@ export async function perform(
           if (gi === undefined) throw new ActionError("We couldn't find that fractional. Refresh the page and try again.");
           const gr = p.groups[gi];
           if (gr.member === me.id) throw new ActionError("That's you, so there's nothing to unlock.");
+          // Fellow fractionals are free (PEERS_FREE): the directory shows their name and seats to every member, so nothing is spent.
+          if (PEERS_FREE) return { message: FRACTIONALS_FREE, id: gr.rid };
           const seats = gr.seats.map((id) => g.engagements.get(id)).filter((e): e is EngNode => !!e);
           const idxNow = memberIndex(seed, s);
           const cellNow = (e: EngNode) => cellOf(s, me, e, "engagement", "operator", idxNow, freeFor("engagement", e.id, "operator"));
@@ -7252,7 +7411,7 @@ export async function perform(
       ...out,
       me: {
         ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), pending: pendingFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
-        unlocksLeft: unlockRoom(s, me.id, nowMs).left, freeCompany: freeCompanyLeft(s, me.id, nowMs), ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)), sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
+        unlocksLeft: unlockRoom(s, me.id, nowMs).left, freeCompany: freeCompanyLeft(s, me.id, nowMs), ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)), ...planCounts(s, g, memberIndex(seed, s), me.id, nowMs), started: startedOf(s, me.id), sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
       },
     };
   }).catch((e) => {
@@ -7345,7 +7504,7 @@ export const tableInternals = {
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
   geoOf, firmsInReview,
   // Plans (lib/billing): the value moment that extends a trial, the saved views Free alerts on, Free's limits, the member's opaque billing ref.
-  valueMoment, alertViewsOf, freeNow, billingRef, balance, grantPlanCredits,
+  valueMoment, alertViewsOf, freeNow, closeNow, billingRef, balance, grantPlanCredits,
   // The next-client radar (lib/radar) reads hires and open roles the way the table does, and records its product signals.
   belowLead, offBarRole, isUnseen, addSignal,
   // How a Crystal Ball company opens for the member today (its email's buttons say the same).
@@ -7867,6 +8026,8 @@ function partnerTitles(g: Graph, s: State, tracks: Tracks, idx: MemberIndex, me:
     const opv = valueOf(e, s, "operator")!;
     if (seatHolder(s, idx, e.id, opv)?.id === me.id) continue;
     if (SEAT_BUNDLE.some((k) => (s.unlocks[fkey(e.id, k)] ?? []).includes(me.id))) continue;
+    // The seat itself shows its title already: fellow fractionals are free at a company the member sees (PEERS_FREE).
+    if (peerFree(s, me, e, "engagement", "role", !identityHidden(g, s, idx, tracks, me, e.companyId))) continue;
     const t = partnerTitle(rv.value, opv.value, c.name, live(c, s, "website") ?? null);
     if (t) out[pubId(e.id)] = t;
   }
@@ -7970,6 +8131,10 @@ function promoView(code: string): PlanView["code"] {
 function freeNow(s: State, memberId: string, nowMs = Date.now()): boolean {
   return gated(planRec(s, memberId), nowMs);
 }
+/** Close features (proposals sent for signature, your own templates, Claude drafting) are open to this member now: lib/billing/rules.ts canClose. */
+function closeNow(s: State, memberId: string, nowMs = Date.now()): boolean {
+  return canClose(planRec(s, memberId), nowMs);
+}
 /** Start the reverse trial for an onboarded member who has had none (and never paid). Changes the draft; true when it started. */
 function startTrialIn(s: State, memberId: string, nowMs: number): boolean {
   if (!billingLive() || !s.profiles[memberId]?.onboarded) return false;
@@ -8032,9 +8197,16 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
   const pause = pauseState(rec, nowMs);
   // The value receipt before the decision: in the trial's last 3 days, what it gave them so far (the same counts as its email).
   const receipt = ending && rec?.trialStartedAt ? valueLines(valueCounts(s, roles?.tracks ?? null, roles?.fnOfEng ?? null, memberId, rec.trialStartedAt, new Date(nowMs + 1).toISOString())) : null;
+  // The trial's end as a loss in plain terms, in its last SUMMARY_DAYS: what they used, and what locks (Home's banner, Plan and billing, the same as the day-18 email).
+  const daysLeft = trialDaysLeft(rec, nowMs);
+  const summary =
+    name === "trial" && rec?.trialStartedAt && daysLeft !== null && daysLeft <= SUMMARY_DAYS
+      ? trialSummary(valueCounts(s, null, null, memberId, rec.trialStartedAt, new Date(nowMs + 1).toISOString()), daysLeft)
+      : null;
   return {
     code: promoView(promoOf(s, memberId)),
     ...(receipt ? { receipt } : {}),
+    ...(summary ? { summary } : {}),
     name,
     trialEndsAt: rec?.trialEndsAt ?? null,
     trialDaysLeft: trialDaysLeft(rec, nowMs),
@@ -8055,7 +8227,13 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     topup: !!process.env.STRIPE_PRICE_TOPUP?.trim(),
     notLooking: prof.looking === false,
     annualLine: annualLine(hourlyOf(ownRate(s, memberId))),
-    prices: { month: PRICES.month, year: PRICES.year, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
+    prices: { month: PRICES.month, year: PRICES.year, closeMonth: PRICES.closeMonth, closeYear: PRICES.closeYear, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
+    // Pro or Pro + Close (the trial is Close), whether Close features are open now, and whether Close can be bought.
+    tier: tierNow(rec, nowMs),
+    canClose: canClose(rec, nowMs),
+    ...(rec?.closeUntil && Date.parse(rec.closeUntil) > nowMs && rec.tier !== "close" ? { closeUntil: rec.closeUntil } : {}),
+    closeOpen: closeReady(),
+    aiPack: aiPackReady(),
     limits: { savedViews: free ? FREE_SAVED_VIEWS : null, claudePerDay: free ? FREE_MCP_PER_DAY : null },
     ...(free && rec?.trialStartedAt && !rec.paidSince && !rec.notices?.trialEndedSeen ? { trialEnded: true } : {}), // [ux ws1] Today's one-time trial-ended card
     ...(proWelcomeDue(rec, name, nowMs) ? { proWelcome: true } : {}),
@@ -8087,7 +8265,7 @@ function billingStats(s: State, idx: MemberIndex, nowMs: number): NonNullable<Ad
     }
     // Recurring revenue from plans that will renew: not set to end, not paused now.
     if (plan === "pro" && rec.subscriptionId && !rec.cancelAt) {
-      const cents = rec.cents || (rec.interval === "year" ? PRICES.year : PRICES.month) * 100;
+      const cents = rec.cents || tierPrice(rec.tier ?? "pro", rec.interval === "year" ? "year" : "month") * 100;
       mrrCents += rec.interval === "year" ? Math.round(cents / 12) : cents;
     }
   }

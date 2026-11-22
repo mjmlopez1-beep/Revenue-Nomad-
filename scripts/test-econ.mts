@@ -164,14 +164,11 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     await unlockCompany(t, "tok-bo", company(bo0, "Betaco"));
     const bo = await t.buildView("tok-bo");
     const be = company(bo, "Betaco")!.engagements[0];
-    check("once claimed, who held it and the role are both locked, one purchase", be.cells.operator?.s === "locked" && be.cells.role?.s === "locked" && M.lockedInEngagement(be).map((x) => x.field).join() === "operator", [be.cells.operator, be.cells.role]);
+    // Fellow fractionals are free (PEERS_FREE): once Bo sees the company, who held the seat and the role show at no charge.
+    check("once claimed, who held it and the role show free to a member who sees the company", be.cells.operator?.s === "value" && be.cells.operator.v === "Cy Claimer" && !be.cells.operator.paid && be.cells.role?.s === "value" && M.lockedInEngagement(be).length === 0, [be.cells.operator, be.cells.role]);
+    const bal0 = (await t.buildView("tok-bo")).me?.credits;
     const buy = await tryAct(t, "tok-bo", { type: "unlock", entity: "engagement", id: e.id, field: "role" });
-    const after = company(await t.buildView("tok-bo"), "Betaco")!.engagements[0];
-    check(
-      "  unlocking the role opens who held it too, for 1 credit",
-      buy.ok && buy.message === "Unlocked the seat holder and their role for 1 credit." && after.cells.operator?.s === "value" && after.cells.operator.v === "Cy Claimer" && after.cells.role?.s === "value",
-      [buy, after.cells.operator, after.cells.role],
-    );
+    check("  asking to unlock the role spends nothing", !buy.ok && buy.error === NOTHING && (await t.buildView("tok-bo")).me?.credits === bal0, buy);
     if (!free) {
       // Di paid for the role before the claim: she holds that half of the pair, so who claimed it comes with it.
       const d = company(await t.buildView("tok-di"), "Betaco")!.engagements[0];

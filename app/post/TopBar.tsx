@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The top bar (light, over the content): search, the credits pill, "Add what you know", Messages. The account menu (AvatarMenu) opens from the sidebar's foot.
+ * The top bar (light, over the content): search, the plan pill (PlanPill: the trial's days with Upgrade, or Upgrade to Pro), the credits pill, "Add what you know", Messages. The account menu (AvatarMenu) opens from the sidebar's foot.
  * Every number here (the balance, "Earned 11 of 25 today", the ledger) is the text face with
  * tabular figures, never mono.
  *
@@ -14,6 +14,8 @@ import { Brand, IconPlus, IconSearch, IconX, timeAgo, useToast } from "../ui/sha
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
+import { PlanPill } from "./Billing";
+import { TAPER_RULE } from "@/lib/tableFields";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
@@ -199,6 +201,8 @@ export function CreditsPopover({
         {owed && <p className="tp-credpop-warn">{owed}</p>}
         {unlocks && <p>{unlocks}</p>}
         {!capped && me.sellEarnLeft === 0 && <p>Answers for a company&apos;s industry, size, revenue or how they sell earn no more credits today. An HQ, a website, a person or a fact on your own seat still earns.</p>}
+        {/* The Free plan's taper: at its cap, say the rule (lib/tableFields.ts TAPER_RULE). */}
+        {!capped && !!me.taper && me.taper.earned >= me.taper.cap && <p data-taper>{TAPER_RULE}</p>}
       </div>
       <div className="tp-credpop-ledger">
         {ledger.length === 0 && <p className="muted tp-small">Nothing yet. Each credit you earn or spend is listed here.</p>}
@@ -735,6 +739,7 @@ export function TopBar({
               <button type="button" className={`tp-iconbtn${searchInList ? " tp-search-icon-list" : ""}`} aria-label="Search" onClick={() => setSearchOpen(true)}>
                 <IconSearch size={18} />
               </button>
+              <PlanPill plan={me.plan} phone />
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
             </div>
           </>
@@ -748,6 +753,8 @@ export function TopBar({
       {brand && home("tp-brand", <span className="tp-brand-logo"><Brand size={32} /></span>)}
       <div className="tp-top-mid">{search}</div>
       <div className="tp-top-right">
+        {/* Only while billing is live (Me.plan): the trial's days with Upgrade, or Upgrade to Pro. Nothing on Pro. */}
+        <PlanPill plan={me.plan} />
         <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
         <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>

@@ -96,13 +96,30 @@ export function unlocksLeftWords(me: Pick<Me, "credits" | "unlocksLeft">): strin
  * unlock limit still has room for a company (it counts as COMPANY_PRICE, like a paid one). At the
  * limit, every unlock button says "Unlocks again tomorrow", this one too.
  */
-export function freeCompanyNow(me: Pick<Me, "freeCompany" | "unlocksLeft">): boolean {
+export function freeCompanyNow(me: Pick<Me, "freeCompany" | "unlocksLeft"> & Partial<Pick<Me, "proOpens">>): boolean {
+  // Trial and Pro: free opens have their own daily count (PRO_OPENS_DAILY), outside the day's unlock limit.
+  if (me.proOpens) return me.proOpens.left > 0;
   return !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE;
+}
+/**
+ * Today's unlocks are used up for a company: its button says "Unlocks again tomorrow" and spends
+ * nothing. Never while a free open on Pro is left (those don't count toward the limit).
+ */
+export function companyLater(me: Pick<Me, "freeCompany" | "unlocksLeft" | "credits"> & Partial<Pick<Me, "proOpens">>): boolean {
+  if (me.proOpens && me.proOpens.left > 0) return false;
+  return (me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (me.credits >= COMPANY_PRICE || (!!me.freeCompany && !me.proOpens));
 }
 /** The unlock button's words while the free company of the day is left. */
 export const UNLOCK_FREE = "Unlock free · 1 left today";
 /** The same, said once near the balance and on Get started. */
 export const FREE_COMPANY_TODAY = "1 free company today";
+/** The unlock button's words while a free open is left: Pro's count, else the free company of the day. */
+export const unlockFreeWords = (me: Partial<Pick<Me, "proOpens">>) => (me.proOpens ? `Unlock free · ${me.proOpens.left} left today` : UNLOCK_FREE);
+/** Near the balance and on Get started: "14 free companies today on Pro", else the free company of the day. */
+export const freeTodayWords = (me: Partial<Pick<Me, "proOpens">>) =>
+  me.proOpens ? `${me.proOpens.left} free ${me.proOpens.left === 1 ? "company" : "companies"} today` : FREE_COMPANY_TODAY;
+/** Pro's free opens are used for today: the line at a company's unlock (PRO_OPENS_USED). */
+export const proOpensUsed = (me: Partial<Pick<Me, "proOpens">>) => !!me.proOpens && me.proOpens.left <= 0;
 
 /** Why a balance can't all be spent today, for the tooltips beside "25 unlocks left today". */
 export const UNLOCKS_LEFT_TIP = "New accounts can unlock 25 facts on their first day, then up to 100 a day. Credits you don't spend stay yours.";

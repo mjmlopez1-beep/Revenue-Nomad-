@@ -418,7 +418,7 @@ async function madeUpSeat(token, fn, revenue, extra = {}, top = {}) {
 {
   const v0 = await view(OWNER.token);
   const own = v0.companies.flatMap((c) => c.engagements).filter((e) => e.yours);
-  const foreign = v0.companies.flatMap((c) => c.engagements).find((e) => !e.yours && e.cells.role?.s === "locked" && e.cells.function?.v === "AI GTM");
+  const foreign = v0.companies.flatMap((c) => c.engagements).find((e) => !e.yours && e.cells.function?.v === "AI GTM"); // any seat not theirs (its role may show free now: PEERS_FREE)
   check("the seed member holds four seats", own.length === 4, own.length);
   for (const rate of ["$100/hr", "$110/hr", "$120/hr"]) await share(OWNER.token, "Other", "Under $1M", rate);
   const s1 = await act(OWNER.token, { type: "benchRate", engagementId: own[0].id, pricing: "Hourly", rate: "$130/hr" });

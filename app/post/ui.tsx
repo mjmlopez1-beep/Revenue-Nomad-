@@ -23,10 +23,10 @@ import { BENCH_RATE_HELP, atTime, fieldText, plural, type Layout } from "./hooks
 import { owedLine } from "./ledger";
 import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
-import { CreditsWall, UpgradeNote } from "./Billing";
+import { CreditsWall, GetCredits, UpgradeNote } from "./Billing";
 import { InvitePanel } from "./Invite";
 import { SEAT_YIELD, tappedWhat, wallBack } from "./earnBack";
-import { freeCompanyNow, marksConfirmed } from "./display";
+import { companyLater, freeCompanyNow, marksConfirmed, unlockFreeWords } from "./display";
 
 export type AddMode = "engagement" | "person" | "facts";
 export interface AddOpts {
@@ -360,16 +360,15 @@ export function ZeroCredits({ anchor, id, onClose, need = 1 }: { anchor: HTMLEle
           </button>
         </>
       ) : (
-        <div className="tp-zero-ways">
-          {ways.map((w, k) => (
-            <button key={w.label} type="button" className={`btn${k === 0 ? " btn-primary" : ""}${phone ? " btn-lg" : " btn-sm"}`} onClick={w.go}>
-              {w.label}
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Three ways to get them, in one line: earn one (the member's seats, or the search for one), the top-up, Pro. */}
+          <GetCredits plan={ui.me.plan} onEarn={earn.capped ? undefined : ways[0].go} className="tp-zero-ways" />
+          <button type="button" className="tp-flink tp-zero-back" onClick={() => setInviting(true)}>
+            {ways[ways.length - 1].label}
+          </button>
+        </>
       )}
       {pills}
-      <Pro where="zero_credits" variant="line" />
     </>
   );
   if (phone)
@@ -397,6 +396,10 @@ export function ZeroCredits({ anchor, id, onClose, need = 1 }: { anchor: HTMLEle
 export const lockCost = (t: { field: string }) => (t.field === "identity" ? COMPANY_PRICE : 1);
 /** A lock's price: "1 credit", "2 credits", and the free company of the day "free · 1 left today". */
 const creditsSay = (n: number) => (n === 0 ? "free · 1 left today" : n === 1 ? "1 credit" : `${n} credits`);
+/** Short of a lock's price: "Get 1 credit", "Get 2 credits". It opens the three ways to get them (GetCredits). */
+export const getCreditsWords = (n: number) => `Get ${Math.max(1, n)} credit${Math.max(1, n) === 1 ? "" : "s"}`;
+/** The record's Unlock company, short of its price. */
+export const GET_COMPANY_CREDITS = getCreditsWords(COMPANY_PRICE);
 
 function Lock({
   onUnlock,
@@ -408,6 +411,7 @@ function Lock({
   later,
   broke,
   cost = 1,
+  freeWords,
 }: {
   onUnlock: () => void;
   ver: number;
@@ -418,9 +422,13 @@ function Lock({
   later?: boolean;
   broke?: boolean;
   cost?: number;
+  /** A free open's price words ("free · 14 left today"), when it isn't the free company of the day. */
+  freeWords?: string;
 }) {
-  const earn = cost > 1 ? "Earn credits to unlock" : "Earn a credit to unlock";
-  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `${earn} ${what}` : cost === 0 ? `Unlock ${what} free. It's your 1 free company today` : `Unlock ${what} for ${creditsSay(cost)}`;
+  // Short of the price: "Get 2 credits" opens the ways to get them (earn one, the top-up, Pro).
+  const earn = getCreditsWords(cost);
+  const price = cost === 0 && freeWords ? freeWords : creditsSay(cost);
+  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `${earn} to see ${what}` : cost === 0 ? `Unlock ${what} free. ${price}` : `Unlock ${what} for ${price}`;
   const more = ver > 0 ? ` Confirmed by ${plural(ver, "member")}.` : from && FROM_SAY[from] ? ` ${FROM_SAY[from]}.` : "";
   return (
     <button type="button" className={`lock${busy ? " busy" : ""}${later ? " later" : ""}${broke ? " broke" : ""}`} title={`${say}.${more}`} aria-label={busy ? "Unlocking" : say} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
@@ -443,7 +451,7 @@ function Lock({
             {!busy && (
               <span className="lock-cost">
                 <span className="lock-dot">· </span>
-                {creditsSay(cost)}
+                {price}
               </span>
             )}
           </>
@@ -558,7 +566,7 @@ export function FactCell({
       // The free company of the day costs nothing (it still counts toward the day's unlocks).
       const free = t.field === "identity" && freeCompanyNow(ui.me);
       const cost = free ? 0 : lockCost(t);
-      const later = (ui.me.unlocksLeft ?? Infinity) < lockCost(t) && (credits >= lockCost(t) || (t.field === "identity" && !!ui.me.freeCompany));
+      const later = t.field === "identity" ? companyLater(ui.me) : (ui.me.unlocksLeft ?? Infinity) < lockCost(t) && credits >= lockCost(t);
       return (
         <span className={cls} data-cell={k} ref={ref}>
           <Lock
@@ -581,6 +589,7 @@ export function FactCell({
             later={later}
             broke={!free && credits < cost}
             cost={cost}
+            freeWords={free ? unlockFreeWords(ui.me).replace(/^Unlock /, "") : undefined}
           />
           {zero && ref.current && <ZeroCredits anchor={ref.current} id={t.id} need={cost} onClose={() => setZero(false)} />}
         </span>

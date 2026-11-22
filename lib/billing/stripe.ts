@@ -7,7 +7,10 @@
  *   STRIPE_WEBHOOK_SECRET   the webhook endpoint's signing secret (whsec_...)
  *   STRIPE_PRICE_MONTH      the price id of Pro monthly ($59)
  *   STRIPE_PRICE_YEAR       the price id of Pro yearly ($590)
+ *   STRIPE_PRICE_CLOSE_MONTH  the price id of Pro + Close monthly ($79)
+ *   STRIPE_PRICE_CLOSE_YEAR   the price id of Pro + Close yearly ($790). Without both there is no Close checkout.
  *   STRIPE_PRICE_TOPUP      the price id of the one-time top-up ($19 for 50 credits). Without it there is no top-up.
+ *   STRIPE_PRICE_AIPACK     the price id of the one-time AI usage pack ($10). Without it there is none.
  *   RN_SURVEY_CODE          the code survey respondents type (e.g. RN-SURVEY10). Members can type any promotion code at checkout.
  *   STRIPE_PROMO_SURVEY     optional: that code's promotion code id (promo_...), so a member who arrives with
  *                           ?code=RN-SURVEY10 gets it applied without typing it.
@@ -51,8 +54,22 @@ async function call(method: "GET" | "POST", path: string, params: Record<string,
   return data;
 }
 
-const price = (k: "month" | "year" | "topup") => process.env[k === "month" ? "STRIPE_PRICE_MONTH" : k === "year" ? "STRIPE_PRICE_YEAR" : "STRIPE_PRICE_TOPUP"]?.trim() ?? "";
+type PriceKey = "month" | "year" | "closeMonth" | "closeYear" | "topup" | "aipack";
+const PRICE_ENV: Record<PriceKey, string> = { month: "STRIPE_PRICE_MONTH", year: "STRIPE_PRICE_YEAR", closeMonth: "STRIPE_PRICE_CLOSE_MONTH", closeYear: "STRIPE_PRICE_CLOSE_YEAR", topup: "STRIPE_PRICE_TOPUP", aipack: "STRIPE_PRICE_AIPACK" };
+const price = (k: PriceKey) => process.env[PRICE_ENV[k]]?.trim() ?? "";
 export const topupReady = () => !!price("topup");
+export const aiPackReady = () => !!price("aipack");
+/** Pro + Close can be bought: both its prices are set up. */
+export const closeReady = () => !!price("closeMonth") && !!price("closeYear");
+/** The price id for a tier and interval. */
+export const priceFor = (tier: "pro" | "close", interval: "month" | "year") => price(tier === "close" ? (interval === "year" ? "closeYear" : "closeMonth") : interval);
+/** Which tier a Stripe price id is, for the webhook (lib/billing/rules.ts EventCtx.tierOf). Null for one we don't know. */
+export function tierOfPrice(id: string | null): "pro" | "close" | null {
+  if (!id) return null;
+  if (id === price("closeMonth") || id === price("closeYear")) return "close";
+  if (id === price("month") || id === price("year")) return "pro";
+  return null;
+}
 
 /** The survey code, when this is it (case and spaces don't matter). */
 export function surveyCode(raw: unknown): boolean {
@@ -73,12 +90,12 @@ interface Who {
  * trial, the subscription starts trialing to then, so the days left are kept and the first charge
  * lands when the trial ends. It goes in the metadata too, so the webhook reads it on every event.
  */
-export async function checkoutPro(who: Who, interval: "month" | "year", base: string, code?: unknown, trialEnd?: number | null): Promise<string> {
+export async function checkoutPro(who: Who, interval: "month" | "year", base: string, code?: unknown, trialEnd?: number | null, tier: "pro" | "close" = "pro"): Promise<string> {
   const promo = surveyCode(code) ? process.env.STRIPE_PROMO_SURVEY?.trim() : "";
   const trial = trialEnd && Number.isFinite(trialEnd) ? Math.floor(trialEnd) : null;
   const s = await call("POST", "checkout/sessions", {
     mode: "subscription",
-    "line_items[0][price]": price(interval),
+    "line_items[0][price]": priceFor(tier, interval),
     "line_items[0][quantity]": 1,
     // Back on Home, where the one-time Pro welcome is (app/post/TradingPost.tsx reads paid=1).
     success_url: `${base}/?paid=1`,
@@ -86,7 +103,9 @@ export async function checkoutPro(who: Who, interval: "month" | "year", base: st
     client_reference_id: who.ref,
     "metadata[ref]": who.ref,
     "metadata[interval]": interval,
+    "metadata[tier]": tier,
     "subscription_data[metadata][ref]": who.ref,
+    "subscription_data[metadata][tier]": tier,
     ...(trial ? { "subscription_data[trial_end]": trial, "subscription_data[metadata][trial_end]": trial, "metadata[trial_end]": trial } : {}),
     ...(who.customerId ? { customer: who.customerId } : { customer_email: who.email }),
     // Stripe takes one or the other: a code applied for them, or a box to type one.
@@ -114,11 +133,46 @@ export async function checkoutTopup(who: Who, base: string): Promise<string> {
   return s.url;
 }
 
+/** Checkout for the one-time AI usage pack. The same pattern as the top-up. */
+export async function checkoutAiPack(who: Who, base: string): Promise<string> {
+  const s = await call("POST", "checkout/sessions", {
+    mode: "payment",
+    "line_items[0][price]": price("aipack"),
+    "line_items[0][quantity]": 1,
+    success_url: `${base}/?p=billing&aipack=1`,
+    cancel_url: `${base}/?p=billing`,
+    client_reference_id: who.ref,
+    "metadata[ref]": who.ref,
+    "metadata[kind]": "aipack",
+    ...(who.customerId ? { customer: who.customerId } : { customer_email: who.email, customer_creation: "always" }),
+    allow_promotion_codes: true,
+  });
+  if (typeof s.url !== "string") throw new StripeError("The payment page didn't open. Try again in a moment.");
+  return s.url;
+}
+
 /** The Customer Portal: card, invoices, cancel. */
 export async function portal(customerId: string, base: string): Promise<string> {
   const s = await call("POST", "billing_portal/sessions", { customer: customerId, return_url: `${base}/?p=billing` });
   if (typeof s.url !== "string") throw new StripeError("The billing page didn't open. Try again in a moment.");
   return s.url;
+}
+
+/**
+ * Move a subscription between Pro and Pro + Close at the same interval: its one item takes the
+ * other price, with Stripe's proration (an upgrade invoices the difference now, a downgrade credits
+ * it to the next invoice). The tier goes in the metadata too, so the webhook reads it.
+ */
+export async function changeTier(subscriptionId: string, tier: "pro" | "close", interval: "month" | "year"): Promise<void> {
+  const sub = await call("GET", `subscriptions/${encodeURIComponent(subscriptionId)}`);
+  const item = ((sub.items as { data?: { id?: string }[] } | undefined)?.data ?? [])[0]?.id;
+  if (!item) throw new StripeError("We couldn't find your plan at the payment service. Try again in a moment.");
+  await call("POST", `subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    "items[0][id]": item,
+    "items[0][price]": priceFor(tier, interval),
+    proration_behavior: tier === "close" ? "always_invoice" : "create_prorations",
+    "metadata[tier]": tier,
+  });
 }
 
 /** Cancel at the end of the paid period, or take that back. */

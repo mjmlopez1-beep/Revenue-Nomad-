@@ -21,7 +21,7 @@
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
-import { ActionError, FREE_COMPANY_USED, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
+import { ActionError, FREE_COMPANY_USED, PRO_OPEN_FREE, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
@@ -40,7 +40,7 @@ import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS } from "../tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, FREE_TAPER_CAP, FREE_TAPER_DAYS, PRO_OPENS_DAILY, PRO_OPENS_USED, REFERRAL_BONUS } from "../tableFields";
 import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
 import { accountPathsLine, pathsLine } from "../paths"; // [smart ways in] counts only, never who
@@ -74,15 +74,20 @@ const NO_RATE = "No rate posted";
 const NO_POSTING = "No posting link on file";
 /** A person's name and title are one purchase (PERSON_BUNDLE). */
 export const LOCKED_PERSON = "locked, 1 credit opens this person's name and title together";
-/** Who held a seat and the role they held are one purchase on a seat whose holder is on file (SEAT_BUNDLE). */
-export const LOCKED_SEAT = "locked, 1 credit opens who held this seat and the role they held together";
+/**
+ * Who held a seat and the role they held: free to members once the company is open (PEERS_FREE). Still
+ * locked only for a fractional who keeps out of the directory, where 1 credit opens both (SEAT_BUNDLE).
+ */
+export const LOCKED_SEAT = "locked, this fractional keeps out of the directory: 1 credit opens who held this seat and the role they held together";
+/** Who held a seat at a company that is still locked: free once the company opens. */
+export const AFTER_COMPANY_SEAT = `free once the company is open. Unlock the company first (${COMPANY_PRICE_SAY}): then who held each seat and the role they held show at no charge`;
 /** A person's LinkedIn, email and phone wait for their name and title (PERSON_DETAILS). */
 export const AFTER_NAME = "opens after the name. Unlock their name and title first (1 credit for both), then this is 1 credit";
 /** A person, or who held a seat, at a company that is still locked. */
 export const AFTER_COMPANY = `opens after the company. Unlock the company first (${COMPANY_PRICE_SAY})`;
 /** What unlock says when asked for one of those too early: the server's words, then the way through. */
 export const NAME_FIRST = "Unlock their name and title first. One credit opens both (unlock this person with field name). Then their LinkedIn, email and phone are 1 credit each.";
-export const COMPANY_FIRST = `Unlock the company first. ${COMPANY_PRICE_SAY} open it (unlock the company with field identity). Then its people and who held its seats can be unlocked.`;
+export const COMPANY_FIRST = `Unlock the company first. ${COMPANY_PRICE_SAY} open it (unlock the company with field identity). Then who held its seats shows free, and its people can be unlocked.`;
 const REVIEW = "under review";
 /** A person's contact details: they open only once the member can see who the person is (PERSON_DETAILS in lib/tableFields.ts). */
 const CONTACT_DETAILS = ["linkedin", "email", "phone"];
@@ -250,8 +255,8 @@ export function personOut(p: PersonRec, seatId?: string | null, hidden = false):
 export function seatLocked(e: EngagementRec, hidden: boolean, field: string): string {
   const open = isOpenRole(e);
   if (open && ROLE_BUNDLE.includes(field)) return hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE;
-  // At a locked company everything else paid opens after the company: any purchase there owns it.
-  if (hidden) return AFTER_COMPANY;
+  // At a locked company everything else paid opens after the company: any purchase there owns it. Who held its seats is then free.
+  if (hidden) return seatBundled(e) && SEAT_PAIR.includes(field) ? AFTER_COMPANY_SEAT : AFTER_COMPANY;
   if (seatBundled(e) && SEAT_PAIR.includes(field)) return LOCKED_SEAT;
   return LOCKED;
 }
@@ -341,8 +346,8 @@ export function warmPaths(i: CoInfo, mv?: MemberView, base = publicBase() ?? "")
       seat_id: e.id,
       ...(h.s === "locked"
         ? hidden
-          ? { unlock_first: company }
-          : { unlock: { entity: "seat", id: e.id, field: "seat_holder" }, opens: withRole ? "who held it and the role they held, 1 credit" : "who held it, 1 credit" }
+          ? { unlock_first: company, then: "who held it and the role they held show free" }
+          : { unlock: { entity: "seat", id: e.id, field: "seat_holder" }, opens: withRole ? "who held it and the role they held, 1 credit (this fractional keeps out of the directory)" : "who held it, 1 credit (this fractional keeps out of the directory)" }
         : {}),
       ...(h.s === "value" && mv && !h.member?.you ? reachOf(e, i, mv, base) : {}),
     });
@@ -806,20 +811,27 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     // Free (trial over): none here. Its free one a day opens in full from Crystal Ball in the Merlin app only.
     free_company_today:
       me.crystal === "one" || me.crystal === "used"
-        ? `none on the Free plan: every company unlock here costs ${COMPANY_PRICE_SAY}. Free opens one company a day from the member's ${FEATURE_NAME} in the Merlin app, with everything on it (${me.crystal === "one" ? "today's is left" : "today's is used"}). Pro opens every company in their ${FEATURE_NAME} free.`
+        ? `none on the Free plan: every company unlock here costs ${COMPANY_PRICE_SAY}. Free opens one company a day from the member's ${FEATURE_NAME} in the Merlin app, with everything on it (${me.crystal === "one" ? "today's is left" : "today's is used"}). Pro opens companies free, up to ${PRO_OPENS_DAILY} a day, plus every company in their ${FEATURE_NAME}.`
+        : me.proOpens
+          ? me.proOpens.left > 0
+            ? `${me.proOpens.left} of ${me.proOpens.of} left: on their plan any company opens free, up to ${me.proOpens.of} a UTC day (${FEATURE_NAME} companies don't count and stay free). Past that a company is ${COMPANY_PRICE_SAY}.`
+            : `none left today: ${PRO_OPENS_USED}`
         : me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE
           ? "1 left: the next company unlock today costs no credits"
           : "used today: the next one is free tomorrow (UTC)",
-    ...(me.crystal === "all" ? { crystal_ball: `Every company in the member's ${FEATURE_NAME} opens free (0 credits) on their plan: unlock quotes 0 for it. Its people and who held its seats cost what they cost.` } : {}),
+    ...(me.crystal === "all" ? { crystal_ball: `Every company in the member's ${FEATURE_NAME} opens free (0 credits) on their plan: unlock quotes 0 for it. Who held its seats then shows free, and its people cost what they cost.` } : {}),
+    ...(me.taper ? { earned_from_other_companies_today: `${me.taper.earned} of ${me.taper.cap}` } : {}),
     ...(me.pending ? { credits_waiting: `${me.pending}, paid when the member's seat at a company new to Merlin is confirmed` } : {}),
     ...(me.sellEarnLeft !== undefined ? { pick_list_answers_that_still_earn_today: me.sellEarnLeft } : {}),
     facts_added: me.added,
     facts_unlocked: me.unlocked,
     how_credits_work:
-      `Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1: who held a seat comes with the role they held, and a person's name with their title, for that one credit. A company is ${COMPANY_PRICE_SAY}, ${
+      `Adding a missing fact earns 1 credit (up to 25 a day${me.taper ? `; on Free after the first ${FREE_TAPER_DAYS} days, facts about other people's companies earn up to ${FREE_TAPER_CAP} a day, while facts on their own seats and confirmations still earn up to 25` : ""}). Seeing a fact someone else added costs 1: a person's name comes with their title for that one credit, and their LinkedIn, email and phone are 1 credit each after it. Fellow fractionals are free: who held a seat and the role they held show at no charge once the member can see the company, and the Fractionals page never costs a credit. A company is ${COMPANY_PRICE_SAY}, ${
         me.crystal === "one" || me.crystal === "used"
           ? `and on Free one company a day from ${FEATURE_NAME} opens in full, free, in the Merlin app`
-          : `and the first company each day is free${me.crystal === "all" ? `, and every company in ${FEATURE_NAME} opens free` : ""}`
+          : me.proOpens
+            ? `and on their plan companies open free, up to ${PRO_OPENS_DAILY} a day, plus every company in ${FEATURE_NAME}`
+            : `and the first company each day is free${me.crystal === "all" ? `, and every company in ${FEATURE_NAME} opens free` : ""}`
       }. A fractional you invite earns you both 10 credits when they add their first fact to a company already on Merlin. Your own seats are free to you. A seat you add at a company new to Merlin earns once another member or an admin confirms it.`,
     seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.filter((f) => f !== "introducedBy").map((f) => outKey(SEAT_KEYS, f)) })),
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
@@ -953,7 +965,7 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
         would_spend: cost,
         credits_now: me.credits,
         would_open: what,
-        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : ""}${ballSay} Nothing was spent.${more}`,
+        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : r.message.includes(PRO_OPEN_FREE) ? ` It opens free on the member's plan (${PRO_OPENS_DAILY} a day).` : ""}${r.message.includes(PRO_OPENS_USED) ? ` ${PRO_OPENS_USED}` : ""}${ballSay} Nothing was spent.${more}`,
         next: "Ask the member if they want to spend this. Only if they say yes, call unlock again with the same arguments and confirm: true.",
       };
     }

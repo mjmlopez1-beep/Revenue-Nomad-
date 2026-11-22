@@ -11,7 +11,7 @@
  *    one action. A row opens the record in the right-hand panel, as a company's does.
  *  - Phones: the same as cards, the filters in a sheet, the record full screen.
  *  - The action: a member on Merlin, Message (their conversation when there is one); someone not on
- *    Merlin yet, "Unlock · 1 credit" while locked (the same purchase as who held one of their seats),
+ *    Merlin yet, free to see by name (fellow fractionals never cost a credit),
  *    then Invite to connect: a note drafted in the member's saved voice, Copy and Mark as sent.
  *    Merlin sends no email.
  *  - A record's seats are drawn from the member's own table, so a locked company there shows only
@@ -29,6 +29,7 @@ import { ConnectButton, openConversation } from "./Messages";
 import { Sheet, useUi } from "./ui";
 import { copyText, plural } from "./hooks";
 import { fmtStamp } from "./RoleDate";
+import { freeCompanyNow } from "./display";
 import { FR_TABS, ballChip, startPlace, takeWantSeat, choiceCounts, frDefaults, frRows, headline, leadTitle, levelLine, tabCounts, type FrFilters, type FrTab } from "./fractionalsModel";
 import "./fractionals.css";
 import { Prop } from "../ui/fractions/lazy";
@@ -575,7 +576,7 @@ function Action({ r, reload, wide }: { r: FractionalRec; reload: () => Promise<v
     };
     return (
       <button type="button" className={`btn btn-sm fr-unlock${w}`} disabled={busy} aria-busy={busy} onClick={() => void unlock()}>
-        <IconLock size={12} /> Unlock <span className="fr-unlock-c">· 1 credit</span>
+        <IconLock size={12} /> See who <span className="fr-unlock-c">· free</span>
       </button>
     );
   }
@@ -779,7 +780,7 @@ function Record({
           <Action r={r} reload={reload} />
         </div>
         {r.locked && !r.onMerlin && (
-          <p className="fr-rnote">1 credit shows who this is, with their name and role on each of their seats. It&apos;s the same purchase as who held one of their seats, so you never pay twice.</p>
+          <p className="fr-rnote">Fellow fractionals are free to see. Open it to see who this is.</p>
         )}
         {!r.locked && !r.onMerlin && !r.you && (
           <p className="fr-rnote">
@@ -882,7 +883,7 @@ function SeatCard({ at, now }: { at: SeatAt | null; now: boolean }) {
       {hidden && (
         <div className="fr-seat-unlock">
           <button type="button" className="btn btn-sm fr-unlock" onClick={() => void ui.unlock({ entity: "company", id: i.c.id, field: "identity" })}>
-            <IconLock size={12} /> Unlock company <span className="fr-unlock-c">· {ui.me.freeCompany ? "free today" : `${COMPANY_PRICE} credits`}</span>
+            <IconLock size={12} /> Unlock company <span className="fr-unlock-c">· {freeCompanyNow(ui.me) ? "free today" : `${COMPANY_PRICE} credits`}</span>
           </button>
         </div>
       )}

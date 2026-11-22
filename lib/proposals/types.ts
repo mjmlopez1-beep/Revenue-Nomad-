@@ -201,7 +201,7 @@ export interface ProposalsView {
    * button and where it goes. Never a number of dollars or tokens. Left out while some is left.
    */
   aiUsedUp?: { words: string; pack: string; button: string };
-  /** Sending for signature: Trial and Pro (and every plan while billing is off). */
+  /** Sending for signature: Pro + Close and the trial (canClose in lib/billing/rules.ts; every plan while billing is off). */
   canSend: boolean;
   /** Templates the member can start from: every one, or on Free only FREE_TEMPLATE. */
   templatesOpen: string[];

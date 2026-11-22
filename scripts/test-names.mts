@@ -278,16 +278,16 @@ const ctx = { member: sm, origin: "https://merlin.example.com" };
 // The member unlocks Alpha first (2 credits): every company is locked for a member until they unlock it or know it.
 await T.perform(sm.token, { type: "unlock", entity: "company", id: T.tableInternals.pubId("c_alpha"), field: "identity" });
 const g0 = (await MCP.getCompany(ctx, { company: "Alpha Fixture Co" })) as { seats: { id: string; seat_holder?: string; role?: string; claimable?: string; holder_verified?: boolean }[]; warm_paths: { name?: string }[] };
-const named0 = g0.seats.find((x) => typeof x.seat_holder === "string" && x.seat_holder.startsWith("locked"));
-check("connector: a named seat's holder is locked with its role, 1 credit for both", !!named0 && /opens who held this seat and the role they held together/.test(named0.seat_holder ?? "") && /locked/.test(String(named0.role ?? "")), g0.seats);
-check("connector: no name before the unlock", !leaksIn(JSON.stringify(g0)).length, leaksIn(JSON.stringify(g0)));
+// Fellow fractionals are free (PEERS_FREE): with Alpha open, a named seat's holder and role show at no charge.
+const named0 = g0.seats.find((x) => x.seat_holder === P.zelda);
+check("connector: a named seat's holder shows free with its role once the company is open", !!named0 && typeof named0.role === "string" && !/locked/.test(String(named0.role)), g0.seats);
+check("connector: no other name than the open company's seat holder", leaksIn(JSON.stringify(g0)).every((x) => x === P.zelda), leaksIn(JSON.stringify(g0)));
 check("connector: a named seat nobody claimed can still be claimed", typeof named0?.claimable === "string");
 check("connector: a seat with nobody named says Nobody named yet", g0.seats.some((x) => x.seat_holder === "Nobody named yet"));
-await T.perform(sm.token, { type: "unlock", entity: "engagement", id: named0!.id, field: "operator" });
 MV.forgetView(sm.id);
 const g1 = (await MCP.getCompany(ctx, { company: "Alpha Fixture Co" })) as { seats: { id: string; seat_holder?: string; holder_verified?: boolean }[]; warm_paths: { name?: string; holder_verified?: boolean }[] };
 const named1 = g1.seats.find((x) => x.id === named0!.id);
-check("connector: after the unlock, the name and holder_verified false", named1?.seat_holder === P.zelda && named1?.holder_verified === false, named1);
+check("connector: the name and holder_verified false", named1?.seat_holder === P.zelda && named1?.holder_verified === false, named1);
 check("connector: the warm path says so too", g1.warm_paths.some((w) => w.name === P.zelda && w.holder_verified === false), g1.warm_paths);
 check("connector: no Sales Navigator or public profile named as a source", !/Sales Nav|public profile/i.test(JSON.stringify(g1)));
 // The weekly email and Slack: a new open role at a company with a named seat.
@@ -414,24 +414,23 @@ if (up) {
   /* gating */
   let av = await ann.view();
   const zSeat = seatIn(av, "fx-a1")!;
-  check("a named seat: claimable, its holder locked, and its role locked with it", !!zSeat && !!zSeat.claimable && zSeat.cells.operator?.s === "locked" && zSeat.cells.role?.s === "locked", zSeat);
+  // Fellow fractionals are free (PEERS_FREE): the members opened these companies, so who held their seats shows at no charge.
+  check("a named seat: claimable, its holder and role free once the company is open, unverified, from Revenue Nomad research", !!zSeat && !!zSeat.claimable && zSeat.cells.operator?.s === "value" && zSeat.cells.operator.v === P.zelda && !!zSeat.cells.operator.unverified && zSeat.cells.operator.from === "research" && zSeat.cells.role?.s === "value", zSeat);
   const unnamed = seatIn(av, "fx-s1")!;
   check("a found seat with nobody named: its role is free (SEAT_SCAN_ROLE_FREE)", unnamed?.cells.role?.s === "value" && (!unnamed.cells.operator || unnamed.cells.operator.s === "empty"), unnamed);
-  check("no name in a member's view before an unlock", !leaksIn(await ann.text()).length, leaksIn(await ann.text()));
+  check("no name in a member's view at a company still locked for them (Charlie's)", !leaksIn(await ann.text()).includes(P.rhea), leaksIn(await ann.text()));
   const anon = await call("GET", "/api/table");
   check("no name in the signed-out view", !leaksIn(anon.text).length);
   const prev = await call("GET", "/api/table?preview=1&fn=Sales");
   check("the homepage preview says a holder is on file, never the name", prev.status === 200 && !leaksIn(prev.text).length && (prev.json?.counts?.holders ?? 0) >= 1, prev.json?.counts);
   const before = await credits(ann);
   let r = await ann.act({ type: "unlock", entity: "engagement", id: zSeat.id, field: "role" });
-  const opCell = r.json?.cells?.find((c: { field: string }) => c.field === "operator")?.cell;
-  check("1 credit opens who held it and the role, whichever lock", r.status === 200 && (await credits(ann)) === before - 1 && opCell?.s === "value" && opCell.v === P.zelda && r.json?.cells?.some((c: { field: string; cell: { s: string } }) => c.field === "role" && c.cell.s === "value"), r.json);
-  check("the name reads as unverified, from Revenue Nomad research", opCell?.unverified === true && opCell?.from === "research", opCell);
+  check("who held it and the role cost nothing: nothing to unlock", r.status === 400 && /Nothing here is locked/.test(r.json?.error ?? "") && (await credits(ann)) === before, r.json);
   const oSeat = seatIn(av, "fx-b1")!;
   const b0 = await credits(bob);
   r = await bob.act({ type: "unlockMany", items: [{ entity: "engagement", id: oSeat.id, field: "operator" }, { entity: "engagement", id: oSeat.id, field: "role" }] });
-  check("Unlock all counts a seat holder with their role once", r.status === 200 && (await credits(bob)) === b0 - 1, r.json);
-  check("another member's view still has the name locked", seatIn(await cat.view(), "fx-a1")?.cells.operator?.s === "locked");
+  check("Unlock all on a seat holder and their role spends nothing", r.status === 200 && (await credits(bob)) === b0, r.json);
+  check("another member who opened the company sees the name free too", seatIn(await cat.view(), "fx-a1")?.cells.operator?.s === "value");
 
   /* Verify: This is me with a matching name, through the claim page, with the invite code */
   const zTok = claimTok(seat("fx-a1")[1]);
@@ -448,7 +447,7 @@ if (up) {
   check("the seat is theirs now, on Your seats", zMine?.yours && zMine.cells.operator?.s === "value" && zMine.cells.operator.v === P.zelda && !zMine.claimable && !zMine.cells.operator.unverified, zMine);
   check("the invite code came with the link: the inviter has one invite", (await ann.view()).me.invited === 1);
   av = await ann.view();
-  check("the member who paid sees the claimed name, verified now", seatIn(av, "fx-a1")?.cells.operator?.v === P.zelda && !seatIn(av, "fx-a1")?.cells.operator?.unverified && !!seatIn(av, "fx-a1")?.cells.operator?.member);
+  check("the member who saw it sees the claimed name, verified now", seatIn(av, "fx-a1")?.cells.operator?.v === P.zelda && !seatIn(av, "fx-a1")?.cells.operator?.unverified && !!seatIn(av, "fx-a1")?.cells.operator?.member);
   page = await call("GET", `/claim/${zTok}`);
   check("the claim page says a claimed seat is claimed", /already claimed/.test(page.text), page.text.slice(0, 200));
   page = await call("GET", `/claim/${zTok}`, { token: zTokCookie });
@@ -507,32 +506,31 @@ if (up) {
 
   /* Verify: This is wrong */
   const sSeat = seatIn(av, "fx-e1")!;
-  await ann.act({ type: "unlock", entity: "engagement", id: sSeat.id, field: "operator" });
-  await bob.act({ type: "unlock", entity: "engagement", id: sSeat.id, field: "operator" });
+  // The name is free to see now, so reporting it opens, as for any free fact, once the member has added a fact of their own.
+  const echoPub = [...pubCo].find(([, id]) => id === "c_echo")![0];
+  await bob.act({ type: "fill", entity: "company", id: echoPub, field: "hq", value: "Austin, TX" });
   const ann1 = await credits(ann);
   const bob1 = await credits(bob);
   r = await bob.act({ type: "report", entity: "engagement", id: sSeat.id, field: "operator" });
   check("This is wrong: one report takes the name off for everyone at once", r.status === 200 && /off the seat for everyone now/.test(r.json?.message ?? ""), r.json);
-  check("each member who paid gets 1 credit back", (await credits(ann)) === ann1 + 1 && (await credits(bob)) === bob1 + 1);
+  check("nobody paid to see it, so nothing comes back", (await credits(ann)) === ann1 && (await credits(bob)) === bob1);
   const gone = seatIn(await dan.view(), "fx-e1");
   check("the seat reads as unnamed: its role is free and it can be claimed", (!gone?.cells.operator || gone.cells.operator.s === "empty") && gone?.cells.role?.s === "value" && !!gone?.claimable, gone);
   r = await ann.act({ type: "report", entity: "engagement", id: sSeat.id, field: "operator" });
-  check("nothing more to report, and no second refund", r.status === 400 && (await credits(ann)) === ann1 + 1);
-  check("the credit history names the refund", ((await ann.view()).ledger as { reason: string }[]).some((l) => /seat holder's name that came off/.test(l.reason)));
+  check("nothing more to report", r.status === 400 && (await credits(ann)) === ann1);
 
   /* the claim page: a locked company, Remove my name and Not me without an account */
   const rTok = claimTok(seat("fx-c1")[1]);
   page = await call("GET", `/claim/${rTok}`);
   check("a seat at a company locked by an open role names no company", /a company that.{1,6}s hiring now, since Apr 2025/.test(page.text) && !/Charlie Hiring Inc/.test(page.text), page.text.slice(0, 300));
-  // Dan pays for the company and then for the name there, so he is the one to refund.
+  // Dan pays for the company; the name there is then free to him.
   const charlie = (await dan.view()).companies.find((c: Co) => c.hidden && c.engagements.some((e) => e.source === "Seat scan"));
   await dan.act({ type: "unlock", entity: "company", id: charlie.id, field: "identity" });
-  const rSeat = seatIn(await dan.view(), "fx-c1")!;
-  r = await dan.act({ type: "unlock", entity: "engagement", id: rSeat.id, field: "operator" });
+  check("the name at Charlie shows free once Dan opened it", seatIn(await dan.view(), "fx-c1")?.cells.operator?.v === P.rhea);
   const dan1 = await credits(dan);
   r = await call("POST", "/api/table/names", { ip: "10.71.0.1", body: { op: "remove", t: rTok } });
   check("Remove my name works without an account", r.status === 200 && r.json?.done === true && /Your name is off that seat/.test(r.json?.message ?? ""), r.json);
-  check("whoever paid for the name gets the credit back", (await credits(dan)) === dan1 + 1);
+  check("nobody paid for the name, so nobody's credits change", (await credits(dan)) === dan1);
   check("the name is off for everyone", (seatIn(await dan.view(), "fx-c1")?.cells.operator?.s ?? "empty") === "empty");
   r = await call("POST", "/api/table/names", { ip: "10.71.0.1", body: { op: "remove", t: rTok } });
   check("removing again says there's nothing on it", r.status === 200 && r.json?.done === false, r.json);
@@ -571,7 +569,8 @@ if (up) {
   check("off: the verified name still shows", seatIn(offView, "fx-legacy7")?.cells.operator?.s === "locked" || seatIn(offView, "fx-legacy7")?.cells.operator?.s === "value");
   check("off: a claimed name still shows", seatIn(offView, "fx-a1")?.cells.operator?.s !== "empty" && seatIn(offView, "fx-b1")?.cells.operator?.s !== "empty");
   await adm.act({ type: "names", op: "show", on: true });
-  check("on again: the name is back behind its lock", (await adm.view()).admin?.names?.shown === true && seatIn(await bob.view(), "fx-i1")?.cells.operator?.s === "locked");
+  // Bob opened the company, so the name is back free to him (PEERS_FREE).
+  check("on again: the name is back", (await adm.view()).admin?.names?.shown === true && seatIn(await bob.view(), "fx-i1")?.cells.operator?.s === "value");
   r = await ann.act({ type: "names", op: "show", on: false });
   check("only admins can switch it", r.status === 400);
   const exp = await call("GET", "/api/table?export=1", { token: adm.token, ip: adm.ip });

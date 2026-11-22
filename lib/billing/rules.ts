@@ -9,17 +9,38 @@
  *   Pro    $59 a month or $590 a year: unlimited saved views, every alert in Slack, the Claude
  *          connector without the daily cap, the benchmarks' ranges by client size, the radar's signals
  *          in Slack as they happen (everyone gets every signal each morning), and 100 credits each paid month.
+ *   Pro + Close  $79 a month or $790 a year: everything in Pro, plus proposals end to end (Claude
+ *          drafting from a call, your own templates and contracts, unlimited send for signature,
+ *          the pipeline moving itself on a signature). The same 100 credits a month. canClose() is
+ *          the one gate. Pro and Close move into each other on the same subscription (prorated).
  *   Top-up $19 for 50 credits, once, on any plan.
- *   Trial  21 days of Pro, no card, from the end of onboarding. Extended once by 7 days when, in its
+ *   Trial  21 days of Pro + Close (the top tier), no card, from the end of onboarding. Extended once by 7 days when, in its
  *          last 4 days, the member opens a conversation, unlocks a warm path or sends an invite.
  *          It ends quietly into Free. Pro can be bought at any point in it: with more than 48 hours
  *          left, the subscription starts in Stripe's trialing status with trial_end at the trial's
  *          end (PlanRecord.proStartsAt), so the member keeps the days left and the first charge, with
  *          its 100 credits, lands when the trial ends. With less left it is charged at once.
  */
-import { planOf, pausedAt, type PlanRecord } from "../plan";
+import { billingLive, planOf, pausedAt, type PlanRecord } from "../plan";
 
-export const PRICES = { month: 59, year: 590, topup: 19 } as const;
+export const PRICES = { month: 59, year: 590, closeMonth: 79, closeYear: 790, topup: 19, aiPack: 10 } as const;
+/** The plans page's lines under Pro + Close: what it does, then (smaller) the AI usage pack, once, on Pro + Close or the trial. No amount or limit is stated. */
+export const CLOSE_AI_LINE = "Claude drafts your proposals from your calls";
+export const AI_PACK_LINE = `Need more AI usage? Add a pack anytime for $${PRICES.aiPack}.`;
+/**
+ * The paid tiers: Pro ($59, $590 a year) and Pro + Close ($79, $790 a year), the same 100 credits
+ * a month. Close adds proposals end to end: Claude drafting from a call, your own templates, your
+ * own contracts with signature fields, unlimited send for signature, and the pipeline moving itself
+ * when something is signed. The trial is Close. PlanRecord.tier says which a subscription is.
+ */
+export type Tier = "pro" | "close";
+export const TIER_NAME: Record<Tier, string> = { pro: "Pro", close: "Pro + Close" };
+/** What a tier costs per interval, in dollars. */
+export const tierPrice = (tier: Tier, interval: "month" | "year") => (tier === "close" ? (interval === "year" ? PRICES.closeYear : PRICES.closeMonth) : interval === "year" ? PRICES.year : PRICES.month);
+/** Pro sold as winning clients: the plans, the Pro welcome, the trial-ended card and the trial emails say it the same way. */
+export const PRO_STORY = "Find the company before it posts, get in through the person who held the seat, and send the proposal they sign.";
+/** The trial summary (what was used, what locks) shows in the trial's last this-many days: Home's banner and the billing page. */
+export const SUMMARY_DAYS = 4;
 export const TOPUP_CREDITS = 50;
 export const PRO_CREDITS = 100;
 export const TRIAL_DAYS = 21;
@@ -51,7 +72,9 @@ export interface BillingState {
   /** Stripe event ids already handled, newest last. */
   events: string[];
   /** Money in, for Pilot metrics: one row per paid invoice or top-up. Cents only, never card data. */
-  payments: { memberId: string; at: string; cents: number; kind: "month" | "year" | "topup"; ref: string }[];
+  payments: { memberId: string; at: string; cents: number; kind: "month" | "year" | "topup" | "aipack"; ref: string }[];
+  /** AI usage packs paid for (onAiPackPaid), once per payment ref, newest last. */
+  aiPacks?: { memberId: string; ref: string; at: string }[];
   /** Subscriptions that ended (Stripe deleted them), for churn. */
   ended: { memberId: string; at: string }[];
 }
@@ -116,6 +139,47 @@ export function keepTrialEnd(rec: PlanRecord | undefined, nowMs: number): number
 /** Subscribed during the trial, and paid Pro hasn't started yet: nothing charged, the first charge still to come. */
 export const proStartsLater = (rec: PlanRecord | undefined, nowMs: number) => !!rec?.proStartsAt && ms(rec.proStartsAt) > nowMs && !rec.invoiceId;
 
+/* ---------- Pro + Close ---------- */
+
+/**
+ * The one gate for every Close feature (proposals sent for signature, Claude drafting, your own
+ * templates and contracts, the pipeline moving on a signature): true on an active trial (the trial
+ * is Close), on a paid Pro + Close subscription, and for a member who was on paid Pro before Close
+ * existed until their next renewal (PlanRecord.closeUntil). False on Free and on plain Pro. While
+ * billing isn't live nothing is gated, so it is true.
+ */
+export function canClose(rec: PlanRecord | undefined, nowMs: number): boolean {
+  if (!billingLive()) return true;
+  const plan = planOf(rec, nowMs);
+  if (plan === "trial") return true;
+  if (plan !== "pro") return false;
+  if (rec!.tier === "close") return true;
+  return !!rec!.closeUntil && nowMs < ms(rec!.closeUntil);
+}
+
+/** The tier a member is on now, for the plans and the gates' words: Free, Pro, or Close (the trial is Close). */
+export function tierNow(rec: PlanRecord | undefined, nowMs: number): "free" | Tier {
+  const plan = planOf(rec, nowMs);
+  if (plan === "free") return "free";
+  if (plan === "trial") return "close";
+  return rec!.tier === "close" ? "close" : "pro";
+}
+
+/**
+ * Once, when Close arrives: a member already on paid Pro stays on Pro, and keeps Close features
+ * until their next renewal (closeUntil, the end of the period they paid for). Returns how many.
+ */
+export function grandfatherClose(b: BillingState, nowMs: number): number {
+  let n = 0;
+  for (const rec of Object.values(b.members)) {
+    if (rec.tier || !rec.paidSince || !(ms(rec.proUntil) > nowMs)) continue;
+    rec.tier = "pro";
+    rec.closeUntil = rec.proUntil;
+    n++;
+  }
+  return n;
+}
+
 /** A trial ran and is over, without a paid plan now. */
 export const trialOver = (rec: PlanRecord | undefined, nowMs: number) =>
   !!rec?.trialEndsAt && ms(rec.trialEndsAt) <= nowMs && planOf(rec, nowMs) === "free";
@@ -164,6 +228,8 @@ export interface EventCtx {
   nowMs: number;
   /** The member an event is about: from our ref (metadata or client_reference_id), the customer or the subscription. */
   memberOf: (o: { ref?: string | null; customer?: string | null; subscription?: string | null }) => string | null;
+  /** Which tier a Stripe price id is (lib/billing/stripe.ts tierOfPrice): null for a price we don't know. */
+  tierOf?: (priceId: string | null) => Tier | null;
 }
 
 export interface EventOutcome {
@@ -173,6 +239,8 @@ export interface EventOutcome {
   memberId?: string;
   /** Credits to put on the ledger (each ref at most once). */
   grants: { memberId: string; delta: number; reason: "plan" | "topup"; ref: string }[];
+  /** An AI usage pack was paid for: hand it to onAiPackPaid (each ref once). */
+  aiPack?: { memberId: string; ref: string };
   /** A renewal: send the value receipt for the period that just ended. */
   receipt?: { memberId: string; from: string; to: string };
 }
@@ -187,7 +255,7 @@ const invoiceSub = (inv: Record<string, unknown>) => str(inv.subscription) ?? st
 const invoiceRef = (inv: Record<string, unknown>) =>
   str(obj(obj(inv.subscription_details).metadata).ref) ?? str(obj(obj(obj(inv.parent).subscription_details).metadata).ref) ?? str(obj(inv.metadata).ref);
 /** The period an invoice paid for: its subscription line's, else the invoice's own. */
-function invoicePeriod(inv: Record<string, unknown>): { start: string | null; end: string | null; interval: "month" | "year" | null } {
+function invoicePeriod(inv: Record<string, unknown>): { start: string | null; end: string | null; interval: "month" | "year" | null; price: string | null } {
   const lines = (obj(inv.lines).data as unknown[] | undefined) ?? [];
   const line = obj(lines.find((l) => obj(obj(l).period).end) ?? lines[0]);
   const p = obj(line.period);
@@ -197,8 +265,11 @@ function invoicePeriod(inv: Record<string, unknown>): { start: string | null; en
     start: unix(num(p.start) ?? num(inv.period_start)),
     end: unix(num(p.end) ?? num(inv.period_end)),
     interval: priceInterval === "year" ? "year" : priceInterval === "month" ? "month" : null,
+    price: str(obj(line.price).id) ?? str(obj(line.plan).id),
   };
 }
+/** A tier read from metadata we set at checkout ("tier"), on a session or a subscription. */
+const metaTier = (m: unknown): Tier | null => (obj(m).tier === "close" ? "close" : obj(m).tier === "pro" ? "pro" : null);
 /** The trial's end we gave Stripe (metadata trial_end, unix seconds), on a session, a subscription or an invoice. */
 function metaTrialEnd(...metas: unknown[]): number | null {
   for (const m of metas) {
@@ -220,6 +291,11 @@ function holdTrial(rec: PlanRecord, endS: number, ending: boolean) {
 }
 /** A subscription's period end, wherever this API version puts it. */
 const subPeriodEnd = (sub: Record<string, unknown>) => num(sub.current_period_end) ?? num(obj(((obj(sub.items).data as unknown[]) ?? [])[0]).current_period_end);
+/** A subscription's price id (its first item). */
+const subPrice = (sub: Record<string, unknown>) => {
+  const item = obj(((obj(sub.items).data as unknown[]) ?? [])[0]);
+  return str(obj(item.price).id) ?? str(obj(item.plan).id);
+};
 const subInterval = (sub: Record<string, unknown>): "month" | "year" | null => {
   const item = obj(((obj(sub.items).data as unknown[]) ?? [])[0]);
   const i = obj(obj(item.price).recurring).interval ?? obj(item.plan).interval;
@@ -261,6 +337,8 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
         if (str(o.subscription)) rec.subscriptionId = str(o.subscription)!;
         const interval = meta.interval === "year" ? "year" : "month";
         rec.interval = interval;
+        // Pro or Pro + Close, as checkout was asked for (metadata tier).
+        rec.tier = metaTier(meta) ?? "pro";
         const settled = o.payment_status === "paid" || o.payment_status === "no_payment_required";
         const trialEnd = metaTrialEnd(meta);
         if (settled && trialEnd && trialEnd * 1000 > ctx.nowMs && !rec.invoiceId) {
@@ -275,6 +353,13 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
           delete rec.cancelAt;
         }
         return done({ handled: true, memberId: id, grants: [] });
+      }
+      // The AI usage pack: the same pattern as the top-up, handed on (onAiPackPaid) instead of credits.
+      if (o.mode === "payment" && meta.kind === "aipack") {
+        if (o.payment_status !== "paid") return done(none("unpaid"));
+        const ref = `aipack.${str(o.id) ?? ev.id}`;
+        pay(b, { memberId: id, at: now, cents: num(o.amount_total) ?? 0, kind: "aipack", ref: str(o.id) ?? ev.id });
+        return done({ handled: true, memberId: id, grants: [], aiPack: { memberId: id, ref } });
       }
       if (o.mode === "payment" && meta.kind === "topup") {
         if (o.payment_status !== "paid") return done(none("unpaid"));
@@ -296,6 +381,8 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
       rec.subscriptionId = sub;
       if (str(o.customer)) rec.customerId = str(o.customer)!;
       if (period.interval) rec.interval = period.interval;
+      const paidTier = ctx.tierOf?.(period.price) ?? metaTier(invoiceMetas(o).find((m) => metaTier(m)));
+      if (paidTier) rec.tier = paidTier;
       const cents = num(o.amount_paid) ?? 0;
       // The $0 invoice Stripe makes when a subscription starts in its trial: it pays for nothing.
       // No credits, no money in, not the first paid month. Pro holds to the trial's end.
@@ -334,6 +421,9 @@ export function applyEvent(b: BillingState, ev: StripeEvent, ctx: EventCtx): Eve
       if (str(o.customer)) rec.customerId = str(o.customer)!;
       const interval = subInterval(o);
       if (interval) rec.interval = interval;
+      // An upgrade to Pro + Close, or back to Pro, changes the subscription's price: its tier follows.
+      const subTier = ctx.tierOf?.(subPrice(o)) ?? metaTier(o.metadata);
+      if (subTier) rec.tier = subTier;
       const end = unix(subPeriodEnd(o));
       if (o.cancel_at_period_end === true || num(o.cancel_at)) rec.cancelAt = unix(num(o.cancel_at)) ?? end ?? rec.proUntil ?? now;
       else delete rec.cancelAt;

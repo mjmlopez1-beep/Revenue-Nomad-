@@ -70,7 +70,7 @@ export async function listProposalTemplates(ctx: Ctx): Promise<ToolOut> {
     })),
     from_a_call: DISCOVERY_FIELDS.map((f) => ({ key: f.key, label: DISCOVERY_LABELS[f.key] ?? f.key, extract: f.extract, cues: f.cues })),
     objections: OBJECTIONS,
-    plan: v.canSend ? "Every template is open, and sending for signature is on." : `On Free: the template ${FREE_TEMPLATE} or a blank page, and drafts only. Sending for signature is on Pro.`,
+    plan: v.canSend ? "Every template is open, and sending for signature is on." : `On Free and Pro: the template ${FREE_TEMPLATE} or a blank page, built and previewed only. Every template and sending for signature are on Pro + Close.`,
   };
 }
 

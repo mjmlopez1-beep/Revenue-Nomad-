@@ -39,7 +39,7 @@ import "../sign/sign.css";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-const PRO_SEND = `Sending for signature is on Pro: $${PRICES.month} a month, or $${PRICES.year} a year. You can write and keep drafts on Free.`;
+const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;
 
 async function load(): Promise<ProposalsView | { error: string }> {
   try {
@@ -165,10 +165,10 @@ export function ProposalsPage({ view, infos, onBack }: { view: View; infos: CoIn
       </div>
       {data && !data.canSend && (
         <div className="pp-free" data-plan="free">
-          <span className="bl-tag bl-tag-lock">Pro</span>
-          <p>On Free you can write drafts and prepare documents. {PRO_SEND.split(".")[0]}.</p>
-          <button type="button" className="btn btn-sm" onClick={() => openPlans("billing")}>
-            See Pro
+          <span className="bl-tag bl-tag-lock">Pro + Close</span>
+          <p>On Free and Pro you can write drafts, build and preview proposals, and prepare documents. {PRO_SEND.split(".")[0]}.</p>
+          <button type="button" className="btn btn-sm" onClick={() => openPlans("proposals")}>
+            See Pro + Close
           </button>
         </div>
       )}

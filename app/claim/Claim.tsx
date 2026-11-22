@@ -596,7 +596,7 @@ export function ClaimView({ token, initial, refCode, support, starter }: { token
               Your first and last name
             </label>
             <input id={`${id}-name`} className="input" autoComplete="name" placeholder="Jane Smith" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
-            <p className="cl-help">Use the name you work under. Other members see it on your seat behind a lock, and never your email.</p>
+            <p className="cl-help">Use the name you work under. Other members see it on your seat, and never your email.</p>
             {err}
             <button type="submit" className="btn btn-pine btn-lg cl-wide" disabled={!!busy} aria-busy={busy === "join"}>
               {busy === "join" ? "Joining" : info.email ? "Email me my link" : "Join and claim it"}

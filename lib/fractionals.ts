@@ -12,10 +12,10 @@
  * What the viewer sees of each:
  *  - a member who said "Show me in the Fractionals directory": their full name, title, seats and the
  *    clients they state, free. One who said no is left out. One who hasn't chosen shows by first
- *    name and last initial (as Referral partners did), unless the viewer bought one of their seats.
- *  - someone not on Merlin yet: locked ("Unlock · 1 credit", the unlockFractional action) until the
- *    viewer bought who held one of their seats, or the person. No name, first name or initials
- *    reach the page before that.
+ *    name and last initial (as Referral partners did), unless the viewer sees one of their seats.
+ *  - someone not on Merlin yet: their full name, free (PEERS_FREE: fellow fractionals never cost a
+ *    credit), with the role of each seat whose company the viewer can see. Names taken off with
+ *    Remove my name, outside the US or unverified past RN_UNVERIFIED_NAMES_UNTIL are never on file.
  *  - always free: function and level (read from their titles), how many seats now and past, and
  *    the clients they serve (a member's stated ones, else read from their seats' companies' free
  *    facts, "From their seats"). Their seats go out as public ids: the page draws each from its own
@@ -25,7 +25,7 @@
 import { claimToken } from "./claimToken";
 import { fractionalInternals as F, inviteCode, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import { clientsFromIcp, clientsFromSeats, clientsLine, fitsIcp, levelOf, levelRank, shortName, type ClientCo, type Clients, type Level } from "./fractionalsCore";
-import { functionOf } from "./tableFields";
+import { PEERS_FREE, functionOf } from "./tableFields";
 import { crystalCompanyIds } from "./radar";
 import type { FractionalRec, FractionalsHome, FractionalsView } from "./tableTypes";
 
@@ -163,7 +163,8 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
     const seesName = you || engs.some((e) => T.cellOf(s, me, e, "engagement", "operator", idx).s === "value");
     const prof = b.member ? s.profiles[b.member.id] : undefined;
     const optedIn = !!b.member && b.on && prof?.fractionals === true;
-    const full = you || optedIn || seesName;
+    // Fellow fractionals are free (PEERS_FREE): someone not on Merlin yet shows by full name to every member. A member on Merlin who hasn't chosen still shows short.
+    const full = you || optedIn || seesName || (PEERS_FREE && !(b.on && !!b.member));
     // A member on Merlin who hasn't chosen: first name and last initial.
     const short = !full && b.on && !!b.member && prof?.fractionals === undefined;
     const name = full ? b.name : short ? shortName(b.name) : null;
@@ -171,7 +172,8 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
     const clients = stated ?? (b.cos.some((c) => c.industry || c.employees || c.revenue || c.country) ? b.fromSeats : null);
     // The title: a member's own (they said it), else their newest seat's role once the viewer sees it.
     const ownTitle = b.member && (full || short) ? (prof?.title || (b.member.title === "Member" ? "" : b.member.title) || "").trim() : "";
-    const roleCell = full ? T.cellOf(s, me, g.engagements.get(b.leadSeat), "engagement", "role", idx) : null;
+    // The newest seat whose role the viewer sees (a seat at a locked company keeps its role locked until the company opens).
+    const roleCell = full ? b.seats.map((id) => T.cellOf(s, me, g.engagements.get(id), "engagement", "role", idx)).find((c) => c.s === "value") ?? null : null;
     const title = ownTitle || (roleCell?.s === "value" ? roleCell.v : "");
     const rec: FractionalRec = {
       id: b.rid,

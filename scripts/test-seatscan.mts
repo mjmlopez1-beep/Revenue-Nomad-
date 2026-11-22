@@ -365,15 +365,16 @@ if (up) {
   check("a fact they add after claiming earns as usual", r.status === 200 && (await credits(ann)) === before + 1, r.json);
   bv = await bob.view();
   const forBob = seatAt(bv, "Corvid Freight");
-  check("others see the name behind a lock, and it isn't claimable", forBob.cells.operator.s === "locked" && !forBob.claimable && !forBob.yours, forBob);
+  // Fellow fractionals are free (PEERS_FREE): Bob sees Corvid Freight, so the name shows at no charge.
+  check("others see the name, free, and it isn't claimable", forBob.cells.operator.s === "value" && forBob.cells.operator.v === "Annika Claimworth" && !forBob.claimable && !forBob.yours, forBob);
   check("others see its rate locked", forBob.cells.rate.s === "locked");
   r = await bob.act({ type: "claimSeat", engagementId: s0.id });
   check("a claimed seat can't be claimed again", r.status === 400 && /already claimed/.test(r.json?.error ?? ""), r.json);
   const bobBefore = await credits(bob);
   r = await bob.act({ type: "unlock", ...t });
-  check("the name unlocks for 1 credit, as a member seat holder", r.status === 200 && (await credits(bob)) === bobBefore - 1, r.json);
-  const unlocked = r.json?.cells?.find((c: { field: string }) => c.field === "operator")?.cell;
-  check("and shows the member", unlocked?.s === "value" && unlocked.v === "Annika Claimworth" && !!unlocked.member && !unlocked.member.you, unlocked);
+  check("the name has nothing to unlock: no credit spent", r.status === 400 && /Nothing here is locked/.test(r.json?.error ?? "") && (await credits(bob)) === bobBefore, r.json);
+  const shownName = forBob.cells.operator as { s: string; v?: string; member?: { you: boolean } };
+  check("and shows the member", shownName.s === "value" && !!shownName.member && !shownName.member.you, shownName);
 
   // The daily limit: 3 claims in 24 hours.
   av = await ann.view();
@@ -400,7 +401,7 @@ if (up) {
   av = await ann.view();
   bv = await bob.view();
   check("released: claimable again, not theirs, no name", !!seatAt(bv, "Corvid Freight").claimable && seatAt(bv, "Corvid Freight").cells.operator.s === "empty" && !seatAt(av, "Corvid Freight").yours);
-  check("the member who unlocked the name gets the credit back", (await credits(bob)) === bobMid + 1);
+  check("nobody paid for the name, so nothing comes back", (await credits(bob)) === bobMid);
   check("released claims still count toward the daily limit", (await ann.act({ type: "claimSeat", engagementId: s0.id })).status === 400);
 
   // An admin removes a claim.

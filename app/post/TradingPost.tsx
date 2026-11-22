@@ -39,7 +39,7 @@ import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cardSeat, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
   icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
-  type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
+  type CheckStep, type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, weekN, type FirstList } from "./place";
 import { alertView } from "../onboard/suggest"; // [ux ws3]
@@ -75,7 +75,7 @@ import { NudgeSlot, pickNudge } from "./nudges";
 import { COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
-import { BillingPage, PlansHost, ProTag, TrialBanner, openPlans } from "./Billing";
+import { BillingPage, PlansHost, ProTag, TrialBanner, TrialSummaryCard, buyTopup, openPlans } from "./Billing";
 import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { freeCompanyNow } from "./display";
 import { NetworkPage } from "./network/Network"; // [google network]
@@ -1741,6 +1741,12 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /** What a nudge's button does. Unknown actions open the page of that name, or do nothing. */
   const runNudge = useStable((action: string) => {
     if (action === "plans" || action === "upgrade" || action === "trial" || action === "keepPro") return openPlans("trial");
+    // Out of credits: the top-up opens checkout, and Pro opens the plans at credits.
+    if (action === "topup") return void buyTopup().then((err) => err && toast(err, true));
+    if (action === "plansCredits") return openPlans("credits");
+    // Get started: the first note is drafted on Home's moves; Google and LinkedIn come in on Your network.
+    if (action === "note") return (setDrawer(null), setPage("today"), void setTimeout(() => document.querySelector(".mv-head")?.scrollIntoView({ block: "start", behavior: "smooth" }), 300));
+    if (action === "connect") return openPage("network");
     if (action === "billing") return setPage("billing");
     if (action === "earn" || action === "add" || action === "credits" || action === "addFact") return showFact("empty");
     if (action === "profile") return setIcpOpen(true);
@@ -2409,7 +2415,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     setPage("table");
   };
   const radarGo = { href: pageHref("radar"), go: () => (setDrawer(null), setSigDay(null), setPage("radar")) };
-  const stepAction: Record<"unlock" | "seat" | "invite", string> = { unlock: "unlock", seat: "seats", invite: "invite" };
+  const stepAction: Record<CheckStep["key"], string> = { unlock: "unlock", seat: "seats", invite: "invite", note: "note", network: "connect" };
   /*
    * Every filter on, as a chip that takes it off, on phones too: an onboarding answer's filter
    * ("No fractional Sales yet") is never only a number on the Filters button (C47).

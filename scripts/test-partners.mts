@@ -212,8 +212,9 @@ const paths = async () => {
 };
 let wp = await paths();
 const pellaPath = (l: Path[]) => l.find((w) => w.seat_id === pub("e_pt_pella"));
-check("connector: before the unlock, no next step and no link", !!pellaPath(wp) && !pellaPath(wp)!.next_step && !pellaPath(wp)!.invite_link && !leaks(JSON.stringify(wp)).length, pellaPath(wp));
-await T.perform(vera.token, { type: "unlock", entity: "engagement", id: pub("e_pt_pella"), field: "operator" });
+// Fellow fractionals are free (PEERS_FREE): Vera sees Alpha, so who held the seat shows, with the next step, at no charge.
+check("connector: who held the seat shows free, with the next step", !!pellaPath(wp) && pellaPath(wp)!.name === P.pella && pellaPath(wp)!.next_step === "Invite to connect", pellaPath(wp));
+await T.perform(vera.token, { type: "unlock", entity: "engagement", id: pub("e_pt_pella"), field: "operator" }).catch(() => null); // nothing to buy now
 wp = await paths();
 const pp = pellaPath(wp);
 const veraCode = T.inviteCode(vera.id);
@@ -224,7 +225,7 @@ check(
 );
 check("connector: with the note the app writes, and what happens when they claim it", !!pp?.suggested_note?.startsWith("Hi Pella, I saw you held the fractional CMO seat at Alpha Partner Co.") && pp.suggested_note.includes(pp.invite_link!) && /conversation opens between you/.test(pp.how ?? ""), pp);
 check("connector: no Revenue Nomad intro inbox anywhere", !/intro/i.test(JSON.stringify(wp)) && !/ask_revenue_nomad/.test(JSON.stringify(await MCP.getCompany(ctx, { company: "Alpha Partner Co" }))));
-await T.perform(vera.token, { type: "unlock", entity: "engagement", id: pub("e_pt_sam"), field: "operator" });
+await T.perform(vera.token, { type: "unlock", entity: "engagement", id: pub("e_pt_sam"), field: "operator" }).catch(() => null); // nothing to buy now
 wp = await paths();
 const sp = wp.find((w) => w.seat_id === pub("e_pt_sam"));
 check("connector: a seat holder who is on Merlin reads Message, with the opener", sp?.next_step === "Message Sam" && !sp.invite_link && !!sp.suggested_message?.startsWith("Hi Sam, I saw you held the fractional RevOps Lead seat"), sp);
@@ -246,7 +247,7 @@ check("seats with nobody named are a count", fin?.seats.length === 0 && fin.unna
 check("a full-time seat is not a partner", !pg.groups.some((x) => x.seats.some((s) => s.e.id === pub("e_pt_fula"))));
 // The companies first (2 credits each): who held a seat at a locked company opens after it.
 for (const c of ["c_alpha", "c_bravo"]) await T.perform(fresh.token, { type: "unlock", entity: "company", id: pub(c), field: "identity" });
-for (const id of ["e_pt_pella", "e_pt_nora", "e_pt_mara"]) await T.perform(fresh.token, { type: "unlock", entity: "engagement", id: pub(id), field: "operator" });
+for (const id of ["e_pt_pella", "e_pt_nora", "e_pt_mara"]) await T.perform(fresh.token, { type: "unlock", entity: "engagement", id: pub(id), field: "operator" }).catch(() => null); // free once the company is open (PEERS_FREE)
 v = await T.buildView(fresh.token);
 pg = PM.partnerGroups(M.deriveAll(v.companies), v.me!);
 const mk = pg.groups.find((x) => x.fn === "Marketing")!;
@@ -298,7 +299,8 @@ tView = await T.buildView(titler.token);
 MV.forgetView(titler.id);
 const tco = (await MCP.getCompany({ member: titler, origin: "https://merlin.example.com" }, { company: "Alpha Partner Co" })) as { seats: { id: string }[] };
 const tq = tco.seats.find((x) => x.id === pub("e_pt_quinn"));
-check("the connector keeps the bundle too: no title before the unlock", !!tq && !JSON.stringify(tq).includes("PMM Lead") && !leaks(JSON.stringify(tco)).length, tq);
+// Fellow fractionals are free (PEERS_FREE): with Alpha open, the connector shows who held the seat and the title, free.
+check("the connector shows who held the seat and the title once the company is open", !!tq && JSON.stringify(tq).includes("PMM Lead") && JSON.stringify(tq).includes(P.quinn), tq);
 const tg = PM.partnerGroups(M.deriveAll(tView.companies), tView.me!, tt);
 const cs = tg.groups.find((x) => x.fn === "Customer Success")!;
 const csIds = cs.seats.map((s) => s.e.id);
@@ -308,11 +310,11 @@ const qe = tg.groups.find((x) => x.fn === "Product Marketing")!.seats[0].e;
 check("the card's lead: the title sent, else Fractional <function> leader", PM.seatLead(qe, tt) === "Fractional PMM Lead" && PM.seatLead(cs.seats[cs.seats.length - 2].e, tt) === "Fractional Customer Success leader");
 const before = tView.me!.credits;
 const left0 = tView.me!.unlocksLeft;
-await T.perform(titler.token, { type: "unlock", entity: "engagement", id: pub("e_pt_quinn"), field: "operator" });
+await T.perform(titler.token, { type: "unlock", entity: "engagement", id: pub("e_pt_quinn"), field: "operator" }).catch(() => null); // free once the company is open (PEERS_FREE)
 tView = await T.buildView(titler.token);
 q = seatIn(tView, "e_pt_quinn")!;
-check("the card's Unlock is the table's purchase: 1 credit for who held it, with the role", tView.me!.credits === before - 1 && q.cells.operator.v === P.quinn && q.cells.role.v === "Fractional PMM Lead", { credits: [before, tView.me!.credits], cells: q.cells });
-check("and it counts toward the daily unlock limit", tView.me!.unlocksLeft === left0 - 1, [left0, tView.me!.unlocksLeft]);
+check("the card shows who held it, with the role, at no charge", tView.me!.credits === before && q.cells.operator.v === P.quinn && q.cells.role.v === "Fractional PMM Lead", { credits: [before, tView.me!.credits], cells: q.cells });
+check("and nothing of the day's unlock limit is used", tView.me!.unlocksLeft === left0, [left0, tView.me!.unlocksLeft]);
 check("once open, the title comes from the seat itself, not the page", !(pub("e_pt_quinn") in ((await T.partnersView(titler.token))!.titles ?? {})));
 
 console.log("\nWho gets hired before and after you");
@@ -506,8 +508,8 @@ if (up) {
   await invite(quinn, "e_pt_quinn", "Hi Quinn");
   const quinnCode = (await quinn.view()).me.inviteCode;
   r = await quinn.names({ op: "claim", t: claimTok("e_pt_quinn"), ref: quinnCode });
-  // (The company was her free company of the day, so only who held the seat cost a credit.)
-  check("a self-invite claims the seat but connects nobody and pays nothing", r.status === 200 && /It's yours/.test(r.json?.message ?? "") && !/conversation|credits/.test(r.json?.message ?? "") && (await quinn.credits()) === 25 - 1 && (await quinn.messages()).conversations.length === 0, r.json);
+  // (The company was her free company of the day, and who held the seat is free there now: nothing cost a credit.)
+  check("a self-invite claims the seat but connects nobody and pays nothing", r.status === 200 && /It's yours/.test(r.json?.message ?? "") && !/conversation|credits/.test(r.json?.message ?? "") && (await quinn.credits()) === 25 && (await quinn.messages()).conversations.length === 0, r.json);
 
   /* REFERRAL_LIMIT: 6 invitees, the inviter is paid for 5 */
   const kit = await join("Kit Kinvite", "kit-pt@example.com");
@@ -524,8 +526,8 @@ if (up) {
   check("six invitees claimed their seats through the links", larks.length === 6);
   check("each invitee gets the bonus", (await Promise.all(larks.map((w) => w.credits()))).every((c) => c === 35));
   const kv = (await kit.view()).me;
-  // (The company was Kit's free company of the day, then 1 for each of the six seat holders.)
-  check("the inviter is paid for 5 invitees in 30 days (REFERRAL_LIMIT), within the daily cap (the rest held)", kv.invitesPaid === 5 && kv.credits === 25 - 6 + 25 && kv.held === 25, { paid: kv.invitesPaid, credits: kv.credits, held: kv.held });
+  // (The company was Kit's free company of the day, and the six seat holders were free to see.)
+  check("the inviter is paid for 5 invitees in 30 days (REFERRAL_LIMIT), within the daily cap (the rest held)", kv.invitesPaid === 5 && kv.credits === 25 + 25 && kv.held === 25, { paid: kv.invitesPaid, credits: kv.credits, held: kv.held });
   check("and a conversation opened with each of them", (await kit.messages()).conversations.length === 6 && (await kit.messages()).unread === 6);
 
   /* a claim that waits for an admin, then approved */
@@ -544,12 +546,14 @@ if (up) {
   await unlock(ivy, "e_pt_zed");
   await invite(ivy, "e_pt_zed", "Hi Zed");
   const bob = await join("Bob Reporter", "bob-pt@example.com");
+  // Reporting a name, a free fact now (PEERS_FREE), opens once the member has added a fact of their own.
+  await bob.act({ type: "add", company: "Bobreport Widgets", website: "bobreport.example", companyFields: { industry: "SaaS" } });
   await unlock(bob, "e_pt_zed");
   const ivy2 = await ivy.credits();
   r = await bob.act({ type: "report", entity: "engagement", id: pubIds.get("e_pt_zed"), field: "operator" });
   const zj = await joinByLink(claimTok("e_pt_zed"), P.zed, "zed-pt@example.com", ivyCode);
-  check("the name came off after the invite: the claim goes through, but the invite no longer stands", zj.r.json?.claimed === true && !/conversation/.test(zj.r.json?.message ?? "") && (await zj.who!.messages()).conversations.length === 0, zj.r.json);
-  check("so no bonus at the claim (the inviter only got the name's credit back)", (await zj.who!.credits()) === 25 && (await ivy.credits()) === ivy2 + 1, { zed: await zj.who!.credits(), ivy: await ivy.credits(), was: ivy2 });
+  check("the name came off after the invite: the claim goes through, but the invite no longer stands", r.status === 200 && zj.r.json?.claimed === true && !/conversation/.test(zj.r.json?.message ?? "") && (await zj.who!.messages()).conversations.length === 0, zj.r.json);
+  check("so no bonus at the claim (and nothing to give back: the name was free to see)", (await zj.who!.credits()) === 25 && (await ivy.credits()) === ivy2, { zed: await zj.who!.credits(), ivy: await ivy.credits(), was: ivy2 });
 
   /* a member who never signed in */
   await unlock(ivy, "e_pt_nora");
@@ -580,14 +584,14 @@ if (up) {
   await tw.act({ type: "unlock", entity: "company", id: (await tw.view()).companies.find((c: Co) => c.engagements.some((e) => e.id === pubIds.get("e_pt_lark1")))?.id, field: "identity" });
   const twView = await tw.view();
   const l1 = seatOf(twView, "e_pt_lark1")!;
-  check("over HTTP: the table still sells the role with who held it", l1.cells.operator.s === "locked" && l1.cells.role.s === "locked");
+  check("over HTTP: the table shows who held it, with the role, free once the company is open", l1.cells.operator.s === "value" && l1.cells.role.s === "value");
   const tw0 = twView.me.credits as number;
   const twLeft = twView.me.unlocksLeft as number;
   r = await unlock(tw, "e_pt_lark1");
   const twAfter = await tw.view();
   const l1b = seatOf(twAfter, "e_pt_lark1")!;
-  check("over HTTP: Unlock costs exactly 1 credit and opens the name and the title", r.status === 200 && twAfter.me.credits === tw0 - 1 && l1b.cells.operator.v === LARKS[1] && l1b.cells.role.v === "Fractional Head of CS", { status: r.status, credits: [tw0, twAfter.me.credits] });
-  check("over HTTP: it counts toward the daily unlock limit", twAfter.me.unlocksLeft === twLeft - 1, [twLeft, twAfter.me.unlocksLeft]);
+  check("over HTTP: Unlock has nothing to buy, and the name and title show", r.status === 400 && twAfter.me.credits === tw0 && l1b.cells.operator.v === LARKS[1] && l1b.cells.role.v === "Fractional Head of CS", { status: r.status, credits: [tw0, twAfter.me.credits] });
+  check("over HTTP: nothing of the day's unlock limit is used", twAfter.me.unlocksLeft === twLeft, [twLeft, twAfter.me.unlocksLeft]);
   check("the order and the answers, with their thresholds", pz.order.some((x: { fn: string; when: string; companies: number }) => x.fn === "Marketing" && x.when === "before" && x.companies === 20) && !pz.order.some((x: { fn: string }) => x.fn === "Finance") && pz.answers?.n === 20, { order: pz.order, answers: pz.answers });
   const names = pz.members.map((m: { first: string }) => m.first);
   check("members on Merlin are listed by default, first names only, never an email", names.includes("Sam") && names.includes("Mara") && !/@/.test(JSON.stringify(pz.members)) && !/Signedin|Memberly|Answerwell|Marketeer/.test(JSON.stringify(pz.members)), names.slice(0, 8));

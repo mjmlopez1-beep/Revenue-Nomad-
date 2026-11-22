@@ -111,7 +111,8 @@ async function main() {
   check("their LinkedIn and email read 'opens after the name'", pUnseen.email === T.AFTER_NAME && pUnseen.linkedin === T.AFTER_NAME && /^opens after the name/.test(T.AFTER_NAME), pUnseen);
   check("once the name and title show, the email is 1 credit", T.personOut(seen).email === T.LOCKED, T.personOut(seen));
   const sPast = T.seatOut(past, il, mv);
-  check("at a locked company, who held a seat and its role read 'opens after the company'", sPast.seat_holder === T.AFTER_COMPANY && sPast.role === T.AFTER_COMPANY && /^opens after the company/.test(T.AFTER_COMPANY), sPast);
+  // Fellow fractionals are free (PEERS_FREE): at a locked company who held a seat reads "free once the company is open".
+  check("at a locked company, who held a seat and its role read 'free once the company is open'", sPast.seat_holder === T.AFTER_COMPANY_SEAT && sPast.role === T.AFTER_COMPANY_SEAT && /^free once the company is open/.test(T.AFTER_COMPANY_SEAT), sPast);
   check("an open role there still comes with the company (2 credits)", T.seatOut(role, il, mv).posting === "on file, unlocks with the company (2 credits)", T.seatOut(role, il, mv));
   const pBoss = T.personOut(boss, null, true);
   check("a person at a locked company reads 'opens after the company', name, title and LinkedIn", pBoss.name === T.AFTER_COMPANY && pBoss.title === T.AFTER_COMPANY && pBoss.linkedin === T.AFTER_COMPANY, pBoss);
@@ -120,12 +121,14 @@ async function main() {
   const wOpen = T.warmPaths(io);
   const wHeld = wOpen.find((w) => w.seat_id === "s_held") as Record<string, any> | undefined;
   const wBoss = wOpen.find((w) => w.person_id === "p_unseen") as Record<string, any> | undefined;
-  check("a warm path to a seat holder unlocks who held it and the role they held for 1 credit", wHeld?.unlock?.field === "seat_holder" && wHeld.opens === "who held it and the role they held, 1 credit" && wHeld.name === T.LOCKED_SEAT, wHeld);
+  // A seat holder still locked at a company the member sees is one who keeps out of the directory: 1 credit, and it says why.
+  check("a warm path to a locked seat holder (out of the directory) unlocks who held it and the role they held for 1 credit", wHeld?.unlock?.field === "seat_holder" && wHeld.opens === "who held it and the role they held, 1 credit (this fractional keeps out of the directory)" && wHeld.name === T.LOCKED_SEAT, wHeld);
   check("a warm path to a person unlocks their name and title for 1 credit", wBoss?.unlock?.field === "name" && wBoss.opens === "their name and title, 1 credit", wBoss);
   const wLocked = T.warmPaths(il);
   check(
     "at a locked company every warm path says to unlock the company first, and offers no unlock of its own",
-    wLocked.length === 2 && wLocked.every((w: Record<string, any>) => w.unlock === undefined && w.unlock_first?.entity === "company" && w.unlock_first.field === "identity" && w.name === T.AFTER_COMPANY),
+    wLocked.length === 2 &&
+      wLocked.every((w: Record<string, any>) => w.unlock === undefined && w.unlock_first?.entity === "company" && w.unlock_first.field === "identity" && w.name === (w.seat_id ? T.AFTER_COMPANY_SEAT : T.AFTER_COMPANY)),
     wLocked,
   );
 
@@ -168,10 +171,12 @@ async function main() {
 
   /* ---------- the instructions say the same ---------- */
   check(
-    "the instructions say who held a seat comes with their role, contact details open after the name, and people after the company",
-    /Who held a seat and the role they held are one purchase/.test(INSTRUCTIONS) &&
+    "the instructions say fellow fractionals are free, contact details open after the name and keep their price, and people after the company",
+    /Fellow fractionals are free on every plan/.test(INSTRUCTIONS) &&
+      /Contact details \(email, phone, LinkedIn\) and the company's own people \(decision makers, leaders, the hiring exec\) keep their prices/.test(INSTRUCTIONS) &&
       /LinkedIn, email and phone open only after that/.test(INSTRUCTIONS) &&
-      /people and the fractionals who held its seats open only after the company/.test(INSTRUCTIONS) &&
+      /its people open only after the company, and who held its seats shows free once it is open/.test(INSTRUCTIONS) &&
+      /up to 15 a UTC day for fair use/.test(INSTRUCTIONS) &&
       /end month while the seat is still going/.test(INSTRUCTIONS),
   );
   check("the instructions keep the rule: never spend a credit without asking", /Never spend a credit without asking/.test(INSTRUCTIONS));
@@ -182,11 +187,14 @@ async function main() {
   const row = (m: ReturnType<typeof priceMatrix>, e: string) => m.find((r) => r.entity === e)!;
   const paid = priceMatrix(false);
   const seatPaid = row(paid, "engagement");
+  // Fellow fractionals are free (PEERS_FREE): who held a seat, with the role, is on the free side now.
   check(
-    "the matrix sells who held a seat with the role they held as one chip, first",
-    seatPaid.locked[0] === "Who held it, with the role they held" && !seatPaid.locked.includes("Seat holder") && !seatPaid.locked.includes("Role"),
-    seatPaid.locked,
+    "the matrix shows who held a seat with the role they held as free, one chip",
+    seatPaid.free.includes("Who held it, with the role they held") && !seatPaid.locked.includes("Who held it, with the role they held") && !seatPaid.locked.includes("Seat holder") && !seatPaid.locked.includes("Role") && /free once you can see the company/.test(seatPaid.note ?? ""),
+    seatPaid,
   );
+  const seatOld = row(priceMatrix(false, false), "engagement");
+  check("with PEERS_FREE off it would sell them as one chip, first, as before", seatOld.locked[0] === "Who held it, with the role they held", seatOld.locked);
   check(
     "an end month is free while the seat is going, and a credit only once it ended",
     seatPaid.free.includes("End month while the seat is going") && seatPaid.locked.includes("End month of a seat that ended") && !seatPaid.locked.includes("End month"),
@@ -204,17 +212,20 @@ async function main() {
     contact.locked[0] === "Name and title" && !contact.locked.includes("Title") && ["LinkedIn", "Email", "Phone"].every((x) => contact.locked.includes(x)) && /open after that, 1 credit each/.test(contact.note ?? ""),
     contact,
   );
-  check("a locked company's people and seat holders open after the company", /Its people and who held its seats open after that/.test(row(paid, "company").note ?? ""));
+  check("a locked company's seat holders show free after the company, its people open after it", /Who held its seats then shows free, and its people open after it/.test(row(paid, "company").note ?? ""));
   const faq = (free: boolean) => new Map(faqItems(25, true, free));
   const fq = faq(false);
   // Free's free company a day is Crystal Ball's, fully open; Pro opens every company in it free.
   const cost = fq.get("What does it cost?") ?? "";
   check(
     "Questions: Free opens one Crystal Ball company a day, Pro every company in it",
-    /open one company a day from your Crystal Ball for free, with everything on it/.test(cost) && /Pro opens every company in your Crystal Ball free/.test(cost) && !/unlock one company a day for free/.test(cost),
+    /open one company a day from your Crystal Ball for free, with everything on it/.test(cost) && /Pro opens companies free, up to 15 a day plus every company in your Crystal Ball/.test(cost) && !/unlock one company a day for free/.test(cost),
     cost,
   );
-  check("Questions: who held a seat comes with the role they held, for 1 credit", /1 credit shows who held the seat and the role they held/.test(fq.get("How do I reach the fractional who held a seat?") ?? ""));
+  // Fellow fractionals are free (PEERS_FREE).
+  check("Questions: who held a seat and the role they held are free once the company is visible", /free to see once you can see the company: fellow fractionals never cost a credit/.test(fq.get("How do I reach the fractional who held a seat?") ?? ""));
+  check("Questions: Fractionals never costs a credit", /It never costs a credit/.test(fq.get("What is Fractionals?") ?? "") && !/costs 1 credit to see who they are/.test(fq.get("What is Fractionals?") ?? ""));
+  check("Questions: no outcome-based price anywhere", ![...fq.values()].some((a) => /succes{2} fee|% of|percent of|per placement|when you win/i.test(a)));
   check("Questions: a seat's end month is free while it is going", /end month while the seat is still going/.test(fq.get("What does a seat cost to see?") ?? ""));
   check("Questions: contact details open after the name", /LinkedIn, email and phone open after that, 1 credit each/.test(fq.get("What does a hiring contact cost?") ?? ""));
   check("Questions: people at a locked company open after the company", /open after the company/.test(fq.get("What does an open role cost?") ?? ""));

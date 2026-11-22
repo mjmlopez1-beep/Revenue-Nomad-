@@ -134,7 +134,8 @@ async function main() {
   const target = coId(71);
   const ok1 = await t.perform(SAL, { type: "unlock", entity: "company", id: target, field: "identity" }, BASE);
   await t.perform(SAL, { type: "unlock", entity: "company", id: coId(0), field: "identity" }, BASE);
-  const ok2 = await t.perform(SAL, { type: "unlock", entity: "engagement", id: holderSeat, field: "operator" }, BASE);
+  // Who held a seat there is free once Sal opened the company (PEERS_FREE): nothing to buy, so this asks and is told so.
+  const ok2 = await t.perform(SAL, { type: "unlock", entity: "engagement", id: holderSeat, field: "operator" }, BASE).catch((e: Error) => (/Nothing here is locked/.test(e.message) ? { message: "free" } : null));
   const ok3 = await t.perform(SAL, { type: "unlock", entity: "contact", id: person0, field: "name" }, BASE);
   check("Sal's unlocks went through", !!ok1 && !!ok2 && !!ok3);
 
@@ -194,7 +195,7 @@ async function main() {
   const salT = (await firstPage(SAL, `?c=${coId(0)}`)) as { view: View };
   const moT = (await firstPage("tok-mo-first", `?c=${coId(0)}`)) as { view: View };
   const holder = (v: View) => unpackView(JSON.parse(JSON.stringify(v))).companies.find((c) => c.id === coId(0))?.engagements.find((e) => e.id === holderSeat)?.cells.operator;
-  check("who held a seat Sal unlocked: his to see, locked for Mo", holder(salT.view)?.s === "value" && holder(moT.view)?.s === "locked", [holder(salT.view), holder(moT.view)]);
+  check("who held a seat at the company Sal opened: his to see free, locked for Mo (the company is locked for him)", holder(salT.view)?.s === "value" && holder(moT.view)?.s === "locked", [holder(salT.view), holder(moT.view)]);
   check("no one's first page names a seat holder or a person they haven't unlocked", !JSON.stringify(moT.view).includes("Holder Person0") && !JSON.stringify(moT.view).includes("Exec Person0"));
 
   // Today's address: Today's answer, no table.

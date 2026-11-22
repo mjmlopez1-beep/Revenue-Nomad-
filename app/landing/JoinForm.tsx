@@ -212,7 +212,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
         </div>
         {err}
         <p className="lp-join-help" id={`${id}-help`}>
-          Use the name you work under. It shows on seats you held, behind a lock. Your email is never shown.
+          Use the name you work under. It shows on seats you held. Your email is never shown.
         </p>
         <p className="lp-join-who">
           <span>

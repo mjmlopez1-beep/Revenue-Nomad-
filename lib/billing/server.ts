@@ -8,7 +8,8 @@
  */
 import { ActionError, cleanPromo, loadSeed, loadState, memberByToken, promoOf, tableInternals as T, type State } from "../table";
 import { billingLive, planOf, upgradeUrl } from "../plan";
-import { applyEvent, emptyBilling, ENDING_DAYS, FIRST_CHARGE_GRACE_MS, keepTrialEnd, pauseDates, PAUSE_MONTHS, proStartsLater, annualLine, hourlyOf, type StripeEvent } from "./rules";
+import { onAiPackPaid } from "./aiPack";
+import { applyEvent, canClose, emptyBilling, ENDING_DAYS, FIRST_CHARGE_GRACE_MS, keepTrialEnd, pauseDates, PAUSE_MONTHS, proStartsLater, annualLine, hourlyOf, TIER_NAME, tierPrice, type StripeEvent, type Tier } from "./rules";
 import * as stripe from "./stripe";
 import { renewalEmail, trialEndedEmail, trialEndingEmail, trialReceiptEmail, valueCounts, type ValueCounts } from "./emails";
 import { emailEnabled, sendEmail } from "../email";
@@ -22,6 +23,7 @@ const dayWords = (iso: string) => {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", ...(d.getUTCFullYear() === new Date().getUTCFullYear() ? {} : { year: "numeric" }), timeZone: "UTC" });
 };
 const NOT_LIVE = "Plans aren't open yet.";
+const CLOSE_NOT_LIVE = "Pro + Close isn't open yet.";
 const SIGNED_OUT = "You're signed out. Sign in again to manage your plan.";
 
 /** The member behind a billing ref, customer or subscription. */
@@ -70,14 +72,16 @@ function rateLineOf(s: State, memberId: string): string | null {
 
 /* ---------- the member's actions ---------- */
 
-export type BillingOp = "checkout" | "topup" | "portal" | "cancel" | "keep" | "pause" | "resume";
+export type BillingOp = "checkout" | "topup" | "portal" | "cancel" | "keep" | "pause" | "resume" | "tier" | "aipack";
+/** Said when someone not on Pro + Close (or the trial) asks for the AI usage pack. */
+export const AI_PACK_CLOSE = "The AI usage pack is for Pro + Close, where Claude drafts your proposals from your calls. Move to Pro + Close first.";
 
 /**
  * One billing action for the signed-in member. Checkout, top-up and portal answer with a Stripe
  * address to open; the rest change the subscription at Stripe first, then here (the webhook that
  * follows agrees).
  */
-export async function billingAction(token: string | null, op: BillingOp, body: { interval?: unknown; code?: unknown }, origin?: string): Promise<{ url?: string; message?: string }> {
+export async function billingAction(token: string | null, op: BillingOp, body: { interval?: unknown; code?: unknown; tier?: unknown }, origin?: string): Promise<{ url?: string; message?: string }> {
   if (!billingLive()) throw new ActionError(NOT_LIVE);
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
@@ -89,14 +93,44 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
   try {
     switch (op) {
       case "checkout": {
-        if (planOf(rec, nowMs) === "pro" && rec?.subscriptionId) throw new ActionError("You're on Pro already. Change your plan in Manage billing.");
+        const tier: Tier = body.tier === "close" ? "close" : "pro";
+        if (tier === "close" && !stripe.closeReady()) throw new ActionError(CLOSE_NOT_LIVE);
+        // Already paying: Pro and Pro + Close move on the same subscription (the tier op), not a second one.
+        if (planOf(rec, nowMs) === "pro" && rec?.subscriptionId) throw new ActionError(`You're on ${TIER_NAME[rec.tier ?? "pro"]} already. Change your plan on Plan and billing.`);
         // During the trial with more than 48 hours left, the first charge waits for its end (keepTrialEnd).
         // The code they typed, else the one they arrived with (?code=, kept from the landing page through joining).
-        return { url: await stripe.checkoutPro(who, body.interval === "year" ? "year" : "month", base, cleanPromo(body.code) || promoOf(s, me.id), keepTrialEnd(rec, nowMs)) };
+        return { url: await stripe.checkoutPro(who, body.interval === "year" ? "year" : "month", base, cleanPromo(body.code) || promoOf(s, me.id), keepTrialEnd(rec, nowMs), tier) };
+      }
+      case "tier": {
+        // Upgrade from Pro to Pro + Close, or back, on the subscription they have: Stripe prorates.
+        const tier: Tier = body.tier === "close" ? "close" : "pro";
+        if (!rec?.subscriptionId || planOf(rec, nowMs) !== "pro") throw new ActionError("There's no paid plan to change. Choose a plan first.");
+        if ((rec.tier ?? "pro") === tier) throw new ActionError(`You're on ${TIER_NAME[tier]} already.`);
+        if (tier === "close" && !stripe.closeReady()) throw new ActionError(CLOSE_NOT_LIVE);
+        const interval = rec.interval ?? "month";
+        await stripe.changeTier(rec.subscriptionId, tier, interval);
+        await T.mutate((d) => {
+          const r = d.billing?.members[me.id];
+          if (!r) return;
+          r.tier = tier;
+          // A move either way settles the grandfathered Close: it is the tier from now on.
+          delete r.closeUntil;
+        });
+        return {
+          message:
+            tier === "close"
+              ? `You're on Pro + Close now: $${tierPrice("close", interval)} a ${interval}, with the difference for this ${interval} charged today.`
+              : `You're on Pro now: $${tierPrice("pro", interval)} a ${interval}. What you paid over goes toward your next invoice.`,
+        };
       }
       case "topup":
         if (!stripe.topupReady()) throw new ActionError("Top-ups aren't open yet.");
         return { url: await stripe.checkoutTopup(who, base) };
+      case "aipack":
+        // Only on Pro + Close or the trial (canClose): anyone else is shown the Close upgrade.
+        if (!canClose(rec, nowMs)) throw new ActionError(AI_PACK_CLOSE);
+        if (!stripe.aiPackReady()) throw new ActionError("The AI usage pack isn't open yet.");
+        return { url: await stripe.checkoutAiPack(who, base) };
       case "portal":
         if (!rec?.customerId) throw new ActionError("There's nothing to manage yet: no card is on file.");
         return { url: await stripe.portal(rec.customerId, base) };
@@ -181,9 +215,11 @@ export async function handleWebhook(raw: string, signature: string | null, origi
   const out = await T.mutate((s, seed) => {
     s.billing ??= emptyBilling();
     const idx = T.memberIndex(seed, s);
-    const o = applyEvent(s.billing, ev, { nowMs, memberOf: memberOf(s, idx.all) });
+    const o = applyEvent(s.billing, ev, { nowMs, memberOf: memberOf(s, idx.all), tierOf: stripe.tierOfPrice });
     const at = new Date(nowMs).toISOString();
     for (const gr of o.grants) if (!s.ledger.some((l) => l.reason === gr.reason && l.ref === gr.ref)) s.ledger.push({ ...gr, at });
+    // An AI usage pack paid for: the hook records it, once per payment ref.
+    if (o.aiPack) onAiPackPaid(s.billing, o.aiPack.memberId, o.aiPack.ref, nowMs);
     let mail: { to: string; first: string; link: string; interval: "month" | "year"; from: string; till: string } | null = null;
     if (o.receipt && emailEnabled() && base) {
       const m = idx.byId.get(o.receipt.memberId);

@@ -23,6 +23,21 @@ export interface Nudge {
   text: string;
   cta?: string;
   action?: string;
+  /** More than one way out, in one line (out of credits: earn one, the top-up, Pro). Shown in place of `cta`. */
+  choices?: { label: string; action: string; tone?: "earn" | "pine" }[];
+}
+
+/** Out of credits, the three ways to get one (Billing.tsx GetCredits says the same). */
+export const EARN_ONE = "Earn one: add a fact";
+export const PRO_COMPANIES_FREE = "Pro: companies free";
+export const topupWords = (plan: Pick<PlanView, "prices">) => `${plan.prices.topupCredits} for $${plan.prices.topup.toLocaleString("en-US")}`;
+/** The three choices for a member at 0 credits: earning always, the top-up when it is set up, Pro off Pro. */
+export function creditChoices(plan: PlanView | undefined): NonNullable<Nudge["choices"]> {
+  return [
+    { label: EARN_ONE, action: "earn", tone: "earn" as const },
+    ...(plan?.topup ? [{ label: topupWords(plan), action: "topup" }] : []),
+    ...(plan && plan.name !== "pro" ? [{ label: PRO_COMPANIES_FREE, action: "plansCredits", tone: "pine" as const }] : []),
+  ];
 }
 export interface NudgeInput {
   page: string;
@@ -40,15 +55,17 @@ const credits = (n: number) => `${n} ${n === 1 ? "credit" : "credits"}`;
 /** The one nudge for this screen, or null. */
 export function pickNudge(x: NudgeInput): Nudge | null {
   const plan = x.plan;
-  if (x.page === "today" && plan?.name === "trial" && plan.ending && plan.trialDaysLeft != null) {
+  // Home shows the trial's summary card in its last days (Billing.tsx TrialSummaryCard): the nudge doesn't repeat it.
+  if (x.page === "today" && plan?.name === "trial" && plan.ending && plan.trialDaysLeft != null && !(plan.summary && !plan.notLooking)) {
     const when = plan.trialDaysLeft <= 1 ? "ends tomorrow" : `ends in ${plan.trialDaysLeft} days`;
     return plan.notLooking
       ? { kind: "trial", text: `Your Pro trial ${when}. Nothing to do: you stay on Free, with no charge.`, cta: "See plans", action: "plans" }
       : { kind: "trial", text: `Your Pro trial ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans" };
   }
   if (x.credits <= LOW_CREDITS) {
-    const left = x.credits <= 0 ? "You're out of credits." : `${credits(x.credits)} left.`;
-    return { kind: "credits", text: `${left} Add a fact you know and earn one.`, cta: "Earn credits", action: "earn" };
+    // At 0: three ways out in one line (earn one, the top-up, Pro).
+    if (x.credits <= 0) return { kind: "credits", text: "You're out of credits.", choices: creditChoices(plan) };
+    return { kind: "credits", text: `${credits(x.credits)} left. Add a fact you know and earn one.`, cta: "Earn credits", action: "earn" };
   }
   if (x.profileEmpty) return { kind: "profile", text: "Tell us who you want to work with, and we rank companies for you.", cta: "Set your profile", action: "profile" };
   if (x.nextStep) {
@@ -93,7 +110,16 @@ export function NudgeSlot({ nudge, onAction, onClose }: { nudge: Nudge | null; o
     "div",
     { className: `tp-strip nudge nudge-${nudge.kind}`, role: "status", "data-nudge": nudge.kind },
     h("span", { className: "tp-strip-t nudge-t", title: nudge.text }, nudge.text),
-    nudge.cta && nudge.action
+    nudge.choices?.length
+      ? h(
+          "span",
+          { className: "nudge-choices", role: "group", "aria-label": "Ways to get credits" },
+          ...nudge.choices.map((c) =>
+            h("button", { key: c.action, type: "button", className: `btn btn-sm nudge-go${c.tone === "earn" ? " btn-primary" : c.tone === "pine" ? " btn-pine" : ""}`, onClick: () => onAction(c.action) }, c.label),
+          ),
+        )
+      : null,
+    !nudge.choices?.length && nudge.cta && nudge.action
       ? h("button", { type: "button", className: `btn btn-sm nudge-go${nudge.kind === "trial" || nudge.kind === "step" ? " btn-pine" : ""}`, onClick: () => onAction(nudge.action!) }, nudge.cta)
       : null,
     onClose
