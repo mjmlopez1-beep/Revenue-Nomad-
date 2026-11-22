@@ -42,6 +42,7 @@ import {
   MEMBER_CONSENT,
   MEMBER_CONSENT_VERSION,
   consentText,
+  type LinkDays,
   type MemberSignMode,
   type MemberSigned,
   type AuditEvent,
@@ -230,6 +231,7 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
     signer: p.signer ? { ...p.signer } : null,
     pricing: p.pricing ? structuredClone(p.pricing) : null,
     memberSign: p.memberSign ?? "now",
+    linkDays: p.linkDays ?? SIGN_DAYS,
     version: p.version,
     status: statusOf(p, nowMs),
     createdAt: p.createdAt,
@@ -379,6 +381,8 @@ export interface ProposalPatch {
   pricing?: unknown;
   /** The member's own signature on the next send: "now", "after" or "none". */
   memberSign?: unknown;
+  /** How long the next send's link works: 14, 30, 60 or 90 days, or 0 for no end date. Not part of what the client reads: no new version. */
+  linkDays?: unknown;
 }
 
 /** The document's parts, to tell whether a change touches what the client reads. */
@@ -428,6 +432,7 @@ function applyPatch(p: StoredProposal, a: ProposalPatch, now: string, nowMs: num
     if (!m) throw new ProposalProblem("Pick how you sign: now, after they sign, or not at all.");
     p.memberSign = m;
   }
+  if (a.linkDays !== undefined) p.linkDays = linkDaysOf(a.linkDays) as LinkDays;
   p.updatedAt = now;
   // A change to what the client reads, after this version went out: a new version, and the old link stops.
   if (docPart(p) !== before && p.sends.some((x) => x.version === p.version)) {
@@ -669,10 +674,11 @@ export async function sendProposal(
   if (!emailEnabled()) throw new ProposalProblem(EMAIL_OFF);
   const now = new Date(nowMs).toISOString();
   const note = cleanLine(a.message, LIMITS.message);
-  const days = linkDaysOf(a.linkDays);
   if (a.memberSign !== undefined && !modeOf(a.memberSign)) throw new ProposalProblem("Pick how you sign: now, after they sign, or not at all.");
   // Their own signature: as picked here, else as kept on the proposal, else now when they have a saved one (none otherwise, as before).
   const p0 = mine(s0, me0, id);
+  // The link's length: as picked here, else as kept on the proposal (the connector sets it ahead), else 30 days.
+  const days = a.linkDays === undefined || a.linkDays === null || a.linkDays === "" ? p0.linkDays ?? SIGN_DAYS : linkDaysOf(a.linkDays);
   const saved = await savedSignatureOf(s0, me0.id);
   const mode: MemberSignMode = modeOf(a.memberSign) ?? p0.memberSign ?? (saved ? "now" : "none");
   if (mode === "now" && !saved) throw new ProposalProblem("Set your signature first, or pick I'll countersign after they sign, or No signature from me.");
@@ -953,6 +959,7 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
   });
   const seed = await loadSeed();
   const m = await memberFor(seed, out.memberId);
+  const signedFacts = { sendId: out.x.id, proposalId: out.proposalId, memberId: out.memberId, by: name, title: out.x.doc.title, at: now, ...(origin ? { origin } : {}) };
   // Countersign mode: the member is told to countersign; the client hears that it comes next. No seal, no copy yet.
   if (awaitingMember(out.x)) {
     const ch = out.x.signed!.choice;
@@ -960,9 +967,12 @@ export async function signProposal(token: unknown, a: { name?: unknown; consent?
     const toClient = countersignEmail({ to: "signer", name: out.x.signer.name, member: out.x.doc.from.name, signer: out.x.signed!.name, title: out.x.doc.title, link: copyLink(origin, out.x), ...(ch ? { choice: `${ch.summary}. Total: ${ch.total}.` } : {}) });
     if (m?.email) await sendEmail(m.email, toMember.subject, toMember.text, toMember.html);
     await sendEmail(out.x.signer.email, toClient.subject, toClient.text, toClient.html, m?.email ? { replyTo: m.email } : {});
+    await callHook(() => proposalHooks.onSigned({ ...signedFacts, state: "client_signed" }));
     return withMemberImg(out.view, out.x.id);
   }
-  return withMemberImg(await completeSigned(out.x.id, m, origin, out.view), out.x.id);
+  const view = await completeSigned(out.x.id, m, origin, out.view);
+  await callHook(() => proposalHooks.onSigned({ ...signedFacts, state: "fully_signed" }));
+  return withMemberImg(view, out.x.id);
 }
 
 /**
@@ -1060,7 +1070,10 @@ export async function countersignProposal(
       const { setMySignature } = await import("./memberSig");
       await setMySignature(token, { method: input.kind, png: png ? dataUrl(png) : undefined, typed: input.kind === "typed" ? input.typed : undefined, consent: true }, origin, nowMs).catch(() => null);
     }
-    if (won) await completeSigned(x0.id, await memberFor(seed, me0.id), origin, null);
+    if (won) {
+      await completeSigned(x0.id, await memberFor(seed, me0.id), origin, null);
+      await callHook(() => proposalHooks.onSigned({ sendId: x0.id, proposalId: id, memberId: me0.id, state: "fully_signed", by: x0.signed?.name ?? x0.signer.name, title: x0.doc.title, at: now, ...(origin ? { origin } : {}) }));
+    }
     return getProposal(token, id, origin, nowMs);
   })().finally(() => countersigning.delete(key));
   countersigning.set(key, job);
@@ -1155,11 +1168,31 @@ export interface HandOffEvent {
   title: string;
   at: string;
 }
+/** A signature landed: the client's with the member's still to come ("client_signed"), or the last one ("fully_signed"). */
+export interface SignedEvent {
+  sendId: string;
+  proposalId: string;
+  memberId: string;
+  state: Exclude<SigningState, "open">;
+  /** Who signed as the client. */
+  by: string;
+  title: string;
+  at: string;
+  origin?: string;
+}
 /**
- * What other parts of Merlin do when a client asks a question or passes a proposal on (alerts,
- * for one). Called after the step is recorded and the member's email has gone; never throws into it.
+ * What other parts of Merlin do when a client asks a question, passes a proposal on, or a signature
+ * lands. Called after the step is recorded and its own email has gone; never throws into it. Out of
+ * the box these are the sender's alerts (lib/close/server.ts closeHooks: a question, passed on,
+ * "countersign to finish", and "Signed" once it is fully signed), loaded when first needed so this
+ * file doesn't depend on them. setProposalHooks replaces any of them.
  */
-const proposalHooks: { onClientQuestion: (e: ClientQuestionEvent) => unknown; onHandOff: (e: HandOffEvent) => unknown } = { onClientQuestion: () => {}, onHandOff: () => {} };
+const closeHooks = async () => (await import("../close/server")).closeHooks;
+const proposalHooks: { onClientQuestion: (e: ClientQuestionEvent) => unknown; onHandOff: (e: HandOffEvent) => unknown; onSigned: (e: SignedEvent) => unknown } = {
+  onClientQuestion: async (e) => (await closeHooks()).onClientQuestion(e),
+  onHandOff: async (e) => (await closeHooks()).onHandOff(e),
+  onSigned: async (e) => (await closeHooks()).onSigned(e),
+};
 export function setProposalHooks(h: Partial<typeof proposalHooks>): void {
   Object.assign(proposalHooks, h);
 }

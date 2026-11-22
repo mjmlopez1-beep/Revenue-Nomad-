@@ -77,14 +77,33 @@ async function main() {
     pt.includes("Anthropic (the AI service that writes Merlin's drafts)") && pt.includes("If Merlin drafts it for you, the transcript and the draft's inputs are sent to Anthropic's API") && pt.includes("don't let it train its models") && pt.includes("are not kept by Merlin") && pt.includes("A transcript Merlin drafts from: not kept"),
   );
   check("documents to sign: stored privately, for the member and the people they send it to", pt.includes("Documents you upload to be signed") && pt.includes("stored privately on Merlin's server") && pt.includes("a proposal or a document for signature") && pt.includes("drawn signature"));
-  check("the version was bumped for it", PRIVACY_VERSION === "1.2");
+  check("the version was bumped for it", PRIVACY_VERSION === "1.3");
+  // Close as merged (Privacy 1.3): readers and the notice, reminders, link length, sealed PDFs and Check a copy, the member's saved signature, Granola.
+  check(
+    "the policy carries Close as merged: readers told on the page and a download after signing, reminders, link length, the sealed PDF and Check a copy, the saved signature, Granola's key encrypted and nothing else kept, off until switched on",
+    [
+      "The page says so near its foot",
+      "only a download of the signed PDF from its page is, and that page says so too",
+      "2 days after it was sent if it hasn't been opened, 7 days after if it hasn't been signed, and 2 days before the link closes",
+      "A signing link works for 30 days unless the sender picked another length (14, 60 or 90 days) or no end date",
+      "The PDF is sealed: a fingerprint of the file (SHA-256), signed with Merlin's own key",
+      "is never stored, logged or sent anywhere",
+      "Your saved signature, if you set one",
+      "Only you can apply it",
+      "Your Granola key, if you connect Granola: kept encrypted",
+      "no note, title, summary or transcript",
+      "used to draft that one proposal, and not kept",
+      "Granola on Merlin stays off until Revenue Nomad switches it on",
+      "the option and add-ons they picked",
+    ].every((x) => pt.includes(x)) && pt.includes("Granola") && /Granola[\s\S]{0,200}Only if you connect Granola with your own Granola API key/.test(pt),
+  );
   check("never sells, never trains, the server calls no AI model", pt.includes("We never sell personal data") && pt.includes("We never use any data to train AI models") && pt.includes("calls no AI model"));
   check("deletion: Disconnect, the LinkedIn import, Remove my name, closing an account", ["Disconnect and delete everything", "Delete removes the file", "Remove my name", "Closing your account"].every((t) => pt.includes(t)));
-  // Own sites (lib/ownsites): one plain sentence, in the policy, the data page and the doc, with version 1.2.
+  // Own sites (lib/ownsites): one plain sentence, in the policy, the data page and the doc (since version 1.2).
   const ownLine = "Merlin also reads the email addresses that fractionals publish on their own business websites";
   check(
-    "own sites: the policy says Merlin reads the emails fractionals publish on their own business websites, US only, to invite them and show members, removable at /remove; version 1.2",
-    PRIVACY_VERSION === "1.2" &&
+    "own sites: the policy says Merlin reads the emails fractionals publish on their own business websites, US only, to invite them and show members, removable at /remove",
+    PRIVACY_VERSION === "1.3" &&
       pt.includes(`${ownLine}, for people in the United States only, to invite them to join Merlin or claim their seats and to show members. Anyone can remove their name and email at Remove my name.`) &&
       src("app/data/DataFlows.tsx").includes(`${ownLine}, US only, to invite them to join Merlin or claim their seats and to show members. Anyone can remove their name and email at /remove.`) &&
       src("docs/data-flows.md").includes("the email addresses that fractionals publish on their own business websites, US only, to invite them to join Merlin or claim their seats and to show members, and anyone can remove their name and email at `/remove`"),
@@ -111,8 +130,26 @@ async function main() {
   check("/terms answers 200", t.status === 200, t.status);
   check("its title and heading", /<title>Terms of Service · Merlin<\/title>/.test(t.html) && tt.includes("Terms of Service"));
   check("the effective date and version", tb.includes(`dateTime="${LEGAL_EFFECTIVE}"`) && tt.includes(`Effective ${LEGAL_EFFECTIVE_WORDS}`) && tt.includes(`Version ${TERMS_VERSION}`));
-  // The Terms changed (account closure, Connecticut law, the plans' descriptions, the pipeline row): version 1.1, effective the same day.
-  check("the Terms' version was bumped for it: 1.1, effective November 22, 2026", TERMS_VERSION === "1.1" && LEGAL_EFFECTIVE === "2026-11-22" && LEGAL_EFFECTIVE_WORDS === "November 22, 2026" && tt.includes("Version 1.1") && !tt.includes("Version 1.0"));
+  // The Terms changed again for Close (reading activity and reminders, options, sealed PDFs, the member's own signature, contracts, Merlin's drafting by Anthropic, Granola): version 1.2, effective the same day.
+  check("the Terms' version was bumped for it: 1.2, effective November 22, 2026", TERMS_VERSION === "1.2" && LEGAL_EFFECTIVE === "2026-11-22" && LEGAL_EFFECTIVE_WORDS === "November 22, 2026" && tt.includes("Version 1.2") && !tt.includes("Version 1.1"));
+  check(
+    "the Terms carry Close as merged: reading activity told to the client, reminders and their switches, link length, options, the sealed PDF and /check, the member's signature, contracts, Anthropic, Granola off until switched on",
+    [
+      "tells your client so on the page",
+      "only a download of the signed PDF is counted",
+      "2 days after you send it if it isn't opened, 7 days after if it isn't signed, and 2 days before the link closes (never for a link with no end date)",
+      "You can turn each reminder off as you send and afterwards",
+      "(14, 60 or 90 days, or no end date)",
+      "up to three options, and add-ons",
+      "Anyone can check a copy at /check",
+      "with a signature you save once; only you can apply it",
+      "your saved signature can go on in one click",
+      "Merlin reads it to find where everyone signs and places the fields",
+      "written by an AI service, Anthropic, through its API",
+      "Merlin reads a call's transcript from your Granola only when you pick that call to draft from, and doesn't keep it",
+      "Granola on Merlin is off until Revenue Nomad switches it on",
+    ].every((x) => tt.includes(x)),
+  );
   check("the Terms' plans say the pipeline row as compare.ts does: You move it, Moves to Won when they sign", tt.includes("Pipeline after a signature: You move it.") && tt.includes("Pipeline after a signature: Moves to Won when they sign.") && !/Moves itself when they sign|moving itself/.test(tt));
   check(
     "the plans' numbers are the billing rules' own",

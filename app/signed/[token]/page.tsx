@@ -4,6 +4,7 @@ import { MEMBER_CONSENT, MEMBER_CONSENT_VERSION, type SignedCopy } from "@/lib/p
 import { SignLegal, SignTop } from "../../sign/Sign";
 import { EVENT_SAY, dayOf, stamp } from "../../sign/doc";
 import { Parties, ProposalView, SealCard, memberState } from "../../sign/ProposalView";
+import { ActivityNotice } from "../../sign/activity";
 import { PrintButton } from "../Print";
 import { DocCopyPage } from "../DocCopy";
 import "../../sign/sign.css";
@@ -84,7 +85,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
             <span className="cv-fine">The sealed copy comes by email to you both once they do.</span>
           </section>
         )}
-        {c.sealed && <SealCard at={c.sealed.at} signers={[c.signed.name, ...(c.member ? [c.member.name] : [])]} events={c.sealed.events} pdf={c.sealed.pdf} check={c.sealed.check} />}
+        {c.sealed && <SealCard at={c.sealed.at} signers={[c.signed.name, ...(c.member ? [c.member.name] : [])]} events={c.sealed.events} pdf={c.sealed.pdf} check={c.sealed.check} track={String(token).slice(0, 120)} />}
 
         <ProposalView
           doc={d}
@@ -195,6 +196,8 @@ export default async function Page({ params }: { params: Promise<{ token: string
 
         <footer className="sg-foot">
           <p>Sent by {d.from.name} with Merlin, from Revenue Nomad.</p>
+          {/* Nothing is read here; only a download of the signed PDF is told to the sender (lib/close). */}
+          {c.sealed && <ActivityNotice sender={d.from.name} signed />}
           <SignLegal />
         </footer>
       </main>

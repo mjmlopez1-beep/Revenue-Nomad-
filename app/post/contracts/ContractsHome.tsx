@@ -26,13 +26,24 @@ import { dapi, uploadPdf } from "../DocBuilder";
 import { CloseBuildPrompt } from "../Proposals";
 import { ProposalStatus } from "../ProposalParts";
 import { dayOf } from "../../sign/doc";
+import { LinkDaysPick } from "../LinkDays";
+import type { LinkDays } from "@/lib/proposals/types";
+import { SendReminders, saveReminders, useSendReminders } from "../SendReminders";
+import { MySignature, useMySignature } from "../MySignature";
 import "../../ui/pdf.css";
 import "../proposals.css";
 
 /** Merlin couldn't find a signature line (lib/documents/smart.ts NOTHING_FOUND says the same). */
 export const NOTHING_FOUND = "Merlin couldn't find signature lines in this contract, so place the fields by hand.";
-/** What happens after it's sent: the reminders and the alert (the reminder scheduler's and alerts' own words). */
-export const AFTER_SEND = (first: string) => `Reminders on day 2 and day 7 if it isn't signed. You'll get an alert when ${first} opens it.`;
+/**
+ * What happens after it's sent, true of a document as of a proposal (lib/close): an alert when the
+ * signer opens it and when everyone has signed. The reminders say their own days in the switches
+ * above this line (SendReminders.tsx), so this doesn't repeat them.
+ */
+export const AFTER_SEND = (first: string) => `You'll get an alert when ${first} opens it, and when it's signed.`;
+/** The member signs too, last: their saved signature (MySignature.tsx) makes it one click on the signing page. */
+export const SIGN_LAST = (first: string, saved: boolean) =>
+  saved ? `You sign last, after ${first}. Your saved signature goes on in one click: Use my saved signature.` : `You sign last, after ${first}. Save your signature now and it's one click then.`;
 
 type Step = "drop" | "busy" | "review" | "sent";
 const first = (s: string) => s.trim().split(/\s+/)[0] || s;
@@ -67,6 +78,10 @@ export function ContractsHome({
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const smart = data.canBuild;
+  // How long the links work, the reminders to whoever signs (lib/close), and the member's own saved signature for when they sign last.
+  const [days, setDays] = useState<LinkDays>(30);
+  const [rem, setRem] = useSendReminders(doc?.id, data.canSend);
+  const [mySig, setMySig] = useMySignature();
 
   const take = async (f: File | undefined) => {
     if (!f) return;
@@ -128,7 +143,9 @@ export function ContractsHome({
     setSending(true);
     const saved = await save();
     if (!saved) return setSending(false);
-    const res = await dapi<{ document: DocumentRec; message: string }>({ op: "send", id: saved.id, message });
+    const off = await saveReminders(saved.id, rem);
+    if (off) return setSending(false), setErr(off);
+    const res = await dapi<{ document: DocumentRec; message: string }>({ op: "send", id: saved.id, message, linkDays: days });
     setSending(false);
     if (res.error) return setErr(res.error);
     setDoc(res.document);
@@ -334,7 +351,16 @@ export function ContractsHome({
                   <textarea className="input cu-input" rows={3} maxLength={600} value={message} onChange={(e) => setMessage(e.target.value)} />
                 </label>
               )}
+              {data.canSend && <LinkDaysPick value={days} onChange={setDays} />}
+              {data.canSend && other && <SendReminders value={rem} onChange={setRem} noEnd={days === 0} disabled={sending} />}
               {other && <span className="cu-muted">{AFTER_SEND(otherFirst)}</span>}
+              {data.canSend && other && signers.some((x) => x.me) && mySig.loaded && (
+                <div className="cu-mysig" data-section="contract-signature">
+                  <span className="cu-label-t">Your signature</span>
+                  <span className="cu-muted">{SIGN_LAST(otherFirst, !!mySig.sig)}</span>
+                  <MySignature value={mySig.sig} name={mySig.name} title={mySig.title} onChange={setMySig} />
+                </div>
+              )}
               {!data.email && <span className="pp-warn">Email isn&#39;t set up on Merlin yet, so a contract can&#39;t go out for signature.</span>}
               {err && (
                 <p className="pp-err" role="alert">

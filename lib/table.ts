@@ -7681,8 +7681,8 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   const net = s.network?.[id] as { google?: { token?: string }; gmail?: { token?: string } } | undefined;
   const googleTokens = [net?.google?.token, net?.gmail?.token].filter((x): x is string => !!x);
   const documentIds = (s.documents ?? []).filter((d) => d.memberId === id).map((d) => d.id);
-  // Their proposals' sealed PDFs (lib/proposals/files.ts), removed by the caller.
-  const sendIds = (s.proposals ?? []).filter((p) => p.memberId === id).flatMap((p) => p.sends.filter((x) => x.seal).map((x) => x.id));
+  // Their proposals' files (lib/proposals/files.ts: a send's sealed PDF, and the copy of their signature applied to it, signed or not), removed by the caller.
+  const sendIds = (s.proposals ?? []).filter((p) => p.memberId === id).flatMap((p) => p.sends.filter((x) => x.seal || x.member).map((x) => x.id));
   const del = <T>(rec: Record<string, T> | undefined) => {
     if (rec) delete rec[id];
   };

@@ -14,6 +14,7 @@
  * to download, with its audit trail page.
  */
 import { LinkDaysPick } from "./LinkDays";
+import { SendReminders, saveReminders, useSendReminders } from "./SendReminders";
 import type { LinkDays } from "@/lib/proposals/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProposalsView } from "@/lib/proposals/types";
@@ -646,12 +647,16 @@ function DocTrail({ d }: { d: DocumentRec }) {
 function DocSendSheet({ d, canSend, email, issues, onClose, onSent }: { d: DocumentRec; canSend: boolean; email: boolean; issues: string[]; onClose: () => void; onSent: (d: DocumentRec, message: string) => void }) {
   const [note, setNote] = useState("");
   const [days, setDays] = useState<LinkDays>(30);
+  // The reminders to whoever signs (SendReminders.tsx, lib/close): each on unless turned off here, saved just before it goes.
+  const [rem, setRem] = useSendReminders(d.id, canSend);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const ok = canSend && email && issues.length === 0;
   const go = async () => {
     setBusy(true);
     setErr(null);
+    const off = await saveReminders(d.id, rem);
+    if (off) return setBusy(false), setErr(off);
     const r = await dapi<{ document: DocumentRec; message: string }>({ op: "send", id: d.id, message: note, linkDays: days });
     setBusy(false);
     if (r.error) return setErr(r.error);
@@ -689,6 +694,7 @@ function DocSendSheet({ d, canSend, email, issues, onClose, onSent }: { d: Docum
           <textarea className="input pp-note" rows={2} maxLength={600} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Here's the agreement we discussed." />
         </label>
         {canSend && <LinkDaysPick value={days} onChange={setDays} />}
+        {canSend && <SendReminders value={rem} onChange={setRem} noEnd={days === 0} disabled={busy} />}
         {issues.length > 0 && (
           <ul className="pp-flaglist">
             {issues.map((x) => (

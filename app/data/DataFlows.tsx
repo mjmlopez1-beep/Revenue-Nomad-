@@ -5,7 +5,7 @@
  * docs/data-flows.md: keep the two in step. Phone first. Its styles are imported by page.tsx.
  */
 import { Brand } from "../ui/shared";
-import { DISCLOSURE_LONG, disclosureText } from "@/lib/close/types";
+import { DISCLOSURE_LONG, disclosureText, signedDisclosureText } from "@/lib/close/types";
 
 type Service = { who: string; gets: string; why: string; when?: string };
 
@@ -184,11 +184,17 @@ export function DataFlows() {
               What is collected: that the proposal or document was opened, which section or page and which price option was on screen while the reader was active, in
               seconds, an option picked, an add-on chosen, and a download. A random id in a cookie, sent only to Merlin&apos;s own address for this, tells one
               reader&apos;s browser from another, so a forward opened somewhere else counts as a new reader. Merlin keeps only a scrambled form of that id, never the IP
-              address and never a fingerprint of the device. Nothing is counted once it is signed, declined, withdrawn or expired.
+              address and never a fingerprint of the device. Nothing is read once it is signed, declined, withdrawn or expired: after a signature only a download of
+              the signed PDF from its page is counted, and that page says so.
             </p>
             <p className="cl-p">
               Why: so the member who sent it knows when it was opened and what was read, and when to follow up. Only that member sees it. It is kept with the proposal,
-              capped, and deleted with it. The page tells the client, near its foot: &ldquo;{disclosureText()}&rdquo;
+              capped, and deleted with it. The page tells the client, near its foot: &ldquo;{disclosureText()}&rdquo; Once signed it reads: &ldquo;{signedDisclosureText()}&rdquo;
+            </p>
+            <p className="cl-p">
+              Reminders: until it is signed or declined, Merlin emails the person who signs for the member, 2 days after it was sent if it isn&apos;t opened, 7 days
+              after if it isn&apos;t signed, and 2 days before the link closes. The member can switch each one off as they send and afterwards. A link works for 30
+              days unless the member picks 14, 60 or 90 days or no end date; a link with no end date gets no warning before it closes.
             </p>
           </section>
 
@@ -200,6 +206,15 @@ export function DataFlows() {
               When a proposal or document is signed, Merlin keeps the final PDF on its own storage, private to the two sides, and seals it: a fingerprint of the file
               (SHA-256), signed with Merlin&apos;s own key. Anyone can check a copy at /check, with no account. The PDF dropped there is read in memory to work out its
               fingerprint, compared with the sealed records, and never stored, logged or sent anywhere. The answer says only whether it matches, and if so who signed and when.
+            </p>
+            <p className="cl-p">
+              A member&apos;s saved signature (the words they typed, or a drawing) is kept privately on Merlin&apos;s own storage, for that member alone. Each time it is
+              applied, to a proposal as it goes out, as a countersignature, or to a document they sign themselves, a copy goes with that signed record and the audit
+              trail says when and how. The member can replace or delete it at any time, and it is deleted with their account&apos;s personal data.
+            </p>
+            <p className="cl-p">
+              On the client&apos;s page, a question is emailed to the member (its first 300 characters go on the audit trail), and a client can pass the proposal to
+              someone else to sign: the name, title and email they give are kept with the proposal, that person gets their own link, and the member is told.
             </p>
           </section>
 

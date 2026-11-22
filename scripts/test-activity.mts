@@ -589,7 +589,8 @@ async function main() {
   /* ================= closeC3's events ================= */
   console.log("\na question, passed on, countersigned");
   let cs = await PS.createProposal(JOR, { companyId: CEDAR, title: "Revenue operations reset", blocks, fields: { "pricing.monthlyFee": "$9,000", "term.initialMonths": "3" } }, BASE);
-  cs = (await PS.sendProposal(JOR, cs.id, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example", title: "COO" } }, BASE, t0)).proposal;
+  // Sent for the member to countersign after the client (closeC3's "after"): the store's own signature events tell lib/close (closeHooks).
+  cs = (await PS.sendProposal(JOR, cs.id, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example", title: "COO" }, memberSign: "after" }, BASE, t0)).proposal;
   const cstok = signTok(lastTo("dana@cedarandpine.example")?.text ?? "");
   check("a question's email is off by default, the rest on", C.prefsOf(undefined).question.email === false && C.prefsOf(undefined).question.app && C.prefsOf(undefined).question.slack && C.prefsOf(undefined).passed.email && C.prefsOf(undefined).countersign.email);
   let sq = slack.length;
@@ -609,31 +610,35 @@ async function main() {
   await settle();
   check("passed on: Dana Whitfield passed Revenue operations reset to Sam Lee to sign", slack.slice(sq).some((x) => x.text.startsWith("Dana Whitfield passed Revenue operations reset to Sam Lee to sign")) && (await C.inboxView(JOR)).items.some((x) => x.head === "Passed on:" && x.text === "Dana to Sam Lee"));
   check("an unknown item, or no one to pass it to: nothing", (await C.afterClientAsked("pr_notthereatall", { text: "x" })) === false && (await C.afterPassedOn(cs.id, { to: "" })) === false);
-  // The client signs; the member countersigns.
-  sq = slack.length;
-  check("afterClientSigned: told once", (await C.afterClientSigned(cs.id, { by: "Dana Whitfield" }, t0 + 3 * DAY)) === true && (await C.afterClientSigned(cs.id, { by: "Dana Whitfield" }, t0 + 3 * DAY)) === false);
-  await settle();
-  const ct = slack.slice(sq).find((x) => /Countersign to finish/.test(x.text));
-  check("countersign: Dana Whitfield signed. Countersign to finish., with Countersign", !!ct && ct.text.startsWith("Dana Whitfield signed. Countersign to finish.") && JSON.stringify(ct.blocks).includes("Countersign"), ct?.text);
-  await PS.requestCode(cstok, who, t0 + 3 * DAY);
-  const cscode = lastTo("dana@cedarandpine.example")?.text.match(/Your code: (\d{6})/)?.[1] ?? "";
-  const csv = await PS.verifyCode(cstok, cscode, who, BASE, t0 + 3 * DAY);
-  await PS.signProposal(cstok, { name: "Dana Whitfield", consent: true, hash: csv.hash }, who, BASE, t0 + 3 * DAY);
-  sq = slack.length;
-  await C.afterSignerStep(cstok, BASE, t0 + 3 * DAY);
-  await settle();
-  check("while it waits for the countersignature: no Signed alert from the sign route", !slack.slice(sq).some((x) => x.text.startsWith("Signed")));
-  let csv2 = await C.activityView(JOR, cs.id, BASE, t0 + 3 * DAY + HOUR);
-  check("while it waits: no renewal clock, the status says so", csv2.renewal === null && csv2.statusWords === "Signed by Dana · countersign to finish", [csv2.renewal, csv2.statusWords]);
-  check("while it waits: no renewal to start", (await refused(C.startRenewal(JOR, cs.id, BASE, t0 + 3 * DAY + HOUR)))?.includes("Countersign it first"));
+  // The client signs; the member countersigns. signProposal tells lib/close itself (its onSigned hook), once.
   await T.tableInternals.mutate((s) => {
     for (const e of s.pipeline?.mem_jor?.entries ?? []) if (e.companyId === "c_cedar") e.stage = "proposal";
   });
   sq = slack.length;
-  const fullAt = t0 + 5 * DAY;
-  check("afterFullySigned: told once", (await C.afterFullySigned(cs.id, { origin: BASE, movePipeline: true }, fullAt)) === true && (await C.afterFullySigned(cs.id, { origin: BASE, movePipeline: true }, fullAt)) === false);
+  await PS.requestCode(cstok, who, t0 + 3 * DAY);
+  const cscode = lastTo("dana@cedarandpine.example")?.text.match(/Your code: (\d{6})/)?.[1] ?? "";
+  const csv = await PS.verifyCode(cstok, cscode, who, BASE, t0 + 3 * DAY);
+  await PS.signProposal(cstok, { name: "Dana Whitfield", consent: true, hash: csv.hash }, who, BASE, t0 + 3 * DAY);
   await settle();
-  check("fully signed: Signed, Moved to Won, and the pipeline at Won", slack.slice(sq).some((x) => x.text.startsWith("Signed") && /Moved to Won/.test(JSON.stringify(x.blocks))) && ((await T.loadState()).pipeline?.mem_jor?.entries ?? []).some((e) => e.companyId === "c_cedar" && e.stage === "won"));
+  check("the client signs: told once to countersign, and afterClientSigned again says nothing", slack.slice(sq).filter((x) => /Countersign to finish/.test(x.text)).length === 1 && (await C.afterClientSigned(cs.id, { by: "Dana Whitfield" }, t0 + 3 * DAY)) === false);
+  const ct = slack.slice(sq).find((x) => /Countersign to finish/.test(x.text));
+  check("countersign: Dana Whitfield signed. Countersign to finish., with Countersign", !!ct && ct.text.startsWith("Dana Whitfield signed. Countersign to finish.") && JSON.stringify(ct.blocks).includes("Countersign"), ct?.text);
+  sq = slack.length;
+  await C.afterSignerStep(cstok, BASE, t0 + 3 * DAY);
+  await settle();
+  check("while it waits for the countersignature: no Signed alert from the sign route", !slack.slice(sq).some((x) => x.text.startsWith("Signed")));
+  check("while it waits: the pipeline has not moved to Won", ((await T.loadState()).pipeline?.mem_jor?.entries ?? []).some((e) => e.companyId === "c_cedar" && e.stage === "proposal"));
+  let csv2 = await C.activityView(JOR, cs.id, BASE, t0 + 3 * DAY + HOUR);
+  check("while it waits: no renewal clock, the status says so", csv2.renewal === null && csv2.statusWords === "Signed by Dana · countersign to finish", [csv2.renewal, csv2.statusWords]);
+  check("while it waits: no renewal to start", (await refused(C.startRenewal(JOR, cs.id, BASE, t0 + 3 * DAY + HOUR)))?.includes("Countersign it first"));
+  sq = slack.length;
+  const fullAt = t0 + 5 * DAY;
+  await PS.countersignProposal(JOR, cs.id, { method: "typed", typed: "Jordan Avery", consent: true }, BASE, fullAt);
+  await settle();
+  check("the member countersigns: Signed told once (afterFullySigned again, and the sign route, say nothing)", slack.slice(sq).filter((x) => x.text.startsWith("Signed")).length === 1 && (await C.afterFullySigned(cs.id, { origin: BASE }, fullAt)) === false);
+  await C.afterSignerStep(cstok, BASE, fullAt);
+  await settle();
+  check("fully signed: Signed, Moved to Won, once, and the pipeline at Won", slack.slice(sq).filter((x) => x.text.startsWith("Signed")).length === 1 && slack.slice(sq).some((x) => x.text.startsWith("Signed") && /Moved to Won/.test(JSON.stringify(x.blocks))) && ((await T.loadState()).pipeline?.mem_jor?.entries ?? []).some((e) => e.companyId === "c_cedar" && e.stage === "won"));
   csv2 = await C.activityView(JOR, cs.id, BASE, fullAt + HOUR);
   check("the renewal clock starts at the countersignature: 3 months from it", csv2.renewal?.end === RN.addMonths(new Date(fullAt).toISOString().slice(0, 10), 3), csv2.renewal);
 
@@ -656,7 +661,7 @@ async function main() {
   check("Reminders until they sign: Close", row("Reminders until they sign")?.[2] === "In your trial only" && /day 2/i.test(row("Reminders until they sign")?.[3] ?? ""));
   check("Renewal reminders: Close", row("Renewal reminders")?.[2] === "In your trial only" && /30 days/.test(row("Renewal reminders")?.[3] ?? ""));
   check("all three in what Close adds (the Terms list them)", ["Know when they open it and what they read", "Reminders until they sign", "Renewal reminders"].every((w) => CP.CLOSE_ADDS.some(([x]) => x === w)));
-  check("the landing page's rows are unchanged", CP.LANDING_ROWS.map((r) => r[0]).join("|") === "Opening companies|Fellow fractionals|Proposals and e-signature|Claude drafting and your own contracts|Pipeline after a signature|Open roles");
+  check("the landing page's rows are unchanged", CP.LANDING_ROWS.map((r) => r[0]).join("|") === "Opening companies|Fellow fractionals|Proposals and e-signature|Merlin drafting and your own contracts|Pipeline after a signature|Open roles");
   check("nothing left the machine but the fake email and Slack", others === 0, others);
 
   console.log(`\n${passes} passed, ${failures} failed`);

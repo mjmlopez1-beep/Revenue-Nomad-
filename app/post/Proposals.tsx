@@ -48,6 +48,8 @@ import { withChange, type ChangeProposal } from "@/lib/proposals/changeShape";
 import { LinkCompany } from "./ProposalLink";
 import { ActivityPanel, takeItem, useOpenItem } from "./Activity";
 import { PricingEditor } from "./PricingEditor";
+import { GranolaCallPicker } from "./GranolaCallPicker";
+import { useGranola } from "./granolaClient";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
@@ -101,6 +103,8 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   // "Send a document to sign": Contracts (contracts/ContractsHome.tsx), and a line for the field placer when it opens from there.
   const [contract, setContract] = useState(false);
   const [docNotice, setDocNotice] = useState<string | null>(null);
+  // Granola's status (granolaClient.ts), read once a page load: the start sheet's "From Granola" shows only while it is on.
+  const granola = useGranola();
   const reload = useCallback(async () => {
     const r = await load();
     if ("error" in r) setError(r.error);
@@ -155,6 +159,22 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         onClose={() => setStarting(null)}
         onTemplate={(t) => setData((d) => (d ? { ...d, templates: [t, ...d.templates] } : d))}
         onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenId(p.id))}
+        // From Granola (GranolaCallPicker.tsx): only while Granola is switched on for Merlin (RN_GRANOLA). Off, there is no Granola card and paste or drop works as before.
+        granolaFirst={!!granola.status?.connected}
+        granolaSlot={
+          granola.status?.on
+            ? (o) => (
+                <GranolaCallPicker
+                  companyId={o.companyId}
+                  email={o.signerEmail}
+                  companyName={o.companyName}
+                  pickedId={o.pickedId}
+                  onPick={(c) => o.onPick({ transcript: c.text, attendees: c.attendees.map((a) => ({ name: a.name || undefined, email: a.email || undefined })), noteId: c.noteId, when: c.when })}
+                  onPaste={o.onPaste}
+                />
+              )
+            : undefined
+        }
       />
     );
   if (contract && data)

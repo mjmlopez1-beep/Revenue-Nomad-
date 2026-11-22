@@ -21,7 +21,7 @@ const PROCESSORS: { who: string; gets: string }[] = [
   { who: "Backup storage", gets: "A daily copy of Merlin's data, kept in a storage bucket Revenue Nomad controls, so Merlin can be restored if its server's disk is lost." },
   {
     who: "Resend (email)",
-    gets: "Each email Merlin sends: the address, the subject and the text. That covers sign-in links and codes, message notices, the weekly email, Crystal Ball emails, plan notices and proposal emails.",
+    gets: "Each email Merlin sends: the address, the subject and the text. That covers sign-in links and codes, message notices, the weekly email, Crystal Ball emails, plan notices, proposal emails with the signed PDF attached, the reminders Merlin sends to the person who signs, and the alerts it sends the member who sent it.",
   },
   {
     who: "Stripe (payments)",
@@ -35,6 +35,10 @@ const PROCESSORS: { who: string; gets: string }[] = [
   {
     who: "Anthropic (the AI service that writes Merlin's drafts)",
     gets: "Only when Merlin drafts or changes a proposal for you, and only for that request: the call's transcript or notes you give it and the draft's inputs (the template, the company's facts you can see, the rate range, your name, title and writing voice), or the proposal and the change you ask for. It is sent to Anthropic's API to write the text. Anthropic's API terms don't let it train its models on this. Merlin keeps the draft, not the transcript.",
+  },
+  {
+    who: "Granola",
+    gets: "Only if you connect Granola with your own Granola API key, and only once Granola is switched on for Merlin: Merlin's requests to Granola's API, sent with your key. Merlin asks Granola for your recent calls with a company or a person, and reads a call's transcript only when you pick that call to draft a proposal from. Nothing about other members goes to Granola.",
   },
   {
     who: "Your own AI assistant",
@@ -77,7 +81,21 @@ export function PrivacyView({ support }: { support: string | null }) {
               Merlin, and only the lines you use are saved. If Merlin drafts it for you, the transcript and the draft&apos;s inputs are sent to Anthropic&apos;s API, the AI
               service Merlin uses, to write that draft, and are not kept by Merlin. Only the draft is saved.
             </li>
+            <li>
+              Earlier versions of a proposal: when you accept a change Merlin made, or bring a version back, the version before is kept with the proposal (up to 20) so
+              you can compare it or restore it. Only you see them.
+            </li>
             <li>Your own templates, if you upload a past proposal: the headings and text read from it. The file itself is not kept.</li>
+            <li>
+              Your saved signature, if you set one: the words you typed, or the drawing, kept privately on Merlin&apos;s server. Only you can apply it. Each time you
+              sign a proposal or a document with it, a copy goes with that signed record, with the time and how it was applied. You can replace or delete it at any time.
+            </li>
+            <li>
+              Your Granola key, if you connect Granola: kept encrypted, with its last four characters to show you, and when it was connected and last worked. Merlin
+              keeps nothing else from Granola: no note, title, summary or transcript. The list of your recent calls is built when you open the picker and dropped. A
+              transcript is read from Granola only when you pick a call, used to draft that one proposal, and not kept. Granola on Merlin stays off until Revenue
+              Nomad switches it on.
+            </li>
             <li>
               Documents you upload to be signed: the PDF, the fields you place and the people who sign. The file is stored privately on Merlin&apos;s server, for you and
               the people you send it to, and is never shown to other members.
@@ -120,13 +138,31 @@ export function PrivacyView({ support }: { support: string | null }) {
           <p className="cl-p">
             When a member sends a proposal or a document for signature, Merlin keeps the signer&apos;s name, email and title as the member entered them. When the signer
             opens, confirms and signs it, Merlin records the time, their IP address and device (browser), the email code they confirmed, their typed name or drawn
-            signature, what they filled in, the consent they agreed to, and a fingerprint (SHA-256) of the exact document. This audit trail is kept with the signed copy
-            and shared with everyone who signed it.
+            signature, what they filled in, the option and add-ons they picked when the proposal offered a choice, the consent they agreed to, and a fingerprint
+            (SHA-256) of the exact document. This audit trail is kept with the signed copy and shared with everyone who signed it.
           </p>
           <p className="cl-p">
-            While the link is open, the sender also sees when it was opened, how many people opened it, and roughly how long each section and price option was read,
-            so they know when to follow up. The page says so near its foot. Merlin tells one reader&apos;s browser from another with a random id in a cookie on the
-            signing page, keeps only a scrambled form of it, and never uses the IP address or a fingerprint of the device for this. Only the sender sees it.
+            A question a signer asks from the proposal&apos;s page is emailed to the member who sent it, and its first 300 characters go on the audit trail. If a signer
+            passes the proposal to someone else to sign, Merlin keeps the name, title and email they give for that person, emails that person their own link, and tells
+            the member.
+          </p>
+          <p className="cl-p">
+            A signing link works for 30 days unless the sender picked another length (14, 60 or 90 days) or no end date. Until it is signed or declined, Merlin can
+            email the signer a reminder for the sender: 2 days after it was sent if it hasn&apos;t been opened, 7 days after if it hasn&apos;t been signed, and 2 days
+            before the link closes. The sender can switch each one off, and they stop the moment it is signed, declined or withdrawn.
+          </p>
+          <p className="cl-p">
+            Once it is signed, Merlin makes a PDF of it as signed, with the audit trail, keeps it privately on its own server and emails it to both sides. The PDF is
+            sealed: a fingerprint of the file (SHA-256), signed with Merlin&apos;s own key. Anyone holding a copy can check it at <a href="/check">Check a copy</a>,
+            with no account: the file dropped there is read in memory to work out its fingerprint, and is never stored, logged or sent anywhere. The answer says only
+            whether it matches and, if so, who signed and when.
+          </p>
+          <p className="cl-p">
+            While the link is open, the sender also sees when it was opened, how many people opened it, roughly how long each section and price option was read,
+            and which option and add-ons were picked, so they know when to follow up. The page says so near its foot. Once it is signed, reading is no longer
+            counted: only a download of the signed PDF from its page is, and that page says so too. Merlin tells one reader&apos;s browser from another with a
+            random id in a cookie on the signing page, keeps only a scrambled form of it, and never uses the IP address or a fingerprint of the device for this.
+            Only the sender sees it.
           </p>
           <h3 className="df-h3">When you use the site</h3>
           <p className="cl-p">
@@ -145,7 +181,7 @@ export function PrivacyView({ support }: { support: string | null }) {
           <li>To show you your own warm paths, your network, your pipeline and Crystal Ball, ranked for you.</li>
           <li>To send the emails and alerts you asked for, and the ones the service needs, such as sign-in links and plan notices.</li>
           <li>To take payment for Pro and top-ups.</li>
-          <li>To send proposals for signature and keep the signed record.</li>
+          <li>To send proposals and documents for signature, remind the person who signs, tell the sender when it is opened and signed, and keep the signed record.</li>
           <li>To keep Merlin safe: limit abuse, review a reported message, and fix problems.</li>
           <li>To count how Merlin is used, as totals only. Admins see counts for private features, never a member&apos;s network, pipeline or notes.</li>
         </ul>
@@ -318,13 +354,17 @@ export function PrivacyView({ support }: { support: string | null }) {
           <li>Your LinkedIn import: Delete removes the file and everything worked out from it. Uploading a new file replaces the old one.</li>
           <li>Your name on a seat, or as a company&apos;s leader, and an email read from your own website: <a href="/remove">Remove my name</a> takes them off at once, and they stay off.</li>
           <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-          <li>A signed proposal and its audit trail: kept with the signed copy for both parties.</li>
+          <li>A signed proposal and its audit trail: kept with the signed copy and its sealed PDF for both parties.</li>
+          <li>What a proposal&apos;s readers did (opens, time on each section and option, picks, a download of the signed PDF): kept with the proposal or document, capped, and deleted with it.</li>
+          <li>Your saved signature: until you replace or delete it. Signed records keep the copy that was applied to them.</li>
+          <li>Your Granola key: until you disconnect Granola in Integrations, which deletes it.</li>
           <li>A document you uploaded: a draft until you delete it, with its file. A signed one is kept with its final PDF and audit trail for everyone who signed it.</li>
           <li>A transcript Merlin drafts from: not kept. Only the draft is.</li>
           <li>
             Closing your account: Close my account, on Your credits, closes it at once. You are signed out, you leave Peers and the Fractionals directory, and Merlin
             stops emailing you. For 30 days you, with the link we email you, or we can bring it back. After 30 days Merlin deletes your personal data: your profile,
-            your Google and LinkedIn imports and your network, the messages you wrote, your proposals and documents, your AI usage log and your saved views. Facts
+            your Google and LinkedIn imports and your network, your Granola key, the messages you wrote, your proposals and documents with their earlier versions, signed
+            PDFs and what their readers did, your saved signature, your proposal notifications, your AI usage log and your saved views. Facts
             you added to companies stay, with your name taken off. Payment records Stripe and we must keep for the law stay. You can also ask us:{" "}
             <ContactLine support={support} subject="Close my Merlin account" />
           </li>

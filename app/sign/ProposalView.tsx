@@ -10,13 +10,18 @@
  * No hooks: the signing page (Sign.tsx) passes what the client picked and the handlers; the
  * signed copy (server-rendered) passes the choice signed and none. Every section and every option
  * carries a stable data-section id ("scope", "the_math", "option-<id>", "addon-<id>", "terms-2",
- * "sign"), for anything that needs to know which part of the page is in view.
+ * "sign"), for anything that needs to know which part of the page is in view. The sender's reading
+ * activity (activity.tsx) is what reads them: a section the member wrote carries its own title
+ * (data-section-title), an option is also a data-option with its name, a section that only groups
+ * others is a data-section-group and a part of one (an agreement part, a workstream, an add-on's
+ * row) a data-section-part, so the time read lands on the member's own sections and options.
  */
 import type { ReactNode } from "react";
 import { choiceRec, includedRows, money, priced, startOption } from "@/lib/proposals/pricing";
 import { arrange, leadCards, milestones, phases, readMinutes, statCards, type Placed } from "@/lib/proposals/sections";
 import { BILLING_SAY, type Choice, type ChoiceRec, type FrozenDoc, type Pricing } from "@/lib/proposals/types";
 import { DocText, dayOf } from "./doc";
+import { TrackedDownload } from "./activity";
 
 const TEAM = new Set(["reporting_structure", "team_rates", "operating_cadence", "role_profile"]);
 const SIDE = new Set(["assumptions", "out_of_scope"]);
@@ -89,7 +94,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
       </div>
 
       <article className="cv-doc" aria-label="The proposal">
-        <header className="cv-head" data-section="header">
+        <header className="cv-head" data-section="header" {...(g.cover?.title ? { "data-section-title": g.cover.title } : { "data-section-group": "" })}>
           <span className="cv-kicker-l">Proposal · Version {d.version}</span>
           <h1 className="cv-h1">{d.title}</h1>
           <span className="cv-parties">
@@ -124,7 +129,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
           {g.scope.length > 0 && <Scope blocks={g.scope} from={d.from} />}
 
           {(p || g.invest.length > 0) && (
-            <section id="invest" className="cv-part" data-section="invest">
+            <section id="invest" className="cv-part" data-section="invest" data-section-title="Timeline and investment">
               <span className="cv-kicker">02 · Timeline and investment</span>
               <div className="cv-titles">
                 <h2 className="cv-h2">{many ? "Choose how we work together" : "Hours and investment"}</h2>
@@ -142,14 +147,14 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
           )}
 
           {g.terms.length > 0 && (
-            <section id="terms" className="cv-part" data-section="terms">
+            <section id="terms" className="cv-part" data-section="terms" data-section-group="">
               <span className="cv-kicker">03 · Consulting agreement</span>
               <h2 className="cv-h2">The agreement terms</h2>
               <span className="cv-sub">
                 {d.company ? `The terms between ${d.company} and ${d.from.name}.` : `The terms of this proposal.`} Open any section to read it in full.
               </span>
               {g.terms.map((b, bi) => (
-                <div key={b.id} className="cv-legal" data-section={b.id}>
+                <div key={b.id} className="cv-legal" data-section={b.id} data-section-title={b.title}>
                   {g.terms.length > 1 && <h3 className="cv-h3">{b.title}</h3>}
                   {b.sections[0] && !b.sections[0].title && b.sections.length > 1 && (
                     <div className="cv-text cv-legal-intro">
@@ -159,7 +164,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
                   {b.sections
                     .filter((s) => s.title)
                     .map((s, i) => (
-                      <details key={i} className="cv-legal-part" open={bi === 0 && i === 0} data-section={`terms-${bi + 1}-${i + 1}`}>
+                      <details key={i} className="cv-legal-part" open={bi === 0 && i === 0} data-section={`terms-${bi + 1}-${i + 1}`} data-section-part="">
                         <summary>
                           {b.sections.length > 1 ? `${i + 1}. ` : ""}
                           {s.title}
@@ -174,9 +179,9 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
             </section>
           )}
 
-          <section id="sign" className="cv-part cv-sign" data-section="sign">
+          <section id="sign" className="cv-part cv-sign" data-section="sign" data-section-title="Signatures">
             {g.sign.map((b) => (
-              <div key={b.id} className="cv-text cv-sign-text" data-section={b.id}>
+              <div key={b.id} className="cv-text cv-sign-text" data-section={b.id} data-section-title={b.title}>
                 <DocText text={b.text} />
               </div>
             ))}
@@ -202,7 +207,7 @@ function Scope({ blocks, from }: { blocks: Placed[]; from: FrozenDoc["from"] }) 
       const team: Placed[] = [];
       while (i < blocks.length && TEAM.has(blocks[i].kind)) team.push(blocks[i++]);
       out.push(
-        <section key={b.id} id="team" className="cv-sec" data-section="team">
+        <section key={b.id} id="team" className="cv-sec" data-section="team" data-section-group="">
           {kicker}
           <h3 className="cv-h3">Team and reporting</h3>
           <div className="cv-grid cv-grid-260">
@@ -219,7 +224,7 @@ function Scope({ blocks, from }: { blocks: Placed[]; from: FrozenDoc["from"] }) 
               </span>
             </div>
             {team.map((t) => (
-              <div key={t.id} className="cv-card" data-section={t.id}>
+              <div key={t.id} className="cv-card" data-section={t.id} data-section-title={t.title}>
                 <strong className="cv-card-h">{t.title}</strong>
                 <div className="cv-text cv-small">
                   <DocText text={t.text} />
@@ -235,10 +240,10 @@ function Scope({ blocks, from }: { blocks: Placed[]; from: FrozenDoc["from"] }) 
       const side: Placed[] = [];
       while (i < blocks.length && SIDE.has(blocks[i].kind)) side.push(blocks[i++]);
       out.push(
-        <section key={b.id} id="assume" className="cv-sec cv-grid cv-grid-300" data-section="assume">
+        <section key={b.id} id="assume" className="cv-sec cv-grid cv-grid-300" data-section="assume" data-section-group="">
           {kicker}
           {side.map((s) => (
-            <div key={s.id} className="cv-col" data-section={s.id}>
+            <div key={s.id} className="cv-col" data-section={s.id} data-section-title={s.title}>
               <h3 className="cv-h3">{s.title}</h3>
               <div className="cv-text">
                 <DocText text={s.text} />
@@ -253,7 +258,7 @@ function Scope({ blocks, from }: { blocks: Placed[]; from: FrozenDoc["from"] }) 
     out.push(<ScopeBlock key={b.id} b={b} kicker={kicker} lead={out.length === 0} />);
   }
   return (
-    <div id="scope" className="cv-part cv-scope" data-section="scope">
+    <div id="scope" className="cv-part cv-scope" data-section="scope" data-section-group="">
       {out}
     </div>
   );
@@ -270,7 +275,7 @@ function ScopeBlock({ b, kicker, lead }: { b: Placed; kicker: ReactNode; lead: b
   if (b.kind === "the_math") {
     const s = statCards(b.text);
     return (
-      <section id="the_math" className="cv-sec" data-section={b.id}>
+      <section id="the_math" className="cv-sec" data-section={b.id} data-section-title={b.title}>
         {head}
         {s.rest && (
           <div className="cv-text cv-muted">
@@ -294,7 +299,7 @@ function ScopeBlock({ b, kicker, lead }: { b: Placed; kicker: ReactNode; lead: b
     const ph = phases(b.text);
     if (ph)
       return (
-        <section id="phases_workstreams" className="cv-sec" data-section={b.id}>
+        <section id="phases_workstreams" className="cv-sec" data-section={b.id} data-section-title={b.title}>
           {head}
           {ph.map((x, pi) => (
             <div key={pi} className="cv-phase">
@@ -310,7 +315,7 @@ function ScopeBlock({ b, kicker, lead }: { b: Placed; kicker: ReactNode; lead: b
                 </div>
               )}
               {x.streams.map((w, wi) => (
-                <details key={wi} className="cv-stream" open={pi === 0 && wi === 0} data-section={`${b.id}-${pi + 1}-${wi + 1}`}>
+                <details key={wi} className="cv-stream" open={pi === 0 && wi === 0} data-section={`${b.id}-${pi + 1}-${wi + 1}`} data-section-part="">
                   <summary>
                     <span>{w.title}</span>
                     {w.when && <span className="cv-when">{w.when}</span>}
@@ -347,7 +352,7 @@ function ScopeBlock({ b, kicker, lead }: { b: Placed; kicker: ReactNode; lead: b
     const m = milestones(b.text);
     if (m)
       return (
-        <section id="milestones" className="cv-sec cv-ruled" data-section={b.id}>
+        <section id="milestones" className="cv-sec cv-ruled" data-section={b.id} data-section-title={b.title}>
           {kicker}
           <strong className="cv-h4">{b.title}</strong>
           {m.rest && (
@@ -370,7 +375,7 @@ function ScopeBlock({ b, kicker, lead }: { b: Placed; kicker: ReactNode; lead: b
     const c = leadCards(b.text);
     if (c)
       return (
-        <section id="success_measures" className="cv-sec" data-section={b.id}>
+        <section id="success_measures" className="cv-sec" data-section={b.id} data-section-title={b.title}>
           {head}
           {c.rest && (
             <div className="cv-text">
@@ -388,7 +393,7 @@ function ScopeBlock({ b, kicker, lead }: { b: Placed; kicker: ReactNode; lead: b
       );
   }
   return (
-    <section id={b.id === b.kind ? b.kind : b.id} className="cv-sec" data-section={b.id}>
+    <section id={b.id === b.kind ? b.kind : b.id} className="cv-sec" data-section={b.id} data-section-title={b.title}>
       {head}
       <div className={lead ? "cv-text cv-text-lg" : "cv-text"}>
         <DocText text={b.text} />
@@ -433,18 +438,18 @@ function Options({ p, pick, rec, from, onPick, onAddOn, live }: { p: Pricing; pi
               </>
             );
             return live ? (
-              <button key={o.id} type="button" role="radio" aria-checked={on} className="cv-opt" data-on={on} data-section={`option-${o.id}`} onClick={() => onPick?.(o.id)}>
+              <button key={o.id} type="button" role="radio" aria-checked={on} className="cv-opt" data-on={on} data-section={`option-${o.id}`} data-option={o.id} data-option-title={o.name} onClick={() => onPick?.(o.id)}>
                 {inner}
               </button>
             ) : (
-              <div key={o.id} className="cv-opt" data-on={on} data-section={`option-${o.id}`}>
+              <div key={o.id} className="cv-opt" data-on={on} data-section={`option-${o.id}`} data-option={o.id} data-option-title={o.name}>
                 {inner}
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="cv-one" data-section={`option-${p.options[0].id}`}>
+        <div className="cv-one" data-section={`option-${p.options[0].id}`} data-option={p.options[0].id} data-option-title={p.options[0].name}>
           <div className="cv-one-h">
             <span className="cv-opt-name">{p.options[0].name}</span>
             <span className="cv-opt-price">
@@ -495,7 +500,7 @@ function Options({ p, pick, rec, from, onPick, onAddOn, live }: { p: Pricing; pi
           {p.addOns.map((a) => {
             const on = pick.addOnIds.includes(a.id);
             return (
-              <label key={a.id} className="cv-add" htmlFor={`cv-add-${a.id}`} data-section={`addon-${a.id}`}>
+              <label key={a.id} className="cv-add" htmlFor={`cv-add-${a.id}`} data-section={`addon-${a.id}`} data-section-part="" data-addon={a.id}>
                 <input id={`cv-add-${a.id}`} type="checkbox" checked={on} disabled={!live} readOnly={!live} onChange={live ? (e) => onAddOn?.(a.id, e.target.checked) : undefined} />
                 <span className="cv-add-t">
                   <span className="cv-add-n">
@@ -523,7 +528,7 @@ function InvestText({ b }: { b: Placed }) {
   const pairs = lines.map((l) => l.trim().replace(/^[-•]\s+/, "").match(/^([^:]{2,40}):\s+(.+)$/));
   const allPairs = lines.length >= 2 && pairs.every(Boolean);
   return (
-    <div className="cv-sec" data-section={b.id}>
+    <div className="cv-sec" data-section={b.id} data-section-title={b.title}>
       <h3 className="cv-h3">{b.title}</h3>
       {allPairs ? (
         <div className="cv-grid cv-grid-260 cv-terms">
@@ -605,7 +610,7 @@ export const memberState = (mode: "now" | "after" | "none", member: unknown, cli
 /* ---------- the seal ---------- */
 
 /** "Sealed by Merlin": who signed, how they were checked, the audit trail, the download and Check a copy. */
-export function SealCard({ at, signers, events, pdf, check }: { at: string; signers: string[]; events: number; pdf: string | null; check: string }) {
+export function SealCard({ at, signers, events, pdf, check, track }: { at: string; signers: string[]; events: number; pdf: string | null; check: string; /** The page's own link: the sender is told of a download (activity.tsx). */ track?: string }) {
   return (
     <section className="cv-seal" aria-labelledby="cv-seal-h">
       <div className="cv-seal-top">
@@ -638,11 +643,16 @@ export function SealCard({ at, signers, events, pdf, check }: { at: string; sign
         </div>
       </dl>
       <div className="cv-seal-go">
-        {pdf && (
-          <a className="cv-btn cv-btn-pine" href={pdf}>
-            Download the signed PDF
-          </a>
-        )}
+        {pdf &&
+          (track ? (
+            <TrackedDownload token={track} className="cv-btn cv-btn-pine" href={pdf}>
+              Download the signed PDF
+            </TrackedDownload>
+          ) : (
+            <a className="cv-btn cv-btn-pine" href={pdf}>
+              Download the signed PDF
+            </a>
+          ))}
         <a className="cv-btn" href={check}>
           Check a copy
         </a>

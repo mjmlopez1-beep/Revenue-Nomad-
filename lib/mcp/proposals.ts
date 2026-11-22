@@ -29,10 +29,11 @@ import { adviceFromView } from "../proposals/rates";
 import { KEY_FIELDS, proposalKit } from "../proposals/kit";
 import { templatesOf } from "../proposals/mine";
 import { loadState } from "../table";
-import { CLOSE_BUILD, ProposalProblem, createProposal, docFields, getProposal, listProposals, sendProposal, updateProposal } from "../proposals/store";
+import { CLOSE_BUILD, ProposalProblem, createProposal, docFields, getProposal, linkDaysOf, listProposals, sendProposal, updateProposal } from "../proposals/store";
+import { PricingProblem, cleanPricing, priced } from "../proposals/pricing";
 import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
-import type { ProposalBlock, ProposalRec } from "../proposals/types";
+import type { Pricing, ProposalBlock, ProposalRec } from "../proposals/types";
 import { SENDER_DUTY } from "../proposals/types";
 import { memberView } from "./view";
 import { DISCOVERY_TARGET as TARGET, acceptInto, fieldLabel } from "../proposals/library";
@@ -162,6 +163,8 @@ async function proposalOut(ctx: Ctx, p: ProposalRec): Promise<ToolOut> {
     fields: p.fields,
     blanks: blanksOf(p.blocks, f),
     notes_from_calls: p.notes,
+    ...(p.pricing ? { pricing: pricingOut(p.pricing) } : {}),
+    link_days: p.linkDays === 0 ? "No end date" : p.linkDays,
     checklist: checks.map((c) => ({ pattern: c.label, done: c.ok, ...(c.missing ? { missing: c.missing } : {}) })),
     risk_flags: riskFlags(p, s?.high ?? null).map((r) => r.message),
     rates: s
@@ -173,7 +176,9 @@ async function proposalOut(ctx: Ctx, p: ProposalRec): Promise<ToolOut> {
             to: p.send.signer,
             status: p.send.status,
             sent_at: p.send.sentAt,
-            expires_at: p.send.expiresAt,
+            expires_at: p.send.expiresAt ?? "No end date",
+            ...(p.send.choice ? { chose: p.send.choice.summary, total: p.send.choice.total } : {}),
+            ...(p.send.waiting === "member" ? { waiting: "The client signed. It is finished, and the pipeline moves to Won, once the member countersigns on Merlin." } : {}),
             ...(p.send.viewedAt ? { opened_at: p.send.viewedAt } : {}),
             ...(p.send.signedAt ? { signed_at: p.send.signedAt, signed_copy: p.send.copyUrl } : {}),
             ...(p.send.declinedAt ? { declined_at: p.send.declinedAt, reason: p.send.declineReason } : {}),
@@ -197,7 +202,33 @@ export async function getProposalTool(ctx: Ctx, a: { proposal_id?: string }): Pr
   return proposalOut(ctx, await wrap(() => getProposal(ctx.member.token, a.proposal_id!, ctx.origin)));
 }
 
+/** The options and add-ons as Claude reads them back: each with its id, name and price in words. */
+const pricingOut = (pr: Pricing) => ({
+  options: pr.options.map((o) => ({ id: o.id, name: o.name, price: priced(o.price, o.billing), ...(o.note ? { note: o.note } : {}), ...(o.about ? { about: o.about } : {}), included: o.included, ...(o.recommended ? { recommended: true } : {}) })),
+  add_ons: pr.addOns.map((a) => ({ id: a.id, name: a.name, price: priced(a.price, a.billing), ...(a.about ? { about: a.about } : {}) })),
+  how_it_works: pr.options.length > 1 ? "The client picks one option and any add-ons on the proposal's page, sees the total and signs that choice." : "One price. The client can add any add-on before signing.",
+});
+
+export interface PricingArgs {
+  options?: { id?: string; name: string; price: number; billing?: "month" | "once"; note?: string; about?: string; included?: string[]; recommended?: boolean }[];
+  add_ons?: { id?: string; name: string; price: number; billing?: "month" | "once"; about?: string }[];
+}
+/** Claude's pricing as the proposal's (lib/proposals/pricing.ts cleans it): an option named as before keeps its id. */
+function pricingFrom(raw: PricingArgs | null, cur: Pricing | null): { options: unknown[]; addOns: unknown[] } | null {
+  if (raw === null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) throw new ToolProblem("pricing is { options: [{ name, price, billing?, included? }], add_ons?: [{ name, price, billing? }] }, or null for one price in the proposal's own words.");
+  const idOf = (list: { id: string; name: string }[] | undefined, x: { id?: string; name?: string }) => x.id ?? list?.find((y) => y.name.toLowerCase() === String(x.name ?? "").trim().toLowerCase())?.id;
+  return {
+    options: (Array.isArray(raw.options) ? raw.options : []).map((o) => ({ ...o, id: idOf(cur?.options, o) })),
+    addOns: (Array.isArray(raw.add_ons) ? raw.add_ons : []).map((a) => ({ ...a, id: idOf(cur?.addOns, a) })),
+  };
+}
+
 export interface UpsertArgs {
+  /** Up to 3 options and 6 add-ons for the client to pick from (Close), or null to go back to one price. */
+  pricing?: PricingArgs | null;
+  /** How long the signing link works once sent: 14, 30, 60 or 90 days, or 0 for no end date. */
+  link_days?: number;
   proposal_id?: string;
   template_id?: string;
   company_id?: string;
@@ -226,10 +257,22 @@ export async function createOrUpdateProposal(ctx: Ctx, a: UpsertArgs): Promise<T
   const token = ctx.member.token;
   const notes = a.notes ? (Array.isArray(a.notes) ? a.notes : []).map((n) => ({ key: String(n?.key ?? "pains"), text: String(n?.text ?? ""), at: new Date().toISOString() })) : undefined;
   let p: ProposalRec;
+  // The options to pick from and the link's length (Close): checked before anything is saved, so a bad one starts nothing.
+  const extras = (cur: ProposalRec | null) => ({ ...(a.pricing !== undefined ? { pricing: pricingFrom(a.pricing, cur?.pricing ?? null) } : {}), ...(a.link_days !== undefined ? { linkDays: a.link_days } : {}) });
+  if (a.link_days !== undefined) await wrap(async () => linkDaysOf(a.link_days));
+  if (a.pricing) {
+    try {
+      cleanPricing(pricingFrom(a.pricing, null));
+    } catch (e) {
+      if (e instanceof PricingProblem) throw new ToolProblem(e.message);
+      throw e;
+    }
+  }
   if (!a.proposal_id) {
     p = await wrap(() =>
       createProposal(token, { templateId: a.template_id ?? null, companyId: a.company_id, companyName: a.company_name, title: a.title, signer: a.signer, fields: a.fields, blocks: blocksFrom(a.blocks), notes, signerOnCall: a.signer_on_call, source: "claude" }, ctx.origin),
     );
+    if (a.pricing !== undefined || a.link_days !== undefined) p = await wrap(() => updateProposal(token, p.id, extras(p), ctx.origin));
   } else {
     const cur = await wrap(() => getProposal(token, a.proposal_id!, ctx.origin));
     p = await wrap(() =>
@@ -245,6 +288,7 @@ export async function createOrUpdateProposal(ctx: Ctx, a: UpsertArgs): Promise<T
           ...(a.signer_on_call !== undefined ? { signerOnCall: a.signer_on_call } : {}),
           ...(a.company_name !== undefined ? { companyName: a.company_name } : {}),
           ...(a.company_id ? { companyId: a.company_id } : {}),
+          ...extras(cur),
           source: "claude",
         },
         ctx.origin,
@@ -261,18 +305,39 @@ export async function createOrUpdateProposal(ctx: Ctx, a: UpsertArgs): Promise<T
   };
 }
 
-export async function sendForSignature(ctx: Ctx, a: { proposal_id: string; signer_name?: string; signer_email?: string; signer_title?: string; message?: string; confirm?: boolean }): Promise<ToolOut> {
+const LINK_WORDS = (days: number) => (days === 0 ? "no end date" : `${days} days`);
+const MY_SIGNATURE: Record<string, string> = {
+  now: "The member's saved signature goes on it as it is sent. When the client signs, it is done.",
+  after: "The client signs first. Then the member countersigns on Merlin, and only then is it finished and the pipeline moves to Won.",
+  none: "No signature from the member: it says prepared and sent by them.",
+};
+
+export async function sendForSignature(
+  ctx: Ctx,
+  a: { proposal_id: string; signer_name?: string; signer_email?: string; signer_title?: string; message?: string; link_days?: number; my_signature?: "now" | "after" | "none"; confirm?: boolean },
+): Promise<ToolOut> {
   const token = ctx.member.token;
   const p = await wrap(() => getProposal(token, String(a.proposal_id ?? ""), ctx.origin));
   const signer = a.signer_email || a.signer_name ? { name: a.signer_name ?? p.signer?.name ?? "", email: a.signer_email ?? p.signer?.email ?? "", ...(a.signer_title ? { title: a.signer_title } : p.signer?.title ? { title: p.signer.title } : {}) } : p.signer;
   const v = await wrap(() => listProposals(token, ctx.origin));
+  const days = a.link_days === undefined ? p.linkDays : await wrap(async () => linkDaysOf(a.link_days));
+  if (a.my_signature !== undefined && !["now", "after", "none"].includes(a.my_signature)) throw new ToolProblem('my_signature is "now", "after" or "none".');
+  // Their own signature: as asked here, else as kept on the proposal; "now" needs a saved signature, so without one it is none.
+  const mode = a.my_signature ?? (p.memberSign === "now" && !v.mySignature ? "none" : p.memberSign);
   if (!a.confirm) {
     const f = docFields({ ...p, signer });
     const blanks = blanksOf(p.blocks, f);
     const checks = checklist({ ...p, signer, fields: f });
     return {
       confirmed: false,
-      would_send: { to: signer ?? "Nobody yet: send signer_name and signer_email", title: p.title, version: p.status === "draft" ? p.version : p.version + 1 },
+      would_send: {
+        to: signer ?? "Nobody yet: send signer_name and signer_email",
+        title: p.title,
+        version: p.status === "draft" ? p.version : p.version + 1,
+        link: days === 0 ? "No end date" : `Works for ${days} days`,
+        ...(v.canSend ? { members_signature: MY_SIGNATURE[mode] } : {}),
+        ...(p.pricing ? { the_client_picks_from: p.pricing.options.map((o) => `${o.name}, ${priced(o.price, o.billing)}`) } : {}),
+      },
       can_send: v.canSend,
       ...(blanks.length ? { blanks, blanks_in_words: blanksInWords(blanks, 8) } : {}),
       missing_from_checklist: checks.filter((c) => !c.ok).map((c) => c.missing),
@@ -280,13 +345,14 @@ export async function sendForSignature(ctx: Ctx, a: { proposal_id: string; signe
       message: v.canSend
         ? blanks.length
           ? "It can't go out yet: fill the blanks first. Nothing was sent."
-          : "Nothing was sent. The client gets an email with a signed link (30 days), confirms their email with a code, and signs on Merlin. No account needed." + ` ${SENDER_DUTY}`
+          : `Nothing was sent. The client gets an email with a signed link (${LINK_WORDS(days)}), confirms their email with a code, and signs on Merlin. No account needed.` + ` ${SENDER_DUTY}`
         : "Nothing was sent. Sending for signature is on Close.",
       next: "Show the member who it goes to and what's missing. Only if they say send, call again with the same arguments and confirm: true.",
     };
   }
-  const r = await wrap(() => sendProposal(token, p.id, { signer: signer ?? undefined, message: a.message }, ctx.origin));
-  return { confirmed: true, message: r.message, proposal_id: p.id, version: r.proposal.version, status: r.proposal.status, document_sha256: r.proposal.send?.hash };
+  if (mode === "now" && !v.mySignature) throw new ToolProblem('The member has no saved signature on Merlin yet. They can save one on Merlin (Proposals, Send for signature), or pass my_signature "after" (they countersign once the client signed) or "none".');
+  const r = await wrap(() => sendProposal(token, p.id, { signer: signer ?? undefined, message: a.message, linkDays: days, ...(v.canSend ? { memberSign: mode } : {}) }, ctx.origin));
+  return { confirmed: true, message: r.message, proposal_id: p.id, version: r.proposal.version, status: r.proposal.status, document_sha256: r.proposal.send?.hash, link: days === 0 ? "No end date" : `Works for ${days} days` };
 }
 
 /* ---------- from a call, changes by talking, contracts ---------- */
@@ -525,7 +591,7 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
     {
       title: "Create or update a proposal",
       description:
-        "Save the proposal you drafted (usually from get_proposal_kit and the member's call) on Merlin, where the member edits it, and it is sent and signed. Without proposal_id it starts one: template_id from list_proposal_templates (or none for a blank page) and the company (company_id from search_companies, or company_name). fields fills the {{keys}} (\"goals.target\", \"pains\" with one item a line, \"pricing.monthlyFee\" like \"$12,000\"). blocks replaces the block list in order (block_id, and title and body when you write them; body may use {{keys}}). notes are lines from the call the member agreed to keep (key from the template's from_a_call list): paraphrase them, never paste the transcript, and never send the whole transcript. signer is the person who signs for the client: send it to them, not a go-between. Saving after it was sent makes a new version and the old link stops working. Returns the proposal with its blanks, checklist and risk flags. Building proposals is Close (the trial included): on another plan it refuses with the upgrade link, and the member's saved templates stay stored for when they upgrade.",
+        "Save the proposal you drafted (usually from get_proposal_kit and the member's call) on Merlin, where the member edits it, and it is sent and signed. Without proposal_id it starts one: template_id from list_proposal_templates (or none for a blank page) and the company (company_id from search_companies, or company_name). fields fills the {{keys}} (\"goals.target\", \"pains\" with one item a line, \"pricing.monthlyFee\" like \"$12,000\"). blocks replaces the block list in order (block_id, and title and body when you write them; body may use {{keys}}). notes are lines from the call the member agreed to keep (key from the template's from_a_call list): paraphrase them, never paste the transcript, and never send the whole transcript. signer is the person who signs for the client: send it to them, not a go-between. pricing gives the client options to pick from instead of one price (1 to 3 options and up to 6 add-ons; they pick one on the proposal's page, see the total and sign that choice; send the whole set each time, null for one price again). link_days sets how long the signing link works once it is sent (14, 30, 60 or 90, or 0 for no end date). Saving after it was sent makes a new version and the old link stops working. Returns the proposal with its blanks, checklist and risk flags. Building proposals is Close (the trial included): on another plan it refuses with the upgrade link, and the member's saved templates stay stored for when they upgrade.",
       inputSchema: {
         proposal_id: z.string().optional(),
         template_id: z.string().optional().describe("A template id, for a new proposal: Merlin's, or one of the member's own (mt_...)."),
@@ -537,6 +603,28 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
         notes: z.array(z.object({ key: z.string(), text: z.string() })).optional().describe("Lines from the call the member agreed to keep, paraphrased. Added to what's there."),
         signer: z.object({ name: z.string(), email: z.string(), title: z.string().optional() }).optional(),
         signer_on_call: z.boolean().optional().describe("Was the person who signs on the call."),
+        pricing: z
+          .object({
+            options: z
+              .array(
+                z.object({
+                  id: z.string().optional().describe("The option's id from get_proposal, to keep it when changing it."),
+                  name: z.string(),
+                  price: z.number().describe("In dollars, a number: 12000."),
+                  billing: z.enum(["month", "once"]).optional().describe("A month (the default) or once."),
+                  note: z.string().optional().describe("A short line under the price, like \"2 days a week\"."),
+                  about: z.string().optional(),
+                  included: z.array(z.string()).optional().describe("What this option includes, a line each."),
+                  recommended: z.boolean().optional().describe("At most one option."),
+                }),
+              )
+              .max(3),
+            add_ons: z.array(z.object({ id: z.string().optional(), name: z.string(), price: z.number(), billing: z.enum(["month", "once"]).optional(), about: z.string().optional() })).max(6).optional(),
+          })
+          .nullable()
+          .optional()
+          .describe("Options for the client to pick from on the proposal's page (Close): 1 to 3 options, each named and priced, and up to 6 add-ons. They pick one, see the total and sign that choice. Send the whole set each time; null goes back to one price in the proposal's own words."),
+        link_days: z.number().optional().describe("How long the signing link works once sent: 14, 30 (the default), 60 or 90 days, or 0 for no end date."),
       },
       annotations: { title: "Create or update a proposal", ...WRITE },
     },
@@ -547,13 +635,15 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
     {
       title: "Send a proposal for signature",
       description:
-        "Send a proposal to the client who signs, through Merlin's own e-signature: they get an email with a signed link (30 days, no account), confirm their email with a 6-digit code, agree to sign electronically, type their name and sign. Both sides get the signed copy with its audit trail, and the company's pipeline moves. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it sends nothing and says who it would go to and what's missing. Only if the member says send, call again with the same arguments and confirm: true. Trial and Pro.",
+        "Send a proposal to the client who signs, through Merlin's own e-signature: they get an email with a signed link (30 days unless link_days says 14, 60 or 90, or 0 for no end date; no account), confirm their email with a 6-digit code, agree to sign electronically, type their name and sign. Both sides get the signed copy with its audit trail, and the company's pipeline moves to Won once it is fully signed (with my_signature after, when the member has countersigned on Merlin). ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it sends nothing and says who it would go to and what's missing. Only if the member says send, call again with the same arguments and confirm: true. Trial and Pro.",
       inputSchema: {
         proposal_id: z.string(),
         signer_name: z.string().optional(),
         signer_email: z.string().optional(),
         signer_title: z.string().optional(),
         message: z.string().optional().describe("A short note above the link in the email, in the member's words."),
+        link_days: z.number().optional().describe("How long the link works: 14, 30, 60 or 90 days, or 0 for no end date. Without it, what the proposal has (30 unless set)."),
+        my_signature: z.enum(["now", "after", "none"]).optional().describe("The member's own signature (Close): now (their saved signature goes on as it is sent), after (they countersign on Merlin once the client signed), or none."),
         confirm: z.boolean().optional(),
       },
       annotations: { title: "Send a proposal for signature", readOnlyHint: false, destructiveHint: false, openWorldHint: true },

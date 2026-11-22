@@ -18,6 +18,15 @@
  * [data-section], a proposal's blocks (.sg-doc .sg-block, "b0", "b1"...) and a document's pages
  * (.pdf-page, "p0", "p1"...) stand in.
  *
+ * The client's proposal page (ProposalView.tsx) nests its sections: "scope" holds the scope's
+ * blocks, a block holds parts that open and close. So a section marked data-section-group (it only
+ * holds others) or data-section-part (a part of one, an add-on's row) is never counted itself, and
+ * of two sections on screen where one is inside the other, the inner one gets the second. That
+ * way the time lands on the section the sender wrote, under its own title.
+ *
+ * Once it is signed nothing is read any more: `mode: "downloads"` sends only downloaded(), for
+ * the signed PDF, from the signing page or the signed copy (the copy's own link is the token).
+ *
  * Each second, while the tab is visible and the reader did something in the last 30 seconds, the
  * section most on screen gets that second (and the option most on screen, apart). The sums go to
  * POST /api/sign/activity every 15 seconds and when the page is hidden or closed, at most a minute
@@ -26,7 +35,7 @@
  * fingerprint.
  */
 import { useEffect, useMemo, useRef } from "react";
-import { disclosureText } from "@/lib/close/types";
+import { disclosureText, signedDisclosureText } from "@/lib/close/types";
 
 const URL = "/api/sign/activity";
 const TICK_MS = 1000;
@@ -51,33 +60,39 @@ function parts(kind: "section" | "option"): { el: HTMLElement; id: string; label
     return [...document.querySelectorAll<HTMLElement>("[data-option]")]
       .map((el) => ({ el, id: el.dataset.option ?? "", label: el.dataset.optionTitle || headingOf(el) }))
       .filter((x) => ID.test(x.id));
-  const tagged = [...document.querySelectorAll<HTMLElement>("[data-section]")].filter((el) => !el.hasAttribute("data-option"));
-  if (tagged.length) return tagged.map((el) => ({ el, id: el.dataset.section ?? "", label: el.dataset.sectionTitle || headingOf(el) })).filter((x) => ID.test(x.id));
+  const all = [...document.querySelectorAll<HTMLElement>("[data-section]")].filter((el) => !el.hasAttribute("data-option"));
+  const tagged = all.filter((el) => !el.hasAttribute("data-section-group") && !el.hasAttribute("data-section-part"));
+  if (all.length) return tagged.map((el) => ({ el, id: el.dataset.section ?? "", label: el.dataset.sectionTitle || headingOf(el) })).filter((x) => ID.test(x.id));
   const blocks = [...document.querySelectorAll<HTMLElement>(".sg-doc .sg-block")];
   if (blocks.length) return blocks.map((el, i) => ({ el, id: `b${i}`, label: headingOf(el) }));
   return [...document.querySelectorAll<HTMLElement>(".pdf-page")].map((el, i) => ({ el, id: `p${i}`, label: `Page ${i + 1}` }));
 }
 
-/** The part most on screen now, or null. */
+/** The part most on screen now, or null. Of one inside another, the inner one. */
 function onScreen(list: { el: HTMLElement; id: string; label: string }[]) {
   const vh = window.innerHeight || 1;
-  let best: (typeof list)[number] | null = null;
-  let bestPx = 0;
+  const seen: { x: (typeof list)[number]; px: number }[] = [];
   for (const x of list) {
     const r = x.el.getBoundingClientRect();
     const px = Math.min(r.bottom, vh) - Math.max(r.top, 0);
     // On screen: a third of the screen, or half of a short part.
-    if (px > bestPx && (px >= vh / 3 || px >= r.height / 2)) (best = x), (bestPx = px);
+    if (px > 0 && r.height > 0 && (px >= vh / 3 || px >= r.height / 2)) seen.push({ x, px });
   }
-  return best;
+  let best: (typeof seen)[number] | null = null;
+  for (const c of seen) {
+    if (seen.some((o) => o !== c && c.x.el.contains(o.x.el))) continue;
+    if (!best || c.px > best.px) best = c;
+  }
+  return best?.x ?? null;
 }
 
 /**
  * Track this signing link's reading. `token` is the link's own; off (`enabled: false`) does
  * nothing. Returns the calls the page makes when the reader picks, adds or downloads.
  */
-export function useProposalActivity(token: string, opts: { enabled?: boolean } = {}): ProposalActivity {
+export function useProposalActivity(token: string, opts: { enabled?: boolean; mode?: "read" | "downloads" } = {}): ProposalActivity {
   const enabled = opts.enabled !== false && !!token;
+  const reading = enabled && opts.mode !== "downloads";
   const st = useRef({ off: false, queue: [] as Ev[], sec: new Map<string, number>(), opt: new Map<string, number>(), named: new Set<string>(), labels: new Map<string, string>() });
 
   const send = (beacon: boolean) => {
@@ -110,7 +125,7 @@ export function useProposalActivity(token: string, opts: { enabled?: boolean } =
   };
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!reading) return;
     const s = st.current;
     s.queue.push({ t: "open" });
     send(false);
@@ -146,36 +161,55 @@ export function useProposalActivity(token: string, opts: { enabled?: boolean } =
       send(true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, token]);
+  }, [reading, token]);
 
   return useMemo<ProposalActivity>(
     () => ({
       picked: (id, label) => {
-        if (!enabled || !ID.test(id)) return;
+        if (!reading || !ID.test(id)) return;
         st.current.queue.push({ t: "pick", id, ...(label ? { label: label.slice(0, 60) } : {}) });
         send(false);
       },
       addon: (id, on, label) => {
-        if (!enabled || !ID.test(id)) return;
+        if (!reading || !ID.test(id)) return;
         st.current.queue.push({ t: "addon", id, on, ...(label ? { label: label.slice(0, 60) } : {}) });
         send(false);
       },
       downloaded: () => {
         if (!enabled) return;
+        // An earlier answer may have said "off" (the link stopped being read once it was signed): a download is still told.
+        if (!reading) st.current.off = false;
         st.current.queue.push({ t: "dl" });
         send(false);
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [enabled, token],
+    [enabled, reading, token],
   );
 }
 
-/** The line near the footer that tells the client, in plain words. */
-export function ActivityNotice({ sender }: { sender?: string | null }) {
+/**
+ * The line near the footer that tells the client, in plain words. On a signed page (`signed`):
+ * reading isn't counted any more, only a download of the signed PDF.
+ */
+export function ActivityNotice({ sender, signed }: { sender?: string | null; signed?: boolean }) {
   return (
-    <p className="sg-notice" data-activity-notice>
-      {disclosureText(sender)}
+    <p className="sg-notice" data-activity-notice={signed ? "signed" : "open"}>
+      {signed ? signedDisclosureText(sender) : disclosureText(sender)}
     </p>
+  );
+}
+
+/**
+ * The signed PDF's download link, telling the sender it was downloaded (one "dl" beacon with the
+ * page's own link as the key: a signing link, or the signed copy's). The link works the same
+ * without it.
+ */
+export function TrackedDownload({ token, href, className, children }: { token: string; href: string; className?: string; children: React.ReactNode }) {
+  const track = useProposalActivity(token, { mode: "downloads" });
+  return (
+    <a className={className} href={href} data-tracked-download onClick={() => track.downloaded()}>
+      {children}
+    </a>
   );
 }

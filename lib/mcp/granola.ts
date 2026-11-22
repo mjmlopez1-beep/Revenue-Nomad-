@@ -8,11 +8,32 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { GranolaProblem, callsFor, granolaOn, linkOf } from "../granola";
-import { loadState } from "../table";
+import { GranolaProblem, callsFor, granolaOn, granolaTranscript, linkOf } from "../granola";
+import { GRANOLA_WORDS } from "../granola/types";
+import { loadState, tableInternals as T } from "../table";
+import { setGranolaTranscript, type GranolaTranscript } from "./proposals";
 import { ToolProblem, type Ctx, type ToolOut } from "./tools";
 
 type Run = (ctx: Ctx, work: () => Promise<ToolOut>) => Promise<CallToolResult>;
+
+/**
+ * draft_proposal_from_call with a granola_note_id (lib/mcp/proposals.ts): Merlin reads that one
+ * call's transcript from the member's Granola, for that draft alone, and keeps none of it. Only
+ * while Granola is switched on, the member connected it, and they are on Close (the trial counts):
+ * drafting from a call is Close, as in the app's picker (lib/granola transcriptForPicker).
+ */
+export const granolaForDraft: GranolaTranscript = async (memberId, noteId) => {
+  if (!granolaOn()) throw new ToolProblem("Merlin can't read Granola notes for this member yet. Read the call in Granola yourself and pass its text as transcript.");
+  if (!T.closeNow(await loadState(), memberId)) throw new ToolProblem(GRANOLA_WORDS.close);
+  try {
+    const t = await granolaTranscript(memberId, noteId);
+    return { transcript: t.text, attendees: t.attendees.map((a) => ({ name: a.name || undefined, email: a.email || undefined })), when: t.when };
+  } catch (e) {
+    if (e instanceof GranolaProblem) throw new ToolProblem(`${e.message} Or pass the call's text as transcript.`);
+    throw e;
+  }
+};
+setGranolaTranscript(granolaForDraft);
 
 export async function listGranolaCalls(ctx: Ctx, a: { company_id?: string; email?: string }): Promise<ToolOut> {
   if (!granolaOn()) throw new ToolProblem("Granola isn't switched on for Merlin.");

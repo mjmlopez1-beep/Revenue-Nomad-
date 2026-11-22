@@ -262,6 +262,8 @@ export interface StoredProposal {
   pricing?: Pricing;
   /** The member's own signature for the next send. Absent: "now" when they have a saved signature, else "none". */
   memberSign?: MemberSignMode;
+  /** How long the next send's link works, when it was picked ahead of sending (the connector): 14, 30, 60 or 90 days, or 0 for no end date. Absent: 30. */
+  linkDays?: LinkDays;
   /** Earlier versions kept when a change was accepted or a version restored (lib/proposals/change.ts), oldest first. */
   versions?: ProposalVersion[];
 }
@@ -333,6 +335,8 @@ export interface ProposalRec {
   pricing: Pricing | null;
   /** The member's own signature for the next send, as it will be frozen (MemberSignMode). */
   memberSign: MemberSignMode;
+  /** How long the next send's link works: 14, 30 (unless picked), 60 or 90 days, or 0 for no end date. */
+  linkDays: LinkDays;
   version: number;
   status: ProposalStatus;
   createdAt: string;

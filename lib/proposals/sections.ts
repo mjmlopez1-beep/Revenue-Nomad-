@@ -44,7 +44,7 @@ export interface Placed {
   sections: { title: string; body: string }[];
 }
 export interface Arranged {
-  cover: { lead: string } | null;
+  cover: { lead: string; title: string } | null;
   scope: Placed[];
   invest: Placed[];
   terms: Placed[];
@@ -121,7 +121,7 @@ export function arrange(d: Pick<FrozenDoc, "blocks">): Arranged {
         .filter((l) => l.trim() && !/^(prepared (for|by)|version\b)/i.test(l.trim()) && !/·\s*version\s+\d+/i.test(l))
         .join("\n")
         .trim();
-      out.cover = { lead };
+      out.cover = { lead, title: b.title };
       return;
     }
     const placed: Placed = { kind, id: idFor(kind === "custom" ? "custom" : kind), title: b.title, text: b.text, sections: [] };

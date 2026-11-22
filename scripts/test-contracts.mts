@@ -322,6 +322,19 @@ async function main() {
     return [f, src.replace(ownClaude, "").replace(/const prompt = claudePrompt[^\n]*/g, "").replace(/export function claudePrompt[\s\S]*?\n}\n/, "").replace(/CLAUDE_NEW[^\n]*/g, "")] as const;
   });
   check("  nor do the screens for them (contracts, Change it, start from the call)", ui.every(([, src]) => !AIW.test(src)), ui.filter(([, src]) => AIW.test(src)).map(([f, src]) => [f, src.match(new RegExp(`.{0,60}(Claude|Anthropic).{0,60}`))?.[0]]));
+  // The same for what the other Close work added: after it goes out (activity, alerts, reminders), what the client sees and signs
+  // (options, sealed PDFs, the member's signature, Check a copy) and Granola's picker. "Claude" stays only where the member connects
+  // their own Claude: Integrations, Use it in Claude, Connected apps and the connector's own tools.
+  const strip = (f: string) => readFileSync(path.join(import.meta.dirname, "..", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+  const closeUi = [
+    "app/post/Activity.tsx", "app/post/Notifications.tsx", "app/post/SendReminders.tsx", "app/sign/activity.tsx", "lib/close/alerts.ts", "lib/close/rules.ts", "lib/close/reminders.ts", "lib/close/renewal.ts", "lib/close/types.ts", "lib/notify/format.ts",
+    "app/sign/ProposalView.tsx", "app/sign/Sign.tsx", "app/sign/DocSign.tsx", "app/sign/doc.tsx", "app/signed/DocCopy.tsx", "app/signed/[token]/page.tsx", "app/check/CheckView.tsx", "app/post/PricingEditor.tsx", "app/post/MySignature.tsx", "app/post/LinkDays.tsx",
+    "lib/proposals/emails.ts", "lib/documents/emails.ts", "lib/proposals/pricing.ts", "lib/proposals/sections.ts", "lib/proposals/pdf.ts", "lib/seal.ts",
+    "app/post/GranolaCallPicker.tsx", "app/post/GranolaSection.tsx", "app/post/granolaWords.ts", "app/post/granolaClient.ts", "lib/granola/types.ts",
+  ].map((f) => [f, strip(f)] as const);
+  check("  nor does anything after it goes out, on the client's page or in Granola's picker", closeUi.every(([, src]) => !AIW.test(src)), closeUi.filter(([, src]) => AIW.test(src)).map(([f, src]) => [f, src.match(new RegExp(`.{0,60}(Claude|Anthropic).{0,60}`))?.[0]]));
+  const ownPlaces = ["app/post/Integrations.tsx", "app/post/UseInClaude.tsx", "app/post/ConnectedApps.tsx"].map((f) => strip(f));
+  check("  Claude is named where the member connects their own: Integrations, Use it in Claude, Connected apps", ownPlaces.every((src) => /Claude/.test(src)) && ownPlaces.every((src) => !/Anthropic/.test(src)));
   const privacy = readFileSync(path.join(import.meta.dirname, "..", "app/privacy/Privacy.tsx"), "utf8");
   check("the Privacy page names Anthropic as the AI service behind Merlin's drafts, not training on it", privacy.includes("Anthropic (the AI service that writes Merlin's drafts)") && privacy.includes("don't let it train its models"));
 

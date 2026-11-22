@@ -22,6 +22,7 @@ const EXAMPLES = [
   "What does a fractional RevOps lead charge?",
   "Draft the [client] proposal from my call with [name] this morning. Use my [template name] template.",
   "Change my [client] proposal: make it two phases, an assessment first, then the ongoing role if they opt in.",
+  "Give [client] three options to pick from in my proposal, with a hiring add-on, and keep the link open for 60 days.",
   "Add my seat. I was the fractional [your title] at [a client you worked with] from [month and year] to [month and year].",
 ];
 /** A question with blanks to fill in before it is sent. */

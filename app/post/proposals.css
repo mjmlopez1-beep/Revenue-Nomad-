@@ -2137,3 +2137,10 @@ textarea.pp-field-in {
   font-weight: 800;
   color: var(--ink);
 }
+
+/* Contracts review: the member's own signature for when they sign last (contracts/ContractsHome.tsx). */
+.cu-mysig {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}

@@ -568,3 +568,20 @@
     grid-template-columns: minmax(0, 1fr) repeat(3, 48px);
   }
 }
+
+/* The reminder switches in a send sheet (SendReminders.tsx). */
+.sr {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.sr legend {
+  padding: 0;
+  margin-bottom: 2px;
+}
+.sr .pp-muted {
+  margin: 0;
+}

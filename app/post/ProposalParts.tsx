@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiscoveryNote, ProposalRec, SignerInfo } from "@/lib/proposals/types";
 import { SENDER_DUTY, type LinkDays, type MemberSignMode } from "@/lib/proposals/types";
 import { LinkDaysPick } from "./LinkDays";
+import { SendReminders, saveReminders, useSendReminders } from "./SendReminders";
 import { Countersign, YourSignatureChoice, useMySignature } from "./MySignature";
 import { DISCOVERY_LABELS, DISCOVERY_TARGET, blanksInWords } from "@/lib/proposals/library";
 import { extract, transcriptOk, type Extraction, type Suggestion } from "@/lib/proposals/extract";
@@ -295,11 +296,15 @@ export function SendSheet({
   // Their own signature on it (MySignature.tsx): now, after the client's, or none.
   const [mode, setMode] = useState<MemberSignMode>(p.memberSign ?? "now");
   const [mySig, setMySig] = useMySignature();
-  const [days, setDays] = useState<LinkDays>(30);
+  const [days, setDays] = useState<LinkDays>(p.linkDays ?? 30);
+  // The reminders to the signer (SendReminders.tsx, lib/close): each on unless turned off here, saved just before it goes.
+  const [rem, setRem] = useSendReminders(p.id, canSend);
   const ok = s.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s.email.trim()) && blanks.length === 0 && canSend && email && (mode !== "now" || !!mySig.sig);
   const go = async () => {
     setBusy(true);
     setErr(null);
+    const off = await saveReminders(p.id, rem);
+    if (off) return setBusy(false), setErr(off);
     const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note, memberSign: mode, linkDays: days });
     setBusy(false);
     if (r.error) return setErr(r.error);
@@ -339,6 +344,7 @@ export function SendSheet({
           <textarea className="input pp-note" rows={2} maxLength={600} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Great talking today. Here's the plan we discussed." />
         </label>
         {canSend && <LinkDaysPick value={days} onChange={setDays} />}
+        {canSend && <SendReminders value={rem} onChange={setRem} noEnd={days === 0} disabled={busy} />}
         {canSend && mySig.loaded && <YourSignatureChoice mode={mode} onMode={setMode} sig={mySig.sig} onSig={setMySig} name={mySig.name} title={mySig.title} />}
         {blanks.length > 0 && (
           <p className="pp-warn">

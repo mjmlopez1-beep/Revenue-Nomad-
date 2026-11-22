@@ -4,7 +4,7 @@
  * "New proposal from a call": start from the conversation the member already had, in three steps.
  *
  *  1. Where's the conversation: From Granola (a slot the Granola picker renders into, which hands
- *     back the transcript; until it's there, the card points to Integrations), a transcript pasted
+ *     back the transcript; there only while Granola is switched on for Merlin), a transcript pasted
  *     or dropped (.txt, .vtt, .srt, .md, or a .docx read here in the browser), or "Tell Merlin what
  *     was agreed", typed or said (the browser's speech recognition, where there is one).
  *  2. Which of their templates: theirs first, the best fit for what was asked for marked
@@ -18,13 +18,12 @@
  * ready": what was done, the things to check (anything the call didn't settle is a labelled blank,
  * never guessed), and where each part came from.
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProposalRec, ProposalsView, TemplateChoice } from "@/lib/proposals/types";
 import { DISCOVERY_TARGET, acceptInto, blanksInWords, blanksOf, docFields, fieldLabel } from "@/lib/proposals/library";
 import { extract, transcriptOk } from "@/lib/proposals/extract";
 import { bestTemplate, browserInflateRaw, docxText, properCase, readTerms } from "@/lib/proposals/startCall";
 import { IconCheck, IconChevron, useToast, errorText } from "../ui/shared";
-import { useUi } from "./ui";
 import { MicButton, useSpeech } from "./ChangeIt";
 import { LiveView, useLive } from "./Live";
 import { LinkCompany } from "./ProposalLink";
@@ -119,8 +118,12 @@ export interface CallPick {
   /** When the call was, ISO. */
   when?: string;
 }
-/** The slot "From Granola" renders into: the picker, given the company and the signer's email, hands back a transcript. */
-export type GranolaSlot = (o: { companyId: string | null; signerEmail?: string; onPick: (c: CallPick) => void }) => React.ReactNode;
+/**
+ * The slot "From Granola" renders into: the picker (GranolaCallPicker.tsx, wired in Proposals.tsx),
+ * given the company, the signer's email and the call picked so far, hands back a transcript, or
+ * sends the member to paste one instead.
+ */
+export type GranolaSlot = (o: { companyId: string | null; companyName?: string; signerEmail?: string; pickedId?: string | null; onPick: (c: CallPick) => void; onPaste: () => void }) => React.ReactNode;
 
 type Source = "granola" | "paste" | "agreed";
 type Ready = { proposal: ProposalRec; toFix: string[]; done: string[]; check: string[]; used: { from: string; what: string }[]; site?: string | null };
@@ -148,6 +151,7 @@ export function StartSheet({
   onMade,
   onTemplate,
   granolaSlot,
+  granolaFirst,
 }: {
   data: ProposalsView;
   infos: CoInfo[];
@@ -155,17 +159,27 @@ export function StartSheet({
   onClose: () => void;
   onMade: (p: ProposalRec, toFix?: string[]) => void;
   onTemplate: (t: TemplateChoice) => void;
-  /** "From Granola": the picker, when Merlin has the Granola connection. Without it, the card points to Integrations. */
+  /** "From Granola": the picker, while Granola is switched on for Merlin (RN_GRANOLA). Without it there is no Granola card at all: paste, drop or say what was agreed. */
   granolaSlot?: GranolaSlot;
+  /** Start on "From Granola" (the member has Granola connected). */
+  granolaFirst?: boolean;
 }) {
   const toast = useToast();
-  const ui = useUi();
   const known = useMemo(() => infos.filter((i) => !i.c.hidden && i.c.name).sort((a, b) => a.c.name.localeCompare(b.c.name)), [infos]);
   const preset = companyId ? infos.find((i) => i.c.id === companyId) : undefined;
   const [q, setQ] = useState(preset && !preset.c.hidden ? preset.c.name : "");
   const [pick, setPick] = useState<string | null>(companyId);
-  const [src, setSrc] = useState<Source>(granolaSlot ? "granola" : "paste");
+  const [src, setSrc] = useState<Source>(granolaSlot && granolaFirst ? "granola" : "paste");
+  const [srcPicked, setSrcPicked] = useState(false);
   const [text, setText] = useState("");
+  // The Granola call the transcript came from, shown as chosen in the picker.
+  const [noteId, setNoteId] = useState<string | null>(null);
+  // Granola's status arrives a moment after the sheet opens: start there once it says connected, unless they already chose or typed.
+  useEffect(() => {
+    if (granolaSlot && granolaFirst && !srcPicked && !text && !agreed) setSrc("granola");
+    if (!granolaSlot && src === "granola") setSrc("paste");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!granolaSlot, granolaFirst]);
   const [agreed, setAgreed] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [drop, setDrop] = useState(false);
@@ -207,6 +221,7 @@ export function StartSheet({
   const takeCall = (c: CallPick) => {
     setText(c.transcript);
     setFileName(null);
+    setNoteId(c.noteId ?? null);
     setSrc("granola");
     if (c.when) setDate(c.when.slice(0, 10));
     const them = c.attendees?.find((a) => a.name && a.name.trim().toLowerCase() !== data.me.name.trim().toLowerCase() && a.email?.toLowerCase() !== data.me.email.toLowerCase());
@@ -419,7 +434,7 @@ export function StartSheet({
     );
 
   const card = (s: Source, t: string, sub: string) => (
-    <button type="button" className="sc-opt" aria-pressed={src === s} data-on={src === s} onClick={() => setSrc(s)}>
+    <button type="button" className="sc-opt" aria-pressed={src === s} data-on={src === s} onClick={() => (setSrc(s), setSrcPicked(true))}>
       <span className="sc-opt-t">{t}</span>
       <span className="sc-opt-s">{sub}</span>
     </button>
@@ -476,25 +491,17 @@ export function StartSheet({
           1. Where&#39;s the conversation?
         </h2>
         <div className="sc-opts">
-          {card("granola", "From Granola", granolaSlot ? "Pick the call, and Merlin reads its transcript." : "Pick a call from your Granola notes.")}
+          {granolaSlot && card("granola", "From Granola", "Pick the call, and Merlin reads its transcript.")}
           {card("paste", "Paste or drop a transcript", "From Zoom, Gong, Otter or anywhere else.")}
           {card("agreed", "Tell Merlin what was agreed", "Type or talk for a minute. Good for calls you didn't record.")}
         </div>
-        {src === "granola" &&
-          (granolaSlot ? (
-            /* The Granola picker goes here (lib/granola): it hands back the transcript, like a dropped file. */
-            <div className="sc-granola" data-slot="granola">
-              {granolaSlot({ companyId: pick, signerEmail: signer.email || undefined, onPick: takeCall })}
-              {text && <p className="pp-muted">{text.trim().split(/\s+/).length.toLocaleString("en-US")} words from Granola</p>}
-            </div>
-          ) : (
-            <div className="sc-granola" data-slot="granola">
-              <p className="pp-help">Connect Granola in Integrations, and your calls show here to pick from. Until then, paste or drop the transcript.</p>
-              <button type="button" className="btn btn-sm" onClick={() => (onClose(), ui.openPage("integrations"))}>
-                Connect Granola in Integrations
-              </button>
-            </div>
-          ))}
+        {src === "granola" && granolaSlot && (
+          /* The Granola picker (GranolaCallPicker.tsx, lib/granola): it hands back the transcript, like a dropped file. */
+          <div className="sc-granola" data-slot="granola">
+            {granolaSlot({ companyId: pick, companyName: company || undefined, signerEmail: signer.email || undefined, pickedId: noteId, onPick: takeCall, onPaste: () => (setSrc("paste"), setSrcPicked(true)) })}
+            {text && noteId && <p className="pp-muted">{text.trim().split(/\s+/).length.toLocaleString("en-US")} words from Granola</p>}
+          </div>
+        )}
         {src === "paste" && (
           <div
             className="pp-drop"

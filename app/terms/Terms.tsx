@@ -241,9 +241,22 @@ export function TermsView({ support, starter }: { support: string | null; starte
             The seal shows whether a copy is the one signed; it is not a certificate-based signature inside the PDF.
           </p>
           <p className="cl-p">
-            On Close, Merlin shows you when your client opens it, how many people read it and how long they spend on each section and price, and tells your client so
-            on the page. It can remind them to sign on day 2 and day 7 and before the link closes, which you can turn off for each proposal, and it reminds you 30 days
-            before a signed term ends.
+            On {TIER_NAME.close}, Merlin shows you when your client opens a proposal or document you sent, how many people read it, how long they spend on each section
+            and price, and which option they pick, and tells your client so on the page. Once it is signed only a download of the signed PDF is counted, and that page
+            says so too. Merlin reminds the person who signs, by email on your behalf, 2 days after you send it if it isn&#39;t opened, 7 days after if it isn&#39;t
+            signed, and 2 days before the link closes (never for a link with no end date). You can turn each reminder off as you send and afterwards, and they stop
+            when it is signed, declined or withdrawn. Merlin also reminds you 30 days before a signed term ends.
+          </p>
+          <p className="cl-p">
+            You can also upload a contract as a PDF and send it for signature: on {TIER_NAME.close}, Merlin reads it to find where everyone signs and places the fields
+            for you to check. When you sign a document yourself, your saved signature can go on in one click. Check the fields, the signers and the order before you
+            send; you are responsible for them.
+          </p>
+          <p className="cl-p">
+            Merlin&#39;s own drafting and changes to a proposal are written by an AI service, Anthropic, through its API, from what you give Merlin for that request
+            (see the <a href="/privacy">Privacy Policy</a>). A draft can be wrong: read it, and settle every blank, before you send it. If you connect Granola with
+            your own Granola API key, Merlin reads a call&#39;s transcript from your Granola only when you pick that call to draft from, and doesn&#39;t keep it; you
+            are responsible for having the right to use that recording. Granola on Merlin is off until Revenue Nomad switches it on.
           </p>
           <p className="cl-p">Before you send, you confirm what Merlin asks of every sender:</p>
           <p className="lg-key">{SENDER_DUTY}</p>

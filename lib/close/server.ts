@@ -26,8 +26,8 @@ import { emailEnabled, sendEmail } from "../email";
 import { upgradeUrl } from "../plan";
 import { NOTIFICATIONS_PATH, emailLinker } from "../emailIn";
 import { baseOf, connectedFor, postNow, track } from "../notify/index";
-import { LIMITS, ProposalProblem, buildGate, copyLink, proposalInternals as PI, readSignToken, recOf, signLink, statusOf } from "../proposals/store";
-import { docCopyLink, docSignToken, docStatus, readDocSignToken, turnOf } from "../documents/store";
+import { LIMITS, ProposalProblem, awaitingMember, buildGate, copyLink, fullySignedAt, proposalInternals as PI, readCopyToken, readSignToken, recOf, signLink, statusOf, type ClientQuestionEvent, type HandOffEvent, type SignedEvent } from "../proposals/store";
+import { docCopyLink, docSignToken, docStatus, readDocCopyToken, readDocSignToken, turnOf } from "../documents/store";
 import { proposalEmail } from "../proposals/emails";
 import { docInviteEmail } from "../documents/emails";
 import { docFields } from "../proposals/library";
@@ -68,8 +68,16 @@ const peek = (s: State, id: string): ItemActivity | null => (s.close?.items?.[id
  * When the renewal clock starts: the signature, or, for a proposal the member countersigns, the
  * countersignature (fully signed). Null while it waits for the countersignature.
  */
-const signedBase = (it: ItemActivity | null | undefined, p: StoredProposal): string | null =>
-  it?.countersign ? it.countersign.fullAt ?? null : p.sends.find((x) => x.signed)?.signed?.at ?? null;
+const signedSend = (p: StoredProposal) => [...p.sends].reverse().find((x) => x.signed) ?? null;
+const signedBase = (_it: ItemActivity | null | undefined, p: StoredProposal): string | null => {
+  const x = signedSend(p);
+  return x ? fullySignedAt(x) : null;
+};
+/** The client signed and the member's countersignature is still to come (lib/proposals/store.ts signingState "client_signed"). */
+const waitsForMember = (p: StoredProposal | null | undefined): boolean => {
+  const x = p ? signedSend(p) : null;
+  return !!x && awaitingMember(x);
+};
 const devOf = (cookie: string) => createHmac("sha256", T.ID_KEY).update(`rn-reader:${cookie}`).digest("base64url").slice(0, 22);
 const COOKIE_RE = /^[A-Za-z0-9_-]{22,43}$/;
 const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, CAPS.id);
@@ -79,6 +87,27 @@ const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
 type Target =
   | { kind: "proposal"; itemId: string; memberId: string; link: string; open: boolean; p: StoredProposal; x: StoredSend }
   | { kind: "document"; itemId: string; memberId: string; link: string; open: boolean; d: StoredDocument; x: DocSigner };
+
+/**
+ * What a signed copy's link points at (/signed/<token>: a proposal's send, or a completed
+ * document), or a signing link whose own signature is in. Only a download of the signed PDF is
+ * counted through these: nothing is read once it is signed.
+ */
+function signedTarget(s: State, raw: unknown, nowMs: number): { kind: "proposal" | "document"; itemId: string; memberId: string; link: string } | null {
+  const t = target(s, raw, nowMs);
+  if (t) return t.kind === "proposal" ? (t.x.signed ? { kind: t.kind, itemId: t.itemId, memberId: t.memberId, link: t.link } : null) : t.x.signed ? { kind: t.kind, itemId: t.itemId, memberId: t.memberId, link: t.link } : null;
+  const sendId = readCopyToken(raw);
+  if (sendId) {
+    for (const p of s.proposals ?? []) {
+      const x = p.sends.find((y) => y.id === sendId);
+      if (x) return x.signed ? { kind: "proposal", itemId: p.id, memberId: p.memberId, link: x.id } : null;
+    }
+    return null;
+  }
+  const docId = readDocCopyToken(raw);
+  const d = docId ? (s.documents ?? []).find((y) => y.id === docId) : null;
+  return d && d.completed ? { kind: "document", itemId: d.id, memberId: d.memberId, link: d.id } : null;
+}
 
 const currentSend = (p: StoredProposal) => [...p.sends].reverse().find((x) => x.version === p.version) ?? null;
 const sendOpen = (x: StoredSend, nowMs: number) => !x.signed && !x.declined && !x.voided && !linkExpired(x.expiresAt, nowMs);
@@ -123,6 +152,10 @@ function labeller(t: Target) {
       const hit = blocks.find((b) => slug(b.title) === id);
       if (hit) return hit.title.slice(0, CAPS.label);
     }
+    // An option or add-on the proposal itself offers (lib/proposals/pricing.ts): its own name, whatever the page said.
+    const pr = t.x.doc.pricing;
+    const own = kind === "opt" ? pr?.options.find((o) => o.id === id)?.name : kind === "addon" ? pr?.addOns.find((o) => o.id === id)?.name : undefined;
+    if (own) return own.slice(0, CAPS.label);
     return fromPage ?? null;
   };
 }
@@ -147,8 +180,30 @@ export async function recordBeacon(a: { token: unknown; events: unknown; cookie:
   if (!parsed) return { status: 400, body: { error: "That didn't go through." } };
   const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
   const t0 = target(s0, a.token, nowMs);
-  if (!t0) return { status: 404, body: { error: GONE } };
-  if (!t0.open) return { status: 200, body: { ok: true, off: true } };
+  if (!t0 || !t0.open) {
+    // Signed: a download of the signed PDF is still told to the sender (from the signing page, or the signed copy's own link). Nothing else.
+    const d0 = signedTarget(s0, a.token, nowMs);
+    if (!d0) return t0 ? { status: 200, body: { ok: true, off: true } } : { status: 404, body: { error: GONE } };
+    const mine = a.memberToken ? memberByToken(seed, a.memberToken, s0) : null;
+    if (!parsed.events.some((e) => e.t === "dl") || mine?.id === d0.memberId || !T.closeNow(s0, d0.memberId, nowMs)) return { status: 200, body: { ok: true, off: true } };
+    const fresh = !a.cookie || !COOKIE_RE.test(a.cookie);
+    const cookie = fresh ? randomBytes(16).toString("base64url") : a.cookie!;
+    await T.mutate((s) => {
+      const d = signedTarget(s, a.token, nowMs);
+      if (!d) return;
+      const it = itemOf(s, d.itemId, d.kind, d.memberId);
+      const at = new Date(nowMs).toISOString();
+      // Told apart only when this browser read it before; a download makes no new reader.
+      const r = it.readers.find((y) => y.dev === devOf(cookie))?.id ?? "";
+      // One a minute from one browser is one download.
+      if (it.downloads.some((y) => y.r === r && nowMs - Date.parse(y.at) < 60_000)) return;
+      it.downloads.push({ r, at });
+      if (it.downloads.length > CAPS.downloads) it.downloads.splice(0, it.downloads.length - CAPS.downloads);
+      it.raw.push({ at, r, t: "dl" });
+      if (it.raw.length > CAPS.raw) it.raw.splice(0, it.raw.length - CAPS.raw);
+    });
+    return { status: 200, body: { ok: true }, ...(fresh ? { cookie } : {}) };
+  }
   const me = a.memberToken ? memberByToken(seed, a.memberToken, s0) : null;
   if (me && me.id === t0.memberId) return { status: 200, body: { ok: true, off: true } };
   if (!T.closeNow(s0, t0.memberId, nowMs)) return { status: 200, body: { ok: true, off: true } };
@@ -321,7 +376,7 @@ export async function afterSignerStep(token: unknown, origin?: string, nowMs = D
       if (t.kind === "proposal") {
         if (!t.x.signed && !t.x.declined) return null;
         // Waiting for the member's countersignature: afterClientSigned told them, afterFullySigned tells the rest.
-        if (t.x.signed && it.countersign && !it.countersign.fullAt) return null;
+        if (t.x.signed && (awaitingMember(t.x) || (it.countersign && !it.countersign.fullAt))) return null;
         if (it.alerts.done.includes(t.link)) return null;
         it.alerts.done.push(t.link);
         if (t.x.declined) return { ...b, kind: "signed", declined: { reason: t.x.declined.reason } };
@@ -427,6 +482,20 @@ export function afterFullySigned(itemId: string, o: { origin?: string; movePipel
     return { ...b, kind: "signed", signed: { option: null, fee: null, won: !!d.companyId, copyUrl: docCopyLink(o.origin, d) } };
   });
 }
+
+/**
+ * The proposal store's events as the sender's alerts (lib/proposals/store.ts setProposalHooks; these
+ * are its defaults): a question, passed on, and a signature. The client's signature with the
+ * member's still to come says "countersign to finish"; the last signature says "Signed". The store
+ * itself moves the pipeline to Won, once, when the send is fully signed (signProposal for a send the
+ * member doesn't countersign, countersignProposal for one they do), so nothing moves it here.
+ */
+export const closeHooks = {
+  onClientQuestion: (e: ClientQuestionEvent) => afterClientAsked(e.proposalId, { by: e.signer.name, text: e.text }, Date.parse(e.at) || Date.now()),
+  onHandOff: (e: HandOffEvent) => afterPassedOn(e.proposalId, { by: e.from.name, to: e.to.name }, Date.parse(e.at) || Date.now()),
+  onSigned: (e: SignedEvent) =>
+    e.state === "client_signed" ? afterClientSigned(e.proposalId, { by: e.by }, Date.parse(e.at) || Date.now()) : afterFullySigned(e.proposalId, { origin: e.origin }, Date.parse(e.at) || Date.now()),
+};
 
 /* ---------- the tick: reminders, waiting and timed alerts, new readers, renewals ---------- */
 
@@ -613,6 +682,7 @@ export async function activityView(token: string | null, id: string, origin?: st
     timeline: [],
     suggestion: null,
     reminders: [],
+    remindersOn: { d2: !it?.reminders.off.d2, d7: !it?.reminders.off.d7, expiry: !it?.reminders.off.expiry },
     renewal: null,
     gmail: null,
     disclosure: DISCLOSURE,
@@ -663,7 +733,9 @@ export async function activityView(token: string | null, id: string, origin?: st
     else tl.push({ at: v.at, strong: nameOf(v.r), text: `, ${ordinal(v.n)} visit${v.ms >= 30_000 ? `, ${minWords(v.ms)}` : ""}` });
   }
   for (const [k, at] of Object.entries(a.reminders.sent)) if (!k.includes(":") || links.length) tl.push({ at, text: "Reminder sent automatically" });
-  for (const dl of a.downloads) tl.push({ at: dl.at, text: `${nameOf(dl.r)} downloaded it` });
+  // A download after the signature is the signed PDF (the only thing counted once it is signed).
+  const signedAtMs = Date.parse((p ? signedSend(p)?.signed?.at : d?.completed?.at) ?? "");
+  for (const dl of a.downloads) tl.push({ at: dl.at, text: `${nameOf(dl.r)} downloaded ${Number.isFinite(signedAtMs) && Date.parse(dl.at) >= signedAtMs ? "the signed PDF" : "it"}` });
   if (p && x) {
     tl.push({ at: x.sentAt, text: "You sent it" });
     if (x.signed) tl.push({ at: x.signed.at, strong: firstName(x.signed.name), text: " signed it" });
@@ -688,7 +760,7 @@ export async function activityView(token: string | null, id: string, origin?: st
     base.gmail = `https://mail.google.com/mail/?${q.toString()}`;
   }
   const from = p ? signedBase(it, p) : null;
-  if (p && it?.countersign && !it.countersign.fullAt && p.sends.some((y) => y.signed)) base.statusWords = `Signed by ${firstName(it.countersign.by) || "them"} · countersign to finish`;
+  if (waitsForMember(p)) base.statusWords = `Signed by ${firstName(it?.countersign?.by ?? signedSend(p!)?.signed?.name ?? "") || "them"} · countersign to finish`;
   if (p && status === "signed" && from) {
     const end = it?.renewal?.end ?? termEndOf(docFields(p), from);
     base.renewal = {

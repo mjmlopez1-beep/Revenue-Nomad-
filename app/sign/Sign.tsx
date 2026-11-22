@@ -133,8 +133,9 @@ export function SignView({ token }: { token: string }) {
   const panel = useRef<HTMLDivElement>(null);
   const cardGo = useRef<HTMLButtonElement>(null);
   const cardShows = useOnScreen(cardGo, !!v && v.status === "open" && step === "read");
-  // What the sender sees: opens and which sections are read, said near the footer (lib/close).
-  useProposalActivity(token, { enabled: v?.status === "open" });
+  // What the sender sees: opens, which sections and options are read, what is picked, said near the footer (lib/close).
+  // Once it is signed only a download of the signed PDF is told.
+  const track = useProposalActivity(token, { enabled: v?.status === "open" || v?.status === "signed", mode: v?.status === "signed" ? "downloads" : "read" });
 
   useEffect(() => {
     void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setChoice(r.choice ?? (r.doc.pricing ? { optionId: startOption(r.doc.pricing), addOnIds: [] } : null)))));
@@ -182,6 +183,15 @@ export function SignView({ token }: { token: string }) {
   const picked = d.pricing && choice ? choiceRec(d.pricing, choice) : null;
   const pickTo = (c: Choice) => {
     if (!open) return;
+    // The sender's activity: the option picked, and each add-on turned on or off.
+    if (d.pricing) {
+      if (c.optionId !== choice?.optionId) track.picked(c.optionId, d.pricing.options.find((o) => o.id === c.optionId)?.name);
+      for (const a of d.pricing.addOns) {
+        const was = !!choice?.addOnIds.includes(a.id);
+        const now = c.addOnIds.includes(a.id);
+        if (was !== now) track.addon(a.id, now, a.name);
+      }
+    }
     setChoice(c);
     // Kept on the server, so the page opens on it again; the choice signed is the one sent with the signature.
     void call({ token, op: "choose", choice: c }).then((r) => {
@@ -493,7 +503,7 @@ export function SignView({ token }: { token: string }) {
           </span>
           <div className="cv-acts">
             {v.sealed && (
-              <a className="cv-btn" href={v.sealed.pdf}>
+              <a className="cv-btn" href={v.sealed.pdf} data-tracked-download onClick={() => track.downloaded()}>
                 Download the signed PDF
               </a>
             )}
@@ -550,7 +560,7 @@ export function SignView({ token }: { token: string }) {
           <p>
             Document fingerprint (SHA-256): <span className="sg-hash">{v.hash}</span>
           </p>
-          {open && <ActivityNotice sender={d.from.name} />}
+          {open ? <ActivityNotice sender={d.from.name} /> : v.status === "signed" && v.sealed ? <ActivityNotice sender={d.from.name} signed /> : null}
           <SignLegal />
         </footer>
       </main>

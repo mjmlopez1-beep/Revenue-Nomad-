@@ -8,6 +8,7 @@ import type { DocCopy } from "@/lib/documents/types";
 import { SignLegal, SignTop } from "../sign/Sign";
 import { stamp, dayOf } from "../sign/doc";
 import { SealCard } from "../sign/ProposalView";
+import { ActivityNotice, TrackedDownload } from "../sign/activity";
 
 const SAY: Record<string, string> = {
   uploaded: "Uploaded",
@@ -64,9 +65,9 @@ export async function DocCopyPage({ token }: { token: string }) {
               <dd>{c.fileName}</dd>
             </div>
           </dl>
-          <a className="btn btn-primary btn-lg sg-wide" href={c.download}>
+          <TrackedDownload token={token} className="btn btn-primary btn-lg sg-wide" href={c.download}>
             Download the signed PDF
-          </a>
+          </TrackedDownload>
         </section>
         {c.sealed && <SealCard at={c.sealed.at} signers={c.signers.map((x) => x.name)} events={c.events.filter((e) => Date.parse(e.at) <= Date.parse(c!.sealed!.at)).length} pdf={null} check={c.sealed.check} />}
         <section className="sg-card sg-signed" aria-labelledby="dc-sg">
@@ -120,6 +121,7 @@ export async function DocCopyPage({ token }: { token: string }) {
         </section>
         <footer className="sg-foot">
           <p>Sent by {c.from.name} with Merlin, from Revenue Nomad.</p>
+          <ActivityNotice sender={c.from.name} signed />
           <SignLegal />
         </footer>
       </main>

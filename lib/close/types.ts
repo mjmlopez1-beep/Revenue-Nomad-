@@ -16,9 +16,12 @@
 export const disclosureText = (sender?: string | null) =>
   `${String(sender ?? "").trim() || "The sender"} sees when this is opened and which sections are read. Merlin counts this with a cookie on this page, never your IP address.`;
 export const DISCLOSURE = disclosureText();
+/** The same line once it is signed (the signing page after signing, and the signed copy): reading isn't counted any more, a download is. */
+export const signedDisclosureText = (sender?: string | null) =>
+  `${String(sender ?? "").trim() || "The sender"} sees when the signed PDF is downloaded from this page. Merlin counts this with a cookie on this page, never your IP address.`;
 /** The same, at more length, for the privacy pages. */
 export const DISCLOSURE_LONG =
-  "When you open a proposal or document sent with Merlin, the sender can see when it was opened, how many people opened the link, and roughly how long each section and price option was read. Merlin counts this with a random id in a cookie on this page, not your IP address.";
+  "When you open a proposal or document sent with Merlin, the sender can see when it was opened, how many people opened the link, and roughly how long each section and price option was read. Once it is signed, only a download of the signed PDF from its page is counted. Merlin counts this with a random id in a cookie on this page, not your IP address.";
 
 /** The cookie that tells one reader's browser from another on a signing link: a random id, nothing else. */
 export const READER_COOKIE = "rn_reader";
@@ -276,6 +279,8 @@ export interface ActivityView {
   timeline: { at: string; text: string; strong?: string }[];
   suggestion: Suggestion | null;
   reminders: ReminderRow[];
+  /** The member's reminder switches for this proposal or document, set or not sent yet (the send sheets read these). */
+  remindersOn: Record<ReminderKey, boolean>;
   /** A signed proposal: its renewal. `ask`: the end isn't known, ask once. */
   renewal: { end: string | null; ask: boolean; due: boolean; remindedAt: string | null; startedId: string | null; ending: boolean } | null;
   /** "Open in Gmail": a compose link to the signer, with the draft. */
