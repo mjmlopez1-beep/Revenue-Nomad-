@@ -71,7 +71,7 @@ import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles, scanSources, type ScanSource } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
 import { isBelowLead, keepsNonGtm } from "./seniority";
-import { aboutWithout, bestPosting, companyKey, isPlaceholderCompany, postingRank, sameRoleTitle, textKey, titleWithout } from "./scan/clean";
+import { aboutWithout, bestPosting, companyKey, companyNameFlag, isPlaceholderCompany, postingRank, sameRoleTitle, textKey, titleWithout, type CompanyNameFlag } from "./scan/clean";
 import { checkPostings, fetchPosting, type PostingFetch } from "./scan/posting";
 import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type FeedFetch, type SiteFetch } from "./scan/sources/ats";
 import {
@@ -95,6 +95,7 @@ import { alertMatches } from "./mcp/alerts";
 import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
 import { pillPlace } from "../app/onboard/place";
 import { nameKey, sameName } from "./personName";
+import { neverAName } from "./nameWords";
 import { claimToken, seatForToken } from "./claimToken";
 import { cleanNote, connectText, notePitch } from "./partners";
 import type { Icp } from "./tableTypes";
@@ -1275,9 +1276,36 @@ function placeholderName(name: string): boolean {
   }
   return v;
 }
+/** Names that are a greeting or a page's words (lib/nameWords.ts neverAName), remembered: the graph is built on every view and action. */
+const pageWordNames = new Map<string, boolean>();
+function pageWordsName(name: string): boolean {
+  let v = pageWordNames.get(name);
+  if (v === undefined) {
+    v = neverAName(name);
+    if (pageWordNames.size > 50_000) pageWordNames.clear();
+    pageWordNames.set(name, v);
+  }
+  return v;
+}
+/** The fields without one key (a copy; the seed's own object is never changed). */
+function withoutKey<T extends object>(o: T, k: string): T {
+  const copy = { ...o } as Record<string, unknown>;
+  delete copy[k];
+  return copy as T;
+}
 /** Companies with a placeholder name kept because a member holds a seat there, for an admin to review. */
 function placeholdersInReview(g: Graph): { companyId: string; name: string }[] {
   return [...g.companies.values()].filter((c) => placeholderName(c.name)).map((c) => ({ companyId: c.id, name: c.name }));
+}
+
+/** Companies whose name reads oddly (companyNameFlag, lib/scan/clean.ts), for an admin to review. They stay in the table. */
+function oddNamesInReview(g: Graph): { companyId: string; name: string; flag: CompanyNameFlag }[] {
+  const out: { companyId: string; name: string; flag: CompanyNameFlag }[] = [];
+  for (const c of g.companies.values()) {
+    const flag = companyNameFlag(c.name);
+    if (flag && !placeholderName(c.name)) out.push({ companyId: c.id, name: c.name, flag });
+  }
+  return out;
 }
 
 function graph(seed: Seed, s: State): Graph {
@@ -1303,11 +1331,21 @@ function graph(seed: Seed, s: State): Graph {
     g.companies.set(c.id, node);
   }
   let publicNames = 0;
+  // A name on the seed that is a greeting or a page's words ("Welcome Read", lib/nameWords.ts) shows as nobody named, and a
+  // person's as no name (scripts/clean-bad-names.mjs takes them off the seed). A member's own name always stays.
+  let members: Set<string> | null = null;
+  const badName = (n: string | undefined) => {
+    if (!n || !pageWordsName(n)) return false;
+    members ??= new Set([...seed.members, ...s.members].map((m) => nameKey(m.name)).filter(Boolean));
+    return !members.has(nameKey(n));
+  };
   for (const e of seed.engagements)
     if (!out.has(e.companyId)) {
-      const pub = e.holderFrom === PUBLIC_PROFILE && !!e.fields.operator;
+      const bad = badName(e.fields.operator);
+      const pub = !bad && e.holderFrom === PUBLIC_PROFILE && !!e.fields.operator;
       if (pub) publicNames++;
-      g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added", ...(pub ? { holderFrom: PUBLIC_PROFILE } : {}) });
+      const seedFields = bad ? withoutKey(e.fields, "operator") : e.fields;
+      g.engagements.set(e.id, { id: e.id, seedFields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added", ...(pub ? { holderFrom: PUBLIC_PROFILE } : {}) });
     }
   for (const e of s.engagements)
     if (!g.engagements.has(e.id) && !out.has(e.companyId))
@@ -1315,7 +1353,7 @@ function graph(seed: Seed, s: State): Graph {
   const companyOfEng = (eid: string | null | undefined) => (eid ? g.engagements.get(eid)?.companyId : undefined);
   for (const p of seed.contacts ?? []) {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
-    if (companyId && !out.has(companyId)) g.contacts.set(p.id, { id: p.id, seedFields: p.fields, companyId, engagementId: p.engagementId ?? null, source: p.source ?? "Demand scan" });
+    if (companyId && !out.has(companyId)) g.contacts.set(p.id, { id: p.id, seedFields: badName(p.fields.name) ? withoutKey(p.fields, "name") : p.fields, companyId, engagementId: p.engagementId ?? null, source: p.source ?? "Demand scan" });
   }
   for (const p of s.contacts) {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
@@ -4431,7 +4469,9 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
       .filter((r, i, all) => g.companies.has(r.companyId) && all.findIndex((x) => x.companyId === r.companyId) === i)
       .map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: r.reason, at: r.at }))
       // A placeholder name kept only because a member holds a seat there (see graph).
-      .concat(placeholdersInReview(g).map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: "placeholder name", at: "" }))),
+      .concat(placeholdersInReview(g).map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: "placeholder name", at: "" })))
+      // A name that may be real but reads oddly (a bare domain, digits only, 1 or 2 characters): listed, never left out.
+      .concat(oddNamesInReview(g).map((r) => ({ companyId: pubId(r.companyId), company: r.name, reason: `name is ${r.flag}`, at: "" }))),
     walls: { members: walled.size, hits },
     lockedViews: lockedViewStats(s, nowMs),
     pendingSeats: (s.pendingSeats ?? [])

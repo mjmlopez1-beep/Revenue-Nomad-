@@ -873,9 +873,88 @@ export function Anchored({
   );
 }
 
+/* ---------- Back closes the sheet on top ---------- */
+
+/*
+ * Each open Sheet puts one entry of its own on the browser's history (the same address, with
+ * `tpSheet` in its state), so the back gesture on Android, or Back anywhere, closes the sheet on
+ * top instead of leaving the page under it. TradingPost counts its own entries (a record, a page,
+ * its overlays) by `tpd`, which the sheet's entry copies, so to it nothing moved.
+ *
+ * Closed by Back, a sheet keeps what was typed in it: the same sheet opened again (the same title
+ * and fields, opening with the same text) gets the typed text back. Closed any other way (its X, a
+ * tap outside, Escape, one of its buttons), the sheet takes its entry back off the history, and the
+ * popstate that answers is swallowed here, so nothing under it reacts and nothing is popped twice.
+ * Should the app have put an entry of its own above it meanwhile (a button that closed the sheet
+ * and opened a page), the sheet's entry stays where it is under it.
+ *
+ * A sheet the app already counts in its own history (history={false}: the Add form, the fact
+ * editor and Sort and filter on phones) puts nothing on it.
+ */
+interface SheetEntry {
+  id: string;
+  /** Its entry is on the history now. */
+  pushed: boolean;
+  /** Back took its entry: close it, keeping what was typed. */
+  back: () => void;
+}
+const openSheets: SheetEntry[] = [];
+let sheetSeq = 0;
+const sheetTag = `s${Math.random().toString(36).slice(2, 8)}`;
+/** The entry a sheet closed by its own button just took off: the popstate that answers is the sheet's own, not the app's. */
+let ownBack: { id: string; timer: ReturnType<typeof setTimeout> } | null = null;
+const stateSheet = (): unknown => {
+  try {
+    return (window.history.state as { tpSheet?: unknown } | null)?.tpSheet;
+  } catch {
+    return undefined;
+  }
+};
+if (typeof window !== "undefined") {
+  // Capture: before the app's own popstate listeners (TradingPost, the Add form's guard) on the same window.
+  window.addEventListener(
+    "popstate",
+    (e) => {
+      const at = stateSheet();
+      if (ownBack && at !== ownBack.id) {
+        clearTimeout(ownBack.timer);
+        ownBack = null;
+        e.stopImmediatePropagation();
+        return;
+      }
+      const i = openSheets.findIndex((x) => x.id === at);
+      const above = openSheets.slice(i + 1).filter((x) => x.pushed);
+      if (!above.length) return;
+      e.stopImmediatePropagation();
+      for (const x of above.reverse()) x.back();
+    },
+    true,
+  );
+}
+
+/** What was typed in a sheet closed by Back, by the sheet (its title and fields), for SHEET_DRAFT_MS. In memory only. */
+const sheetDrafts = new Map<string, { init: string[]; vals: string[]; at: number }>();
+const SHEET_DRAFT_MS = 30 * 60_000;
+const TEXT_INPUT = new Set(["", "text", "search", "email", "url", "tel", "number"]);
+type TextField = HTMLInputElement | HTMLTextAreaElement;
+const textFields = (root: HTMLElement): TextField[] =>
+  [...root.querySelectorAll<TextField>("textarea, input")].filter((el) => el instanceof HTMLTextAreaElement || TEXT_INPUT.has((el.getAttribute("type") ?? "").toLowerCase()));
+const sheetKey = (root: HTMLElement, fields: TextField[]) =>
+  `${root.querySelector(".tp-sheet-title")?.textContent ?? ""}|${fields.map((f) => `${f.tagName}:${f.name}:${f.getAttribute("aria-label") ?? ""}:${f.placeholder}`).join(",")}`;
+/** Puts text in a field the way typing does, so React's onChange hears it. */
+function typeInto(el: TextField, v: string) {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, v);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/** Tests (scripts/test-qafix.mts): the sheets with an entry on the history, bottom first. */
+export const openSheetIds = () => openSheets.filter((x) => x.pushed).map((x) => x.id);
+
 /**
  * A bottom sheet on phones. With `dialog`, the same content is a centered dialog on wider
- * screens. `onClose` runs for the X, a tap on the dimmed page and Escape.
+ * screens. `onClose` runs for the X, a tap on the dimmed page, Escape and Back (the back gesture:
+ * see above). `history={false}`: the app counts this sheet in its own history, so Back is its.
  */
 export function Sheet({
   title,
@@ -886,6 +965,7 @@ export function Sheet({
   dialog,
   className = "",
   restore,
+  history = true,
 }: {
   title: ReactNode;
   onClose: () => void;
@@ -896,11 +976,106 @@ export function Sheet({
   dialog?: boolean;
   className?: string;
   restore?: () => HTMLElement | null;
+  history?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const tid = useId();
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  /*
+   * Its own entry on the history while it is open (see above), and what was typed kept when Back
+   * closes it. Each field's text as it first showed is noted (when the sheet opens, and when a field
+   * that came later takes focus), so a draft is kept only when something was typed, and given back
+   * only to the same sheet opening with the same text.
+   */
+  useEffect(() => {
+    if (!history || typeof window === "undefined") return;
+    const root = ref.current;
+    const first = new WeakMap<TextField, string>();
+    const note = () => {
+      if (root) for (const f of textFields(root)) if (!first.has(f)) first.set(f, f.value);
+    };
+    const onFocus = (e: FocusEvent) => {
+      const t = e.target as TextField | null;
+      if (t && (t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement) && !first.has(t)) first.set(t, t.value);
+    };
+    root?.addEventListener("focusin", onFocus, true);
+    // A draft kept from a Back: given back once the sheet's fields are there (they may come a moment later).
+    let restored = false;
+    const tryRestore = () => {
+      if (restored || !root) return;
+      const fields = textFields(root);
+      if (!fields.length) return;
+      const key = sheetKey(root, fields);
+      const d = sheetDrafts.get(key);
+      if (!d) return;
+      restored = true;
+      sheetDrafts.delete(key);
+      const now = fields.map((f) => f.value);
+      if (Date.now() - d.at > SHEET_DRAFT_MS || d.init.length !== now.length || d.init.some((v, k) => v !== now[k])) return;
+      fields.forEach((f, k) => d.vals[k] !== f.value && typeInto(f, d.vals[k]));
+    };
+    // The text as it first showed is noted before a draft goes back in, so a second Back keeps the draft again.
+    note();
+    tryRestore();
+    const mo = root ? new MutationObserver(() => (note(), tryRestore())) : null;
+    if (root) mo?.observe(root, { childList: true, subtree: true });
+    const moStop = setTimeout(() => mo?.disconnect(), 3000);
+    const keepDraft = () => {
+      if (!root) return null;
+      const fields = textFields(root);
+      const init = fields.map((f) => first.get(f) ?? f.value);
+      const vals = fields.map((f) => f.value);
+      if (!vals.some((v, k) => v !== init[k])) return null;
+      const key = sheetKey(root, fields);
+      sheetDrafts.set(key, { init, vals, at: Date.now() });
+      return key;
+    };
+
+    const entry: SheetEntry = { id: `${sheetTag}.${++sheetSeq}`, pushed: false, back: () => {} };
+    let alive = true;
+    const push = () => {
+      try {
+        window.history.pushState({ ...((window.history.state as object | null) ?? {}), tpSheet: entry.id }, "", window.location.href);
+        entry.pushed = true;
+      } catch {}
+    };
+    entry.back = () => {
+      entry.pushed = false;
+      const kept = keepDraft();
+      closeRef.current();
+      // Still open a moment later (it asks first, or stays by design): its entry goes back, and the draft with it is not needed.
+      setTimeout(() => {
+        if (!alive) return;
+        if (kept) sheetDrafts.delete(kept);
+        push();
+      }, 80);
+    };
+    openSheets.push(entry);
+    // After the app's own history work for the same change (a sheet that opens with a page), so this entry is on top.
+    const t = setTimeout(() => alive && push(), 0);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+      clearTimeout(moStop);
+      mo?.disconnect();
+      root?.removeEventListener("focusin", onFocus, true);
+      const k = openSheets.indexOf(entry);
+      if (k >= 0) openSheets.splice(k, 1);
+      if (!entry.pushed) return;
+      // Closed by its own button: take its entry off, once the app has done its own history work for the same change.
+      setTimeout(() => {
+        if (stateSheet() !== entry.id) return;
+        if (ownBack) clearTimeout(ownBack.timer);
+        ownBack = { id: entry.id, timer: setTimeout(() => (ownBack = null), 1500) };
+        try {
+          window.history.back();
+        } catch {
+          ownBack = null;
+        }
+      }, 0);
+    };
+  }, [history]);
   // The sheet itself takes focus (unless a field inside asked for it), so a screen reader starts at its title.
   useLayer(ref, { onEscape: () => closeRef.current(), tab: "trap", restore, first: (root) => root });
   useEffect(() => {
@@ -1615,6 +1790,7 @@ export function FactEditor({
   if (ui.layout === "phone")
     return (
       <Sheet
+        history={false}
         title={title}
         onClose={tryClose}
         footer={

@@ -21,7 +21,7 @@
  * The logo and the About: the route reads the icon from the company's own website only (a mock
  * server on 127.0.0.1 for every company's host: its <link rel="icon">, else /favicon.ico, robots.txt
  * first, never a link to another site, never Google, DuckDuckGo or Clearbit) and sends image bytes,
- * never a redirect or the site's headers, 404 for an unknown id, a seat's id, no website or no icon
+ * never a redirect or the site's headers, 204 with no body (no logo, so no console error) for an unknown id, a seat's id, no website or no icon
  * (an SVG included), from memory and then from the data volume without asking again, nothing
  * fetched with RN_LOGO_LOOKUP=off, 429 past its per-address limit; every logo the page draws is our
  * own /api/logo/<public id>, a named company with no id gets its letters; the page's markup for a locked company points at /api/logo/<public id> and holds no icon
@@ -638,15 +638,15 @@ async function main() {
     { status: lgBlue.status, type: lgBlue.headers.get("content-type"), asked: siteAsked.slice(from) },
   );
   const lgNone = await ask(pub(CO.cobalt.id));
-  check("no icon on the site: 404, with no body", lgNone.status === 404 && (await lgNone.text()) === "" && leaks(headersOf(lgNone), ALL).length === 0, { status: lgNone.status, headers: headersOf(lgNone) });
+  check("no icon on the site: 204, with no body (never a 404 the browser logs)", lgNone.status === 204 && (await lgNone.text()) === "" && leaks(headersOf(lgNone), ALL).length === 0, { status: lgNone.status, headers: headersOf(lgNone) });
   const lgSvg = await ask(pub(CO.dun.id));
-  check("an SVG is never sent on (it can carry script): 404", lgSvg.status === 404, lgSvg.status);
+  check("an SVG is never sent on (it can carry script): 204", lgSvg.status === 204, lgSvg.status);
   from = siteAsked.length;
   const lgRobots = await ask(pub(CO.iris.id));
-  check("a site whose robots.txt says no is left alone after reading it: 404", lgRobots.status === 404 && siteAsked.slice(from).every((x) => x.path === "/robots.txt"), siteAsked.slice(from));
+  check("a site whose robots.txt says no is left alone after reading it: 204", lgRobots.status === 204 && siteAsked.slice(from).every((x) => x.path === "/robots.txt"), siteAsked.slice(from));
   from = siteAsked.length;
   const lgAway = await ask(pub(CO.gran.id));
-  check("a homepage that redirects to another site is not followed there", lgAway.status === 404 && siteAsked.slice(from).every((x) => x.host === CO.gran.site), siteAsked.slice(from));
+  check("a homepage that redirects to another site is not followed there", lgAway.status === 204 && siteAsked.slice(from).every((x) => x.host === CO.gran.site), siteAsked.slice(from));
   check(
     "every request went to a company's own site: none to Google, DuckDuckGo, Clearbit or any other host, and fetch was never used",
     siteAsked.every((x) => ownSites.has(x.host)) && fetched.length === fetchedBefore && !fetched.some((x) => /google|duckduckgo|clearbit/i.test(x.url)),
@@ -655,8 +655,8 @@ async function main() {
   from = siteAsked.length;
   const odd = await Promise.all(["c_madeupmadeup1", "../../etc/passwd", "", CO.acme.id, pub("e_acme_sales"), pub(NOSITE.id)].map((id) => ask(id)));
   check(
-    "an unknown id, a made-up one, a seat's id, an internal id, a company with no website: 404, and nothing is fetched",
-    odd.every((r) => r.status === 404) && siteAsked.length === from,
+    "an unknown id, a made-up one, a seat's id, an internal id, a company with no website: 204 with no body, and nothing is fetched",
+    odd.every((r) => r.status === 204) && siteAsked.length === from,
     { status: odd.map((r) => r.status), asked: siteAsked.slice(from) },
   );
   process.env.RN_LOGO_LOOKUP = "off";
@@ -664,11 +664,11 @@ async function main() {
   from = siteAsked.length;
   const offKept = await ask(pub(CO.acme.id));
   const offNew = await ask(pub(CO.elm.id));
-  check("RN_LOGO_LOOKUP=off: an icon already kept still shows, nothing new is fetched (a 404 and the tile)", offKept.status === 200 && offNew.status === 404 && siteAsked.length === from, { kept: offKept.status, fresh: offNew.status, asked: siteAsked.slice(from) });
+  check("RN_LOGO_LOOKUP=off: an icon already kept still shows, nothing new is fetched (a 204 and the tile)", offKept.status === 200 && offNew.status === 204 && siteAsked.length === from, { kept: offKept.status, fresh: offNew.status, asked: siteAsked.slice(from) });
   const burst: number[] = [];
   for (let k = 0; k <= Lg.LOGO_PER_MINUTE; k++) burst.push((await ask("c_madeupmadeup2", "198.51.100.99")).status);
   const other = await ask(pub(CO.acme.id), "198.51.100.100");
-  check("past LOGO_PER_MINUTE a minute from one address: 429, other addresses unaffected", burst.at(-1) === 429 && burst.slice(0, -1).every((s) => s === 404) && other.status === 200, { last: burst.at(-1), other: other.status });
+  check("past LOGO_PER_MINUTE a minute from one address: 429, other addresses unaffected", burst.at(-1) === 429 && burst.slice(0, -1).every((s) => s === 204) && other.status === 200, { last: burst.at(-1), other: other.status });
   await new Promise<void>((done) => sites.close(() => done()));
   const linkOrder = Lg.iconLinks(`<link rel="icon" href="/a.png" sizes="16x16"><link rel="apple-touch-icon" href="/t.png"><link rel="icon" href="/b.png" sizes="32x32"><link rel="icon" href="/c.svg"><link rel="icon" href="data:image/png;base64,AA">`, "https://x.example/");
   check("icon links best first: apple-touch-icon, then the largest, never SVG or data", linkOrder.join() === "https://x.example/t.png,https://x.example/b.png,https://x.example/a.png", linkOrder);

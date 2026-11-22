@@ -15,14 +15,14 @@
  * The answer is kept on the data volume (RN_DATA_DIR/icons, one small JSON file a domain, the image
  * base64) and in memory: a found icon for HIT_MS, a miss for MISS_MS, then the site is asked again.
  * At most FETCH_AT_ONCE companies' sites are read at a time; past QUEUE_MAX waiting, the answer is a
- * 404 that is not kept, so the next page load tries again.
+ * 204 (no logo) that is not kept, so the next page load tries again.
  *
  * RN_LOGO_LOOKUP=off: nothing is fetched. Icons already on the volume still show; everything else
- * is a 404 and the page draws its lettered tile (the test servers run this way).
+ * is a 204 (no logo) and the page draws its lettered tile (the test servers run this way).
  *
  * Only the image goes out: never a redirect, none of the site's headers, no name, no domain. An
  * unknown id, a company with no website of its own (or one on a shared host such as a job board):
- * 404. No sign-in (it is only an image), but LOGO_PER_MINUTE a minute per address.
+ * 204 (no logo, no body). No sign-in (it is only an image), but LOGO_PER_MINUTE a minute per address.
  */
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
@@ -266,15 +266,20 @@ export function forgetIcons(): void {
   memoryBytes = 0;
 }
 
-const NOT_FOUND = (keep: boolean) => new Response(null, { status: 404, headers: { "cache-control": keep ? "public, max-age=3600" : "no-store" } });
+/**
+ * No logo: 204, no body. Most companies have none, and a 404 for each one fills the browser's
+ * console with errors; the page draws the company's tile instead (CompanyLogo, app/ui/shared.tsx).
+ * `keep`: the answer is final for an hour (a busy moment is not).
+ */
+const NO_LOGO = (keep: boolean) => new Response(null, { status: 204, headers: { "cache-control": keep ? "public, max-age=3600" : "no-store" } });
 
-/** The answer to GET /api/logo/<id>: the image, a 404, or a 429 past the per-address limit. */
+/** The answer to GET /api/logo/<id>: the image, a 204 for no logo, or a 429 past the per-address limit. */
 export async function logoResponse(req: Request, publicId: string): Promise<Response> {
   if (limited(`logo:${clientIp(req)}`, LOGO_PER_MINUTE, 60_000)) return new Response(null, { status: 429, headers: { "retry-after": "60", "cache-control": "no-store" } });
   const domain = await logoDomain(publicId);
   const img = domain ? await logoImage(domain) : null;
-  if (img === BUSY) return NOT_FOUND(false);
-  if (!img) return NOT_FOUND(true);
+  if (img === BUSY) return NO_LOGO(false);
+  if (!img) return NO_LOGO(true);
   return new Response(img.body.slice(0), {
     status: 200,
     headers: {

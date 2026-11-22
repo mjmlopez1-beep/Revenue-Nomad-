@@ -137,6 +137,18 @@ export interface RadarItem {
 
 /** A UTC day as ?sig= carries it. */
 export const SIG_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * A radar day from an address (?sig=), clamped to a day that has happened: a real calendar date,
+ * from 2020 on, and never after today (UTC; a later day reads as today). Null for anything else.
+ */
+export function sigDayOf(raw: string | null | undefined, nowMs: number = Date.now()): string | null {
+  const d = String(raw ?? "");
+  if (!SIG_DAY_RE.test(d)) return null;
+  const ms = Date.parse(`${d}T00:00:00Z`);
+  if (!Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 10) !== d || d < "2020-01-01") return null;
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  return d > today ? today : d;
+}
 /** The app's address for one day's companies: the email's, Slack's and the page's link. */
 export const radarPath = (day: string) => `/?p=table&sig=${day}`;
 /**

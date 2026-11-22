@@ -943,7 +943,7 @@ else {
 
       // The logo route by an id that names no company: 404 at once, never a redirect, and nothing fetched (no domain to ask about).
       const logo = await call("GET", "/api/logo/c_madeupmadeup");
-      check("GET /api/logo/<an id that names no company> answers 404, no redirect", logo.status === 404 && !logo.headers.get("location"), { status: logo.status, location: logo.headers.get("location") });
+      check("GET /api/logo/<an id that names no company> answers 204 (no logo, no body), no redirect", logo.status === 204 && !logo.headers.get("location"), { status: logo.status, location: logo.headers.get("location") });
 
       // Oversized bodies.
       const me = "fixtok-0";

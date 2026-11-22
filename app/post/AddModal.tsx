@@ -1459,7 +1459,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
   if (ui.layout === "phone")
     return (
       <>
-        <Sheet title={title} onClose={() => leave()} full>
+        <Sheet title={title} onClose={() => leave()} full history={false}>
           <div ref={rootRef} className="am-root">
             {body}
           </div>

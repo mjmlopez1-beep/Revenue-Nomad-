@@ -85,6 +85,7 @@ export function MovesSection({
   loading,
   rest,
   dayN,
+  crystalN = 0,
   integrations,
   onClaude,
   openCompany,
@@ -102,6 +103,8 @@ export function MovesSection({
   rest: boolean;
   /** Companies in Crystal Ball's day, for "All 14 in Crystal Ball". */
   dayN: number;
+  /** Nothing new this week, but Crystal Ball holds this many companies (Home's crystalN): the empty line says so and links it. */
+  crystalN?: number;
   integrations: Go;
   /** How their own Claude learns their voice: the Claude connector's page. */
   onClaude: () => void;
@@ -205,9 +208,20 @@ export function MovesSection({
       ) : (
         <>
           <p className="mv-none">
-            {month > 0 && dayN > 0
-              ? "That's today's moves done. Tomorrow's arrive with the morning's Crystal Ball."
-              : "Nothing strong today. No company in your Crystal Ball has a move worth your ten minutes."}
+            {month > 0 && dayN > 0 ? (
+              "That's today's moves done. Tomorrow's arrive with the morning's Crystal Ball."
+            ) : crystalN > 0 ? (
+              <>
+                Your {FEATURE_NAME} has {crystalN === 1 ? "1 company" : `${crystalN} companies`}.{" "}
+                {link(
+                  <>
+                    Open one to start <IconChevron dir="right" size={13} />
+                  </>,
+                )}
+              </>
+            ) : (
+              "Nothing strong today. No company in your Crystal Ball has a move worth your ten minutes."
+            )}
           </p>
           {fallback}
         </>

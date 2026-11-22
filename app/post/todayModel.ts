@@ -15,7 +15,7 @@ export interface TodayAnswer {
   me: Me;
   plan?: PlanView;
   freeCompany?: boolean;
-  radar: { day: string; fn: string | null; rows: RadarRow[]; newCount: number; ready?: boolean };
+  radar: { day: string; fn: string | null; rows: RadarRow[]; newCount: number; total?: number; ready?: boolean };
   /** Your three moves today (lib/moves.ts). Left out by a server from before them. */
   moves?: MovesWire;
   since?: { radar: number; roles: number; follows: number; sinceIso: string };
@@ -26,6 +26,8 @@ export interface TodayData {
   rows: RadarRow[];
   /** Companies new in the Crystal Ball since the last visit (or on its latest day, on a first visit). */
   newCount: number;
+  /** With none new in the last week: the companies Crystal Ball holds in its own range (TodayView radar.total), else 0. */
+  total: number;
   since: { radar: number; roles: number; follows: number; sinceIso: string } | null;
   from: "today" | "radar";
   /** Today's moves as the server picked them. Null from a server without them: Home makes them of the top rows, with no way in from a network. */
@@ -37,6 +39,8 @@ export interface TodayData {
    */
   latest: { day: string; n: number } | null;
 }
+/** Crystal Ball holds companies but none is new this week (TodayData.total): "Your Crystal Ball has 3 companies. Open one to start." */
+export const crystalLine = (n: number) => `Your ${FEATURE_NAME} has ${n === 1 ? "1 company" : `${n.toLocaleString("en-US")} companies`}. Open one to start.`;
 /** The rows Today keeps from the radar. */
 export const TODAY_ROWS = 4;
 /** An answer bigger than this to ?today=1 is a full view (a server without the endpoint): it isn't read. */

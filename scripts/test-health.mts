@@ -295,7 +295,8 @@ async function main() {
       { label: "Reached Sent", n: 25 },
       { label: "Reached Replied", n: 21 },
       { label: "Reached Meeting", n: 21 },
-      { label: "Reached Proposal", n: 21 },
+      // The 21 won deals went Sent, Replied, Meeting, Won with no proposal: none reached Proposal (outcomeStats counts a stage only when it happened).
+      { label: "Reached Proposal", n: 0 },
       { label: "Won", n: 21 },
       { label: "Won through Merlin", n: 15 },
       { label: "Won from a signed proposal", n: 0 },

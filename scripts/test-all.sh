@@ -163,6 +163,8 @@ run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts
 run nudges npx tsx scripts/test-nudges.mts
 # The way around (app/post/navModel.ts, Sidebar.tsx): every page one link away, one item on and the right one, admin-only items for admins, the counts the table's own (place.ts placeRows), Home's search by page name. In process, on a made-up seed.
 run nav npx tsx scripts/test-nav.mts
+# The QA fixes (scripts/test-qafix.mts): names that are a greeting or a page's words refused and hidden (and scripts/clean-bad-names.mjs on a copy), odd company names for review, outcomes counted only for stages that happened, no logo a 204, an unlock already done elsewhere a calm notice, Home's Crystal Ball line, ?sig= clamped; then in Chromium as a Pixel 7 on its own server: Back closes the sheet on top and keeps what was typed, its X never pops twice, a long search, logos, a used sign-in link, ?sig=2099-12-31.
+run qafix env QAFIX_PORT="$PORT" npx tsx scripts/test-qafix.mts
 # 20 members acting at once on their own server: every answer carries the member's numbers and the table version, no server errors, at most one table a minute each.
 run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs
 

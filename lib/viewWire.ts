@@ -33,6 +33,12 @@ export interface TodayView {
     rows: RadarRow[];
     /** How many companies that day has in all. */
     newCount: number;
+    /**
+     * With no day of the last week having any (newCount 0): how many companies Crystal Ball holds
+     * in its own default range (as GET ?radar=1&range=auto lists them, what onboarding showed), so
+     * Home says "Your Crystal Ball has 3 companies" rather than nothing. Left out otherwise.
+     */
+    total?: number;
     /** The radar is on, and has the function and profile it needs (RadarView.on and ready). Empty rows and not ready: Today falls back to the table. */
     on: boolean;
     ready: boolean;

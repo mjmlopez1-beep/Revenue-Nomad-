@@ -164,6 +164,22 @@ export function isPlaceholderCompany(name: unknown): boolean {
   return false;
 }
 
+/** Why a company's name wants an admin's eyes (companyNameFlag). */
+export type CompanyNameFlag = "a bare domain" | "digits only" | "1 or 2 characters";
+/**
+ * A company name that may be real but reads oddly, for an admin to review (never left out or
+ * deleted for it): a bare domain ("acme.io", the import's fallback when no name was found), digits
+ * only ("1440"), or 1 or 2 characters ("GE", "3M" are real; "x" is not). Null for any other name.
+ */
+export function companyNameFlag(name: unknown): CompanyNameFlag | null {
+  const n = plain(name).trim();
+  if (!n) return null;
+  if (/^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/?$/i.test(n)) return "a bare domain";
+  if (/^[\d\s.,#-]+$/.test(n) && /\d/.test(n)) return "digits only";
+  if ([...n.replace(/\s+/g, "")].length <= 2) return "1 or 2 characters";
+  return null;
+}
+
 /**
  * Whether a cleaned name is a real company the role can be filed under. Nameless stand-ins,
  * descriptions ("A B2B SaaS startup"), job boards, recruiters and thread handles are not.

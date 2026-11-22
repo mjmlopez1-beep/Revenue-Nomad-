@@ -463,6 +463,15 @@ export function LockedSite({ seed, className }: { seed: string; className?: stri
 
 /** A company's public id (lib/table.ts pubId), the only thing GET /api/logo/<id> takes. */
 const COMPANY_ID = /^c_[\w-]{6,40}$/;
+/**
+ * The logo addresses that answered with no logo (a 204, which the browser reports as a load error
+ * without a word in the console) or a blank icon, on this page: never asked for again while it is
+ * open, so a list that redraws its rows draws the tile at once.
+ */
+const NO_LOGO = new Set<string>();
+const noLogoAt = (src: string | undefined) => {
+  if (src) NO_LOGO.add(src);
+};
 
 /**
  * Every logo comes from our own GET /api/logo/<public id> (lib/logo.ts): the server reads the
@@ -470,10 +479,10 @@ const COMPANY_ID = /^c_[\w-]{6,40}$/;
  * service, so no outside service learns which companies a member looks at. `seed` is the
  * company's public id; without one, a known company's id is found by its domain (rememberLogo).
  *
- * `hidden`: a locked company's logo. With no logo (a 404, or a blank icon) it is a plain soft tile
+ * `hidden`: a locked company's logo. With no logo (a 204, or a blank icon) it is a plain soft tile
  * in a color from the id, with a quiet building in it: never letters, which would read as a real
  * mark. `noLogo`: the tile only (the landing page's rows have no company id). A company the member
- * can name with no logo (no id, no website, or a 404) gets its lettered tile.
+ * can name with no logo (no id, no website, or a 204) gets its lettered tile.
  */
 export function CompanyLogo({
   name,
@@ -493,7 +502,8 @@ export function CompanyLogo({
   const sources = useMemo(() => {
     if (noLogo) return [];
     const id = seed && COMPANY_ID.test(seed) ? seed : !hidden ? logoIdFor(domain) : undefined;
-    return id ? [`/api/logo/${encodeURIComponent(id)}`] : [];
+    const src = id ? `/api/logo/${encodeURIComponent(id)}` : null;
+    return src && !NO_LOGO.has(src) ? [src] : [];
   }, [domain, hidden, seed, noLogo]);
   const [idx, setIdx] = useState(0);
   useEffect(() => setIdx(0), [domain, hidden, seed]);
@@ -509,9 +519,9 @@ export function CompanyLogo({
           aria-hidden
           loading="lazy"
           decoding="async"
-          // A blank or tiny icon is no logo: the tile instead.
-          onLoad={(e) => e.currentTarget.naturalWidth < 16 && setIdx(sources.length)}
-          onError={() => setIdx(sources.length)}
+          // A blank or tiny icon is no logo: the tile instead. So is no logo at all (a 204).
+          onLoad={(e) => e.currentTarget.naturalWidth < 16 && (noLogoAt(sources[idx]), setIdx(sources.length))}
+          onError={() => (noLogoAt(sources[idx]), setIdx(sources.length))}
         />
       );
     return (
@@ -536,8 +546,8 @@ export function CompanyLogo({
       alt=""
       loading="lazy"
       decoding="async"
-      onLoad={(e) => e.currentTarget.naturalWidth < 16 && setIdx(sources.length)}
-      onError={() => setIdx(sources.length)}
+      onLoad={(e) => e.currentTarget.naturalWidth < 16 && (noLogoAt(sources[idx]), setIdx(sources.length))}
+      onError={() => (noLogoAt(sources[idx]), setIdx(sources.length))}
     />
   );
 }
@@ -678,5 +688,18 @@ export const IconMenu = ({ size = 18 }: { size?: number }) => svg(<path d="M4 7h
 export const IconExternal = ({ size = 12 }: { size?: number }) => svg(<><path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>, size);
 export const IconPencil = ({ size = 12 }: { size?: number }) => svg(<><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>, size);
 
-/** A refusal that is a limit, not a mistake (today's unlocks are used up): a calm notice, never a red toast. */
-export const calmRefusal = (msg: string) => /^You've unlocked \d+ facts today|^You've reached today's unlock limit|^You can unlock \d+ more today/.test(msg);
+/**
+ * The server's answer to an unlock of something this member can already see: unlocked on another
+ * device or tab since this page last downloaded the table (lib/table.ts). Nothing went wrong.
+ */
+export const alreadyOpen = (msg: string) => /^Nothing here is locked, so no credit was spent|^You can already see (?:who this is|all of these)/.test(msg);
+/** A sign-in link (?k=) that was used or expired, opened where the member is signed in already (app/Root.tsx). */
+export const SIGNED_IN_LINK_USED = "That sign-in link was used or expired. You're still signed in here.";
+/** What the member reads then, as the table comes back with it open. */
+export const ALREADY_OPEN = "That's already unlocked for you, maybe on another device, so no credit was spent. It's showing now.";
+/**
+ * A refusal that is not a mistake: a limit (today's unlocks are used up) or something already
+ * unlocked elsewhere (alreadyOpen). A calm notice, never a red toast.
+ */
+export const calmRefusal = (msg: string) =>
+  /^You've unlocked \d+ facts today|^You've reached today's unlock limit|^You can unlock \d+ more today/.test(msg) || alreadyOpen(msg) || msg === ALREADY_OPEN;

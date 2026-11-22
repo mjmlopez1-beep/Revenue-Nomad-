@@ -780,12 +780,13 @@ export function pipelineHidden(log: PipelineLog | undefined, nowMs: number): Set
   return out;
 }
 
-/** The entry reached this stage: it has the stage's date, or is past it on the way to Won. */
+/**
+ * The entry reached this stage: it actually happened (the stage has its date), or the entry is at
+ * it now. Being past it is not enough: a deal that went Sent, Proposal, Won had no reply and no
+ * meeting, and isn't counted as Replied or Meeting.
+ */
 export function reached(e: Pick<PipelineEntry, "stage" | "dates">, stage: Stage): boolean {
-  if (e.dates[stage]) return true;
-  const at = LINE.indexOf(e.stage);
-  const want = LINE.indexOf(stage);
-  return at >= 0 && want >= 0 && at >= want;
+  return !!e.dates[stage] || e.stage === stage;
 }
 
 export interface FollowUpItem {
@@ -907,7 +908,7 @@ export interface OutcomeStats {
   members: number;
   entries: number;
   byStage: Record<Stage, number>;
-  /** Entries that reached each stage on the way to Won. */
+  /** Entries that reached each stage (reached: the stage happened, not only a later one). */
   reached: Record<"sent" | "replied" | "meeting" | "proposal" | "won", number>;
   /** Shares from 0 to 1, or null with nothing to divide by. */
   conversion: { sentToReplied: number | null; repliedToMeeting: number | null; meetingToWon: number | null; sentToWon: number | null };
@@ -937,6 +938,8 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
   const byStage = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
   const detected: Record<Via, number> = { note: 0, message: 0, gmail: 0, calendar: 0, proposal: 0, seat: 0, auto: 0, you: 0 };
   const reachedN = { sent: 0, replied: 0, meeting: 0, proposal: 0, won: 0 };
+  // Each share counts the entries that reached both of its stages, so a deal that skipped one never counts as converted through it.
+  const both = { sentReplied: 0, repliedMeeting: 0, meetingWon: 0, sentWon: 0 };
   let members = 0;
   let entries = 0;
   let wonThroughMerlin = 0;
@@ -954,7 +957,12 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
     for (const e of log.entries ?? []) {
       entries++;
       byStage[e.stage]++;
-      for (const s of ["sent", "replied", "meeting", "proposal", "won"] as const) if (reached(e, s)) reachedN[s]++;
+      const r = Object.fromEntries(LINE.map((s) => [s, reached(e, s)])) as Record<(typeof LINE)[number], boolean>;
+      for (const s of ["sent", "replied", "meeting", "proposal", "won"] as const) if (r[s]) reachedN[s]++;
+      if (r.sent && r.replied) both.sentReplied++;
+      if (r.replied && r.meeting) both.repliedMeeting++;
+      if (r.meeting && r.won) both.meetingWon++;
+      if (r.sent && r.won) both.sentWon++;
       for (const v of Object.values(e.via ?? {})) if (v) detected[v]++;
       if (isOpen(e.stage) && e.due && e.due <= today) due++;
       if (e.stage === "won") {
@@ -977,10 +985,10 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
     byStage,
     reached: reachedN,
     conversion: {
-      sentToReplied: share(reachedN.replied, reachedN.sent),
-      repliedToMeeting: share(reachedN.meeting, reachedN.replied),
-      meetingToWon: share(reachedN.won, reachedN.meeting),
-      sentToWon: share(reachedN.won, reachedN.sent),
+      sentToReplied: share(both.sentReplied, reachedN.sent),
+      repliedToMeeting: share(both.repliedMeeting, reachedN.replied),
+      meetingToWon: share(both.meetingWon, reachedN.meeting),
+      sentToWon: share(both.sentWon, reachedN.sent),
     },
     won: byStage.won,
     wonThroughMerlin,

@@ -16,9 +16,11 @@
  * What is left must read as a person's name: two or more words of letters, the first and the last
  * written out. A last name given only as an initial ("Jane D.") is the person's own choice on their
  * profile, so it is skipped, and so is a first name given only as an initial with nothing else
- * ("J. Smith"). The result always passes PERSON_NAME_RE (lib/tableFields.ts), the seat holder rule.
+ * ("J. Smith"). The result always passes PERSON_NAME_RE (lib/tableFields.ts), the seat holder rule,
+ * and holds no greeting or page word (lib/nameWords.ts: "Welcome Read" is a page, not a person).
  */
 import { PERSON_NAME_RE } from "./tableFields";
+import { NEVER_NAME, neverAName } from "./nameWords";
 
 /** Credentials and degrees people write after their name, compared lower case without dots, ® or ™. */
 const CREDENTIALS = new Set(
@@ -50,7 +52,7 @@ const TITLE_WORDS_THEN = new Set("head chief director board leader coach author 
 const PARTICLES = new Set(["van", "von", "der", "den", "de", "da", "di", "del", "della", "du", "la", "le", "bin", "al", "dos", "das", "ter", "ten"]);
 
 /** Why a name was not kept, as the script counts it. */
-export type NameSkip = "no name" | "one word" | "last name is only an initial" | "first name is only an initial" | "not a person's name";
+export type NameSkip = "no name" | "one word" | "last name is only an initial" | "first name is only an initial" | "not a person's name" | "a greeting or page words";
 
 const key = (w: string) => w.toLowerCase().replace(/[.®™]/g, "");
 const letters = (w: string) => (w.match(/\p{L}/gu) ?? []).length;
@@ -90,6 +92,9 @@ export function cleanPersonName(raw: unknown): { name: string; first: string } |
   // A title or a tagline after the name ("Jane Doe Fractional CMO"): the name ends before it. "Jane Fractional CMO" has no surname left.
   const cut = ws.findIndex((w, i) => i >= 1 && (TITLE_WORDS.has(key(w)) || (TITLE_WORDS_THEN.has(key(w)) && i < ws.length - 1)));
   if (cut > 0) ws = ws.slice(0, cut);
+  // A page's word after a whole name ("Jane Doe Growth Leader"): the name ends before it. One before the name refuses it below.
+  const pageCut = ws.findIndex((w, i) => i >= 2 && NEVER_NAME.has(key(w)));
+  if (pageCut > 0) ws = ws.slice(0, pageCut);
   // Credentials and suffixes at the end ("Jane Doe MBA", "Jane Doe Jr."). In an all-caps name they can't be told from a surname, so they stay.
   while (ws.length > 1 && (SUFFIXES.has(key(ws[ws.length - 1])) || (!caps && isCredential(ws[ws.length - 1])))) ws.pop();
   if (!ws.length) return { skip: "no name" };
@@ -111,6 +116,8 @@ export function cleanPersonName(raw: unknown): { name: string; first: string } |
   if (!first) return { skip: "first name is only an initial" };
   const name = ws.join(" ");
   if (!PERSON_NAME_RE.test(name)) return { skip: "not a person's name" };
+  // The shape of a name is not enough: "Welcome Read" and "Meet Our Team" came from a page (lib/nameWords.ts).
+  if (neverAName(name)) return { skip: "a greeting or page words" };
   return { name, first };
 }
 

@@ -8,7 +8,7 @@
  * TradingPost.tsx); the server is told them with the request.
  */
 import type { Me, SavedViewRec } from "@/lib/tableTypes";
-import { SIG_DAY_RE, radarRangeOf } from "@/lib/radar/types";
+import { radarRangeOf, sigDayOf } from "@/lib/radar/types";
 import { firstViewPlace } from "../onboard/place";
 import {
   EMPTY_FILTERS, RECORD_TYPES, SORTS, TYPE_PARAM, activeCount, applyFilters, decodeFilters, encodeFilters, hasRoleDates, hiredOn, icpApplies, icpEmpty, icpMatch, mySeats, namedFn,
@@ -85,7 +85,8 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
   // An old "Use it in Claude" link (p=claude) opens Integrations at its Claude section.
   // A day of the radar (?sig=2026-11-19, the email's and Slack's links, lib/radar radarPath) opens that day's companies,
   // and so does an older email's "See who" (?upgrade=radar).
-  const sig = SIG_DAY_RE.test(q.get("sig") ?? "") ? q.get("sig") : null;
+  // A day still to come, or one that is no date (?sig=2099-12-31, 2026-13-45), is no day of the radar: a future day reads as today.
+  const sig = sigDayOf(q.get("sig"));
   const p: PlacePage | null = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PLACE_PAGES.find((x) => x === q.get("p")) ?? null;
   // The radar's range the member picked (?p=radar&range=7d); a day (?sig=) wins.
   const range = p === "radar" && !sig ? radarRangeOf(q.get("range")) : null;

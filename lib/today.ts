@@ -31,11 +31,14 @@ export async function todayView(token: string | null, sinceRaw?: string | null, 
   const sinceMs = Date.parse(sinceRaw ?? "");
   const sinceIso = Number.isFinite(sinceMs) && sinceMs < nowMs && nowMs - sinceMs <= SINCE_MAX_MS ? new Date(sinceMs).toISOString() : null;
   const counts = sinceIso ? await todayCounts(token, sinceIso, me.function) : null;
+  // Nothing in the last week: what Crystal Ball still holds in its own range (onboarding's list), so Home never says it is empty when it isn't.
+  const ranged = !r.rows.length && r.ready ? await radarView(token, null, new Date(nowMs).toISOString(), "auto") : null;
+  const total = ranged ? ranged.rows.length : 0;
   const out: TodayView = {
     me,
     ...(me.plan ? { plan: me.plan } : {}),
     freeCompany: !!me.freeCompany,
-    radar: { day: r.day, fn: r.function, rows, newCount: r.rows.length, on: r.on, ready: r.ready },
+    radar: { day: r.day, fn: r.function, rows, newCount: r.rows.length, ...(total ? { total } : {}), on: r.on, ready: r.ready },
     moves: { ...mv.wire, list: [] },
     ...(sinceIso && counts
       ? { since: { radar: r.days.filter((d) => d.day >= sinceIso.slice(0, 10)).reduce((n, d) => n + d.companies, 0), roles: counts.roles, follows: counts.follows, sinceIso } }

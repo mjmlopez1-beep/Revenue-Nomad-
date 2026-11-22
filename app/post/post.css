@@ -1421,6 +1421,14 @@ body:has(.tp-drawer) .pro-foot {
 .tp-q {
   color: var(--ink);
   font-weight: 600;
+  /* A long query wraps anywhere (even inside the toolbar's one-line count), never pushing the page sideways on a phone. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.tp-pcount > span,
+.tp-count {
+  min-width: 0;
 }
 .tp-sortbtn {
   display: inline-flex;
