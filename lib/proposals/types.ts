@@ -65,7 +65,12 @@ export interface SignatureView {
  * signs ("after", a countersignature), or none (prepared and sent by them, as before).
  */
 export type MemberSignMode = "now" | "after" | "none";
-export const MEMBER_SIGN_SAY: Record<MemberSignMode, string> = { now: "Sign it now", after: "Countersign after they sign", none: "No signature from me" };
+export const MEMBER_SIGN_SAY: Record<MemberSignMode, string> = { now: "Add my signature now", after: "I'll countersign after they sign", none: "No signature from me" };
+
+/** How long a signing link works, picked per send: days, or 0 for no end date. 30 unless the member picks another. */
+export const LINK_DAYS = [14, 30, 60, 90, 0] as const;
+export type LinkDays = (typeof LINK_DAYS)[number];
+export const LINK_DAYS_SAY: Record<LinkDays, string> = { 14: "14 days", 30: "30 days", 60: "60 days", 90: "90 days", 0: "No end date" };
 /** What the member agrees to when they save a signature or countersign. Bump MEMBER_CONSENT_VERSION when the words change. */
 export const MEMBER_CONSENT_VERSION = "2026-11-22";
 export const MEMBER_CONSENT =
@@ -91,7 +96,7 @@ export interface MemberSigned {
 
 /** One event on a send's audit trail. */
 export interface AuditEvent {
-  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent" | "member_signed" | "countersigned";
+  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent" | "member_signed" | "countersigned" | "question" | "passed";
   at: string;
   ip?: string;
   ua?: string;
@@ -197,7 +202,8 @@ export interface StoredSend {
   /** SHA-256 of the canonical JSON of `doc`, hex. */
   hash: string;
   sentAt: string;
-  expiresAt: string;
+  /** When the link stops working; null: no end date (the member picked it). */
+  expiresAt: string | null;
   viewedAt?: string;
   /** The email code: an HMAC of the 6 digits, when it was sent, wrong tries since. */
   code?: { hash: string; at: string; tries: number };
@@ -205,7 +211,14 @@ export interface StoredSend {
   codeVerifiedAt?: string;
   signed?: { name: string; at: string; ip: string; ua: string; consent: string; consentVersion: string; hash: string; email: string; choice?: ChoiceRec };
   declined?: { at: string; reason: string; ip: string; ua: string };
-  voided?: { at: string; why: "member" | "changed" };
+  voided?: { at: string; why: "member" | "changed" | "passed" };
+  /** The client passed it to someone else to sign: this link is read only now, and `to` has the new one. */
+  passedTo?: { name: string; email: string; title?: string; at: string; sendId: string };
+  /** This send came from a hand-off: who passed it on, and how many hand-offs there have been (at most 3). */
+  passedFrom?: { name: string; email: string; at: string; sendId: string };
+  handoffs?: number;
+  /** When the client asked a question here (a few a day at most). */
+  questions?: string[];
   /** Sent while the member had Close (canClose, the trial too): the client picks from its options, and the signed copy is a sealed PDF. */
   close?: boolean;
   /** What the client has picked so far: theirs to change until they sign. */
@@ -267,7 +280,7 @@ export interface ProposalSendRec {
   signer: SignerInfo;
   status: Exclude<ProposalStatus, "draft">;
   sentAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   viewedAt: string | null;
   codeVerifiedAt: string | null;
   signedAt: string | null;
@@ -282,6 +295,9 @@ export interface ProposalSendRec {
   choice: ChoiceRec | null;
   /** The sealed PDF (Close): its download and when it was sealed. */
   sealed: { at: string; pdf: string; sha256: string } | null;
+  /** Passed on by the client: who passed it, and (on the earlier send) who it went to. */
+  passedFrom: { name: string; at: string } | null;
+  passedTo: { name: string; at: string } | null;
   /** The member's own signature on this send: the mode frozen, when they signed, and "member" while the client has signed and it waits for the member's countersignature. */
   memberMode: MemberSignMode;
   memberSignedAt: string | null;
@@ -375,7 +391,13 @@ export interface ProposalsView {
 /* ---------- what the client who signs gets ---------- */
 
 export interface SignerView {
-  status: "open" | "signed" | "declined" | "void" | "changed" | "expired";
+  status: "open" | "signed" | "declined" | "void" | "changed" | "expired" | "passed";
+  /** Who signs on this link (the addressee, or who it was passed to), for the signature card. */
+  signer: { name: string; title: string };
+  /** This link was passed to someone else to sign. */
+  passedTo: { name: string } | null;
+  /** Hand-offs left on this link (at most 3 in all). */
+  handoffsLeft: number;
   doc: FrozenDoc;
   hash: string;
   /** The signer's email, partly hidden ("da***@acme.com"), for "we sent a code to". */
@@ -388,7 +410,7 @@ export interface SignerView {
   signedAt: string | null;
   signedName: string | null;
   declinedAt: string | null;
-  expiresAt: string;
+  expiresAt: string | null;
   copyUrl: string | null;
   /** What they have picked so far (open), or what they signed. Null: a single price, or nothing picked yet. */
   choice: Choice | null;
@@ -420,6 +442,7 @@ export interface SignedCopy {
   memberMode: MemberSignMode;
   member: SignerView["member"];
   awaitingMember: boolean;
+  signer: { name: string; title: string };
 }
 
 /**

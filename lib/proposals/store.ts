@@ -28,7 +28,7 @@ import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
 import { TEMPLATES, blanksInWords, blanksOf, blockDef, docFields, fieldDefaults, rendered, templateBlocks, templateDef } from "./library";
 export { docFields };
-import { codeEmail, countersignEmail, declinedEmail, proposalEmail, signedEmail } from "./emails";
+import { codeEmail, countersignEmail, declinedEmail, handoffEmail, proposalEmail, questionEmail, signedEmail } from "./emails";
 import { CLOSE_BUILD, blocksOfMine, isMineId, templatesOf } from "./mine";
 import { aiConfigured } from "./aiConfig";
 import { AI_PACK_LINK, PACK_PRICE_USD, budgetOf, usedUpWords } from "./aiUsage";
@@ -97,7 +97,20 @@ const base = (origin?: string) => (publicBase() ?? origin ?? "").replace(/\/$/, 
 
 export const signToken = (sendId: string, expMs: number) => `${sendId}.${expMs.toString(36)}.${mac(`rn-sign:${sendId}:${expMs}`)}`;
 export const copyToken = (sendId: string) => `${sendId}.${mac(`rn-signed:${sendId}`)}`;
-export const signLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/sign/${signToken(x.id, Date.parse(x.expiresAt))}`;
+/** A link's expiry in its token: the time, or 0 for no end date. */
+export const expMsOf = (expiresAt: string | null | undefined) => (expiresAt ? Date.parse(expiresAt) : 0);
+export const expiredAt = (expiresAt: string | null | undefined, nowMs: number) => !!expiresAt && nowMs > Date.parse(expiresAt);
+export const signLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/sign/${signToken(x.id, expMsOf(x.expiresAt))}`;
+/** The link length picked when sending: 14, 30, 60 or 90 days, or 0 for no end date. 30 unless picked. */
+export function linkDaysOf(raw: unknown): number {
+  if (raw === undefined || raw === null || raw === "") return SIGN_DAYS;
+  const n = Number(raw);
+  if (![14, 30, 60, 90, 0].includes(n)) throw new ProposalProblem("Pick how long the link works: 14, 30, 60 or 90 days, or no end date.");
+  return n;
+}
+export const expiryFor = (days: number, nowMs: number) => (days === 0 ? null : new Date(nowMs + days * DAY).toISOString());
+/** "The link works until May 31, 2027." or "The link has no end date." */
+export const untilWords = (expiresAt: string | null) => (expiresAt ? `The link works until ${fmtDay(Date.parse(expiresAt))}.` : "The link has no end date.");
 export const copyLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/signed/${copyToken(x.id)}`;
 /** The sealed PDF's download, with the signed copy's key. */
 export const pdfLink = (origin: string | undefined, x: StoredSend) => `${base(origin)}/api/sign/pdf?c=${copyToken(x.id)}`;
@@ -147,7 +160,7 @@ function sendStatus(x: StoredSend, nowMs: number): Exclude<ProposalStatus, "draf
   if (x.signed) return "signed";
   if (x.declined) return "declined";
   if (x.voided) return "void";
-  if (nowMs > Date.parse(x.expiresAt)) return "expired";
+  if (expiredAt(x.expiresAt, nowMs)) return "expired";
   return x.viewedAt ? "viewed" : "sent";
 }
 /** The send of the proposal's current version (the newest), if it has one. */
@@ -192,6 +205,8 @@ function sendRec(x: StoredSend, nowMs: number, origin?: string): ProposalSendRec
     copyUrl: x.signed ? copyLink(origin, x) : null,
     choice: x.signed?.choice ? structuredClone(x.signed.choice) : null,
     sealed: x.seal ? { at: x.seal.at, pdf: pdfLink(origin, x), sha256: x.seal.sha256 } : null,
+    passedFrom: x.passedFrom ? { name: x.passedFrom.name, at: x.passedFrom.at } : null,
+    passedTo: x.passedTo ? { name: x.passedTo.name, at: x.passedTo.at } : null,
     memberMode: x.memberMode ?? "none",
     memberSignedAt: x.member?.at ?? null,
     waiting: awaitingMember(x) ? "member" : null,
@@ -637,7 +652,7 @@ function memberSigned(who: { name: string; title: string }, how: MemberSigned["h
 export async function sendProposal(
   token: string | null,
   id: string,
-  a: { signer?: unknown; message?: unknown; memberSign?: unknown; who?: Client },
+  a: { signer?: unknown; message?: unknown; memberSign?: unknown; linkDays?: unknown; who?: Client },
   origin?: string,
   nowMs = Date.now(),
 ): Promise<{ proposal: ProposalRec; message: string }> {
@@ -648,12 +663,13 @@ export async function sendProposal(
   if (!emailEnabled()) throw new ProposalProblem(EMAIL_OFF);
   const now = new Date(nowMs).toISOString();
   const note = cleanLine(a.message, LIMITS.message);
+  const days = linkDaysOf(a.linkDays);
   if (a.memberSign !== undefined && !modeOf(a.memberSign)) throw new ProposalProblem("Pick how you sign: now, after they sign, or not at all.");
   // Their own signature: as picked here, else as kept on the proposal, else now when they have a saved one (none otherwise, as before).
   const p0 = mine(s0, me0, id);
   const saved = await savedSignatureOf(s0, me0.id);
   const mode: MemberSignMode = modeOf(a.memberSign) ?? p0.memberSign ?? (saved ? "now" : "none");
-  if (mode === "now" && !saved) throw new ProposalProblem("Set your signature first, or pick Countersign after they sign, or No signature from me.");
+  if (mode === "now" && !saved) throw new ProposalProblem("Set your signature first, or pick I'll countersign after they sign, or No signature from me.");
   // The drawing goes with the send, as it is now: replacing the saved one later never changes what was signed.
   const sendId = `s_${randomBytes(9).toString("base64url")}`;
   const staged = mode === "now" && saved?.png ? await stageSendSignature(sendId, saved.png) : null;
@@ -682,7 +698,7 @@ export async function sendProposal(
       doc,
       hash: hashDoc(doc),
       sentAt: now,
-      expiresAt: new Date(nowMs + SIGN_DAYS * DAY).toISOString(),
+      expiresAt: expiryFor(days, nowMs),
       events: [{ kind: "sent", at: now, note: signer.email }],
       ...(close ? { close: true } : {}),
       // The member's own signature is Close: frozen into the send, a change after needs a new version.
@@ -714,7 +730,7 @@ export async function sendProposal(
     });
     throw new ProposalProblem("The email didn't go out. Try again in a moment.", 502);
   }
-  return { proposal: await getProposal(token, id, origin, nowMs), message: `Sent to ${out.x.signer.name} at ${out.x.signer.email}. The link works for ${SIGN_DAYS} days.` };
+  return { proposal: await getProposal(token, id, origin, nowMs), message: `Sent to ${out.x.signer.name} at ${out.x.signer.email}. ${out.x.expiresAt ? `The link works for ${days} days.` : "The link has no end date."}` };
 }
 
 /* ---------- the client's side ---------- */
@@ -731,15 +747,16 @@ const GONE = "This link doesn't work. Ask the sender for a new one.";
 function resolve(s: State, raw: unknown): Found {
   const t = readSignToken(raw);
   const f = t ? findSend(s, t.sendId) : null;
-  if (!t || !f || Date.parse(f.x.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
+  if (!t || !f || expMsOf(f.x.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
   return f;
 }
 function signerStatus(f: Found, nowMs: number): SignerView["status"] {
   const { x } = f;
   if (x.signed) return "signed";
   if (x.declined) return "declined";
+  if (x.passedTo) return "passed";
   if (x.voided) return x.voided.why === "changed" ? "changed" : "void";
-  if (nowMs > Date.parse(x.expiresAt)) return "expired";
+  if (expiredAt(x.expiresAt, nowMs)) return "expired";
   return "open";
 }
 const emailHint = (e: string) => {
@@ -753,6 +770,9 @@ function viewOf(f: Found, nowMs: number, origin?: string): SignerView {
   const { x } = f;
   return {
     status: signerStatus(f, nowMs),
+    signer: { name: x.signer.name, title: x.signer.title ?? "" },
+    passedTo: x.passedTo ? { name: x.passedTo.name } : null,
+    handoffsLeft: Math.max(0, HANDOFFS - (x.handoffs ?? 0)),
     doc: structuredClone(x.doc),
     hash: x.hash,
     emailHint: emailHint(x.signer.email),
@@ -817,7 +837,9 @@ const notOpen = (st: SignerView["status"]) =>
         ? "The sender changed this proposal, so this version can't be signed. They'll send you the new one."
         : st === "void"
           ? "The sender withdrew this proposal, so it can't be signed."
-          : "This link has expired. Ask the sender for a new one.";
+          : st === "passed"
+            ? "You passed this proposal to someone else to sign, so it can't be signed here."
+            : "This link has expired. Ask the sender for a new one.";
 
 /** Email the signer a 6-digit code (15 minutes, CODE_TRIES tries), to confirm the address is theirs. */
 export async function requestCode(token: unknown, who: Client, nowMs = Date.now()): Promise<{ sent: true; emailHint: string }> {
@@ -1101,6 +1123,154 @@ export async function sealedPdf(raw: unknown, origin?: string): Promise<{ bytes:
   return r ? { bytes: r.bytes, name: sealedName(f.x.doc.title) } : null;
 }
 
+/* ---------- the client asks a question, or passes it to someone else to sign ---------- */
+
+/** At most this many hand-offs on one proposal's link, and this many questions a day on one link. */
+export const HANDOFFS = 3;
+export const QUESTIONS_A_DAY = 5;
+export const QUESTION_MAX = 2000;
+
+export interface ClientQuestionEvent {
+  sendId: string;
+  proposalId: string;
+  memberId: string;
+  signer: { name: string; email: string };
+  title: string;
+  text: string;
+  at: string;
+}
+export interface HandOffEvent {
+  fromSendId: string;
+  toSendId: string;
+  proposalId: string;
+  memberId: string;
+  from: { name: string; email: string };
+  to: { name: string; email: string; title?: string };
+  title: string;
+  at: string;
+}
+/**
+ * What other parts of Merlin do when a client asks a question or passes a proposal on (alerts,
+ * for one). Called after the step is recorded and the member's email has gone; never throws into it.
+ */
+const proposalHooks: { onClientQuestion: (e: ClientQuestionEvent) => unknown; onHandOff: (e: HandOffEvent) => unknown } = { onClientQuestion: () => {}, onHandOff: () => {} };
+export function setProposalHooks(h: Partial<typeof proposalHooks>): void {
+  Object.assign(proposalHooks, h);
+}
+const callHook = async (fn: () => unknown) => {
+  try {
+    await fn();
+  } catch (e) {
+    console.error("proposal hook failed", (e as Error)?.message);
+  }
+};
+
+/**
+ * "Ask a question": the client's question, emailed to the member with the client's name, the
+ * proposal's title and a link to it in Merlin, reply-to the client's own address (the member just
+ * replies; the client never sees the member's address). On the audit trail. QUESTIONS_A_DAY a link.
+ */
+export async function askQuestion(token: unknown, raw: unknown, who: Client, origin?: string, nowMs = Date.now()): Promise<{ sent: true; to: string }> {
+  const text = cleanText(raw, QUESTION_MAX + 1).trim();
+  if (!text) throw new ProposalProblem("Type your question first.");
+  if (text.length > QUESTION_MAX) throw new ProposalProblem(`Keep it under ${QUESTION_MAX.toLocaleString("en-US")} characters.`);
+  if (!emailEnabled()) throw new ProposalProblem("Email isn't working on our side right now. Try again later.", 503);
+  const now = new Date(nowMs).toISOString();
+  const out = await T.mutate((s) => {
+    const f = resolve(s, token);
+    const st = signerStatus(f, nowMs);
+    if (st !== "open" && st !== "signed") throw new ProposalProblem(notOpen(st), 409);
+    const recent = (f.x.questions ?? []).filter((t) => nowMs - Date.parse(t) < DAY);
+    if (recent.length >= QUESTIONS_A_DAY) throw new ProposalProblem(`That's ${QUESTIONS_A_DAY} questions today on this link, which is the most. Try again tomorrow.`, 429);
+    f.x.questions = [...recent, now];
+    ev(f.x, "question", now, { ...who, note: text.length > 300 ? `${text.slice(0, 300)}…` : text });
+    return { sendId: f.x.id, proposalId: f.p.id, memberId: f.p.memberId, signer: { name: f.x.signer.name, email: f.x.signer.email }, title: f.x.doc.title, from: f.x.doc.from.name };
+  });
+  const m = await memberFor(await loadSeed(), out.memberId);
+  if (!m?.email) throw new ProposalProblem("Your question didn't go out. Try again in a moment.", 502);
+  const mail = questionEmail({ member: m.name, signer: out.signer.name, title: out.title, question: text, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}` });
+  if (!(await sendEmail(m.email, mail.subject, mail.text, mail.html, { replyTo: out.signer.email }))) throw new ProposalProblem("Your question didn't go out. Try again in a moment.", 502);
+  await callHook(() => proposalHooks.onClientQuestion({ sendId: out.sendId, proposalId: out.proposalId, memberId: out.memberId, signer: out.signer, title: out.title, text, at: now }));
+  return { sent: true, to: (out.from || m.name).split(" ")[0] };
+}
+
+/**
+ * "Send to someone else to sign": a new link to the person named, with the same document (same
+ * hash: the member's signature on it still holds), the option picked so far, and the same email
+ * code before signing. This link turns read only ("You passed this to …"). The member is told.
+ * At most HANDOFFS on one proposal; not after signing or declining; never to the member.
+ */
+export async function handOff(token: unknown, a: { signer?: unknown; note?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+  const signer = cleanSigner(a.signer);
+  const note = cleanLine(a.note, LIMITS.message);
+  if (!emailEnabled()) throw new ProposalProblem("Email isn't working on our side right now. Try again later.", 503);
+  const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
+  const f0 = resolve(s0, token);
+  const m0 = await memberFor(seed, f0.p.memberId);
+  const NOT_SENDER = "Pass it to someone at your company, not to the person who sent it.";
+  if (m0?.email && m0.email.toLowerCase() === signer.email) throw new ProposalProblem(NOT_SENDER);
+  if (signer.email === f0.x.signer.email) throw new ProposalProblem("That's the address this link went to. Type the email of the person who signs instead.");
+  const newId = `s_${randomBytes(9).toString("base64url")}`;
+  // The member's drawn signature goes with the new link (the same document, the same hash).
+  const sigPng = f0.x.member?.kind === "drawn" ? await readSendSignature(f0.x.id) : null;
+  const staged = sigPng ? await stageSendSignature(newId, sigPng) : null;
+  const now = new Date(nowMs).toISOString();
+  const out = await T.mutate((s) => {
+    const f = resolve(s, token);
+    const st = signerStatus(f, nowMs);
+    if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
+    const n = f.x.handoffs ?? 0;
+    if (n >= HANDOFFS) throw new ProposalProblem(`This proposal was passed on ${HANDOFFS} times, which is the most. Ask ${f.x.doc.from.name || "the sender"} for a new link.`, 409);
+    const x = f.x;
+    const y: StoredSend = {
+      id: newId,
+      version: x.version,
+      signer,
+      doc: structuredClone(x.doc),
+      hash: x.hash,
+      sentAt: now,
+      expiresAt: x.expiresAt,
+      events: [{ kind: "sent", at: now, note: `${signer.email}, passed on by ${x.signer.name}` }],
+      ...(x.close ? { close: true } : {}),
+      ...(x.memberMode ? { memberMode: x.memberMode } : {}),
+      ...(x.member ? { member: structuredClone(x.member) } : {}),
+      ...(x.choice ? { choice: structuredClone(x.choice) } : {}),
+      passedFrom: { name: x.signer.name, email: x.signer.email, at: now, sendId: x.id },
+      handoffs: n + 1,
+    };
+    x.passedTo = { name: signer.name, email: signer.email, ...(signer.title ? { title: signer.title } : {}), at: now, sendId: newId };
+    x.voided = { at: now, why: "passed" };
+    ev(x, "passed", now, { ...who, note: `${x.signer.name} passed it to ${signer.name}${signer.title ? `, ${signer.title}` : ""} <${signer.email}>` });
+    f.p.sends.push(y);
+    f.p.signer = signer;
+    f.p.updatedAt = now;
+    return { y: structuredClone(y), from: { name: x.signer.name, email: x.signer.email }, proposalId: f.p.id, memberId: f.p.memberId, view: viewOf(f, nowMs, origin) };
+  }).catch(async (e) => {
+    await dropStaged(staged);
+    throw e;
+  });
+  if (staged) await commitSendSignature(newId, staged);
+  const toNew = handoffEmail({ to: "signer", name: signer.name, from: out.from.name, member: out.y.doc.from.name, title: out.y.doc.title, link: signLink(origin, out.y), expiresAt: out.y.expiresAt, note });
+  if (!(await sendEmail(signer.email, toNew.subject, toNew.text, toNew.html, m0?.email ? { replyTo: m0.email } : {}))) {
+    // It never reached them: taken back, and this link works again.
+    await T.mutate((s) => {
+      const f = findSend(s, out.y.id);
+      const g = findSend(s, f0.x.id);
+      if (f) f.p.sends = f.p.sends.filter((z) => z.id !== out.y.id), (f.p.signer = f0.x.signer);
+      if (g) delete g.x.passedTo, delete g.x.voided, ev(g.x, "passed", new Date().toISOString(), { note: "The email to the new signer didn't go out, so this link works again" });
+    });
+    throw new ProposalProblem("The email to them didn't go out. Check the address and try again.", 502);
+  }
+  if (m0?.email) {
+    const toMember = handoffEmail({ to: "member", name: m0.name, from: out.from.name, member: out.y.doc.from.name, title: out.y.doc.title, link: `${base(origin)}/?p=proposals&pr=${encodeURIComponent(out.proposalId)}`, expiresAt: out.y.expiresAt, note, newSigner: `${signer.name}${signer.title ? `, ${signer.title}` : ""}` });
+    await sendEmail(m0.email, toMember.subject, toMember.text, toMember.html);
+  }
+  await callHook(() =>
+    proposalHooks.onHandOff({ fromSendId: f0.x.id, toSendId: newId, proposalId: out.proposalId, memberId: out.memberId, from: out.from, to: { name: signer.name, email: signer.email, ...(signer.title ? { title: signer.title } : {}) }, title: out.y.doc.title, at: now }),
+  );
+  return withMemberImg(out.view, f0.x.id);
+}
+
 export async function declineProposal(token: unknown, a: { reason?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
   const reason = cleanLine(a.reason, LIMITS.reason);
   const now = new Date(nowMs).toISOString();
@@ -1143,6 +1313,7 @@ export async function signedCopy(raw: unknown, origin?: string): Promise<SignedC
     memberMode: x.memberMode ?? "none",
     member: memberOut(x),
     awaitingMember: awaitingMember(x),
+    signer: { name: x.signer.name, title: x.signer.title ?? "" },
   }, x.id);
 }
 

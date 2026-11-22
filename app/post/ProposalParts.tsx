@@ -7,7 +7,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiscoveryNote, ProposalRec, SignerInfo } from "@/lib/proposals/types";
-import { SENDER_DUTY, type MemberSignMode } from "@/lib/proposals/types";
+import { SENDER_DUTY, type LinkDays, type MemberSignMode } from "@/lib/proposals/types";
+import { LinkDaysPick } from "./LinkDays";
 import { Countersign, YourSignatureChoice, useMySignature } from "./MySignature";
 import { DISCOVERY_LABELS, DISCOVERY_TARGET, blanksInWords } from "@/lib/proposals/library";
 import { extract, transcriptOk, type Extraction, type Suggestion } from "@/lib/proposals/extract";
@@ -293,11 +294,12 @@ export function SendSheet({
   // Their own signature on it (MySignature.tsx): now, after the client's, or none.
   const [mode, setMode] = useState<MemberSignMode>(p.memberSign ?? "now");
   const [mySig, setMySig] = useMySignature();
+  const [days, setDays] = useState<LinkDays>(30);
   const ok = s.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s.email.trim()) && blanks.length === 0 && canSend && email && (mode !== "now" || !!mySig.sig);
   const go = async () => {
     setBusy(true);
     setErr(null);
-    const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note, memberSign: mode });
+    const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note, memberSign: mode, linkDays: days });
     setBusy(false);
     if (r.error) return setErr(r.error);
     onSent(r.proposal, r.message);
@@ -335,6 +337,7 @@ export function SendSheet({
           <span className="pp-field-l">A note above the link (optional)</span>
           <textarea className="input pp-note" rows={2} maxLength={600} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Great talking today. Here's the plan we discussed." />
         </label>
+        {canSend && <LinkDaysPick value={days} onChange={setDays} />}
         {canSend && mySig.loaded && <YourSignatureChoice mode={mode} onMode={setMode} sig={mySig.sig} onSig={setMySig} name={mySig.name} title={mySig.title} />}
         {blanks.length > 0 && (
           <p className="pp-warn">
@@ -371,7 +374,7 @@ export function SendStatus({ p, onChange }: { p: ProposalRec; onChange?: (r: Pro
             ? `The link expired on ${dayOf(x.expiresAt)}. Send it again for a new one.`
             : x.status === "viewed"
               ? `${x.signer.name} opened it on ${dayOf(x.viewedAt)}. Waiting for their signature.`
-              : `Sent to ${x.signer.name} (${x.signer.email}) on ${dayOf(x.sentAt)}. The link works until ${dayOf(x.expiresAt)}.`;
+              : `Sent to ${x.signer.name} (${x.signer.email}) on ${dayOf(x.sentAt)}. ${x.expiresAt ? `The link works until ${dayOf(x.expiresAt)}.` : "The link has no end date."}`;
   return (
     <section className="pp-card pp-status" data-status={x.status} aria-label="Signature status">
       <div className="pp-status-row">
@@ -382,6 +385,12 @@ export function SendStatus({ p, onChange }: { p: ProposalRec; onChange?: (r: Pro
           </a>
         )}
       </div>
+      {x.passedFrom && (
+        <p className="pp-status-l">
+          {x.passedFrom.name} passed it to {x.signer.name}
+          {x.signer.title ? `, ${x.signer.title}` : ""}, on {dayOf(x.passedFrom.at)}. {x.signer.name.split(" ")[0]} signs it now.
+        </p>
+      )}
       {x.waiting === "member" && onChange && <Countersign p={p} onDone={onChange} />}
       {x.memberMode === "now" && x.memberSignedAt && x.status !== "signed" && <p className="pp-muted">You signed it as you sent it, on {dayOf(x.memberSignedAt)}.</p>}
       {x.choice && (

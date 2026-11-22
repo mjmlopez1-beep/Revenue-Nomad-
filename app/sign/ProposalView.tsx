@@ -39,7 +39,7 @@ export function totalWords(r: ChoiceRec): { line: string; sub: string } {
 
 export interface ProposalViewProps {
   doc: FrozenDoc;
-  /** The link's last day, while it can still be signed. */
+  /** The link's last day while it can still be signed; "none" when it has no end date. */
   openUntil?: string | null;
   /** What's picked (open), or what was signed. */
   choice: Choice | null;
@@ -79,7 +79,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
       <div className="cv-bar">
         <span className="cv-bar-l">
           Sent to {d.to.name} by {d.from.name}
-          {openUntil ? ` · open until ${dayOf(openUntil)}` : ""} · about {readMinutes(d)} {readMinutes(d) === 1 ? "minute" : "minutes"} to read
+          {openUntil === "none" ? " · no end date" : openUntil ? ` · open until ${dayOf(openUntil)}` : ""} · about {readMinutes(d)} {readMinutes(d) === 1 ? "minute" : "minutes"} to read
         </span>
         {canSign && (
           <a className="cv-bar-go" href="#sign">
@@ -105,7 +105,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
           )}
           <div className="cv-chips">
             <span className="cv-chip">Sent {dayOf(d.preparedAt)}</span>
-            {openUntil && <span className="cv-chip">Open until {dayOf(openUntil)}</span>}
+            {openUntil && <span className="cv-chip">{openUntil === "none" ? "No end date" : `Open until ${dayOf(openUntil)}`}</span>}
             {rec && <span className="cv-chip">{many && live ? `${p!.options.length} options to pick from` : live ? priced(rec.price, rec.billing) : rec.total}</span>}
           </div>
         </header>
@@ -561,7 +561,8 @@ export function Parties({
   member,
 }: {
   doc: FrozenDoc;
-  client: { state: "here" | "signed"; name?: string | null; at?: string | null };
+  /** The person who signs on this link (the addressee, or who it was passed to), with their title. */
+  client: { state: "here" | "signed"; name?: string | null; title?: string | null; at?: string | null };
   member: { state: "signed" | "after" | "waiting" | "none"; sig?: (Sig & { name: string; title: string; at: string; how: string }) | null };
 }) {
   const ms = member.state === "signed" ? member.sig ?? null : null;
@@ -571,8 +572,8 @@ export function Parties({
         <span className="cv-party-co">{d.company || "For the client"}</span>
         {client.state === "signed" && <SigMark sig={null} name={client.name ?? d.to.name} />}
         <strong>
-          {client.state === "signed" ? client.name ?? d.to.name : d.to.name}
-          {d.to.title ? `, ${d.to.title}` : ""}
+          {client.name ?? d.to.name}
+          {(client.title ?? d.to.title) ? `, ${client.title ?? d.to.title}` : ""}
         </strong>
         <span className="cv-party-s">{client.state === "here" ? "Signs here" : `Signed ${dayOf(client.at ?? null)}`}</span>
       </div>

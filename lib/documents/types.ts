@@ -94,7 +94,8 @@ export interface StoredDocument {
   createdAt: string;
   updatedAt: string;
   sentAt?: string;
-  expiresAt?: string;
+  /** When the links stop working; null: no end date (picked when sending). Absent until it is sent. */
+  expiresAt?: string | null;
   voided?: { at: string };
   /** The final PDF: the fields stamped in and the audit trail page added. */
   completed?: { at: string; sha256: string; signedPagesSha256: string; size: number; seal?: import("../proposals/types").SealRec };

@@ -42,6 +42,8 @@ export const EVENT_WORDS: Record<string, string> = {
   voided: "Voided",
   expired_open: "Opened after the link expired",
   copy_sent: "Signed copy emailed",
+  question: "A question to the sender",
+  passed: "Passed to someone else to sign",
   member_signed: "Signed by the sender when sending",
   countersigned: "Countersigned by the sender",
 };
@@ -144,7 +146,7 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   y -= 4;
   for (const l of partyLines) drawRuns(page, ink, body, l, { x: M, y: y - 10.5, size: 10.5, color: MINT }), (y -= 15);
   y = H - bandH - 26;
-  text(`Sent ${stampWhen(x.sentAt)}. Signed by ${sig.name} ${stampWhen(sig.at)}.`, { size: 9, color: MUTED, gap: 8 });
+  text(`Sent ${stampWhen(x.sentAt)}.${x.passedFrom ? ` Passed by ${x.passedFrom.name} to ${x.signer.name} ${stampWhen(x.passedFrom.at)}.` : ""} Signed by ${sig.name} ${stampWhen(sig.at)}.`, { size: 9, color: MUTED, gap: 8 });
 
   const g = arrange(d);
   if (g.cover?.lead) text(g.cover.lead, { size: 12, color: INK, gap: 10 });
@@ -245,7 +247,8 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   cell(M, [
     { t: d.company || "The client", size: 8.5, font: body, color: MUTED },
     { t: shownName, size: scriptSize, font: script, color: INK },
-    { t: `${sig.name}${d.to.title ? `, ${d.to.title}` : ""}`, size: 9.5, font: bold, color: INK },
+    // Who actually signed, with their title (a hand-off can put someone else here than the proposal was prepared for).
+    { t: `${sig.name}${x.signer.title ? `, ${x.signer.title}` : ""}`, size: 9.5, font: bold, color: INK },
     { t: `Signed ${stampWhen(sig.at)}`, size: 8.5, font: body, color: MUTED },
   ]);
   const mem = x.member;

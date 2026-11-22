@@ -106,13 +106,18 @@ const STATUS_SAY: Record<SignerView["status"], { h: string; p: string }> = {
   declined: { h: "You declined this proposal", p: "The sender knows. If you change your mind, ask them for a new one." },
   void: { h: "This proposal was withdrawn", p: "The sender withdrew it, so it can't be signed. Ask them if you expected to sign it." },
   changed: { h: "There's a newer version", p: "The sender changed this proposal after sending it, so this version can't be signed. They'll send you the new one." },
-  expired: { h: "This link has expired", p: "Links to sign work for 30 days. Ask the sender for a new one." },
+  expired: { h: "This link has expired", p: "This link has stopped working. Ask the sender for a new one." },
+  passed: { h: "You passed this on to sign", p: "They have their own link now, with the same email code check. This one is read only." },
 };
 
 export function SignView({ token }: { token: string }) {
   const [v, setV] = useState<SignerView | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
-  const [step, setStep] = useState<"read" | "sign" | "decline">("read");
+  const [step, setStep] = useState<"read" | "sign" | "decline" | "ask" | "handoff">("read");
+  // Ask a question (sent to the member by email), or pass it to someone else to sign.
+  const [question, setQuestion] = useState("");
+  const [asked, setAsked] = useState<string | null>(null);
+  const [next, setNext] = useState({ name: "", title: "", email: "", note: "" });
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Which step an error belongs to: it shows there, and only there.
@@ -192,7 +197,79 @@ export function SignView({ token }: { token: string }) {
 
   const signPanel = (
     <div ref={panel} className="cv-accept" id="sg-panel">
-      {step === "decline" ? (
+      {step === "ask" ? (
+        asked ? (
+          <div className="cv-wait" role="status">
+            <span className="cv-wait-h">Sent to {asked}. They&#39;ll reply by email.</span>
+            <button type="button" className="sg-link" onClick={() => (setStep("read"), setAsked(null), setQuestion(""))}>
+              Back to the proposal
+            </button>
+          </div>
+        ) : (
+          <form
+            className="sg-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const r = await run("ask", { op: "ask", question });
+              if (r) setAsked((r as unknown as { to: string }).to || fromFirst);
+            }}
+          >
+            <h2 className="cv-h2">Ask {fromFirst} a question</h2>
+            <label className="sg-label" htmlFor="sg-q">
+              Your question. {fromFirst} replies to your email.
+            </label>
+            <textarea id="sg-q" className="input sg-area" rows={4} maxLength={2000} value={question} onChange={(e) => setQuestion(e.target.value)} />
+            {err && errAt === "ask" && (
+              <p className="sg-err" role="alert">
+                {err}
+              </p>
+            )}
+            <div className="sg-row">
+              <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
+                Back
+              </button>
+              <button type="submit" className="btn btn-lg" aria-busy={busy === "ask"} disabled={!!busy || !question.trim()}>
+                {busy === "ask" ? "Sending" : "Send the question"}
+              </button>
+            </div>
+          </form>
+        )
+      ) : step === "handoff" ? (
+        <form
+          className="sg-form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const r = await run("handoff", { op: "handoff", signer: { name: next.name.trim(), title: next.title.trim(), email: next.email.trim() }, note: next.note });
+            if (r) setV(r), window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
+          <h2 className="cv-h2">Send to someone else to sign</h2>
+          <p className="sg-help">They get their own link, and confirm their email with a code before signing. Yours becomes read only. {fromFirst} is told.</p>
+          {(["name", "title", "email"] as const).map((k) => (
+            <label key={k} className="sg-label">
+              {k === "name" ? "Their full name" : k === "title" ? "Their title" : "Their email"}
+              <input className="input" type={k === "email" ? "email" : "text"} autoComplete="off" maxLength={k === "email" ? 160 : 100} value={next[k]} onChange={(e) => setNext({ ...next, [k]: e.target.value })} />
+            </label>
+          ))}
+          <label className="sg-label">
+            A note for them (optional)
+            <textarea className="input sg-area" rows={2} maxLength={600} value={next.note} onChange={(e) => setNext({ ...next, note: e.target.value })} />
+          </label>
+          {err && errAt === "handoff" && (
+            <p className="sg-err" role="alert">
+              {err}
+            </p>
+          )}
+          <div className="sg-row">
+            <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
+              Back
+            </button>
+            <button type="submit" className="btn btn-lg" aria-busy={busy === "handoff"} disabled={!!busy || !NAME_RE.test(next.name.trim()) || !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(next.email.trim())}>
+              {busy === "handoff" ? "Sending" : `Send to ${next.name.trim().split(" ")[0] || "them"}`}
+            </button>
+          </div>
+        </form>
+      ) : step === "decline" ? (
         <form
           className="sg-form"
           onSubmit={async (e) => {
@@ -224,7 +301,7 @@ export function SignView({ token }: { token: string }) {
         <>
           <h2 className="cv-h2">Accept and sign</h2>
           <span className="cv-accept-l">{accepting}</span>
-          <Parties doc={d} client={{ state: "here" }} member={{ state: memberState(v.memberMode, v.member, false), sig: v.member }} />
+          <Parties doc={d} client={{ state: "here", name: v.signer.name, title: v.signer.title }} member={{ state: memberState(v.memberMode, v.member, false), sig: v.member }} />
           {err && errAt === "choose" && (
             <p className="sg-err" role="alert">
               {err}
@@ -234,6 +311,14 @@ export function SignView({ token }: { token: string }) {
             <button ref={cardGo} type="button" className="cv-go" onClick={() => setStep("sign")}>
               Accept and sign
             </button>
+            <button type="button" className="cv-btn cv-btn-lg" onClick={() => (setStep("ask"), setErr(null))}>
+              Ask {fromFirst} a question
+            </button>
+            {v.handoffsLeft > 0 && (
+              <button type="button" className="cv-btn cv-btn-lg" onClick={() => (setStep("handoff"), setErr(null))}>
+                Send to someone else to sign
+              </button>
+            )}
             <button type="button" className="cv-decline" onClick={() => setStep("decline")}>
               Decline
             </button>
@@ -393,7 +478,7 @@ export function SignView({ token }: { token: string }) {
             {fromFirst} countersigns next. You&#39;ll both get the {v.sealOnSign ? "sealed" : "signed"} copy by email as soon as they do.
           </span>
         </div>
-        <Parties doc={d} client={{ state: "signed", name: v.signedName, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
+        <Parties doc={d} client={{ state: "signed", name: v.signedName, title: v.signer.title, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
       </div>
     ) : v.status === "signed" ? (
       <div className="cv-accept">
@@ -416,11 +501,11 @@ export function SignView({ token }: { token: string }) {
             )}
           </div>
         </div>
-        <Parties doc={d} client={{ state: "signed", name: v.signedName, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
+        <Parties doc={d} client={{ state: "signed", name: v.signedName, title: v.signer.title, at: v.signedAt }} member={{ state: memberState(v.memberMode, v.member, true), sig: v.member }} />
       </div>
     ) : (
       <div className="cv-accept">
-        <h2 className="cv-h2">{STATUS_SAY[v.status].h}</h2>
+        <h2 className="cv-h2">{v.status === "passed" && v.passedTo ? `You passed this to ${v.passedTo.name} to sign` : STATUS_SAY[v.status].h}</h2>
         <span className="cv-fine">{STATUS_SAY[v.status].p}</span>
       </div>
     );
@@ -432,7 +517,7 @@ export function SignView({ token }: { token: string }) {
         {!open && (
           <section className="sg-card sg-state" data-status={v.status}>
             {v.status === "signed" && <SignedArt />}
-            <h2 className="sg-h">{v.awaitingMember ? `Signed by you · waiting for ${d.from.name} to countersign` : STATUS_SAY[v.status].h}</h2>
+            <h2 className="sg-h">{v.status === "passed" && v.passedTo ? `You passed this to ${v.passedTo.name} to sign` : v.awaitingMember ? `Signed by you · waiting for ${d.from.name} to countersign` : STATUS_SAY[v.status].h}</h2>
             <p className="sg-p">
               {v.status === "signed" && v.signedName ? `Signed by ${v.signedName} on ${dayOf(v.signedAt)}. ` : ""}
               {v.awaitingMember ? `You'll both get the ${v.sealOnSign ? "sealed" : "signed"} copy by email once ${fromFirst} countersigns.` : STATUS_SAY[v.status].p}
@@ -447,7 +532,7 @@ export function SignView({ token }: { token: string }) {
 
         <ProposalView
           doc={d}
-          openUntil={open ? v.expiresAt : null}
+          openUntil={open ? v.expiresAt ?? "none" : null}
           canSign={open}
           choice={choice}
           onPick={open && d.pricing ? (id) => pickTo({ optionId: id, addOnIds: choice?.addOnIds ?? [] }) : undefined}

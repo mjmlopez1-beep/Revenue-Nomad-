@@ -241,10 +241,10 @@ export function DocSignView({ token }: { token: string }) {
                 <dd>{v.others.map((o) => `${o.name}${o.status === "signed" ? " (signed)" : ""}`).join(", ")}</dd>
               </div>
             )}
-            {open && v.expiresAt && (
+            {open && (
               <div>
                 <dt>Sign by</dt>
-                <dd>{dayOf(v.expiresAt)}</dd>
+                <dd>{v.expiresAt ? dayOf(v.expiresAt) : "No end date"}</dd>
               </div>
             )}
             <div>

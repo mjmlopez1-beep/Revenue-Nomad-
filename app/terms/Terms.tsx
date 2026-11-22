@@ -230,7 +230,9 @@ export function TermsView({ support, starter }: { support: string | null; starte
           <p className="cl-p">
             Merlin helps you write a proposal and send it to your client to sign online. When your client signs, Merlin records their consent, their typed name, the email code
             they confirmed, the time, their IP address and device, and a fingerprint of the exact document, and keeps the signed copy and its audit trail for you both.
-            Signing links work for {SIGN_LINK_DAYS} days.
+            Signing links work for {SIGN_LINK_DAYS} days unless you pick another length when you send (14, 60 or 90 days, or no end date). On {TIER_NAME.close} you
+            can also sign a proposal yourself, as it goes out or after your client signs, with a signature you save once; only you can apply it. Your client can ask you a
+            question from their page (it comes to you by email, and you reply by email) or pass the proposal to someone else at their company to sign.
           </p>
           <p className="cl-p">
             On {TIER_NAME.close} you can give your client up to three options, and add-ons, to pick from: the option and add-ons they pick are part of what they sign. Once

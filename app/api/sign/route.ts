@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { clientIp, limited } from "@/lib/rateLimit";
-import { ProposalProblem, chooseOption, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
+import { ProposalProblem, askQuestion, chooseOption, handOff, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
 import { docDecline, docRequestCode, docSavedSignature, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,8 @@ const err = (message: string, status = 400) => NextResponse.json({ error: messag
  * POST { token, op: "view" }                      SignerView (the first open is noted)
  * POST { token, op: "code" }                      email a 6-digit code to the signer
  * POST { token, op: "verify", code }              confirm it
+ * POST { token, op: "ask", question }             a question to the member, by email (reply-to the signer)
+ * POST { token, op: "handoff", signer: { name, email, title? }, note? }   pass it to someone else to sign
  * POST { token, op: "choose", choice }            pick an option and add-ons ({ optionId, addOnIds }), until signed
  * POST { token, op: "sign", name, consent, hash, choice? } sign: the full name typed, consent true, the hash of the document shown, the option picked
  * POST { token, op: "decline", reason? }
@@ -74,6 +76,13 @@ export const POST = guarded(async (req: NextRequest) => {
       case "verify":
         if (limited(`sign-verify:${ip}`, 20, 10 * 60_000)) return err("That's a lot of tries. Wait 10 minutes, then try again.", 429);
         return NextResponse.json(await verifyCode(token, b.code, who, o), { headers: NO_STORE });
+      case "ask":
+        // A question to the member, by email (lib/proposals/store.ts askQuestion: a few a day on one link too).
+        if (limited(`sign-ask:${ip}`, 10, 60 * 60_000)) return err("That's a lot of questions from here in an hour. Try again later.", 429);
+        return NextResponse.json(await askQuestion(token, b.question, who, o), { headers: NO_STORE });
+      case "handoff":
+        if (limited(`sign-handoff:${ip}`, 5, 60 * 60_000)) return err("That's a lot from here in an hour. Try again later.", 429);
+        return NextResponse.json(await handOff(token, { signer: b.signer, note: b.note }, who, o), { headers: NO_STORE });
       case "choose":
         return NextResponse.json(await chooseOption(token, b.choice, o), { headers: NO_STORE });
       case "sign":

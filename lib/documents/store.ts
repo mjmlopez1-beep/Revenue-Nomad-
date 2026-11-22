@@ -19,7 +19,7 @@ import { randomBytes, randomInt } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type State } from "../table";
 import { emailEnabled, sendEmail, MAX_ATTACHMENT_BYTES } from "../email";
 import { upgradeUrl } from "../plan";
-import { PRO_SEND, EMAIL_OFF, ProposalProblem, SIGN_DAYS, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, proposalInternals as PI, type Client } from "../proposals/store";
+import { PRO_SEND, EMAIL_OFF, ProposalProblem, expMsOf, expiredAt, expiryFor, linkDaysOf, CODE_TTL_MS, CODE_TRIES, CODES_PER_HOUR, companyFor, proposalInternals as PI, type Client } from "../proposals/store";
 import { pipelineEvent } from "../proposals/pipelineHook";
 import { CONSENT_VERSION, consentText } from "../proposals/types";
 import { DOC_MAX_BYTES, SIG_MAX_BYTES, commitSignature, dropSignature, readFinal, readOriginal, readSignature, removeFiles, saveFinal, saveOriginal, stageSignature } from "./files";
@@ -27,7 +27,6 @@ import { PdfProblem, buildFinal, checkPng, inspectPdf, sha256, shown } from "./p
 import { docCodeEmail, docDeclinedEmail, docDoneEmail, docInviteEmail } from "./emails";
 import { FIELD_KINDS, type DocCopy, type DocEvent, type DocField, type DocSigner, type DocSignerRec, type DocSignerView, type DocStatus, type DocumentRec, type StoredDocument } from "./types";
 
-const DAY = 86_400_000;
 export const DOC_LIMITS = { documents: 200, signers: 10, fields: 300, title: 160, label: 60, text: 200, message: 600, reason: 1000 } as const;
 
 const newId = (p: string) => `${p}${randomBytes(9).toString("base64url")}`;
@@ -37,7 +36,7 @@ const { mac, same, cleanLine, cleanSigner, emailHint, base, onFree, titleOf, mem
 
 export const docSignToken = (signerId: string, expMs: number) => `${signerId}.${expMs.toString(36)}.${mac(`rn-dsign:${signerId}:${expMs}`)}`;
 export const docCopyToken = (docId: string) => `${docId}.${mac(`rn-dsigned:${docId}`)}`;
-const signLinkOf = (origin: string | undefined, d: StoredDocument, x: DocSigner) => `${base(origin)}/sign/${docSignToken(x.id, Date.parse(d.expiresAt!))}`;
+const signLinkOf = (origin: string | undefined, d: StoredDocument, x: DocSigner) => `${base(origin)}/sign/${docSignToken(x.id, expMsOf(d.expiresAt))}`;
 export const docCopyLink = (origin: string | undefined, d: { id: string }) => `${base(origin)}/signed/${docCopyToken(d.id)}`;
 export const docDownloadLink = (origin: string | undefined, d: { id: string }) => `${base(origin)}/api/documents/file?c=${encodeURIComponent(docCopyToken(d.id))}`;
 
@@ -64,7 +63,7 @@ export function docStatus(d: StoredDocument, nowMs = Date.now()): DocStatus {
   if (d.signers.some((x) => x.declined)) return "declined";
   if (d.voided) return "void";
   if (!d.sentAt) return "draft";
-  if (d.expiresAt && nowMs > Date.parse(d.expiresAt)) return "expired";
+  if (expiredAt(d.expiresAt, nowMs)) return "expired";
   return d.signers.some((x) => x.viewedAt) ? "viewed" : "sent";
 }
 const live = (d: StoredDocument, nowMs: number) => ["sent", "viewed"].includes(docStatus(d, nowMs));
@@ -351,7 +350,7 @@ async function notify(docId: string, origin: string | undefined, nowMs: number):
   const ok: string[] = [];
   const title = titleOf(s, { id: d.memberId, title: "" } as Parameters<typeof titleOf>[1]);
   for (const x of want) {
-    const mail = docInviteEmail({ signer: x.name, member: m?.name ?? "Your contact", memberTitle: title, title: d.title, link: signLinkOf(origin, d, x), expiresAt: d.expiresAt!, note: d.message, after: d.ordered ? prev : null, self: !!x.sender });
+    const mail = docInviteEmail({ signer: x.name, member: m?.name ?? "Your contact", memberTitle: title, title: d.title, link: signLinkOf(origin, d, x), expiresAt: d.expiresAt ?? null, note: d.message, after: d.ordered ? prev : null, self: !!x.sender });
     if (await sendEmail(x.email, mail.subject, mail.text, mail.html, m?.email && !x.sender ? { replyTo: m.email } : {})) ok.push(x.id);
   }
   if (ok.length) {
@@ -365,7 +364,8 @@ async function notify(docId: string, origin: string | undefined, nowMs: number):
 }
 
 /** Send it: the signers' links by email, in turn. Trial and Pro. */
-export async function sendDocument(token: string | null, id: string, a: { message?: unknown } = {}, origin?: string, nowMs = Date.now()): Promise<{ document: DocumentRec; message: string }> {
+export async function sendDocument(token: string | null, id: string, a: { message?: unknown; linkDays?: unknown } = {}, origin?: string, nowMs = Date.now()): Promise<{ document: DocumentRec; message: string }> {
+  const days = linkDaysOf(a.linkDays);
   const seed = await loadSeed();
   const s0 = await loadState();
   const me0 = memberOf(seed, s0, token);
@@ -380,7 +380,7 @@ export async function sendDocument(token: string | null, id: string, a: { messag
     if (why) throw new ProposalProblem(why);
     if (a.message !== undefined) d.message = cleanLine(a.message, DOC_LIMITS.message);
     d.sentAt = now;
-    d.expiresAt = new Date(nowMs + SIGN_DAYS * DAY).toISOString();
+    d.expiresAt = expiryFor(days, nowMs);
     d.updatedAt = now;
     ev(d, "sent", now, { note: d.signers.map((x) => x.email).join(", ") });
     const to = d.signers.find((x) => !x.sender) ?? d.signers[0];
@@ -397,7 +397,7 @@ export async function sendDocument(token: string | null, id: string, a: { messag
   }
   const d = await getDocument(token, id, origin, nowMs);
   const firsts = d.signers.filter((x) => x.notifiedAt).map((x) => x.name);
-  return { document: d, message: `Sent to ${firsts.join(" and ")}${d.ordered && d.signers.length > 1 ? ". The others get it in turn" : ""}. The links work for ${SIGN_DAYS} days.` };
+  return { document: d, message: `Sent to ${firsts.join(" and ")}${d.ordered && d.signers.length > 1 ? ". The others get it in turn" : ""}. ${days ? `The links work for ${days} days.` : "The links have no end date."}` };
 }
 
 /** The member's own signing link, when they sign it too and it is their turn. */
@@ -431,7 +431,7 @@ function resolve(s: State, raw: unknown): Found {
   for (const d of s.documents ?? []) {
     const x = d.signers.find((y) => y.id === t.signerId);
     if (x) {
-      if (!d.expiresAt || Date.parse(d.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
+      if (!d.sentAt || d.expiresAt === undefined || expMsOf(d.expiresAt) !== t.expMs) throw new ProposalProblem(GONE, 404);
       return { d, x };
     }
   }
@@ -444,7 +444,7 @@ function signerState(f: Found, nowMs: number): DocSignerView["status"] {
   if (x.signed) return "signed";
   if (d.signers.some((y) => y.declined)) return "declined";
   if (d.voided) return "void";
-  if (nowMs > Date.parse(d.expiresAt!)) return "expired";
+  if (expiredAt(d.expiresAt, nowMs)) return "expired";
   return turnOf(d).includes(x) ? "open" : "waiting";
 }
 

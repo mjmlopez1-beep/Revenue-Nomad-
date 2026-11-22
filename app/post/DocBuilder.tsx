@@ -13,6 +13,8 @@
  * with each signer's progress and the audit trail. When everyone has signed, the final PDF is here
  * to download, with its audit trail page.
  */
+import { LinkDaysPick } from "./LinkDays";
+import type { LinkDays } from "@/lib/proposals/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProposalsView } from "@/lib/proposals/types";
 import { SENDER_DUTY } from "@/lib/proposals/types";
@@ -629,13 +631,14 @@ function DocTrail({ d }: { d: DocumentRec }) {
 
 function DocSendSheet({ d, canSend, email, issues, onClose, onSent }: { d: DocumentRec; canSend: boolean; email: boolean; issues: string[]; onClose: () => void; onSent: (d: DocumentRec, message: string) => void }) {
   const [note, setNote] = useState("");
+  const [days, setDays] = useState<LinkDays>(30);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const ok = canSend && email && issues.length === 0;
   const go = async () => {
     setBusy(true);
     setErr(null);
-    const r = await dapi<{ document: DocumentRec; message: string }>({ op: "send", id: d.id, message: note });
+    const r = await dapi<{ document: DocumentRec; message: string }>({ op: "send", id: d.id, message: note, linkDays: days });
     setBusy(false);
     if (r.error) return setErr(r.error);
     onSent(r.document, r.message);
@@ -671,6 +674,7 @@ function DocSendSheet({ d, canSend, email, issues, onClose, onSent }: { d: Docum
           <span className="pp-field-l">A note in the email (optional)</span>
           <textarea className="input pp-note" rows={2} maxLength={600} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Here's the agreement we discussed." />
         </label>
+        {canSend && <LinkDaysPick value={days} onChange={setDays} />}
         {issues.length > 0 && (
           <ul className="pp-flaglist">
             {issues.map((x) => (

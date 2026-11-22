@@ -26,12 +26,12 @@ export function proposalName(title: string, company: string): string {
 }
 
 /** To the client: the proposal is ready to read and sign. */
-export function proposalEmail(o: { signer: string; member: string; memberTitle: string; title: string; company: string; link: string; expiresAt: string; note?: string }): Mail {
+export function proposalEmail(o: { signer: string; member: string; memberTitle: string; title: string; company: string; link: string; expiresAt: string | null; note?: string }): Mail {
   const member = oneLine(o.member).slice(0, 80);
   const subject = `${member} sent you a proposal to sign`;
   const lead = `${member}${o.memberTitle ? `, ${oneLine(o.memberTitle).slice(0, 80)},` : ""} sent you ${proposalName(o.title, o.company)}.`;
   const how = "Read it and sign online. No account needed: we confirm it's you with a code sent to this email.";
-  const until = `The link works until ${day(o.expiresAt)}.`;
+  const until = o.expiresAt ? `The link works until ${day(o.expiresAt)}.` : "The link has no end date.";
   const note = oneLine(o.note ?? "").slice(0, 600);
   const f = foot();
   const text = [`Hi ${first(o.signer)},`, "", lead, ...(note ? ["", note] : []), "", how, "", o.link, "", until, "", ...f.text].join("\n");
@@ -147,6 +147,52 @@ export function countersignEmail(o: { to: "member" | "signer"; name: string; mem
     linkLine(o.link),
   ].join("\n");
   return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, art: "signed", footer: f.lines }) };
+}
+
+/** To the member: the client's question, reply-to the client's own address. */
+export function questionEmail(o: { member: string; signer: string; title: string; question: string; link: string }): Mail {
+  const signer = oneLine(o.signer).slice(0, 80);
+  const title = oneLine(o.title).slice(0, 140);
+  const subject = `${signer} asked a question about ${title}`.slice(0, 200);
+  const lead = `${signer} asked about ${title}. Reply to this email to answer: it goes straight to them.`;
+  const q = String(o.question).slice(0, 2000);
+  const f = foot();
+  const text = [`Hi ${first(o.member)},`, "", lead, "", q, "", `The proposal in Merlin: ${o.link}`, "", ...f.text].join("\n");
+  const body = [
+    mailP(`Hi ${escHtml(first(o.member))},`),
+    mailH(`${escHtml(signer)} asked a question`),
+    mailP(escHtml(lead)),
+    mailCallout(escHtml(q).replace(/\n/g, "<br>"), "page"),
+    mailButton(o.link, "Open the proposal", "margin:8px 0 24px"),
+    linkLine(o.link),
+  ].join("\n");
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, art: "proposal", footer: f.lines }) };
+}
+
+/** A hand-off: to the new signer, their link; to the member, who it went to. */
+export function handoffEmail(o: { to: "signer" | "member"; name: string; from: string; member: string; title: string; link: string; expiresAt: string | null; note?: string; newSigner?: string }): Mail {
+  const from = oneLine(o.from).slice(0, 80);
+  const member = oneLine(o.member).slice(0, 80);
+  const title = oneLine(o.title).slice(0, 140);
+  const subject = o.to === "signer" ? `${from} passed you ${title} to sign`.slice(0, 200) : `${from} passed ${title} to ${oneLine(o.newSigner ?? "someone else")} to sign`.slice(0, 200);
+  const lead =
+    o.to === "signer"
+      ? `${from} passed you ${title}, from ${member}, to read and sign online. No account needed: we confirm it's you with a code sent to this email.`
+      : `${from} passed ${title} to ${oneLine(o.newSigner ?? "someone else")} to sign. Their link is on its way; the one ${from} had is read only now.`;
+  const note = oneLine(o.note ?? "").slice(0, 600);
+  const until = o.expiresAt ? `The link works until ${day(o.expiresAt)}.` : "The link has no end date.";
+  const f = foot();
+  const text = [`Hi ${first(o.name)},`, "", lead, ...(note ? ["", `${from}'s note: ${note}`] : []), "", o.link, ...(o.to === "signer" ? ["", until] : []), "", ...f.text].join("\n");
+  const body = [
+    mailP(`Hi ${escHtml(first(o.name))},`),
+    mailH(o.to === "signer" ? `${escHtml(from)} passed you a proposal to sign` : "It was passed on"),
+    mailP(escHtml(lead)),
+    note ? mailCallout(`${escHtml(from)}&#39;s note: ${escHtml(note)}`, "page") : "",
+    mailButton(o.link, o.to === "signer" ? "Review and sign" : "Open the proposal", "margin:8px 0 24px"),
+    linkLine(o.link),
+    o.to === "signer" ? small(escHtml(until)) : "",
+  ].join("\n");
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, art: "proposal", footer: f.lines }) };
 }
 
 /** To the member: the client declined, with their reason when they gave one. */

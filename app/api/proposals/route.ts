@@ -47,7 +47,7 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName? }
  *                  A change to what the client reads, after a version went out, makes a new version and voids the old link.
  * POST { op: "duplicate" | "delete" | "void", id }
- * POST { op: "send", id, signer: { name, email, title? }, message?, memberSign? }   Trial and Pro (403 with `upgrade` on Free). memberSign: "now" | "after" | "none".
+ * POST { op: "send", id, signer: { name, email, title? }, message?, memberSign?, linkDays? }   Trial and Pro (403 with `upgrade` on Free). memberSign: "now" | "after" | "none".
  * POST { op: "countersign", id, method?: "saved" | "drawn" | "typed", png?, typed?, consent?, save? }   The sender countersigns after the client signed.
  * POST { op: "signature_get" } | { op: "signature_set", method: "drawn" | "typed", png?, typed?, consent: true } | { op: "signature_delete" }   Their saved signature (Close).
  * GET ?countersign=due   Proposals the client signed over 24 hours ago that wait for their countersignature (Home).
@@ -113,7 +113,7 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(() => voidProposal(token, id, o));
     case "send":
       if (limited(`prop-send:${me.id}`, 20, 60 * 60_000)) return err("That's 20 sends in an hour, which is the limit. Try again later.", 429);
-      return answer(() => sendProposal(token, id, { signer: b.signer, message: b.message, memberSign: b.memberSign, who }, o));
+      return answer(() => sendProposal(token, id, { signer: b.signer, message: b.message, memberSign: b.memberSign, linkDays: b.linkDays, who }, o));
     case "countersign":
       return answer(() => countersignProposal(token, id, { method: b.method, png: b.png, typed: b.typed, consent: b.consent, save: b.save, who }, o));
     case "signature_get":

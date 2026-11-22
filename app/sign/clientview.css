@@ -959,3 +959,7 @@ button.cv-opt {
   font-weight: 800;
   color: #0a1a13;
 }
+.cv-btn-lg {
+  min-height: 52px;
+  font-size: 15px;
+}
