@@ -236,7 +236,15 @@ const { WonMoment } = await import("../app/ui/WonMoment");
   const pl = readFileSync(join(ROOT, "app/post/Pipeline.tsx"), "utf8");
   check("the pipeline's Won column opens with it", pl.includes('{s === "won" && list[0] ? <WonMoment rec={list[0]} compact /> : null}'));
   const sign = readFileSync(join(ROOT, "app/sign/Sign.tsx"), "utf8");
-  check("the signer's Signed card has its spot, not a check icon", sign.includes('<Spot name="unlocked" size={112} on="mint" ember className="sg-done-art" />') && !sign.includes('className="sg-done"'));
+  // SignedArt (Sign.tsx) is shared by the proposal's and the uploaded document's signing pages: the open lock on the mint signed card.
+  const docSign = readFileSync(join(ROOT, "app/sign/DocSign.tsx"), "utf8");
+  check(
+    "the signer's Signed card has its spot, not a check icon",
+    sign.includes('export const SignedArt = ({ on = "mint" }: { on?: "mint" | "white" }) => <Spot name="unlocked" size={112} on={on} ember className="sg-done-art" />;') &&
+      sign.includes("<SignedArt />") &&
+      docSign.includes('<SignedArt on={v.status === "signed" ? "mint" : "white"} />') &&
+      !sign.includes('className="sg-done"'),
+  );
 }
 
 /* ---------- the loading shell and the problem pages ---------- */
