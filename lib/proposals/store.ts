@@ -31,6 +31,7 @@ export { docFields };
 import { codeEmail, declinedEmail, proposalEmail, signedEmail } from "./emails";
 import { blocksOfMine, isMineId, templatesOf } from "./mine";
 import { aiConfigured } from "./aiConfig";
+import { AI_PACK_LINK, PACK_PRICE_USD, budgetOf, usedUpWords } from "./aiUsage";
 import { pipelineEvent } from "./pipelineHook";
 import {
   CONSENT_VERSION,
@@ -215,6 +216,8 @@ export async function listProposals(token: string | null, origin?: string, nowMs
     templates: templateChoices(s, me.id, free),
     ai: !aiConfigured() ? "off" : free ? "plan" : "on",
     aiAgreed: !!s.aiDrafts?.[me.id],
+    // The AI usage all used: the words the draft gives (no numbers), and the pack's button and link.
+    ...(aiConfigured() && !free && !budgetOf(s, me.id, nowMs).open ? { aiUsedUp: { words: usedUpWords(nowMs, budgetOf(s, me.id, nowMs).trial), pack: AI_PACK_LINK, button: `Add a $${PACK_PRICE_USD} usage pack` } } : {}),
     canSend: !free,
     templatesOpen: free ? [FREE_TEMPLATE] : TEMPLATES.map((t) => t.id),
     email: emailEnabled(),

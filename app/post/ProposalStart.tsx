@@ -25,6 +25,8 @@ const NETWORK = "We couldn't reach Merlin. Check your connection and try again."
 export const CLAUDE_NEW = "https://claude.ai/new";
 const AI_CONSENT = "Claude reads the transcript through Anthropic's API to write the draft. Merlin keeps the draft, not the transcript.";
 
+const PACK_WORDS = "Add a $10 usage pack";
+
 async function post<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
   try {
     const r = await fetch("/api/proposals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -96,6 +98,8 @@ export function StartSheet({
   const [useAi, setUseAi] = useState(data.ai === "on");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // The AI usage all used (ProposalsView.aiUsedUp, or the draft's refusal): the draft explains, with the pack and Build it in Claude.
+  const [usedUp, setUsedUp] = useState<{ words: string; pack: string; button: string } | null>(data.aiUsedUp ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
   const tplRef = useRef<HTMLInputElement>(null);
 
@@ -105,6 +109,7 @@ export function StartSheet({
   const template = data.templates.find((t) => t.id === tpl) ?? null;
   const hasCall = text.trim().length > 0;
   const ai = data.ai === "on" && useAi && hasCall;
+  const aiOut = ai && !!usedUp;
 
   const readFile = (f: File | undefined) => {
     if (!f) return;
@@ -132,6 +137,7 @@ export function StartSheet({
       setBusy("draft");
       const r = await post<{ proposal: ProposalRec; toFix: string[] }>({ op: "draft", ...base, transcript: text, callDate: dayWords(date) || undefined, callWith: withWho.trim() || undefined, agree: true });
       setBusy(null);
+      if (r.error && r.upgrade) return setUsedUp({ words: r.error, pack: r.upgrade, button: PACK_WORDS });
       if (r.error) return setErr(r.error);
       // The transcript is gone from here too once the draft is made.
       setText("");
@@ -175,7 +181,16 @@ export function StartSheet({
       className="pp-start"
       footer={
         <div className="pp-start-foot">
-          <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy === "draft"} disabled={!!busy || (!company && !pick)} onClick={draft}>
+          {aiOut && usedUp && (
+            <div className="pp-aiout" role="note">
+              <p className="pp-help">{usedUp.words}</p>
+              {/* The pack's purchase posts to /api/billing/ai-pack once billing has it (lib/proposals/aiUsage.ts AI_PACK_ROUTE); until then, Settings, Plan. */}
+              <a className="btn btn-pine btn-lg pp-wide" href={usedUp.pack}>
+                {usedUp.button}
+              </a>
+            </div>
+          )}
+          <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy === "draft"} disabled={!!busy || (!company && !pick) || aiOut} onClick={draft}>
             {busy === "draft" ? (ai ? "Claude is drafting it" : "Drafting") : hasCall ? "Draft it" : "Start from the template"}
           </button>
           <button type="button" className="btn btn-lg pp-wide pp-claude-btn" onClick={() => void buildInClaude(prompt, toast)}>

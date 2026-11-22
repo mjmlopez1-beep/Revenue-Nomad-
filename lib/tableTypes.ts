@@ -460,6 +460,12 @@ export interface PlanView {
   proWelcome?: boolean;
   /** The trial started in the last few days and the member hasn't closed Home's one-time trial card yet (PlanRecord.notices.trialStartedSeen). */
   trialStarted?: boolean;
+  /**
+   * Settings, Plan's "AI usage this month" (lib/proposals/aiUsage.ts aiMeter), while drafting with
+   * Claude is on for them: a percentage and the day it resets, never dollars or tokens. `notice`:
+   * the one-time "You've used 75% of this month's AI usage" (noticeSeen kind "aiUsage" closes it).
+   */
+  ai?: { percent: number; resetsOn: string | null; trial: boolean; usedUp: boolean; onPack: boolean; canAddPack: boolean; notice: 50 | 75 | 90 | null };
 }
 
 /** The most functions "Which fractional usually gets hired before you?" takes. */
@@ -1071,7 +1077,7 @@ export type Action =
   /** The invite loop: the inviter closed the line saying these fractionals joined from their invite (Me.joined ids). It doesn't come back. */
   | { type: "joinedSeen"; ids: string[] }
   /** Today's one-time cards: the member closed it ("trialEnded": the trial-ended card), kept in PlanRecord.notices. */ // [ux ws1]
-  | { type: "noticeSeen"; kind: "trialEnded" | "proWelcome" | "trialStarted" } // [ux ws1]
+  | { type: "noticeSeen"; kind: "trialEnded" | "proWelcome" | "trialStarted" | "aiUsage" } // [ux ws1]
   /**
    * Your three moves today (lib/moves.ts): the member did the move at this company (it leaves the
    * list for DONE_DAYS and counts for the month), snoozed it (hidden for SNOOZE_DAYS), or took

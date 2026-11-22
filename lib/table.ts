@@ -135,6 +135,8 @@ import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 
 import type { MyTemplate, StoredProposal } from "./proposals/types";
+import { aiMeter, noticeSeenIn as aiNoticeSeenIn, type AiUsageRec } from "./proposals/aiUsage";
+import { aiConfigured } from "./proposals/aiConfig";
 import type { StoredDocument } from "./documents/types";
 // The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
 // inside the same change that sends, signs or declines. Registered once, when the server loads this module.
@@ -590,8 +592,8 @@ export interface State extends MessagingState {
   myTemplates?: Record<string, MyTemplate[]>;
   /** When each member agreed that a transcript may go to Anthropic's API to write a draft (lib/proposals/draft.ts), by member id. */
   aiDrafts?: Record<string, string>;
-  /** How many proposals each member drafted with Claude on Merlin's server on a UTC day (lib/proposals/draft.ts DRAFTS_A_DAY), by member id. Theirs alone like aiDrafts. */
-  aiDraftDays?: Record<string, { day: string; n: number }>;
+  /** Each member's Claude usage on Merlin's server, metered in micro-dollars, with their packs and notices (lib/proposals/aiUsage.ts), by member id. Numbers only. Theirs alone: never in another member's view or the export. */
+  aiUsage?: Record<string, AiUsageRec>;
 }
 
 /** State.salesBuild[companyId]. */
@@ -6942,6 +6944,8 @@ export async function perform(
           if (rec && a.kind === "proWelcome") (rec.notices ??= {}).proWelcomeSeen = now;
           // Home's one-time card when the trial started, closed.
           if (rec && a.kind === "trialStarted") (rec.notices ??= {}).trialStartedSeen = now;
+          // The AI usage notice (50%, 75%, 90%), seen: each fires once a month (lib/proposals/aiUsage.ts).
+          if (a.kind === "aiUsage") aiNoticeSeenIn(s, me.id);
           return { message: "" }; // [ux ws1]
         } // [ux ws1]
         case "move": {
@@ -7306,7 +7310,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well.
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiDraftDays: _aiDraftDays, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -8056,6 +8060,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     ...(free && rec?.trialStartedAt && !rec.paidSince && !rec.notices?.trialEndedSeen ? { trialEnded: true } : {}), // [ux ws1] Today's one-time trial-ended card
     ...(proWelcomeDue(rec, name, nowMs) ? { proWelcome: true } : {}),
     ...(trialCardDue(rec, name, nowMs) ? { trialStarted: true } : {}),
+    ...(aiConfigured() && !gated(rec, nowMs) ? { ai: aiMeter(s, memberId, nowMs) } : {}),
   };
 }
 

@@ -626,7 +626,7 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
     notes: [{ key: "budget.signals", text: "Quoted $15k a month elsewhere, felt high" }],
     to_fix: ["Confirm the start date", "Add Dana's email before you send"],
   };
-  const reply = (text: string, stop = "end_turn") => ({ json: { id: "msg_fake", type: "message", role: "assistant", model: "model-from-the-env", content: [{ type: "text", text }], stop_reason: stop, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } } });
+  const reply = (text: string, stop = "end_turn", use = { input_tokens: 10, output_tokens: 10 }) => ({ json: { id: "msg_fake", type: "message", role: "assistant", model: "model-from-the-env", content: [{ type: "text", text }], stop_reason: stop, stop_sequence: null, usage: use } });
   aiAnswer = () => reply(JSON.stringify(draftJson));
   const setEnv = (on: boolean) => {
     for (const [k, v] of Object.entries(aiEnv)) on ? (process.env[k] = v) : delete process.env[k];
@@ -701,28 +701,85 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   check("switch off: nothing went to Anthropic", aiCalls.length === 6);
   setEnv(true);
 
-  // The day's cap: 15 drafts with Claude a member a UTC day, kept in the state. Failed drafts give theirs back.
-  const today = new Date().toISOString().slice(0, 10);
-  const stCap = JSON.parse(readFileSync(path.join(dir, "intel.json"), "utf8"));
-  check("the day's count is in the state: 2 drafts made, the 4 that failed gave theirs back", D.DRAFTS_A_DAY === 15 && stCap.aiDraftDays?.mem_pat?.day === today && stCap.aiDraftDays.mem_pat.n === 2, stCap.aiDraftDays);
-  await T.tableInternals.mutate((st) => {
-    (st.aiDraftDays ??= {}).mem_pat = { day: today, n: 14 };
-  });
-  const nCap = (await S.listProposals(PAT, BASE)).proposals.length;
-  const callsCap = aiCalls.length;
+  /* ---------- the AI budget (lib/proposals/aiUsage.ts) ---------- */
+  console.log("\nthe AI budget");
+  const AU = await import("../lib/proposals/aiUsage");
+  const usage0 = (await T.loadState()).aiUsage?.mem_pat;
+  // 10 tokens in at $4 a million and 10 out at $20 a million: 40 + 200 micro-dollars a call.
+  check("metered from the API's usage, in micro-dollars: the 2 drafts saved, 240 each", AU.microsOf(10, 10) === 240 && usage0?.trialMicros === 480 && usage0.log.length === 2 && usage0.log.every((l) => l.inTok === 10 && l.outTok === 10 && l.micros === 240 && Object.keys(l).sort().join() === "at,inTok,micros,outTok"), usage0);
+  check("a failure or a refusal costs nothing: the 4 that failed aren't charged or logged", usage0?.log.length === 2 && usage0.usedMicros === 0);
+  const b0 = AU.budgetOf(await T.loadState(), "mem_pat");
+  check("an active trial has $3 in total", b0.trial && b0.budget === 3_000_000 && AU.TRIAL_BUDGET_MICROS === 3_000_000 && AU.MONTH_BUDGET_MICROS === 10_000_000 && AU.PACK_MICROS === 4_700_000);
+  await T.tableInternals.mutate((st) => void (st.aiUsage!.mem_pat.trialMicros = 2_999_999));
+  // A long call: 50,000 tokens in and 10,000 out, $0.40.
+  const big = { input_tokens: 50_000, output_tokens: 10_000 };
+  aiAnswer = () => reply(JSON.stringify(draftJson), "end_turn", big);
+  const callsB = aiCalls.length;
   await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE);
-  check("the 15th draft of the day goes through", aiCalls.length === callsCap + 1 && (await S.listProposals(PAT, BASE)).proposals.length === nCap + 1 && D.draftsToday(await T.loadState(), "mem_pat") === 15);
-  const capErr = await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
-  check("the 16th is refused with a plain sentence, and Claude isn't called", capErr?.status === 429 && capErr.message === D.AI_CAP && /15 drafts with Claude today/.test(capErr.message) && /Build it in Claude/.test(capErr.message) && aiCalls.length === callsCap + 1 && (await S.listProposals(PAT, BASE)).proposals.length === nCap + 1, capErr?.message);
-  check("the cap is the member's own: another member's day isn't touched", D.draftsToday(await T.loadState(), "mem_oth") === 0);
-  const tomorrow = Date.now() + 24 * 60 * 60_000;
-  await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE, tomorrow);
-  check("the next UTC day starts again at 1", aiCalls.length === callsCap + 2 && D.draftsToday(await T.loadState(), "mem_pat", tomorrow) === 1);
-  check("the day's count never leaves in the export", !("aiDraftDays" in (await T.exportState())));
-  // Build it in Claude (the copied prompt and the connector's kit, below) runs in the member's own Claude: no cap, even at 15.
-  await T.tableInternals.mutate((st) => {
-    (st.aiDraftDays ??= {}).mem_pat = { day: today, n: 15 };
-  });
+  const u1 = (await T.loadState()).aiUsage!.mem_pat;
+  check("allowed just under 100%, and the call may take it past", aiCalls.length === callsB + 1 && u1.trialMicros === 2_999_999 + 400_000, u1.trialMicros);
+  const over = await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
+  check("refused at 100%, with the pack and Build it in Claude, and Claude isn't called", over?.status === 402 && over.message === AU.usedUpWords(Date.now(), true) && /usage pack/.test(over.message) && /Build it in Claude, free/.test(over.message) && over.upgrade === AU.AI_PACK_LINK && aiCalls.length === callsB + 1, over?.message);
+  check("the month's words name the day it resets", /^You've used this month's AI usage\. Add a \$10 usage pack to keep drafting, or Build it in Claude, free\. It resets on December 1\.$/.test(AU.usedUpWords(Date.UTC(2026, 10, 22))));
+  const lv = await S.listProposals(PAT, BASE);
+  check("the page knows: the words and the pack's button, never a number", lv.aiUsedUp?.words === over?.message && lv.aiUsedUp?.button === "Add a $10 usage pack" && lv.aiUsedUp.pack === AU.AI_PACK_LINK && readFileSync("app/post/ProposalStart.tsx", "utf8").includes(`const PACK_WORDS = "${lv.aiUsedUp?.button}"`));
+  // A pack: once per payment, used after the budget, never expiring.
+  check("grantAiPack adds a pack", (await AU.grantAiPack("mem_pat", AU.PACK_MICROS, "pi_test_pack_1")).granted === true && (await T.loadState()).aiUsage!.mem_pat.packMicros === 4_700_000);
+  check("grantAiPack is idempotent on its payment reference", (await AU.grantAiPack("mem_pat", AU.PACK_MICROS, "pi_test_pack_1")).granted === false && (await T.loadState()).aiUsage!.mem_pat.packMicros === 4_700_000 && (await T.loadState()).aiUsage!.mem_pat.packs!.length === 1);
+  check("grantAiPack needs a reference", (await AU.grantAiPack("mem_pat", AU.PACK_MICROS, "").then(() => false, () => true)));
+  check("with a pack, drafting opens again", !(await S.listProposals(PAT, BASE)).aiUsedUp);
+  await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE);
+  const u2 = (await T.loadState()).aiUsage!.mem_pat;
+  check("past the budget, the pack pays", u2.packMicros === 4_700_000 - 400_000 && u2.trialMicros === 3_399_999, [u2.packMicros, u2.trialMicros]);
+  // What the member sees: a percentage, never dollars or tokens.
+  const pv = await T.buildView(PAT);
+  const pvJson = JSON.stringify(pv);
+  check("Settings, Plan: a percentage only", pv.me?.plan?.ai?.percent === 100 && pv.me.plan.ai.trial === true && pv.me.plan.ai.onPack === true && pv.me.plan.ai.usedUp === false && Object.keys(pv.me.plan.ai).sort().join() === "canAddPack,notice,onPack,percent,resetsOn,trial,usedUp", pv.me?.plan?.ai);
+  check("no dollars or tokens in what the member's app reads", !/aiUsage|[Mm]icros|inTok|outTok|input_tokens|"usd"/.test(pvJson) && !/[Mm]icros|inTok|outTok|4\.70/.test(JSON.stringify(await S.listProposals(PAT, BASE))));
+  check("another member sees none of it", !/aiUsage|[Mm]icros/.test(JSON.stringify(await T.buildView(OTH))) && (await T.buildView(OTH)).me?.plan?.ai?.percent === 0);
+  check("the export leaves it out", !("aiUsage" in (await T.exportState())));
+  // The trial's notices fired as it passed 50, 75 and 90%, once; seen, they're closed.
+  check("the trial's notice: the highest passed", pv.me?.plan?.ai?.notice === 90);
+  await T.perform(PAT, { type: "noticeSeen", kind: "aiUsage" }, BASE);
+  check("closed once seen, and it doesn't come back", (await T.buildView(PAT)).me?.plan?.ai?.notice === null);
+  // The admin's Health: the month in counts and dollars.
+  const tot = AU.aiUsageTotals(await T.loadState());
+  check("Health: the month's calls, tokens, cost, packs and members past 50, 90 and 100%", tot.calls === 4 && tot.inTok === 20 + 100_000 && tot.outTok === 20 + 20_000 && tot.micros === 480 + 800_000 && tot.packsSold === 1 && tot.past50 === 1 && tot.past90 === 1 && tot.past100 === 1, tot);
+  // Pure: a month on Pro, its notices and its rollover, on a made-up state.
+  const NOV = Date.UTC(2026, 10, 3, 12);
+  const DEC = Date.UTC(2026, 11, 2, 12);
+  const pst = { aiUsage: {}, billing: { members: { m1: { proUntil: new Date(Date.UTC(2027, 5, 1)).toISOString() } } } } as unknown as import("../lib/table").State;
+  const spend = (micros: number, at = NOV) => AU.chargeIn(pst, "m1", at, { inTok: micros / 4, outTok: 0 });
+  const meter = (at = NOV) => AU.aiMeter(pst, "m1", at);
+  check("Pro: $10 a month, resets on the 1st, the pack offered", AU.budgetOf(pst, "m1", NOV).budget === 10_000_000 && !AU.budgetOf(pst, "m1", NOV).trial && meter().resetsOn === "2026-12-01" && meter().canAddPack === true && meter().percent === 0 && meter().notice === null);
+  spend(4_000_000);
+  check("under 50%: no notice", meter().percent === 40 && meter().notice === null);
+  spend(1_000_000);
+  check("at 50%: the notice", meter().percent === 50 && meter().notice === 50);
+  AU.noticeSeenIn(pst, "m1");
+  spend(1_000_000);
+  check("past 50% again: it doesn't fire twice", meter().percent === 60 && meter().notice === null);
+  spend(1_600_000);
+  check("at 75%", meter().notice === 75);
+  AU.noticeSeenIn(pst, "m1");
+  spend(1_500_000);
+  check("at 90%", meter().percent === 91 && meter().notice === 90);
+  AU.noticeSeenIn(pst, "m1");
+  spend(500_000);
+  const al = (pst.aiUsage!.m1 as import("../lib/proposals/aiUsage").AiUsageRec).alerts!;
+  check("each fires once a month", meter().notice === null && al.fired.join() === "50,75,90" && al.seen.join() === "50,75,90");
+  check("just under 100%: allowed", AU.budgetOf(pst, "m1", NOV).open && meter().percent === 96);
+  spend(1_000_000);
+  check("at 100% and no pack: refused", !AU.budgetOf(pst, "m1", NOV).open && meter().usedUp && meter().percent === 100);
+  (pst.aiUsage!.m1 as import("../lib/proposals/aiUsage").AiUsageRec).packMicros = 1_000_000;
+  check("a pack opens it again", AU.budgetOf(pst, "m1", NOV).open && meter().onPack);
+  check("the month rolls over on the 1st: 0% used, the notices start again, the pack kept", AU.budgetOf(pst, "m1", DEC).used === 0 && meter(DEC).percent === 0 && meter(DEC).notice === null && meter(DEC).resetsOn === "2027-01-01" && AU.budgetOf(pst, "m1", DEC).pack === 1_000_000);
+  spend(5_000_000, DEC);
+  const recD = pst.aiUsage!.m1 as import("../lib/proposals/aiUsage").AiUsageRec;
+  check("December's first spend: November's used is gone, December's 50% notice fires", recD.month === "2026-12" && recD.usedMicros === 5_000_000 && recD.packMicros === 1_000_000 && meter(DEC).notice === 50);
+  for (let i = 0; i < 230; i++) spend(4, DEC);
+  check("the log keeps the last 200, numbers only", recD.log.length === 200 && recD.log.every((l) => typeof l.inTok === "number" && typeof l.micros === "number"));
+  aiAnswer = () => reply(JSON.stringify(draftJson));
 
   // The connector's kit: one call, by template id or by the name the member said.
   const kctx = { member: (await T.memberForToken(PAT))!, origin: BASE };
@@ -733,7 +790,9 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   const fkctx = { member: (await T.memberForToken(FRE))!, origin: BASE };
   check("get_proposal_kit on Free: Merlin's other templates are Pro's", (await refused(C.getProposalKit(fkctx, { template: "sprint-90" })))?.includes("On Free"));
   check("the kit and the server's draft read the same inputs", JSON.stringify(Object.keys(await K.proposalKit(PAT, { templateId: "sprint-90", companyId: ACME })).sort()) === JSON.stringify(Object.keys(kitJson).sort()));
-  check("Build it in Claude isn't capped: the kit still comes at 15 drafts today", D.draftsToday(await T.loadState(), "mem_pat") === 15 && !!(await C.getProposalKit(kctx, { template: "sprint 90", company_id: ACME })).template);
+  // Build it in Claude runs in the member's own Claude: free and unlimited, even with the AI usage all used.
+  await T.tableInternals.mutate((st) => void Object.assign(st.aiUsage!.mem_pat, { trialMicros: 9_000_000, packMicros: 0 }));
+  check("Build it in Claude isn't metered: with the AI usage all used, the kit still comes", !!(await S.listProposals(PAT, BASE)).aiUsedUp && !!(await C.getProposalKit(kctx, { template: "sprint 90", company_id: ACME })).template);
 
   /* ================= My templates ================= */
   console.log("\nmy templates");

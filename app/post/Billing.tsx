@@ -573,6 +573,60 @@ export function CreditsWall({ plan }: { plan: PlanView }) {
 
 /* ---------- Plan and billing ---------- */
 
+/** Where "Add an AI usage pack, $10" posts (the billing branch builds it: lib/proposals/aiUsage.ts AI_PACK_ROUTE). */
+const AI_PACK_ROUTE = "/api/billing/ai-pack";
+
+/**
+ * AI usage this month (PlanView.ai, lib/proposals/aiUsage.ts aiMeter): a percentage and the day it
+ * resets, never dollars or tokens. On paid Pro, the usage pack.
+ */
+export function AiUsageCard({ ai }: { ai: NonNullable<PlanView["ai"]> }) {
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  const reset = ai.resetsOn ? new Date(`${ai.resetsOn}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : null;
+  const line = ai.trial ? `${ai.percent}% of your trial's AI usage used` : `${ai.percent}% used${reset ? `, resets ${reset}` : ""}`;
+  const buy = async () => {
+    setBusy(true);
+    setSaid(null);
+    try {
+      const r = await fetch(AI_PACK_ROUTE, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (r.ok && j.url) return void (window.location.href = j.url);
+      setSaid(r.status === 404 ? "Usage packs aren't on sale yet." : j.error ?? "That didn't go through. Try again.");
+    } catch {
+      setSaid("That didn't go through. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="tp-card bl-ai" aria-labelledby="bl-ai-h">
+      <h2 className="tp-card-h" id="bl-ai-h">
+        {ai.trial ? "AI usage on your trial" : "AI usage this month"}
+      </h2>
+      <div className="bl-ai-meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={ai.percent} aria-label={line}>
+        <span style={{ width: `${ai.percent}%` }} />
+      </div>
+      <p className="cr-note bl-ai-line">{line}</p>
+      {ai.usedUp ? (
+        <p className="cr-note">You&apos;ve used it all. Build it in Claude still works, free.</p>
+      ) : ai.onPack ? (
+        <p className="cr-note">This month&apos;s is used: your usage pack keeps you drafting.</p>
+      ) : null}
+      {ai.canAddPack && (
+        <div className="bl-acts">
+          <button type="button" className="btn" disabled={busy} aria-busy={busy} onClick={() => void buy()}>
+            Add an AI usage pack, $10
+          </button>
+          <span className="tp-small muted" role="status">
+            {said}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Status({ plan }: { plan: PlanView }) {
   if (plan.name === "trial")
     return (
@@ -697,6 +751,8 @@ export function BillingPage({ view, refresh, onBack }: { view: View; refresh: ()
           )}
         </div>
       </section>
+
+      {plan.ai && <AiUsageCard ai={plan.ai} />}
 
       {paidPlan && plan.proStartsAt && !plan.cancelAt && (
         <section className="tp-card bl-manage" aria-labelledby="bl-manage-h">

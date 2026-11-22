@@ -196,6 +196,11 @@ export interface ProposalsView {
   ai: "on" | "off" | "plan";
   /** They agreed once that a transcript may go to Anthropic's API to write a draft. */
   aiAgreed: boolean;
+  /**
+   * Their AI usage is all used (lib/proposals/aiUsage.ts): what the draft explains, the pack's
+   * button and where it goes. Never a number of dollars or tokens. Left out while some is left.
+   */
+  aiUsedUp?: { words: string; pack: string; button: string };
   /** Sending for signature: Trial and Pro (and every plan while billing is off). */
   canSend: boolean;
   /** Templates the member can start from: every one, or on Free only FREE_TEMPLATE. */

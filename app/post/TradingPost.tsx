@@ -874,6 +874,16 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [trialStartSeen, setTrialStartSeen] = useState(false);
   // The one-time Pro welcome on Home, closed here, and the way back from checkout (?paid=1): say thanks once, and load the plan the payment just made.
   const [proSeen, setProSeen] = useState(false);
+  // The AI usage notice (Me.plan.ai.notice: 50%, 75% or 90%, each once a month): said once, then closed on the server.
+  const aiNotice = me.plan?.ai?.notice ?? null;
+  const aiTrial = !!me.plan?.ai?.trial;
+  const aiSaid = useRef<number | null>(null);
+  useEffect(() => {
+    if (!aiNotice || aiSaid.current === aiNotice) return;
+    aiSaid.current = aiNotice;
+    toast(aiTrial ? `You've used ${aiNotice}% of your trial's AI usage` : `You've used ${aiNotice}% of this month's AI usage`);
+    void act({ type: "noticeSeen", kind: "aiUsage" }, { quiet: true, silentError: true });
+  }, [aiNotice, aiTrial, toast, act]);
   const planNow = useRef(me.plan?.name);
   planNow.current = me.plan?.name;
   useEffect(() => {

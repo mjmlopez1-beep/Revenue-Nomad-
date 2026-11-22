@@ -24,6 +24,7 @@
  */
 import type { State } from "./table";
 import { planOf } from "./plan";
+import { aiUsageTotals, type AiUsageTotals } from "./proposals/aiUsage";
 import { outcomeStats, reached as reachedStage, type OutcomeStats, type PipelineLog, type Via } from "./pipeline";
 
 export const WEEKS = 12;
@@ -65,6 +66,8 @@ export interface HealthStats {
    * the panel then reads "Deal tracking not live yet".
    */
   outcomes: OutcomeRow[] | null;
+  /** Claude on Merlin's server this UTC month (lib/proposals/aiUsage.ts aiUsageTotals): calls, tokens, estimated cost, packs, members past 50/90/100%. Admin only. */
+  ai: AiUsageTotals;
   insights: { working: Insight[]; notWorking: Insight[]; waiting: string[] };
 }
 
@@ -278,6 +281,7 @@ export function healthStats(o: HealthInput): HealthStats {
     invites,
     plans: { billing: o.billing, trialsEnded, trialsPaid, paidNow },
     outcomes: outcomeRows(outcomeStats(s, nowMs)),
+    ai: aiUsageTotals(s, nowMs),
     insights: { working: [], notWorking: [], waiting: [] },
   };
   out.insights = insights(o, out, joined, times, firstFill, firstUnlock);

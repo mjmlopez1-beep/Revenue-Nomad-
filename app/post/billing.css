@@ -733,3 +733,21 @@ button.tp-plan:hover {
     max-width: 320px;
   }
 }
+
+/* AI usage this month: a percentage only (Billing.tsx AiUsageCard). */
+.bl-ai-meter {
+  height: 8px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.bl-ai-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--pine);
+}
+.bl-ai-line {
+  margin-top: 8px;
+}

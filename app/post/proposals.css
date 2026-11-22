@@ -1028,6 +1028,14 @@ textarea.pp-field-in {
 .pp-claude-btn {
   gap: 6px;
 }
+/* The AI usage all used: what to do instead, with the pack's button. */
+.pp-aiout {
+  display: grid;
+  gap: 8px;
+}
+.pp-aiout .pp-help {
+  margin: 0;
+}
 .pp-claude-how {
   margin-top: 12px;
 }

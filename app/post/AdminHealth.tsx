@@ -233,6 +233,32 @@ export function Health({ h }: { h: Health }) {
               <p className="tp-small muted">Deal tracking not live yet.</p>
             )}
           </HCard>
+          <HCard title="Claude this month" span={6}>
+            {/* Drafting with Claude on Merlin's server (lib/proposals/aiUsage.ts aiUsageTotals): counts and dollars, never whose. Admin only. */}
+            {h.ai ? (
+              <dl className="tp-pm-rows">
+                {(
+                  [
+                    ["Claude calls", n0(h.ai.calls)],
+                    ["Tokens in", n0(h.ai.inTok)],
+                    ["Tokens out", n0(h.ai.outTok)],
+                    ["Estimated Claude cost", `$${(h.ai.micros / 1_000_000).toFixed(2)}`],
+                    ["Usage packs sold", n0(h.ai.packsSold)],
+                    ["Members past 50%", n0(h.ai.past50)],
+                    ["Members past 90%", n0(h.ai.past90)],
+                    ["Members at 100%", n0(h.ai.past100)],
+                  ] as const
+                ).map(([l, v]) => (
+                  <div key={l}>
+                    <dt>{l}</dt>
+                    <dd>
+                      <Num>{v}</Num>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </HCard>
         </section>
 
         <HTable
