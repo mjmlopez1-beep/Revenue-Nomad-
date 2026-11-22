@@ -18,7 +18,7 @@
  */
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
-import { MAIL, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine } from "./email";
+import { escHtml, footerNote, mailButton, mailCode, mailH, mailLinkLine, mailP, mailShell, mailSmall, oneLine } from "./email";
 
 export const SIGNIN_TTL_MS = 20 * 60 * 1000;
 export const CODE_TRIES = 5;
@@ -196,17 +196,16 @@ export function oneTimeEmail(name: string, link: string, code: string, purpose: 
     from,
     ...(note ? [note] : []),
   ].join("\n");
-  const small = `font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}`;
   const body = [
     mailP(`Hi ${escHtml(first)},`),
     mailH(escHtml(head)),
     mailP(escHtml(lead), "margin-bottom:24px;"),
     mailButton(url, join ? "Open Merlin" : "Sign in to Merlin", "margin:0 0 24px"),
-    `<p style="margin:0 0 8px;${small}">${escHtml(codeLine)}</p>`,
-    `<p style="margin:0 0 24px;font-family:${MAIL.font};font-size:28px;line-height:36px;font-weight:800;letter-spacing:0.12em;font-variant-numeric:tabular-nums;color:${MAIL.ink}">${escHtml(digits)}</p>`,
-    `<p style="margin:0 0 4px;${small}">If the button doesn&#39;t work, paste this link into your browser.</p>`,
-    `<p style="margin:0;font-family:${MAIL.mono};font-size:13px;line-height:20px;word-break:break-all"><a href="${escHtml(url)}" style="color:${MAIL.pine};text-decoration:underline">${escHtml(url)}</a></p>`,
+    mailSmall(escHtml(codeLine), "margin-bottom:8px;"),
+    mailCode(digits),
+    mailSmall("If the button doesn&#39;t work, paste this link into your browser."),
+    mailLinkLine(url, "margin:0"),
   ].join("\n");
-  const html = mailShell({ title: subject, preheader: lead, body, link: url, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: subject, preheader: lead, body, link: url, art: "door", footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
 }

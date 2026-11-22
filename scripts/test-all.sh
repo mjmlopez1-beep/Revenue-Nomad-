@@ -88,6 +88,8 @@ run scan npx tsx scripts/test-scan.mts
 run funding npx tsx scripts/test-funding.mts
 run seniority npx tsx scripts/test-seniority.mts
 run digest npx tsx scripts/test-digest.ts
+# The studio pass (docs/design-system.md): every email in the new frame (the lockup and its Fractions strip on pine, never the photo banner, one pine button, dark mode), the header strips and the link preview at their sizes, monogram tiles in brand tints only, the system's components (Chip, Stat, EmptyState, PageHead, Logo, WonMoment) and where WonMoment lives, the loading shell with the lockup (over HTTP).
+serve studio npx tsx scripts/test-studio.mts
 run messages npx tsx scripts/test-messages.mjs
 # Alerts in Slack and webhooks (lib/notify), with fetch and name lookups replaced: nothing leaves the machine.
 run notify npx tsx scripts/test-notify.mts

@@ -15,14 +15,14 @@
  * Sales, Technology, Product), because Merlin covers every fractional function.
  */
 import type { ReactNode } from "react";
-import { IconLock } from "../ui/shared";
+import { IconLock, monoTint } from "../ui/shared";
 import { Locked } from "./Visuals";
 import { Corner, FeatBall, FeatDoor, FeatRates, FeatTrail, Sun } from "./scenes";
 
-/** A made-up company's tile: two letters on a soft color, as the app draws a company with no logo. */
-function Tile({ letters, hue }: { letters: string; hue: number }) {
+/** A made-up company's tile: two letters on a brand tint, as the app draws a company with no logo. */
+function Tile({ letters }: { letters: string; hue?: number }) {
   return (
-    <span className="lp-v-tile" style={{ background: `hsl(${hue} 55% 91%)`, color: `hsl(${hue} 45% 26%)` }}>
+    <span className="lp-v-tile" style={monoTint(letters)}>
       {letters}
     </span>
   );

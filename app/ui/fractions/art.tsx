@@ -28,7 +28,7 @@ import { nomad, POSE_BOX, type NomadOpt, type Pose } from "./nomad";
 import * as props from "./props";
 import * as spots from "./spots";
 import { BLEEDS, BULLETS, GLYPHS, avatar, cornerCluster, dividerCamp, dividerScallop, dividerSpark, dividerSteps, frame, textureBorder, textureSparse, type BleedKind, type BulletKind, type FrameKind, type GlyphKind } from "./patterns";
-import { STRIPS, doorway, scene, trail, trailWidth, welcomeBanner, type SceneKind, type StripKind } from "./compose";
+import { STRIPS, WON_BOX, doorway, scene, trail, trailWidth, welcomeBanner, wonKeep, type SceneKind, type StripKind } from "./compose";
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
 /** Markup is drawn once per picture and colourway, then kept. */
@@ -177,6 +177,11 @@ export function Scene({ kind, on = "white", loud, square, ember = true, pro, cla
 /** Welcome, as the first-run card's banner (960 by 226): loud, on its own pine field. The scene's one home. */
 export function WelcomeBanner({ className }: { className?: string }) {
   return <Fx html={once("welcomeBanner", () => welcomeBanner(LOUD.pine))} box="0 0 960 226" className={cx("fx-scene", className)} fit="xMidYMax slice" />;
+}
+
+/** The win (360 by 200): the keep with your trail at its door, quiet, `height` px tall (160 by default). Its one home is WonMoment. */
+export function WonArt({ on = "white", height = 160, className }: Common & { height?: number }) {
+  return <Fx html={once("won", () => wonKeep(calm(QUIET)))} box={`0 0 ${WON_BOX.w} ${WON_BOX.h}`} height={height} width={Math.round((height * WON_BOX.w) / WON_BOX.h)} on={on} className={cx("fx-scene fx-won", className)} />;
 }
 
 /** The doorway, beside the sign-in form (320 by 520): quiet, on the mint panel it is given. */

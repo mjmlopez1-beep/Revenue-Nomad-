@@ -4,12 +4,11 @@
  * look every Merlin email shares (lib/email.ts), each with a plain-text twin. The member's name
  * leads: the client may never have heard of Merlin.
  */
-import { MAIL, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine } from "../email";
+import { MAIL, escHtml, footerNote, mailButton, mailCallout, mailCode, mailH, mailLinkLine, mailP, mailShell, mailSmall, oneLine } from "../email";
 
 const from = "Sent with Merlin, from Revenue Nomad. Merlin keeps the signed copy and its audit trail.";
-const small = (html: string) => `<p style="margin:0 0 4px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">${html}</p>`;
-const linkLine = (url: string) =>
-  `<p style="margin:0 0 16px;font-family:${MAIL.mono};font-size:13px;line-height:20px;word-break:break-all"><a href="${escHtml(url)}" style="color:${MAIL.pine};text-decoration:underline">${escHtml(url)}</a></p>`;
+const small = (html: string) => mailSmall(html);
+const linkLine = (url: string) => mailLinkLine(url);
 const first = (name: string) => oneLine(name).split(" ")[0].slice(0, 40) || "there";
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 const foot = () => {
@@ -33,14 +32,14 @@ export function proposalEmail(o: { signer: string; member: string; memberTitle: 
     mailP(`Hi ${escHtml(first(o.signer))},`),
     mailH(`${escHtml(member)} sent you a proposal`),
     mailP(escHtml(lead)),
-    note ? mailP(escHtml(note), "padding:12px 16px;background:#F3F5F4;border-radius:8px;") : "",
+    note ? mailCallout(escHtml(note), "page") : "",
     mailP(escHtml(how), "margin-bottom:24px;"),
     mailButton(o.link, "Review and sign", "margin:0 0 24px"),
     small("If the button doesn&#39;t work, paste this link into your browser."),
     linkLine(o.link),
     small(escHtml(until)),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.link, art: "proposal", footer: f.lines }) };
 }
 
 /** To the client: the 6-digit code that confirms their email before they sign. */
@@ -53,10 +52,10 @@ export function codeEmail(o: { member: string; title: string; code: string }): M
   const body = [
     mailH("Your code to sign"),
     mailP(escHtml(lead)),
-    `<p style="margin:0 0 24px;font-family:${MAIL.mono};font-size:32px;line-height:40px;font-weight:700;letter-spacing:0.18em;color:${MAIL.ink}">${escHtml(o.code)}</p>`,
+    mailCode(o.code),
     small(escHtml(why)),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: `Your code: ${o.code}`, body, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: `Your code: ${o.code}`, body, art: "door", footer: f.lines }) };
 }
 
 /** To both sides once it is signed: the signed copy, with its audit trail. */
@@ -79,7 +78,7 @@ export function signedEmail(o: { to: "member" | "signer"; name: string; member: 
     linkLine(o.copy),
     small(`Document fingerprint (SHA-256): <span style="font-family:${MAIL.mono};word-break:break-all">${escHtml(o.hash)}</span>`),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.copy, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.copy, art: "signed", footer: f.lines }) };
 }
 
 /** To the member: the client declined, with their reason when they gave one. */
@@ -93,9 +92,9 @@ export function declinedEmail(o: { member: string; signer: string; title: string
   const body = [
     mailP(`Hi ${escHtml(first(o.member))},`),
     mailH(escHtml(lead)),
-    reason ? mailP(`Their reason: ${escHtml(reason)}`, "padding:12px 16px;background:#F3F5F4;border-radius:8px;") : "",
+    reason ? mailCallout(`Their reason: ${escHtml(reason)}`, "page") : "",
     mailP(escHtml(next), "margin-bottom:24px;"),
     mailButton(o.app, "Open Proposals", "margin:0 0 8px"),
   ].join("\n");
-  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.app, footer: f.lines }) };
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.app, art: "proposal", footer: f.lines }) };
 }

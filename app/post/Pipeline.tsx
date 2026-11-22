@@ -16,6 +16,7 @@ import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { pipelineAct, usePipeline } from "./pipelineStore";
 import { FixMenu, StageChip } from "./PipelineParts";
+import { WonMoment } from "../ui/WonMoment";
 import "./pipeline.css";
 
 const FollowUpSheet = dynamic(() => import("./FollowUpSheet").then((m) => m.FollowUpSheet), { ssr: false });
@@ -78,6 +79,7 @@ export function PipelinePage({ infos, onBack, openCompany, onIntegrations }: { i
                   <h2 className="pl-col-h" id={`pl-col-${s}`}>
                     {STAGE_WORDS[s]} <span className="pl-col-n num">{list.length}</span>
                   </h2>
+                  {s === "won" && list[0] ? <WonMoment rec={list[0]} compact /> : null}
                   {list.length ? (
                     <ul className="pl-cards">
                       {list.map((e) => (

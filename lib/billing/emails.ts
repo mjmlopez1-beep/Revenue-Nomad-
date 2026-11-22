@@ -6,7 +6,7 @@
  * A member who said "Not now" to "Are you looking for a new client?" gets the soft form: staying
  * on Free is a fine answer, a pause is there, and nothing pushes.
  */
-import { MAIL, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine } from "../email";
+import { escHtml, footerNote, mailButton, mailH, mailList, mailP, mailShell, oneLine } from "../email";
 import { PRICES, TOPUP_CREDITS } from "./rules";
 import { functionOf } from "../tableFields";
 import { FEATURE_NAME } from "../radar/types";
@@ -63,21 +63,13 @@ export function valueLines(v: ValueCounts): string[] {
   return out;
 }
 
-const listHtml = (lines: string[]) =>
-  lines.length
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px">${lines
-        .map(
-          (l) =>
-            `<tr><td style="padding:4px 10px 4px 0;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.pine};font-weight:700">&#8226;</td><td style="padding:4px 0;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.body}">${escHtml(l)}</td></tr>`,
-        )
-        .join("")}</table>`
-    : "";
+const listHtml = (lines: string[]) => mailList(lines);
 
 const WHY = "You get this because you're a Merlin member with a plan. Merlin is a data exchange for fractional operators, from Revenue Nomad.";
 
 function shell(subject: string, lead: string, bodyParts: string[], link: string) {
   const note = footerNote();
-  return mailShell({ title: subject, preheader: lead.slice(0, 120), body: bodyParts.join("\n"), link, footer: [escHtml(WHY), note ? escHtml(note) : ""] });
+  return mailShell({ title: subject, preheader: lead.slice(0, 120), body: bodyParts.join("\n"), link, art: "plan", footer: [escHtml(WHY), note ? escHtml(note) : ""] });
 }
 
 /** The annual line first, then monthly. `rateLine`: "Less than an hour of your time a month." when their rate says so. */

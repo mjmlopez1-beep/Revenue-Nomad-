@@ -13,7 +13,7 @@
  */
 import { webLink } from "./links";
 import type { DigestData, DigestHireRow, DigestHires, DigestRole } from "./scanTypes";
-import { MAIL, escHtml as esc, footerNote as footerLine, mailButton, mailP, mailShell, oneLine } from "./email";
+import { MAIL, escHtml as esc, footerNote as footerLine, mailButton, mailCallout, mailFootLink, mailP, mailShell, oneLine } from "./email";
 import { hiresLine, startWords } from "./hired";
 
 /** How many functions the list shows before the rest fold into one line. */
@@ -217,15 +217,15 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   const hero =
     heroCount > 0
       ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px"><tr>
-${hireOnly ? "" : `<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0"><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${MAIL.ember}"></span></td>\n`}<td valign="middle" style="padding:0 12px 0 0;font-family:${MAIL.font};font-size:48px;line-height:52px;font-weight:800;letter-spacing:-0.03em;${num}color:${hireOnly ? MAIL.ink : MAIL.emberInk}">${heroCount}</td>
-<td valign="middle" style="font-family:${MAIL.font};font-size:22px;line-height:26px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">${esc(heroLabel)}</td>
+${hireOnly ? "" : `<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0"><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${MAIL.ember}"></span></td>\n`}<td valign="middle" class="${hireOnly ? "cb-ink" : "cb-ember"}" style="padding:0 12px 0 0;font-family:${MAIL.font};font-size:48px;line-height:52px;font-weight:800;letter-spacing:-0.03em;${num}color:${hireOnly ? MAIL.ink : MAIL.emberInk}">${heroCount}</td>
+<td valign="middle" class="cb-ink" style="font-family:${MAIL.font};font-size:22px;line-height:26px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">${esc(heroLabel)}</td>
 </tr></table>`
-      : `<p style="margin:0 0 12px;font-family:${MAIL.font};font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">No new fractional roles this week</p>`;
+      : `<p class="cb-ink" style="margin:0 0 12px;font-family:${MAIL.font};font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">No new fractional roles this week</p>`;
 
   const cell = (body: string, align: "left" | "right", bold: boolean) =>
-    `<td align="${align}" style="padding:10px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font};font-size:15px;line-height:20px;${align === "right" ? `${num}white-space:nowrap;padding-left:12px;` : ""}color:${MAIL.ink};font-weight:${bold ? 700 : 400}">${body}</td>`;
+    `<td align="${align}" class="cb-ink" style="padding:10px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font};font-size:15px;line-height:20px;${align === "right" ? `${num}white-space:nowrap;padding-left:12px;` : ""}color:${MAIL.ink};font-weight:${bold ? 700 : 400}">${body}</td>`;
   const list = showList
-    ? `<p style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${listTitle}</p>
+    ? `<p class="cb-muted" style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${listTitle}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border-bottom:1px solid ${MAIL.line}">
 ${shown.map((r) => `<tr>${cell(esc(r.function), "left", r.function === fn)}${cell(String(r.n), "right", true)}</tr>`).join("\n")}${
         rest ? `\n<tr>${cell(restLabel, "left", false)}${cell(String(rest), "right", true)}</tr>` : ""
@@ -234,7 +234,7 @@ ${shown.map((r) => `<tr>${cell(esc(r.function), "left", r.function === fn)}${cel
     : "";
 
   const alertList = alerts.length
-    ? `<p style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${alertsTitle}</p>
+    ? `<p class="cb-muted" style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${alertsTitle}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border-bottom:1px solid ${MAIL.line}">
 ${alerts.map((a) => `<tr>${cell(esc(a.name), "left", false)}${cell(alertNew(a.n), "right", true)}</tr>`).join("\n")}
 </table>`
@@ -248,8 +248,8 @@ ${roles
     (r) => `<tr>
 <td valign="top" style="padding:12px 12px 12px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font}">${
       r.url
-        ? `<a href="${esc(r.url)}" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink};text-decoration:underline">${esc(r.title)}</a>`
-        : `<span style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink}">${esc(r.title)}</span>`
+        ? `<a href="${esc(r.url)}" class="cb-ink" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink};text-decoration:underline">${esc(r.title)}</a>`
+        : `<span class="cb-ink" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink}">${esc(r.title)}</span>`
     }${r.meta ? `<br><span style="font-size:14px;line-height:20px;color:${MAIL.muted}">${esc(r.meta)}</span>` : ""}</td>
 <td valign="top" align="right" style="padding:13px 0 12px;border-top:1px solid ${MAIL.line};font-family:${MAIL.font};font-size:14px;line-height:20px;${num}white-space:nowrap;color:${MAIL.muted}">${esc(r.day)}</td>
 </tr>`,
@@ -262,17 +262,14 @@ ${roles
   // companies that newly match (each a link to its record, never a locked company's name, never who held the seat), and a
   // button to the view: the email's filled button in a week with no new roles, an outlined one under the roles' button
   // otherwise (and for a second view), so the email still has one main button.
-  const outlineButton = (href: string, label: string) =>
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px"><tr>
-<td style="border:2px solid ${MAIL.pine};border-radius:8px"><a href="${esc(href)}" style="display:inline-block;padding:12px 22px;font-family:${MAIL.font};font-size:16px;line-height:20px;font-weight:700;color:${MAIL.pine};text-decoration:none;border-radius:8px">${esc(label)}</a></td>
-</tr></table>`;
+  const outlineButton = (href: string, label: string) => mailButton(href, label, "margin:0 0 32px", "outline");
   const hireBlocks = hires
     .map((h, k) => {
       const lead0 = hireOnly && k === 0;
       const head = lead0
         ? ""
-        : `<p style="margin:0 0 4px;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:${MAIL.ink}">${esc(hiresLine(h.n, h.functions, h.inProfile, true))}</p>${
-            h.name ? `\n<p style="margin:0 0 12px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">From your saved view “${esc(h.name)}”</p>` : ""
+        : `<p class="cb-ink" style="margin:0 0 4px;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:${MAIL.ink}">${esc(hiresLine(h.n, h.functions, h.inProfile, true))}</p>${
+            h.name ? `\n<p class="cb-muted" style="margin:0 0 12px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">From your saved view “${esc(h.name)}”</p>` : ""
           }`;
       const list = h.rows.length
         ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;border-bottom:1px solid ${MAIL.line}">
@@ -280,8 +277,8 @@ ${h.rows
   .map(
     (r) => `<tr><td valign="top" style="padding:12px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font}">${
       r.url
-        ? `<a href="${esc(r.url)}" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink};text-decoration:underline">${esc(r.company)}</a>`
-        : `<span style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink}">${esc(r.company)}</span>`
+        ? `<a href="${esc(r.url)}" class="cb-ink" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink};text-decoration:underline">${esc(r.company)}</a>`
+        : `<span class="cb-ink" style="font-size:16px;line-height:22px;font-weight:700;color:${MAIL.ink}">${esc(r.company)}</span>`
     }${r.meta ? `<br><span style="font-size:14px;line-height:20px;${num}color:${MAIL.muted}">${esc(r.meta)}</span>` : ""}</td></tr>`,
   )
   .join("\n")}
@@ -294,12 +291,8 @@ ${h.rows
 
   // A line with its link words linked (signed in), or plain when there is no link.
   const linked = (parts: [string, string, string], href: string) =>
-    href ? `${esc(parts[0])}<a href="${esc(href)}" style="color:${MAIL.ink};font-weight:700;text-decoration:underline">${esc(parts[1])}</a>${esc(parts[2])}` : esc(parts.join(""));
-  const seats = seatsParts
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr>
-<td bgcolor="${MAIL.voltSoft}" style="padding:12px 16px;border-radius:8px;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${linked(seatsParts, seatsUrl)}</td>
-</tr></table>`
-    : "";
+    href ? `${esc(parts[0])}<a href="${esc(href)}" class="cb-ink" style="color:${MAIL.ink};font-weight:700;text-decoration:underline">${esc(parts[1])}</a>${esc(parts[2])}` : esc(parts.join(""));
+  const seats = seatsParts ? mailCallout(linked(seatsParts, seatsUrl), "mint") : "";
 
   // The headline, then the roles it counts (each one a link), then the one button, which opens that list in the app.
   const body = [
@@ -320,14 +313,15 @@ ${h.rows
 
   const html = mailShell({
     title: subject,
+    art: "week",
     link: appUrl || unsubscribeUrl,
     preheader: oneLine([lead, creditsLine].filter(Boolean).join(" ")),
     body,
     footer: [
       esc(why),
       [
-        settingsUrl ? `<a href="${esc(settingsUrl)}" style="color:${MAIL.muted};text-decoration:underline">Notifications</a>` : "",
-        unsubscribeUrl ? `<a href="${esc(unsubscribeUrl)}" style="color:${MAIL.muted};text-decoration:underline">Unsubscribe</a>` : "",
+        settingsUrl ? mailFootLink(settingsUrl, "Notifications") : "",
+        unsubscribeUrl ? mailFootLink(unsubscribeUrl, "Unsubscribe") : "",
       ]
         .filter(Boolean)
         .join(" · "),

@@ -16,7 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffe
 import { createPortal } from "react-dom";
 import type { Action, Cell, Me } from "@/lib/tableTypes";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
-import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
+import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, monoTint, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { readRate } from "@/lib/rates";
 import { BENCH_RATE_HELP, atTime, fieldText, plural, type Layout } from "./hooks";
@@ -1378,7 +1378,7 @@ export function SeatHolderInput({
       />
       {linked ? (
         <div className="tp-seat-linked" role="status">
-          <span className="tp-seat-av" style={{ background: `hsl(${hue(linked.name)} 45% 90%)`, color: `hsl(${hue(linked.name)} 45% 28%)` }}>
+          <span className="tp-seat-av" style={monoTint(linked.name)}>
             {initials(linked.name)}
           </span>
           <span className="tp-seat-who">
@@ -1407,7 +1407,7 @@ export function SeatHolderInput({
                 onMouseEnter={() => setHi(i)}
                 onClick={() => pick(m)}
               >
-                <span className="tp-seat-av" aria-hidden style={{ background: `hsl(${hue(m.name)} 45% 90%)`, color: `hsl(${hue(m.name)} 45% 28%)` }}>
+                <span className="tp-seat-av" aria-hidden style={monoTint(m.name)}>
                   {initials(m.name)}
                 </span>
                 <span className="tp-seat-who">

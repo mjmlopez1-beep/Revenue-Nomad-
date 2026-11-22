@@ -15,6 +15,7 @@ import { CompanyLogo, LockedName, IconPencil, useToast } from "../ui/shared";
 import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { pipelineAct, usePipeline } from "./pipelineStore";
+import { WonMoment } from "../ui/WonMoment";
 import "./pipeline.css";
 
 const FollowUpSheet = dynamic(() => import("./FollowUpSheet").then((m) => m.FollowUpSheet), { ssr: false });
@@ -63,17 +64,8 @@ export function FollowUps({ me, byId, openCompany }: { me: Me; byId: Map<string,
       </div>
       <ul className="pl-fu-list">
         {wins.map((e) => (
-          <li key={e.id} className="pl-fu-card pl-fu-won">
-            <Co e={e} byId={byId} onOpen={() => openCompany(e.company)} />
-            <div className="pl-fu-t">
-              <span className="pl-fu-title">You won {e.name ?? "a deal"}</span>
-              <span className="pl-fu-line">{e.how ? `${e.how}.` : "Merlin saw it won."} Add it as your seat and what you add earns credits.</span>
-            </div>
-            <div className="pl-fu-acts">
-              <button type="button" className="btn btn-pine" onClick={() => setWinning(e.id)}>
-                Add it as your seat
-              </button>
-            </div>
+          <li key={e.id}>
+            <WonMoment rec={e} onSeat={() => setWinning(e.id)} />
           </li>
         ))}
         {due.slice(0, SHOWN).map((f) => (

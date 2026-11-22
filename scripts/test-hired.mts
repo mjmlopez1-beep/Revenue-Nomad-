@@ -435,15 +435,15 @@ async function main() {
   // Changed: the hires were added this week, and may have started months before: the line says "added this week", each row when it started.
   check("the subject is the owner's line, as added this week", mail.subject === "4 companies in your profile that hired a fractional Finance leader, added this week", mail.subject);
   check("the email lists the companies in free facts: the company, the function, when it started", mail.text.includes(`Beta Labs · Finance · started ${H.startWords(ym(1))}`) && mail.text.includes(`${digest.LOCKED_HIRER} · Finance · started ${H.startWords(ym(2))}`), mail.text);
-  check("its one button opens the saved view", mail.html.includes("Open the saved view") && (mail.html.match(/bgcolor="#2EE59D"/g) ?? []).length === 1 && mail.html.includes(h!.url.replace(/&/g, "&amp;")));
+  check("its one button opens the saved view", mail.html.includes("Open the saved view") && (mail.html.match(/class="cb-cta"/g) ?? []).length === 1 && mail.html.includes(h!.url.replace(/&/g, "&amp;")));
   check("the rendered email never names a seat holder or a locked company", !(mail.text + mail.html).includes(HOLDER) && !(mail.text + mail.html).includes(HIDDEN_NAME));
   check("no ember dot: a hire is no live opening", !mail.html.includes("background:#FF5A1F"));
   // A week with new roles too: the hire line sits under the roles, with an outlined button to the view (the email keeps one filled button).
   const mixed = digest.renderDigest({ ...sal!, newRoles: 2, newRolesMine: 1, newRolesMineHidden: 1, byFunction: [{ function: "Sales", n: 1 }, { function: "Marketing", n: 1 }], rolesUrl: `${BASE}/?v=hiring`, roles: [] });
-  check("with new roles, the roles lead and the hire line follows", mixed.subject === "1 new Sales role this week" && mixed.text.includes("4 companies in your profile that hired a fractional Finance leader, added this week.") && (mixed.html.match(/bgcolor="#2EE59D"/g) ?? []).length === 1, mixed.text);
+  check("with new roles, the roles lead and the hire line follows", mixed.subject === "1 new Sales role this week" && mixed.text.includes("4 companies in your profile that hired a fractional Finance leader, added this week.") && (mixed.html.match(/class="cb-cta"/g) ?? []).length === 1, mixed.text);
   check(
     "with new roles, the saved view still gets a button (outlined, after the roles' filled one)",
-    /border:2px solid [^"]*"><a href="[^"]*"[^>]*>Open the saved view<\/a>/.test(mixed.html) && mixed.html.indexOf("Open the saved view") > mixed.html.indexOf('bgcolor="#2EE59D"') && mixed.html.includes(h!.url.replace(/&/g, "&amp;")),
+    /border:2px solid [^"]*"><a href="[^"]*"[^>]*>Open the saved view<\/a>/.test(mixed.html) && mixed.html.indexOf("Open the saved view") > mixed.html.indexOf('class="cb-cta"') && mixed.html.includes(h!.url.replace(/&/g, "&amp;")),
   );
 
   /* ---------- the server: the weekly post in Slack ---------- */

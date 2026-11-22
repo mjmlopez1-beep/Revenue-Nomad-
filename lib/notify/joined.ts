@@ -7,7 +7,7 @@
  */
 import { loadState, tableInternals as T, type JoinNews } from "../table";
 import { REFERRAL_BONUS } from "../tableFields";
-import { emailEnabled, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine, sendEmail } from "../email";
+import { emailEnabled, escHtml, footerNote, mailButton, mailFootLink, mailH, mailP, mailShell, oneLine, sendEmail } from "../email";
 import { addSignIn } from "../signin";
 import { NOTIFICATIONS_PATH, emailLinker } from "../emailIn";
 import { joinedHeadline } from "./format";
@@ -34,7 +34,7 @@ export function joinedEmail(o: { first: string; both: boolean; bonus: number; li
     mailP(escHtml(lead), "margin-bottom:24px;"),
     mailButton(link, "Open Merlin", "margin:0 0 16px"),
   ].join("\n");
-  const html = mailShell({ title: subject, preheader: lead.slice(0, 120), body, link, footer: [escHtml(why), /^https?:\/\//i.test(settings) ? `<a href="${escHtml(settings)}" style="color:#5B6661;text-decoration:underline">Notifications</a>` : "", escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: subject, preheader: lead.slice(0, 120), body, link, art: "letter", footer: [escHtml(why), /^https?:\/\//i.test(settings) ? mailFootLink(settings, "Notifications") : "", escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
 }
 

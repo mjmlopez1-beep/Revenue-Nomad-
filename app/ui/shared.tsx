@@ -327,9 +327,22 @@ export const initials = (s: string) =>
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
     .join("") || "?";
-/** Tints for a company with no logo. None is near ember (hue 16): orange means an open role here. */
-const HUES = [152, 200, 265, 230, 330, 175, 48];
-export const hue = (s: string) => HUES[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
+/**
+ * The tiles a monogram (a company with no logo, a person with no picture) can take: brand tints
+ * only, each with pine or ink letters. Never a hue of its own (no violet, no pink, nothing near
+ * ember, which means an open role here). The same name always gets the same tile.
+ */
+export const MONO_TINTS = [
+  { background: "var(--pine-8)", color: "var(--pine)" },
+  { background: "var(--volt-soft)", color: "var(--pine)" },
+  { background: "var(--sand)", color: "var(--pine)" },
+  { background: "var(--saffron-hi)", color: "var(--ink)" },
+  { background: "var(--ink-6)", color: "var(--ink)" },
+] as const;
+export type MonoTint = (typeof MONO_TINTS)[number];
+const monoIndex = (s: string) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0) % MONO_TINTS.length;
+/** A name's monogram tile: its background and letter colour, as a style object. */
+export const monoTint = (s: string): MonoTint => MONO_TINTS[monoIndex(s)];
 
 /** "2024-03" -> "Mar 2024", "2024" -> "2024", "Ongoing" stays. */
 /** "2025-03" as "Mar 2025". Kept once worked out: a table of a few thousand seats asks for the same months over and over. */
@@ -515,16 +528,16 @@ export function CompanyLogo({
         />
       );
     return (
-      <span className={`${cls} logo-locked`} aria-hidden style={{ ["--lk" as string]: lockedLook(seed ?? name).hue }}>
+      <span className={`${cls} logo-locked`} aria-hidden>
         <span className="logo-locked-in">
-          <IconBuilding size={size === "lg" ? 20 : 14} />
+          <IconLock size={size === "lg" ? 18 : 13} />
         </span>
       </span>
     );
   }
   if (idx >= sources.length)
     return (
-      <span className={cls} aria-hidden style={{ background: `hsl(${hue(name)} 55% 93%)`, color: `hsl(${hue(name)} 45% 28%)`, borderColor: "transparent" }}>
+      <span className={cls} aria-hidden style={{ ...monoTint(name), borderColor: "transparent" }}>
         {initials(name)}
       </span>
     );

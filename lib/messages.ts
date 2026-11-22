@@ -20,7 +20,7 @@ import { publicBase } from "./links";
 import { randomBytes } from "crypto";
 import { ActionError, isAdmin, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import { HIDDEN_COMPANY, functionOf } from "./tableFields";
-import { MAIL, emailEnabled, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine, sendEmail } from "./email";
+import { MAIL, emailEnabled, escHtml, footerNote, mailButton, mailH, mailP, mailQuote, mailShell, mailSmall, oneLine, sendEmail } from "./email";
 import { sideOf, unreadCount, unreadIn, type StoredConversation } from "./messageState";
 import { addSignIn } from "./signin";
 import { NOTIFICATIONS_PATH, emailLinker } from "./emailIn";
@@ -182,11 +182,11 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
   const body = [
     mailH(`${escHtml(first)} sent you a message`),
     mailP(`About ${escHtml(about)}.`, "margin-bottom:24px;"),
-    `<p style="margin:0 0 24px;padding:12px 16px;border-left:3px solid ${MAIL.volt};background:${MAIL.page};font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${escHtml(snippet)}</p>`,
+    mailQuote(escHtml(snippet)),
     mailButton(link, "Read and reply", "margin:0 0 16px"),
-    mailP(escHtml(noReply), `margin-bottom:0;font-size:14px;line-height:20px;color:${MAIL.muted};`),
+    mailSmall(escHtml(noReply), "margin:0;"),
   ].join("\n");
-  const html = mailShell({ title: subject, preheader: snippet.slice(0, 120), body, link, footer: [escHtml(why), settingsLink(settings), escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: subject, preheader: snippet.slice(0, 120), body, link, art: "letter", footer: [escHtml(why), settingsLink(settings), escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
 }
 
@@ -225,7 +225,7 @@ export function connectEmail(o: { partner: string; company: string; link: string
     mailP(escHtml(lead), "margin-bottom:24px;"),
     mailButton(link, "Open the conversation", "margin:0 0 16px"),
   ].join("\n");
-  const html = mailShell({ title: subject, preheader: lead.slice(0, 120), body, link, footer: [escHtml(why), settingsLink(settings), escHtml(from), note ? escHtml(note) : ""] });
+  const html = mailShell({ title: subject, preheader: lead.slice(0, 120), body, link, art: "letter", footer: [escHtml(why), settingsLink(settings), escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
 }
 

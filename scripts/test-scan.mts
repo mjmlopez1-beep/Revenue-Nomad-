@@ -1108,27 +1108,37 @@ check("text has the app link", d.text.includes("See this week's roles\nhttps://t
 check("unsubscribe link is in the text", d.text.includes(base.unsubscribeUrl));
 check("unsubscribe link is in the HTML", d.html.includes('href="https://table-pilot.up.railway.app/api/table?unsubscribe=tok_123&amp;m=1"') && />Unsubscribe<\/a>/.test(d.html));
 check("says why they got it", d.text.includes("because you're a Merlin member") && d.html.includes("because you&#39;re a Merlin member"));
-// The header: the banner image from the site the email links to, on pine, with the name as its alt text.
-const BANNER = /<td bgcolor="#073F2F" style="padding:0;[^"]*background-color:#073F2F[^"]*"><img src="([^"]+)" width="560" height="128" alt="Merlin by Revenue Nomad" style="display:block;[^"]*"><\/td>/;
-check("header is the banner on pine, from the app's own site", d.html.match(BANNER)?.[1] === "https://table-pilot.up.railway.app/brand/merlin-banner-email.png", d.html.match(/<img [^>]*>/)?.[0]);
-check("one image, in the header", (d.html.match(/<img /g) ?? []).length === 1);
+// The header (lib/emailArt.ts): on pine, the white lockup with "Merlin" as its alt text, then the weekly email's Fractions strip, both from the site the email links to.
+const LOCKUP = /<img src="([^"]+\/email\/crystal-ball\/merlin@2x\.png)\?v=\d+" width="96" height="28" alt="Merlin"/;
+const BANNER = /<img src="([^"]+\/email\/header\/week@2x\.png)\?v=\d+" width="600" height="120" alt=""/;
+check("header is the lockup and the week's strip on pine, from the app's own site", d.html.match(LOCKUP)?.[1] === "https://table-pilot.up.railway.app/email/crystal-ball/merlin@2x.png" && d.html.match(BANNER)?.[1] === "https://table-pilot.up.railway.app/email/header/week@2x.png" && /<td bgcolor="#073F2F"[^>]*>[\s\S]*?<img src="[^"]*merlin@2x\.png/.test(d.html), d.html.match(/<img [^>]*>/)?.[0]);
+check("two images, both in the header", (d.html.match(/<img /g) ?? []).length === 2);
 check("the text part has no header", d.text.startsWith("Hi "));
 {
   // With no link and no RN_PUBLIC_URL there is nowhere to load the banner from: the name in text, on pine.
   const was = process.env.RN_PUBLIC_URL;
   delete process.env.RN_PUBLIC_URL;
   const bare = renderDigest({ ...base, appUrl: "", unsubscribeUrl: "" } as DigestData);
-  check("no site to load the banner from: the pine bar with the name in text", /bgcolor="#073F2F"[^>]*>Merlin</.test(bare.html) && !bare.html.includes("<img"));
+  check("no site to load the pictures from: the pine header with the name in text", /<td bgcolor="#073F2F"[^>]*>[\s\S]*?color:#FFFFFF">Merlin<\/td>/.test(bare.html) && !bare.html.includes("<img"));
   process.env.RN_PUBLIC_URL = "https://merlin.example.com/";
   const viaEnv = renderDigest({ ...base, appUrl: "", unsubscribeUrl: "" } as DigestData);
-  check("no link in the email: the banner comes from RN_PUBLIC_URL", viaEnv.html.match(BANNER)?.[1] === "https://merlin.example.com/brand/merlin-banner-email.png", viaEnv.html.match(/<img [^>]*>/)?.[0]);
+  check("no link in the email: the pictures come from RN_PUBLIC_URL", viaEnv.html.match(BANNER)?.[1] === "https://merlin.example.com/email/header/week@2x.png", viaEnv.html.match(/<img [^>]*>/g)?.[1]);
   if (was === undefined) delete process.env.RN_PUBLIC_URL;
   else process.env.RN_PUBLIC_URL = was;
 }
-check("button is volt with pine text", /bgcolor="#2EE59D"[^>]*><a [^>]*color:#073F2F/.test(d.html));
+check("button is pine with white text", /bgcolor="#073F2F" class="cb-cta"[^>]*><a [^>]*color:#FFFFFF/.test(d.html));
 eq("ember is used once, on the count", (d.html.match(/#FF5A1F/gi) ?? []).length, 1);
-check("max width is 560px", d.html.includes("max-width:560px"));
-check("layout uses tables and inline styles only", !/<style|<link|<script|class=/i.test(d.html) && d.html.includes('role="presentation"'));
+check("max width is 600px", d.html.includes("max-width:600px"));
+// Tables and inline styles; the one <style> block only adds dark mode and a phone's gutters (the email reads the same without it).
+const styleOnly = (html: string) => {
+  const blocks = html.match(/<style>[\s\S]*?<\/style>/g) ?? [];
+  if (blocks.length !== 1 || /@import|@font-face|url\(/i.test(blocks[0])) return false;
+  const media = blocks[0].match(/@media[^{]*\{/g) ?? [];
+  const rules = [...blocks[0].replace(/<\/?style>|@media[^{]*\{/g, "").matchAll(/([^{}]+)\{[^{}]*\}/g)].map((m) => m[1].trim());
+  const sel = /^(\[data-og(?:sc|sb)\] )?(:root|\.cb-[\w-]+(?: (?:\.cb-[\w-]+|[a-z]+))*)$/;
+  return media.every((m) => /^@media \((prefers-color-scheme:dark|max-width:480px)\)\{$/.test(m)) && rules.length > 0 && rules.every((r) => r.split(",").every((x) => sel.test(x.trim())));
+};
+check("layout uses tables and inline styles, a <style> block only for dark mode and phones", !/<link|<script/i.test(d.html) && d.html.includes('role="presentation"') && styleOnly(d.html));
 check("system fonts only", !/Figtree|googleapis|@font-face/i.test(d.html));
 
 process.env.RN_EMAIL_FOOTER = 'Revenue Nomad <b>LLC</b>, 1 Main St & "Suite" 2';
@@ -1139,9 +1149,9 @@ const hostile = digest({
   appUrl: 'https://example.com/?a=1&b="2"><script>',
   unsubscribeUrl: "https://example.com/u?t=<tok>&x='1'",
 });
-// The banner is the one image the frame adds; its address is only the link's origin.
-check("the banner comes from the link's site only", hostile.html.match(BANNER)?.[1] === "https://example.com/brand/merlin-banner-email.png", hostile.html.match(/<img [^>]*>/)?.[0]);
-const hostileBody = hostile.html.replace(BANNER, "");
+// The lockup and the strip are the only images the frame adds; their address is only the link's origin.
+check("the header's pictures come from the link's site only", hostile.html.match(BANNER)?.[1] === "https://example.com/email/header/week@2x.png" && hostile.html.match(LOCKUP)?.[1] === "https://example.com/email/crystal-ball/merlin@2x.png", hostile.html.match(/<img [^>]*>/g));
+const hostileBody = hostile.html.replace(/<img src="https:\/\/example\.com\/email\/(crystal-ball\/merlin|header\/week)@2x\.png\?v=\d+"[^>]*>/g, "");
 check("HTML is escaped: no raw tags from data", !/<script|<img|<i>|<b>/i.test(hostileBody), hostileBody.match(/<(script|img|i|b)[ >][^\n]{0,60}/i)?.[0]);
 check("HTML is escaped: name, function, footer", hostile.html.includes("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;") && hostile.html.includes("Sales &amp; &quot;Ops&quot; &lt;i&gt;") && hostile.html.includes("Revenue Nomad &lt;b&gt;LLC&lt;/b&gt;, 1 Main St &amp; &quot;Suite&quot; 2"));
 check("HTML is escaped: links cannot break out of the attribute", !/href="[^"]*"[^ >]/.test(hostile.html) && hostile.html.includes("&lt;tok&gt;&amp;x=&#39;1&#39;"), hostile.html.match(/href="[^"]*"[^ >][^\n]{0,40}/)?.[0]);
@@ -1179,11 +1189,11 @@ eq("subject", si.subject, "Your Merlin sign-in link");
 check("greets by first name", si.text.startsWith("Hi Maya,") && si.html.includes("Hi Maya,"));
 check("an empty name still gets a greeting", signInEmail("", "https://example.com/?k=a").text.startsWith("Hi there,"));
 check("text carries the link on its own line", si.text.split("\n").includes("https://table-pilot.up.railway.app/?k=abc123&x=<1>"));
-check("same frame as the weekly email: the banner header", si.html.match(BANNER)?.[1] === "https://table-pilot.up.railway.app/brand/merlin-banner-email.png" && si.html.includes("max-width:560px"), si.html.match(/<img [^>]*>/)?.[0]);
-check("one volt button with pine text, to the link", (si.html.match(/bgcolor="#2EE59D"/g) ?? []).length === 1 && /bgcolor="#2EE59D"[^>]*><a href="https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;"[^>]*color:#073F2F[^>]*>Sign in to Merlin</.test(si.html), si.html.match(/<a [^>]*>/g));
+check("same frame as the weekly email: the lockup, its own strip (the door)", si.html.match(LOCKUP)?.[1] === "https://table-pilot.up.railway.app/email/crystal-ball/merlin@2x.png" && /\/email\/header\/door@2x\.png\?v=\d+" width="600" height="120"/.test(si.html) && si.html.includes("max-width:600px"), si.html.match(/<img [^>]*>/g));
+check("one pine button with white text, to the link", (si.html.match(/class="cb-cta"/g) ?? []).length === 1 && /bgcolor="#073F2F" class="cb-cta"[^>]*><a href="https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;"[^>]*color:#FFFFFF[^>]*>Sign in to Merlin</.test(si.html), si.html.match(/<a [^>]*>/g));
 check("no ember in the sign-in email", !/#FF5A1F/i.test(si.html));
 check("the link is also shown as text, in mono", /font-family:ui-monospace[^>]*><a [^>]*>https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;<\/a>/.test(si.html));
-check("tables and inline styles only, system fonts", !/<style|<link|<script|class=|googleapis|@font-face|Schibsted|Figtree/i.test(si.html) && si.html.includes('role="presentation"'));
+check("tables and inline styles (a <style> block only for dark mode and phones), system fonts", !/<link|<script|googleapis|@font-face|Schibsted|Figtree/i.test(si.html) && si.html.includes('role="presentation"') && styleOnly(si.html));
 check("says to keep the link private and what to do if they did not ask", si.text.includes("It works like a password.") && si.text.includes("If it wasn't you, ignore this email."));
 const siCopy = (si.subject + "\n" + si.text).split("\n").filter((l) => !/^https?:\/\//.test(l));
 check("copy has no em dash, semicolon or colon", siCopy.every((l) => !/[—;:]/.test(l)), siCopy.filter((l) => /[—;:]/.test(l)));
