@@ -276,7 +276,7 @@ export function Find(p: FindProps) {
               ) : (
                 <IcpBox me={me} infos={infos} f={f} setF={setF} first={p.first} onProfile={p.onProfile} />
               )}
-              {quick.map((g) => (
+              {!(kind === "lookalikes" && !like.length) && quick.map((g) => (
                 <div key={g.name} className="fd-group">
                   <span className="fd-group-h">{g.name.toUpperCase()}</span>
                   <div className="fd-chips">
@@ -286,7 +286,7 @@ export function Find(p: FindProps) {
                   </div>
                 </div>
               ))}
-              {p.first && (
+              {p.first && kind !== "lookalikes" && (
                 <div className="fd-group">
                   <span className="fd-group-h">YOU</span>
                   <span className="fd-note">
@@ -295,9 +295,9 @@ export function Find(p: FindProps) {
                 </div>
               )}
               <ExtraChips f={f} setF={setF} quick={quick.flatMap((g) => g.items.map((v) => v.key))} groups={groups} />
-              <button type="button" className="fd-browse" onClick={() => setStep("browse")}>
+              {groups.length > 0 && <button type="button" className="fd-browse" onClick={() => setStep("browse")}>
                 Browse all {groups.reduce((n, g) => n + g.filters.length, 0)} filters
-              </button>
+              </button>}
               <Foot n={found} noun={noun} waiting={p.waiting} onNext={() => setStep("save")} />
             </div>
           )}
@@ -328,7 +328,7 @@ export function Find(p: FindProps) {
           <div className="fd-prev-top">
             <strong>Preview</strong>
             <span className="fd-prev-n" role="status">
-              {p.waiting || !run ? "Counting the whole table…" : <>{Math.min(PREVIEW, found)} of <b>{found.toLocaleString("en-US")}</b> {noun(found).replace(/^[\d,]+ /, "")} found · updates as you filter · nothing is spent yet</>}
+              {kind === "lookalikes" && !like.length ? "Pick a past client first. Nothing is spent here." : p.waiting || !run ? "Counting the whole table…" : <>{Math.min(PREVIEW, found)} of <b>{found.toLocaleString("en-US")}</b> {noun(found).replace(/^[\d,]+ /, "")} found · updates as you filter · nothing is spent yet</>}
             </span>
             <input type="search" aria-label="Search these results" placeholder="Search by name, website, industry or function" value={q} onChange={(e) => setQ(e.target.value)} className="fd-search" />
             <label className="fd-sort">
