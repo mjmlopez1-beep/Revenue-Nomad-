@@ -203,7 +203,9 @@ export interface ProposalsView {
   aiUsedUp?: { words: string; pack: string; button: string };
   /** Sending for signature: Pro + Close and the trial (canClose in lib/billing/rules.ts; every plan while billing is off). */
   canSend: boolean;
-  /** Templates the member can start from: every one, or on Free only FREE_TEMPLATE. */
+  /** Building proposals at all (new, edit, a saved template): Pro + Close and the trial (canClose). Else read only, with the upgrade prompt. */
+  canBuild: boolean;
+  /** Templates the member can start from: every one on Pro + Close and the trial, none otherwise (their own stay stored). */
   templatesOpen: string[];
   /** Email is set up, so a proposal can go out. */
   email: boolean;

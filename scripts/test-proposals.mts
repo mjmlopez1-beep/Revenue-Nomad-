@@ -15,7 +15,10 @@
  *   - create (from a template, blank, a company on Merlin, a locked one, one typed in), edit,
  *     reorder, add and remove blocks, fields from the record, the profile and the call;
  *   - the rate suggestion from the member's own benchmarks, and where their price sits;
- *   - plans: Free sees one template and keeps drafts, sending is Pro's (with the price);
+ *   - plans: building proposals is Pro + Close (the trial is Close): after the trial no new proposal
+ *     (blank, Merlin's templates or their own), no edit, no saved template, no kit, the connector's
+ *     list_proposal_templates, create_or_update_proposal and get_proposal_kit refuse with the
+ *     upgrade link; what they made in the trial stays stored and comes back on Pro + Close;
  *   - privacy: another member can't read, change, send or sign it; nothing of it in their table or
  *     the export; the signer's view carries nothing private; only accepted lines are stored;
  *   - send: blanks refused, an email to the signer with a signed link, the pipeline told;
@@ -316,13 +319,27 @@ async function main() {
 
   /* ================= plans ================= */
   console.log("\nplans");
+  // Fred's trial (Pro + Close): he builds a proposal and saves a template of his own. Then it ends.
+  const MN0 = await import("../lib/proposals/mine");
+  const fredWas = structuredClone((await T.loadState()).billing!.members.mem_fre);
+  await T.tableInternals.mutate((st) => void (st.billing!.members.mem_fre = { trialStartedAt: iso(-10 * DAY), trialEndsAt: iso(11 * DAY) }));
+  check("in the trial: building is on, every template open", (await S.listProposals(FRE, BASE)).canBuild && (await S.listProposals(FRE, BASE)).templatesOpen.length === 5);
+  const fp = await S.createProposal(FRE, { templateId: "sprint-90", companyName: "Wrenfield Dairy" }, BASE);
+  const fredMine = await MN0.uploadTemplate(FRE, "fred.md", Buffer.from("# Fred's SOW\n\n## Fees\n$5,000 a month for advice, two calls a week and a written plan."));
+  check("in the trial: a proposal and a saved template of his own", fp.status === "draft" && /^mt_/.test(fredMine.id));
+  await T.tableInternals.mutate((st) => void (st.billing!.members.mem_fre = fredWas));
   const fv = await S.listProposals(FRE, BASE);
-  check("Free: one template open, no sending", fv.templatesOpen.join() === L.FREE_TEMPLATE && fv.canSend === false);
-  const sprint = await refused(S.createProposal(FRE, { templateId: "sprint-90" }, BASE));
-  // Every template and sending are Pro + Close now (canClose): Free and Pro build and preview.
-  check("Free: another template is Pro + Close's, with the price", /Pro \+ Close: \$79 a month/.test(sprint ?? ""), sprint);
-  const fp = await S.createProposal(FRE, { templateId: L.FREE_TEMPLATE, companyName: "Wrenfield Dairy" }, BASE);
-  check("Free: a draft from the open template", fp.status === "draft");
+  check("after the trial: building is off, no template opens (his own neither), no sending", fv.canBuild === false && fv.templatesOpen.length === 0 && fv.templates.every((t) => !t.open) && fv.canSend === false, fv.templates);
+  check("  what he made is kept: the proposal and his saved template are still listed", fv.proposals.some((x) => x.id === fp.id) && fv.templates.some((t) => t.id === fredMine.id && t.mine));
+  const blank = await S.createProposal(FRE, { companyName: "Wrenfield Dairy" }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
+  check("after the trial: a new blank proposal is Pro + Close's, with the price and the upgrade link", !!blank && blank.status === 403 && blank.message === S.CLOSE_BUILD && /Pro \+ Close: \$79 a month/.test(blank.message) && /p=billing/.test(blank.upgrade ?? ""), blank?.message);
+  check("  from Merlin's templates too", (await refused(S.createProposal(FRE, { templateId: "sprint-90" }, BASE))) === S.CLOSE_BUILD && (await refused(S.createProposal(FRE, { templateId: L.FREE_TEMPLATE }, BASE))) === S.CLOSE_BUILD);
+  check("  and from his own saved template", (await refused(S.createProposal(FRE, { templateId: fredMine.id }, BASE))) === S.CLOSE_BUILD);
+  check("  no edit, no copy", (await refused(S.updateProposal(FRE, fp.id, { title: "Changed" }, BASE))) === S.CLOSE_BUILD && (await refused(S.duplicateProposal(FRE, fp.id, BASE))) === S.CLOSE_BUILD);
+  const upFail = await MN0.uploadTemplate(FRE, "again.md", Buffer.from("# Again\n\n## Fees\n$5,000 a month.")).then(() => null, (e: InstanceType<typeof MN0.MineProblem>) => e);
+  check("  no template saved, with the upgrade link", !!upFail && upFail.status === 403 && upFail.message === S.CLOSE_BUILD && /p=billing/.test(upFail.upgrade ?? ""), upFail?.message);
+  check("  the kit refuses too", (await refused(import("../lib/proposals/kit").then((K0) => K0.proposalKit(FRE, { templateId: fredMine.id })))) === S.CLOSE_BUILD);
+  check("  his template is not deleted: it is still stored", (await T.loadState()).myTemplates?.mem_fre?.some((t) => t.id === fredMine.id) === true);
   const fsend = await S.sendProposal(FRE, fp.id, { signer: { name: "Rhea Wren", email: "rhea@wrenfield.example" } }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
   check("Free: sending is Pro + Close's, said plainly with the price, with the upgrade link", !!fsend && fsend.status === 403 && /Sending for signature is on Pro \+ Close: \$79 a month, or \$790 a year/.test(fsend.message) && /p=billing/.test(fsend.upgrade ?? ""), fsend?.message);
   check("Trial: every template and sending", (await S.listProposals(PAT, BASE)).canSend && (await S.listProposals(PAT, BASE)).templatesOpen.length === 5);
@@ -530,7 +547,8 @@ async function main() {
   const fctx = { member: (await T.memberForToken(FRE))!, origin: BASE };
   const lib = await C.listProposalTemplates(ctx);
   check("list_proposal_templates: templates, blocks with guidance and fields, what to pull from a call", (lib.templates as unknown[]).length === 5 && (lib.blocks as { fields: unknown[] }[]).every((b) => Array.isArray(b.fields)) && (lib.from_a_call as { cues: string[] }[]).every((x) => x.cues.length > 0) && /person who signs/.test(String(lib.about)));
-  check("on Free it says which template is open", ((await C.listProposalTemplates(fctx)).templates as { id: string; open: boolean }[]).filter((t) => t.open).map((t) => t.id).join() === L.FREE_TEMPLATE);
+  const flist = await C.listProposalTemplates(fctx);
+  check("list_proposal_templates after the trial: building is Pro + Close's, with the link, and his saved template is counted as kept, not opened", flist.can_build === false && String(flist.plan).startsWith(S.CLOSE_BUILD) && /p=billing/.test(String(flist.plan)) && flist.your_templates_kept === 1 && !("templates" in flist) && !JSON.stringify(flist).includes("$5,000"), flist);
   const made = await C.createOrUpdateProposal(ctx, {
     template_id: "sprint-90",
     company_id: ACME,
@@ -558,10 +576,11 @@ async function main() {
   check("send_proposal_for_signature without confirm: nothing sent, it asks", ask.confirmed === false && /Nothing was sent/.test(String(ask.message)) && /confirm: true/.test(String(ask.next)) && mails.length === m3 && (await S.getProposal(PAT, pid, BASE)).status === "draft", ask);
   const yes = await C.sendForSignature(ctx, { proposal_id: pid, confirm: true });
   check("with confirm: sent", yes.confirmed === true && (await S.getProposal(PAT, pid, BASE)).status === "sent" && mails.slice(m3).some((m) => m.to === "dana@acmerobotics.example"), yes);
-  const fmade = await C.createOrUpdateProposal(fctx, { template_id: L.FREE_TEMPLATE, company_name: "Wrenfield Dairy" });
-  check("Free through Claude: drafts yes", fmade.saved === true);
-  check("Free through Claude: sending is Pro's", (await refused(C.sendForSignature(fctx, { proposal_id: String(fmade.proposal_id), signer_name: "Rhea Wren", signer_email: "rhea@wrenfield.example", confirm: true })))?.includes("Pro"));
-  check("Free through Claude: another template is Pro's", (await refused(C.createOrUpdateProposal(fctx, { template_id: "revops-build" })))?.includes("Pro"));
+  check("create_or_update_proposal after the trial: a new one refused with the upgrade link", (await refused(C.createOrUpdateProposal(fctx, { template_id: L.FREE_TEMPLATE, company_name: "Wrenfield Dairy" })))?.startsWith(S.CLOSE_BUILD) === true);
+  const fredPid = (await S.listProposals(FRE, BASE)).proposals[0].id;
+  check("  an edit to the one from his trial refused too", (await refused(C.createOrUpdateProposal(fctx, { proposal_id: fredPid, title: "New title" })))?.startsWith(S.CLOSE_BUILD) === true);
+  check("  from his own template neither", (await refused(C.createOrUpdateProposal(fctx, { template_id: (await S.listProposals(FRE, BASE)).templates.find((t) => t.mine)!.id, company_name: "X" })))?.includes("Pro + Close") === true);
+  check("Free through Claude: sending is Pro's", (await refused(C.sendForSignature(fctx, { proposal_id: fredPid, signer_name: "Rhea Wren", signer_email: "rhea@wrenfield.example", confirm: true })))?.includes("Pro"));
 
   /* ================= the pipeline, on its own ================= */
   console.log("\nthe pipeline hook, on its own");
@@ -801,7 +820,7 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   check("get_proposal_kit: rate band, company, voice, how to write it and the shape to save it in", !!(kit.rate_band as { market?: string }).market && (kit.company as { name: string }).name === "Acme Robotics" && !!kit.voice && Array.isArray(kit.how_to_write_it) && (kit.save_it_with as { tool: string }).tool === "create_or_update_proposal");
   check("get_proposal_kit: a template that isn't there lists the ones that are", /No template called "Moonshot"[\s\S]*sprint-90/.test((await refused(C.getProposalKit(kctx, { template: "Moonshot" }))) ?? ""));
   const fkctx = { member: (await T.memberForToken(FRE))!, origin: BASE };
-  check("get_proposal_kit on Free: Merlin's other templates are Pro's", (await refused(C.getProposalKit(fkctx, { template: "sprint-90" })))?.includes("On Free"));
+  check("get_proposal_kit after the trial: refused, Pro + Close, with the link", (await refused(C.getProposalKit(fkctx, { template: "sprint-90" })))?.startsWith(S.CLOSE_BUILD) === true);
   check("the kit and the server's draft read the same inputs", JSON.stringify(Object.keys(await K.proposalKit(PAT, { templateId: "sprint-90", companyId: ACME })).sort()) === JSON.stringify(Object.keys(kitJson).sort()));
   // Build it in Claude runs in the member's own Claude: free and unlimited, even with the AI usage all used.
   await T.tableInternals.mutate((st) => void Object.assign(st.aiUsage!.mem_pat, { trialMicros: 9_000_000, packMicros: 0 }));
@@ -881,7 +900,13 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   check("a proposal from her own template: its sections and her text", fromMine.blocks.map((b) => b.title).join("|") === "Background|Scope of work|Fees|Out of scope" && fromMine.blocks[2].body === "$11,000 a month, billed in advance." && fromMine.title === "Northwind SOW for Larkspur Foods", fromMine.title);
   const mkit = await K.proposalKit(PAT, { templateId: mt.id, companyName: "Larkspur Foods" });
   check("the kit for her template carries her own words, section by section", mkit.template.mine && mkit.template.sections[2].their_text === "$11,000 a month, billed in advance.");
-  check("Free can start from a template of their own", /^mt_/.test((await MN.uploadTemplate(FRE, "mine.md", Buffer.from("# Mine\n\n## Fees\n$5,000 a month for advice, two calls a week and a written plan."))).id));
+  // Upgrading brings it all back: Fred on Pro + Close opens his saved template and builds from it.
+  const fredBack = structuredClone((await T.loadState()).billing!.members.mem_fre);
+  await T.tableInternals.mutate((st) => void (st.billing!.members.mem_fre = { ...fredBack, proUntil: new Date(Date.now() + 30 * DAY).toISOString(), paidSince: new Date().toISOString(), tier: "close" } as typeof fredBack));
+  const fv2 = await S.listProposals(FRE, BASE);
+  const fredT = fv2.templates.find((t) => t.mine)!;
+  check("on Pro + Close his saved template is back and open, and he builds from it", fv2.canBuild && fredT.open && (await S.createProposal(FRE, { templateId: fredT.id, companyName: "Wrenfield Dairy" }, BASE)).blocks.some((b) => /\$5,000 a month/.test(b.body)));
+  await T.tableInternals.mutate((st) => void (st.billing!.members.mem_fre = fredBack));
   check("another member can't use or see it", (await refused(S.createProposal(OTH, { templateId: mt.id, companyName: "X" }, BASE)))?.includes("isn't there") && !(await S.listProposals(OTH, BASE)).templates.some((x) => x.mine));
   check("nor delete it", (await refused(MN.deleteTemplate(OTH, mt.id)))?.includes("isn't there"));
   check("not in the export", !JSON.stringify(await T.exportState()).includes("Northwind"));

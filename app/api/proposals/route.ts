@@ -24,7 +24,7 @@ async function answer(work: () => Promise<unknown>) {
     return NextResponse.json(await work(), { headers: NO_STORE });
   } catch (e) {
     if (e instanceof ProposalProblem) return err(e.message, e.status, e.upgrade);
-    if (e instanceof MineProblem) return err(e.message, e.status);
+    if (e instanceof MineProblem) return err(e.message, e.status, e.upgrade);
     throw e;
   }
 }

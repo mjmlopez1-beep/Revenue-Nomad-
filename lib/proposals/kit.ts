@@ -13,10 +13,10 @@ import { loadSeed, loadState, memberByToken, tableInternals as T, type Member } 
 import { functionOf } from "../tableFields";
 import { styleOf, voiceSummary } from "../voice";
 import { memberView } from "../mcp/view";
-import { DISCOVERY_FIELDS, DISCOVERY_LABELS, FREE_TEMPLATE, STARTER, TEMPLATES, WINNING_PATTERNS, blockDef, guidanceFor, templateDef } from "./library";
+import { DISCOVERY_FIELDS, DISCOVERY_LABELS, STARTER, TEMPLATES, WINNING_PATTERNS, blockDef, guidanceFor, templateDef } from "./library";
 import { adviceFromView } from "./rates";
 import { isMineId, templatesOf } from "./mine";
-import { ProposalProblem, companyFor } from "./store";
+import { ProposalProblem, buildGate, companyFor } from "./store";
 
 export interface KitSection {
   block_id: string;
@@ -65,8 +65,8 @@ export async function proposalKit(token: string | null, a: { templateId?: string
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (!me) throw new ProposalProblem("You're signed out. Sign in again.", 401);
-  // Not on Pro + Close (lib/billing/rules.ts canClose): Merlin's one template, a template of theirs or a blank page.
-  const free = !T.closeNow(s, me.id, Date.now());
+  // The kit is for building a proposal: Pro + Close and the trial (lib/billing/rules.ts canClose), else the upgrade prompt.
+  buildGate(s, me.id, Date.now());
   const tid = a.templateId || null;
   let template: ProposalKit["template"];
   if (isMineId(tid)) {
@@ -84,7 +84,6 @@ export async function proposalKit(token: string | null, a: { templateId?: string
   } else {
     const t = templateDef(tid);
     if (tid && !t) throw new ProposalProblem("That template isn't in the library.");
-    if (t && t.id !== FREE_TEMPLATE && free) throw new ProposalProblem(`On Free and Pro you can start from ${templateDef(FREE_TEMPLATE)!.title}, a template of yours or a blank page. Every template is on Pro + Close.`, 403);
     const ids = t ? t.blocks.map((b) => ({ id: b.blockId, required: b.required })) : ["cover", "what_we_heard", "recommendation", "milestones", "investment", "next_steps", "signature"].map((id) => ({ id, required: true }));
     template = {
       id: t?.id ?? null,
@@ -130,10 +129,10 @@ export async function proposalKit(token: string | null, a: { templateId?: string
   };
 }
 
-/** Every template a member can start from: theirs, then the library's. */
+/** Every template a member can start from: theirs, then the library's. Without Pro + Close none is open (theirs stay stored). */
 export function templateChoices(s: Awaited<ReturnType<typeof loadState>>, memberId: string, free: boolean) {
   return [
-    ...templatesOf(s, memberId).map((t) => ({ id: t.id, title: t.title, about: t.fileName, mine: true, open: true, sections: t.blocks.length })),
-    ...TEMPLATES.map((t) => ({ id: t.id, title: t.title, about: t.bestFor, mine: false, open: !free || t.id === FREE_TEMPLATE, sections: t.blocks.length })),
+    ...templatesOf(s, memberId).map((t) => ({ id: t.id, title: t.title, about: t.fileName, mine: true, open: !free, sections: t.blocks.length })),
+    ...TEMPLATES.map((t) => ({ id: t.id, title: t.title, about: t.bestFor, mine: false, open: !free, sections: t.blocks.length })),
   ];
 }

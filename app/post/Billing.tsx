@@ -214,8 +214,8 @@ function leadFor(plan: PlanView, a: Ask): string {
   if (a.from === "crystal") return `Free opens one ${FEATURE_NAME} company a day, with everything on it. Pro opens every company in your ${FEATURE_NAME} free.`;
   if (a.from === "proposals")
     return plan.hadTrial || plan.name !== "free"
-      ? "Free and Pro build and preview proposals. Pro + Close drafts them from your call, opens your own templates and contracts, and sends them for e-signature, so the client signs where they read it."
-      : "Free and Pro build and preview proposals. Your 21-day trial is Pro + Close: draft from your call, send, and get it signed.";
+      ? "Building proposals in Merlin is on Pro + Close: new ones, from Merlin's templates or your own. It drafts them from your call, opens your own templates and contracts, and sends them for e-signature. Your proposals and saved templates are kept, and come back when you upgrade."
+      : "Your 21-day trial is Pro + Close: build proposals, save your own templates, draft from your call, send, and get it signed. After it, building proposals is on Pro + Close.";
   return VALUE_LINE;
 }
 

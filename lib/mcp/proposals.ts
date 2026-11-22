@@ -18,12 +18,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { BLOCKS, DISCOVERY_FIELDS, DISCOVERY_LABELS, FREE_TEMPLATE, OBJECTIONS, STARTER, TEMPLATES, blanksInWords, blanksOf, blockDef, checklist, makeBlock, rendered, riskFlags } from "../proposals/library";
+import { BLOCKS, DISCOVERY_FIELDS, DISCOVERY_LABELS, OBJECTIONS, STARTER, TEMPLATES, blanksInWords, blanksOf, blockDef, checklist, makeBlock, rendered, riskFlags } from "../proposals/library";
 import { adviceFromView } from "../proposals/rates";
 import { KEY_FIELDS, proposalKit } from "../proposals/kit";
 import { templatesOf } from "../proposals/mine";
 import { loadState } from "../table";
-import { ProposalProblem, createProposal, docFields, getProposal, listProposals, sendProposal, updateProposal } from "../proposals/store";
+import { CLOSE_BUILD, ProposalProblem, createProposal, docFields, getProposal, listProposals, sendProposal, updateProposal } from "../proposals/store";
+import { upgradeUrl } from "../plan";
+import { publicBase } from "../links";
 import type { ProposalBlock, ProposalRec } from "../proposals/types";
 import { SENDER_DUTY } from "../proposals/types";
 import { memberView } from "./view";
@@ -43,7 +45,16 @@ const wrap = async <T>(work: () => Promise<T>): Promise<T> => {
 export async function listProposalTemplates(ctx: Ctx): Promise<ToolOut> {
   const v = await wrap(() => listProposals(ctx.member.token, ctx.origin));
   const mine = templatesOf(await loadState(), ctx.member.id);
+  // Without Pro + Close (after the trial): no template opens, Merlin's or theirs. Theirs stay stored and come back on upgrade.
+  if (!v.canBuild)
+    return {
+      can_build: false,
+      plan: `${CLOSE_BUILD} ${upgradeUrl((publicBase() ?? ctx.origin ?? "").replace(/\/$/, ""), "proposals")}`,
+      your_templates_kept: mine.length,
+      next: "Tell the member building proposals needs Pro + Close, and give them the link. Don't draft one for Merlin: it can't be saved on their plan.",
+    };
   return {
+    can_build: true,
     your_templates: mine.length
       ? mine.map((t) => ({ id: t.id, title: t.title, from_file: t.fileName, sections: t.blocks.map((b) => b.title) }))
       : "None yet. The member can upload a past proposal or SOW in Proposals on Merlin (My templates), then draft from its structure and voice.",
@@ -70,7 +81,7 @@ export async function listProposalTemplates(ctx: Ctx): Promise<ToolOut> {
     })),
     from_a_call: DISCOVERY_FIELDS.map((f) => ({ key: f.key, label: DISCOVERY_LABELS[f.key] ?? f.key, extract: f.extract, cues: f.cues })),
     objections: OBJECTIONS,
-    plan: v.canSend ? "Every template is open, and sending for signature is on." : `On Free and Pro: the template ${FREE_TEMPLATE} or a blank page, built and previewed only. Every template and sending for signature are on Pro + Close.`,
+    plan: "Every template is open, and sending for signature is on.",
   };
 }
 
@@ -274,7 +285,7 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
     {
       title: "Get everything to draft a proposal",
       description:
-        "START HERE when the member asks you to draft or write a proposal or SOW from a call (\"use my XYZ template in Merlin and draft a proposal for Acme from my call with Dana\"). One call returns everything to write it: the template's sections in order with guidance and examples (the member's own uploaded template with its text, or one of Merlin's that won), the patterns that win, the rate band for the company's size from Merlin's rate benchmarks, the company's facts the member can see, the member's name, title and writing voice, and the exact shape to save it in. Read the call itself from the member's meeting notes or transcript tool (Granola, Google Drive) or what they paste, write the whole proposal, then save it with create_or_update_proposal. template: an id or the name the member used. company_id from search_companies or find_company, or company_name.",
+        "START HERE when the member asks you to draft or write a proposal or SOW from a call (\"use my XYZ template in Merlin and draft a proposal for Acme from my call with Dana\"). One call returns everything to write it: the template's sections in order with guidance and examples (the member's own uploaded template with its text, or one of Merlin's that won), the patterns that win, the rate band for the company's size from Merlin's rate benchmarks, the company's facts the member can see, the member's name, title and writing voice, and the exact shape to save it in. Read the call itself from the member's meeting notes or transcript tool (Granola, Google Drive) or what they paste, write the whole proposal, then save it with create_or_update_proposal. template: an id or the name the member used. company_id from search_companies or find_company, or company_name. Building proposals is Pro + Close (the trial included): on another plan it refuses with the upgrade link, and the member's saved templates stay stored for when they upgrade.",
       inputSchema: {
         template: z.string().optional().describe("A template id from list_proposal_templates (theirs start mt_), or the name the member said. None: a blank page."),
         company_id: z.string().optional().describe("The company's id on Merlin."),
@@ -289,7 +300,7 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
     {
       title: "Proposal templates",
       description:
-        "Merlin's proposal builder: the member's own templates (past proposals they uploaded), Merlin's templates from proposals that won, every block with what good looks like, common mistakes, its {{field}} keys and starter text, the fields to pull from a discovery call with their cue phrases, and answers to common objections. To draft one proposal, get_proposal_kit gives all of it for the chosen template in one call. Use the member's own call to write it in their client's language, paraphrased, never pasted.",
+        "Merlin's proposal builder: the member's own templates (past proposals they uploaded), Merlin's templates from proposals that won, every block with what good looks like, common mistakes, its {{field}} keys and starter text, the fields to pull from a discovery call with their cue phrases, and answers to common objections. To draft one proposal, get_proposal_kit gives all of it for the chosen template in one call. Use the member's own call to write it in their client's language, paraphrased, never pasted. Building proposals is Pro + Close (the trial included): on another plan it refuses with the upgrade link, and the member's saved templates stay stored for when they upgrade.",
       inputSchema: {},
       annotations: { title: "Proposal templates", ...READ },
     },
@@ -311,7 +322,7 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
     {
       title: "Create or update a proposal",
       description:
-        "Save the proposal you drafted (usually from get_proposal_kit and the member's call) on Merlin, where the member edits it, and it is sent and signed. Without proposal_id it starts one: template_id from list_proposal_templates (or none for a blank page) and the company (company_id from search_companies, or company_name). fields fills the {{keys}} (\"goals.target\", \"pains\" with one item a line, \"pricing.monthlyFee\" like \"$12,000\"). blocks replaces the block list in order (block_id, and title and body when you write them; body may use {{keys}}). notes are lines from the call the member agreed to keep (key from the template's from_a_call list): paraphrase them, never paste the transcript, and never send the whole transcript. signer is the person who signs for the client: send it to them, not a go-between. Saving after it was sent makes a new version and the old link stops working. Returns the proposal with its blanks, checklist and risk flags.",
+        "Save the proposal you drafted (usually from get_proposal_kit and the member's call) on Merlin, where the member edits it, and it is sent and signed. Without proposal_id it starts one: template_id from list_proposal_templates (or none for a blank page) and the company (company_id from search_companies, or company_name). fields fills the {{keys}} (\"goals.target\", \"pains\" with one item a line, \"pricing.monthlyFee\" like \"$12,000\"). blocks replaces the block list in order (block_id, and title and body when you write them; body may use {{keys}}). notes are lines from the call the member agreed to keep (key from the template's from_a_call list): paraphrase them, never paste the transcript, and never send the whole transcript. signer is the person who signs for the client: send it to them, not a go-between. Saving after it was sent makes a new version and the old link stops working. Returns the proposal with its blanks, checklist and risk flags. Building proposals is Pro + Close (the trial included): on another plan it refuses with the upgrade link, and the member's saved templates stay stored for when they upgrade.",
       inputSchema: {
         proposal_id: z.string().optional(),
         template_id: z.string().optional().describe("A template id, for a new proposal: Merlin's, or one of the member's own (mt_...)."),

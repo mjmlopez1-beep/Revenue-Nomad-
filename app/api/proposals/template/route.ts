@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 const COOKIE = "rn_table";
 const NO_STORE = { "cache-control": "no-store" };
-const err = (message: string, status = 400) => NextResponse.json({ error: message }, { status, headers: NO_STORE });
+const err = (message: string, status = 400, upgrade?: string) => NextResponse.json({ error: message, ...(upgrade ? { upgrade } : {}) }, { status, headers: NO_STORE });
 
 /**
  * POST /api/proposals/template?name=<file name>, the file as the body: one of the member's own
@@ -29,7 +29,7 @@ export const POST = guarded(async (req: NextRequest) => {
   try {
     return NextResponse.json(await uploadTemplate(token, req.nextUrl.searchParams.get("name") ?? "", buf), { headers: NO_STORE });
   } catch (e) {
-    if (e instanceof MineProblem) return err(e.message, e.status);
+    if (e instanceof MineProblem) return err(e.message, e.status, e.upgrade);
     throw e;
   }
 });
