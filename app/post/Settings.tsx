@@ -135,7 +135,7 @@ export function CloseAccount({ startAsking = false }: { startAsking?: boolean })
     }
   };
   return (
-    <section className="tp-card tp-set tp-close" data-close-account>
+    <section className="tp-card tp-set tp-close" data-close-account data-asking={asking ? "" : undefined}>
       <div className="tp-set-t">
         <h2 className="tp-card-h" id="tp-set-close">
           {CLOSE_ACCOUNT.title}

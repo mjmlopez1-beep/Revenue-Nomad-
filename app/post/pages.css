@@ -636,6 +636,19 @@
 .tp-set-t {
   min-width: 0;
 }
+/* Close your account: asking, the words and the two buttons stack under the heading. */
+.tp-card.tp-set.tp-close[data-asking] {
+  flex-direction: column;
+  align-items: stretch;
+}
+.tp-close .tp-set-ask {
+  display: grid;
+  gap: 8px;
+}
+.tp-close .tp-set-ask .tp-btn-red {
+  color: var(--red);
+  border-color: var(--red);
+}
 .tp-set .tp-card-h {
   margin-bottom: 2px;
 }

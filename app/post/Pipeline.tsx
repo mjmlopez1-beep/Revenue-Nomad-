@@ -154,9 +154,7 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
         <CompanyLogo name={e.name ?? ""} domain={e.name ? i?.c.iconDomain ?? i?.domain ?? null : null} hidden={!e.name} seed={e.company} />
         <span className="pl-card-n">{e.name ?? <LockedName seed={e.company} />}</span>
       </button>
-      <span className="pl-card-to">
-        To {e.to.label} · {CHANNEL_WORDS[e.channel]}
-      </span>
+      <span className="pl-card-to">{e.stage === "reach" ? "A lead a peer passed you. Nothing sent yet." : `To ${e.to.label} · ${CHANNEL_WORDS[e.channel]}`}</span>
       {(CLOSED as string[]).includes(e.stage) ? <StageChip stage={e.stage} /> : null}
       {e.how && <span className="pl-how">{e.how}</span>}
       {(e.lead || e.team) && (
@@ -168,7 +166,7 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
       )}
       {e.stage === "won" ? (
         <span className="pl-card-next">{e.won ? monthWords(e.won.monthly) : e.seat ? "Your seat here is confirmed" : "Add the terms and your seat"}</span>
-      ) : e.next ? (
+      ) : e.next && e.stage !== "reach" ? (
         <span className={`pl-card-next${due ? " pl-due" : ""}`}>{e.next}</span>
       ) : null}
       <div className="pl-card-acts">
