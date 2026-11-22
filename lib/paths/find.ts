@@ -118,6 +118,10 @@ export interface Contact {
   aliases?: string[];
   /** Seats (internal ids) Your network matched this contact to as their holder ("You know this person"). */
   seats?: string[];
+  /** A member the member wrote to on Merlin (or who wrote to them): how many messages, the last one's day, and the conversation (the member's own). */
+  msgCount?: number;
+  msgLast?: string | null;
+  conv?: string | null;
 }
 
 export interface Me {
@@ -300,6 +304,7 @@ export function findAll(w: World, me: Me, contacts: Contact[]): { byCompany: Map
               fn: t.fn,
               active: t.active,
               year: both ? null : yearOf(Math.max(s.from!, x.from!)),
+              togetherEnd: both ? null : yearOf(end),
               tYear: yearOf(t.from),
               otherSeat: t.id,
               bridgeId: s.companyId,
@@ -334,7 +339,7 @@ export function findAll(w: World, me: Me, contacts: Contact[]): { byCompany: Map
         const t = w.seats.get(id);
         if (!t || t.companyId === s.companyId || skipTarget(t.companyId)) continue;
         const shared = me.visible(s.companyId) ? (w.companies.get(s.companyId)?.name ?? "a client") : "a client";
-        raws.push({ target: t.companyId, degree: 2, q: (t.active ? BASE["client-now"] : BASE["client-past"]) * 0.8 * (t.active ? 1 : recency(yearsAgo(t.to))), parts: { kind: "client", shared, fn: t.fn, active: t.active, year: yearOf(t.from) }, via: { directory: d, name: d.shown } });
+        raws.push({ target: t.companyId, degree: 2, q: (t.active ? BASE["client-now"] : BASE["client-past"]) * 0.8 * (t.active ? 1 : recency(yearsAgo(t.to))), parts: { kind: "client", shared, fn: t.fn, active: t.active, year: yearOf(t.from), ownSeat: t.id, bridgeId: s.companyId }, via: { directory: d, name: d.shown } });
       }
     }
 
@@ -372,6 +377,20 @@ const DM_TITLE =
   /\b(ceo|cfo|coo|cro|cmo|cto|cpo|cio|chief|founder|co-?founder|owner|president|managing (director|partner)|general manager|vp|svp|evp|vice president|head of)\b/i;
 const NOT_DM = /\b(assistant|intern|fractional|interim|advisor|adviser|consultant)\b/i;
 
+/**
+ * What a way in was found from, by its view (never in an answer: internal ids): the server's
+ * ratings (lib/paths/ways.ts) read the seats and the person on each side from it.
+ */
+export interface PathRaw {
+  target: string;
+  degree: 1 | 2;
+  q: number;
+  parts: Raw["parts"];
+  contact: Contact | null;
+  directory: WPerson | null;
+}
+export const PATH_RAW = new WeakMap<PathView, PathRaw>();
+
 function viewOf(r: Raw, target: string | null, me: Me, key: string): PathView {
   const c = "key" in r.via ? r.via : null;
   const d = "directory" in r.via ? r.via : null;
@@ -381,7 +400,7 @@ function viewOf(r: Raw, target: string | null, me: Me, key: string): PathView {
   if (d) who.src = [];
   const parts: Parts = { ...r.parts, who, target };
   const score = scoreOf(r.degree, r.q);
-  return {
+  const view: PathView = {
     key: `${key}:${r.parts.kind}`,
     kind: r.parts.kind as PathKind,
     degree: r.degree,
@@ -403,4 +422,6 @@ function viewOf(r: Raw, target: string | null, me: Me, key: string): PathView {
     },
     note: noteOf(parts, { ...me.words, voice: me.voice }),
   };
+  PATH_RAW.set(view, { target: r.target, degree: r.degree, q: r.q, parts: r.parts, contact: c, directory: d?.directory ?? null });
+  return view;
 }

@@ -2,9 +2,10 @@
  * Your pipeline: each member's own deals, one entry per company they reached out to, moved by
  * Merlin itself. The member never moves a stage by hand: Merlin sees what happened and moves it.
  *
- *   To reach out  a lead a peer passed them (lib/peers.ts, openLead): theirs to write to. It moves
- *             to Sent by itself the same way a new deal lands there (the member's note goes out,
- *             a message on Merlin, or their Gmail shows an email out to the company).
+ *   To reach out  a lead a peer passed them (lib/peers.ts, openLead), or a route in the member went
+ *             with (Your way in, routeEntry): theirs to write to. It moves to Sent by itself the
+ *             same way a new deal lands there (the member's note or first step goes out, a message
+ *             on Merlin, or their Gmail shows an email out to the company).
  *   Sent      the member used a drafted note (Open in Gmail, Copy, Mark as sent), a message,
  *             intro or invite went out on Merlin, or their connected Gmail shows a new email out
  *             to a company in their Crystal Ball (headers only: who, to whom, when).
@@ -184,6 +185,8 @@ export interface PipelineEntry {
   introId?: string;
   /** A lead a peer passed (lib/peers.ts LeadPass): its id and the member who passed it. A win here is counted for them too. */
   lead?: { passId: string; by: string };
+  /** The member went with a route in (lib/paths/plan.ts, Your way in): when. The plan itself is State.routes. */
+  route?: { at: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -295,7 +298,8 @@ export function openEntry(
     if (o.lead && !had.lead) had.lead = o.lead;
     if (o.conversationId && !had.conversationId) had.conversationId = o.conversationId;
     if (o.to?.memberId && !had.to.memberId) had.to = { ...had.to, ...o.to };
-    // A peer's lead waiting at To reach out: the member's note went out, so it moves to Sent, as a new deal would land there.
+    // A deal waiting at To reach out (a peer's lead, or a route the member went with, routeEntry): the member's
+    // note or first step went out, so it moves to Sent, as a new deal would land there. Its first send, not a follow-up.
     if (had.stage === "reach") {
       had.channel = o.channel;
       if (o.to && (o.to.role || o.to.name || o.to.seatId)) had.to = { ...o.to, ...(had.to.memberId && !o.to.memberId ? { memberId: had.to.memberId } : {}) };
@@ -403,6 +407,49 @@ export function migrateLeadsToReach(log: PipelineLog | undefined): number {
     n++;
   }
   return n;
+}
+
+/**
+ * Go with a route (Your way in, lib/paths/plan.ts): the company's open deal takes the route, or a
+ * new deal waits at To reach out (nothing sent yet, no follow-up due), as a peer's lead does, until
+ * the member's first step goes out: openEntry (their note or message) or their Gmail (detectEntry)
+ * then moves it to Sent by the same rules. Nothing is sent here.
+ */
+export function routeEntry(log: PipelineLog, o: { id: string; companyId: string; channel: Channel; source: Source; nowMs: number }): { entry: PipelineEntry; created: boolean } {
+  const had = log.entries.find((e) => e.companyId === o.companyId && (isOpen(e.stage) || e.stage === "quiet"));
+  if (had) {
+    if (!had.route) logLine(had, "Chose a route in", o.nowMs);
+    had.route = { at: iso(o.nowMs) };
+    had.updatedAt = iso(o.nowMs);
+    return { entry: had, created: false };
+  }
+  const at = iso(o.nowMs);
+  const entry: PipelineEntry = {
+    id: o.id,
+    companyId: o.companyId,
+    stage: "reach",
+    channel: o.channel,
+    to: {},
+    source: o.source,
+    dates: { reach: at },
+    via: { reach: "you" },
+    due: null,
+    follow: 0,
+    lastOut: at,
+    seen: {},
+    notes: [],
+    log: [],
+    route: { at },
+    createdAt: at,
+    updatedAt: at,
+  };
+  logLine(entry, "To reach out: you chose a route in", o.nowMs);
+  log.entries.push(entry);
+  if (log.entries.length > PIPELINE_LIMITS.entries) {
+    const closed = log.entries.filter((e) => !isOpen(e.stage) && e.stage !== "won").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    for (const c of closed.slice(0, log.entries.length - PIPELINE_LIMITS.entries)) log.entries.splice(log.entries.indexOf(c), 1);
+  }
+  return { entry, created: true };
 }
 
 const LOG_WORDS: Record<Stage, string> = {
@@ -959,7 +1006,9 @@ export function followUpWords(f: Pick<FollowUpItem, "stage" | "channel" | "to" |
 }
 
 /** The next step on an entry, in a few words ("Follow up Nov 24", "Book a meeting", "Add it as your seat"), or null when there is none. */
-export function nextStep(e: Pick<PipelineEntry, "stage" | "due" | "seatId">, nowMs: number): string | null {
+export function nextStep(e: Pick<PipelineEntry, "stage" | "due" | "seatId"> & Partial<Pick<PipelineEntry, "route">>, nowMs: number): string | null {
+  // A route chosen and not acted on yet (it waits at To reach out): its first step (the words name nobody, so the connector can read them too).
+  if (e.route && e.stage === "reach") return "Take the first step of your route";
   const today = dayOf(nowMs);
   const when = e.due ? (e.due < today ? "overdue" : e.due === today ? "today" : shortDay(e.due)) : null;
   switch (e.stage) {
@@ -1147,6 +1196,8 @@ export interface PipelineRec {
   lead?: { id: string; by: string };
   /** A team at this company (lib/peers.ts): "Teamed with Ana". */
   team?: { id: string; with: string };
+  /** The member went with a route in here (Your way in): the card draws the route line (app/post/network/Ways.tsx RouteLine). */
+  route?: boolean;
   createdAt: string;
   updatedAt: string;
 }

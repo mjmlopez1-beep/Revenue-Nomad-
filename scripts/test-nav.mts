@@ -153,7 +153,7 @@ async function main() {
   // Your pipeline sits under Yours, first after the saved views: Your pipeline, Proposals (next to the pipeline), Following, Your seats.
   // Notifications (every email and Slack post, and how often) sits in the foot after Integrations: one place for the
   // switches that were on Your credits, Your profile and Integrations.
-  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,peers,messages,view:v1,view:v2,pipeline,proposals,following,seats,network,add,rates,invite,integrations,notifications,billing,credits,metrics", keys);
+  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,getin,hiring,peers,messages,view:v1,view:v2,pipeline,proposals,following,seats,network,add,rates,invite,integrations,notifications,billing,credits,metrics", keys);
   const ntItem = all.find((it) => it.key === "notifications");
   check("Notifications is in the foot, and its link opens it", ntItem?.group === "foot" && ntItem.page === "notifications" && parsePlace(me, (ntItem.href ?? "").split("?")[1] ?? "", new Set()).p === "notifications", ntItem);
   check("'notifications' finds it from Home's search", nm.navMatches("notifications", all).some((it) => it.key === "notifications"));

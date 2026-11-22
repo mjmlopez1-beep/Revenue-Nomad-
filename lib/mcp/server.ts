@@ -18,6 +18,7 @@ import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
 import { registerProposalTools } from "./proposals";
 import { registerPeerTools } from "./peers";
+import { registerWayTools } from "./ways";
 import { networkOn } from "../google/types"; // [google network]
 import { VOICE_EXCLAMATIONS, VOICE_FORMALITY, VOICE_GREETINGS, VOICE_LENGTHS, VOICE_NAMES, VOICE_OPENERS, VOICE_PHRASES_MAX, VOICE_PHRASE_CHARS, VOICE_SIGNOFFS } from "../voice";
 
@@ -460,6 +461,8 @@ export function makeServer(ctx: T.Ctx): McpServer {
   registerProposalTools(server, ctx, run);
   // Peers (lib/mcp/peers.ts): the member's peers, passing a lead (asks first), and the leads passed to them.
   registerPeerTools(server, ctx, run);
+  // Your way into a company (lib/mcp/ways.ts): the routes with Est. success, read only. Only with Your network on, like the paths.
+  if (networkOn()) registerWayTools(server, ctx, run);
 
   return server;
 }

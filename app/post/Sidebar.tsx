@@ -65,6 +65,13 @@ const P: Record<NavIconName, ReactNode> = {
     </>
   ),
   messages: <path d="M4 5h16v11H9l-5 4z" />,
+  getin: (
+    <>
+      <circle cx="5" cy="18" r="2" />
+      <rect x="16" y="3.5" width="5" height="5" rx="1.2" />
+      <path d="M6.5 16.5c3-1 2.5-5 6-6s3.5-2.5 4.5-3" />
+    </>
+  ),
   network: (
     <>
       <circle cx="12" cy="5.5" r="2.5" />

@@ -47,6 +47,8 @@ export interface Parts {
   year?: number | null;
   /** The start year of the seat on the other side, at the company (2nd degree). */
   tYear?: number | null;
+  /** overlap: the year the time they shared at the bridge ended (null while both seats are going). */
+  togetherEnd?: number | null;
   /** hired: "Hiring for the seat" or "Reported to"; a decision maker on a record has none. */
   rel?: string | null;
   /** prevco through one of the company's leaders on Merlin (no seat on the other side). */

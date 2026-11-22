@@ -153,6 +153,21 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-ways">
+            <h2 className="df-h" id="df-ways">
+              Inside Merlin: Your way in
+            </h2>
+            <p className="cl-p">
+              When you go with a route into a company, Merlin keeps your plan: which route, when you chose it, the step you are on, your plan B, and what happened at
+              each step. It keeps who the route goes through as codes, never as names, and works the names out each time it shows you the plan. Only you see your plan.
+            </p>
+            <p className="cl-p">
+              What happened at each step is also counted without anyone in it (how many people were in between, how warm each link was, whether the last person decides),
+              so the estimate gets better as members record what worked. No member, company or person is in those counts. Deleting your Google network or your contacts
+              file deletes the plans that went through them. When you close your account they stay for the 30 days you can bring it back, then all of them are deleted with your personal data.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-off">
             <h2 className="df-h" id="df-off">
               Who can switch it off
@@ -161,12 +176,13 @@ export function DataFlows() {
             <ul className="df-bullets">
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps. Disconnect any assistant you added.</li>
+              <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
               <li>Peers: mute a member, or leave a circle.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection and the connections file you uploaded, your network, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
+              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection and the connections file you uploaded, your network, your pipeline and plans for a way in, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
             </ul>
             <h3 className="df-h3">Revenue Nomad</h3>
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>
