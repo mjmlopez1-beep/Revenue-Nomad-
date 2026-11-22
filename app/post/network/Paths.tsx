@@ -28,7 +28,7 @@ import { CompanyLogo, IconChevron, initials, useToast } from "../../ui/shared";
 import { namedFn, type CoInfo } from "../model";
 import { useUi } from "../ui";
 import { earnRoom } from "../NextMove";
-import { WarmthChip } from "./parts";
+import { WarmthChip, besideChip } from "./parts";
 import { load, monthYear, netAct } from "./useNetwork";
 import { pipelineAct } from "../pipelineStore";
 import { usePlan } from "./usePaths";
@@ -184,7 +184,7 @@ function WarmRow({ c, info, onNote, onOpen }: { c: NetCompanyView; info: CoInfo 
               {p.dm && <span className="nw-dm"> · Decision maker</span>}
             </span>
             <span className="np-p-why">
-              <WarmthChip w={p.warmth} /> {strengthLine(p)}
+              <WarmthChip w={p.warmth} strength /> {besideChip(strengthLine(p), p.warmth)}
             </span>
             <IntroLine plan={plan} first={firstOf(p.name ?? "")} />
           </span>
@@ -479,7 +479,7 @@ function IntroRow({ p, me, strength, onDraft }: { p: IntroView; me: Me; strength
           </span>
           <span className="nw-muted">{introWho(p)}</span>
           <span className="np-p-why">
-            <WarmthChip w={p.warmth} /> {strength}
+            <WarmthChip w={p.warmth} strength /> {besideChip(strength, p.warmth)}
           </span>
           {plan?.count ? <IntroLine plan={plan} first={first} /> : <span className="np-opens">{p.opens}</span>}
         </span>

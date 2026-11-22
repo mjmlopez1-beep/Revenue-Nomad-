@@ -93,7 +93,7 @@ import { WonMoment } from "@/app/ui/WonMoment";
 | `Callout` | `tone?: "mint" \| "sand"`, `role?` | A tint, no edge. Mint for good news and earning, sand for everything else. Class: `.callout`, `.callout-sand`. |
 | `Chip` | `tone?: "outline" \| "pine" \| "mint" \| "ember"`, `glyph?`, `title?` | Four tones only. Ember is solid and means an open role, once a screen. |
 | `LikelihoodChip` | `band: "High" \| "Medium" \| "Low"`, `long?` | High pine, Medium mint, Low outline. |
-| `WarmthChip` | `warmth: "Hot" \| "Warm" \| "Cold"` | One scale with the spark Glyph on each step: Hot pine, Warm mint, Cold outline. |
+| `WarmthChip` | `warmth: "Hot" \| "Warm" \| "Cold"`, or the strength words `"Strong" \| "Good" \| "Fading" \| "Cold"` | One scale with the spark Glyph on each step: Hot pine, Warm mint, Cold outline. The strength words keep those tones: Strong pine, Good mint, Fading and Cold outline. |
 | `StatusChip` | `status: "Draft" \| "Sent" \| "Viewed" \| "Signed" \| "Declined" \| "Won" \| "Lost"` | Signed and Won pine, Viewed mint, the rest outline. Never ember. |
 | `Stat` | `n`, `label`, `link?` | 32/36 number in the figures face, 13/20 label, an optional link. Never a filled tile. Group them in `.stats`. |
 | `EmptyState` | `spot`, `title`, children (the words), `action?`, `framed?` (default true), `on?`, `ember?`, `role?` | A Spot at 128, a 17/24 title, 15/24 words, one pine button. Use it for every empty, error, offline and expired state. |
@@ -101,7 +101,7 @@ import { WonMoment } from "@/app/ui/WonMoment";
 | `Problem` | `title`, children, `onRetry?`, `retryLabel?`, `reload?` | A page that could not show: the offline Spot at 128, a 24/30 title, one sentence, pine then plain buttons. `PineBar` is the pine bar with the white lockup for pages outside the app. |
 | `WonMoment` | `rec` (a pipeline deal), `onSeat?`, `compact?` | The win: the keep (quiet), the client, its value a month, "Add it as your seat". Home's "You won" card and the top of the pipeline's Won column only. |
 
-Scales are exported as maps too (`LIKELIHOOD_TONE`, `WARMTH_TONE`, `STATUS_TONE`), for a place
+Scales are exported as maps too (`LIKELIHOOD_TONE`, `WARMTH_TONE`, `STRENGTH_TONE`, `STATUS_TONE`), for a place
 that draws its own chip.
 
 ### Monograms

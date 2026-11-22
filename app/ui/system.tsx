@@ -109,12 +109,19 @@ export function LikelihoodChip({ band, long }: { band: Likelihood; long?: boolea
   return <Chip tone={LIKELIHOOD_TONE[band]}>{long ? `${band} likelihood` : band}</Chip>;
 }
 
-/** How well the member knows someone: one scale, the same spark glyph on each step. Hot pine, Warm mint, Cold outline. */
+/**
+ * How well the member knows someone: one scale, the same spark glyph on each step. Hot pine, Warm mint, Cold outline.
+ * It takes the relationship's strength words too (lib/google/types STRENGTH_WORDS), in the same tones:
+ * Strong is Hot's pine, Good is Warm's mint, Fading and Cold are the outline.
+ */
 export type Warmth = "Hot" | "Warm" | "Cold";
+export type Strength = "Strong" | "Good" | "Fading" | "Cold";
 export const WARMTH_TONE: Record<Warmth, ChipTone> = { Hot: "pine", Warm: "mint", Cold: "outline" };
-export function WarmthChip({ warmth }: { warmth: Warmth }) {
+export const STRENGTH_TONE: Record<Strength, ChipTone> = { Strong: WARMTH_TONE.Hot, Good: WARMTH_TONE.Warm, Fading: WARMTH_TONE.Cold, Cold: WARMTH_TONE.Cold };
+const toneOfWarmth = (w: Warmth | Strength): ChipTone => (w in WARMTH_TONE ? WARMTH_TONE[w as Warmth] : STRENGTH_TONE[w as Strength]);
+export function WarmthChip({ warmth }: { warmth: Warmth | Strength }) {
   return (
-    <Chip tone={WARMTH_TONE[warmth]} glyph="spark">
+    <Chip tone={toneOfWarmth(warmth)} glyph="spark">
       {warmth}
     </Chip>
   );

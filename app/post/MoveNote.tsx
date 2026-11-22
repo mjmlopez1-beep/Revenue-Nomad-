@@ -26,10 +26,23 @@ import { Sheet, useUi } from "./ui";
 import { startSeatMessage, openConversation } from "./Messages";
 import { VoiceLine } from "./Voice";
 import { IntroBlock } from "./network/IntroWhy";
+import { STRENGTH_WORDS, type Warmth } from "@/lib/google/types";
 import type { IntroPlanView } from "@/lib/paths/intro";
 import "./movenote.css";
 
 const MAX = 2000;
+
+/**
+ * The chip by the person the note is to. From Your network (`strength`: the sheet says how strong the
+ * relationship is), the strength words: Strong, Good, Fading or Cold, in the same colours as the warmth.
+ */
+export function WhoWarmth({ w, strength }: { w: Warmth; strength?: boolean }) {
+  return (
+    <span className={`mv-warm mv-warm-${w.toLowerCase()}`} data-warmth={w}>
+      {strength ? STRENGTH_WORDS[w] : w}
+    </span>
+  );
+}
 
 export function NoteSheet({
   m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed, intro,
@@ -184,7 +197,7 @@ export function NoteSheet({
                       : m.name}
                 </span>
               </div>
-              {way.kind === "know" ? <span className={`mv-warm mv-warm-${way.person.warmth.toLowerCase()}`}>{way.person.warmth}</span> : null}
+              {way.kind === "know" ? <WhoWarmth w={way.person.warmth} strength={!!intro} /> : null}
             </div>
           ) : null}
           {intro ? (
