@@ -245,3 +245,6 @@
   display: grid;
   gap: 10px;
 }
+.ms-counter > .btn {
+  justify-self: start;
+}
