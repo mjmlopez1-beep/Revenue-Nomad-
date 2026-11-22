@@ -2158,20 +2158,20 @@ export function Drawer({
           )}
           {/* Your pipeline at this company (PipelineBlock.tsx): the member's own deal here, as Merlin moved it. Nothing when there is none. */}
           {!c.hidden && <PipelineBlock i={i} />}
-          {/* [smart ways in] the member's best ways in through people they know (SmartPaths.tsx), above Your way in. */}
-          <SmartWaysIn i={i} />
-          {/* [ux ws3] Your way in: who held the seats here and the next step with each, before About, seats and people. */}
-          <YourWayIn i={i} seats={wayInSeats} />
-          {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
-          <Charge i={i} benchmarks={benchmarks} seats={mySeats} />
-          <WriteProposal i={i} />
-          {/* About: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
+          {/* About, right after the member's own deal and before the ways in: a hidden company's About shows too, without its name, web address and links (the server cuts them). */}
           {(!c.hidden || c.cells.about?.s === "value") && (
             <section className="tp-dsec">
               <h3 className="tp-dsec-h">About</h3>
               <AboutText id={c.id} cell={c.cells.about} as={c.hidden ? "locked" : c.found ? "found" : "open"} />
             </section>
           )}
+          {/* [smart ways in] the member's best ways in through people they know (SmartPaths.tsx), after About and above Your way in. */}
+          <SmartWaysIn i={i} />
+          {/* [ux ws3] Your way in: who held the seats here and the next step with each, after About and before seats and people. */}
+          <YourWayIn i={i} seats={wayInSeats} />
+          {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
+          <Charge i={i} benchmarks={benchmarks} seats={mySeats} />
+          <WriteProposal i={i} />
           {(!c.hidden || COMPANY_GTM.some((f) => c.cells[f]?.s !== "empty")) && (
             <section className="tp-dsec">
               <h3 className="tp-dsec-h">How they sell</h3>
