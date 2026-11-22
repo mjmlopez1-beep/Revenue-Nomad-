@@ -16,7 +16,7 @@
  */
 import { createElement as h, useEffect, useSyncExternalStore } from "react";
 import type { PlanView } from "@/lib/tableTypes";
-import { TRIAL_NAME } from "@/lib/billing/rules";
+import { TRIAL_NAME, keepVerb, keepWords } from "@/lib/billing/rules";
 
 export type NudgeKind = "trial" | "credits" | "profile" | "step";
 export interface Nudge {
@@ -63,7 +63,7 @@ export function pickNudge(x: NudgeInput): Nudge | null {
       ? { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Nothing to do: you stay on Free, with no charge.`, cta: "See plans", action: "plans" }
       : plan.keep === "close"
         ? { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Then you're on Free, unless you keep Close.`, cta: "Keep Close", action: "plans" }
-        : { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Then you're on Free, unless you keep Pro.`, cta: "Keep Pro", action: "plans" };
+        : { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Then you're on Free, unless you ${keepVerb("pro")}.`, cta: keepWords("pro"), action: "plans" };
   }
   if (x.credits <= LOW_CREDITS) {
     // At 0: three ways out in one line (earn one, the top-up, Pro).

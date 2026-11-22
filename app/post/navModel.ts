@@ -9,7 +9,7 @@
  */
 import type { PlanView } from "@/lib/tableTypes";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { TRIAL_NAME } from "@/lib/billing/rules";
+import { TRIAL_NAME, planName } from "@/lib/billing/rules";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
@@ -96,11 +96,11 @@ export interface NavInput {
   inviteBonus: number;
 }
 
-/** "Close trial · 9 days left", "Pro", "Free": the plan's line in the sidebar's foot. */
+/** "Close trial · 9 days left", "Pro", "Close", "Free": the plan's line in the sidebar's foot. */
 export function planLine(plan: PlanView | undefined): string | null {
   if (!plan) return null;
   if (plan.name === "trial") return `${TRIAL_NAME} · ${plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft ?? 0} days left`}`;
-  return plan.name === "pro" ? "Pro" : "Free";
+  return planName(plan);
 }
 
 /** Which item is on: the page, else on the table the saved view, Hiring now, Following or the list. Referral partners and the Fractionals directory are in Peers now. */
@@ -143,7 +143,7 @@ export function navItems(x: NavInput): NavItem[] {
     { key: "integrations", label: "Integrations", group: "foot", icon: "integrations", href: x.hrefs.page("integrations"), page: "integrations" },
     // Every email and Slack post, and how often: the account menu and every email's footer open it too.
     { key: "notifications", label: "Notifications", group: "foot", icon: "notifications", href: x.hrefs.page("notifications"), page: "notifications" },
-    ...(x.plan ? [{ key: "billing", label: "Plan and billing", group: "foot" as const, icon: "billing" as const, href: x.hrefs.page("billing"), page: "billing" as const, hint: x.plan.name === "pro" ? "Pro" : undefined }] : []),
+    ...(x.plan ? [{ key: "billing", label: "Plan and billing", group: "foot" as const, icon: "billing" as const, href: x.hrefs.page("billing"), page: "billing" as const, hint: x.plan.name === "pro" ? planName(x.plan) : undefined }] : []),
     { key: "credits", label: "Credits", group: "foot", icon: "credits", href: x.hrefs.page("credits"), page: "credits", count: x.credits },
     ...(x.admin ? [{ key: "metrics", label: "Pilot metrics", group: "foot" as const, icon: "metrics" as const, href: x.hrefs.page("metrics"), page: "metrics" as const, admin: true }] : []),
   ];

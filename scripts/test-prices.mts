@@ -239,7 +239,7 @@ async function main() {
   const R = await import("../lib/billing/rules");
   const CP = await import("../lib/billing/compare");
   check("the third plan is Close, its prices unchanged", R.TIER_NAME.close === "Close" && R.TIER_NAME.pro === "Pro" && CP.PLANS.map((p) => p.name).join(",") === "Free,Pro,Close" && R.PRICES.month === 59 && R.PRICES.year === 590 && R.PRICES.closeMonth === 79 && R.PRICES.closeYear === 790);
-  check("the trial is the Close trial, in one constant", R.TRIAL_NAME === "Close trial" && R.TRIAL_LABEL === `${R.TRIAL_DAYS}-day Close trial` && R.keepWords("close") === "Keep Close" && R.keepWords("pro") === "Keep Pro");
+  check("the trial is the Close trial, in one constant", R.TRIAL_NAME === "Close trial" && R.TRIAL_LABEL === `${R.TRIAL_DAYS}-day Close trial` && R.keepWords("close") === "Keep Close" && R.keepWords("pro") === "Choose Pro");
   check(
     "what Pro leaves out is each a row where Close does more than Pro",
     CP.PRO_LEAVES_OUT.join("|") === "Sending for signature|Your own templates|Merlin drafting|The pipeline moving to Won when they sign" &&

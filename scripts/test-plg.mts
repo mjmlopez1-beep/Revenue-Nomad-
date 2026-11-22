@@ -407,7 +407,7 @@ async function main() {
   /* ---------- 11. the trial nudges toward Pro, or Close for an active Close user ---------- */
   console.log("\n11. Keep Pro, or Keep Close once the trial used Close for real");
   check("the threshold: anything sent for signature, or 2 or more proposals, documents or Claude drafts", rules.CLOSE_ACTIVE_MIN === 2 && !rules.closeActive({ made: 1, drafted: 0, sent: 0 }) && !rules.closeActive({ made: 0, drafted: 1, sent: 0 }) && rules.closeActive({ made: 1, drafted: 1, sent: 0 }) && rules.closeActive({ made: 2, drafted: 0, sent: 0 }) && rules.closeActive({ made: 0, drafted: 0, sent: 1 }));
-  check("keepTier and its words", rules.keepTier({ made: 0, drafted: 0, sent: 0 }) === "pro" && rules.keepTier({ made: 0, drafted: 0, sent: 1 }) === "close" && rules.keepWords("close") === "Keep Close" && rules.keepWords("pro") === "Keep Pro");
+  check("keepTier and its words", rules.keepTier({ made: 0, drafted: 0, sent: 0 }) === "pro" && rules.keepTier({ made: 0, drafted: 0, sent: 1 }) === "close" && rules.keepWords("close") === "Keep Close" && rules.keepWords("pro") === "Choose Pro");
   const triPlan = (await view(TRI)).me!.plan!;
   check("Tia sent a proposal for signature in her trial: her plan nudges Close", triPlan.keep === "close", triPlan.keep);
   const quiet = structuredClone(await t.loadState());
@@ -440,17 +440,17 @@ async function main() {
   );
   const cardPro = text(renderToStaticMarkup(React.createElement(B.TrialSummaryCard, { plan: { ...triPlan, keep: "pro" as const } })));
   const cardClose = text(renderToStaticMarkup(React.createElement(B.TrialSummaryCard, { plan: { ...triPlan, keep: "close" as const } })));
-  check("Home's trial card: Keep Pro by default, Keep Close for an active Close user", cardPro.endsWith("Keep Pro") && cardClose.endsWith("Keep Close"), [cardPro.slice(-40), cardClose.slice(-40)]);
+  check("Home's trial card: Choose Pro by default, Keep Close for an active Close user", cardPro.endsWith("Choose Pro") && cardClose.endsWith("Keep Close"), [cardPro.slice(-40), cardClose.slice(-40)]);
   const endingPlan = { ...triPlan, ending: true, trialDaysLeft: 3, summary: undefined };
   const nPro = nudges.pickNudge({ page: "today", credits: 20, plan: { ...endingPlan, keep: "pro" }, profileEmpty: false });
   const nClose = nudges.pickNudge({ page: "today", credits: 20, plan: { ...endingPlan, keep: "close" }, profileEmpty: false });
-  check("the trial nudge names the same plan", nPro?.cta === "Keep Pro" && /unless you keep Pro\.$/.test(nPro.text) && nClose?.cta === "Keep Close" && /unless you keep Close\.$/.test(nClose.text), [nPro, nClose]);
+  check("the trial nudge names the same plan", nPro?.cta === "Choose Pro" && /unless you choose Pro\.$/.test(nPro.text) && nClose?.cta === "Keep Close" && /unless you keep Close\.$/.test(nClose.text), [nPro, nClose]);
   const banner = (k: "pro" | "close") => text(renderToStaticMarkup(React.createElement(B.TrialBanner, { plan: { ...endingPlan, keep: k } })));
-  check("the trial banner too", /unless you keep Pro\. Keep Pro/.test(banner("pro")) && /unless you keep Close\. Keep Close/.test(banner("close")), [banner("pro"), banner("close")]);
+  check("the trial banner too", /unless you choose Pro\. Choose Pro/.test(banner("pro")) && /unless you keep Close\. Keep Close/.test(banner("close")), [banner("pro"), banner("close")]);
   const mPro = emails.trialEndingEmail({ first: "Tia", days: 1, notLooking: false, rateLine: null, link: BASE });
   const mClose = emails.trialEndingEmail({ first: "Tia", days: 1, notLooking: false, rateLine: null, link: BASE, keep: "close" });
   const rClose = emails.trialReceiptEmail({ first: "Tia", days: 3, counts: emails.valueCounts((await t.loadState()) as never, null, null, "mem_tri", iso(-18 * DAY), new Date().toISOString()), rateLine: null, link: BASE, keep: "close" });
-  check("the trial-ending emails name Pro by default", /unless you keep Pro\. Pro is how you win the client/.test(mPro.text) && mPro.html.includes(">Keep Pro<"), mPro.text);
+  check("the trial-ending emails name Pro by default", /unless you choose Pro\. Pro is how you win the client/.test(mPro.text) && mPro.html.includes(">Choose Pro<"), mPro.text);
   check("  and Close for an active Close user, with its button", /unless you keep Close/.test(mClose.text) && mClose.html.includes(">Keep Close<") && /unless you keep Close/.test(rClose.text) && rClose.html.includes(">Keep Close<"), [mClose.text, rClose.text]);
 }
 

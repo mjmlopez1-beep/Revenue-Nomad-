@@ -1,5 +1,5 @@
 /**
- * Billing's emails: the value receipt 3 days before the trial ends (day 18 of 21, with Keep Pro, in place of a countdown), the last-day note, the value receipt when the
+ * Billing's emails: the value receipt 3 days before the trial ends (day 18 of 21, with Choose Pro or Keep Close, in place of a countdown), the last-day note, the value receipt when the
  * trial ends (with the annual plan first), and the value receipt at each renewal. Counts only:
  * never another member's name, never a company the member hasn't unlocked.
  *
@@ -7,7 +7,7 @@
  * on Free is a fine answer, a pause is there, and nothing pushes.
  */
 import { MAIL, escHtml, footerNote, mailButton, mailH, mailList, mailP, mailShell, oneLine } from "../email";
-import { PRICES, PRO_STORY, TOPUP_CREDITS, TRIAL_NAME, keepWords, type Tier } from "./rules";
+import { PRICES, PRO_STORY, TOPUP_CREDITS, TRIAL_NAME, keepVerb, keepWords, paidName, type Tier } from "./rules";
 import { COMPANY_PRICE_SAY, functionOf } from "../tableFields";
 import { FEATURE_NAME } from "../radar/types";
 
@@ -118,8 +118,8 @@ const priceWords = (rateLine: string | null) =>
 /** What to keep, in the trial-ending emails: Pro by default, Close for an active Close user (lib/billing/rules.ts keepTier). */
 const keepLine = (keep: Tier | undefined) =>
   keep === "close"
-    ? `After it ends you're on Free, unless you keep Close. You've been building proposals in Merlin: Close keeps them going, drafted from your call, sent and signed, with everything in Pro.`
-    : `After it ends you're on Free, unless you keep Pro. Pro is how you win the client: ${lowerFirst(PRO_STORY)}`;
+    ? `After it ends you're on Free, unless you ${keepVerb("close")}. You've been building proposals in Merlin: Close keeps them going, drafted from your call, sent and signed, with everything in Pro.`
+    : `After it ends you're on Free, unless you ${keepVerb("pro")}. Pro is how you win the client: ${lowerFirst(PRO_STORY)}`;
 
 /** The trial ends in `days` days (3, or 1 on the last day). `keep`: the plan it names (Pro unless they used Close for real). */
 export function trialEndingEmail(o: { first: string; days: number; notLooking: boolean; rateLine: string | null; link: string; keep?: Tier }) {
@@ -138,7 +138,7 @@ export function trialEndingEmail(o: { first: string; days: number; notLooking: b
 
 /**
  * The value receipt before the decision: 3 days before the trial ends (day 18 of 21), what it gave
- * them so far, then Keep Pro. It takes the place of the 3-day note, so there is one email, not two.
+ * them so far, then Choose Pro (or Keep Close). It takes the place of the 3-day note, so there is one email, not two.
  */
 export function trialReceiptEmail(o: { first: string; days: number; counts: ValueCounts; rateLine: string | null; link: string; keep?: Tier }) {
   const first = oneLine(o.first).slice(0, 40) || "there";
@@ -190,13 +190,15 @@ export function trialEndedEmail(o: { first: string; counts: ValueCounts; notLook
 }
 
 /** A renewal: what the last period gave them. */
-export function renewalEmail(o: { first: string; counts: ValueCounts; interval: "month" | "year"; link: string }) {
+export function renewalEmail(o: { first: string; counts: ValueCounts; interval: "month" | "year"; link: string; tier?: Tier }) {
   const first = oneLine(o.first).slice(0, 40) || "there";
   const lines = valueLines(o.counts);
-  const subject = o.interval === "year" ? "Your year on Merlin Pro" : "Your month on Merlin Pro";
+  // The plan they pay for, by name: Pro or Close.
+  const name = paidName(o.tier);
+  const subject = `Your ${o.interval} on Merlin ${name}`;
   const link = oneLine(o.link);
-  const lead = `Pro renewed. Here's what the last ${o.interval} gave you.`;
-  const none = "A quiet stretch. Pro keeps watching your markets, and a pause is there in Plan and billing if your book is full.";
+  const lead = `${name} renewed. Here's what the last ${o.interval} gave you.`;
+  const none = `A quiet stretch. ${name} keeps watching your markets, and a pause is there in Plan and billing if your book is full.`;
   const text = [`Hi ${first},`, "", lead, "", ...(lines.length ? lines.map((l) => `- ${l}`) : [none]), "", link, "", "--", WHY].join("\n");
   const html = shell(subject, lead, [mailP(`Hi ${escHtml(first)},`), mailH(subject), mailP(escHtml(lead)), lines.length ? listHtml(lines) : mailP(escHtml(none)), mailButton(link, "Open Merlin", "margin:0 0 8px")], link);
   return { subject, text, html };

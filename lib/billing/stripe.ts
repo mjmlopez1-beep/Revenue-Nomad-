@@ -97,8 +97,8 @@ export async function checkoutPro(who: Who, interval: "month" | "year", base: st
     mode: "subscription",
     "line_items[0][price]": priceFor(tier, interval),
     "line_items[0][quantity]": 1,
-    // Back on Home, where the one-time Pro welcome is (app/post/TradingPost.tsx reads paid=1).
-    success_url: `${base}/?paid=1`,
+    // Back on Home, where the one-time welcome is (app/post/TradingPost.tsx reads paid=1, and plan= for the thanks to name the plan bought).
+    success_url: `${base}/?paid=1&plan=${tier}`,
     cancel_url: `${base}/?p=billing`,
     client_reference_id: who.ref,
     "metadata[ref]": who.ref,

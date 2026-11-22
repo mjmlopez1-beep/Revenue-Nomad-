@@ -2087,7 +2087,7 @@ export function Drawer({
               <IconChevron dir="left" size={18} />
             </button>
           ) : (
-            <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close (Esc)" onClick={onClose}>
+            <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Done (Esc)" onClick={onClose}>
               <IconX />
             </button>
           )}

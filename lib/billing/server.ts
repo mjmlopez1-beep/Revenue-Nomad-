@@ -9,7 +9,7 @@
 import { ActionError, cleanPromo, loadSeed, loadState, memberByToken, promoOf, tableInternals as T, type State } from "../table";
 import { billingLive, planOf, upgradeUrl } from "../plan";
 import { onAiPackPaid } from "./aiPack";
-import { applyEvent, canClose, emptyBilling, ENDING_DAYS, FIRST_CHARGE_GRACE_MS, keepTrialEnd, pauseDates, PAUSE_MONTHS, proStartsLater, annualLine, hourlyOf, TIER_NAME, tierPrice, type StripeEvent, type Tier } from "./rules";
+import { applyEvent, canClose, emptyBilling, ENDING_DAYS, FIRST_CHARGE_GRACE_MS, keepTrialEnd, pauseDates, PAUSE_MONTHS, proStartsLater, annualLine, hourlyOf, TIER_NAME, paidName, tierPrice, type StripeEvent, type Tier } from "./rules";
 import * as stripe from "./stripe";
 import { renewalEmail, trialEndedEmail, trialEndingEmail, trialReceiptEmail, valueCounts, type ValueCounts } from "./emails";
 import { emailEnabled, sendEmail } from "../email";
@@ -152,12 +152,14 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
           } else if (op === "cancel") r.cancelAt = r.proUntil ?? new Date(nowMs).toISOString();
           else delete r.cancelAt;
         });
+        // The plan they pay for, by name (Pro or Close), in every line.
+        const name = paidName(rec.tier);
         if (waiting)
           return {
-            message: op === "cancel" ? `Cancelled. Nothing is charged. You keep Pro until ${dayWords(waiting)}, then you're on Free.` : `Pro carries on. The first charge comes on ${dayWords(waiting)}.`,
+            message: op === "cancel" ? `Cancelled. Nothing is charged. You keep ${name} until ${dayWords(waiting)}, then you're on Free.` : `${name} carries on. The first charge comes on ${dayWords(waiting)}.`,
           };
         const until = rec.proUntil ? dayWords(rec.proUntil) : "the end of this period";
-        return { message: op === "cancel" ? `Cancelled. You keep Pro until ${until}, then you're on Free. Nothing more is charged.` : "Pro carries on. Nothing changes." };
+        return { message: op === "cancel" ? `Cancelled. You keep ${name} until ${until}, then you're on Free. Nothing more is charged.` : `${name} carries on. Nothing changes.` };
       }
       case "pause": {
         const d0 = pauseDates(rec, nowMs);
@@ -169,10 +171,10 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
           r.pausedFrom = d0.from;
           r.pausedUntil = d0.until;
         });
-        return { message: `Paused for ${PAUSE_MONTHS === 1 ? "a month" : `${PAUSE_MONTHS} months`}. You keep Pro until ${dayWords(d0.from)}, then Free with no charge, and Pro comes back on ${dayWords(d0.until)}.` };
+        return { message: `Paused for ${PAUSE_MONTHS === 1 ? "a month" : `${PAUSE_MONTHS} months`}. You keep ${paidName(rec!.tier)} until ${dayWords(d0.from)}, then Free with no charge, and ${paidName(rec!.tier)} comes back on ${dayWords(d0.until)}.` };
       }
       case "resume": {
-        if (!rec?.subscriptionId || !rec.pausedUntil) throw new ActionError("Pro isn't paused.");
+        if (!rec?.subscriptionId || !rec.pausedUntil) throw new ActionError(`${paidName(rec?.tier)} isn't paused.`);
         await stripe.setPause(rec.subscriptionId, null);
         await T.mutate((d) => {
           const r = d.billing?.members[me.id];
@@ -180,7 +182,7 @@ export async function billingAction(token: string | null, op: BillingOp, body: {
           delete r.pausedUntil;
           delete r.pausedFrom;
         });
-        return { message: "The pause is off. Pro carries on, and the next charge comes on its usual day." };
+        return { message: `The pause is off. ${paidName(rec.tier)} carries on, and the next charge comes on its usual day.` };
       }
       default:
         throw new ActionError("That didn't go through. Refresh the page and try again.");
@@ -220,10 +222,10 @@ export async function handleWebhook(raw: string, signature: string | null, origi
     for (const gr of o.grants) if (!s.ledger.some((l) => l.reason === gr.reason && l.ref === gr.ref)) s.ledger.push({ ...gr, at });
     // An AI usage pack paid for: the hook records it and grants the member its usage (lib/proposals/aiUsage.ts), once per payment ref.
     if (o.aiPack) onAiPackPaid(s.billing, o.aiPack.memberId, o.aiPack.ref, nowMs, s);
-    let mail: { to: string; first: string; link: string; interval: "month" | "year"; from: string; till: string } | null = null;
+    let mail: { to: string; first: string; link: string; interval: "month" | "year"; tier: Tier; from: string; till: string } | null = null;
     if (o.receipt && emailEnabled() && base) {
       const m = idx.byId.get(o.receipt.memberId);
-      if (m?.email) mail = { to: m.email, first: T.firstName(m.name), link: planLink(s, m.id, base, nowMs).replace("&plans=1", ""), interval: s.billing.members[m.id]?.interval ?? "month", from: o.receipt.from, till: o.receipt.to };
+      if (m?.email) mail = { to: m.email, first: T.firstName(m.name), link: planLink(s, m.id, base, nowMs).replace("&plans=1", ""), interval: s.billing.members[m.id]?.interval ?? "month", tier: s.billing.members[m.id]?.tier ?? "pro", from: o.receipt.from, till: o.receipt.to };
     }
     return { o, mail };
   });
@@ -231,7 +233,7 @@ export async function handleWebhook(raw: string, signature: string | null, origi
     const m = out.mail;
     void countsFor(out.o.receipt!.memberId, m.from, m.till)
       .then((counts) => {
-        const e = renewalEmail({ first: m.first, counts, interval: m.interval, link: m.link });
+        const e = renewalEmail({ first: m.first, counts, interval: m.interval, link: m.link, tier: m.tier });
         return sendEmail(m.to, e.subject, e.text, e.html);
       })
       .catch((e) => console.error("renewal receipt failed", e));

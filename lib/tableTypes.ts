@@ -452,6 +452,8 @@ export interface PlanView {
   prices: { month: number; year: number; closeMonth: number; closeYear: number; topup: number; topupCredits: number; proCredits: number };
   /** The tier now: Free, Pro, or Close ("close"; the trial is Close). */
   tier: "free" | "pro" | "close";
+  /** The tier the subscription is for, paused or not ("pro" or "close"); null with no subscription. The words for cancel, keep, pause and resume name it. */
+  paidTier?: "pro" | "close" | null;
   /**
    * The plan the trial nudges toward (lib/billing/rules.ts keepTier): "close" once the member is an
    * active Close user in their trial (anything sent for signature, or 2 or more proposals, documents

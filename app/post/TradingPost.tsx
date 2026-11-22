@@ -77,7 +77,7 @@ import { NudgeSlot, pickNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
-import { BillingPage, PlansHost, ProTag, TrialBanner, TrialSummaryCard, buyTopup, openPlans } from "./Billing";
+import { BillingPage, PlansHost, ProTag, TrialBanner, TrialSummaryCard, buyTopup, openPlans, paidThanks } from "./Billing";
 import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { freeCompanyNow } from "./display";
 import { NetworkPage } from "./network/Network"; // [google network]
@@ -945,10 +945,13 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     if (q.get("paid") !== "1" || q.get("p")) return;
-    toast(me.plan?.firstChargeAt ? "Thanks. Pro is yours. Nothing is charged until your trial ends." : "Thanks. Pro is yours.");
+    // The plan just bought, by name: Stripe's return says which (plan=close), else the plan as it reads now.
+    const bought = q.get("plan");
+    toast(paidThanks(me.plan && (bought === "close" || bought === "pro") ? { ...me.plan, paidTier: bought } : me.plan));
     try {
       const u = new URL(window.location.href);
       u.searchParams.delete("paid");
+      u.searchParams.delete("plan");
       window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
     } catch {}
     // Stripe tells the server a moment after it sends the member back: look until the plan is Pro, a few times.

@@ -1187,7 +1187,7 @@ export function Sheet({
           <div className="tp-sheet-title" id={tid}>
             {title}
           </div>
-          <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close" onClick={onClose}>
+          <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Done" onClick={onClose}>
             <IconX />
           </button>
         </div>

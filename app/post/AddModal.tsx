@@ -1489,7 +1489,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
           >
             <div className="tp-modal-head">
               <h2 className="tp-modal-title">{title}</h2>
-              <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close (Esc)" onClick={() => leave()}>
+              <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Done (Esc)" onClick={() => leave()}>
                 <IconX />
               </button>
             </div>

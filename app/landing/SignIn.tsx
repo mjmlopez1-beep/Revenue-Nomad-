@@ -221,7 +221,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
         <div className="lp-dialog-head">
           <h2 id={`${id}-h`}>Sign in</h2>
           <NomadArt pose="wave" height={40} className="lp-dialog-nomad" />
-          <button type="button" className="btn btn-ghost btn-sm lp-dialog-x" onClick={onClose} aria-label="Close">
+          <button type="button" className="btn btn-ghost btn-sm lp-dialog-x" onClick={onClose} aria-label="Done">
             <IconX />
           </button>
         </div>
