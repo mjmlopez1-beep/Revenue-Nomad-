@@ -15,7 +15,11 @@
  *    "From their website", after the name; 1 credit opens it, the same on their other seat; Invite
  *    to connect and claim outreach get it; the connector says where it came from;
  *  - Remove my name takes it off with the credit back, and the site is never read again; Undo; the
- *    Automatic jobs row; the real seed holds no profile id.
+ *    Automatic jobs row; the real seed holds no profile id;
+ *  - prospects (no seat, a known own-firm site, outreach only): linked by person key with their name,
+ *    California still out, read with the known sites before any firm-name lookup, never in any
+ *    member's or admin's table, Fractionals or the connector, only in the admin's sample and the
+ *    outreach file's join list (join Merlin, not claim a seat); Remove my name by their firm or site.
  *
  * Nothing leaves the machine: the sites come from a mock server on 127.0.0.1, names resolve
  * through a table here, lib/table.ts runs in this process on a made-up seed in a temporary data
@@ -60,6 +64,8 @@ interface P {
   two?: boolean;
   /** Known by firm name only (the past seats file's current company). */
   firmOnly?: boolean;
+  /** No seat on the seed at all: a prospect, outreach only. */
+  prospect?: boolean;
 }
 const people: P[] = [
   { id: "SNAV-AVERY-001", name: "Avery Quinlan", firm: "Quinlan Advisory", site: "quinlanadvisory.test", location: "Austin, Texas, United States", two: true },
@@ -75,6 +81,9 @@ const people: P[] = [
   { id: "SNAV-KIT-011", name: "Kit Sorel", firm: "Sorel Group", site: "sorelgroup.test", location: "Nashville, Tennessee, United States" },
   { id: "SNAV-UNA-012", name: "Una Dowling", firm: "Dowling Consulting", site: "dowlingconsulting.test", location: "Columbus, Ohio, United States" },
   { id: "SNAV-LEE-013", name: "Lee Ashdown", firm: "Ashdown Labs", site: "ashdownlabs.test", location: "Los Angeles Metropolitan Area" },
+  // Prospects: no seat on the seed (their only seat was their own firm), a known own-firm site.
+  { id: "SNAV-NELL-015", name: "Nell Brookfield", firm: "Brookfield Advisory", site: "brookfieldadvisory.test", location: "Raleigh, North Carolina, United States", prospect: true },
+  { id: "SNAV-OPAL-016", name: "Opal Fenwick", firm: "Fenwick Growth", site: "fenwickgrowth.test", location: "San Diego, California, United States", prospect: true },
 ];
 const byName = (n: string) => people.find((p) => p.name === n)!;
 
@@ -93,6 +102,7 @@ const seed = {
   contacts: [],
 };
 people.forEach((p, i) => {
+  if (p.prospect) return;
   const cid = `c_client${i}`;
   seed.companies.push({ id: cid, fields: { name: `Clientco ${String.fromCharCode(65 + i)} Systems`, website: `clientco${i}.test`, industry: "Software", hq: "Austin, TX" } });
   // Harper (California) and Indy (abroad) have seats too: the import must still leave them out.
@@ -164,8 +174,9 @@ const imp = importer("--counts-only");
 check("the import runs", imp.status === 0, imp.stdout + imp.stderr);
 const num = (re: RegExp) => Number(imp.stdout.match(re)?.[1] ?? NaN);
 eq("people linked: 10 (9 with a site, 1 firm only)", [num(/people linked: (\d+)/), num(/with site: (\d+)/), num(/firm only: (\d+)/)], [10, 9, 1]);
-eq("excluded, California: 2 (the Bay Area and Los Angeles)", num(/excluded, California: (\d+)/), 2);
+eq("excluded, California: 3 (the Bay Area, Los Angeles, and Opal in San Diego)", num(/excluded, California: (\d+)/), 3);
 eq("excluded, no own firm: 1", num(/excluded, no own firm: (\d+)/), 1);
+eq("prospects: 1 (Nell; Opal is in California)", num(/prospects \(no named seat, a known own-firm site, outreach only\): (\d+)/), 1);
 check("its output names nobody: no name, firm, site or profile id", !people.some((p) => [p.name, p.firm, p.site ?? "@@", p.id, p.name.split(" ")[1]].some((x) => imp.stdout.includes(x) || imp.stderr.includes(x))), imp.stdout);
 const after = JSON.parse(readFileSync(seedFile, "utf8"));
 const links = after.ownSites as Record<string, { site?: string; firm?: string; how: string }>;
@@ -174,6 +185,10 @@ eq("Jules is linked by the firm's name only (their current company)", links[pers
 check("California (Harper, Lee) and abroad (Indy) are not linked", !links[personKeyOf("SNAV-HARPER-008")] && !links[personKeyOf("SNAV-LEE-013")] && !links[personKeyOf("SNAV-INDY-009")]);
 const flat = JSON.stringify(after);
 check("no profile id anywhere in the seed, and no location", !people.some((p) => flat.includes(p.id)) && !flat.includes("SNAV-") && !/Bay Area|Los Angeles|Texas, United States/.test(flat));
+const prospectsIn = after.ownSiteProspects as Record<string, { name: string; site: string; firm?: string; how: string }>;
+eq("Nell is a prospect, by person key, with her name to greet her and match her email", prospectsIn[personKeyOf("SNAV-NELL-015")], { name: "Nell Brookfield", site: "brookfieldadvisory.test", firm: "Brookfield Advisory", how: "known site" });
+check("a California prospect (Opal) is left out, and no seat holder is a prospect", !prospectsIn[personKeyOf("SNAV-OPAL-016")] && !Object.keys(prospectsIn).some((k) => links[k]));
+check("the prospects section holds person keys, names, sites, firm names and how only", Object.entries(prospectsIn).every(([k, v]) => /^p_[0-9a-f]{20}$/.test(k) && Object.keys(v).every((f) => ["name", "site", "firm", "how"].includes(f))));
 check("the seed's own-sites section holds person keys, sites, firm names and how only", Object.entries(links).every(([k, v]) => /^p_[0-9a-f]{20}$/.test(k) && Object.keys(v).every((f) => ["site", "firm", "how"].includes(f))));
 // The real seed: person keys only, never a profile id (the private file, when it is here).
 const realSeed = path.join(ROOT, "data", "intel-seed.json");
@@ -183,6 +198,10 @@ if (existsSync(realSeed)) {
   check(
     "the real seed's own-sites section: person keys only, and no field beyond site, firm and how",
     Object.entries(own).every(([k, v]) => /^p_[0-9a-f]{20}$/.test(k) && Object.keys(v as object).every((f) => ["site", "firm", "how"].includes(f))),
+  );
+  check(
+    "the real seed's prospects: person keys only, and no field beyond name, site, firm and how",
+    Object.entries(real.ownSiteProspects ?? {}).every(([k, v]) => /^p_[0-9a-f]{20}$/.test(k) && Object.keys(v as object).every((f) => ["name", "site", "firm", "how"].includes(f))),
   );
   check("the real seed carries no Sales Navigator id field or lead link", !/person_sales_nav_id|sales_nav_id|linkedin\.com\/sales\/lead/.test(readFileSync(realSeed, "utf8")));
 }
@@ -238,6 +257,7 @@ const sites: Record<string, Record<string, string> & { robots?: string }> = {
   },
   "sorelgroup.test": { robots: "User-agent: *\nDisallow: /contact\n", "/": page(`<p>Kit Sorel</p><a href="/contact">Contact</a>`), "/contact": page(`<a href="mailto:kit@sorelgroup.test">kit@sorelgroup.test</a>`) },
   "kentwoodadvisory.com": { "/": page(`<h1>Kentwood Advisory</h1><p>Jules Kentwood, founder.</p><a href="/contact">Contact</a>`, "Kentwood Advisory"), "/contact": page(`<a href="mailto:jules@kentwoodadvisory.com">jules@kentwoodadvisory.com</a>`) },
+  "brookfieldadvisory.test": { "/": page(`<p>Nell Brookfield helps founders hire their first CFO.</p><a href="/contact">Contact</a>`), "/contact": page(`<a href="mailto:nell@brookfieldadvisory.test">nell@brookfieldadvisory.test</a>`) },
   "elsewhere.test": { "/contact": page(`<a href="mailto:gray@elsewhere.test">gray@elsewhere.test</a>`) },
 };
 const server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -332,6 +352,13 @@ const secretsIn = (text: string) =>
   people.flatMap((p) => [p.name, p.name.split(" ")[0], p.name.split(" ")[1], p.site ?? "@@@", p.firm]).filter((x) => text.toLowerCase().includes(x.toLowerCase())).concat(/@/.test(text) ? ["an @"] : []).concat(/\.test\b|\.com\b/.test(text) ? ["a domain"] : []);
 
 console.log("\nThe start-up dry run (RN_OWNSITES_DRYRUN)");
+const order = await store.ownTargets({ dry: true });
+const firstLookup = order.findIndex((t) => !t.site);
+check(
+  "known sites first, seat holders and prospects alike, then firm-name lookups",
+  firstLookup === order.length - 1 && order[firstLookup].key === personKeyOf("SNAV-JULES-010") && order.some((t) => t.key === personKeyOf("SNAV-NELL-015") && t.prospect),
+  order.map((t) => [t.site ? "site" : "firm", t.prospect ? "prospect" : "seat"]),
+);
 const logs: string[] = [];
 const realLog = console.log;
 const realErr = console.error;
@@ -349,9 +376,9 @@ check("its log: a progress line every so many people and one at the end, the cou
 check("its log names nobody: no email, no domain, no name, no firm", logs.every((l) => !secretsIn(l).length), logs.map((l) => [l, secretsIn(l)]));
 const dryRun = stateOnDisk().ownSitesJob?.lastDry;
 eq(
-  "it read the 9 linked people who may be read (not Blake, a member who keeps himself out of view): 3 accepted (2 name match, 1 generic on a one-person site), 2 robots, 1 unreachable, 2 not theirs, 1 no email",
+  "it read the 9 linked people who may be read (not Blake, a member who keeps himself out of view) and Nell, a prospect: 4 accepted (3 name match, 1 generic on a one-person site), 2 robots, 1 unreachable, 2 not theirs, 1 no email",
   dryRun && [dryRun.tried, dryRun.accepted, dryRun.byHow["name match"], dryRun.byHow["generic on a one-person site"], dryRun.robots, dryRun.unreachable, dryRun.notTheirs, dryRun.noEmail],
-  [9, 3, 2, 1, 2, 1, 2, 1],
+  [10, 4, 3, 1, 2, 1, 2, 1],
 );
 const st1 = stateOnDisk();
 check("what it found is stored pending, never usable", Object.values(st1.ownEmails ?? {}).length > 0 && Object.values(st1.ownEmails ?? {}).every((e) => (e as { pending?: boolean }).pending === true), st1.ownEmails);
@@ -363,7 +390,7 @@ delete process.env.RN_OWNSITES;
 
 console.log("\nThe switch");
 const realRun = await run.runOwnSites({ read: readOpts, delayMs: 0, limit: 50, log: () => {} });
-check("a real run reads the people the dry run read (a dry try holds nobody back)", realRun.tried === 9 && realRun.accepted === 3, realRun);
+check("a real run reads the people the dry run read (a dry try holds nobody back)", realRun.tried === 10 && realRun.accepted === 4, realRun);
 const st2 = stateOnDisk();
 check("its finds are stored usable, by person key", st2.ownEmails[personKeyOf("SNAV-AVERY-001")]?.email === "avery@quinlanadvisory.test" && !st2.ownEmails[personKeyOf("SNAV-AVERY-001")].pending, st2.ownEmails);
 await table.tableInternals.mutate(() => {});
@@ -417,6 +444,15 @@ const outOpen = personOut(a2.p);
 check("the connector: the same locks, and says it is from their website", String(outLocked.email ?? "").toLowerCase().includes("lock") && /From their website/.test(String(outLocked.email_is)) && outOpen.email === "avery@quinlanadvisory.test", { outLocked, outOpen });
 const admin = await view("tok-admin-own");
 check("an admin's table follows the same rules (the record, From their website)", ownPeople(admin).length === 4);
+// Prospects: found and stored, never anywhere a member or an admin reads the table, Fractionals or the connector.
+const nellEmail = stateOnDisk().ownEmails[personKeyOf("SNAV-NELL-015")];
+check("a prospect's email is found and stored, marked prospect", nellEmail?.email === "nell@brookfieldadvisory.test" && nellEmail.prospect === true && !nellEmail.pending, nellEmail);
+const { fractionalsView } = await import("../lib/fractionals");
+const noNell = (x: unknown) => !/brookfield|nell@/i.test(JSON.stringify(x ?? null));
+check("never in a member's table, an admin's, or Fractionals", noNell(sal) && noNell(admin) && noNell(await fractionalsView("tok-sal-own")) && noNell(await fractionalsView("tok-admin-own")));
+const mcp = await import("../lib/mcp/view");
+const connectorView = await mcp.memberView({ id: "m_sal", name: "Sal Seller", email: "sal-own@example.com", title: "Fractional VP Sales", token: "tok-sal-own" } as never).catch(() => null);
+check("never in the connector's view of the table", connectorView !== null && noNell(connectorView), connectorView === null ? "no view" : undefined);
 
 console.log("\nClaim outreach");
 const stateCopy = path.join(dir, "state-copy.json");
@@ -448,6 +484,18 @@ check("with RN_OWNSITES=1 the outreach file carries the email from their website
 outreach(false);
 const oOff = readFileSync(path.join(outCsvDir, "out.csv"), "utf8");
 check("with it off, no email goes in the file", !oOff.includes("@quinlanadvisory"));
+const joinFile = path.join(outCsvDir, "out.join.csv");
+outreach(true);
+const jText = existsSync(joinFile) ? readFileSync(joinFile, "utf8") : "";
+const claimText = readFileSync(path.join(outCsvDir, "out.csv"), "utf8");
+check(
+  "prospects go in a separate join list: their email, and an invite to join Merlin (no seat to claim) that says how to be taken off",
+  jText.startsWith("first_name,full_name,firm,site,email,email_from,join_link,message") && jText.includes("nell@brookfieldadvisory.test,their website") && /Joining is free/.test(jText) && !/claim/i.test(jText) && /\/remove takes your name and email off/.test(jText),
+  jText,
+);
+check("  and never in the claim list", !/brookfield/i.test(claimText));
+outreach(false);
+check("  with RN_OWNSITES off, the join list has no one", (existsSync(joinFile) ? readFileSync(joinFile, "utf8") : "").trim().split("\n").length === 1);
 rmSync(outCsvDir, { recursive: true, force: true });
 void seatIds;
 
@@ -462,6 +510,13 @@ eq("and the job never reads their site again", st3.ownSitesJob.people[personKeyO
 const targets = await store.ownTargets({ dry: true });
 check("  not even a dry run", !targets.some((t) => t.key === personKeyOf("SNAV-AVERY-001")));
 
+eq("Remove my name for a prospect, by their own firm's website: their email goes", await table.nameOffByName("Nell Brookfield", "brookfieldadvisory.test"), 1);
+check("  stored nowhere after, never read again, not even by a dry run", !stateOnDisk().ownEmails[personKeyOf("SNAV-NELL-015")] && stateOnDisk().ownSitesJob.people[personKeyOf("SNAV-NELL-015")].s === "removed" && !(await store.ownTargets({ dry: true })).some((t) => t.key === personKeyOf("SNAV-NELL-015")));
+writeFileSync(stateCopy, JSON.stringify(stateOnDisk()));
+outreach(true);
+check("  and off the join list", !/brookfield/i.test(existsSync(joinFile) ? readFileSync(joinFile, "utf8") : ""));
+rmSync(outCsvDir, { recursive: true, force: true });
+
 console.log("\nPrivacy and the US rule");
 check("only people the import linked (United States, never California): Harper and Lee have no record", !ownPeople(sal).some(({ c }) => /Clientco H|Clientco M/.test(c.name)));
 
@@ -474,7 +529,7 @@ const panel = await J.jobsPanel();
 const row = panel.jobs.find((j) => j.id === "ownsites");
 check("its row has Dry run and the last dry run's counts", !!row && row.canDry === true && /^Dry run \d{4}-\d{2}-\d{2}: \d+ of \d+ tried/.test(row.dryNote ?? ""), row);
 const stats = await store.ownStats();
-check("the admin's counts", stats.linked === 10 && stats.usable === 2 && stats.removed === 1, stats);
+check("the admin's counts", stats.linked === 10 && stats.prospects === 1 && stats.usable === 2 && stats.removed === 2, stats);
 const sample = await store.ownSample();
 check("the admin's sample: the seat holder, the email, the site", sample.rows.some((r) => r.name === "Casey Wren" && r.email === "hello@wrenpartners.test" && r.how === "generic on a one-person site"), sample);
 const due = await run.maybeOwnSites({ nowMs: Date.now(), run: { read: readOpts, delayMs: 0, log: () => {} } });

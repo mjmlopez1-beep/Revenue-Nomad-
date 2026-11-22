@@ -232,9 +232,10 @@ interface OwnRow {
   how: string;
   at: string;
   pending: boolean;
+  prospect?: boolean;
 }
 interface OwnData {
-  stats: { linked: number; withSite: number; firmOnly: number; usable: number; pending: number; byHow: Record<string, number>; misses: Record<string, number>; removed: number; undone: number };
+  stats: { linked: number; prospects?: number; prospectEmails?: number; withSite: number; firmOnly: number; usable: number; pending: number; byHow: Record<string, number>; misses: Record<string, number>; removed: number; undone: number };
   rows: OwnRow[];
   total: number;
   usable: boolean;
@@ -285,7 +286,8 @@ function OwnSiteFinds({ stamp }: { stamp: string }) {
       ) : (
         <>
           <p className="tp-small" style={{ margin: "6px 0" }}>
-            {n(st.linked)} people linked to their own firm ({n(st.withSite)} with a site, {n(st.firmOnly)} by firm name). {n(st.usable)} emails found
+            {n(st.linked)} seat holders linked to their own firm ({n(st.withSite)} with a site, {n(st.firmOnly)} by firm name), and {n(st.prospects ?? 0)} prospects with no seat
+            ({n(st.prospectEmails ?? 0)} emails found, for outreach only). {n(st.usable)} emails found
             {st.usable ? ` (${Object.entries(st.byHow).map(([k, v]) => `${n(v)} ${k}`).join(", ")})` : ""}, {n(st.pending)} from dry runs (not usable). Not found:{" "}
             {Object.entries(st.misses).map(([k, v]) => `${n(v)} ${k}`).join(", ")}. {n(st.removed)} removed their name, {n(st.undone)} taken back.
           </p>
@@ -315,6 +317,7 @@ function OwnSiteFinds({ stamp }: { stamp: string }) {
                       <td style={{ padding: "2px 8px 2px 0" }}>
                         {r.how}
                         {r.pending ? " · dry run" : ""}
+                        {r.prospect ? " · prospect, outreach only" : ""}
                       </td>
                       <td style={{ padding: "2px 8px 2px 0" }}>{when(r.at)}</td>
                     </tr>

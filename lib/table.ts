@@ -112,7 +112,7 @@ import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./websites/types";
 // Own sites: emails fractionals publish on their own firm's website (lib/ownsites), shown only with RN_OWNSITES=1.
-import { OWNSITE_RELATIONSHIP, OWNSITE_SOURCE, ownSitesEnabled, type OwnEmail, type OwnSiteLink, type OwnSitesState } from "./ownsites/types";
+import { OWNSITE_RELATIONSHIP, OWNSITE_SOURCE, ownSitesEnabled, type OwnEmail, type OwnProspect, type OwnSiteLink, type OwnSitesState } from "./ownsites/types";
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, KNOWN_DAYS as LEADERS_KNOWN_DAYS, DAILY_BATCH as LEADERS_DAILY_BATCH, READER_VERSION as LEADERS_READER_VERSION, leadersEnabled, leadersProgress, fnKnow, memberRoles, reportsOf, teamReadAt, CONFIRM_MEMBERS,
   type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
@@ -216,6 +216,13 @@ export interface Seed {
    * Server only, for lib/ownsites: never in the graph, a view or an export.
    */
   ownSites?: Record<string, OwnSiteLink>;
+  /**
+   * Prospects (scripts/add-own-sites.mjs): United States fractionals outside California with no
+   * named seat and a known own-firm website, by person key, with their name (to match their email and
+   * greet them). Outreach only: lib/ownsites reads their site, the admin's sample and the outreach
+   * file's join list carry them, and nothing else ever does (no graph, view, export or connector).
+   */
+  ownSiteProspects?: Record<string, OwnProspect>;
 }
 
 interface Added {
@@ -7522,8 +7529,9 @@ export async function nameOffByName(nameRaw: unknown, companyRaw: unknown): Prom
     const site = siteKey(company);
     const key = keyOfCompany(company);
     const at = new Set([...g.companies.values()].filter((c) => (key && keyOfCompany(c.name) === key) || (site && siteKey(live(c, s, "website")) === site)).map((c) => c.id));
-    if (!at.size) return 0;
-    let n = 0;
+    // A prospect (outreach only, no seat): their own firm by name or website. Their email goes, and their site is never read again.
+    let n = ownProspectOff(s, seed, name, key, site, now);
+    if (!at.size) return n;
     for (const e of seed.engagements) {
       if (!at.has(e.companyId) || nameVerified(s, e.id)) continue;
       const onFile = seedPublicName(seed, s, e.id);
@@ -9561,7 +9569,7 @@ function ownSitePeople(seed: Seed, s: State, g: Graph) {
   let priv: Set<string> | null = null;
   const bySeat = seatsByKey(seed);
   for (const [k, em] of Object.entries(s.ownEmails ?? {})) {
-    if (!em?.email || em.pending || !links[k]) continue;
+    if (!em?.email || em.pending || em.prospect || !links[k]) continue;
     const peers: string[] = [];
     for (const seatId of bySeat.get(k) ?? []) {
       const e = g.engagements.get(seatId);
@@ -9594,6 +9602,22 @@ function ownEmailHeld(s: State, me: Member | null, node: Node | undefined, entit
   const own = (node as PersonNode | undefined)?.own;
   if (!me || !own || entity !== "contact" || key !== "email") return false;
   return own.peers.some((id) => id !== node!.id && (s.unlocks[fkey(id, "email")] ?? []).includes(me.id));
+}
+
+/** Remove my name for a prospect (Seed.ownSiteProspects): the same person at their own firm, by its name or website. Returns how many came off. */
+function ownProspectOff(s: State, seed: Seed, name: string, companyKey: string | null, site: string | null, now: string): number {
+  let n = 0;
+  for (const [k, p] of Object.entries(seed.ownSiteProspects ?? {})) {
+    if (!p?.name || !sameName(p.name, name)) continue;
+    const firmMatch = !!companyKey && !!p.firm && keyOfCompany(p.firm) === companyKey;
+    const siteMatch = !!site && siteKey(p.site) === site;
+    if (!firmMatch && !siteMatch) continue;
+    if (s.ownEmails) delete s.ownEmails[k];
+    const job = (s.ownSitesJob ??= { people: {}, lastRun: null, lastDry: null, dryDone: [] });
+    if (job.people[k]?.s !== "removed") n++;
+    job.people[k] = { s: "removed", at: now };
+  }
+  return n;
 }
 
 /** Every unlock of a seat holder's email from their website (on these seats, or all), refunded and forgotten. Returns how many members got a credit back. */

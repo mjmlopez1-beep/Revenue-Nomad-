@@ -5,6 +5,7 @@
  * data/intel-seed.json, then re-seals data/intel-seed.enc:
  *
  *   seed.ownSites = { [holderKey]: { site?: "theirfirm.com", firm?: "Their Firm LLC", how } }
+ *   seed.ownSiteProspects = { [personKey]: { name, site, firm?, how: "known site" } }
  *
  *   node scripts/add-own-sites.mjs --seats <seats.csv> --past <past-seats.csv> [--companies <past-companies.csv>]
  *   ... --counts-only     print the counts and seal
@@ -38,10 +39,17 @@
  *     client company already in the seed (or a client row in the files). The firm's name, and the
  *     site the files give for a firm by that name when they give one; else the job finds its site.
  *
+ * Prospects (outreach only): United States people outside California with no named seat on the
+ * seed (their only seats were their own firm, which the importers drop) and an own-firm row with a
+ * website (rule 1). Keyed by the same person key (never a profile id), with their name, cleaned
+ * (lib/personName.ts): it is needed to match their email and to greet them. They have no seat to
+ * claim and never show in the app: lib/ownsites reads their site, and only the admin's sample and
+ * the outreach file's "join" list (scripts/claim-outreach.mjs) carry them.
+ *
  * Prints counts only, never a name, a company, a domain or an email.
  */
 import { execFileSync, spawnSync } from "child_process";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, realpathSync, renameSync, writeFileSync } from "fs";
 
 // The rules are TypeScript (lib/), so this runs under tsx: started with plain node, it starts itself again with tsx loaded.
 if (!process.env.RN_OWN_SITES_TSX) {
@@ -53,6 +61,7 @@ const { companyFirm } = await import("../lib/firmRemoval.ts");
 const { isDirectoryHost } = await import("../lib/websites/verify.ts");
 const { inCalifornia } = await import("../lib/ownsites/types.ts");
 const { host, isTrue, ownFirm, parseCsv, personKey, real, seedKey } = await import("./seat-import.mjs");
+const { cleanPersonName } = await import("../lib/personName.ts");
 
 /* ---------- arguments ---------- */
 
@@ -159,8 +168,9 @@ for (const r of [...seatRows, ...pastRows]) {
 
 /* ---------- linking ---------- */
 
-const counts = { people: people.size, us: 0, notUs: 0, ca: 0, notNamed: 0, noOwnFirm: 0, linked: 0, withSite: 0, firmOnly: 0, siteFromTab: 0, ranks: { 3: 0, 2: 0, 1.5: 0, 1: 0 }, firmSite: 0, currentRows: 0, pastRows: 0 };
+const counts = { people: people.size, us: 0, notUs: 0, ca: 0, notNamed: 0, noOwnFirm: 0, prospects: 0, prospectNoName: 0, linked: 0, withSite: 0, firmOnly: 0, siteFromTab: 0, ranks: { 3: 0, 2: 0, 1.5: 0, 1: 0 }, firmSite: 0, currentRows: 0, pastRows: 0 };
 const out = {};
+const prospects = {};
 for (const [id, p] of people) {
   // A person whose rows disagree on the country (one says elsewhere) is left out: the rule is United States only.
   if (!p.us || p.other) {
@@ -173,10 +183,7 @@ for (const [id, p] of people) {
     continue;
   }
   const hk = personKey(key, id);
-  if (!hk || !named.has(hk)) {
-    counts.notNamed++;
-    continue;
-  }
+  if (!hk) continue;
   // 1. A known site: the best own-firm row with a website.
   let best = null;
   for (const { r, current } of p.rows) {
@@ -190,7 +197,20 @@ for (const [id, p] of people) {
     }
     if (!site) continue;
     const score = rank * 2 + (current ? 1 : 0);
-    if (!best || score > best.score) best = { site, rank, current, fromTab, score, firm: String(r.company_name ?? "").trim().slice(0, 80) };
+    if (!best || score > best.score) best = { site, rank, current, fromTab, score, firm: String(r.company_name ?? "").trim().slice(0, 80), person: r.person_name };
+  }
+  if (!named.has(hk)) {
+    counts.notNamed++;
+    // A prospect: no seat to claim, a known own-firm site. Outreach only.
+    if (best) {
+      const clean = cleanPersonName(best.person ?? p.rows[0].r.person_name);
+      if ("skip" in clean) counts.prospectNoName++;
+      else {
+        prospects[hk] = { name: clean.name, site: best.site, ...(best.firm ? { firm: best.firm } : {}), how: "known site" };
+        counts.prospects++;
+      }
+    }
+    continue;
   }
   if (best) {
     out[hk] = { site: best.site, how: "known site" };
@@ -226,23 +246,29 @@ for (const [id, p] of people) {
 }
 
 // Never a profile id: the section holds person keys, domains and firm names only.
-const flat = JSON.stringify(out);
+const flat = JSON.stringify(out) + JSON.stringify(prospects);
 for (const id of people.keys()) if (id.length >= 6 && flat.includes(id)) throw new Error("A profile id would reach the seed. Nothing was written.");
 
 const before = seed.ownSites ? Object.keys(seed.ownSites).length : 0;
 console.log(`people in the files: ${counts.people}; United States: ${counts.us}; elsewhere or mixed: ${counts.notUs}`);
 console.log(`excluded, California: ${counts.ca}`);
-console.log(`excluded, no named seat on the seed: ${counts.notNamed}`);
+console.log(`no named seat on the seed: ${counts.notNamed} (prospects come from these)`);
 console.log(`excluded, no own firm: ${counts.noOwnFirm}`);
 console.log(`people linked: ${counts.linked} (with site: ${counts.withSite + counts.firmSite}, firm only: ${counts.firmOnly})`);
 console.log(`  by how: known site ${counts.withSite}; current company ${counts.firmSite + counts.firmOnly} (${counts.firmSite} with a site the files give for that firm, ${counts.firmOnly} name only)`);
 console.log(`  with site, by row: named after them ${counts.ranks[3]}, one-person company ${counts.ranks[2]}, small firm or provider ${counts.ranks[1.5]}, larger firm or provider ${counts.ranks[1]}; from current seats ${counts.currentRows}, past seats ${counts.pastRows}${companiesPath ? `, site from Past Companies ${counts.siteFromTab}` : ""}`);
 console.log(`seed.ownSites: ${before} before, ${counts.linked} now`);
+console.log(`prospects (no named seat, a known own-firm site, outreach only): ${counts.prospects}${counts.prospectNoName ? `; left out, the name doesn't read as a first and last name: ${counts.prospectNoName}` : ""}`);
+console.log(`known sites in all (seat holders and prospects): ${counts.withSite + counts.firmSite + counts.prospects}`);
 if (dry) {
   console.log("dry run: nothing written");
   process.exit(0);
 }
 seed.ownSites = out;
-writeFileSync(seedPath, JSON.stringify(seed));
+seed.ownSiteProspects = prospects;
+// Written whole, then moved into place: a server or another script reading the seed never sees half a file.
+const target = realpathSync(seedPath);
+writeFileSync(`${target}.own-sites.tmp`, JSON.stringify(seed));
+renameSync(`${target}.own-sites.tmp`, target);
 console.log(`wrote ${seedPath}`);
 if (!noSeal && seedPath === "data/intel-seed.json") execFileSync(process.execPath, ["scripts/seal-intel-seed.mjs"], { stdio: "inherit" });

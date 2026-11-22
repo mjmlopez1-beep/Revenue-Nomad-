@@ -18,6 +18,18 @@ export interface OwnSiteLink {
   how: "known site" | "current company";
 }
 
+/**
+ * A prospect (Seed.ownSiteProspects, by person key): a United States fractional outside California
+ * with no named seat on the seed and a known own-firm website. Outreach only: their name is kept to
+ * match their email and to greet them, and they never show in the app.
+ */
+export interface OwnProspect {
+  name: string;
+  site: string;
+  firm?: string;
+  how: "known site";
+}
+
 /** Why an email was accepted. */
 export type OwnHow = "name match" | "only address on a one-person site" | "generic on a one-person site";
 export const OWN_HOWS: OwnHow[] = ["name match", "only address on a one-person site", "generic on a one-person site"];
@@ -32,6 +44,8 @@ export interface OwnEmail {
   /** The site read (its host). */
   site: string;
   pending?: true;
+  /** A prospect's (outreach only): never shown in the app, whatever the switch. */
+  prospect?: true;
 }
 
 /** How a person's last try ended. */

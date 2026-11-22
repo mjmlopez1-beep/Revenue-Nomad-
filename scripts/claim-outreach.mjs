@@ -22,6 +22,13 @@
  * data/intel-seed.key). The lead link is the one place the file's profile id goes, and only here.
  * The message says what the person gets and that it is free, and never where the name came from.
  *
+ * A second file, the join list (<out>.join.csv, beside it): prospects (seed.ownSiteProspects:
+ * United States fractionals outside California with no seat on Merlin and an email they publish on
+ * their own firm's website, lib/ownsites), with --state and RN_OWNSITES=1 only, a real run's finds
+ * only, never one who used Remove my name. Columns: first name, full name, firm, site, email,
+ * email_from, join link and a message that invites them to join Merlin (they have no seat to
+ * claim) and says how to be taken off.
+ *
  * Prints counts only, never a name.
  */
 import { spawnSync } from "child_process";
@@ -164,5 +171,32 @@ writeFileSync(out, lines.join("\n") + "\n", { mode: 0o600 });
 console.log(`United States rows: ${counts.us}`);
 console.log(`rows written: ${counts.written}${counts.noLead ? ` (${counts.noLead} without a lead link)` : ""}; with an email from their website: ${counts.withEmail}`);
 console.log(`left out: ${counts.notOnSeed} not on the seed, ${counts.notNamed} with no name on the seat, ${counts.claimed} claimed by a member, ${counts.removed} taken off`);
+/* ---------- the join list: prospects, outreach only ---------- */
+const joinOut = out.replace(/\.csv$/i, "") + ".join.csv";
+const joinLines = [["first_name", "full_name", "firm", "site", "email", "email_from", "join_link", "message"].join(",")];
+const joinCounts = { prospects: 0, written: 0, noEmail: 0, removed: 0 };
+const people = state?.ownSitesJob?.people ?? {};
+for (const [k, p] of Object.entries(seed.ownSiteProspects ?? {})) {
+  joinCounts.prospects++;
+  if (people[k]?.s === "removed") {
+    joinCounts.removed++;
+    continue;
+  }
+  const own = ownEmails[k];
+  if (!own || own.pending || !own.email) {
+    joinCounts.noEmail++;
+    continue;
+  }
+  const first = firstNameOf(p.name);
+  const message =
+    `Hi ${first}, Merlin is a data exchange for fractional operators from Revenue Nomad. ` +
+    "Operators share what they know about fractional work to earn credits, and see which companies hire fractionals, what they've paid and which roles are open now. " +
+    `Joining is free and takes a minute. ${base}/ ` +
+    `Would you rather not hear from us? ${base}/remove takes your name and email off.`;
+  joinLines.push([first, p.name, p.firm ?? "", p.site, own.email, "their website", `${base}/`, message].map(csvCell).join(","));
+  joinCounts.written++;
+}
+writeFileSync(joinOut, joinLines.join("\n") + "\n", { mode: 0o600 });
+console.log(`join list (prospects with no seat, outreach only): ${joinCounts.prospects} prospects; rows written: ${joinCounts.written}; left out: ${joinCounts.noEmail} with no email from their website, ${joinCounts.removed} taken off`);
 console.log(`claim links point at ${base}`);
 console.log("wrote the file (outside the repo). It names people: keep it to yourself.");

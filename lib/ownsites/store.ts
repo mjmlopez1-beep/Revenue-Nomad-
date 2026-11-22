@@ -3,6 +3,9 @@
  * counts, sample and Undo. Every write goes through lib/table.ts's own mutate, so it queues with
  * the members' actions and the other jobs.
  *
+ * Prospects (Seed.ownSiteProspects, outreach only) are read the same way, with the known sites:
+ * their emails are stored marked prospect and never show in the app.
+ *
  * Who: the people the import linked to their own firm (Seed.ownSites, United States, never
  * California), whose seat still carries the name from public profiles (not claimed by a member, not
  * taken off with Remove my name), and never a member whose own choice keeps them out of view. State.ownEmails holds what was found, by person key; a dry run's
@@ -17,7 +20,7 @@ import { emptyOwnSites, OWN_MISSES, RETRY_DAYS, type OwnAttempt, type OwnEmail, 
 
 const DAY = 24 * 60 * 60 * 1000;
 
-export type OwnTarget = ReadTarget & { how: OwnSiteLink["how"] };
+export type OwnTarget = ReadTarget & { how: OwnSiteLink["how"]; prospect?: true };
 
 /**
  * Each linked person's name on their seat, by person key: a name from public profiles on the seed
@@ -52,8 +55,9 @@ export function dueOwn(prev: OwnAttempt | undefined, email: OwnEmail | undefined
 }
 
 /**
- * The people to read now, in order: a known site first, then a firm with a site the files give,
- * then a firm known by name; within each, never tried before first, then the oldest try.
+ * The people to read now, in order: every known site first (seat holders and prospects alike), then
+ * a firm with a site the files give, then a firm known by name; within each, never tried before
+ * first, then the oldest try.
  * `knownOnly`: people with a site only.
  */
 export async function ownTargets(o: { nowIso?: string; dry?: boolean; knownFirst?: boolean } = {}): Promise<OwnTarget[]> {
@@ -63,6 +67,14 @@ export async function ownTargets(o: { nowIso?: string; dry?: boolean; knownFirst
   const names = namesByKey(seed, s);
   const job = s.ownSitesJob ?? emptyOwnSites();
   const out: (OwnTarget & { rank: number; prevAt: string })[] = [];
+  // Prospects (outreach only): a known own-firm site, read with the seat holders' known sites.
+  const priv = T.privateMemberKeys(seed, s);
+  for (const [key, p] of Object.entries(seed.ownSiteProspects ?? {})) {
+    if (!p?.name || !p.site || links[key] || priv.has(nameKey(p.name))) continue;
+    const prev = job.people[key];
+    if (!dueOwn(prev, s.ownEmails?.[key], nowMs, !!o.dry)) continue;
+    out.push({ key, name: p.name, site: p.site, ...(p.firm ? { firm: p.firm } : {}), how: "known site", prospect: true, rank: 0, prevAt: prev && !prev.dry ? prev.at : "" });
+  }
   for (const [key, link] of Object.entries(links)) {
     const name = names.get(key);
     if (!name || (!link.site && !link.firm)) continue;
@@ -95,7 +107,8 @@ export async function clientSites(): Promise<Set<string>> {
  * A person taken off or undone since the read started stays off.
  */
 export function saveOwn(outcomes: ReadOutcome[], dry: boolean, nowIso?: string, run?: OwnRunSummary | null): Promise<void> {
-  return T.mutate((s) => {
+  return T.mutate((s, seed) => {
+    const prospects = seed.ownSiteProspects ?? {};
     const now = nowIso ?? new Date().toISOString();
     const job = (s.ownSitesJob ??= emptyOwnSites());
     const emails = (s.ownEmails ??= {});
@@ -108,7 +121,8 @@ export function saveOwn(outcomes: ReadOutcome[], dry: boolean, nowIso?: string, 
       if (dry && prev && !prev.dry) {
         // A real try stays: the dry run's find is kept apart as pending.
       } else job.people[o.key] = { s: o.s, at: now, pages: o.pages, ...(site ? { site } : {}), ...(dry ? { dry: true as const } : {}) };
-      if (o.s === "found") emails[o.key] = { email: o.email, page: o.page, at: now, how: o.how, site: o.site, ...(dry ? { pending: true as const } : {}) };
+      if (o.s === "found")
+        emails[o.key] = { email: o.email, page: o.page, at: now, how: o.how, site: o.site, ...(dry ? { pending: true as const } : {}), ...(prospects[o.key] && !seed.ownSites?.[o.key] ? { prospect: true as const } : {}) };
       else if (!dry && had?.pending) delete emails[o.key];
     }
     if (run) {
@@ -132,6 +146,9 @@ export function claimDry(n: number): Promise<boolean> {
 
 export interface OwnStats {
   linked: number;
+  /** Prospects (outreach only) and the emails found for them (usable ones). */
+  prospects: number;
+  prospectEmails: number;
   withSite: number;
   firmOnly: number;
   usable: number;
@@ -161,9 +178,11 @@ export async function ownStats(): Promise<OwnStats> {
   for (const e of emails) if (!e.pending) byHow[e.how] = (byHow[e.how] ?? 0) + 1;
   return {
     linked: links.length,
+    prospects: Object.keys(seed.ownSiteProspects ?? {}).length,
+    prospectEmails: emails.filter((e) => e.prospect && !e.pending).length,
     withSite: links.filter((l) => !!l.site).length,
     firmOnly: links.filter((l) => !l.site).length,
-    usable: emails.filter((e) => !e.pending).length,
+    usable: emails.filter((e) => !e.pending && !e.prospect).length,
     pending: emails.filter((e) => e.pending).length,
     byHow,
     misses,
@@ -180,6 +199,8 @@ export interface OwnSample {
   how: string;
   at: string;
   pending: boolean;
+  /** Outreach only: no seat, never shown in the app. */
+  prospect: boolean;
 }
 
 /** A short sample of found emails with the seat holder's name, for the owner only (the caller checks admin). Newest first. */
@@ -189,7 +210,10 @@ export async function ownSample(limit = 25): Promise<{ rows: OwnSample[]; total:
   const rows = Object.entries(s.ownEmails ?? {}).sort((a, b) => b[1].at.localeCompare(a[1].at));
   return {
     total: rows.length,
-    rows: rows.slice(0, limit).map(([k, e]) => ({ name: names.get(k) ?? "", email: e.email, site: e.site, page: e.page, how: e.how, at: e.at, pending: !!e.pending })),
+    rows: rows.slice(0, limit).map(([k, e]) => ({
+      name: names.get(k) ?? seed.ownSiteProspects?.[k]?.name ?? "",
+      email: e.email, site: e.site, page: e.page, how: e.how, at: e.at, pending: !!e.pending, prospect: !!e.prospect,
+    })),
   };
 }
 
