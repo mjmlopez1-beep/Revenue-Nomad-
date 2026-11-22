@@ -224,6 +224,8 @@ export interface ProposalsView {
   templatesOpen: string[];
   /** Email is set up, so a proposal can go out. */
   email: boolean;
+  /** They saved a writing voice (lib/voice.ts): drafts and changes are written in it. */
+  voice?: boolean;
   /** The member's own name and title, for "Prepared by". */
   me: { name: string; title: string; function: string | null; email: string };
 }

@@ -142,6 +142,17 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         onOpen={(x) => (putDoc(x), setOpenDoc(x.id))}
       />
     );
+  if (starting && data && data.canBuild)
+    return (
+      <StartSheet
+        data={data}
+        infos={infos}
+        companyId={starting.companyId}
+        onClose={() => setStarting(null)}
+        onTemplate={(t) => setData((d) => (d ? { ...d, templates: [t, ...d.templates] } : d))}
+        onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenId(p.id))}
+      />
+    );
   if (contract && data)
     return (
       <ContractUpload
@@ -232,16 +243,6 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
             ),
           )}
         </ul>
-      )}
-      {starting && data && data.canBuild && (
-        <StartSheet
-          data={data}
-          infos={infos}
-          companyId={starting.companyId}
-          onClose={() => setStarting(null)}
-          onTemplate={(t) => setData((d) => (d ? { ...d, templates: [t, ...d.templates] } : d))}
-          onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenId(p.id))}
-        />
       )}
       {templates && data && <TemplatesSheet data={data} onClose={() => setTemplates(false)} onChange={(t) => setData((d) => (d ? { ...d, templates: t } : d))} />}
     </div>

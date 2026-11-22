@@ -35,7 +35,7 @@ async function answer(work: () => Promise<unknown>) {
  *
  * GET              ProposalsView: every proposal of theirs, newest first, and what their plan allows.
  * GET ?id=ID       ProposalRec: one of theirs.
- * POST { op: "create", templateId?, companyId?, companyName?, title?, fields?, notes?, signerOnCall? }
+ * POST { op: "create", templateId?, companyId?, companyName?, title?, fields?, notes?, signerOnCall?, signer? }
  *                  templateId: a library template, one of theirs ("mt_..."), or none. fields and notes: what the
  *                  member kept from a call read in their browser (lib/proposals/extract.ts), never the transcript.
  * POST { op: "draft", templateId?, companyId?, companyName?, transcript, callDate?, callWith?, agree? }
@@ -85,7 +85,7 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(() =>
         createProposal(
           token,
-          { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, title: b.title, fields: b.fields, notes: b.notes, signerOnCall: b.signerOnCall, ...(b.fields || b.notes ? { source: "discovery" } : {}) },
+          { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, title: b.title, fields: b.fields, notes: b.notes, signerOnCall: b.signerOnCall, ...(b.signer ? { signer: b.signer } : {}), ...(b.fields || b.notes ? { source: "discovery" } : {}) },
           o,
         ),
       );

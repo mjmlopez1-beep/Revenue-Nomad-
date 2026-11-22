@@ -235,6 +235,7 @@ export async function listProposals(token: string | null, origin?: string, nowMs
     canBuild: !free,
     templatesOpen: free ? [] : TEMPLATES.map((t) => t.id),
     email: emailEnabled(),
+    voice: !!s.voice?.[me.id],
     me: { name: me.name, title: titleOf(s, me), function: fnOf(s, me), email: me.email },
   };
 }

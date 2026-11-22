@@ -1,23 +1,32 @@
 "use client";
 
 /**
- * "New proposal from a call": the one way in to Proposals, as short as asking Claude. Pick the
- * company, paste or drop the transcript or your notes, pick a template (yours or ours), Draft.
- * Everything else is optional.
+ * "New proposal from a call": start from the conversation the member already had, in three steps.
  *
- * Draft, with drafting on (RN_AI_DRAFTS, ProposalsView.ai "on") and the box ticked: the server
- * writes the whole proposal with Claude (lib/proposals/draft.ts); the transcript is used for that
- * one request and not kept. Without it: Merlin's own reader (lib/proposals/extract.ts) runs here
- * in the browser, the lines it finds fill the template's fields, and only those are saved; the
- * transcript never leaves the browser. "Build it in Claude" copies a ready prompt for the
- * member's own Claude (with Granola or Drive connected) and the connector does the rest.
+ *  1. Where's the conversation: From Granola (a slot the Granola picker renders into, which hands
+ *     back the transcript; until it's there, the card points to Integrations), a transcript pasted
+ *     or dropped (.txt, .vtt, .srt, .md, or a .docx read here in the browser), or "Tell Merlin what
+ *     was agreed", typed or said (the browser's speech recognition, where there is one).
+ *  2. Which of their templates: theirs first, the best fit for what was asked for marked
+ *     (lib/proposals/startCall.ts bestTemplate), and how often each was used.
+ *  3. Who signs: from the call, the company's decision maker on their Merlin record, or typed.
+ *
+ * Draft it: with drafting on (RN_AI_DRAFTS, ProposalsView.ai "on") and the box ticked, the server
+ * writes it with Claude (lib/proposals/draft.ts; the transcript used for that request only).
+ * Without it, Merlin's own reader (lib/proposals/extract.ts) and what was agreed (readTerms) run
+ * here in the browser, and only the lines it finds are saved. Either way the draft reads "Draft
+ * ready": what was done, the things to check (anything the call didn't settle is a labelled blank,
+ * never guessed), and where each part came from. "Build it in Claude" copies a prompt for the
+ * member's own Claude.
  */
 import { useMemo, useRef, useState } from "react";
 import type { ProposalRec, ProposalsView, TemplateChoice } from "@/lib/proposals/types";
-import { DISCOVERY_TARGET, acceptInto } from "@/lib/proposals/library";
+import { DISCOVERY_TARGET, acceptInto, blanksInWords, blanksOf, docFields, fieldLabel } from "@/lib/proposals/library";
 import { extract, transcriptOk } from "@/lib/proposals/extract";
-import { IconCheck, IconExternal, useToast, errorText } from "../ui/shared";
-import { Sheet, useUi } from "./ui";
+import { bestTemplate, browserInflateRaw, docxText, readTerms } from "@/lib/proposals/startCall";
+import { IconCheck, IconChevron, IconExternal, useToast, errorText } from "../ui/shared";
+import { useUi } from "./ui";
+import { MicButton, useSpeech } from "./ChangeIt";
 import { copyText } from "./hooks";
 import type { CoInfo } from "./model";
 
@@ -117,6 +126,35 @@ export function signerFrom(o: { withWho: string; text: string; me: string; compa
   return out;
 }
 
+/** A transcript a source hands over: Granola's picker (lib/granola, wired in Proposals), a file, or what was pasted. */
+export interface CallPick {
+  transcript: string;
+  attendees?: { name?: string; email?: string }[];
+  noteId?: string;
+  /** When the call was, ISO. */
+  when?: string;
+}
+/** The slot "From Granola" renders into: the picker, given the company and the signer's email, hands back a transcript. */
+export type GranolaSlot = (o: { companyId: string | null; signerEmail?: string; onPick: (c: CallPick) => void }) => React.ReactNode;
+
+type Source = "granola" | "paste" | "agreed";
+type Ready = { proposal: ProposalRec; toFix: string[]; done: string[]; check: string[]; used: { from: string; what: string }[] };
+
+const readable = (k: string) => fieldLabel(k).replace(/\s*\([^)]*\)$/, "").toLowerCase();
+const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+/** Who signs, and where Merlin found them: the call, the company's Merlin record, or both. */
+function whoSigns(o: { withWho: string; text: string; me: string; company: CoInfo | null }): { name?: string; title?: string; email?: string; found: string } {
+  const call = signerFrom({ withWho: o.withWho, text: o.text, me: o.me, company: null });
+  const both = signerFrom({ ...o, company: o.company ?? null });
+  const rec = o.company ? signerFrom({ withWho: "", text: "", me: o.me, company: o.company }) : {};
+  const co = o.company && !o.company.c.hidden ? o.company.c.name : "";
+  const onRecord = !!rec.name && (!call.name || rec.name.toLowerCase() === call.name.toLowerCase());
+  const s = call.name ? { ...call, title: call.title || (onRecord ? rec.title : undefined), email: call.email || (onRecord ? rec.email : undefined) } : both;
+  const found = call.name ? (onRecord ? `On the call, and in your Merlin record${co ? ` for ${co}` : ""}` : "On the call") : rec.name ? `In your Merlin record${co ? ` for ${co}` : ""}` : "";
+  return { ...s, found };
+}
+
 export function StartSheet({
   data,
   infos,
@@ -124,6 +162,7 @@ export function StartSheet({
   onClose,
   onMade,
   onTemplate,
+  granolaSlot,
 }: {
   data: ProposalsView;
   infos: CoInfo[];
@@ -131,6 +170,8 @@ export function StartSheet({
   onClose: () => void;
   onMade: (p: ProposalRec, toFix?: string[]) => void;
   onTemplate: (t: TemplateChoice) => void;
+  /** "From Granola": the picker, when Merlin has the Granola connection. Without it, the card points to Integrations. */
+  granolaSlot?: GranolaSlot;
 }) {
   const toast = useToast();
   const ui = useUi();
@@ -138,35 +179,66 @@ export function StartSheet({
   const preset = companyId ? infos.find((i) => i.c.id === companyId) : undefined;
   const [q, setQ] = useState(preset && !preset.c.hidden ? preset.c.name : "");
   const [pick, setPick] = useState<string | null>(companyId);
+  const [src, setSrc] = useState<Source>(granolaSlot ? "granola" : "paste");
   const [text, setText] = useState("");
+  const [agreed, setAgreed] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [drop, setDrop] = useState(false);
-  const [more, setMore] = useState(false);
   const [date, setDate] = useState("");
   const [withWho, setWith] = useState("");
-  const open = data.templates.filter((t) => t.open);
-  const [tpl, setTpl] = useState<string>(open.find((t) => t.mine)?.id ?? open[0]?.id ?? "blank");
+  const [allTpl, setAllTpl] = useState(false);
   const [useAi, setUseAi] = useState(data.ai === "on");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  // The AI usage all used (ProposalsView.aiUsedUp, or the draft's refusal): the draft explains, with the pack and Build it in Claude.
   const [usedUp, setUsedUp] = useState<{ words: string; pack: string; button: string } | null>(data.aiUsedUp ?? null);
+  const [editSigner, setEditSigner] = useState(false);
+  const [typed, setTyped] = useState<{ name: string; title: string; email: string } | null>(null);
+  const [ready, setReady] = useState<Ready | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const tplRef = useRef<HTMLInputElement>(null);
+  const speech = useSpeech((t) => setAgreed((x) => `${x} ${t}`.trim()));
 
   const matches = q.trim().length >= 2 && !pick ? known.filter((i) => i.c.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6) : [];
   const picked = pick ? infos.find((i) => i.c.id === pick) : undefined;
   const company = picked && !picked.c.hidden ? picked.c.name : q.trim();
-  const template = data.templates.find((t) => t.id === tpl) ?? null;
-  const hasCall = text.trim().length > 0;
-  const ai = data.ai === "on" && useAi && hasCall;
+  // Whatever the source, the drafting reads one text: the transcript, or what was agreed.
+  const callText = src === "agreed" ? agreed : text;
+  const hasCall = callText.trim().length > 0;
+  const found = useMemo(() => whoSigns({ withWho, text: callText, me: data.me.name, company: picked ?? null }), [withWho, callText, data.me.name, picked]);
+  const signer = typed ?? { name: found.name ?? "", title: found.title ?? "", email: found.email ?? "" };
+  const used = useMemo(() => Object.fromEntries(data.templates.map((t) => [t.id, data.proposals.filter((p) => p.templateId === t.id).length])), [data.templates, data.proposals]);
+  const best = useMemo(() => bestTemplate(data.templates, callText, used), [data.templates, callText, used]);
+  const open = data.templates.filter((t) => t.open);
+  const [tpl, setTpl] = useState<string>(open.find((t) => t.mine)?.id ?? open[0]?.id ?? "blank");
+  const [tplPicked, setTplPicked] = useState(false);
+  // Until the member picks one, the template follows the best fit for what was said.
+  const tplNow = !tplPicked && best.score >= 2 && best.id ? best.id : tpl;
+  const template = data.templates.find((t) => t.id === tplNow) ?? null;
+  const ai = data.ai === "on" && useAi && callText.trim().length >= 200;
   const aiOut = ai && !!usedUp;
 
-  const readFile = (f: File | undefined) => {
+  const takeCall = (c: CallPick) => {
+    setText(c.transcript);
+    setFileName(null);
+    setSrc("granola");
+    if (c.when) setDate(c.when.slice(0, 10));
+    const them = c.attendees?.find((a) => a.name && a.name.trim().toLowerCase() !== data.me.name.trim().toLowerCase() && a.email?.toLowerCase() !== data.me.email.toLowerCase());
+    if (them?.name && !withWho) setWith(them.name);
+    if (them?.email && !typed && !found.email && them.name) setTyped({ name: them.name, title: "", email: them.email });
+  };
+  const readFile = async (f: File | undefined) => {
     if (!f) return;
-    if (!transcriptOk(f.name)) return toast("That file type doesn't read here. Use .txt, .vtt, .srt or .md, or paste the text.", true);
     if (f.size > 2_000_000) return toast("That file is over 2 MB. Paste the part that matters.", true);
-    void f.text().then((t) => (setText(t), setFileName(f.name)));
+    if (/\.docx$/i.test(f.name)) {
+      try {
+        const t = await docxText(new Uint8Array(await f.arrayBuffer()), browserInflateRaw);
+        return setText(t), setFileName(f.name), setSrc("paste");
+      } catch (e) {
+        return toast((e as Error).message || "That .docx didn't open.", true);
+      }
+    }
+    if (!transcriptOk(f.name)) return toast("That file type doesn't read here. Use .txt, .vtt, .srt, .md or .docx, or paste the text.", true);
+    void f.text().then((t) => (setText(t), setFileName(f.name), setSrc("paste")));
   };
   const addTemplate = async (f: File | undefined) => {
     if (!f) return;
@@ -177,29 +249,69 @@ export function StartSheet({
     const t: TemplateChoice = { id: r.id, title: r.title ?? f.name, about: f.name, mine: true, open: true, sections: r.blocks?.length ?? 0 };
     onTemplate(t);
     setTpl(t.id);
+    setTplPicked(true);
     toast(`Added ${t.title}, ${t.sections} sections.`);
+  };
+
+  /** What the draft did, what to check and where each part came from, from the saved draft itself. */
+  const summarise = (p: ProposalRec, toFix: string[], loose: string[]): Ready => {
+    const f = docFields(p);
+    const fromCall = Object.keys(p.fields).filter((k) => ["discovery", "claude"].includes(p.sources[k] ?? "") && !k.startsWith("client.signer") && k !== "discovery.callDate");
+    const fromRecord = Object.keys(p.fields).filter((k) => p.sources[k] === "record" && k.startsWith("company."));
+    const blanks = blanksOf(p.blocks, f);
+    const unused = Object.keys(p.fields).filter((k) => p.sources[k] === "discovery" && /^(pricing|term|start)\./.test(k) && !p.blocks.some((b) => b.body.includes(`{{${k}}}`)));
+    const who = p.signer?.name || p.fields["client.signerName"];
+    const done = [
+      template ? (template.mine ? `Used your "${template.title}" template` : `Used Merlin's "${template.title.split(":")[0]}" template`) : "Started from a blank page",
+      ...(fromCall.length ? [`Filled in ${listWords(fromCall.slice(0, 4).map(readable))}${fromCall.length > 4 ? ` and ${fromCall.length - 4} more` : ""} from ${src === "agreed" ? "what you told Merlin" : "the call"}`] : []),
+      ...(p.fields["pricing.monthlyFee"] && fromCall.includes("pricing.monthlyFee") ? [`Set the fee at ${p.fields["pricing.monthlyFee"]} a month${p.fields["pricing.fixedFee"] ? `, with ${p.fields["pricing.fixedFee"]} fixed up front` : ""}, as discussed`] : []),
+      ...(fromRecord.length && p.company.name ? [`Added ${p.company.name}'s ${listWords(fromRecord.map((k) => readable(k)))} from Merlin`] : []),
+      ...(who ? [`Put ${who} in as the signer`] : []),
+    ];
+    const check = [
+      ...loose,
+      ...unused.map((k) => `The call gave the ${readable(k)} (${p.fields[k]}), and the template has no place for it yet. Add it where it fits.`),
+      ...toFix,
+      ...(blanks.length ? [`${blanks.length === 1 ? "One thing wasn't" : `${blanks.length} things weren't`} settled, so ${blanks.length === 1 ? "it's" : "they're"} left as labelled blanks: ${blanksInWords(blanks, 5)}.`] : []),
+    ];
+    const usedRows = [
+      ...(fromCall.length ? [{ from: src === "agreed" ? "What you told Merlin" : "The call", what: `${listWords(fromCall.slice(0, 5).map(readable))}`.replace(/^./, (c) => c.toUpperCase()) }] : []),
+      { from: template?.mine ? "Your template" : "The template", what: template?.mine ? "Section order and your standing language, like your terms" : "Section order and the starting text for each part" },
+      ...(fromRecord.length || found.found.includes("Merlin record") ? [{ from: "Merlin", what: [fromRecord.length ? `${p.company.name || "The company"}'s ${listWords(fromRecord.map(readable))}` : "", found.found.includes("Merlin record") && who ? `${who}'s title and email` : ""].filter(Boolean).join(", and ") }] : []),
+      ...(data.voice && ai ? [{ from: "Your writing", what: "Tone and phrasing from your saved voice" }] : []),
+    ];
+    return { proposal: p, toFix, done, check, used: usedRows };
   };
 
   const draft = async () => {
     setErr(null);
     if (!company && !pick) return setErr("Pick the company, or type its name.");
-    const base = { templateId: tpl === "blank" ? null : tpl, companyId: pick, companyName: picked && !picked.c.hidden ? undefined : q.trim() };
+    const base = { templateId: tplNow === "blank" ? null : tplNow, companyId: pick, companyName: picked && !picked.c.hidden ? undefined : q.trim() };
+    const sign = signer.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(signer.email.trim()) ? { name: signer.name.trim(), email: signer.email.trim(), ...(signer.title.trim() ? { title: signer.title.trim() } : {}) } : null;
+    const terms = hasCall ? readTerms(callText) : { fields: {}, checks: [] };
     if (ai) {
       setBusy("draft");
-      const r = await post<{ proposal: ProposalRec; toFix: string[] }>({ op: "draft", ...base, transcript: text, callDate: dayWords(date) || undefined, callWith: withWho.trim() || undefined, agree: true });
+      const r = await post<{ proposal: ProposalRec; toFix: string[] }>({ op: "draft", ...base, transcript: callText, callDate: dayWords(date) || undefined, callWith: signer.name || withWho.trim() || undefined, agree: true });
+      if (r.error) {
+        setBusy(null);
+        if (r.upgrade) return setUsedUp({ words: r.error, pack: r.upgrade, button: PACK_WORDS });
+        return setErr(r.error);
+      }
+      let p = r.proposal;
+      if (sign && !p.signer) {
+        const u = await post<ProposalRec>({ op: "update", id: p.id, signer: sign });
+        if (!u.error) p = u;
+      }
       setBusy(null);
-      if (r.error && r.upgrade) return setUsedUp({ words: r.error, pack: r.upgrade, button: PACK_WORDS });
-      if (r.error) return setErr(r.error);
-      // The transcript is gone from here too once the draft is made.
-      setText("");
-      return onMade(r.proposal, r.toFix);
+      setText(""), setAgreed("");
+      return setReady(summarise(p, r.toFix ?? [], terms.checks));
     }
     // Merlin's own reader, in this browser: only the lines it finds are sent, never the transcript.
     let fields: Record<string, string> = {};
     let notes: { key: string; text: string; at: string }[] = [];
     let signerOnCall: boolean | null = null;
     if (hasCall) {
-      const ex = extract(text, data.me.name);
+      const ex = extract(callText, data.me.name);
       const per = new Map<string, number>();
       const at = new Date().toISOString();
       for (const s of ex.suggestions) {
@@ -213,158 +325,308 @@ export function StartSheet({
         notes = r.notes;
       }
       signerOnCall = ex.signerOnCall;
+      fields = { ...fields, ...terms.fields };
       if (date) fields["discovery.callDate"] = dayWords(date);
     }
-    // Who signs, from the call or the company's decision maker: filled once here, so the cover, Who signs and Send all start with it.
-    const signer = signerFrom({ withWho, text, me: data.me.name, company: picked ?? null });
     if (signer.name && !fields["client.signerName"]) fields["client.signerName"] = signer.name;
     if (signer.title && !fields["client.signerTitle"]) fields["client.signerTitle"] = signer.title;
     if (signer.email && !fields["client.signerEmail"]) fields["client.signerEmail"] = signer.email;
     setBusy("draft");
-    const r = await post<ProposalRec>({ op: "create", ...base, ...(hasCall ? { fields, notes, signerOnCall } : Object.keys(fields).length ? { fields } : {}) });
+    const r = await post<ProposalRec>({ op: "create", ...base, ...(hasCall ? { fields, notes, signerOnCall } : Object.keys(fields).length ? { fields } : {}), ...(sign ? { signer: sign } : {}) });
     setBusy(null);
     if (r.error) return setErr(r.error);
-    setText("");
-    onMade(r);
+    setText(""), setAgreed("");
+    setReady(summarise(r, [], terms.checks));
   };
 
+  const title = picked && !picked.c.hidden ? `New proposal for ${picked.c.name}` : "New proposal from a call";
+  const shownTpl = [...data.templates].sort((a, b) => (a.id === best.id && best.score >= 2 ? -1 : b.id === best.id && best.score >= 2 ? 1 : 0) || Number(b.mine) - Number(a.mine));
+  const tplList = allTpl ? shownTpl : shownTpl.slice(0, 3);
   const prompt = claudePrompt({ template, company, date, with: withWho.trim() });
-  return (
-    <Sheet
-      title="New proposal from a call"
-      onClose={onClose}
-      dialog
-      className="pp-start"
-      footer={
-        <div className="pp-start-foot">
-          {aiOut && usedUp && (
-            <div className="pp-aiout" role="note">
-              <p className="pp-help">{usedUp.words}</p>
-              {/* The pack's purchase posts to /api/billing/ai-pack once billing has it (lib/proposals/aiUsage.ts AI_PACK_ROUTE); until then, Settings, Plan. */}
-              <a className="btn btn-pine btn-lg pp-wide" href={usedUp.pack}>
-                {usedUp.button}
-              </a>
-            </div>
-          )}
-          <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy === "draft"} disabled={!!busy || (!company && !pick) || aiOut} onClick={draft}>
-            {busy === "draft" ? (ai ? "Claude is drafting it" : "Drafting") : hasCall ? "Draft it" : "Start from the template"}
-          </button>
-          <button type="button" className="btn btn-lg pp-wide pp-claude-btn" onClick={() => void buildInClaude(prompt, toast)}>
-            Build it in Claude <IconExternal />
-          </button>
-        </div>
-      }
-    >
-      <div className="pp-start-body">
-        <label className="pp-label" htmlFor="pp-co">
-          <span className="pp-step">1</span> The company
-        </label>
-        <div className="pp-co">
-          <input id="pp-co" className="input" autoComplete="off" placeholder="Search Merlin, or type its name" value={q} onChange={(e) => (setQ(e.target.value), picked?.c.hidden || setPick(null))} />
-          {picked && (
-            <p className="pp-co-picked">
-              <IconCheck /> {picked.c.hidden ? "A locked company on Merlin. Type its name: it stays on your proposal only." : "On Merlin: its facts fill in."}
-            </p>
-          )}
-          {matches.length > 0 && (
-            <ul className="pp-co-list" role="listbox" aria-label="Companies on Merlin">
-              {matches.map((i) => (
-                <li key={i.c.id}>
-                  <button type="button" role="option" aria-selected={false} onClick={() => (setPick(i.c.id), setQ(i.c.name))}>
-                    <b>{i.c.name}</b>
-                    <span>{[i.c.cells.industry, i.c.cells.revenue].map((c) => (c?.s === "value" ? String(c.v) : "")).filter(Boolean).join(" · ")}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+  const signerFirst = (signer.name || "").split(/\s+/)[0];
 
-        <label className="pp-label" htmlFor="pp-call">
-          <span className="pp-step">2</span> The call
-        </label>
-        <div
-          className="pp-drop"
-          data-on={drop}
-          onDragOver={(e) => (e.preventDefault(), setDrop(true))}
-          onDragLeave={() => setDrop(false)}
-          onDrop={(e) => (e.preventDefault(), setDrop(false), readFile(e.dataTransfer.files?.[0]))}
-        >
-          <textarea
-            id="pp-call"
-            className="input pp-paste"
-            placeholder="Paste the transcript or your meeting notes, or drop a .txt, .vtt, .srt or .md file here"
-            value={text}
-            onChange={(e) => (setText(e.target.value), setFileName(null))}
-            rows={5}
-          />
-          <div className="pp-drop-row">
-            <button type="button" className="tp-flink" onClick={() => fileRef.current?.click()}>
-              Choose a file
-            </button>
-            {fileName && <span className="pp-muted">{fileName}</span>}
-            {hasCall && <span className="pp-muted">{text.trim().split(/\s+/).length.toLocaleString("en-US")} words</span>}
-            <button type="button" className="tp-flink" aria-expanded={more} onClick={() => setMore((x) => !x)}>
-              {more ? "Hide the call's details" : "Add its date and who was on it"}
-            </button>
-          </div>
-          <input ref={fileRef} type="file" accept=".txt,.vtt,.srt,.md,text/plain,text/vtt,text/markdown" hidden onChange={(e) => (readFile(e.target.files?.[0]), (e.target.value = ""))} />
-        </div>
-        {more && (
-          <div className="pp-start-more">
-            <label className="pp-field">
-              <span className="pp-field-l">The call&#39;s date</span>
-              <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </label>
-            <label className="pp-field">
-              <span className="pp-field-l">Who you spoke with</span>
-              <input className="input" value={withWho} placeholder="Their name" onChange={(e) => setWith(e.target.value)} />
-            </label>
-          </div>
-        )}
-
-        <p className="pp-label">
-          <span className="pp-step">3</span> The template
-        </p>
-        <div className="pp-tplchips" role="radiogroup" aria-label="Template">
-          {[...data.templates, { id: "blank", title: "A blank page", about: "", mine: false, open: true, sections: 6 }].map((t) => (
-            <button key={t.id} type="button" role="radio" aria-checked={tpl === t.id} className="pp-tplchip" data-on={tpl === t.id} data-mine={t.mine} disabled={!t.open} onClick={() => setTpl(t.id)} title={t.about}>
-              {t.mine && <span className="pp-yours">Yours</span>}
-              <span className="pp-tplchip-t">{t.title.split(":")[0]}</span>
-              {!t.open && <span className="bl-tag bl-tag-lock">Close</span>}
-            </button>
-          ))}
-          <button type="button" className="pp-tplchip pp-tplchip-add" aria-busy={busy === "template"} disabled={!!busy} onClick={() => tplRef.current?.click()}>
-            {busy === "template" ? "Reading it" : "+ Upload a past proposal"}
-          </button>
-          <input ref={tplRef} type="file" accept={TEMPLATE_ACCEPT} hidden onChange={(e) => (void addTemplate(e.target.files?.[0]), (e.target.value = ""))} />
-        </div>
-        {template && !template.mine && template.id !== "blank" && <p className="pp-help pp-tpl-about">{template.about}</p>}
-
-        {data.ai === "on" && (
-          <label className="pp-ai">
-            <input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
-            <span>
-              <b>Draft the whole proposal with Claude</b>
-              <span className="pp-muted">{AI_CONSENT}</span>
+  if (ready)
+    return (
+      <div className="page-wide pp-page sc-page">
+        <button type="button" className="page-back" onClick={onClose}>
+          <IconChevron dir="left" /> Proposals
+        </button>
+        <header className="cu-head">
+          <h1 className="cu-h1">{title}</h1>
+        </header>
+        <div className="sc-ready">
+          <section className="sc-done" aria-labelledby="sc-ready-h">
+            <span id="sc-ready-h" className="sc-done-t">
+              Draft ready
             </span>
-          </label>
-        )}
-        {data.ai !== "on" && hasCall && (
-          <p className="pp-help">
-            Draft fills the template from what Merlin finds in the call, read in this browser and not kept. For a full first draft in your words, use Build it in Claude.
-          </p>
-        )}
-        {data.ai === "plan" && <p className="pp-help">Drafting with Claude on Merlin is on Close. Build it in Claude works on every plan.</p>}
-        <p className="pp-help pp-claude-how">
-          Build it in Claude copies a prompt for Claude with your meeting notes connected. It needs Merlin connected to Claude once:{" "}
-          <button type="button" className="tp-flink" onClick={() => (onClose(), ui.openPage("integrations"))}>
-            see how
-          </button>
-          .
-        </p>
-        {err && <p className="pp-err">{err}</p>}
+            {ready.done.map((d) => (
+              <div key={d} className="sc-tick">
+                <IconCheck size={18} />
+                <span>{d}</span>
+              </div>
+            ))}
+            {ready.check.length > 0 ? (
+              <div className="sc-check">
+                <strong>
+                  {ready.check.length} {ready.check.length === 1 ? "thing" : "things"} to check
+                </strong>
+                <ul>
+                  {ready.check.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="sc-check" data-ok>
+                <strong>Nothing left blank</strong>
+                <span>Read it through before you send it.</span>
+              </div>
+            )}
+            <div className="sc-btns">
+              <button type="button" className="btn btn-pine btn-lg" onClick={() => onMade(ready.proposal, ready.toFix)}>
+                Open the draft
+              </button>
+              <button type="button" className="btn btn-lg" onClick={() => setReady(null)}>
+                Start over
+              </button>
+            </div>
+          </section>
+          <section className="sc-used" aria-labelledby="sc-used-h">
+            <span id="sc-used-h" className="sc-used-t">
+              Where each part came from
+            </span>
+            {ready.used.map((u) => (
+              <div key={u.from} className="sc-used-row">
+                <span className="sc-used-from">{u.from}</span>
+                <span>{u.what}</span>
+              </div>
+            ))}
+          </section>
+        </div>
       </div>
-    </Sheet>
+    );
+
+  const card = (s: Source, t: string, sub: string) => (
+    <button type="button" className="sc-opt" aria-pressed={src === s} data-on={src === s} onClick={() => setSrc(s)}>
+      <span className="sc-opt-t">{t}</span>
+      <span className="sc-opt-s">{sub}</span>
+    </button>
+  );
+  return (
+    <div className="page-wide pp-page sc-page">
+      <button type="button" className="page-back" onClick={onClose}>
+        <IconChevron dir="left" /> Proposals
+      </button>
+      <header className="cu-head">
+        <h1 className="cu-h1">{title}</h1>
+        <p className="cu-lead">Start from the conversation you already had. Merlin fills in what was said, in your template, in your words.</p>
+      </header>
+
+      {!(picked && !picked.c.hidden) && (
+        <section className="sc-step" aria-labelledby="sc-co-h">
+          <h2 className="sc-h2" id="sc-co-h">
+            Who is it for?
+          </h2>
+          <div className="pp-co">
+            <input id="pp-co" className="input" aria-label="The company" autoComplete="off" placeholder="Search Merlin, or type its name" value={q} onChange={(e) => (setQ(e.target.value), picked?.c.hidden || setPick(null))} />
+            {picked && <p className="pp-co-picked">{picked.c.hidden ? "A locked company on Merlin. Type its name: it stays on your proposal only." : "On Merlin: its facts fill in."}</p>}
+            {matches.length > 0 && (
+              <ul className="pp-co-list" role="listbox" aria-label="Companies on Merlin">
+                {matches.map((i) => (
+                  <li key={i.c.id}>
+                    <button type="button" role="option" aria-selected={false} onClick={() => (setPick(i.c.id), setQ(i.c.name))}>
+                      <b>{i.c.name}</b>
+                      <span>{[i.c.cells.industry, i.c.cells.revenue].map((c) => (c?.s === "value" ? String(c.v) : "")).filter(Boolean).join(" · ")}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section className="sc-step" aria-labelledby="sc-h1">
+        <h2 className="sc-h2" id="sc-h1">
+          1. Where&#39;s the conversation?
+        </h2>
+        <div className="sc-opts">
+          {card("granola", "From Granola", granolaSlot ? "Pick the call, and Merlin reads its transcript." : "Pick a call from your Granola notes.")}
+          {card("paste", "Paste or drop a transcript", "From Zoom, Gong, Otter or anywhere else.")}
+          {card("agreed", "Tell Merlin what was agreed", "Type or talk for a minute. Good for calls you didn't record.")}
+        </div>
+        {src === "granola" &&
+          (granolaSlot ? (
+            /* The Granola picker goes here (lib/granola): it hands back the transcript, like a dropped file. */
+            <div className="sc-granola" data-slot="granola">
+              {granolaSlot({ companyId: pick, signerEmail: signer.email || undefined, onPick: takeCall })}
+              {text && <p className="pp-muted">{text.trim().split(/\s+/).length.toLocaleString("en-US")} words from Granola</p>}
+            </div>
+          ) : (
+            <div className="sc-granola" data-slot="granola">
+              <p className="pp-help">Connect Granola in Integrations, and your calls show here to pick from. Until then, paste or drop the transcript.</p>
+              <button type="button" className="btn btn-sm" onClick={() => (onClose(), ui.openPage("integrations"))}>
+                Connect Granola in Integrations
+              </button>
+            </div>
+          ))}
+        {src === "paste" && (
+          <div
+            className="pp-drop"
+            data-on={drop}
+            onDragOver={(e) => (e.preventDefault(), setDrop(true))}
+            onDragLeave={() => setDrop(false)}
+            onDrop={(e) => (e.preventDefault(), setDrop(false), void readFile(e.dataTransfer.files?.[0]))}
+          >
+            <textarea
+              id="pp-call"
+              className="input pp-paste"
+              aria-label="The transcript"
+              placeholder="Paste the transcript or your meeting notes, or drop a .txt, .vtt, .srt or .docx file here"
+              value={text}
+              onChange={(e) => (setText(e.target.value), setFileName(null))}
+              rows={6}
+            />
+            <div className="pp-drop-row">
+              <button type="button" className="tp-flink" onClick={() => fileRef.current?.click()}>
+                Choose a file
+              </button>
+              {fileName && <span className="pp-muted">{fileName}</span>}
+              {text.trim() && <span className="pp-muted">{text.trim().split(/\s+/).length.toLocaleString("en-US")} words</span>}
+            </div>
+            <input ref={fileRef} type="file" accept=".txt,.vtt,.srt,.md,.docx,text/plain,text/vtt,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden onChange={(e) => (void readFile(e.target.files?.[0]), (e.target.value = ""))} />
+          </div>
+        )}
+        {src === "agreed" && (
+          <div className="sc-agreed">
+            <textarea
+              className="input pp-paste"
+              aria-label="What was agreed"
+              rows={5}
+              placeholder="Like: two phases. A 45-day assessment at $24k fixed, then the fractional CRO at $11k a month if they opt in. Dana, the CEO, signs."
+              value={agreed}
+              onChange={(e) => setAgreed(e.target.value)}
+            />
+            <div className="ci-row">
+              <MicButton speech={speech} label="Talk instead of typing" />
+              <span className="ci-hint">{speech.can ? "Tap the mic and say what was agreed. " : ""}Anything you don&#39;t say is left as a blank to fill.</span>
+            </div>
+          </div>
+        )}
+        <div className="pp-start-more">
+          <label className="pp-field">
+            <span className="pp-field-l">The call&#39;s date (optional)</span>
+            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+        </div>
+      </section>
+
+      <section className="sc-step" aria-labelledby="sc-h2">
+        <h2 className="sc-h2" id="sc-h2">
+          2. Start from one of your templates
+        </h2>
+        <div className="sc-opts">
+          {tplList.map((t) => {
+            const n = used[t.id] ?? 0;
+            return (
+              <button key={t.id} type="button" className="sc-opt" aria-pressed={tplNow === t.id} data-on={tplNow === t.id} disabled={!t.open} onClick={() => (setTpl(t.id), setTplPicked(true))}>
+                <span className="sc-opt-t">
+                  {t.mine && <span className="pp-yours">Yours</span>} {t.title.split(":")[0]}
+                </span>
+                <span className="sc-opt-s">
+                  {t.mine ? `${t.sections} sections, from ${t.about}` : t.about}
+                  {n ? ` Used ${n === 1 ? "once" : n === 2 ? "twice" : `${n} times`}.` : ""}
+                </span>
+                {t.id === best.id && best.score >= 2 && <span className="sc-best">Best fit for {signerFirst ? `what ${signerFirst} asked for` : "this call"}</span>}
+                {!t.open && <span className="bl-tag bl-tag-lock">Close</span>}
+              </button>
+            );
+          })}
+          {allTpl && (
+            <button type="button" className="sc-opt" aria-pressed={tplNow === "blank"} data-on={tplNow === "blank"} onClick={() => (setTpl("blank"), setTplPicked(true))}>
+              <span className="sc-opt-t">A blank page</span>
+              <span className="sc-opt-s">The usual sections, nothing filled in.</span>
+            </button>
+          )}
+        </div>
+        <span className="pp-help">
+          {shownTpl.length > 3 && (
+            <>
+              <button type="button" className="tp-flink" onClick={() => setAllTpl((x) => !x)}>
+                {allTpl ? "Show fewer" : `Show all ${shownTpl.length + 1}`}
+              </button>{" "}
+              ·{" "}
+            </>
+          )}
+          {data.templates.some((t) => t.mine) ? "Your templates came from proposals you uploaded. " : ""}
+          <button type="button" className="tp-flink" aria-busy={busy === "template"} disabled={!!busy} onClick={() => tplRef.current?.click()}>
+            {busy === "template" ? "Reading it" : "Add one from a .docx or PDF"}
+          </button>
+        </span>
+        <input ref={tplRef} type="file" accept={TEMPLATE_ACCEPT} hidden onChange={(e) => (void addTemplate(e.target.files?.[0]), (e.target.value = ""))} />
+      </section>
+
+      <section className="sc-step" aria-labelledby="sc-h3">
+        <h2 className="sc-h2" id="sc-h3">
+          3. Who signs
+        </h2>
+        {!editSigner && signer.name ? (
+          <div className="sc-signer">
+            <span className="sc-signer-main">
+              <strong>
+                {signer.name}
+                {signer.title ? `, ${signer.title}` : ""}
+              </strong>
+              {signer.email && <span>{signer.email}</span>}
+              <span className="cu-found">{typed ? "Typed by you" : found.found}</span>
+            </span>
+            <button type="button" className="tp-flink" onClick={() => (setTyped(signer), setEditSigner(true))}>
+              Change
+            </button>
+          </div>
+        ) : (
+          <div className="sc-signer-edit">
+            {!signer.name && <p className="pp-help">Merlin didn&#39;t find who signs in the call or your record. Type them, or leave it for later.</p>}
+            <input className="input" aria-label="Their name" placeholder="Their name" value={signer.name} onChange={(e) => setTyped({ ...signer, name: e.target.value })} />
+            <input className="input" aria-label="Their title" placeholder="Their title" value={signer.title} onChange={(e) => setTyped({ ...signer, title: e.target.value })} />
+            <input className="input" aria-label="Their email" type="email" placeholder="Their email" value={signer.email} onChange={(e) => setTyped({ ...signer, email: e.target.value })} />
+            {editSigner && (
+              <button type="button" className="tp-flink" onClick={() => setEditSigner(false)}>
+                Done
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+
+      {data.ai === "on" && hasCall && (
+        <label className="pp-ai">
+          <input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
+          <span>
+            <b>Draft the whole proposal with Claude</b>
+            <span className="pp-muted">{callText.trim().length < 200 ? "Needs a few more lines than this. Merlin fills the template from what you wrote instead." : AI_CONSENT}</span>
+          </span>
+        </label>
+      )}
+      {data.ai !== "on" && hasCall && <p className="pp-help">Merlin fills the template from what it finds, read in this browser and not kept. Anything not settled is left as a labelled blank.</p>}
+      {aiOut && usedUp && (
+        <div className="pp-aiout" role="note">
+          <p className="pp-help">{usedUp.words}</p>
+          <a className="btn btn-pine btn-lg" href={usedUp.pack}>
+            {usedUp.button}
+          </a>
+        </div>
+      )}
+      {err && <p className="pp-err">{err}</p>}
+      <div className="sc-go">
+        <button type="button" className="btn btn-pine btn-lg" aria-busy={busy === "draft"} disabled={!!busy || (!company && !pick) || aiOut} onClick={() => void draft()}>
+          {busy === "draft" ? (ai ? "Claude is drafting it" : "Drafting") : hasCall ? "Draft it" : "Start from the template"}
+        </button>
+        <span className="pp-muted">{ai ? "About 30 seconds. You review everything before it's sent." : "You review everything before it's sent."}</span>
+        <button type="button" className="tp-flink sc-claude" onClick={() => void buildInClaude(prompt, toast)}>
+          Or build it in Claude <IconExternal />
+        </button>
+      </div>
+    </div>
   );
 }
