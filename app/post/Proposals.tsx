@@ -41,7 +41,8 @@ import type { CoInfo } from "./model";
 import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
 import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./ProposalStart";
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
-import { DocBuilder, uploadPdf } from "./DocBuilder";
+import { DocBuilder } from "./DocBuilder";
+import { ContractUpload } from "./ContractUpload";
 import { LinkCompany } from "./ProposalLink";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
@@ -91,8 +92,9 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   });
   const [fixFirst, setFixFirst] = useState<string[]>([]);
   const [templates, setTemplates] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const pdfRef = useRef<HTMLInputElement>(null);
+  // "Send a document to sign": the contract page (ContractUpload.tsx), and a line for the field placer when it opens from there.
+  const [contract, setContract] = useState(false);
+  const [docNotice, setDocNotice] = useState<string | null>(null);
   const reload = useCallback(async () => {
     const r = await load();
     if ("error" in r) setError(r.error);
@@ -109,15 +111,6 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
     if (data) startDone();
   }, [data]);
 
-  const pickPdf = async (f: File | undefined) => {
-    if (!f) return;
-    setUploading(true);
-    const r = await uploadPdf(f);
-    setUploading(false);
-    if ("error" in r) return toast(r.error, true);
-    putDoc(r);
-    setOpenDoc(r.id);
-  };
 
   if (open && data)
     return (
@@ -137,13 +130,24 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
     return (
       <DocBuilder
         key={doc.id}
+        notice={docNotice}
         initial={doc}
         data={data}
         infos={infos}
         onSaved={putDoc}
-        onBack={() => setOpenDoc(null)}
+        onBack={() => (setOpenDoc(null), setDocNotice(null))}
         onGone={(id) => (setData((d) => (d ? { ...d, documents: d.documents.filter((x) => x.id !== id) } : d)), setOpenDoc(null))}
         onOpen={(x) => (putDoc(x), setOpenDoc(x.id))}
+      />
+    );
+  if (contract && data)
+    return (
+      <ContractUpload
+        data={data}
+        onBack={() => setContract(false)}
+        onSaved={putDoc}
+        onManual={(x, notice) => (putDoc(x), setDocNotice(notice ?? null), setContract(false), setOpenDoc(x.id))}
+        onOpenDoc={(x) => (putDoc(x), setDocNotice(null), setContract(false), setOpenDoc(x.id))}
       />
     );
 
@@ -166,14 +170,13 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
       />
       <div className="pp-hero">
         <div className="pp-hero-more">
-          <button type="button" className="tp-flink" aria-busy={uploading} disabled={!data || uploading} onClick={() => pdfRef.current?.click()}>
-            {uploading ? "Uploading the PDF" : "Send a document to sign"}
+          <button type="button" className="tp-flink" disabled={!data} onClick={() => setContract(true)}>
+            Send a contract to sign
           </button>
           <span aria-hidden>·</span>
           <button type="button" className="tp-flink" disabled={!data} onClick={() => setTemplates(true)}>
             My templates{mine.length ? ` (${mine.length})` : ""}
           </button>
-          <input ref={pdfRef} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => (void pickPdf(e.target.files?.[0]), (e.target.value = ""))} />
         </div>
       </div>
       {data && !data.canBuild && <CloseBuildPrompt />}

@@ -1284,3 +1284,280 @@ textarea.pp-field-in {
   line-height: 18px;
   color: var(--red);
 }
+
+/* ---------- Send a contract for signature (ContractUpload.tsx): cu- ---------- */
+.cu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 20px;
+}
+.cu-h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.cu-lead {
+  margin: 0;
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--muted);
+}
+.cu-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 64px 24px;
+  border: 2px dashed var(--line-input);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--pine);
+  text-align: center;
+  margin: 0 0 16px;
+}
+.cu-drop[data-on="true"] {
+  border-color: var(--pine);
+  background: var(--volt-soft);
+}
+.cu-drop-t {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.cu-drop-s {
+  font-size: 15px;
+  color: var(--muted);
+}
+.cu-drop-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.cu-review {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+.cu-doc {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cu-doc-top,
+.cu-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 14px;
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.cu-legend {
+  justify-content: flex-start;
+  font-size: 13px;
+}
+.cu-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cu-swatch,
+.cu-field {
+  --sc: #0b6b45;
+  --sc-soft: rgba(46, 229, 157, 0.22);
+}
+.cu-swatch[data-who="me"],
+.cu-field[data-who="me"] {
+  --sc: #8a6a2b;
+  --sc-soft: var(--sand);
+}
+.cu-field[data-who="me"] {
+  color: #6b4f12;
+}
+.cu-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 2px solid var(--sc);
+  background: var(--sc-soft);
+}
+.cu-field {
+  cursor: default;
+}
+.cu-side {
+  flex: 1 1 360px;
+  min-width: 0;
+  max-width: 420px;
+}
+.cu-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.cu-kicker {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+.cu-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--body-ink);
+}
+.cu-label-t {
+  font-size: 13px;
+  font-weight: 600;
+}
+.cu-input {
+  min-height: 44px;
+  font-size: 15px;
+}
+.cu-who {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cu-signer {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+.cu-num {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--pine);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cu-num[data-me="true"] {
+  background: var(--sand);
+  color: var(--pine);
+}
+.cu-signer-main,
+.cu-signer-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.cu-signer-main strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+.cu-email {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.cu-found,
+.cu-muted {
+  font-size: 13px;
+  color: var(--muted);
+}
+.cu-change,
+.cu-add {
+  align-self: flex-start;
+  min-height: 44px;
+}
+.cu-placed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: #f3f5f4;
+  font-size: 14px;
+  line-height: 20px;
+}
+.cu-placed strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+.cu-send,
+.cu-hand {
+  width: 100%;
+}
+.cu-sent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 760px;
+  padding: 36px;
+  border-radius: 16px;
+  background: var(--pine);
+}
+.cu-sent-t {
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 800;
+  color: #fff;
+}
+.cu-sent-s {
+  font-size: 16px;
+  line-height: 25px;
+  color: #cfe8dd;
+}
+.cu-sent-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+.cu-sent-go {
+  background: #fff;
+  color: var(--pine);
+  border-color: #fff;
+}
+.cu-sent-again {
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.cu-foot {
+  margin: 20px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.df-notice {
+  margin: 0 0 12px;
+}
+@media (max-width: 600px) {
+  .cu-h1 {
+    font-size: 24px;
+    line-height: 30px;
+  }
+  .cu-drop {
+    padding: 36px 16px;
+  }
+  .cu-side {
+    max-width: none;
+  }
+  .cu-sent {
+    padding: 24px 16px;
+  }
+}

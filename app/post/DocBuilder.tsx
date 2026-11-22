@@ -42,7 +42,7 @@ export async function uploadPdf(f: File): Promise<DocumentRec | { error: string 
     return { error: NETWORK };
   }
 }
-async function dapi<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
+export async function dapi<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
   try {
     const r = await fetch("/api/documents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
@@ -74,6 +74,7 @@ const tempId = (p: string) => `${p}${Date.now().toString(36)}${(seq++).toString(
 const first = (s: string) => s.trim().split(/\s+/)[0] || s;
 
 export function DocBuilder({
+  notice,
   initial,
   data,
   infos,
@@ -82,6 +83,8 @@ export function DocBuilder({
   onGone,
   onOpen,
 }: {
+  /** A line at the top: why it opened here (Merlin found no signature lines, or reading it was refused). */
+  notice?: string | null;
   initial: DocumentRec;
   data: ProposalsView;
   infos: CoInfo[];
@@ -229,7 +232,7 @@ export function DocBuilder({
               onKeyDown={(e) => draft && (e.key === "Delete" || e.key === "Backspace") && (setFields((fs) => fs.filter((x) => x.id !== f.id)), setSel(null))}
             >
               <span className="df-field-l">
-                {f.kind === "checkbox" ? "" : FIELD_SAY[f.kind]}
+                {f.kind === "checkbox" ? "" : f.kind === "text" && (f.prefill || f.label) ? f.prefill || f.label : FIELD_SAY[f.kind]}
                 {f.kind !== "checkbox" && s ? <span className="df-field-who"> · {first(s.name)}</span> : null}
               </span>
               {draft && sel === f.id && <span className="df-handle" onPointerDown={(e) => onFieldDown(e, f, "size")} onPointerMove={onFieldMove} onPointerUp={onFieldUp} aria-hidden />}
@@ -249,6 +252,9 @@ export function DocBuilder({
                   )}
                   {f.kind === "text" && (
                     <input className="input df-pop-label" placeholder="What to type" maxLength={60} value={f.label ?? ""} onChange={(e) => setFields((fs) => fs.map((x) => (x.id === f.id ? { ...x, label: e.target.value } : x)))} />
+                  )}
+                  {f.kind === "text" && (
+                    <input className="input df-pop-label" aria-label="Filled in as" placeholder="Filled in as (they can change it)" maxLength={200} value={f.prefill ?? ""} onChange={(e) => setFields((fs) => fs.map((x) => (x.id === f.id ? { ...x, prefill: e.target.value } : x)))} />
                   )}
                   <button type="button" className="tp-iconbtn tp-iconbtn-sm" aria-label="Remove this field" onClick={() => (setFields((fs) => fs.filter((x) => x.id !== f.id)), setSel(null))}>
                     <IconX size={14} />
@@ -335,6 +341,11 @@ export function DocBuilder({
         </div>
       </header>
 
+      {notice && draft && (
+        <p className="pp-banner df-notice" role="status">
+          {notice}
+        </p>
+      )}
       {draft && (
         <div className="df-tools" role="toolbar" aria-label="Place fields">
           <div className="df-who" role="radiogroup" aria-label="Who fills it">

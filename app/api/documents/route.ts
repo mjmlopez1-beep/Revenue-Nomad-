@@ -4,6 +4,7 @@ import { limited } from "@/lib/rateLimit";
 import { memberForToken } from "@/lib/table";
 import { ProposalProblem } from "@/lib/proposals/store";
 import { DOC_MAX_BYTES } from "@/lib/documents/files";
+import { readContract } from "@/lib/documents/smart";
 import { copyDocument, deleteDocument, getDocument, myDocLink, sendDocument, updateDocument, uploadDocument, voidDocument } from "@/lib/documents/store";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,8 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "update", id, title?, fields?, signers?, ordered?, companyId?, companyName?, message? }   drafts only
  * POST { op: "send", id, message? }            Trial and Pro (403 with `upgrade` on Free)
  * POST { op: "void" | "delete" | "copy" | "mylink", id }
+ * POST { op: "read", id }                      Close: where the signature lines are, who signs, a title and a note
+ *                                              (lib/documents/smart.ts). Nothing is saved; the app saves what the member keeps.
  */
 export const GET = guarded(async (req: NextRequest) => {
   const token = req.cookies.get(COOKIE)?.value ?? null;
@@ -81,6 +84,9 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(async () => (await deleteDocument(token, id), { ok: true }));
     case "copy":
       return answer(() => copyDocument(token, id, o));
+    case "read":
+      if (limited(`doc-read:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of contracts read in an hour. Try again later.", 429);
+      return answer(() => readContract(token, id, o));
     case "mylink":
       return answer(() => myDocLink(token, id, o));
     default:

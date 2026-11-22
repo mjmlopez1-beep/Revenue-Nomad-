@@ -231,7 +231,8 @@ function cleanFields(raw: unknown, d: StoredDocument, signers: DocSigner[], ids:
     const w = num(o.w, 0.01, 1);
     const h = num(o.h, 0.008, 1);
     const label = cleanLine(o.label, DOC_LIMITS.label);
-    return [{ id, page, kind, signer: signer.id, x: num(o.x, 0, 1 - w), y: num(o.y, 0, 1 - h), w, h, required: o.required !== false, ...(label ? { label } : {}) }];
+    const prefill = kind === "text" ? cleanLine(o.prefill, DOC_LIMITS.text) : "";
+    return [{ id, page, kind, signer: signer.id, x: num(o.x, 0, 1 - w), y: num(o.y, 0, 1 - h), w, h, required: o.required !== false, ...(label ? { label } : {}), ...(prefill ? { prefill } : {}) }];
   });
 }
 

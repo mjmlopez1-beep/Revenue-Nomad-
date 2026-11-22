@@ -68,6 +68,7 @@ export function PdfPages({
   overlay,
   onPointerDown,
   className = "",
+  only,
 }: {
   /** Where the PDF is read from (same origin). */
   src: string;
@@ -76,6 +77,8 @@ export function PdfPages({
   overlay?: (page: number) => ReactNode;
   onPointerDown?: (e: React.PointerEvent<HTMLDivElement>, page: number) => void;
   className?: string;
+  /** Show only these pages (0-based), each still numbered "Page n of all". */
+  only?: number[];
 }) {
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -98,14 +101,14 @@ export function PdfPages({
   return (
     <div className={`pdf-pages ${className}`}>
       {err && <p className="pdf-err">{err}</p>}
-      {pages.map((p, i) => (
+      {pages.map((p, i) => (only && !only.includes(i) ? null : (
         <div key={i} className="pdf-pagewrap">
           <Page doc={doc} n={i} w={p.w} h={p.h} onPointerDown={onPointerDown}>
             {overlay?.(i)}
           </Page>
           {pages.length > 1 && <span className="pdf-num">Page {i + 1} of {pages.length}</span>}
         </div>
-      ))}
+      )))}
     </div>
   );
 }
