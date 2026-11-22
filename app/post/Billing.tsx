@@ -208,7 +208,7 @@ function leadFor(plan: PlanView, a: Ask): string {
     if (a.from === "trial" || a.from === "billing")
       return keepOf(plan) === "close"
         ? `All of Close is yours until your trial ends ${when}. You've been building proposals in Merlin: keep Close now and it carries straight on after, with nothing to do that day.`
-        : `All of Pro is yours until your trial ends ${when}. Keep it now and it carries straight on after, with nothing to do that day.`;
+        : `Your ${TRIAL_NAME} ends ${when}. Keep Pro now and it carries straight on after, with nothing to do that day. Sending for signature and the rest of Close stop then, unless you keep Close.`;
     if (a.from === "credits") return `Pro adds ${plan.prices.proCredits} credits each paid month, on top of what you earn. They start with your first paid month.`;
     return `${leadFor({ ...plan, name: "free", notLooking: false }, a)} It's yours in the trial until ${day(plan.trialEndsAt)}.`;
   }
