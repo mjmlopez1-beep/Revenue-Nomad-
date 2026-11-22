@@ -3489,6 +3489,8 @@ function warmShared() {
 const NOBODY_BLIND = new Set([
   "ledger", "held", "unlocks", "follows", "referralPaid", "reportLog", "signals", "lockedViews", "digest", "connector", "integrations", "radar", "inviteJoins",
   "billing", "found", "findMisses", "seatInvites", "seatPrivate", "benchRates", "n", "at", "firstAt", "hist",
+  // A member's Granola key (lib/granola) is theirs alone.
+  "granola",
   // A member's moves and writing voice are theirs alone: Nobody has neither, and no record reads them.
   "moves", "voice",
   // Each member's pipeline is theirs alone too.
@@ -7615,9 +7617,10 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
+  // A member's Granola key (sealed, lib/granola) never leaves in the export.
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, granola: _granola, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7689,6 +7692,8 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { google
   del(s.digest?.members);
   // Google, LinkedIn, the network, and everything private to them.
   del(s.network);
+  // Their Granola key (lib/granola; account closure deletes it at once already).
+  del((s as State & { granola?: Record<string, unknown> }).granola);
   del((s as State & { paths?: Record<string, unknown> }).paths);
   del(s.moves);
   del(s.pipeline);
