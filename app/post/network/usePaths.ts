@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import type { CompanyPathsView, PathsAnswer, PathsView } from "@/lib/paths/types";
+import type { IntroPlanView } from "@/lib/paths/intro";
 
 type Snap = { answer: PathsAnswer | null; failed: boolean; version: number };
 let snap: Snap = { answer: null, failed: false, version: 0 };
@@ -93,4 +94,24 @@ export function useCompanyPaths(id: string | null | undefined): CompanyPathsView
     };
   }, [id, has, version]);
   return has ? got : null;
+}
+
+/** Everyone with a specific ask (lib/paths/intro.ts), by each of their keys. */
+const planMemo = new WeakMap<PathsView, Map<string, IntroPlanView>>();
+export function plansOf(view: PathsView | null): Map<string, IntroPlanView> {
+  if (!view) return new Map();
+  let m = planMemo.get(view);
+  if (!m) {
+    m = new Map();
+    for (const p of view.people ?? []) for (const k of p.keys) if (!m.has(k)) m.set(k, p);
+    planMemo.set(view, m);
+  }
+  return m;
+}
+/** The specific ask for someone the member knows, by any of their keys ("g:<email>" for a Google contact, "l:<slug>", "m:<id>"), or null. */
+export function usePlan(...keys: (string | null | undefined)[]): IntroPlanView | null {
+  const { view } = usePaths();
+  const m = plansOf(view);
+  for (const k of keys) if (k && m.has(k)) return m.get(k)!;
+  return null;
 }

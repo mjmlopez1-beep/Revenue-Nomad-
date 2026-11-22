@@ -11,15 +11,23 @@
  * is { on: false } and nothing shows.
  */
 import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
-import { companiesOf } from "../google";
+import { companiesOf, selfTest } from "../google";
+import { ownSeatTest } from "../google/odds";
 import { matchDomain, matchOrg } from "../google/compute";
 import { networkOn, whenWords, workDomain, type MemberNetwork, type Warmth } from "../google/types";
-import { crystalCompanyIds } from "../radar";
+import { crystalCompanyIds, crystalRowsOf } from "../radar";
+import type { RadarSentRow } from "../radar/types";
+import { companyFacts } from "../radar/signals";
+import { icpIsEmpty, inIcp } from "../radar/match";
+import { fnKnow } from "../leaders/types";
+import { COMPANY_PRICE_SAY } from "../tableFields";
+import { STRENGTH_WORDS, strengthLine } from "../google/types";
+import { FIT_WEIGHT, INTRO_NOTE_MAX, INTRO_TARGETS_MAX, askPerson, askTo, fitWords, howThey, howYou, whyLine, type IntroAskLine, type IntroFacts, type IntroPlanView, type IntroTargetView, type ListFit } from "./intro";
 import { alertMatches, type SavedSearch } from "../mcp/alerts";
 import { clientKinds, myWords } from "../partners";
 import { styleOf, type VoiceProfile } from "../voice";
 import { parseConnections, CSV_PROBLEM_WORDS } from "./csv";
-import { findPaths, type Contact, type Me } from "./find";
+import { findAll, type Contact, type ContactTarget, type Me } from "./find";
 import { firstWord, personKey } from "./match";
 import { cleanPersonName } from "../personName";
 import { directoryOf, worldOf } from "./world";
@@ -118,6 +126,13 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
     const hitKey = (c.email && byEmail.get(c.email)) || (nk && byNameCo.get(nk)) || (c.member && out.has(`m:${c.member}`) ? `m:${c.member}` : null);
     const was = hitKey ? out.get(hitKey) : undefined;
     if (was) {
+      if (c.key !== was.key && !(was.aliases ??= []).includes(c.key)) was.aliases.push(c.key);
+      was.meetings ??= c.meetings;
+      was.emails ??= c.emails;
+      was.both ??= c.both;
+      was.firstMet ??= c.firstMet;
+      if (c.seats?.length) was.seats = [...new Set([...(was.seats ?? []), ...c.seats])];
+      was.lastMet ??= c.lastMet;
       for (const x of c.src) if (!was.src.includes(x)) was.src.push(x);
       // Google's warmth is from real meetings and mail; a member's messages say the same of Merlin.
       if (c.warmth && (!was.warmth || ["Hot", "Warm", "Fading", "Cold"].indexOf(c.warmth) < ["Hot", "Warm", "Fading", "Cold"].indexOf(was.warmth))) {
@@ -160,17 +175,25 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
     }
   }
 
-  // The member's own Google network: people at companies on Merlin, not set aside, not hidden.
+  // The member's own Google network: people at companies on Merlin, not set aside, not hidden, never the member themself.
   const n = (s as WithPaths).network?.[m.id];
+  const self = selfTest(m, n);
+  const g0 = T.graph(seed, s);
+  const seatIdOf = (companyId: string, pub: string) => [...g0.engagements.values()].find((e) => e.companyId === companyId && T.pubId(e.id) === pub)?.id ?? null;
   if (networkOn() && n)
-    for (const co of companiesOf(seed, s, n, nowMs)) {
+    // With the member: their own contacts who hold a seat they can see by name are placed at those companies ("You know this person").
+    for (const co of companiesOf(seed, s, n, nowMs, m)) {
       if (co.set) continue;
       for (const p of co.people) {
-        if (p.hidden || !p.name) continue;
+        if (p.hidden || !p.name || self(p)) continue;
         const email = p.email?.toLowerCase() ?? null;
+        // Someone placed here only as the seat holder they are ("You know this person"): the seat, not a job here.
+        const seat = p.seat ? seatIdOf(co.internal, p.seat.id) : null;
         put({
-          key: `g:${p.key}`, name: p.name, first: firstWord(p.name), nameKey: personKey(p.name), title: p.title, companyId: co.internal, email, slug: null, linkedin: null,
+          key: `g:${p.key}`, name: p.name, first: firstWord(p.name), nameKey: personKey(p.name), title: p.title, companyId: seat ? null : co.internal, email, slug: null, linkedin: null,
+          ...(seat ? { seats: [seat] } : {}),
           src: ["google"], warmth: p.warmth, why: p.why, met: p.meetings > 0 || p.emails > 0, connected: null, member: email ? (w.memberByEmail.get(email) ?? null) : null,
+          meetings: p.meetings, emails: p.emails, both: p.both, firstMet: p.first, lastMet: p.last,
         });
       }
     }
@@ -200,6 +223,9 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
 
 interface Found {
   byCompany: Map<string, { paths: PathView[]; n: number; first: number }>;
+  /** Contact key -> the companies they are a way into, best first (the specific ask, introPlansOf). */
+  byContact: Map<string, ContactTarget[]>;
+  contacts: Map<string, Contact>;
   matched: number;
   me: Me;
 }
@@ -244,7 +270,8 @@ function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found {
   if (!hit) {
     const { contacts, matched } = contactsOf(seed, s, m, nowMs);
     const me = meOf(seed, s, m, nowMs);
-    hit = { byCompany: findPaths(worldOf(seed, s, nowMs), me, contacts), matched, me };
+    const all = findAll(worldOf(seed, s, nowMs), me, contacts);
+    hit = { byCompany: all.byCompany, byContact: all.byContact, contacts: new Map(contacts.map((c) => [c.key, c])), matched, me };
     if (per.size > 2000) per.clear();
     per.set(k, hit);
   }
@@ -273,6 +300,139 @@ const factsOf = (seed: Seed, s: State, id: string) => {
   const c = T.graph(seed, s).companies.get(id);
   return [T.live(c, s, "industry"), T.live(c, s, "employees")].filter(Boolean).join(" · ");
 };
+
+/* ---------- the specific ask: who someone can introduce the member to ---------- */
+
+const ROLE_HEAD = /^\s*(new open role|open role)\s*:\s*/i;
+/** A Crystal Ball row's line as a clause after the company: "hired a fractional CMO 1 month ago", "posted an open VP Sales role". */
+function nowClause(row: RadarSentRow | undefined): string | null {
+  const head = (row?.l ?? "").split(" · ")[0].trim();
+  if (!row || !head) return null;
+  if (row.kind === "role") {
+    const t = head.replace(ROLE_HEAD, "").replace(/\s*[([{].*$/, "").trim();
+    return t && !/\d{2,}|[$€£]/.test(t) ? `posted an open ${t} role` : "posted an open fractional role";
+  }
+  if (row.kind === "funding") return "just raised a round";
+  return /^[A-Z][a-z]/.test(head) ? head.charAt(0).toLowerCase() + head.slice(1) : head;
+}
+/** The way in's strength line: from the member's own Google counts, their messages, or their LinkedIn file. */
+function strengthOf(c: Contact, nowMs: number): string {
+  if (c.warmth && ((c.meetings ?? 0) > 0 || (c.emails ?? 0) > 0)) return strengthLine({ meetings: c.meetings, emails: c.emails, both: c.both, first: c.firstMet, last: c.lastMet, warmth: c.warmth }, nowMs);
+  if (c.warmth) return `${c.why} · ${STRENGTH_WORDS[c.warmth]}`;
+  return `${c.why} · Not met yet`;
+}
+
+/**
+ * For each person the member knows, the companies in the member's own list (their Crystal Ball,
+ * a saved view, their Ideal Fractional Profile) that person can introduce them to, ranked by how
+ * strong the way in is (the path's score, which carries the relationship's warmth) times how well
+ * the company fits (Crystal Ball's band, then a saved view, then the profile). Names only what the
+ * member may see: a locked company by its facts with what opening it costs, the person on the
+ * other side only when the member can see their name. Never a person key or an internal id.
+ */
+export function introPlansOf(seed: Seed, s: State, m: Member, f: Found, nowMs = Date.now()): IntroPlanView[] {
+  const g = T.graph(seed, s);
+  const idx = T.memberIndex(seed, s);
+  let rows = new Map<string, RadarSentRow>();
+  try {
+    rows = crystalRowsOf(seed, s, m, nowMs);
+  } catch {
+    /* no Crystal Ball yet */
+  }
+  const views = (s.connector?.alerts?.[m.id] ?? []) as SavedSearch[];
+  const prof = s.profiles[m.id] ?? {};
+  const icp = prof.icp && !icpIsEmpty(prof.icp) ? prof.icp : null;
+  const fn = f.me.words.fn;
+  const crystal = T.crystalOf(s, m.id, nowMs);
+  const fits = new Map<string, ListFit | null>();
+  const fitOf = (id: string): ListFit | null => {
+    if (fits.has(id)) return fits.get(id)!;
+    const row = rows.get(id);
+    let x: ListFit | null = row ? { kind: "ball", band: row.b ?? "Medium" } : null;
+    if (!x) {
+      const v = viewsMatching(seed, s, views, id);
+      if (v) x = { kind: "view", name: v };
+    }
+    if (!x && icp) {
+      const cf = companyFacts(g, s, id);
+      if (cf && inIcp(icp, cf)) x = { kind: "profile" };
+    }
+    fits.set(id, x);
+    return x;
+  };
+  const opener = (id: string) => (rows.has(id) && (crystal === "all" || crystal === "one") ? "Open it free from your Crystal Ball" : `Open it for ${COMPANY_PRICE_SAY}`);
+  /** A seat holder's name and role on the other side, only when the member can see them. */
+  const holder = (seatId: string | undefined): { name: string | null; role: string | null } => {
+    const e = seatId ? g.engagements.get(seatId) : undefined;
+    if (!e || !f.me.visible(e.companyId)) return { name: null, role: null };
+    const vis = (k: string) => T.cellOf(s, m, e, "engagement", k, idx).s === "value";
+    if (!vis("operator")) return { name: null, role: null };
+    return { name: shownName(T.live(e, s, "operator") ?? "") || null, role: vis("role") ? (T.live(e, s, "role") ?? null) : null };
+  };
+  const leaderName = (pid: string | undefined): string | null => {
+    const p = pid ? g.contacts.get(pid) : undefined;
+    if (!p || !f.me.visible(p.companyId)) return null;
+    return T.cellOf(s, m, p, "contact", "name", idx).s === "value" ? shownName(T.live(p, s, "name") ?? "") || null : null;
+  };
+  const noLeader = (id: string) => !!fn && fnKnow(s.leaders?.[id], s.leaderReports?.[id]?.[fn], fn, nowMs).s === "none";
+  // Companies where the member holds or held a seat: their own clients, never an opening to be introduced to.
+  const own = ownSeatTest(seed, s, m);
+  const held = new Set([...g.engagements.values()].filter(own).map((e) => e.companyId));
+
+  const out: (IntroPlanView & { r: number })[] = [];
+  for (const [key, list] of f.byContact) {
+    const c = f.contacts.get(key);
+    if (!c) continue;
+    const mine: { t: ContactTarget; fit: ListFit; r: number }[] = [];
+    for (const t of list) {
+      if (held.has(t.target)) continue;
+      const fit = fitOf(t.target);
+      // How strong the way in is (its kind, the tie, how recent) times how well the company fits: a likely company through someone two steps away can lead.
+      if (fit) mine.push({ t, fit, r: t.q * FIT_WEIGHT(fit) });
+    }
+    if (!mine.length) continue;
+    mine.sort((a, b) => b.r - a.r || a.t.target.localeCompare(b.t.target));
+    const targets: IntroTargetView[] = [];
+    const lines: IntroAskLine[] = [];
+    let locked = 0;
+    for (const { t, fit, r } of mine) {
+      const named = f.me.visible(t.target) ? (g.companies.get(t.target)?.name ?? null) : null;
+      if (!named) locked++;
+      if (targets.length >= INTRO_TARGETS_MAX) continue;
+      const p = t.parts;
+      const other = p.leader ? { name: leaderName(p.leaderId), role: null } : holder(p.otherSeat);
+      const facts: IntroFacts = {
+        kind: p.kind as IntroFacts["kind"], degree: t.degree, first: c.first, title: c.title, company: named, bridge: p.bridge ?? null, bridgeNote: p.bridgeNote ?? p.bridge ?? null,
+        fn: p.fn ?? null, active: !!p.active, other: other.name, otherRole: other.role, rel: p.rel ?? null, leader: !!p.leader,
+      };
+      const why = nowClause(rows.get(t.target));
+      const gap = noLeader(t.target) ? `has no ${fn} leader yet` : null;
+      const fresh = why && !/\bago$/.test(why) && !/^just /.test(why) ? `just ${why}` : why;
+      const nowWords = [why ? why.charAt(0).toUpperCase() + why.slice(1) : null, gap ? `No ${fn} leader on their team page` : null].filter(Boolean).join(" · ") || null;
+      targets.push({ id: T.pubId(t.target), name: named, facts: factsOf(seed, s, t.target), inWords: fitWords(fit), now: nowWords, how: howThey(facts), degree: t.degree, score: Math.max(1, Math.round(r * 100)), open: named ? null : opener(t.target) });
+      if (named && lines.length < INTRO_NOTE_MAX) lines.push({ company: named, you: howYou({ ...facts, company: named }), now: [fresh, gap].filter(Boolean).join(" and ") || null, person: askPerson(facts), to: askTo(facts, fn) });
+    }
+    const strength = strengthOf(c, nowMs);
+    out.push({
+      keys: [c.key, ...(c.aliases ?? [])],
+      name: c.name,
+      first: c.first,
+      strength,
+      why: whyLine(strength, mine.length),
+      targets,
+      count: mine.length,
+      locked,
+      ask: lines.length ? { lines, locked } : null,
+      r: mine[0].r,
+    });
+  }
+  return out
+    .sort((a, b) => b.r - a.r || a.name.localeCompare(b.name))
+    .slice(0, INTRO_PLANS_MAX)
+    .map(({ r: _r, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
+}
+/** People the page carries a plan for (the strongest first). */
+export const INTRO_PLANS_MAX = 300;
 
 /** GET /api/paths: the import, the counts by company, and "Your hidden paths". { on: false } with Your network off. */
 export async function pathsView(token: string | null, nowMs = Date.now()): Promise<PathsAnswer | null> {
@@ -306,6 +466,7 @@ export async function pathsView(token: string | null, nowMs = Date.now()): Promi
     importsLeft: Math.max(0, IMPORTS_DAILY - importsToday(p, nowMs)),
     targets: targets.slice(0, TARGETS_MAX).map(({ r: _r, ...t }) => t), // eslint-disable-line @typescript-eslint/no-unused-vars
     counts,
+    people: introPlansOf(seed, s, m, f, nowMs),
   };
 }
 

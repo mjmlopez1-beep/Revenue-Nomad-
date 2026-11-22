@@ -324,6 +324,46 @@ async function main() {
   check("best first across all of them", v2.targets.every((x, i) => i === 0 || v2.targets[i - 1].best.score >= x.best.score));
   check("the counts say how many are 1st degree", v2.counts[pub("c_acme")].n === acme2.length && v2.counts[pub("c_acme")].first === 1);
 
+  /* ---------- 6b. the specific ask: who someone can introduce Ana to ---------- */
+  console.log("\nThe specific ask for an introduction");
+  const plans = async (tok = ANA) => (await view(tok)).people;
+  const planOf = async (key: string) => (await plans()).find((x) => x.keys.includes(key)) ?? null;
+  if (process.env.SHOW) for (const x of await plans()) console.log(`  ${x.name} | ${x.strength} | ${x.why}\n${x.targets.map((t) => `    ${t.score} ${t.name ?? t.facts} | ${t.inWords} | ${t.how} | ${t.now ?? ""} | ${t.open ?? ""}`).join("\n")}`);
+  const dana = await planOf("l:dana-reyes-fake");
+  check("Dana (a LinkedIn connection) can introduce Ana to Acme, a company in her saved view", !!dana && dana.targets.some((x) => x.id === pub("c_acme") && x.inWords === "Saved view: SaaS 51-200"), dana);
+  const danaAcme = dana!.targets.find((x) => x.id === pub("c_acme"))!;
+  check("who Dana worked with there stays a seat until Ana can see the name: never Riley's name, and the bridge she can't see is its kind", danaAcme.name === "Acme Robotics" && danaAcme.how === "Dana worked at a SaaS company with Acme Robotics' fractional RevOps lead." && !JSON.stringify(await plans()).includes("Riley"), danaAcme.how);
+  const rae = await planOf("g:rae@northwind.example");
+  check("how strong each relationship is, said plainly: Rae from Ana's own calendar, Dana from her LinkedIn file", !!rae && /^6 meetings since [A-Z][a-z]{2} \d{4}, last [A-Z][a-z]{2} \d+ · Strong$/.test(rae.strength) && /^LinkedIn connection since 2023 · Not met yet$/.test(dana!.strength), [rae?.strength, dana?.strength]);
+  check("\"Why Rae\": the counts and how many companies in her profile", /^6 meetings since [A-Z][a-z]{2} \d{4} · can introduce you to 2 companies in your profile$/.test(rae!.why) && rae!.count === 2, rae?.why);
+  check("Rae works where Acme's past Sales lead holds a seat now, said as it is", rae!.targets.some((x) => x.how === "Rae works at Northwind Labs, where the person who held Acme Robotics' fractional Sales seat holds a seat now."), rae!.targets.map((x) => x.how));
+  const pat = await planOf("l:pat-sample-fake");
+  const patCedar = pat?.targets.find((x) => x.id === pub("c_cedar"));
+  check("Pat holds the seat at Cedar, in Ana's Crystal Ball: locked, so it says what opening it costs and never its name", !!patCedar && patCedar.name === null && patCedar.open === "Open it for 2 credits" && patCedar.inWords === "In your Crystal Ball" && patCedar.how === "Pat holds this company's fractional Finance seat now." && !JSON.stringify(pat).includes("Cedar Health"), patCedar);
+  check("with nothing it may name, the note asks generally (no specific ask)", pat!.ask === null && pat!.locked >= 1);
+  check("only companies in her own list: never a filler, never her own clients (Elm, a past seat; Ivy Works, now)", (await plans()).every((x) => x.targets.every((t) => ![pub("c_elm"), pub("c_ivy"), pub("c_fill0")].includes(t.id))));
+  check("best first: within a person, by the way in times the fit (a Crystal Ball company above a saved view's)", (await plans()).every((x) => x.targets.every((t, i) => i === 0 || x.targets[i - 1].score >= t.score)) && (await plans())[0].targets[0].inWords === "In your Crystal Ball");
+  // Ana opens who holds Acme's RevOps seat: now Riley is named, in the page and in the note.
+  await t.tableInternals.mutate((st) => {
+    st.unlocks["e_acme_revops.operator"] = ["mem_ana"];
+  });
+  const dana2 = (await planOf("l:dana-reyes-fake"))!;
+  const acme3 = dana2.targets.find((x) => x.id === pub("c_acme"))!;
+  check("once Ana has unlocked who holds the seat, the page names Riley", acme3.how === "Dana worked with Riley Stone at a SaaS company. Riley Stone holds Acme Robotics' fractional RevOps seat now.", acme3.how);
+  const line = dana2.ask?.lines.find((l) => l.company === "Acme Robotics");
+  check("and the note's line says it to Dana, asks to meet Riley, and keeps the bridge Ana can't see as Dana's own past client", !!line && line.you === "You worked with Riley Stone at one of your past clients. Riley Stone is now at Acme Robotics as their fractional RevOps Lead." && line.person === "Riley Stone" && line.to === "Riley Stone", line);
+  const MN = await import("../lib/moveNote.ts");
+  const facts = (intro: typeof dana2.ask) => ({ kind: (intro ? "introAsk" : "ask") as "introAsk" | "ask", company: "Northwind Labs", to: { name: "Dana Reyes", email: null, from: null }, since: null, saw: null, me: { first: "Ana", name: "Ana Member", as: "a fractional CRO", fn: "Sales", clients: null }, seat: null, role: null, link: null, via: "fractional" as const, intro });
+  const note = MN.draftNote(facts(dana2.ask));
+  check("the drafted note names who and where, and asks for that introduction", note.subject === "An intro at Acme Robotics?" && note.body.includes("You worked with Riley Stone at one of your past clients.") && note.body.includes("Would you introduce me to Riley Stone?") && !/You see a lot of teams/.test(note.body), note.body);
+  const casual = MN.draftNote(facts(dana2.ask), { greeting: "Hey {first},", signoff: "Cheers,", name: "first", length: "short", formality: "casual", contractions: true, exclamations: "never", emoji: false, opener: "direct", phrases: [] });
+  check("in a short casual voice too: three sentences, the ask kept", casual.body.startsWith("Hey Dana,") && /Any chance you'd introduce me to Riley Stone\?/.test(casual.body), casual.body);
+  const generic = MN.draftNote(facts(null));
+  check("with nothing specific the note is the general ask", /You see a lot of teams/.test(generic.body) && generic.subject === "An introduction?");
+  const all6 = JSON.stringify(await plans());
+  check("never a person key or an internal id in the answer", !/p_(riley|dana|quinn|pat|jamie|lou|toni)fake|"c_acme"|e_acme_revops|"e_/.test(all6));
+  check("Bo has no one: Ana's people are hers alone", (await plans(BO)).length === 0);
+
   /* ---------- 7. privacy ---------- */
   console.log("\nPrivacy");
   const vBo = await view(BO);

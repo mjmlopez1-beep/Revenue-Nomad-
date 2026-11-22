@@ -349,6 +349,18 @@ export function crystalCompanyIds(seed: Seed, s: State, m: Member, nowMs: number
   return new Set([...byDay.values()].flatMap((rows) => rows.map((x) => x.c)));
 }
 
+/**
+ * The member's Crystal Ball rows by company (internal id): the latest day's row for each, with its
+ * band and line, for the specific ask for an introduction (lib/paths/index.ts). The same companies
+ * as crystalCompanyIds.
+ */
+export function crystalRowsOf(seed: Seed, s: State, m: Member, nowMs: number): Map<string, RadarSentRow> {
+  const { byDay } = dayRows(ctxOf(seed, s, nowMs), m, keptDays(nowMs));
+  const out = new Map<string, RadarSentRow>();
+  for (const d of [...byDay.keys()].sort().reverse()) for (const x of byDay.get(d) ?? []) if (!out.has(x.c)) out.set(x.c, x);
+  return out;
+}
+
 /** The same, as the public ids the member's table and the connector use. Empty when the token is nobody's. */
 export async function crystalPublicIds(token: string | null, nowMs = Date.now()): Promise<Set<string>> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);

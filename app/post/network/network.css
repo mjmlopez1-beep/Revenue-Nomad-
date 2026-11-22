@@ -1334,14 +1334,67 @@ button.np-co-name:hover {
   display: grid;
   gap: 8px;
 }
-.np-offers li {
+/* One suggestion, one row: who on the left, the choice, what it earns and the button on the right. On a phone the two halves stack, each on one line. */
+.np-offers li.np-offer {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
   font-size: 14px;
   line-height: 20px;
+}
+.np-offer-who {
+  display: grid;
+  min-width: 0;
+}
+.np-offer-who b,
+.np-offer-who .nw-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.np-offer-who .nw-muted {
+  font-size: 13px;
+}
+.np-offer-do {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.np-offer-do .np-sel {
+  max-width: 172px;
+}
+.np-offer-do .sg-plus,
+.np-offer-none {
+  white-space: nowrap;
+}
+.np-offer-none {
+  font-size: 13px;
+  color: var(--muted);
+}
+@media (max-width: 560px) {
+  .np-offers li.np-offer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .np-offer-do {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .np-offer-do .np-sel {
+    max-width: none;
+    width: 100%;
+    min-width: 0;
+  }
+  .np-offer-do > .sg-plus,
+  .np-offer-do > .np-offer-none {
+    justify-self: start;
+  }
 }
 .np-sel {
   font: inherit;

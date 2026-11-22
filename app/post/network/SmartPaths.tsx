@@ -19,7 +19,8 @@ import { CompanyLogo, useToast } from "../../ui/shared";
 import { CSV_PROBLEM_WORDS, parseConnections } from "@/lib/paths/csv";
 import { EXPORT_STEPS, FILE_MAX_BYTES, waysWords, type PathView, type TargetView } from "@/lib/paths/types";
 import { WarmthChip } from "./parts";
-import { pathsAct, useCompanyPaths, usePathCount, usePaths } from "./usePaths";
+import { pathsAct, useCompanyPaths, usePathCount, usePaths, usePlan } from "./usePaths";
+import { IntroLine } from "./IntroWhy";
 import "./paths.css";
 
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -30,10 +31,17 @@ const n = (x: number) => x.toLocaleString("en-US");
 export function PathRow({ p, compact = false }: { p: PathView; compact?: boolean }) {
   const copy = useCopy();
   const [open, setOpen] = useState(false);
+  // "Why Dana": how strong the relationship is, and how many companies in the member's list Dana can introduce them to.
+  const plan = usePlan(p.via.key);
   const mail = p.via.email ? `mailto:${encodeURIComponent(p.via.email)}?subject=${encodeURIComponent(p.note.subject)}&body=${encodeURIComponent(p.note.body)}` : null;
   return (
     <div className={`sp-path${compact ? " sp-path-c" : ""}`} data-path={p.kind}>
       <p className="sp-line">{p.line}</p>
+      {plan ? (
+        <p className="sp-why">
+          <IntroLine plan={plan} first={p.via.first} />
+        </p>
+      ) : null}
       <p className="sp-do">
         <span className={`sp-str sp-str-${p.strength === "Strong" ? "s" : p.strength === "Good" ? "g" : "w"}`}>{p.degree === 1 ? "You know them" : "Through someone you know"}</span>
         {p.via.warmth && <WarmthChip w={p.via.warmth} />}

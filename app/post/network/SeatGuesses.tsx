@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CompanyLogo, IconCheck, IconLock, useToast } from "../../ui/shared";
 import { Prop } from "../../ui/fractions/lazy";
 import { seatConfirmFields, type SeatGuessView } from "@/lib/google/types";
-import { namedFn, shown, type CoInfo, type SeatInfo } from "../model";
+import { namedFn, type CoInfo, type SeatInfo } from "../model";
 import { useUi } from "../ui";
 import { earnRoom } from "../NextMove";
 import { SEAT_YIELD } from "../earnBack";
@@ -70,8 +70,8 @@ function GuessCard({
   }, [editing, g.role, g.function]);
   const fields = seatConfirmFields(g, ui.me.name, role || null);
   const facts = Object.keys(fields).length;
-  // A seat Revenue Nomad found there in the same function that nobody holds: the Add claims it instead of adding a second one.
-  const claims = !!g.function && !!info?.engs.some((e) => e.claimable && shown(e.cells.function) === g.function);
+  // A seat Revenue Nomad found there that Confirm claims instead of adding a second one: the server's own rule (g.claim, lib/table.ts claimableSeats).
+  const claims = !!g.claim;
   const earn = earnWords(g, facts, earnRoom(ui.me), ui.me.earnCap, claims);
   const fn = namedFn(g.function);
   const looks = role || (fn ? `Fractional ${fn} seat` : "");
@@ -172,7 +172,8 @@ export function SeatGuesses({ infos, seats, onShown }: { infos: CoInfo[]; /** Th
     if (busy) return;
     setBusy({ id: g.id, what: "yes" });
     // The existing Add, with the member as the seat holder: its rules, credits and limits, nothing new.
-    const r = await ui.act({ type: "add", company: g.name, newEngagement: true, engagementFields: seatConfirmFields(g, ui.me.name, role), operatorMemberId: "me" }, { quiet: true });
+    // The seat it claims (g.claim) goes with it, so the Add claims that one and never adds a second seat beside it.
+    const r = await ui.act({ type: "add", company: g.name, newEngagement: true, ...(g.claim ? { engagementId: g.claim } : {}), engagementFields: seatConfirmFields(g, ui.me.name, role), operatorMemberId: "me" }, { quiet: true });
     setBusy(null);
     if (!r.ok) return;
     // What it earned is the server's own sentence ("You earned 5 credits.", or "+5 when confirmed. ..."), said as it came.

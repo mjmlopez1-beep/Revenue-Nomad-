@@ -72,6 +72,8 @@ const engagements = [
   seat("e_lark_sales", "c_lark", { source: "Seat scan", function: "Sales", role: "Fractional CRO", type: "Fractional", start: "2026-02" }),
   // Northwind: Revenue Nomad already found a RevOps seat there that nobody holds. Confirm claims it.
   seat("e_north_rev", "c_north", { source: "Seat scan", function: "RevOps", role: "Fractional Head of RevOps", type: "Fractional" }),
+  // Tallgrass: a RevOps seat Revenue Nomad found that ended years before Ana's began. Another seat: Confirm never promises to claim it.
+  seat("e_tall_old", "c_tall", { source: "Seat scan", function: "RevOps", role: "Fractional RevOps Lead", type: "Fractional", start: "2019-01", end: "2019-12", status: "Ended" }),
   ...fillers.map((f, i) => seat(`e_fill${i}`, f.id, { source: "Seat scan", function: "Finance", role: "Fractional CFO", type: "Fractional", start: "2025-01" })),
   // Birchway hired a fractional Sales leader two months ago: RevOps usually follows (Crystal Ball's likelihood).
   seat("e_birch_sales", "c_birch", { source: "Seat scan", function: "Sales", role: "Fractional CRO", type: "Fractional", start: new Date(Date.UTC(new Date(NOW).getUTCFullYear(), new Date(NOW).getUTCMonth() - 2, 15)).toISOString().slice(0, 7), status: "Active", end: "Ongoing" }),
@@ -83,7 +85,11 @@ const seed = {
   members: [mem("mem_ana", "Ana Member"), mem("mem_bo", "Bo Other"), mem("mem_sam", "Sam Small"), mem("mem_zed", "Zed Zero"), mem("mem_nia", "Nia None"), mem("mem_cy", "Cy Client"), mem("mem_fre", "Fen Free"), mem("mem_fin", "Fin Finance", "Fractional CFO"), ...RATERS],
   companies,
   engagements,
-  contacts: [],
+  // Already on file at Quarry Labs (Cy's client): Omar with everything an Add would send, Lena with no relationship to a seat yet.
+  contacts: [
+    { id: "p_quarry_omar", companyId: "c_quarry", fields: { name: "Omar Reyes", title: "COO", relationship: "Worked with" } },
+    { id: "p_quarry_lena", companyId: "c_quarry", fields: { name: "Lena Park", title: "Head of Operations" } },
+  ],
 };
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
 
@@ -186,6 +192,8 @@ C.meet([-70, -30], P("Tess Morgan", "tess@hirewell.example"));
 C.connections.push(contact("Tess Morgan", "tess@hirewell.example", "Hirewell Staffing", "Senior Recruiter"));
 C.meet([...Array.from({ length: 28 }, (_, i) => -(3 + i * 7)), 4], P("Nora Vance", "nora@quarrylabs.example"));
 C.connections.push(contact("Nora Vance", "nora@quarrylabs.example", "Quarry Labs", "CEO"));
+// Her own address at her client (Cy herself), and two people there who are on file already.
+C.meet([-5, -12, -19, -26, -33, -40], P("Cy Client", "cy.client@quarrylabs.example"), P("Omar Reyes", "omar@quarrylabs.example"), P("Lena Park", "lena@quarrylabs.example"));
 C.meet([-40, -95, -130], P("Rosa Lin", "rosa@birchway.example"));
 C.connections.push(contact("Rosa Lin", "rosa@birchway.example", "Birchway Apps", "Founder and CEO"));
 C.meet([-60, -150], P("Ben Cole", "ben@ridgelinecapital.example"));
@@ -521,7 +529,7 @@ async function main() {
   check("four guesses, each a company met with over months; nothing has been added", v6.seats.length === 4 && ["Tallgrass Analytics", "Northwind Supply", "Wrenfield Dental Group", "Bramblewood Labs"].every((n) => !!guess(n)) && seatsBefore === 1, v6.seats.map((g) => [g.name, g.meetings, g.from, g.to, g.sure, g.waits]));
   const tall = guess("Tallgrass Analytics")!;
   check("a guess is the months and the count Your network shows, who they met most, and the function and title from their profile", tall.meetings === 36 && /^\d{4}-\d{2}$/.test(tall.from) && tall.from < tall.to && tall.months >= 9 && tall.function === "RevOps" && tall.role === "Fractional Head of RevOps" && tall.with[0].name === "Marcus Bell" && tall.with.length === 2 && tall.sure && !tall.waits && !tall.active, tall);
-  check("and nothing else: no meeting title, no date of a meeting, no email address", Object.keys(tall).sort().join() === "active,from,function,id,meetings,months,name,role,site,sure,to,waits,with" && !JSON.stringify(v6.seats).includes("@") && !/\d{4}-\d{2}-\d{2}/.test(JSON.stringify(v6.seats)));
+  check("and nothing else: no meeting title, no date of a meeting, no email address", Object.keys(tall).sort().join() === "active,claim,from,function,id,meetings,months,name,role,site,sure,to,waits,with" && !JSON.stringify(v6.seats).includes("@") && !/\d{4}-\d{2}-\d{2}/.test(JSON.stringify(v6.seats)));
   check("the shorter one is marked Less sure, and the one at a company whose first seat waits says so", guess("Wrenfield Dental Group")!.sure === false && guess("Wrenfield Dental Group")!.waits === true && guess("Northwind Supply")!.waits === false);
   check("what Confirm sends: the member as holder, function, title, first month, and the last month of a seat that ended", JSON.stringify(types.seatConfirmFields(tall, "Ana Member")) === JSON.stringify({ operator: "Ana Member", function: "RevOps", role: "Fractional Head of RevOps", start: tall.from, end: tall.to }) && JSON.stringify(types.seatConfirmFields({ ...tall, active: true }, "Ana Member", "Fractional COO")) === JSON.stringify({ operator: "Ana Member", function: "RevOps", role: "Fractional COO", start: tall.from, status: "Active" }));
   const mine = await tools.myNetwork({ member: (await t.memberById("mem_ana"))!, origin: ORIGIN });
@@ -536,6 +544,9 @@ async function main() {
   check("the page says it in the member's words, and that nothing is added until they confirm", cardsText.includes("We think you held these 4 seats") && /Nothing is added until you do/.test(cardsText) && count(cards, "Confirm this seat") === 4 && count(cards, "Not a seat") === 4);
   check("each card has the meeting pattern that suggested it", cardsText.includes(SG.guessLine(tall)) && /\d+ meetings over \d+ months/.test(SG.guessLine(tall)) && cardsText.includes("Less sure"));
   check("the credits each card promises: 5 now, up to 5 where a found seat is claimed, 5 when confirmed where the seat waits", /\+5 credits now, up to ~12 with the rest/.test(cardsText) && /up to \+5 We have a seat on file there that may be yours/.test(cardsText) && /\+5 when confirmed/.test(cardsText), cardsText);
+  check("the seat Confirm would claim comes from the server, by the Add's own rule: Northwind's found seat; none at Tallgrass, whose found RevOps seat ended years before hers began", guess("Northwind Supply")!.claim === t.tableInternals.pubId("e_north_rev") && tall.claim === null && guess("Wrenfield Dental Group")!.claim === null, v6.seats.map((g) => [g.name, g.claim]));
+  const tallCard = cards.slice(cards.indexOf(`data-guess="${tall.id}"`), cards.indexOf("</article>", cards.indexOf(`data-guess="${tall.id}"`)));
+  check("so only Northwind's card promises a claim (a function alone never does)", count(cards, "may be yours") === 1 && !!tallCard && !tallCard.includes("may be yours"), text(tallCard));
   check("without the connector's answer the page shows no guesses at all", (() => {
     served = { on: false };
     return true;
@@ -554,7 +565,8 @@ async function main() {
 
   // Confirm: a new seat.
   const credits0 = (await t.buildView(ANA)).me!.credits;
-  const add = (g: (typeof v6.seats)[number]) => t.perform(ANA, { type: "add", company: g.name, newEngagement: true, engagementFields: types.seatConfirmFields(g, "Ana Member"), operatorMemberId: "me" });
+  // Confirm as the card sends it: the seat it claims goes with it (SeatGuesses.tsx).
+  const add = (g: (typeof v6.seats)[number]) => t.perform(ANA, { type: "add", company: g.name, newEngagement: true, ...(g.claim ? { engagementId: g.claim } : {}), engagementFields: types.seatConfirmFields(g, "Ana Member"), operatorMemberId: "me" });
   const r1 = await add(tall);
   const a1 = await t.buildView(ANA);
   const tallCo = a1.companies.find((c) => c.name === "Tallgrass Analytics")!;
@@ -563,6 +575,12 @@ async function main() {
   check("Confirm adds the seat through the existing Add, and pays what the card said: 5 credits", /Added a seat at Tallgrass Analytics/.test(r1.message) && /You earned 5 credits/.test(r1.message) && a1.me!.credits === credits0 + 5, r1.message);
   check("the seat is hers, with the function, title and months filled in", !!mySeat && val(mySeat.cells.function) === "RevOps" && val(mySeat.cells.role) === "Fractional Head of RevOps" && val(mySeat.cells.start) === tall.from && val(mySeat.cells.end) === tall.to && val(mySeat.cells.status) === "Ended", mySeat?.cells);
   check("one seat was added, by her own action, and the guess is gone", (await t.loadState()).engagements.length === seatsBefore + 1 && !(await net(ANA)).seats.some((g) => g.id === tall.id));
+  check("at Tallgrass her seat goes in beside the found 2019 seat, which stays unclaimed, as the card said", tallCo.engagements.length === 2 && tallCo.engagements.filter((e) => e.yours).length === 1 && tallCo.engagements.some((e) => e.claimable));
+  // Her own seat that ended is not an opening: not on Your network's likelihood, not in her Crystal Ball.
+  const tallNet = (await net(ANA)).companies.find((c) => c.id === tall.id)!;
+  check("her own ended seat never reads as the seat that may be open again on Your network", !!tallNet && !/seat ended|open again/i.test(tallNet.odds?.why ?? "") && tallNet.odds?.saw?.kind !== "seat", tallNet?.odds);
+  const ballRow = radar.crystalRowsOf(await t.loadSeed(), await t.loadState(), (await t.memberById("mem_ana"))!, Date.now()).get("c_tall");
+  check("nor in her Crystal Ball", !ballRow || (ballRow.kind !== "seat" && ballRow.kind !== "rehire"), ballRow);
   const boAfter1 = await t.buildView(BO, { fresh: true });
   check("other members see the seat by the usual rules: its function free, her name behind its lock; who she met is nowhere", (() => {
     const c = boAfter1.companies.find((x) => x.id === tallCo.id)!;
@@ -582,6 +600,7 @@ async function main() {
   const r2 = await add(north);
   const a2 = await t.buildView(ANA);
   const northSeats = a2.companies.find((c) => c.id === northId)!.engagements;
+  check("Confirm sent the found seat's id, as the card does", !!north.claim);
   check("Confirm claims it: her name on the seat on file, credits only for what it was missing (its start, its end, that it ended)", /already on file, so we put your name on it/.test(r2.message) && /You earned 3 credits/.test(r2.message) && /2 facts were already there/.test(r2.message) && a2.me!.credits === credits0 + 5 + 3, r2.message);
   check("no second seat was made there", northSeats.length === 1 && northSeats[0].yours === true && (await t.loadState()).engagements.length === seatsBefore + 1);
   check("for other members only that company's record changed", (await strip(BO, northId)) === boStrip0);
@@ -673,7 +692,7 @@ async function main() {
   const quarry = cy("Quarry Labs");
   const s8 = await t.loadState();
   check("the client every week is under Your clients, not confirmed, and nothing is on Merlin for it yet", !!quarry.client && quarry.client.seat === null && quarry.client.active && !s8.engagements.some((e) => e.companyId === "c_quarry") && !cv.warm.includes(quarry.id));
-  const cardsHtml = render(me8, React.createElement(PT.Clients, { view: cv, infos: infos8, me: me8, refresh: noop }));
+  const cardsHtml = render(me8, React.createElement(PT.Clients, { view: cv, infos: infos8, me: me8 }));
   check("its card offers Confirm this seat and Not a seat, and nothing else is added by showing it", /Confirm this seat/.test(text(cardsHtml)) && /Not a seat/.test(text(cardsHtml)) && (await t.loadState()).engagements.length === s8.engagements.length);
   const guessQ = cv.seats.find((g) => g.id === quarry.id)!;
   const boAfterMarks = await others(BO);
@@ -683,10 +702,32 @@ async function main() {
   check("Confirm adds her seat by the existing Add, as active from the first month", /Added a seat at Quarry Labs/.test(conf.message) && !!seatId && (await t.loadState()).engagements.filter((e) => e.companyId === "c_quarry").length === 1, conf.message);
   const t8 = await t.buildView(CY);
   const quarryInfo = deriveAll(t8.companies).find((i) => i.c.id === quarry.id)!;
-  const offerHtml = text(render(t8.me, React.createElement(PT.Clients, { view: cv, infos: deriveAll(t8.companies), me: t8.me!, refresh: noop })));
-  check("her confirmed seat offers who she works with there, as contributions she chooses, and Nora is not on the record before the click", /Add Nora Vance \(CEO\) as/.test(offerHtml) && /credits/.test(offerHtml) && !quarryInfo.people.some(({ p }) => p.cells.name?.s === "value" && p.cells.name.v === "Nora Vance") && !JSON.stringify((await t.loadState()).values).includes("Nora Vance"), offerHtml.slice(0, 400));
+  const offerRaw = render(t8.me, React.createElement(PT.Clients, { view: cv, infos: deriveAll(t8.companies), me: t8.me! }));
+  const offerHtml = text(offerRaw);
+  const qv = cy("Quarry Labs");
+  check("Cy herself (her own address at her client, her own name) is never one of her people there, nor suggested on her seat", !qv.people.some((p) => p.name === "Cy Client" || /^cy\.client@/.test(p.email ?? "")) && !offerHtml.includes("Cy Client") && !cv.seats.some((g) => g.with.some((w) => w.name === "Cy Client")), qv.people.map((p) => p.name));
+  check("someone already on file at her seat says so, with what an Add would still fill in", qv.people.find((p) => p.name === "Omar Reyes")?.onFile?.mine === false && qv.people.find((p) => p.name === "Omar Reyes")!.onFile!.empty.length === 0 && JSON.stringify(qv.people.find((p) => p.name === "Lena Park")?.onFile?.empty) === '["relationship"]' && !qv.people.find((p) => p.name === "Nora Vance")?.onFile, qv.people.map((p) => [p.name, p.onFile]));
+  check("each suggestion is one row, and says what it will do: a new person Add +3 credits, someone on file Confirm with what it earns", count(offerRaw, 'class="np-offer"') === 3 && /Nora Vance CEO who you report to .*\+3 credits Add/.test(offerHtml) && /Omar Reyes On file Confirms their name Confirm/.test(offerHtml) && /Lena Park On file who you report to .*\+1 credit Confirm/.test(offerHtml) && !/Omar Reyes[^+]*\+2 credits/.test(offerHtml), offerHtml.slice(0, 900));
+  check("her confirmed seat offers who she works with there, as contributions she chooses, and Nora is not on the record before the click", /Nora Vance CEO/.test(offerHtml) && /credits/.test(offerHtml) && !quarryInfo.people.some(({ p }) => p.cells.name?.s === "value" && p.cells.name.v === "Nora Vance") && !JSON.stringify((await t.loadState()).values).includes("Nora Vance"), offerHtml.slice(0, 400));
   const added = await t.perform(CY, { type: "addPerson", companyId: quarry.id, engagementId: seatId, person: { name: "Nora Vance", title: "CEO", relationship: "Reported to" } });
   check("her click adds Nora as who she reports to, with the usual credits", /Added Nora Vance at Quarry Labs/.test(added.message) && /You earned/.test(added.message), added.message);
+  // Confirm on someone already on file (the phone's crash): the answer, then the card drawn again from what the page then has.
+  const cyCredits = (await t.buildView(CY)).me!.credits;
+  const omar = await t.perform(CY, { type: "addPerson", companyId: quarry.id, engagementId: seatId, person: { name: "Omar Reyes", relationship: "Worked with" } });
+  check("Confirm on Omar (on file) confirms his name and adds nothing: no credit, as the card said", /Omar Reyes is already on file at Quarry Labs\. Nothing new was added/.test(omar.message) && (await t.buildView(CY)).me!.credits === cyCredits && typeof omar.id === "string", omar.message);
+  const lena = await t.perform(CY, { type: "addPerson", companyId: quarry.id, engagementId: seatId, person: { name: "Lena Park", relationship: "Worked with" } });
+  check("Confirm on Lena (on file, no relationship) earns the 1 credit the card said", /Lena Park was already on file at Quarry Labs/.test(lena.message) && /You earned 1 credit/.test(lena.message) && (await t.buildView(CY)).me!.credits === cyCredits + 1, lena.message);
+  cv = await net(CY);
+  const t9 = await t.buildView(CY);
+  let after9 = "";
+  let threw: unknown = null;
+  try {
+    after9 = text(render(t9.me, React.createElement(PT.Clients, { view: cv, infos: deriveAll(t9.companies), me: t9.me! })));
+  } catch (e) {
+    threw = e;
+  }
+  check("after those answers the card draws again without failing, and nobody is offered twice", !threw && /Your seat/.test(after9) && !/Omar Reyes/.test(after9) && !/Lena Park/.test(after9) && !/Nora Vance/.test(after9), threw ? String((threw as Error).stack) : after9.slice(0, 500));
+  check("Omar is confirmed by her now, with nothing left to add: off the card for good", cy("Quarry Labs").people.find((p) => p.name === "Omar Reyes")?.onFile?.confirmed === true && PT.offerOf(cy("Quarry Labs").people.find((p) => p.name === "Omar Reyes")!) === null);
   check("other members see only what she added, by the usual locks; Bo's network is untouched", !JSON.stringify(await G.networkView(BO)).includes("Nora") && !JSON.stringify((await t.buildView(BO, { fresh: true })).companies.find((c) => c.id === quarry.id)).includes("Nora Vance"));
   // Privacy: nothing of Cy's network in another member's view, the export or the connector beyond what it allows.
   check("another member's table, network and Crystal Ball: the same bytes after all of Cy's marks and reads (before her own Add)", boCy0 === boAfterMarks);

@@ -544,6 +544,50 @@ export interface NetPersonView {
    * and whether it is still going. Only this member sees it. Left out otherwise.
    */
   seat?: { id: string; fn: string | null; now: boolean };
+  /** The first meeting or email with them (YYYY-MM-DD), for "47 meetings since Dec 2024". */
+  first: string | null;
+  /**
+   * Only at a company where the member holds a seat: someone of this name is already on file there
+   * (lib/table.ts onFileAt), so "Your seat"'s Add would confirm them rather than add them. Left out otherwise.
+   */
+  onFile?: { mine: boolean; confirmed: boolean; empty: ("title" | "relationship")[] };
+}
+
+/* ---------- how strong a relationship is ---------- */
+
+/** The warmth grades as a relationship's strength, in plain words: Hot is Strong. */
+export const STRENGTH_WORDS: Record<Warmth, string> = { Hot: "Strong", Warm: "Good", Fading: "Fading", Cold: "Cold" };
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Oct 23" within the last year, else "Oct 2024". */
+export function lastWords(d: string | null | undefined, nowMs = Date.now()): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d ?? "");
+  if (!m) return null;
+  const at = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
+  const mon = SHORT_MONTHS[Number(m[2]) - 1];
+  if (!mon) return null;
+  return Math.abs(nowMs - at) <= 330 * 86_400_000 ? `${mon} ${Number(m[3])}` : `${mon} ${m[1]}`;
+}
+/** "Dec 2024". */
+export const monthWords = (d: string | null | undefined) => {
+  const m = /^(\d{4})-(\d{2})/.exec(d ?? "");
+  return m && SHORT_MONTHS[Number(m[2]) - 1] ? `${SHORT_MONTHS[Number(m[2]) - 1]} ${m[1]}` : null;
+};
+/**
+ * How strong a relationship is, said plainly from the member's own counts: "47 meetings since Dec
+ * 2024, last Oct 23 · Strong", "12 emails both ways, last Jun 3 · Good", "In your contacts · Cold".
+ * The grade is the warmth grade (WARMTH_RULES), named for strength.
+ */
+export function strengthLine(x: { meetings?: number; emails?: number; both?: boolean; first?: string | null; last?: string | null; warmth: Warmth }, nowMs = Date.now()): string {
+  const m = x.meetings ?? 0;
+  const e = x.emails ?? 0;
+  const since = m > 1 ? monthWords(x.first) : null;
+  const last = lastWords(x.last, nowMs);
+  const what = m
+    ? `${m} ${m === 1 ? "meeting" : "meetings"}${since ? ` since ${since}` : ""}${last ? `, ${m === 1 ? "" : "last "}${last}` : ""}`
+    : e
+      ? `${e} ${e === 1 ? "email" : "emails"}${x.both ? " both ways" : ""}${last ? `, last ${last}` : ""}`
+      : "In your contacts";
+  return `${what} · ${STRENGTH_WORDS[x.warmth]}`;
 }
 
 /** What a person's title (or their firm) says they are: another fractional, an investor, a recruiter, someone selling. */
@@ -679,6 +723,11 @@ export interface SeatGuessView {
    * pendingSeats): what Confirm adds earns "when confirmed", not now.
    */
   waits: boolean;
+  /**
+   * A seat Revenue Nomad already found there that Confirm claims instead of adding a second one
+   * (lib/table.ts claimableSeats, the Add's own rule): its public id, sent with Confirm. Null: Confirm adds a new seat.
+   */
+  claim: string | null;
 }
 
 /**

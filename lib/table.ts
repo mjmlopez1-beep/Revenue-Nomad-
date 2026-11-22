@@ -3628,6 +3628,42 @@ export async function viewPatch(
   };
 }
 
+/** Someone already on file at a company under a name (onFileAt). */
+export interface OnFile {
+  /** The member added that name there themselves: an Add of it is refused ("You already added"). */
+  mine: boolean;
+  /** The member already confirmed the name (an earlier Add of it). */
+  confirmed: boolean;
+  /** The facts an Add sends (a title, how they relate to the seat) that are still empty on that record: each earns 1 credit. */
+  empty: ("title" | "relationship")[];
+}
+/**
+ * Who is on file at a company under a name, as the member's Add of that name there would find them
+ * (putPerson's own match: the same name, or a leader read from the company's website by first and
+ * last name), for the suggestions on Your network's "Your seat" card (lib/google): what an Add would
+ * do before the member taps it. The name is the member's own contact's, and the answer says no more
+ * than the Add's own answer would ("already on file"). Null: nobody of that name is on file there.
+ */
+export function onFileAt(seed: Seed, s: State, memberId: string, companyId: string): (name: string) => OnFile | null {
+  const g = viewGraph(seed, s);
+  const here = [...g.contacts.values()].filter((p) => p.companyId === companyId);
+  return (typed) => {
+    const key = normName(typed ?? "");
+    if (!key || !here.length) return null;
+    const same = here.filter((p) => {
+      const n = valueOf(p, s, "name")?.value ?? "";
+      return normName(n) === key || (!!p.site && sameName(n, typed));
+    });
+    if (!same.length) return null;
+    if (same.some((p) => valueOf(p, s, "name")?.by === memberId)) return { mine: true, confirmed: true, empty: [] };
+    const into = same.find((p) => valueOf(p, s, "name")?.status === "live");
+    if (!into) return null;
+    const confirmed = (s.verifications[fkey(into.id, "name")] ?? []).includes(memberId);
+    const empty = (["title", "relationship"] as const).filter((k) => !valueOf(into, s, k));
+    return { mine: false, confirmed, empty };
+  };
+}
+
 /**
  * The member's own move log, as today's moves read it (lib/movesView.ts): the companies hidden
  * from their moves right now (done lately or snoozed), by public id, and how many moves they
@@ -4916,6 +4952,42 @@ const monthsApart = (a: string | null | undefined, b: string | null | undefined)
 };
 
 /**
+ * Seats Revenue Nomad found at a company (the seat scan) that a member's own seat with these facts
+ * would claim instead of adding a second one, best match first: unclaimed (nobody named, or a name
+ * from public profiles that is the member's own), not one they said wasn't theirs, the same title or
+ * function, starts at most SAME_SEAT_MONTHS apart (or one blank), and not ended well before this one
+ * started. The Add claims the first (lib/table.ts "add"); a seat guess offers the same one (lib/google
+ * seatGuessesOf), so what the card promises is what the Add does.
+ */
+export function claimableSeats(atCompany: readonly EngNode[], s: State, me: Pick<Member, "id" | "name">, fields: Record<string, string>): EngNode[] {
+  const sent = (k: string) => (fields[k] ?? "").trim() || null;
+  const role = sent("role");
+  const roleKey = role ? textKey(role) : "";
+  const sentFn = sent("function") ?? functionOf(role);
+  return atCompany
+    .filter((e) => {
+      if (e.source !== SEAT_SCAN || (s.notMine[me.id] ?? []).includes(e.id)) return false;
+      const pn = publicName(e, s);
+      return pn ? sameName(pn.value, me.name) : !valueOf(e, s, "operator");
+    })
+    .map((e) => {
+      const theirRole = live(e, s, "role");
+      const theirStart = live(e, s, "start");
+      const sameRole = !!roleKey && textKey(theirRole ?? "") === roleKey;
+      const sameFn = !!sentFn && (live(e, s, "function") ?? functionOf(theirRole)) === sentFn;
+      const apart = monthsApart(sent("start"), theirStart);
+      // A seat that ended well before this one started is another seat, whatever its start.
+      const ended = monthSpan(sent("end") === "Ongoing" ? null : sent("end"));
+      const began = monthSpan(theirStart);
+      const before = !!ended && !!began && ended[1] < began[0] - SAME_SEAT_MONTHS;
+      return { e, ok: (sameRole || sameFn) && (apart === null || apart <= SAME_SEAT_MONTHS) && !before, score: (sameRole ? 0 : 100) + (apart ?? 50) };
+    })
+    .filter((x) => x.ok)
+    .sort((x, y) => x.score - y.score)
+    .map((x) => x.e);
+}
+
+/**
  * `dryRun` (the connector's "what would this cost"): the action runs on a copy of the state and
  * nothing is kept. The answer says what it would do, and `spent` the credits it would take. A
  * refusal is thrown as it would be. `claimLink`: a claimSeat that came through the seat's own
@@ -5917,8 +5989,12 @@ export async function perform(
             // An open role is never matched by its title: a past seat with the same title is its own record.
             // Titles compare by textKey (any script, accents aside). An empty key matches nothing.
             const roleKey = role ? textKey(role) : "";
+            // A seat the Add names (Confirm on a seat guess: the claimable seat the server offered), claimed
+            // by the same rules when it is still claimable; any other seat named is filled in as before (its own checks: only the seat holder adds to a seat).
+            const named = wantEng ? atCompany.find((e) => e.id === wantEng) : undefined;
+            const pinned = named && selfSeat ? claimableSeats(atCompany, s, me, Object.fromEntries(engFields)).find((e) => e.id === named.id) : undefined;
             const ownMatch = wantEng
-              ? atCompany.find((e) => e.id === wantEng)
+              ? (pinned ?? named)
               : (a.newEngagement ? atCompany.find((e) => isBlank(e) && mayMerge(e)) : atCompany.find((e) => madeByMe(e) && mayMerge(e))) ??
                 (roleKey ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && textKey(live(e, s, "role") ?? "") === roleKey && mayMerge(e)) : undefined);
             // "Add a seat you held" where Revenue Nomad already found that seat (a seat-scan seat nobody
@@ -5926,31 +6002,10 @@ export async function perform(
             // title, or the same function, and starts at most SAME_SEAT_MONTHS apart (or one of them
             // blank). The claim pays nothing, like claimSeat: only the empty facts it fills in earn.
             const sent = (k: string) => engFields.find(([x]) => x === k)?.[1] ?? null;
-            const sentFn = sent("function") ?? functionOf(role ?? null);
             const scanSeat =
-              ownMatch || !selfSeat || (sent("type") && !FRACTIONAL_TYPES.includes(sent("type")!)) || sent("status") === "Open role"
+              (ownMatch && !pinned) || !selfSeat || (sent("type") && !FRACTIONAL_TYPES.includes(sent("type")!)) || sent("status") === "Open role"
                 ? undefined
-                : atCompany
-                    // Unclaimed: nobody named, or a name from public profiles that is the member's own (someone else's name means it is another seat).
-                    .filter((e) => {
-                      if (e.source !== SEAT_SCAN || (s.notMine[me.id] ?? []).includes(e.id)) return false;
-                      const pn = publicName(e, s);
-                      return pn ? sameName(pn.value, me.name) : !valueOf(e, s, "operator");
-                    })
-                    .map((e) => {
-                      const theirRole = live(e, s, "role");
-                      const theirStart = live(e, s, "start");
-                      const sameRole = !!roleKey && textKey(theirRole ?? "") === roleKey;
-                      const sameFn = !!sentFn && (live(e, s, "function") ?? functionOf(theirRole)) === sentFn;
-                      const apart = monthsApart(sent("start"), theirStart);
-                      // A seat that ended well before this one started is another seat, whatever its start.
-                      const ended = monthSpan(sent("end") === "Ongoing" ? null : sent("end"));
-                      const began = monthSpan(theirStart);
-                      const before = !!ended && !!began && ended[1] < began[0] - SAME_SEAT_MONTHS;
-                      return { e, ok: (sameRole || sameFn) && (apart === null || apart <= SAME_SEAT_MONTHS) && !before, score: (sameRole ? 0 : 100) + (apart ?? 50) };
-                    })
-                    .filter((x) => x.ok)
-                    .sort((x, y) => x.score - y.score)[0]?.e;
+                : (pinned ?? claimableSeats(atCompany, s, me, Object.fromEntries(engFields))[0]);
             if (scanSeat && claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX)
               throw new ActionError(`We have this seat on file already, so adding it claims it. You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours, so add it tomorrow.`);
             const existing = ownMatch ?? scanSeat;
@@ -7270,6 +7325,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
 export const tableInternals = {
   // The committed state's graph is built once and shared, as the views share it (viewGraph); a draft's is its own. Read it, never change it.
   mutate, graph: viewGraph, memberIndex, seatHolder, signedIn, valueOf, live, cellOf, identityHidden, tracksOf, pubId, inboxKey, firstName, ID_KEY,
+  // Your network's "Your seat" card: who is already on file at the member's own seat company; the seat a seat guess's Confirm claims.
+  onFileAt, claimableSeats,
   // Alerts (lib/notify/events.ts) match new open roles the way the weekly email does.
   fnOf, hqRegion, isOpenRole, friendliness,
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
