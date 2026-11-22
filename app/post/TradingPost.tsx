@@ -73,11 +73,11 @@ import { rolesSince, useTodayData } from "./Today";
 import { HomePage, type HomeView } from "./Home";
 import { MoreSheet, Sidebar, TabBar } from "./Sidebar";
 import { navItems, type AppPageKey, type NavItem } from "./navModel";
-import { NudgeSlot, pickNudge } from "./nudges";
+import { NudgeSlot, pickSlotNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
 import { unlockLimitLine } from "./ledger";
-import { BillingPage, PlansHost, ProTag, TrialBanner, TrialSummaryCard, buyTopup, openPlans } from "./Billing";
+import { BillingPage, PlansHost, ProTag, TrialBanner, TrialSummaryCard, buyTopup, openPlans, paidThanks } from "./Billing";
 import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { freeCompanyNow } from "./display";
 import { NetworkPage } from "./network/Network"; // [google network]
@@ -950,10 +950,13 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     if (q.get("paid") !== "1" || q.get("p")) return;
-    toast(me.plan?.firstChargeAt ? "Thanks. Pro is yours. Nothing is charged until your trial ends." : "Thanks. Pro is yours.");
+    // The plan just bought, by name: Stripe's return says which (plan=close), else the plan as it reads now.
+    const bought = q.get("plan");
+    toast(paidThanks(me.plan && (bought === "close" || bought === "pro") ? { ...me.plan, paidTier: bought } : me.plan));
     try {
       const u = new URL(window.location.href);
       u.searchParams.delete("paid");
+      u.searchParams.delete("plan");
       window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
     } catch {}
     // Stripe tells the server a moment after it sends the member back: look until the plan is Pro, a few times.
@@ -1008,9 +1011,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     markSpent();
     showUndo(message, () => act({ type: "undoUnlock", at }));
   };
-  const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void; from?: "crystal" }): Promise<boolean> => {
+  const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void; from?: "crystal"; asked?: boolean }): Promise<boolean> => {
     const k = cellKey(t.id, t.field);
-    if (!(await confirmSpend(costOf(t, opts?.from), spendWhat(t)))) return false;
+    if (!opts?.asked && !(await confirmSpend(costOf(t, opts?.from), spendWhat(t)))) return false;
     flagOn("busy", [k]);
     const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field, ...(opts?.from ? { from: opts.from } : {}) }, { quiet: true, silentError: true });
     flagOff("busy", [k]);
@@ -1885,7 +1888,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const nudgeFor = (where: "today" | "table") => {
     const m = where === "today" ? me : slotMe;
     const next = checkOff || (where === "today" && (homeSteps || steps.next?.action === "unlock")) || (waiting && !pf) ? null : steps.next;
-    return pickNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined });
+    // The slot is chosen from the balance as the list opened; its credits line reads the balance now (pickSlotNudge).
+    return pickSlotNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined }, me.credits);
   };
   /** What a nudge's button does. Unknown actions open the page of that name, or do nothing. */
   const runNudge = useStable((action: string) => {

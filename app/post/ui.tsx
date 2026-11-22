@@ -62,7 +62,8 @@ export interface Ui {
    * credits. `from: "crystal"`: a company opened from Crystal Ball or the Today card (Me.crystal);
    * the server checks it is in their Crystal Ball. Resolves true when it worked.
    */
-  unlock: (t: FactRef, opts?: { onWall?: () => void; from?: "crystal" }) => Promise<boolean> | void;
+  /** `asked`: the caller already asked before the spend (askSpend), so it isn't asked twice. */
+  unlock: (t: FactRef, opts?: { onWall?: () => void; from?: "crystal"; asked?: boolean }) => Promise<boolean> | void;
   /** `confirmed`: the caller already asked the member (Unlock all's own question). `cost`: what the caller says it costs. */
   unlockMany: (items: FactRef[], opts?: { confirmed?: boolean; cost?: number }) => Promise<boolean>;
   /** Open the fact editor on an element. With `initial`, it edits the member's own value. */
@@ -612,14 +613,16 @@ export function FactCell({
       if (ui.isHidden(t.id))
         return (
           <span className={`${cls} tp-none`} data-cell={k} title={`This company is locked. Unlock it for ${COMPANY_PRICE_SAY}, then you can add this.`}>
-            –
+            <span aria-hidden>–</span>
+            <span className="sr-only">Locked</span>
           </span>
         );
       // Only the seat holder adds facts about a seat: anyone else sees a quiet dash.
       if (t.entity === "engagement" && !ui.holdsSeat(t.id))
         return (
           <span className={`${cls} tp-none`} data-cell={k} title={SEAT_HOLDER_ONLY}>
-            –<span className="sr-only">{SEAT_HOLDER_ONLY}</span>
+            <span aria-hidden>–</span>
+            <span className="sr-only">No value. {SEAT_HOLDER_ONLY}</span>
           </span>
         );
       // The member's own rate, shared for the benchmarks only: not on the seat, and not missing either.
@@ -1187,7 +1190,7 @@ export function Sheet({
           <div className="tp-sheet-title" id={tid}>
             {title}
           </div>
-          <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close" onClick={onClose}>
+          <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Done" onClick={onClose}>
             <IconX />
           </button>
         </div>
@@ -1289,7 +1292,7 @@ export function spendWhat(t: FactRef): string {
   return factWhat(t);
 }
 
-type SpendAsk = { id: number; cost: number; what: string; credits: number; anchor: HTMLElement | null; resolve: (ok: boolean) => void };
+type SpendAsk = { id: number; cost: number; what: string; credits: number; then?: string; go?: string; anchor: HTMLElement | null; resolve: (ok: boolean) => void };
 let askNow: SpendAsk | null = null;
 const askSubs = new Set<() => void>();
 const askSet = (x: SpendAsk | null) => {
@@ -1303,7 +1306,7 @@ const pressable = (el: Element | null) => (el?.closest?.("button, [role='button'
  * Ask before a spend: resolves true on Unlock, false on Not now (Esc, a tap outside). The popover
  * opens by the control that asked (the focused or last pressed button). Mount SpendHost once.
  */
-export function askSpend(x: { cost: number; what: string; credits: number }): Promise<boolean> {
+export function askSpend(x: { cost: number; what: string; credits: number; then?: string; go?: string }): Promise<boolean> {
   askNow?.resolve(false);
   const active = typeof document !== "undefined" && document.activeElement !== document.body ? pressable(document.activeElement) : null;
   const anchor = active ?? (lastPress?.isConnected ? lastPress : null);
@@ -1341,13 +1344,14 @@ export function SpendHost() {
       </p>
       <p className="tp-spend-after">
         You&apos;ll have <span className="num">{plural(after, "credit")}</span> left, and you can undo it for 10 seconds.
+        {x.then ? ` ${x.then}` : null}
       </p>
       <div className="tp-spend-acts">
         <button type="button" className="btn" onClick={() => answer(false)}>
           Not now
         </button>
         <button type="button" className="btn btn-pine" autoFocus onClick={() => answer(true)}>
-          Unlock · <span className="num">{plural(x.cost, "credit")}</span>
+          {x.go ?? "Unlock"} · <span className="num">{plural(x.cost, "credit")}</span>
         </button>
       </div>
     </Anchored>

@@ -132,10 +132,17 @@ export function roleTermsLine(cells: Record<string, { s: string; v?: unknown } |
   return [r ?? "No rate posted", h ? `${h} ${h === 1 ? "hour" : "hours"} a week` : null].filter(Boolean).join(" · ");
 }
 
-/** Home's one-time card when the trial starts: "Your trial runs 21 days. On Pro, Close and the trial, any company opens free, … 14 left today." (OPENS_RULE) */
-export function trialCardLine(daysLeft: number | null, today: number): string {
+/**
+ * Home's one-time card when the trial starts: "Your trial runs 21 more days. On Pro, Close and the
+ * trial, any company opens free, … 15 of 15 free opens left today. 18 companies are in your Crystal
+ * Ball today." (OPENS_RULE). `opens` is Me.proOpens (left out: no count); `crystal` the Crystal Ball's
+ * companies today, said apart with its own words so the two numbers never read as one.
+ */
+export function trialCardLine(daysLeft: number | null, opens: { left: number; of: number } | null | undefined, crystal = 0): string {
   const days = daysLeft && daysLeft > 0 ? daysLeft : 21;
-  return `Your trial runs ${days === 1 ? "until tomorrow" : `${days} more days`}. ${OPENS_RULE}${today > 0 ? ` ${today} left today.` : ""}`;
+  const left = opens ? (opens.left > 0 ? ` ${opens.left} of ${opens.of} free opens left today.` : ` Today's ${opens.of} free opens are used. More open free tomorrow.`) : "";
+  const ball = crystal > 0 ? ` ${crystal === 1 ? "1 company is" : `${crystal} companies are`} in your ${FEATURE_NAME} today.` : "";
+  return `Your trial runs ${days === 1 ? "until tomorrow" : `${days} more days`}. ${OPENS_RULE}${left}${ball}`;
 }
 /** The trial on Home, for a phone (the top bar's pill is in its More sheet there): "Close trial · 18 days left". Null off the trial. */
 export function trialPillWords(plan: Pick<PlanView, "name" | "trialDaysLeft"> | null | undefined): string | null {

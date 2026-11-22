@@ -29,6 +29,7 @@ import { RateWho, reasonsFor, type RateChoice } from "./Seats";
 import { BENCH_RATE_HELP, atTime, plural, useDebounced } from "./hooks";
 import { Spot } from "../ui/fractions/lazy";
 import { pipelineAct } from "./pipelineStore";
+import { radioKeys, radioTab } from "./radioGroup";
 
 interface Lookup {
   domain: string;
@@ -104,9 +105,9 @@ const nextField = (from: string) => {
 
 function Chips({ options, value, onPick, label, id, err }: { options: string[]; value: string; onPick: (v: string) => void; label: string; id?: string; err?: FormErr }) {
   return (
-    <div className="tp-chips" role="radiogroup" aria-label={label} id={id} tabIndex={id ? -1 : undefined} {...(id && err ? invalid(id, err, id.replace(/^tp-ef-/, "")) : {})}>
-      {options.map((o) => (
-        <button key={o} type="button" role="radio" aria-checked={value === o} className={`chip tp-chipbtn${value === o ? " chip-on" : ""}`} onClick={() => onPick(value === o ? "" : o)}>
+    <div className="tp-chips" role="radiogroup" aria-label={label} id={id} tabIndex={id ? -1 : undefined} onKeyDown={radioKeys} {...(id && err ? invalid(id, err, id.replace(/^tp-ef-/, "")) : {})}>
+      {options.map((o, i) => (
+        <button key={o} type="button" role="radio" aria-checked={value === o} tabIndex={radioTab(i, options.indexOf(value))} className={`chip tp-chipbtn${value === o ? " chip-on" : ""}`} onClick={() => onPick(value === o ? "" : o)}>
           {o}
         </button>
       ))}
@@ -184,8 +185,14 @@ function NewCompany({
       setIndustry(lookup.industry ?? "");
     }
   }, [lookup, initialName]);
-  // What the member chose themselves (a looked-up name, website and industry are ours).
-  const typed = (!lookup && !!website.trim()) || (!!industry && industry !== (lookup?.industry ?? "")) || !!employees || !!revenue;
+  // What the member changed themselves: any field that differs from what it opened with (a looked-up
+  // name, website and industry are ours until the member edits them; an edited one counts like typing).
+  const typed =
+    name.trim() !== (lookup?.name ?? initialName).trim() ||
+    website.trim() !== (lookup?.domain ?? "").trim() ||
+    (!!industry && industry !== (lookup?.industry ?? "")) ||
+    !!employees ||
+    !!revenue;
   useEffect(() => {
     onDirty(typed);
     return () => onDirty(false);
@@ -1489,7 +1496,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
           >
             <div className="tp-modal-head">
               <h2 className="tp-modal-title">{title}</h2>
-              <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close (Esc)" onClick={() => leave()}>
+              <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Done (Esc)" onClick={() => leave()}>
                 <IconX />
               </button>
             </div>

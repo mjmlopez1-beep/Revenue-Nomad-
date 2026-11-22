@@ -182,8 +182,25 @@ export const CLOSE_ACTIVE_MIN = 2;
 export const closeActive = (u: CloseUse): boolean => u.sent > 0 || u.made + u.drafted >= CLOSE_ACTIVE_MIN;
 /** The plan the trial nudges toward: Pro, or Close for an active Close user. */
 export const keepTier = (u: CloseUse): Tier => (closeActive(u) ? "close" : "pro");
-/** "Keep Pro" or "Keep Close". */
-export const keepWords = (t: Tier) => `Keep ${TIER_NAME[t]}`;
+/**
+ * The trial's button for the plan it nudges toward: "Keep Close" (the trial is Close, so it carries
+ * on), or "Choose Pro" (a plan the member isn't on yet, so nothing reads as if they had it).
+ */
+export const keepWords = (t: Tier) => (t === "close" ? `Keep ${TIER_NAME.close}` : `Choose ${TIER_NAME.pro}`);
+/** The same in a sentence: "unless you keep Close", "unless you choose Pro". */
+export const keepVerb = (t: Tier) => (t === "close" ? `keep ${TIER_NAME.close}` : `choose ${TIER_NAME.pro}`);
+
+/**
+ * The member's plan by name, the one helper every screen and email uses: "Free", "Pro", "Close",
+ * or "Close trial". `name` is PlanView.name (planOf); `tier` the paid tier (Pro unless it says Close).
+ */
+export function planName(p: { name: "free" | "trial" | "pro"; tier?: string | null } | null | undefined): string {
+  if (!p || p.name === "free") return "Free";
+  if (p.name === "trial") return TRIAL_NAME;
+  return paidName(p.tier);
+}
+/** The paid tier a subscription is on, paused or not: "Pro" or "Close". */
+export const paidName = (tier?: string | null): string => TIER_NAME[tier === "close" ? "close" : "pro"];
 
 /** The tier a member is on now, for the plans and the gates' words: Free, Pro, or Close (the trial is Close). */
 export function tierNow(rec: PlanRecord | undefined, nowMs: number): "free" | Tier {
@@ -221,9 +238,9 @@ export const trialOver = (rec: PlanRecord | undefined, nowMs: number) =>
  */
 export function pauseDates(rec: PlanRecord | undefined, nowMs: number): { from: string; until: string } | { why: string } {
   if (!rec?.subscriptionId) return { why: "There's no paid plan to pause." };
-  if (rec.cancelAt) return { why: "Your plan is set to end. Keep Pro first, then pause it." };
-  if (proStartsLater(rec, nowMs)) return { why: "Nothing is charged until your trial ends. Pause once Pro has started." };
-  if (Number.isFinite(ms(rec.pausedUntil)) && ms(rec.pausedUntil) > nowMs) return { why: "Pro is paused already." };
+  if (rec.cancelAt) return { why: `Your plan is set to end. Keep ${paidName(rec.tier)} first, then pause it.` };
+  if (proStartsLater(rec, nowMs)) return { why: `Nothing is charged until your trial ends. Pause once ${paidName(rec.tier)} has started.` };
+  if (Number.isFinite(ms(rec.pausedUntil)) && ms(rec.pausedUntil) > nowMs) return { why: `${paidName(rec.tier)} is paused already.` };
   const end = ms(rec.proUntil);
   const from = Number.isFinite(end) && end > nowMs ? end : nowMs;
   return { from: isoOf(from), until: addMonths(isoOf(from), PAUSE_MONTHS) };

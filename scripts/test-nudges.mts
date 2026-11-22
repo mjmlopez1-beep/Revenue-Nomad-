@@ -47,7 +47,7 @@ const base = { page: "today", credits: 20, profileEmpty: false };
 console.log("The order");
 const ending = plan({ ending: true, trialDaysLeft: 3 });
 const all = pickNudge({ ...base, credits: 1, plan: ending, profileEmpty: true, nextStep: step });
-check("the trial's last days come first, on Today", all?.kind === "trial" && all.text === "Your Close trial ends in 3 days. Then you're on Free, unless you keep Pro." && all.cta === "Keep Pro" && all.action === "plans", all);
+check("the trial's last days come first, on Today", all?.kind === "trial" && all.text === "Your Close trial ends in 3 days. Then you're on Free, unless you choose Pro." && all.cta === "Choose Pro" && all.action === "plans", all);
 check("only on Today: on the table the credits come first", pickNudge({ ...base, page: "table", credits: 1, plan: ending, profileEmpty: true, nextStep: step })?.kind === "credits");
 check("a trial with more than 3 days left is no nudge", pickNudge({ ...base, plan: plan({ trialDaysLeft: 12 }) }) === null);
 check("the last day says tomorrow", pickNudge({ ...base, plan: plan({ ending: true, trialDaysLeft: 1 }) })?.text.startsWith("Your Close trial ends tomorrow.") === true);

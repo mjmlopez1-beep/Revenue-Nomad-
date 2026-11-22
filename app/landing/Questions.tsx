@@ -55,7 +55,7 @@ export function Questions({ starter, support, intro = false, first }: QuestionsP
         </button>
       ) : null}
       <p className="lp-faq-more">
-        Want your name off a seat? <a href="/remove">Remove my name</a>
+        Want your name off a seat? <a className="lp-tap" href="/remove">Remove my name</a>
       </p>
       {support ? (
         <p className="lp-faq-more">

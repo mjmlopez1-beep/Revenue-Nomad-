@@ -549,7 +549,7 @@ async function main() {
   const freToday0 = JSON.stringify(sortKeys((await todayView(FRE))!.moves));
   const ball0 = JSON.stringify((await radar.radarView(MOR))!.rows);
   let r = await act(MOR, { type: "move", id: P.corv, op: "done" });
-  check("Done says so, and counts", /^Done\. That's your first move this month\.$/.test(r.message), r.message);
+  check("Mark as done says it was marked, and counts", /^Marked as done\. That's your first move this month\.$/.test(r.message), r.message);
   let m2 = await homeMoves(MOR);
   check("the done company is gone and the next best takes its place", same(m2.moves.map((m) => m.id), [P.harb, P.lark, P.tall]) && m2.today.moves!.month === 1, m2.moves.map((m) => nameOf(m.id)));
   check("Crystal Ball itself is unchanged", JSON.stringify((await radar.radarView(MOR))!.rows) === ball0);

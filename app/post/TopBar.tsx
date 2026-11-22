@@ -16,6 +16,30 @@ import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, SpendHost, UndoHost, owedText } from "./ui";
 import { PlanPill } from "./Billing";
 import { ProposalBell } from "./Activity";
+
+/**
+ * Around the bell (Activity.tsx ProposalBell): when Tab takes focus out of its open panel, the panel
+ * closes and focus comes back to the bell, so nothing hidden under the panel gets focus. Escape and
+ * a click outside are the bell's own. `display: contents`, so the top bar's layout is unchanged.
+ */
+export function BellFocus({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="tp-bellfocus"
+      style={{ display: "contents" }}
+      onBlur={(e) => {
+        const wrap = e.currentTarget;
+        const to = e.relatedTarget as Node | null;
+        if (to && wrap.contains(to)) return;
+        const bell = wrap.querySelector<HTMLButtonElement>("button[aria-controls='ac-bell-panel'][aria-expanded='true']");
+        // No new target: a click elsewhere (the bell's own mousedown closes it) or the window losing focus. Only Tab moves focus somewhere.
+        if (bell && to) bell.click();
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
@@ -738,7 +762,9 @@ export function TopBar({
               <button type="button" className={`tp-iconbtn${searchInList ? " tp-search-icon-list" : ""}`} aria-label="Search" onClick={() => setSearchOpen(true)}>
                 <IconSearch size={18} />
               </button>
-              <ProposalBell phone />
+              <BellFocus>
+                <ProposalBell phone />
+              </BellFocus>
               <PlanPill plan={me.plan} phone />
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} unlockTip={unlockTip} />
             </div>
@@ -761,7 +787,9 @@ export function TopBar({
           <span className="tp-add-short">Add</span>
         </button>
         {/* Proposal notifications (Activity.tsx, lib/close): Close only, nothing otherwise. */}
-        <ProposalBell />
+        <BellFocus>
+          <ProposalBell />
+        </BellFocus>
         {onMessages && <MessagesBtn unread={unread} onClick={onMessages} here={onMessagesPage} />}
       </div>
       {hosts}

@@ -209,8 +209,9 @@ async function firstSession(t: typeof import("../lib/table"), radar: typeof impo
   check("a row click spends nothing after Free's is used, or with billing off (the record states the cost)", !m.rowOpensFree({ crystal: "used" }) && !m.rowOpensFree({}));
 
   // The trial's one-time card and the phone's pill.
-  check("the trial card's line", m.trialCardLine(21, 14) === "Your trial runs 21 more days. On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that. 14 left today.", m.trialCardLine(21, 14));
-  check("with nothing today it leaves the count out", m.trialCardLine(20, 0) === "Your trial runs 20 more days. On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that.", m.trialCardLine(20, 0));
+  check("the trial card's line: free opens left of 15, then Crystal Ball's count in its own words", m.trialCardLine(21, { left: 15, of: 15 }, 18) === "Your trial runs 21 more days. On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that. 15 of 15 free opens left today. 18 companies are in your Crystal Ball today.", m.trialCardLine(21, { left: 15, of: 15 }, 18));
+  check("with no counts it leaves them out", m.trialCardLine(20, null, 0) === "Your trial runs 20 more days. On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that.", m.trialCardLine(20, null, 0));
+  check("today's opens used: it says so, not 0 left", /Today's 15 free opens are used\. More open free tomorrow\.$/.test(m.trialCardLine(20, { left: 0, of: 15 })), m.trialCardLine(20, { left: 0, of: 15 }));
   check("the phone's trial pill", m.trialPillWords({ name: "trial", trialDaysLeft: 18 }) === "Close trial · 18 days left" && m.trialPillWords({ name: "trial", trialDaysLeft: 1 }) === "Close trial · last day");
   check("no pill off the trial", m.trialPillWords({ name: "free", trialDaysLeft: null }) === null && m.trialPillWords({ name: "pro", trialDaysLeft: null }) === null && m.trialPillWords(undefined) === null);
 

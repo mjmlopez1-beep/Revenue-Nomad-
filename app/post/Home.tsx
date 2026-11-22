@@ -326,7 +326,7 @@ export function HomePage(p: HomeProps) {
       />
       {/* The trial's last 4 days: what they used, and what locks when it ends (PlanView.summary). */}
       <TrialSummaryCard plan={me.plan} />
-      {p.trialStarted && me.plan?.name === "trial" ? <TrialStarted days={me.plan.trialDaysLeft} today={dayN} radar={p.radar} onSeen={p.onTrialStartSeen} /> : null}
+      {p.trialStarted && me.plan?.name === "trial" ? <TrialStarted days={me.plan.trialDaysLeft} opens={me.proOpens} crystal={dayN} radar={p.radar} onSeen={p.onTrialStartSeen} /> : null}
       {p.trialEnded ? <TrialEnded onSeePro={p.onSeePro} onSeen={p.onTrialSeen} art={<Scene kind="trialEnding" square pro on="mint" className="td-trial-art" />} /> : null}
       {p.proWelcome && me.plan ? <ProWelcome plan={me.plan} onSeen={p.onProSeen} /> : null}
 
@@ -468,13 +468,13 @@ export function HomePage(p: HomeProps) {
 /* ---------- the trial's one-time card ---------- */
 
 /** Once, when the trial starts: every Crystal Ball company opens free for its days, and the way there. */
-function TrialStarted({ days, today, radar, onSeen }: { days: number | null; today: number; radar: Go; onSeen: () => void }) {
+function TrialStarted({ days, opens, crystal, radar, onSeen }: { days: number | null; opens?: { left: number; of: number }; crystal: number; radar: Go; onSeen: () => void }) {
   return (
     <section className="td-trial hm-trialcard" aria-labelledby="hm-trialcard-h">
       <p className="td-trial-h" id="hm-trialcard-h">
         Your {TRIAL_NAME} is on.
       </p>
-      <p>{trialCardLine(days, today)}</p>
+      <p>{trialCardLine(days, opens, crystal)}</p>
       <div className="td-acts">
         <GoLink to={{ href: radar.href, go: () => (onSeen(), radar.go()) }} className="btn btn-pine">
           Open {FEATURE_NAME}

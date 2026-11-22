@@ -814,6 +814,14 @@ button.lp-fake-btn {
     height: 44px;
   }
 }
+/* An inline link on a touch screen ("Remove my name"): a 44px hit area that padding gives and a negative margin takes back. */
+@media (pointer: coarse) {
+  a.lp-tap {
+    display: inline-block;
+    padding: 12px 4px;
+    margin: -12px -4px;
+  }
+}
 .lp-rec-loading .lp-rec-sec,
 .lp-rec-loading .lp-rec-id {
   display: grid;

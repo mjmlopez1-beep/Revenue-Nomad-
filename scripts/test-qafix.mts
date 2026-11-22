@@ -395,7 +395,7 @@ async function inBrowser() {
         await page.waitForSelector(".hunt-sheet #hunt-title", { timeout: 5000 });
         await page.waitForTimeout(300);
         check("opened again, what was typed is still there", (await page.inputValue("#hunt-title")) === typed, await page.inputValue("#hunt-title"));
-        await page.click(".hunt-sheet .tp-sheet-head [aria-label='Close']");
+        await page.click(".hunt-sheet .tp-sheet-head [aria-label='Done']");
         await page.waitForTimeout(500);
         const st = await page.evaluate(() => ({ sheet: (window.history.state as { tpSheet?: string } | null)?.tpSheet ?? null, len: window.history.length }));
         check("its own X closes it and takes its entry off: the page doesn't move", (await page.$(".hunt-sheet")) === null && page.url() === table && st.sheet === null && (await inApp()), { url: page.url(), st });

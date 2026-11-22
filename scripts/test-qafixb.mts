@@ -208,7 +208,7 @@ async function inProcess() {
   for (const f of ["app/post/Credits.tsx", "app/post/todayModel.ts", "app/onboard/Onboarding.tsx", "app/landing/Pricing.tsx", "app/landing/faq.ts", "app/post/Today.tsx"]) check(`${f} uses OPENS_RULE`, /OPENS_RULE/.test(readFileSync(f, "utf8")));
   check("the day's first free open says it in its toast, the rest count down", t.proOpenLine(14).includes(TF.OPENS_RULE) && /13 of today's 15 free opens left/.test(t.proOpenLine(13)) && /last of today's 15/.test(t.proOpenLine(0)));
   const TM = await import("../app/post/todayModel");
-  check("Home's trial card says it", TM.trialCardLine(21, 14).includes(TF.OPENS_RULE) && /14 left today/.test(TM.trialCardLine(21, 14)), TM.trialCardLine(21, 14));
+  check("Home's trial card says it", TM.trialCardLine(21, { left: 14, of: 15 }).includes(TF.OPENS_RULE) && /14 of 15 free opens left today/.test(TM.trialCardLine(21, { left: 14, of: 15 })), TM.trialCardLine(21, { left: 14, of: 15 }));
   check("PRO_STORY never promises Pro sends proposals", !/send the proposal/.test(rules.PRO_STORY) && /Close adds the proposal they sign/.test(rules.PRO_STORY), rules.PRO_STORY);
   check("no \"Pro + Close\" anywhere in what changed", !["app/post/Credits.tsx", "app/landing/faq.ts", "lib/billing/rules.ts", "lib/tableFields.ts", "app/onboard/Onboarding.tsx"].some((f) => readFileSync(f, "utf8").includes("Pro + Close")));
   check("a 500 or above reads in plain words, a refusal keeps its own", S.errorText(500, "TypeError: x is undefined at line 4", "f") === S.SERVER_PROBLEM && S.errorText(503, "Merlin is busy", "f") === S.SERVER_PROBLEM && S.errorText(400, "Pick the company.", "f") === "Pick the company." && S.errorText(404, "", "Fallback.") === "Fallback.");

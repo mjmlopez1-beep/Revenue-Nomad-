@@ -220,6 +220,17 @@ img {
   text-decoration: none;
   transition: background var(--t), border-color var(--t), color var(--t), opacity var(--t);
 }
+/* A button whose label carries a name of any length ("Add <company> to Merlin"): it wraps inside its card, never past it. */
+.btn.btn-wrap {
+  white-space: normal;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 .btn:hover {
   border-color: var(--pine);
 }

@@ -643,7 +643,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
               Copy
             </button>
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => setDraft(null)}>
-              Close
+              Done
             </button>
           </div>
           <span className="nw-small">Merlin never sends for you. You review and send it yourself.</span>

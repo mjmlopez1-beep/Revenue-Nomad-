@@ -191,6 +191,8 @@ run nav npx tsx scripts/test-nav.mts
 run qafix env QAFIX_PORT="$PORT" npx tsx scripts/test-qafix.mts
 # The QA fixes, batch B (scripts/test-qafixb.mts): Undo an unlock and the question before a spend, Unlock and send, Hide my name on my seats, the words (who sees a name, the free opens, PRO_STORY, plain words for a 500, the proposal's labelled blanks, Draft it's signer); then in Chromium at 1440 and as an iPhone 13: the top search keeps every letter and Add never opens, the price at rest, Undo, the full table failing then Try again, Fractionals at 1024, 44px targets.
 run qafixb env QAFIXB_PORT="$PORT" npx tsx scripts/test-qafixb.mts
+# The QA fixes, batch 6U (scripts/test-qa6u.mts): the plan by name everywhere (Free, Pro, Close, Close trial: billing page, thanks, sidebar, renewal and trial emails, the credit history, the month's credits on a yearly plan), Home's trial card, one balance on the table, Unlock and send asks once, where a claimed seat was found, You've messaged, locked sites as dots; then in Chromium: the record modal at 768 with focus back, onboarding's chips by arrow keys, Fractionals at 768, 44px on touch.
+run qa6u env QA6U_PORT="$PORT" npx tsx scripts/test-qa6u.mts
 # 20 members acting at once on their own server: every answer carries the member's numbers and the table version, no server errors, at most one table a minute each.
 run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs
 

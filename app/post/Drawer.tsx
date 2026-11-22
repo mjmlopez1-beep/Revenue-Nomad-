@@ -1855,6 +1855,11 @@ export function Drawer({
   const fromBall = !!crystal && (ui.me.crystal === "all" || ui.me.crystal === "one");
   const coarse = useMedia("(hover: none) and (pointer: coarse)");
   const touch = phone || coarse;
+  // Below 1024px the record is full width (post.css) and covers the table: there it is modal, as on a phone.
+  const covers = useMedia("(max-width: 1023px)");
+  const modal = phone || covers;
+  // Where focus was when the record opened: it goes back there when the record closes.
+  const opener = useRef<Element | null>(typeof document !== "undefined" ? document.activeElement : null);
   const rootRef = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
@@ -1922,13 +1927,24 @@ export function Drawer({
     }
   }, [c.id, focus, c.hidden]);
 
-  // A phone record covers the page: what is behind it is out of reach until it closes.
+  // A record that covers the page (a phone, or any width under 1024px): what is behind it is out of reach until it closes.
   useEffect(() => {
-    if (!phone) return;
-    const behind = [...document.querySelectorAll<HTMLElement>(".tp-app > .tp-top, .tp-app > main, .tp-app > .tp-body")];
+    if (!modal) return;
+    // The page's own parts beside the record (the top bar, the table, the tab bar, whatever the layout nests them in), never another layer.
+    const root = rootRef.current;
+    const own = root?.parentElement ? [...root.parentElement.children].filter((el): el is HTMLElement => el instanceof HTMLElement && el !== root && !el.matches("[role='dialog'], [role='alertdialog'], .tp-skip, .toasts")) : [];
+    const behind = [...new Set([...own, ...document.querySelectorAll<HTMLElement>(".tp-app > .tp-top, .tp-app > main, .tp-app > .tp-body")])].filter((el) => !el.contains(root));
     behind.forEach((el) => el.setAttribute("inert", ""));
     return () => behind.forEach((el) => el.removeAttribute("inert"));
-  }, [phone]);
+  }, [modal]);
+  // Closed: focus goes back to what opened it (a row, a name), when it is still on the page.
+  useEffect(
+    () => () => {
+      const el = opener.current as HTMLElement | null;
+      if (el && el.isConnected && typeof el.focus === "function" && !rootRef.current?.isConnected) requestAnimationFrame(() => el.isConnected && el.focus({ preventScroll: true }));
+    },
+    [],
+  );
 
   useEffect(() => {
     const head = headRef.current;
@@ -1946,8 +1962,8 @@ export function Drawer({
       e.stopPropagation();
       return;
     }
-    // A phone record is modal: Tab stays inside it.
-    if (e.key === "Tab" && phone && rootRef.current) {
+    // A record that covers the page is modal: Tab stays inside it.
+    if (e.key === "Tab" && modal && rootRef.current) {
       const els = [...rootRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter((x) => x.offsetParent !== null);
       if (!els.length) return;
       const first = els[0];
@@ -2077,7 +2093,7 @@ export function Drawer({
         ref={rootRef}
         className={`${phone ? "tp-rsheet" : "tp-drawer"}${touch ? " tp-touchrows" : ""}`}
         role="dialog"
-        aria-modal={phone}
+        aria-modal={modal}
         aria-label={coName}
         onKeyDown={onKeyDown}
       >
@@ -2087,7 +2103,7 @@ export function Drawer({
               <IconChevron dir="left" size={18} />
             </button>
           ) : (
-            <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close (Esc)" onClick={onClose}>
+            <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Done (Esc)" onClick={onClose}>
               <IconX />
             </button>
           )}

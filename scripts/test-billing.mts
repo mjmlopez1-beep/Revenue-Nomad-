@@ -459,7 +459,7 @@ async function main() {
   check("invoice.paid: 100 credits, once, however often it comes", w2.status === 200 && w2again.status === 200 && w2again.body.why === "duplicate" && w2twin.status === 200 && diMe.credits === credits0 + 100, { credits0, now: diMe.credits, w2again: w2again.body });
   await t.billingVisit(DI);
   check("a visit in the same month grants nothing more", (await meOf(DI)).credits === credits0 + 100);
-  check("the credits read as Pro's in the history", (await t.buildView(DI)).ledger.some((l) => l.reason === "Pro credits for the month" && l.delta === 100));
+  check("the credits read as Pro's in the history, with the month of the year on a yearly plan", (await t.buildView(DI)).ledger.some((l) => l.reason === "Pro credits for month 1 of your year" && l.delta === 100));
   const top = { id: "evt_w3", type: "checkout.session.completed", data: { object: { id: "cs_w3", mode: "payment", client_reference_id: ref, customer: "cus_w", payment_status: "paid", amount_total: 1900, metadata: { ref, kind: "topup" } } } };
   await hook(top);
   await hook(top);
@@ -566,8 +566,8 @@ async function main() {
   const to = (who: string) => mails.filter((m) => m.to === who);
   check("Al (3 days left, looking): the 3-day note", to("al.trialson@example.com").length === 1 && /ends in \d+ days/.test(to("al.trialson@example.com")[0].subject), to("al.trialson@example.com").map((m) => m.subject));
   check(
-    "it is the value receipt with Keep Pro, in place of a countdown (one email, not two)",
-    /what your trial gave you so far|still yours for a few days/.test(to("al.trialson@example.com")[0]?.text ?? "") && /After it ends you're on Free, unless you keep Pro/.test(to("al.trialson@example.com")[0]?.text ?? "") && /\$590 a year/.test(to("al.trialson@example.com")[0]?.text ?? ""),
+    "it is the value receipt with Choose Pro, in place of a countdown (one email, not two)",
+    /what your trial gave you so far|still yours for a few days/.test(to("al.trialson@example.com")[0]?.text ?? "") && /After it ends you're on Free, unless you choose Pro/.test(to("al.trialson@example.com")[0]?.text ?? "") && /\$590 a year/.test(to("al.trialson@example.com")[0]?.text ?? ""),
     to("al.trialson@example.com")[0]?.text,
   );
   const alEnd = (await meOf(AL)).plan!;
@@ -712,6 +712,20 @@ async function main() {
     check("  Close at once: canClose, and proposals send", diClose.tier === "close" && diClose.canClose && (await P.listProposals(DI)).canSend, diClose);
     const again = await server.billingAction(DI, "tier", { tier: "close" }).then(() => null, (e: Error) => e.message);
     check("  asking again says so", /already/.test(again ?? ""), again);
+    // [qa6U A-38-1] On Close every cancel, keep, pause and resume line names Close, never Pro.
+    const cnC = await server.billingAction(DI, "cancel", {});
+    const kpC = await server.billingAction(DI, "keep", {});
+    const psC = await server.billingAction(DI, "pause", {});
+    const rsC = await server.billingAction(DI, "resume", {});
+    const said = [cnC.message, kpC.message, psC.message, rsC.message].join(" | ");
+    check(
+      "  on Close, cancel, keep, pause and resume name Close",
+      /^Cancelled\. You keep Close until /.test(cnC.message ?? "") && kpC.message === "Close carries on. Nothing changes." && /You keep Close until .*, and Close comes back on /.test(psC.message ?? "") && /^The pause is off\. Close carries on/.test(rsC.message ?? "") && !/\bPro\b/.test(said),
+      said,
+    );
+    const diCloseV = (await meOf(DI)).plan!;
+    check("  the plan says which tier the subscription is for (paidTier)", diCloseV.paidTier === "close", diCloseV.paidTier);
+    check("  the month's credits read as Close's, by the month of the year", (await t.buildView(DI)).ledger.some((l) => /^Close credits for month \d+ of your year$/.test(l.reason)), (await t.buildView(DI)).ledger.map((l) => l.reason));
     calls.length = 0;
     const down = await server.billingAction(DI, "tier", { tier: "pro" });
     const downBody = new URLSearchParams(calls.find((c) => c.method === "POST")?.body ?? "");

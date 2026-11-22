@@ -31,8 +31,8 @@ const PICK_LABELS = new Set(ALL_FIELDS.filter(({ entity, f }) => entity === "com
 const PRIVATE_RATE = "Private rate";
 /** The free company of the day's row (lib/table.ts FREE_COMPANY_LINE). */
 const FREE_COMPANY = "Free company of the day";
-/** Trial and Pro: a company opened free, up to 15 a day (lib/table.ts PRO_OPEN_LINE). They don't count toward the day's unlocks. */
-const PRO_OPEN = "Opened free on Pro";
+/** Trial, Pro and Close: a company opened free, up to 15 a day, named by the plan it opened on (lib/table.ts openedFreeLine). They don't count toward the day's unlocks. */
+const PRO_OPEN = /^Opened free (on|in your) /;
 /** A company opened free from Crystal Ball on Trial or Pro, and Free's one a day (lib/table.ts CRYSTAL_LINE, CRYSTAL_FULL_LINE). */
 const CRYSTAL = `Opened free from ${FEATURE_NAME}`;
 const CRYSTAL_FULL = `Free ${FEATURE_NAME} company of the day`;
@@ -44,9 +44,9 @@ export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?
   const locked = l.company === HIDDEN_COMPANY;
   const at = locked ? " at a locked company" : l.company ? ` at ${l.company}` : "";
   const priv = l.field === PRIVATE_RATE;
+  if (PRO_OPEN.test(l.reason)) return { text: `${l.reason}${l.company && !locked ? `: ${l.company}` : ""}` };
   switch (l.reason) {
     case FREE_COMPANY:
-    case PRO_OPEN:
     case CRYSTAL:
     case CRYSTAL_FULL:
       // The free company of the day, or one opened free from Crystal Ball: no credits, and the company is theirs like a paid one.

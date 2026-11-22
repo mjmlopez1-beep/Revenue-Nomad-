@@ -13,8 +13,8 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ConversationRec, Me, MessageRec, ReportedMessage } from "@/lib/tableTypes";
 import { IconChevron, LockedName, initials, post, useToast, errorText } from "../ui/shared";
-import { COMPANY_PRICE_SAY, HIDDEN_COMPANY } from "@/lib/tableFields";
-import { Sheet, useFocusTrap, useUi } from "./ui";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, HIDDEN_COMPANY } from "@/lib/tableFields";
+import { Sheet, askSpend, needsSpendConfirm, spendWhat, useFocusTrap, useUi } from "./ui";
 import { useLayout } from "./hooks";
 import { freeCompanyNow } from "./display";
 import type { FactRef } from "./model";
@@ -629,6 +629,8 @@ export function MessageButton({
 /** The server's refusal when who held a seat is still locked for the member (lib/messages.ts message.start). */
 export const SEAT_LOCKED_FIRST = /^Unlock who held this seat first/;
 /** "Unlock and send"'s price: a company free on a free open, else its price; any other fact 1 credit. */
+/** The same in credits: what the one question before Unlock and send asks for. */
+export const unlockSendCost = (me: Me, t: FactRef): number => (t.field === "identity" ? (freeCompanyNow(me) ? 0 : COMPANY_PRICE) : 1);
 export function unlockSendPrice(me: Me, t: FactRef): string {
   if (t.field === "identity") return freeCompanyNow(me) ? "free" : COMPANY_PRICE_SAY;
   return "1 credit";
@@ -749,14 +751,20 @@ function Compose({
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (busy || !text.trim() || len > MAX) return;
-    setBusy(true);
     setErr(null);
     if (needs) {
-      // Unlock first (it asks before a spend, and can be undone), then send what was typed.
-      const ok = await ui.unlock(needs);
+      // One question, here, before anything is spent: what the credits open, and that the message then sends.
+      // Nothing reads "Sending" while it is asked; the unlock after it doesn't ask again (asked).
+      const cost = unlockSendCost(ui.me, needs);
+      if (needsSpendConfirm(cost) && ui.me.credits >= cost) {
+        const yes = await askSpend({ cost, what: spendWhat(needs), credits: ui.me.credits, then: `Then your message to ${first} sends.`, go: "Unlock and send" });
+        if (!yes) return;
+      }
+      setBusy(true);
+      const ok = await ui.unlock(needs, { asked: true });
       if (ok === false) return setBusy(false);
       setNeeds(null);
-    }
+    } else setBusy(true);
     const r = await send("engagementId" in to ? { type: "message.start", engagementId: to.engagementId, text: text.trim() } : { type: "message.connect", memberId: to.memberId, text: text.trim() });
     setBusy(false);
     if (r.error && "engagementId" in to && SEAT_LOCKED_FIRST.test(r.error)) {

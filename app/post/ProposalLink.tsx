@@ -58,7 +58,7 @@ export function LinkCompany({ p, onLinked, site, lead }: { p: ProposalRec; onLin
             Pick the company
           </button>
           {p.company.name && (
-            <button type="button" className="btn btn-sm" onClick={() => setAdding(true)}>
+            <button type="button" className="btn btn-sm btn-wrap" onClick={() => setAdding(true)}>
               Add {p.company.name} to Merlin
             </button>
           )}

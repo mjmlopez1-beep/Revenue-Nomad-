@@ -103,7 +103,7 @@ import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
 import { healthStats } from "./health";
 import {
-  ENDING_DAYS, SUMMARY_DAYS, canClose, keepTier, type CloseUse, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
+  ENDING_DAYS, SUMMARY_DAYS, canClose, keepTier, paidName, planName, TRIAL_NAME, type CloseUse, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
 import { aiPackReady, closeReady, surveyCode } from "./billing/stripe";
@@ -2347,8 +2347,26 @@ function crystalOf(s: State, memberId: string, nowMs: number): "all" | "one" | "
 }
 /** The credit history's words for it (LedgerRow.reason). */
 export const FREE_COMPANY_LINE = "Free company of the day";
-/** The same on Trial and Pro, where companies open free up to PRO_OPENS_DAILY a day. */
-export const PRO_OPEN_LINE = "Opened free on Pro";
+/**
+ * The same on Trial, Pro and Close, where companies open free up to PRO_OPENS_DAILY a day, named by
+ * the plan the member was on when it opened: "Opened free on Close", "Opened free in your Close trial".
+ */
+export const openedFreeLine = (plan: string) => (plan === TRIAL_NAME ? `Opened free in your ${TRIAL_NAME}` : `Opened free on ${plan}`);
+export const PRO_OPEN_LINE = openedFreeLine("Pro");
+/** A free open's line in the credit history, from the plan on the day it happened (not today's). */
+export function freeOpenLine(rec: PlanRecord | undefined, atMs: number): string {
+  const then = billingLive() ? planOf(rec, atMs) : "free";
+  return then === "free" ? FREE_COMPANY_LINE : openedFreeLine(planName({ name: then, tier: rec?.tier }));
+}
+/**
+ * The month's credits on a paid plan, named by the plan: "Close credits for the month", and on a
+ * yearly plan which month of the year they are for ("Pro credits for month 3 of your year").
+ */
+export function planCreditsLine(rec: PlanRecord | undefined, ref?: string): string {
+  const name = paidName(rec?.tier);
+  const k = Number(/\.(\d+)$/.exec(ref ?? "")?.[1]);
+  return rec?.interval === "year" && Number.isFinite(k) ? `${name} credits for month ${k + 1} of your year` : `${name} credits for the month`;
+}
 /** The credit history's words for a company opened free from Crystal Ball (Trial and Pro), and for Free's one a day. */
 export const CRYSTAL_LINE = `Opened free from ${FEATURE_NAME}`;
 export const CRYSTAL_FULL_LINE = `Free ${FEATURE_NAME} company of the day`;
@@ -4313,7 +4331,7 @@ async function fullView(
       }
       // Pro's credits for a paid month, and a top-up bought (lib/billing).
       if (l.reason === "plan" || l.reason === "topup") {
-        ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "plan" ? "Pro credits for the month" : `Bought ${TOPUP_CREDITS} credits`, company: "", field: "" });
+        ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "plan" ? planCreditsLine(planRec(s, me.id), l.ref) : `Bought ${TOPUP_CREDITS} credits`, company: "", field: "" });
         continue;
       }
       // The one-time lift to 0 when starter credits went down.
@@ -4348,7 +4366,7 @@ async function fullView(
       }
       // The free company of the day: "Free company of the day", then the company (theirs now).
       if (l.reason === "unlock" && l.why === "free") {
-        ledger.push({ at: l.at, delta: l.delta, reason: proOpens(s, me.id, nowMs) ? PRO_OPEN_LINE : FREE_COMPANY_LINE, company: companyNameOf(id), field: "" });
+        ledger.push({ at: l.at, delta: l.delta, reason: freeOpenLine(planRec(s, me.id), Date.parse(l.at)), company: companyNameOf(id), field: "" });
         continue;
       }
       // Opened free from Crystal Ball (Trial and Pro), or Free's one Crystal Ball company of the day, then the company (theirs now).
@@ -7294,7 +7312,8 @@ export async function perform(
           return {
             message:
               op === "done"
-                ? `Done. ${n === 1 ? "That's your first move this month." : `That's ${n} moves this month.`}`
+                ? // The member says they made it (in Merlin or outside it): the words say it was marked, not that Merlin saw it done.
+                  `Marked as done. ${n === 1 ? "That's your first move this month." : `That's ${n} moves this month.`}`
                 : op === "snooze"
                   ? `Snoozed for ${SNOOZE_DAYS} days.`
                   : "Back in your moves.",
@@ -7878,7 +7897,7 @@ export async function claimPathFor(engagementPubId: string): Promise<string | nu
 export interface ClaimPage {
   status: "invalid" | "open" | "held" | "yours" | "waiting" | "signin";
   /** `ended`: the seat's status is Ended, and `end` its end month or year when on file (the page reads "2023 to 2025", not "since 2023"). */
-  seat: { role: string | null; fn: string | null; company: string | null; start: string | null; end?: string | null; ended?: boolean; named: boolean } | null;
+  seat: { role: string | null; fn: string | null; company: string | null; start: string | null; end?: string | null; ended?: boolean; named: boolean; found: ClaimFound } | null;
   me: { first: string } | null;
   /** Sign-in links go by email (an email provider is set up). */
   email: boolean;
@@ -7899,6 +7918,9 @@ export interface ClaimPage {
     others: number;
   };
 }
+/** Where Merlin found a seat, for the claim page's one line about it: public sources (the seat scan, published work), or a member who added it. */
+export type ClaimFound = "public" | "member";
+const claimFound = (e: EngNode): ClaimFound => (e.source === "Member added" ? "member" : "public");
 export async function claimPage(token: unknown, memberToken: string | null, ref?: unknown): Promise<ClaimPage> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, memberToken, s);
@@ -7935,6 +7957,7 @@ export async function claimPage(token: unknown, memberToken: string | null, ref?
       start: live(e, s, "start"),
       ...(live(e, s, "status") === "Ended" ? { ended: true, end: hireMonth(live(e, s, "end")) ? live(e, s, "end") : null } : {}),
       named: !!publicName(e, s) || !!seedPublicName(seed, s, e.id),
+      found: claimFound(e),
     },
     ...(status === "open" ? personPage(seed, s, g, e, locked, ref) : {}),
   };
@@ -8581,6 +8604,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     prices: { month: PRICES.month, year: PRICES.year, closeMonth: PRICES.closeMonth, closeYear: PRICES.closeYear, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
     // Pro or Close (the trial is Close), whether Close features are open now, and whether Close can be bought.
     tier: tierNow(rec, nowMs),
+    paidTier: rec?.subscriptionId ? (rec.tier === "close" ? "close" : "pro") : null,
     keep: keepOf(s, memberId),
     canClose: canClose(rec, nowMs),
     ...(rec?.closeUntil && Date.parse(rec.closeUntil) > nowMs && rec.tier !== "close" ? { closeUntil: rec.closeUntil } : {}),
