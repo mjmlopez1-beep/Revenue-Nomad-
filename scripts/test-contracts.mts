@@ -71,7 +71,9 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.startsWith(AI_BASE)) {
     const raw = init?.body ?? (input instanceof Request ? await input.text() : "{}");
     aiCalls.push({ body: JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw as ArrayBuffer)) });
-    return new Response(JSON.stringify(aiAnswer()), { status: 200, headers: { "content-type": "application/json", "request-id": "req_fake" } });
+    const a = aiAnswer();
+    if (a instanceof Response) return a;
+    return new Response(JSON.stringify(a), { status: 200, headers: { "content-type": "application/json", "request-id": "req_fake" } });
   }
   if (url === "http://127.0.0.1:9/fake-email") {
     const b = JSON.parse(String(init?.body ?? "{}"));
@@ -322,6 +324,157 @@ async function main() {
   check("  nor do the screens for them (contracts, Change it, start from the call)", ui.every(([, src]) => !AIW.test(src)), ui.filter(([, src]) => AIW.test(src)).map(([f, src]) => [f, src.match(new RegExp(`.{0,60}(Claude|Anthropic).{0,60}`))?.[0]]));
   const privacy = readFileSync(path.join(import.meta.dirname, "..", "app/privacy/Privacy.tsx"), "utf8");
   check("the Privacy page names Anthropic as the AI service behind Merlin's drafts, not training on it", privacy.includes("Anthropic (the AI service that writes Merlin's drafts)") && privacy.includes("don't let it train its models"));
+
+  /* ---------- 10. live progress, a company added from its website, the signer from the draft ---------- */
+  const LV = await import("../lib/proposals/live");
+  const SP = await import("../lib/proposals/streamParse");
+  const AC = await import("../lib/proposals/addCompany");
+  const DRF = await import("../lib/proposals/draft");
+  const { isPlaceholderCompany } = await import("../lib/scan/clean");
+
+  // The model's answer as server-sent events, a few characters at a time. `cut`: the stream stops there, without its end.
+  const sse = (json: string, o: { chunk?: number; delayMs?: number; cut?: number } = {}) => {
+    const chunk = o.chunk ?? 40;
+    const text = o.cut ? json.slice(0, o.cut) : json;
+    const lines = [
+      { type: "message_start", message: { id: "msg_s", type: "message", role: "assistant", model: "model-from-the-env", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 900, output_tokens: 1 } } },
+      { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+      ...Array.from({ length: Math.ceil(text.length / chunk) }, (_, i) => ({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: text.slice(i * chunk, (i + 1) * chunk) } })),
+      ...(o.cut ? [] : [{ type: "content_block_stop", index: 0 }, { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 700 } }, { type: "message_stop" }]),
+    ];
+    const enc = new TextEncoder();
+    return new Response(
+      new ReadableStream({
+        async start(c) {
+          for (const l of lines) {
+            if (o.delayMs) await new Promise((r) => setTimeout(r, o.delayMs));
+            c.enqueue(enc.encode(`event: ${l.type}\ndata: ${JSON.stringify(l)}\n\n`));
+          }
+          if (o.cut) await new Promise((r) => setTimeout(r, 50)), c.error(new Error("connection reset"));
+          else c.close();
+        },
+      }),
+      { status: 200, headers: { "content-type": "text/event-stream", "request-id": "req_stream" } },
+    );
+  };
+  const call = [
+    "Brian Hain: I run operations here. I'm Brian Hain, VP of Operations at Seven Figure Agency.",
+    "Jordan Avery: Thanks Brian. What are you trying to get to?",
+    "Brian Hain: We want to get to $8M next year. Our pipeline is a guess every month and deals stall after the first call.",
+    "Brian Hain: Send it to me at brian@sevenfigureagency.example and I'll sign it myself.",
+    "Jordan Avery: I'd suggest two days a week at $11k a month for six months.",
+  ].join("\n");
+  const draftJson = {
+    title: "Fractional sales leader for Seven Figure Agency",
+    blocks: [
+      { block_id: "cover", title: "Prepared for Brian Hain", body: "Prepared for Brian Hain, VP of Operations, Seven Figure Agency.\nPrepared by Jordan Avery." },
+      { block_id: "what_we_heard", title: "What we heard", body: "You want to get to $8M next year.\n- The pipeline is a guess every month.\n- Deals stall after the first call." },
+      { block_id: "investment", title: "Investment", body: "$11,000 a month for {{pricing.allocation}}, for six months from {{start.date}}." },
+    ],
+    fields: { monthly_fee: "$11,000", step_down_fee: "", allocation: "two days a week", initial_months: "6", notice_days: "", goal: "Get to $8M next year", call_date: "", next_step: "" },
+    signer: { name: "Brian Hain", title: "VP of Operations", email: "brian@sevenfigureagency.example" },
+    signer_on_call: "yes",
+    notes: [],
+    to_fix: [],
+  };
+  const parts = SP.sectionsSoFar(JSON.stringify(draftJson).slice(0, 330), "block_id");
+  check("reading a streamed answer: sections appear once their title has arrived, done only once their text closes", parts.length >= 2 && parts[0].done && parts[0].title === "Prepared for Brian Hain" && !parts[parts.length - 1].done && SP.unescapePartial('a\\nb\\u00e9\\') === "a\nb\u00e9", parts);
+
+  const watch = (job: ReturnType<typeof LV.startJob>) =>
+    new Promise<import("../lib/proposals/live").LiveEvent[]>((res) => {
+      const seen: import("../lib/proposals/live").LiveEvent[] = [];
+      const stop = LV.follow(job, 0, (e) => {
+        seen.push(e);
+        if (e.t === "done" || e.t === "error") stop(), res(seen);
+      });
+    });
+  aiAnswer = () => sse(JSON.stringify(draftJson), { chunk: 25 });
+  const before = (await PS.listProposals(JOR, BASE)).proposals.length;
+  const j1 = LV.startJob("mem_jor", "draft", (pr) => DRF.draftWithClaude(JOR, { templateId: "fractional-sales-leader", companyName: "seven figure agency", transcript: call, agree: true }, BASE, Date.now(), pr));
+  // A listener that leaves part way (a dropped connection) misses nothing: the job runs on, and the rest is read after the last event it had.
+  let early = 0;
+  const leave = LV.follow(j1, 0, () => void (++early >= 3 && leave()));
+  const ev1 = await watch(j1);
+  const labels = ev1.filter((e) => e.t === "step").map((e) => (e as { label: string }).label);
+  check("live draft: real steps in order, the call read with its words, the goal and the signer found", labels[0] === `Reading the call · ${call.split(/\s+/).length} words` && labels.some((l) => l.startsWith("Found the goals: We want to get to $8M next year")) && labels.includes("Who's signing: Brian Hain, VP of Operations"), labels);
+  const secs = ev1.filter((e) => e.t === "section") as { key: string; title: string; state: string }[];
+  check("  each section as it's written, then done, in order", secs.map((x) => `${x.title}:${x.state}`).join("|") === "Prepared for Brian Hain:active|Prepared for Brian Hain:done|What we heard:active|What we heard:done|Investment:active|Investment:done", secs.map((x) => `${x.title}:${x.state}`));
+  const texts = ev1.filter((e) => e.t === "text" && (e as { key: string }).key === "s1").map((e) => (e as { text: string }).text);
+  check("  the section's text fills in as it arrives", texts.length >= 1 && texts[texts.length - 1] === draftJson.blocks[1].body && ev1.every((e, i) => e.seq === i + 1), texts);
+  check("  ends Draft ready with its sections and blanks", labels.at(-1)?.startsWith("Draft ready · 3 sections · ") === true && ev1.at(-1)?.t === "done", labels.at(-1));
+  check("  a listener that dropped picks up the rest after its last event", LV.eventsAfter(j1, 3).events.length === ev1.length - 3 && LV.eventsAfter(j1, 3).status === "done");
+  const made = (ev1.at(-1) as { result: { proposal: import("../lib/proposals/types").ProposalRec } }).result.proposal;
+  check("signer prefill: the draft's signer is set, with the email the call gave", made.signer?.name === "Brian Hain" && made.signer?.title === "VP of Operations" && made.signer?.email === "brian@sevenfigureagency.example" && made.fields["client.signerName"] === "Brian Hain", made.signer);
+  check("  the company typed in lower case reads with capitals", made.company.name === "Seven Figure Agency", made.company.name);
+  check("  a draft whose signer email the call didn't give keeps the name and title, the email blank", await (async () => {
+    aiAnswer = () => sse(JSON.stringify({ ...draftJson, signer: { name: "Brian Hain", title: "VP of Operations", email: "brian@made-up.example" } }));
+    const j = LV.startJob("mem_jor", "draft", (pr) => DRF.draftWithClaude(JOR, { companyName: "Seven Figure Agency", transcript: call.replace("Send it to me at brian@sevenfigureagency.example and I'll sign it myself.", "I'll sign it myself."), agree: true }, BASE, Date.now(), pr));
+    const p2 = ((await watch(j)).at(-1) as { result?: { proposal: import("../lib/proposals/types").ProposalRec } }).result?.proposal;
+    return !!p2 && !p2.signer && p2.fields["client.signerName"] === "Brian Hain" && !p2.fields["client.signerEmail"];
+  })());
+
+  aiAnswer = () => sse(JSON.stringify(draftJson), { chunk: 10, delayMs: 15 });
+  const n0 = (await PS.listProposals(JOR, BASE)).proposals.length;
+  const j2 = LV.startJob("mem_jor", "draft", (pr) => DRF.draftWithClaude(JOR, { companyName: "Seven Figure Agency", transcript: call, agree: true }, BASE, Date.now(), pr));
+  const ev2p = watch(j2);
+  await new Promise<void>((r) => {
+    const stop = LV.follow(j2, 0, (e) => e.t === "section" && (stop(), r()));
+  });
+  check("cancel: it stops part way", LV.cancelJob("mem_jor", j2.id) && !LV.cancelJob("mem_oth", j2.id));
+  const ev2 = await ev2p;
+  // The cancelled work winds down (the fake stream doesn't stop on its own), and nothing is saved meanwhile.
+  await new Promise((r) => setTimeout(r, 2500));
+  check("  says so, and nothing is saved", ev2.at(-1)?.t === "error" && (ev2.at(-1) as { status: number }).status === 499 && (await PS.listProposals(JOR, BASE)).proposals.length === n0 && j2.status === "cancelled", ev2.at(-1));
+
+  const cutAt = JSON.stringify(draftJson).indexOf('"investment"') + 30;
+  aiAnswer = () => sse(JSON.stringify(draftJson), { cut: cutAt });
+  const j3 = LV.startJob("mem_jor", "draft", (pr) => DRF.draftWithClaude(JOR, { companyName: "Seven Figure Agency", transcript: call, agree: true }, BASE, Date.now(), pr));
+  const ev3 = await watch(j3);
+  const last3 = ev3.at(-1) as { t: string; message: string; result?: { proposal: import("../lib/proposals/types").ProposalRec; partial: boolean } };
+  check("a stream that drops: a plain message, and the sections written whole are kept as a draft", last3.t === "error" && /stopped after 2 sections. Merlin kept what was written/.test(last3.message) && last3.result?.partial === true && last3.result.proposal.blocks.length === 2, last3);
+  check("  another member can't read a job", LV.jobOf("mem_oth", j1.id) === null && LV.jobOf("mem_jor", j1.id) === j1);
+
+  // Change it, live.
+  aiAnswer = () => sse(JSON.stringify(answer));
+  const pr2 = await PS.createProposal(JOR, { templateId: "fractional-sales-leader", companyName: "Cedar and Pine Software", fields: { "pricing.monthlyFee": "$12,500" } }, BASE);
+  const answer2 = { ...answer, changes: answer.changes.map((c, i) => ({ ...c, section_id: pr2.blocks[i + 2].id })) };
+  aiAnswer = () => sse(JSON.stringify(answer2), { chunk: 30 });
+  const j4 = LV.startJob("mem_jor", "change", (pr) => CH.proposeChange(JOR, pr2.id, { instruction: "Make it two phases", agree: true }, BASE, Date.now(), pr));
+  const ev4 = await watch(j4);
+  const l4 = ev4.filter((e) => e.t === "step" || e.t === "section").map((e) => ("label" in e ? e.label : (e as { title: string }).title) + ":" + (e as { state: string }).state);
+  check("live change: reading the proposal, each section being rewritten, then the numbers checked", l4[0] === `Reading your proposal · ${pr2.blocks.length} sections:done` && l4.includes(`Rewriting ${pr2.blocks[2].title}:done`) && l4.at(-1)!.startsWith("Checked:") && ev4.at(-1)?.t === "done", l4);
+
+  // A company added from its website.
+  check("websites read as their host", AC && SC.normaliseSite("sevenfigureagency.com/") === "sevenfigureagency.com" && SC.normaliseSite("https://www.SevenFigureAgency.com/about?x=1") === "sevenfigureagency.com" && SC.normaliseSite("not a site") === null && SC.normaliseSite("http://localhost:3000") === null);
+  check("the site's own name: og:site_name, else the title's telling part", AC.nameFromHtml('<meta property="og:site_name" content="Seven Figure Agency">') === "Seven Figure Agency" && AC.nameFromHtml("<title>Home | Seven Figure Agency</title>") === "Seven Figure Agency" && AC.nameFromHtml("<title>Seven Figure Agency - We grow agencies to seven figures</title>") === "Seven Figure Agency");
+  const readSite = await AC.siteName("sevenfigureagency.example/", async () => ({ ok: true, url: "https://sevenfigureagency.example/", host: "sevenfigureagency.example", status: 200, html: "<title>Welcome | Seven Figure Agency</title>", truncated: false }));
+  const slow = await AC.siteName("slow.example", async () => ({ ok: false, kind: "failed", reason: "timeout" }) as never);
+  check("  read with a short timeout; when the site can't be read, the member types the name", readSite.website === "sevenfigureagency.example" && readSite.name === "Seven Figure Agency" && slow.name === null && AC.SITE_NAME_MS <= 4000);
+  const unlinked = await PS.createProposal(JOR, { templateId: "fractional-sales-leader", companyName: "Quill Studio" }, BASE);
+  check("a proposal for a company not on Merlin starts unlinked", unlinked.company.id === null);
+  const addedCo = await AC.addCompanyFor(JOR, { proposalId: unlinked.id, name: "quill studio", website: "https://www.quillstudio.example/" }, BASE);
+  check("add it from its website: added, named with capitals, and the proposal linked", addedCo.added && addedCo.name === "Quill Studio" && addedCo.proposal?.company.id === addedCo.companyId, addedCo);
+  const st2 = await T.loadState();
+  check("  the ordinary Add a company: its website on the record", st2.companies.some((c) => c.name === "Quill Studio") && Object.entries(st2.values).some(([k, v]) => k.endsWith(".website") && JSON.stringify(v).includes("quillstudio.example")));
+  const again = await AC.addCompanyFor(JOR, { name: "Quill Studio", website: "quillstudio.example" }, BASE);
+  check("  never twice: the same website is the same company", !again.added && again.companyId === addedCo.companyId);
+  const othView = JSON.stringify(await T.viewPatch(OTH, [addedCo.companyId], { asMember: true }));
+  check("  other members never see who added it, or that there's a proposal", !othView.includes("Jordan") && !othView.includes(me.email) && !othView.includes("pr_") && !JSON.stringify(await PS.listProposals(OTH, BASE)).includes("Quill"));
+  check("  a placeholder name is refused in words, as Add a company refuses it", isPlaceholderCompany("Stealth Startup") && /example name|placeholder/i.test((await refused(AC.addCompanyFor(JOR, { name: "Stealth Startup", website: "stealthy.example" }, BASE))) ?? ""));
+  check("  a website that isn't one is refused in words", /Type its website/.test((await refused(AC.addCompanyFor(JOR, { name: "Quill", website: "quill" }, BASE))) ?? ""));
+
+  // Auto-link at draft time: the website the call gives (the signer's domain) finds the company on Merlin.
+  aiAnswer = () => sse(JSON.stringify({ ...draftJson, signer: { name: "Dana Whitfield", title: "CEO", email: "dana@cedarpine.example" } }));
+  const j5 = LV.startJob("mem_jor", "draft", (pr) => DRF.draftWithClaude(JOR, { transcript: `${call}\nDana Whitfield, CEO: you can reach me at dana@cedarpine.example.`, agree: true }, BASE, Date.now(), pr));
+  const r5 = ((await watch(j5)).at(-1) as { result: { proposal: import("../lib/proposals/types").ProposalRec; company?: unknown } }).result;
+  check("auto-link at draft time: the company found by the signer's email domain, linked", !!r5.proposal.company.id && r5.proposal.company.id === T.tableInternals.pubId("c_cedar") && !r5.company, r5.proposal.company);
+  check("  not found: the draft says so, with the website, for Draft ready's add-or-pick", !made.company.id && (ev1.at(-1) as { result: { company?: { website: string | null } } }).result.company?.website === "sevenfigureagency.example");
+  check("siteFromCall: the signer's domain, never a shared mail host or the member's own", SC.siteFromCall("Mail me at dana@gmail.com", { email: me.email }) === null && SC.siteFromCall("x", { email: me.email }, "brian@sevenfigureagency.example") === "sevenfigureagency.example" && SC.siteFromCall("Our site is www.quillstudio.example/about", { email: me.email }) === "quillstudio.example");
+  check("signerInCall: a name beside a title, not the member, with their email", JSON.stringify(SC.signerInCall(call, { name: "Jordan Avery", email: me.email })) === JSON.stringify({ name: "Brian Hain", title: "VP of Operations", email: "brian@sevenfigureagency.example" }), SC.signerInCall(call, { name: "Jordan Avery", email: me.email }));
+
+  // No "Build it in Claude" left in the proposal flow or Billing.
+  const flow = ["app/post/ProposalStart.tsx", "app/post/Proposals.tsx", "app/post/ProposalParts.tsx", "app/post/ProposalLink.tsx", "app/post/WriteProposal.tsx", "app/post/Billing.tsx", "app/post/ChangeIt.tsx", "app/post/Live.tsx", "app/post/contracts/ContractsHome.tsx", "lib/proposals/aiUsage.ts", "lib/proposals/draft.ts", "lib/proposals/change.ts"].map((f) => [f, readFileSync(path.join(import.meta.dirname, "..", f), "utf8")] as const);
+  check("no Build it in Claude anywhere in the proposal flow or Billing", flow.every(([, src]) => !/build it in (your own )?claude|improve it in claude|claudePrompt|buildInClaude/i.test(src)), flow.filter(([, src]) => /build it in (your own )?claude|improve it in claude|claudePrompt|buildInClaude/i.test(src)).map(([f]) => f));
 
   console.log(`\n${passes} passed, ${failures} failed`);
 }

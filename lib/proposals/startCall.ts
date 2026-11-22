@@ -148,7 +148,7 @@ export async function browserInflateRaw(data: Uint8Array): Promise<Uint8Array> {
 /* ---------- who signs, and the client's website, from the call ---------- */
 
 const SIGNER_TITLE = /\b(CEO|CFO|COO|CTO|CRO|CMO|CPO|Chief [A-Z][a-z]+(?: [A-Z][a-z]+)? Officer|Founder|Co-founder|Cofounder|President|Managing Director|General Manager|Owner|VP(?: of)? [A-Z][A-Za-z]+|Vice President(?: of)? [A-Z][A-Za-z]+|Head of [A-Z][A-Za-z]+)\b/;
-const PERSON = "([A-Z][a-z'’-]+(?: [A-Z][a-z'’-]+){1,2})";
+const PERSON = "([A-Z][a-z][a-z'’-]*(?: [A-Z][a-z][a-z'’-]*){1,2})";
 const EMAIL_G = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 /** Mail hosts many people share: an address there says nothing about the company. */
 export const SHARED_MAIL = /^(gmail|googlemail|yahoo|hotmail|outlook|live|icloud|me|aol|proton|protonmail|hey|fastmail|zoho|gmx|mail|yandex)\./i;
@@ -205,7 +205,7 @@ export function siteFromCall(text: string, me: { email?: string }, signerEmail?:
     return d && !SHARED_MAIL.test(d) && d !== mine ? normaliseSite(d) : null;
   };
   if (fromMail(signerEmail)) return fromMail(signerEmail);
-  const sites = [...String(text ?? "").matchAll(/\b(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|io|co|ai|net|org|agency|app|dev|us|uk|ca|de))\b(?!@)/gi)]
+  const sites = [...String(text ?? "").matchAll(/\b(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|io|co|ai|net|org|agency|app|dev|us|uk|ca|de|example))\b(?!@)/gi)]
     .filter((m) => !String(text).slice(Math.max(0, (m.index ?? 0) - 1), m.index).includes("@"))
     .map((m) => normaliseSite(m[1]))
     .filter((x): x is string => !!x && x !== mine && !SHARED_MAIL.test(`${x}.`));
