@@ -100,10 +100,23 @@ function ctxOf(seed: Seed, s: State, me: Member, nowMs: number) {
    * no block either way, and in the directory unless the two already work together.
    */
   const peerOk = (id: string) => id !== me.id && idx.byId.has(id) && !isAdmin(idx.byId.get(id)!) && T.signedIn(s, idx, id) && !blocked(id, me.id) && !blocked(me.id, id) && (!hidden(id) || related(id));
-  /** The name the viewer sees: in full when they show in the directory or already work together, else first name and last initial. */
+  // The directory's own names (lib/fractionals.ts, plg's rule): fellow fractionals are free (PEERS_FREE), a member who
+  // said no stays out, and Remove my name, the US-only names rule and RN_UNVERIFIED_NAMES_UNTIL leave no name on file.
+  let dirNames: Map<string, string | null> | null = null;
+  const dirName = (id: string) => {
+    dirNames ??= new Map(fractionalRecords(seed, s, me, nowMs).filter((r) => r.memberId).map((r) => [r.memberId!, r.name ?? null] as const));
+    return dirNames.get(T.pubId(id));
+  };
+  /**
+   * The name the viewer sees, by the Fractionals directory's rule: in full when they show in the
+   * directory or the two already work together, else the name the directory gives the viewer (in
+   * full where it does, first name and last initial for a member who hasn't chosen and whose seats
+   * the viewer doesn't see), else first name and last initial.
+   */
   const nameOf = (id: string) => {
     const n = idx.byId.get(id)?.name ?? "A former member";
-    return prof(id).fractionals === true || related(id) ? n : shortName(n);
+    if (prof(id).fractionals === true || related(id)) return n;
+    return dirName(id) ?? shortName(n);
   };
   const companyKind = (companyId: string) => {
     const c = g.companies.get(companyId);

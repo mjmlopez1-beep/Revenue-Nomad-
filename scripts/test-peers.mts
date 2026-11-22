@@ -236,6 +236,38 @@ async function main() {
     check("the connector never names someone Ana knows only from her LinkedIn: counted, not named", !list.includes("Theo") && !list.includes("Lena") && list.includes("Finn") && /2 more fractionals the member knows/.test(list), list);
   }
 
+  /* ---------- names: the Fractionals directory's rule ---------- */
+  console.log("\nNames, as the Fractionals directory gives them");
+  {
+    const FR = await import("../lib/fractionals");
+    const dirNameFor = async (viewer: string, of: string) => {
+      const me = (await t.memberForToken(tok(viewer)))!;
+      return FR.fractionalRecords(await t.loadSeed(), await t.loadState(), me).find((r) => r.memberId === pub(of))?.name ?? null;
+    };
+    // Cara hasn't chosen yet: Peers names her as the directory does for Ana.
+    const caraWas = (await t.loadState()).profiles.mem_cara;
+    const unlocksWas = (await t.loadState()).unlocks["c_birch.identity"];
+    await t.tableInternals.mutate((st) => void (st.profiles.mem_cara = { ...st.profiles.mem_cara, fractionals: undefined }));
+    const caraIn = async () => (await view("mem_ana")).serve.find((r) => r.name.startsWith("Cara"))?.name ?? null;
+    const short = await caraIn();
+    check("a member who hasn't chosen, her seat's company locked for Ana: first name and last initial, as the directory", short === "Cara D." && (await dirNameFor("mem_ana", "mem_cara")) === "Cara D.", [short, await dirNameFor("mem_ana", "mem_cara")]);
+    // Ana sees Birchway now: fellow fractionals are free (PEERS_FREE), so the directory names Cara in full, and so does Peers.
+    await t.tableInternals.mutate((st) => void (st.unlocks["c_birch.identity"] = ["mem_ana"]));
+    const full = await caraIn();
+    check("once Ana sees her seat's company: her full name, in Peers as in the directory", full === "Cara Diaz" && (await dirNameFor("mem_ana", "mem_cara")) === "Cara Diaz", [full, await dirNameFor("mem_ana", "mem_cara")]);
+    check("a member with no seats who hasn't chosen: first name and last initial", (await (async () => {
+      await t.tableInternals.mutate((st) => void (st.profiles.mem_gus = { ...st.profiles.mem_gus, fractionals: undefined }));
+      const g = [...(await view("mem_ana")).serve, ...(await view("mem_ana")).know].find((r) => r.name.startsWith("Gus"));
+      return !g || g.name === "Gus L.";
+    })()));
+    await t.tableInternals.mutate((st) => {
+      st.profiles.mem_cara = caraWas;
+      st.profiles.mem_gus = { ...st.profiles.mem_gus, fractionals: true };
+      if (unlocksWas) st.unlocks["c_birch.identity"] = unlocksWas;
+      else delete st.unlocks["c_birch.identity"];
+    });
+  }
+
   /* ---------- pass a lead ---------- */
   console.log("\nPass a lead");
   {
