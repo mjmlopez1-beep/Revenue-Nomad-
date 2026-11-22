@@ -43,6 +43,7 @@ export function PipelineBlock({ i }: { i: CoInfo }) {
         <p className="pl-block-next">
           {rec.won ? `${rateWords(rec.won)}, about ${monthWords(rec.won.monthly)}.` : "Won."} {rec.seat ? "Your seat here is confirmed by this win." : null}
           {rec.intro ? ` Through ${rec.intro.by}'s intro.` : null}
+          {rec.lead ? ` Passed to you by ${rec.lead.by}. They see it was won.` : null}
         </p>
       ) : rec.next ? (
         <p className="pl-block-next">
@@ -50,6 +51,13 @@ export function PipelineBlock({ i }: { i: CoInfo }) {
           {due ? `. ${due.line}` : ""}
         </p>
       ) : null}
+      {(rec.lead || rec.team) && rec.stage !== "won" && (
+        <p className="pl-peer">
+          {rec.lead ? `Passed to you by ${rec.lead.by}` : ""}
+          {rec.lead && rec.team ? " · " : ""}
+          {rec.team ? `Teamed with ${rec.team.with}` : ""}
+        </p>
+      )}
       <div className="pl-block-acts">
         {due && (
           <button type="button" className="btn btn-pine btn-sm" onClick={() => setDrafting(true)}>

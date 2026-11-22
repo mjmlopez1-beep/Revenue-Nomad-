@@ -43,7 +43,7 @@ export interface AddOpts {
 }
 
 /** A page that replaces the table. */
-export type AppPage = "rates" | "credits" | "seats" | "metrics" | "messages" | "partners" | "network" | "fractionals" | "integrations" | "notifications" | "pipeline" | "proposals";
+export type AppPage = "rates" | "credits" | "seats" | "metrics" | "messages" | "partners" | "network" | "fractionals" | "peers" | "integrations" | "notifications" | "pipeline" | "proposals";
 
 export interface Ui {
   me: Me;
@@ -647,6 +647,38 @@ const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):not([t
 /** What Tab can reach inside an overlay, in order. A folded group (a closed details) offers only its title. */
 const focusables = (root: HTMLElement) =>
   [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0 && !el.closest("details:not([open]) > :not(summary)"));
+
+/**
+ * Keep Tab inside `ref` while `on` (a phone's full-screen record or conversation, which is aria-modal):
+ * Tab past the last control comes back to the first, Shift+Tab before the first goes to the last, and
+ * focus outside it comes back in. Escape stays with the layer's own handler.
+ */
+export function useFocusTrap(ref: React.RefObject<HTMLElement | null>, on: boolean) {
+  useEffect(() => {
+    if (!on) return;
+    const onKey = (e: KeyboardEvent) => {
+      const root = ref.current;
+      if (e.key !== "Tab" || !root) return;
+      const els = focusables(root);
+      if (!els.length) return e.preventDefault();
+      const first = els[0];
+      const last = els[els.length - 1];
+      const at = document.activeElement as HTMLElement | null;
+      if (!at || !root.contains(at)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && (at === first || at === root)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && at === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [ref, on]);
+}
 
 /** Open overlays, newest last. Only the newest answers Escape and Tab. */
 const layers: number[] = [];

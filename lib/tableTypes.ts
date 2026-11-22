@@ -9,6 +9,7 @@ import type { FundingAdminStats } from "./funding/types";
 import type { HealthStats } from "./health";
 import type { MovesWire } from "./moves";
 import type { Channel, ManualStage, PipelineView } from "./pipeline";
+import type { PeersView } from "./peersCore";
 import type { VoiceProfile } from "./voice";
 
 /**
@@ -356,6 +357,8 @@ export interface Me {
   unread?: number;
   /** An email when a member messages them (on unless they turned it off). Sent only while email is on. */
   messageEmail?: boolean;
+  /** An email when a peer passes them a lead or asks them to team up (on unless they turned it off). */
+  peerEmail?: boolean;
   /** Listed for other members in Referral partners (on unless they turned it off in Your profile). */
   partners?: boolean;
   /**
@@ -589,7 +592,9 @@ export interface ConversationRec {
    * by itself when a seat holder claimed their seat through the other member's invite (Invite to
    * connect); `started` is the inviter. Left out on a conversation about a seat a member unlocked.
    */
-  kind?: "partners" | "invite";
+  kind?: "partners" | "invite" | "team";
+  /** A team's shared thread (kind team): the team's id, for its space on Peers. */
+  teamId?: string;
   /** The other member: name, title and public id. Never their email or phone. */
   with: { id?: string; name: string; first: string; title: string };
   about: {
@@ -1084,7 +1089,7 @@ export type Action =
    * `fractionals`: "Show me in the Fractionals directory" (Your profile, and Home's one-time question).
    * `partners`: the same switch under its old name (Referral partners).
    */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; partners?: boolean; fractionals?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean }
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean }
   /**
    * Fractionals: "Unlock · 1 credit" on a fractional not on Merlin yet (FractionalRec.id). The same
    * purchase as who held one of their seats: every seat of theirs then shows who held it, with the role.
@@ -1169,6 +1174,30 @@ export type Action =
   /** Admins: decide on a reported message. */
   | { type: "message.review"; reportId: string; decision: "keep" | "remove" }
   /**
+   * Peers (lib/peers.ts, lib/peersCore.ts). Ids are public ids (a member's, a company's, a seat's), or
+   * a pass's or a team's own id. Each answers with the whole PeersView as `peers`.
+   *  - pass: pass a lead to a peer (a member), with a note. `roleId`: the open role it is about.
+   *    answer: the peer takes it (`take` true: into their pipeline) or not.
+   *  - mute: the member no longer gets leads, team-up invites or circle posts from that member.
+   *  - team: ask a peer to pursue a company together. teamAnswer: join or not. teamLeave: either side.
+   *    teamDraft: the shared note draft.
+   *  - circleJoin (the circle Merlin proposed, or a new one with `circleId` null), circleLeave,
+   *    circlePost (this month's thread), circleRead.
+   *  - seen: From your peers on Home was seen.
+   */
+  | { type: "peer.pass"; companyId: string; memberId: string; note?: string; roleId?: string | null; from?: "crystal" | "role" | "record" | "deal" | "connector" }
+  | { type: "peer.answer"; id: string; take: boolean }
+  | { type: "peer.mute"; memberId: string; on: boolean }
+  | { type: "peer.team"; companyId: string; memberId: string; note?: string }
+  | { type: "peer.teamAnswer"; id: string; join: boolean }
+  | { type: "peer.teamLeave"; id: string }
+  | { type: "peer.teamDraft"; id: string; text: string }
+  | { type: "peer.circleJoin"; circleId?: string | null }
+  | { type: "peer.circleLeave" }
+  | { type: "peer.circlePost"; text: string }
+  | { type: "peer.circleRead" }
+  | { type: "peer.seen" }
+  /**
    * Admins, seat-holder names from public profiles (Pilot metrics). show: the switch "Show names
    * from public profiles until we reach N seats" (`on`). approve or decline: a member's claim
    * waiting on a seat (`memberId`). verify: the name on file is right. remove: take it off (whoever
@@ -1225,6 +1254,8 @@ export type ActionResult = {
   moves?: MovesWire;
   /** Pipeline actions: the member's pipeline as it now stands (lib/pipeline.ts PipelineView). */
   pipeline?: PipelineView;
+  /** Peer actions: the Peers page as it now stands (lib/peersCore.ts PeersView). */
+  peers?: PeersView;
 };
 
 /**
@@ -1313,7 +1344,7 @@ export interface FractionalRec {
   invite?: { path: string; seat: string; at?: string };
   /**
    * They hold or held seats at companies in the viewer's Crystal Ball (any day it keeps): how many
-   * companies ("Serves 2 of your Crystal Ball companies"), whether one of those seats is current,
+   * companies ("Serves 2 companies in your Crystal Ball"), whether one of those seats is current,
    * and the names of the ones the viewer can see by name (unlocked, theirs, or someone they know
    * there) for the prefilled message. A locked company is counted and never named. Left out at 0.
    */

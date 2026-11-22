@@ -49,6 +49,7 @@ import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { WarmthChip } from "./network/parts"; // [google network]
 import { Charge } from "./Charge";
 import { PipelineBlock } from "./PipelineBlock";
+import { PeerActions } from "./PeerSheets";
 import { WriteProposal } from "./WriteProposal";
 import { Prop } from "../ui/fractions/lazy";
 import dynamic from "next/dynamic";
@@ -2175,6 +2176,16 @@ export function Drawer({
           {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
           <Charge i={i} benchmarks={benchmarks} seats={mySeats} />
           <WriteProposal i={i} />
+          {/* Not my fit? Pass it to a peer, or team up on it (PeerSheets.tsx). Only at a company the member can see by name. After Write a proposal, before How they sell. */}
+          {!c.hidden && (
+            <section className="tp-dsec pe-sec-peer" aria-labelledby="pe-dsec-h">
+              <h3 className="tp-dsec-h" id="pe-dsec-h">
+                With a peer
+              </h3>
+              <p className="tp-dsec-note">Not your fit? Pass it to someone great, free for them. Or team up and pitch it together.</p>
+              <PeerActions company={c.id} role={i.engs.find(openRole)?.id ?? null} from={i.engs.some(openRole) ? "role" : crystal ? "crystal" : "record"} />
+            </section>
+          )}
           {(!c.hidden || COMPANY_GTM.some((f) => c.cells[f]?.s !== "empty")) && (
             <section className="tp-dsec">
               <h3 className="tp-dsec-h">How they sell</h3>

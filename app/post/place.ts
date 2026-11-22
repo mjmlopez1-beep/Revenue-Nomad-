@@ -25,7 +25,7 @@ import { holderSeen, personSeen, stepOneKind, type StepOne } from "./getStarted"
 export const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
 
 /** The pages a place can name (?p=). Today and the table are the two without one. */
-export const PLACE_PAGES = ["seats", "credits", "rates", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals"] as const;
+export const PLACE_PAGES = ["seats", "credits", "rates", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals", "peers"] as const;
 export type PlacePage = (typeof PLACE_PAGES)[number];
 
 /** The address keys that name a place in the app. With none of them, / opens Today. */
@@ -87,12 +87,15 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
   // and so does an older email's "See who" (?upgrade=radar).
   // A day still to come, or one that is no date (?sig=2099-12-31, 2026-13-45), is no day of the radar: a future day reads as today.
   const sig = sigDayOf(q.get("sig"));
-  const p: PlacePage | null = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PLACE_PAGES.find((x) => x === q.get("p")) ?? null;
+  const p0: PlacePage | null = sig ? "radar" : q.get("p") === "claude" ? "integrations" : !q.get("p") && q.get("upgrade") === "radar" ? "radar" : PLACE_PAGES.find((x) => x === q.get("p")) ?? null;
+  // The Fractionals directory (and Referral partners before it) lives in Peers now: their old addresses open Peers' Every fractional.
+  const p: PlacePage | null = p0 === "fractionals" || p0 === "partners" ? "peers" : p0;
+  const pt = p === "peers" && (p0 !== "peers" || q.get("pt") === "all");
   // The radar's range the member picked (?p=radar&range=7d); a day (?sig=) wins.
   const range = p === "radar" && !sig ? radarRangeOf(q.get("range")) : null;
   // Nothing in the address that names a place (?c=, ?p=, ?v= and the rest): Today, the home. "?p=table" is the table at its defaults.
   const home = !from && !PLACE_KEYS.some((k) => q.has(k));
-  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, ...(range ? { range } : {}), home };
+  return { t, v, s, f, q: (q.get("q") ?? "").slice(0, 200), c: q.get("c"), p, all: q.get("af") === "1", sig, ...(range ? { range } : {}), ...(pt ? { pt: true } : {}), home };
 }
 /** The address names no place: / opens Today. */
 export const isHome = (search: string) => {

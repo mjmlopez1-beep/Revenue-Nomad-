@@ -841,9 +841,11 @@
   }
 }
 
-/* "Serves 2 of your Crystal Ball companies". */
+/* "Serves 2 companies in your Crystal Ball". It wraps inside its own cell, never over the next column. */
 .fr-ball {
   justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin-top: 2px;
   font-size: 12px;
   line-height: 16px;
@@ -852,5 +854,5 @@
   border-radius: 6px;
   background: var(--volt-soft);
   color: var(--volt-ink);
-  white-space: nowrap;
+  white-space: normal;
 }

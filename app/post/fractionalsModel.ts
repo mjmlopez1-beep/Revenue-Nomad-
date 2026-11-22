@@ -21,7 +21,7 @@ let startUsed = false;
 export function startPlace(): { diff: boolean; rec: string | null; seat: string | null; welcome: boolean; m: string | null } {
   const q = new URLSearchParams(startUsed ? "" : START);
   startUsed = true;
-  if (q.get("p") !== "fractionals" && q.get("p") !== "partners") return { diff: false, rec: null, seat: null, welcome: false, m: null };
+  if (q.get("p") !== "fractionals" && q.get("p") !== "partners" && !(q.get("p") === "peers" && q.get("pt") === "all")) return { diff: false, rec: null, seat: null, welcome: false, m: null };
   return { diff: q.get("ff") === "diff" || q.get("p") === "partners", rec: q.get("fr"), seat: q.get("fs"), welcome: q.get("welcome") === "1", m: q.get("m") };
 }
 
@@ -161,13 +161,13 @@ export function headline(records: FractionalRec[], hasIcp: boolean): string {
 }
 
 /**
- * The chip on a record that serves companies in the member's Crystal Ball: "Serves 2 of your
- * Crystal Ball companies" (a current seat at one of them), else "Served 1 of …". Null at none.
+ * The chip on a record that serves companies in the member's Crystal Ball: "Serves 2 companies in
+ * your Crystal Ball" (a current seat at one of them), else "Served 1 company in …". Null at none.
  */
 export function ballChip(r: Pick<FractionalRec, "ball">): string | null {
   const b = r.ball;
   if (!b || b.n < 1) return null;
-  return `${b.now ? "Serves" : "Served"} ${b.n} of your Crystal Ball ${b.n === 1 ? "company" : "companies"}`;
+  return `${b.now ? "Serves" : "Served"} ${b.n} ${b.n === 1 ? "company" : "companies"} in your Crystal Ball`;
 }
 
 /** "C-level · Finance". */

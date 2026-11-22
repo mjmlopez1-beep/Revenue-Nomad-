@@ -102,12 +102,13 @@ export function Notifications({ view, onBack, onIntegrations }: { view: View; on
   const me = ui.me;
   const plan = me.plan;
   // What the member just picked, shown until the server's answer arrives (put back if it fails).
-  const [picked, setPicked] = useState<Partial<{ radarEmail: RadarEmail; radarSlack: boolean; digest: boolean; messageEmail: boolean }>>({});
+  const [picked, setPicked] = useState<Partial<{ radarEmail: RadarEmail; radarSlack: boolean; digest: boolean; messageEmail: boolean; peerEmail: boolean }>>({});
   const radarEmail = picked.radarEmail ?? me.radarEmail ?? "daily";
   const radarSlack = picked.radarSlack ?? me.radarSlack !== false;
   const digest = picked.digest ?? me.digest;
   const messageEmail = picked.messageEmail ?? me.messageEmail !== false;
-  useEffect(() => setPicked({}), [me.radarEmail, me.radarSlack, me.digest, me.messageEmail]);
+  const peerEmail = picked.peerEmail ?? me.peerEmail !== false;
+  useEffect(() => setPicked({}), [me.radarEmail, me.radarSlack, me.digest, me.messageEmail, me.peerEmail]);
   const save = async (k: keyof typeof picked, v: RadarEmail | boolean) => {
     setPicked((p) => ({ ...p, [k]: v }));
     const r = await ui.act({ type: "settings", [k]: v });
@@ -179,6 +180,9 @@ export function Notifications({ view, onBack, onIntegrations }: { view: View; on
               )}
               <Row id="nt-msg" title="Messages" desc="When a member writes to you, at most one an hour for each conversation. It never shows your email address to them.">
                 <Switch id="nt-msg" on={messageEmail} onChange={(on) => void save("messageEmail", on)} />
+              </Row>
+              <Row id="nt-peer" title="From your peers" desc="When a peer passes you a lead or asks you to team up. One email each, never with your email address in it.">
+                <Switch id="nt-peer" on={peerEmail} onChange={(on) => void save("peerEmail", on)} />
               </Row>
             </ul>
           </section>

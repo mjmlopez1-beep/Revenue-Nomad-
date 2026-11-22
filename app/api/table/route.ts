@@ -26,6 +26,7 @@ import { yourFeature } from "@/lib/radar/types";
 import { runDueJobs } from "@/lib/jobs";
 import { fractionalsHome, fractionalsView } from "@/lib/fractionals";
 import { pipelineViewFor } from "@/lib/pipelineActions";
+import { peerPicks, peersHome, peersView } from "@/lib/peers";
 
 export const dynamic = "force-dynamic";
 
@@ -218,7 +219,7 @@ function touchedIds(a: Action, out: ActionResult): string[] {
   return ids;
 }
 const patchless = (a: Action) =>
-  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
+  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || a.type.startsWith("peer.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
@@ -228,6 +229,8 @@ const patchless = (a: Action) =>
  *                  a person, email, phone, posting link or rate (lib/preview.ts). 400 on a value not on its list.
  * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
+ * GET ?peers=1     PeersView: the Peers page (lib/peers.ts). ?peers=home: PeersHome, Home's From your peers. ?peers=picks&c=ID[&role=ID][&for=team]:
+ *                  PeerPicks, who to pass a company to or team up with. 401 signed out.
  * GET ?pipeline=1  PipelineView: the member's own pipeline, follow-ups due and intros (lib/pipelineActions.ts). 401 signed out.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
  * GET ?fractionals=1  FractionalsView: the Fractionals directory, one record per fractional as the member may see it
@@ -319,6 +322,14 @@ export const GET = guarded(async (req: NextRequest) => {
   if (fr !== null) {
     const f = fr === "home" ? await fractionalsHome(token) : await fractionalsView(token);
     return f ? sendJson(req, f) : err("You're signed out. Sign in again to see Fractionals.", 401);
+  }
+  // Peers (lib/peers.ts): the Peers page, Home's From your peers, and who to pass a company to or team up with.
+  const pr = req.nextUrl.searchParams.get("peers");
+  if (pr !== null) {
+    const q = req.nextUrl.searchParams;
+    const out = pr === "home" ? await peersHome(token) : pr === "picks" ? await peerPicks(token, q.get("c") ?? "", q.get("role"), q.get("for") === "team") : await peersView(token);
+    if (out) return sendJson(req, out);
+    return (await memberForToken(token)) ? err("That company isn't on Merlin anymore.", 404) : err("You're signed out. Sign in again to see your peers.", 401);
   }
   // Your pipeline (lib/pipelineActions.ts): the member's own deals, moved by what Merlin sees, with the follow-ups due and their intros.
   if (req.nextUrl.searchParams.get("pipeline") !== null) {

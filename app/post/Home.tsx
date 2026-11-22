@@ -11,6 +11,7 @@
  *   one search box: companies by the names the member can see (Crystal Ball's names on their plan too); Enter
  *   searches the whole table, every company, with the profile and filters off for that search
  *   four quick actions: Find companies, Your Crystal Ball, Add what you know, Fill in your seats
+ *   From your peers: leads passed to the member, team-up asks, new circle posts (HomePeers.tsx)
  *   Since your last visit: each count a row that opens it
  *   Your saved views: a small table (matches, new, the weekly email, last opened)
  *
@@ -34,6 +35,7 @@ import { plural, useMedia } from "./hooks";
 import { LeadCard, TrialEnded, factsOf, type TodayData } from "./Today";
 import { MovesSection } from "./Moves";
 import { FollowUps } from "./FollowUps";
+import { FromYourPeers } from "./HomePeers";
 import { ProWelcome, TrialSummaryCard } from "./Billing";
 import type { MovesWire } from "@/lib/moves";
 import { crystalLine, crystalNames, nameMatches, showMeDue, trialCardLine, trialPillWords, sinceWords } from "./todayModel";
@@ -397,6 +399,8 @@ export function HomePage(p: HomeProps) {
       </ul>
       )}
 
+        {/* From your peers (HomePeers.tsx): leads passed to the member, team-up asks, the circle thread. Nothing when there is nothing. */}
+        {rest && <FromYourPeers openCompany={p.openCompany} />}
         {rest && (
         <section className="hm-sec hm-since" aria-labelledby="hm-since-h">
           <h2 className="hm-h2" id="hm-since-h">

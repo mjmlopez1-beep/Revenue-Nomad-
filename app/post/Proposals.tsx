@@ -36,6 +36,7 @@ import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./Pr
 import { AddBlock, AutoText, CallPanel, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder, uploadPdf } from "./DocBuilder";
 import "../sign/sign.css";
+import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -540,6 +541,8 @@ function Editor({
           {p.blocks.map((b) => (
             <Section key={b.id} b={b} fields={fields} p={p} readOnly={readOnly} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
           ))}
+          {/* Peers: a team pursuing this company together can add its "Your team" section (PeerSheets.tsx). */}
+          {!readOnly && <TeamBlockOffer company={p.company.id} has={p.blocks.some((b) => b.title === "Your team")} onAdd={(b) => setBlocks([...p.blocks, b])} />}
           {!readOnly && (
             <button
               type="button"

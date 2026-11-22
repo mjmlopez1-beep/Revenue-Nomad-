@@ -132,10 +132,10 @@ async function main() {
   // Every page is one item, and its link opens it.
   const all = nm.navItems(input({ admin: true, plan: trial, network: true, networkN: 4 }));
   const pagesOf = new Set(all.map((it) => it.page));
-  // Referral partners' old page ("partners") is Fractionals now: its address opens Fractionals, and no item of its own.
-  const missing = nm.APP_PAGES.filter((p) => p !== "partners" && !pagesOf.has(p));
+  // Referral partners' old page ("partners") and the Fractionals directory ("fractionals") are in Peers now: their addresses open Peers' Every fractional, and no item of their own.
+  const missing = nm.APP_PAGES.filter((p) => p !== "partners" && p !== "fractionals" && !pagesOf.has(p));
   check("every page the app draws is in the sidebar (an admin, billing and Your network on)", missing.length === 0, missing);
-  check("Referral partners has no item: Fractionals replaces it", !all.some((it) => it.key === "partners" || it.page === "partners") && all.find((it) => it.key === "fractionals")?.group === "community");
+  check("Referral partners and Fractionals have no item: Peers replaces them", !all.some((it) => it.key === "partners" || it.page === "partners" || it.key === "fractionals") && all.find((it) => it.key === "peers")?.group === "community");
   const me = (await t.buildView("tok-sal-nav")).me!;
   const wrong = all
     .filter((it) => it.href)
@@ -153,7 +153,7 @@ async function main() {
   // Your pipeline sits under Yours, first after the saved views: Your pipeline, Proposals (next to the pipeline), Following, Your seats.
   // Notifications (every email and Slack post, and how often) sits in the foot after Integrations: one place for the
   // switches that were on Your credits, Your profile and Integrations.
-  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,fractionals,messages,view:v1,view:v2,pipeline,proposals,following,seats,network,add,rates,invite,integrations,notifications,billing,credits,metrics", keys);
+  check("in the order Home, Find, Community, Yours, Earn, then the foot", keys.join(",") === "today,companies,engagements,people,radar,hiring,peers,messages,view:v1,view:v2,pipeline,proposals,following,seats,network,add,rates,invite,integrations,notifications,billing,credits,metrics", keys);
   const ntItem = all.find((it) => it.key === "notifications");
   check("Notifications is in the foot, and its link opens it", ntItem?.group === "foot" && ntItem.page === "notifications" && parsePlace(me, (ntItem.href ?? "").split("?")[1] ?? "", new Set()).p === "notifications", ntItem);
   check("'notifications' finds it from Home's search", nm.navMatches("notifications", all).some((it) => it.key === "notifications"));
@@ -180,7 +180,7 @@ async function main() {
     ["Hiring now", { page: "table", recordType: "engagements", tab: "hiring" }, "hiring"],
     ["Following", { page: "table", tab: "following" }, "following"],
     ["a saved view on screen", { page: "table", tab: "hiring", currentView: "v1" }, "view:v1"],
-    ...nm.APP_PAGES.filter((p) => p !== "today" && p !== "table").map((p) => [p, { page: p, currentView: "v1" }, p === "partners" ? "fractionals" : p] as [string, Partial<NavInput>, string]),
+    ...nm.APP_PAGES.filter((p) => p !== "today" && p !== "table").map((p) => [p, { page: p, currentView: "v1" }, p === "partners" || p === "fractionals" ? "peers" : p] as [string, Partial<NavInput>, string]),
   ];
   for (const [name, x, want] of cases) {
     const got = on(x);

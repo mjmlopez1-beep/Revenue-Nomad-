@@ -17,6 +17,7 @@ import { BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPE
 import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
 import { registerProposalTools } from "./proposals";
+import { registerPeerTools } from "./peers";
 import { networkOn } from "../google/types"; // [google network]
 import { VOICE_EXCLAMATIONS, VOICE_FORMALITY, VOICE_GREETINGS, VOICE_LENGTHS, VOICE_NAMES, VOICE_OPENERS, VOICE_PHRASES_MAX, VOICE_PHRASE_CHARS, VOICE_SIGNOFFS } from "../voice";
 
@@ -53,6 +54,7 @@ Using it well
 - A member's writing voice is style conclusions only (greeting, sign-off, length, tone, a few stock phrases), never message text. To learn it, read the member's own sent mail on your side only when they ask, summarise it into save_my_voice's fields, show them the summary, and save it once they agree. Never send Merlin message text, subjects, names or addresses from their mail.
 - Proposals: when the member asks for a proposal from a call ("use my XYZ template and draft a proposal for Acme from my call with Dana"), read the call from their meeting notes or transcript tool (Granola, Google Drive) or what they paste, call get_proposal_kit once (the template, theirs or Merlin's, with its guidance, the patterns that win, the rate band, the company's facts, their voice), write the whole proposal in the buyer's own words with one price and day 30/60/90 decisions, and save it with create_or_update_proposal (paraphrase, never paste the transcript). Check get_proposal's checklist and risk flags with them, and send it only through send_proposal_for_signature after they say yes. Sending for signature, drafting with Claude on Merlin and every template are on Pro + Close and the trial; on Free and Pro a proposal is built and previewed only.
 - Each company and open role carries fit (Hiring now, Repeat hirer, Recent seat, Past seat, Posting closed, Full-time only, No seats) and fit_reason, one line saying why. Pass the reason on with the tier.
+- Peers: list_peers gives fellow fractionals to work with (members only; people from the member's own Google or LinkedIn are never named). pass_lead passes a company that isn't the member's fit to a peer: it asks first, like unlock, and passes only with confirm true after the member says yes. leads_passed_to_me gives the leads peers passed them.
 - Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name, and never guess one from its industry, size or place.`;
 
 function text(out: unknown, isError = false): CallToolResult {
@@ -456,6 +458,8 @@ export function makeServer(ctx: T.Ctx): McpServer {
 
   // The proposal builder (lib/mcp/proposals.ts): the member's own proposals, sent only after they say so.
   registerProposalTools(server, ctx, run);
+  // Peers (lib/mcp/peers.ts): the member's peers, passing a lead (asks first), and the leads passed to them.
+  registerPeerTools(server, ctx, run);
 
   return server;
 }

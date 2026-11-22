@@ -103,6 +103,8 @@ export function WonSheet({ rec, onClose }: { rec: PipelineRec; onClose: () => vo
           <span>Did this come through Merlin?</span>
         </label>
         {rec.intro && <p className="pl-won-intro">Through {rec.intro.by}&apos;s intro.</p>}
+        {rec.lead && <p className="pl-won-intro">Passed to you by {rec.lead.by}. It counts as their win too.</p>}
+        {rec.team && <p className="pl-won-intro">Won with {rec.team.with}, your teammate here.</p>}
         {value > 0 && <p className="pl-won-v num">About {monthWords(value)}{months ? `, ${monthWords(value * num(months)).replace(" a month", "")} in all` : ""}.</p>}
         {err && (
           <p className="mn-warn" role="alert">

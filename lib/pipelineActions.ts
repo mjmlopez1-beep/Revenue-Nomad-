@@ -151,6 +151,12 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
   const log = s.pipeline?.[me.id] ?? P.emptyPipeline();
   const view = P.emptyPipelineView(nowMs);
   const introById = new Map(log.intros.map((i) => [i.id, i]));
+  // Peers (lib/peers.ts): who passed a lead, and the teams the member is on, by company.
+  const teamAt = new Map<string, { id: string; with: string }>();
+  for (const t of s.peers?.teams ?? []) {
+    if (t.status !== "active" || (t.by !== me.id && t.with !== me.id)) continue;
+    teamAt.set(t.companyId, { id: t.id, with: T.firstName(idx.byId.get(t.by === me.id ? t.with : t.by)?.name ?? "a peer") });
+  }
   const introWho = (i: P.IntroRecord) => (i.introducer.memberId ? idx.byId.get(i.introducer.memberId)?.name ?? "A former member" : i.introducer.name || (i.introducer.role ? `the ${i.introducer.role}` : "Someone you know"));
   for (const e of log.entries) {
     if (!g.companies.has(e.companyId)) continue;
@@ -183,6 +189,8 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
       ...(e.won ? { won: { ...e.won, monthly: P.monthlyValue(e.won) } } : {}),
       ...(e.seatId ? { seat: T.pubId(e.seatId) } : {}),
       ...(intro ? { intro: { id: intro.id, by: introWho(intro), status: intro.status } } : {}),
+      ...(e.lead ? { lead: { id: e.lead.passId, by: idx.byId.get(e.lead.by)?.name ?? "A former member" } } : {}),
+      ...(teamAt.has(e.companyId) ? { team: teamAt.get(e.companyId)! } : {}),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     });
