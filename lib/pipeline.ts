@@ -1,6 +1,7 @@
 /**
  * Your pipeline: each member's own deals, one entry per company they reached out to, moved by
- * Merlin itself. The member never moves a stage by hand: Merlin sees what happened and moves it.
+ * Merlin itself where it can see what happened, and by the member wherever they know better: any
+ * deal can be moved to any stage by hand ("Move to...", moveEntry, recorded as via "you").
  *
  *   To reach out  a lead a peer passed them (lib/peers.ts, openLead), or a route in the member went
  *             with (Your way in, routeEntry): theirs to write to. It moves to Sent by itself the
@@ -14,9 +15,14 @@
  *             only, never a title), or one booked ahead.
  *   Proposal  a proposal sent, and Won or Lost from it signed or declined (pipelineEvent: the
  *             proposal builder plugs in there).
- *   Won       also when the member adds or claims their own seat at that company after Sent.
- *   Went quiet  no reply after QUIET_AFTER_FOLLOW_UPS follow-ups, or QUIET_DAYS of silence.
- *   Lost, Not now  the only things the member says, one tap, when they want to.
+ *   Won       also when the member adds or claims their own seat at that company after Sent: a
+ *             seat that started, and came onto Merlin, on or after the Sent date, and isn't
+ *             Full-time (seatWins). A past seat added later is no win.
+ *   Went quiet  no reply after QUIET_AFTER_FOLLOW_UPS follow-ups, or QUIET_DAYS of silence, only
+ *             where Merlin could have seen a reply (hasInbound: Gmail connected, or a conversation
+ *             on Merlin). Without one the deal stays at Sent and asks the member instead: "No reply
+ *             seen. Did they reply by email?" (askReply).
+ *   Lost, Not now  the member's, one tap, as is every other stage through Move to.
  *
  * Each entry keeps who it went to, the channel, the date of each stage and what it was detected
  * from, the next follow-up, private notes and a log. The member can correct a detection in one tap
@@ -57,6 +63,10 @@ export const OPEN_STAGES: readonly Stage[] = ["reach", "sent", "replied", "meeti
 /** What the member may say themselves (one tap). */
 export const MANUAL_STAGES = ["lost", "notnow"] as const;
 export type ManualStage = (typeof MANUAL_STAGES)[number];
+/** Every stage the member can move a deal to by hand ("Move to..."), on every plan. Went quiet is Merlin's alone. */
+export const MOVE_STAGES = ["reach", "sent", "replied", "meeting", "proposal", "won", "lost", "notnow"] as const;
+export type MoveStage = (typeof MOVE_STAGES)[number];
+export const isMoveStage = (v: unknown): v is MoveStage => typeof v === "string" && (MOVE_STAGES as readonly string[]).includes(v);
 export const isStage = (v: unknown): v is Stage => typeof v === "string" && (STAGES as readonly string[]).includes(v);
 export const isOpen = (s: Stage) => OPEN_STAGES.includes(s);
 
@@ -505,6 +515,41 @@ export function closeEntry(e: PipelineEntry, stage: ManualStage, nowMs: number) 
   moveTo(e, stage, "you", nowMs, nowMs);
 }
 
+/**
+ * The member moves a deal to a stage by hand ("Move to..."), on every plan: they know what Merlin
+ * can't see (a reply by email without Gmail, a call, a signature on paper). Recorded as via "you".
+ * Back along the line, the stages past it are taken off (they didn't happen, the member says); a
+ * close (Went quiet, Lost, Not now) goes when the deal opens again or closes another way. A Won
+ * left keeps no terms and confirms no seat. At To reach out or Sent, silence counts from now.
+ * Returns whether it changed.
+ */
+export function moveEntry(e: PipelineEntry, stage: MoveStage, nowMs: number): boolean {
+  if (e.stage === stage || !isMoveStage(stage)) return false;
+  const at = LINE.indexOf(stage);
+  for (const st of STAGES) {
+    if (st === stage) continue;
+    const i = LINE.indexOf(st);
+    if ((at >= 0 && (i > at || i < 0)) || (at < 0 && i < 0)) {
+      delete e.dates[st];
+      delete e.via[st];
+    }
+  }
+  if (stage !== "won") unwin(e);
+  moveTo(e, stage, "you", nowMs, nowMs);
+  if (stage === "reach" || stage === "sent") e.lastOut = iso(nowMs);
+  e.log[e.log.length - 1].text = `You moved it to ${STAGE_WORDS[stage]}`;
+  return true;
+}
+
+/** A Won taken back: its terms go, and the seat it confirmed is no longer this win's (kept as seen, so it never wins it again by itself). */
+function unwin(e: PipelineEntry) {
+  delete e.won;
+  if (e.seatId) {
+    if (!(e.seen.seats ??= []).includes(e.seatId)) e.seen.seats.push(e.seatId);
+    delete e.seatId;
+  }
+}
+
 /** The stage an entry was at before its current one: the furthest on the way to Won that it reached, short of `below`. */
 function stageBefore(e: PipelineEntry, below: Stage | null): Stage {
   const cap = below ? LINE.indexOf(below) : LINE.length;
@@ -512,13 +557,14 @@ function stageBefore(e: PipelineEntry, below: Stage | null): Stage {
   return "sent";
 }
 
-/** Undo the member's Lost, Not now, or a Went quiet: back to where it was. */
+/** Undo the member's Lost, Not now, a Went quiet or a Won: back to where it was. */
 export function reopenEntry(e: PipelineEntry, nowMs: number): boolean {
-  if (isOpen(e.stage) || e.stage === "won") return false;
-  const back = stageBefore(e, null);
+  if (isOpen(e.stage)) return false;
   const was = e.stage;
+  const back = stageBefore(e, was === "won" ? "won" : null);
   delete e.dates[was];
   delete e.via[was];
+  if (was === "won") unwin(e);
   e.stage = back;
   e.due = nextDue(back, nowMs);
   // Silence counts from now.
@@ -528,10 +574,22 @@ export function reopenEntry(e: PipelineEntry, nowMs: number): boolean {
 }
 
 /**
- * A detection was wrong ("Not a reply", "Not a meeting"): the signal behind it is set aside (only a
- * newer one counts), and the entry goes back to the stage before. Only a detected stage, never Sent.
+ * A detection was wrong ("Not a reply", "Not a meeting", "Not a win"): the signal behind it is set
+ * aside (only a newer one counts; a seat that won it never wins it again by itself), and the entry
+ * goes back to the stage before. Only a detected stage, never Sent, and never a Won the member set.
  */
 export function correctEntry(e: PipelineEntry, sig: CompanySignals | undefined, nowMs: number): boolean {
+  if (e.stage === "won") {
+    if (!e.via.won || e.via.won === "you") return false;
+    delete e.dates.won;
+    delete e.via.won;
+    unwin(e);
+    e.stage = stageBefore(e, "won");
+    e.due = nextDue(e.stage, nowMs);
+    e.lastOut = iso(nowMs);
+    logLine(e, "You said that wasn't a win", nowMs);
+    return true;
+  }
   if (e.stage !== "replied" && e.stage !== "meeting") return false;
   const was = e.stage;
   if (was === "replied") {
@@ -626,9 +684,55 @@ export interface CompanySignals {
   msgAt?: string;
   /** A person Merlin saw an email go to (for an entry Gmail opened). From the member's Google account. */
   person?: { name?: string; title?: string };
-  /** The member's own seats there (internal ids): one that is new since Merlin first looked is a win. */
+  /** The member's own seats there (internal ids): one that is new since Merlin first looked may be the win (seatWins). */
   seats?: string[];
+  /** What Merlin knows of each of those seats, by id: a new one wins the deal only by these (seatWins). */
+  seatFacts?: Record<string, SeatFacts>;
 }
+
+/** A seat's start month (YYYY-MM), when it came onto Merlin (ISO), and its type ("Full-time", "Fractional", ...). */
+export interface SeatFacts {
+  start?: string | null;
+  addedAt?: string | null;
+  type?: string | null;
+}
+
+/**
+ * A new seat of the member's at the company wins the deal only when it can be this deal's seat: it
+ * started on or after the deal's Sent date (its month, when Merlin knows it), it came onto Merlin
+ * on or after that date, and it isn't Full-time. A past seat added later for credits, or one in
+ * the table from before, is no win. Without facts (a seat the member linked to the win
+ * themselves, "pipeline.seat") it is.
+ */
+export function seatWins(e: Pick<PipelineEntry, "dates" | "createdAt">, f: SeatFacts | undefined): boolean {
+  if (!f) return true;
+  const sent = e.dates.sent ?? e.createdAt;
+  if (String(f.type ?? "").trim().toLowerCase() === "full-time") return false;
+  if (!f.addedAt || f.addedAt < sent) return false;
+  // A start month, or a year alone ("2019"), before the deal's: a seat that was already going.
+  const start = String(f.start ?? "");
+  const k = /^\d{4}-\d{2}/.test(start) ? 7 : /^\d{4}$/.test(start) ? 4 : 0;
+  if (k && start.slice(0, k) < sent.slice(0, k)) return false;
+  return true;
+}
+
+/**
+ * Whether Merlin could see a reply on this deal: the member's Gmail (headers), or a conversation
+ * on Merlin it went out in. Without one, silence proves nothing: the deal never goes quiet by
+ * itself, and asks the member instead (askReply).
+ */
+export const hasInbound = (e: Pick<PipelineEntry, "conversationId" | "channel">, gmail: boolean) => gmail || !!e.conversationId || e.channel === "merlin";
+
+/**
+ * "No reply seen. Did they reply by email?": a deal at Sent where Merlin can't see a reply, once
+ * its follow-up is due or it would have gone quiet. The card offers Replied and Meeting.
+ */
+export function askReply(e: Pick<PipelineEntry, "stage" | "due" | "follow" | "lastOut" | "conversationId" | "channel">, gmail: boolean, nowMs: number): boolean {
+  if (e.stage !== "sent" || hasInbound(e, gmail)) return false;
+  return (!!e.due && e.due <= dayOf(nowMs)) || quietBy(e, nowMs);
+}
+/** The question, in words: by email, or on LinkedIn. */
+export const askWords = (channel: Channel) => `No reply seen. Did they reply ${channel === "linkedin" ? "on LinkedIn" : "by email"}?`;
 
 /**
  * Move one entry by what Merlin sees, forward only: an email out after the last send is a
@@ -636,7 +740,7 @@ export interface CompanySignals {
  * booked ahead) is Meeting. Proposal, Won, Lost and Not now are never changed here. With nothing new
  * for QUIET_DAYS, or past the last follow-up, an entry at Sent goes quiet. Returns whether it changed.
  */
-export function detectEntry(e: PipelineEntry, sig: CompanySignals | undefined, nowMs: number): boolean {
+export function detectEntry(e: PipelineEntry, sig: CompanySignals | undefined, nowMs: number, o: { gmail?: boolean } = {}): boolean {
   let changed = false;
   const sentAt = e.dates.sent ?? e.createdAt;
   const after = (t: string | undefined, seen: string | undefined, floor: string) => !!t && t > floor && (!seen || t > seen);
@@ -690,18 +794,19 @@ export function detectEntry(e: PipelineEntry, sig: CompanySignals | undefined, n
       e.seen.seats = [...sig.seats].slice(0, 20);
       changed = true;
     } else {
-      const fresh = sig.seats.find((x) => !e.seen.seats!.includes(x));
-      if (fresh) {
+      // Each new one is looked at once (kept as seen); the first that can be this deal's seat wins it.
+      for (const fresh of sig.seats.filter((x) => !e.seen.seats!.includes(x))) {
         e.seen.seats = [...e.seen.seats, fresh].slice(-20);
-        if (isOpen(e.stage) || e.stage === "quiet") {
+        changed = true;
+        if ((isOpen(e.stage) || e.stage === "quiet") && seatWins(e, sig.seatFacts?.[fresh])) {
           e.seatId = fresh;
           moveTo(e, "won", "seat", nowMs, nowMs);
-          changed = true;
         }
       }
     }
   }
-  if (e.stage === "sent") {
+  // Went quiet only where a reply could have been seen: without one an email deal stays at Sent and asks (askReply).
+  if (e.stage === "sent" && hasInbound(e, o.gmail ?? true)) {
     const quietDays = (nowMs - Date.parse(e.lastOut)) / DAY;
     const pastLast = e.follow >= QUIET_AFTER_FOLLOW_UPS && !!e.due && e.due <= dayOf(nowMs);
     if (pastLast || quietDays >= QUIET_DAYS) {
@@ -721,6 +826,8 @@ export interface DetectInput {
   newAt?: Set<string>;
   /** Makes an id for an entry Gmail opens. */
   newId?: () => string;
+  /** The member's Gmail is connected, so a reply by email would be seen (hasInbound). Unset: as if it were. */
+  gmail?: boolean;
 }
 
 /**
@@ -734,7 +841,7 @@ export function detectAll(log: PipelineLog, x: DetectInput, nowMs: number): numb
     const base = x.signals.get(e.companyId);
     const msgAt = e.conversationId ? x.replies?.get(e.conversationId) : undefined;
     const sig = msgAt ? { ...(base ?? {}), msgAt } : base;
-    if (detectEntry(e, sig, nowMs)) n++;
+    if (detectEntry(e, sig, nowMs, { gmail: x.gmail })) n++;
   }
   if (x.newAt && x.newId) {
     for (const id of x.newAt) {
@@ -746,7 +853,7 @@ export function detectAll(log: PipelineLog, x: DetectInput, nowMs: number): numb
       const to: PipelineTo = sig.person?.name || sig.person?.title ? { ...(sig.person.name ? { name: sig.person.name } : {}), ...(sig.person.title ? { role: sig.person.title } : {}), google: true } : {};
       const { entry } = openEntry(log, { id: x.newId(), companyId: id, channel: "email", to, source: "gmail", via: "gmail", nowMs, atMs: Date.parse(sig.outFirstAt) });
       entry.seen.out = sig.outAt;
-      detectEntry(entry, sig, nowMs);
+      detectEntry(entry, sig, nowMs, { gmail: x.gmail });
       n++;
     }
   }
@@ -964,7 +1071,7 @@ export function dueFollowUps(state: { pipeline?: Record<string, PipelineLog> }, 
     .sort((a, b) => a.due.localeCompare(b.due) || a.sentAt.localeCompare(b.sentAt));
 }
 /** An entry at Sent that would go quiet now (read without changing it). */
-const quietBy = (e: PipelineEntry, nowMs: number) => (e.follow >= QUIET_AFTER_FOLLOW_UPS && !!e.due && e.due <= dayOf(nowMs)) || (nowMs - Date.parse(e.lastOut)) / DAY >= QUIET_DAYS;
+const quietBy = (e: Pick<PipelineEntry, "follow" | "due" | "lastOut">, nowMs: number) => (e.follow >= QUIET_AFTER_FOLLOW_UPS && !!e.due && e.due <= dayOf(nowMs)) || (nowMs - Date.parse(e.lastOut)) / DAY >= QUIET_DAYS;
 
 const firstOf = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 /** "the CEO" from "CEO". */
@@ -1184,7 +1291,9 @@ export interface PipelineRec {
   follow: number;
   next: string | null;
   /** One-tap corrections that make sense now. */
-  fix: ("notReply" | "notMeeting" | "lost" | "notnow" | "reopen" | "remove")[];
+  fix: ("notReply" | "notMeeting" | "notWon" | "lost" | "notnow" | "reopen" | "remove")[];
+  /** No reply seen and none could be (no Gmail, not on Merlin): the card asks "Did they reply by email?" with Replied and Meeting (askReply). */
+  ask?: boolean;
   notes: PipelineNote[];
   log: PipelineNote[];
   won?: WonTerms & { monthly: number };

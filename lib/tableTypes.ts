@@ -8,7 +8,7 @@ import type { CompanyLeads, LeadersRunSummary } from "./leaders/types";
 import type { FundingAdminStats } from "./funding/types";
 import type { HealthStats } from "./health";
 import type { MovesWire } from "./moves";
-import type { Channel, ManualStage, PipelineView } from "./pipeline";
+import type { Channel, ManualStage, MoveStage, PipelineView } from "./pipeline";
 import type { PeersView } from "./peersCore";
 import type { VoiceProfile } from "./voice";
 
@@ -1130,8 +1130,9 @@ export type Action =
    *  - sent: a drafted note was used at a company outside today's moves (a record, Your network).
    *    `intro`: it asked the person for an introduction (recorded as an intro too).
    *  - followed: a drafted follow-up was used. snooze: the follow-up 3 days later.
-   *  - close: Lost or Not now (the only stages the member sets). reopen: undo that, or Went quiet.
-   *  - correct: a detected Replied or Meeting was wrong. remove: not a deal at all.
+   *  - close: Lost or Not now, one tap. move: any stage but Went quiet, by hand ("Move to...", via
+   *    "you"), on every plan. reopen: undo a close, a Went quiet or a Won.
+   *  - correct: a detected Replied, Meeting or Won was wrong. remove: not a deal at all.
    *  - note: a private note. won: the terms of a won deal (for Add it as your seat), and seat: the
    *    seat it became (`engagementId`, the member's own seat at that company).
    *  - intro: the member asked the other member in a conversation for an intro at the seat's company.
@@ -1141,6 +1142,7 @@ export type Action =
   | { type: "pipeline.followed"; id: string }
   | { type: "pipeline.snooze"; id: string }
   | { type: "pipeline.close"; id: string; stage: ManualStage }
+  | { type: "pipeline.move"; id: string; stage: MoveStage }
   | { type: "pipeline.reopen"; id: string }
   | { type: "pipeline.correct"; id: string }
   | { type: "pipeline.remove"; id: string }

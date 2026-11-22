@@ -314,7 +314,7 @@ async function main() {
     check("my_pipeline: To reach out, passed by Ana, and the count", pe?.stage === "To reach out" && pe.passed_by_peer === "Ana" && (myPipe.counts as Record<string, number>)["To reach out"] === 1 && /To reach out/.test(String(myPipe.how_to_use)), pe);
     const theoLeads = await mcp.leadsPassedToMe(theoCtx);
     check("leads_passed_to_me: the lead's stage in his pipeline", (theoLeads.passed_to_you as { lead_id: string; pipeline_stage?: string }[]).find((x) => x.lead_id === lead.id)?.pipeline_stage === "To reach out", theoLeads.passed_to_you);
-    check("update_pipeline takes Lost or Not now on it like any deal, never a stage", /lost, not_now or note/.test((await tools.updatePipeline(theoCtx, { entry_id: entry!.id, action: "sent" }).then(() => "", (e: Error) => e.message))));
+    check("update_pipeline takes Lost or Not now on it like any deal, never a stage", /action is one of move \(with stage\)/.test((await tools.updatePipeline(theoCtx, { entry_id: entry!.id, action: "sent" }).then(() => "", (e: Error) => e.message))));
     // His note goes out: Merlin moves it to Sent by itself, as a new deal lands there.
     await pa.performPipeline(tok("mem_theo"), { type: "pipeline.sent", companyId: ACME, channel: "email" } as never);
     const pv2 = await pa.pipelineViewOf(await t.loadSeed(), await t.loadState(), (await t.memberForToken(tok("mem_theo")))!);

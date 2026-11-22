@@ -3,7 +3,8 @@
 /**
  * The record's "Your pipeline" block, near the top of a company's record: where the member's deal
  * there stands as Merlin saw it ("Replied", "Detected from your Gmail on Nov 21"), who it went to,
- * the next step, the log and their private notes, with one-tap corrections. A won deal offers its
+ * the next step, the log and their private notes, with one-tap corrections and Move to (any
+ * stage, by hand), and "Did they reply by email?" where Merlin can't see a reply. A won deal offers its
  * terms and Add it as your seat. Nothing shows at a company that isn't in their pipeline. The
  * member's alone: it comes from their own pipeline, never anyone else's.
  */
@@ -14,7 +15,7 @@ import { IconPencil } from "../ui/shared";
 import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { usePipeline } from "./pipelineStore";
-import { FixMenu, LogList, NoteBox, StageChip } from "./PipelineParts";
+import { AskReply, FixMenu, LogList, MoveMenu, NoteBox, StageChip } from "./PipelineParts";
 import "./pipeline.css";
 
 const FollowUpSheet = dynamic(() => import("./FollowUpSheet").then((m) => m.FollowUpSheet), { ssr: false });
@@ -45,6 +46,8 @@ export function PipelineBlock({ i }: { i: CoInfo }) {
           {rec.intro ? ` Through ${rec.intro.by}'s intro.` : null}
           {rec.lead ? ` Passed to you by ${rec.lead.by}. They see it was won.` : null}
         </p>
+      ) : rec.ask ? (
+        <AskReply rec={rec} />
       ) : rec.next ? (
         <p className="pl-block-next">
           <b>Next:</b> {rec.next}
@@ -69,6 +72,7 @@ export function PipelineBlock({ i }: { i: CoInfo }) {
             {rec.seat ? "The terms" : "Add it as your seat"}
           </button>
         )}
+        <MoveMenu rec={rec} />
         <FixMenu rec={rec} />
         <button type="button" className="mv-link pl-block-all" onClick={() => ui.openPage("pipeline")}>
           Your whole pipeline

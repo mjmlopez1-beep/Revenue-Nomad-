@@ -52,7 +52,7 @@ import { draftNote, noteFacts } from "../moveNote";
 import { VOICE_FIELDS, VoiceProblem, cleanVoice, styleOf, voiceRows } from "../voice";
 import { saveVoice, voiceOf } from "../table";
 // Your pipeline (lib/pipeline.ts, lib/pipelineActions.ts): the member's own deals, moved by what Merlin sees.
-import { CHANNEL_WORDS, STAGE_WORDS, monthWords, whoWords, type PipelineView } from "../pipeline";
+import { CHANNEL_WORDS, MOVE_STAGES, STAGE_WORDS, monthWords, whoWords, type MoveStage, type PipelineView } from "../pipeline";
 import { dueFollowUpsFor, pipelineViewFor } from "../pipelineActions";
 
 export interface Ctx {
@@ -1336,26 +1336,35 @@ export async function myPipeline(ctx: Ctx): Promise<ToolOut> {
     won_month_value: monthWords(v.wonMonthly),
     merlin_sees: v.sees.gmail ? "notes and messages on Merlin, the calendar and Gmail headers" : v.sees.calendar ? "notes and messages on Merlin and the calendar (Gmail isn't connected, so replies by email aren't seen)" : "notes and messages on Merlin",
     how_to_use:
-      "This is the member's own pipeline. Merlin moves the stages by itself: a lead a peer passed waits at To reach out until the member writes to them, Sent when a drafted note or a message goes out, Replied when an email comes in from the company (when Gmail is connected) or they reply on Merlin, Meeting from the calendar, Proposal and Won from a proposal, and Went quiet after the follow-ups go unanswered. The member only ever marks Lost or Not now, and adds notes: update_pipeline does those three things and nothing else. Never guess a locked company's name, and never name the person you know there: their name is on Merlin. Nothing here costs a credit.",
+      "This is the member's own pipeline. Merlin moves the stages it can see: a lead a peer passed waits at To reach out until the member writes to them, Sent when a drafted note or a message goes out, Replied when an email comes in from the company (when Gmail is connected) or they reply on Merlin, Meeting from the calendar, Proposal and Won from a proposal, and Went quiet after the follow-ups go unanswered where a reply could have been seen. Without Gmail a deal stays at Sent and its next step asks whether they replied by email. The member can move any deal to any stage but Went quiet by hand, mark it Lost or Not now, reopen it, or add a note: update_pipeline does that, only when the member asks. Never guess a locked company's name, and never name the person you know there: their name is on Merlin. Nothing here costs a credit.",
   };
 }
 
-/** update_pipeline: mark an entry Lost or Not now, or add a private note. The only changes the member makes; Merlin moves the rest. */
-export async function updatePipeline(ctx: Ctx, a: { entry_id?: string; company_id?: string; action?: string; note?: string }): Promise<ToolOut> {
+/** The stage update_pipeline's move takes, from its words ("Replied") or its key ("replied"). Went quiet is Merlin's alone. */
+const MOVE_BY_WORDS: Record<string, MoveStage> = Object.fromEntries(MOVE_STAGES.flatMap((st) => [[STAGE_WORDS[st].toLowerCase(), st], [st, st]]));
+
+/** update_pipeline: the member's own changes to an entry: move it to a stage by hand, Lost or Not now, reopen it, or a private note. Merlin moves what it sees. */
+export async function updatePipeline(ctx: Ctx, a: { entry_id?: string; company_id?: string; action?: string; stage?: string; note?: string }): Promise<ToolOut> {
   const v = await pipelineViewFor(ctx.member.token);
   if (!v) throw new ToolProblem("The member is signed out of Merlin.");
   const e = v.entries.find((x) => (a.entry_id && x.id === a.entry_id) || (!a.entry_id && a.company_id && x.company === a.company_id));
   if (!e) throw new ToolProblem("That isn't in the member's pipeline. Call my_pipeline for the entry ids.");
   const what = String(a.action ?? "");
+  const to = MOVE_BY_WORDS[String(a.stage ?? "").trim().toLowerCase()];
+  if (what === "move" && !to) throw new ToolProblem("For move, give stage: one of To reach out, Sent, Replied, Meeting, Proposal, Won, Lost or Not now. Went quiet is Merlin's alone.");
   const act: Action | null =
-    what === "lost"
-      ? { type: "pipeline.close", id: e.id, stage: "lost" }
-      : what === "not_now"
-        ? { type: "pipeline.close", id: e.id, stage: "notnow" }
-        : what === "note"
-          ? { type: "pipeline.note", id: e.id, text: String(a.note ?? "") }
-          : null;
-  if (!act) throw new ToolProblem("action is one of lost, not_now or note. Merlin moves every other stage by itself.");
+    what === "move"
+      ? { type: "pipeline.move", id: e.id, stage: to! }
+      : what === "lost"
+        ? { type: "pipeline.close", id: e.id, stage: "lost" }
+        : what === "not_now"
+          ? { type: "pipeline.close", id: e.id, stage: "notnow" }
+          : what === "reopen"
+            ? { type: "pipeline.reopen", id: e.id }
+            : what === "note"
+              ? { type: "pipeline.note", id: e.id, text: String(a.note ?? "") }
+              : null;
+  if (!act) throw new ToolProblem("action is one of move (with stage), lost, not_now, reopen or note.");
   try {
     const r = await perform(ctx.member.token, act, ctx.origin);
     const now = r.pipeline?.entries.find((x) => x.id === e.id);

@@ -18,7 +18,7 @@ import { ContactLine, LegalShell, TERMS_VERSION, type Part } from "../legal/Lega
 export const GOVERNING_LAW = "the State of Connecticut";
 /** Where disputes are heard. */
 export const DISPUTE_COURTS = "the state and federal courts located in Connecticut";
-/** "Sending for signature, your own templates, Claude drafting and the pipeline moving itself when they sign". */
+/** "Sending for signature, your own templates, Claude drafting and the pipeline moving to Won when they sign". */
 const sayList = (xs: readonly string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 /** What Pro leaves out that Close has, in the Terms' words (lib/billing/compare.ts PRO_LEAVES_OUT). */
 export const PRO_LEAVES_OUT_SAY = sayList(PRO_LEAVES_OUT.map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)));

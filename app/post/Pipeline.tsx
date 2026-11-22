@@ -4,9 +4,10 @@
  * Your pipeline (?p=pipeline, under Yours): every company the member reached out to, by stage, as
  * Merlin moved it, and first the leads peers passed them and the routes in they went with, at To reach out until their note goes out. Stages are columns on a wide screen and a grouped list on a phone, each with its
  * count, then the closed ones (Went quiet, Lost, Not now), the intros, and the month's value of
- * what they won. Read-only: each card says how Merlin knows ("Detected from your Gmail on Nov 21",
- * "From your calendar"), and carries its one-tap corrections. The page says what Merlin can see
- * for this member, and what connecting Gmail would add.
+ * what they won. Each card says how Merlin knows ("Detected from your Gmail on Nov 21",
+ * "From your calendar", "You marked it"), carries its one-tap corrections and Move to (any stage,
+ * by hand, on every plan), and asks "Did they reply by email?" where Merlin can't see a reply. The
+ * page says what Merlin can see for this member, and what connecting Gmail would add.
  */
 import { useMemo, useState } from "react";
 import { RouteLine } from "./network/Ways";
@@ -17,7 +18,7 @@ import { EmptyState, PageHead, Stat } from "../ui/system";
 import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { pipelineAct, usePipeline } from "./pipelineStore";
-import { FixMenu, StageChip } from "./PipelineParts";
+import { AskReply, FixMenu, MoveMenu, StageChip } from "./PipelineParts";
 import { WonMoment } from "../ui/WonMoment";
 import { PassButton } from "./PeerSheets";
 import "./pipeline.css";
@@ -53,7 +54,7 @@ export function PipelinePage({ infos, openCompany, onIntegrations }: { infos: Co
   const won = rec(winning);
   return (
     <div className="page-wide pl-page">
-      <PageHead title="Your pipeline" lead="Merlin moves each deal by itself: a peer's lead or a route you go with waits at To reach out, then Sent when your note goes out, Replied when they write back, Meeting from your calendar. You only say Lost or Not now." />
+      <PageHead title="Your pipeline" lead="Merlin moves each deal where it can see what happened: a peer's lead or a route you go with waits at To reach out, then Sent when your note goes out, Replied when they write back, Meeting from your calendar. Anything it can't see, move yourself: Move to on any card." />
       {view && <Sees v={view} onIntegrations={onIntegrations} />}
       {!view ? (
         failed ? (
@@ -169,6 +170,8 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
       )}
       {e.stage === "won" ? (
         <span className="pl-card-next">{e.won ? monthWords(e.won.monthly) : e.seat ? "Your seat here is confirmed" : "Add the terms and your seat"}</span>
+      ) : e.ask ? (
+        <AskReply rec={e} />
       ) : e.next && e.stage !== "reach" ? (
         <span className={`pl-card-next${due ? " pl-due" : ""}`}>{e.next}</span>
       ) : null}
@@ -189,6 +192,7 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
           </button>
         )}
         {e.name && (e.stage === "sent" || e.stage === "quiet" || e.stage === "notnow") && <PassButton company={e.company} from="deal" />}
+        <MoveMenu rec={e} />
         <FixMenu rec={e} />
       </div>
     </li>

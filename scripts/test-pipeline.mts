@@ -1,6 +1,6 @@
 /**
  * Checks of Your pipeline (lib/pipeline.ts, lib/pipelineActions.ts, lib/pipelineNote.ts): Merlin
- * moves each member's deals by what it sees, and the member only says Lost or Not now.
+ * moves each member's deals by what it sees, and the member moves any deal to any stage by hand.
  *
  *   npx tsx scripts/test-pipeline.mts      exits 1 on any failure
  *
@@ -27,7 +27,10 @@
  *   - Won: the proposal hook, the terms, Add it as your seat prefilled (credits as usual), the seat
  *     confirmed by the win, and a seat added at an open deal is itself the win;
  *   - intros: asked in a conversation, seen and marked made by the other member, credited on the win;
- *   - the connector: my_pipeline, and update_pipeline limited to Lost, Not now and notes;
+ *   - the connector: my_pipeline, and update_pipeline (move to a stage, Lost, Not now, reopen, notes);
+ *   - the logic probe's scenarios (a past seat added later is no win, Reopen and Not a win on a
+ *     Won, an out-of-office reply taken back, a route never sent), Move to by hand on every stage,
+ *     and a member without Gmail: never Went quiet by itself, "Did they reply by email?" instead;
  *   - deleting what came from Google: Disconnect and delete everything leaves no name, email or
  *     title from the fake Google anywhere in the state, removes the entry only Gmail opened and
  *     keeps every entry she acted on at its stage and dates; access removed at Google (Gmail's
@@ -307,6 +310,80 @@ async function main() {
     return first && w.stage === "sent" && P.detectEntry(w, { seats: ["e_old", "e_new"] }, mon + 2 * DAY) && w.stage === "won" && w.seatId === "e_new" && w.via.won === "seat";
   })());
 
+  console.log("\nthe logic probe's scenarios, pure (qa/logic/pipeline-probe.mts)");
+  {
+    const t0 = Date.parse("2026-11-02T12:00:00Z");
+    // 1. A past seat added after Sent is no win; a seat that started after Sent is.
+    const L1 = P.emptyPipeline();
+    const x1 = P.openEntry(L1, { id: id(), companyId: "x1", channel: "email", source: "move", via: "note", nowMs: t0 }).entry;
+    P.detectEntry(x1, { seats: [], seatFacts: {} }, t0 + DAY);
+    const past = P.detectEntry(x1, { seats: ["e_2019"], seatFacts: { e_2019: { start: "2019-03", addedAt: new Date(t0 + 2 * DAY).toISOString(), type: "Fractional" } } }, t0 + 2 * DAY);
+    check("probe 1: a 2019 seat added after Sent (for credits) is no win: still Sent, the seat set aside", past && x1.stage === "sent" && !x1.seatId && x1.seen.seats!.includes("e_2019"), x1);
+    check("probe 1: a seat in the table from before (added before Sent) is no win", (() => {
+      P.detectEntry(x1, { seats: ["e_2019", "e_old"], seatFacts: { e_2019: { start: "2019-03", addedAt: new Date(t0 + 2 * DAY).toISOString() }, e_old: { start: null, addedAt: new Date(t0 - 90 * DAY).toISOString() } } }, t0 + 3 * DAY);
+      return x1.stage === "sent";
+    })());
+    check("probe 1: a Full-time seat is no win", (() => {
+      P.detectEntry(x1, { seats: ["e_2019", "e_old", "e_ft"], seatFacts: { e_ft: { start: "2026-11", addedAt: new Date(t0 + 4 * DAY).toISOString(), type: "Full-time" } } }, t0 + 4 * DAY);
+      return x1.stage === "sent";
+    })());
+    check("probe 1: a seat with no date that came onto Merlin before Sent is no win", P.seatWins(x1, { start: null, addedAt: null }) === false && P.seatWins(x1, { start: "2026", addedAt: new Date(t0 + DAY).toISOString() }) === true && P.seatWins(x1, { start: "2025", addedAt: new Date(t0 + DAY).toISOString() }) === false);
+    const won = P.detectEntry(x1, { seats: ["e_2019", "e_old", "e_ft", "e_new"], seatFacts: { e_new: { start: "2026-11", addedAt: new Date(t0 + 5 * DAY).toISOString(), type: "Fractional" } } }, t0 + 5 * DAY);
+    check("probe 1: a seat that started this month, added after Sent: Won, from her seats", won && x1.stage === "won" && x1.seatId === "e_new" && x1.via.won === "seat", x1);
+    // 2. Reopen and Not a win, on a Won.
+    check("probe 2: Not a win: back to Sent, the seat no longer this win's, and it never wins it again", P.correctEntry(x1, undefined, t0 + 6 * DAY) && x1.stage === "sent" && !x1.seatId && !x1.dates.won && !P.detectEntry(x1, { seats: ["e_2019", "e_old", "e_ft", "e_new"] }, t0 + 6 * DAY + MIN) && x1.stage === "sent" && x1.log.at(-1)!.text === "You said that wasn't a win", x1.log.at(-1));
+    P.moveEntry(x1, "won", t0 + 7 * DAY);
+    check("a Won the member set is theirs: Reopen, never Not a win", !P.correctEntry(x1, undefined, t0 + 7 * DAY) && x1.stage === "won" && x1.via.won === "you");
+    check("probe 2: reopenEntry on a Won works: back to where it was", P.reopenEntry(x1, t0 + 8 * DAY) && x1.stage === "sent" && !x1.dates.won && !x1.won, x1.stage);
+    // 3. An inbound email a minute after Sent (an out-of-office): Replied, and one tap takes it back.
+    const L3 = P.emptyPipeline();
+    const x3 = P.openEntry(L3, { id: id(), companyId: "x3", channel: "email", source: "move", via: "note", nowMs: t0 }).entry;
+    const ooo = new Date(t0 + MIN).toISOString();
+    P.detectEntry(x3, { inAt: ooo }, t0 + 2 * MIN);
+    check("probe 3: an email in a minute after Sent reads as Replied, and That wasn't a reply sets it aside for good", x3.stage === "replied" && P.correctEntry(x3, { inAt: ooo }, t0 + 3 * MIN) && x3.stage === "sent" && !P.detectEntry(x3, { inAt: ooo }, t0 + 4 * MIN) && x3.stage === "sent");
+    // 4. A route chosen and nothing sent: never quiet, never Replied, Sent only when something goes out.
+    const L4 = P.emptyPipeline();
+    const x4 = P.routeEntry(L4, { id: id(), companyId: "x4", channel: "email", source: "move", nowMs: t0 }).entry;
+    P.detectEntry(x4, { seats: [] }, t0 + DAY);
+    check("probe 4: a route chosen, nothing sent for 31 days: still To reach out, not Went quiet", !P.detectEntry(x4, undefined, t0 + 31 * DAY) && x4.stage === "reach" && P.nextStep(x4, t0 + 31 * DAY) === "Take the first step of your route");
+    P.detectEntry(x4, { inAt: new Date(t0 + 2 * DAY).toISOString() }, t0 + 32 * DAY);
+    check("probe 4: an email in from the company before anything went out isn't a reply", x4.stage === "reach");
+  }
+
+  console.log("\nno inbound channel (no Gmail), pure");
+  {
+    const t0 = Date.parse("2026-11-02T12:00:00Z");
+    const N0 = P.emptyPipeline();
+    const n1 = P.openEntry(N0, { id: id(), companyId: "n1", channel: "email", source: "record", via: "note", nowMs: t0 }).entry;
+    check("without Gmail an email deal never goes quiet by itself, even after 31 days", !P.detectEntry(n1, undefined, t0 + 31 * DAY, { gmail: false }) && n1.stage === "sent");
+    check("it asks instead: No reply seen. Did they reply by email?", P.askReply(n1, false, t0 + 31 * DAY) && P.askWords(n1.channel) === "No reply seen. Did they reply by email?" && P.askWords("linkedin") === "No reply seen. Did they reply on LinkedIn?");
+    check("not before its follow-up is due", !P.askReply(n1, false, t0 + DAY));
+    check("with Gmail the same deal goes quiet, and nothing asks", P.detectEntry(structuredClone(n1), undefined, t0 + 31 * DAY, { gmail: true }) && !P.askReply(n1, true, t0 + 31 * DAY));
+    const n2 = P.openEntry(N0, { id: id(), companyId: "n2", channel: "merlin", source: "record", via: "message", nowMs: t0, conversationId: "cv1" }).entry;
+    check("a deal on Merlin (replies there are seen) still goes quiet without Gmail", P.detectEntry(n2, undefined, t0 + 31 * DAY, { gmail: false }) && n2.stage === "quiet" && !P.askReply(n2, false, t0 + 31 * DAY));
+  }
+
+  console.log("\nMove to, by hand, pure");
+  {
+    const t0 = Date.parse("2026-11-02T12:00:00Z");
+    const M0 = P.emptyPipeline();
+    const m1 = P.openEntry(M0, { id: id(), companyId: "m1", channel: "email", source: "record", via: "note", nowMs: t0 }).entry;
+    check("every stage but Went quiet can be chosen", P.MOVE_STAGES.join(",") === "reach,sent,replied,meeting,proposal,won,lost,notnow" && !P.isMoveStage("quiet"));
+    check("Sent to Replied: via you, logged as the member's", P.moveEntry(m1, "replied", t0 + DAY) && m1.stage === "replied" && m1.via.replied === "you" && m1.log.at(-1)!.text === "You moved it to Replied" && P.viaLine(m1.via.replied, m1.dates.replied)!.startsWith("You marked it on"));
+    P.moveEntry(m1, "meeting", t0 + 2 * DAY);
+    P.moveEntry(m1, "proposal", t0 + 3 * DAY);
+    check("to Won by hand: Add it as your seat next, terms allowed", P.moveEntry(m1, "won", t0 + 4 * DAY) && m1.stage === "won" && m1.via.won === "you" && P.nextStep(m1, t0 + 4 * DAY) === "Add it as your seat" && m1.due === null);
+    P.setWonTerms(m1, { pricing: "monthly", rate: 9000, hours: null, start: null, months: null, merlin: false }, t0 + 4 * DAY);
+    check("back to Replied: what lies past it goes (Meeting, Proposal, Won and its terms)", P.moveEntry(m1, "replied", t0 + 5 * DAY) && m1.stage === "replied" && !m1.dates.meeting && !m1.dates.proposal && !m1.dates.won && !m1.won && !!m1.dates.sent && !!m1.dates.replied);
+    check("Lost keeps the line's dates; out of Lost, the close goes", P.moveEntry(m1, "lost", t0 + 6 * DAY) && !!m1.dates.replied && P.moveEntry(m1, "meeting", t0 + 7 * DAY) && !m1.dates.lost && m1.stage === "meeting" && !!m1.due);
+    check("To reach out: no follow-up, nothing sent, silence counts from now", P.moveEntry(m1, "reach", t0 + 8 * DAY) && m1.stage === "reach" && m1.due === null && !m1.dates.sent && m1.lastOut === new Date(t0 + 8 * DAY).toISOString());
+    check("the same stage again changes nothing", !P.moveEntry(m1, "reach", t0 + 9 * DAY));
+    check("the counts follow what the member says happened", (() => {
+      const st = P.outcomeStats({ pipeline: { mem_m: M0 } });
+      return st.detected.you >= 1 && st.byStage.reach === 1;
+    })());
+  }
+
   console.log("\nfollow-ups due, pure");
   const D = P.emptyPipeline();
   const d1 = P.openEntry(D, { id: id(), companyId: "d1", channel: "email", to: { role: "CEO" }, source: "move", via: "note", nowMs: mon }).entry;
@@ -476,7 +553,7 @@ async function main() {
   check("Not now: one tap, closed, no follow-up", r.pipeline!.entries.find((e) => e.id === tallDue!.id)!.stage === "notnow" && r.pipeline!.entries.find((e) => e.id === tallDue!.id)!.due === null);
   r = await PA.performPipeline(ANA, { type: "pipeline.reopen", id: tallDue!.id } as never);
   check("reopened: back to Sent", r.pipeline!.entries.find((e) => e.id === tallDue!.id)!.stage === "sent");
-  check("a stage can't be set by hand", !!(await refused(PA.performPipeline(ANA, { type: "pipeline.close", id: tallDue!.id, stage: "won" } as never))));
+  check("close takes only Lost or Not now (Move to is its own action)", !!(await refused(PA.performPipeline(ANA, { type: "pipeline.close", id: tallDue!.id, stage: "won" } as never))));
   r = await PA.performPipeline(ANA, { type: "pipeline.note", id: tallDue!.id, text: "Pella prefers mornings. Private note 7731." } as never);
   check("a private note is kept on the entry", r.pipeline!.entries.find((e) => e.id === tallDue!.id)!.notes.some((x) => x.text.includes("7731")));
   // A proposal out at a company she has never opened: locked for her.
@@ -514,7 +591,7 @@ async function main() {
   check("the connector names a locked company as a locked company", (myPipe2.entries as { company_id: string; company: string }[]).find((e) => e.company_id === pub("c_bfin"))?.company === "Locked company");
   check("and never names the locked one in its words", !JSON.stringify(myPipe2).includes("Bluefin"));
   const bad = await refused(tools.updatePipeline(await ctxOf(ANA), { entry_id: anaIds[0], action: "won" }));
-  check("update_pipeline sets nothing but Lost, Not now and notes", !!bad && /lost, not_now or note/.test(bad), bad);
+  check("update_pipeline takes only its actions", !!bad && /action is one of move \(with stage\), lost, not_now, reopen or note/.test(bad), bad);
   const okTool = await tools.updatePipeline(await ctxOf(ANA), { company_id: pub("c_dune"), action: "note", note: "From Claude, note 4410" });
   check("update_pipeline adds a note", okTool.ok === true && (await at(ANA, "c_dune"))!.notes.some((x) => x.text.includes("4410")));
   check("Bo's connector can't touch Ana's entry", !!(await refused(tools.updatePipeline(await ctxOf(BO), { entry_id: anaIds[0], action: "lost" }))));
@@ -663,6 +740,68 @@ async function main() {
   await G.syncMember("mem_bo", T0);
   check("Bo: kept 29 days, then deleted by the check the automatic jobs run", (await G.expireRevoked(T0 + 29 * DAY)) === 0 && !!JSON.parse(stateFile()).network?.mem_bo && (await G.expireRevoked(T0 + 30 * DAY)) === 1 && !JSON.parse(stateFile()).network?.mem_bo);
   check("lib/jobs.ts runs that check with every due check", /expireRevoked\(nowMs\)/.test(src("lib/jobs.ts")) && /await expireGoogle\(nowMs\)/.test(src("lib/jobs.ts")));
+
+  /* ================= a member without Gmail moves their own pipeline ================= */
+  console.log("\nwithout Gmail: Did they reply by email?, and Move to");
+  await act(BO, { type: "unlock", entity: "company", id: pub("c_lark"), field: "identity" });
+  r = await PA.performPipeline(BO, { type: "pipeline.sent", companyId: pub("c_lark"), channel: "email", to: { role: "CEO" }, from: "record" } as never);
+  let bl = r.pipeline!.entries.find((e) => e.company === pub("c_lark"))!;
+  check("set-up: Bo (no Gmail) sends a note to Larkfield: Sent, no question yet", bl.stage === "sent" && !bl.ask && !(await view(BO)).sees.gmail, bl);
+  await T.tableInternals.mutate((s) => {
+    const e = s.pipeline!.mem_bo.entries.find((x) => x.companyId === "c_lark")!;
+    e.lastOut = new Date(Date.now() - 31 * DAY).toISOString();
+    e.dates.sent = e.lastOut;
+    e.createdAt = e.lastOut;
+    e.follow = 2;
+    e.due = P.addDays(today, -1);
+  });
+  bl = (await at(BO, "c_lark"))!;
+  check("31 days and two follow-ups on: not Went quiet, since Merlin couldn't see a reply", bl.stage === "sent" && !bl.dates.quiet, bl);
+  check("its next step asks: No reply seen. Did they reply by email?", bl.ask === true && bl.next === "No reply seen. Did they reply by email?", bl);
+  const boTool1 = await tools.myPipeline(await ctxOf(BO));
+  check("the connector reads the same question", (boTool1.entries as { company_id: string; next_step?: string }[]).find((e) => e.company_id === pub("c_lark"))?.next_step === "No reply seen. Did they reply by email?");
+  r = await PA.performPipeline(BO, { type: "pipeline.move", id: bl.id, stage: "replied" } as never);
+  bl = r.pipeline!.entries.find((e) => e.id === bl.id)!;
+  check("one tap, Replied: the member's own, You marked it", bl.stage === "replied" && bl.via.replied === "you" && /^You marked it on /.test(bl.how ?? "") && !bl.ask && r.message === "Moved to Replied." && bl.log.at(-1)!.text === "You moved it to Replied", bl);
+  check("another member can't move it", !!(await refused(PA.performPipeline(ANA, { type: "pipeline.move", id: bl.id, stage: "won" } as never))));
+  check("Went quiet, or a made-up stage, can't be chosen", !!(await refused(PA.performPipeline(BO, { type: "pipeline.move", id: bl.id, stage: "quiet" } as never))) && !!(await refused(PA.performPipeline(BO, { type: "pipeline.move", id: bl.id, stage: "signed" } as never))));
+  for (const st of ["meeting", "proposal", "won"] as const) r = await PA.performPipeline(BO, { type: "pipeline.move", id: bl.id, stage: st } as never);
+  bl = r.pipeline!.entries.find((e) => e.id === bl.id)!;
+  check("Meeting, Proposal, then Won by hand: Add it as your seat, Reopen but no Not a win", bl.stage === "won" && bl.via.won === "you" && bl.next === "Add it as your seat" && bl.fix.includes("reopen") && !bl.fix.includes("notWon"), bl);
+  r = await PA.performPipeline(BO, { type: "pipeline.won", id: bl.id, pricing: "monthly", rate: 8000 } as never);
+  check("a Won by hand takes its terms", r.pipeline!.entries.find((e) => e.id === bl.id)!.won?.monthly === 8000, r.message);
+  r = await PA.performPipeline(BO, { type: "pipeline.reopen", id: bl.id } as never);
+  bl = r.pipeline!.entries.find((e) => e.id === bl.id)!;
+  check("Reopen a Won: back to Proposal, the terms gone", bl.stage === "proposal" && !bl.won && !bl.dates.won, bl);
+  for (const st of ["lost", "notnow", "reach", "sent"] as const) {
+    r = await PA.performPipeline(BO, { type: "pipeline.move", id: bl.id, stage: st } as never);
+    check(`Move to ${P.STAGE_WORDS[st]}`, r.pipeline!.entries.find((e) => e.id === bl.id)!.stage === st, r.message);
+  }
+  const ut = await tools.updatePipeline(await ctxOf(BO), { entry_id: bl.id, action: "move", stage: "Meeting" });
+  check("update_pipeline moves it too (stage in words)", ut.ok === true && ut.stage === "Meeting", ut);
+  check("update_pipeline refuses Went quiet", /Went quiet is Merlin's alone/.test((await refused(tools.updatePipeline(await ctxOf(BO), { entry_id: bl.id, action: "move", stage: "Went quiet" }))) ?? ""));
+  check("update_pipeline reopens", (await tools.updatePipeline(await ctxOf(BO), { entry_id: bl.id, action: "lost" })).stage === "Lost" && (await tools.updatePipeline(await ctxOf(BO), { entry_id: bl.id, action: "reopen" })).stage === "Meeting");
+
+  console.log("\nphantom wins: only a seat of this deal");
+  await PA.performPipeline(BO, { type: "pipeline.move", id: bl.id, stage: "sent" } as never);
+  await T.tableInternals.mutate((s) => {
+    const e = s.pipeline!.mem_bo.entries.find((x) => x.companyId === "c_lark")!;
+    e.dates.sent = new Date(Date.now() - 2 * DAY).toISOString();
+    e.lastOut = e.dates.sent;
+  });
+  const pastSeat = await act(BO, { type: "add", company: "Larkfield Robotics", website: "lark.example", newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", status: "Ended", start: "2019-03", end: "2020-01", operator: "Bo Other" }, operatorMemberId: "me" });
+  bl = (await at(BO, "c_lark"))!;
+  check("a 2019 seat Bo adds now (for credits) is no win: still Sent", !!pastSeat.id && bl.stage === "sent" && !bl.seat, bl);
+  const ftSeat = await act(BO, { type: "add", company: "Larkfield Robotics", website: "lark.example", newEngagement: true, engagementFields: { function: "RevOps", type: "Full-time", status: "Active", start: thisMonth, operator: "Bo Other" }, operatorMemberId: "me" });
+  bl = (await at(BO, "c_lark"))!;
+  check("a Full-time seat there is no win", !!ftSeat.id && bl.stage === "sent", bl);
+  const newSeat = await act(BO, { type: "add", company: "Larkfield Robotics", website: "lark.example", newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", status: "Active", start: thisMonth, operator: "Bo Other" }, operatorMemberId: "me" });
+  bl = (await at(BO, "c_lark"))!;
+  check("a fractional seat that started this month, added after Sent: Won, from his seats", bl.stage === "won" && bl.via.won === "seat" && bl.seat === newSeat.id && bl.fix.includes("notWon") && bl.fix.includes("reopen"), bl);
+  r = await PA.performPipeline(BO, { type: "pipeline.correct", id: bl.id } as never);
+  bl = r.pipeline!.entries.find((e) => e.id === bl.id)!;
+  check("Not a win: back to Sent, the seat set aside", bl.stage === "sent" && !bl.seat && !bl.dates.won && /^Back to Sent/.test(r.message), [bl.stage, r.message]);
+  check("and the seat doesn't win it again on the next look", (await at(BO, "c_lark"))!.stage === "sent");
 
   console.log(`\n${passed} passed, ${failed} failed`);
 }

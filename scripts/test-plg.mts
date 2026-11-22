@@ -432,7 +432,7 @@ async function main() {
   const proOut = text(cardOf(cardsTrialPro, "pro"));
   check(
     "  the trial's Pro card lists what Pro leaves out, and only Pro's card does",
-    /Not in Pro, only in Close: Sending for signature Your own templates Claude drafting The pipeline moving itself when they sign/.test(proOut) &&
+    /Not in Pro, only in Close: Sending for signature Your own templates Claude drafting The pipeline moving to Won when they sign/.test(proOut) &&
       text(cardOf(cardsTrialClose, "pro")).includes("Sending for signature") &&
       !cardOf(cardsTrialPro, "close").includes("data-pro-leaves-out") &&
       !cardsFree.includes("Not in Pro"),

@@ -70,11 +70,16 @@ export function signalsFor(seed: Seed, s: State, me: Member): Map<string, P.Comp
   if (at.size) {
     const g = T.graph(seed, s);
     const idx = T.memberIndex(seed, s);
+    // When each seat came onto Merlin: added by a member or the scan (State.engagements[].at), else the seed's stamp. A seed seat without one was there before.
+    const addedAt = new Map<string, string>();
+    for (const e of seed.engagements) if (at.has(e.companyId) && e.addedAt) addedAt.set(e.id, e.addedAt);
+    for (const e of s.engagements) if (at.has(e.companyId) && e.at) addedAt.set(e.id, e.at);
     for (const e of g.engagements.values()) {
       if (!at.has(e.companyId)) continue;
       if (T.seatHolder(s, idx, e.id, T.valueOf(e, s, "operator"))?.id !== me.id) continue;
       const x = one(e.companyId);
       (x.seats ??= []).push(e.id);
+      (x.seatFacts ??= {})[e.id] = { start: T.live(e, s, "start"), addedAt: addedAt.get(e.id) ?? null, type: T.live(e, s, "type") };
     }
     for (const id of at) if (!out.get(id)?.seats) one(id).seats = [];
   }
@@ -99,9 +104,15 @@ function newAtFor(s: State, me: Member, crystal: Set<string>): Set<string> | und
   return new Set([...crystal].filter((id) => !aside.has(id)));
 }
 
+/** The member's Gmail is connected and reading (headers only): a reply by email would be seen. */
+function gmailSees(s: State, me: Member): boolean {
+  const n = s.network?.[me.id];
+  return networkOn() && !!n?.gmail && n.gmail.status !== "reconnect" && !!n.gm;
+}
+
 /** What detection reads for a member, from the committed state (its graph is built once and shared). */
 function seeFor(seed: Seed, s: State, me: Member, crystal: Set<string>): P.DetectInput {
-  return { signals: signalsFor(seed, s, me), replies: repliesFor(s, me.id), newAt: newAtFor(s, me, crystal), newId };
+  return { signals: signalsFor(seed, s, me), replies: repliesFor(s, me.id), newAt: newAtFor(s, me, crystal), newId, gmail: gmailSees(s, me) };
 }
 
 /** Move one member's pipeline in `s` by what Merlin sees (`see`). Returns how many entries changed. */
@@ -157,6 +168,7 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
     if (t.status !== "active" || (t.by !== me.id && t.with !== me.id)) continue;
     teamAt.set(t.companyId, { id: t.id, with: T.firstName(idx.byId.get(t.by === me.id ? t.with : t.by)?.name ?? "a peer") });
   }
+  const gmail = gmailSees(s, me);
   const introWho = (i: P.IntroRecord) => (i.introducer.memberId ? idx.byId.get(i.introducer.memberId)?.name ?? "A former member" : i.introducer.name || (i.introducer.role ? `the ${i.introducer.role}` : "Someone you know"));
   for (const e of log.entries) {
     if (!g.companies.has(e.companyId)) continue;
@@ -164,8 +176,10 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
     const fix: P.PipelineRec["fix"] = [];
     if (e.stage === "replied" && (e.via.replied === "gmail" || e.via.replied === "message")) fix.push("notReply");
     if (e.stage === "meeting" && e.via.meeting === "calendar") fix.push("notMeeting");
+    if (e.stage === "won" && e.via.won && e.via.won !== "you") fix.push("notWon");
     if (P.isOpen(e.stage)) fix.push("lost", "notnow");
-    if (e.stage === "lost" || e.stage === "notnow" || e.stage === "quiet") fix.push("reopen");
+    if (e.stage === "lost" || e.stage === "notnow" || e.stage === "quiet" || e.stage === "won") fix.push("reopen");
+    const ask = P.askReply(e, gmail, nowMs);
     if (e.stage !== "won") fix.push("remove");
     const intro = e.introId ? introById.get(e.introId) : undefined;
     view.entries.push({
@@ -183,8 +197,9 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
       how: P.viaLine(e.via[e.stage], e.stage === "quiet" ? e.lastOut : e.dates[e.stage]),
       due: P.isOpen(e.stage) ? e.due : null,
       follow: e.follow,
-      next: P.nextStep(e, nowMs),
+      next: ask ? P.askWords(e.channel) : P.nextStep(e, nowMs),
       fix,
+      ...(ask ? { ask: true } : {}),
       notes: e.notes,
       log: e.log.slice(-30),
       ...(e.won ? { won: { ...e.won, monthly: P.monthlyValue(e.won) } } : {}),
@@ -252,7 +267,7 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
   view.sees = {
     google: networkOn(),
     calendar: networkOn() && !!n?.google && n.google.status !== "reconnect" && !!n.cal,
-    gmail: networkOn() && !!n?.gmail && n.gmail.status !== "reconnect" && !!n.gm,
+    gmail,
     gmailOffered: networkOn() && !!n?.google && gmailTester(me.email, n.google.email),
   };
   return view;
@@ -295,7 +310,7 @@ export type DueFollowUp = P.FollowUpItem & { company: string | null; companyPub:
 export function followUpsOf(seed: Seed, s: State, me: Member, nowMs: number, names: "all" | "merlin" = "all", named?: (companyId: string) => boolean): DueFollowUp[] {
   if (!s.pipeline?.[me.id]?.entries?.length) return [];
   const nameOf = nameFor(seed, s, me);
-  const items = P.dueFollowUps(s, me.id, nowMs, { signals: signalsFor(seed, s, me), replies: repliesFor(s, me.id) });
+  const items = P.dueFollowUps(s, me.id, nowMs, { signals: signalsFor(seed, s, me), replies: repliesFor(s, me.id), gmail: gmailSees(s, me) });
   return items.map((f) => {
     const company = !named || named(f.companyId) ? nameOf(f.companyId) : null;
     return { ...f, company, companyPub: T.pubId(f.companyId), ...P.followUpWords(f, company, names) };
@@ -389,6 +404,14 @@ export async function performPipeline(token: string | null, raw: Action): Promis
         if (!P.reopenEntry(e, nowMs)) throw new ActionError("That one is still open.");
         return `Back to ${P.STAGE_WORDS[e.stage]}.`;
       }
+      case "pipeline.move": {
+        // The member moves it by hand, to any stage but Went quiet (Merlin's), on every plan.
+        const e = entry(a.id);
+        if (!P.isMoveStage(a.stage)) throw new ActionError("Pick a stage: To reach out, Sent, Replied, Meeting, Proposal, Won, Lost or Not now.");
+        if (e.stage === a.stage) return `It's at ${P.STAGE_WORDS[e.stage]} already.`;
+        P.moveEntry(e, a.stage, nowMs);
+        return a.stage === "won" ? "Moved to Won. Add the terms and your seat when you're ready." : a.stage === "notnow" ? "Moved to Not now. Merlin won't nudge you about it." : `Moved to ${P.STAGE_WORDS[a.stage]}.`;
+      }
       case "pipeline.correct": {
         const e = entry(a.id);
         const sig = sig0.get(e.companyId) ?? {};
@@ -410,7 +433,7 @@ export async function performPipeline(token: string | null, raw: Action): Promis
       }
       case "pipeline.won": {
         const e = entry(a.id);
-        if (e.stage !== "won") throw new ActionError("Merlin marks a deal won when the proposal is signed, or when you add your seat there.");
+        if (e.stage !== "won") throw new ActionError("Move it to Won first. Merlin also marks a deal won when the proposal is signed, or when you add your seat there.");
         const w = P.cleanWon(a, nowMs);
         if (!w.terms) throw new ActionError(w.error!);
         P.setWonTerms(e, w.terms, nowMs);

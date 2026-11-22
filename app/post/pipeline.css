@@ -43,6 +43,36 @@
   margin-top: 4px;
 }
 
+/* ---------- Move to... and "Did they reply by email?" (PipelineParts.tsx MoveMenu, AskReply) ---------- */
+.pl-move[open] {
+  flex-basis: 100%;
+}
+.pl-move-m .btn {
+  min-height: 32px;
+}
+.pl-ask {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.pl-ask-q {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.pl-ask-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pl-ask-acts .btn {
+  min-height: 32px;
+}
+
 /* ---------- log and notes ---------- */
 .pl-log {
   list-style: none;

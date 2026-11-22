@@ -11,7 +11,7 @@
  *          in Slack as they happen (everyone gets every signal each morning), and 100 credits each paid month.
  *   Close  $79 a month or $790 a year: everything in Pro, plus proposals end to end (Claude
  *          drafting from a call, your own templates and contracts, unlimited send for signature,
- *          the pipeline moving itself on a signature). The same 100 credits a month. canClose() is
+ *          the pipeline moving to Won on a signature). The same 100 credits a month. canClose() is
  *          the one gate. Pro and Close move into each other on the same subscription (prorated).
  *   Top-up $19 for 50 credits, once, on any plan.
  *   Trial  the 21-day Close trial (TRIAL_LABEL, the top tier), no card, from the end of onboarding. Extended once by 7 days when, in its
@@ -30,7 +30,7 @@ export const AI_PACK_LINE = `Need more AI usage? Add a pack anytime for $${PRICE
 /**
  * The paid tiers: Pro ($59, $590 a year) and Close ($79, $790 a year), the same 100 credits
  * a month. Close adds proposals end to end: Claude drafting from a call, your own templates, your
- * own contracts with signature fields, unlimited send for signature, and the pipeline moving itself
+ * own contracts with signature fields, unlimited send for signature, and the pipeline moving to Won
  * when something is signed. The trial is Close. PlanRecord.tier says which a subscription is.
  */
 export type Tier = "pro" | "close";
