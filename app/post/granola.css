@@ -1,0 +1,206 @@
+/* Granola (gr-): the Integrations card's extras and the call picker (GranolaCallPicker). */
+
+.gr-mark {
+  color: var(--pine);
+}
+.gr-mark-box {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.gr-mark-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.gr-close {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 12px 0 0;
+  padding: 12px 16px;
+  border-radius: var(--r-card);
+  background: var(--sand);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+.gr-close p {
+  flex: 1 1 220px;
+  margin: 0;
+}
+
+.gr-picker {
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--body-ink);
+}
+.gr-picker.gr-close {
+  display: flex;
+  border: 0;
+  background: var(--sand);
+}
+.gr-empty {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 14px;
+}
+.gr-empty-t {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.gr-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.gr-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.gr-p,
+.gr-quiet,
+.gr-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.gr-note {
+  font-size: 13px;
+}
+.gr-titles {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--body-ink);
+  cursor: pointer;
+}
+.gr-titles input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pine);
+}
+
+.gr-calls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+.gr-call {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t);
+}
+.gr-call:hover {
+  border-color: var(--pine);
+}
+.gr-call.on {
+  padding: 13px 15px;
+  border: 2px solid var(--pine);
+  background: #f2f7f4;
+}
+.gr-call:disabled {
+  cursor: progress;
+}
+.gr-call-h {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.gr-call-title {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+  overflow-wrap: anywhere;
+}
+.gr-call-s {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.gr-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.gr-row .btn,
+.gr-paste,
+.gr-more .tp-flink {
+  min-height: 44px;
+}
+.gr-search {
+  display: grid;
+  gap: 6px;
+}
+.gr-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 44px;
+}
+.gr-err {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-btn);
+  background: var(--sand);
+  color: var(--ink);
+}
+.gr-err p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.gr-none {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .gr-calls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gr-row .btn {
+    flex: 1 1 auto;
+  }
+}
