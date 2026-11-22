@@ -42,34 +42,35 @@ export function readTerms(text: string): AgreedTerms {
     .split(/(?<=[.!?])\s+|\n+/)
     .map((s) => s.trim())
     .filter(Boolean);
-  const set = (k: string, v: string, s: string, said: RegExp) => {
+  /** Set a field from what matched; a hedge right before or after it ("around", "or so") is a thing to check, quoted from the hedge. */
+  const set = (k: string, v: string, s: string, m: RegExpMatchArray) => {
     if (fields[k]) return;
     fields[k] = v;
-    const m = s.match(said);
-    const at = m?.index ?? 0;
-    if (m && HEDGE.test(s.slice(Math.max(0, at - 20), at + m[0].length + 6))) {
-      // The words as said, from the hedge before them when there is one.
-      const from = at > 12 ? s.slice(at - 12, at + m[0].length).replace(/^\S*\s/, "") : s.slice(0, at + m[0].length);
-      checks.push(`They said "${from.trim().replace(/^./, (c) => c.toLowerCase())}". The draft says ${v}.`);
+    const at = m.index ?? 0;
+    const before = s.slice(Math.max(0, at - 24), at).match(new RegExp(`(${HEDGE.source.slice(2, -2)})\\s+$`, "i"));
+    const after = s.slice(at + m[0].length, at + m[0].length + 14).match(/^\s*(or so|give or take|ish)\b/i);
+    if (before || after || HEDGE.test(m[0])) {
+      const said = `${before ? before[0] : ""}${m[0]}${after ? after[0] : ""}`.replace(/\s+/g, " ").trim();
+      checks.push(`They said "${said.replace(/^./, (c) => c.toLowerCase())}". The draft says ${v}.`);
     }
   };
   for (const s of sentences) {
     const monthly = s.match(new RegExp(`${AMOUNT}\\s*(?:a|per|\\/|each)\\s*(?:month|mo)\\b|${AMOUNT}\\s*monthly|monthly (?:fee|retainer|rate) (?:of|is|at)\\s*${AMOUNT}`, "i"));
     if (monthly) {
       const [raw, unit] = monthly[1] ? [monthly[1], monthly[2]] : monthly[3] ? [monthly[3], monthly[4]] : [monthly[5], monthly[6]];
-      if (/\b(after|from|then|drops? to|steps? down|month (?:4|four))\b/i.test(s.slice(0, monthly.index)) && fields["pricing.monthlyFee"]) set("pricing.stepDownFee", usd(raw, unit), s, new RegExp(AMOUNT, "i"));
-      else set("pricing.monthlyFee", usd(raw, unit), s, new RegExp(AMOUNT, "i"));
+      if (/\b(after|from|then|drops? to|steps? down|month (?:4|four))\b/i.test(s.slice(0, monthly.index)) && fields["pricing.monthlyFee"]) set("pricing.stepDownFee", usd(raw, unit), s, monthly);
+      else set("pricing.monthlyFee", usd(raw, unit), s, monthly);
     }
     const fixed = s.match(new RegExp(`${AMOUNT}\\s*(?:fixed|flat|one[- ]time|up front|upfront)|(?:fixed|flat|one[- ]time) (?:fee|price) (?:of|is|at)\\s*${AMOUNT}`, "i"));
-    if (fixed) set("pricing.fixedFee", usd(fixed[1] ?? fixed[3], fixed[1] ? fixed[2] : fixed[4]), s, new RegExp(AMOUNT, "i"));
+    if (fixed) set("pricing.fixedFee", usd(fixed[1] ?? fixed[3], fixed[1] ? fixed[2] : fixed[4]), s, fixed);
     const term = s.match(new RegExp(`\\b${NUM}[- ]month (?:term|contract|engagement|commitment|retainer)|(?:term|contract|engagement|commitment) (?:of|for|is)\\s*${NUM} months?|\\bfor (?:the first )?${NUM} months\\b`, "i"));
-    if (term) set("term.initialMonths", String(n(term[1] ?? term[2] ?? term[3])), s, /\d+|\b(one|two|three|four|five|six|twelve)\b/i);
+    if (term) set("term.initialMonths", String(n(term[1] ?? term[2] ?? term[3])), s, term);
     const notice = s.match(new RegExp(`\\b${NUM}\\s*days?(?:'|’)?\\s*(?:written\\s*)?notice|notice (?:of|period of)\\s*${NUM}\\s*days`, "i"));
-    if (notice) set("term.noticeDays", String(n(notice[1] ?? notice[2])), s, /\d+\s*days?|\b(thirty|sixty|ninety)\s*days?/i);
+    if (notice) set("term.noticeDays", String(n(notice[1] ?? notice[2])), s, notice);
     const alloc = s.match(new RegExp(`\\b${NUM}\\s*(days|hours)\\s*(?:a|per|each)\\s*week\\b`, "i"));
-    if (alloc) set("pricing.allocation", `${n(alloc[1])} ${n(alloc[1]) === 1 ? alloc[2].replace(/s$/, "") : alloc[2]} a week`, s, new RegExp(`(?:around |about |roughly )?${NUM}\\s*(days|hours)\\s*(?:a|per|each)\\s*week`, "i"));
+    if (alloc) set("pricing.allocation", `${n(alloc[1])} ${n(alloc[1]) === 1 ? alloc[2].replace(/s$/, "") : alloc[2]} a week`, s, alloc);
     const start = s.match(new RegExp(`\\bstart(?:s|ing)?\\s*(?:on|by|from)?\\s*((?:${MONTHS.join("|")})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*\\d{4})?|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?(?:${MONTHS.join("|")}))`, "i"));
-    if (start) set("start.date", start[1].replace(/\b[a-z]/, (c) => c.toUpperCase()).replace(/(\d)(st|nd|rd|th)\b/, "$1"), s, new RegExp(start[1], "i"));
+    if (start) set("start.date", start[1].replace(/\b[a-z]/, (c) => c.toUpperCase()).replace(/(\d)(st|nd|rd|th)\b/, "$1"), s, start);
   }
   return { fields, checks: checks.slice(0, 4) };
 }
