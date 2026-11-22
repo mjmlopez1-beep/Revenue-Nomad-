@@ -7,6 +7,7 @@ import { docCopy } from "@/lib/documents/store";
 import type { DocCopy } from "@/lib/documents/types";
 import { SignLegal, SignTop } from "../sign/Sign";
 import { stamp, dayOf } from "../sign/doc";
+import { SealCard } from "../sign/ProposalView";
 
 const SAY: Record<string, string> = {
   uploaded: "Uploaded",
@@ -67,6 +68,7 @@ export async function DocCopyPage({ token }: { token: string }) {
             Download the signed PDF
           </a>
         </section>
+        {c.sealed && <SealCard at={c.sealed.at} signers={c.signers.map((x) => x.name)} events={c.events.filter((e) => Date.parse(e.at) <= Date.parse(c!.sealed!.at)).length} pdf={null} check={c.sealed.check} />}
         <section className="sg-card sg-signed" aria-labelledby="dc-sg">
           <h2 className="sg-h2" id="dc-sg">
             Who signed

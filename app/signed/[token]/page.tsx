@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { signedCopy } from "@/lib/proposals/store";
 import type { SignedCopy } from "@/lib/proposals/types";
 import { SignLegal, SignTop } from "../../sign/Sign";
-import { DocBlocks, EVENT_SAY, dayOf, stamp } from "../../sign/doc";
+import { EVENT_SAY, dayOf, stamp } from "../../sign/doc";
+import { Parties, ProposalView, SealCard } from "../../sign/ProposalView";
 import { PrintButton } from "../Print";
 import { DocCopyPage } from "../DocCopy";
 import "../../sign/sign.css";
+import "../../sign/clientview.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Signed copy · Revenue Nomad", robots: { index: false, follow: false }, openGraph: null, twitter: null };
@@ -22,7 +24,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
   if (/^dc_/.test(String(token ?? ""))) return <DocCopyPage token={String(token).slice(0, 120)} />;
   let c: SignedCopy | null = null;
   try {
-    c = await signedCopy(String(token ?? "").slice(0, 120));
+    c = await signedCopy(String(token ?? "").slice(0, 120), process.env.RN_PUBLIC_URL);
   } catch (e) {
     console.error("signed copy could not be read", e);
   }
@@ -44,7 +46,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
   return (
     <div className="sg sg-copy">
       <SignTop />
-      <main className="sg-main">
+      <main className="sg-main cv-main">
         <section className="sg-card sg-head">
           <p className="sg-from">Signed copy · Proposal from</p>
           <p className="sg-sender">{d.from.name}</p>
@@ -66,14 +68,28 @@ export default async function Page({ params }: { params: Promise<{ token: string
               </dd>
             </div>
           </dl>
+          {c.signed.choice && (
+            <p className="sg-p">
+              Chose {c.signed.choice.summary}. Total: {c.signed.choice.total}.
+            </p>
+          )}
           <div className="sg-noprint">
             <PrintButton />
           </div>
         </section>
 
-        <article className="sg-card sg-doc" aria-label="The proposal as signed">
-          <DocBlocks blocks={d.blocks} />
-        </article>
+        {c.sealed && <SealCard at={c.sealed.at} signers={[c.signed.name]} events={c.sealed.events} pdf={c.sealed.pdf} check={c.sealed.check} />}
+
+        <ProposalView
+          doc={d}
+          choice={c.signed.choice ? { optionId: c.signed.choice.optionId, addOnIds: c.signed.choice.addOns.map((a) => a.id) } : null}
+          sign={
+            <div className="cv-accept">
+              <h2 className="cv-h2">Signatures</h2>
+              <Parties doc={d} client={`Signed ${stamp(c.signed.at)}`} member={`Sent ${stamp(c.sentAt)}`} />
+            </div>
+          }
+        />
 
         <section className="sg-card sg-signed" aria-labelledby="sg-sigh">
           <h2 className="sg-h2" id="sg-sigh">
