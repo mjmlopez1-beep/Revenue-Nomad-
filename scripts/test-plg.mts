@@ -27,9 +27,9 @@
  *   8. The trial's end as a loss: PlanView.summary in its last 4 days ("You opened 3 companies free
  *      and sent 3 notes; 1 proposal is out." / "In 3 days companies cost 2 credits again and your
  *      second saved view stops emailing."), Home's card with "So far", and the day-18 email.
- *  10. The Free plan's taper, with the clock moved: past the first 30 days, facts about other
- *      people's companies earn up to 10 a day (the 11th says the rule), facts on the member's own
- *      seat still earn; before day 30 the 11th still earns.
+ *  10. No Free earning taper, with the clock moved: past the first 30 days, facts about other
+ *      people's companies still earn up to the daily 25 (the 11th earns), before day 30 the same,
+ *      Me carries no taper, and the Credits rule says Free keeps earning.
  * (9, activation, is in scripts/test-model.mts: startSteps.)
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -82,7 +82,7 @@ const seed = {
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
 
 const row = (memberId: string, c: string) => ({ k: `test:${memberId}:${c}`, c, kind: "role", l: "New open role: Fractional VP Sales · In your function", b: "High", w: "Hiring now" });
-// Joined members: Tara 31 days ago (the taper applies), Yan 25 days ago (not yet).
+// Joined members: Tara 31 days ago, Yan 25 days ago (no taper either way: Free earns 25 a day for good).
 const joined = (id: string, name: string, days: number) => ({ ...member(id, name), at: iso(-days * DAY), ipHash: `${id}${id}`.slice(0, 16) });
 const fillable = Array.from({ length: N }, (_, k) => `c_p${pad(k)}.identity`);
 writeFileSync(
@@ -380,29 +380,25 @@ async function main() {
   const lastMail = emails.trialEndingEmail({ first: "Tia", days: 1, notLooking: false, rateLine: null, link: BASE });
   check("the trial-ended and last-day emails tell it too", endMail.text.includes("send the proposal they sign") && lastMail.text.includes("send the proposal they sign"));
 
-  /* ---------- 10. the Free plan's taper, with the clock moved ---------- */
-  console.log("\n10. Free's earning taper after the first 30 days");
-  check("the numbers are constants: 30 days, 10 a day, 25 for own seats", F.FREE_TAPER_DAYS === 30 && F.FREE_TAPER_CAP === 10 && F.EARN_CAP === 25);
+  /* ---------- 10. no Free earning taper, with the clock moved ---------- */
+  console.log("\n10. Free keeps earning up to 25 a day, past the first 30 days too");
+  check("the taper's constants are gone, the daily cap is 25", !("FREE_TAPER_DAYS" in F) && !("FREE_TAPER_CAP" in F) && !("TAPER_RULE" in F) && F.EARN_CAP === 25);
+  check("the rule as members read it", F.FREE_EARN_RULE === "On Free you keep earning up to 25 credits a day, for as long as you're a member.");
   const fill = (tok: string, k: number, field = "hq", value = "Austin, TX") => t.perform(tok, { type: "fill", entity: "company", id: P(k), field, value }, BASE);
   const ta0 = await credits(TAPER);
-  for (let k = 0; k < 10; k++) await fill(TAPER, k);
-  check("past day 30: 10 facts about other people's companies earn 10", (await credits(TAPER)) === ta0 + 10);
-  const tap11 = await fill(TAPER, 10);
-  check("the 11th earns nothing, and says the rule", (await credits(TAPER)) === ta0 + 10 && tap11.message.includes(F.TAPER_RULE), tap11.message);
+  for (let k = 0; k < 11; k++) await fill(TAPER, k);
+  check("past day 30: 11 facts about other people's companies earn 11", (await credits(TAPER)) === ta0 + 11, [ta0, await credits(TAPER)]);
   const tv = await view(TAPER);
-  check("Me.taper: 10 of 10 today", tv.me!.taper?.cap === 10 && tv.me!.taper.earned === 10, tv.me!.taper);
+  check("Me carries no taper", !("taper" in tv.me!), tv.me);
   const own = await t.perform(TAPER, { type: "fill", entity: "engagement", id: pub("e_taper_own"), field: "hours", value: "20" }, BASE);
-  check("a fact on her own seat still earns (up to 25)", (await credits(TAPER)) === ta0 + 11, own.message);
-  check("the rule as members read it", F.TAPER_RULE === "On Free, after your first 30 days, facts about other people's companies earn up to 10 credits a day. Facts on your own seats, and confirmations, still earn up to 25.");
+  check("a fact on her own seat earns too", (await credits(TAPER)) === ta0 + 12, own.message);
   const y0 = await credits(YOUNG);
   for (let k = 11; k < 22; k++) await fill(YOUNG, k);
-  const yv = await view(YOUNG);
-  check("before day 30: the 11th still earns", (await credits(YOUNG)) === y0 + 11 && !yv.me!.taper, [y0, await credits(YOUNG)]);
+  check("before day 30: the 11th earns", (await credits(YOUNG)) === y0 + 11, [y0, await credits(YOUNG)]);
   skew += 6 * DAY;
   const y1 = await credits(YOUNG);
   for (let k = 11; k < 22; k++) await fill(YOUNG, k, "linkedin", `https://www.linkedin.com/company/plgco-${pad(k)}`);
-  check("six days later (day 31), the same 11 facts earn 10", (await credits(YOUNG)) === y1 + 10 && (await view(YOUNG)).me!.taper?.earned === 10, [y1, await credits(YOUNG)]);
-  check("Pro has no taper", !(await view(PRO)).me!.taper);
+  check("six days later (day 31), the same 11 facts earn 11", (await credits(YOUNG)) === y1 + 11 && !("taper" in (await view(YOUNG)).me!), [y1, await credits(YOUNG)]);
   skew -= 6 * DAY;
 }
 

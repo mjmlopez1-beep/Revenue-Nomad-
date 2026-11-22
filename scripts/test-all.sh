@@ -150,7 +150,7 @@ run fractionals npx tsx scripts/test-fractionals.mts
 run peers npx tsx scripts/test-peers.mts
 # Plans and payments (lib/plan.ts, lib/billing): the trial and its extension, pause, cancel, the Stripe webhook (signature, each event, once), monthly credits and top-ups, Free's limits on and off, nothing changed with billing off. Fetch replaced: nothing reaches Stripe.
 run billing npx tsx scripts/test-billing.mts
-# Plans, credits and upgrade moments (the PLG decisions): Pro opens 15 companies a day free, fellow fractionals free, contact details paid, PlanPill, Free / Pro / Pro + Close and the landing pricing, the three choices at 0 credits, the trial summary, the Free taper with the clock moved. In process.
+# Plans, credits and upgrade moments (the PLG decisions): Pro opens 15 companies a day free, fellow fractionals free, contact details paid, PlanPill, Free / Pro / Pro + Close and the landing pricing, the three choices at 0 credits, the trial summary, no Free earning taper (25 a day for good) with the clock moved. In process.
 run plg npx tsx scripts/test-plg.mts
 # Your network (lib/google): the OAuth start and callback, sealed tokens, the sync and matching on fixture companies, warmth, named free, privacy (another member, admins, the export, the connector), Gmail via Claude (text refused, the caps, deletion), Gmail headers for test members (the gate, bulk skipped, invalid_grant), disconnect, RN_GOOGLE off. A fake Google server on 127.0.0.1; nothing leaves the machine.
 run google npx tsx scripts/test-google.mts

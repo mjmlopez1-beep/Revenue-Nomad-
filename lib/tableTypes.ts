@@ -279,8 +279,6 @@ export interface Me {
   freeCompany?: boolean;
   /** Trial and Pro, billing live: free company opens left today, of PRO_OPENS_DAILY. Crystal Ball's don't count. Left out otherwise. */
   proOpens?: { left: number; of: number };
-  /** Free, past the first FREE_TAPER_DAYS: what facts about other people's companies earned in 24 hours, and their cap. Left out otherwise. */
-  taper?: { cap: number; earned: number };
   /** Get started: a first note went out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections are in. */
   started?: { note: boolean; network: boolean; /** Your network isn't on for Merlin (RN_GOOGLE): the Connect Google step is left out. */ networkOff?: boolean };
   /**

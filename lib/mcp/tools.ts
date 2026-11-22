@@ -40,7 +40,7 @@ import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, FREE_TAPER_CAP, FREE_TAPER_DAYS, PRO_OPENS_DAILY, PRO_OPENS_USED, REFERRAL_BONUS } from "../tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, REFERRAL_BONUS } from "../tableFields";
 import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
 import { accountPathsLine, pathsLine } from "../paths"; // [smart ways in] counts only, never who
@@ -820,13 +820,12 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
           ? "1 left: the next company unlock today costs no credits"
           : "used today: the next one is free tomorrow (UTC)",
     ...(me.crystal === "all" ? { crystal_ball: `Every company in the member's ${FEATURE_NAME} opens free (0 credits) on their plan: unlock quotes 0 for it. Who held its seats then shows free, and its people cost what they cost.` } : {}),
-    ...(me.taper ? { earned_from_other_companies_today: `${me.taper.earned} of ${me.taper.cap}` } : {}),
     ...(me.pending ? { credits_waiting: `${me.pending}, paid when the member's seat at a company new to Merlin is confirmed` } : {}),
     ...(me.sellEarnLeft !== undefined ? { pick_list_answers_that_still_earn_today: me.sellEarnLeft } : {}),
     facts_added: me.added,
     facts_unlocked: me.unlocked,
     how_credits_work:
-      `Adding a missing fact earns 1 credit (up to 25 a day${me.taper ? `; on Free after the first ${FREE_TAPER_DAYS} days, facts about other people's companies earn up to ${FREE_TAPER_CAP} a day, while facts on their own seats and confirmations still earn up to 25` : ""}). Seeing a fact someone else added costs 1: a person's name comes with their title for that one credit, and their LinkedIn, email and phone are 1 credit each after it. Fellow fractionals are free: who held a seat and the role they held show at no charge once the member can see the company, and the Fractionals page never costs a credit. A company is ${COMPANY_PRICE_SAY}, ${
+      `Adding a missing fact earns 1 credit (up to 25 a day, on every plan and for as long as the member is one). Seeing a fact someone else added costs 1: a person's name comes with their title for that one credit, and their LinkedIn, email and phone are 1 credit each after it. Fellow fractionals are free: who held a seat and the role they held show at no charge once the member can see the company, and the Fractionals page never costs a credit. A company is ${COMPANY_PRICE_SAY}, ${
         me.crystal === "one" || me.crystal === "used"
           ? `and on Free one company a day from ${FEATURE_NAME} opens in full, free, in the Merlin app`
           : me.proOpens

@@ -77,7 +77,7 @@ import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type F
 import {
   ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
-  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, FREE_TAPER_DAYS, FREE_TAPER_CAP, TAPER_RULE, type Entity,
+  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -2241,43 +2241,10 @@ function freeCompaniesLeft(s: State, memberId: string, nowMs: number): number {
 /** Pro and the trial with billing live: companies open free, up to PRO_OPENS_DAILY a UTC day (freeCompaniesLeft). */
 const proOpens = (s: State, memberId: string, nowMs: number) => billingLive() && hasPro(planRec(s, memberId), nowMs);
 
-/*
- * The Free plan's earning taper (FREE_TAPER_DAYS, FREE_TAPER_CAP in lib/tableFields.ts). Kept here
- * on its own so it can be taken out in one place: taperOn, taperOwn, taperEarned and the check in
- * perform's awardFill.
- */
-/** Free (billing live) past the member's first FREE_TAPER_DAYS (from joining, else the trial's start; a seed member with neither is past them). */
-function taperOn(s: State, memberId: string, nowMs: number): boolean {
-  if (FREE_TAPER_CAP >= EARN_CAP || !gated(planRec(s, memberId), nowMs)) return false;
-  const since = s.members.find((m) => m.id === memberId)?.at ?? planRec(s, memberId)?.trialStartedAt;
-  return !since || nowMs - Date.parse(since) >= FREE_TAPER_DAYS * DAY;
-}
-/** The companies whose facts are the member's own for the taper: one they added, or one where they added or hold a seat. */
-function taperOwn(s: State, g: Graph, idx: MemberIndex, memberId: string): Set<string> {
-  const out = new Set<string>();
-  for (const c of s.companies) if (c.by === memberId) out.add(c.id);
-  for (const e of s.engagements) if (e.by === memberId) out.add(e.companyId);
-  for (const e of g.engagements.values()) if (!out.has(e.companyId) && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === memberId) out.add(e.companyId);
-  return out;
-}
-/** Credits earned in the rolling 24 hours from facts about other people's companies (what the taper caps). A benchmark-only rate is the member's own. */
-function taperEarned(s: State, g: Graph, own: Set<string>, memberId: string, nowMs: number): number {
-  let n = 0;
-  for (const l of s.ledger) {
-    if (l.memberId !== memberId || l.reason !== "fill" || l.delta <= 0 || l.undone || nowMs - Date.parse(l.at) >= DAY || l.ref.startsWith("bench.")) continue;
-    const co = refCompany(s, g, l.ref);
-    if (co && !own.has(co)) n += l.delta;
-  }
-  return n;
-}
-/** Said when the taper stopped a credit. */
-export const TAPER_NOTE = TAPER_RULE;
-
-/** Me's plan counts: Pro's free company opens left today, and the taper while it applies. */
-function planCounts(s: State, g: Graph, idx: MemberIndex, memberId: string, nowMs: number): Pick<Me, "proOpens" | "taper"> {
-  const out: Pick<Me, "proOpens" | "taper"> = {};
+/** Me's plan counts: Pro's free company opens left today. (Free has no earning taper: it earns up to EARN_CAP a day like every plan.) */
+function planCounts(s: State, _g: Graph, _idx: MemberIndex, memberId: string, nowMs: number): Pick<Me, "proOpens"> {
+  const out: Pick<Me, "proOpens"> = {};
   if (proOpens(s, memberId, nowMs)) out.proOpens = { left: freeCompaniesLeft(s, memberId, nowMs), of: PRO_OPENS_DAILY };
-  if (taperOn(s, memberId, nowMs)) out.taper = { cap: FREE_TAPER_CAP, earned: taperEarned(s, g, taperOwn(s, g, idx, memberId), memberId, nowMs) };
   return out;
 }
 /** Get started's last two steps (Me.started): a first note out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections in. */
@@ -5411,9 +5378,6 @@ export async function perform(
      * joined, and not on a seat they made themselves: a client they add with their own seat is not it.
      */
     let referralOk = false;
-    /** The taper (taperOn): the member's own companies, read once, and whether it stopped a credit. */
-    let taperOwnNow: Set<string> | undefined;
-    let taperCapped = false;
     const noteReferral = (ref: string) => {
       if (referralOk) return;
       const rec = refRecord(ref);
@@ -5440,12 +5404,6 @@ export async function perform(
         const today = fillsToday(s, me.id, nowMs);
         if (today.length >= FILL_DAILY_MAX && !ownSeat(refRecord(ref)) && today.filter((l) => !ownSeat(refRecord(l.ref))).length >= FILL_DAILY_MAX)
           throw new ActionError(`You've added ${FILL_DAILY_MAX} facts today, and that's the daily limit. Add more tomorrow. You can still fill in the seats you hold.`);
-        // The Free plan's taper: past the first FREE_TAPER_DAYS, facts about other people's companies earn up to FREE_TAPER_CAP a day.
-        if (earns && taperOn(s, me.id, nowMs)) {
-          const own = (taperOwnNow ??= taperOwn(s, g, memberIndex(seed, s), me.id));
-          const co = refCompany(s, g, ref);
-          if (co && !own.has(co) && taperEarned(s, g, own, me.id, nowMs) >= FREE_TAPER_CAP) (earns = false), (taperCapped = true);
-        }
       }
       // At a company where the member's own new seat waits to be confirmed: no credit yet, paid when it is (confirmSeat).
       if (!ref.startsWith("bench.") && waitsAt(ref)) {
@@ -5634,8 +5592,6 @@ export async function perform(
       // Under the daily cap, so the reason was the pick-list limit: say that, and what still earns.
       if (sellCapped && earning(s, me.id, nowMs).earned < EARN_CAP)
         return ` Only ${SELL_EARN_MAX} answers for ${PICKS} earn a credit each day, so this one didn't earn. ${SELL_STILL_EARNS}`;
-      // Under the daily cap, stopped by the Free plan's taper: say so, and what still earns.
-      if (taperCapped && earning(s, me.id, nowMs).earned < EARN_CAP) return ` No credit ${some ? "for the rest" : "this time"}. ${TAPER_NOTE}`;
       // The limit has one name everywhere ("earned today"). The client adds when earning opens again (Me.earnResetsAt), in the member's own time zone.
       return ` No credit ${some ? "for the rest" : "this time"}, because you've earned today's ${EARN_CAP}.`;
     };
