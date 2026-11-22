@@ -78,9 +78,9 @@ async function main() {
   check(
     "own sites: the policy says Merlin reads the emails fractionals publish on their own business websites, US only, to invite them and show members, removable at /remove; version 1.2",
     PRIVACY_VERSION === "1.2" &&
-      pt.includes(`${ownLine}, for people in the United States only, to invite them to claim their seats and to show members. Anyone can remove their name and email at Remove my name.`) &&
-      src("app/data/DataFlows.tsx").includes(`${ownLine}, US only, to invite them to claim their seats and to show members. Anyone can remove their name and email at /remove.`) &&
-      src("docs/data-flows.md").includes("the email addresses that fractionals publish on their own business websites, US only, to invite them to claim their seats and to show members, and anyone can remove their name and email at `/remove`"),
+      pt.includes(`${ownLine}, for people in the United States only, to invite them to join Merlin or claim their seats and to show members. Anyone can remove their name and email at Remove my name.`) &&
+      src("app/data/DataFlows.tsx").includes(`${ownLine}, US only, to invite them to join Merlin or claim their seats and to show members. Anyone can remove their name and email at /remove.`) &&
+      src("docs/data-flows.md").includes("the email addresses that fractionals publish on their own business websites, US only, to invite them to join Merlin or claim their seats and to show members, and anyone can remove their name and email at `/remove`"),
   );
   check(
     "deletion of Google data: the pipeline is cleared too, and access removed at Google means deleted after 30 days",
