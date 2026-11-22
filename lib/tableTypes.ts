@@ -990,7 +990,12 @@ export type Action =
    * company the member can see, an open role's role, posting and rate are one purchase too.
    */
   /** `from: "crystal"`: Trial and Pro only, the company in it opens for 0 credits when it is in their Crystal Ball (the rest costs what it costs). */
-  | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[]; from?: "crystal" }
+  /**
+   * `quote: true` (the workbench's bulk runs): nothing is spent. POST /api/table answers
+   * `{ quote: UnlockQuote }`, worked out by the same unlock run as a dry run (lib/unlockQuote.ts),
+   * in batches of UNLOCK_BATCH, naming any limit that stops part of the run.
+   */
+  | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[]; from?: "crystal"; quote?: boolean }
   /**
    * Take back an unlock just made (`at`: the ActionResult.undo the unlock answered with). Within
    * UNLOCK_UNDO_MS only, and only while nothing came after it (another credit spent or earned, a
@@ -1164,6 +1169,8 @@ export type Action =
   | { type: "pipeline.seat"; id: string; engagementId: string }
   | { type: "pipeline.intro"; conversationId: string }
   | { type: "pipeline.introMark"; id: string; status: "made" | "declined" | "asked" }
+  /** Add companies from a list (the workbench's "Add to pipeline"): each one the member can see waits at To reach out. Up to PIPELINE_ADD_MAX. */
+  | { type: "pipeline.add"; companyIds: string[] }
   /**
    * Your writing voice (lib/voice.ts): save the style conclusions the member typed in Your profile
    * (every field one value from its list, checked on the server), or remove the profile. Never text
@@ -1238,6 +1245,28 @@ export type Action =
  * sees them (ids are the public ids the view uses), and `me` is the actor's new counts, so
  * the client can update the screen without waiting for a full GET.
  */
+/**
+ * What a bulk unlock would spend, from a dry run of the unlock itself (lib/unlockQuote.ts), so a
+ * workbench run shows one quote and one confirm before any credit moves. The run goes to the
+ * server in batches of UNLOCK_BATCH (the most one unlockMany takes); each batch is quoted on the
+ * state as it is now.
+ */
+export interface UnlockQuote {
+  /** Facts asked for (after the run's cap, UNLOCK_QUOTE_MAX). */
+  asked: number;
+  /** Each batch as it would go to the server: how many facts, and the credits it would spend. */
+  batches: { n: number; cost: number }[];
+  /** The facts that fit, from the start of the list: all of them, or the part before `stop`. */
+  fits: number;
+  /** Credits the part that fits would spend. 0 when it all opens free (the trial's opens, Crystal Ball). */
+  cost: number;
+  /** The server's own words for the limit or the refusal that stops the rest ("You can unlock 12 more today. ..."). Null when it all fits. */
+  stop: string | null;
+  /** The member's balance now, and after the part that fits. */
+  credits: number;
+  after: number;
+}
+
 export type ActionResult = {
   message: string;
   /** The record the action touched (a public id). */
@@ -1278,6 +1307,8 @@ export type ActionResult = {
   pipeline?: PipelineView;
   /** Peer actions: the Peers page as it now stands (lib/peersCore.ts PeersView). */
   peers?: PeersView;
+  /** unlockMany with `quote: true`: what the run would spend. Nothing was spent. */
+  quote?: UnlockQuote;
 };
 
 /**

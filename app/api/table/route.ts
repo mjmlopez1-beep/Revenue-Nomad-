@@ -27,6 +27,7 @@ import { runDueJobs } from "@/lib/jobs";
 import { fractionalsHome, fractionalsView } from "@/lib/fractionals";
 import { pipelineViewFor } from "@/lib/pipelineActions";
 import { peerPicks, peersHome, peersView } from "@/lib/peers";
+import { quoteUnlock } from "@/lib/unlockQuote";
 
 export const dynamic = "force-dynamic";
 
@@ -452,6 +453,8 @@ function sound<T>(x: T, depth = 0): T {
  *                                     the header x-cron-secret: RN_CRON_SECRET.
  * POST { signOut: true }              sign out.
  * POST { action: {...} }              see Action and ActionResult in lib/tableTypes.ts.
+ * POST { action: { type: "unlockMany", items, quote: true } }  { quote: UnlockQuote }: what the bulk unlock would spend
+ *                                     (lib/unlockQuote.ts, a dry run of the unlock in batches of 60). Spends nothing.
  *
  * A body over 64 KB is refused (413). An action from someone who is not signed in is answered
  * at once and never queued as a change.
@@ -571,6 +574,13 @@ export const POST = guarded(async (req: NextRequest) => {
   }
   try {
     const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1";
+    // A bulk unlock's quote (the workbench): the unlock as a dry run, in batches of 60, naming any limit that stops part of it.
+    // Nothing is spent: a quote never reaches perform as an unlock.
+    if (action?.type === "unlockMany" && !!(action as { quote?: unknown }).quote) {
+      const quote = await quoteUnlock(token, action.items, { asMember, ...(action.from === "crystal" ? { from: "crystal" as const } : {}) });
+      if (!quote) return err(SIGNED_OUT, 401);
+      return sendJson(req, { message: "", quote, version: viewVersion() });
+    }
     // Anything the action writes to the credit history is dated after this.
     const since = new Date().toISOString();
     const out = await perform(token, action, origin(req), { asMember });

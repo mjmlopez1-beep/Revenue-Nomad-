@@ -379,6 +379,37 @@ export async function performPipeline(token: string | null, raw: Action): Promis
         if (introId) log.intros.find((i) => i.id === introId)!.entryId ??= e.id;
         return created ? "In your pipeline. Merlin moves it when they reply, and nudges you to follow up in 3 business days." : "Logged in your pipeline.";
       }
+      case "pipeline.add": {
+        // From a list (the workbench): each company the member can see waits at To reach out. A locked one is skipped and said.
+        const raw = Array.isArray(a.companyIds) ? a.companyIds.filter((x): x is string => typeof x === "string") : [];
+        const ids = [...new Set(raw)].slice(0, P.PIPELINE_ADD_MAX);
+        if (!ids.length) throw new ActionError("Pick the companies to add first.");
+        let added = 0;
+        let had = 0;
+        let locked = 0;
+        let gone = 0;
+        for (const pub of ids) {
+          const cid = companyOf(pub);
+          if (!cid) {
+            gone++;
+            continue;
+          }
+          if (T.identityHidden(g, s, idx, tracks, me, cid)) {
+            locked++;
+            continue;
+          }
+          if (P.addEntry(log, { id: newId(), companyId: cid, nowMs, source: "record" }).created) added++;
+          else had++;
+        }
+        const parts = [
+          added ? `Added ${added === 1 ? "1 company" : `${added} companies`} to your pipeline at To reach out.` : "",
+          had ? `${had === 1 ? "1 was" : `${had} were`} in it already.` : "",
+          locked ? `${locked === 1 ? "1 is" : `${locked} are`} still locked: open ${locked === 1 ? "it" : "them"} first.` : "",
+          gone ? `${gone === 1 ? "1 isn't" : `${gone} aren't`} on Merlin anymore.` : "",
+        ].filter(Boolean);
+        if (!added && !had) throw new ActionError(parts.join(" ") || "Nothing to add.");
+        return parts.join(" ");
+      }
       case "pipeline.followed": {
         const e = entry(a.id);
         if (!P.isOpen(e.stage)) throw new ActionError("That deal isn't open anymore.");
