@@ -4,6 +4,7 @@ import type { SignedCopy } from "@/lib/proposals/types";
 import { SignLegal, SignTop } from "../../sign/Sign";
 import { DocBlocks, EVENT_SAY, dayOf, stamp } from "../../sign/doc";
 import { PrintButton } from "../Print";
+import { DocCopyPage } from "../DocCopy";
 import "../../sign/sign.css";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,8 @@ export const metadata: Metadata = { title: "Signed copy · Revenue Nomad", robot
  */
 export default async function Page({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  // A document to sign that everyone signed (lib/documents): its own page, with the PDF to download.
+  if (/^dc_/.test(String(token ?? ""))) return <DocCopyPage token={String(token).slice(0, 120)} />;
   let c: SignedCopy | null = null;
   try {
     c = await signedCopy(String(token ?? "").slice(0, 120));

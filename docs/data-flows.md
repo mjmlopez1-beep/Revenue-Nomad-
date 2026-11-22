@@ -4,7 +4,8 @@ The same content as the public page at `/data` (`app/data/DataFlows.tsx`), with 
 
 ## 1. When an AI model is used
 
-- Merlin's server calls no AI model. There is no model provider's SDK in `package.json` and no request to a model provider anywhere in `lib/` or `app/api/`.
+- Merlin's server calls no AI model, except drafting a proposal with Claude (`lib/proposals/draft.ts`), which is off unless `RN_AI_DRAFTS=1`, `ANTHROPIC_API_KEY` and `RN_AI_MODEL` are all set (`lib/proposals/aiConfig.ts`), and which a member agrees to before their first draft (`State.aiDrafts`). Then one request to Anthropic's Messages API carries that draft's inputs: the transcript or notes the member pasted, the template, the company's facts as the member's table shows them, the rate range from the benchmarks, the member's name, title and writing voice. The transcript is used for that request only and never stored or logged; only the draft is saved. It is Trial and Pro, 30 drafts a member a day.
+- **To confirm:** Anthropic's commercial terms and data retention for the API key Revenue Nomad uses, before turning `RN_AI_DRAFTS` on.
 - AI comes in only when a member adds Merlin to their own assistant (Claude, ChatGPT) with the connector (`app/api/mcp`, `lib/mcp`). The assistant calls Merlin's tools as that member, with a token that member granted (OAuth 2.1 with PKCE, `lib/mcp/oauth.ts`). Each tool answers from the member's own view (`lib/mcp/view.ts`, `lib/mcp/tools.ts`): the same locks, credits and limits as the app. Nothing is sent to the assistant that the member couldn't see in the app.
 - What the assistant's provider does with those answers is governed by the member's own account with that provider.
 - The member sees and disconnects connected assistants in Your credits, Connected apps (`app/post/ConnectedApps.tsx`, `disconnectApp` in `lib/mcp/oauth.ts`). An assistant can also revoke its own grant (`/api/oauth/revoke`).
@@ -41,7 +42,7 @@ Every outside host the server calls, from `lib/` and `app/api/`:
 | AI assistants' sign-in details | the assistant's own client id address (for example on claude.ai) | A GET for the assistant's public client metadata document. No member data. | Registering an assistant for the connector (`lib/mcp/oauth.ts` `fetchCimd`). | When an assistant connects. |
 | Hosting | Railway | Runs the server; the data volume (`RN_DATA_DIR`) lives there. | Hosting. | Always. |
 
-Not called: no AI model provider, no analytics, no ad network, no icon service, no company-data or autocomplete service. The older job sources in `lib/crawler/sources` for Hacker News and Reddit are in the repo but not read by the scan.
+Not called: no AI model provider (except Anthropic's API for drafting with Claude, when it is switched on, see part 1), no analytics, no ad network, no icon service, no company-data or autocomplete service. The older job sources in `lib/crawler/sources` for Hacker News and Reddit are in the repo but not read by the scan.
 
 - **To confirm:** a data processing agreement, or the provider's standard terms, for each vendor that receives member data: Railway (hosting and the volume), the backup bucket's provider, Resend, Stripe, Slack. And whether Railway's region needs saying for members outside the US.
 - **To confirm:** the backup copy holds Google network data. Whether that copy needs its own encryption key or retention limit under Google's policy. It is overwritten daily under a dated name; how long the bucket keeps old days is set in the bucket, not in Merlin.

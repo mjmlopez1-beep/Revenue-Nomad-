@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { ProposalProblem, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
+import { docDecline, docRequestCode, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,16 @@ const err = (message: string, status = 400) => NextResponse.json({ error: messag
  * POST { token, op: "verify", code }              confirm it
  * POST { token, op: "sign", name, consent, hash } sign: the full name typed, consent true, the hash of the document shown
  * POST { token, op: "decline", reason? }
+ *
+ * A document's link (a "ds_" token, lib/documents/store.ts) takes the same steps, and signs with
+ * POST { token, op: "sign", name, method: "typed" | "drawn", png?, values: { fieldId: value }, consent, hash }.
  */
 export const POST = guarded(async (req: NextRequest) => {
   const ip = clientIp(req);
   if (limited(`sign:${ip}`, 60, 60_000)) return err("That's a lot in one minute. Give it a moment, then try again.", 429);
   const text = await req.text();
-  if (text.length > 16 * 1024) return err("That's too much to send at once.", 413);
+  // A drawn signature (a small PNG) makes a document's signature bigger than a typed one.
+  if (text.length > 320 * 1024) return err("That's too much to send at once.", 413);
   let b: Record<string, unknown>;
   try {
     b = JSON.parse(text);
@@ -36,7 +41,26 @@ export const POST = guarded(async (req: NextRequest) => {
   const token = typeof b.token === "string" ? b.token.slice(0, 120) : "";
   const who = { ip, ua: (req.headers.get("user-agent") ?? "").slice(0, 300) };
   const o = origin(req);
+  const doc = isDocToken(token);
+  if (!doc && text.length > 16 * 1024) return err("That's too much to send at once.", 413);
   try {
+    if (doc)
+      switch (b.op) {
+        case "view":
+          return NextResponse.json(await docSignerView(token, who, o), { headers: NO_STORE });
+        case "code":
+          if (limited(`sign-code:${ip}`, 10, 60 * 60_000)) return err("That's a lot of codes from here in an hour. Use the newest one, or try again later.", 429);
+          return NextResponse.json(await docRequestCode(token, who), { headers: NO_STORE });
+        case "verify":
+          if (limited(`sign-verify:${ip}`, 20, 10 * 60_000)) return err("That's a lot of tries. Wait 10 minutes, then try again.", 429);
+          return NextResponse.json(await docVerifyCode(token, b.code, who, o), { headers: NO_STORE });
+        case "sign":
+          return NextResponse.json(await docSign(token, { name: b.name, method: b.method, png: b.png, values: b.values, consent: b.consent, hash: b.hash }, who, o), { headers: NO_STORE });
+        case "decline":
+          return NextResponse.json(await docDecline(token, { reason: b.reason }, who, o), { headers: NO_STORE });
+        default:
+          return err("That didn't go through. Refresh the page and try again.");
+      }
     switch (b.op) {
       case "view":
         return NextResponse.json(await signerView(token, who, o), { headers: NO_STORE });

@@ -10,8 +10,9 @@
  * Every request goes to /api/sign with the link's token; the server records each step with the
  * time, IP address and browser (lib/proposals/store.ts), and checks the document's SHA-256 at signing.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Brand, IconCheck } from "../ui/shared";
+import { Spot } from "../ui/fractions/art";
 import type { SignerView } from "@/lib/proposals/types";
 import { DocBlocks, dayOf } from "./doc";
 import "./sign.css";
@@ -44,6 +45,46 @@ export function SignTop() {
   );
 }
 
+/** Is this element on screen? The sticky sign bar hides while the card's own button shows. */
+export function useOnScreen(ref: RefObject<HTMLElement | null>, on = true): boolean {
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !on || typeof IntersectionObserver === "undefined") return setSeen(false);
+    const io = new IntersectionObserver((es) => setSeen(es.some((e) => e.isIntersecting)));
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, on]);
+  return seen;
+}
+
+/** The consent box: its first sentence, and on phones the rest behind "Read the full consent". */
+export function ConsentBox({ text, checked, disabled, onChange }: { text: string; checked: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const cut = text.indexOf(". ") + 1;
+  const first = cut > 0 ? text.slice(0, cut) : text;
+  const rest = cut > 0 ? text.slice(cut) : "";
+  return (
+    <div className="sg-consent" data-open={open}>
+      <input type="checkbox" id="sg-agree" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <div>
+        <label htmlFor="sg-agree">
+          {first}
+          {rest && <span className="sg-consent-rest">{rest}</span>}
+        </label>
+        {rest && (
+          <button type="button" className="sg-link sg-consent-more" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
+            {open ? "Show less" : "Read the full consent"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Signed: the quiet Fractions spot for a thing done, in place of a bare check. */
+export const SignedArt = () => <Spot name="factAdded" size={88} on="white" className="sg-done-art" />;
+
 /** Merlin's Privacy Policy and Terms, under every state of the signing page and the signed copy. */
 export function SignLegal() {
   return (
@@ -69,12 +110,16 @@ export function SignView({ token }: { token: string }) {
   const [step, setStep] = useState<"read" | "sign" | "decline">("read");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Which step an error belongs to: it shows there, and only there.
+  const [errAt, setErrAt] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [agree, setAgree] = useState(false);
   const [name, setName] = useState("");
   const [reason, setReason] = useState("");
   const panel = useRef<HTMLDivElement>(null);
+  const cardGo = useRef<HTMLButtonElement>(null);
+  const cardShows = useOnScreen(cardGo, !!v && v.status === "open" && step === "read");
 
   useEffect(() => {
     void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : setV(r)));
@@ -113,7 +158,7 @@ export function SignView({ token }: { token: string }) {
     setErr(null);
     const r = await call<SignerView & { sent?: boolean; emailHint?: string }>({ token, ...body });
     setBusy(null);
-    if (r.error) return setErr(r.error), null;
+    if (r.error) return setErr(r.error), setErrAt(what), null;
     return r;
   };
   const open = v.status === "open";
@@ -157,9 +202,7 @@ export function SignView({ token }: { token: string }) {
         {!open && (
           <section className="sg-card sg-state" data-status={v.status}>
             {v.status === "signed" && (
-              <span className="sg-done" aria-hidden>
-                <IconCheck size={20} />
-              </span>
+              <SignedArt />
             )}
             <h2 className="sg-h">{STATUS_SAY[v.status].h}</h2>
             <p className="sg-p">
@@ -194,7 +237,11 @@ export function SignView({ token }: { token: string }) {
                   Tell {d.from.name.split(" ")[0]} why (optional)
                 </label>
                 <textarea id="sg-reason" className="input sg-area" rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
-                {err && <p className="sg-err">{err}</p>}
+                {err && errAt === "decline" && (
+                  <p className="sg-err" role="alert">
+                    {err}
+                  </p>
+                )}
                 <div className="sg-row">
                   <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
                     Back
@@ -208,7 +255,7 @@ export function SignView({ token }: { token: string }) {
               <div className="sg-ready">
                 <h2 className="sg-h2">Ready to sign?</h2>
                 <p className="sg-help">It takes a minute. We confirm it&#39;s you with a code sent to {v.emailHint}.</p>
-                <button type="button" className="btn btn-primary btn-lg sg-wide" onClick={() => setStep("sign")}>
+                <button ref={cardGo} type="button" className="btn btn-pine btn-lg sg-wide" onClick={() => setStep("sign")}>
                   Sign this proposal
                 </button>
                 <button type="button" className="sg-link" onClick={() => setStep("decline")}>
@@ -232,7 +279,7 @@ export function SignView({ token }: { token: string }) {
                           <p className="sg-help">We&#39;ll email a 6-digit code to {v.emailHint}.</p>
                           <button
                             type="button"
-                            className="btn btn-pine btn-lg"
+                            className="btn btn-lg"
                             aria-busy={busy === "code"}
                             disabled={!!busy}
                             onClick={async () => {
@@ -242,6 +289,11 @@ export function SignView({ token }: { token: string }) {
                           >
                             {busy === "code" ? "Sending" : "Email me a code"}
                           </button>
+                          {err && (errAt === "code" || errAt === "verify") && (
+                            <p className="sg-err" role="alert">
+                              {err}
+                            </p>
+                          )}
                         </>
                       ) : (
                         <form
@@ -266,8 +318,13 @@ export function SignView({ token }: { token: string }) {
                             onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                             autoFocus
                           />
+                          {err && (errAt === "code" || errAt === "verify") && (
+                            <p className="sg-err" role="alert">
+                              {err}
+                            </p>
+                          )}
                           <div className="sg-row">
-                            <button type="submit" className="btn btn-pine btn-lg" aria-busy={busy === "verify"} disabled={!!busy || code.length !== 6}>
+                            <button type="submit" className="btn btn-lg" aria-busy={busy === "verify"} disabled={!!busy || code.length !== 6}>
                               {busy === "verify" ? "Checking" : "Confirm"}
                             </button>
                             <button
@@ -292,10 +349,7 @@ export function SignView({ token }: { token: string }) {
                     </span>
                     <div className="sg-stepbody">
                       <h3 className="sg-h3">Agree to sign electronically</h3>
-                      <label className="sg-consent">
-                        <input type="checkbox" checked={agree} disabled={!v.codeVerified} onChange={(e) => setAgree(e.target.checked)} />
-                        <span>{v.consent}</span>
-                      </label>
+                      <ConsentBox text={v.consent} checked={agree} disabled={!v.codeVerified} onChange={setAgree} />
                     </div>
                   </li>
                   <li className="sg-step" data-off={!v.codeVerified || !agree}>
@@ -326,8 +380,12 @@ export function SignView({ token }: { token: string }) {
                         <span className="sg-sig-name">{name.trim() || "Your signature"}</span>
                         <span className="sg-sig-line">Signature · {dayOf(new Date().toISOString())}</span>
                       </div>
-                      {err && <p className="sg-err">{err}</p>}
-                      <button type="submit" className="btn btn-primary btn-lg sg-wide" aria-busy={busy === "sign"} disabled={!!busy || !v.codeVerified || !agree || !nameOk}>
+                      {err && errAt === "sign" && (
+                        <p className="sg-err" role="alert">
+                          {err}
+                        </p>
+                      )}
+                      <button type="submit" className="btn btn-pine btn-lg sg-wide" aria-busy={busy === "sign"} disabled={!!busy || !v.codeVerified || !agree || !nameOk}>
                         {busy === "sign" ? "Signing" : "Sign"}
                       </button>
                       <p className="sg-fine">
@@ -336,7 +394,6 @@ export function SignView({ token }: { token: string }) {
                     </form>
                   </li>
                 </ol>
-                {err && !v.codeVerified && <p className="sg-err">{err}</p>}
                 <button type="button" className="sg-link" onClick={() => (setStep("decline"), setErr(null))}>
                   Decline instead
                 </button>
@@ -355,9 +412,9 @@ export function SignView({ token }: { token: string }) {
           <SignLegal />
         </footer>
       </main>
-      {open && step === "read" && (
+      {open && step === "read" && !cardShows && (
         <div className="sg-bar">
-          <button type="button" className="btn btn-primary btn-lg" onClick={() => setStep("sign")}>
+          <button type="button" className="btn btn-pine btn-lg" onClick={() => setStep("sign")}>
             Sign this proposal
           </button>
         </div>

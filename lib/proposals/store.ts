@@ -26,9 +26,11 @@ import { functionOf } from "../tableFields";
 import { PRICES } from "../billing/rules";
 import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
-import { FREE_TEMPLATE, TEMPLATES, blanksOf, blockDef, docFields, fieldDefaults, rendered, templateBlocks, templateDef } from "./library";
+import { FREE_TEMPLATE, TEMPLATES, blanksInWords, blanksOf, blockDef, docFields, fieldDefaults, rendered, templateBlocks, templateDef } from "./library";
 export { docFields };
 import { codeEmail, declinedEmail, proposalEmail, signedEmail } from "./emails";
+import { blocksOfMine, isMineId, templatesOf } from "./mine";
+import { aiConfigured } from "./aiConfig";
 import { pipelineEvent } from "./pipelineHook";
 import {
   CONSENT_VERSION,
@@ -202,15 +204,21 @@ export async function listProposals(token: string | null, origin?: string, nowMs
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberOf(seed, s, token);
   const free = onFree(s, me.id, nowMs);
+  const { docRecsOf } = await import("../documents/store");
+  const { templateChoices } = await import("./kit");
   return {
     proposals: (s.proposals ?? [])
       .filter((p) => p.memberId === me.id)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((p) => recOf(p, nowMs, origin)),
+    documents: docRecsOf(s, me.id, nowMs, origin),
+    templates: templateChoices(s, me.id, free),
+    ai: !aiConfigured() ? "off" : free ? "plan" : "on",
+    aiAgreed: !!s.aiDrafts?.[me.id],
     canSend: !free,
     templatesOpen: free ? [FREE_TEMPLATE] : TEMPLATES.map((t) => t.id),
     email: emailEnabled(),
-    me: { name: me.name, title: titleOf(s, me), function: fnOf(s, me) },
+    me: { name: me.name, title: titleOf(s, me), function: fnOf(s, me), email: me.email },
   };
 }
 
@@ -330,7 +338,7 @@ function applyPatch(p: StoredProposal, a: ProposalPatch, now: string, nowMs: num
 }
 
 /** The member's view of a company on Merlin (as their table shows it), with its internal id. */
-async function companyFor(token: string, pub: string): Promise<{ internal: string; name: string; hidden: boolean; facts: Record<string, string> } | null> {
+export async function companyFor(token: string, pub: string): Promise<{ internal: string; name: string; hidden: boolean; facts: Record<string, string> } | null> {
   const patch = await viewPatch(token, [pub], { asMember: true });
   const c = patch?.companies?.find((x) => x.id === pub);
   if (!c) return null;
@@ -355,8 +363,11 @@ export async function createProposal(
   const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
   const me0 = memberOf(seed, s0, token);
   const templateId = a.templateId === null || a.templateId === undefined || a.templateId === "" || a.templateId === "blank" ? null : String(a.templateId);
-  if (templateId && !templateDef(templateId)) throw new ProposalProblem("That template isn't in the library.");
-  if (templateId && templateId !== FREE_TEMPLATE && onFree(s0, me0.id, nowMs))
+  // One of the member's own templates (My templates): its sections, on every plan.
+  const mineT = isMineId(templateId) ? templatesOf(s0, me0.id).find((t) => t.id === templateId) : undefined;
+  if (isMineId(templateId) && !mineT) throw new ProposalProblem("That template of yours isn't there anymore.", 404);
+  if (templateId && !mineT && !templateDef(templateId)) throw new ProposalProblem("That template isn't in the library.");
+  if (templateId && !mineT && templateId !== FREE_TEMPLATE && onFree(s0, me0.id, nowMs))
     throw new ProposalProblem(`On Free you can start from ${templateDef(FREE_TEMPLATE)!.title} or a blank page. Every template is on Pro: $${PRICES.month} a month.`, 403, upgradeUrl(base(origin), "proposals"));
   const pub = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
   const co = pub ? await companyFor(token!, pub) : null;
@@ -368,7 +379,7 @@ export async function createProposal(
     const me = memberOf(seed, s, token);
     const list = (s.proposals ??= []);
     if (list.filter((p) => p.memberId === me.id).length >= LIMITS.proposals) throw new ProposalProblem(`You have ${LIMITS.proposals} proposals, which is the most. Delete an old draft first.`);
-    const blocks = templateBlocks(templateId);
+    const blocks = mineT ? blocksOfMine(mineT) : templateBlocks(templateId);
     const fields: Record<string, string> = { ...fieldDefaults(blocks), ...(co?.facts ?? {}) };
     const sources: Record<string, string> = Object.fromEntries(Object.keys(fields).map((k) => [k, k.startsWith("company.") ? "record" : "manual"]));
     const set = (k: string, v: string, src: string) => v && ((fields[k] = v), (sources[k] = src));
@@ -376,6 +387,12 @@ export async function createProposal(
     set("provider.signerName", me.name, "profile");
     set("provider.title", titleOf(s, me), "profile");
     set("client.companyName", name, co ? "record" : "manual");
+    // Who it goes to, from the member's own deal at this company (as they typed it; never a name that came from Google).
+    const deal = co ? [...(s.pipeline?.[me.id]?.entries ?? [])].filter((e) => e.companyId === co.internal).sort((x, y) => (y.updatedAt ?? "").localeCompare(x.updatedAt ?? ""))[0] : undefined;
+    if (deal?.to && !deal.to.google) {
+      set("client.signerName", cleanLine(deal.to.name, 100), "pipeline");
+      set("client.signerTitle", cleanLine(deal.to.role, 100), "pipeline");
+    }
     set("proposal.date", fmtDay(nowMs), "manual");
     const t = templateDef(templateId);
     const p: StoredProposal = {
@@ -385,7 +402,7 @@ export async function createProposal(
       companyPub: co ? pub : null,
       companyName: name,
       templateId,
-      title: cleanLine(a.title, LIMITS.title) || `${t ? t.title.split(":")[0] : "Proposal"}${name ? ` for ${name}` : ""}`,
+      title: cleanLine(a.title, LIMITS.title) || `${t ? t.title.split(":")[0] : mineT ? mineT.title : "Proposal"}${name ? ` for ${name}` : ""}`.slice(0, LIMITS.title),
       blocks,
       fields,
       sources,
@@ -479,7 +496,7 @@ export async function sendProposal(
     // This version went out before (voided, declined or expired): the new send is a new version.
     if (cur) p.version++;
     const blanks = blanksOf(p.blocks, docFields(p));
-    if (blanks.length) throw new ProposalProblem(`Fill the ${blanks.length === 1 ? "last blank" : `${blanks.length} blanks`} first: ${blanks.slice(0, 5).join(", ")}${blanks.length > 5 ? " and more" : ""}.`);
+    if (blanks.length) throw new ProposalProblem(`Fill the ${blanks.length === 1 ? "last blank" : `${blanks.length} blanks`} first: ${blanksInWords(blanks, 5)}.`);
     const doc = freeze(p, signer, now);
     const x: StoredSend = {
       id: `s_${randomBytes(9).toString("base64url")}`,
@@ -715,3 +732,6 @@ async function memberFor(seed: Seed, id: string): Promise<{ name: string; email:
   const m = seed.members.find((x) => x.id === id) ?? s.members.find((x) => x.id === id);
   return m ? { name: m.name, email: m.email } : null;
 }
+
+/** What lib/documents shares with proposals: the same links' keys, checks and clean-up. */
+export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, titleOf, memberOf, memberFor, EMAIL, NAME };

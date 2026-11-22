@@ -55,10 +55,8 @@
   margin: 0;
   font-size: 13px;
   line-height: 20px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--volt-ink);
+  font-weight: 600;
+  color: var(--muted);
 }
 .sg-sender {
   margin: 0;
@@ -128,10 +126,9 @@
 .sg-h2 {
   margin: 0;
   color: var(--ink);
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
 }
 .sg-h3 {
   margin: 0;
@@ -533,5 +530,26 @@
   }
   .sg-block {
     break-inside: avoid;
+  }
+}
+
+/* The consent's first sentence shows; on phones the rest opens with "Read the full consent". */
+.sg-consent label {
+  cursor: pointer;
+}
+.sg-consent-more {
+  display: none;
+  margin-top: 6px;
+}
+.sg-done-art {
+  display: block;
+  margin: 0 auto 8px;
+}
+@media (max-width: 600px) {
+  .sg-consent[data-open="false"] .sg-consent-rest {
+    display: none;
+  }
+  .sg-consent-more {
+    display: inline-block;
   }
 }
