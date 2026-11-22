@@ -19,6 +19,8 @@ import { Sheet } from "./ui";
 import { plural } from "./hooks";
 import { TAB_KEYS, TAB_KEYS2, moreOn, moreOn2, planLine, type NavIcon as NavIconName, type NavItem, type NavItem2 } from "./navModel";
 import { MemberChip, NavGroups2, NavIcon2, PlanLine2 } from "./shell/Rail";
+import { GettingStartedCard } from "./shell/GettingStarted";
+import type { SixSteps } from "./getStarted";
 import type { Me, PlanView } from "@/lib/tableTypes";
 import { Divider } from "../ui/fractions/lazy";
 
@@ -510,7 +512,24 @@ export function TabBar2({ items, onNav, onMore, moreRef, moreOpen }: { items: Na
 }
 
 /** More in the new look: the rest of the rail in its groups, the plan line and the member. */
-export function MoreSheet2({ items, me, onNav, onClose, onUpgrade, onAccount }: { items: NavItem2[]; me: Me; onNav: (it: NavItem2) => void; onClose: () => void; onUpgrade: () => void; onAccount: () => void }) {
+export function MoreSheet2({
+  items,
+  me,
+  onNav,
+  onClose,
+  onUpgrade,
+  onAccount,
+  start,
+}: {
+  items: NavItem2[];
+  me: Me;
+  onNav: (it: NavItem2) => void;
+  onClose: () => void;
+  onUpgrade: () => void;
+  onAccount: () => void;
+  /** Getting started's card, while steps are left: the six steps and what its click does. */
+  start?: { six: SixSteps; go: () => void } | null;
+}) {
   const go = (it: NavItem2) => {
     onClose();
     onNav(it);
@@ -520,6 +539,7 @@ export function MoreSheet2({ items, me, onNav, onClose, onUpgrade, onAccount }: 
       <div className="ws-more">
         <NavGroups2 items={items} onNav={go} skip={TAB_KEYS2} />
         <div className="ws-foot">
+          {start && <GettingStartedCard six={start.six} onClick={() => (onClose(), start.go())} />}
           <PlanLine2 plan={me.plan} onUpgrade={() => (onClose(), onUpgrade())} />
           <MemberChip me={me} onClick={onAccount} hint="Your profile, sign-in link, sign out" />
         </div>

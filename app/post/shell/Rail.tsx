@@ -9,7 +9,7 @@
  * A plain click moves in the app (onNav); a middle, Ctrl or Cmd click is the browser's. The item
  * on screen has aria-current="page".
  */
-import type { ReactNode, RefObject } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { initials } from "../../ui/shared";
 import type { Me, PlanView } from "@/lib/tableTypes";
 import { GROUPS2, planLine, type NavIcon2, type NavItem2 } from "../navModel";
@@ -175,6 +175,19 @@ export function Rail({
   onStart: () => void;
 }) {
   const home = items.find((it) => it.key === "today");
+  const scroll = useRef<HTMLDivElement>(null);
+  const on = items.find((it) => it.current)?.key;
+  // The item on screen is always in sight in the rail (Settings sits low on a short screen).
+  useEffect(() => {
+    const box = scroll.current;
+    const el = on ? box?.querySelector<HTMLElement>(`[data-nav="${on}"]`) : null;
+    if (!box || !el) return;
+    // Only the rail scrolls (never the shell around it, which is clipped).
+    const r = el.getBoundingClientRect();
+    const b = box.getBoundingClientRect();
+    if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8;
+    else if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
+  }, [on]);
   return (
     <nav className="ws-rail" aria-label="Merlin">
       <a
@@ -193,7 +206,7 @@ export function Rail({
           <span className="ws-brand-s">REVENUE NOMAD</span>
         </span>
       </a>
-      <div className="ws-rail-scroll">
+      <div className="ws-rail-scroll" ref={scroll}>
         <NavGroups2 items={items} onNav={onNav} />
       </div>
       <div className="ws-foot">

@@ -80,6 +80,7 @@ import { Rail } from "./shell/Rail";
 import { HeaderActions, ShellHeader, type Crumb } from "./shell/Header";
 import { Bell } from "./shell/Bell";
 import { PageStrip } from "./shell/PageStrip";
+import { GettingStartedList } from "./shell/GettingStarted";
 import { NudgeSlot, pickSlotNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
@@ -429,6 +430,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const toBase = useStable(() => setPage(baseRef.current));
   /** This visit opened on Today: the one-time lines (a bonus paid, who joined) are said there, not over the table too. */
   const [openedToday] = useState(page === "today");
+  /** Draw again after Back or Forward changed only a page's own screen in the address (Proposals at Contracts). */
+  const [, setAddrTick] = useState(0);
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
   /** Why Your seats is open: the fact the zero-credits wall was asked for (the way back once they earn), and whether its search comes first. */
   const [seatCtx, setSeatCtx] = useState<{ back: WallBack | null; search: boolean }>({ back: null, search: false });
@@ -1530,6 +1533,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       // Back or Forward from one page or record to another, both above the table (the sidebar's entries).
       const x = readPlace(me);
       const p = x.p && (x.p !== "metrics" || view.admin) ? x.p : null;
+      // Proposals moving between its list and Contracts (its own screens): the rail's item follows the address.
+      if (p === "proposals" && page === "proposals") setAddrTick((n) => n + 1);
       if (p && (p !== page || (p === "peers" && !!x.pt !== peersAll))) {
         setDrawer(null);
         if (p === "radar") setSigDay(x.sig, x.range ?? null);
@@ -1913,7 +1918,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const homeSteps = !checkOff && !(waiting && !pf) && steps.steps.length > 0;
   const nudgeFor = (where: "today" | "table") => {
     const m = where === "today" ? me : slotMe;
-    const next = checkOff || (where === "today" && (homeSteps || steps.next?.action === "unlock")) || (waiting && !pf) ? null : steps.next;
+    // The new look's Getting started is its six steps (the rail's card, Home's list): the old next step leaves the nudge slot.
+    const next = ui2 || checkOff || (where === "today" && (homeSteps || steps.next?.action === "unlock")) || (waiting && !pf) ? null : steps.next;
     // The slot is chosen from the balance as the list opened; its credits line reads the balance now (pickSlotNudge).
     return pickSlotNudge({ page: where, credits: m.credits, plan: me.plan, profileEmpty: icpEmpty(me.icp), nextStep: next ?? undefined }, me.credits);
   };
@@ -2683,6 +2689,20 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     };
   }, [fabShown, list]);
 
+  /** Close is the member's (or the Close trial, or billing is off and nothing is gated): Evidence Bank is theirs. */
+  const closeOn = !me.plan || me.plan.tier === "close";
+  const [stripsGone, setStripsGone] = useState<string[]>([]);
+  const sixDoneKey = `tp_six_done_${me.id}`;
+  const six = useMemo(
+    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, close: closeOn, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
+    [me, seatStats.n, stepSeen, closeOn, sixDoneKey],
+  );
+  useEffect(() => {
+    if (!ui2) return;
+    const had = new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean));
+    const done = six.steps.filter((x) => x.done).map((x) => `six:${x.key}`);
+    if (done.some((k) => !had.has(k))) store.set(sixDoneKey, [...new Set([...had, ...done])].join(","));
+  }, [ui2, six, sixDoneKey]);
   const homeEl = (
     <main className="tp-main tp-main-page td-page hm-page">
       <HomePage
@@ -2695,7 +2715,16 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         failed={today.failed}
         sinceAt={since.at}
         unread={unread}
-        nudge={nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null}
+        nudge={
+          ui2 && !checkOff && !(waiting && !pf) && six.next ? (
+            <>
+              {nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null}
+              <GettingStartedList six={six} onRun={(k) => runSix(k)} onHide={hideCheck} />
+            </>
+          ) : nudgeFor("today") ? (
+            <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} />
+          ) : null
+        }
         events={events}
         trialStarted={!!me.plan?.trialStarted && !trialStartSeen}
         onTrialStartSeen={() => {
@@ -2715,7 +2744,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         }}
         integrations={{ href: pageHref("integrations"), go: () => (setDrawer(null), setPage("integrations")) }}
         onClaude={() => (setDrawer(null), setClaudeLink(true), setPage("integrations"), setTimeout(() => document.getElementById("claude-voice")?.scrollIntoView({ block: "start" }), 500))}
-        steps={homeSteps ? steps.steps : null}
+        steps={homeSteps && !ui2 ? steps.steps : null}
         onStep={(k) => runNudge(stepAction[k])}
         onHideSteps={hideCheck}
         find={{ href: firstViewHref, go: openFirstView }}
@@ -2934,8 +2963,6 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * ----- the new look's way around (RN_UI2): the rail, the header, the tab bar and More -----
    * navModel.ts navItems2, drawn by shell/Rail.tsx and Sidebar.tsx TabBar2 and MoreSheet2.
    */
-  /** Close is the member's (or the Close trial, or billing is off and nothing is gated): Evidence Bank is theirs. */
-  const closeOn = !me.plan || me.plan.tier === "close";
   /** Proposals on its Contracts screen (?p=proposals&ct=1): the rail marks Contracts. */
   const onContracts = page === "proposals" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ct") === "1";
   /** Proposals at its list or at Contracts, as an address. */
@@ -3072,18 +3099,6 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * Every page but Home and the table is an entry there, drawn with this context. The new look's
    * own pages (home2, companies2, find2) take Home's and the table's place once they have a component.
    */
-  const [stripsGone, setStripsGone] = useState<string[]>([]);
-  const sixDoneKey = `tp_six_done_${me.id}`;
-  const six = useMemo(
-    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, close: closeOn, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
-    [me, seatStats.n, stepSeen, closeOn, sixDoneKey],
-  );
-  useEffect(() => {
-    if (!ui2) return;
-    const had = new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean));
-    const done = six.steps.filter((x) => x.done).map((x) => `six:${x.key}`);
-    if (done.some((k) => !had.has(k))) store.set(sixDoneKey, [...new Set([...had, ...done])].join(","));
-  }, [ui2, six, sixDoneKey]);
   /** What a Getting started step's button does (getStarted.ts sixSteps). */
   const runSix = useStable((k: SixKey) => {
     if (k === "icp") return setIcpOpen(true);
@@ -3286,12 +3301,15 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                 title={headTitle}
                 phone={phone}
                 onHome={goHome}
-                search={!phone && onScreen === "table" && !Companies2 ? searchField : undefined}
+                search={phone ? searchField : onScreen === "table" && !Companies2 ? searchField : undefined}
+                searching={!!query}
+                onCloseSearch={() => setQuery("")}
                 actions={headerActions}
-                hosts={<TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />}
+                hosts={null}
               />
             )}
-            {headOwn && <TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />}
+            {/* The help sheet, the Undo toast and the spend question, hosted once whatever the header draws. */}
+            <TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />
             {stripKey && !defShown?.ownStrip && !(onScreen === "table" && recordOpen && phone) && <PageStrip page={stripKey} own={stripOwn} />}
           </>
         ) : (
@@ -3357,6 +3375,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           <MoreSheet2
             items={nav2}
             me={me}
+            start={!ctx.start.hidden ? { six, go: () => (six.next ? runSix(six.next.key) : goHome()) } : null}
             onNav={navTo2}
             onClose={() => setMoreOpen(false)}
             onUpgrade={() => openPlans(me.plan?.name === "trial" ? "trial" : "billing")}

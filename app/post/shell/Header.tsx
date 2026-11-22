@@ -11,8 +11,8 @@
  * floating button. The header also hosts the help sheet, the Undo toast and the spend question
  * (TopBar.tsx TopHosts), as the top bar did.
  */
-import type { ReactNode } from "react";
-import { IconPlus } from "../../ui/shared";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { IconPlus, IconSearch, IconX } from "../../ui/shared";
 import { ownClick, Mark } from "./Rail";
 import "./shell.css";
 
@@ -38,7 +38,48 @@ export function HeaderActions({ bell, credits, onAdd, phone }: { bell: ReactNode
   );
 }
 
-export function ShellHeader({ crumbs, title, search, actions, phone, onHome, hosts }: { crumbs: Crumb[]; title: string; search?: ReactNode; actions: ReactNode; phone: boolean; onHome: () => void; hosts: ReactNode }) {
+export function ShellHeader({
+  crumbs,
+  title,
+  search,
+  actions,
+  phone,
+  onHome,
+  hosts,
+  searching,
+  onCloseSearch,
+}: {
+  crumbs: Crumb[];
+  title: string;
+  /** The search field: in the row on wider screens; on phones behind a search button (the old top bar's). */
+  search?: ReactNode;
+  actions: ReactNode;
+  phone: boolean;
+  onHome: () => void;
+  hosts: ReactNode;
+  /** Phones: a search is typed (the field stays open). */
+  searching?: boolean;
+  /** Phones: the search closed (clear it). */
+  onCloseSearch?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const shown = phone && !!search && (open || !!searching);
+  useEffect(() => {
+    if (open) box.current?.querySelector<HTMLInputElement>("input")?.focus();
+  }, [open]);
+  if (shown)
+    return (
+      <header className="ws-head ws-head-phone">
+        <div className="ws-head-search ws-head-search-phone" ref={box}>
+          {search}
+        </div>
+        <button type="button" className="ws-hbtn" aria-label="Close search" onClick={() => (setOpen(false), onCloseSearch?.())}>
+          <IconX size={18} />
+        </button>
+        {hosts}
+      </header>
+    );
   return (
     <header className={`ws-head${phone ? " ws-head-phone" : ""}`}>
       {phone && (
@@ -82,7 +123,12 @@ export function ShellHeader({ crumbs, title, search, actions, phone, onHome, hos
           {title}
         </strong>
       </nav>
-      {search && <div className="ws-head-search">{search}</div>}
+      {search && !phone && <div className="ws-head-search">{search}</div>}
+      {search && phone && (
+        <button type="button" className="ws-hbtn" aria-label="Search" onClick={() => setOpen(true)}>
+          <IconSearch size={18} />
+        </button>
+      )}
       {actions}
       {hosts}
     </header>

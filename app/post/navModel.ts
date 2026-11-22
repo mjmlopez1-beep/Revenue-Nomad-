@@ -288,6 +288,10 @@ export function currentKey2(x: Pick<NavInput2, "page" | "recordType" | "tab" | "
   }
 }
 
+/**
+ * The member's own things (Warm paths, Pipeline, Proposals, Messages) show no count while they have
+ * none, as on a first visit in the mockup; Merlin's own data (Companies, People, Seats) always does.
+ */
 /** The rail, top to bottom (Rail.dc.html). Warm paths needs Your network. Evidence Bank is Close's: without it, the item carries the plan's pill and opens the upgrade. */
 export function navItems2(x: NavInput2): NavItem2[] {
   const on = currentKey2(x);
@@ -305,9 +309,9 @@ export function navItems2(x: NavInput2): NavItem2[] {
       ...(x.hiringN && x.hiringHot ? { pill: { text: x.hiringN.toLocaleString("en-US"), kind: "hot" as const } } : { count: x.hiringN }),
       spoken: x.hiringN != null ? `${x.hiringN} open roles` : undefined,
     },
-    ...(x.network ? [{ key: "warm", label: "Warm paths", group: "signals" as const, icon: "warm" as const, href: p("warm"), page: "warm" as const, count: x.networkN ?? null }] : []),
-    { key: "pipeline", label: "Pipeline", group: "close", icon: "pipeline", href: p("pipeline"), page: "pipeline", count: x.pipelineN ?? null, spoken: x.pipelineN ? `${x.pipelineN} open deals` : undefined },
-    { key: "proposals", label: "Proposals", group: "close", icon: "proposals", href: p("proposals"), page: "proposals", count: x.proposalsN ?? null },
+    ...(x.network ? [{ key: "warm", label: "Warm paths", group: "signals" as const, icon: "warm" as const, href: p("warm"), page: "warm" as const, count: x.networkN || null }] : []),
+    { key: "pipeline", label: "Pipeline", group: "close", icon: "pipeline", href: p("pipeline"), page: "pipeline", count: x.pipelineN || null, spoken: x.pipelineN ? `${x.pipelineN} open deals` : undefined },
+    { key: "proposals", label: "Proposals", group: "close", icon: "proposals", href: p("proposals"), page: "proposals", count: x.proposalsN || null },
     { key: "contracts", label: "Contracts", group: "close", icon: "contracts", href: x.hrefs.contracts, page: "proposals", pill: { text: "New", kind: "new" } },
     {
       key: "evidence", label: "Evidence Bank", group: "close", icon: "evidence", href: p("evidence"), page: "evidence",
