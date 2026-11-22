@@ -43,6 +43,7 @@ import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./Pr
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder, uploadPdf } from "./DocBuilder";
 import { LinkCompany } from "./ProposalLink";
+import { PricingEditor } from "./PricingEditor";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
@@ -567,6 +568,8 @@ function Editor({
           {p.blocks.map((b) => (
             <Section key={b.id} b={b} fields={fields} p={p} readOnly={readOnly} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
           ))}
+          {/* Close: options and add-ons the client picks from (PricingEditor.tsx). */}
+          {(data.canBuild || p.pricing) && <PricingEditor value={p.pricing} readOnly={readOnly} onChange={(pricing) => change({ pricing }, { pricing })} />}
           {/* Peers: a team pursuing this company together can add its "Your team" section (PeerSheets.tsx). */}
           {!readOnly && <TeamBlockOffer company={p.company.id} has={p.blocks.some((b) => b.title === "Your team")} onAdd={(b) => setBlocks([...p.blocks, b])} />}
           {!readOnly && (

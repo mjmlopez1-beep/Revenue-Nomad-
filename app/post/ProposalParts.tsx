@@ -375,6 +375,22 @@ export function SendStatus({ p }: { p: ProposalRec }) {
           </a>
         )}
       </div>
+      {x.choice && (
+        <p className="pp-status-l">
+          {x.signer.name.split(" ")[0]} chose {x.choice.summary}. Total: {x.choice.total}.
+        </p>
+      )}
+      {x.sealed && (
+        <div className="pp-status-row">
+          <p className="pp-muted">Sealed by Merlin. Any change to the PDF breaks the seal.</p>
+          <a className="btn btn-sm" href={x.sealed.pdf}>
+            Download the signed PDF
+          </a>
+          <a className="btn btn-sm" href="/check" target="_blank" rel="noreferrer">
+            Check a copy
+          </a>
+        </div>
+      )}
       <details className="pp-trail">
         <summary>Audit trail</summary>
         <ol>
