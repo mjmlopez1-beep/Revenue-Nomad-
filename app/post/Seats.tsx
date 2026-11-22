@@ -29,6 +29,8 @@ import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
 import { Prop, Spot } from "../ui/fractions/lazy";
 import { PageHead } from "../ui/system";
+import { HideNameSwitch } from "./PartnersSwitch";
+import { NAME_HIDDEN, seatNameWho } from "@/lib/tableFields";
 import { SeatGuesses } from "./network/SeatGuesses"; // [google network]
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
@@ -980,8 +982,9 @@ export function Seats({
             keep private.
           </p>
           <p className="ys-lead-sub">
-            Members spend 1 credit to see your name on a seat, and the seat's title comes with it. How you were found, the rate and the month a past seat ended are 1 credit each. Everything else here is free for every member to see.
+            {me.nameHidden ? `Your name is hidden: other members see "${NAME_HIDDEN}" on your seats.` : seatNameWho(me.fractionals ?? null)} How you were found, the rate and the month a past seat ended are 1 credit each. Everything else here is free for every member to see.
           </p>
+          <HideNameSwitch className="ys-hidename" />
           <div className="ys-progress">
             <div className="ys-progress-box" role="status">
               <span className="ys-progress-n">

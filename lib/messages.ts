@@ -355,6 +355,7 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           const holder = T.seatHolder(s, idx, e.id, T.valueOf(e, s, "operator"));
           if (!holder) throw new ActionError("Nobody on Merlin is linked to this seat, so there's no one to write to here.");
           if (holder.id === me.id) throw new ActionError("That's your own seat.");
+          if (T.holderNameHidden(s, e, me.id, idx)) throw new ActionError("This fractional keeps their name private, so there's no one to write to here.");
           if (T.cellOf(s, me, e, "engagement", "operator", idx).s !== "value") throw new ActionError("Unlock who held this seat first. Then you can write to them.");
           const name = T.firstName(holder.name);
           if (!T.signedIn(s, idx, holder.id)) throw new ActionError(`${name} hasn't signed in to Merlin yet, so a message here wouldn't reach them. Try LinkedIn instead.`);

@@ -637,3 +637,20 @@ body:has(.tp-tabbar):has(.tp-fab) .toasts {
 .tp-app .tp-asmember {
   flex: none;
 }
+
+/* Phones: every control in the More sheet and the sidebar's foot is a 44px target (saved views, Manage, Upgrade). */
+@media (max-width: 767px) {
+  .tp-nav-sheet .tp-nav-view,
+  .tp-nav-manage,
+  .tp-nav-plan-go {
+    min-height: 44px;
+  }
+  .tp-nav-manage {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 8px;
+  }
+  .tp-nav-plan-go {
+    padding: 0 10px;
+  }
+}

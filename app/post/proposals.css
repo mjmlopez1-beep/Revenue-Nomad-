@@ -26,15 +26,16 @@
 .pp-banner-won {
   background: var(--volt-soft);
 }
+/* A refusal over the list: plain words in the body ink on sand, not a red alarm (the words say what to do). */
 .pp-err {
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: var(--r-btn);
   background: var(--sand);
-  color: var(--red);
+  color: var(--body-ink);
   font-size: 14px;
   line-height: 20px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .pp-warn {
   margin: 0;

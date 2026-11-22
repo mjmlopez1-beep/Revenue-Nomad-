@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CompanyRec } from "@/lib/tableTypes";
 import { FIND_MIN } from "@/lib/tableFields";
+import { errorText } from "./shared";
 
 /** What a lookup came to. `recs`: the companies found (named). `none`: no exact match (the server's words). `error`: a refusal, such as the day's limit. */
 export type Found = { q: string; recs: CompanyRec[]; none?: string; error?: string };
@@ -20,7 +21,7 @@ export async function findCompany(text: string): Promise<Found | null> {
   try {
     const res = await fetch(`/api/table?find=${encodeURIComponent(q)}`, { cache: "no-store" });
     const j = (await res.json().catch(() => ({}))) as { companies?: CompanyRec[]; found?: string; message?: string; error?: string };
-    if (!res.ok) return { q, recs: [], error: j.error ?? "That didn't go through. Try again in a moment." };
+    if (!res.ok) return { q, recs: [], error: errorText(res.status, j.error, "That didn't go through. Try again in a moment.") };
     if (j.found === "none") return { q, recs: [], none: j.message ?? "No company with that exact name or website." };
     return { q, recs: (j.companies ?? []).filter((c) => c && c.id) };
   } catch {

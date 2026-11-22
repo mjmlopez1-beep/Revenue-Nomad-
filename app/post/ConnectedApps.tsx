@@ -6,7 +6,7 @@
  * once, inline, then the app's tokens stop working at once. Reads /api/oauth/apps.
  */
 import { useEffect, useState } from "react";
-import { timeAgo, useToast } from "../ui/shared";
+import { timeAgo, useToast, errorText } from "../ui/shared";
 import "./connect.css";
 
 interface App {
@@ -43,7 +43,7 @@ export function ConnectedApps({ onHowTo }: { onHowTo?: () => void }) {
       if (r.ok) {
         setApps(j.apps ?? []);
         toast(`Disconnected ${app.name}. It can't use your account any more.`);
-      } else toast(j.error || "That didn't go through. Try again.", true);
+      } else toast(errorText(r.status, j.error, "That didn't go through. Try again."), true);
     } catch {
       toast("We couldn't reach Merlin. Check your connection and try again.", true);
     }

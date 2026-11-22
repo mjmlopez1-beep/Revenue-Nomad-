@@ -14,7 +14,16 @@ import type { MovesWire } from "@/lib/moves";
 import { logoIdFor } from "./logoIds";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
-export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean; /** The "move" action: today's moves as they now stand. */ moves?: MovesWire };
+export type ActResult = {
+  ok: boolean;
+  message: string;
+  id?: string;
+  capped?: boolean;
+  /** The "move" action: today's moves as they now stand. */
+  moves?: MovesWire;
+  /** An unlock that spent credits: what undoUnlock takes back (ActionResult.undo). */
+  undo?: string;
+};
 /**
  * Run an action. `quiet`: no toast for the success message (the caller says it). `silentError`:
  * no toast for a refusal either, for a caller that shows the error in place (a form under its
@@ -157,7 +166,7 @@ export async function fetchView(): Promise<ViewResult> {
   const wait = Number(r.headers.get("Retry-After"));
   return {
     view: null,
-    error: (j && typeof j.error === "string" && j.error) || "Merlin did not load. Check your connection and try again.",
+    error: errorText(r.status, j?.error, "Merlin did not load. Check your connection and try again."),
     status: r.status,
     retryAfter: Number.isFinite(wait) && wait > 0 ? wait : null,
   };
@@ -225,11 +234,16 @@ export async function fetchFirst(search: string): Promise<FirstResult | null> {
 }
 
 /** POST to /api/table. Returns the JSON body, with `error` set on failure. */
+/** Any answer of 500 or above, in plain words: a server's own error text never reaches a member. */
+export const SERVER_PROBLEM = "Something went wrong on our side. Try again.";
+/** What a failed answer says to the member: plain words for a server problem (500 and up), else its own sentence, else `fallback`. */
+export const errorText = (status: number, error: unknown, fallback: string): string => (status >= 500 ? SERVER_PROBLEM : typeof error === "string" && error.trim() ? error : fallback);
+
 export async function post<T = Record<string, unknown>>(body: unknown): Promise<T & { error?: string }> {
   try {
     const r = await fetch("/api/table", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
+    return r.ok ? j : { ...j, error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." } as T & { error: string };
   }
@@ -608,9 +622,10 @@ export function LockPill({
       disabled={busy}
       onClick={(e) => (e.stopPropagation(), !later && onUnlock())}
     >
+      {/* At rest the price shows too (never on hover alone). */}
       <span className="lock-rest" aria-hidden>
         <IconLock />
-        <span className="lock-mask" />
+        {later ? <span className="lock-mask" /> : <span className="lock-price">{broke ? "Earn a credit" : "1 credit"}</span>}
       </span>
       <span className="lock-cta" aria-hidden>
         <IconLock />

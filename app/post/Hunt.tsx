@@ -16,7 +16,7 @@ import { IconCheck, IconSearch } from "../ui/shared";
 import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
 import { Sheet, UiCtx } from "./ui";
-import { PartnersSwitch, RadarSwitch } from "./PartnersSwitch";
+import { HideNameSwitch, PartnersSwitch, RadarSwitch } from "./PartnersSwitch";
 import dynamic from "next/dynamic";
 
 /** Your writing voice (Voice.tsx) loads with the sheet that shows it, not with the app. */
@@ -399,6 +399,7 @@ export function IcpSheet({
       <LookingSwitch />
       <RadarSwitch />
       <PartnersSwitch />
+      <HideNameSwitch />
       <VoiceSection />
       {views ? (
         <div className="hunt-sub hunt-views-sub">

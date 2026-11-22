@@ -7,6 +7,7 @@
  */
 import { LANDING_ROWS, PLANS } from "@/lib/billing/compare";
 import { PRO_STORY, TRIAL_LABEL } from "@/lib/billing/rules";
+import { OPENS_RULE } from "@/lib/tableFields";
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 
@@ -45,6 +46,7 @@ export default function Pricing({ starter, onJoin }: { starter: number; onJoin: 
           ))}
         </div>
         <p className="lp-price-trial num">{TRIAL_LABEL}, no card. It ends into Free on its own.</p>
+        <p className="lp-price-opens">{OPENS_RULE}</p>
         <table className="lp-price-table">
           <thead>
             <tr>

@@ -92,7 +92,7 @@
 .sg-meta div,
 .sg-facts div {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 120px minmax(0, 1fr);
   gap: 12px;
   font-size: 15px;
   line-height: 22px;
@@ -196,13 +196,17 @@
 .sg-text li + li {
   margin-top: 4px;
 }
+/* A blank to fill, by its label ("Signer name"): a field in the text face, never a key in mono. */
 .sg-blank {
-  padding: 0 4px;
+  display: inline-block;
+  padding: 0 6px;
   border-radius: 4px;
   background: #fff4d6;
   color: #7a5200;
-  font-family: var(--mono);
+  font-family: var(--font);
   font-size: 0.86em;
+  font-weight: 600;
+  line-height: 1.5;
   box-shadow: inset 0 0 0 1px #f2d48a;
 }
 
@@ -543,4 +547,23 @@
   .sg-consent-more {
     display: inline-block;
   }
+}
+
+/* Long names never push the page sideways: every child of the column may shrink, and long words break. */
+.sg-main > * {
+  min-width: 0;
+}
+.sg-sender,
+.sg-sender-t,
+.sg-title,
+.sg-meta div,
+.sg-facts div,
+.sg-meta dt,
+.sg-facts dt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sg-meta div > *,
+.sg-facts div > * {
+  min-width: 0;
 }

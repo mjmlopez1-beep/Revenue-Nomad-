@@ -5,8 +5,8 @@
  */
 import type { ReactNode } from "react";
 
-/** One block's text as paragraphs and lists. {{blanks}} show marked when `blanks` is on. */
-export function DocText({ text, blanks = false }: { text: string; blanks?: boolean }) {
+/** One block's text as paragraphs and lists. {{blanks}} show marked when `blanks` is on, by `label` ("Signer name") when given, never the key. */
+export function DocText({ text, blanks = false, label }: { text: string; blanks?: boolean; label?: (key: string) => string }) {
   const out: ReactNode[] = [];
   let list: string[] = [];
   let para: string[] = [];
@@ -15,7 +15,7 @@ export function DocText({ text, blanks = false }: { text: string; blanks?: boole
       ? s.split(/(\{\{\s*[A-Za-z0-9_.]+\s*\}\})/).map((part, i) =>
           /^\{\{/.test(part) ? (
             <mark key={`${k}${i}`} className="sg-blank">
-              {part.replace(/[{}\s]/g, "")}
+              {label ? label(part.replace(/[{}\s]/g, "")) : part.replace(/[{}\s]/g, "")}
             </mark>
           ) : (
             part

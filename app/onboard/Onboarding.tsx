@@ -37,7 +37,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./onboard.css";
 import { CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, LockedName, post, val, type Act, type View } from "../ui/shared";
-import { FUNCTIONS } from "@/lib/tableFields";
+import { FUNCTIONS, NAME_HIDDEN, NAME_HIDDEN_SAY, OPENS_RULE, seatNameWho } from "@/lib/tableFields";
 import type { Icp, OnboardDraft } from "@/lib/tableTypes";
 import { CLIENT_COUNTS } from "@/lib/tableTypes";
 import { countryKey, countryOf, deriveAll, hireLine, hireOfRow, icpEmpty, type Filters, type Row } from "@/app/post/model";
@@ -53,7 +53,7 @@ import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { invitedParts } from "@/lib/notify/format";
 import { TRIAL_DAYS, TRIAL_LABEL, TRIAL_NAME } from "@/lib/billing/rules";
 import { moveWhy } from "@/lib/moves";
-import type { RadarRow } from "@/lib/radar/types";
+import { FEATURE_NAME, type RadarRow } from "@/lib/radar/types";
 import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
 import { Glyph, Trail, WelcomeBanner } from "../ui/fractions/art";
 import { Logo } from "../ui/Logo";
@@ -180,6 +180,14 @@ const signature = (fv: FirstView, roles: boolean, email: boolean, fn: string | n
 export default function Onboarding({ view, act, onDone, onSkip, viewReady = true, onHold }: OnboardingProps) {
   const me = view.me!;
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
+  // "Hide my name on my seats", from the step that says who sees it: saved at once (settings), as Your profile's switch does.
+  const [nameHidden, setNameHidden] = useState(!!me.nameHidden);
+  const onNameHidden = (on: boolean) => {
+    setNameHidden(on);
+    void act({ type: "settings", nameHidden: on }, { quiet: true, silentError: true }).then((x) => {
+      if (!x.ok) setNameHidden(!on);
+    });
+  };
   // Joined here with email sign-in off: the sign-in link is kept on the last step (with it on, it comes by email).
   const linkStep = me.id.startsWith("j_") && !view.email;
   const total = STEPS;
@@ -542,6 +550,8 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
               published={published}
               scanned={scanned}
               credits={me.credits}
+              nameHidden={nameHidden}
+              onNameHidden={onNameHidden}
               trial={trialAhead}
               invited={me.invitedBy ? invitedParts(me.invitedBy.first, me.invitedBy.both, REFERRAL_BONUS) : null}
               fn={fn}
@@ -633,9 +643,30 @@ function seatsLine(seats: number, published: number, scanned: number): string {
   return `${seats} seats already carry your name: ${said}.`;
 }
 
+/**
+ * "Hide my name on my seats" where onboarding says who sees the name (the same switch as Your
+ * profile's and Your seats', HideNameSwitch): NAME_HIDDEN on every seat of theirs to everyone else.
+ */
+function HideNameToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="ob-hidename">
+      <button type="button" role="switch" aria-checked={on} className={`ob-hidename-t${on ? " on" : ""}`} onClick={() => onChange(!on)}>
+        <span className="ob-hidename-box" aria-hidden>
+          {on && <IconCheck size={11} />}
+        </span>
+        Hide my name on my seats
+      </button>
+      <p className="ob-hidename-p">{on ? `Everyone else sees "${NAME_HIDDEN}" on your seats. Your seats and roles still count.` : NAME_HIDDEN_SAY}</p>
+    </div>
+  );
+}
+
 function StepYou({
-  first, seats, published, scanned, credits, trial, invited, fn, setFn, title, setTitle, onNext,
+  first, seats, published, scanned, credits, nameHidden, onNameHidden, trial, invited, fn, setFn, title, setTitle, onNext,
 }: {
+  /** "Hide my name on my seats", and its switch. */
+  nameHidden: boolean;
+  onNameHidden: (on: boolean) => void;
   /** The Close trial starts when they finish here (billing live): what a company costs reads for it. */
   trial: boolean;
   first: string;
@@ -667,8 +698,9 @@ function StepYou({
       </h1>
       <p className="ob-sub">
         Merlin shows you which companies hire fractionals, who held each seat and which roles are open now. Share what you know to earn credits.
-        {seats ? ` ${seatsLine(seats, published, scanned)} Other members see your name on a seat only after they spend 1 credit.` : null}
+        {seats ? ` ${seatsLine(seats, published, scanned)} ${seatNameWho()}` : null}
       </p>
+      {seats ? <HideNameToggle on={nameHidden} onChange={onNameHidden} /> : null}
       <p className="ob-credit-note">
         <span className="ob-coin" aria-hidden>
           <IconCoin size={13} />
@@ -685,8 +717,8 @@ function StepYou({
             {credits} {credits === 1 ? "credit" : "credits"}
           </strong>
           {trial
-            ? `. A company is 2 credits. Your ${TRIAL_LABEL} starts when you finish here, no card, and on it every company in your Crystal Ball opens free. One more credit shows who held a seat there.`
-            : ". A company is 2 credits, and one each day is free (on the Free plan, the one you pick in your Crystal Ball). One more credit shows who held a seat there."}
+            ? `. A company is 2 credits, and your ${TRIAL_LABEL} starts when you finish here, no card. ${OPENS_RULE}`
+            : `. A company is 2 credits, and on the Free plan one ${FEATURE_NAME} company a day opens free. ${seatNameWho()}`}
         </span>
       </p>
 

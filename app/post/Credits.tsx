@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LedgerRow, View } from "@/lib/tableTypes";
-import { COMPANY_PRICE, EARN_CAP, FREE_EARN_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, EARN_CAP, FREE_EARN_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef, OPENS_RULE } from "@/lib/tableFields";
 import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
@@ -291,9 +291,9 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
       `You unlock a company: its name and website, with the job posting of each open role there. ${
         // Free (billing live): the free one a day is Crystal Ball's, with everything on it. Trial and Pro: any company free, up to PRO_OPENS_DAILY a day, and Crystal Ball's on top.
         me.crystal === "one" || me.crystal === "used"
-          ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it. On Pro, companies open free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}.`
+          ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it. ${OPENS_RULE}`
           : me.proOpens
-            ? `On your plan, companies open free, up to ${PRO_OPENS_DAILY} a day plus every company in your ${FEATURE_NAME}. Past ${PRO_OPENS_DAILY}, a company is ${COMPANY_PRICE} credits until tomorrow.`
+            ? `${OPENS_RULE} Past ${PRO_OPENS_DAILY}, a company is ${COMPANY_PRICE} credits until tomorrow.`
             : `Your first company each day is free.${me.crystal === "all" ? ` Every company in your ${FEATURE_NAME} opens free.` : ""}`
       }`,
     ],

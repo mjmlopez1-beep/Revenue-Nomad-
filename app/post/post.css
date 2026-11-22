@@ -853,6 +853,37 @@
 .tp-credpop-all {
   width: 100%;
 }
+/* Before a spend (ui.tsx SpendHost): what it opens, the balance after, Not now or Unlock. */
+.tp-spend {
+  display: grid;
+  gap: 8px;
+}
+.tp-spend-q {
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tp-spend-after {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.tp-spend-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+@media (max-width: 767px) {
+  .tp-spend-acts .btn {
+    min-height: 44px;
+    flex: 1;
+    justify-content: center;
+  }
+}
 /* At 0 credits: facts to add here instead of a failed unlock. */
 .tp-zero {
   display: grid;
@@ -2125,6 +2156,9 @@ body:has(.tp-drawer) .pro-foot {
   }
   .tp-table tr:hover .lock-mask {
     background: var(--pine-14);
+  }
+  .tp-table tr:hover .lock-price {
+    color: var(--pine);
   }
 }
 /* Touch screens (tablets too): no hover to wait for, so "+ Add" reads at rest. No box: a dashed box on every empty cell is a wall. */
@@ -6026,8 +6060,18 @@ button.tp-fsheet-row:disabled {
   width: 10px;
   height: 10px;
 }
-.tp-co-hidden.in-table .lock-rest .lock-mask {
+.tp-co-hidden.in-table .lock-rest .lock-mask,
+.tp-co-hidden.in-table .lock-rest .lock-price {
   display: none;
+}
+/* The company's price at rest sits after its blurred name (the lock on the tile is too small to say it). */
+.tp-co-price {
+  flex: none;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .tp-co-hidden.in-table .lock-cta {
   height: 28px;
@@ -7402,4 +7446,16 @@ div.tp-pcard-when {
     height: 44px;
     transform: translate(-50%, -50%);
   }
+}
+/* A page before the whole table is here (TradingPost PageWait): its own head, then quiet lines. */
+.tp-pagewait-lines {
+  display: grid;
+  gap: 12px;
+  max-width: 640px;
+  padding: 8px 0 24px;
+}
+.tp-pagewait .problem,
+.tp-allwait-fail .problem {
+  min-height: 0;
+  padding-top: 24px;
 }

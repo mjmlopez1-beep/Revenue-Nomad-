@@ -92,11 +92,18 @@ function FractionalsJoined() {
 /** Once, for a member who hasn't chosen: show them in the Fractionals directory, or keep them out. Your profile has the same switch. */
 function ShowMeAsk() {
   const ui = useContext(UiCtx);
-  const [busy, setBusy] = useState<"yes" | "no" | null>(null);
+  const [busy, setBusy] = useState<"yes" | "no" | "hide" | null>(null);
   if (!ui) return null;
   const pick = async (on: boolean) => {
     setBusy(on ? "yes" : "no");
     await ui.act({ type: "settings", fractionals: on });
+    setBusy(null);
+  };
+  // Out of the directory and the name off every seat: "A fractional (name hidden)" to everyone else.
+  const hide = async () => {
+    setBusy("hide");
+    await ui.act({ type: "settings", fractionals: false }, { quiet: true });
+    await ui.act({ type: "settings", nameHidden: true });
     setBusy(null);
   };
   return (
@@ -106,7 +113,7 @@ function ShowMeAsk() {
       </h2>
       <p className="hm-frask-p">
         Members see your name, your seats and the clients you serve, free, and can message you. Never your email. Until you choose, you show as {ui.me.name.trim().split(/\s+/)[0]}{" "}
-        {(ui.me.name.trim().split(/\s+/).pop() ?? "").charAt(0).toUpperCase()}. You can change it any time in Your profile.
+        {(ui.me.name.trim().split(/\s+/).pop() ?? "").charAt(0).toUpperCase()}. Keeping out of the directory leaves your name on your seats, so to keep it off them, hide it. You can change either any time in Your profile.
       </p>
       <div className="hm-frask-acts">
         <button type="button" className="btn btn-pine" disabled={!!busy} aria-busy={busy === "yes"} onClick={() => void pick(true)}>
@@ -114,6 +121,9 @@ function ShowMeAsk() {
         </button>
         <button type="button" className="btn" disabled={!!busy} aria-busy={busy === "no"} onClick={() => void pick(false)}>
           Keep me out
+        </button>
+        <button type="button" className="tp-flink" disabled={!!busy} aria-busy={busy === "hide"} onClick={() => void hide()}>
+          Hide my name on my seats
         </button>
       </div>
     </section>

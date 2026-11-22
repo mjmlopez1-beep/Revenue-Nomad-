@@ -365,6 +365,8 @@ export interface Me {
    * show by first name and last initial).
    */
   fractionals?: boolean | null;
+  /** "Hide my name on my seats": their seats read NAME_HIDDEN to everyone else, the connector included. */
+  nameHidden?: boolean;
   /** Crystal Ball goes out by email or Slack at all (Notifications). */
   radar?: boolean;
   /** How often the Crystal Ball email comes, or "off" (Notifications, or the email's own link). */
@@ -986,6 +988,12 @@ export type Action =
   /** `from: "crystal"`: Trial and Pro only, the company in it opens for 0 credits when it is in their Crystal Ball (the rest costs what it costs). */
   | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[]; from?: "crystal" }
   /**
+   * Take back an unlock just made (`at`: the ActionResult.undo the unlock answered with). Within
+   * UNLOCK_UNDO_MS only, and only while nothing came after it (another credit spent or earned, a
+   * message to someone it opened): its credits come back and what it opened locks again.
+   */
+  | { type: "undoUnlock"; at: string }
+  /**
    * Add a company (one click from a URL) and optionally an engagement and people there.
    * A company is never duplicated: same website, else same name, is the same company.
    */
@@ -1094,7 +1102,8 @@ export type Action =
    * `fractionals`: "Show me in the Fractionals directory" (Your profile, and Home's one-time question).
    * `partners`: the same switch under its old name (Referral partners).
    */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean }
+  /** `nameHidden`: "Hide my name on my seats". */
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; nameHidden?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean }
   /**
    * Fractionals: "Unlock · 1 credit" on a fractional not on Merlin yet (FractionalRec.id). The same
    * purchase as who held one of their seats: every seat of theirs then shows who held it, with the role.
@@ -1257,6 +1266,8 @@ export type ActionResult = {
   version?: string;
   /** The "move" action: today's moves as they now stand (the next best in place of the one done or snoozed), with their records in `companies`. */
   moves?: MovesWire;
+  /** An unlock that spent credits: pass it back as undoUnlock's `at` to take the unlock back (within UNLOCK_UNDO_MS). */
+  undo?: string;
   /** Pipeline actions: the member's pipeline as it now stands (lib/pipeline.ts PipelineView). */
   pipeline?: PipelineView;
   /** Peer actions: the Peers page as it now stands (lib/peersCore.ts PeersView). */

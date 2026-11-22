@@ -38,7 +38,7 @@ export const TIER_NAME: Record<Tier, string> = { pro: "Pro", close: "Close" };
 /** What a tier costs per interval, in dollars. */
 export const tierPrice = (tier: Tier, interval: "month" | "year") => (tier === "close" ? (interval === "year" ? PRICES.closeYear : PRICES.closeMonth) : interval === "year" ? PRICES.year : PRICES.month);
 /** Pro sold as winning clients: the plans, the Pro welcome, the trial-ended card and the trial emails say it the same way. */
-export const PRO_STORY = "Find the company before it posts, get in through the person who held the seat, and send the proposal they sign.";
+export const PRO_STORY = "Find the company before it posts and get in through the person who held the seat. Close adds the proposal they sign.";
 /** The trial summary (what was used, what locks) shows in the trial's last this-many days: Home's banner and the billing page. */
 export const SUMMARY_DAYS = 4;
 export const TOPUP_CREDITS = 50;

@@ -26,12 +26,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { View } from "@/lib/tableTypes";
 import type { DiscoveryNote, ProposalBlock, ProposalRec, ProposalsView, SignerInfo, TemplateChoice } from "@/lib/proposals/types";
 import type { DocumentRec } from "@/lib/documents/types";
-import { BLOCKS, DISCOVERY_TARGET, acceptInto, blanksOf, blockDef, blockFields, checklist, docFields, fill, guidanceFor, makeBlock, riskFlags, templateDef } from "@/lib/proposals/library";
+import { BLOCKS, DISCOVERY_TARGET, acceptInto, blanksOf, blockDef, blockFields, checklist, docFields, fieldLabel, fill, guidanceFor, makeBlock, riskFlags, templateDef } from "@/lib/proposals/library";
 import { adviceFromView } from "@/lib/proposals/rates";
 import { PRICES } from "@/lib/billing/rules";
-import { IconCheck, IconChevron, IconPencil, IconPlus, IconX, useToast } from "../ui/shared";
+import { IconCheck, IconChevron, IconPencil, IconPlus, IconX, useToast, errorText } from "../ui/shared";
 import { Prop } from "../ui/fractions/art";
 import { EmptyState, PageHead } from "../ui/system";
+import { Problem } from "../ui/Problem";
 import { Sheet } from "./ui";
 import { useMedia } from "./hooks";
 import { openPlans } from "./Billing";
@@ -66,7 +67,7 @@ async function load(): Promise<ProposalsView | { error: string }> {
   try {
     const r = await fetch("/api/proposals", { headers: { accept: "application/json" } });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { error: j.error || "Proposals didn't load. Try again." };
+    return r.ok ? j : { error: errorText(r.status, j.error, "Proposals didn't load. Try again.") };
   } catch {
     return { error: NETWORK };
   }
@@ -175,7 +176,17 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         </div>
       </div>
       {data && !data.canBuild && <CloseBuildPrompt />}
-      {error && <p className="pp-err">{error}</p>}
+      {/* Nothing here yet: the page says it didn't load, in plain words, with Try again. Later errors keep the list and say so above it. */}
+      {error && !data && (
+        <Problem title="Proposals didn't load" onRetry={() => void reload()} reload={false} on="bg">
+          {error}
+        </Problem>
+      )}
+      {error && data && (
+        <p className="pp-err" role="alert">
+          {error}
+        </p>
+      )}
       {!data && !error && <div className="pp-skel" aria-busy="true" />}
       {data && rows.length === 0 && (
         <EmptyState spot="noMessages" title="Nothing sent yet">
@@ -598,7 +609,9 @@ const claudeRevise = (p: ProposalRec) =>
   `Open my proposal "${p.title}" in Merlin (get_proposal with proposal_id ${p.id}). Check it against the checklist and my call, tighten it in my voice, keep the price and the day 30, 60 and 90 decisions, and save the changes with create_or_update_proposal. Show me before anything is sent.`;
 
 /** "3 things to fix": one line that opens into the list. */
-function FixLine({ fixes, blanks }: { fixes: string[]; blanks: number }) {
+export function FixLine({ fixes, blanks }: { fixes: string[]; blanks: number }) {
+  // The blanks are one item of the list ("15 blanks left to fill."): said first, by their own count, then the rest.
+  const others = fixes.length - (blanks ? 1 : 0);
   const [open, setOpen] = useState(false);
   if (!fixes.length)
     return (
@@ -612,9 +625,11 @@ function FixLine({ fixes, blanks }: { fixes: string[]; blanks: number }) {
   return (
     <div className="pp-fixline" data-open={open}>
       <button type="button" className="pp-fix-go" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
-        <span className="pp-fix-n">{fixes.length}</span>
+        <span className="pp-fix-n">{blanks || fixes.length}</span>
         <span>
-          {fixes.length === 1 ? "thing" : "things"} to fix before you send{blanks ? `, ${blanks} ${blanks === 1 ? "blank" : "blanks"} among them` : ""}
+          {blanks
+            ? `${blanks === 1 ? "blank" : "blanks"} to fill${others > 0 ? `, and ${others} more ${others === 1 ? "thing" : "things"} to fix` : ""} before you send`
+            : `${fixes.length === 1 ? "thing" : "things"} to fix before you send`}
         </span>
         <IconChevron dir={open ? "up" : "down"} />
       </button>
@@ -664,7 +679,7 @@ function Section({
               </span>
             </h2>
             <div className="sg-text">
-              <DocText text={text} blanks />
+              <DocText text={text} blanks label={fieldLabel} />
             </div>
           </button>
         ) : (
@@ -678,13 +693,20 @@ function Section({
       </section>
     );
   const fl = blockFields(b).filter((f) => f.key !== "proposal.version");
+  const [wording, setWording] = useState(false);
   return (
     <section id={`sec-${b.id}`} className="sg-block pp-sec pp-sec-on" aria-label={`Editing ${b.title}`}>
       <input className="pp-sec-t" aria-label="Section title" value={b.title} maxLength={120} onChange={(e) => onBlock({ ...b, title: e.target.value })} autoFocus={b.blockId === "custom"} />
-      <AutoText className="pp-body" label={`${b.title} text`} value={b.body} readOnly={false} onChange={(v) => onBlock({ ...b, body: v })} />
+      {/* The wording itself, with its {{fields}}, only when asked for: the fields below are what most edits need. */}
+      {(fl.length === 0 || wording) && <AutoText className="pp-body" label={`${b.title} text`} value={b.body} readOnly={false} onChange={(v) => onBlock({ ...b, body: v })} />}
       {fl.length > 0 && (
         <div className="pp-fields">
-          <p className="pp-muted pp-fields-h">In double braces, filled from these:</p>
+          <p className="pp-muted pp-fields-h">
+            Fill in this section.{" "}
+            <button type="button" className="tp-flink" aria-expanded={wording} onClick={() => setWording((x) => !x)}>
+              {wording ? "Hide the wording" : "Edit the wording"}
+            </button>
+          </p>
           {fl.map((f) => {
             const multi = f.type === "list" || f.type === "table" || (fields[f.key] ?? "").includes("\n");
             return (

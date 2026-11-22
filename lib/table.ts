@@ -77,7 +77,7 @@ import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type F
 import {
   ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
-  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, type Entity,
+  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, NAME_HIDDEN, OPENS_RULE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -316,6 +316,8 @@ interface Profile {
   icp?: Icp | null;
   /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. Fractionals reads it as hidden too. */
   partnersOff?: boolean;
+  /** "Hide my name on my seats": who held their seats reads NAME_HIDDEN to everyone else, the connector included (State.namesHidden lists them). */
+  nameHidden?: boolean;
   /**
    * "Show me in the Fractionals directory": true shows their full name, their seats and the clients
    * they serve to every member, free; false takes them out of the directory. Absent: not chosen yet
@@ -411,6 +413,8 @@ interface StoredBenchRate {
 }
 /** Messages between members, one-time sign-in links and rotated tokens: see lib/messageState.ts. */
 export interface State extends MessagingState {
+  /** Members who hide their name on their seats (Profile.nameHidden), kept apart so reading a cell costs nothing when nobody does. */
+  namesHidden?: string[];
   /** `by` is a member id, or "scan" for a company the weekly scan added. */
   companies: (Added & { name: string })[];
   /** `source` is set for engagements the weekly scan added ("Demand scan"). */
@@ -1585,6 +1589,21 @@ function peerPrivate(s: State, node: Node | undefined): boolean {
   const p = s.profiles[at.gr.member];
   return p?.fractionals === false || (p?.fractionals === undefined && !!p?.partnersOff);
 }
+/**
+ * The member who holds this seat and hides their name on their seats (Profile.nameHidden), or null.
+ * Free when nobody hides theirs. `idx` finds a holder the person index leaves out (an open role claimed).
+ */
+function hiddenHolder(s: State, node: Node | undefined, idx?: MemberIndex): string | null {
+  if (!s.namesHidden?.length || !node) return null;
+  let m = personOf(s, node)?.gr.member ?? null;
+  if (!m && idx) m = seatHolder(s, idx, node.id, valueOf(node, s, "operator"))?.id ?? null;
+  return m && s.namesHidden.includes(m) ? m : null;
+}
+/** Who held this seat is a member who hides their name (for anyone but them): never name them, in any view. */
+export function holderNameHidden(s: State, node: Node | undefined, viewer?: string | null, idx?: MemberIndex): boolean {
+  const h = hiddenHolder(s, node, idx);
+  return !!h && h !== viewer;
+}
 /** The company of a seat is open to the member (identityHidden reads the state the seat was built in). */
 function seatCompanySeen(s: State, me: Member, node: Node): boolean {
   const g = engGraphs.get(node);
@@ -2334,9 +2353,14 @@ export const FREE_COMPANY_USED = "That was your free company today, so it cost n
 /** Fractionals: a fellow fractional's name and work history cost nothing (PEERS_FREE). */
 export const FRACTIONALS_FREE = "Fellow fractionals are free to see on Merlin, so nothing was spent.";
 /** Trial and Pro: said after a company opened free (PRO_OPENS_DAILY a day), with how many are left today. */
-export const PRO_OPEN_FREE = "Free on Pro.";
+export const PRO_OPEN_FREE = "It opened free.";
 export const proOpenLine = (left: number) =>
-  left > 0 ? `${PRO_OPEN_FREE} ${left} more ${left === 1 ? "company opens" : "companies open"} free today.` : `${PRO_OPEN_FREE} That was the last of today's ${PRO_OPENS_DAILY}. More open free tomorrow.`;
+  // The day's first free open says the rule (OPENS_RULE); the rest count down.
+  left === PRO_OPENS_DAILY - 1
+    ? `${PRO_OPEN_FREE} ${OPENS_RULE}`
+    : left > 0
+      ? `${PRO_OPEN_FREE} ${left} of today's ${PRO_OPENS_DAILY} free opens left.`
+      : `${PRO_OPEN_FREE} That was the last of today's ${PRO_OPENS_DAILY}. More open free tomorrow.`;
 
 /** What a member sees of their balance: never a negative number. A shortfall is shown as credits owed. */
 const shownBalance = (bal: number) => ({ credits: Math.max(0, bal), owed: Math.max(0, -bal) });
@@ -2663,6 +2687,12 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
     return c.s === "reported" ? { s: "locked", ver: 0, from: "research" } : c;
   }
   if (entity === "engagement" && ((key === "end" && endFree(node, s)) || (key === "role" && scanRoleFree(node, s)))) free = true;
+  // A holder who hides their name on their seats: the seat says NAME_HIDDEN to everyone else (nothing to sell), and its role
+  // opens with the company as a fellow fractional's does. Their own view keeps their name.
+  if (entity === "engagement" && (key === "operator" || key === "role") && holderNameHidden(s, node, me?.id, idx)) {
+    if (key === "operator") return valueOf(node, s, "operator")?.status === "live" ? { s: "value", v: NAME_HIDDEN, ver: 0 } : { s: "empty" };
+    if (!free && me && seatBundled(node, s) && seatCompanySeen(s, me, node!)) free = true;
+  }
   // Fractionals: a member shown in the directory has who held their seats, and the roles, free to every member.
   if (!free && me && entity === "engagement" && (key === "operator" || (key === "role" && seatBundled(node, s))) && personShown(s, node)) free = true;
   // Fellow fractionals: who held a seat, with the role, free once the member sees the company.
@@ -4373,6 +4403,8 @@ async function fullView(
       partners: !prof.partnersOff,
       // Fractionals: "Show me in the Fractionals directory" (null: not chosen yet). Referral partners' old switch off reads as out.
       fractionals: prof.fractionals ?? (prof.partnersOff ? false : null),
+      // "Hide my name on my seats".
+      nameHidden: !!prof.nameHidden,
       radar: ((x) => x.email !== "off" || x.slack)(radarPrefs(prof)),
       // Notifications: how often the Crystal Ball email comes, and whether it posts to Slack.
       radarEmail: radarPrefs(prof).email,
@@ -5040,6 +5072,19 @@ const BENCH_DAILY_MAX = 5;
 const RATE_HELP = "Use a rate like $8k/mo or $150/hr.";
 /** A request the server doesn't know (an old tab after a release, most likely). */
 const UNKNOWN_ACTION = "That didn't go through. Refresh the page and try again.";
+
+/** How long an unlock that spent credits can be taken back from its toast (the page's Undo, UNDO_MS). */
+export const UNLOCK_UNDO_MS = 10_000;
+/** A little more on the server, for the trip there. */
+const UNLOCK_UNDO_GRACE_MS = 3_000;
+/**
+ * Unlocks that spent credits in the last moments, by `${memberId}|${at}`: what each opened for the
+ * member (every unlock key it added them to, the free parts of a bundle included), so Undo locks
+ * exactly that again. Kept in memory only: after a restart the window has long passed.
+ */
+const recentUnlocks = new Map<string, { keys: string[]; at: number }>();
+export const UNDO_TOO_LATE = "It's too late to undo that unlock, so it stays yours.";
+export const UNDO_AFTER = "You've done more since that unlock, so it stays yours.";
 /** Said when a move names a company that isn't in the member's Crystal Ball. */
 export const MOVE_NOT_IN = `That company isn't in your ${FEATURE_NAME} any more, so it has no move. Refresh Home for today's.`;
 /** A fact an admin took off the table (review, or adminRemove): what happened to the credits. */
@@ -5209,6 +5254,8 @@ export async function perform(
     releaseHeld(s, me.id, now);
     const balBefore = balance(s, me.id);
     const ledgerAt = s.ledger.length;
+    // An unlock: what the member could open before it (each key's list as it was), so Undo knows exactly what it opened.
+    const unlocksBefore = a?.type === "unlock" || a?.type === "unlockMany" ? { ...s.unlocks } : null;
     const g = graph(seed, s);
     // Followed roles, rebuilt after a change to them (the draft changes in place).
     let tracksNow: Tracks | null = null;
@@ -5761,6 +5808,51 @@ export async function perform(
             capped,
             cells,
           };
+        }
+        case "undoUnlock": {
+          /*
+           * Take back an unlock made a moment ago (its toast's Undo): its credits come back and what it
+           * opened locks again, as if it never happened (its ledger lines go, so the day's counts and free
+           * opens come back too). Only within UNLOCK_UNDO_MS, and only while nothing came after it that
+           * could have used what it showed: any later credit line of the member's, a message or an invite.
+           */
+          const at = String(a.at ?? "");
+          const key = `${me.id}|${at}`;
+          const rec = recentUnlocks.get(key);
+          const t0 = Date.parse(at);
+          if (!rec || !Number.isFinite(t0) || nowMs - t0 > UNLOCK_UNDO_MS + UNLOCK_UNDO_GRACE_MS) throw new ActionError(UNDO_TOO_LATE);
+          const lines: number[] = [];
+          s.ledger.forEach((l, i) => l.memberId === me.id && l.reason === "unlock" && l.at === at && lines.push(i));
+          if (!lines.length) throw new ActionError(UNDO_TOO_LATE);
+          const last = Math.max(...lines);
+          const since = (x: string | undefined) => !!x && Date.parse(x) >= t0;
+          if (
+            s.ledger.slice(last + 1).some((l) => l.memberId === me.id) ||
+            (s.seatInvites ?? []).some((x) => x.by === me.id && since(x.at)) ||
+            (s.conversations ?? []).some((c) => (c.a === me.id || c.b === me.id) && c.messages.some((m) => m.by === me.id && since(m.at)))
+          )
+            throw new ActionError(UNDO_AFTER);
+          const back = -lines.reduce((n, i) => n + Math.min(0, s.ledger[i].delta), 0);
+          for (const i of [...lines].sort((x, y) => y - x)) s.ledger.splice(i, 1);
+          const cells: ReturnType<typeof changed>[] = [];
+          for (const k of rec.keys) {
+            const left = (s.unlocks[k] ?? []).filter((m) => m !== me.id);
+            if (left.length) s.unlocks[k] = left;
+            else delete s.unlocks[k];
+            const dot = k.lastIndexOf(".");
+            const id = k.slice(0, dot);
+            const field = k.slice(dot + 1);
+            const co = g.companies.get(id);
+            const eng = g.engagements.get(id);
+            const person = g.contacts.get(id);
+            if (co && field === "identity") cells.push(...[...IDENTITY_FIELDS, "hq"].map((f) => changed("company", co, f)));
+            else if (co) cells.push(changed("company", co, field));
+            // The other half of a bundle shows through it: both halves lock again.
+            else if (eng) for (const f of SEAT_BUNDLE.includes(field) ? SEAT_BUNDLE : [field]) cells.push(changed("engagement", eng, f));
+            else if (person) for (const f of PERSON_BUNDLE.includes(field) ? PERSON_BUNDLE : [field]) cells.push(changed("contact", person, f));
+          }
+          recentUnlocks.delete(key);
+          return { message: back ? `Undone. Your ${back === 1 ? "credit is" : `${back} credits are`} back, and it's locked again.` : "Undone. It's locked again.", cells };
         }
         case "unlock":
         case "unlockMany": {
@@ -7111,6 +7203,21 @@ export async function perform(
                 : `${YOUR_FEATURE} is off. We won't send it by email or Slack. ${FEATURE_NAME} in the app still lists what's new.`,
             };
           }
+          // "Hide my name on my seats": NAME_HIDDEN on every seat of theirs, to everyone else, the connector included.
+          if (typeof a.nameHidden === "boolean") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            if (a.nameHidden) p.nameHidden = true;
+            else delete p.nameHidden;
+            s.profiles[me.id] = p;
+            const rest = (s.namesHidden ?? []).filter((id) => id !== me.id);
+            s.namesHidden = a.nameHidden ? [...rest, me.id] : rest;
+            if (!s.namesHidden.length) delete s.namesHidden;
+            return {
+              message: a.nameHidden
+                ? `Your name is hidden on your seats. Everyone else sees "${NAME_HIDDEN}", and your seats and roles still count.`
+                : "Your name shows on your seats again.",
+            };
+          }
           // "Show me in the Fractionals directory" (Referral partners' switch, `partners`, is the same one now).
           const show = typeof a.fractionals === "boolean" ? a.fractionals : typeof a.partners === "boolean" ? a.partners : null;
           if (show !== null) {
@@ -7418,6 +7525,13 @@ export async function perform(
     };
 
     const out = run();
+    // An unlock that spent credits can be taken back for a moment (undoUnlock): remember what it opened.
+    if (unlocksBefore && !opts.dryRun && !refusal.message && s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && l.delta < 0)) {
+      const keys = Object.keys(s.unlocks).filter((k) => s.unlocks[k] !== unlocksBefore[k] && s.unlocks[k].includes(me.id) && !(unlocksBefore[k] ?? []).includes(me.id));
+      for (const [k, v] of recentUnlocks) if (nowMs - v.at > UNLOCK_UNDO_MS + UNLOCK_UNDO_GRACE_MS) recentUnlocks.delete(k);
+      recentUnlocks.set(`${me.id}|${now}`, { keys, at: nowMs });
+      out.undo = now;
+    }
     // Value in the trial's last days (a warm path unlocked: who held a seat or a person's name; an invite sent) extends it once.
     if (billingLive() && (a.type === "invite" || s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && (l.ref.endsWith(".operator") || l.ref.endsWith(".person") || (l.ref.startsWith("p_") && l.ref.endsWith(".name"))))))
       valueMoment(s, me.id, nowMs);
@@ -7697,6 +7811,8 @@ export const tableInternals = {
   // Closing an account (lib/account.ts): its personal data deleted after CLOSURE_DAYS; the member index rebuilt after a restore.
   purgeMember,
   memberIndexReset: () => void (memberIndexCache = null),
+  // "Hide my name on my seats": who held a seat is never named where it applies.
+  holderNameHidden,
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */

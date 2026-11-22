@@ -13,7 +13,7 @@ import type { LedgerRow, Me, View } from "@/lib/tableTypes";
 import { Brand, IconPlus, IconSearch, IconX, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
-import { Anchored, Sheet, UndoHost, owedText } from "./ui";
+import { Anchored, Sheet, SpendHost, UndoHost, owedText } from "./ui";
 import { PlanPill } from "./Billing";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
@@ -660,6 +660,7 @@ export function TopBar({
     <>
       <HelpHost me={me} contact={contact} emailOn={emailOn} starter={starter} />
       <UndoHost />
+      <SpendHost />
     </>
   );
   const search = (

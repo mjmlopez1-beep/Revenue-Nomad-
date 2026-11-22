@@ -7,6 +7,7 @@
  * that kit, never on this page. Plain words, short sentences.
  */
 import { ContactLine, LegalShell, PRIVACY_VERSION, type Part } from "../legal/LegalShell";
+import { NAME_HIDDEN, seatNameWho } from "@/lib/tableFields";
 
 /** Google's required sentence. Checked word for word by scripts/test-legal.mts. */
 const LU_BEFORE = "Merlin's use and transfer to any other app of information received from Google APIs will adhere to the ";
@@ -283,7 +284,10 @@ export function PrivacyView({ support }: { support: string | null }) {
       body: (
         <ul className="df-bullets">
           <li>Facts you add to a company, a seat or a person become part of the exchange. Other members see them free or for a credit, depending on the fact.</li>
-          <li>The seats you hold, with your name, to members who unlock who held them.</li>
+          <li>
+            The seats you hold, with your name. {seatNameWho()} {seatNameWho(false)} In Your profile or on Your seats, Hide my name on my seats shows them as &ldquo;{NAME_HIDDEN}&rdquo;
+            to every other member and to Claude, and takes you out of the Fractionals directory. Your seats and roles still count.
+          </li>
           <li>
             In the Fractionals directory, your first name and last initial until you choose. You can show your full name, seats and clients, or leave the directory, in Your
             profile. You can also turn off Show me in Referral partners.

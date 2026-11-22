@@ -7,7 +7,7 @@
  * pipeline and Messages too: those are read again after it.
  */
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { post, type Action } from "../ui/shared";
+import { post, type Action, errorText } from "../ui/shared";
 import type { PeerPicks, PeersHome, PeersView } from "@/lib/peersCore";
 import { loadPipeline } from "./pipelineStore";
 
@@ -34,7 +34,7 @@ export function loadPeers(force = false): Promise<void> {
     try {
       const r = await fetch("/api/table?peers=1", { cache: "no-store" });
       const j = await r.json().catch(() => null);
-      if (!r.ok || !j) throw new Error(j?.error || "Peers didn't load. Try again.");
+      if (!r.ok || !j) throw new Error(errorText(r.status, j?.error, "Peers didn't load. Try again."));
       setPeers(j as PeersView);
     } catch (e) {
       failed = e instanceof Error && e.message ? e.message : "We couldn't reach Merlin. Check your connection and try again.";
@@ -75,7 +75,7 @@ export async function loadPicks(company: string, role: string | null, forTeam: b
     const q = new URLSearchParams({ peers: "picks", c: company, ...(role ? { role } : {}), ...(forTeam ? { for: "team" } : {}) });
     const r = await fetch(`/api/table?${q}`, { cache: "no-store" });
     const j = await r.json().catch(() => null);
-    return r.ok && j ? (j as PeerPicks) : { error: j?.error || "That didn't load. Try again." };
+    return r.ok && j ? (j as PeerPicks) : { error: errorText(r.status, j?.error, "That didn't load. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." };
   }

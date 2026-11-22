@@ -1299,3 +1299,50 @@
 .ob-fv-quiet {
   margin: 0;
 }
+
+/* "Hide my name on my seats" under the line that says who sees it (HideNameToggle). */
+.ob-hidename {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  max-width: 40em;
+}
+.ob-hidename-t {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ob-hidename-box {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  color: #fff;
+}
+.ob-hidename-t.on .ob-hidename-box {
+  border-color: var(--pine);
+  background: var(--pine);
+}
+.ob-hidename-t:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.ob-hidename-p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}

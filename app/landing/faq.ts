@@ -3,7 +3,7 @@
  * the landing page and in the app's "Questions and feedback" sheet). Pure, so
  * scripts/test-prices.mts can check what they say about prices.
  */
-import { COMPANY_PRICE_SAY, EARN_CAP, PRO_OPENS_DAILY, REFERRAL_BONUS } from "@/lib/tableFields";
+import { COMPANY_PRICE_SAY, EARN_CAP, NAME_HIDDEN_SAY, PRO_OPENS_DAILY, REFERRAL_BONUS, OPENS_RULE, seatNameWho } from "@/lib/tableFields";
 import { PRICES, TOPUP_CREDITS, TRIAL_LABEL } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
 import { FEATURE_NAME } from "@/lib/radar/types";
@@ -73,7 +73,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What will other members see about me?",
-      "Your name and title show on seats you held, with the role you held there, free to members who can see the company. Keep yourself out of the Fractionals directory and they stay behind a 1 credit lock. Only you can add a seat you held, and only you add facts about it. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.",
+      `Your name shows on seats you held, with the role you held there. ${seatNameWho()} ${seatNameWho(false)} ${NAME_HIDDEN_SAY} Only you can add a seat you held, and only you add facts about it. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.`,
     ],
     [
       "What happens to a rate I share?",
@@ -101,7 +101,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does it cost?",
-      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Other companies are ${COMPANY_PRICE_SAY}. Pro opens companies free, up to ${PRO_OPENS_DAILY} a day plus every company in your ${FEATURE_NAME}: $${PRICES.month} a month or $${PRICES.year} a year. Close adds proposals drafted from your call, sent and signed: $${PRICES.closeMonth} a month or $${PRICES.closeYear} a year. Every new member starts with a ${TRIAL_LABEL}, no card needed, and it ends into Free on its own. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
+      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Other companies are ${COMPANY_PRICE_SAY}. ${OPENS_RULE} Pro is $${PRICES.month} a month or $${PRICES.year} a year. Close adds proposals drafted from your call, sent and signed: $${PRICES.closeMonth} a month or $${PRICES.closeYear} a year. Every new member starts with a ${TRIAL_LABEL}, no card needed, and it ends into Free on its own. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
     ],
   ];
 }

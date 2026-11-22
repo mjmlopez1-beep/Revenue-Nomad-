@@ -8,7 +8,7 @@
  */
 import { useId, useRef, useState } from "react";
 import "../claim/claim.css";
-import { Brand, IconCheck } from "../ui/shared";
+import { Brand, IconCheck, errorText } from "../ui/shared";
 
 const NAME_RE = /^\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'’.-]*)+$/u;
 
@@ -33,7 +33,7 @@ export function RemoveView() {
     try {
       const r = await fetch("/api/table/names", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "forget", name: n, company: c }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) setError(j.error || "That didn't go through. Try again.");
+      if (!r.ok) setError(errorText(r.status, j.error, "That didn't go through. Try again."));
       else {
         setDone(j.message || "Done.");
         setTimeout(() => head.current?.focus());

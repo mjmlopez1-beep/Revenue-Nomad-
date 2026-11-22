@@ -219,7 +219,7 @@ async function main() {
   const cost = fq.get("What does it cost?") ?? "";
   check(
     "Questions: Free opens one Crystal Ball company a day, Pro every company in it",
-    /open one company a day from your Crystal Ball for free, with everything on it/.test(cost) && /Pro opens companies free, up to 15 a day plus every company in your Crystal Ball/.test(cost) && !/unlock one company a day for free/.test(cost),
+    /open one company a day from your Crystal Ball for free, with everything on it/.test(cost) && /On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that\./.test(cost) && !/unlock one company a day for free/.test(cost),
     cost,
   );
   // Fellow fractionals are free (PEERS_FREE).

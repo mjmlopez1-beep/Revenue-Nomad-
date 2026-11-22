@@ -147,8 +147,7 @@ img {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
-/* On pine and ink the volt itself is the ring. */
-.tp-top,
+/* On pine and ink the volt itself is the ring. (Not the top bar: it is white, where volt doesn't show.) */
 .nm-card,
 .toast,
 .lp-nav,
@@ -506,6 +505,14 @@ button.lock {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+/* The price at rest, beside the lock: a click is never a surprise (it is the label's price, quieter). */
+.lock-price {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--t);
 }
 .lock-mask {
   display: block;
@@ -989,6 +996,24 @@ span.locked-site {
 .btn-volt:active {
   background: var(--volt-hover);
   border-color: var(--volt-hover);
+}
+/* A volt button's ring is pine, so it shows beside the volt (white on the pine and ink surfaces). */
+.btn-volt:focus-visible {
+  outline: 2px solid var(--pine);
+  outline-offset: 2px;
+}
+.nm-card .btn-volt:focus-visible,
+.toast .btn-volt:focus-visible,
+.lp-nav .btn-volt:focus-visible,
+.lp-hero .btn-volt:focus-visible,
+.lp-final .btn-volt:focus-visible {
+  outline-color: #fff;
+}
+/* Phones: a focused control is never hidden under the tab bar. */
+@media (max-width: 767px) {
+  html {
+    scroll-padding-bottom: 72px;
+  }
 }
 .btn-outline {
   background: var(--surface);

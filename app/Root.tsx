@@ -262,6 +262,8 @@ if (typeof window !== "undefined") {
 
 /** An admin removing everything a member added changes records all over the table: wait for the full view. */
 const FULL_REFRESH = new Set(["adminRemoveMember"]);
+/** After the first screen, a full view that failed is tried again after these waits, then the page says so (fullFailed). */
+const FULL_RETRY_MS = [2000, 5000, 15000];
 /** Other members' changes show within this long of an action (or of coming back to the tab). */
 const REFRESH_EVERY = 60_000;
 /**
@@ -342,6 +344,12 @@ function App() {
   const [view, setView] = useState<View | null>(null);
   /** Why the first load failed (nothing on screen yet). */
   const [failed, setFailed] = useState<{ text: string; status: number } | null>(null);
+  /**
+   * The full view failed after the first screen drew: tried again after 2, 5 and 15 seconds, then
+   * the pages that wait for it say so with Try again (never "Loading all companies…" for good).
+   */
+  const [fullFailed, setFullFailed] = useState(false);
+  const fullTries = useRef(0);
   // A ?k= sign-in link that failed: the landing page opens Sign in with this message.
   const [signInError, setSignInError] = useState<string | null>(null);
   // A link to a conversation (?p=messages, from a message email). Signed out, Sign in opens with a note.
@@ -441,6 +449,18 @@ function App() {
           void refreshRef.current();
         }, Math.min(r.retryAfter, 120) * 1000);
       }
+      // The first screen is up and the full view is owed: try again after 2, 5 and 15 seconds, then say so with Try again.
+      if (loaded.current && waitingView.current) {
+        const k = fullTries.current++;
+        if (k < FULL_RETRY_MS.length) {
+          if (!retry.current)
+            retry.current = setTimeout(() => {
+              retry.current = null;
+              void refreshRef.current();
+            }, FULL_RETRY_MS[k]);
+        } else setFullFailed(true);
+        return;
+      }
       if (!loaded.current) setFailed({ text: r.error, status: r.status });
       else if (r.status === 503 && !toldBusy.current) {
         toldBusy.current = true;
@@ -451,6 +471,8 @@ function App() {
     toldBusy.current = false;
     loaded.current = true;
     lastLoad.current = Date.now();
+    fullTries.current = 0;
+    setFullFailed(false);
     writeHint(!!r.view.me);
     setFailed(null);
     const v = r.view;
@@ -615,7 +637,7 @@ function App() {
       // Follow flips at once; the answer brings the company as the server now has it.
       const flip = a.type === "follow" ? a : null;
       if (flip) setView((v) => (v ? { ...v, companies: v.companies.map((c) => (c.id === flip.companyId ? { ...c, following: flip.on } : c)) } : v));
-      const r = await post<{ message: string; id?: string; capped?: boolean; moves?: ActResult["moves"] } & ActPatch>({ action: a });
+      const r = await post<{ message: string; id?: string; capped?: boolean; moves?: ActResult["moves"]; undo?: string } & ActPatch>({ action: a });
       if (r.error) {
         // Already unlocked for this member, from another device or tab: no mistake. A calm word, and the table as it is now.
         if (alreadyOpen(r.error)) {
@@ -636,9 +658,12 @@ function App() {
       else {
         // The answer carries what changed: show it, and download the table again only when others changed it too (settle).
         setView((v) => (v ? patchView(v, r) : v));
+        // An unlock taken back: its lines leave the credit history too.
+        const undone = a.type === "undoUnlock" ? a.at : null;
+        if (undone) setView((v) => (v ? { ...v, ledger: v.ledger.filter((l) => l.at !== undone) } : v));
         settle(r);
       }
-      return { ok: true, message: r.message, id: r.id, capped: r.capped, ...(r.moves ? { moves: r.moves } : {}) };
+      return { ok: true, message: r.message, id: r.id, capped: r.capped, ...(r.moves ? { moves: r.moves } : {}), ...(r.undo ? { undo: r.undo } : {}) };
     },
     [refresh, settle, sync, toast],
   );
@@ -725,7 +750,13 @@ function App() {
   // Picked once: switching from the dynamic wrapper to the component itself later would mount the app again.
   postRef.current ??= tradingPostNow ?? TradingPost;
   const Post = postRef.current;
-  return <Post view={view} act={act} refresh={refresh} signOut={signOut} start={start} partial={partial} onDrawn={partial ? onDrawn : undefined} />;
+  // The full view didn't come after its retries: Try again starts them over.
+  const retryFull = () => {
+    fullTries.current = 0;
+    setFullFailed(false);
+    sync();
+  };
+  return <Post view={view} act={act} refresh={refresh} signOut={signOut} start={start} partial={partial} onDrawn={partial ? onDrawn : undefined} fullFailed={partial && fullFailed ? retryFull : null} />;
 }
 
 export default function Root() {

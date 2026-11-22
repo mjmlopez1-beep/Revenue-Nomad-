@@ -278,6 +278,12 @@ export const COMPANY_PRICE_SAY = `${COMPANY_PRICE} credits`;
  * from Crystal Ball don't count and stay free. Past it a company is COMPANY_PRICE again until tomorrow.
  */
 export const PRO_OPENS_DAILY = 15;
+/**
+ * The one description of the free opens, everywhere it is said (Home, Credits, the unlock toasts,
+ * onboarding, the landing page): lib/table.ts proOpens is Pro, Close and the trial (hasPro), up to
+ * PRO_OPENS_DAILY a UTC day, and a company opened from Crystal Ball is not counted (fromBall).
+ */
+export const OPENS_RULE = `On Pro, Close and the trial, any company opens free, up to ${PRO_OPENS_DAILY} a day, and your Crystal Ball companies don't count toward that.`;
 /** Said at a company once today's free opens on Pro are used. */
 export const PRO_OPENS_USED = `You've opened ${PRO_OPENS_DAILY} companies today. More open tomorrow, or use ${COMPANY_PRICE_SAY}.`;
 /**
@@ -286,6 +292,22 @@ export const PRO_OPENS_USED = `You've opened ${PRO_OPENS_DAILY} companies today.
  * costs a credit. Contact details and the company's own people keep their price.
  */
 export const PEERS_FREE = true;
+/** Who held a seat, for a member who hides their name on their seats (Profile.nameHidden): every view, the connector included. */
+export const NAME_HIDDEN = "A fractional (name hidden)";
+/**
+ * Who sees a member's name on their seats, said the same way in onboarding, Your seats, the
+ * directory switch, the Questions and the Privacy page. Read from PEERS_FREE, so the words follow
+ * the rule. `inDirectory`: the member's directory choice (true in, false out, null not chosen).
+ */
+export function seatNameWho(inDirectory: boolean | null = null): string {
+  if (!PEERS_FREE) return "Other members see your name on a seat after they spend 1 credit on it.";
+  if (inDirectory === true) return "Every member sees your name on your seats, free, because you're in the Fractionals directory.";
+  if (inDirectory === false)
+    return "Out of the directory, your name on a seat costs other members 1 credit once they can see the company.";
+  return "Fellow fractionals see your name on a seat for free once they can see that company.";
+}
+/** What hiding your name does, in one place. */
+export const NAME_HIDDEN_SAY = `Hide your name and your seats read "${NAME_HIDDEN}" to everyone, Claude included. Your seats and roles still count.`;
 
 /*
  * Finding a company by its exact name or website (the action "find", GET /api/table?find=): it

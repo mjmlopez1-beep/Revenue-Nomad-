@@ -63,7 +63,8 @@ export interface Ui {
    * the server checks it is in their Crystal Ball. Resolves true when it worked.
    */
   unlock: (t: FactRef, opts?: { onWall?: () => void; from?: "crystal" }) => Promise<boolean> | void;
-  unlockMany: (items: FactRef[]) => Promise<boolean>;
+  /** `confirmed`: the caller already asked the member (Unlock all's own question). `cost`: what the caller says it costs. */
+  unlockMany: (items: FactRef[], opts?: { confirmed?: boolean; cost?: number }) => Promise<boolean>;
   /** Open the fact editor on an element. With `initial`, it edits the member's own value. */
   edit: (el: HTMLElement, t: FactRef, initial?: string) => void;
   /** `memberId` (seat holder only) links the seat to a member picked in SeatHolderInput. */
@@ -86,6 +87,17 @@ export interface Ui {
   contact: { support: string | null; intro: string | null } | null;
   /** Share or copy the member's invite link (the zero-credits sheet offers it). */
   invite?: () => void;
+}
+
+/**
+ * One filled button a view: in a list of cards that each have a primary button (Home's moves,
+ * Crystal Ball's rows, Peers), the first stays pine and the rest are outline. A list item past the
+ * first sets this; the buttons inside read their tone with usePine.
+ */
+export const SecondaryCtx = createContext(false);
+/** "btn-pine", or "btn-outline" inside a list item past the first (SecondaryCtx). */
+export function usePine(): "btn-pine" | "btn-outline" {
+  return useContext(SecondaryCtx) ? "btn-outline" : "btn-pine";
 }
 
 /** Said on an empty seat fact to anyone but the seat holder. */
@@ -432,9 +444,10 @@ function Lock({
   const more = ver > 0 ? ` Confirmed by ${plural(ver, "member")}.` : from && FROM_SAY[from] ? ` ${FROM_SAY[from]}.` : "";
   return (
     <button type="button" className={`lock${busy ? " busy" : ""}${later ? " later" : ""}${broke ? " broke" : ""}`} title={`${say}.${more}`} aria-label={busy ? "Unlocking" : say} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
+      {/* At rest the price shows too (never on hover alone), so a click never spends by surprise. */}
       <span className="lock-rest" aria-hidden>
         <IconLock />
-        <span className="lock-mask" />
+        {later ? <span className="lock-mask" /> : <span className="lock-price">{broke ? earn : cost === 0 ? "Free" : creditsSay(cost)}</span>}
       </span>
       <span className="lock-cta" aria-hidden>
         <IconLock />
@@ -1234,6 +1247,110 @@ export function UndoHost() {
       </button>
     </div>,
     host,
+  );
+}
+
+/* ---------- asking before a spend ---------- */
+
+/*
+ * Credits are instant, so a curious click must never spend by surprise. The member's first spend
+ * in a session, and any single spend of 2 credits or more, asks first in a small popover by the
+ * button: what it opens and the balance after. Every spend can be undone from its toast for
+ * UNDO_MS (TradingPost's unlock, the server's undoUnlock).
+ */
+const SPENT_KEY = "tp_spent_session";
+let spentMem = false;
+/** The member spent a credit in this session (this tab) already. */
+export function spentThisSession(): boolean {
+  try {
+    return spentMem || window.sessionStorage.getItem(SPENT_KEY) === "1";
+  } catch {
+    return spentMem;
+  }
+}
+export function markSpent(): void {
+  spentMem = true;
+  try {
+    window.sessionStorage.setItem(SPENT_KEY, "1");
+  } catch {}
+}
+/** A spend of `cost` credits asks first: the session's first spend, or 2 credits or more at once. */
+export const needsSpendConfirm = (cost: number) => cost > 0 && (cost >= 2 || !spentThisSession());
+
+/** What an unlock opens, in the question before it ("this company's name, website and job postings"). */
+export function spendWhat(t: FactRef): string {
+  if (t.field === "identity") return "this company's name, website and job postings";
+  if (t.entity === "contact" && (t.field === "name" || t.field === "title")) return "this person's name and title";
+  if (t.entity === "contact" && t.field === "email") return "their email";
+  if (t.entity === "contact" && t.field === "phone") return "their phone number";
+  if (t.entity === "contact" && t.field === "linkedin") return "their LinkedIn";
+  if (t.entity === "engagement" && (t.field === "operator" || t.field === "role")) return "who held this seat and their role";
+  if (t.entity === "engagement" && (t.field === "posting" || t.field === "rate" || t.field === "hours")) return "the job posting and its posted rate";
+  return factWhat(t);
+}
+
+type SpendAsk = { id: number; cost: number; what: string; credits: number; anchor: HTMLElement | null; resolve: (ok: boolean) => void };
+let askNow: SpendAsk | null = null;
+const askSubs = new Set<() => void>();
+const askSet = (x: SpendAsk | null) => {
+  askNow = x;
+  askSubs.forEach((f) => f());
+};
+/** The control the member last pressed: where the question opens (Safari doesn't focus a pressed button). */
+let lastPress: HTMLElement | null = null;
+const pressable = (el: Element | null) => (el?.closest?.("button, [role='button'], a") as HTMLElement | null) ?? null;
+/**
+ * Ask before a spend: resolves true on Unlock, false on Not now (Esc, a tap outside). The popover
+ * opens by the control that asked (the focused or last pressed button). Mount SpendHost once.
+ */
+export function askSpend(x: { cost: number; what: string; credits: number }): Promise<boolean> {
+  askNow?.resolve(false);
+  const active = typeof document !== "undefined" && document.activeElement !== document.body ? pressable(document.activeElement) : null;
+  const anchor = active ?? (lastPress?.isConnected ? lastPress : null);
+  return new Promise((resolve) => askSet({ id: Date.now() + Math.random(), ...x, anchor, resolve }));
+}
+
+/** The question before a spend. Mount it once (the top bar does). */
+export function SpendHost() {
+  const x = useSyncExternalStore(
+    (f) => (askSubs.add(f), () => askSubs.delete(f)),
+    () => askNow,
+    () => null,
+  );
+  useEffect(() => {
+    const press = (e: PointerEvent) => {
+      const b = pressable(e.target as Element | null);
+      if (b && !b.closest(".tp-spend")) lastPress = b;
+    };
+    document.addEventListener("pointerdown", press, true);
+    return () => document.removeEventListener("pointerdown", press, true);
+  }, []);
+  if (!x) return null;
+  const answer = (ok: boolean) => {
+    if (askNow?.id !== x.id) return;
+    askSet(null);
+    x.resolve(ok);
+  };
+  const after = Math.max(0, x.credits - x.cost);
+  const anchor = x.anchor?.isConnected ? x.anchor : (document.querySelector(".tp-top") as HTMLElement | null);
+  if (!anchor) return null;
+  return (
+    <Anchored anchor={anchor} width={320} onClose={() => answer(false)} className="tp-spend" labelledBy={`tp-spend-${x.id}`}>
+      <p className="tp-spend-q" id={`tp-spend-${x.id}`}>
+        Spend {plural(x.cost, "credit")} of your {x.credits} to see {x.what}?
+      </p>
+      <p className="tp-spend-after">
+        You&apos;ll have <span className="num">{plural(after, "credit")}</span> left, and you can undo it for 10 seconds.
+      </p>
+      <div className="tp-spend-acts">
+        <button type="button" className="btn" onClick={() => answer(false)}>
+          Not now
+        </button>
+        <button type="button" className="btn btn-pine" autoFocus onClick={() => answer(true)}>
+          Unlock · <span className="num">{plural(x.cost, "credit")}</span>
+        </button>
+      </div>
+    </Anchored>
   );
 }
 

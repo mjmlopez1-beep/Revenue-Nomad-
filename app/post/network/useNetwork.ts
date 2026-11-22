@@ -8,6 +8,7 @@
  */
 import { useEffect, useState } from "react";
 import type { NetCompanyView, NetworkAnswer, NetworkView } from "@/lib/google/types";
+import { errorText } from "../../ui/shared";
 
 type Snap = { answer: NetworkAnswer | null; failed: boolean };
 let snap: Snap = { answer: null, failed: false };
@@ -48,7 +49,7 @@ export async function netAct(op: NetOp, more: Record<string, string> = {}): Prom
     const r = await fetch("/api/integrations/google", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...more, op }) });
     const j = (await r.json().catch(() => ({}))) as { view?: NetworkAnswer; message?: string; error?: string };
     if (j.view) set(j.view);
-    return r.ok ? { message: j.message } : { error: j.error || "That didn't go through. Try again." };
+    return r.ok ? { message: j.message } : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." };
   }

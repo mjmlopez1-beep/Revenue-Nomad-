@@ -21,7 +21,7 @@
  */
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Me, PlanView, View } from "@/lib/tableTypes";
-import { IconCheck, IconLock, IconX, useToast } from "../ui/shared";
+import { IconCheck, IconLock, IconX, useToast, errorText } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
@@ -371,7 +371,7 @@ export function AiPackLine({ plan }: { plan: PlanView }) {
       const r = await fetch("/api/billing/ai-pack", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
       const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
       if (j.url) return window.location.assign(j.url);
-      toast(j.error ?? "That didn't go through. Try again in a moment.", true);
+      toast(errorText(r.status, j.error, "That didn't go through. Try again in a moment."), true);
     } catch {
       toast("We couldn't reach Merlin. Check your connection and try again.", true);
     }

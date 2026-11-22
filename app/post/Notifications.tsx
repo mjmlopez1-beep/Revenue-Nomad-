@@ -17,7 +17,7 @@
  * off in Pilot metrics, or email not set up, nothing goes out whatever is picked here.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { IconChevron, useToast } from "../ui/shared";
+import { IconChevron, useToast, errorText } from "../ui/shared";
 import { useUi } from "./ui";
 import { ProLock, ProTag, planDay } from "./Billing";
 import type { View } from "@/lib/tableTypes";
@@ -73,7 +73,7 @@ async function integrations(body?: Record<string, unknown>): Promise<{ view?: In
   try {
     const r = await fetch("/api/integrations", body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
     const j = (await r.json().catch(() => ({}))) as { view?: IntegrationsView; error?: string };
-    return r.ok ? j : { error: j.error || "That didn't go through. Try again." };
+    return r.ok ? j : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." };
   }

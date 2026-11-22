@@ -19,7 +19,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { KNOWN_WORDS, monthName, type CircleRec, type LeadRec, type PeerRec, type TeamRec } from "@/lib/peersCore";
 import { IconChevron, IconUsers, timeAgo, useToast } from "../ui/shared";
-import { useUi } from "./ui";
+import { useUi, SecondaryCtx, usePine } from "./ui";
 import { ConnectButton, openConversation } from "./Messages";
 import { Avatar, PassSheet, TeamSheet, TeamSpace } from "./PeerSheets";
 import { peersAct, takePeersWant, usePeers } from "./peersStore";
@@ -53,6 +53,13 @@ export function PeersPage({ infos, waiting, all, onAll, onProfile, openCompany }
   const openTeam = view?.teams.find((t) => t.id === space) ?? null;
   const newLeads = view?.inbox.filter((l) => l.status === "new") ?? [];
   const asks = view?.teams.filter((t) => !t.invited && t.status === "invited") ?? [];
+  // One filled button on the page: the first card's (in the order drawn). Every card after it is outline (SecondaryCtx).
+  let lead = true;
+  const later = () => {
+    const was = !lead;
+    lead = false;
+    return was;
+  };
   return (
     <div className="page-wide pe-page">
       <PageHead title="Peers" lead={<>Fractionals to do your best work with. Pass a lead that isn&apos;t your fit, team up on a pitch, and keep a small circle close.</>} art={<Prop name="camp" height={72} on="bg" />} />
@@ -81,10 +88,14 @@ export function PeersPage({ infos, waiting, all, onAll, onProfile, openCompany }
               </h2>
               <ul className="pe-leads">
                 {newLeads.map((l) => (
-                  <LeadCard key={l.id} l={l} focus={l.id === focusLead} openCompany={openCompany} />
+                  <SecondaryCtx.Provider key={l.id} value={later()}>
+                    <LeadCard l={l} focus={l.id === focusLead} openCompany={openCompany} />
+                  </SecondaryCtx.Provider>
                 ))}
                 {asks.map((t) => (
-                  <TeamAsk key={t.id} t={t} onOpen={() => setSpace(t.id)} />
+                  <SecondaryCtx.Provider key={t.id} value={later()}>
+                    <TeamAsk t={t} onOpen={() => setSpace(t.id)} />
+                  </SecondaryCtx.Provider>
                 ))}
               </ul>
             </section>
@@ -98,7 +109,9 @@ export function PeersPage({ infos, waiting, all, onAll, onProfile, openCompany }
             {view.know.length ? (
               <ul className="pe-grid">
                 {view.know.map((r) => (
-                  <PeerCard key={r.id} r={r} infos={infos} />
+                  <SecondaryCtx.Provider key={r.id} value={later()}>
+                    <PeerCard r={r} infos={infos} />
+                  </SecondaryCtx.Provider>
                 ))}
               </ul>
             ) : (
@@ -116,7 +129,9 @@ export function PeersPage({ infos, waiting, all, onAll, onProfile, openCompany }
             {view.serve.length ? (
               <ul className="pe-grid">
                 {view.serve.map((r) => (
-                  <PeerCard key={r.id} r={r} infos={infos} />
+                  <SecondaryCtx.Provider key={r.id} value={later()}>
+                    <PeerCard r={r} infos={infos} />
+                  </SecondaryCtx.Provider>
                 ))}
               </ul>
             ) : (
@@ -181,6 +196,7 @@ export function PeersPage({ infos, waiting, all, onAll, onProfile, openCompany }
 /* ---------- a person ---------- */
 
 function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
+  const pine = usePine();
   const ui = useUi();
   const toast = useToast();
   const [sheet, setSheet] = useState<"pass" | "team" | null>(null);
@@ -234,7 +250,7 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
       <div className="pe-card-acts">
         {r.memberId ? (
           <>
-            <ConnectButton member={{ id: r.memberId, first: r.first }} conversationId={r.thread?.id ?? null} label="Message" className="btn btn-sm btn-pine" />
+            <ConnectButton member={{ id: r.memberId, first: r.first }} conversationId={r.thread?.id ?? null} label="Message" className={`btn btn-sm ${pine}`} />
             <button type="button" className="btn btn-sm" onClick={() => setSheet("pass")}>
               Pass a lead
             </button>
@@ -252,7 +268,7 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
             </button>
           </>
         ) : r.invite ? (
-          <a className="btn btn-sm btn-pine" href={r.invite.path} onClick={(e) => (e.preventDefault(), ui.openPage("fractionals"))}>
+          <a className={`btn btn-sm ${pine}`} href={r.invite.path} onClick={(e) => (e.preventDefault(), ui.openPage("fractionals"))}>
             Invite to connect
           </a>
         ) : (
@@ -270,6 +286,7 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
 /* ---------- leads ---------- */
 
 function LeadCard({ l, focus, openCompany }: { l: LeadRec; focus?: boolean; openCompany: (id: string) => void }) {
+  const pine = usePine();
   const ui = useUi();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -311,7 +328,7 @@ function LeadCard({ l, focus, openCompany }: { l: LeadRec; focus?: boolean; open
         <div className="pe-row">
           {!mine && l.status === "new" && (
             <>
-              <button type="button" className="btn btn-sm btn-pine" aria-busy={busy === "take"} onClick={() => void answer(true)}>
+              <button type="button" className={`btn btn-sm ${pine}`} aria-busy={busy === "take"} onClick={() => void answer(true)}>
                 Take it
               </button>
               <button type="button" className="btn btn-sm" aria-busy={busy === "no"} onClick={() => void answer(false)}>
@@ -334,6 +351,7 @@ function LeadCard({ l, focus, openCompany }: { l: LeadRec; focus?: boolean; open
 }
 
 function TeamAsk({ t, onOpen }: { t: TeamRec; onOpen: () => void }) {
+  const pine = usePine();
   return (
     <li className="pe-lead pe-lead-new">
       <Avatar name={t.with.name} small />
@@ -348,7 +366,7 @@ function TeamAsk({ t, onOpen }: { t: TeamRec; onOpen: () => void }) {
           {timeAgo(t.at)}
         </p>
         <div className="pe-row">
-          <button type="button" className="btn btn-sm btn-pine" onClick={onOpen}>
+          <button type="button" className={`btn btn-sm ${pine}`} onClick={onOpen}>
             See the team space
           </button>
         </div>
