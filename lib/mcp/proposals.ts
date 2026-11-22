@@ -8,6 +8,12 @@
  *   get_proposal                 the member's own proposals, or one with its filled text, blanks, checklist, risk flags and rates
  *   create_or_update_proposal    blocks and fields, and the lines from a call the member agreed to keep
  *   send_proposal_for_signature  asks first, like unlock: without confirm it sends nothing and says what would go out
+ *   draft_proposal_from_call     a draft from a call's transcript the client already has (from Granola or anywhere),
+ *                                or a Granola note id Merlin reads itself: read by Merlin's rules, never kept, with
+ *                                the blanks to settle and where each part came from
+ *   change_proposal              a change in plain words: the sections that change, a line each and the numbers
+ *                                checked; saved as a new version only with apply: true (the one before is kept)
+ *   send_document_for_signature  a contract uploaded in Merlin, its fields placed: asks first, like the proposal's
  *
  * The flow it is built for: the member says "use my XYZ template in Merlin and draft a proposal for
  * Acme from my call with Dana" to their Claude, with their meeting notes (Granola, Drive) connected.
@@ -29,6 +35,12 @@ import { publicBase } from "../links";
 import type { ProposalBlock, ProposalRec } from "../proposals/types";
 import { SENDER_DUTY } from "../proposals/types";
 import { memberView } from "./view";
+import { DISCOVERY_TARGET as TARGET, acceptInto, fieldLabel } from "../proposals/library";
+import { extract, MAX_TRANSCRIPT } from "../proposals/extract";
+import { readTerms } from "../proposals/startCall";
+import { CHANGE_CONSENT, CHANGE_OFF, acceptChange, checkChange, proposeChange, type ChangeProposal } from "../proposals/change";
+import { aiConfigured } from "../proposals/aiConfig";
+import { getDocument, sendDocument, notReadyOf } from "../documents/store";
 import { ToolProblem, type Ctx, type ToolOut } from "./tools";
 
 type Run = (ctx: Ctx, work: () => Promise<ToolOut>) => Promise<CallToolResult>;
@@ -277,9 +289,195 @@ export async function sendForSignature(ctx: Ctx, a: { proposal_id: string; signe
   return { confirmed: true, message: r.message, proposal_id: p.id, version: r.proposal.version, status: r.proposal.status, document_sha256: r.proposal.send?.hash };
 }
 
+/* ---------- from a call, changes by talking, contracts ---------- */
+
+/**
+ * Reading a Granola note's transcript on Merlin's side (lib/granola, when the member connected
+ * Granola in Integrations). Set where that connection lives; until then a note id is refused in
+ * words and the transcript text is asked for instead.
+ */
+export type GranolaTranscript = (memberId: string, noteId: string) => Promise<{ transcript: string; attendees?: { name?: string; email?: string }[]; when?: string } | null>;
+let granola: GranolaTranscript | null = null;
+export const setGranolaTranscript = (fn: GranolaTranscript | null) => void (granola = fn);
+
+/** A template by id, or by the name the member said ("my assessment template"). */
+async function templateIdOf(ctx: Ctx, raw: string | undefined): Promise<string | null> {
+  const t = raw?.trim() || null;
+  if (!t || /^mt_/.test(t) || TEMPLATES.some((x) => x.id === t) || t === "blank") return t === "blank" ? null : t;
+  const q = t.toLowerCase().replace(/\b(my|the|template)\b/g, "").replace(/\s+/g, " ").trim();
+  const mine = templatesOf(await loadState(), ctx.member.id);
+  const hit = mine.find((x) => x.title.toLowerCase().includes(q) || x.fileName.toLowerCase().includes(q)) ?? TEMPLATES.find((x) => x.title.toLowerCase().includes(q) || x.id.includes(q.replace(/\s+/g, "-")));
+  if (!hit) {
+    const v = await wrap(() => listProposals(ctx.member.token, ctx.origin));
+    throw new ToolProblem(`No template called "${raw}". Theirs and ours: ${v.templates.map((x) => `${x.title} (${x.id})`).join("; ")}.`);
+  }
+  return hit.id;
+}
+
+export interface FromCallArgs {
+  transcript?: string;
+  granola_note_id?: string;
+  template?: string;
+  company_id?: string;
+  company_name?: string;
+  call_date?: string;
+  signer?: { name: string; email?: string; title?: string };
+}
+
+/** A draft from a call: Merlin's own rules read it (no model), the lines found and what was agreed fill the template. */
+export async function draftFromCall(ctx: Ctx, a: FromCallArgs): Promise<ToolOut> {
+  let transcript = typeof a.transcript === "string" ? a.transcript : "";
+  let callWith: { name?: string; email?: string } | undefined;
+  if (!transcript.trim() && a.granola_note_id) {
+    if (!granola) throw new ToolProblem("Merlin can't read Granola notes for this member yet. Read the call in Granola yourself and pass its text as transcript.");
+    const got = await granola(ctx.member.id, String(a.granola_note_id));
+    if (!got?.transcript?.trim()) throw new ToolProblem("That Granola note has no transcript Merlin can read. Pass the call's text as transcript instead.");
+    transcript = got.transcript;
+    callWith = got.attendees?.find((x) => x.email?.toLowerCase() !== ctx.member.email.toLowerCase() && x.name);
+  }
+  // Read here for this call only: never stored, never logged. Only the lines found are kept.
+  transcript = transcript.replace(/\r\n?/g, "\n").slice(0, MAX_TRANSCRIPT);
+  if (transcript.trim().length < 40) throw new ToolProblem("Pass the call's transcript (or the notes on what was agreed) as transcript, or a granola_note_id. A few words isn't enough to draft from.");
+  const templateId = await templateIdOf(ctx, a.template);
+  const ex = extract(transcript, ctx.member.name);
+  const terms = readTerms(transcript);
+  let fields: Record<string, string> = {};
+  let notes: { key: string; text: string; at: string }[] = [];
+  const per = new Map<string, number>();
+  const at = new Date().toISOString();
+  for (const s of ex.suggestions) {
+    const target = TARGET[s.key];
+    const k = target ?? s.key;
+    if ((per.get(k) ?? 0) >= (target ? 3 : 2) || !s.buyer) continue;
+    per.set(k, (per.get(k) ?? 0) + 1);
+    const r = acceptInto(fields, notes, s.key, s.text, at);
+    fields = r.fields;
+    notes = r.notes;
+  }
+  fields = { ...fields, ...terms.fields };
+  if (a.call_date) fields["discovery.callDate"] = String(a.call_date).slice(0, 40);
+  const signer = a.signer?.name ? a.signer : callWith?.name ? { name: callWith.name, ...(callWith.email ? { email: callWith.email } : {}) } : null;
+  if (signer?.name) fields["client.signerName"] = signer.name;
+  if (signer?.title) fields["client.signerTitle"] = signer.title;
+  const p = await wrap(() =>
+    createProposal(
+      ctx.member.token,
+      { templateId, companyId: a.company_id, companyName: a.company_name, fields, notes, signerOnCall: ex.signerOnCall, ...(signer?.email ? { signer: { name: signer.name, email: signer.email, ...(signer.title ? { title: signer.title } : {}) } } : {}), source: "discovery" },
+      ctx.origin,
+    ),
+  );
+  const out = await proposalOut(ctx, p);
+  const blanks = out.blanks as string[];
+  const fromCall = Object.keys(p.fields).filter((k) => p.sources[k] === "discovery" && !k.startsWith("client.signer"));
+  const fromMerlin = Object.keys(p.fields).filter((k) => p.sources[k] === "record" || p.sources[k] === "pipeline" || p.sources[k] === "profile");
+  return {
+    saved: true,
+    ...out,
+    blanks_to_settle: blanks.map((k) => ({ key: k, label: fieldLabel(k) })),
+    things_to_check: [...terms.checks, ...(signer?.email ? [] : ["Who signs, with their email: the call didn't give it."])],
+    sources: {
+      the_call: fromCall.map((k) => ({ key: k, label: fieldLabel(k), value: p.fields[k] })),
+      the_template: p.templateId ? `Section order and starting text from "${p.title.split(" for ")[0]}"` : "A blank page",
+      merlin: fromMerlin.map((k) => ({ key: k, label: fieldLabel(k) })),
+    },
+    transcript_kept: false,
+    next: "Show the member the draft and ask them to settle each blank (never guess one). Rewrite the sections in their voice from the call if they want (get_proposal_kit has the guidance), save with create_or_update_proposal or change_proposal, then send_proposal_for_signature (it asks first).",
+  };
+}
+
+export interface ChangeArgs {
+  proposal_id: string;
+  instruction?: string;
+  sections?: { section_id?: string; title?: string; body: string; summary?: string }[];
+  fields?: Record<string, string>;
+  apply?: boolean;
+  member_agreed?: boolean;
+}
+
+const changeOut = (c: ChangeProposal) => ({
+  changes: c.changes.map((x) => ({ section_id: x.id, title: x.title, summary: `${x.title} ${x.summary}`, body: x.body })),
+  fields: c.fields,
+  numbers_checked: c.check.line,
+  numbers_ok: c.check.ok,
+  ...(c.check.problems.length ? { problems: c.check.problems } : {}),
+});
+
+/** A change in plain words, or sections the client rewrote: shown, checked, and saved as a new version only with apply. */
+export async function changeProposalTool(ctx: Ctx, a: ChangeArgs): Promise<ToolOut> {
+  const token = ctx.member.token;
+  const p = await wrap(() => getProposal(token, String(a.proposal_id ?? ""), ctx.origin));
+  let c: ChangeProposal;
+  if (a.sections?.length || (a.fields && Object.keys(a.fields).length)) {
+    c = await wrap(() => checkChange(token, p.id, { changes: (a.sections ?? []).map((x) => ({ id: x.section_id ?? x.title, title: x.title, body: x.body, summary: x.summary })), fields: a.fields ?? {}, instruction: a.instruction }));
+  } else {
+    if (!a.instruction?.trim()) throw new ToolProblem("Send instruction (what to change, in plain words), or the rewritten sections.");
+    if (!aiConfigured())
+      return {
+        changed: false,
+        applied: false,
+        message: `${CHANGE_OFF} So write the changed sections yourself.`,
+        sections: p.blocks.map((b) => ({ section_id: b.id, title: b.title, body: b.body })),
+        fields: p.fields,
+        next: "Rewrite only the sections the instruction needs, in the member's voice, keeping {{keys}} and making totals, terms and dates agree. Call change_proposal again with sections (section_id, title, body, summary) and without apply to show the member the change and the numbers check; with apply: true once they say yes.",
+      };
+    try {
+      c = await proposeChange(token, p.id, { instruction: a.instruction, agree: a.member_agreed === true });
+    } catch (e) {
+      if (e instanceof ProposalProblem && e.status === 428) return { changed: false, applied: false, message: CHANGE_CONSENT, next: "Ask the member if that's all right. If they say yes, call again with member_agreed: true." };
+      throw e instanceof ProposalProblem ? new ToolProblem(e.upgrade ? `${e.message} ${e.upgrade}` : e.message) : e;
+    }
+    if (!c.changes.length && !Object.keys(c.fields).length) return { changed: false, applied: false, message: c.unclear ?? "Nothing to change for that." };
+  }
+  if (!c.changes.length && !Object.keys(c.fields).length) return { changed: false, applied: false, message: "The sections read the same as they do now: nothing to change." };
+  if (a.apply !== true)
+    return {
+      changed: true,
+      applied: false,
+      ...changeOut(c),
+      next: "Show the member each section's summary and the numbers check. Nothing is saved yet. Only if they say yes, call again with the same sections (the bodies above) and apply: true: it saves a new version and keeps the one before.",
+    };
+  const r = await wrap(() => acceptChange(token, p.id, { changes: c.changes, fields: c.fields, instruction: c.instruction }, ctx.origin));
+  return {
+    changed: true,
+    applied: true,
+    ...changeOut(c),
+    version: r.saved.version,
+    previous_version_kept: r.saved.previous,
+    message: `Saved as version ${r.saved.version}. Version ${r.saved.previous} is kept: the member can compare or bring it back on Merlin.`,
+    edit_on_merlin: `${ctx.origin.replace(/\/$/, "")}/?p=proposals&pr=${encodeURIComponent(p.id)}`,
+  };
+}
+
+/** A contract uploaded in Merlin, sent to its signers. Asks first. */
+export async function sendDocumentTool(ctx: Ctx, a: { document_id?: string; message?: string; confirm?: boolean }): Promise<ToolOut> {
+  const token = ctx.member.token;
+  const v = await wrap(() => listProposals(token, ctx.origin));
+  if (!a.document_id) {
+    const drafts = v.documents.filter((d) => d.status === "draft");
+    return {
+      documents: v.documents.map((d) => ({ document_id: d.id, title: d.title, status: d.status, signers: d.signers.map((x) => `${x.name}${x.sender ? " (the member)" : ""}`), fields: d.fields.length })),
+      ...(drafts.length ? {} : { note: "No contract waiting to go out. The member uploads one in Merlin (Proposals, Send a contract to sign), and Merlin places the fields." }),
+    };
+  }
+  const d = await wrap(() => getDocument(token, String(a.document_id), ctx.origin));
+  if (!a.confirm) {
+    const why = await notReadyOf(token, d.id);
+    return {
+      confirmed: false,
+      would_send: { title: d.title, signers_in_order: d.signers.map((x, i) => ({ order: d.ordered ? i + 1 : "at once", name: x.name, email: x.email, ...(x.sender ? { the_member: true } : {}) })), fields: d.fields.length, ...(a.message ? { message: a.message } : {}) },
+      can_send: v.canSend,
+      ...(why ? { not_ready: why } : {}),
+      message: !v.canSend ? "Nothing was sent. Sending for signature is on Close." : why ? `It can't go out yet: ${why} Nothing was sent.` : `Nothing was sent. Each signer gets an email with their own link in turn, confirms their email with a code and signs on Merlin. ${SENDER_DUTY.replace("this proposal", "this document")}`,
+      next: "Show the member who signs, in what order. Only if they say send, call again with the same arguments and confirm: true.",
+    };
+  }
+  const r = await wrap(() => sendDocument(token, d.id, { message: a.message }, ctx.origin));
+  return { confirmed: true, message: r.message, document_id: d.id, status: r.document.status };
+}
+
 const fieldMap = z.record(z.string(), z.string());
 
-/** The five tools, on the connector's server (lib/mcp/server.ts). */
+/** The proposal tools, on the connector's server (lib/mcp/server.ts). */
 export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): void {
   const READ = { readOnlyHint: true, openWorldHint: false } as const;
   const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
@@ -359,5 +557,57 @@ export function registerProposalTools(server: McpServer, ctx: Ctx, run: Run): vo
       annotations: { title: "Send a proposal for signature", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     (a) => run(ctx, () => sendForSignature(ctx, a)),
+  );
+  server.registerTool(
+    "draft_proposal_from_call",
+    {
+      title: "Draft a proposal from a call",
+      description:
+        "Start a proposal from a call the member had. Pass the call's transcript as transcript (what you read from Granola, Zoom, Gong, their notes, or what they told you was agreed), or granola_note_id when Merlin can read their Granola notes itself. Merlin reads it with its own rules, never keeps it, and saves a draft in the member's template (template: an id or the name they used) for the company (company_id, or company_name): the lines from the call fill the template's fields, the fee, term, notice and days a week they agreed fill those, and anything the call didn't settle is left as a labelled blank, never guessed. Returns the draft with blanks_to_settle, things_to_check and where each part came from. Then rewrite the sections in the member's voice if they want (create_or_update_proposal or change_proposal), ask them to settle each blank, and send only through send_proposal_for_signature. Close (the trial included).",
+      inputSchema: {
+        transcript: z.string().optional().describe("The call's text, or notes on what was agreed. Used for this call only, never stored."),
+        granola_note_id: z.string().optional().describe("A Granola note's id, when the member connected Granola to Merlin. Otherwise pass transcript."),
+        template: z.string().optional().describe("A template id (theirs start mt_), or the name the member said. None: a blank page."),
+        company_id: z.string().optional(),
+        company_name: z.string().optional(),
+        call_date: z.string().optional().describe('Like "November 18, 2026".'),
+        signer: z.object({ name: z.string(), email: z.string().optional(), title: z.string().optional() }).optional().describe("Who signs for the client, when you know."),
+      },
+      annotations: { title: "Draft a proposal from a call", ...WRITE },
+    },
+    (a) => run(ctx, () => draftFromCall(ctx, a as FromCallArgs)),
+  );
+  server.registerTool(
+    "change_proposal",
+    {
+      title: "Change a proposal",
+      description:
+        "Change one of the member's proposals the way they say it (\"make it two phases\", \"start date December 1, and add the board readout to Phase 1\"). Either send instruction alone (Merlin rewrites the sections that need it, when that is switched on for Merlin; otherwise it returns the sections for you to rewrite), or send the sections you rewrote yourself (section_id from get_proposal, title, body, summary). Merlin returns each changed section with a one-line summary and checks the numbers: totals, terms and dates agree across sections. Nothing is saved unless apply is true: then it is saved as a new version and the one before is kept, to compare or bring back. Show the member the changes first. Close (the trial included).",
+      inputSchema: {
+        proposal_id: z.string(),
+        instruction: z.string().optional().describe("The change in the member's words."),
+        sections: z.array(z.object({ section_id: z.string().optional(), title: z.string().optional(), body: z.string(), summary: z.string().optional() })).optional().describe("Sections you rewrote: only the ones that change. section_id \"new\" adds one."),
+        fields: fieldMap.optional().describe("{{key}} values to set with the change."),
+        apply: z.boolean().optional().describe("Save it as a new version. Only after the member says yes."),
+        member_agreed: z.boolean().optional().describe("The member agreed that Merlin sends the proposal to Anthropic's API to make the change."),
+      },
+      annotations: { title: "Change a proposal", ...WRITE },
+    },
+    (a) => run(ctx, () => changeProposalTool(ctx, a as ChangeArgs)),
+  );
+  server.registerTool(
+    "send_document_for_signature",
+    {
+      title: "Send a contract for signature",
+      description:
+        "Send a contract the member uploaded in Merlin (Proposals, Send a contract to sign; Merlin places its fields) to its signers, in order: each gets an email with their own link, confirms their email with a code and signs on Merlin. Without document_id: the member's contracts and their status. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it sends nothing and says who signs, in what order, and what's missing. Only if the member says send, call again with confirm: true. Close (the trial included).",
+      inputSchema: {
+        document_id: z.string().optional(),
+        message: z.string().optional().describe("A short note in the email, in the member's words."),
+        confirm: z.boolean().optional(),
+      },
+      annotations: { title: "Send a contract for signature", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    (a) => run(ctx, () => sendDocumentTool(ctx, a)),
   );
 }

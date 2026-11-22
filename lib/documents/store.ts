@@ -341,6 +341,12 @@ export function notReady(d: StoredDocument): string | null {
   return null;
 }
 
+/** Why one of the member's drafts can't go out yet, or null (the connector asks before it sends). */
+export async function notReadyOf(token: string | null, id: string): Promise<string | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return notReady(mineDoc(s, memberOf(seed, s, token).id, id));
+}
+
 /** Email the link to each signer whose turn it is and who hasn't had it. Returns how many went out. */
 async function notify(docId: string, origin: string | undefined, nowMs: number): Promise<number> {
   const s = await loadState();

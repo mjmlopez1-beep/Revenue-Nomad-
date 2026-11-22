@@ -20,6 +20,8 @@ const EXAMPLES = [
   "Set up alerts on fractional Marketing roles at SaaS companies from $5M to $20M.",
   "What's new in open Sales roles this week?",
   "What does a fractional RevOps lead charge?",
+  "Draft the [client] proposal from my call with [name] this morning. Use my [template name] template.",
+  "Change my [client] proposal: make it two phases, an assessment first, then the ongoing role if they opt in.",
   "Add my seat. I was the fractional [your title] at [a client you worked with] from [month and year] to [month and year].",
 ];
 /** A question with blanks to fill in before it is sent. */
@@ -142,10 +144,10 @@ export function UseInClaude({ onCredits, embedded = false }: { onBack?: () => vo
 
       <section className="tp-card uc-note" aria-labelledby="uc-safe">
         <h2 className="tp-card-h" id="uc-safe">
-          Every unlock asks you first
+          Every unlock and every send asks you first
         </h2>
         <p className="cr-note">
-          Before it spends a credit, the app tells you what it costs and what you&apos;ll see, and waits for your yes. It only sees what you can see in Merlin, and it never sees
+          Before it spends a credit, the app tells you what it costs and what you&apos;ll see, and waits for your yes. A proposal or a contract goes out for signature only after you say send, and a change it makes is saved only after you accept it. It only sees what you can see in Merlin, and it never sees
           your sign-in link. You can disconnect it any time in{" "}
           <button type="button" className="ca-link" onClick={onCredits}>
             Your credits
