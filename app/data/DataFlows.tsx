@@ -33,6 +33,12 @@ const SERVICES: Service[] = [
     when: "Only while the Google feature is on, and only for members who connect.",
   },
   {
+    who: "Granola",
+    gets: "Only for a member who connects Granola with their own Granola API key: Merlin's requests to Granola's API, sent with that key. When the member opens the call picker, Merlin asks Granola for their recent notes with a company's web address or a person's email on the invite, and reads when each call was and who was on it. Only when the member picks a call does Merlin read its transcript, to draft that one proposal. Merlin keeps the key encrypted and nothing else from Granola: no note, title, summary or transcript.",
+    why: "Starting a proposal from a call the member recorded in Granola.",
+    when: "Only while the Granola feature is on, and only for members who connect it.",
+  },
+  {
     who: "Resend (email)",
     gets: "Each email Merlin sends: the address, the subject and the text. Sign-in links and codes, a note that a member wrote to you with the first 200 characters of their message, a lead or a team-up a fellow fractional sent you through Peers with their note, the weekly email, Crystal Ball emails, and plan notices.",
     why: "Sending Merlin's email.",
@@ -91,7 +97,7 @@ export function DataFlows() {
             </h2>
             <p className="cl-p">
               Merlin&apos;s server calls no AI model, with one exception a member turns on: drafting a proposal with Claude. Then that one draft&apos;s inputs (the call&apos;s
-              transcript or notes, the template, the company&apos;s facts the member can see, the rate range, their name, title and writing voice) go to Anthropic&apos;s
+              transcript or notes, pasted or picked from Granola, the template, the company&apos;s facts the member can see, the rate range, their name, title and writing voice) go to Anthropic&apos;s
               API to write it. Merlin keeps the draft, not the transcript. It is off unless Revenue Nomad switches it on, and each member agrees before their first draft.
             </p>
             <p className="cl-p">
@@ -175,7 +181,8 @@ export function DataFlows() {
             <h3 className="df-h3">You</h3>
             <ul className="df-bullets">
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
-              <li>Assistants: Your credits, Connected apps. Disconnect any assistant you added.</li>
+              <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added.</li>
+              <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
               <li>Peers: mute a member, or leave a circle.</li>
@@ -188,6 +195,7 @@ export function DataFlows() {
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>
             <ul className="df-bullets">
               <li>Google network: off unless turned on.</li>
+              <li>Granola: off unless turned on.</li>
               <li>Leadership pages from company websites: off unless turned on.</li>
               <li>Finding company websites: off unless turned on.</li>
               <li>About texts from company websites: off unless turned on.</li>
