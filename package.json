@@ -2,6 +2,9 @@
   "name": "revenue-nomad",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
   "description": "Revenue Nomad — fractional GTM job aggregator and operator portal",
   "scripts": {
     "test:mcp": "node scripts/test-mcp.mjs",
