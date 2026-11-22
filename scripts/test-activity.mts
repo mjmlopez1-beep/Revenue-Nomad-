@@ -352,7 +352,7 @@ async function main() {
   check("engaged with email off: Slack and Merlin, no email", engagedCount() === ec + 2 && mails.filter((m) => /back on pricing/.test(m.subject)).length === mEng);
   check("defaults: on for Merlin and email; Slack on, sent only when connected", (() => {
     const d = C.prefsOf(undefined);
-    return CT.CLOSE_ALERT_KINDS.every((k) => d[k].app && d[k].email && d[k].slack);
+    return CT.CLOSE_ALERT_KINDS.every((k) => d[k].app && d[k].slack && (d[k].email || k === "question"));
   })());
   const oth = await C.inboxView(OTH);
   check("a member with no Slack connected: slack false in the view", oth.slack === false && (await C.inboxView(JOR)).slack === true);
@@ -564,6 +564,90 @@ async function main() {
   check("docs/data-flows.md says what is collected from readers and why", /READER_COOKIE|rn_reader/.test(flows) && /lib\/close/.test(flows) && flows.includes(CT.disclosureText().split(".")[0].replace("The sender", "")));
   const dataPage = readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../app/data/DataFlows.tsx"), "utf8");
   check("the /data page says it too", /proposal readers|Proposal readers/i.test(dataPage) && /DISCLOSURE_LONG|disclosureText/.test(dataPage));
+
+  /* ================= a link with no end date (closeC3) ================= */
+  console.log("\na link with no end date");
+  check("linkEnd: null, missing or not a date is no end; linkExpired never for those", CT.linkEnd(null) === null && CT.linkEnd(undefined) === null && CT.linkEnd("") === null && !CT.linkExpired(null, t0 + 999 * DAY) && CT.linkExpired(iso(DAY), t0 + 2 * DAY));
+  const open0: RM.LinkInfo = { link: "s_noend", name: "Dana Whitfield", email: "d@x.example", base: iso(0), viewedAt: null, expiresAt: null, done: null };
+  check("no end date: no 'before the link closes' reminder, listed or due; day 2 and day 7 stay", RM.reminderRows([open0], null, t0).map((r) => r.key).join() === "d2,d7" && RM.dueReminders([open0], null, t0 + 400 * DAY).length === 0 && RM.dueReminders([open0], null, t0 + 7 * DAY + MIN).map((r) => r.key).join() === "d7");
+  let ne = await PS.createProposal(JOR, { companyId: CEDAR, title: "Open-ended advisory", blocks, fields: {} }, BASE);
+  ne = (await PS.sendProposal(JOR, ne.id, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example" } }, BASE, t0)).proposal;
+  const neSend = ne.send!.id;
+  await T.tableInternals.mutate((s) => {
+    const x = s.proposals!.find((y) => y.id === ne.id)!.sends.find((y) => y.id === neSend)!;
+    (x as { expiresAt: string | null }).expiresAt = null;
+  });
+  const netok = PS.signToken(neSend, C.NO_END_TOKEN_MS);
+  const nb = await beacon(netok, [{ t: "open" }], "N".repeat(22), t0 + 10 * DAY);
+  check("its link counts readers (the token's end is NO_END_TOKEN_MS)", nb.status === 200 && nb.body.off !== true && (await item(ne.id))?.readers.length === 1, nb);
+  check("and stays open years on", C.closeInternals.target(await T.loadState(), netok, t0 + 900 * DAY)?.open === true);
+  const nev = await C.activityView(JOR, ne.id, BASE, t0 + 10 * DAY);
+  check("the view: no end date, no closing reminder, never expired", nev.expiresAt === null && !nev.reminders.some((r) => r.key === "expiry") && nev.status !== "expired" && nev.suggestion?.key !== "expired", [nev.expiresAt, nev.status, nev.reminders.map((r) => r.key)]);
+  const neRules = R.suggest({ ...base, a: null, status: "sent", nowMs: t0 + 400 * DAY });
+  check("the expired rule doesn't fire on its own: only an expired status does", neRules?.key !== "expired");
+
+  /* ================= closeC3's events ================= */
+  console.log("\na question, passed on, countersigned");
+  let cs = await PS.createProposal(JOR, { companyId: CEDAR, title: "Revenue operations reset", blocks, fields: { "pricing.monthlyFee": "$9,000", "term.initialMonths": "3" } }, BASE);
+  cs = (await PS.sendProposal(JOR, cs.id, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example", title: "COO" } }, BASE, t0)).proposal;
+  const cstok = signTok(lastTo("dana@cedarandpine.example")?.text ?? "");
+  check("a question's email is off by default, the rest on", C.prefsOf(undefined).question.email === false && C.prefsOf(undefined).question.app && C.prefsOf(undefined).question.slack && C.prefsOf(undefined).passed.email && C.prefsOf(undefined).countersign.email);
+  let sq = slack.length;
+  let mq = mails.length;
+  check("afterClientAsked: told", (await C.afterClientAsked(cs.id, { by: "Dana Whitfield", text: "Can we start in January?" }, t0 + DAY)) === true);
+  await settle();
+  const qs = slack.slice(sq).find((x) => /asked a question/.test(x.text));
+  check("a question: Dana Whitfield asked a question about Revenue operations reset, the question quoted", !!qs && qs.text.startsWith("Dana Whitfield asked a question about Revenue operations reset") && JSON.stringify(qs.blocks).includes("Can we start in January?"), qs?.text);
+  check("a question: in Merlin, no email by default", (await C.inboxView(JOR)).items.some((x) => x.head === "Question:" && x.text === "Dana Whitfield asked about Revenue operations reset") && !mails.slice(mq).some((m) => /asked a question/.test(m.subject)));
+  await C.setPref(JOR, "question", "email", true);
+  mq = mails.length;
+  await C.afterClientAsked(cs.id, { by: "Dana Whitfield", text: "And the notice period?" }, t0 + DAY + HOUR);
+  await settle();
+  check("a question's email when the member turns it on", mails.slice(mq).some((m) => m.subject === "Dana Whitfield asked a question about Revenue operations reset" && /And the notice period/.test(m.text)));
+  sq = slack.length;
+  check("afterPassedOn: told", (await C.afterPassedOn(cs.id, { by: "Dana Whitfield", to: "Sam Lee" }, t0 + 2 * DAY)) === true);
+  await settle();
+  check("passed on: Dana Whitfield passed Revenue operations reset to Sam Lee to sign", slack.slice(sq).some((x) => x.text.startsWith("Dana Whitfield passed Revenue operations reset to Sam Lee to sign")) && (await C.inboxView(JOR)).items.some((x) => x.head === "Passed on:" && x.text === "Dana to Sam Lee"));
+  check("an unknown item, or no one to pass it to: nothing", (await C.afterClientAsked("pr_notthereatall", { text: "x" })) === false && (await C.afterPassedOn(cs.id, { to: "" })) === false);
+  // The client signs; the member countersigns.
+  sq = slack.length;
+  check("afterClientSigned: told once", (await C.afterClientSigned(cs.id, { by: "Dana Whitfield" }, t0 + 3 * DAY)) === true && (await C.afterClientSigned(cs.id, { by: "Dana Whitfield" }, t0 + 3 * DAY)) === false);
+  await settle();
+  const ct = slack.slice(sq).find((x) => /Countersign to finish/.test(x.text));
+  check("countersign: Dana Whitfield signed. Countersign to finish., with Countersign", !!ct && ct.text.startsWith("Dana Whitfield signed. Countersign to finish.") && JSON.stringify(ct.blocks).includes("Countersign"), ct?.text);
+  await PS.requestCode(cstok, who, t0 + 3 * DAY);
+  const cscode = lastTo("dana@cedarandpine.example")?.text.match(/Your code: (\d{6})/)?.[1] ?? "";
+  const csv = await PS.verifyCode(cstok, cscode, who, BASE, t0 + 3 * DAY);
+  await PS.signProposal(cstok, { name: "Dana Whitfield", consent: true, hash: csv.hash }, who, BASE, t0 + 3 * DAY);
+  sq = slack.length;
+  await C.afterSignerStep(cstok, BASE, t0 + 3 * DAY);
+  await settle();
+  check("while it waits for the countersignature: no Signed alert from the sign route", !slack.slice(sq).some((x) => x.text.startsWith("Signed")));
+  let csv2 = await C.activityView(JOR, cs.id, BASE, t0 + 3 * DAY + HOUR);
+  check("while it waits: no renewal clock, the status says so", csv2.renewal === null && csv2.statusWords === "Signed by Dana · countersign to finish", [csv2.renewal, csv2.statusWords]);
+  check("while it waits: no renewal to start", (await refused(C.startRenewal(JOR, cs.id, BASE, t0 + 3 * DAY + HOUR)))?.includes("Countersign it first"));
+  await T.tableInternals.mutate((s) => {
+    for (const e of s.pipeline?.mem_jor?.entries ?? []) if (e.companyId === "c_cedar") e.stage = "proposal";
+  });
+  sq = slack.length;
+  const fullAt = t0 + 5 * DAY;
+  check("afterFullySigned: told once", (await C.afterFullySigned(cs.id, { origin: BASE, movePipeline: true }, fullAt)) === true && (await C.afterFullySigned(cs.id, { origin: BASE, movePipeline: true }, fullAt)) === false);
+  await settle();
+  check("fully signed: Signed, Moved to Won, and the pipeline at Won", slack.slice(sq).some((x) => x.text.startsWith("Signed") && /Moved to Won/.test(JSON.stringify(x.blocks))) && ((await T.loadState()).pipeline?.mem_jor?.entries ?? []).some((e) => e.companyId === "c_cedar" && e.stage === "won"));
+  csv2 = await C.activityView(JOR, cs.id, BASE, fullAt + HOUR);
+  check("the renewal clock starts at the countersignature: 3 months from it", csv2.renewal?.end === RN.addMonths(new Date(fullAt).toISOString().slice(0, 10), 3), csv2.renewal);
+
+  /* ================= the bell ================= */
+  console.log("\nthe bell");
+  const bell = await C.inboxView(JOR);
+  const one = bell.items.find((x) => !x.read)!;
+  await C.markRead(JOR, [one.id]);
+  const after = await C.inboxView(JOR);
+  check("read one: only that one, kept on the server", after.items.find((x) => x.id === one.id)?.read === true && after.unread === bell.unread - 1 && after.unread > 0);
+  check("newest first", after.items.every((x, i, a) => i === 0 || a[i - 1].at >= x.at));
+  const src2 = readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../app/post/Activity.tsx"), "utf8");
+  check("the bell: a real button with the count in its label, a dialog, Escape closes, focus back, no pine button", /aria-label=\{unread \? `Notifications, \$\{unread\} unread`/.test(src2) && /role="dialog"/.test(src2) && /e\.key === "Escape"/.test(src2) && /btn\.current\?\.focus\(\)/.test(src2) && !/btn-pine/.test(src2.slice(src2.indexOf("export function ProposalBell"))));
+  check("the bell is in the top bar, desktop and phone", (readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../app/post/TopBar.tsx"), "utf8").match(/<ProposalBell/g) ?? []).length === 2);
 
   /* ================= the plan comparison ================= */
   console.log("\nthe plans");
