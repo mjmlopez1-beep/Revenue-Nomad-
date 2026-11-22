@@ -900,16 +900,10 @@ textarea.pp-field-in {
 
 /* ---------- the page's one action, and the start sheet ---------- */
 .pp-hero {
-  display: grid;
-  justify-items: start;
-  gap: 4px;
   margin: 0 0 20px;
 }
-.pp-hero .tp-page-art {
-  margin-bottom: 4px;
-}
 .pp-hero .pp-lead {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 .pp-empty-art {
   display: block;
