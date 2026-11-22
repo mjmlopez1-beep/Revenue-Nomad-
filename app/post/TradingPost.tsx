@@ -2907,6 +2907,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         )}
         {sideOverlay && phone && (
           <Sheet
+            history={false}
             title={
               <span>
                 Sort and filter {nFilters > 0 && <span className="num tp-cnt">{nFilters}</span>}

@@ -15,6 +15,7 @@
  * locked fact someone else added costs 1.
  */
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
+import { NEVER_NAME_REFUSED, neverAName } from "./nameWords";
 
 export type Entity = "company" | "engagement" | "contact";
 export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrOngoing" | "number" | "choice";
@@ -701,6 +702,9 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
+      // A person's name that holds a greeting or a page's words ("Welcome Read", "Meet Our Team"): lib/nameWords.ts. A seat
+      // holder's name is always the member's own (lib/table.ts setValue), never refused for its words.
+      if (f.key === "name" && !f.identity && neverAName(v)) return { error: NEVER_NAME_REFUSED };
       // Two letters is a title ("GM", "AE", "VP"), and so is one Han, Kana or Hangul character (営業).
       if (f.key === "role" && (v.match(/\p{L}/gu) ?? []).length < 2 && !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(v))
         return { error: "Use the seat's title, like Fractional VP Sales." };

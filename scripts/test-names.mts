@@ -68,6 +68,14 @@ const NAMES: [string, string][] = [
   ["C. Rutledge", "skip: first name is only an initial"],
   ["Dashiell", "skip: one word"],
   ["🚀🚀", "skip: no name"],
+  // A greeting or a page's words is no name (lib/nameWords.ts): "Welcome Read" came from a page. A surname that is also a page word stays.
+  ["Welcome Read", "skip: a greeting or page words"],
+  ["Meet Our Team", "skip: a greeting or page words"],
+  ["Hello Sarah", "skip: a greeting or page words"],
+  ["Read Ashworth", "skip: a greeting or page words"],
+  ["Ashley Read", "Ashley Read"],
+  ["Larry Page", "Larry Page"],
+  ["Sable Underhill Growth Partners", "Sable Underhill"],
 ];
 for (const [raw, want] of NAMES) check(`clean ${JSON.stringify(raw)} -> ${want}`, clean(raw) === want, clean(raw));
 check("a cleaned name always passes the seat holder rule", NAMES.every(([raw]) => {

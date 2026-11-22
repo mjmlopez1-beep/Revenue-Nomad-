@@ -22,11 +22,11 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
-import { ToastProvider, calmRefusal, fetchFirst, fetchView, patchView, post, useToast, type Act, type ActPatch, type ActResult, type FirstResult, type View, type ViewResult } from "./ui/shared";
+import { ALREADY_OPEN, SIGNED_IN_LINK_USED, ToastProvider, alreadyOpen, calmRefusal, fetchFirst, fetchView, patchView, post, useToast, type Act, type ActPatch, type ActResult, type FirstResult, type View, type ViewResult } from "./ui/shared";
 import type { TradingPostProps } from "./post/TradingPost";
 import type { OnboardingProps } from "./onboard/Onboarding";
 import type { Me } from "@/lib/tableTypes";
-import { SIG_DAY_RE, yourFeature } from "@/lib/radar/types";
+import { sigDayOf, yourFeature } from "@/lib/radar/types";
 
 /* ---------- loading: the shape of what is coming, not a line of gray text ---------- */
 
@@ -296,7 +296,7 @@ function App() {
   // A link to a conversation (?p=messages, from a message email). Signed out, Sign in opens with a note.
   // Signed in by that email's one-time link, the member goes straight to it, skipping onboarding for this visit.
   const [toMessage] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "messages");
-  const [toRadar] = useState(() => typeof window !== "undefined" && SIG_DAY_RE.test(new URLSearchParams(window.location.search).get("sig") ?? ""));
+  const [toRadar] = useState(() => typeof window !== "undefined" && !!sigDayOf(new URLSearchParams(window.location.search).get("sig")));
   // Just activated a fractional profile (app/claim/Claim.tsx): their record and first conversation, skipping onboarding for this visit.
   const [toWelcome] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("welcome") === "1" && new URLSearchParams(window.location.search).get("p") === "fractionals");
   const linkNote = toMessage ? MESSAGE_NOTE : toRadar ? RADAR_NOTE : null;
@@ -566,6 +566,12 @@ function App() {
       if (flip) setView((v) => (v ? { ...v, companies: v.companies.map((c) => (c.id === flip.companyId ? { ...c, following: flip.on } : c)) } : v));
       const r = await post<{ message: string; id?: string; capped?: boolean; moves?: ActResult["moves"] } & ActPatch>({ action: a });
       if (r.error) {
+        // Already unlocked for this member, from another device or tab: no mistake. A calm word, and the table as it is now.
+        if (alreadyOpen(r.error)) {
+          if (!opts?.silentError) toast(ALREADY_OPEN);
+          await refresh();
+          return { ok: false, message: ALREADY_OPEN };
+        }
         if (!opts?.silentError) toast(r.error, !calmRefusal(r.error));
         // The day's unlock limit: every unlock button says "Unlocks again tomorrow" at once, before the table comes back.
         const fewer = /^You can unlock (\d+) more today/.exec(r.error);
@@ -616,6 +622,18 @@ function App() {
   const onSkip = useCallback(() => {
     skipped.current = true;
   }, []);
+
+  // A sign-in link that no longer works, opened in a browser that is signed in already: the landing page's Sign in never
+  // shows here, so a small notice says what happened (the member stays signed in).
+  // Read once, on the first table after the link was tried (a sign-in through the landing page later never says it).
+  const linkChecked = useRef(false);
+  useEffect(() => {
+    if (linkChecked.current || !view) return;
+    linkChecked.current = true;
+    if (!view.me || !signInError) return;
+    toast(SIGNED_IN_LINK_USED);
+    setSignInError(null);
+  }, [view, signInError, toast]);
 
   const onboarding = !!view?.me && (!view.me.onboarded || obHold) && !fromMessageLink.current && !toMessage && !toWelcome;
   useEffect(() => {

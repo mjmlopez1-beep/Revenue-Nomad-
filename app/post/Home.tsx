@@ -36,7 +36,7 @@ import { MovesSection } from "./Moves";
 import { FollowUps } from "./FollowUps";
 import { ProWelcome } from "./Billing";
 import type { MovesWire } from "@/lib/moves";
-import { crystalNames, nameMatches, showMeDue, trialCardLine, trialPillWords, sinceWords } from "./todayModel";
+import { crystalLine, crystalNames, nameMatches, showMeDue, trialCardLine, trialPillWords, sinceWords } from "./todayModel";
 import { openPlans } from "./Billing";
 import { NavIcon } from "./Sidebar";
 import { navMatches, type NavIcon as NavIconName, type NavItem } from "./navModel";
@@ -251,6 +251,8 @@ export function HomePage(p: HomeProps) {
   // With no move today: the top of their table, as before.
   const lead = !loading && !moveN && p.firstRow ? { i: byId.get(p.firstRow.i.c.id) ?? p.firstRow.i, row: null } : null;
   const dayN = data?.newCount ?? 0;
+  // Nothing new this week, but Crystal Ball still holds companies (what onboarding showed): Home says so and opens it.
+  const crystalN = dayN === 0 ? data?.total ?? 0 : 0;
   const since = data?.since ?? null;
   const sinceLow = p.sinceAt ? sinceWords(p.sinceAt).replace(/^Since/, "since") : null;
 
@@ -262,6 +264,7 @@ export function HomePage(p: HomeProps) {
     if (dayN > 0) return `${plural(dayN, "company", "companies")} in your ${FEATURE_NAME} today.`;
     if (!me.function) return "Tell us your function and Merlin finds the companies likely to hire you next.";
     if (loading) return "Finding your moves for today.";
+    if (crystalN > 0) return crystalLine(crystalN);
     return `Nothing new in your ${FEATURE_NAME} today. Your table has every company.`;
   })();
 
@@ -310,6 +313,7 @@ export function HomePage(p: HomeProps) {
         loading={loading}
         rest={rest}
         dayN={dayN}
+        crystalN={crystalN}
         integrations={p.integrations}
         onClaude={p.onClaude}
         openCompany={p.openCompany}

@@ -12,6 +12,7 @@
 import { cleanText } from "../about/extract";
 import { DIRECTOR_PLUS, seniorityOf, type Seniority } from "../seniority";
 import { functionOf, PERSON_NAME_RE } from "../tableFields";
+import { neverAName } from "../nameWords";
 import { LEADER_LEVELS, type LeaderHow, type LeaderKind, type LeaderLevel } from "./types";
 
 /**
@@ -129,7 +130,8 @@ const PARTICLE = /^(?:de|da|del|della|di|du|van|von|der|den|la|le|al|el|bin|ibn|
 /** A person's name: 2 to 4 words, each capitalised (or a particle), letters only. */
 export function looksLikeName(s: string): boolean {
   const t = s.trim().replace(/\s+/g, " ");
-  if (t.length < 4 || t.length > 40 || NAME_STOP.test(t)) return false;
+  // A page's words (NAME_STOP), a greeting or a heading ("Welcome Read", lib/nameWords.ts) is no name.
+  if (t.length < 4 || t.length > 40 || NAME_STOP.test(t) || neverAName(t)) return false;
   const words = t.split(" ");
   if (words.length < 2 || words.length > 4) return false;
   return words.every((w) => PARTICLE.test(w) || /^\p{Lu}[\p{L}'’.-]*$/u.test(w) || /^\p{Lu}\.$/u.test(w)) && /^\p{Lu}/u.test(words[words.length - 1]);
