@@ -134,7 +134,8 @@ import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 
-import type { StoredProposal } from "./proposals/types";
+import type { MyTemplate, StoredProposal } from "./proposals/types";
+import type { StoredDocument } from "./documents/types";
 // The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
 // inside the same change that sends, signs or declines. Registered once, when the server loads this module.
 import { proposalToPipeline, setPipelineHook } from "./proposals/pipelineHook";
@@ -583,6 +584,12 @@ export interface State extends MessagingState {
   schedule?: ScheduleState;
   /** Proposals (lib/proposals): each member's own, with their sends and audit trails. Private to them: never in another member's view, the shared table, the export or an admin's panel. */
   proposals?: StoredProposal[];
+  /** Documents to sign (lib/documents): each member's own uploads, their fields, signers and audit trails. The PDFs are files on the volume, never here. Private like proposals. */
+  documents?: StoredDocument[];
+  /** "My templates" (lib/proposals/mine.ts): each member's own past proposals, read into sections, by member id. Private like proposals. */
+  myTemplates?: Record<string, MyTemplate[]>;
+  /** When each member agreed that a transcript may go to Anthropic's API to write a draft (lib/proposals/draft.ts), by member id. */
+  aiDrafts?: Record<string, string>;
 }
 
 /** State.salesBuild[companyId]. */
@@ -7296,8 +7303,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well.
-  // Proposals are a member's own and a client's signature: never in the export.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither.
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, aiDrafts: _aiDrafts, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars

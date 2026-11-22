@@ -156,9 +156,46 @@ export interface ProposalRec {
   history: ProposalSendRec[];
 }
 
+/**
+ * One of the member's own templates: a past proposal or SOW they uploaded (.docx, .pdf, .md,
+ * .txt), read into sections (lib/proposals/templateParse.ts). Private to them, like a proposal.
+ * The file itself is not kept: only its sections' titles and text.
+ */
+export interface MyTemplate {
+  /** "mt_" and 12 characters. */
+  id: string;
+  title: string;
+  fileName: string;
+  kind: "docx" | "pdf" | "md" | "txt";
+  blocks: { blockId: string; title: string; body: string }[];
+  createdAt: string;
+}
+
+/** A template as the app lists it: ours (the library) or theirs. */
+export interface TemplateChoice {
+  id: string;
+  title: string;
+  /** Who it suits (ours), or the file it came from (theirs). */
+  about: string;
+  mine: boolean;
+  open: boolean;
+  sections: number;
+}
+
 /** GET /api/proposals: the member's own proposals, and what their plan allows. */
 export interface ProposalsView {
   proposals: ProposalRec[];
+  /** Documents they uploaded to be signed (lib/documents), in the same list. */
+  documents: import("../documents/types").DocumentRec[];
+  /** Every template they can start from: theirs first, then the library's. */
+  templates: TemplateChoice[];
+  /**
+   * Drafting with Claude on the server: "on" (RN_AI_DRAFTS=1 with a key and a model, and their
+   * plan has it), "off" (not set up on this server), "plan" (set up, not on their plan).
+   */
+  ai: "on" | "off" | "plan";
+  /** They agreed once that a transcript may go to Anthropic's API to write a draft. */
+  aiAgreed: boolean;
   /** Sending for signature: Trial and Pro (and every plan while billing is off). */
   canSend: boolean;
   /** Templates the member can start from: every one, or on Free only FREE_TEMPLATE. */
@@ -166,7 +203,7 @@ export interface ProposalsView {
   /** Email is set up, so a proposal can go out. */
   email: boolean;
   /** The member's own name and title, for "Prepared by". */
-  me: { name: string; title: string; function: string | null };
+  me: { name: string; title: string; function: string | null; email: string };
 }
 
 /* ---------- what the client who signs gets ---------- */
@@ -212,11 +249,11 @@ export interface SignedCopy {
  * and consent given in a way that shows the signer can open them. Our own words. Have it reviewed
  * before launch; bump CONSENT_VERSION whenever the words change.
  */
-export const CONSENT_VERSION = "2026-11-22";
-export const consentText = (provider: string) =>
+export const CONSENT_VERSION = "2026-11-23";
+export const consentText = (provider: string, what: "proposal" | "document" = "proposal") =>
   [
-    `I agree to use electronic records and an electronic signature for this proposal and the records about it: the signed copy, its audit trail and any notice about it.`,
-    `Typing my full name and clicking Sign is my signature. It is legally binding, with the same effect as signing by hand. If I sign for a company or another person, I confirm I am authorised to sign for them.`,
+    `I agree to use electronic records and an electronic signature for this ${what} and the records about it: the signed copy, its audit trail and any notice about it.`,
+    `Typing my full name, or drawing my signature, and clicking Sign is my signature. It is legally binding, with the same effect as signing by hand. If I sign for a company or another person, I confirm I am authorised to sign for them.`,
     `I can ask ${provider} for a paper copy at any time, at no cost. I can withdraw this consent before I sign by not signing and telling ${provider}; we then sign another way. Withdrawing does not undo anything already signed.`,
     `To open, sign and keep these records I need a device with a current web browser, access to my email, and a way to save or print a web page. Opening this page shows I can. If my email address changes, I tell ${provider}.`,
     `A record of my signing (the time, my IP address and device, the email code I confirmed, and a fingerprint of this exact document) is kept with the signed copy and shared with both parties.`,

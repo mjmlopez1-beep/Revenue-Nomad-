@@ -89,7 +89,11 @@ export function DataFlows() {
             <h2 className="df-h" id="df-ai">
               When an AI model is used
             </h2>
-            <p className="cl-p">Merlin&apos;s server calls no AI model. It sends nothing to a model provider.</p>
+            <p className="cl-p">
+              Merlin&apos;s server calls no AI model, with one exception a member turns on: drafting a proposal with Claude. Then that one draft&apos;s inputs (the call&apos;s
+              transcript or notes, the template, the company&apos;s facts the member can see, the rate range, their name, title and writing voice) go to Anthropic&apos;s
+              API to write it. Merlin keeps the draft, not the transcript. It is off unless Revenue Nomad switches it on, and each member agrees before their first draft.
+            </p>
             <p className="cl-p">
               AI comes in only when a member adds Merlin to their own assistant, such as Claude or ChatGPT, with Merlin&apos;s connector. The assistant then asks
               Merlin&apos;s tools as that member, and gets only what those tools return to that member: what they would see in the app, with the same locks and credits. That

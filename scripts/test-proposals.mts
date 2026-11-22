@@ -24,9 +24,17 @@
  *   - signing: the code by email (wrong tries, expiry), consent, the full name, the hash of the
  *     document shown, the audit trail complete, the signed copy to both sides, frozen after;
  *   - decline, void, a new version on a change after sending, an expired link refused, a tampered link;
- *   - the connector's tools, and that sending asks first.
+ *   - the connector's tools, and that sending asks first;
+ *   - drafting with Claude (lib/proposals/draft.ts) against a fake Anthropic endpoint: off without
+ *     the switch, Pro's, asks first, one request with the kit (template, patterns, rate band,
+ *     company facts, profile, voice) and the model from RN_AI_MODEL, the answer checked and saved
+ *     as a draft in the template's structure, the transcript never stored, a broken answer and a
+ *     refusal refused; get_proposal_kit through the connector;
+ *   - My templates (lib/proposals/templateParse.ts, mine.ts): a .docx, a .pdf, a .md and a .txt
+ *     made here read into sections, a proposal started from one, private to its member.
  */
 import { createHash } from "node:crypto";
+import { crc32, deflateRawSync } from "node:zlib";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -98,8 +106,20 @@ for (const k of ["RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADA
 
 const mails: { to: string; subject: string; text: string; html: string; reply_to?: string }[] = [];
 let others = 0;
+// The fake Anthropic API (RN_AI_TEST_BASE_URL, read only on a test server): what it was asked, and what it answers next.
+const AI_BASE = "http://127.0.0.1:7041/fake-anthropic";
+const aiCalls: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = [];
+let aiAnswer: () => { status?: number; json: unknown } = () => ({ json: {} });
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
+  if (url.startsWith(AI_BASE)) {
+    const h: Record<string, string> = {};
+    new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined)).forEach((v, k) => (h[k] = v));
+    const raw = init?.body ?? (input instanceof Request ? await input.text() : "{}");
+    aiCalls.push({ url, headers: h, body: JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw as ArrayBuffer)) });
+    const a = aiAnswer();
+    return new Response(JSON.stringify(a.json), { status: a.status ?? 200, headers: { "content-type": "application/json", "request-id": "req_fake" } });
+  }
   if (url === "http://127.0.0.1:9/fake-email") {
     const b = JSON.parse(String(init?.body ?? "{}"));
     mails.push({ to: b.to[0], subject: b.subject, text: b.text, html: b.html, reply_to: b.reply_to });
@@ -194,6 +214,13 @@ async function main() {
   check("the library has no consulting firm, network or person named", !/linkedin|sales navigator/i.test(JSON.stringify(L.BLOCKS) + JSON.stringify(L.TEMPLATES)));
   const filled = L.fill("Goal: {{goals.target}}\n{{pains}}\nLeft: {{nope}}", { "goals.target": "$20M by next year", pains: "Seat empty three weeks\nForecast nobody owns" });
   check("{{fields}} fill in, a list as one bullet each, a blank stays a blank", filled === "Goal: $20M by next year\n- Seat empty three weeks\n- Forecast nobody owns\nLeft: {{nope}}", filled);
+  const inv = L.fill(L.STARTER.investment, { "pricing.overageRate": "$1,200 a day", "pricing.monthlyFee": "$12,000 a month" });
+  check("one unit after a price: a value with its own unit never reads \"a day an hour\" or \"a month a month\"", /\$1,200 a day, only/.test(inv) && !/a day an hour/.test(inv) && /\$12,000 a month for/.test(inv) && !/a month a month/.test(inv), inv);
+  check("one unit: $250/hr and a plain $250 an hour both read once", L.oneUnit("$250/hr an hour") === "$250/hr" && L.fill("{{r}} an hour", { r: "$250" }) === "$250 an hour" && L.fill("{{h}} a week", { h: "15 hours a week" }) === "15 hours a week" && L.oneUnit("two days a week") === "two days a week");
+  const EM = await import("../lib/proposals/emails");
+  const pe = EM.proposalEmail({ signer: "Ivy Hollis", member: "Pat Rowan", memberTitle: "Fractional VP Sales", title: "Fractional sales leader for Larkfield Robotics", company: "Larkfield Robotics", link: "https://post.example.com/sign/x", expiresAt: iso(30 * DAY) });
+  check("the proposal email names the company once, in its subject, text and page", !/Larkfield Robotics for Larkfield Robotics/.test(pe.subject + pe.text + pe.html) && (pe.text.match(/Larkfield Robotics/g) ?? []).length === 1, pe.text.split("\n")[2]);
+  check("and adds it when the title doesn't name it", EM.proposalName("Sales plan", "Larkfield Robotics") === "Sales plan for Larkfield Robotics" && EM.proposalName("Sales plan", "") === "Sales plan");
   check("blanks are counted once", L.blanksOf([{ id: "a", blockId: "custom", title: "x", body: "{{a}} {{b}} {{a}}" }], { b: "1" }).join() === "a");
 
   /* ================= the extractor ================= */
@@ -571,7 +598,231 @@ async function main() {
   const rows = HL.outcomeRows(xs);
   check("Health's outcomes: Won from a signed proposal, after Won through Merlin", rows.find((r) => r.label === "Won from a signed proposal")?.n === 2 && rows.findIndex((r) => r.label === "Won from a signed proposal") === rows.findIndex((r) => r.label === "Won through Merlin") + 1, rows);
 
-  check("nothing but the fake email endpoint was called", others === 0, others);
+
+  /* ================= drafting with Claude ================= */
+  console.log("\ndrafting with Claude");
+  const D = await import("../lib/proposals/draft");
+  const K = await import("../lib/proposals/kit");
+  const AIC = await import("../lib/proposals/aiConfig");
+  const CALL = `Pat Rowan: What would make this a win by spring?
+Dana Whitfield: Honestly the blue whiteboard in the warehouse is our whole forecast, and nobody trusts it.
+Dana Whitfield: We want to reach $20M next year from about $9M now, with four reps.
+Dana Whitfield: Our board meets in March and I need a plan before then. We were quoted $15k a month by a firm, which felt like a lot.
+Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
+  const UNIQUE = "blue whiteboard in the warehouse";
+  const aiEnv = { RN_AI_DRAFTS: "1", ANTHROPIC_API_KEY: "sk-ant-test-fake", RN_AI_MODEL: "model-from-the-env", RN_AI_TEST_BASE_URL: AI_BASE };
+  const draftJson = {
+    title: "Sales system build for Acme Robotics",
+    blocks: [
+      { block_id: "cover", title: "Cover", body: "A sales system you can trust by March\n\nPrepared for Dana Whitfield, COO, Acme Robotics" },
+      { block_id: "what_we_heard", title: "What we heard", body: "- Your forecast lives on one whiteboard, and nobody trusts it.\n- You want $20M next year, from about $9M today, with four reps." },
+      { block_id: "milestones", title: "Milestones", body: "- Day 30: a readout. You decide what we fix first.\n- Day 60: the new process is live. You decide what to scale.\n- Day 90: results against plan. You decide to continue, scale up or stop." },
+      { block_id: "investment", title: "Timeline and investment", body: "Months 1 to 3: $12,000 a month for two days a week. From month 4: $8,000 a month. Start date: {{start.date}}." },
+      { block_id: "not_a_block", title: "A section of their own", body: "Something the template doesn't have." },
+    ],
+    fields: { monthly_fee: "$12,000", step_down_fee: "$8,000", allocation: "two days a week", initial_months: "3", notice_days: "30", goal: "$20M next year", call_date: "", next_step: "Thursday: walk through the plan" },
+    signer: { name: "Dana Whitfield", title: "COO" },
+    signer_on_call: "yes",
+    notes: [{ key: "budget.signals", text: "Quoted $15k a month elsewhere, felt high" }],
+    to_fix: ["Confirm the start date", "Add Dana's email before you send"],
+  };
+  const reply = (text: string, stop = "end_turn") => ({ json: { id: "msg_fake", type: "message", role: "assistant", model: "model-from-the-env", content: [{ type: "text", text }], stop_reason: stop, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } } });
+  aiAnswer = () => reply(JSON.stringify(draftJson));
+  const setEnv = (on: boolean) => {
+    for (const [k, v] of Object.entries(aiEnv)) on ? (process.env[k] = v) : delete process.env[k];
+  };
+  setEnv(false);
+  check("switch off: drafting with Claude is off, the page says so", !AIC.aiConfigured() && (await S.listProposals(PAT, BASE)).ai === "off");
+  const offErr = await S.createProposal(PAT, { companyId: ACME }, BASE).then(() => D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL, agree: true }, BASE)).then(() => null, (e: Error) => e.message);
+  check("switch off: a draft request is refused with what to do instead, and nothing is called", offErr === D.AI_OFF && aiCalls.length === 0, offErr);
+  process.env.RN_AI_DRAFTS = "1";
+  process.env.ANTHROPIC_API_KEY = "sk-ant-test-fake";
+  check("on without a model it stays off: no model is named in the code", !AIC.aiConfigured());
+  setEnv(true);
+  check("on with the key and RN_AI_MODEL", AIC.aiConfigured() && AIC.aiModel() === "model-from-the-env");
+  check("Free: drafting with Claude is Pro's", (await S.listProposals(FRE, BASE)).ai === "plan" && (await refused(D.draftWithClaude(FRE, { companyName: "Wrenfield Dairy", transcript: CALL, agree: true }, BASE))) === D.AI_PLAN);
+  const av0 = await S.listProposals(PAT, BASE);
+  check("Trial: on, and not agreed yet", av0.ai === "on" && av0.aiAgreed === false);
+  const aiAsk = await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
+  check("it asks first: the transcript goes to Anthropic only after the member agrees", aiAsk?.status === 428 && /Anthropic's API/.test(aiAsk.message) && aiCalls.length === 0, aiAsk?.message);
+  check("a few lines aren't enough to draft from", (await refused(D.draftWithClaude(PAT, { companyId: ACME, transcript: "Hi there.", agree: true }, BASE)))?.includes("isn't enough"));
+  // A voice of her own, so the kit carries it.
+  await T.tableInternals.mutate((st) => {
+    (st.voice ??= {}).mem_pat = { greeting: "Hey {first},", signoff: "Cheers,", name: "first", length: "short", formality: "casual", contractions: true, exclamations: "never", emoji: false, opener: "direct", phrases: ["Happy to dig in"], at: iso(0), by: "you" };
+  });
+  const nP = (await S.listProposals(PAT, BASE)).proposals.length;
+  const dr = await D.draftWithClaude(PAT, { templateId: "fractional-sales-leader", companyId: ACME, transcript: CALL, callDate: "November 18, 2026", callWith: "Dana Whitfield", agree: true }, BASE);
+  check("one request to Anthropic's Messages API", aiCalls.length === 1 && aiCalls[0].url === `${AI_BASE}/v1/messages`, aiCalls.map((c) => c.url));
+  const req = aiCalls[0]?.body as { model: string; max_tokens: number; system: string; messages: { role: string; content: string }[]; output_config: { format: { type: string; schema: { required: string[] } } } };
+  check("the model is RN_AI_MODEL's, the key is the env's", req.model === "model-from-the-env" && (aiCalls[0].headers["x-api-key"] ?? aiCalls[0].headers.authorization?.replace(/^Bearer /, "")) === "sk-ant-test-fake", [req.model, aiCalls[0].headers]);
+  check("structured output: JSON in the draft's shape", req.output_config?.format?.type === "json_schema" && ["title", "blocks", "fields", "notes", "to_fix"].every((k) => req.output_config.format.schema.required.includes(k)));
+  const msg = req.messages?.[0]?.content ?? "";
+  const kitJson = JSON.parse(msg.match(/<kit>\n([\s\S]*?)\n<\/kit>/)?.[1] ?? "{}");
+  check("the kit: the template's blocks in order with their guidance", kitJson.template?.id === "fractional-sales-leader" && kitJson.template.sections.map((x: { block_id: string }) => x.block_id).join() === L.templateDef("fractional-sales-leader")!.blocks.map((b) => b.blockId).join() && kitJson.template.sections.every((x: { guidance?: string }) => !!x.guidance));
+  check("the kit: the winning patterns, the rate band from the benchmarks, the company's facts", kitJson.winning_patterns?.length >= 10 && /middle half of 12 people/.test(kitJson.rate_band?.market ?? "") && kitJson.company?.name === "Acme Robotics" && kitJson.company.facts?.revenue === "$5M–$20M", [kitJson.rate_band, kitJson.company]);
+  check("the kit: her profile and her voice", kitJson.me?.name === "Pat Rowan" && kitJson.me.title === "Fractional VP Sales" && kitJson.voice?.formality === "casual" && kitJson.voice.phrases?.includes("Happy to dig in"));
+  check("the kit never carries the private rate file or another member's data", !/rate-index|Oona|oth\.proposals/.test(msg));
+  check("the call goes in as data, after the kit", msg.indexOf("<transcript>") > msg.indexOf("</kit>") && msg.includes(UNIQUE) && /not instructions/.test(req.system));
+  check("the system prompt asks for the buyer's words, one price and 30/60/90 decisions", /buyer's own words/.test(req.system) && /one price/.test(req.system) && /day 30, 60 and 90/.test(req.system));
+  const dp = dr.proposal;
+  check("saved as a draft in the template's structure", dp.status === "draft" && dp.templateId === "fractional-sales-leader" && dp.blocks.map((b) => b.blockId).join() === "cover,what_we_heard,milestones,investment,custom" && (await S.listProposals(PAT, BASE)).proposals.length === nP + 1, dp.blocks.map((b) => b.blockId));
+  check("an unknown section is kept as a section of its own", dp.blocks[4].title === "A section of their own" && dp.blocks[4].blockId === "custom");
+  check("the price stated and the key fields set, from Claude", dp.fields["pricing.monthlyFee"] === "$12,000" && dp.fields["pricing.stepDownFee"] === "$8,000" && dp.fields["client.signerName"] === "Dana Whitfield" && dp.fields["discovery.callDate"] === "November 18, 2026" && dp.sources["pricing.monthlyFee"] === "claude", dp.fields);
+  const dchecks = L.checklist({ ...dp, fields: L.docFields(dp) });
+  check("the checklist reads the draft: price and 30/60/90 decisions there", dchecks.find((c) => c.id === "price")?.ok === true && dchecks.find((c) => c.id === "milestones")?.ok === true, dchecks.filter((c) => !c.ok).map((c) => c.id));
+  check("what it couldn't know is a blank to fill, so it can't be sent yet", L.blanksOf(dp.blocks, L.docFields(dp)).includes("start.date"));
+  check("budget signals stay private notes, the things to check come back", dp.notes.some((n) => n.key === "budget.signals" && /15k/.test(n.text)) && !JSON.stringify(dp.blocks).includes("15k") && dr.toFix.length === 2 && dp.notes.some((n) => n.key === "check"));
+  check("the person who signs was on the call", dp.signerOnCall === true);
+  const st1 = readFileSync(path.join(dir, "intel.json"), "utf8");
+  check("the transcript is never stored: not in the state, only the draft", !st1.includes(UNIQUE) && !st1.includes("Let's meet Thursday to go through it") && st1.includes("Sales system build for Acme Robotics"));
+  check("she agreed once, and it's remembered", (await S.listProposals(PAT, BASE)).aiAgreed === true);
+  await D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE);
+  check("after agreeing once, the next draft needs no box", aiCalls.length === 2);
+  aiAnswer = () => reply("Here is your proposal, in prose rather than JSON.");
+  const nBad = (await S.listProposals(PAT, BASE)).proposals.length;
+  check("an answer that isn't the draft's JSON is refused, and nothing is saved", (await refused(D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE)))?.includes("form Merlin can read") && (await S.listProposals(PAT, BASE)).proposals.length === nBad);
+  aiAnswer = () => reply(JSON.stringify({ ...draftJson, blocks: [] }));
+  check("a draft with no sections is refused", (await refused(D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE)))?.includes("form Merlin can read"));
+  aiAnswer = () => reply("", "refusal");
+  check("a refusal says so and offers the other ways", (await refused(D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE)))?.includes("didn't draft this one"));
+  aiAnswer = () => ({ status: 401, json: { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } } });
+  check("a refused key: set up wrong, said plainly", (await refused(D.draftWithClaude(PAT, { companyId: ACME, transcript: CALL }, BASE)))?.includes("isn't set up right"));
+  aiAnswer = () => reply(JSON.stringify(draftJson));
+  const st2 = readFileSync(path.join(dir, "intel.json"), "utf8");
+  check("failed drafts left no transcript behind either", !st2.includes(UNIQUE));
+  // The page's own reader, switch off: what it found is sent, never the transcript (the app's path, as ProposalStart.tsx runs it).
+  setEnv(false);
+  const exOff = X.extract(TRANSCRIPT, "Pat Rowan");
+  let offFields: Record<string, string> = {};
+  let offNotes: import("../lib/proposals/types").DiscoveryNote[] = [];
+  for (const sg of exOff.suggestions.filter((x) => x.buyer).slice(0, 8)) ({ fields: offFields, notes: offNotes } = L.acceptInto(offFields, offNotes, sg.key, sg.text, iso(0)));
+  const offP = await S.createProposal(PAT, { templateId: "fractional-sales-leader", companyId: ACME, fields: offFields, notes: offNotes, signerOnCall: exOff.signerOnCall, source: "discovery" }, BASE);
+  check("switch off: Draft fills the template from what the reader found, as a draft", offP.blocks.length === L.templateDef("fractional-sales-leader")!.blocks.length && Object.values(offP.sources).includes("discovery") && offP.notes.length > 0, offP.sources);
+  check("switch off: nothing went to Anthropic", aiCalls.length === 6);
+  setEnv(true);
+
+  // The connector's kit: one call, by template id or by the name the member said.
+  const kctx = { member: (await T.memberForToken(PAT))!, origin: BASE };
+  const kit = await C.getProposalKit(kctx, { template: "sprint 90", company_id: ACME });
+  check("get_proposal_kit: a template by the name the member said, with its sections and guidance", (kit.template as { id: string }).id === "sprint-90" && (kit.template as { sections: unknown[] }).sections.length === L.templateDef("sprint-90")!.blocks.length);
+  check("get_proposal_kit: rate band, company, voice, how to write it and the shape to save it in", !!(kit.rate_band as { market?: string }).market && (kit.company as { name: string }).name === "Acme Robotics" && !!kit.voice && Array.isArray(kit.how_to_write_it) && (kit.save_it_with as { tool: string }).tool === "create_or_update_proposal");
+  check("get_proposal_kit: a template that isn't there lists the ones that are", /No template called "Moonshot"[\s\S]*sprint-90/.test((await refused(C.getProposalKit(kctx, { template: "Moonshot" }))) ?? ""));
+  const fkctx = { member: (await T.memberForToken(FRE))!, origin: BASE };
+  check("get_proposal_kit on Free: Merlin's other templates are Pro's", (await refused(C.getProposalKit(fkctx, { template: "sprint-90" })))?.includes("On Free"));
+  check("the kit and the server's draft read the same inputs", JSON.stringify(Object.keys(await K.proposalKit(PAT, { templateId: "sprint-90", companyId: ACME })).sort()) === JSON.stringify(Object.keys(kitJson).sort()));
+
+  /* ================= My templates ================= */
+  console.log("\nmy templates");
+  const TP = await import("../lib/proposals/templateParse");
+  const MN = await import("../lib/proposals/mine");
+  // A tiny .docx, made here: a zip with word/document.xml and its styles.
+  const zip = (files: Record<string, string>) => {
+    const locals: Buffer[] = [];
+    const central: Buffer[] = [];
+    let off = 0;
+    for (const [name, text] of Object.entries(files)) {
+      const raw = Buffer.from(text, "utf8");
+      const data = deflateRawSync(raw);
+      const n = Buffer.from(name);
+      const crc = crc32(raw);
+      const lh = Buffer.alloc(30);
+      lh.writeUInt32LE(0x04034b50, 0), lh.writeUInt16LE(20, 4), lh.writeUInt16LE(8, 8), lh.writeUInt32LE(crc, 14), lh.writeUInt32LE(data.length, 18), lh.writeUInt32LE(raw.length, 22), lh.writeUInt16LE(n.length, 26);
+      const ch = Buffer.alloc(46);
+      ch.writeUInt32LE(0x02014b50, 0), ch.writeUInt16LE(20, 4), ch.writeUInt16LE(20, 6), ch.writeUInt16LE(8, 10), ch.writeUInt32LE(crc, 16), ch.writeUInt32LE(data.length, 20), ch.writeUInt32LE(raw.length, 24), ch.writeUInt16LE(n.length, 28), ch.writeUInt32LE(off, 42);
+      locals.push(lh, n, data);
+      central.push(ch, n);
+      off += 30 + n.length + data.length;
+    }
+    const cd = Buffer.concat(central);
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0), end.writeUInt16LE(Object.keys(files).length, 8), end.writeUInt16LE(Object.keys(files).length, 10), end.writeUInt32LE(cd.length, 12), end.writeUInt32LE(off, 16);
+    return Buffer.concat([...locals, cd, end]);
+  };
+  const para = (t: string, style?: string, list = false) => `<w:p>${style || list ? `<w:pPr>${style ? `<w:pStyle w:val="${style}"/>` : ""}${list ? "<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"1\"/></w:numPr>" : ""}</w:pPr>` : ""}<w:r><w:t xml:space="preserve">${t}</w:t></w:r></w:p>`;
+  const docx = zip({
+    "[Content_Types].xml": "<Types/>",
+    "word/styles.xml": `<w:styles><w:style w:type="paragraph" w:styleId="Titre1"><w:name w:val="heading 1"/></w:style></w:styles>`,
+    "word/document.xml": `<w:document><w:body>${[
+      para("Northwind Statement of Work", "Title"),
+      para("Background", "Heading1"),
+      para("Northwind grew fast &amp; its sales process didn't keep up."),
+      para("Scope of work", "Titre1"),
+      para("Weeks 1 to 2: diagnose the pipeline", undefined, true),
+      para("Weeks 3 to 6: rebuild the process", undefined, true),
+      para("Fees", "Heading1"),
+      para("$11,000 a month, billed in advance."),
+      para("Out of scope", "Heading2"),
+      para("Hiring a full-time leader."),
+    ].join("")}</w:body></w:document>`,
+    "docProps/core.xml": "<cp:coreProperties><dc:title>Northwind SOW</dc:title></cp:coreProperties>",
+  });
+  const pd = await TP.parseTemplateFile("Northwind SOW.docx", docx);
+  check(".docx: the document's title, each heading a section, Word's styles (any locale)", pd.title === "Northwind SOW" && pd.sections.map((x) => x.title).join("|") === "Background|Scope of work|Fees|Out of scope", pd.sections.map((x) => x.title));
+  check(".docx: text with entities, list paragraphs as bullets", pd.sections[0].body === "Northwind grew fast & its sales process didn't keep up." && pd.sections[1].body === "- Weeks 1 to 2: diagnose the pipeline\n- Weeks 3 to 6: rebuild the process", pd.sections.map((x) => x.body));
+  check(".docx: headings read as the library's blocks", pd.sections.map((x) => x.blockId).join() === "what_we_heard,phases_workstreams,investment,out_of_scope", pd.sections.map((x) => x.blockId));
+  const { PDFDocument, StandardFonts } = await import("pdf-lib");
+  const tpdf = await PDFDocument.create();
+  const hb = await tpdf.embedFont(StandardFonts.HelveticaBold);
+  const hr = await tpdf.embedFont(StandardFonts.Helvetica);
+  const pg = tpdf.addPage([612, 792]);
+  let yy = 740;
+  for (const [t, size, font] of [["Proposal for Larkspur", 22, hb], ["Our approach", 15, hb], ["We start with the numbers, then the team, then the process.", 10, hr], ["Investment", 15, hb], ["Nine thousand dollars a month for one day a week.", 10, hr], ["Next steps", 15, hb], ["Sign by Friday and we start Monday.", 10, hr]] as const) {
+    pg.drawText(t, { x: 54, y: yy, size, font });
+    yy -= size + 14;
+  }
+  const pp = await TP.parseTemplateFile("larkspur.pdf", Buffer.from(await tpdf.save()));
+  check(".pdf: lines set larger than the body text are headings, the rest their text", pp.sections.map((x) => x.title).join("|") === "Our approach|Investment|Next steps" && /numbers, then the team/.test(pp.sections[0].body) && pp.sections.map((x) => x.blockId).join() === "recommendation,investment,next_steps", pp.sections);
+  const pmd = await TP.parseTemplateFile("plan.md", Buffer.from("# Plan for Ostrava\n\n## The situation\nSales stalled at $4M.\n\n## Pricing\n* $10,000 a month\n* 3 months\n"));
+  check(".md: # headings, * bullets", pmd.title === "Plan for Ostrava" && pmd.sections.map((x) => x.title).join("|") === "The situation|Pricing" && pmd.sections[1].body === "- $10,000 a month\n- 3 months", pmd.sections);
+  const ptx = await TP.parseTemplateFile("sow.txt", Buffer.from("BACKGROUND\nThey need a forecast.\n\n1. Scope\nA weekly pipeline review.\n\nFees:\n$9,500 a month.\n"));
+  check(".txt: capitals, numbered and colon headings", ptx.sections.map((x) => x.title).join("|") === "BACKGROUND|Scope|Fees" && ptx.sections[2].body === "$9,500 a month.", ptx.sections);
+  check("a scan with no text, a wrong type and an old .doc are refused in words", (await refused(TP.parseTemplateFile("x.txt", Buffer.from("  \n "))))?.includes("couldn't find any text") && (await refused(TP.parseTemplateFile("x.rtf", Buffer.from("x"))))?.includes("Upload a .docx") && (await refused(TP.parseTemplateFile("x.doc", Buffer.from("x"))))?.includes(".docx or PDF"));
+  const mt = await MN.uploadTemplate(PAT, "Northwind SOW.docx", docx);
+  check("uploaded: kept as hers, the file itself not kept", /^mt_/.test(mt.id) && mt.blocks.length === 4 && !readFileSync(path.join(dir, "intel.json"), "utf8").includes("[Content_Types]"));
+  const mv = await S.listProposals(PAT, BASE);
+  check("her templates come first in the list, then Merlin's", mv.templates[0].id === mt.id && mv.templates[0].mine && mv.templates.filter((x) => !x.mine).length === 5);
+  const fromMine = await S.createProposal(PAT, { templateId: mt.id, companyName: "Larkspur Foods" }, BASE);
+  check("a proposal from her own template: its sections and her text", fromMine.blocks.map((b) => b.title).join("|") === "Background|Scope of work|Fees|Out of scope" && fromMine.blocks[2].body === "$11,000 a month, billed in advance." && fromMine.title === "Northwind SOW for Larkspur Foods", fromMine.title);
+  const mkit = await K.proposalKit(PAT, { templateId: mt.id, companyName: "Larkspur Foods" });
+  check("the kit for her template carries her own words, section by section", mkit.template.mine && mkit.template.sections[2].their_text === "$11,000 a month, billed in advance.");
+  check("Free can start from a template of their own", /^mt_/.test((await MN.uploadTemplate(FRE, "mine.md", Buffer.from("# Mine\n\n## Fees\n$5,000 a month for advice, two calls a week and a written plan."))).id));
+  check("another member can't use or see it", (await refused(S.createProposal(OTH, { templateId: mt.id, companyName: "X" }, BASE)))?.includes("isn't there") && !(await S.listProposals(OTH, BASE)).templates.some((x) => x.mine));
+  check("nor delete it", (await refused(MN.deleteTemplate(OTH, mt.id)))?.includes("isn't there"));
+  check("not in the export", !JSON.stringify(await T.exportState()).includes("Northwind"));
+  await MN.deleteTemplate(PAT, mt.id);
+  check("deleted: gone from her list, the proposal made from it stays", !(await S.listProposals(PAT, BASE)).templates.some((x) => x.id === mt.id) && !!(await S.getProposal(PAT, fromMine.id, BASE)));
+  setEnv(false);
+
+  /* ================= blanks in words, the signer from the deal, the signing page's errors ================= */
+  console.log("\nwords and the signer");
+  check("a blank in words: the library's label, never its key", L.fieldLabel("client.signerName") === "Signer name" && L.fieldLabel("discovery.callDate") === "Discovery call date" && L.fieldLabel("start.date") === "Date" && L.fieldLabel("term.optOutDay") !== "term.optOutDay");
+  check("blanks in words: the first few by name, then a count", L.blanksInWords(["headline", "client.signerName", "client.signerTitle", "discovery.callDate", "pains", "seats"]) === "Outcome headline, Signer name, Signer title, Discovery call date and 2 more", L.blanksInWords(["headline", "client.signerName", "client.signerTitle", "discovery.callDate", "pains", "seats"]));
+  const blankP = await S.createProposal(PAT, { templateId: "fractional-sales-leader", companyName: "Keyless Holdings" }, BASE);
+  const blankErr = (await refused(S.sendProposal(PAT, blankP.id, { signer: { name: "Kim Key", email: "kim@keyless.example" } }, BASE))) ?? "";
+  check("sending with blanks says what to fill in words, never field keys", /^Fill the \d+ blanks first: /.test(blankErr) && !/[a-z]+\.[a-zA-Z]+/.test(blankErr.replace(/^Fill the \d+ blanks first: /, "")) && /Outcome headline/.test(blankErr), blankErr);
+  const ctxW = { member: (await T.memberForToken(PAT))!, origin: BASE };
+  const askW = await C.sendForSignature(ctxW, { proposal_id: blankP.id, signer_name: "Kim Key", signer_email: "kim@keyless.example" });
+  check("the connector says the blanks in words too (with the keys, for Claude to fill)", typeof askW.blanks_in_words === "string" && !/client\./.test(String(askW.blanks_in_words)) && Array.isArray(askW.blanks));
+  // Her own deal at Acme, to someone she typed in: a new proposal there is addressed to them.
+  await T.tableInternals.mutate((st) => {
+    const log = ((st.pipeline ??= {}).mem_pat ??= P.emptyPipeline());
+    const e = log.entries.find((x) => x.companyId === "c_acme");
+    if (e) e.to = { name: "Dana Whitfield", role: "COO" }, (e.updatedAt = new Date().toISOString());
+    else P.openEntry(log, { id: "pl_acme_to", companyId: "c_acme", channel: "email", to: { name: "Dana Whitfield", role: "COO" }, source: "record", via: "note", nowMs: Date.now() });
+  });
+  const pre = await S.createProposal(PAT, { templateId: "fractional-sales-leader", companyId: ACME }, BASE);
+  check("the signer prefilled from her deal at the company", pre.fields["client.signerName"] === "Dana Whitfield" && pre.fields["client.signerTitle"] === "COO" && pre.sources["client.signerName"] === "pipeline", pre.fields);
+  check("so those blanks never appear", !L.blanksOf(pre.blocks, L.docFields(pre)).some((k) => k === "client.signerName" || k === "client.signerTitle"));
+  await T.tableInternals.mutate((st) => {
+    for (const e of st.pipeline!.mem_pat.entries) if (e.companyId === "c_acme") e.to = { name: "Gina From Google", google: true };
+  });
+  check("never a name that came from Google", !(await S.createProposal(PAT, { templateId: "fractional-sales-leader", companyId: ACME }, BASE)).fields["client.signerName"]);
+  const signSrc = readFileSync(path.join(process.cwd(), "app/sign/Sign.tsx"), "utf8") + readFileSync(path.join(process.cwd(), "app/sign/DocSign.tsx"), "utf8");
+  check("the signing pages: every error shows in its own step, announced, never twice", !/\{err && <p/.test(signSrc) && (signSrc.match(/errAt === "code" \|\| errAt === "verify"/g) ?? []).length === 4 && (signSrc.match(/role="alert"/g) ?? []).length === 8 && !signSrc.includes("err && !v.codeVerified"));
+  const codeForm = readFileSync(path.join(process.cwd(), "app/sign/Sign.tsx"), "utf8").match(/onSubmit=\{async \(e\) => \{\s*e.preventDefault\(\);\s*const r = await run\("verify"[\s\S]*?<\/form>/)?.[0] ?? "";
+  check("a wrong code's error is inside the code form", /errAt === "verify"/.test(codeForm) && /role="alert"/.test(codeForm));
+
+  check("nothing but the fake email and Anthropic endpoints was called", others === 0, others);
   H.setPipelineHook(null);
   console.log(`\n${passes} passed, ${failures} failed`);
   if (!failures) rmSync(dir, { recursive: true, force: true });

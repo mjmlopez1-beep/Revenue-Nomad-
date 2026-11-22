@@ -3,11 +3,15 @@ import { guarded } from "@/lib/apiGuard";
 import { limited } from "@/lib/rateLimit";
 import { memberForToken } from "@/lib/table";
 import { ProposalProblem, createProposal, deleteProposal, duplicateProposal, getProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
+import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
+import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
 
 export const dynamic = "force-dynamic";
 
 const COOKIE = "rn_table";
 const MAX_BODY = 256 * 1024;
+/** A draft from a call carries the transcript (lib/proposals/extract.ts MAX_TRANSCRIPT, about three hours of talk). */
+const MAX_DRAFT_BODY = 900 * 1024;
 const NO_STORE = { "cache-control": "no-store" };
 const origin = (req: NextRequest) =>
   process.env.RN_PUBLIC_URL?.replace(/\/$/, "") ||
@@ -20,6 +24,7 @@ async function answer(work: () => Promise<unknown>) {
     return NextResponse.json(await work(), { headers: NO_STORE });
   } catch (e) {
     if (e instanceof ProposalProblem) return err(e.message, e.status, e.upgrade);
+    if (e instanceof MineProblem) return err(e.message, e.status);
     throw e;
   }
 }
@@ -29,7 +34,14 @@ async function answer(work: () => Promise<unknown>) {
  *
  * GET              ProposalsView: every proposal of theirs, newest first, and what their plan allows.
  * GET ?id=ID       ProposalRec: one of theirs.
- * POST { op: "create", templateId?, companyId?, companyName?, title? }
+ * POST { op: "create", templateId?, companyId?, companyName?, title?, fields?, notes?, signerOnCall? }
+ *                  templateId: a library template, one of theirs ("mt_..."), or none. fields and notes: what the
+ *                  member kept from a call read in their browser (lib/proposals/extract.ts), never the transcript.
+ * POST { op: "draft", templateId?, companyId?, companyName?, transcript, callDate?, callWith?, agree? }
+ *                  Draft the whole proposal with Claude (lib/proposals/draft.ts, RN_AI_DRAFTS). The transcript is
+ *                  used for this request only and never kept. { proposal, toFix }.
+ * POST { op: "agree_ai" }   They agree a transcript may go to Anthropic's API to write a draft.
+ * POST { op: "template_rename", id, title } | { op: "template_delete", id }   My templates (uploads: /api/proposals/template).
  * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName? }
  *                  A change to what the client reads, after a version went out, makes a new version and voids the old link.
  * POST { op: "duplicate" | "delete" | "void", id }
@@ -49,9 +61,9 @@ export const POST = guarded(async (req: NextRequest) => {
   const me = await memberForToken(token);
   if (!me) return err("You're signed out. Sign in again to work on proposals.", 401);
   if (limited(`prop-post:${me.id}`, 120, 60_000)) return err(SLOW, 429);
-  if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY) return err("That's too much to save at once. Shorten it, then try again.", 413);
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_DRAFT_BODY) return err("That's too much to send at once. Paste the part of the call about their business.", 413);
   const text = await req.text();
-  if (text.length > MAX_BODY) return err("That's too much to save at once. Shorten it, then try again.", 413);
+  if (text.length > MAX_DRAFT_BODY) return err("That's too much to send at once. Paste the part of the call about their business.", 413);
   let b: Record<string, unknown>;
   try {
     b = JSON.parse(text);
@@ -61,9 +73,25 @@ export const POST = guarded(async (req: NextRequest) => {
   if (!b || typeof b !== "object") return err("That didn't go through. Refresh the page and try again.");
   const id = typeof b.id === "string" ? b.id : "";
   const o = origin(req);
+  if (b.op !== "draft" && text.length > MAX_BODY) return err("That's too much to save at once. Shorten it, then try again.", 413);
   switch (b.op) {
     case "create":
-      return answer(() => createProposal(token, { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, title: b.title }, o));
+      return answer(() =>
+        createProposal(
+          token,
+          { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, title: b.title, fields: b.fields, notes: b.notes, signerOnCall: b.signerOnCall, ...(b.fields || b.notes ? { source: "discovery" } : {}) },
+          o,
+        ),
+      );
+    case "draft":
+      if (limited(`prop-draft:${me.id}`, 30, 24 * 60 * 60_000)) return err("That's 30 drafts with Claude today, which is the limit. Draft without Claude, or Build it in Claude.", 429);
+      return answer(() => draftWithClaude(token, { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, transcript: b.transcript, callDate: b.callDate, callWith: b.callWith, agree: b.agree }, o));
+    case "agree_ai":
+      return answer(async () => (await agreeToAi(token), { ok: true }));
+    case "template_rename":
+      return answer(() => renameTemplate(token, id, b.title));
+    case "template_delete":
+      return answer(async () => (await deleteTemplate(token, id), { ok: true }));
     case "update":
       return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, source: typeof b.source === "string" ? b.source : undefined }, o));
     case "duplicate":

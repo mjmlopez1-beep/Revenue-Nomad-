@@ -17,7 +17,11 @@ import { docFields, moneyOf } from "./library";
 import type { StoredProposal } from "./types";
 
 export type PipelineKind = "proposal_sent" | "signed" | "declined";
-export type PipelineEventFn = (state: State, memberId: string, companyId: string, kind: PipelineKind, at: string) => unknown;
+/** A document to sign (lib/documents) moves the pipeline the same way: who it went to, and no proposal terms. */
+export interface PipelineFrom {
+  document: { to: { name: string; title?: string } | null };
+}
+export type PipelineEventFn = (state: State, memberId: string, companyId: string, kind: PipelineKind, at: string, from?: PipelineFrom) => unknown;
 
 let hook: PipelineEventFn | null = null;
 
@@ -72,11 +76,17 @@ function proposalAt(state: State, memberId: string, companyId: string, kind: Pip
  * The hook lib/table.ts registers: the pipeline's own pipelineEvent on the change's draft state,
  * then, on a signature, the proposal's terms as the Won terms (only when the member gave none).
  */
-export function proposalToPipeline(state: State, memberId: string, companyId: string, kind: PipelineKind, at: string): P.PipelineEntry {
+export function proposalToPipeline(state: State, memberId: string, companyId: string, kind: PipelineKind, at: string, from?: PipelineFrom): P.PipelineEntry {
   const atMs = Date.parse(at);
   const nowMs = Number.isFinite(atMs) ? Math.max(atMs, 0) : Date.now();
-  const p = proposalAt(state, memberId, companyId, kind, at);
   const e = P.pipelineEvent(state, memberId, companyId, kind, at, () => `pl${randomBytes(8).toString("hex")}`, nowMs);
+  // A document: who it went to, as the member typed them. Its terms are in the PDF, not in fields Merlin can read.
+  if (from?.document) {
+    const to = from.document.to;
+    if (to && !e.to.name && !e.to.memberId) e.to = { ...e.to, name: to.name, ...(to.title ? { role: to.title } : {}) };
+    return e;
+  }
+  const p = proposalAt(state, memberId, companyId, kind, at);
   // Opened by the proposal: who it went to, as the member typed it on the proposal.
   if (p?.signer && !e.to.name && !e.to.memberId) e.to = { ...e.to, name: p.signer.name, ...(p.signer.title ? { role: p.signer.title } : {}) };
   if (kind === "signed" && p && !e.won) {
@@ -87,10 +97,11 @@ export function proposalToPipeline(state: State, memberId: string, companyId: st
 }
 
 /** Tell the pipeline, when there is one. `companyId` is the internal company id; a company typed in, not on Merlin, has none and is skipped. */
-export function pipelineEvent(state: State, memberId: string, companyId: string | null, kind: PipelineKind, at: string): void {
+export function pipelineEvent(state: State, memberId: string, companyId: string | null, kind: PipelineKind, at: string, from?: PipelineFrom): void {
   if (!hook || !companyId) return;
   try {
-    hook(state, memberId, companyId, kind, at);
+    if (from) hook(state, memberId, companyId, kind, at, from);
+    else hook(state, memberId, companyId, kind, at);
   } catch (e) {
     console.error("pipeline event failed", kind, e);
   }

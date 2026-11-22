@@ -156,6 +156,29 @@ export function blockFields(b: ProposalBlock): { key: string; label: string; sou
 }
 const EXTRA_LABELS: Record<string, string> = { "provider.title": "Your title", "company.industry": "Industry", "company.revenue": "Revenue", "company.employees": "Employees", "company.hq": "HQ" };
 
+/**
+ * A {{key}} in words, for a person: the library's label ("Signer name"), else the key made
+ * readable ("start.date" reads "Start date"). Never the key itself in a sentence to the member.
+ */
+export function fieldLabel(key: string): string {
+  const f = BLOCKS.flatMap((x) => x.fields).find((x) => x.key === key);
+  if (f?.label) return f.label;
+  if (EXTRA_LABELS[key]) return EXTRA_LABELS[key];
+  const words = (key.split(".").pop() ?? key)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .toLowerCase()
+    .trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : key;
+}
+/** Blanks in words, first few by name: "Headline, Signer name and 3 more". */
+export function blanksInWords(keys: string[], n = 4): string {
+  const l = keys.slice(0, n).map((k) => fieldLabel(k).replace(/\s*\([^)]*\)$/, ""));
+  const more = keys.length - l.length;
+  if (more > 0) return `${l.join(", ")} and ${more} more`;
+  return l.length > 1 ? `${l.slice(0, -1).join(", ")} and ${l[l.length - 1]}` : l[0] ?? "";
+}
+
 const PH = /\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g;
 /** The {{keys}} in a text, in order. */
 export const placeholders = (text: string): string[] => [...text.matchAll(PH)].map((m) => m[1]);
@@ -175,10 +198,18 @@ export function fill(body: string, fields: Record<string, string>, blank?: (key:
       const parts = v.split("\n").map((x) => x.trim()).filter(Boolean);
       return parts.length > 1 || only[1] ? parts.map((p) => (p.startsWith("- ") ? p : `- ${p}`)) : parts;
     }
-    return [line.replace(PH, (m, k: string) => val(k) || (blank ? blank(k) : m))];
+    return [oneUnit(line.replace(PH, (m, k: string) => val(k) || (blank ? blank(k) : m)))];
   });
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+
+const UNIT = "(?:hour|hr|day|week|wk|month|mo|year|yr)";
+/**
+ * One unit after a price: a value that carries its own ("$1,200 a day", "$250/hr") in a starter
+ * that adds one ("{{pricing.overageRate}} an hour") reads "$1,200 a day", never "a day an hour".
+ */
+export const oneUnit = (s: string) =>
+  s.replace(new RegExp(`((?:\\b(?:a|an|per)\\s+|\\/\\s*)${UNIT}s?\\b)(?:\\s*,)?\\s+(?:a|an|per)\\s+${UNIT}s?\\b`, "gi"), "$1");
 
 /** The blanks left in a filled proposal: the {{keys}} nothing filled, once each. */
 export function blanksOf(blocks: ProposalBlock[], fields: Record<string, string>): string[] {
@@ -229,6 +260,7 @@ export const DISCOVERY_TARGET: Record<string, string | null> = {
   objectionsRaised: null,
   nextStep: "nextStep",
   buyerPhrases: null,
+  check: null,
 };
 /** Fields that are the member's own notes: never put in a document's text by the starter blocks. */
 export const PRIVATE_FIELDS = new Set(["budget.signals"]);
@@ -256,6 +288,7 @@ export const DISCOVERY_LABELS: Record<string, string> = {
   objectionsRaised: "Their worries",
   nextStep: "Next step",
   buyerPhrases: "Their own words",
+  check: "Check before you send",
 };
 
 /** Accept a line into a proposal: into its field (one line more), and always as a note. */
@@ -268,6 +301,23 @@ export function acceptInto(fields: Record<string, string>, notes: DiscoveryNote[
 }
 
 /* ---------- the checklist: what winning proposals do ---------- */
+
+/** The patterns the checklist checks, in words a drafter (the member's Claude, or Merlin's) can follow. */
+export const WINNING_PATTERNS: string[] = [
+  "Address it to the person who signs, by name and title, not a go-between.",
+  "Open with what you heard, in the buyer's own words: their goal, their pains, why now.",
+  "The math works back from their own target (revenue goal, run rate, deal size, cycle) to what has to be true.",
+  "Recommend one option, and say what the role is not.",
+  "State one price for it: a monthly fee with the hours or days it covers. Never leave the price for a later email.",
+  "A heavier build in months 1 to 3, then a lower steady fee from month 4.",
+  "3 to 7 workstreams, each with week ranges, a deliverable and the expected impact.",
+  "Milestones at day 30, 60 and 90, each ending in a decision the client makes (continue, scale, change, stop).",
+  "What the client must give (data access in week one, a weekly session) as conditions for success.",
+  "A short first term (6 months or less), then month to month with notice, and an out at day 90.",
+  "Dated next steps, with who does each.",
+  "Say that an electronic signature counts as the original.",
+  "Send it within 48 hours of the call.",
+];
 
 export interface CheckItem {
   id: string;

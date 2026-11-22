@@ -19,11 +19,18 @@ const foot = () => {
 
 export type Mail = { subject: string; text: string; html: string };
 
+/** "Fractional sales leader for Larkfield Robotics": the company once, even when the title already names it. */
+export function proposalName(title: string, company: string): string {
+  const t = oneLine(title).slice(0, 160);
+  const c = oneLine(company).slice(0, 80);
+  return c && !t.toLowerCase().includes(c.toLowerCase()) ? `${t} for ${c}` : t;
+}
+
 /** To the client: the proposal is ready to read and sign. */
 export function proposalEmail(o: { signer: string; member: string; memberTitle: string; title: string; company: string; link: string; expiresAt: string; note?: string }): Mail {
   const member = oneLine(o.member).slice(0, 80);
   const subject = `${member} sent you a proposal to sign`;
-  const lead = `${member}${o.memberTitle ? `, ${oneLine(o.memberTitle).slice(0, 80)},` : ""} sent you ${oneLine(o.title).slice(0, 160)}${o.company ? ` for ${oneLine(o.company).slice(0, 80)}` : ""}.`;
+  const lead = `${member}${o.memberTitle ? `, ${oneLine(o.memberTitle).slice(0, 80)},` : ""} sent you ${proposalName(o.title, o.company)}.`;
   const how = "Read it and sign online. No account needed: we confirm it's you with a code sent to this email.";
   const until = `The link works until ${day(o.expiresAt)}.`;
   const note = oneLine(o.note ?? "").slice(0, 600);

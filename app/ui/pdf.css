@@ -1,0 +1,401 @@
+/*
+ * A PDF's pages (app/ui/PdfPages.tsx) and the fields laid over them: placing them (df-, the
+ * document builder in Proposals) and filling them (ds-, the signing page). Tokens from
+ * app/globals.css. Signers are told apart by colour and by name on each field.
+ */
+.pdf-pages {
+  display: grid;
+  gap: 20px;
+}
+.pdf-pagewrap {
+  display: grid;
+  gap: 6px;
+}
+.pdf-page {
+  position: relative;
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(10, 26, 19, 0.08);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.pdf-page[data-drawn="false"] {
+  background: linear-gradient(90deg, #f3f5f4, #fafbfa, #f3f5f4);
+}
+.pdf-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pdf-num {
+  justify-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+.pdf-err {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-btn);
+  background: #fdecef;
+  color: var(--red);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- signers' colours ---------- */
+.df-c0 {
+  --sc: #0e7a55;
+  --sc-soft: rgba(46, 229, 157, 0.18);
+}
+.df-c1 {
+  --sc: #7a3fc4;
+  --sc-soft: rgba(160, 92, 230, 0.16);
+}
+.df-c2 {
+  --sc: #b23a0a;
+  --sc-soft: rgba(255, 90, 31, 0.14);
+}
+.df-c3 {
+  --sc: #8a6200;
+  --sc-soft: rgba(255, 193, 46, 0.22);
+}
+.df-c4 {
+  --sc: #1f5fa8;
+  --sc-soft: rgba(31, 95, 168, 0.14);
+}
+.df-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sc);
+}
+
+/* ---------- fields on a page ---------- */
+.df-layer {
+  position: absolute;
+  inset: 0;
+}
+.df-layer[data-placing="true"] {
+  cursor: crosshair;
+  background: rgba(46, 229, 157, 0.05);
+  outline: 2px dashed var(--volt);
+  outline-offset: -2px;
+}
+.df-field {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  min-width: 14px;
+  min-height: 12px;
+  border: 1.5px solid var(--sc);
+  border-radius: 3px;
+  background: var(--sc-soft);
+  color: var(--sc);
+  font-size: 11px;
+  line-height: 13px;
+  font-weight: 700;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.df-field[data-kind="checkbox"] {
+  justify-content: center;
+}
+.df-field[data-sel="true"] {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--sc);
+  z-index: 2;
+}
+.df-field-l {
+  overflow: hidden;
+  padding: 0 4px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.df-field-who {
+  font-weight: 500;
+}
+.df-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--sc);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.df-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: 280px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  box-shadow: var(--overlay-shadow);
+  color: var(--ink);
+  font-weight: 500;
+  cursor: default;
+}
+.df-pop .input {
+  min-height: 32px;
+  font-size: 14px;
+}
+.df-pop-who {
+  max-width: 160px;
+}
+.df-pop-label {
+  width: 160px;
+}
+.df-pop-req {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* ---------- the builder's toolbar and side ---------- */
+.df-tools {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.df-who,
+.df-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.df-whochip,
+.df-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.df-whochip[data-on="true"] {
+  border-color: var(--sc);
+  background: var(--sc-soft);
+  color: var(--sc);
+}
+.df-kind {
+  border-radius: var(--r-btn);
+  cursor: grab;
+}
+.df-kind[data-on="true"] {
+  border-color: var(--pine);
+  background: var(--pine);
+  color: #fff;
+}
+.df-kind:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.df-hint {
+  margin: 0;
+  color: var(--volt-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.df-title {
+  width: 100%;
+}
+.df-doc {
+  min-width: 0;
+}
+.df-signers {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.df-signers li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.df-signers li > span:nth-child(2) {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.df-signers li .pp-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.df-add {
+  display: grid;
+  gap: 8px;
+}
+.df-order {
+  margin: 0 0 12px;
+}
+.df-trail {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0 0 0 18px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* ---------- the signing page's fields ---------- */
+.ds-layer .df-field {
+  cursor: default;
+  border-style: dashed;
+}
+.ds-field[data-ready="true"] {
+  border-style: solid;
+  background: rgba(255, 193, 46, 0.2);
+  border-color: #b98700;
+}
+.ds-field[data-done="true"] {
+  background: rgba(46, 229, 157, 0.12);
+  border-color: var(--volt-ink);
+}
+.ds-in {
+  width: 100%;
+  height: 100%;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ds-in:focus {
+  outline: 2px solid var(--focus);
+}
+.ds-box {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  accent-color: var(--pine);
+}
+.ds-filled {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 4px;
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ds-script {
+  font-family: "Brush Script MT", "Segoe Script", "Snell Roundhand", cursive;
+  font-size: 1.5em;
+  font-style: italic;
+}
+.ds-sigimg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.ds-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+.ds-tab {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ds-tab[data-on="true"] {
+  border-color: var(--pine);
+  background: var(--volt-soft);
+}
+.ds-pad {
+  position: relative;
+  margin: 0 0 8px;
+}
+.ds-pad-c {
+  display: block;
+  width: 100%;
+  height: 140px;
+  border: 1px dashed var(--line-input);
+  border-radius: var(--r-btn);
+  background: #fff;
+  touch-action: none;
+}
+.ds-pad-line {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 32px;
+  border-bottom: 1px solid var(--line-strong);
+  pointer-events: none;
+}
+.ds-pad-clear {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+}
+.ds-sig-done {
+  min-height: 72px;
+}
+.ds-doc {
+  padding: 12px;
+}
+.ds-fill-help {
+  margin: 12px 0 0;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+
+@media (max-width: 600px) {
+  .df-tools {
+    margin-left: -4px;
+    margin-right: -4px;
+  }
+  .df-kind,
+  .df-whochip {
+    min-height: 40px;
+  }
+  .ds-doc {
+    padding: 6px;
+  }
+}

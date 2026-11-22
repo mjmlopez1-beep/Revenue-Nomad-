@@ -32,6 +32,10 @@ const PROCESSORS: { who: string; gets: string }[] = [
     gets: "Only if you connect Google: your sign-in and Merlin's read-only requests, sent with your own access. Nothing about other members goes to Google.",
   },
   {
+    who: "Anthropic (drafting with Claude)",
+    gets: "Only if you turn on drafting with Claude in Proposals, and only for the draft you ask for: the call's transcript or notes you paste, and the draft's inputs (the template, the company's facts you can see, the rate range, your name, title and writing voice). It is sent to Anthropic's API to write the draft. Merlin keeps the draft, not the transcript.",
+  },
+  {
     who: "Your own AI assistant",
     gets: "Only if you add Merlin's connector to it: the answers Merlin's tools give you. See \"Your own AI assistant\" below.",
   },
@@ -67,7 +71,16 @@ export function PrivacyView({ support }: { support: string | null }) {
             <li>What you add to the exchange: facts about companies, seats, people and rates. These are your contributions. See &quot;What other members see&quot; below.</li>
             <li>Your messages to other members, and the reports you make about a message.</li>
             <li>Your pipeline: the companies you reached out to, its stages, your notes and follow-ups.</li>
-            <li>Your proposals: drafts, the lines you accept from a call, and what you send for signature. A call&apos;s transcript is read in your browser and never sent to Merlin. Only the lines you accept are saved.</li>
+            <li>
+              Your proposals: drafts, the lines you accept from a call, and what you send for signature. A call&apos;s transcript is read in your browser and not sent to
+              Merlin, and only the lines you use are saved. If you turn on drafting with Claude, the transcript and the draft&apos;s inputs are sent to Anthropic&apos;s API
+              to write that draft, and are not kept by Merlin. Only the draft is saved.
+            </li>
+            <li>Your own templates, if you upload a past proposal: the headings and text read from it. The file itself is not kept.</li>
+            <li>
+              Documents you upload to be signed: the PDF, the fields you place and the people who sign. The file is stored privately on Merlin&apos;s server, for you and
+              the people you send it to, and is never shown to other members.
+            </li>
             <li>Your writing voice, if you set it: a few style choices, such as how you open and close a note.</li>
             <li>Your plan and payments: your plan, its dates and the amounts paid. Stripe holds the card.</li>
           </ul>
@@ -104,9 +117,10 @@ export function PrivacyView({ support }: { support: string | null }) {
           </p>
           <h3 className="df-h3">From people who sign a proposal</h3>
           <p className="cl-p">
-            When a member sends a proposal for signature, Merlin keeps the signer&apos;s name, email and title as the member entered them. When the signer opens, confirms
-            and signs it, Merlin records the time, their IP address and device (browser), the email code they confirmed, their typed name, the consent they agreed to, and
-            a fingerprint (SHA-256) of the exact document. This audit trail is kept with the signed copy and shared with both parties.
+            When a member sends a proposal or a document for signature, Merlin keeps the signer&apos;s name, email and title as the member entered them. When the signer
+            opens, confirms and signs it, Merlin records the time, their IP address and device (browser), the email code they confirmed, their typed name or drawn
+            signature, what they filled in, the consent they agreed to, and a fingerprint (SHA-256) of the exact document. This audit trail is kept with the signed copy
+            and shared with everyone who signed it.
           </p>
           <h3 className="df-h3">When you use the site</h3>
           <p className="cl-p">
@@ -138,7 +152,10 @@ export function PrivacyView({ support }: { support: string | null }) {
         <ul className="df-bullets">
           <li>We never sell personal data.</li>
           <li>We never use Google data for advertising, and we show no ads.</li>
-          <li>We never use any data to train AI models. Merlin&apos;s server calls no AI model and sends nothing to a model provider.</li>
+          <li>
+            We never use any data to train AI models. Merlin&apos;s server calls no AI model and sends nothing to a model provider, except when you turn on drafting with
+            Claude for a proposal: then that draft&apos;s inputs go to Anthropic&apos;s API, and the transcript is not kept.
+          </li>
           <li>We never show your Google data, your LinkedIn import, your pipeline or your writing voice to another member.</li>
           <li>We never read the text or subject of an email, or a meeting&apos;s title, description or location.</li>
         </ul>
@@ -225,7 +242,7 @@ export function PrivacyView({ support }: { support: string | null }) {
             say yes, and gets only what those tools return to you: what you would see in the app, with the same locks and credits.
           </p>
           <p className="cl-p">
-            What your assistant&apos;s provider does with those answers is set by your own account with that provider. Merlin itself calls no AI model. You can see and
+            What your assistant&apos;s provider does with those answers is set by your own account with that provider. Merlin itself calls no AI model, except the proposal drafting you can turn on. You can see and
             disconnect every assistant you added in Your credits, under Connected apps.
           </p>
           <p className="cl-p">
@@ -293,6 +310,8 @@ export function PrivacyView({ support }: { support: string | null }) {
           <li>Your name on a seat, or as a company&apos;s leader, and an email read from your own website: <a href="/remove">Remove my name</a> takes them off at once, and they stay off.</li>
           <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
           <li>A signed proposal and its audit trail: kept with the signed copy for both parties.</li>
+          <li>A document you uploaded: a draft until you delete it, with its file. A signed one is kept with its final PDF and audit trail for everyone who signed it.</li>
+          <li>A transcript you draft from with Claude: not kept. Only the draft is.</li>
           <li>
             Closing your account: there is no button for this yet. <ContactLine support={support} subject="Close my Merlin account" /> We will close it, delete your private data and
             tell you what we have to keep, such as payment records.
