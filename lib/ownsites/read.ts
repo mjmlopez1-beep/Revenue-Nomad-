@@ -7,7 +7,9 @@
  *
  * Then at most PAGE_CAP pages of the site's own registrable domain: the homepage, a contact page,
  * an about page, a team page (linked from the homepage, else the common path), and one more linked
- * page whose address says contact, about or team. robots.txt first (a site that refuses "/" is
+ * page whose address says contact, about or team. Then, past the cap, at most BIO_PAGES more: links
+ * on the pages read that look like the person's own bio page (the address carries their name, or
+ * the link's words name them), the same rules for each. robots.txt first (a site that refuses "/" is
  * left alone), and every page's own path checked against it; every request through
  * lib/about/fetch.ts with all its safety checks (public addresses only, each redirect hop checked,
  * 8 seconds, a size cap, html only, the plain User-Agent), one request per host at a time, a short
@@ -18,8 +20,8 @@
 import { pageJunk } from "../about/extract";
 import { fetchHomepage, fetchPageAt, fetchRobotsTxt, registrable, robotsAllowsPath, testAllowance, type FetchOpts, type Page } from "../about/fetch";
 import { findWebsite, type FindOpts } from "../websites/find";
-import { decide, nameWords, namesPerson, pageLinks, visibleText, type PageKind, type SitePage } from "./extract";
-import { PAGE_CAP, type OwnHow, type OwnStatus } from "./types";
+import { bioLinks, decide, nameWords, namesPerson, pageLinks, visibleText, type PageKind, type SitePage } from "./extract";
+import { BIO_PAGES, PAGE_CAP, type OwnHow, type OwnStatus } from "./types";
 
 /** A page read is cut at this size: contact details sit in the page, not deep in a script. */
 export const PAGE_MAX_BYTES = 384 * 1024;
@@ -35,7 +37,7 @@ export interface ReadTarget {
 }
 
 export type ReadOutcome =
-  | { key: string; s: "found"; email: string; page: string; how: OwnHow; site: string; pages: number; lookedUp?: string }
+  | { key: string; s: "found"; email: string; page: string; how: OwnHow; site: string; pages: number; lookedUp?: string; invitesOnly?: true }
   | { key: string; s: Exclude<OwnStatus, "found">; pages: number; site?: string; why?: string };
 
 
@@ -145,11 +147,34 @@ export async function readOwnSite(t: ReadTarget, o: ReadOpts = {}): Promise<Read
         if (!plan.includes(l.url) && !seen.has(key(new URL(l.url)))) plan.push(l.url);
       }
     }
+    // The person's own bio page, when a page read links one: at most BIO_PAGES more pages, the same checks for each.
+    const bios: string[] = [];
+    for (const p of pages) for (const u of bioLinks(p.html, p.url, sameSite, t.name)) if (!bios.includes(u) && !seen.has(key(new URL(u)))) bios.push(u);
+    let extraRead = 0;
+    for (const url of bios) {
+      if (extraRead >= BIO_PAGES) break;
+      const k = key(new URL(url));
+      if (seen.has(k)) continue;
+      seen.add(k);
+      await pause();
+      extraRead++;
+      const p = await fetchPageAt(url, pageOpts);
+      if (!p.ok) {
+        if (p.reason === "robots.txt disallows") blocked++;
+        continue;
+      }
+      if (!sameSite(new URL(p.url))) continue;
+      const k2 = key(new URL(p.url));
+      if (k2 !== k && seen.has(k2)) continue;
+      seen.add(k2);
+      pages.push({ url: p.url, html: p.html });
+      base.pages++;
+    }
   } catch {
     /* what was read is decided on */
   }
   const d = decide(pages, home.host, t.name);
-  if (d.ok) return { ...base, s: "found", email: d.email, page: d.page, how: d.how, site: home.host.replace(/^www\./, ""), ...(lookedUp ? { lookedUp } : {}) };
+  if (d.ok) return { ...base, s: "found", email: d.email, page: d.page, how: d.how, site: home.host.replace(/^www\./, ""), ...(lookedUp ? { lookedUp } : {}), ...(d.invitesOnly ? { invitesOnly: true as const } : {}) };
   // Nothing at all, and robots.txt kept us off every page past the homepage: say so.
   if (d.s === "no email" && blocked && pages.length === 1) return { ...base, s: "robots", site: lookedUp };
   return { ...base, s: d.s, site: lookedUp, ...(d.s === "email not theirs" ? { why: d.why } : {}) };

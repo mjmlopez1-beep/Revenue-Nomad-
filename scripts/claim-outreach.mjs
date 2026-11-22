@@ -119,7 +119,14 @@ const base = (process.env.RN_PUBLIC_URL || "https://table-pilot.up.railway.app")
 
 const counts = { us: 0, notOnSeed: 0, notNamed: 0, claimed: 0, removed: 0, noLead: 0, written: 0 };
 const lines = [["first_name", "full_name", "company", "role", "start_month", "claim_link", "sales_navigator_lead", "email", "email_from", "message"].join(",")];
-/** Emails from their own websites (State.ownEmails by person key): usable ones only, and only with the switch on. */
+/**
+ * Emails from their own websites (State.ownEmails by person key): usable ones only, and only with the switch on.
+ * A generic inbox on a one-person site (invitesOnly, or its how) may carry this invite to Merlin and nothing
+ * else: its email_from says so, so the file's sender uses it for the invite only.
+ */
+const INVITES_ONLY_HOWS = ["generic inbox, one-person site", "generic on a one-person site"];
+const invitesOnly = (own) => !!own && (own.invitesOnly === true || INVITES_ONLY_HOWS.includes(own.how));
+const fromWords = (own) => (invitesOnly(own) ? "their website (generic inbox; invites to Merlin only)" : "their website");
 const ownEmails = process.env.RN_OWNSITES === "1" ? state?.ownEmails ?? {} : {};
 const ownLinked = seed.ownSites ?? {};
 counts.withEmail = 0;
@@ -162,7 +169,7 @@ for (const r of csvRows) {
   const own = e.holderKey && ownLinked[e.holderKey] ? ownEmails[e.holderKey] : null;
   const email = own && !own.pending && own.email ? own.email : "";
   if (email) counts.withEmail++;
-  lines.push([first, name, company, role, monthText(e.fields.start), link, lead ? `https://www.linkedin.com/sales/lead/${lead}` : "", email, email ? "their website" : "", message].map(csvCell).join(","));
+  lines.push([first, name, company, role, monthText(e.fields.start), link, lead ? `https://www.linkedin.com/sales/lead/${lead}` : "", email, email ? fromWords(own) : "", message].map(csvCell).join(","));
   counts.written++;
 }
 
@@ -193,7 +200,7 @@ for (const [k, p] of Object.entries(seed.ownSiteProspects ?? {})) {
     "Operators share what they know about fractional work to earn credits, and see which companies hire fractionals, what they've paid and which roles are open now. " +
     `Joining is free and takes a minute. ${base}/ ` +
     `Would you rather not hear from us? ${base}/remove takes your name and email off.`;
-  joinLines.push([first, p.name, p.firm ?? "", p.site, own.email, "their website", `${base}/`, message].map(csvCell).join(","));
+  joinLines.push([first, p.name, p.firm ?? "", p.site, own.email, fromWords(own), `${base}/`, message].map(csvCell).join(","));
   joinCounts.written++;
 }
 writeFileSync(joinOut, joinLines.join("\n") + "\n", { mode: 0o600 });

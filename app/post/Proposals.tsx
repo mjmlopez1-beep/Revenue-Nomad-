@@ -15,7 +15,12 @@
  * things to fix"). The sections' order, adding one, who signs, what to charge and the lines kept
  * from the call are in the side menu (a sheet on phones). Changes save as they are made. A change
  * after sending makes a new version (the server voids the old link), so a sent proposal opens
- * read-only until the member says to change it. Free writes drafts; sending is Pro's (Trial has it).
+ * read-only until the member says to change it.
+ *
+ * Building is Pro + Close (ProposalsView.canBuild; the trial is Close). After the trial, without it,
+ * the page lists what they made, read only, with the Pro + Close prompt (CloseBuildPrompt): New
+ * proposal and My templates' upload open the plans, and their saved templates stay listed, kept
+ * for when they upgrade.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { View } from "@/lib/tableTypes";
@@ -41,7 +46,21 @@ import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;
+/** The upgrade prompt where building is refused (lib/proposals/mine.ts CLOSE_BUILD says the same). */
+export const CLOSE_BUILD_WORDS = `Building proposals in Merlin is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. Your proposals and saved templates are kept, and come back when you upgrade.`;
+
+/** The Pro + Close prompt where building is refused: the plan tag, the words, See Pro + Close. */
+export function CloseBuildPrompt({ compact }: { compact?: boolean }) {
+  return (
+    <div className="pp-free" data-plan="free" data-close-build role="status">
+      <span className="bl-tag bl-tag-lock">Pro + Close</span>
+      <p>{compact ? CLOSE_BUILD_WORDS.split(". Your")[0] + "." : CLOSE_BUILD_WORDS}</p>
+      <button type="button" className="btn btn-sm" onClick={() => openPlans("proposals")}>
+        See Pro + Close
+      </button>
+    </div>
+  );
+}
 
 async function load(): Promise<ProposalsView | { error: string }> {
   try {
@@ -138,7 +157,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         lead="Drop in the call, pick a template, and Merlin drafts it in your words with the price and the next 90 days. Send it for signature, and your pipeline moves."
         art={<Prop name="ledger" height={72} on="bg" />}
         actions={
-          <button type="button" className="btn btn-pine btn-lg pp-hero-go" onClick={() => setStarting({ companyId: null })} disabled={!data}>
+          <button type="button" className="btn btn-pine btn-lg pp-hero-go" onClick={() => (data && !data.canBuild ? openPlans("proposals") : setStarting({ companyId: null }))} disabled={!data}>
             <IconPlus /> New proposal from a call
           </button>
         }
@@ -155,15 +174,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
           <input ref={pdfRef} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => (void pickPdf(e.target.files?.[0]), (e.target.value = ""))} />
         </div>
       </div>
-      {data && !data.canSend && (
-        <div className="pp-free" data-plan="free">
-          <span className="bl-tag bl-tag-lock">Pro + Close</span>
-          <p>On Free and Pro you can write drafts, build and preview proposals, and prepare documents. {PRO_SEND.split(".")[0]}.</p>
-          <button type="button" className="btn btn-sm" onClick={() => openPlans("proposals")}>
-            See Pro + Close
-          </button>
-        </div>
-      )}
+      {data && !data.canBuild && <CloseBuildPrompt />}
       {error && <p className="pp-err">{error}</p>}
       {!data && !error && <div className="pp-skel" aria-busy="true" />}
       {data && rows.length === 0 && (
@@ -205,7 +216,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
           )}
         </ul>
       )}
-      {starting && data && (
+      {starting && data && data.canBuild && (
         <StartSheet
           data={data}
           infos={infos}
@@ -249,12 +260,19 @@ function TemplatesSheet({ data, onClose, onChange }: { data: ProposalsView; onCl
       dialog
       className="pp-start"
       footer={
-        <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy} disabled={busy} onClick={() => ref.current?.click()}>
-          {busy ? "Reading it" : "Upload a past proposal or SOW"}
-        </button>
+        data.canBuild ? (
+          <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy} disabled={busy} onClick={() => ref.current?.click()}>
+            {busy ? "Reading it" : "Upload a past proposal or SOW"}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("proposals")}>
+            See Pro + Close
+          </button>
+        )
       }
     >
       <div className="pp-start-body">
+        {!data.canBuild && <CloseBuildPrompt compact />}
         <p className="pp-help">A .docx, .pdf, .md or .txt you wrote before. Merlin reads its headings and text into sections, and drafts new ones in its structure and your words. Only you see it. The file itself isn&#39;t kept.</p>
         <input ref={ref} type="file" accept={TEMPLATE_ACCEPT} hidden onChange={(e) => (void add(e.target.files?.[0]), (e.target.value = ""))} />
         {mine.length === 0 ? (
@@ -319,7 +337,9 @@ function Editor({
 
   const signed = p.status === "signed";
   const out = p.status === "sent" || p.status === "viewed";
-  const readOnly = signed || (out && !changing);
+  // Without Pro + Close (after the trial) a proposal opens read only, with the prompt.
+  const locked = !data.canBuild;
+  const readOnly = signed || (out && !changing) || locked;
   const fields = useMemo(() => docFields(p), [p]);
   const checks = useMemo(() => checklist({ ...p, fields }), [p, fields]);
   const advice = useMemo(() => adviceFromView(view, p), [view, p]);
@@ -476,7 +496,7 @@ function Editor({
               Sections
             </button>
           )}
-          {!signed && !out && (
+          {!signed && !out && !locked && (
             <button type="button" className="btn btn-pine" onClick={() => (void flush(), setSending(true))}>
               Send for signature
             </button>
@@ -491,9 +511,11 @@ function Editor({
               More
             </summary>
             <div className="pp-more-menu">
-              <button type="button" onClick={() => act("duplicate")}>
-                Duplicate
-              </button>
+              {!locked && (
+                <button type="button" onClick={() => act("duplicate")}>
+                  Duplicate
+                </button>
+              )}
               {!signed && (
                 <button type="button" onClick={() => act("delete")}>
                   Delete
@@ -508,7 +530,8 @@ function Editor({
       </header>
 
       {p.send && <SendStatus p={p} />}
-      {out && !changing && (
+      {locked && <CloseBuildPrompt />}
+      {out && !changing && !locked && (
         <div className="pp-banner" role="status">
           <p>
             This version is out for signature, so it&#39;s read-only. Changing it makes version {p.version + 1}, and the link {p.send?.signer.name} has stops working.

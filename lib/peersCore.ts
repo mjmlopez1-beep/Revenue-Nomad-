@@ -366,6 +366,8 @@ export interface LeadRec {
   answeredAt?: string;
   /** The peer's pipeline entry reached Won there. */
   won?: boolean;
+  /** To the viewer only (side to-you, taken): where it stands in their own pipeline, "To reach out" until their note goes out. */
+  stage?: string;
   conversationId?: string;
   /** The passer's credits for it. */
   credited?: number;

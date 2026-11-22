@@ -2,21 +2,24 @@
  * Merlin's Terms of Service. The numbers are read from the rules the server runs (lib/billing/rules.ts,
  * lib/tableFields.ts EARN_CAP, lib/proposals SIGN_DAYS and SENDER_DUTY), so the page can't drift from
  * what Merlin does. Cancellation and refunds say only what the billing code does: Pro runs to the end
- * of the period paid for, then Free, and Merlin makes no refunds of its own. The governing law is the
- * owner's to fill in (GOVERNING_LAW); until then the page shows a placeholder.
+ * of the period paid for, then Free, and Merlin makes no refunds of its own. The governing law is
+ * Connecticut's, where Revenue Nomad is registered (GOVERNING_LAW), with disputes in the state and
+ * federal courts located in Connecticut.
  */
 import { EXTEND_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PAUSE_MONTHS, PRICES, PRO_CREDITS, TOPUP_CREDITS, TRIAL_DAYS } from "@/lib/billing/rules";
 import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
 import { SENDER_DUTY } from "@/lib/proposals/types";
 import { ContactLine, LegalShell, TERMS_VERSION, type Part } from "../legal/LegalShell";
 
-/** The owner fills this in, e.g. "the State of Delaware". Null shows the placeholder. */
-export const GOVERNING_LAW: string | null = null;
+/** Revenue Nomad is registered in Connecticut: its law governs these terms. */
+export const GOVERNING_LAW = "the State of Connecticut";
+/** Where disputes are heard. */
+export const DISPUTE_COURTS = "the state and federal courts located in Connecticut";
 /** How long a signing link works (lib/proposals/store.ts SIGN_DAYS; that module reads the server's state, so the number is repeated here and checked by scripts/test-legal.mts). */
 export const SIGN_LINK_DAYS = 30;
 
 export function TermsView({ support, starter }: { support: string | null; starter: number }) {
-  const law = GOVERNING_LAW ?? "[To confirm: State of ___]";
+  const law = GOVERNING_LAW;
   const parts: Part[] = [
     {
       id: "agree",
@@ -222,11 +225,15 @@ export function TermsView({ support, starter }: { support: string | null; starte
       body: (
         <>
           <p className="cl-p">
-            You can stop using Merlin at any time. To close your account, <ContactLine support={support} subject="Close my Merlin account" />
+            You can stop using Merlin at any time. Close my account, on Your credits, closes your account at once: you are signed out, you leave Peers and the
+            Fractionals directory, and Merlin stops emailing you. For 30 days you can bring it back with the link we email you when it closes, or by writing to us,
+            and so can we. After 30 days Merlin deletes your personal data, and the account can&apos;t come back. A paid plan stops renewing when the account closes.
+            You can also ask us to close it: <ContactLine support={support} subject="Close my Merlin account" />
           </p>
           <p className="cl-p">
             We may suspend or close an account that breaks these terms, puts members or Merlin at risk, or that the law requires us to. We may also stop offering Merlin, and
-            will tell members first. When an account closes, its credits end with it. What you added to the exchange can stay, under the licence above.
+            will tell members first. When an account closes, its credits end with it. What you added to the exchange stays, under the licence above, with your name
+            taken off once your personal data is deleted.
           </p>
         </>
       ),
@@ -274,8 +281,8 @@ export function TermsView({ support, starter }: { support: string | null; starte
       title: "Governing law",
       body: (
         <p className="cl-p">
-          These terms are governed by the laws of {law}, without regard to its conflict of law rules. Any dispute will be heard in the courts there, unless the law where you
-          live says otherwise.
+          These terms are governed by the laws of {law}, without regard to its conflict of law rules. Any dispute will be heard in {DISPUTE_COURTS}, unless the law
+          where you live says otherwise.
         </p>
       ),
     },

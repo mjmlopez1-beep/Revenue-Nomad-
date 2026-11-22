@@ -26,10 +26,10 @@ import { functionOf } from "../tableFields";
 import { PRICES } from "../billing/rules";
 import { upgradeUrl } from "../plan";
 import { publicBase } from "../links";
-import { FREE_TEMPLATE, TEMPLATES, blanksInWords, blanksOf, blockDef, docFields, fieldDefaults, rendered, templateBlocks, templateDef } from "./library";
+import { TEMPLATES, blanksInWords, blanksOf, blockDef, docFields, fieldDefaults, rendered, templateBlocks, templateDef } from "./library";
 export { docFields };
 import { codeEmail, declinedEmail, proposalEmail, signedEmail } from "./emails";
-import { blocksOfMine, isMineId, templatesOf } from "./mine";
+import { CLOSE_BUILD, blocksOfMine, isMineId, templatesOf } from "./mine";
 import { aiConfigured } from "./aiConfig";
 import { AI_PACK_LINK, PACK_PRICE_USD, budgetOf, usedUpWords } from "./aiUsage";
 import { pipelineEvent } from "./pipelineHook";
@@ -58,9 +58,15 @@ export const CODE_TTL_MS = 15 * 60_000;
 export const CODE_TRIES = 5;
 export const CODES_PER_HOUR = 5;
 export const LIMITS = { proposals: 200, blocks: 40, title: 160, body: 8000, fields: 300, fieldKey: 60, fieldValue: 3000, notes: 300, note: 400, reason: 1000, message: 600 } as const;
-/** Sending for signature, every template and Claude drafting are Pro + Close (lib/billing/rules.ts canClose). Free and Pro build and preview. */
-export const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;
-export const CLOSE_TEMPLATES = (title: string) => `You can start from ${title} or a blank page. Every template is on Pro + Close: $${PRICES.closeMonth} a month.`;
+/**
+ * Building proposals in Merlin is Pro + Close (lib/billing/rules.ts canClose, closeNow here): the
+ * trial is Close, so during it a member builds, saves My templates and sends. Once it ends, without
+ * Pro + Close: no new proposal (blank, from Merlin's templates or their own), no edits, no saved
+ * template added, no kit for their Claude. What they made stays stored, never deleted, and comes
+ * back when they upgrade. Sending for signature and Claude drafting are Pro + Close too.
+ */
+export { CLOSE_BUILD };
+export const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year.`;
 export const EMAIL_OFF = "Email isn't set up on Merlin yet, so a proposal can't go out for signature.";
 
 /** A problem to tell the member or the client in a sentence. `status` for the route. */
@@ -195,9 +201,12 @@ const memberOf = (seed: Seed, s: State, token: string | null): Member => {
 };
 const titleOf = (s: State, me: Member) => s.profiles[me.id]?.title || (me.title === "Member" ? "" : me.title) || "";
 const fnOf = (s: State, me: Member) => s.profiles[me.id]?.function ?? functionOf(me.title) ?? null;
-/** Free while billing is live: drafts and one template, no sending. */
-/** Not on Pro + Close now: build and preview only (Free and Pro alike). The one gate is canClose. */
+/** Not on Pro + Close now (Free and Pro alike, after the trial): proposals are read only. The one gate is canClose. */
 const onFree = (s: State, memberId: string, nowMs: number) => !T.closeNow(s, memberId, nowMs);
+/** Building (a new proposal, an edit, a copy, a saved template, the kit) needs Pro + Close: else the upgrade prompt. */
+export function buildGate(s: State, memberId: string, nowMs: number, origin?: string): void {
+  if (onFree(s, memberId, nowMs)) throw new ProposalProblem(CLOSE_BUILD, 403, upgradeUrl(base(origin), "proposals"));
+}
 const mine = (s: State, me: Member, id: unknown): StoredProposal => {
   const p = (s.proposals ?? []).find((x) => x.id === id && x.memberId === me.id);
   if (!p) throw new ProposalProblem("That proposal isn't there anymore. Open Proposals again.", 404);
@@ -222,7 +231,8 @@ export async function listProposals(token: string | null, origin?: string, nowMs
     // The AI usage all used: the words the draft gives (no numbers), and the pack's button and link.
     ...(aiConfigured() && !free && !budgetOf(s, me.id, nowMs).open ? { aiUsedUp: { words: usedUpWords(nowMs, budgetOf(s, me.id, nowMs).trial), pack: AI_PACK_LINK, button: `Add a $${PACK_PRICE_USD} usage pack` } } : {}),
     canSend: !free,
-    templatesOpen: free ? [FREE_TEMPLATE] : TEMPLATES.map((t) => t.id),
+    canBuild: !free,
+    templatesOpen: free ? [] : TEMPLATES.map((t) => t.id),
     email: emailEnabled(),
     me: { name: me.name, title: titleOf(s, me), function: fnOf(s, me), email: me.email },
   };
@@ -368,13 +378,13 @@ export async function createProposal(
 ): Promise<ProposalRec> {
   const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
   const me0 = memberOf(seed, s0, token);
+  // A new proposal, blank, from Merlin's templates or from their own: Pro + Close (the trial is Close).
+  buildGate(s0, me0.id, nowMs, origin);
   const templateId = a.templateId === null || a.templateId === undefined || a.templateId === "" || a.templateId === "blank" ? null : String(a.templateId);
-  // One of the member's own templates (My templates): its sections, on every plan.
+  // One of the member's own templates (My templates): its sections.
   const mineT = isMineId(templateId) ? templatesOf(s0, me0.id).find((t) => t.id === templateId) : undefined;
   if (isMineId(templateId) && !mineT) throw new ProposalProblem("That template of yours isn't there anymore.", 404);
   if (templateId && !mineT && !templateDef(templateId)) throw new ProposalProblem("That template isn't in the library.");
-  if (templateId && !mineT && templateId !== FREE_TEMPLATE && onFree(s0, me0.id, nowMs))
-    throw new ProposalProblem(CLOSE_TEMPLATES(templateDef(FREE_TEMPLATE)!.title), 403, upgradeUrl(base(origin), "proposals"));
   const pub = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
   const co = pub ? await companyFor(token!, pub) : null;
   if (pub && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
@@ -431,7 +441,9 @@ export async function updateProposal(token: string | null, id: string, a: Propos
   const seed = await loadSeed();
   const now = new Date(nowMs).toISOString();
   return T.mutate((s) => {
-    const p = mine(s, memberOf(seed, s, token), id);
+    const me = memberOf(seed, s, token);
+    buildGate(s, me.id, nowMs, origin);
+    const p = mine(s, me, id);
     applyPatch(p, a, now, nowMs);
     return recOf(p, nowMs, origin);
   });
@@ -442,6 +454,7 @@ export async function duplicateProposal(token: string | null, id: string, origin
   const now = new Date(nowMs).toISOString();
   return T.mutate((s) => {
     const me = memberOf(seed, s, token);
+    buildGate(s, me.id, nowMs, origin);
     const p = mine(s, me, id);
     if ((s.proposals ?? []).filter((x) => x.memberId === me.id).length >= LIMITS.proposals) throw new ProposalProblem(`You have ${LIMITS.proposals} proposals, which is the most. Delete an old draft first.`);
     const copy: StoredProposal = { ...structuredClone(p), id: newId("pr_"), title: `${p.title} (copy)`.slice(0, LIMITS.title), version: 1, sends: [], createdAt: now, updatedAt: now };
@@ -740,4 +753,4 @@ async function memberFor(seed: Seed, id: string): Promise<{ name: string; email:
 }
 
 /** What lib/documents shares with proposals: the same links' keys, checks and clean-up. */
-export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, titleOf, memberOf, memberFor, EMAIL, NAME };
+export const proposalInternals = { mac, same, cleanLine, cleanText, cleanSigner, emailHint, base, onFree, buildGate, titleOf, memberOf, memberFor, EMAIL, NAME };

@@ -279,8 +279,6 @@ export interface Me {
   freeCompany?: boolean;
   /** Trial and Pro, billing live: free company opens left today, of PRO_OPENS_DAILY. Crystal Ball's don't count. Left out otherwise. */
   proOpens?: { left: number; of: number };
-  /** Free, past the first FREE_TAPER_DAYS: what facts about other people's companies earned in 24 hours, and their cap. Left out otherwise. */
-  taper?: { cap: number; earned: number };
   /** Get started: a first note went out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections are in. */
   started?: { note: boolean; network: boolean; /** Your network isn't on for Merlin (RN_GOOGLE): the Connect Google step is left out. */ networkOff?: boolean };
   /**
@@ -452,6 +450,13 @@ export interface PlanView {
   prices: { month: number; year: number; closeMonth: number; closeYear: number; topup: number; topupCredits: number; proCredits: number };
   /** The tier now: Free, Pro, or Pro + Close ("close"; the trial is Close). */
   tier: "free" | "pro" | "close";
+  /**
+   * The plan the trial nudges toward (lib/billing/rules.ts keepTier): "close" once the member is an
+   * active Close user in their trial (anything sent for signature, or 2 or more proposals, documents
+   * or Claude drafts), else "pro". The plans sheet's lead plan and primary button, Home's trial card,
+   * the trial nudge and the trial-ending emails all follow it.
+   */
+  keep: "pro" | "close";
   /** Close features are open now (lib/billing/rules.ts canClose): the trial, paid Pro + Close, or grandfathered Pro. */
   canClose: boolean;
   /** On Pro from before Close: Close features until this date (the next renewal). Left out otherwise. */

@@ -27,9 +27,12 @@
  *   8. The trial's end as a loss: PlanView.summary in its last 4 days ("You opened 3 companies free
  *      and sent 3 notes; 1 proposal is out." / "In 3 days companies cost 2 credits again and your
  *      second saved view stops emailing."), Home's card with "So far", and the day-18 email.
- *  10. The Free plan's taper, with the clock moved: past the first 30 days, facts about other
- *      people's companies earn up to 10 a day (the 11th says the rule), facts on the member's own
- *      seat still earn; before day 30 the 11th still earns.
+ *  10. No Free earning taper, with the clock moved: past the first 30 days, facts about other
+ *      people's companies still earn up to the daily 25 (the 11th earns), before day 30 the same,
+ *      Me carries no taper, and the Credits rule says Free keeps earning.
+ *  11. The trial nudges toward Pro, or Pro + Close for an active Close user (anything sent for
+ *      signature, or 2+ proposals, documents or Claude drafts): the plans sheet's lead plan, its
+ *      Most chosen tag and primary button, Home's trial card, the nudge, the banner and the emails.
  * (9, activation, is in scripts/test-model.mts: startSteps.)
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -82,7 +85,7 @@ const seed = {
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
 
 const row = (memberId: string, c: string) => ({ k: `test:${memberId}:${c}`, c, kind: "role", l: "New open role: Fractional VP Sales · In your function", b: "High", w: "Hiring now" });
-// Joined members: Tara 31 days ago (the taper applies), Yan 25 days ago (not yet).
+// Joined members: Tara 31 days ago, Yan 25 days ago (no taper either way: Free earns 25 a day for good).
 const joined = (id: string, name: string, days: number) => ({ ...member(id, name), at: iso(-days * DAY), ipHash: `${id}${id}`.slice(0, 16) });
 const fillable = Array.from({ length: N }, (_, k) => `c_p${pad(k)}.identity`);
 writeFileSync(
@@ -310,8 +313,8 @@ async function main() {
   const rowOf = (what: string) => compare.PLAN_ROWS.find((r) => r[0] === what);
   // Three plans: Free, Pro, Pro + Close. Sending for signature, Claude drafting and your own contracts are Close.
   check("three plans: Free $0, Pro $59 / $590, Pro + Close $79 / $790", JSON.stringify(compare.PLANS.map((p) => [p.name, p.month, p.year])) === JSON.stringify([["Free", 0, 0], ["Pro", 59, 590], ["Pro + Close", 79, 790]]), compare.PLANS);
-  check("Proposals and e-signature", JSON.stringify(rowOf("Proposals and e-signature")) === JSON.stringify(["Proposals and e-signature", "Build and preview, can't send", "Build and preview, can't send", "Every template, send and get signed, unlimited"]));
-  check("Claude drafting and your own contracts are Close's", JSON.stringify(rowOf("Claude drafting and your own contracts")?.slice(1)) === JSON.stringify(["Build it in Claude (copy a prompt)", "Build it in Claude (copy a prompt)", "Drafted from your call, your own templates and contracts with signature fields"]));
+  check("Proposals and e-signature: building is Pro + Close's after the trial", JSON.stringify(rowOf("Proposals and e-signature")) === JSON.stringify(["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"]));
+  check("Claude drafting and your own contracts are Close's", JSON.stringify(rowOf("Claude drafting and your own contracts")?.slice(1)) === JSON.stringify(["In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"]));
   check("Opening companies", JSON.stringify(rowOf("Opening companies")) === JSON.stringify(["Opening companies", "1 a day from Crystal Ball, others 2 credits", "Free, up to 15 a day plus all of Crystal Ball", "Free, up to 15 a day plus all of Crystal Ball"]));
   check("Fellow fractionals", JSON.stringify(rowOf("Fellow fractionals")) === JSON.stringify(["Fellow fractionals", "Free", "Free", "Free"]));
   check("Open roles are about alerts", JSON.stringify(rowOf("Open roles")) === JSON.stringify(["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"]));
@@ -380,30 +383,66 @@ async function main() {
   const lastMail = emails.trialEndingEmail({ first: "Tia", days: 1, notLooking: false, rateLine: null, link: BASE });
   check("the trial-ended and last-day emails tell it too", endMail.text.includes("send the proposal they sign") && lastMail.text.includes("send the proposal they sign"));
 
-  /* ---------- 10. the Free plan's taper, with the clock moved ---------- */
-  console.log("\n10. Free's earning taper after the first 30 days");
-  check("the numbers are constants: 30 days, 10 a day, 25 for own seats", F.FREE_TAPER_DAYS === 30 && F.FREE_TAPER_CAP === 10 && F.EARN_CAP === 25);
+  /* ---------- 10. no Free earning taper, with the clock moved ---------- */
+  console.log("\n10. Free keeps earning up to 25 a day, past the first 30 days too");
+  check("the taper's constants are gone, the daily cap is 25", !("FREE_TAPER_DAYS" in F) && !("FREE_TAPER_CAP" in F) && !("TAPER_RULE" in F) && F.EARN_CAP === 25);
+  check("the rule as members read it", F.FREE_EARN_RULE === "On Free you keep earning up to 25 credits a day, for as long as you're a member.");
   const fill = (tok: string, k: number, field = "hq", value = "Austin, TX") => t.perform(tok, { type: "fill", entity: "company", id: P(k), field, value }, BASE);
   const ta0 = await credits(TAPER);
-  for (let k = 0; k < 10; k++) await fill(TAPER, k);
-  check("past day 30: 10 facts about other people's companies earn 10", (await credits(TAPER)) === ta0 + 10);
-  const tap11 = await fill(TAPER, 10);
-  check("the 11th earns nothing, and says the rule", (await credits(TAPER)) === ta0 + 10 && tap11.message.includes(F.TAPER_RULE), tap11.message);
+  for (let k = 0; k < 11; k++) await fill(TAPER, k);
+  check("past day 30: 11 facts about other people's companies earn 11", (await credits(TAPER)) === ta0 + 11, [ta0, await credits(TAPER)]);
   const tv = await view(TAPER);
-  check("Me.taper: 10 of 10 today", tv.me!.taper?.cap === 10 && tv.me!.taper.earned === 10, tv.me!.taper);
+  check("Me carries no taper", !("taper" in tv.me!), tv.me);
   const own = await t.perform(TAPER, { type: "fill", entity: "engagement", id: pub("e_taper_own"), field: "hours", value: "20" }, BASE);
-  check("a fact on her own seat still earns (up to 25)", (await credits(TAPER)) === ta0 + 11, own.message);
-  check("the rule as members read it", F.TAPER_RULE === "On Free, after your first 30 days, facts about other people's companies earn up to 10 credits a day. Facts on your own seats, and confirmations, still earn up to 25.");
+  check("a fact on her own seat earns too", (await credits(TAPER)) === ta0 + 12, own.message);
   const y0 = await credits(YOUNG);
   for (let k = 11; k < 22; k++) await fill(YOUNG, k);
-  const yv = await view(YOUNG);
-  check("before day 30: the 11th still earns", (await credits(YOUNG)) === y0 + 11 && !yv.me!.taper, [y0, await credits(YOUNG)]);
+  check("before day 30: the 11th earns", (await credits(YOUNG)) === y0 + 11, [y0, await credits(YOUNG)]);
   skew += 6 * DAY;
   const y1 = await credits(YOUNG);
   for (let k = 11; k < 22; k++) await fill(YOUNG, k, "linkedin", `https://www.linkedin.com/company/plgco-${pad(k)}`);
-  check("six days later (day 31), the same 11 facts earn 10", (await credits(YOUNG)) === y1 + 10 && (await view(YOUNG)).me!.taper?.earned === 10, [y1, await credits(YOUNG)]);
-  check("Pro has no taper", !(await view(PRO)).me!.taper);
+  check("six days later (day 31), the same 11 facts earn 11", (await credits(YOUNG)) === y1 + 11 && !("taper" in (await view(YOUNG)).me!), [y1, await credits(YOUNG)]);
   skew -= 6 * DAY;
+
+  /* ---------- 11. the trial nudges toward Pro, or Pro + Close for an active Close user ---------- */
+  console.log("\n11. Keep Pro, or Keep Pro + Close once the trial used Close for real");
+  check("the threshold: anything sent for signature, or 2 or more proposals, documents or Claude drafts", rules.CLOSE_ACTIVE_MIN === 2 && !rules.closeActive({ made: 1, drafted: 0, sent: 0 }) && !rules.closeActive({ made: 0, drafted: 1, sent: 0 }) && rules.closeActive({ made: 1, drafted: 1, sent: 0 }) && rules.closeActive({ made: 2, drafted: 0, sent: 0 }) && rules.closeActive({ made: 0, drafted: 0, sent: 1 }));
+  check("keepTier and its words", rules.keepTier({ made: 0, drafted: 0, sent: 0 }) === "pro" && rules.keepTier({ made: 0, drafted: 0, sent: 1 }) === "close" && rules.keepWords("close") === "Keep Pro + Close" && rules.keepWords("pro") === "Keep Pro");
+  const triPlan = (await view(TRI)).me!.plan!;
+  check("Tia sent a proposal for signature in her trial: her plan nudges Pro + Close", triPlan.keep === "close", triPlan.keep);
+  const quiet = structuredClone(await t.loadState());
+  quiet.proposals = [];
+  check("with nothing of Close used, the same trial nudges Pro", t.tableInternals.keepOf(quiet as never, "mem_tri") === "pro" && JSON.stringify(t.tableInternals.closeUseOf(quiet as never, "mem_tri", iso(-30 * DAY))) === JSON.stringify({ made: 0, drafted: 0, sent: 0 }));
+  quiet.proposals = [{ ...(await t.loadState()).proposals![0], id: "pr_x", sends: [] }];
+  check("  one proposal made and left alone is not enough", t.tableInternals.keepOf(quiet as never, "mem_tri") === "pro");
+  const proPlan = { ...triPlan, keep: "pro" as const, summary: undefined };
+  const closePlan = { ...triPlan, keep: "close" as const, summary: undefined };
+  const cardsTrialPro = renderToStaticMarkup(React.createElement(B.PlanCards, { plan: proPlan, from: "trial" }));
+  const cardsTrialClose = renderToStaticMarkup(React.createElement(B.PlanCards, { plan: closePlan, from: "trial" }));
+  const leadOf = (html: string) => (/bl-plan bl-plan-(pro|close) bl-plan-lead/.exec(html) ?? [])[1] ?? null;
+  const tagIn = (html: string, key: string) => new RegExp(`bl-plan-${key} bl-plan-lead[^>]*><span class="bl-plan-tag">Most chosen</span>`).test(html);
+  const cardOf = (html: string, key: string) => {
+    const i = html.indexOf(`data-plan-card="${key}"`);
+    const j = html.indexOf("data-plan-card=", i + 20);
+    return html.slice(i, j < 0 ? undefined : j);
+  };
+  const primaryOn = (html: string, key: string) => cardOf(html, key).includes("btn bl-plan-btn btn-pine");
+  check("the trial's plans sheet, by default: Pro leads, Most chosen, the primary button", leadOf(cardsTrialPro) === "pro" && tagIn(cardsTrialPro, "pro") && primaryOn(cardsTrialPro, "pro") && !primaryOn(cardsTrialPro, "close"), [leadOf(cardsTrialPro)]);
+  check("  an active Close user: Pro + Close leads, Most chosen, the primary button", leadOf(cardsTrialClose) === "close" && tagIn(cardsTrialClose, "close") && primaryOn(cardsTrialClose, "close") && !primaryOn(cardsTrialClose, "pro"), [leadOf(cardsTrialClose)]);
+  const cardPro = text(renderToStaticMarkup(React.createElement(B.TrialSummaryCard, { plan: { ...triPlan, keep: "pro" as const } })));
+  const cardClose = text(renderToStaticMarkup(React.createElement(B.TrialSummaryCard, { plan: { ...triPlan, keep: "close" as const } })));
+  check("Home's trial card: Keep Pro by default, Keep Pro + Close for an active Close user", cardPro.endsWith("Keep Pro") && cardClose.endsWith("Keep Pro + Close"), [cardPro.slice(-40), cardClose.slice(-40)]);
+  const endingPlan = { ...triPlan, ending: true, trialDaysLeft: 3, summary: undefined };
+  const nPro = nudges.pickNudge({ page: "today", credits: 20, plan: { ...endingPlan, keep: "pro" }, profileEmpty: false });
+  const nClose = nudges.pickNudge({ page: "today", credits: 20, plan: { ...endingPlan, keep: "close" }, profileEmpty: false });
+  check("the trial nudge names the same plan", nPro?.cta === "Keep Pro" && /unless you keep Pro\.$/.test(nPro.text) && nClose?.cta === "Keep Pro + Close" && /unless you keep Pro \+ Close\.$/.test(nClose.text), [nPro, nClose]);
+  const banner = (k: "pro" | "close") => text(renderToStaticMarkup(React.createElement(B.TrialBanner, { plan: { ...endingPlan, keep: k } })));
+  check("the trial banner too", /unless you keep Pro\. Keep Pro/.test(banner("pro")) && /unless you keep Pro \+ Close\. Keep Pro \+ Close/.test(banner("close")), [banner("pro"), banner("close")]);
+  const mPro = emails.trialEndingEmail({ first: "Tia", days: 1, notLooking: false, rateLine: null, link: BASE });
+  const mClose = emails.trialEndingEmail({ first: "Tia", days: 1, notLooking: false, rateLine: null, link: BASE, keep: "close" });
+  const rClose = emails.trialReceiptEmail({ first: "Tia", days: 3, counts: emails.valueCounts((await t.loadState()) as never, null, null, "mem_tri", iso(-18 * DAY), new Date().toISOString()), rateLine: null, link: BASE, keep: "close" });
+  check("the trial-ending emails name Pro by default", /unless you keep Pro\. Pro is how you win the client/.test(mPro.text) && mPro.html.includes(">Keep Pro<"), mPro.text);
+  check("  and Pro + Close for an active Close user, with its button", /unless you keep Pro \+ Close/.test(mClose.text) && mClose.html.includes(">Keep Pro + Close<") && /unless you keep Pro \+ Close/.test(rClose.text) && rClose.html.includes(">Keep Pro + Close<"), [mClose.text, rClose.text]);
 }
 
 main()

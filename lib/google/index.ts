@@ -22,7 +22,7 @@ import { icpIsEmpty, inIcp, warmthMultiplier } from "../radar/match";
 import { crystalCompanyIds } from "../radar";
 import * as P from "../pipeline";
 import {
-  MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailTester, googleConfigured, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
+  MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailScopes, gmailTester, googleConfigured, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
 } from "./config";
 import { seal, unseal } from "./crypto";
 import * as G from "./api";
@@ -79,7 +79,8 @@ function directory(seed: Seed, s: State): Directory {
 /* ---------- the OAuth state (one time, 10 minutes, same browser, same member) ---------- */
 
 const hashOf = (v: string) => createHash("sha256").update(`rn-google-state:${v}`).digest("hex");
-const states = new Map<string, { memberId: string; kind: Kind; from: string; exp: number }>();
+/** A consent page under way. `own`: a Gmail start on its own OAuth client (GOOGLE_GMAIL_CLIENT_ID), so the callback swaps the code on that client. */
+const states = new Map<string, { memberId: string; kind: Kind; from: string; exp: number; own?: boolean }>();
 function sweep() {
   const now = Date.now();
   for (const [k, v] of states) if (v.exp <= now) states.delete(k);
@@ -98,9 +99,11 @@ export async function startConnect(token: string | null, origin: string, kind: K
   if (kind === "gmail" && (!gmailTester(w.m.email, n?.google?.email) || !n?.google)) return { ok: false, why: "not_allowed" };
   sweep();
   const state = randomBytes(32).toString("base64url");
-  states.set(hashOf(state), { memberId: w.m.id, kind, from: from === "onboard" ? "onboard" : "", exp: Date.now() + STATE_TTL_MS });
-  const scopes = kind === "gmail" ? (gmailOwnClient() ? ["openid", "email", SCOPE_GMAIL] : [SCOPE_GMAIL]) : MAIN_SCOPES;
-  return { ok: true, url: G.authorizeUrl(kind, scopes, state, origin, kind === "gmail" ? n?.google?.email : undefined), state };
+  // Gmail on its own client (a separate Google Cloud project): its own consent screen, only its own sign-in and gmail.metadata.
+  const own = kind === "gmail" && gmailOwnClient();
+  states.set(hashOf(state), { memberId: w.m.id, kind, from: from === "onboard" ? "onboard" : "", exp: Date.now() + STATE_TTL_MS, ...(own ? { own: true } : {}) });
+  const scopes = kind === "gmail" ? gmailScopes(own) : MAIN_SCOPES;
+  return { ok: true, url: G.authorizeUrl(kind, scopes, state, origin, kind === "gmail" ? n?.google?.email : undefined, own), state };
 }
 
 const same = (a: string, b: string) => {
@@ -133,7 +136,7 @@ export async function finishConnect(
   if (!code || code.length > 1000) return { outcome: "failed", from: got.from };
   let t: G.Tokens;
   try {
-    t = await G.exchangeCode(got.kind, code, origin);
+    t = await G.exchangeCode(got.kind, code, origin, got.own);
   } catch (e) {
     console.error(`Google connect: the code exchange failed (${e instanceof G.GoogleError ? e.code : "error"})`);
     return { outcome: "failed", from: got.from };
@@ -156,7 +159,8 @@ export async function finishConnect(
     access.set(`${w.m.id}:google`, { access: t.access, exp: t.expiresAt, sealed: link.token });
   } else {
     if (!hasGmail(t.scopes)) {
-      if (gmailOwnClient()) void G.revoke(t.refresh);
+      // Its own grant (the Gmail project): nothing else rides on it, so it goes back. On the main client it is the main grant: kept.
+      if (got.own) void G.revoke(t.refresh);
       return { outcome: "scopes", from: got.from };
     }
     let email = t.email ?? "";
@@ -165,7 +169,8 @@ export async function finishConnect(
     } catch {
       /* the profile is only for the member's own domain */
     }
-    const link: GoogleLink = { token: seal(t.refresh), email, scopes: [SCOPE_GMAIL], connectedAt: now, status: "ok", ...(gmailOwnClient() ? { ownClient: true } : {}) };
+    // Kept apart from the main connection: its own sealed refresh token, marked with the client it was made on.
+    const link: GoogleLink = { token: seal(t.refresh), email, scopes: [SCOPE_GMAIL], connectedAt: now, status: "ok", ...(got.own ? { ownClient: true } : {}) };
     await T.mutate((s) => {
       const nets = netsOf(s);
       if (!nets[w.m.id]?.google) throw new ActionError("Connect Calendar and Contacts first.");
@@ -187,7 +192,8 @@ async function accessFor(memberId: string, kind: Kind, link: GoogleLink): Promis
   if (hit && hit.sealed === link.token && hit.exp > Date.now() + 60_000) return hit.access;
   const refresh = unseal(link.token);
   if (!refresh) throw new G.GoogleError("invalid_grant");
-  const t = await G.refreshAccess(kind, refresh);
+  // Refreshed on the client the token was made with (a Gmail link's ownClient), whatever the variables say now.
+  const t = await G.refreshAccess(kind, refresh, kind === "gmail" ? !!link.ownClient : false);
   access.set(k, { access: t.access, exp: t.expiresAt, sealed: link.token });
   return t.access;
 }

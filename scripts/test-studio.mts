@@ -292,7 +292,7 @@ console.log("Pages");
   check("a nested page's way back goes through PageHead", /back=\{back \? \{ label: `Back to \$\{back\.name\}`, onClick: back\.go \} : undefined\}/.test(src("app/post/Seats.tsx")) && /back=\{\{ label: "Back to the table", onClick: onBack \}\}/.test(src("app/post/Fractionals.tsx")));
 
   // Numbers are Stats, empty lists EmptyStates.
-  check("Your pipeline's numbers are Stats and its empty states EmptyStates", (src("app/post/Pipeline.tsx").match(/<Stat /g) ?? []).length === 3 && (src("app/post/Pipeline.tsx").match(/<EmptyState /g) ?? []).length === 2 && !src("app/post/Pipeline.tsx").includes("pl-stats num"));
+  check("Your pipeline's numbers are Stats and its empty states EmptyStates", (src("app/post/Pipeline.tsx").match(/<Stat /g) ?? []).length === 4 && (src("app/post/Pipeline.tsx").match(/<EmptyState /g) ?? []).length === 2 && !src("app/post/Pipeline.tsx").includes("pl-stats num"));
   check("Your credits' and Pilot metrics' numbers are Stats, never a filled tile", /<Stat n=\{me\.added\}/.test(src("app/post/Credits.tsx")) && /<Stat n=\{<Num>\{value\}<\/Num>\} label=\{label\} \/>/.test(src("app/post/Admin.tsx")) && !/className="tp-stat[" ]/.test(src("app/post/Credits.tsx") + src("app/post/Admin.tsx")));
   check("Proposals, Messages and Peers use EmptyState, Peers' spots calm beside the head's prop", /<EmptyState spot="noMessages" title="Nothing sent yet">/.test(src("app/post/Proposals.tsx")) && /<EmptyState spot="noMessages" title="No messages yet"/.test(src("app/post/Messages.tsx")) && (src("app/post/Peers.tsx").match(/<EmptyState [^>]*ember=\{false\}/g) ?? []).length === 2);
 

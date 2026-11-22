@@ -9,11 +9,21 @@
  * An email is accepted only when its domain is the site's (or a clear alias: the same name on
  * another ending, linked from the site) and:
  *  - "name match": its part before the @ is the person's (first, last, first.last, first-last,
- *    firstlast, flast, firstl, first_last, initials; case and accents folded), or
+ *    firstlast, first initial and last name: flast, f.last, f_last, lastf, last.f; firstl,
+ *    first_last, initials; case and accents folded), or
+ *  - "nickname match": a common nickname of their first name (NICKNAMES: Mike for Michael, Bill for
+ *    William, Liz for Elizabeth ...) with their last name, in the same forms (mike.smith,
+ *    mikesmith, msmith for Mike, smith.mike). A nickname alone, or a nickname's initials, is not
+ *    enough: the last name must be there, as the full-name rules have it, or
+ *  - "bio page": the only personal-looking address at the site's domain on the person's own about,
+ *    bio or team-member page (bioPage: an about, bio or team page whose title or main heading names
+ *    them, or whose address carries their name), which counts as the site naming them, or
  *  - "only address on a one-person site": the site names the person, looks like one person's, and
  *    this is its only personal-looking address, or
- *  - "generic on a one-person site": a role address (info@, hello@, contact@ ...) on a site that
- *    names the person, looks like one person's and has no better address.
+ *  - "generic inbox, one-person site": a role address (info@, hello@, contact@ ...) on a site that
+ *    names the person, looks like one person's (onePerson: no team words, no team page read, at
+ *    most one personal-looking address) and has no better address. INVITES ONLY: kept flagged
+ *    (OwnEmail.invitesOnly) to send them an invite to Merlin, never shown to a member as theirs.
  * Or, on their own site, a personal mail provider's address (gmail.com, outlook.com ...) that is
  * plainly theirs: "name match, personal address", its part before the @ holding both their first
  * and last name (first.last, firstlast, flast, first_last ...). A first name alone or initials there
@@ -112,7 +122,55 @@ export function nameWords(name: string): string[] {
     .filter((w) => w.length >= 1 && !/^(mr|mrs|ms|dr|jr|sr|ii|iii|iv|mba|cpa|phd)$/.test(w));
 }
 
-/** The local parts that are this person's: first, last, first.last, first-last, firstlast, flast, firstl, first_last, initials. */
+/**
+ * Common nicknames, each group one name's forms (the formal name first). A nickname counts like
+ * the first name only with the last name beside it. Compact on purpose: the usual American forms.
+ */
+export const NICKNAMES: readonly (readonly string[])[] = [
+  ["michael", "mike", "mick", "mikey"], ["william", "bill", "will", "billy", "liam"], ["elizabeth", "liz", "beth", "betsy", "lizzie", "eliza"],
+  ["robert", "rob", "bob", "bobby", "robbie"], ["richard", "rick", "rich", "dick", "ricky"], ["james", "jim", "jimmy", "jamie"], ["john", "jack", "johnny"],
+  ["joseph", "joe", "joey"], ["thomas", "tom", "tommy"], ["christopher", "chris", "topher"], ["daniel", "dan", "danny"], ["matthew", "matt"],
+  ["anthony", "tony"], ["andrew", "andy", "drew"], ["edward", "ed", "eddie", "ted", "ned"], ["benjamin", "ben", "benji"], ["samuel", "sam", "sammy"],
+  ["samantha", "sam", "sammy"], ["alexander", "alex", "xander"], ["alexandra", "alex", "lexi"], ["nicholas", "nick", "nico"], ["jonathan", "jon"],
+  ["nathaniel", "nate", "nathan"], ["nathan", "nate"], ["stephen", "steve"], ["steven", "steve"], ["gregory", "greg"], ["jeffrey", "jeff"],
+  ["kenneth", "ken", "kenny"], ["timothy", "tim", "timmy"], ["patrick", "pat"], ["patricia", "pat", "patty", "trish"], ["katherine", "kate", "katie", "kathy", "kat"],
+  ["catherine", "cathy", "kate", "cat"], ["kathleen", "kathy", "kate"], ["margaret", "maggie", "meg", "peggy"], ["jennifer", "jen", "jenny"], ["jessica", "jess", "jessie"],
+  ["rebecca", "becky", "becca"], ["susan", "sue", "susie"], ["deborah", "deb", "debbie"], ["christine", "chris", "tina"], ["christina", "chris", "tina"],
+  ["victoria", "vicky", "tori"], ["abigail", "abby"], ["kimberly", "kim"], ["pamela", "pam"], ["cynthia", "cindy"], ["frederick", "fred", "freddie"],
+  ["charles", "charlie", "chuck"], ["david", "dave"], ["donald", "don", "donnie"], ["ronald", "ron", "ronnie"], ["lawrence", "larry"], ["raymond", "ray"],
+  ["gerald", "jerry"], ["douglas", "doug"], ["philip", "phil"], ["phillip", "phil"], ["peter", "pete"], ["zachary", "zach", "zack"], ["joshua", "josh"],
+  ["jacob", "jake"], ["michelle", "shelly"], ["theodore", "ted", "theo"], ["leonard", "leo", "len"], ["allison", "ally", "allie"], ["madeline", "maddie"],
+  ["melissa", "mel", "missy"], ["amanda", "mandy"], ["barbara", "barb"], ["valerie", "val"], ["vincent", "vince"], ["walter", "walt"], ["harold", "hal"],
+];
+/** The other forms of a first name (its nicknames, or a nickname's formal name and siblings), without the name itself. */
+export function nicknamesOf(first: string): string[] {
+  const f = first.toLowerCase();
+  const out = new Set<string>();
+  for (const g of NICKNAMES) if (g.includes(f)) for (const n of g) if (n !== f && n.length >= 2) out.add(n);
+  return [...out];
+}
+/** A first name with the last name in the forms a local part takes: first.last, firstlast, first-last, first_last, flast, f.last, last.first, lastfirst. */
+const withLast = (f: string, l: string) => [`${f}.${l}`, `${f}-${l}`, `${f}_${l}`, `${f}${l}`, `${f[0]}${l}`, `${f[0]}.${l}`, `${l}.${f}`, `${l}${f}`, `${l}_${f}`];
+
+/** The local parts a nickname of their first name gives, always with the last name. */
+export function nicknameLocals(name: string): Set<string> {
+  const w = nameWords(name);
+  const out = new Set<string>();
+  if (w.length < 2) return out;
+  const l = w[w.length - 1];
+  if (l.length < 2) return out;
+  for (const n of nicknamesOf(w[0])) for (const x of withLast(n, l)) out.add(x);
+  // A form the first name itself gives is a plain name match, not a nickname one.
+  for (const x of personLocals(name)) out.delete(x);
+  return out;
+}
+/** Whether a local part is a nickname of their first name with their last name. Digits after it are allowed. */
+export function nicknameMatches(local: string, name: string): boolean {
+  const lp = local.toLowerCase().replace(/\+.*$/, "").replace(/\d+$/, "");
+  return lp.length >= 4 && nicknameLocals(name).has(lp);
+}
+
+/** The local parts that are this person's: first, last, first.last, first-last, firstlast, first initial and last name (flast, f.last, f_last, lastf, last.f), firstl, first_last, initials. */
 export function personLocals(name: string): Set<string> {
   const w = nameWords(name).filter((x) => x.length >= 1);
   const out = new Set<string>();
@@ -122,7 +180,9 @@ export function personLocals(name: string): Set<string> {
   const mids = w.slice(1, -1);
   if (f.length >= 2) out.add(f);
   if (l.length >= 3) out.add(l);
-  for (const x of [`${f}.${l}`, `${f}-${l}`, `${f}_${l}`, `${f}${l}`, `${f[0]}${l}`, `${f[0]}.${l}`, `${f}${l[0]}`, `${f}.${l[0]}`, `${l}.${f}`, `${l}${f}`, `${l}${f[0]}`]) out.add(x);
+  for (const x of [`${f}.${l}`, `${f}-${l}`, `${f}_${l}`, `${f}${l}`, `${f}${l[0]}`, `${f}.${l[0]}`, `${l}.${f}`, `${l}${f}`]) out.add(x);
+  // First initial and last name, at the site's own domain: jsmith, j.smith, j_smith, j-smith, smithj, smith.j.
+  if (l.length >= 2) for (const x of [`${f[0]}${l}`, `${f[0]}.${l}`, `${f[0]}_${l}`, `${f[0]}-${l}`, `${l}${f[0]}`, `${l}.${f[0]}`]) out.add(x);
   // Initials: "jd", and with a middle initial "jmd".
   out.add(`${f[0]}${l[0]}`);
   if (mids.length) out.add(`${f[0]}${mids.map((m) => m[0]).join("")}${l[0]}`);
@@ -139,7 +199,9 @@ export function fullNameLocals(name: string): Set<string> {
   const f = w[0];
   const l = w[w.length - 1];
   if (f.length < 2 || l.length < 2) return out;
-  for (const x of [`${f}.${l}`, `${f}-${l}`, `${f}_${l}`, `${f}${l}`, `${f[0]}${l}`, `${f[0]}.${l}`, `${l}.${f}`, `${l}${f}`, `${l}_${f}`]) out.add(x);
+  for (const x of withLast(f, l)) out.add(x);
+  // A nickname of the first name with the whole last name is their whole name too (mike.smith for Michael Smith).
+  for (const n of nicknamesOf(f)) for (const x of withLast(n, l)) out.add(x);
   const mids = w.slice(1, -1);
   if (mids.length) {
     out.add(`${f}${mids.join("")}${l}`);
@@ -208,7 +270,7 @@ export interface SitePage {
 }
 
 export type Decision =
-  | { ok: true; email: string; page: string; how: "name match" | "only address on a one-person site" | "generic on a one-person site" | "name match, personal address" }
+  | { ok: true; email: string; page: string; how: "name match" | "nickname match" | "bio page" | "only address on a one-person site" | "generic inbox, one-person site" | "name match, personal address"; invitesOnly?: true }
   | { ok: false; s: "no email"; found: number }
   | { ok: false; s: "email not theirs"; found: number; why: RejectWhy };
 
@@ -241,6 +303,75 @@ function nameRank(local: string, name: string): number {
 }
 const ROLE_ORDER = ["hello", "contact", "info", "hi", "connect", "talk", "letstalk", "start", "office", "mail"];
 
+/** The page's title and main headings (h1, h2), as text: what a bio page names its person in. */
+function headText(html: string): string {
+  const out: string[] = [];
+  for (const m of html.slice(0, 600_000).matchAll(/<(title|h1|h2)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)) out.push(cleanText(m[2]));
+  return out.join(" \n ");
+}
+
+/** The slugs a person's own page address may carry: "jane-smith", "janesmith", "jane_smith", "smith" (folded). A first name alone counts only on an about or team page (bioPage). */
+export function nameSlugs(name: string): string[] {
+  const w = nameWords(name);
+  if (w.length < 2) return [];
+  const f = w[0];
+  const l = w[w.length - 1];
+  const nick = nicknamesOf(f).filter((n) => n.length >= 3);
+  return [...new Set([`${f}-${l}`, `${f}_${l}`, `${f}${l}`, `${f}.${l}`, ...nick.map((n) => `${n}-${l}`), ...nick.map((n) => `${n}${l}`), ...(l.length >= 3 ? [l] : [])])];
+}
+/** Whether a path carries the person's name in a segment ("/team/jane-smith", "/about/jane", "/bio-smith", "/people/smith.html"). */
+export function pathNamesPerson(path: string, name: string): boolean {
+  let p = path;
+  try {
+    p = decodeURIComponent(path);
+  } catch {
+    /* as written */
+  }
+  const segs = p.toLowerCase().replace(/\.(html?|php|aspx?)$/, "").split("/").filter(Boolean);
+  const slugs = nameSlugs(name);
+  return segs.some((seg) => {
+    const parts = seg.split(/[-_.]/);
+    return slugs.some((sl) => seg === sl || (!/[-_.]/.test(sl) && parts.includes(sl)) || (/[-_.]/.test(sl) && seg.includes(sl)));
+  });
+}
+
+/**
+ * The person's own about, bio or team-member page: a same-site page (not the homepage) whose
+ * address carries their name, or an about or team page whose title or main heading names them. A
+ * team listing with everyone's addresses is never read as one person's: decide wants a single
+ * personal-looking address on it.
+ */
+export function bioPage(p: SitePage, name: string): boolean {
+  let path = "/";
+  try {
+    path = new URL(p.url).pathname;
+  } catch {
+    return false;
+  }
+  if (path === "/" || path === "") return false;
+  if (pathNamesPerson(path, name)) return true;
+  const kind = kindOf(path);
+  if (kind !== "about" && kind !== "team") return false;
+  const first = nameWords(name)[0] ?? "";
+  const firstInPath = first.length >= 3 && path.toLowerCase().split(/[/_.-]/).includes(first);
+  return firstInPath || namesPerson(headText(p.html), name);
+}
+
+/**
+ * A one-person site: the pages name the person, read as one person's (no team words), no team page
+ * was read besides the person's own bio page, and at most one personal-looking address is there.
+ */
+function onePersonSite(pages: SitePage[], text: string, name: string, personalCount: number): boolean {
+  if (!namesPerson(text, name) || personalCount > 1 || TEAM_WORDS.test(text)) return false;
+  return !pages.some((p) => {
+    try {
+      return kindOf(new URL(p.url).pathname) === "team" && !bioPage(p, name);
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** Which address on the pages is the person's, if any. `site` is the host read. */
 export function decide(pages: SitePage[], site: string, name: string): Decision {
   const hosts = pages.flatMap((p) => linkedHosts(p.html));
@@ -249,23 +380,34 @@ export function decide(pages: SitePage[], site: string, name: string): Decision 
   const all: { email: string; page: string }[] = [];
   for (const p of pages) for (const e of emailsOf(p.html)) if (!all.some((x) => x.email === e)) all.push({ email: e, page: p.url });
   if (!all.length) return { ok: false, s: "no email", found: 0 };
-  const here = all.filter((x) => domains.has(registrable(x.email.split("@")[1])));
+  const atSite = (e: string) => domains.has(registrable(e.split("@")[1]));
+  const here = all.filter((x) => atSite(x.email));
   const local = (e: string) => e.split("@")[0];
   const mine = here.filter((x) => localMatches(local(x.email), name)).sort((a, b) => nameRank(local(a.email), name) - nameRank(local(b.email), name));
   if (mine.length) return { ok: true, email: mine[0].email, page: mine[0].page, how: "name match" };
+  // A common nickname of their first name with their last name (mike.smith for Michael Smith), at the site's own domain.
+  const nick = here.find((x) => nicknameMatches(local(x.email), name));
+  if (nick) return { ok: true, email: nick.email, page: nick.page, how: "nickname match" };
+  // Their own bio page names them: its one personal-looking address at the site's domain is theirs.
+  for (const p of pages) {
+    if (!bioPage(p, name) || !namesPerson(visibleText(p.html), name)) continue;
+    const own = emailsOf(p.html).filter((e) => atSite(e) && !isRole(local(e)));
+    if (own.length === 1) return { ok: true, email: own[0], page: p.url, how: "bio page" };
+  }
   const personalMine = all.filter((x) => isPersonalDomain(x.email.split("@")[1]) && fullNameMatches(local(x.email), name));
   const text = texts.join(" \n ");
   const named = namesPerson(text, name);
   const personal = here.filter((x) => !isRole(local(x.email)));
-  const onePerson = named && personal.length <= 1 && !TEAM_WORDS.test(text);
+  const onePerson = onePersonSite(pages, text, name, personal.length);
   if (onePerson && personal.length === 1) return { ok: true, email: personal[0].email, page: personal[0].page, how: "only address on a one-person site" };
+  // Their whole name at a personal provider, on their own site: theirs, after anything personal at the site's own domain.
+  if (personalMine.length) return { ok: true, email: personalMine[0].email, page: personalMine[0].page, how: "name match, personal address" };
   if (onePerson && !personal.length) {
     const roles = here.filter((x) => isRole(local(x.email)) && !/^(no-?reply|donotreply|do-not-reply|postmaster|hostmaster|abuse|webmaster|privacy|careers|jobs|press|security|billing|invoices)$/.test(local(x.email)));
     roles.sort((a, b) => (ROLE_ORDER.indexOf(local(a.email)) + 1 || 99) - (ROLE_ORDER.indexOf(local(b.email)) + 1 || 99));
-    if (roles.length) return { ok: true, email: roles[0].email, page: roles[0].page, how: "generic on a one-person site" };
+    // Invites only: the address may carry an invite to Merlin, never a member's view of their email.
+    if (roles.length) return { ok: true, email: roles[0].email, page: roles[0].page, how: "generic inbox, one-person site", invitesOnly: true };
   }
-  // Their whole name at a personal provider, on their own site: theirs, after anything at the site's own domain.
-  if (personalMine.length) return { ok: true, email: personalMine[0].email, page: personalMine[0].page, how: "name match, personal address" };
   let why: RejectWhy;
   if (!here.length) why = all.some((x) => isPersonalDomain(x.email.split("@")[1])) ? "personal address, not their whole name" : "only other companies' addresses";
   else if (!personal.length) why = named ? "role address on a team site" : "role address, site doesn't name them";
@@ -310,6 +452,35 @@ export function pageLinks(html: string, base: string, sameSite: (u: URL) => bool
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ url: u.href, kind });
+  }
+  return out;
+}
+
+/**
+ * Links that look like the person's own bio page: same site, and the address carries their name
+ * ("/team/jane-smith") or the link's words name them ("Jane Smith" on a team page). At most `max`,
+ * in page order. The homepage is never one.
+ */
+export function bioLinks(html: string, base: string, sameSite: (u: URL) => boolean, name: string, max = 4): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const re = /<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))[^>]*>([\s\S]*?)<\/a\s*>/gi;
+  for (let m: RegExpExecArray | null; (m = re.exec(html)) && out.length < max; ) {
+    const raw = decodeEntities(m[1] ?? m[2] ?? m[3] ?? "").trim();
+    if (!raw || /^(mailto|tel|javascript|data):/i.test(raw) || raw.startsWith("#")) continue;
+    let u: URL;
+    try {
+      u = new URL(raw, base);
+    } catch {
+      continue;
+    }
+    u.hash = "";
+    if (!sameSite(u) || u.pathname === "/" || u.pathname === "") continue;
+    if (!pathNamesPerson(u.pathname, name) && !namesPerson(cleanText(m[4] ?? ""), name)) continue;
+    const key = `${u.host}${u.pathname.replace(/\/+$/, "")}${u.search}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(u.href);
   }
   return out;
 }

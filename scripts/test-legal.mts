@@ -3,8 +3,8 @@
  * both render with their effective date and version, the Privacy Policy carries Google's Limited
  * Use sentence word for word with its link and a #google part, the support address from
  * RN_SUPPORT_EMAIL (SUPPORT_EMAIL), the Terms' numbers are the billing rules' own and its sender's
- * duty the proposals' own, no em dashes and no owner notes on either page (but the governing law's
- * placeholder while it is unset), and the landing page, the signing page, Your credits and each
+ * duty the proposals' own, no em dashes and no owner notes on either page, the governing law
+ * Connecticut's with disputes in its state and federal courts, and the landing page, the signing page, Your credits and each
  * Connect Google link to them. Also the verification kit (docs/google-verification.md): every
  * scope, the Limited Use sentence, and nothing that looks like a secret.
  *
@@ -15,7 +15,7 @@ import { EXTEND_DAYS, PRICES, PRO_CREDITS, TOPUP_CREDITS, TRIAL_DAYS } from "../
 import { SENDER_DUTY } from "../lib/proposals/types";
 import { MAIN_SCOPES, SCOPE_GMAIL } from "../lib/google/config";
 import { GOOGLE_POLICY_URL, LIMITED_USE } from "../app/privacy/Privacy";
-import { GOVERNING_LAW, SIGN_LINK_DAYS } from "../app/terms/Terms";
+import { DISPUTE_COURTS, GOVERNING_LAW, SIGN_LINK_DAYS } from "../app/terms/Terms";
 import { LEGAL_EFFECTIVE, LEGAL_EFFECTIVE_WORDS, PRIVACY_VERSION, TERMS_VERSION } from "../app/legal/LegalShell";
 
 const BASE = (process.env.BASE || "http://localhost:4600").replace(/\/+$/, "");
@@ -119,10 +119,10 @@ async function main() {
   check("contributions, acceptable use, as is, the connector, cancellation, liability", ["give Revenue Nomad a worldwide", "scrape", "resell", "harass", "anti-spam", "A likely email is a guess", "The connector and your AI assistant", "You can cancel at any time", "Limitation of liability"].every((x) => tt.includes(x)));
   check("no refund is promised", tt.includes("Payments are not refunded") && !/we (will )?refund|full refund/i.test(tt));
   check(
-    GOVERNING_LAW ? `governing law: ${GOVERNING_LAW}` : "governing law: the owner's placeholder shows until it is set",
-    GOVERNING_LAW ? tt.includes(GOVERNING_LAW) && !tt.includes("To confirm") : tt.includes("[To confirm: State of ___]"),
+    "governing law: the State of Connecticut, disputes in the state and federal courts located in Connecticut, no placeholder",
+    GOVERNING_LAW === "the State of Connecticut" && DISPUTE_COURTS === "the state and federal courts located in Connecticut" && tt.includes("governed by the laws of the State of Connecticut") && tt.includes("heard in the state and federal courts located in Connecticut") && !/To confirm|State of ___|\[STATE\]/.test(tt),
   );
-  check("no other owner notes and no em dashes", !tt.replace("[To confirm: State of ___]", "").includes("To confirm") && !tt.includes("—"), (tt.match(/.{30}—.{30}/) ?? [])[0]);
+  check("no owner notes and no em dashes", !tt.includes("To confirm") && !tt.includes("—"), (tt.match(/.{30}—.{30}/) ?? [])[0]);
   check("it links the Privacy Policy", tb.includes('href="/privacy"'));
 
   console.log("\nWhere they are linked");

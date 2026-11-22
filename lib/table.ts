@@ -66,7 +66,7 @@ import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual 
 import { iconDomains } from "./companyIcons";
 import { readRate } from "./rates";
 import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
-import { emailEnabled, sendEmail } from "./email";
+import { emailEnabled, sendEmail, setMailBlock } from "./email";
 import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles, scanSources, type ScanSource } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
@@ -77,7 +77,7 @@ import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type F
 import {
   ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
-  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, FREE_TAPER_DAYS, FREE_TAPER_CAP, TAPER_RULE, type Entity,
+  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -103,7 +103,7 @@ import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
 import { healthStats } from "./health";
 import {
-  ENDING_DAYS, SUMMARY_DAYS, canClose, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
+  ENDING_DAYS, SUMMARY_DAYS, canClose, keepTier, type CloseUse, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
   type BillingState,
 } from "./billing/rules";
 import { aiPackReady, closeReady, surveyCode } from "./billing/stripe";
@@ -113,7 +113,7 @@ import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./websites/types";
 // Own sites: emails fractionals publish on their own firm's website (lib/ownsites), shown only with RN_OWNSITES=1.
-import { OWNSITE_RELATIONSHIP, OWNSITE_SOURCE, ownSitesEnabled, type OwnEmail, type OwnProspect, type OwnSiteLink, type OwnSitesState } from "./ownsites/types";
+import { OWNSITE_RELATIONSHIP, OWNSITE_SOURCE, ownInvitesOnly, ownSitesEnabled, type OwnEmail, type OwnProspect, type OwnSiteLink, type OwnSitesState } from "./ownsites/types";
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, KNOWN_DAYS as LEADERS_KNOWN_DAYS, DAILY_BATCH as LEADERS_DAILY_BATCH, READER_VERSION as LEADERS_READER_VERSION, leadersEnabled, leadersProgress, fnKnow, memberRoles, reportsOf, teamReadAt, CONFIRM_MEMBERS,
   type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
@@ -129,7 +129,7 @@ import { networkKnown, networkOn, type NetworkState } from "./google/types";
 // Your three moves today, and the voice its notes are written in: each member's own (lib/moves.ts, lib/voice.ts).
 import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type MoveLog } from "./moves";
 // Your pipeline (lib/pipeline.ts): each member's own deals, moved by what Merlin sees. A move's note used opens its entry.
-import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, openEntry, pipelineHidden, type PipelineLog } from "./pipeline";
+import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, migrateLeadsToReach, openEntry, pipelineHidden, type PipelineLog } from "./pipeline";
 import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
@@ -475,7 +475,7 @@ export interface State extends MessagingState {
   /** Weekly email: last run, emails sent in all, and each member's last one. */
   digest: { lastSentAt: string | null; sent: number; members: Record<string, string> };
   /** One-time changes already applied. starterFloor: the starter balance the floor was last applied at. */
-  flags: { starterFloor?: number; closeTier?: boolean };
+  flags: { starterFloor?: number; closeTier?: boolean; reachStage?: boolean };
   /** The Claude connector: connected apps (token hashes only) and saved searches. See lib/mcp. */
   connector?: ConnectorState;
   /** Fractional firms kept because a member holds a seat there (lib/firmRemoval.ts), for an admin to review. */
@@ -605,7 +605,34 @@ export interface State extends MessagingState {
    * draft, a circle post) is members' writing: it leaves the export without it, as messages do.
    */
   peers?: PeersState;
+  /**
+   * Accounts their member (or an admin) closed (lib/account.ts), by member id: closed at once
+   * (signed out, out of Peers and the directory, no email), restorable until purgeAt, then their
+   * personal data is deleted (purgeMember) and only this row is left, with purgedAt. `restore` is
+   * the SHA-256 of the restore link's key and `mail` of their inbox key (no address is kept here).
+   */
+  closures?: Record<string, AccountClosure>;
 }
+
+/** State.closures[memberId]. */
+export interface AccountClosure {
+  at: string;
+  /** When the scheduled job deletes their personal data (CLOSURE_DAYS after `at`). */
+  purgeAt: string;
+  by: "member" | "admin";
+  /** SHA-256 (hex) of the restore link's key, emailed at closure. Gone once restored or purged. */
+  restore?: string;
+  /** SHA-256 (hex) of their inbox key: no email goes to that address while the account is closed. */
+  mail?: string;
+  /** Their personal data was deleted on this date: the account can't come back. */
+  purgedAt?: string;
+}
+/** Days from closing an account to deleting its personal data. Until then the owner, an admin or the member's restore link brings it back. */
+export const CLOSURE_DAYS = 30;
+/** Who a fact or record is attributed to after its member's account was deleted: nobody (no member has this id). */
+export const FORMER_MEMBER = "m_former";
+/** An inbox key's hash, for State.closures' mail guard. */
+export const mailHashOf = (email: string) => createHash("sha256").update(`rn-closed-mail:${inboxKey(email)}`).digest("hex");
 
 /** State.salesBuild[companyId]. */
 export interface SalesBuildRecord {
@@ -1031,6 +1058,13 @@ export async function loadState(): Promise<State> {
       const n = s.billing ? grandfatherClose(s.billing, Date.now()) : 0;
       if (n) console.log(`Kept ${n} paid Pro member${n === 1 ? "" : "s"} on Pro, with Pro + Close until their next renewal.`);
       s.flags.closeTier = true;
+    }
+    // To reach out arrived (lib/pipeline.ts): peers' leads stored at Sent though nothing went out from the member yet move there. Once; every other deal stays.
+    if (!s.flags.reachStage) {
+      let n = 0;
+      for (const log of Object.values(s.pipeline ?? {})) n += migrateLeadsToReach(log);
+      if (n) console.log(`Moved ${n} lead${n === 1 ? "" : "s"} a peer passed, not written to yet, to To reach out.`);
+      s.flags.reachStage = true;
     }
     // An ongoing seat's end month is free now. Whoever paid to see one gets that credit back, once.
     if (seedNow) {
@@ -1778,6 +1812,11 @@ const firmsInReview = (seed: Seed, s: State) => new Set([...(seed.firmReview ?? 
  * back with the token that works now.
  */
 export const memberByToken = (seed: Seed, token: string | null | undefined, s?: State): Member | null => {
+  const m = memberByTokenRaw(seed, token, s);
+  // A closed account (State.closures) is signed out everywhere at once, until it is restored.
+  return m && s?.closures?.[m.id] ? null : m;
+};
+const memberByTokenRaw = (seed: Seed, token: string | null | undefined, s?: State): Member | null => {
   if (!token) return null;
   const over = s?.tokens;
   if (over) {
@@ -2241,43 +2280,10 @@ function freeCompaniesLeft(s: State, memberId: string, nowMs: number): number {
 /** Pro and the trial with billing live: companies open free, up to PRO_OPENS_DAILY a UTC day (freeCompaniesLeft). */
 const proOpens = (s: State, memberId: string, nowMs: number) => billingLive() && hasPro(planRec(s, memberId), nowMs);
 
-/*
- * The Free plan's earning taper (FREE_TAPER_DAYS, FREE_TAPER_CAP in lib/tableFields.ts). Kept here
- * on its own so it can be taken out in one place: taperOn, taperOwn, taperEarned and the check in
- * perform's awardFill.
- */
-/** Free (billing live) past the member's first FREE_TAPER_DAYS (from joining, else the trial's start; a seed member with neither is past them). */
-function taperOn(s: State, memberId: string, nowMs: number): boolean {
-  if (FREE_TAPER_CAP >= EARN_CAP || !gated(planRec(s, memberId), nowMs)) return false;
-  const since = s.members.find((m) => m.id === memberId)?.at ?? planRec(s, memberId)?.trialStartedAt;
-  return !since || nowMs - Date.parse(since) >= FREE_TAPER_DAYS * DAY;
-}
-/** The companies whose facts are the member's own for the taper: one they added, or one where they added or hold a seat. */
-function taperOwn(s: State, g: Graph, idx: MemberIndex, memberId: string): Set<string> {
-  const out = new Set<string>();
-  for (const c of s.companies) if (c.by === memberId) out.add(c.id);
-  for (const e of s.engagements) if (e.by === memberId) out.add(e.companyId);
-  for (const e of g.engagements.values()) if (!out.has(e.companyId) && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === memberId) out.add(e.companyId);
-  return out;
-}
-/** Credits earned in the rolling 24 hours from facts about other people's companies (what the taper caps). A benchmark-only rate is the member's own. */
-function taperEarned(s: State, g: Graph, own: Set<string>, memberId: string, nowMs: number): number {
-  let n = 0;
-  for (const l of s.ledger) {
-    if (l.memberId !== memberId || l.reason !== "fill" || l.delta <= 0 || l.undone || nowMs - Date.parse(l.at) >= DAY || l.ref.startsWith("bench.")) continue;
-    const co = refCompany(s, g, l.ref);
-    if (co && !own.has(co)) n += l.delta;
-  }
-  return n;
-}
-/** Said when the taper stopped a credit. */
-export const TAPER_NOTE = TAPER_RULE;
-
-/** Me's plan counts: Pro's free company opens left today, and the taper while it applies. */
-function planCounts(s: State, g: Graph, idx: MemberIndex, memberId: string, nowMs: number): Pick<Me, "proOpens" | "taper"> {
-  const out: Pick<Me, "proOpens" | "taper"> = {};
+/** Me's plan counts: Pro's free company opens left today. (Free has no earning taper: it earns up to EARN_CAP a day like every plan.) */
+function planCounts(s: State, _g: Graph, _idx: MemberIndex, memberId: string, nowMs: number): Pick<Me, "proOpens"> {
+  const out: Pick<Me, "proOpens"> = {};
   if (proOpens(s, memberId, nowMs)) out.proOpens = { left: freeCompaniesLeft(s, memberId, nowMs), of: PRO_OPENS_DAILY };
-  if (taperOn(s, memberId, nowMs)) out.taper = { cap: FREE_TAPER_CAP, earned: taperEarned(s, g, taperOwn(s, g, idx, memberId), memberId, nowMs) };
   return out;
 }
 /** Get started's last two steps (Me.started): a first note out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections in. */
@@ -2427,7 +2433,8 @@ let memberIndexCache: { seed: Seed; s: State; idx: MemberIndex } | null = null;
 /** Every member (seed and joined), by id and by normalized name. Rebuilt when the state changes. */
 function memberIndex(seed: Seed, s: State): MemberIndex {
   if (memberIndexCache && memberIndexCache.seed === seed && memberIndexCache.s === s) return memberIndexCache.idx;
-  const all = [...seed.members, ...s.members].filter((m) => m.name?.trim());
+  // A closed account is nobody on Merlin while it is closed: out of Peers, the directory, every list and every email (State.closures).
+  const all = [...seed.members, ...s.members].filter((m) => m.name?.trim() && !s.closures?.[m.id]);
   const byId = new Map(all.map((m) => [m.id, m]));
   const byName = new Map<string, Member[]>();
   for (const m of all) {
@@ -2754,6 +2761,8 @@ export async function joinMember(
     const seedMember = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
     const joined = s.members.find((m) => inboxKey(m.email) === inbox);
     if (seedMember || joined) {
+      const closed = s.closures?.[(seedMember ?? joined)!.id];
+      if (closed && !closed.purgedAt) throw new ActionError(ACCOUNT_CLOSED_JOIN);
       // A member back through the survey link: their code waits for checkout too.
       if (emailEnabled() && cleanPromo(promoRaw)) setPromo(s, (seedMember ?? joined)!.id, cleanPromo(promoRaw));
       if (emailEnabled()) return { ...(seedMember ? withToken(seedMember, s) : joined)!, existing: true }; // route emails them a sign-in link
@@ -5411,9 +5420,6 @@ export async function perform(
      * joined, and not on a seat they made themselves: a client they add with their own seat is not it.
      */
     let referralOk = false;
-    /** The taper (taperOn): the member's own companies, read once, and whether it stopped a credit. */
-    let taperOwnNow: Set<string> | undefined;
-    let taperCapped = false;
     const noteReferral = (ref: string) => {
       if (referralOk) return;
       const rec = refRecord(ref);
@@ -5440,12 +5446,6 @@ export async function perform(
         const today = fillsToday(s, me.id, nowMs);
         if (today.length >= FILL_DAILY_MAX && !ownSeat(refRecord(ref)) && today.filter((l) => !ownSeat(refRecord(l.ref))).length >= FILL_DAILY_MAX)
           throw new ActionError(`You've added ${FILL_DAILY_MAX} facts today, and that's the daily limit. Add more tomorrow. You can still fill in the seats you hold.`);
-        // The Free plan's taper: past the first FREE_TAPER_DAYS, facts about other people's companies earn up to FREE_TAPER_CAP a day.
-        if (earns && taperOn(s, me.id, nowMs)) {
-          const own = (taperOwnNow ??= taperOwn(s, g, memberIndex(seed, s), me.id));
-          const co = refCompany(s, g, ref);
-          if (co && !own.has(co) && taperEarned(s, g, own, me.id, nowMs) >= FREE_TAPER_CAP) (earns = false), (taperCapped = true);
-        }
       }
       // At a company where the member's own new seat waits to be confirmed: no credit yet, paid when it is (confirmSeat).
       if (!ref.startsWith("bench.") && waitsAt(ref)) {
@@ -5634,8 +5634,6 @@ export async function perform(
       // Under the daily cap, so the reason was the pick-list limit: say that, and what still earns.
       if (sellCapped && earning(s, me.id, nowMs).earned < EARN_CAP)
         return ` Only ${SELL_EARN_MAX} answers for ${PICKS} earn a credit each day, so this one didn't earn. ${SELL_STILL_EARNS}`;
-      // Under the daily cap, stopped by the Free plan's taper: say so, and what still earns.
-      if (taperCapped && earning(s, me.id, nowMs).earned < EARN_CAP) return ` No credit ${some ? "for the rest" : "this time"}. ${TAPER_NOTE}`;
       // The limit has one name everywhere ("earned today"). The client adds when earning opens again (Me.earnResetsAt), in the member's own time zone.
       return ` No credit ${some ? "for the rest" : "this time"}, because you've earned today's ${EARN_CAP}.`;
     };
@@ -7504,6 +7502,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
     circles: s.peers.circles.map((c) => ({ ...c, posts: c.posts.map((x) => ({ ...x, text: "" })) })),
   };
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
+  // A generic inbox on a one-person site (lib/ownsites ownInvitesOnly) may carry an invite to Merlin and nothing else: never exported.
+  const ownEmails = s.ownEmails && Object.fromEntries(Object.entries(s.ownEmails).filter(([, e]) => !ownInvitesOnly(e)));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
   // Webhook URLs are secrets (anyone with one can post to that Slack channel): they leave as "connected" only, with no alerts waiting.
@@ -7516,6 +7516,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   return {
     ...rest,
     ...(conversations ? { conversations } : {}),
+    ...(ownEmails ? { ownEmails } : {}),
     ...(seatInvites ? { seatInvites } : {}),
     ...(peers ? { peers } : {}),
     ...(integrations ? { integrations } : {}),
@@ -7523,6 +7524,120 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
     benchRates,
   };
 }
+
+/* ---------- a closed account's personal data, deleted (lib/account.ts) ---------- */
+
+/** Said to someone who joins or signs in with a closed account's address. */
+export const ACCOUNT_CLOSED_JOIN = "This account was closed. Use the restore link we emailed when it closed, or write to us to restore it within 30 days.";
+
+/**
+ * CLOSURE_DAYS after an account closed (lib/account.ts purgeDue, on the job scheduler's tick):
+ * delete the member's personal data, in the draft (inside mutate). Gone: their profile and account
+ * record, their Google connection and what it read (Your network), their LinkedIn connections
+ * import (State.paths), their messages (what they wrote; a conversation left with nothing goes),
+ * their peers' notes, posts, teams and circle places, proposals and documents (with the documents'
+ * files: their ids are returned for the caller to remove), My templates, the AI usage log and
+ * agreement, saved views and connected apps, their pipeline, moves, voice, Slack and webhooks,
+ * Crystal Ball, credits and unlock history, sign-in links and networks. Facts and records they
+ * added to companies stay, attributed to nobody (FORMER_MEMBER), and so do benchmark rates.
+ * Returns the sealed Google tokens (for the caller to revoke) and the document ids.
+ */
+function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { googleTokens: string[]; documentIds: string[] } {
+  const net = s.network?.[id] as { google?: { token?: string }; gmail?: { token?: string } } | undefined;
+  const googleTokens = [net?.google?.token, net?.gmail?.token].filter((x): x is string => !!x);
+  const documentIds = (s.documents ?? []).filter((d) => d.memberId === id).map((d) => d.id);
+  const del = <T>(rec: Record<string, T> | undefined) => {
+    if (rec) delete rec[id];
+  };
+  // Their profile, account record and sign-in.
+  del(s.profiles);
+  s.members = s.members.filter((m) => m.id !== id);
+  // A seed member's seed token never works again: a random one stands in its place.
+  if (seed.members.some((m) => m.id === id)) s.tokens = { ...(s.tokens ?? {}), [id]: randomBytes(18).toString("base64url") };
+  else del(s.tokens);
+  if (s.signins) s.signins = s.signins.filter((x) => x.memberId !== id);
+  del(s.ips);
+  del(s.seen);
+  del(s.follows);
+  del(s.notMine);
+  del(s.found);
+  del(s.findMisses);
+  del(s.digest?.members);
+  // Google, LinkedIn, the network, and everything private to them.
+  del(s.network);
+  del((s as State & { paths?: Record<string, unknown> }).paths);
+  del(s.moves);
+  del(s.pipeline);
+  del(s.voice);
+  del(s.myTemplates);
+  del(s.aiDrafts);
+  del(s.aiUsage);
+  del(s.integrations?.members);
+  del(s.radar?.members);
+  del(s.billing?.members);
+  if (s.connector) {
+    del(s.connector.alerts);
+    s.connector.grants = s.connector.grants.filter((x) => x.memberId !== id);
+  }
+  s.proposals = (s.proposals ?? []).filter((p) => p.memberId !== id);
+  s.documents = (s.documents ?? []).filter((d) => d.memberId !== id);
+  // Their credits and what they bought: their own history only.
+  s.ledger = s.ledger.filter((l) => l.memberId !== id);
+  s.held = s.held.filter((h) => h.memberId !== id);
+  for (const k of Object.keys(s.unlocks)) if (s.unlocks[k].includes(id)) s.unlocks[k] = s.unlocks[k].filter((x) => x !== id);
+  for (const k of Object.keys(s.verifications)) if (s.verifications[k].includes(id)) s.verifications[k] = s.verifications[k].filter((x) => x !== id);
+  s.reportLog = s.reportLog.filter((r) => r.memberId !== id);
+  s.signals = s.signals.filter((x) => x.memberId !== id);
+  s.referralPaid = s.referralPaid.filter((x) => x !== id);
+  if (s.roleClaims) s.roleClaims = s.roleClaims.filter((x) => x.memberId !== id);
+  if (s.seatClaims) s.seatClaims = s.seatClaims.filter((x) => x.memberId !== id);
+  if (s.pendingSeats) s.pendingSeats = s.pendingSeats.filter((x) => x.memberId !== id);
+  if (s.lockedViews) s.lockedViews = s.lockedViews.filter((x) => x.memberId !== id);
+  if (s.seatInvites) s.seatInvites = s.seatInvites.filter((x) => x.by !== id);
+  if (s.inviteJoins) s.inviteJoins = s.inviteJoins.filter((x) => x.by !== id && x.invitee !== id);
+  if (s.seatPrivate) for (const [k, v] of Object.entries(s.seatPrivate)) if (v.by === id) delete s.seatPrivate[k];
+  // Messages they wrote go; a conversation left with nothing goes too. Their blocks and reports go.
+  if (s.conversations) {
+    for (const c of s.conversations) if (c.a === id || c.b === id) c.messages = c.messages.filter((m) => m.by !== id);
+    s.conversations = s.conversations.filter((c) => !((c.a === id || c.b === id) && c.messages.length === 0));
+  }
+  del(s.blocks);
+  if (s.messageReports) s.messageReports = s.messageReports.filter((r) => (r as { by?: string }).by !== id);
+  // Peers: what they wrote (a pass's note, a circle post), their teams and circle places, mutes.
+  if (s.peers) {
+    for (const q of s.peers.passes) if (q.by === id) q.note = "";
+    s.peers.teams = s.peers.teams.filter((t) => t.by !== id && t.with !== id);
+    for (const c of s.peers.circles) {
+      c.members = c.members.filter((m) => m.id !== id);
+      c.posts = c.posts.filter((x) => x.by !== id);
+    }
+    del(s.peers.mutes);
+    del(s.peers.seen);
+  }
+  // Facts and records they added to companies stay, attributed to nobody.
+  for (const v of Object.values(s.values)) {
+    if (v.by === id) v.by = FORMER_MEMBER;
+    if ((v as { memberId?: string }).memberId === id) delete (v as { memberId?: string }).memberId;
+  }
+  for (const list of [s.companies, s.engagements, s.contacts] as { by: string }[][]) for (const x of list) if (x.by === id) x.by = FORMER_MEMBER;
+  for (const b of s.benchRates) if (b.by === id) b.by = FORMER_MEMBER;
+  const c = s.closures?.[id];
+  if (c) {
+    c.purgedAt = nowIso;
+    delete c.restore;
+    delete c.mail;
+  }
+  memberIndexCache = null;
+  return { googleTokens, documentIds };
+}
+
+/** A closed account's inbox hash is blocked: Merlin sends it nothing (lib/email.ts setMailBlock). */
+setMailBlock((to) => {
+  const cl = stateCache?.closures;
+  if (!cl) return false;
+  const h = mailHashOf(to);
+  return Object.values(cl).some((c) => c.mail === h && !c.purgedAt);
+});
 
 /**
  * Peers (lib/peers.ts): a lead a peer passed opens its company for the member it went to, free and
@@ -7559,7 +7674,7 @@ export const tableInternals = {
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
   geoOf, firmsInReview,
   // Plans (lib/billing): the value moment that extends a trial, the saved views Free alerts on, Free's limits, the member's opaque billing ref.
-  valueMoment, alertViewsOf, freeNow, closeNow, billingRef, balance, grantPlanCredits,
+  valueMoment, alertViewsOf, freeNow, closeNow, closeUseOf, keepOf, billingRef, balance, grantPlanCredits,
   // The next-client radar (lib/radar) reads hires and open roles the way the table does, and records its product signals.
   belowLead, offBarRole, isUnseen, addSignal,
   // How a Crystal Ball company opens for the member today (its email's buttons say the same).
@@ -7568,6 +7683,9 @@ export const tableInternals = {
   refundOwnEmails, privateMemberKeys,
   // Peers (lib/peers.ts): a passed lead's company opens for the peer free; the passer's credits go within the daily earning cap.
   giftCompany, grant, knownCompanies, releaseHeld,
+  // Closing an account (lib/account.ts): its personal data deleted after CLOSURE_DAYS; the member index rebuilt after a restore.
+  purgeMember,
+  memberIndexReset: () => void (memberIndexCache = null),
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
@@ -8244,6 +8362,31 @@ export const TRIAL_CARD_DAYS = 3;
 /** Home's one-time trial card is due: on the trial, started in the last TRIAL_CARD_DAYS, and not closed (PlanRecord.notices.trialStartedSeen). */
 const trialCardDue = (rec: PlanRecord | undefined, name: PlanView["name"], nowMs: number): boolean =>
   name === "trial" && !!rec?.trialStartedAt && !rec.notices?.trialStartedSeen && nowMs - Date.parse(rec.trialStartedAt) < TRIAL_CARD_DAYS * DAY_MS;
+/**
+ * What a member did with Close features since `sinceIso` (lib/billing/rules.ts CloseUse), counts
+ * only: proposals and documents made, Claude drafts (each metered call), and sends for signature.
+ */
+function closeUseOf(s: State, memberId: string, sinceIso: string): CloseUse {
+  let made = 0;
+  let sent = 0;
+  for (const p of s.proposals ?? []) {
+    if (p.memberId !== memberId) continue;
+    if (p.createdAt >= sinceIso) made++;
+    sent += p.sends.filter((x) => x.sentAt >= sinceIso).length;
+  }
+  for (const d of s.documents ?? []) {
+    if (d.memberId !== memberId) continue;
+    if (d.createdAt >= sinceIso) made++;
+    if (d.sentAt && d.sentAt >= sinceIso) sent++;
+  }
+  const drafted = (s.aiUsage?.[memberId]?.log ?? []).filter((l) => l.at >= sinceIso).length;
+  return { made, drafted, sent };
+}
+/** The plan the trial nudges toward (PlanView.keep): Pro + Close for an active Close user in their trial, else Pro. */
+function keepOf(s: State, memberId: string): "pro" | "close" {
+  const rec = planRec(s, memberId);
+  return keepTier(closeUseOf(s, memberId, rec?.trialStartedAt ?? "1970-01-01T00:00:00.000Z"));
+}
 /** Me.plan: what the Plan and billing page, the banner and the upgrade moments read. */
 function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: Tracks; fnOfEng: (engId: string) => string | null }): PlanView {
   const rec = planRec(s, memberId);
@@ -8287,6 +8430,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     prices: { month: PRICES.month, year: PRICES.year, closeMonth: PRICES.closeMonth, closeYear: PRICES.closeYear, topup: PRICES.topup, topupCredits: TOPUP_CREDITS, proCredits: PRO_CREDITS },
     // Pro or Pro + Close (the trial is Close), whether Close features are open now, and whether Close can be bought.
     tier: tierNow(rec, nowMs),
+    keep: keepOf(s, memberId),
     canClose: canClose(rec, nowMs),
     ...(rec?.closeUntil && Date.parse(rec.closeUntil) > nowMs && rec.tier !== "close" ? { closeUntil: rec.closeUntil } : {}),
     closeOpen: closeReady(),
@@ -9845,7 +9989,8 @@ function privateMemberKeys(seed: Seed, s: State): Set<string> {
   const out = new Set<string>();
   for (const m of [...seed.members, ...s.members]) {
     const p = s.profiles[m.id];
-    if (p && (p.fractionals === false || p.partnersOff)) {
+    // A closed account keeps out of view like a member who said no (State.closures).
+    if (s.closures?.[m.id] || (p && (p.fractionals === false || p.partnersOff))) {
       const k = nameKey(m.name);
       if (k) out.add(k);
     }
@@ -9907,7 +10052,9 @@ function seatsByKey(seed: Seed): Map<string, string[]> {
  * with RN_OWNSITES=1 (graph() calls this only then), never a dry run's find (pending), only for a
  * person the import linked (Seed.ownSites: the United States, never California), only on a seat
  * whose name from public profiles still stands (not claimed by a member, not taken off with Remove
- * my name), and never for a member whose own choice keeps them out of view.
+ * my name), and never for a member whose own choice keeps them out of view. Never an invites-only
+ * address (a generic inbox on a one-person site, ownInvitesOnly): that one may carry an invite to
+ * Merlin and nothing else, so it is never a member's view of their email, the export or the connector.
  */
 function ownSitePeople(seed: Seed, s: State, g: Graph) {
   const links = seed.ownSites;
@@ -9915,7 +10062,7 @@ function ownSitePeople(seed: Seed, s: State, g: Graph) {
   let priv: Set<string> | null = null;
   const bySeat = seatsByKey(seed);
   for (const [k, em] of Object.entries(s.ownEmails ?? {})) {
-    if (!em?.email || em.pending || em.prospect || !links[k]) continue;
+    if (!em?.email || em.pending || em.prospect || ownInvitesOnly(em) || !links[k]) continue;
     const peers: string[] = [];
     for (const seatId of bySeat.get(k) ?? []) {
       const e = g.engagements.get(seatId);

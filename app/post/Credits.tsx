@@ -10,14 +10,14 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LedgerRow, View } from "@/lib/tableTypes";
-import { COMPANY_PRICE, EARN_CAP, TAPER_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, EARN_CAP, FREE_EARN_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
 import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { freeCompanyNow, freeTodayWords } from "./display";
 import { CRYSTAL_FREE_TODAY, FEATURE_NAME } from "@/lib/radar/types";
 import { Pro, useUi } from "./ui";
-import { DataLink, NotificationsCard, SignInActions } from "./Settings";
+import { CloseAccount, DataLink, NotificationsCard, SignInActions } from "./Settings";
 import { ReportedMessages } from "./Messages";
 import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
@@ -361,13 +361,8 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
           the limit still saves.
         </p>
         <p>Only 5 answers a day about a company&apos;s industry, size, revenue or how they sell earn a credit. You can unlock up to 100 facts a day, or 25 on your first day.</p>
-        {/* The Free plan's taper (lib/tableFields.ts FREE_TAPER_*), stated while billing is live. */}
-        {me.plan && (
-          <p data-taper>
-            {TAPER_RULE}
-            {me.taper ? ` Today: ${me.taper.earned} of ${me.taper.cap} from other people's companies.` : ""}
-          </p>
-        )}
+        {/* Free earns like every plan, for good (lib/tableFields.ts FREE_EARN_RULE), stated while billing is live. */}
+        {me.plan && <p data-free-earn>{FREE_EARN_RULE}</p>}
       </div>
     </>
   );
@@ -457,6 +452,7 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
           <NotificationsCard onOpen={onNotifications} />
           <ConnectedApps onHowTo={onUseInClaude} />
           <DataLink />
+          <CloseAccount />
         </>
       ) : (
         <>
@@ -470,6 +466,7 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
           <DataLink />
           {review}
           {history}
+          <CloseAccount />
         </>
       )}
       <Pro where="my_credits" />

@@ -16,7 +16,7 @@ import { nameKey } from "../personName";
 import { siteKey } from "../tableFields";
 import { loadSeed, loadState, tableInternals as T, type Seed, type State } from "../table";
 import type { ReadOutcome, ReadTarget } from "./read";
-import { emptyOwnSites, OWN_MISSES, RETRY_DAYS, type OwnAttempt, type OwnEmail, type OwnRunSummary, type OwnSiteLink, type OwnSitesState } from "./types";
+import { emptyOwnSites, ownInvitesOnly, OWN_MISSES, RETRY_DAYS, type OwnAttempt, type OwnEmail, type OwnRunSummary, type OwnSiteLink, type OwnSitesState } from "./types";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -122,7 +122,13 @@ export function saveOwn(outcomes: ReadOutcome[], dry: boolean, nowIso?: string, 
         // A real try stays: the dry run's find is kept apart as pending.
       } else job.people[o.key] = { s: o.s, at: now, pages: o.pages, ...(site ? { site } : {}), ...(dry ? { dry: true as const } : {}) };
       if (o.s === "found")
-        emails[o.key] = { email: o.email, page: o.page, at: now, how: o.how, site: o.site, ...(dry ? { pending: true as const } : {}), ...(prospects[o.key] && !seed.ownSites?.[o.key] ? { prospect: true as const } : {}) };
+        emails[o.key] = {
+          email: o.email, page: o.page, at: now, how: o.how, site: o.site,
+          ...(dry ? { pending: true as const } : {}),
+          ...(prospects[o.key] && !seed.ownSites?.[o.key] ? { prospect: true as const } : {}),
+          // A generic inbox on a one-person site: invites to Merlin only, never a member's view of their email.
+          ...(o.invitesOnly || ownInvitesOnly(o) ? { invitesOnly: true as const } : {}),
+        };
       else if (!dry && had?.pending) delete emails[o.key];
     }
     if (run) {
@@ -152,6 +158,8 @@ export interface OwnStats {
   withSite: number;
   firmOnly: number;
   usable: number;
+  /** Generic inboxes on one-person sites: invites to Merlin only (counted apart from usable). */
+  invitesOnly: number;
   pending: number;
   byHow: Record<string, number>;
   misses: Record<string, number>;
@@ -182,7 +190,8 @@ export async function ownStats(): Promise<OwnStats> {
     prospectEmails: emails.filter((e) => e.prospect && !e.pending).length,
     withSite: links.filter((l) => !!l.site).length,
     firmOnly: links.filter((l) => !l.site).length,
-    usable: emails.filter((e) => !e.pending && !e.prospect).length,
+    usable: emails.filter((e) => !e.pending && !e.prospect && !ownInvitesOnly(e)).length,
+    invitesOnly: emails.filter((e) => !e.pending && ownInvitesOnly(e)).length,
     pending: emails.filter((e) => e.pending).length,
     byHow,
     misses,
@@ -201,6 +210,8 @@ export interface OwnSample {
   pending: boolean;
   /** Outreach only: no seat, never shown in the app. */
   prospect: boolean;
+  /** A generic inbox on a one-person site: invites to Merlin only, never shown to a member. */
+  invitesOnly: boolean;
 }
 
 /** A short sample of found emails with the seat holder's name, for the owner only (the caller checks admin). Newest first. */
@@ -212,7 +223,7 @@ export async function ownSample(limit = 25): Promise<{ rows: OwnSample[]; total:
     total: rows.length,
     rows: rows.slice(0, limit).map(([k, e]) => ({
       name: names.get(k) ?? seed.ownSiteProspects?.[k]?.name ?? "",
-      email: e.email, site: e.site, page: e.page, how: e.how, at: e.at, pending: !!e.pending, prospect: !!e.prospect,
+      email: e.email, site: e.site, page: e.page, how: e.how, at: e.at, pending: !!e.pending, prospect: !!e.prospect, invitesOnly: ownInvitesOnly(e),
     })),
   };
 }

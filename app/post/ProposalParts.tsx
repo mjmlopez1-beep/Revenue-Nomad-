@@ -27,7 +27,7 @@ export function ProposalStatus({ status }: { status: ProposalRec["status"] }) {
 }
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;
+const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year.`;
 
 export async function api<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
   try {

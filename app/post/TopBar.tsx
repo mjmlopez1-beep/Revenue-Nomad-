@@ -15,7 +15,6 @@ import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
 import { PlanPill } from "./Billing";
-import { TAPER_RULE } from "@/lib/tableFields";
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
@@ -201,8 +200,6 @@ export function CreditsPopover({
         {owed && <p className="tp-credpop-warn">{owed}</p>}
         {unlocks && <p>{unlocks}</p>}
         {!capped && me.sellEarnLeft === 0 && <p>Answers for a company&apos;s industry, size, revenue or how they sell earn no more credits today. An HQ, a website, a person or a fact on your own seat still earns.</p>}
-        {/* The Free plan's taper: at its cap, say the rule (lib/tableFields.ts TAPER_RULE). */}
-        {!capped && !!me.taper && me.taper.earned >= me.taper.cap && <p data-taper>{TAPER_RULE}</p>}
       </div>
       <div className="tp-credpop-ledger">
         {ledger.length === 0 && <p className="muted tp-small">Nothing yet. Each credit you earn or spend is listed here.</p>}

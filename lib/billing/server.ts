@@ -255,7 +255,7 @@ export async function sweep(nowIso?: string, origin?: string): Promise<{ sent: n
     const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
     const base = baseOf(origin);
     const mailOn = emailEnabled() && !!base;
-    type Due = { memberId: string; kind: "trial3" | "trialLast" | "trialEnd"; to: string; first: string; link: string; notLooking: boolean; rateLine: string | null; from: string; till: string; days: number };
+    type Due = { memberId: string; kind: "trial3" | "trialLast" | "trialEnd"; to: string; first: string; link: string; notLooking: boolean; rateLine: string | null; from: string; till: string; days: number; keep: "pro" | "close" };
     const { due, granted } = await T.mutate((s, seed) => {
       const idx = T.memberIndex(seed, s);
       const list: Due[] = [];
@@ -291,6 +291,8 @@ export async function sweep(nowIso?: string, origin?: string): Promise<{ sent: n
           from: rec.trialStartedAt ?? rec.trialEndsAt,
           till: rec.trialEndsAt,
           days: Math.max(1, Math.ceil(left / DAY)),
+          // The plan the emails name: Pro, or Pro + Close for an active Close user (lib/billing/rules.ts keepTier).
+          keep: T.keepOf(s, id),
         });
       }
       return { due: list, granted: n };
@@ -303,8 +305,8 @@ export async function sweep(nowIso?: string, origin?: string): Promise<{ sent: n
           d.kind === "trialEnd"
             ? trialEndedEmail({ first: d.first, counts: await countsFor(d.memberId, d.from, d.till), notLooking: d.notLooking, rateLine: d.rateLine, link: d.link })
             : d.kind === "trial3"
-              ? trialReceiptEmail({ first: d.first, days: d.days, counts: await countsFor(d.memberId, d.from, new Date(nowMs).toISOString()), rateLine: d.rateLine, link: d.link })
-              : trialEndingEmail({ first: d.first, days: 1, notLooking: d.notLooking, rateLine: d.rateLine, link: d.link });
+              ? trialReceiptEmail({ first: d.first, days: d.days, counts: await countsFor(d.memberId, d.from, new Date(nowMs).toISOString()), rateLine: d.rateLine, link: d.link, keep: d.keep })
+              : trialEndingEmail({ first: d.first, days: 1, notLooking: d.notLooking, rateLine: d.rateLine, link: d.link, keep: d.keep });
         if (await sendEmail(d.to, e.subject, e.text, e.html)) sent++;
       } catch (e) {
         console.error("billing notice failed for one member", e);

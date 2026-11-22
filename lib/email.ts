@@ -30,14 +30,27 @@ const emailApiUrl = () => process.env.RN_EMAIL_API_URL?.trim() || "https://api.r
 /** `replyTo` (a proposal): one plain address that replies go to instead of RN_EMAIL_REPLY_TO. */
 /** `attachments` (a signed document's final PDF): files sent with the email, as Resend takes them (base64 content). */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Addresses Merlin no longer writes to: a closed account's (lib/table.ts registers the check, from
+ * State.closures). Every email goes through sendEmail, so a closed member gets none, whichever job
+ * would send it. `evenClosed`: the closure's own email with its restore link, and the restore notice.
+ */
+const mailGuard = globalThis as { __merlinMailBlocked?: (to: string) => boolean };
+export function setMailBlock(fn: ((to: string) => boolean) | null) {
+  mailGuard.__merlinMailBlocked = fn ?? undefined;
+}
+export const mailBlocked = (to: string) => !!mailGuard.__merlinMailBlocked?.(to);
+
 export async function sendEmail(
   to: string,
   subject: string,
   text: string,
   html: string,
-  opts: { unsubscribeUrl?: string; replyTo?: string; attachments?: { filename: string; content: Uint8Array }[] } = {},
+  opts: { unsubscribeUrl?: string; replyTo?: string; attachments?: { filename: string; content: Uint8Array }[]; evenClosed?: boolean } = {},
 ): Promise<boolean> {
   if (!emailEnabled()) return false;
+  if (!opts.evenClosed && mailBlocked(to)) return false;
   const unsub = /^https?:\/\/[^\s<>]+$/.test(opts.unsubscribeUrl ?? "") ? opts.unsubscribeUrl : undefined;
   const headers = unsub ? { headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {};
   const reply = opts.replyTo && /^[^\s@<>,]+@[^\s@<>,]+\.[a-z]{2,}$/i.test(opts.replyTo) ? opts.replyTo : replyTo();

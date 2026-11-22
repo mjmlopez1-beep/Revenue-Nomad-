@@ -174,7 +174,8 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
       name: nameOf(e.companyId),
       stage: e.stage,
       channel: e.channel,
-      to: { label: P.whoWords({ ...e.to, name: toName }, e.channel, "all"), name: toName, role: e.to.role ?? null, google: !!e.to.google },
+      // A peer's lead at To reach out: nobody written to yet.
+      to: { label: e.stage === "reach" && !toName && !e.to.role ? "nobody yet" : P.whoWords({ ...e.to, name: toName }, e.channel, "all"), name: toName, role: e.to.role ?? null, google: !!e.to.google },
       source: e.source,
       merlinDefault: P.merlinByDefault(e),
       dates: e.dates,

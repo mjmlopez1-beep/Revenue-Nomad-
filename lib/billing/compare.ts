@@ -21,8 +21,8 @@ export const PLANS = [
 export const PLAN_ROWS: [string, string, string, string][] = [
   ["Opening companies", `1 a day from ${FEATURE_NAME}, others ${COMPANY_PRICE} credits`, `Free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}`, `Free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}`],
   ["Fellow fractionals", "Free", "Free", "Free"],
-  ["Proposals and e-signature", "Build and preview, can't send", "Build and preview, can't send", "Every template, send and get signed, unlimited"],
-  ["Claude drafting and your own contracts", "Build it in Claude (copy a prompt)", "Build it in Claude (copy a prompt)", "Drafted from your call, your own templates and contracts with signature fields"],
+  ["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"],
+  ["Claude drafting and your own contracts", "In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"],
   ["Pipeline on a signature", "You move it", "You move it", "Moves itself when they sign"],
   ["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"],
   ["Saved views", "1, with the weekly email", "As many as you want, with alerts", "As many as you want, with alerts"],

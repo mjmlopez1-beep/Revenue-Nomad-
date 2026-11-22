@@ -2,6 +2,9 @@
  * Your pipeline: each member's own deals, one entry per company they reached out to, moved by
  * Merlin itself. The member never moves a stage by hand: Merlin sees what happened and moves it.
  *
+ *   To reach out  a lead a peer passed them (lib/peers.ts, openLead): theirs to write to. It moves
+ *             to Sent by itself the same way a new deal lands there (the member's note goes out,
+ *             a message on Merlin, or their Gmail shows an email out to the company).
  *   Sent      the member used a drafted note (Open in Gmail, Copy, Mark as sent), a message,
  *             intro or invite went out on Merlin, or their connected Gmail shows a new email out
  *             to a company in their Crystal Ball (headers only: who, to whom, when).
@@ -43,13 +46,13 @@
 
 /* ---------- stages and channels ---------- */
 
-export const STAGES = ["sent", "replied", "meeting", "proposal", "won", "lost", "notnow", "quiet"] as const;
+export const STAGES = ["reach", "sent", "replied", "meeting", "proposal", "won", "lost", "notnow", "quiet"] as const;
 export type Stage = (typeof STAGES)[number];
-export const STAGE_WORDS: Record<Stage, string> = { sent: "Sent", replied: "Replied", meeting: "Meeting", proposal: "Proposal", won: "Won", lost: "Lost", notnow: "Not now", quiet: "Went quiet" };
-/** The stages a deal moves through in order, to Won. */
-export const LINE: readonly Stage[] = ["sent", "replied", "meeting", "proposal", "won"];
-/** Still in play: these have a next step and a follow-up date. */
-export const OPEN_STAGES: readonly Stage[] = ["sent", "replied", "meeting", "proposal"];
+export const STAGE_WORDS: Record<Stage, string> = { reach: "To reach out", sent: "Sent", replied: "Replied", meeting: "Meeting", proposal: "Proposal", won: "Won", lost: "Lost", notnow: "Not now", quiet: "Went quiet" };
+/** The stages a deal moves through in order, to Won. To reach out comes first: a peer's lead, not written to yet. */
+export const LINE: readonly Stage[] = ["reach", "sent", "replied", "meeting", "proposal", "won"];
+/** Still in play: these have a next step (To reach out's is the member's note; the others' a follow-up date). */
+export const OPEN_STAGES: readonly Stage[] = ["reach", "sent", "replied", "meeting", "proposal"];
 /** What the member may say themselves (one tap). */
 export const MANUAL_STAGES = ["lost", "notnow"] as const;
 export type ManualStage = (typeof MANUAL_STAGES)[number];
@@ -69,8 +72,9 @@ export const isChannel = (v: unknown): v is Channel => typeof v === "string" && 
  * Google account (headers and attendees only). proposal: the proposal builder. auto: silence aged
  * it out. you: the member said so.
  */
-export type Via = "note" | "message" | "gmail" | "calendar" | "proposal" | "seat" | "auto" | "you";
+export type Via = "note" | "message" | "gmail" | "calendar" | "proposal" | "seat" | "auto" | "you" | "peer";
 export const VIA_WORDS: Record<Via, string> = {
+  peer: "Passed to you by a peer",
   note: "From your note",
   message: "From Merlin messages",
   gmail: "Detected from your Gmail",
@@ -263,8 +267,8 @@ function logLine(e: PipelineEntry, text: string, nowMs: number) {
   e.updatedAt = iso(nowMs);
 }
 
-/** The next follow-up after a change at `atMs`: FOLLOW_UP_BUSINESS_DAYS business days on, while the deal is open. */
-const nextDue = (stage: Stage, atMs: number) => (isOpen(stage) ? addBusinessDays(atMs, FOLLOW_UP_BUSINESS_DAYS) : null);
+/** The next follow-up after a change at `atMs`: FOLLOW_UP_BUSINESS_DAYS business days on, while the deal is open. To reach out has none: nothing went out yet. */
+const nextDue = (stage: Stage, atMs: number) => (isOpen(stage) && stage !== "reach" ? addBusinessDays(atMs, FOLLOW_UP_BUSINESS_DAYS) : null);
 
 /** The open entry at a company, or the latest one. */
 export function entryAt(log: PipelineLog | undefined, companyId: string): PipelineEntry | null {
@@ -291,6 +295,14 @@ export function openEntry(
     if (o.lead && !had.lead) had.lead = o.lead;
     if (o.conversationId && !had.conversationId) had.conversationId = o.conversationId;
     if (o.to?.memberId && !had.to.memberId) had.to = { ...had.to, ...o.to };
+    // A peer's lead waiting at To reach out: the member's note went out, so it moves to Sent, as a new deal would land there.
+    if (had.stage === "reach") {
+      had.channel = o.channel;
+      if (o.to && (o.to.role || o.to.name || o.to.seatId)) had.to = { ...o.to, ...(had.to.memberId && !o.to.memberId ? { memberId: had.to.memberId } : {}) };
+      moveTo(had, "sent", o.via, atMs, o.nowMs);
+      had.lastOut = at;
+      return { entry: had, created: false };
+    }
     if (atMs - Date.parse(had.lastOut) < SAME_SEND_MS) return { entry: had, created: false };
     if (had.stage === "quiet") {
       moveTo(had, "sent", o.via, atMs, o.nowMs);
@@ -331,7 +343,70 @@ export function openEntry(
   return { entry, created: true };
 }
 
+/**
+ * A lead a peer passed (lib/peers.ts): a new entry at To reach out, with no follow-up due (nothing
+ * went out yet). A company with an open entry keeps it as it is; the caller notes the lead on it.
+ */
+export function openLead(log: PipelineLog, o: { id: string; companyId: string; nowMs: number; lead: { passId: string; by: string }; conversationId?: string }): { entry: PipelineEntry; created: boolean } {
+  const had = log.entries.find((e) => e.companyId === o.companyId && (isOpen(e.stage) || e.stage === "quiet"));
+  if (had) {
+    had.lead ??= o.lead;
+    return { entry: had, created: false };
+  }
+  const at = iso(o.nowMs);
+  const entry: PipelineEntry = {
+    id: o.id,
+    companyId: o.companyId,
+    stage: "reach",
+    channel: "intro",
+    to: {},
+    source: "peer",
+    dates: { reach: at },
+    via: { reach: "peer" },
+    due: null,
+    follow: 0,
+    lastOut: at,
+    seen: {},
+    notes: [],
+    log: [],
+    lead: o.lead,
+    ...(o.conversationId ? { conversationId: o.conversationId } : {}),
+    createdAt: at,
+    updatedAt: at,
+  };
+  logLine(entry, "To reach out: a lead a peer passed you", o.nowMs);
+  log.entries.push(entry);
+  if (log.entries.length > PIPELINE_LIMITS.entries) {
+    const closed = log.entries.filter((e) => !isOpen(e.stage) && e.stage !== "won").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    for (const c of closed.slice(0, log.entries.length - PIPELINE_LIMITS.entries)) log.entries.splice(log.entries.indexOf(c), 1);
+  }
+  return { entry, created: true };
+}
+
+/**
+ * Once (State.flags.reachStage): peers' leads stored before To reach out existed, opened at Sent
+ * though nothing went out from the member yet, move to To reach out. Such an entry came from a lead
+ * (lead set, source peer), is still at Sent as it was opened (via message, no follow-up, nothing out
+ * or seen since). Every other deal is left as it is. Returns how many moved.
+ */
+export function migrateLeadsToReach(log: PipelineLog | undefined): number {
+  let n = 0;
+  for (const e of log?.entries ?? []) {
+    if (!e.lead || e.source !== "peer" || e.stage !== "sent" || e.via.sent !== "message" || e.follow > 0) continue;
+    if (e.lastOut !== e.dates.sent || e.seen.out || e.seen.in || e.seen.msg || e.seen.met || e.seen.next) continue;
+    if (Object.keys(e.dates).some((k) => k !== "sent")) continue;
+    e.stage = "reach";
+    e.dates = { reach: e.dates.sent ?? e.createdAt };
+    e.via = { reach: "peer" };
+    e.due = null;
+    e.log.push({ at: e.updatedAt, text: "To reach out: a lead a peer passed you" });
+    n++;
+  }
+  return n;
+}
+
 const LOG_WORDS: Record<Stage, string> = {
+  reach: "To reach out",
   sent: "Back to Sent",
   replied: "They replied",
   meeting: "Meeting",
@@ -518,7 +593,16 @@ export function detectEntry(e: PipelineEntry, sig: CompanySignals | undefined, n
   let changed = false;
   const sentAt = e.dates.sent ?? e.createdAt;
   const after = (t: string | undefined, seen: string | undefined, floor: string) => !!t && t > floor && (!seen || t > seen);
-  if (sig) {
+  if (sig && e.stage === "reach") {
+    // A peer's lead: an email out to the company after it was passed is the member reaching out. Sent, as a new deal lands.
+    if (sig.outAt && after(sig.outAt, e.seen.out, e.createdAt)) {
+      e.seen.out = sig.outAt;
+      moveTo(e, "sent", "gmail", Date.parse(sig.outAt), nowMs);
+      e.lastOut = sig.outAt;
+      changed = true;
+    }
+  }
+  if (sig && e.stage !== "reach") {
     // An email out, well after the last send: a follow-up (or, after it went quiet, a new try).
     if ((e.stage === "sent" || e.stage === "quiet") && sig.outAt && Date.parse(sig.outAt) - Date.parse(e.lastOut) > FOLLOW_GAP_MS && after(sig.outAt, e.seen.out, e.lastOut)) {
       e.seen.out = sig.outAt;
@@ -879,6 +963,8 @@ export function nextStep(e: Pick<PipelineEntry, "stage" | "due" | "seatId">, now
   const today = dayOf(nowMs);
   const when = e.due ? (e.due < today ? "overdue" : e.due === today ? "today" : shortDay(e.due)) : null;
   switch (e.stage) {
+    case "reach":
+      return "Write your note";
     case "sent":
       return when ? (when === "overdue" ? "Follow up, overdue" : `Follow up ${when}`) : "Wait to hear back";
     case "replied":
@@ -945,7 +1031,7 @@ const share = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10
  */
 export function outcomeStats(state: { pipeline?: Record<string, PipelineLog>; peers?: PeersCounted }, nowMs: number = Date.now()): OutcomeStats {
   const byStage = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
-  const detected: Record<Via, number> = { note: 0, message: 0, gmail: 0, calendar: 0, proposal: 0, seat: 0, auto: 0, you: 0 };
+  const detected: Record<Via, number> = { note: 0, message: 0, gmail: 0, calendar: 0, proposal: 0, seat: 0, auto: 0, you: 0, peer: 0 };
   const reachedN = { sent: 0, replied: 0, meeting: 0, proposal: 0, won: 0 };
   // Each share counts the entries that reached both of its stages, so a deal that skipped one never counts as converted through it.
   const both = { sentReplied: 0, repliedMeeting: 0, meetingWon: 0, sentWon: 0 };

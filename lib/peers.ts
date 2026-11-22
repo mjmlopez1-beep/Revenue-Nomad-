@@ -37,7 +37,7 @@ import { networkOn } from "./google/types";
 import { MAIL, emailEnabled, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine, sendEmail } from "./email";
 import { NOTIFICATIONS_PATH, emailLinker } from "./emailIn";
 import { settingsLink } from "./messages";
-import { STAGE_WORDS, emptyPipeline, entryAt, isOpen, openEntry } from "./pipeline";
+import { STAGE_WORDS, emptyPipeline, entryAt, isOpen, openEntry, openLead } from "./pipeline";
 import type { StoredConversation } from "./messageState";
 import type { Action, ActionResult, FractionalRec } from "./tableTypes";
 import {
@@ -251,6 +251,8 @@ function leadRec(x: Ctx, q: LeadPass): LeadRec {
     ...(q.answeredAt ? { answeredAt: q.answeredAt } : {}),
     // The peer's deal there, for the passer: only whether it was won (never its stage, notes or who they wrote to).
     ...(entry?.stage === "won" ? { won: true } : {}),
+    // The recipient's own deal: its stage, To reach out until their note goes out. Never shown to the passer.
+    ...(toMe && entry ? { stage: STAGE_WORDS[entry.stage] } : {}),
     ...(q.conversationId ? { conversationId: q.conversationId } : {}),
     ...(!toMe && q.paid ? { credited: PASS_CREDIT } : {}),
     ...((toMe ? q.status === "new" : q.status === "taken") && (q.answeredAt ?? q.at) > seen ? { fresh: true } : {}),
@@ -709,7 +711,8 @@ export async function performPeer(token: string | null, raw: Action, origin?: st
           had.log.push({ at: now, text: `${first} passed you this lead` });
           q.entryId = had.id;
         } else {
-          const { entry } = openEntry(log, { id: newId("pl"), companyId: q.companyId, channel: "intro", to: {}, source: "peer", via: "message", nowMs, lead: { passId: q.id, by: q.by }, ...(q.conversationId ? { conversationId: q.conversationId } : {}) });
+          // A peer's lead lands at To reach out: nothing went out from the member yet. Their note moves it to Sent (openEntry).
+          const { entry } = openLead(log, { id: newId("pl"), companyId: q.companyId, nowMs, lead: { passId: q.id, by: q.by }, ...(q.conversationId ? { conversationId: q.conversationId } : {}) });
           entry.log.push({ at: now, text: `${first} passed you this lead` });
           q.entryId = entry.id;
         }

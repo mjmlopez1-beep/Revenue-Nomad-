@@ -301,15 +301,8 @@ export const FOUND_NOTE = "Found by its exact name";
 
 /** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;
-/*
- * Free plan earning taper (the owner may drop it: set FREE_TAPER_CAP to EARN_CAP to turn it off).
- * After a member's first FREE_TAPER_DAYS, facts about other people's companies earn up to
- * FREE_TAPER_CAP a day; facts on their own seats, and confirmations, still earn up to EARN_CAP.
- */
-export const FREE_TAPER_DAYS = 30;
-export const FREE_TAPER_CAP = 10;
-/** The taper as members read it (the Credits page, the cap messages). */
-export const TAPER_RULE = `On Free, after your first ${FREE_TAPER_DAYS} days, facts about other people's companies earn up to ${FREE_TAPER_CAP} credits a day. Facts on your own seats, and confirmations, still earn up to ${EARN_CAP}.`;
+/** Free keeps earning like every plan: up to EARN_CAP credits in any 24 hours, for as long as they are a member (no taper after the first days). */
+export const FREE_EARN_RULE = `On Free you keep earning up to ${EARN_CAP} credits a day, for as long as you're a member.`;
 /** Credits for inviting a fellow fractional, paid to both once the new member adds their first fact. */
 export const REFERRAL_BONUS = 10;
 /** Paid invites per member per 30 days. */

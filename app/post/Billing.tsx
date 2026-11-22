@@ -26,7 +26,15 @@ import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
 import { PLANS, PLAN_ROWS } from "@/lib/billing/compare";
-import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY } from "@/lib/billing/rules";
+import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY, TIER_NAME, keepWords } from "@/lib/billing/rules";
+
+/**
+ * The plan the trial nudges toward (PlanView.keep, lib/billing/rules.ts keepTier): Pro by default,
+ * Pro + Close once the member is an active Close user in the trial. Its name and its button.
+ */
+const keepOf = (plan: PlanView): "pro" | "close" => (plan.keep === "close" ? "close" : "pro");
+export const keepName = (plan: PlanView) => TIER_NAME[keepOf(plan)];
+export const keepCta = (plan: PlanView) => keepWords(keepOf(plan));
 import { EARN_ONE, PRO_COMPANIES_FREE, topupWords, useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
 import { NomadArt, Prop, Scene } from "../ui/fractions/lazy";
@@ -197,7 +205,10 @@ function leadFor(plan: PlanView, a: Ask): string {
   if (plan.name === "trial") {
     const when = plan.trialDaysLeft === 1 ? "tomorrow" : `on ${day(plan.trialEndsAt)}`;
     if (plan.notLooking) return `Your Pro trial ends ${when}. Nothing to do: you stay on Free, with no charge. Pro is here for when you want it, and it pauses any month your book is full.`;
-    if (a.from === "trial" || a.from === "billing") return `All of Pro is yours until your trial ends ${when}. Keep it now and it carries straight on after, with nothing to do that day.`;
+    if (a.from === "trial" || a.from === "billing")
+      return keepOf(plan) === "close"
+        ? `All of Pro + Close is yours until your trial ends ${when}. You've been building proposals in Merlin: keep Pro + Close now and it carries straight on after, with nothing to do that day.`
+        : `All of Pro is yours until your trial ends ${when}. Keep it now and it carries straight on after, with nothing to do that day.`;
     if (a.from === "credits") return `Pro adds ${plan.prices.proCredits} credits each paid month, on top of what you earn. They start with your first paid month.`;
     return `${leadFor({ ...plan, name: "free", notLooking: false }, a)} It's yours in the trial until ${day(plan.trialEndsAt)}.`;
   }
@@ -214,8 +225,8 @@ function leadFor(plan: PlanView, a: Ask): string {
   if (a.from === "crystal") return `Free opens one ${FEATURE_NAME} company a day, with everything on it. Pro opens every company in your ${FEATURE_NAME} free.`;
   if (a.from === "proposals")
     return plan.hadTrial || plan.name !== "free"
-      ? "Free and Pro build and preview proposals. Pro + Close drafts them from your call, opens your own templates and contracts, and sends them for e-signature, so the client signs where they read it."
-      : "Free and Pro build and preview proposals. Your 21-day trial is Pro + Close: draft from your call, send, and get it signed.";
+      ? "Building proposals in Merlin is on Pro + Close: new ones, from Merlin's templates or your own. It drafts them from your call, opens your own templates and contracts, and sends them for e-signature. Your proposals and saved templates are kept, and come back when you upgrade."
+      : "Your 21-day trial is Pro + Close: build proposals, save your own templates, draft from your call, send, and get it signed. After it, building proposals is on Pro + Close.";
   return VALUE_LINE;
 }
 
@@ -237,7 +248,8 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
   const applied = !!plan.code && code.trim().toUpperCase() === plan.code.code;
   // Paying now (not in the trial): the other paid tier is a move on the same subscription.
   const paying = plan.subscribed && plan.name === "pro";
-  const lead: "pro" | "close" = from === "proposals" || plan.name === "trial" || plan.tier === "pro" ? "close" : "pro";
+  // In the trial the lead plan (its tag, the highlight and the primary button) is the one the trial nudges toward: Pro, or Pro + Close for an active Close user.
+  const lead: "pro" | "close" = from === "proposals" ? "close" : plan.name === "trial" ? keepOf(plan) : plan.tier === "pro" ? "close" : "pro";
   const yearly = interval === "year";
   const priceOf = (p: (typeof PLANS)[number]) => (yearly ? p.year : p.month);
   return (
@@ -267,7 +279,7 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
           const op = `${paying ? "tier" : "checkout"}${paying ? "" : interval}`;
           return (
             <div key={p.key} className={`bl-plan bl-plan-${p.key}${paid && p.key === lead ? " bl-plan-lead" : ""}${mine ? " mine" : ""}`} data-plan-card={p.key}>
-              {paid && p.key === lead && !mine ? <span className="bl-plan-tag">{p.key === "close" ? "Wins the client" : "Most chosen"}</span> : null}
+              {paid && p.key === lead && !mine ? <span className="bl-plan-tag">{p.key === "close" && plan.name !== "trial" ? "Wins the client" : "Most chosen"}</span> : null}
               <p className="bl-plan-h">{p.name}</p>
               <p className="bl-plan-price num">
                 {usd(priceOf(p))}
@@ -397,7 +409,7 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
   const canMove = onPro && plan.tier === "pro" && !plan.proStartsAt;
   const trial = plan.name === "trial";
   // "Your trial ends soon" only in the trial's last 3 days: on day 1 it would read as a countdown.
-  const title = plan.notLooking && a.from === "trial" ? (plan.ending ? "Your trial ends soon" : "Merlin Pro") : trial && a.from === "billing" ? "Keep Pro" : TITLE[a.from];
+  const title = plan.notLooking && a.from === "trial" ? (plan.ending ? "Your trial ends soon" : "Merlin Pro") : trial && (a.from === "billing" || a.from === "trial") ? keepCta(plan) : TITLE[a.from];
   return (
     <Sheet title={title} onClose={onClose} dialog className="bl-sheet">
       <div className="bl-sheet-in">
@@ -548,13 +560,13 @@ export function TrialBanner({ plan }: { plan?: PlanView }) {
           </>
         ) : (
           <>
-            Your Pro trial {when}.{got} Then you&apos;re on Free, unless you keep Pro.
+            Your Pro trial {when}.{got} Then you&apos;re on Free, unless you keep {keepName(plan)}.
           </>
         )}
       </span>
       <span className="tp-strip-acts">
         <button type="button" className={`btn btn-sm${plan.notLooking ? "" : " btn-pine"}`} onClick={() => openPlans("trial")}>
-          {plan.notLooking ? "See plans" : "Keep Pro"}
+          {plan.notLooking ? "See plans" : keepCta(plan)}
         </button>
       </span>
       <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-label="Dismiss" onClick={close}>
@@ -587,8 +599,8 @@ export function TrialSummaryCard({ plan }: { plan?: PlanView }) {
         )}
         <p className="bl-sum-p">{plan.summary.locks}</p>
       </div>
-      <button type="button" className="btn btn-sm btn-pine" onClick={() => openPlans("trial")}>
-        Keep Pro
+      <button type="button" className="btn btn-sm btn-pine" onClick={() => openPlans("trial")} data-keep={keepOf(plan)}>
+        {keepCta(plan)}
       </button>
     </section>
   );

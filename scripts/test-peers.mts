@@ -23,6 +23,9 @@
  *    of the member's own Crystal Ball (locked names unnamed, nobody's contacts), admin counts only;
  *  - email: the lead and team-up emails to the fake endpoint, signed-in links, the Notifications switch;
  *  - the connector: list_peers never names a LinkedIn contact, pass_lead asks first, leads_passed_to_me;
+ *  - To reach out: a lead taken lands there (no follow-up due), the member's note moves it to Sent by
+ *    itself, a company with an open deal keeps its stage, the connector's my_pipeline and
+ *    leads_passed_to_me say it, the passer never sees it, and the one-time move of stored leads;
  *  - the export without what members wrote; ?p=fractionals opens Peers' Every fractional.
  */
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -303,6 +306,22 @@ async function main() {
     const pv = await pa.pipelineViewOf(await t.loadSeed(), await t.loadState(), (await t.memberForToken(tok("mem_theo")))!);
     const entry = pv.entries.find((e) => e.company === ACME);
     check("his entry says who passed it", entry?.lead?.by === "Ana Ruiz" && entry.source === "peer" && entry.merlinDefault, entry);
+    check("it lands at To reach out: the first stage, nothing out yet, no follow-up due, Write your note", entry?.stage === "reach" && P.STAGE_WORDS.reach === "To reach out" && P.LINE[0] === "reach" && !entry.dates.sent && entry.due === null && entry.next === "Write your note" && pv.counts.reach === 1 && !pv.due.some((f) => f.id === entry.id), entry);
+    const tools = await import("../lib/mcp/tools");
+    const theoCtx = { member: (await t.memberForToken(tok("mem_theo")))!, origin: "https://post.example.com" };
+    const myPipe = await tools.myPipeline(theoCtx);
+    const pe = (myPipe.entries as { company_id: string; stage: string; passed_by_peer?: string }[]).find((x) => x.company_id === ACME);
+    check("my_pipeline: To reach out, passed by Ana, and the count", pe?.stage === "To reach out" && pe.passed_by_peer === "Ana" && (myPipe.counts as Record<string, number>)["To reach out"] === 1 && /To reach out/.test(String(myPipe.how_to_use)), pe);
+    const theoLeads = await mcp.leadsPassedToMe(theoCtx);
+    check("leads_passed_to_me: the lead's stage in his pipeline", (theoLeads.passed_to_you as { lead_id: string; pipeline_stage?: string }[]).find((x) => x.lead_id === lead.id)?.pipeline_stage === "To reach out", theoLeads.passed_to_you);
+    check("update_pipeline takes Lost or Not now on it like any deal, never a stage", /lost, not_now or note/.test((await tools.updatePipeline(theoCtx, { entry_id: entry!.id, action: "sent" }).then(() => "", (e: Error) => e.message))));
+    // His note goes out: Merlin moves it to Sent by itself, as a new deal lands there.
+    await pa.performPipeline(tok("mem_theo"), { type: "pipeline.sent", companyId: ACME, channel: "email" } as never);
+    const pv2 = await pa.pipelineViewOf(await t.loadSeed(), await t.loadState(), (await t.memberForToken(tok("mem_theo")))!);
+    const sentNow = pv2.entries.find((e) => e.id === entry!.id);
+    check("his note goes out: Sent by itself, from his note, with a follow-up due, the To reach out date kept", sentNow?.stage === "sent" && sentNow.via.sent === "note" && !!sentNow.due && !!sentNow.dates.reach && !!sentNow.dates.sent && sentNow.channel === "email" && pv2.counts.reach === 0, sentNow);
+    check("  one entry still, the lead on it", pv2.entries.filter((e) => e.company === ACME).length === 1 && sentNow?.lead?.by === "Ana Ruiz");
+    check("  leads_passed_to_me says Sent now", (await mcp.leadsPassedToMe(theoCtx)).passed_to_you && ((await mcp.leadsPassedToMe(theoCtx)).passed_to_you as { lead_id: string; pipeline_stage?: string }[]).find((x) => x.lead_id === lead.id)?.pipeline_stage === "Sent");
     check("Ana sees it taken, with her credits", (await view("mem_ana")).sent.find((l) => l.id === lead.id)?.credited === 5);
     check("never where Theo's deal stands, his notes or who he wrote to", !JSON.stringify((await view("mem_ana")).sent).match(/\"stage\"|Sent|notes/));
     check("Ana's ledger line", (await t.buildView(tok("mem_ana"))).me!.ledger?.some((l) => l.reason === "A peer took the lead you passed" && l.delta === 5) ?? true);
@@ -473,6 +492,39 @@ async function main() {
     check("the directory's old page lights Peers", nav.currentKey({ page: "fractionals", recordType: "companies", tab: "all", currentView: null }) === "peers");
   }
 
+  /* ---------- To reach out, pure: Gmail, an open deal kept, the one-time move ---------- */
+  {
+    const P = await import("../lib/pipeline");
+    const DAYMS = 86_400_000;
+    const now = Date.parse("2026-11-20T15:00:00Z");
+    const lead = { passId: "lp1", by: "mem_x" };
+    const lg = P.emptyPipeline();
+    const { entry } = P.openLead(lg, { id: "e1", companyId: "c1", nowMs: now, lead });
+    check("openLead: To reach out, no follow-up, logged", entry.stage === "reach" && entry.due === null && entry.dates.reach === new Date(now).toISOString() && entry.via.reach === "peer");
+    P.detectEntry(entry, { outAt: new Date(now + DAYMS).toISOString() }, now + 2 * DAYMS);
+    check("an email out to the company in their Gmail moves it to Sent, as a new deal lands", entry.stage === "sent" && entry.via.sent === "gmail" && !!entry.due, entry);
+    const open = P.emptyPipeline();
+    P.openEntry(open, { id: "e2", companyId: "c2", channel: "email", source: "move", via: "note", nowMs: now });
+    const kept = P.openLead(open, { id: "e3", companyId: "c2", nowMs: now + DAYMS, lead });
+    check("a company with an open deal keeps it and its stage; the lead is noted on it", !kept.created && kept.entry.id === "e2" && kept.entry.stage === "sent" && kept.entry.lead?.passId === "lp1" && open.entries.length === 1);
+    const old = P.emptyPipeline();
+    const mk = (id: string, extra: Partial<import("../lib/pipeline").PipelineEntry>) => {
+      const at = new Date(now - 5 * DAYMS).toISOString();
+      old.entries.push({ id, companyId: `c_${id}`, stage: "sent", channel: "intro", to: {}, source: "peer", dates: { sent: at }, via: { sent: "message" }, due: "2026-11-18", follow: 0, lastOut: at, seen: {}, notes: [], log: [], lead, createdAt: at, updatedAt: at, ...extra });
+    };
+    mk("untouched", {});
+    mk("followed", { follow: 1 });
+    mk("noted", { via: { sent: "note" } });
+    mk("replied", { stage: "replied", dates: { sent: new Date(now - 5 * DAYMS).toISOString(), replied: new Date(now - DAYMS).toISOString() }, via: { sent: "message", replied: "gmail" } });
+    mk("notpeer", { source: "move", lead: undefined });
+    const moved = P.migrateLeadsToReach(old);
+    const st = (id: string) => old.entries.find((e) => e.id === id)!;
+    check("the one-time move: a stored lead still at Sent as it was opened goes to To reach out", moved === 1 && st("untouched").stage === "reach" && !st("untouched").dates.sent && st("untouched").due === null, old.entries.map((e) => [e.id, e.stage]));
+    check("  a lead followed up, sent from a note, or further on, and every other deal, stay as they are", st("followed").stage === "sent" && st("noted").stage === "sent" && st("replied").stage === "replied" && st("notpeer").stage === "sent");
+    check("  run again, nothing moves", P.migrateLeadsToReach(old) === 0);
+    check("outcomeStats counts To reach out apart, and not as Sent", P.outcomeStats({ pipeline: { m: old } }).byStage.reach === 1 && P.outcomeStats({ pipeline: { m: old } }).reached.sent === 4);
+  }
+
   console.log(`\n${passes} passed, ${failures} failed`);
   process.exit(failures ? 1 : 0);
 }
@@ -481,3 +533,4 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
+
