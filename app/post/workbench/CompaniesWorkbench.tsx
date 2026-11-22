@@ -93,7 +93,8 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
   const layout = useLayout();
   const live = ui.me;
   const hasIcp = !icpEmpty(me.icp);
-  const first = firstProp ?? !(me.companiesUnlocked ?? 0);
+  // Read once, when the page opens: opening the first company here moves the strip on to the next step, it doesn't end the first visit.
+  const [first] = useState(() => firstProp ?? !(me.companiesUnlocked ?? 0));
   // A gated item opens the plans (Billing.tsx's host), unless the shell passes its own.
   const upgrade = onUpgrade ?? ((from: "evidence" | "signals" | "proposal") => openPlans(from === "signals" ? "billing" : "proposals"));
 

@@ -630,11 +630,11 @@
 }
 .wb-tab {
   height: 38px;
-  padding: 0 9px;
+  padding: 0 7px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--body-ink);
   white-space: nowrap;
   cursor: pointer;
