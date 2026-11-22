@@ -1,0 +1,128 @@
+/**
+ * The Tools panel's items (For you, Sources, Enrich, Signals, Actions), each with what it costs a
+ * row. Pure: the panel draws them, RunConfig runs the Enrich ones (an ordinary unlock, quoted by
+ * the server first), and scripts/test-workbench.mts checks the words and the mapping.
+ *
+ * The mapping (BUILD_PLAN F3): Company name and website is the company's own unlock (2 credits,
+ * free on the trial and Pro up to 15 a day); Who held the seat is free once the company is open;
+ * Decision maker is the person's name and title (one purchase); Work email opens after the name;
+ * Rate paid is the seat's rate. Signals are list alerts (F5). Actions are Add to pipeline, Draft
+ * notes, Start a proposal (Close), Pass as a lead.
+ *
+ * Left out, with nothing behind them yet (BUILD_PLAN part 6): "Ask Merlin, a column Merlin
+ * researches" (no research agent on the server), Closest evidence (Evidence is Stage 5), Import a
+ * CSV (only the LinkedIn connections file reads today), Export CSV (the owner's question 5: no plan
+ * allows it yet) and Send to Slack (no list post exists).
+ */
+import { COMPANY_PRICE, PRO_OPENS_DAILY } from "@/lib/tableFields";
+import type { Me } from "@/lib/tableTypes";
+import type { RecordType } from "../model";
+
+export type ToolTab = "you" | "sources" | "enrich" | "signals" | "actions";
+export const TOOL_TABS: { key: ToolTab; label: string }[] = [
+  { key: "you", label: "For you" },
+  { key: "sources", label: "Sources" },
+  { key: "enrich", label: "Enrich" },
+  { key: "signals", label: "Signals" },
+  { key: "actions", label: "Actions" },
+];
+
+/** How an item's cost reads: a pale green pill for free and earning, grey for credits, an outline for a plan gate. */
+export type CostTone = "free" | "paid" | "gate";
+
+/**
+ * What the item does when picked.
+ *   run      Enrich: open the drill-in to run a column on rows (`col` in columns.ts)
+ *   column   show a free column at once
+ *   type     switch the table to another record type, keeping the filters
+ *   page     open another page
+ *   alert    save the list with an alert on (`trigger` says which)
+ *   action   one of the selection's actions
+ *   recipe   For you: opens the first step of a short recipe
+ */
+export type ToolDo =
+  | { kind: "run"; col: string }
+  | { kind: "column"; col: string }
+  | { kind: "type"; type: RecordType }
+  | { kind: "page"; page: "network" | "proposals" | "pipeline" }
+  | { kind: "alert"; trigger: "role" | "seat" | "leader" | "funding" }
+  | { kind: "action"; action: "pipeline" | "notes" | "pass" | "proposal" };
+
+export interface ToolItem {
+  id: string;
+  tab: ToolTab;
+  label: string;
+  sub: string;
+  cost: string;
+  tone: CostTone;
+  do: ToolDo;
+}
+
+/** What the panel needs to know about the member and the server's switches. */
+export interface ToolCtx {
+  me: Pick<Me, "proOpens" | "plan" | "credits">;
+  /** Your network (RN_GOOGLE) is on: Google contacts and the LinkedIn file are sources. */
+  network: boolean;
+  /** Close features are open (the trial, Close, grandfathered Pro): Start a proposal. */
+  close: boolean;
+}
+
+/** Trial and Pro: companies open free up to PRO_OPENS_DAILY a day (Me.proOpens). */
+export const opensFree = (me: Pick<Me, "proOpens">) => !!me.proOpens && me.proOpens.left > 0;
+/** The member's plan has Pro's features (the trial does). Billing off: nothing is gated. */
+export const proNow = (me: Pick<Me, "plan">) => !me.plan || me.plan.tier !== "free";
+
+/** "Free on trial", "Free today" (Pro), or "2 / row". */
+export function companyCost(me: Pick<Me, "proOpens" | "plan">): { cost: string; tone: CostTone } {
+  if (!opensFree(me)) return { cost: `${COMPANY_PRICE} / row`, tone: "paid" };
+  return { cost: me.plan?.name === "trial" ? "Free on trial" : "Free today", tone: "free" };
+}
+
+export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
+  const co = companyCost(ctx.me);
+  const pro = proNow(ctx.me);
+  const gate = (ok: boolean, name: string): { cost: string; tone: CostTone } => (ok ? { cost: "On", tone: "free" } : { cost: name, tone: "gate" });
+  const items: ToolItem[] = [
+    // For you: short recipes that start the right drill-in.
+    { id: "you-dm", tab: "you", label: "Find who decides", sub: "Decision maker, then their work email", cost: "1 / row", tone: "paid", do: { kind: "run", col: "decider" } },
+    { id: "you-open", tab: "you", label: "Open these companies", sub: `See each name, website and job posting${opensFree(ctx.me) ? `, free up to ${PRO_OPENS_DAILY} a day` : ""}`, cost: co.cost, tone: co.tone, do: { kind: "run", col: "company" } },
+    { id: "you-watch", tab: "you", label: "Watch this list", sub: "Tell me when a company on it posts a fractional role", cost: "Free", tone: "free", do: { kind: "alert", trigger: "role" } },
+    // Sources: other record types over the same filters, and the member's own contacts.
+    ...(type !== "people" ? [{ id: "src-people", tab: "sources" as const, label: "People at these companies", sub: "Leaders and who decides, with the same filters", cost: "Free", tone: "free" as const, do: { kind: "type" as const, type: "people" as const } }] : []),
+    ...(type !== "engagements" ? [{ id: "src-seats", tab: "sources" as const, label: "Seats at these companies", sub: "Every fractional seat on file", cost: "Free", tone: "free" as const, do: { kind: "type" as const, type: "engagements" as const } }] : []),
+    ...(type !== "companies" ? [{ id: "src-co", tab: "sources" as const, label: "These companies", sub: "One row a company", cost: "Free", tone: "free" as const, do: { kind: "type" as const, type: "companies" as const } }] : []),
+    ...(ctx.network
+      ? [{ id: "src-network", tab: "sources" as const, label: "Your contacts", sub: "Google contacts or your LinkedIn connections file, matched to these companies", cost: "Free", tone: "free" as const, do: { kind: "page" as const, page: "network" as const } }]
+      : []),
+    // Enrich: columns, each with its price a row. Runs are ordinary unlocks, quoted first.
+    ...(type === "companies"
+      ? [
+          { id: "en-company", tab: "enrich" as const, label: "Company name and website", sub: "Opens the company and its job postings", cost: co.cost, tone: co.tone, do: { kind: "run" as const, col: "company" } },
+          { id: "en-held", tab: "enrich" as const, label: "Who held the seat", sub: "Free once the company is open", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "heldBy" } },
+          { id: "en-dm", tab: "enrich" as const, label: "Decision maker", sub: "Name and title of who hires, one purchase", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "decider" } },
+          { id: "en-email", tab: "enrich" as const, label: "Work email", sub: "Needs the decision maker's name first", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "email" } },
+          { id: "en-rate", tab: "enrich" as const, label: "Rate paid", sub: "What the latest seat paid, where a member shared it", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "rate" } },
+          { id: "en-motion", tab: "enrich" as const, label: "Sales motion", sub: "How the company sells, where members added it", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "motion" } },
+        ]
+      : []),
+    // Signals: what a saved list's alert watches for (F5). New executive and funding say where they come from.
+    { id: "sig-role", tab: "signals", label: "Open role posted", sub: "A company on this list posts a fractional role", cost: "Free", tone: "free", do: { kind: "alert", trigger: "role" } },
+    { id: "sig-seat", tab: "signals", label: "Seat ended", sub: "A fractional's seat there ended", cost: "Free", tone: "free", do: { kind: "alert", trigger: "seat" } },
+    { id: "sig-leader", tab: "signals", label: "New executive", sub: "A new CEO, COO or CRO, from company websites Merlin reads", cost: gate(pro, "Pro").cost, tone: gate(pro, "Pro").tone, do: { kind: "alert", trigger: "leader" } },
+    { id: "sig-funding", tab: "signals", label: "Raised money (SEC filing)", sub: "A Form D filing, US companies only", cost: gate(pro, "Pro").cost, tone: gate(pro, "Pro").tone, do: { kind: "alert", trigger: "funding" } },
+    // Actions on the rows picked.
+    { id: "act-pipe", tab: "actions", label: "Add to pipeline", sub: "Picked rows wait at To reach out", cost: "Free", tone: "free", do: { kind: "action", action: "pipeline" } },
+    { id: "act-notes", tab: "actions", label: "Draft notes", sub: "One note a row, from a template in your voice", cost: "Free", tone: "free", do: { kind: "action", action: "notes" } },
+    { id: "act-pass", tab: "actions", label: "Pass as a lead", sub: "To a fractional who fits. Earn 5 credits when they pick it up", cost: "Earn", tone: "free", do: { kind: "action", action: "pass" } },
+    { id: "act-proposal", tab: "actions", label: "Start a proposal", sub: "From a call or a template", cost: "Close", tone: ctx.close ? "free" : "gate", do: { kind: "page", page: "proposals" } },
+  ];
+  return items;
+}
+
+/** Items on one tab whose words match the search box (every word, any order). */
+export function itemsFor(type: RecordType, ctx: ToolCtx, tab: ToolTab, q = ""): ToolItem[] {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const all = toolItems(type, ctx);
+  if (!words.length) return all.filter((x) => x.tab === tab);
+  return all.filter((x) => words.every((w) => `${x.label} ${x.sub}`.toLowerCase().includes(w)));
+}
