@@ -6,8 +6,12 @@
  *    known site from an own-firm row, a firm name from the current company, only people on a named
  *    seat, person keys only (no profile id anywhere in the seed), counts only in its output, --dry;
  *  - the acceptance rules: a name match, an obfuscated address, the only address on a one-person
- *    site, a generic address on a one-person site, a generic address on a bigger site rejected, an
- *    address at another domain rejected;
+ *    site, a generic inbox on a one-person site (invites only), a generic address on a bigger site
+ *    rejected, an address at another domain rejected; nicknames with the last name (never alone),
+ *    first initial and last name, the person's own bio page on a team site, a one-person site's
+ *    team page;
+ *  - invites only: a generic inbox is stored flagged, never on a member's or admin's table, the
+ *    connector or the export, and the outreach file marks it for invites to Merlin only;
  *  - the reader: robots.txt honoured (the whole site, and one page), the 5-page cap, same site only,
  *    a firm's site found by name;
  *  - the start-up dry run: counts only in the log (no email, domain or name), once per N, nothing usable;
@@ -210,6 +214,7 @@ if (existsSync(realSeed)) {
 console.log("\nWhich address is theirs");
 
 const X = await import("../lib/ownsites/extract");
+const types0 = await import("../lib/ownsites/types");
 const page = (body: string, title = "Home") => `<!doctype html><html><head><title>${title}</title><script>var x = "decoy@scripted.test";</script></head><body>${body}</body></html>`;
 eq("mailto links, the text, and obfuscations ([at] [dot], (at)(dot), entities) are read; scripts are not", X.emailsOf(page(`<a href="mailto:Avery@Quinlan.test?subject=hi">Write</a> or ann [at] quinlan [dot] test, bo(at)quinlan(dot)test, cy&#64;quinlan.test`)), ["avery@quinlan.test", "ann@quinlan.test", "bo@quinlan.test", "cy@quinlan.test"]);
 const forms = ["avery", "quinlan", "avery.quinlan", "averyquinlan", "aquinlan", "averyq", "avery_quinlan", "aq", "Avery.Quinlan", "avery-quinlan"];
@@ -222,7 +227,44 @@ check("a name match wins over a generic address", nm.ok && nm.email === "avery@q
 const ob = d([["https://o.test/about", page(`Reach Blake at blake [at] o [dot] test`)]], "o.test", "Blake Ortez");
 check("an obfuscated address that matches the name", ob.ok && ob.email === "blake@o.test" && ob.how === "name match", ob);
 const solo = d([["https://w.test/", page(`<h1>Casey Wren</h1><p>I help founders build their first sales team.</p>`)], ["https://w.test/contact", page(`<a href="mailto:hello@w.test">hello@w.test</a>`)]], "w.test", "Casey Wren");
-check("a generic address on a one-person site that names them: accepted, marked generic on a one-person site", solo.ok && solo.email === "hello@w.test" && solo.how === "generic on a one-person site", solo);
+check("a generic inbox on a one-person site that names them: accepted, marked generic inbox, one-person site, invites only", solo.ok && solo.email === "hello@w.test" && solo.how === "generic inbox, one-person site" && solo.invitesOnly === true, solo);
+const soloTeam = d([["https://w2.test/", page(`<h1>Casey Wren</h1><p>I help founders.</p>`)], ["https://w2.test/team", page(`<p>Casey Wren</p><p>Rory Stone</p>`)], ["https://w2.test/contact", page(`<a href="mailto:hello@w2.test">hello@w2.test</a>`)]], "w2.test", "Casey Wren");
+check("  a site with a team page that names others is not one person's: its generic inbox is rejected", !soloTeam.ok && soloTeam.s === "email not theirs", soloTeam);
+check("  the old how name reads back as invites only too", types0.ownInvitesOnly({ how: "generic on a one-person site" }) && types0.ownInvitesOnly({ how: "x", invitesOnly: true }) && !types0.ownInvitesOnly({ how: "name match" }));
+// Nicknames: a common nickname of the first name counts with the last name, never alone.
+const nickForms = ["mike.quinlan", "mikequinlan", "mike-quinlan", "mike_quinlan", "quinlan.mike", "quinlanmike"];
+check("a nickname with the last name (Mike for Michael): nickname forms", nickForms.every((l) => X.nicknameMatches(l, "Michael Quinlan")) && X.nicknameMatches("bill.oduya", "William Oduya") && X.nicknameMatches("liz.hart", "Elizabeth Hart"), nickForms.filter((l) => !X.nicknameMatches(l, "Michael Quinlan")));
+check("  and the other way (Michael for a Mike on file)", X.nicknameMatches("michael.quinlan", "Mike Quinlan"));
+check("  a nickname alone, or its initials alone, is never theirs", !X.nicknameMatches("mike", "Michael Quinlan") && !X.localMatches("mike", "Michael Quinlan") && !X.nicknameMatches("mq", "Michael Quinlan") && !X.nicknameMatches("bill", "William Oduya"));
+const nk = d([["https://mq.test/", page(`<p>Michael Quinlan</p><a href="mailto:info@mq.test">info</a> <a href="mailto:mike.quinlan@mq.test">write</a>`)]], "mq.test", "Michael Quinlan");
+check("  on the site: accepted, marked nickname match", nk.ok && nk.email === "mike.quinlan@mq.test" && nk.how === "nickname match", nk);
+const nkAlone = d([["https://mq2.test/", page(`<h2>Our team</h2><p>Michael Quinlan</p><a href="mailto:mike@mq2.test">write</a>`)]], "mq2.test", "Michael Quinlan");
+check("  mike@ alone on a team site: rejected", !nkAlone.ok, nkAlone);
+const gmNick = d([["https://g7.test/", page(`<p>William Oduya</p><a href="mailto:bill.oduya@gmail.com">write</a>`)]], "g7.test", "William Oduya");
+check("  a nickname with the whole last name at a personal provider: their whole name", gmNick.ok && gmNick.how === "name match, personal address", gmNick);
+// First initial and last name, at the site's own domain.
+const inits = ["jsmith", "j.smith", "j_smith", "j-smith", "smithj", "smith.j"];
+check("first initial and last name: jsmith, j.smith, j_smith, j-smith, smithj, smith.j are a name match", inits.every((l) => X.localMatches(l, "Jordan Smith")), inits.filter((l) => !X.localMatches(l, "Jordan Smith")));
+const fi = d([["https://js.test/", page(`<h2>Meet the team</h2><p>Jordan Smith, Ana Bell</p><a href="mailto:smithj@js.test">a</a> <a href="mailto:abell@js.test">b</a>`)]], "js.test", "Jordan Smith");
+check("  smithj@ on a team site: name match", fi.ok && fi.email === "smithj@js.test" && fi.how === "name match", fi);
+check("  another domain's jsmith@ is not theirs", !d([["https://js2.test/", page(`<p>Jordan Smith</p><a href="mailto:jsmith@other.test">a</a>`)]], "js2.test", "Jordan Smith").ok);
+// Their own bio page names them: its one personal address is theirs, on a team site too.
+const bio = d(
+  [
+    ["https://pc.test/", page(`<h2>Our team</h2><a href="/team/dana-pike">Dana Pike</a> <a href="/team/rory-stone">Rory Stone</a>`)],
+    ["https://pc.test/team", page(`<h2>Our team</h2><p>Dana Pike</p><p>Rory Stone</p><a href="mailto:rs.ops@pc.test">rs</a> <a href="mailto:dk.growth@pc.test">dk</a>`)],
+    ["https://pc.test/team/dana-pike", page(`<h1>Dana Pike</h1><p>Dana Pike leads revenue.</p><a href="mailto:dk.growth@pc.test">Email Dana</a><a href="mailto:info@pc.test">info</a>`, "Dana Pike")],
+  ],
+  "pc.test",
+  "Dana Pike",
+);
+check("their own bio page (/team/dana-pike) names them: its one personal address is theirs, marked bio page", bio.ok && bio.email === "dk.growth@pc.test" && bio.how === "bio page" && /dana-pike$/.test(bio.page), bio);
+const bioHead = d([["https://pc2.test/", page(`<p>Dana Pike and partners</p>`)], ["https://pc2.test/about", page(`<h1>About Dana Pike</h1><p>Dana Pike, founder.</p><a href="mailto:dk.growth@pc2.test">write</a>`)]], "pc2.test", "Dana Pike");
+check("  an about page whose heading names them counts too", bioHead.ok && bioHead.how === "bio page", bioHead);
+const listing = d([["https://pc3.test/team", page(`<h1>Our team</h1><p>Dana Pike</p><p>Rory Stone</p><a href="mailto:dk.growth@pc3.test">dk</a> <a href="mailto:rs.ops@pc3.test">rs</a>`)]], "pc3.test", "Dana Pike");
+check("  a team listing with everyone's addresses is never one person's bio page", !listing.ok, listing);
+const otherBio = d([["https://pc4.test/team/rory-stone", page(`<h1>Rory Stone</h1><p>Rory Stone works with Dana Pike.</p><a href="mailto:rs.ops@pc4.test">write</a>`)]], "pc4.test", "Dana Pike");
+check("  someone else's bio page that mentions them is not theirs", !otherBio.ok, otherBio);
 const big = d([["https://p.test/", page(`<h2>Meet the team</h2><p>Dana Pike</p><p>Rory Stone</p><a href="mailto:info@p.test">info@p.test</a>`)]], "p.test", "Dana Pike");
 check("a generic address on a bigger site: rejected (not theirs)", !big.ok && big.s === "email not theirs", big);
 const other = d([["https://m.test/", page(`<p>Ellis Marr</p><a href="mailto:ellis.marr@gmail.test">ellis.marr@gmail.test</a>`)]], "m.test", "Ellis Marr");
@@ -276,6 +318,16 @@ const sites: Record<string, Record<string, string> & { robots?: string }> = {
   "kentwoodadvisory.com": { "/": page(`<h1>Kentwood Advisory</h1><p>Jules Kentwood, founder.</p><a href="/contact">Contact</a>`, "Kentwood Advisory"), "/contact": page(`<a href="mailto:jules@kentwoodadvisory.com">jules@kentwoodadvisory.com</a>`) },
   "brookfieldadvisory.test": { "/": page(`<p>Nell Brookfield helps founders hire their first CFO.</p><a href="/contact">Contact</a>`), "/contact": page(`<a href="mailto:nell@brookfieldadvisory.test">nell@brookfieldadvisory.test</a>`) },
   "elsewhere.test": { "/contact": page(`<a href="mailto:gray@elsewhere.test">gray@elsewhere.test</a>`) },
+  // A team firm (not on the seed): the person's own bio page is linked from the team page, past the usual pages.
+  "tollandgroup.test": {
+    "/": page(`<h2>Our team</h2><a href="/contact">Contact</a><a href="/about">About</a><a href="/team">Team</a><a href="/our-story">Story</a><p>Rhea Tolland and Sol Brand</p>`),
+    "/contact": page(`<a href="mailto:info@tollandgroup.test">info@tollandgroup.test</a>`),
+    "/about": page(`<p>We are a team of advisors.</p>`),
+    "/team": page(`<h1>Our team</h1><a href="/team/rhea-tolland">Rhea Tolland</a> <a href="/team/sol-brand">Sol Brand</a>`),
+    "/our-story": page(`<p>Since 2019.</p>`),
+    "/team/rhea-tolland": page(`<h1>Rhea Tolland</h1><p>Rhea Tolland runs finance for growth companies.</p><a href="mailto:rt.finance@tollandgroup.test">Email Rhea</a>`, "Rhea Tolland"),
+    "/team/sol-brand": page(`<h1>Sol Brand</h1><a href="mailto:sb.ops@tollandgroup.test">Email Sol</a>`, "Sol Brand"),
+  },
 };
 const server = createServer((req: IncomingMessage, res: ServerResponse) => {
   const host = (req.headers.host ?? "").replace(/:\d+$/, "");
@@ -329,6 +381,11 @@ const none = await read("Nora Blank", undefined, "Zzqx Nothing Advisory");
 eq("a firm whose site can't be found: no site found", none.s, "no site found");
 const down = await read("Una Dowling", "dowlingconsulting.test");
 eq("a site that doesn't answer: site unreachable", down.s, "site unreachable");
+hits.length = 0;
+const rhea = await read("Rhea Tolland", "tollandgroup.test");
+const tollandPages = hits.filter((h) => h.startsWith("tollandgroup.test/") && h !== "tollandgroup.test/robots.txt");
+check("their bio page, linked from the team page past the usual pages: read, and its address is theirs (bio page)", rhea.s === "found" && rhea.email === "rt.finance@tollandgroup.test" && rhea.how === "bio page", rhea);
+check(`  at most ${types0.PAGE_CAP} pages and ${types0.BIO_PAGES} more for a bio page, never someone else's bio page`, tollandPages.length <= types0.PAGE_CAP + types0.BIO_PAGES && rhea.pages <= types0.PAGE_CAP + types0.BIO_PAGES && !tollandPages.includes("tollandgroup.test/team/sol-brand"), tollandPages);
 
 /* ---------- the table, in process ---------- */
 
@@ -389,12 +446,12 @@ console.log = realLog;
 console.error = realErr;
 check("it starts once", started === true && again === false, { started, again });
 const doneLine = logs.find((l) => l.startsWith("ownsites dry run (RN_OWNSITES_DRYRUN=50) done: "));
-check("its log: a progress line every so many people and one at the end, the counts by reason and by how", !!doneLine && logs.some((l) => /RN_OWNSITES_DRYRUN=50\): \d+ of \d+ tried: .*s so far$/.test(l)) && /tried: \d+ no site found, \d+ site unreachable, \d+ blocked by robots, \d+ no email on site, \d+ accepted \(\d+ name match, \d+ only address on a one-person site, \d+ generic on a one-person site, \d+ name match on a personal address\), \d+ rejected \(not theirs\); \d+ pages read; [\d.]+s; nothing made usable$/.test(doneLine ?? ""), logs);
+check("its log: a progress line every so many people and one at the end, the counts by reason and by how", !!doneLine && logs.some((l) => /RN_OWNSITES_DRYRUN=50\): \d+ of \d+ tried: .*s so far$/.test(l)) && /tried: \d+ no site found, \d+ site unreachable, \d+ blocked by robots, \d+ no email on site, \d+ accepted \(\d+ name match, \d+ nickname match, \d+ on their bio page, \d+ only address on a one-person site, \d+ generic inbox on a one-person site \(invites only\), \d+ name match on a personal address\), \d+ rejected \(not theirs\); \d+ pages read; [\d.]+s; nothing made usable$/.test(doneLine ?? ""), logs);
 check("its log names nobody: no email, no domain, no name, no firm", logs.every((l) => !secretsIn(l).length), logs.map((l) => [l, secretsIn(l)]));
 const dryRun = stateOnDisk().ownSitesJob?.lastDry;
 eq(
-  "it read the 9 linked people who may be read (not Blake, a member who keeps himself out of view) and Nell, a prospect: 4 accepted (3 name match, 1 generic on a one-person site), 2 robots, 1 unreachable, 2 not theirs, 1 no email",
-  dryRun && [dryRun.tried, dryRun.accepted, dryRun.byHow["name match"], dryRun.byHow["generic on a one-person site"], dryRun.robots, dryRun.unreachable, dryRun.notTheirs, dryRun.noEmail],
+  "it read the 9 linked people who may be read (not Blake, a member who keeps himself out of view) and Nell, a prospect: 4 accepted (3 name match, 1 generic inbox on a one-person site), 2 robots, 1 unreachable, 2 not theirs, 1 no email",
+  dryRun && [dryRun.tried, dryRun.accepted, dryRun.byHow["name match"], dryRun.byHow["generic inbox, one-person site"], dryRun.robots, dryRun.unreachable, dryRun.notTheirs, dryRun.noEmail],
   [10, 4, 3, 1, 2, 1, 2, 1],
 );
 const st1 = stateOnDisk();
@@ -410,6 +467,8 @@ const realRun = await run.runOwnSites({ read: readOpts, delayMs: 0, limit: 50, l
 check("a real run reads the people the dry run read (a dry try holds nobody back)", realRun.tried === 10 && realRun.accepted === 4, realRun);
 const st2 = stateOnDisk();
 check("its finds are stored usable, by person key", st2.ownEmails[personKeyOf("SNAV-AVERY-001")]?.email === "avery@quinlanadvisory.test" && !st2.ownEmails[personKeyOf("SNAV-AVERY-001")].pending, st2.ownEmails);
+const caseyStored = st2.ownEmails[personKeyOf("SNAV-CASEY-003")];
+check("a generic inbox on a one-person site is stored flagged invites only", caseyStored?.email === "hello@wrenpartners.test" && caseyStored.invitesOnly === true && caseyStored.how === "generic inbox, one-person site" && !st2.ownEmails[personKeyOf("SNAV-AVERY-001")].invitesOnly, caseyStored);
 await table.tableInternals.mutate(() => {});
 sal = await view("tok-sal-own");
 check("switch off: nothing usable anywhere (no record, no address in the member's table)", ownPeople(sal).length === 0 && !JSON.stringify(sal).includes("quinlanadvisory") && !JSON.stringify(sal).includes("@wrenpartners"));
@@ -419,7 +478,12 @@ await table.tableInternals.mutate(() => {});
 sal = await view("tok-sal-own");
 const recs = ownPeople(sal);
 const averyRecs = recs.filter(({ e }) => e.cells.operator.s === "locked" || e.cells.operator.s === "value").filter(({ c }) => /Clientco A|Secondco A/.test(c.name));
-eq("switch on: a record on each of the accepted people's seats (Avery has two), and none for Blake, a member who keeps himself out of view", [recs.length, averyRecs.length, recs.filter(({ c }) => /Clientco B/.test(c.name)).length], [4, 2, 0]);
+eq(
+  "switch on: a record on each of the accepted people's seats (Avery has two), none for Blake, a member who keeps himself out of view, and none for Casey's generic inbox (invites only)",
+  [recs.length, averyRecs.length, recs.filter(({ c }) => /Clientco B/.test(c.name)).length, recs.filter(({ c }) => /Clientco C/.test(c.name)).length],
+  [3, 2, 0, 0],
+);
+check("  the invites-only address is nowhere in the member's table", !JSON.stringify(sal).includes("hello@wrenpartners"));
 const ar = averyRecs.find(({ c }) => c.name.startsWith("Clientco"))!;
 // Fellow fractionals are free (PEERS_FREE): Sal knows these companies, so who held the seat (the record's name) shows free.
 // The email they publish is a contact detail and keeps its price.
@@ -453,11 +517,13 @@ check("their other seat: the name shows, and the email they paid for shows too, 
 const emailOnFile = (e: (typeof a2)["e"], name: string) => e.people.find((p) => p.cells.name?.s === "value" && p.cells.name.v === name && p.cells.email?.s === "value");
 check("Invite to connect picks it: the seat has its claim link, and the seat holder's email on file for Email it", !!a2.e.invite?.path && (emailOnFile(a2.e, "Avery Quinlan")?.cells.email as { v?: string } | undefined)?.v === "avery@quinlanadvisory.test", a2.e.invite);
 const { personOut } = await import("../lib/mcp/tools");
-const outLocked = personOut(ownPeople(sal).find(({ c }) => /Clientco C/.test(c.name))!.p);
+const outLocked = personOut(ownPeople(sal).find(({ c }) => /Clientco J/.test(c.name))!.p);
 const outOpen = personOut(a2.p);
 check("the connector: the same locks, and says it is from their website", String(outLocked.email ?? "").toLowerCase().includes("lock") && /From their website/.test(String(outLocked.email_is)) && outOpen.email === "avery@quinlanadvisory.test", { outLocked, outOpen });
 const admin = await view("tok-admin-own");
-check("an admin's table follows the same rules (the record, From their website)", ownPeople(admin).length === 4);
+check("an admin's table follows the same rules (the record, From their website; never the invites-only inbox)", ownPeople(admin).length === 3 && !JSON.stringify(admin).includes("hello@wrenpartners"));
+const exported = JSON.stringify(await table.exportState());
+check("the export carries no invites-only address (the usable ones stay, as before)", !exported.includes("hello@wrenpartners") && exported.includes("avery@quinlanadvisory.test"));
 // Prospects: found and stored, never anywhere a member or an admin reads the table, Fractionals or the connector.
 const nellEmail = stateOnDisk().ownEmails[personKeyOf("SNAV-NELL-015")];
 check("a prospect's email is found and stored, marked prospect", nellEmail?.email === "nell@brookfieldadvisory.test" && nellEmail.prospect === true && !nellEmail.pending, nellEmail);
@@ -467,6 +533,7 @@ check("never in a member's table, an admin's, or Fractionals", noNell(sal) && no
 const mcp = await import("../lib/mcp/view");
 const connectorView = await mcp.memberView({ id: "m_sal", name: "Sal Seller", email: "sal-own@example.com", title: "Fractional VP Sales", token: "tok-sal-own" } as never).catch(() => null);
 check("never in the connector's view of the table", connectorView !== null && noNell(connectorView), connectorView === null ? "no view" : undefined);
+check("the connector's view never carries the invites-only inbox", connectorView !== null && !JSON.stringify(connectorView).includes("hello@wrenpartners"));
 
 console.log("\nClaim outreach");
 const stateCopy = path.join(dir, "state-copy.json");
@@ -495,6 +562,7 @@ const outreach = (on: boolean) =>
 const ox = outreach(true);
 const oText = existsSync(path.join(outCsvDir, "out.csv")) ? readFileSync(path.join(outCsvDir, "out.csv"), "utf8") : "";
 check("with RN_OWNSITES=1 the outreach file carries the email from their website", ox.status === 0 && oText.includes("avery@quinlanadvisory.test,their website") && /with an email from their website: [1-9]/.test(ox.stdout), ox.stdout + ox.stderr);
+check("  a generic inbox goes in for the invite to Merlin only, marked so", oText.includes("hello@wrenpartners.test,their website (generic inbox; invites to Merlin only)") && !oText.includes("avery@quinlanadvisory.test,their website (generic"), oText.split("\n").filter((l) => l.includes("wrenpartners")));
 outreach(false);
 const oOff = readFileSync(path.join(outCsvDir, "out.csv"), "utf8");
 check("with it off, no email goes in the file", !oOff.includes("@quinlanadvisory"));
@@ -543,18 +611,19 @@ const panel = await J.jobsPanel();
 const row = panel.jobs.find((j) => j.id === "ownsites");
 check("its row has Dry run and the last dry run's counts", !!row && row.canDry === true && /^Dry run \d{4}-\d{2}-\d{2}: \d+ of \d+ tried/.test(row.dryNote ?? ""), row);
 const stats = await store.ownStats();
-check("the admin's counts", stats.linked === 10 && stats.prospects === 1 && stats.usable === 2 && stats.removed === 2, stats);
+check("the admin's counts: usable apart from invites only", stats.linked === 10 && stats.prospects === 1 && stats.usable === 1 && stats.invitesOnly === 1 && stats.removed === 2, stats);
 const sample = await store.ownSample();
-check("the admin's sample: the seat holder, the email, the site", sample.rows.some((r) => r.name === "Casey Wren" && r.email === "hello@wrenpartners.test" && r.how === "generic on a one-person site"), sample);
+check("the admin's sample: the seat holder, the email, the site, invites only", sample.rows.some((r) => r.name === "Casey Wren" && r.email === "hello@wrenpartners.test" && r.how === "generic inbox, one-person site" && r.invitesOnly === true), sample);
 const due = await run.maybeOwnSites({ nowMs: Date.now(), run: { read: readOpts, delayMs: 0, log: () => {} } });
 await waitIdle();
 check("the daily job runs on its schedule with the switch on", due === true || stateOnDisk().ownSitesJob.lastRun !== null);
 const casey = stateOnDisk().ownEmails[personKeyOf("SNAV-CASEY-003")];
 const before4 = await credits("tok-sal-own");
-const caseyRec = ownPeople(await view("tok-sal-own")).find(({ c }) => /Clientco C/.test(c.name))!;
-// Who held Casey's seat is free (PEERS_FREE); the email is 1 credit.
-await table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: caseyRec.p.id, field: "email" }, BASE);
-check("(Casey's email, unlocked for 1 credit, the name free)", (await credits("tok-sal-own")) === before4 - 1 && !!casey);
+check("(Casey's invites-only inbox has no record to unlock)", !!casey && !ownPeople(await view("tok-sal-own")).some(({ c }) => /Clientco C/.test(c.name)));
+const julesRec = ownPeople(await view("tok-sal-own")).find(({ c }) => /Clientco J/.test(c.name))!;
+// Who held Jules's seat is free (PEERS_FREE); the email is 1 credit.
+await table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: julesRec.p.id, field: "email" }, BASE);
+check("(Jules's email, unlocked for 1 credit, the name free)", (await credits("tok-sal-own")) === before4 - 1);
 const undone = await store.undoOwnEmails("m_admin");
 sal = await view("tok-sal-own");
 check("Undo takes every found email back, with the credit back", undone === 2 && ownPeople(sal).length === 0 && Object.keys(stateOnDisk().ownEmails).length === 0 && (await credits("tok-sal-own")) === before4, { undone, credits: await credits("tok-sal-own") });

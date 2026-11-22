@@ -113,7 +113,7 @@ import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./websites/types";
 // Own sites: emails fractionals publish on their own firm's website (lib/ownsites), shown only with RN_OWNSITES=1.
-import { OWNSITE_RELATIONSHIP, OWNSITE_SOURCE, ownSitesEnabled, type OwnEmail, type OwnProspect, type OwnSiteLink, type OwnSitesState } from "./ownsites/types";
+import { OWNSITE_RELATIONSHIP, OWNSITE_SOURCE, ownInvitesOnly, ownSitesEnabled, type OwnEmail, type OwnProspect, type OwnSiteLink, type OwnSitesState } from "./ownsites/types";
 import {
   REFRESH_DAYS as LEADERS_REFRESH_DAYS, RETRY_DAYS as LEADERS_RETRY_DAYS, KNOWN_DAYS as LEADERS_KNOWN_DAYS, DAILY_BATCH as LEADERS_DAILY_BATCH, READER_VERSION as LEADERS_READER_VERSION, leadersEnabled, leadersProgress, fnKnow, memberRoles, reportsOf, teamReadAt, CONFIRM_MEMBERS,
   type CompanyLeads, type LeadLine, type LeaderReport, type LeadersOutcome, type LeadersRecord, type LeadersRunSummary, type LeadersTarget,
@@ -7460,6 +7460,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
     circles: s.peers.circles.map((c) => ({ ...c, posts: c.posts.map((x) => ({ ...x, text: "" })) })),
   };
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
+  // A generic inbox on a one-person site (lib/ownsites ownInvitesOnly) may carry an invite to Merlin and nothing else: never exported.
+  const ownEmails = s.ownEmails && Object.fromEntries(Object.entries(s.ownEmails).filter(([, e]) => !ownInvitesOnly(e)));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
   // Webhook URLs are secrets (anyone with one can post to that Slack channel): they leave as "connected" only, with no alerts waiting.
@@ -7472,6 +7474,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   return {
     ...rest,
     ...(conversations ? { conversations } : {}),
+    ...(ownEmails ? { ownEmails } : {}),
     ...(seatInvites ? { seatInvites } : {}),
     ...(peers ? { peers } : {}),
     ...(integrations ? { integrations } : {}),
@@ -9863,7 +9866,9 @@ function seatsByKey(seed: Seed): Map<string, string[]> {
  * with RN_OWNSITES=1 (graph() calls this only then), never a dry run's find (pending), only for a
  * person the import linked (Seed.ownSites: the United States, never California), only on a seat
  * whose name from public profiles still stands (not claimed by a member, not taken off with Remove
- * my name), and never for a member whose own choice keeps them out of view.
+ * my name), and never for a member whose own choice keeps them out of view. Never an invites-only
+ * address (a generic inbox on a one-person site, ownInvitesOnly): that one may carry an invite to
+ * Merlin and nothing else, so it is never a member's view of their email, the export or the connector.
  */
 function ownSitePeople(seed: Seed, s: State, g: Graph) {
   const links = seed.ownSites;
@@ -9871,7 +9876,7 @@ function ownSitePeople(seed: Seed, s: State, g: Graph) {
   let priv: Set<string> | null = null;
   const bySeat = seatsByKey(seed);
   for (const [k, em] of Object.entries(s.ownEmails ?? {})) {
-    if (!em?.email || em.pending || em.prospect || !links[k]) continue;
+    if (!em?.email || em.pending || em.prospect || ownInvitesOnly(em) || !links[k]) continue;
     const peers: string[] = [];
     for (const seatId of bySeat.get(k) ?? []) {
       const e = g.engagements.get(seatId);

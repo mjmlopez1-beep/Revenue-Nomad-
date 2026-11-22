@@ -30,9 +30,30 @@ export interface OwnProspect {
   how: "known site";
 }
 
-/** Why an email was accepted. */
-export type OwnHow = "name match" | "only address on a one-person site" | "generic on a one-person site" | "name match, personal address";
-export const OWN_HOWS: OwnHow[] = ["name match", "only address on a one-person site", "generic on a one-person site", "name match, personal address"];
+/**
+ * Why an email was accepted (lib/ownsites/extract.ts decide):
+ *  - "name match": the part before the @ is theirs (first, last, first.last, first initial and
+ *    last name: jsmith, j.smith, smithj ...), at the site's own domain.
+ *  - "nickname match": a common nickname of their first name with their last name (mike.smith for
+ *    Michael Smith), at the site's own domain. A nickname alone never counts.
+ *  - "bio page": the only personal-looking address at the site's domain on their own about, bio or
+ *    team-member page, a page that names them in its title or heading, or in its address.
+ *  - "only address on a one-person site": the site names only them, and this is its one address.
+ *  - "generic inbox, one-person site": a role address (hello@, info@ ...) on a one-person site.
+ *    INVITES ONLY (OwnEmail.invitesOnly): used only to send them an invite to Merlin, never shown to
+ *    a member as their email, never exported, never sent through the connector.
+ *  - "name match, personal address": their whole name at a personal mail provider, on their own site.
+ */
+export type OwnHow = "name match" | "nickname match" | "bio page" | "only address on a one-person site" | "generic inbox, one-person site" | "name match, personal address";
+export const OWN_HOWS: OwnHow[] = ["name match", "nickname match", "bio page", "only address on a one-person site", "generic inbox, one-person site", "name match, personal address"];
+/** What an earlier version called a generic inbox on a one-person site: read back as invites only too. */
+export const LEGACY_GENERIC_HOW = "generic on a one-person site";
+/** The hows that make an address invites only (see OwnEmail.invitesOnly). */
+export const INVITES_ONLY_HOWS: readonly string[] = ["generic inbox, one-person site", LEGACY_GENERIC_HOW];
+/** Used only to invite them to Merlin: a generic inbox on a one-person site, flagged, or stored before the flag by its how. */
+export const ownInvitesOnly = (e: { how?: string; invitesOnly?: boolean } | null | undefined): boolean => !!e && (e.invitesOnly === true || INVITES_ONLY_HOWS.includes(String(e.how ?? "")));
+/** How the owner's invite list says an invites-only address may be used. */
+export const INVITES_ONLY_SAY = "their website (generic inbox; invites to Merlin only)";
 
 /** One found email (State.ownEmails, by person key). `pending`: a dry run found it; it is never usable. */
 export interface OwnEmail {
@@ -40,7 +61,15 @@ export interface OwnEmail {
   /** The page it was read on. */
   page: string;
   at: string;
-  how: OwnHow;
+  /** Why it was accepted. Read with ownInvitesOnly: an address stored by an earlier version may carry LEGACY_GENERIC_HOW. */
+  how: OwnHow | typeof LEGACY_GENERIC_HOW;
+  /**
+   * A generic inbox on a one-person site ("generic inbox, one-person site"): it may be used only to
+   * send them an invite to Merlin (scripts/claim-outreach.mjs, marked so in the file). Never on a
+   * member's table as their email (lib/table.ts ownSitePeople), so never in the export, a member's
+   * Invite to connect or the connector.
+   */
+  invitesOnly?: true;
   /** The site read (its host). */
   site: string;
   pending?: true;
@@ -82,7 +111,7 @@ export interface OwnRunSummary {
   pages: number;
 }
 export const emptyRun = (startedAt: string, dry: boolean): OwnRunSummary => ({
-  startedAt, endedAt: null, dry, total: 0, tried: 0, accepted: 0, byHow: { "name match": 0, "only address on a one-person site": 0, "generic on a one-person site": 0, "name match, personal address": 0 },
+  startedAt, endedAt: null, dry, total: 0, tried: 0, accepted: 0, byHow: Object.fromEntries(OWN_HOWS.map((h) => [h, 0])) as Record<OwnHow, number>,
   noSite: 0, unreachable: 0, robots: 0, noEmail: 0, notTheirs: 0, rejectWhy: {}, pages: 0,
 });
 
@@ -104,6 +133,8 @@ export const RETRY_DAYS = 60;
 export const DAILY_BATCH = 200;
 /** Pages read on a site, the homepage included. */
 export const PAGE_CAP = 5;
+/** Past the cap: at most this many more same-site pages, only links that look like the person's own bio page. */
+export const BIO_PAGES = 2;
 
 /** Who an own-site email's person is on the seat (PersonRec.source), and the relationship on their record. */
 export const OWNSITE_SOURCE = "Their website";
@@ -133,7 +164,7 @@ export function runWords(r: OwnRunSummary): string {
   const n = (x: number) => x.toLocaleString("en-US");
   return (
     `${n(r.tried)} of ${n(r.total)} tried: ${n(r.noSite)} no site found, ${n(r.unreachable)} site unreachable, ${n(r.robots)} blocked by robots, ${n(r.noEmail)} no email on site, ` +
-    `${n(r.accepted)} accepted (${n(r.byHow["name match"])} name match, ${n(r.byHow["only address on a one-person site"])} only address on a one-person site, ${n(r.byHow["generic on a one-person site"])} generic on a one-person site, ${n(r.byHow["name match, personal address"] ?? 0)} name match on a personal address), ` +
+    `${n(r.accepted)} accepted (${n(r.byHow["name match"] ?? 0)} name match, ${n(r.byHow["nickname match"] ?? 0)} nickname match, ${n(r.byHow["bio page"] ?? 0)} on their bio page, ${n(r.byHow["only address on a one-person site"] ?? 0)} only address on a one-person site, ${n(r.byHow["generic inbox, one-person site"] ?? 0)} generic inbox on a one-person site (invites only), ${n(r.byHow["name match, personal address"] ?? 0)} name match on a personal address), ` +
     `${n(r.notTheirs)} rejected (not theirs)`
   );
 }
