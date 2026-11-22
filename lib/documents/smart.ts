@@ -307,7 +307,9 @@ export async function readContract(token: string | null, id: string, origin?: st
   let pages: PageText[];
   try {
     pages = await readPdfText(bytes);
-  } catch {
+  } catch (e) {
+    // Its name only: never the file's text.
+    console.error("contract read failed", (e as Error)?.name, (e as Error)?.message?.slice(0, 120));
     pages = [];
   }
   const parties = findParties(pages);

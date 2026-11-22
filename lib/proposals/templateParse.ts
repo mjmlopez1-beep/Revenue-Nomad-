@@ -219,7 +219,7 @@ interface PdfItem {
 }
 
 export async function parsePdf(buf: Buffer, name = "My template"): Promise<ParsedTemplate> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await (await import("../documents/pdfjsNode")).pdfjsNode();
   const task = pdfjs.getDocument({ data: new Uint8Array(buf), disableFontFace: true, useSystemFonts: false, verbosity: 0 });
   let doc;
   try {

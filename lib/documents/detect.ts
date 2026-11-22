@@ -260,7 +260,7 @@ interface PdfItem {
 
 /** Each page's text as runs, in shares of the page as shown. Pages after `maxPages` are left out. */
 export async function readPdfText(bytes: Uint8Array, maxPages = 60): Promise<PageText[]> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await (await import("./pdfjsNode")).pdfjsNode();
   const task = pdfjs.getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false, verbosity: 0 });
   const doc = await task.promise;
   const pages: PageText[] = [];
