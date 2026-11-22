@@ -12,7 +12,7 @@
  * server was down) is dropped rather than sent out of turn.
  */
 import type { ItemActivity, ReminderKey, ReminderRow } from "./types";
-import { REMINDER_KEYS } from "./types";
+import { REMINDER_KEYS, linkEnd } from "./types";
 
 const DAY = 86_400_000;
 export const LATE_MS = 2 * DAY;
@@ -25,7 +25,8 @@ export interface LinkInfo {
   /** When it went to them: the send, or the document signer's own email. */
   base: string;
   viewedAt: string | null;
-  expiresAt: string;
+  /** Null: the link has no end date, so no "before the link closes" reminder (it isn't listed). */
+  expiresAt: string | null;
   done: "signed" | "declined" | "void" | "expired" | null;
 }
 
@@ -38,7 +39,7 @@ export const REMINDER_SAY: Record<ReminderKey, { label: string; opened?: string;
 /** When each reminder is due for a link. */
 export function reminderAt(l: LinkInfo, key: ReminderKey): number {
   const b = Date.parse(l.base);
-  return key === "d2" ? b + 2 * DAY : key === "d7" ? b + 7 * DAY : Date.parse(l.expiresAt) - 2 * DAY;
+  return key === "d2" ? b + 2 * DAY : key === "d7" ? b + 7 * DAY : (linkEnd(l.expiresAt) ?? NaN) - 2 * DAY;
 }
 
 function rowsFor(l: LinkInfo, a: ItemActivity | null | undefined, nowMs: number): ReminderRow[] {

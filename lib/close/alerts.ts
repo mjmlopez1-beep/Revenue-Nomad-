@@ -40,6 +40,12 @@ export interface AlertFacts {
   signed?: { option: string | null; fee: string | null; won: boolean; copyUrl: string | null };
   declined?: { reason: string };
   renewal?: { end: string; endWords: string; days: number; terms: string | null };
+  /** The client's question (closeC3), and who asked. */
+  question?: { by: string; text: string };
+  /** Passed to someone else to sign: who passed it, to whom. */
+  passed?: { by: string; to: string };
+  /** Signed by the client, waiting for the member to countersign. */
+  countersign?: { by: string };
   /** The link into Merlin (absolute), and the one with the follow-up drafted. */
   url: string;
 }
@@ -206,6 +212,37 @@ export function alertWords(f: AlertFacts, notifications: string): AlertOut {
         },
         email: null,
         inbox: { kind: "signed", item: f.item, head: "Signed:", text: `${company || signer}${g.option ? `, ${g.option}` : ""}`, ...(g.won ? { sub: "moved to Won" } : {}) },
+      };
+    }
+    case "question": {
+      const q = f.question!;
+      const by = cut(q.by, 80) || signer;
+      const headline = `${by} asked a question about ${cut(f.title, 120)}`;
+      const text = cut(q.text, 280);
+      return {
+        slack: { kind: "proposal", count: 1, headline, lines: text ? [`"${text}"`] : [], url: f.url, button: "See activity", footer: "Proposal alerts from Merlin. Change them in Notifications." },
+        email: mail(headline, `${headline}.`, text ? [mailQuote(escHtml(text))] : [], text ? ["", `"${text}"`] : [], "Open in Merlin"),
+        inbox: { kind: "question", item: f.item, head: "Question:", text: `${by} asked about ${cut(f.title, 80)}` },
+      };
+    }
+    case "passed": {
+      const g = f.passed!;
+      const by = cut(g.by, 80) || signer;
+      const to = cut(g.to, 80);
+      const headline = `${by} passed ${cut(f.title, 120)} to ${to} to sign`;
+      return {
+        slack: { kind: "proposal", count: 1, headline, lines: [`${firstName(to) || to} gets the signing link now. Follow up with them, not ${firstName(by) || by}.`], url: f.url, button: "See activity", footer: "Proposal alerts from Merlin. Change them in Notifications." },
+        email: mail(headline, `${headline}.`, [], [], "See activity"),
+        inbox: { kind: "passed", item: f.item, head: "Passed on:", text: `${firstName(by) || by} to ${to}` },
+      };
+    }
+    case "countersign": {
+      const by = cut(f.countersign!.by, 80) || signer;
+      const headline = `${by} signed. Countersign to finish.`;
+      return {
+        slack: { kind: "proposal", count: 1, headline, lines: [`${company ? `${company}, ` : ""}${cut(f.title, 120)}. It moves to Won once you countersign.`], url: f.url, button: "Countersign", footer: "Proposal alerts from Merlin. Change them in Notifications." },
+        email: mail(headline, `${by} signed ${cut(f.title, 120)}. It's finished, and your pipeline moves to Won, once you countersign.`, [], [], "Countersign"),
+        inbox: { kind: "countersign", item: f.item, head: `Signed by ${firstName(by) || by}:`, text: "countersign to finish" },
       };
     }
     case "renewal": {

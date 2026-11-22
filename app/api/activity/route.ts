@@ -29,7 +29,7 @@ async function answer(work: () => Promise<unknown>) {
  *
  * GET ?id=ID       ActivityView: who opened it, what they read, when to follow up, the reminders, the renewal.
  * GET              CloseInboxView: notifications in Merlin, renewals due, the alert switches.
- * POST { op: "read" }                                   every notification read
+ * POST { op: "read", ids? }                             these notifications read, or every one
  * POST { op: "pref", kind, channel, on }                one alert on one channel (slack, email, app)
  * POST { op: "reminders", id, d2?, d7?, expiry? }       this proposal's reminders, each on (true) or off
  * POST { op: "renewal", id, end? | skip? | ending? }     the term's end when Merlin couldn't read it; Not sure; It's ending
@@ -62,7 +62,7 @@ export const POST = guarded(async (req: NextRequest) => {
   const o = origin(req);
   switch (b.op) {
     case "read":
-      return answer(() => markRead(token));
+      return answer(() => markRead(token, b.ids));
     case "pref":
       return answer(() => setPref(token, b.kind, b.channel, b.on));
     case "reminders":

@@ -149,12 +149,22 @@ export interface ItemActivity {
   };
   /** The member's reminder switches for this proposal (on unless turned off), and what went out ("<link>:<key>" -> at). */
   reminders: { off: Partial<Record<ReminderKey, boolean>>; sent: Record<string, string>; failed?: Record<string, number> };
+  /**
+   * Signed by the client, waiting for the member's countersignature (closeC3): when the client signed, who,
+   * and when it was fully signed. Until `fullAt`, no renewal clock and no Won.
+   */
+  countersign?: { clientAt: string; by: string; fullAt?: string };
   /** A signed proposal's renewal: the term's end, asked once when not known, the reminder, the draft started from it. */
   renewal?: { end?: string; asked?: boolean; skipped?: boolean; remindedAt?: string; startedId?: string; ending?: string };
 }
 
-export type CloseAlertKind = "open" | "reader" | "engaged" | "signed" | "renewal";
-export const CLOSE_ALERT_KINDS: CloseAlertKind[] = ["open", "engaged", "reader", "signed", "renewal"];
+/**
+ * question: the client asked a question on the page; passed: they passed it to someone else to sign;
+ * countersign: they signed and the member countersigns to finish (closeC3's flows, lib/close/server.ts
+ * afterClientAsked, afterPassedOn, afterClientSigned). signed: fully signed, or declined.
+ */
+export type CloseAlertKind = "open" | "reader" | "engaged" | "question" | "passed" | "countersign" | "signed" | "renewal";
+export const CLOSE_ALERT_KINDS: CloseAlertKind[] = ["open", "engaged", "reader", "question", "passed", "countersign", "signed", "renewal"];
 export type Channel = "slack" | "email" | "app";
 export const CHANNELS: Channel[] = ["slack", "email", "app"];
 
@@ -163,13 +173,18 @@ export const ALERT_ROWS: { kind: CloseAlertKind; label: string; line: string }[]
   { kind: "open", label: "First open", line: "The first time they open it." },
   { kind: "engaged", label: "Engaged: time to follow up", line: "When what they read says it's time, at most once every 6 hours for each proposal." },
   { kind: "reader", label: "Someone new opened it", line: "A new person opens the link, say a forward to their boss." },
+  { kind: "question", label: "They asked a question", line: "A question on the proposal. The question itself already comes by email." },
+  { kind: "passed", label: "Passed to someone else to sign", line: "They sent it on to the person who signs." },
+  { kind: "countersign", label: "Signed, your turn to countersign", line: "They signed. It's finished once you countersign." },
   { kind: "signed", label: "Signed or declined", line: "As it happens. The signed copy and a decline always come by email too." },
   { kind: "renewal", label: "Renewal coming up", line: "30 days before a signed engagement ends." },
 ];
 
-/** A member's switches: on unless turned off. Slack only goes out when Slack is connected. */
+/** A member's switches: on unless turned off (or off by default here). Slack only goes out when Slack is connected. */
 export type AlertPrefs = Partial<Record<CloseAlertKind, Partial<Record<Channel, boolean>>>>;
-export const prefOn = (p: AlertPrefs | undefined, kind: CloseAlertKind, ch: Channel): boolean => p?.[kind]?.[ch] !== false;
+/** Off until turned on: a question's email (the question itself already comes by email from the proposal). */
+export const DEFAULT_OFF: AlertPrefs = { question: { email: false } };
+export const prefOn = (p: AlertPrefs | undefined, kind: CloseAlertKind, ch: Channel): boolean => p?.[kind]?.[ch] ?? DEFAULT_OFF[kind]?.[ch] !== false;
 
 /** One notification in Merlin. */
 export interface InboxItem {
@@ -193,6 +208,22 @@ export interface CloseState {
 }
 
 export const emptyClose = (): CloseState => ({ items: {}, inbox: {}, prefs: {} });
+
+/**
+ * A signing link's end, as ms, or null when it has none (closeC3: a link may have no end date).
+ * Everything here reads a link's expiry through this, so a send whose expiresAt is null or missing
+ * never expires, gets no "before the link closes" reminder, and reads "No end date".
+ */
+export const linkEnd = (expiresAt: string | null | undefined): number | null => {
+  const ms = Date.parse(String(expiresAt ?? ""));
+  return Number.isFinite(ms) ? ms : null;
+};
+/** The link has an end and it has passed. */
+export const linkExpired = (expiresAt: string | null | undefined, nowMs: number) => {
+  const end = linkEnd(expiresAt);
+  return end !== null && nowMs > end;
+};
+export const NO_END_WORDS = "No end date";
 
 /* ---------- what the member's app gets ---------- */
 
@@ -235,6 +266,7 @@ export interface ActivityView {
   statusWords: string;
   signer: { name: string; title: string; email: string } | null;
   sentAt: string | null;
+  /** Null: not sent, or the link has no end date. */
   expiresAt: string | null;
   stats: { opens: number; readers: number; ms: number; option: string | null; mostRead: string | null };
   sections: { id: string; label: string; ms: number; top: boolean }[];

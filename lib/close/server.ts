@@ -31,6 +31,7 @@ import { docCopyLink, docSignToken, docStatus, readDocSignToken, turnOf } from "
 import { proposalEmail } from "../proposals/emails";
 import { docInviteEmail } from "../documents/emails";
 import { docFields } from "../proposals/library";
+import { pipelineEvent } from "../proposals/pipelineHook";
 import { CLOSE_BUILD } from "../proposals/mine";
 import type { ProposalRec, StoredProposal, StoredSend } from "../proposals/types";
 import type { DocSigner, StoredDocument } from "../documents/types";
@@ -40,7 +41,7 @@ import { REMINDER_SAY, dueReminders, reminderNote, reminderRows, type LinkInfo }
 import { daysTo, dayOfText, renewalDue, renewalFields, shortDay, termEndOf, termsLine } from "./renewal";
 import { engagedDue, suggest } from "./rules";
 import {
-  CAPS, CHANNELS, CLOSE_ALERT_KINDS, DISCLOSURE, READER_COOKIE, deviceOf, emptyClose, prefOn,
+  CAPS, CHANNELS, CLOSE_ALERT_KINDS, DISCLOSURE, READER_COOKIE, deviceOf, emptyClose, linkEnd, linkExpired, prefOn,
   type ActivityView, type AlertPrefs, type Channel, type CloseAlertKind, type CloseInboxView, type CloseState, type InboxItem, type ItemActivity, type ReminderKey,
 } from "./types";
 
@@ -63,6 +64,12 @@ const itemOf = (s: State, id: string, kind: ItemActivity["kind"], memberId: stri
   return normalize((c.items[id] ??= emptyActivity(kind, memberId)));
 };
 const peek = (s: State, id: string): ItemActivity | null => (s.close?.items?.[id] ? normalize(s.close.items[id]) : null);
+/**
+ * When the renewal clock starts: the signature, or, for a proposal the member countersigns, the
+ * countersignature (fully signed). Null while it waits for the countersignature.
+ */
+const signedBase = (it: ItemActivity | null | undefined, p: StoredProposal): string | null =>
+  it?.countersign ? it.countersign.fullAt ?? null : p.sends.find((x) => x.signed)?.signed?.at ?? null;
 const devOf = (cookie: string) => createHmac("sha256", T.ID_KEY).update(`rn-reader:${cookie}`).digest("base64url").slice(0, 22);
 const COOKIE_RE = /^[A-Za-z0-9_-]{22,43}$/;
 const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, CAPS.id);
@@ -74,7 +81,13 @@ type Target =
   | { kind: "document"; itemId: string; memberId: string; link: string; open: boolean; d: StoredDocument; x: DocSigner };
 
 const currentSend = (p: StoredProposal) => [...p.sends].reverse().find((x) => x.version === p.version) ?? null;
-const sendOpen = (x: StoredSend, nowMs: number) => !x.signed && !x.declined && !x.voided && nowMs <= Date.parse(x.expiresAt);
+const sendOpen = (x: StoredSend, nowMs: number) => !x.signed && !x.declined && !x.voided && !linkExpired(x.expiresAt, nowMs);
+/**
+ * A signing token's expiry part matches the link's: its end in ms, or NO_END_TOKEN_MS for a link
+ * with no end date (closeC3). The one place that ties a token to a send's expiry.
+ */
+export const NO_END_TOKEN_MS = 0;
+const sameEnd = (expiresAt: string | null | undefined, expMs: number) => (linkEnd(expiresAt) ?? NO_END_TOKEN_MS) === expMs;
 const docOpen = (d: StoredDocument, x: DocSigner, nowMs: number) => ["sent", "viewed"].includes(docStatus(d, nowMs)) && !x.signed && !x.declined;
 
 function target(s: State, raw: unknown, nowMs: number): Target | null {
@@ -82,7 +95,7 @@ function target(s: State, raw: unknown, nowMs: number): Target | null {
   if (pt) {
     for (const p of s.proposals ?? []) {
       const x = p.sends.find((y) => y.id === pt.sendId);
-      if (x) return Date.parse(x.expiresAt) === pt.expMs ? { kind: "proposal", itemId: p.id, memberId: p.memberId, link: x.id, open: sendOpen(x, nowMs), p, x } : null;
+      if (x) return sameEnd(x.expiresAt, pt.expMs) ? { kind: "proposal", itemId: p.id, memberId: p.memberId, link: x.id, open: sendOpen(x, nowMs), p, x } : null;
     }
     return null;
   }
@@ -90,7 +103,7 @@ function target(s: State, raw: unknown, nowMs: number): Target | null {
   if (dt) {
     for (const d of s.documents ?? []) {
       const x = d.signers.find((y) => y.id === dt.signerId);
-      if (x) return d.expiresAt && Date.parse(d.expiresAt) === dt.expMs ? { kind: "document", itemId: d.id, memberId: d.memberId, link: x.id, open: docOpen(d, x, nowMs), d, x } : null;
+      if (x) return d.sentAt && sameEnd(d.expiresAt, dt.expMs) ? { kind: "document", itemId: d.id, memberId: d.memberId, link: x.id, open: docOpen(d, x, nowMs), d, x } : null;
     }
   }
   return null;
@@ -189,7 +202,9 @@ function ruleInputOf(s: State, it: ItemActivity | null, kind: "proposal" | "docu
     const x = p ? currentSend(p) : null;
     if (!p || !x) return null;
     const d2 = !it?.reminders.off.d2 && !it?.reminders.sent[`${x.id}:d2`] && !x.viewedAt;
-    return { a: it, status: statusOf(p, nowMs), sentAt: x.sentAt, signer: x.signer.name, company: p.companyName, reminderComing: d2, declineReason: x.declined?.reason ?? null, nowMs };
+    const st = statusOf(p, nowMs);
+    // A link with no end date never expires, whatever an older status function says.
+    return { a: it, status: st === "expired" && linkEnd(x.expiresAt) === null ? (x.viewedAt ? "viewed" : "sent") : st, sentAt: x.sentAt, signer: x.signer.name, company: p.companyName, reminderComing: d2, declineReason: x.declined?.reason ?? null, nowMs };
   }
   const d = (s.documents ?? []).find((x) => x.id === id);
   if (!d) return null;
@@ -305,6 +320,8 @@ export async function afterSignerStep(token: unknown, origin?: string, nowMs = D
       const b = baseFacts(s, t);
       if (t.kind === "proposal") {
         if (!t.x.signed && !t.x.declined) return null;
+        // Waiting for the member's countersignature: afterClientSigned told them, afterFullySigned tells the rest.
+        if (t.x.signed && it.countersign && !it.countersign.fullAt) return null;
         if (it.alerts.done.includes(t.link)) return null;
         it.alerts.done.push(t.link);
         if (t.x.declined) return { ...b, kind: "signed", declined: { reason: t.x.declined.reason } };
@@ -328,22 +345,105 @@ export async function afterSignerStep(token: unknown, origin?: string, nowMs = D
   }
 }
 
+/* ---------- closeC3's events: a question, passed on, signed and countersigned ---------- */
+
+/** A proposal's or document's member and kind, by its id. */
+function itemById(s: State, itemId: string): { kind: "proposal" | "document"; memberId: string; p: StoredProposal | null; d: StoredDocument | null } | null {
+  const p = (s.proposals ?? []).find((x) => x.id === itemId) ?? null;
+  if (p) return { kind: "proposal", memberId: p.memberId, p, d: null };
+  const d = (s.documents ?? []).find((x) => x.id === itemId) ?? null;
+  return d ? { kind: "document", memberId: d.memberId, p: null, d } : null;
+}
+
+/** Record something on an item and send its alert, Close only. `make` returns the facts, or null for nothing to say. Never throws. */
+async function itemEvent(itemId: string, nowMs: number, make: (s: State, it: ItemActivity, t: NonNullable<ReturnType<typeof itemById>>, b: Omit<AlertFacts, "kind">) => AlertFacts | null): Promise<boolean> {
+  try {
+    const s0 = await loadState();
+    const t0 = itemById(s0, itemId);
+    if (!t0 || !T.closeNow(s0, t0.memberId, nowMs)) return false;
+    const f = await T.mutate((s) => {
+      const t = itemById(s, itemId);
+      const b = t ? factsOfItem(s, t.kind, itemId) : null;
+      if (!t || !b) return null;
+      return make(s, itemOf(s, itemId, t.kind, t.memberId), t, b);
+    });
+    if (f) await dispatch(t0.memberId, f, nowMs);
+    return !!f;
+  } catch (e) {
+    console.error("proposal event: the alert failed", e instanceof Error ? e.message : "error");
+    return false;
+  }
+}
+
+/**
+ * The client asked a question on the proposal (closeC3). "Dana Whitfield asked a question about
+ * <proposal>": in Merlin and Slack; email off by default, because the question itself already
+ * comes by email. `text` is quoted in Slack and Merlin's email (cut to 280 characters).
+ */
+export function afterClientAsked(itemId: string, a: { by?: string | null; text?: string | null }, nowMs = Date.now()): Promise<boolean> {
+  return itemEvent(itemId, nowMs, (_s, _it, _t, b) => ({ ...b, kind: "question", question: { by: a.by || b.signer, text: String(a.text ?? "") } }));
+}
+
+/** The client passed it to someone else to sign (closeC3): "Dana Whitfield passed <proposal> to Sam Lee to sign". */
+export function afterPassedOn(itemId: string, a: { by?: string | null; to: string }, nowMs = Date.now()): Promise<boolean> {
+  return itemEvent(itemId, nowMs, (_s, _it, _t, b) => (a.to ? { ...b, kind: "passed", passed: { by: a.by || b.signer, to: a.to } } : null));
+}
+
+/**
+ * The client signed a proposal the member countersigns (closeC3): "Dana Whitfield signed.
+ * Countersign to finish." No Won and no renewal clock yet: those wait for afterFullySigned. Once an item.
+ */
+export function afterClientSigned(itemId: string, a: { by?: string | null } = {}, nowMs = Date.now()): Promise<boolean> {
+  return itemEvent(itemId, nowMs, (_s, it, _t, b) => {
+    if (it.countersign) return null;
+    const by = a.by || b.signer;
+    it.countersign = { clientAt: new Date(nowMs).toISOString(), by };
+    return { ...b, kind: "countersign", countersign: { by } };
+  });
+}
+
+/**
+ * Fully signed (the last signature, a countersignature included): the "Signed" alert (Moved to Won
+ * when it names a company), and the renewal clock starts now for a countersigned proposal. With
+ * `movePipeline`, the pipeline moves to Won here (for a flow whose signing step didn't move it).
+ * Once a link: the sign route's afterSignerStep and this never both tell it.
+ */
+export function afterFullySigned(itemId: string, o: { origin?: string; movePipeline?: boolean } = {}, nowMs = Date.now()): Promise<boolean> {
+  return itemEvent(itemId, nowMs, (s, it, t, b) => {
+    const at = new Date(nowMs).toISOString();
+    if (it.countersign && !it.countersign.fullAt) it.countersign.fullAt = at;
+    if (t.p) {
+      const x = [...t.p.sends].reverse().find((y) => y.signed) ?? currentSend(t.p);
+      if (!x || it.alerts.done.includes(x.id)) return null;
+      it.alerts.done.push(x.id);
+      if (o.movePipeline) pipelineEvent(s, t.memberId, t.p.companyId, "signed", at);
+      const fee = String(docFields(t.p)["pricing.monthlyFee"] ?? "").trim() || null;
+      return { ...b, kind: "signed", adds: addonsOn(it), signed: { option: optionNow(it), fee, won: !!t.p.companyId, copyUrl: copyLink(o.origin, x) } };
+    }
+    const d = t.d!;
+    if (it.alerts.done.includes(d.id)) return null;
+    it.alerts.done.push(d.id);
+    if (o.movePipeline) pipelineEvent(s, t.memberId, d.companyId, "signed", at, { document: { to: null } });
+    return { ...b, kind: "signed", signed: { option: null, fee: null, won: !!d.companyId, copyUrl: docCopyLink(o.origin, d) } };
+  });
+}
+
 /* ---------- the tick: reminders, waiting and timed alerts, new readers, renewals ---------- */
 
 function proposalLinks(p: StoredProposal, nowMs: number): LinkInfo[] {
   const x = currentSend(p);
   if (!x) return [];
-  const done = x.signed ? "signed" : x.declined ? "declined" : x.voided ? "void" : nowMs > Date.parse(x.expiresAt) ? "expired" : null;
-  return [{ link: x.id, name: x.signer.name, email: x.signer.email, base: x.sentAt, viewedAt: x.viewedAt ?? null, expiresAt: x.expiresAt, done }];
+  const done = x.signed ? "signed" : x.declined ? "declined" : x.voided ? "void" : linkExpired(x.expiresAt, nowMs) ? "expired" : null;
+  return [{ link: x.id, name: x.signer.name, email: x.signer.email, base: x.sentAt, viewedAt: x.viewedAt ?? null, expiresAt: linkEnd(x.expiresAt) === null ? null : x.expiresAt, done }];
 }
 function documentLinks(d: StoredDocument, nowMs: number): LinkInfo[] {
-  if (!d.sentAt || !d.expiresAt) return [];
+  if (!d.sentAt) return [];
   const st = docStatus(d, nowMs);
   const done = st === "signed" ? "signed" : st === "declined" ? "declined" : st === "void" ? "void" : st === "expired" ? "expired" : null;
   const turn = new Set(turnOf(d).map((x) => x.id));
   return d.signers
     .filter((x) => !x.sender && x.notifiedAt)
-    .map((x) => ({ link: x.id, name: x.name, email: x.email, base: x.notifiedAt!, viewedAt: x.viewedAt ?? null, expiresAt: d.expiresAt!, done: x.signed ? "signed" : done ?? (turn.has(x.id) ? null : "signed") }));
+    .map((x) => ({ link: x.id, name: x.name, email: x.email, base: x.notifiedAt!, viewedAt: x.viewedAt ?? null, expiresAt: linkEnd(d.expiresAt) === null ? null : d.expiresAt!, done: x.signed ? "signed" : done ?? (turn.has(x.id) ? null : "signed") }));
 }
 
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -393,9 +493,10 @@ export async function closeTick(origin?: string, nowMs = Date.now()): Promise<{ 
         consider("proposal", p.id, p.memberId, links, links.some((l) => !l.done));
         // The renewal: 30 days before a signed engagement's term ends.
         const signed = p.sends.find((x) => x.signed);
-        if (signed?.signed && T.closeNow(s, p.memberId, nowMs)) {
+        const from = signedBase(peek(s, p.id), p);
+        if (signed?.signed && from && T.closeNow(s, p.memberId, nowMs)) {
           const it = peek(s, p.id);
-          const end = it?.renewal?.end ?? termEndOf(docFields(p), signed.signed.at);
+          const end = it?.renewal?.end ?? termEndOf(docFields(p), from);
           if (end && renewalDue(end, nowMs) && !it?.renewal?.remindedAt && !it?.renewal?.startedId && !it?.renewal?.ending) {
             const a = itemOf(s, p.id, "proposal", p.memberId);
             a.renewal = { ...(a.renewal ?? {}), remindedAt: new Date(nowMs).toISOString() };
@@ -443,7 +544,7 @@ async function sendReminder(seed: Seed, r: { kind: "proposal" | "document"; item
   const m = await memberFor(seed, r.memberId);
   const member = m?.name ?? "Your contact";
   const memberTitle = titleOf(s, { id: r.memberId, title: "" } as Parameters<typeof titleOf>[1]);
-  const note = reminderNote(r.key, fmtDay(r.link.expiresAt));
+  const note = reminderNote(r.key, r.link.expiresAt ? fmtDay(r.link.expiresAt) : "");
   let mail: { subject: string; text: string; html: string } | null = null;
   if (r.kind === "proposal") {
     const p = (s.proposals ?? []).find((x) => x.id === r.itemId);
@@ -453,7 +554,7 @@ async function sendReminder(seed: Seed, r: { kind: "proposal" | "document"; item
     const d = (s.documents ?? []).find((x) => x.id === r.itemId);
     const x = d?.signers.find((y) => y.id === r.link.link);
     if (d && x && docOpen(d, x, nowMs))
-      mail = docInviteEmail({ signer: x.name, member, memberTitle, title: d.title, link: `${(PI.base(origin) || "").replace(/\/$/, "")}/sign/${docSignToken(x.id, Date.parse(d.expiresAt!))}`, expiresAt: d.expiresAt!, note, after: null });
+      mail = docInviteEmail({ signer: x.name, member, memberTitle, title: d.title, link: `${(PI.base(origin) || "").replace(/\/$/, "")}/sign/${docSignToken(x.id, linkEnd(d.expiresAt) ?? NO_END_TOKEN_MS)}`, expiresAt: d.expiresAt!, note, after: null });
   }
   const k = `${r.link.link}:${r.key}`;
   const ok = !!mail && (await sendEmail(r.link.email, `Reminder: ${mail.subject}`, mail.text, mail.html, m?.email ? { replyTo: m.email } : {}));
@@ -504,7 +605,7 @@ export async function activityView(token: string | null, id: string, origin?: st
     statusWords: status === "sent" && it?.readers.some((r) => (p ? r.link === x?.id : true)) ? STATUS_WORDS.viewed : STATUS_WORDS[status] ?? status,
     signer: who ? { name: who.name, title: who.title ?? "", email: who.email } : null,
     sentAt: p ? x?.sentAt ?? null : d!.sentAt ?? null,
-    expiresAt: p ? x?.expiresAt ?? null : d!.expiresAt ?? null,
+    expiresAt: linkEnd(p ? x?.expiresAt : d!.expiresAt) === null ? null : (p ? x!.expiresAt : d!.expiresAt!),
     stats: { opens: 0, readers: 0, ms: 0, option: null, mostRead: null },
     sections: [],
     options: [],
@@ -586,9 +687,10 @@ export async function activityView(token: string | null, id: string, origin?: st
     const q = new URLSearchParams({ view: "cm", fs: "1", to: base.signer.email, su: `Re: ${base.title}`, body: base.suggestion.draft });
     base.gmail = `https://mail.google.com/mail/?${q.toString()}`;
   }
-  if (p && status === "signed") {
-    const signed = p.sends.find((y) => y.signed)!;
-    const end = it?.renewal?.end ?? termEndOf(docFields(p), signed.signed!.at);
+  const from = p ? signedBase(it, p) : null;
+  if (p && it?.countersign && !it.countersign.fullAt && p.sends.some((y) => y.signed)) base.statusWords = `Signed by ${firstName(it.countersign.by) || "them"} · countersign to finish`;
+  if (p && status === "signed" && from) {
+    const end = it?.renewal?.end ?? termEndOf(docFields(p), from);
     base.renewal = {
       end: end ?? null,
       ask: !end && !it?.renewal?.skipped,
@@ -612,9 +714,10 @@ export async function inboxView(token: string | null, nowMs = Date.now()): Promi
     for (const p of s.proposals ?? []) {
       if (p.memberId !== me.id) continue;
       const signed = p.sends.find((x) => x.signed);
-      if (!signed?.signed) continue;
       const it = peek(s, p.id);
-      const end = it?.renewal?.end ?? termEndOf(docFields(p), signed.signed.at);
+      const from = signedBase(it, p);
+      if (!signed?.signed || !from) continue;
+      const end = it?.renewal?.end ?? termEndOf(docFields(p), from);
       if (!end || !renewalDue(end, nowMs) || it?.renewal?.ending || (it?.renewal?.startedId && (s.proposals ?? []).some((y) => y.id === it.renewal!.startedId))) continue;
       const days = daysTo(end, nowMs);
       renewals.push({
@@ -638,11 +741,13 @@ export async function inboxView(token: string | null, nowMs = Date.now()): Promi
   };
 }
 
-export async function markRead(token: string | null): Promise<{ ok: true }> {
+/** Mark notifications read: these ids, or every one. Kept per member in the state, so it holds on every device. */
+export async function markRead(token: string | null, ids?: unknown): Promise<{ ok: true }> {
   const seed = await loadSeed();
+  const only = Array.isArray(ids) ? new Set(ids.filter((x): x is string => typeof x === "string").slice(0, 100)) : null;
   await T.mutate((s) => {
     const me = memberOf(seed, s, token);
-    for (const x of s.close?.inbox?.[me.id] ?? []) x.read = true;
+    for (const x of s.close?.inbox?.[me.id] ?? []) if (!only || only.has(x.id)) x.read = true;
   });
   return { ok: true };
 }
@@ -713,7 +818,9 @@ export async function startRenewal(token: string | null, id: string, origin?: st
     const had = it.renewal?.startedId ? (s.proposals ?? []).find((x) => x.id === it.renewal!.startedId) : null;
     if (had) return recOf(had, nowMs, origin);
     if ((s.proposals ?? []).filter((x) => x.memberId === me.id).length >= LIMITS.proposals) throw new ProposalProblem(`You have ${LIMITS.proposals} proposals, which is the most. Delete an old draft first.`);
-    const end = it.renewal?.end ?? termEndOf(docFields(p), signed.signed.at) ?? new Date(nowMs).toISOString().slice(0, 10);
+    const from = signedBase(it, p);
+    if (!from) throw new ProposalProblem("It isn't fully signed yet. Countersign it first.");
+    const end = it.renewal?.end ?? termEndOf(docFields(p), from) ?? new Date(nowMs).toISOString().slice(0, 10);
     const copy: StoredProposal = {
       ...structuredClone(p),
       id: `pr_${randomBytes(9).toString("base64url")}`,
