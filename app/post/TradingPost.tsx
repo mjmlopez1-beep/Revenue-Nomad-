@@ -47,7 +47,7 @@ import {
 import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, ui2PageOf, weekN, type FirstList, type Ui2Page } from "./place";
 import { ui2Action } from "@/lib/ui2";
 import { alertView } from "../onboard/suggest"; // [ux ws3]
-import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, startSteps, stepOneKind, type StepTarget } from "./getStarted";
+import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, sixSteps, startSteps, stepOneKind, type SixKey, type StepTarget } from "./getStarted";
 import { wallBack, type WallBack } from "./earnBack";
 import { InvitePanel } from "./Invite";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
@@ -92,36 +92,18 @@ import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./post.css";
 
 /*
- * Pages a member opens now and then, and the Add form, load on their own: Home and the table paint
- * without them, and they are fetched once the whole table is here (preloadLater below).
+ * The Add form loads on its own, and so do the pages a member opens now and then (shell/pages.tsx):
+ * Home and the table paint without them, and they are fetched once the whole table is here (preloadLater below).
  */
-const pageWait = () => (
-  <div className="tp-allwait" role="status" aria-busy>
-    <p className="tp-allwait-t">Loading…</p>
-  </div>
-);
 const loadAdd = () => import("./AddModal");
-const loadIntegrations = () => import("./Integrations");
-const loadNotifications = () => import("./Notifications");
-const loadBenchmarks = () => import("./Benchmarks");
-const loadFractionals = () => import("./Fractionals");
-const loadPeers = () => import("./Peers");
-const loadAdmin = () => import("./Admin");
 const AddModal = dynamic(() => loadAdd().then((m) => m.AddModal), { ssr: false });
-const Integrations = dynamic(() => loadIntegrations().then((m) => m.Integrations), { ssr: false, loading: pageWait });
-const Notifications = dynamic(() => loadNotifications().then((m) => m.Notifications), { ssr: false, loading: pageWait });
-const Benchmarks = dynamic(() => loadBenchmarks().then((m) => m.Benchmarks), { ssr: false, loading: pageWait });
-// Peers (Peers.tsx): fellow fractionals to work with; the Fractionals directory is its Every fractional view.
-const PeersPage = dynamic(() => loadPeers().then((m) => m.PeersPage), { ssr: false, loading: pageWait });
-const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
-// Proposals (Proposals.tsx), loaded when opened.
-const ProposalsPage = dynamic(() => import("./Proposals").then((m) => m.ProposalsPage), { ssr: false, loading: pageWait });
 /** Fetch them while the member reads (the Add form first): opening one is then instant. */
 const preloadLater = (admin: boolean) => {
-  for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
+  for (const f of [loadAdd, ...preloadPages(admin)]) void f().catch(() => {});
 };
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
+import { AppCtxProvider, opensTable, pageDef, preloadPages, type AppCtx, type ShellPage } from "./shell/pages";
 
 export interface TradingPostProps {
   view: View;
@@ -225,13 +207,12 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // "proposals": Proposals (Proposals.tsx), the member's own.
 // "getin": Where you can get in, and Your way into one company (?w=<company>) (network/Ways.tsx), only with RN_GOOGLE=1.
 // The new look (RN_UI2, lib/ui2.ts) adds "find", "warm", "alerts", "agent" and "settings" (place.ts UI2_PAGES); old pages with a new home open it (ui2PageOf).
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals" | "peers" | "getin" | Ui2Page;
+// Every page but "today" and "table" is drawn from the registry (shell/pages.tsx PAGES).
+type Page = ShellPage;
 /** The page an old page key opens with the new look off (a new page's old home). */
 const OLD_PAGE: Partial<Record<Page, Page>> = { warm: "getin", alerts: "notifications", agent: "integrations", settings: "integrations", find: "table" };
-/** Find's own page isn't built yet: under the new look "find" opens the table (its search and filters) for now. */
-const FIND_PLACEHOLDER = true;
-/** The page `p` opens in the look on screen (`ui2`: the new look). */
-const pageFor = (p: Page, ui2: boolean): Page => (ui2 ? (p === "find" && FIND_PLACEHOLDER ? "table" : ui2PageOf(p)) : OLD_PAGE[p] ?? p);
+/** The page `p` opens in the look on screen (`ui2`: the new look). A page whose new one isn't built yet and stands in for the table (Find, for now) opens the table. */
+const pageFor = (p: Page, ui2: boolean): Page => (ui2 ? (opensTable(p) ? "table" : ui2PageOf(p)) : OLD_PAGE[p] ?? p);
 
 /* ---------- the place in the address bar ---------- */
 
@@ -2696,11 +2677,426 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     };
   }, [fabShown, list]);
 
+  const homeEl = (
+    <main className="tp-main tp-main-page td-page hm-page">
+      <HomePage
+        me={me}
+        infos={infos}
+        byId={byId}
+        firstRow={listWaits ? null : sorted[0] ?? null}
+        waiting={waiting}
+        data={today.data}
+        failed={today.failed}
+        sinceAt={since.at}
+        unread={unread}
+        nudge={nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null}
+        events={events}
+        trialStarted={!!me.plan?.trialStarted && !trialStartSeen}
+        onTrialStartSeen={() => {
+          setTrialStartSeen(true);
+          void act({ type: "noticeSeen", kind: "trialStarted" }, { quiet: true, silentError: true });
+        }}
+        trialEnded={!!me.plan?.trialEnded && !trialSeen}
+        onTrialSeen={() => {
+          setTrialSeen(true);
+          void act({ type: "noticeSeen", kind: "trialEnded" }, { quiet: true, silentError: true });
+        }}
+        onSeePro={() => openPlans("billing")}
+        proWelcome={!!me.plan?.proWelcome && !proSeen}
+        onProSeen={() => {
+          setProSeen(true);
+          void act({ type: "noticeSeen", kind: "proWelcome" }, { quiet: true, silentError: true });
+        }}
+        integrations={{ href: pageHref("integrations"), go: () => (setDrawer(null), setPage("integrations")) }}
+        onClaude={() => (setDrawer(null), setClaudeLink(true), setPage("integrations"), setTimeout(() => document.getElementById("claude-voice")?.scrollIntoView({ block: "start" }), 500))}
+        steps={homeSteps ? steps.steps : null}
+        onStep={(k) => runNudge(stepAction[k])}
+        onHideSteps={hideCheck}
+        find={{ href: firstViewHref, go: openFirstView }}
+        radar={radarGo}
+        onAdd={() => openAdd()}
+        seats={seatsCard}
+        roles={{ href: tableHref("engagements", "hiring", hiringFilters, null, false), go: seeOpenRoles }}
+        follows={{ href: tableHref("companies", "following"), go: () => navTo(nav.find((x) => x.key === "following")!) }}
+        messages={{ href: pageHref("messages"), go: () => (setDrawer(null), setPage("messages")) }}
+        views={homeViews}
+        onOpenView={openView}
+        onEmailView={emailView}
+        table={{ href: firstViewHref, go: openFirstView }}
+        openCompany={(id) => openCompany(id)}
+        onSearch={(text) => {
+          setDrawer(null);
+          setSearchTab(null);
+          // Home's search reads every company: the saved view, the profile and the filters are off for it (they come back when it is cleared).
+          setSearchWide(true);
+          setQuery(text);
+          // The table's search takes the cursor with the text, so typing on carries on there.
+          searchNavAt.current = Date.now();
+          setPage("table");
+          setFindNow(Date.now());
+        }}
+        nav={nav}
+        onNav={navTo}
+      />
+    </main>
+  );
+  const tableEl = phone ? (
+    <main className="tp-main tp-main-phone">
+      <h1 id="tp-h1" className="sr-only">
+        {TYPE_TITLE[recordType]}
+      </h1>
+      {/* The search is a real field at the top of the list. While searching, the results come straight under it (DSGNP-5). */}
+      {listSearch}
+      {searchTypes}
+      {qt ? null : banners}
+      <div ref={listTopRef} className="tp-listtop" aria-hidden />
+      {/*
+        One sticky row: what to list (Companies, Seats or People, a menu), Filters (sort lives in its sheet) and the views,
+        each with its count. The record type sits here, not in a row of its own, so the first card starts higher (decision 16).
+      */}
+      {hiredSentence || pill}
+      <div className="tp-pchips">
+        <button type="button" className={`chip tp-pchip tp-pfilter${nFilters ? " chip-on" : ""}`} onClick={() => setSideOverlay(true)} aria-label={`Sort and filter${nFilters ? `, ${plural(nFilters, "filter")} on` : ""}`}>
+          <IconFilter size={13} /> Filters{nFilters ? ` (${nFilters})` : ""}
+        </button>
+        {tabs}
+      </div>
+      {chipRow}
+      {typeOpen && typeRef.current && (
+        <Anchored anchor={typeRef.current} onClose={() => setTypeOpen(false)} width={240} className="tp-menu" label="What to list">
+          {RECORD_TYPES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="menuitemradio"
+              aria-checked={recordType === t.key}
+              className={`tp-menu-item${recordType === t.key ? " on" : ""}`}
+              onClick={() => (setRecordType(t.key), setTypeOpen(false))}
+            >
+              <span>{t.label}</span>
+              <span className="tp-menu-hint num" title={typeTitle(t.key)}>
+                {typeCounts[t.key]}
+              </span>
+            </button>
+          ))}
+        </Anchored>
+      )}
+      {qt && (
+        <div className="tp-pcount">
+          {!listN && foundRows.length ? (
+            <span>
+              <b className="num">{foundRows.length}</b> found by its exact name
+            </span>
+          ) : (
+          <span>
+            <b className="num">{listN}</b>
+            {tab !== "all" ? (
+              <>
+                {" "}
+                of <span className="num">{facets.tabs.all}</span>
+              </>
+            ) : null}{" "}
+            matching <span className="tp-q">{qt}</span>
+          </span>
+          )}
+          {tab !== "all" && listN > 0 && (
+            <button type="button" className="tp-flink" onClick={() => setTab("all")}>
+              Show all
+            </button>
+          )}
+        </div>
+      )}
+      {searchLine}
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {countText}
+      </p>
+      {scanLine}
+      {followLine}
+      <div id="tp-results" tabIndex={-1} className="tp-presults">
+        {foundStrip}
+        {listWaits ? <AllLoading phone failed={fullFailed} /> : empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
+      </div>
+      {more}
+      {scanNote}
+      {proFoot}
+      {/* The main action, labeled and in thumb reach (DSGNP-8). Not while searching: the keyboard has that space. It steps aside while the first card is under it. */}
+      {fabShown && (
+        <button ref={fabRef} type="button" className={`btn btn-volt tp-fab${fabAside ? " tp-fab-aside" : ""}`} onClick={() => openAdd()}>
+          <IconPlus size={18} /> Add what you know
+        </button>
+      )}
+    </main>
+    ) : (
+    <div className="tp-body">
+      {layout === "desktop" && sideDocked && (
+        <aside className="tp-side" aria-label="Filters">
+          {filterPanel(
+            <div className="tp-filters-head">
+              <span className="tp-filters-title">Filters</span>
+              {nFilters > 0 && (
+                <button type="button" className="tp-flink" onClick={clearFilters}>
+                  Clear all
+                </button>
+              )}
+              <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-label="Hide filters" title="Hide filters (F)" onClick={() => setSideDocked(false)}>
+                <IconChevron dir="left" />
+              </button>
+            </div>,
+          )}
+        </aside>
+      )}
+      <main className="tp-main">
+        <h1 id="tp-h1" className="sr-only">
+          {TYPE_TITLE[recordType]}
+        </h1>
+        {banners}
+        <div ref={listTopRef} className="tp-listtop" aria-hidden />
+        {/* With the sidebar, what to list is its Companies, Seats and People: the switch here comes back only while searching (each list's matches). */}
+        {(!(layout === "desktop" && sideDocked) || !navSide || searchCounts) && (
+          <div className="tp-head">
+            {!(layout === "desktop" && sideDocked) && (
+              <button type="button" className={`btn tp-filterbtn${nFilters ? " on" : ""}`} onClick={toggleFilters} title="Show filters (F)">
+                <IconFilter size={14} /> Filters{nFilters ? <span className="num tp-filterbtn-n">{nFilters}</span> : null}
+              </button>
+            )}
+            {(!navSide || searchCounts) && recordSwitch}
+          </div>
+        )}
+        {hiredSentence || pill}
+        <div className="tp-toolbar">
+          {tabs}
+          {hiredBtn}
+          <span className="tp-toolbar-sp" />
+          <span className="tp-count" aria-live="polite" aria-atomic="true">
+            {!listN && foundRows.length ? (
+              <>
+                <b className="num">{foundRows.length}</b> found by its exact name
+              </>
+            ) : (
+              <>
+                <b className="num">{listN}</b> {listN === 1 ? noun[0] : noun[1]}
+                {qt && (
+                  <>
+                    {" "}
+                    matching <span className="tp-q">{qt}</span>
+                  </>
+                )}
+              </>
+            )}
+          </span>
+          <button type="button" className="tp-sortbtn tp-savebtn" onClick={askSave} aria-pressed={!!currentView}>
+            {currentView ? "Saved view" : "Save this view"}
+            {saveTag}
+          </button>
+          {sortMenu}
+        </div>
+        {chipRow}
+        {searchLine}
+        {scanLine}
+        {followLine}
+        <div className="tp-frame-box" ref={frameBoxRef}>
+          <div className="tp-frame" ref={frameRef} id="tp-results" tabIndex={-1}>
+            {foundStrip}
+            {listWaits ? <AllLoading failed={fullFailed} /> : empty || (
+              <>
+                <DataTable
+                  type={list.type}
+                  rows={list.rows}
+                  me={cellMe}
+                  selected={drawer?.rowKey ?? null}
+                  onOpen={openRow}
+                  newSince={since.at}
+                  tab={tab}
+                  notMine={eff.notMine}
+                  hire={hireCtx}
+                  sort={sort}
+                  onSort={setSort}
+                />
+                {more}
+                {proFoot}
+              </>
+            )}
+          </div>
+          <div className="tp-frame-fade" ref={fadeRef} aria-hidden />
+        </div>
+        {scanNote}
+      </main>
+    </div>
+  );
+
+  /*
+   * ----- the page registry (shell/pages.tsx) -----
+   * Every page but Home and the table is an entry there, drawn with this context. The new look's
+   * own pages (home2, companies2, find2) take Home's and the table's place once they have a component.
+   */
+  const [stripsGone, setStripsGone] = useState<string[]>([]);
+  const sixDoneKey = `tp_six_done_${me.id}`;
+  const six = useMemo(
+    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
+    [me, seatStats.n, stepSeen, sixDoneKey],
+  );
+  useEffect(() => {
+    if (!ui2) return;
+    const had = new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean));
+    const done = six.steps.filter((x) => x.done).map((x) => `six:${x.key}`);
+    if (done.some((k) => !had.has(k))) store.set(sixDoneKey, [...new Set([...had, ...done])].join(","));
+  }, [ui2, six, sixDoneKey]);
+  /** What a Getting started step's button does (getStarted.ts sixSteps). */
+  const runSix = useStable((k: SixKey) => {
+    if (k === "icp") return setIcpOpen(true);
+    if (k === "seat") return seatStats.n > 0 ? openSeats() : openSeatSearch();
+    if (k === "network") return openPage("network");
+    if (k === "open") return stepOne();
+    if (k === "alert") {
+      // A list already saved with its email off: open it, and its sheet, where the email is switched on. Else the table on the first view, and Save this view.
+      const quiet = views.find((v) => !v.email);
+      if (quiet) openView(quiet);
+      else openFirstView();
+      return void setTimeout(() => (quiet ? setSaveOpen(true) : askSave()), 120);
+    }
+  });
+  const openShellPage = useStable((p: ShellPage) => {
+    if (p === "today") return goHome();
+    if (p === "table") {
+      if (!okToLeave()) return;
+      setDrawer(null);
+      return setPage("table");
+    }
+    openPage(p as AppPage);
+  });
+  const hrefOf = (p: ShellPage) => placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p, all: allFns });
+  const searchField = (
+    <label className="tp-search">
+      <IconSearch size={16} />
+      <input
+        ref={ui2 && !phone ? searchRef : undefined}
+        className="tp-bare"
+        type="search"
+        placeholder="Search companies, seats and people"
+        aria-label="Search companies, seats and people"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          if (page !== "table" || drawer?.over) searchToTable(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            if (page !== "table" || drawer?.over) searchToTable(query, true);
+            setFindNow(Date.now());
+          }
+          if (e.key === "Escape") {
+            setQuery("");
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      {query && (
+        <button type="button" className="tp-search-x" aria-label="Clear search" onClick={() => setQuery("")}>
+          <IconX size={14} />
+        </button>
+      )}
+    </label>
+  );
+  const ctx: AppCtx = {
+    view,
+    me,
+    act,
+    refresh,
+    infos,
+    byId,
+    waiting,
+    fullFailed,
+    layout,
+    phone,
+    ui2,
+    page: onScreen,
+    openCompany,
+    openPage: openShellPage,
+    hrefOf,
+    toBase,
+    openAdd,
+    openSeats,
+    openProfile: () => setIcpOpen(true),
+    table: {
+      recordType,
+      setRecordType,
+      tab,
+      setTab,
+      sort,
+      setSort,
+      sorts: sortList,
+      filters: eff,
+      setFilters: setEff,
+      clearFilters,
+      nFilters,
+      chips: chips.map((c) => ({ id: c.id, label: chipLabel(c), clear: () => setEff(c.clear(eff)) })),
+      query,
+      setQuery,
+      rows: sorted,
+      shown: list.rows,
+      total: listN,
+      showMore: () => setLimit((l) => l + PAGE),
+      listWaits,
+      facets,
+      typeCounts,
+      totals,
+      openRow,
+      openKey: drawer?.rowKey ?? null,
+      since: since.at,
+      hire: hireCtx,
+      views,
+      currentView,
+      openView,
+      askSave,
+      pill: hiredSentence || pill || null,
+      filterPanel: (head) => filterPanel(head),
+      searchField,
+    },
+    shell: {
+      radar: { data: radar.data, failed: radar.failed, reload: () => void radar.reload(), rows: radarList },
+      cellMe,
+      setRadarRange: (r) => setSigDay(null, r),
+      radarKnow,
+      setRadarKnow,
+      openNetwork: (section) => (setNetSection(section), setPage("network")),
+      netSection,
+      claudeLink,
+      peersAll,
+      setPeersAll,
+      seats,
+      seatFocus,
+      seatSearch: seatCtx.search,
+      seatBack,
+      wayCo,
+      setWayCo,
+    },
+    legacy: { home: homeEl, table: tableEl },
+    headerActions: null,
+    start: {
+      six,
+      run: (k) => runSix(k),
+      hidden: checkOff || six.next === null,
+      hide: hideCheck,
+      stripOff: (k) => stripsGone.includes(k) || (me.stripsOff ?? []).includes(k),
+      dismissStrip: (k) => {
+        setStripsGone((x) => [...x, k]);
+        void act(ui2Action({ stripOff: k }), { quiet: true, silentError: true });
+      },
+    },
+  };
+  const defNow = onScreen !== "today" && onScreen !== "table" ? pageDef(onScreen) : null;
+  const PageNow = defNow?.component && (!defNow.when || defNow.when(ctx)) ? defNow.component : null;
+  const pageMain = defNow ? (typeof defNow.mainClass === "function" ? defNow.mainClass(ctx) : defNow.mainClass ?? "") : "";
+  /** The new look's Home and Companies workbench, once they exist (shell/pages.tsx home2, companies2). */
+  const Home2 = ui2 ? pageDef("home2")?.component ?? null : null;
+  const Companies2 = ui2 && onScreen === "table" && recordType === "companies" ? pageDef("companies2")?.component ?? null : null;
+
   /* ----- layout ----- */
   return (
     <UiCtx.Provider value={ui}>
       <CellUiCtx.Provider value={cellUi}>
       <FitWhyCtx.Provider value={fitWhy}>
+      <AppCtxProvider value={ctx}>
       <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
         {/* The first Tab stop: past the sidebar, to the list or the page. */}
         <a href={page === "table" ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
@@ -2761,336 +3157,20 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         )}
 
         {onScreen === "today" ? (
-          <main className="tp-main tp-main-page td-page hm-page">
-            <HomePage
-              me={me}
-              infos={infos}
-              byId={byId}
-              firstRow={listWaits ? null : sorted[0] ?? null}
-              waiting={waiting}
-              data={today.data}
-              failed={today.failed}
-              sinceAt={since.at}
-              unread={unread}
-              nudge={nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null}
-              events={events}
-              trialStarted={!!me.plan?.trialStarted && !trialStartSeen}
-              onTrialStartSeen={() => {
-                setTrialStartSeen(true);
-                void act({ type: "noticeSeen", kind: "trialStarted" }, { quiet: true, silentError: true });
-              }}
-              trialEnded={!!me.plan?.trialEnded && !trialSeen}
-              onTrialSeen={() => {
-                setTrialSeen(true);
-                void act({ type: "noticeSeen", kind: "trialEnded" }, { quiet: true, silentError: true });
-              }}
-              onSeePro={() => openPlans("billing")}
-              proWelcome={!!me.plan?.proWelcome && !proSeen}
-              onProSeen={() => {
-                setProSeen(true);
-                void act({ type: "noticeSeen", kind: "proWelcome" }, { quiet: true, silentError: true });
-              }}
-              integrations={{ href: pageHref("integrations"), go: () => (setDrawer(null), setPage("integrations")) }}
-              onClaude={() => (setDrawer(null), setClaudeLink(true), setPage("integrations"), setTimeout(() => document.getElementById("claude-voice")?.scrollIntoView({ block: "start" }), 500))}
-              steps={homeSteps ? steps.steps : null}
-              onStep={(k) => runNudge(stepAction[k])}
-              onHideSteps={hideCheck}
-              find={{ href: firstViewHref, go: openFirstView }}
-              radar={radarGo}
-              onAdd={() => openAdd()}
-              seats={seatsCard}
-              roles={{ href: tableHref("engagements", "hiring", hiringFilters, null, false), go: seeOpenRoles }}
-              follows={{ href: tableHref("companies", "following"), go: () => navTo(nav.find((x) => x.key === "following")!) }}
-              messages={{ href: pageHref("messages"), go: () => (setDrawer(null), setPage("messages")) }}
-              views={homeViews}
-              onOpenView={openView}
-              onEmailView={emailView}
-              table={{ href: firstViewHref, go: openFirstView }}
-              openCompany={(id) => openCompany(id)}
-              onSearch={(text) => {
-                setDrawer(null);
-                setSearchTab(null);
-                // Home's search reads every company: the saved view, the profile and the filters are off for it (they come back when it is cleared).
-                setSearchWide(true);
-                setQuery(text);
-                // The table's search takes the cursor with the text, so typing on carries on there.
-                searchNavAt.current = Date.now();
-                setPage("table");
-                setFindNow(Date.now());
-              }}
-              nav={nav}
-              onNav={navTo}
-            />
-          </main>
+          Home2 ? <Home2 /> : homeEl
         ) : waiting && onScreen !== "table" ? (
           <main className="tp-main tp-main-page">
             {/* A page about companies waits for all of them; any other page shows its own head while the table lands. */}
-            {onScreen === "radar" || onScreen === "getin" || onScreen === "warm" ? <AllLoading failed={fullFailed} /> : <PageWait title={PAGE_TITLE[onScreen]} failed={fullFailed} />}
+            {pageDef(onScreen)?.needsTable ? <AllLoading failed={fullFailed} /> : <PageWait title={PAGE_TITLE[onScreen]} failed={fullFailed} />}
           </main>
-        ) : page === "credits" ? (
-          <main className="tp-main tp-main-page">
-            <MyCredits view={view} refresh={refresh} onUseInClaude={() => setPage("integrations")} onNotifications={() => setPage("notifications")} />
+        ) : PageNow ? (
+          <main className={`tp-main tp-main-page${pageMain ? ` ${pageMain}` : ""}`}>
+            <PageNow />
           </main>
-        ) : page === "integrations" || page === "settings" || page === "agent" ? (
-          <main className="tp-main tp-main-page">
-            <Integrations onBack={toBase} onCredits={() => setPage("credits")} section={claudeLink || page === "agent" ? "claude" : undefined} onNetwork={() => setPage("network")} onNotifications={() => setPage("notifications")} />
-          </main>
-        ) : page === "notifications" || page === "alerts" ? (
-          <main className="tp-main tp-main-page">
-            <Notifications view={view} onIntegrations={() => setPage("integrations")} />
-          </main>
-        ) : page === "rates" ? (
-          <main className="tp-main tp-main-page">
-            <Benchmarks view={view} refresh={refresh} />
-          </main>
-        ) : page === "metrics" && view.admin ? (
-          <main className="tp-main tp-main-page">
-            <Admin view={view} refresh={refresh} />
-          </main>
-        ) : page === "messages" ? (
-          <main className="tp-main tp-main-page">
-            <MessagesPage onBack={toBase} openCompany={(id) => openCompany(id)} />
-          </main>
-        ) : onScreen === "radar" ? (
-          <main className="tp-main tp-main-page rd-main">
-            <RadarPage
-              view={radar.data}
-              failed={radar.failed}
-              reload={() => void radar.reload()}
-              rows={radar.data ? radarList : []}
-              me={cellMe}
-              phone={phone}
-              onBack={toBase}
-              onProfile={() => setIcpOpen(true)}
-              onRange={(r) => setSigDay(null, r)}
-              openCompany={openCompany}
-              know={radarKnow}
-              onKnow={setRadarKnow}
-              onWarm={() => (setNetSection("nw-warm"), setPage("network"))}
-            />
-          </main>
-        ) : page === "billing" && me.plan ? (
-          <main className="tp-main tp-main-page">
-            <BillingPage view={view} refresh={refresh} />
-          </main>
-        ) : page === "peers" || page === "fractionals" || page === "partners" ? (
-          <main className={`tp-main tp-main-page${peersAll || page !== "peers" ? " fr-main" : ""}`}>
-            <PeersPage infos={infos} waiting={waiting} all={peersAll || page !== "peers"} onAll={setPeersAll} onProfile={() => setIcpOpen(true)} openCompany={openCompany} />
-          </main>
-        ) : page === "seats" ? (
-          <main className="tp-main tp-main-page ys-main">
-            <Seats seats={seats} infos={infos} focus={seatFocus} search={seatCtx.search} back={seatBack} />
-          </main>
-        ) : page === "pipeline" ? (
-          <main className="tp-main tp-main-page">
-            <PipelinePage infos={infos} openCompany={openCompany} onIntegrations={() => setPage("integrations")} />
-          </main>
-        ) : page === "proposals" ? (
-          <main className="tp-main tp-main-page">
-            <ProposalsPage view={view} infos={infos} />
-          </main>
-        ) : page === "getin" || page === "warm" ? (
-          // Where you can get in, and Your way into one company (network/Ways.tsx). With Your network on.
-          <main className="tp-main tp-main-page">
-            {wayCo ? <WayInPage company={wayCo} phone={phone} infos={infos} onBack={() => setWayCo(null)} /> : <GetInPage infos={infos} phone={phone} openCompany={openCompany} />}
-          </main>
-        ) : page === "network" ? (
-          // [google network] Your network: the member's own, from Google and their own Claude.
-          <main className="tp-main tp-main-page">
-            <NetworkPage
-              infos={infos}
-              me={me}
-              onBack={toBase}
-              openCompany={openCompany}
-              onProfile={() => setIcpOpen(true)}
-              section={netSection}
-              onSeats={() => openSeats()}
-              onClaude={() => (setPage("integrations"), setTimeout(() => document.getElementById("claude-network")?.scrollIntoView({ block: "start" }), 400))}
-              refresh={refresh}
-            />
-          </main>
-        ) : phone ? (
-          <main className="tp-main tp-main-phone">
-            <h1 id="tp-h1" className="sr-only">
-              {TYPE_TITLE[recordType]}
-            </h1>
-            {/* The search is a real field at the top of the list. While searching, the results come straight under it (DSGNP-5). */}
-            {listSearch}
-            {searchTypes}
-            {qt ? null : banners}
-            <div ref={listTopRef} className="tp-listtop" aria-hidden />
-            {/*
-              One sticky row: what to list (Companies, Seats or People, a menu), Filters (sort lives in its sheet) and the views,
-              each with its count. The record type sits here, not in a row of its own, so the first card starts higher (decision 16).
-            */}
-            {hiredSentence || pill}
-            <div className="tp-pchips">
-              <button type="button" className={`chip tp-pchip tp-pfilter${nFilters ? " chip-on" : ""}`} onClick={() => setSideOverlay(true)} aria-label={`Sort and filter${nFilters ? `, ${plural(nFilters, "filter")} on` : ""}`}>
-                <IconFilter size={13} /> Filters{nFilters ? ` (${nFilters})` : ""}
-              </button>
-              {tabs}
-            </div>
-            {chipRow}
-            {typeOpen && typeRef.current && (
-              <Anchored anchor={typeRef.current} onClose={() => setTypeOpen(false)} width={240} className="tp-menu" label="What to list">
-                {RECORD_TYPES.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={recordType === t.key}
-                    className={`tp-menu-item${recordType === t.key ? " on" : ""}`}
-                    onClick={() => (setRecordType(t.key), setTypeOpen(false))}
-                  >
-                    <span>{t.label}</span>
-                    <span className="tp-menu-hint num" title={typeTitle(t.key)}>
-                      {typeCounts[t.key]}
-                    </span>
-                  </button>
-                ))}
-              </Anchored>
-            )}
-            {qt && (
-              <div className="tp-pcount">
-                {!listN && foundRows.length ? (
-                  <span>
-                    <b className="num">{foundRows.length}</b> found by its exact name
-                  </span>
-                ) : (
-                <span>
-                  <b className="num">{listN}</b>
-                  {tab !== "all" ? (
-                    <>
-                      {" "}
-                      of <span className="num">{facets.tabs.all}</span>
-                    </>
-                  ) : null}{" "}
-                  matching <span className="tp-q">{qt}</span>
-                </span>
-                )}
-                {tab !== "all" && listN > 0 && (
-                  <button type="button" className="tp-flink" onClick={() => setTab("all")}>
-                    Show all
-                  </button>
-                )}
-              </div>
-            )}
-            {searchLine}
-            <p className="sr-only" aria-live="polite" aria-atomic="true">
-              {countText}
-            </p>
-            {scanLine}
-            {followLine}
-            <div id="tp-results" tabIndex={-1} className="tp-presults">
-              {foundStrip}
-              {listWaits ? <AllLoading phone failed={fullFailed} /> : empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} hire={hireCtx} />}
-            </div>
-            {more}
-            {scanNote}
-            {proFoot}
-            {/* The main action, labeled and in thumb reach (DSGNP-8). Not while searching: the keyboard has that space. It steps aside while the first card is under it. */}
-            {fabShown && (
-              <button ref={fabRef} type="button" className={`btn btn-volt tp-fab${fabAside ? " tp-fab-aside" : ""}`} onClick={() => openAdd()}>
-                <IconPlus size={18} /> Add what you know
-              </button>
-            )}
-          </main>
+        ) : Companies2 ? (
+          <Companies2 />
         ) : (
-          <div className="tp-body">
-            {layout === "desktop" && sideDocked && (
-              <aside className="tp-side" aria-label="Filters">
-                {filterPanel(
-                  <div className="tp-filters-head">
-                    <span className="tp-filters-title">Filters</span>
-                    {nFilters > 0 && (
-                      <button type="button" className="tp-flink" onClick={clearFilters}>
-                        Clear all
-                      </button>
-                    )}
-                    <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-label="Hide filters" title="Hide filters (F)" onClick={() => setSideDocked(false)}>
-                      <IconChevron dir="left" />
-                    </button>
-                  </div>,
-                )}
-              </aside>
-            )}
-            <main className="tp-main">
-              <h1 id="tp-h1" className="sr-only">
-                {TYPE_TITLE[recordType]}
-              </h1>
-              {banners}
-              <div ref={listTopRef} className="tp-listtop" aria-hidden />
-              {/* With the sidebar, what to list is its Companies, Seats and People: the switch here comes back only while searching (each list's matches). */}
-              {(!(layout === "desktop" && sideDocked) || !navSide || searchCounts) && (
-                <div className="tp-head">
-                  {!(layout === "desktop" && sideDocked) && (
-                    <button type="button" className={`btn tp-filterbtn${nFilters ? " on" : ""}`} onClick={toggleFilters} title="Show filters (F)">
-                      <IconFilter size={14} /> Filters{nFilters ? <span className="num tp-filterbtn-n">{nFilters}</span> : null}
-                    </button>
-                  )}
-                  {(!navSide || searchCounts) && recordSwitch}
-                </div>
-              )}
-              {hiredSentence || pill}
-              <div className="tp-toolbar">
-                {tabs}
-                {hiredBtn}
-                <span className="tp-toolbar-sp" />
-                <span className="tp-count" aria-live="polite" aria-atomic="true">
-                  {!listN && foundRows.length ? (
-                    <>
-                      <b className="num">{foundRows.length}</b> found by its exact name
-                    </>
-                  ) : (
-                    <>
-                      <b className="num">{listN}</b> {listN === 1 ? noun[0] : noun[1]}
-                      {qt && (
-                        <>
-                          {" "}
-                          matching <span className="tp-q">{qt}</span>
-                        </>
-                      )}
-                    </>
-                  )}
-                </span>
-                <button type="button" className="tp-sortbtn tp-savebtn" onClick={askSave} aria-pressed={!!currentView}>
-                  {currentView ? "Saved view" : "Save this view"}
-                  {saveTag}
-                </button>
-                {sortMenu}
-              </div>
-              {chipRow}
-              {searchLine}
-              {scanLine}
-              {followLine}
-              <div className="tp-frame-box" ref={frameBoxRef}>
-                <div className="tp-frame" ref={frameRef} id="tp-results" tabIndex={-1}>
-                  {foundStrip}
-                  {listWaits ? <AllLoading failed={fullFailed} /> : empty || (
-                    <>
-                      <DataTable
-                        type={list.type}
-                        rows={list.rows}
-                        me={cellMe}
-                        selected={drawer?.rowKey ?? null}
-                        onOpen={openRow}
-                        newSince={since.at}
-                        tab={tab}
-                        notMine={eff.notMine}
-                        hire={hireCtx}
-                        sort={sort}
-                        onSort={setSort}
-                      />
-                      {more}
-                      {proFoot}
-                    </>
-                  )}
-                </div>
-                <div className="tp-frame-fade" ref={fadeRef} aria-hidden />
-              </div>
-              {scanNote}
-            </main>
-          </div>
+          tableEl
         )}
         </div>
         {!navSide && <TabBar items={nav} onNav={navTo} onMore={() => (setPop(null), setMoreOpen((x) => !x))} moreRef={moreRef} moreOpen={moreOpen} />}
@@ -3296,6 +3376,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           />
         )}
       </div>
+      </AppCtxProvider>
       </FitWhyCtx.Provider>
       </CellUiCtx.Provider>
     </UiCtx.Provider>

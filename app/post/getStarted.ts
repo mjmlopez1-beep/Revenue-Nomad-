@@ -11,7 +11,7 @@
  */
 import type { EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, PERSON_BUNDLE } from "@/lib/tableFields";
-import { checkSteps, shown, type CheckStep, type CoInfo, type FactRef, type Row } from "./model";
+import { checkSteps, icpEmpty, shown, type CheckStep, type CoInfo, type FactRef, type Row } from "./model";
 import { CRYSTAL_FREE_TODAY, yourFeature } from "@/lib/radar/types";
 
 /** Get started's hint on Trial and Pro: every company in their Crystal Ball opens free. */
@@ -210,3 +210,88 @@ export function startSteps(
   const seats = o.seatsHeld === 0 ? { label: "Find your seats", hint: "up to ~12 credits a seat", action: "seats" as const } : null;
   return { steps, next: fill ?? seats };
 }
+
+/* ---------- the new look's six steps (RN_UI2, BUILD_PLAN F6) ---------- */
+
+/** The six steps' keys, in order. */
+export const SIX_KEYS = ["icp", "seat", "network", "open", "alert", "evidence"] as const;
+export type SixKey = (typeof SIX_KEYS)[number];
+/** Evidence (step 6) ships in Stage 5: until then the step is left out and the card reads "of 5". */
+export const EVIDENCE_ON = false;
+
+export interface SixStep {
+  key: SixKey;
+  /** Its number among the six (1 to 6), kept when a step is left out. */
+  n: number;
+  label: string;
+  /** What it takes, and what it gives back. */
+  takes: string;
+  gives: string;
+  /** About how long it takes. */
+  time: string;
+  /** Its button. */
+  go: string;
+  /** A short note beside it ("Earns credits", "Free on the trial"), or none. */
+  pill?: string;
+  pillKind?: "earn" | "free";
+  done: boolean;
+}
+export interface SixSteps {
+  steps: SixStep[];
+  /** How many are done, of how many are shown. */
+  done: number;
+  of: number;
+  /** The first not done (the card's "Next: …"), or null when every step is. */
+  next: SixStep | null;
+  /** Minutes left, from each step's time. */
+  minutes: number;
+}
+
+/** What the six steps read. Every one is derived from what the member has: nothing new is stored. */
+export interface SixInput {
+  me: Pick<Me, "icp" | "holdersUnlocked" | "companiesUnlocked" | "savedViews" | "started" | "crystal" | "proOpens" | "freeCompany" | "unlocksLeft">;
+  /** Seats the member held (EngagementRec.yours, model.ts mySeats). */
+  seatsHeld: number;
+  /** A seat holder or a person they paid to see (holderSeen, personSeen): a company was open for it. */
+  seen?: boolean;
+  /** Steps done before in this browser stay done (a refund never takes a tick back). */
+  stuck?: Set<string>;
+}
+
+const MIN = { icp: 2, seat: 5, network: 3, open: 1, alert: 1, evidence: 10 } as const;
+
+/** A saved list with an alert on: its weekly email, or (F5) its alert switched on. */
+export const alertOn = (v: { email?: boolean; alert?: { on?: boolean } }) => (v.alert ? !!v.alert.on : !!v.email);
+
+/**
+ * Getting started's six steps (BRIEF "The six steps"), each ticked from the member's own state:
+ * 1 an ideal client on file (Profile.icp), 2 a seat they held, 3 Google or their LinkedIn
+ * connections file brought in (Me.started.network; left out while Your network is off, so it can
+ * never be done), 4 a company opened (a company or a seat holder unlocked, a Crystal Ball open
+ * included), 5 a saved list with its alert on, 6 an evidence case ready (left out until Evidence
+ * ships). Example rows are never counted: nothing here reads a list's rows.
+ */
+export function sixSteps(x: SixInput): SixSteps {
+  const { me } = x;
+  const icpOn = !icpEmpty(me.icp);
+  const opened = (me.holdersUnlocked ?? 0) + (me.companiesUnlocked ?? 0) > 0 || !!x.seen;
+  const free = me.crystal === "all" || (me.proOpens ? me.proOpens.left > 0 : !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE);
+  const stuck = (k: SixKey) => !!x.stuck?.has(`six:${k}`);
+  const all: SixStep[] = [
+    { key: "icp", n: 1, label: "Say who your ideal client is", takes: "The function you sell, the industries and the company sizes.", gives: "Find, Crystal Ball and every list start tuned to these companies.", time: "2 minutes", go: icpOn ? "Change it" : "Set it", done: icpOn },
+    { key: "seat", n: 2, label: "Add the seats you have held", takes: "The company, your role and the dates. The rate and hours if you want to share them.", gives: "1 credit for each fact Merlin does not have, up to 25 a day. Each seat becomes a way in.", time: "5 minutes", go: "Add your seats", pill: "Earns credits", pillKind: "earn", done: x.seatsHeld > 0 },
+    { key: "network", n: 3, label: "Bring in who you know", takes: "Google contacts or your LinkedIn connections file. Merlin reads names and companies, never message text.", gives: "Warm paths: who can get you into which company.", time: "3 minutes", go: "Bring them in", done: !!me.started?.network },
+    { key: "open", n: 4, label: "Open your first company", takes: "One click on a company in your list.", gives: "Its name, its website and who held the seat. It stays open for you.", time: "1 minute", go: "Go to Companies", ...(free ? { pill: me.proOpens ? "Free on your plan" : "Free today", pillKind: "free" as const } : {}), done: opened },
+    { key: "alert", n: 5, label: "Save a list with an alert", takes: "Save a list and keep its email on.", gives: "Merlin watches the list and tells you when a company on it starts hiring.", time: "1 minute", go: "Go to your lists", done: (me.savedViews ?? []).some(alertOn) },
+    { key: "evidence", n: 6, label: "Write your first evidence case", takes: "The problem, what you did, and the numbers before and after. The client name stays hidden unless you show it.", gives: "It fills the Proof part of every proposal you send.", time: "10 minutes", go: "Go to Evidence", done: false },
+  ];
+  const steps = all
+    .filter((s) => (s.key !== "evidence" || EVIDENCE_ON) && (s.key !== "network" || !me.started?.networkOff || s.done))
+    .map((s) => (stuck(s.key) ? { ...s, done: true } : s));
+  const done = steps.filter((s) => s.done).length;
+  const next = steps.find((s) => !s.done) ?? null;
+  return { steps, done, of: steps.length, next, minutes: steps.filter((s) => !s.done).reduce((n, s) => n + MIN[s.key], 0) };
+}
+
+/** The rail card's line: "2 of 5 done". */
+export const sixLine = (s: Pick<SixSteps, "done" | "of">) => `${s.done} of ${s.of} done`;
