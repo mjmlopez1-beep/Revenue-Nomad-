@@ -147,3 +147,13 @@
   .fd-head, .fd-bar, .fd-strip, .fd-saved { padding-left: 16px; padding-right: 16px; }
   .fd-kinds { margin-right: 0; flex-basis: 100%; }
 }
+.fd-likebtn { min-height: 44px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--pine); background: var(--surface); color: var(--pine); font-size: 13px; font-weight: 700; text-align: left; }
+.fd-likebtn[aria-pressed="true"] { background: #e8f3ee; border-color: #b9d9ca; }
+.fd-like { padding: 10px 12px; border-radius: 10px; background: #e8f3ee; border: 1px solid #b9d9ca; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 19px; }
+.fd-like strong { color: var(--ink); }
+.fd-like-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.fd-like .fd-chip:not(.on) { background: var(--surface); }
+.fd-seedpick { display: flex; flex-direction: column; gap: 6px; }
+.fd-seedpick input { height: 40px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line-input); border-radius: 8px; background: var(--surface); font: inherit; font-size: 14px; }
+.fd-seedhits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fd-seedhits .fd-link { padding: 0; text-align: left; }

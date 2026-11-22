@@ -3,8 +3,9 @@
  * an Ask plan to set, or a company to look up. Set just before opening Find, taken once by it.
  */
 import type { AskPlan } from "@/lib/ask";
+import type { FindKind } from "./findModel";
 
-export type FindStart = { plan: AskPlan; text: string } | { lookup: string } | { step: "save" | "filter" };
+export type FindStart = { plan: AskPlan; text: string } | { lookup: string } | { step: "save" | "filter" } | { kind: FindKind };
 let next: FindStart | null = null;
 export const setFindStart = (x: FindStart | null) => {
   next = x;

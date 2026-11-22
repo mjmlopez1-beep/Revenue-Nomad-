@@ -30,15 +30,17 @@ import {
   type CoInfo, type Filters, type Row, type SortKey,
 } from "../model";
 import {
-  HEADS, KIND_LABEL, KIND_TYPE, NOTES, deciderRefs, filterGroups, filtersFromAsk, findRun, fractionalRow, icpLine, insideStats, lookalikeBase, nounOf, previewRow, quickGroups, runCompanies, saveCost,
+  HEADS, KIND_LABEL, KIND_TYPE, NOTES, deciderRefs, filterGroups, filtersFromAsk, findRun, fractionalRow, icpLine, insideStats, nounOf, previewRow, quickGroups, runCompanies, saveCost,
   type FilterValue, type FindKind,
 } from "./findModel";
 import { alertWords, kindOfList, listAct, listsOf } from "./lists";
 import { takeFindStart } from "./start";
+import { defaultSeeds, likeCriteria, profileOf, profileWords, rankLike, seedMatches, traitChips, withoutTrait, type LikeRow } from "./lookalikes";
+import type { LikeTrait } from "../model";
 import "./find.css";
 
-/** The kinds in the switcher. Lookalikes waits for the owner (BUILD_PLAN part 8): add "lookalikes" here to show it. */
-const KINDS: FindKind[] = ["companies", "people", "seats", "roles", "fractionals"];
+/** The kinds in the switcher, Lookalikes last (the owner's "reverse engineer what works into a target account list"). */
+const KINDS: FindKind[] = ["companies", "people", "seats", "roles", "fractionals", "lookalikes"];
 const STRIP_KEY = "rn_strip_find";
 const PREVIEW = 8;
 const BATCH = 60;
@@ -91,6 +93,9 @@ export function Find(p: FindProps) {
   const [sort, setSort] = useState<SortKey>("best");
   const [lookText, setLookText] = useState("");
   const [askText, setAskText] = useState("");
+  // Lookalikes: the seed companies (null: the member's seats) and the traits taken off.
+  const [seeds, setSeeds] = useState<string[] | null>(null);
+  const [traitsOff, setTraitsOff] = useState<LikeTrait[]>([]);
   const [strip, setStrip] = useState(() => {
     try {
       return localStorage.getItem(STRIP_KEY) !== "off";
@@ -104,6 +109,7 @@ export function Find(p: FindProps) {
     if (!s) return;
     if ("plan" in s) applyPlan(s.plan, s.text);
     else if ("lookup" in s) (setLookText(s.lookup), setStep("lookup"));
+    else if ("kind" in s) setKind(s.kind);
     else setStep(s.step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -120,11 +126,18 @@ export function Find(p: FindProps) {
   const sets = { pipeline: !!pipe, wayIn: getIn.off ? ("off" as const) : !!getIn.data };
 
   const directory = useDirectory(kind === "fractionals");
-  const base = useMemo(() => lookalikeBase(infos, me), [infos, me]);
-  const df = useDeferredValue(f);
+  const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
+  const seedIds = useMemo(() => seeds ?? defaultSeeds(infos, me), [seeds, infos, me]);
+  const seedInfos = useMemo(() => seedIds.map((id) => byId.get(id)).filter((i): i is CoInfo => !!i), [seedIds, byId]);
+  const likeAll = useMemo(() => profileOf(seedInfos), [seedInfos]);
+  const like = useMemo(() => traitsOff.reduce((t, k) => withoutTrait(t, k), likeAll), [likeAll, traitsOff]);
+  // The filters the run reads: on Lookalikes, the profile is one of them.
+  const fx = useMemo<Filters>(() => (kind === "lookalikes" ? { ...f, like, icp: false } : f.like.length ? { ...f, like: [] } : f), [kind, f, like]);
+  const df = useDeferredValue(fx);
   const dq = useDeferredValue(q.trim());
-  const run = useMemo(() => (p.waiting ? null : findRun(kind, infos, me, df, dq, sort, base, directory)), [p.waiting, kind, infos, me, df, dq, sort, base, directory, sets.pipeline, sets.wayIn]); // eslint-disable-line react-hooks/exhaustive-deps
-  const groups = useMemo(() => (run ? filterGroups(f, run.facets, me, sets) : []), [run, f, me, sets.pipeline, sets.wayIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  const run = useMemo(() => (p.waiting || (kind === "lookalikes" && !like.length) ? null : findRun(kind, infos, me, df, dq, sort, directory)), [p.waiting, kind, infos, me, df, dq, sort, directory, like.length, sets.pipeline, sets.wayIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ranked = useMemo(() => (kind === "lookalikes" && run ? new Map(rankLike(run.rows.slice(0, 200), like, seedInfos).map((x) => [x.row.key, x])) : null), [kind, run, like, seedInfos]);
+  const groups = useMemo(() => (run ? filterGroups(fx, run.facets, me, sets) : []), [run, fx, me, sets.pipeline, sets.wayIn]); // eslint-disable-line react-hooks/exhaustive-deps
   const quick = useMemo(() => quickGroups(groups, f, me, p.first), [groups, f, me, p.first]);
   const vocab: AskVocab = useMemo(() => ({ myFn: me.function ?? null, hasIcp }), [me.function, hasIcp]);
   const noun = (n: number) => nounOf(kind, n);
@@ -232,6 +245,9 @@ export function Find(p: FindProps) {
               suggestionsLabel={p.first && me.function ? `Three to start with, written for a fractional ${me.function} leader` : "Try one of these"}
               suggestions={examples(me, p.first)}
             />
+            <button type="button" className="fd-likebtn" aria-pressed={kind === "lookalikes"} onClick={() => (setKind("lookalikes"), setStep("filter"))}>
+              Find more like my past clients
+            </button>
           </aside>
         )}
 
@@ -244,7 +260,21 @@ export function Find(p: FindProps) {
                   Clear
                 </button>
               </div>
-              <IcpBox me={me} infos={infos} f={f} setF={setF} first={p.first} onProfile={p.onProfile} />
+              {kind === "lookalikes" ? (
+                <LikePanel
+                  tokens={like}
+                  all={likeAll}
+                  off={traitsOff}
+                  setOff={setTraitsOff}
+                  seeds={seedInfos}
+                  infos={infos}
+                  setSeeds={(ids) => setSeeds(ids)}
+                  isDefault={seeds === null}
+                  onAddSeat={() => ui.openAdd({ mode: "engagement", mine: true })}
+                />
+              ) : (
+                <IcpBox me={me} infos={infos} f={f} setF={setF} first={p.first} onProfile={p.onProfile} />
+              )}
               {quick.map((g) => (
                 <div key={g.name} className="fd-group">
                   <span className="fd-group-h">{g.name.toUpperCase()}</span>
@@ -276,7 +306,7 @@ export function Find(p: FindProps) {
             <SavePane
               key={`${kind}:${found}`}
               kind={kind}
-              f={f}
+              f={fx}
               q={dq}
               sort={sort}
               rows={run.rows}
@@ -311,7 +341,8 @@ export function Find(p: FindProps) {
               </select>
             </label>
           </div>
-          <Preview kind={kind} run={run} me={me} base={base} openCompany={p.openCompany} openFractionals={() => p.openPage("fractionals")} />
+          <Preview kind={kind} run={run} me={me} ranked={ranked} openCompany={p.openCompany} openFractionals={() => p.openPage("fractionals")} />
+          {kind === "lookalikes" && !like.length && <p className="fd-note fd-pad">Pick a past client in the filters column and Merlin lists the companies most like it.</p>}
           {kind === "companies" && run && found > 0 && (
             <div className="fd-inside">
               <span className="fd-inside-h">Inside these {found.toLocaleString("en-US")} companies. Tap one to narrow the list.</span>
@@ -606,7 +637,7 @@ function SavePane(p: {
   const type = KIND_TYPE[p.kind];
   const tab = p.kind === "roles" ? "hiring" : "all";
   const fnOne = p.f.fn.length === 1 ? p.f.fn[0] : null;
-  const [name, setName] = useState(() => (p.first && p.kind === "companies" && p.f.icp ? `${icpLabel(me.icp)}`.slice(0, 100) || "Your ideal client" : viewName(p.f, tab, type, null, me.function ?? null)));
+  const [name, setName] = useState(() => (p.kind === "lookalikes" ? "Like your past clients" : p.first && p.kind === "companies" && p.f.icp ? `${icpLabel(me.icp)}`.slice(0, 100) || "Your ideal client" : viewName(p.f, tab, type, null, me.function ?? null)));
   const [many, setMany] = useState<"all" | "25">(p.n > 25 ? "25" : "all");
   const [adds, setAdds] = useState<{ names: boolean; dm: boolean }>({ names: false, dm: false });
   const [alert, setAlert] = useState(true);
@@ -621,7 +652,7 @@ function SavePane(p: {
     setBusy(true);
     const f = withIcpSpelled(p.f, me.icp);
     const place = absolutePlace({ t: type, v: tab, s: p.sort, f, q: p.q });
-    const criteria = criteriaOf(f, fnOne);
+    const criteria = f.like.length ? { ...criteriaOf({ ...f, like: [] }, fnOne), ...likeCriteria(f.like) } : criteriaOf(f, fnOne);
     const kind = p.kind === "lookalikes" ? "companies" : p.kind;
     const r = await p.act(listAct({ op: "save", name: name.trim(), place, criteria, email: alert, list: { kind, alert: { on: alert, email: alert, slack: alert } } }));
     if (!r.ok) {
@@ -828,9 +859,9 @@ const ini = (s: string) =>
     .slice(0, 2)
     .toUpperCase();
 
-function Preview({ kind, run, me, base, openCompany, openFractionals }: { kind: FindKind; run: ReturnType<typeof findRun> | null; me: Me; base: ReturnType<typeof lookalikeBase>; openCompany: (id: string) => void; openFractionals: () => void }) {
+function Preview({ kind, run, me, ranked, openCompany, openFractionals }: { kind: FindKind; run: ReturnType<typeof findRun> | null; me: Me; ranked: Map<string, LikeRow> | null; openCompany: (id: string) => void; openFractionals: () => void }) {
   const head = HEADS[kind];
-  const rows = !run ? [] : kind === "fractionals" ? (run.fractionals ?? []).slice(0, PREVIEW).map(fractionalRow) : run.rows.slice(0, PREVIEW).map((r) => previewRow(kind, r, me, base));
+  const rows = !run ? [] : kind === "fractionals" ? (run.fractionals ?? []).slice(0, PREVIEW).map(fractionalRow) : run.rows.slice(0, PREVIEW).map((r) => previewRow(kind, r, me, ranked?.get(r.key) ?? null));
   return (
     <div className="fd-grid-wrap">
       <div className="fd-grid" role="table" aria-label="Preview">
@@ -842,7 +873,7 @@ function Preview({ kind, run, me, base, openCompany, openFractionals }: { kind: 
             </span>
           ))}
         </div>
-        {!run &&
+        {!run && kind !== "lookalikes" &&
           Array.from({ length: 5 }, (_, k) => (
             <div key={k} role="row" className="fd-grow-r" aria-hidden>
               <span className="td-skel" style={{ width: 14 }} />
@@ -887,6 +918,108 @@ function Preview({ kind, run, me, base, openCompany, openFractionals }: { kind: 
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ---------- lookalikes: the seeds and the profile built from them ---------- */
+
+function LikePanel({
+  tokens,
+  all,
+  off,
+  setOff,
+  seeds,
+  infos,
+  setSeeds,
+  isDefault,
+  onAddSeat,
+}: {
+  tokens: string[];
+  all: string[];
+  off: LikeTrait[];
+  setOff: (x: LikeTrait[]) => void;
+  seeds: CoInfo[];
+  infos: CoInfo[];
+  setSeeds: (ids: string[]) => void;
+  isDefault: boolean;
+  onAddSeat: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [picking, setPicking] = useState(false);
+  const skip = new Set(seeds.map((s) => s.c.id));
+  const hits = seedMatches(infos, text, skip);
+  const ids = seeds.map((s) => s.c.id);
+  const chips = traitChips(tokens);
+  const offChips = traitChips(all).filter((c) => off.includes(c.k));
+  const picker = (
+    <div className="fd-seedpick">
+      <label htmlFor="fd-seed" className="fd-lab">
+        Add a company you can see
+      </label>
+      <input id="fd-seed" type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="A client's name, like Cedar and Pine" />
+      {hits.length > 0 && (
+        <ul className="fd-seedhits">
+          {hits.map((i) => (
+            <li key={i.c.id}>
+              <button type="button" className="fd-link" onClick={() => (setSeeds([...ids, i.c.id]), setText(""))}>
+                Add {i.c.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {text.trim().length >= 2 && !hits.length && <span className="fd-note">No company you have open by that name. Open it first, or look it up by its full name.</span>}
+    </div>
+  );
+  if (!seeds.length)
+    return (
+      <div className="fd-like">
+        <strong>Lookalikes start from your past clients.</strong>
+        <span className="fd-note">You have no seats on Merlin yet, so there is nothing to match against. Add a seat you have held, or pick companies you have won, and Merlin lists the companies most like them.</span>
+        <div className="fd-like-acts">
+          <button type="button" className="fd-volt fd-sm" onClick={onAddSeat}>
+            Add a seat you&apos;ve held
+          </button>
+          <button type="button" className="fd-outline fd-sm" aria-expanded={picking} onClick={() => setPicking(!picking)}>
+            Pick companies you&apos;ve won
+          </button>
+        </div>
+        {picking && picker}
+      </div>
+    );
+  return (
+    <div className="fd-like">
+      <span className="fd-like-words">
+        <strong>{profileWords(tokens).replace(/:.*$/, "")}.</strong> Each match shares at least 3 of these. Take one off to widen it.
+      </span>
+      <div className="fd-chips" aria-label="The profile">
+        {chips.map((c) => (
+          <button key={c.k} type="button" className="fd-chip on fd-chip-x" aria-label={`Take off: ${c.label}`} onClick={() => setOff([...off, c.k])}>
+            <span>{c.label}</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        ))}
+        {offChips.map((c) => (
+          <button key={c.k} type="button" className="fd-chip" onClick={() => setOff(off.filter((k) => k !== c.k))}>
+            Put back: {c.label}
+          </button>
+        ))}
+      </div>
+      <span className="fd-lab">{isDefault ? "From your seats" : "Your past clients"}</span>
+      <div className="fd-chips">
+        {seeds.map((s) => (
+          <button key={s.c.id} type="button" className="fd-chip fd-chip-x" aria-label={`Leave out ${s.c.hidden ? "this company" : s.c.name}`} onClick={() => setSeeds(ids.filter((x) => x !== s.c.id))}>
+            <span>{s.c.hidden ? "A company you held a seat at" : s.c.name}</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        ))}
+      </div>
+      {picker}
     </div>
   );
 }

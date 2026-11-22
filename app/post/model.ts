@@ -653,6 +653,13 @@ export interface Filters {
   inPipeline: boolean;
   /** The member has a way in (setFilterSets: Where you can get in's companies, RN_GOOGLE). */
   wayIn: boolean;
+  /**
+   * Lookalikes: a profile built from seed companies (the member's past clients), as trait tokens
+   * (find/lookalikes.ts): "i:SaaS", "e:51–200", "r:$5M–$20M", "g:Texas", "f:Sales", "rep", the seeds
+   * themselves "x:<company id>" (never listed) and "min:3", how many traits a company must share.
+   * Read from the row alone, so the table and a saved list list the same companies.
+   */
+  like: string[];
 }
 
 export const EMPTY_FILTERS: Filters = {
@@ -693,7 +700,55 @@ export const EMPTY_FILTERS: Filters = {
   opened: false,
   inPipeline: false,
   wayIn: false,
+  like: [],
 };
+
+/* ---------- lookalikes: how many of a profile's traits a company shares ---------- */
+
+export type LikeTrait = "industry" | "employees" | "revenue" | "region" | "fns" | "repeat";
+export const LIKE_TRAITS: LikeTrait[] = ["industry", "revenue", "employees", "region", "fns", "repeat"];
+const LIKE_PREFIX: Record<string, LikeTrait> = { i: "industry", e: "employees", r: "revenue", g: "region", f: "fns" };
+/** A profile's tokens read back: the values of each trait, the seeds, and the traits a company must share. */
+export function likeParts(tokens: readonly string[]) {
+  const vals: Record<LikeTrait, Set<string>> = { industry: new Set(), employees: new Set(), revenue: new Set(), region: new Set(), fns: new Set(), repeat: new Set() };
+  const seeds = new Set<string>();
+  let min = 0;
+  for (const t of tokens) {
+    if (t === "rep") vals.repeat.add("yes");
+    else if (t.startsWith("x:")) seeds.add(t.slice(2));
+    else if (t.startsWith("min:")) min = Math.max(0, Math.round(Number(t.slice(4)) || 0));
+    else {
+      const at = t.indexOf(":");
+      const k = at > 0 ? LIKE_PREFIX[t.slice(0, at)] : undefined;
+      if (k) vals[k].add(t.slice(at + 1));
+    }
+  }
+  const traits = LIKE_TRAITS.filter((k) => vals[k].size > 0);
+  return { vals, seeds, traits, min: Math.min(traits.length, min || Math.min(3, traits.length)) };
+}
+/** The traits a row shares with the profile, in LIKE_TRAITS order. */
+export function likeShared(parts: ReturnType<typeof likeParts>, r: Row): LikeTrait[] {
+  const c = r.i.c;
+  const out: LikeTrait[] = [];
+  for (const k of parts.traits) {
+    const v = parts.vals[k];
+    const hit =
+      k === "industry" ? v.has(shown(c.cells.industry) ?? "") :
+      k === "employees" ? v.has(shown(c.cells.employees) ?? "") :
+      k === "revenue" ? v.has(shown(c.cells.revenue) ?? "") :
+      k === "region" ? v.has(regionOf(c) ?? "") :
+      k === "fns" ? r.i.fnState.hired.some((f) => v.has(f)) :
+      repeatHirer(r.i);
+    if (hit) out.push(k);
+  }
+  return out;
+}
+/** A company like the profile: not a seed, not in the member's pipeline, sharing at least `min` traits. */
+export function likeTest(tokens: readonly string[]): (r: Row) => boolean {
+  const parts = likeParts(tokens);
+  if (!parts.traits.length) return () => false;
+  return (r) => !parts.seeds.has(r.i.c.id) && !memberSets.pipeline?.has(r.i.c.id) && likeShared(parts, r).length >= parts.min;
+}
 
 /* ---------- Find's signals: what the member's own data and the company's news say ---------- */
 
@@ -1169,6 +1224,7 @@ function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   if (f.fitMin > 0) out.push({ group: "fitMin", test: (r) => r.i.c.friendly.score >= f.fitMin });
   for (const k of SIGNAL_KEYS) if (f[k]) out.push({ group: k, test: signalTest(k) });
   if (f.endedWithin > 0) out.push({ group: "endedWithin", test: endedTest(f.endedWithin, f.fn) });
+  if (f.like.length) out.push({ group: "like", test: likeTest(f.like) });
   // Recently hired: a hire in the functions picked, inside the window (lib/hired.ts).
   if (hiredOn(f)) {
     const now = Date.now();
@@ -1340,6 +1396,7 @@ export function activeCount(f: Filters): number {
   if (hiredOn(f)) n++;
   for (const k of SIGNAL_KEYS) if (f[k]) n++;
   if (f.endedWithin > 0) n++;
+  if (f.like.length) n++;
   return n;
 }
 
@@ -1373,6 +1430,7 @@ export function activeChips(f: Filters): { id: string; label: string; clear: (f:
   if (f.fitMin) out.push({ id: "fit", label: `Fit ${f.fitMin}+`, clear: (x) => ({ ...x, fitMin: 0 }) });
   // Find's keys: a list saved there shows them in the table as chips that clear.
   if (f.endedWithin > 0) out.push({ id: "endedWithin", label: endedLabel(f.endedWithin), clear: (x) => ({ ...x, endedWithin: 0 }) });
+  if (f.like.length) out.push({ id: "like", label: "Like your past clients", clear: (x) => ({ ...x, like: [] }) });
   for (const k of SIGNAL_KEYS) if (f[k]) out.push({ id: k, label: SIGNAL_LABEL[k], clear: (x) => ({ ...x, [k]: false }) });
   return out;
 }

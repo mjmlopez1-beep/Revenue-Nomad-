@@ -150,6 +150,8 @@ export interface Home2Props extends HomeProps {
   onAsk: (plan: AskPlan, text: string) => void;
   /** Find, and the pages the quick starts open. */
   openFind: () => void;
+  /** Find on Lookalikes: companies like the member's past clients. */
+  openLookalikes: () => void;
   openPage: (p: "rates" | "fractionals" | "pipeline" | "proposals" | "network" | "getin" | "integrations" | "messages") => void;
   /** Open a list in the table (a saved view, or a starter that isn't saved yet). */
   openList: (v: SavedViewRec) => void;
@@ -270,6 +272,9 @@ export function Home2(p: Home2Props) {
           onGo={p.onAsk}
           suggestions={askSuggestions(me, first)}
         />
+        <button type="button" className="h2-likebtn" onClick={p.openLookalikes}>
+          Find more like my past clients
+        </button>
       </section>
 
       {!first && (
@@ -524,7 +529,7 @@ function Lists(p: Home2Props) {
   const [busy, setBusy] = useState<string | null>(null);
   useEffect(() => setFavs(readFavs()), []);
   const saved = listsOf(me);
-  const starters = useMemo(() => starterLists(me), [me]);
+  const starters = useMemo(() => starterLists(me, p.waiting ? null : p.infos), [me, p.waiting, p.infos]);
   const counts = useMemo(() => new Map(p.views.map((v) => [v.v.id, v])), [p.views]);
   const fills = useMemo(() => {
     const m = new Map<string, number | null>();

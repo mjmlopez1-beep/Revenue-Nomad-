@@ -8,15 +8,16 @@
  * allows it: "same industry and size band as companies where you held a seat", counted from the
  * table, and shown only once the member has such a seat.
  */
-import type { CompanyRec, FractionalRec, Me } from "@/lib/tableTypes";
+import type { FractionalRec, Me } from "@/lib/tableTypes";
 import { COMPANY_PRICE } from "@/lib/tableFields";
 import {
   EMPTY_FILTERS, ENDED_WINDOWS, FIT_STEPS, LIST_OPTIONS, SIGNAL_LABEL, TOGGLE_LABEL, applyFilters, endedLabel, endedTest, icpEmpty, icpMatch, isOpenRole, known, listedDays,
-  mySeats, notMineLabel, rowsFor, shown, signalTest, sortRows, sortsFor,
+  notMineLabel, rowsFor, shown, signalTest, sortRows, sortsFor,
   type CoInfo, type Facets, type Filters, type ListKey, type RecordType, type Row, type SignalKey, type SortKey, type ToggleKey,
 } from "../model";
 import type { AskFilters, AskKind } from "@/lib/ask";
 import { HIRED_WINDOWS } from "@/lib/hired";
+import { rankLike } from "./lookalikes";
 
 export type FindKind = AskKind | "lookalikes";
 export const KIND_LABEL: Record<FindKind, string> = { companies: "Companies", people: "People", seats: "Seats", roles: "Open roles", fractionals: "Fractionals", lookalikes: "Lookalikes" };
@@ -32,33 +33,6 @@ export const KIND_NOUN: Record<FindKind, [string, string]> = {
 export const KIND_TYPE: Record<FindKind, RecordType> = { companies: "companies", people: "people", seats: "engagements", roles: "engagements", fractionals: "companies", lookalikes: "companies" };
 export const nounOf = (k: FindKind, n: number) => `${n.toLocaleString("en-US")} ${KIND_NOUN[k][n === 1 ? 0 : 1]}`;
 
-/* ---------- lookalikes: same industry and size band as a company where the member held a seat ---------- */
-
-export interface LookalikeBase {
-  /** The member's own seat companies (named: they held a seat there), with the industry and size band read. */
-  from: { id: string; name: string; industry: string; employees: string }[];
-}
-export function lookalikeBase(infos: CoInfo[], me: Me): LookalikeBase {
-  const seen = new Set<string>();
-  const from: LookalikeBase["from"] = [];
-  for (const s of mySeats(infos, me)) {
-    const c = s.i.c;
-    const industry = shown(c.cells.industry);
-    const employees = shown(c.cells.employees);
-    if (!industry || !employees || seen.has(c.id)) continue;
-    seen.add(c.id);
-    from.push({ id: c.id, name: c.hidden ? "" : c.name, industry, employees });
-  }
-  return { from };
-}
-/** The seat company a company looks like, or null. Never the member's own seat company. */
-export function lookalikeOf(base: LookalikeBase, c: CompanyRec): LookalikeBase["from"][number] | null {
-  if (base.from.some((f) => f.id === c.id)) return null;
-  const ind = shown(c.cells.industry);
-  const emp = shown(c.cells.employees);
-  return base.from.find((f) => f.industry === ind && f.employees === emp) ?? null;
-}
-
 /* ---------- the rows a kind lists ---------- */
 
 export interface KindRows {
@@ -68,10 +42,10 @@ export interface KindRows {
 }
 
 /** Every row of a kind before filters (the filters apply to these). */
-export function baseRows(kind: FindKind, infos: CoInfo[], base: LookalikeBase): Row[] {
+export function baseRows(kind: FindKind, infos: CoInfo[]): Row[] {
   if (kind === "seats") return rowsFor("engagements", infos).filter((r) => !!r.e && !isOpenRole(r.e));
   if (kind === "roles") return rowsFor("engagements", infos).filter((r) => !!r.e && isOpenRole(r.e));
-  if (kind === "lookalikes") return rowsFor("companies", infos).filter((r) => !!lookalikeOf(base, r.i.c));
+  // Lookalikes are companies: the profile is a filter (Filters.like), so a saved list lists them too.
   return rowsFor(KIND_TYPE[kind], infos);
 }
 
@@ -298,10 +272,11 @@ export interface FindResult {
   n: number;
 }
 
-export function findRun(kind: FindKind, infos: CoInfo[], me: Me, f: Filters, q: string, sort: SortKey, base: LookalikeBase, directory: FractionalRec[] | null): FindResult {
-  const all = baseRows(kind, infos, base);
+export function findRun(kind: FindKind, infos: CoInfo[], me: Me, f: Filters, q: string, sort: SortKey, directory: FractionalRec[] | null): FindResult {
+  const all = baseRows(kind, infos);
   const { rows, facets } = applyFilters(all, f, "all", q, me);
-  const sorted = sortRows(rows, sortsFor(KIND_TYPE[kind]).some((s) => s.key === sort) ? sort : "best", false, q, { me });
+  // Lookalikes on Best fit: the most traits shared first.
+  const sorted = kind === "lookalikes" && sort === "best" && !q ? rankLike(rows, f.like).map((x) => x.row) : sortRows(rows, sortsFor(KIND_TYPE[kind]).some((s) => s.key === sort) ? sort : "best", false, q, { me });
   if (kind === "fractionals") {
     const fr = directory ? fractionalsAt(directory, rows) : null;
     return { rows: sorted, facets, fractionals: fr, n: fr?.length ?? 0 };
@@ -372,7 +347,7 @@ export interface PreviewRow {
 /** What opening a locked company costs this member now: free on the trial and Pro while free opens are left, else 2 credits. */
 export const openWord = (me: Me) => (me.proOpens && me.proOpens.left > 0 ? "Free" : `${COMPANY_PRICE} credits`);
 
-export function previewRow(kind: FindKind, r: Row, me: Me, base: LookalikeBase): PreviewRow {
+export function previewRow(kind: FindKind, r: Row, me: Me, like?: { why: string; like: string | null } | null): PreviewRow {
   const co = coLine(r.i);
   const price = openWord(me);
   const fnOf = (e: { cells: Record<string, { s: string; v?: string }> }) => shown(e.cells.function as never) ?? "";
@@ -441,8 +416,7 @@ export function previewRow(kind: FindKind, r: Row, me: Me, base: LookalikeBase):
   const seat = latest ? [lfn ? `${lfn} seat` : "A seat", lstatus === "Ended" ? `ended${shown(latest.cells.end) ? ` ${monthWords(shown(latest.cells.end))}` : ""}` : shown(latest.cells.start) ? `since ${yearOf(shown(latest.cells.start))}` : ""].filter(Boolean).join(" · ") : "No seat on file";
   const sig = r.i.c.friendly.open > 0 ? "Hiring now" : endedTest(3, [])(r) ? "Seat ended" : signalTest("newLeader")(r) ? "New leader" : null;
   if (kind === "lookalikes") {
-    const like = lookalikeOf(base, r.i.c);
-    return { key: r.key, companyId: r.i.c.id, open: co.open, name: co.name, sub: co.facts, pill: co.open ? null : price, c2: like?.name || "A company where you held a seat", c3: "Same industry and size", c3muted: false, sig };
+    return { key: r.key, companyId: r.i.c.id, open: co.open, name: co.name, sub: co.facts, pill: co.open ? null : price, c2: like?.like || "Your past clients", c3: like?.why || "", c3muted: false, sig };
   }
   return { key: r.key, companyId: r.i.c.id, open: co.open, name: co.name, sub: co.facts, pill: co.open ? null : price, c2: seat, c3: r.i.fnState.hired.join(", ") || "None on file yet", c3muted: !r.i.fnState.hired.length, sig };
 }
@@ -481,7 +455,7 @@ export const NOTES: Record<FindKind, (first: boolean) => string> = {
   seats: () => "Function, dates and hours are free. Who held a seat opens with the company. A rate is 1 credit where a member shared one.",
   roles: () => "Titles and dates are free. The job posting, with its rate and hours when they were posted, opens with the company.",
   fractionals: () => "Fellow fractionals are free to see on every plan. These are the ones who held seats at companies that match your filters.",
-  lookalikes: () => "Same industry and size band as a company where you held a seat. Add more of your seats and Merlin matches against those too.",
+  lookalikes: () => "Companies that share at least 3 traits with your past clients, never one of them and never one already in your pipeline. Names stay hidden until you open one.",
 };
 
 /* ---------- the save step ---------- */

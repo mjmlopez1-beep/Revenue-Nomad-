@@ -109,5 +109,5 @@ export function Try2({
         onProfile={onProfile}
       />
     );
-  return <Home2 {...home} six={six} first={first} onAsk={onAsk} openFind={() => setWhich("find2")} openPage={(p) => go(p)} openList={(v) => (setWhich(null), openView(v))} />;
+  return <Home2 {...home} six={six} first={first} onAsk={onAsk} openFind={() => setWhich("find2")} openLookalikes={() => (setFindStart({ kind: "lookalikes" }), setWhich("find2"))} openPage={(p) => go(p)} openList={(v) => (setWhich(null), openView(v))} />;
 }

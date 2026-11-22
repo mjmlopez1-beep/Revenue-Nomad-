@@ -7,7 +7,8 @@
 import type { Action, Me, SavedViewCriteria, SavedViewRec } from "@/lib/tableTypes";
 import { listOf, placeKey, type SavedListRec } from "@/lib/hunt";
 import { LIST_KIND_LABEL, type ListAlert, type ListKind } from "@/lib/mcp/alerts";
-import { EMPTY_FILTERS, absolutePlace, criteriaOf, icpEmpty, icpLabel, namedFn, withIcpSpelled, type Filters, type RecordType, type SortKey, type Tab } from "../model";
+import { EMPTY_FILTERS, absolutePlace, criteriaOf, icpEmpty, icpLabel, namedFn, withIcpSpelled, type CoInfo, type Filters, type RecordType, type SortKey, type Tab } from "../model";
+import { likeCriteria, lookalikesFor } from "./lookalikes";
 
 export type { SavedListRec };
 
@@ -56,14 +57,15 @@ const place = (t: RecordType, v: Tab, s: SortKey | null, f: Filters) => absolute
  * "Made for you": three lists from the ideal client the member gave (Home's first visit). Each is
  * left out once the member saved it, or one that opens the same rows. None without an ideal client.
  */
-export function starterLists(me: Me, now = new Date().toISOString()): StarterList[] {
-  if (icpEmpty(me.icp)) return [];
+export function starterLists(me: Me, infos: CoInfo[] | null = null, now = new Date().toISOString()): StarterList[] {
   const fn = namedFn(me.function ?? null);
   const icpF = withIcpSpelled({ ...EMPTY_FILTERS, icp: true }, me.icp);
-  const out: { key: string; name: string; kind: ListKind; t: RecordType; v: Tab; s: SortKey | null; f: Filters }[] = [
-    { key: "icp", name: "Your ideal client", kind: "companies", t: "companies", v: "all", s: "best", f: icpF },
-  ];
-  if (fn) {
+  const out: { key: string; name: string; kind: ListKind; t: RecordType; v: Tab; s: SortKey | null; f: Filters }[] = [];
+  if (!icpEmpty(me.icp)) out.push({ key: "icp", name: "Your ideal client", kind: "companies", t: "companies", v: "all", s: "best", f: icpF });
+  // Like your past clients: once the member has a seat with something on file to match.
+  const like = infos ? lookalikesFor(infos, me) : null;
+  if (like && like.tokens.some((t) => !t.startsWith("x:"))) out.push({ key: "like", name: "Like your past clients", kind: "companies", t: "companies", v: "all", s: "best", f: { ...EMPTY_FILTERS, like: like.tokens } });
+  if (fn && !icpEmpty(me.icp)) {
     out.push({ key: "roles", name: `Open ${fn} roles at your kind of company`, kind: "roles", t: "engagements", v: "hiring", s: null, f: { ...icpF, fn: [fn] } });
     out.push({ key: "ended", name: `${fn} seats that ended in the last 90 days`, kind: "seats", t: "engagements", v: "all", s: null, f: { ...EMPTY_FILTERS, fn: [fn], endedWithin: 3 } });
   }
@@ -71,7 +73,7 @@ export function starterLists(me: Me, now = new Date().toISOString()): StarterLis
   return out
     .map((x) => {
       const p = place(x.t, x.v, x.s, x.f);
-      const criteria = criteriaOf(x.f, null);
+      const criteria = x.f.like.length ? { ...criteriaOf({ ...x.f, like: [] }, null), ...likeCriteria(x.f.like) } : criteriaOf(x.f, null);
       return { key: x.key, name: x.name, kind: x.kind, place: p, criteria, asView: { id: `starter:${x.key}`, name: x.name, place: p, criteria, email: false, createdAt: now } };
     })
     .filter((x) => !have.has(placeKey(x.place)));

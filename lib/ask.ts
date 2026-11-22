@@ -33,7 +33,7 @@ import { COUNTRIES_FIRST, REGIONS } from "./geo";
 export const ASK_PAGES = ["find", "hiring", "radar", "rates", "credits", "warm", "lookup", "proposals", "pipeline"] as const;
 export type AskPage = (typeof ASK_PAGES)[number];
 /** What Find lists (its kind switcher). */
-export const ASK_KINDS = ["companies", "people", "seats", "roles", "fractionals"] as const;
+export const ASK_KINDS = ["companies", "people", "seats", "roles", "fractionals", "lookalikes"] as const;
 export type AskKind = (typeof ASK_KINDS)[number];
 /** The table's sorts (app/post/model.ts SortKey) Ask can set. */
 export const ASK_SORTS = ["best", "fit", "newest", "hired", "employees", "revenue", "name"] as const;
@@ -480,7 +480,7 @@ function readRules(text: string, vocab: AskVocab): AskRaw {
   take(toks, ["i follow", "you follow", "following", "followed", "that i follow"].map(P), () => (f.followed = true));
   take(toks, ["i opened", "i have opened", "ive opened", "opened", "unlocked", "i unlocked"].map(P), () => (f.opened = true));
   take(toks, ["in my pipeline", "in the pipeline", "in pipeline", "on my pipeline"].map(P), () => (f.inPipeline = true));
-  take(toks, ["my ideal client", "my ideal clients", "ideal client", "fit my ideal client", "fits my ideal client", "my kind of company", "my kind of companies", "my market", "my profile", "fit me", "like my clients"].map(P), () => (f.icp = true));
+  take(toks, ["my ideal client", "my ideal clients", "ideal client", "fit my ideal client", "fits my ideal client", "my kind of company", "my kind of companies", "my market", "my profile", "fit me"].map(P), () => (f.icp = true));
   take(toks, ["hired a fractional", "hired fractional", "had a fractional", "have a fractional", "has a fractional", "used a fractional", "brought in a fractional", "hired a", "hired"].map(P), () => (hired = true));
   take(toks, ["rate on file", "with a rate", "rates on file", "posted rate"].map(P), () => (f.rateKnown = true));
   take(toks, ["email on file", "with an email", "with emails", "emails"].map(P), () => cols.push("email"));
@@ -492,6 +492,8 @@ function readRules(text: string, vocab: AskVocab): AskRaw {
   take(toks, ["who held the seat", "who held it", "seat holder", "seat holders"].map(P), () => cols.push("holder"));
 
   // 4. List words: what to list, sorts, functions, industries, places, motions.
+  // Lookalikes: built from the member's past clients in Find (find/lookalikes.ts), never from a name typed here.
+  take(toks, ["like my past clients", "like my clients", "like my past client", "lookalikes", "lookalike", "lookalike companies", "similar to my clients", "similar to my past clients", "like the ones i worked at", "like the companies i worked at", "more like my past clients"].map(P), () => (kind = "lookalikes"));
   take(toks, ["fractionals", "other fractionals", "fellow fractionals", "fractional peers", "peers"].map(P), () => (kind ??= "fractionals"));
   take(toks, ["people", "contacts", "persons"].map(P), () => (kind ??= "people"));
   take(toks, ["seats", "past seats", "engagements"].map(P), () => (kind ??= "seats"));
@@ -577,7 +579,7 @@ const BOOL_LABEL: Record<(typeof BOOL_KEYS)[number], (v: AskVocab) => string> = 
 };
 const SORT_LABEL: Record<AskSort, string> = { best: "Best fit for you", fit: "Most fractional friendly", newest: "Newest first", hired: "Most recent hire", employees: "Most employees", revenue: "Most revenue", name: "Company name" };
 const COL_LABEL: Record<AskCol, string> = { wayIn: "Your way in", decisionMaker: "Decision makers", email: "Work email", rate: "Rate paid", holder: "Who held the seat" };
-const KIND_LABEL: Record<AskKind, string> = { companies: "Companies", people: "People", seats: "Seats", roles: "Open roles", fractionals: "Fractionals" };
+const KIND_LABEL: Record<AskKind, string> = { companies: "Companies", people: "People", seats: "Seats", roles: "Open roles", fractionals: "Fractionals", lookalikes: "Lookalikes" };
 const PAGE_LABEL: Record<AskPage, string> = { find: "Find", hiring: "Hiring now", radar: "Crystal Ball", rates: "Rate benchmarks", credits: "Credits and usage", warm: "Warm paths", lookup: "Look up a company", proposals: "Proposals", pipeline: "Your pipeline" };
 
 /** "$5M–$20M" and "$20M–$50M" read as "$5M to $50M"; one band as itself. */

@@ -121,3 +121,4 @@
   .h2-lrow > span:nth-child(5), .h2-lrow > span:nth-child(6), .h2-lrow > span:nth-child(8) { display: none; }
   .h2-lrow > span:nth-child(7) { grid-area: alert; }
 }
+.h2-likebtn { align-self: flex-start; margin-top: 10px; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--pine); background: var(--surface); color: var(--pine); font-size: 14px; font-weight: 700; }
