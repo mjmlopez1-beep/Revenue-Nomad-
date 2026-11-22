@@ -313,6 +313,8 @@ async function main() {
   const deal1 = (await pipe0.pipelineViewFor(SAM))!.entries.find((x) => x.company === pub("c_halcyon"))!;
   check("the first step's message went out: To reach out moves to Sent, its first send (no follow-up counted), a follow-up due", deal1.stage === "sent" && !!deal1.dates.sent && !!deal1.dates.reach && deal1.follow === 0 && !!deal1.due && deal1.route === true && deal1.next !== "Take the first step of your route", deal1);
   check("still one deal at the company", (await pipe0.pipelineViewFor(SAM))!.entries.filter((x) => x.company === pub("c_halcyon")).length === 1);
+  const hl = ((await W.planLines(SAM)) as { plans: import("../lib/paths/types.ts").PlanLine[] }).plans.find((x) => x.company === pub("c_halcyon"));
+  check("the route line's next step keeps a name's capital: Next: Casey introduces you to Rita", hl?.next === "Next: Casey introduces you to Rita", hl?.next);
   const stale = await act("c_halcyon", { do: "step", step: 1, answer: "sent" }).catch((e: Error) => e.message);
   check("the same answer again (a second tab) is refused", typeof stale === "string" && /moved on/.test(stale), stale);
   const s2 = await act("c_halcyon", { do: "step", step: 2, answer: "noreply" });

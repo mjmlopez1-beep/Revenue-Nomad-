@@ -114,6 +114,8 @@ function cxOf(seed: Seed, s: State, m: Member, nowMs: number): Cx {
 
 const firstOf = (name: string) => name.trim().split(/\s+/)[0] || name;
 const lc = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
+/** A step's title after "Next: ": a verb or "their ..." goes lower case ("Next: ask Casey for an intro"), a name keeps its capital ("Next: Casey introduces you to Rita"). */
+const lcStep = (x: string) => (/^(Ask|Send|Meet|Write|Their|Whoever|You)\b/.test(x) ? lc(x) : x);
 const companyLabel = (cx: Cx, id: string) => (cx.f.me.visible(id) ? (cx.g.companies.get(id)?.name ?? null) : null);
 
 /** Names from public profiles show only at a company in the United States, and never in California. */
@@ -994,7 +996,7 @@ export function planLinesOf(seed: Seed, s: State, m: Member, nowMs = Date.now())
           : st?.detail ?? "",
       nudgeDue: v.nudgeDue,
       since: v.done ? `All ${p.steps} steps done` : `Step ${Math.min(p.step, p.steps)} of ${p.steps}${waiting ? ` · waiting on ${whoNow} since ${since}` : ""}`,
-      next: v.done ? "Next: the proposal" : waiting ? (nudgeOn ? `Next: nudge ${whoNow}, ${nudgeOn}` : `Next: ${lc(st.title)}`) : `Next: ${lc(st?.title ?? r.title)}`,
+      next: v.done ? "Next: the proposal" : waiting ? (nudgeOn ? `Next: nudge ${whoNow}, ${nudgeOn}` : `Next: ${lcStep(st.title)}`) : `Next: ${lcStep(st?.title ?? r.title)}`,
       marks,
       now: v.done ? null : st ?? null,
       updatedAt: p.log[p.log.length - 1]?.at ?? p.at,
