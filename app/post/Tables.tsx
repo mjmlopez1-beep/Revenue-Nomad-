@@ -359,10 +359,11 @@ function CompanyName({ i, following, tagged = true, quiet }: { i: CoInfo; follow
   );
 }
 
-/** Nothing to show and nothing to add here. */
-const None = ({ title }: { title?: string }) => (
+/** Nothing to show and nothing to add here: a dash to see, "No value" (or `label`) to hear. */
+const None = ({ title, label = "No value" }: { title?: string; label?: string }) => (
   <span className="tp-none" title={title}>
-    –
+    <span aria-hidden>–</span>
+    <span className="sr-only">{label}</span>
   </span>
 );
 const NOT_YET = "This role is still open, so it has no start or end yet.";
@@ -410,7 +411,7 @@ function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: 
 function PeopleCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
   if (!i.people.length) {
-    if (i.c.hidden) return <None title="Unlock the company first, then you can add who hired here." />;
+    if (i.c.hidden) return <None title="Unlock the company first, then you can add who hired here." label="Locked" />;
     return <AddPill label="Add a person" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "person" })} />;
   }
   const dm = i.people.find(({ p }) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Decision maker") ?? i.people[0];
@@ -452,7 +453,7 @@ const rowProps = (r: Row, sel: boolean, onOpen: (r: Row) => void) => ({
  * have it yet. Its role, on a seat whose holder is on file, opens with who held it (one lock each, one purchase).
  */
 function engCell(i: CoInfo, e: EngagementRec, field: string, opts: { render?: (v: string) => ReactNode; addLabel?: string } = {}) {
-  if (NOT_YET_ON_OPEN_ROLE.includes(field) && isUnheldOpenRole(e) && e.cells[field]?.s === "empty") return <None title={NOT_YET} />;
+  if (NOT_YET_ON_OPEN_ROLE.includes(field) && isUnheldOpenRole(e) && e.cells[field]?.s === "empty") return <None title={NOT_YET} label="Not yet, the role is still open" />;
   return <RowFact t={{ entity: "engagement", id: e.id, field }} cell={e.cells[field]} cover={coverOf(i, e, field)} noun={seatNoun(e, field)} what={seatWhat(e, field)} {...opts} />;
 }
 

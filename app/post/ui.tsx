@@ -613,14 +613,16 @@ export function FactCell({
       if (ui.isHidden(t.id))
         return (
           <span className={`${cls} tp-none`} data-cell={k} title={`This company is locked. Unlock it for ${COMPANY_PRICE_SAY}, then you can add this.`}>
-            –
+            <span aria-hidden>–</span>
+            <span className="sr-only">Locked</span>
           </span>
         );
       // Only the seat holder adds facts about a seat: anyone else sees a quiet dash.
       if (t.entity === "engagement" && !ui.holdsSeat(t.id))
         return (
           <span className={`${cls} tp-none`} data-cell={k} title={SEAT_HOLDER_ONLY}>
-            –<span className="sr-only">{SEAT_HOLDER_ONLY}</span>
+            <span aria-hidden>–</span>
+            <span className="sr-only">No value. {SEAT_HOLDER_ONLY}</span>
           </span>
         );
       // The member's own rate, shared for the benchmarks only: not on the seat, and not missing either.

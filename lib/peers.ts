@@ -93,8 +93,9 @@ function ctxOf(seed: Seed, s: State, me: Member, nowMs: number) {
     if (!had || lastAt(had) < lastAt(c)) convWith.set(other, c);
   }
   /** The two already work together: a conversation, a lead passed, a team. */
-  const related = (id: string) =>
-    convWith.has(id) || p.passes.some((x) => (x.by === me.id && x.to === id) || (x.to === me.id && x.by === id)) || p.teams.some((t) => (t.by === me.id && t.with === id) || (t.with === me.id && t.by === id));
+  /** Worked together for real: a lead passed either way, or a team. (A conversation alone is only "You've messaged".) */
+  const workedWith = (id: string) => p.passes.some((x) => (x.by === me.id && x.to === id) || (x.to === me.id && x.by === id)) || p.teams.some((t) => (t.by === me.id && t.with === id) || (t.with === me.id && t.by === id));
+  const related = (id: string) => convWith.has(id) || workedWith(id);
   /**
    * A member the viewer can see as a peer: signed in, not them, not an admin (Revenue Nomad staff),
    * no block either way, and in the directory unless the two already work together.
@@ -132,7 +133,7 @@ function ctxOf(seed: Seed, s: State, me: Member, nowMs: number) {
   const pubSeat = new Map<string, string>();
   for (const id of g.engagements.keys()) pubSeat.set(T.pubId(id), id);
   const memberByPub = new Map(idx.all.map((m) => [T.pubId(m.id), m] as const));
-  return { seed, s, me, nowMs, g, idx, tracks, p, hiddenCo, blocked, mutedBy, prof, fnOfMember, titleOf, shapeOf, hidden, convWith, related, peerOk, nameOf, companyKind, companyName, pubCompany, pubSeat, memberByPub, lastAt };
+  return { seed, s, me, nowMs, g, idx, tracks, p, hiddenCo, blocked, mutedBy, prof, fnOfMember, titleOf, shapeOf, hidden, convWith, related, workedWith, peerOk, nameOf, companyKind, companyName, pubCompany, pubSeat, memberByPub, lastAt };
 }
 
 const initialsOf = (name: string) =>
@@ -537,7 +538,7 @@ function picksOf(seed: Seed, s: State, me: Member, companyPub: string, rolePub: 
       initials: initialsOf(name),
       title: x.titleOf(m.id),
       fn,
-      why: best ? (forTeam ? `A ${fn} fractional to pitch with` : `A ${fn} fractional`) + (fits ? ", serves clients like this one" : "") : fits ? "Serves clients like this one" : "You already work together",
+      why: best ? (forTeam ? `A ${fn} fractional to pitch with` : `A ${fn} fractional`) + (fits ? ", serves clients like this one" : "") : fits ? "Serves clients like this one" : x.workedWith(m.id) ? "You already work together" : "You've messaged",
       best,
       ...(passed ? { passed: true } : {}),
       ...(teamed ? { teamed: true } : {}),

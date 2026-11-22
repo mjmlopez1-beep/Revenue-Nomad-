@@ -112,9 +112,9 @@
 .tp-faint {
   color: var(--faint);
 }
-/* Nothing here, and nothing to add. */
+/* Nothing here, and nothing to add: a quiet dash, still 3.4:1 on white and the page (a non-text mark, WCAG 1.4.11). Its words are for screen readers (sr-only). */
 .tp-none {
-  color: var(--line-strong);
+  color: var(--line-input);
 }
 .tp-link {
   color: var(--pine);
@@ -7458,4 +7458,87 @@ div.tp-pcard-when {
 .tp-allwait-fail .problem {
   min-height: 0;
   padding-top: 24px;
+}
+
+/*
+ * Touch screens of any width (a tablet at 768 or 1024 as much as a phone): every control is at
+ * least 44px to tap. Only on a coarse pointer, so a mouse keeps the desktop's density. Inline links
+ * (the record's website and LinkedIn, Rate benchmarks, a leader's line) grow their hit area with
+ * padding that a negative margin takes back, so the text doesn't move.
+ */
+@media (pointer: coarse) {
+  .tp-app .tp-iconbtn,
+  .tp-app .tp-iconbtn-sm,
+  .rd-pill-x {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .tp-app .btn,
+  .tp-app .btn-sm,
+  .tp-app .chip,
+  .tp-app .tp-chipbtn,
+  .tp-app .tp-credits,
+  .tp-app .tp-plan,
+  .tp-app .tp-add-btn,
+  .tp-app .tp-follow,
+  .tp-app .tp-flink,
+  .tp-app .pe-mute,
+  .tp-app .ob-chip,
+  .tp-app .ob-title-pick {
+    min-height: 44px;
+  }
+  .tp-app .pe-mute,
+  .tp-app .tp-flink {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    justify-content: center;
+  }
+  .tp-app .tp-brand,
+  .tp-app .tp-nav-brand {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .tp-drawer .tp-dlinks a,
+  .tp-rsheet .tp-dlinks a,
+  .tp-drawer .tp-dsec a,
+  .tp-rsheet .tp-dsec a,
+  .tp-drawer .tp-link,
+  .tp-rsheet .tp-link {
+    display: inline-block;
+    padding: 12px 4px;
+    margin: -12px -4px;
+  }
+  /* The alerts grid's checkboxes (Activity.tsx): a 44px box to tap, drawn as a 22px box in its middle. */
+  .ac-grid-c input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    border: 11px solid transparent;
+    border-radius: 15px;
+    background: var(--surface) content-box;
+    box-shadow: inset 0 0 0 2px var(--line-input);
+    cursor: pointer;
+  }
+  .ac-grid-c input[type="checkbox"]:checked {
+    background: var(--pine) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat content-box;
+    box-shadow: none;
+  }
+  .ac-grid-c input[type="checkbox"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* The record's "Your ways in" (network/Ways.tsx) right above "Your way in": one heading, one section to the eye. */
+.tp-dsec[data-record-ways] + .tp-wayin {
+  margin-top: 16px;
+  padding-top: 0;
+  border-top: 0;
+}
+.tp-dsec[data-record-ways] + .tp-wayin > .tp-dsec-h {
+  display: none;
 }

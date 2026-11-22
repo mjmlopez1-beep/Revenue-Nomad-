@@ -186,6 +186,13 @@
   border-radius: var(--r-card);
   overflow-x: auto;
   overflow-y: hidden;
+  /* A scroll cue that shows wherever more of the table is out of view (a shade at that edge), even with overlay scrollbars. */
+  background:
+    linear-gradient(to right, var(--surface) 30%, rgba(255, 255, 255, 0)) left / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 30%, rgba(255, 255, 255, 0)) right / 28px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(10, 26, 19, 0.2), rgba(10, 26, 19, 0)) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(10, 26, 19, 0.2), rgba(10, 26, 19, 0)) right / 12px 100% no-repeat scroll,
+    var(--surface);
 }
 .fr-table {
   width: 100%;
@@ -743,6 +750,17 @@
   }
   .fr-body {
     padding: 16px 20px 56px;
+  }
+}
+/* A tablet (768 to 1023): the five columns fit the width (726px at 768) instead of cutting the last one off. */
+@media (max-width: 1023px) {
+  .fr-table {
+    min-width: 660px;
+  }
+  .fr-table th,
+  .fr-table td {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 }
 @media (max-width: 767px) {

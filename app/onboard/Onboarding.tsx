@@ -57,6 +57,7 @@ import { FEATURE_NAME, type RadarRow } from "@/lib/radar/types";
 import { OnboardGoogle, startGoogle } from "@/app/post/network/Network"; // [google network]
 import { Glyph, Trail, WelcomeBanner } from "../ui/fractions/art";
 import { Logo } from "../ui/Logo";
+import { radioKeys, radioTab } from "../post/radioGroup";
 
 export interface OnboardingProps {
   view: View;
@@ -725,9 +726,9 @@ function StepYou({
 
       <fieldset className="ob-q">
         <legend className="ob-h">Your function</legend>
-        <div className="ob-chips" role="radiogroup" aria-label="Your function">
-          {FUNCTIONS.map((f) => (
-            <button key={f} type="button" role="radio" aria-checked={fn === f} className={`ob-chip${fn === f ? " ob-chip-on" : ""}`} onClick={() => setFn(f)}>
+        <div className="ob-chips" role="radiogroup" aria-label="Your function" onKeyDown={radioKeys}>
+          {FUNCTIONS.map((f, i) => (
+            <button key={f} type="button" role="radio" aria-checked={fn === f} tabIndex={radioTab(i, FUNCTIONS.indexOf(fn as (typeof FUNCTIONS)[number]))} className={`ob-chip${fn === f ? " ob-chip-on" : ""}`} onClick={() => setFn(f)}>
               {f}
             </button>
           ))}
@@ -740,9 +741,9 @@ function StepYou({
             Your title
           </label>
           {picks.length ? (
-            <div className="ob-title-picks" role="radiogroup" aria-label="Titles to pick from">
-              {picks.map((t) => (
-                <button key={t} type="button" role="radio" aria-checked={title === t} className={`ob-title-pick${title === t ? " ob-title-pick-on" : ""}`} onClick={() => setTitle(t)}>
+            <div className="ob-title-picks" role="radiogroup" aria-label="Titles to pick from" onKeyDown={radioKeys}>
+              {picks.map((t, i) => (
+                <button key={t} type="button" role="radio" aria-checked={title === t} tabIndex={radioTab(i, picks.indexOf(title))} className={`ob-title-pick${title === t ? " ob-title-pick-on" : ""}`} onClick={() => setTitle(t)}>
                   {t}
                 </button>
               ))}

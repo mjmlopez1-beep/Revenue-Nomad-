@@ -467,7 +467,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             <a className="mono" href="https://revenuenomad.com" target="_blank" rel="noopener noreferrer">
               revenuenomad.com
             </a>
-            <a href="/remove">Remove my name</a>
+            <a className="lp-tap" href="/remove">Remove my name</a>
             <a href="/data">Where your data goes</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>

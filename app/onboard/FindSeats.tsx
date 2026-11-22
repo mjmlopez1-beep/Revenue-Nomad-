@@ -19,6 +19,7 @@ import { SEAT_YIELD } from "@/app/post/earnBack";
 import { metaOf, seatLine as lineOf, seatState, seatsAt } from "./suggest";
 import { useExactFind } from "../ui/find";
 import { FOUND_NOTE } from "@/lib/tableFields";
+import { radioKeys, radioTab } from "../post/radioGroup";
 
 export { SEAT_YIELD };
 
@@ -146,9 +147,9 @@ function AddSeat({ company, fn, title, name, act, onAdded }: { company: string; 
         Your title there
       </label>
       <input id={`ob-role-${company}`} className="input" value={role} maxLength={80} onChange={(e) => setRole(e.target.value)} placeholder={fn ? `Fractional VP ${fn}` : "Fractional VP Sales"} />
-      <div className="ob-chips" role="radiogroup" aria-label="Still in the seat?">
-        {(["Active", "Ended"] as const).map((s) => (
-          <button key={s} type="button" role="radio" aria-checked={status === s} className={`ob-chip${status === s ? " ob-chip-on" : ""}`} onClick={() => setStatus(s)}>
+      <div className="ob-chips" role="radiogroup" aria-label="Still in the seat?" onKeyDown={radioKeys}>
+        {(["Active", "Ended"] as const).map((s, i) => (
+          <button key={s} type="button" role="radio" aria-checked={status === s} tabIndex={radioTab(i, status === "Active" ? 0 : status === "Ended" ? 1 : -1)} className={`ob-chip${status === s ? " ob-chip-on" : ""}`} onClick={() => setStatus(s)}>
             {s === "Active" ? "I'm still there" : "It ended"}
           </button>
         ))}

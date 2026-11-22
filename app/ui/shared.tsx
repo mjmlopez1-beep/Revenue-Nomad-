@@ -446,7 +446,8 @@ export function lockedLook(seed: string): LockedLook {
   };
   const first = word(4, 10);
   const name = r() < 0.3 ? `${first} ${word(3, 6)}` : first;
-  const look = { name, site: `${first.toLowerCase()}${pick([".com", ".com", ".com", ".io", ".co"])}`, hue: Math.floor(r() * 360), mark: initials(name) };
+  // The site under the blur is plainly not an address: dots of about the name's length, never a domain anyone could own.
+  const look = { name, site: `${"•".repeat(Math.min(10, first.length))}.${"•".repeat(pick(["3", "2", "3"]) === "2" ? 2 : 3)}`, hue: Math.floor(r() * 360), mark: initials(name) };
   lockedCache.set(seed, look);
   return look;
 }
@@ -464,7 +465,7 @@ export function LockedName({ seed, className, shown }: { seed: string; className
     return (
       <span className={`locked-name locked-name-shown${className ? ` ${className}` : ""}`}>
         {shown}
-        <span className="sr-only">. Named free on Pro. Unlock it to make it yours.</span>
+        <span className="sr-only">. Named free today on your plan. Unlock it to make it yours.</span>
       </span>
     );
   return (

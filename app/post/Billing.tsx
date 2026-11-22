@@ -46,6 +46,7 @@ export const keepSay = (plan: PlanView) => keepVerb(keepOf(plan));
 export const paidOf = (plan: PlanView) => paidName(plan.paidTier ?? plan.tier);
 import { EARN_ONE, PRO_COMPANIES_FREE, topupWords, useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
+import { radioKeys, radioTab } from "./radioGroup";
 import { NomadArt, Prop, Scene } from "../ui/fractions/lazy";
 import { PageHead } from "../ui/system";
 
@@ -264,9 +265,9 @@ export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansF
   const priceOf = (p: (typeof PLANS)[number]) => (yearly ? p.year : p.month);
   return (
     <>
-      <div className="bl-interval" role="radiogroup" aria-label="Billed">
-        {(["year", "month"] as const).map((k) => (
-          <button key={k} type="button" role="radio" aria-checked={interval === k} className={`chip${interval === k ? " chip-on" : ""}`} onClick={() => setBilled(k)}>
+      <div className="bl-interval" role="radiogroup" aria-label="Billed" onKeyDown={radioKeys}>
+        {(["year", "month"] as const).map((k, i) => (
+          <button key={k} type="button" role="radio" aria-checked={interval === k} tabIndex={radioTab(i, interval === "year" ? 0 : 1)} className={`chip${interval === k ? " chip-on" : ""}`} onClick={() => setBilled(k)}>
             {k === "year" ? "Yearly, 2 months free" : "Monthly"}
           </button>
         ))}
