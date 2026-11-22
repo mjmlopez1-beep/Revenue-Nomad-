@@ -18,6 +18,13 @@
  *     GET /api/table, so the page needs no second request; signed out the same;
  *   - an admin's and a member's whole table: the same however often asked, before and after the
  *     first screen.
+ *
+ * Before the server, with no server (PURE=1 runs only these): the new look's first visits
+ * (BUILD_PLAN F6), pure. The six steps, each derived from what the member has (step 3 left out
+ * while Your network is off, step 6 only with Evidence Bank built and Close); a step once done
+ * stays done; the card's "N of M done" and minutes; each page's first visit, its strip and its
+ * dismissal; example rows never counted, never mistaken for a record; and the flag's settings
+ * (lib/ui2.ts): off sends nothing, optin keeps the member's choice, strips kept by page key.
  */
 import { unpackCompany, unpackView } from "../lib/viewWire";
 import type { CompanyRec, View } from "../lib/tableTypes";
@@ -59,6 +66,77 @@ async function join(name: string, n: number, email?: string, headers: Record<str
     body: JSON.stringify({ action: { type: "profile", function: "Sales", goal: "friendly" } }),
   });
   return token;
+}
+
+/* ---------- the new look's first visits, pure ---------- */
+async function pure() {
+  const gs = await import("../app/post/getStarted");
+  const fv = await import("../app/post/firstVisit");
+  const ex = await import("../app/post/examples");
+  const u2 = await import("../lib/ui2");
+  type SixMe = Parameters<typeof gs.sixSteps>[0]["me"];
+  const blank: SixMe = { icp: null, holdersUnlocked: 0, companiesUnlocked: 0, savedViews: [], started: { note: false, network: false }, crystal: "all" } as SixMe;
+  const icp = { industries: ["SaaS"], employees: [], revenue: [], countries: [] };
+  const view = (email: boolean) => ({ id: "v1", name: "Open Sales roles", place: "v=hiring", criteria: {}, email, createdAt: "2026-11-01T00:00:00Z" });
+  const six = (me: Partial<SixMe>, x: Partial<Parameters<typeof gs.sixSteps>[0]> = {}) => gs.sixSteps({ me: { ...blank, ...me } as SixMe, seatsHeld: 0, ...x });
+
+  const s0 = six({});
+  check("six steps: a new member, none done, of 5 while Evidence Bank isn't built", s0.done === 0 && s0.of === 5 && s0.next?.key === "icp" && s0.steps.map((x) => x.n).join() === "1,2,3,4,5", s0.steps.map((x) => x.key));
+  check("six steps: the card's words", gs.sixLine(s0) === "0 of 5 done" && s0.minutes === 12);
+  check("step 1: an ideal client on file", six({ icp }).steps[0].done && !six({ icp: { industries: [], employees: [], revenue: [], countries: [] } }).steps[0].done);
+  check("step 2: a seat held", six({}, { seatsHeld: 1 }).steps.find((x) => x.key === "seat")!.done && six({}, { seatsHeld: 1 }).steps.find((x) => x.key === "seat")!.pill === "Earns credits");
+  check("step 3: Google or the LinkedIn connections file brought in", six({ started: { note: false, network: true } }).steps.find((x) => x.key === "network")!.done);
+  const noNet = six({ started: { note: false, network: false, networkOff: true } });
+  check("step 3 is left out while Your network is off (it could never be done)", !noNet.steps.some((x) => x.key === "network") && noNet.of === 4 && gs.sixLine(noNet) === "0 of 4 done");
+  check("step 4: a company opened, or a seat holder or person paid for", six({ companiesUnlocked: 1 }).steps.find((x) => x.key === "open")!.done && six({ holdersUnlocked: 1 }).steps.find((x) => x.key === "open")!.done && six({}, { seen: true }).steps.find((x) => x.key === "open")!.done);
+  check("step 4 says free where it is", six({}).steps.find((x) => x.key === "open")!.pillKind === "free" && !six({ crystal: undefined, proOpens: undefined, freeCompany: false }).steps.find((x) => x.key === "open")!.pill);
+  check("step 5: a saved list with its email on", six({ savedViews: [view(true)] as never }).steps.find((x) => x.key === "alert")!.done && !six({ savedViews: [view(false)] as never }).steps.find((x) => x.key === "alert")!.done);
+  check("step 5 reads a list's alert switch once lists have one (F5)", !gs.alertOn({ email: true, alert: { on: false } }) && gs.alertOn({ email: false, alert: { on: true } }));
+  check("step 6 is left out until Evidence Bank is built", !gs.EVIDENCE_ON && !six({}, { close: true }).steps.some((x) => x.key === "evidence"));
+  const ev = six({}, { close: true, evidence: true });
+  check("step 6, once built, is Close's: of 6 with Close, of 5 without", ev.of === 6 && ev.steps[5].label === "Write your first evidence case" && six({}, { close: false, evidence: true }).of === 5);
+  const all5 = six({ icp, companiesUnlocked: 1, savedViews: [view(true)] as never, started: { note: false, network: true } }, { seatsHeld: 2 });
+  check("every step done: no next, nothing left", all5.done === 5 && all5.next === null && all5.minutes === 0);
+  check("a step once done stays done in this browser (a refund never takes a tick back)", six({}, { stuck: new Set(["six:open"]) }).steps.find((x) => x.key === "open")!.done);
+  check("the next step is the first not done", six({ icp }).next?.key === "seat");
+
+  // First visits and their strips.
+  const me = { added: 0, unlocked: 0, companiesUnlocked: 0, holdersUnlocked: 0, savedViews: [], started: { note: false, network: false }, benchRates: [], icp: null } as never;
+  check("Home on a first visit: its strip", fv.firstOf("home", fv.ownOf("home", me)).first && /Your day starts here/.test(fv.firstOf("home", 0).strip ?? ""));
+  check("a strip dismissed stays gone", fv.firstOf("home", 0, ["home"]).strip === null && fv.firstOf("home", 0, ["home"]).first);
+  check("with the member's own data, no strip", fv.firstOf("companies", 3).strip === null && !fv.firstOf("companies", 3).first);
+  check("unknown is never a first visit (no strip on a guess)", fv.firstOf("proposals", null).strip === null && fv.ownOf("proposals", me) === null);
+  check("every strip points at a step", Object.values(fv.STRIPS).every((x) => !!x.step));
+  check("each page's step is one of the six", Object.values(fv.STRIPS).every((x) => (gs.SIX_KEYS as readonly string[]).includes(x.step!)));
+  check("Companies: first until a company is opened", fv.ownOf("companies", me) === 0 && fv.ownOf("companies", { ...(me as object), companiesUnlocked: 2 } as never) === 2);
+  check("strip keys are page keys the server accepts", Object.keys(fv.STRIPS).every((k) => u2.STRIP_KEY_RE.test(k)));
+
+  // Examples: never counted, never a record.
+  const deal = { company: "Cedar and Pine", stage: "Target" as const, person: "Head of Sales", line: "A real deal" };
+  const rows = [deal, ...ex.EXAMPLE_DEALS];
+  check("example rows are taken out of what counts", ex.realOnly(rows).length === 1 && ex.realOnly(rows)[0] === deal);
+  check("examples alone are said to be examples", ex.onlyExamples(ex.EXAMPLE_DEALS) && !ex.onlyExamples(rows) && !ex.onlyExamples([]));
+  check("every example is labelled Example and frozen", [...ex.EXAMPLE_DEALS, ...ex.EXAMPLE_CONVERSATIONS, ...ex.EXAMPLE_PROPOSALS, ...ex.EXAMPLE_CONTRACTS].every((x) => ex.isExample(x) && x.label === "Example" && Object.isFrozen(x)));
+  check("an example is no record: it has no id, no company id, nothing an action takes", ex.EXAMPLE_DEALS.every((x) => !("id" in x) && !("companyId" in x) && !("id" in (x.value as object))));
+  check("the six steps read no list's rows: examples can't tick a step", JSON.stringify(six({ savedViews: ex.EXAMPLE_DEALS as never }).steps.find((x) => x.key === "alert")!.done) === "false");
+  check("examples use the made-up cast only", JSON.stringify([ex.EXAMPLE_DEALS, ex.EXAMPLE_CONVERSATIONS, ex.EXAMPLE_PROPOSALS, ex.EXAMPLE_CONTRACTS]).match(/Northwind Clinics|Cedar and Pine|Halcyon Freight|Larkspur Learning|Dana Whitfield/g)!.length >= 4);
+
+  // The flag's settings (lib/ui2.ts).
+  check("RN_UI2 off: Me carries nothing of it", JSON.stringify(u2.ui2Me({ ui2: true, stripsOff: ["home"] }, "off")) === "{}");
+  check("RN_UI2 optin: off until chosen, the switch offered", JSON.stringify(u2.ui2Me({}, "optin")) === JSON.stringify({ ui2: false, ui2Optin: true }) && u2.ui2Me({ ui2: true }, "optin").ui2 === true);
+  check("RN_UI2 on: everyone, no switch", u2.ui2Me({}, "on").ui2 === true && !u2.ui2Me({}, "on").ui2Optin);
+  const t1 = u2.ui2Setting({ ui2: true }, {}, "optin");
+  check("Try the new Merlin: kept on the profile", !!t1 && "profile" in t1 && t1.profile.ui2 === true);
+  const t2 = u2.ui2Setting({ ui2: false }, { ui2: true }, "optin");
+  check("Back to the old look: taken off the profile", !!t2 && "profile" in t2 && t2.profile.ui2 === undefined);
+  const t3 = u2.ui2Setting({ ui2: true }, {}, "off");
+  check("with the flag off the switch is refused", !!t3 && "refused" in t3);
+  const t4 = u2.ui2Setting({ stripOff: "companies" }, { stripsOff: ["home"] }, "on");
+  check("a strip dismissed is added once", !!t4 && "profile" in t4 && t4.profile.stripsOff!.join() === "home,companies");
+  const t5 = u2.ui2Setting({ stripOn: "home" }, { stripsOff: ["home"] }, "on");
+  check("Undo brings it back, and an empty list goes", !!t5 && "profile" in t5 && t5.profile.stripsOff === undefined);
+  check("a key that is no page key is refused", "refused" in (u2.ui2Setting({ stripOff: "../x" }, {}, "on") ?? {}));
+  check("anything else is not the new look's", u2.ui2Setting({ digest: true }, {}, "on") === null);
 }
 
 async function main() {
@@ -142,7 +220,8 @@ async function main() {
 }
 
 try {
-  await main();
+  await pure();
+  if (process.env.PURE !== "1") await main();
 } catch (e) {
   failures++;
   console.log("FAIL threw:", e);
