@@ -10,8 +10,14 @@
  *   RN_GOOGLE_GMAIL_TESTERS        ... only to these emails (comma-separated), matching the test users
  *                                  in Google Cloud. A member's Merlin email or connected Google email counts.
  *   GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET
- *                                  optional: Gmail through its own OAuth client (a separate Google Cloud
- *                                  project that stays in Testing), so the main one can be published.
+ *                                  optional: Gmail through its own OAuth client in a separate Google
+ *                                  Cloud project (it can stay in Testing), so the main one can be
+ *                                  published without the Gmail scope. Both set: "Add Gmail" runs its
+ *                                  own consent screen with only openid, email and gmail.metadata, and
+ *                                  its refresh token is kept apart (MemberNetwork.gmail, ownClient).
+ *                                  Sign-in, Calendar and Contacts stay on GOOGLE_CLIENT_ID. Unset: Gmail
+ *                                  is added to the main grant on the main client, as before. Setup:
+ *                                  docs/google-verification.md, "Gmail in its own Google Cloud project".
  *   RN_GOOGLE_TOKEN_KEY            optional: the key tokens are sealed with (else derived from RN_ID_SECRET,
  *                                  then RN_INTEL_SEED_KEY).
  *
@@ -49,10 +55,21 @@ const set = (v: string | undefined) => !!v?.trim();
 export const googleConfigured = () => set(process.env.GOOGLE_CLIENT_ID) && set(process.env.GOOGLE_CLIENT_SECRET);
 export const gmailOwnClient = () => set(process.env.GOOGLE_GMAIL_CLIENT_ID) && set(process.env.GOOGLE_GMAIL_CLIENT_SECRET);
 
-export function clientFor(kind: "google" | "gmail"): { id: string; secret: string } {
-  if (kind === "gmail" && gmailOwnClient()) return { id: process.env.GOOGLE_GMAIL_CLIENT_ID!.trim(), secret: process.env.GOOGLE_GMAIL_CLIENT_SECRET!.trim() };
+/**
+ * The OAuth client for a flow. `own` says which a token was made with (GoogleLink.ownClient, or the
+ * start's state), so a Gmail token made on the Gmail project is refreshed there, and one made on
+ * the main client before GOOGLE_GMAIL_CLIENT_ID was set keeps refreshing on the main client.
+ * Without `own`, Gmail uses its own client when both of its variables are set.
+ */
+export function clientFor(kind: "google" | "gmail", own?: boolean): { id: string; secret: string } {
+  const useOwn = kind === "gmail" && (own ?? gmailOwnClient());
+  if (useOwn && gmailOwnClient()) return { id: process.env.GOOGLE_GMAIL_CLIENT_ID!.trim(), secret: process.env.GOOGLE_GMAIL_CLIENT_SECRET!.trim() };
+  // A token from the Gmail project whose client was since removed: no secret here to refresh it with (Google answers invalid_client, and the link asks to reconnect).
+  if (useOwn) return { id: "", secret: "" };
   return { id: (process.env.GOOGLE_CLIENT_ID ?? "").trim(), secret: (process.env.GOOGLE_CLIENT_SECRET ?? "").trim() };
 }
+/** The scopes "Add Gmail" asks for: on its own client its own sign-in (openid, email) and gmail.metadata only; on the main client gmail.metadata, added to the main grant. */
+export const gmailScopes = (own: boolean) => (own ? ["openid", "email", SCOPE_GMAIL] : [SCOPE_GMAIL]);
 
 /** Gmail is offered to this member: RN_GOOGLE_GMAIL=1 and one of their emails is on the testers list. */
 export function gmailTester(...emails: (string | null | undefined)[]): boolean {

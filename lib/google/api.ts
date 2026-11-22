@@ -44,16 +44,17 @@ const form = (url: string, body: Record<string, string>) =>
 
 /* ---------- OAuth ---------- */
 
-export function authorizeUrl(kind: "google" | "gmail", scopes: string[], state: string, origin: string, hint?: string): string {
+export function authorizeUrl(kind: "google" | "gmail", scopes: string[], state: string, origin: string, hint?: string, own?: boolean): string {
   const q = new URLSearchParams({
-    client_id: clientFor(kind).id,
+    client_id: clientFor(kind, own).id,
     redirect_uri: redirectUri(origin),
     response_type: "code",
     scope: scopes.join(" "),
     access_type: "offline",
     // A refresh token every time (Google only sends one on consent).
     prompt: "consent",
-    include_granted_scopes: "true",
+    // Incremental: Gmail on the main client joins the main grant. Gmail on its own client is a grant of its own.
+    ...(kind === "gmail" && own ? {} : { include_granted_scopes: "true" }),
     state,
     ...(hint ? { login_hint: hint } : {}),
   });
@@ -91,13 +92,13 @@ function tokensOf(j: unknown, nowMs: number): Tokens {
   };
 }
 
-export async function exchangeCode(kind: "google" | "gmail", code: string, origin: string): Promise<Tokens> {
-  const c = clientFor(kind);
+export async function exchangeCode(kind: "google" | "gmail", code: string, origin: string, own?: boolean): Promise<Tokens> {
+  const c = clientFor(kind, own);
   return tokensOf(await form(`${bases().token}/token`, { code, client_id: c.id, client_secret: c.secret, redirect_uri: redirectUri(origin), grant_type: "authorization_code" }), Date.now());
 }
 
-export async function refreshAccess(kind: "google" | "gmail", refresh: string): Promise<Tokens> {
-  const c = clientFor(kind);
+export async function refreshAccess(kind: "google" | "gmail", refresh: string, own?: boolean): Promise<Tokens> {
+  const c = clientFor(kind, own);
   return tokensOf(await form(`${bases().token}/token`, { refresh_token: refresh, client_id: c.id, client_secret: c.secret, grant_type: "refresh_token" }), Date.now());
 }
 

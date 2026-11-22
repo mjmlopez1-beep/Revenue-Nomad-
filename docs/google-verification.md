@@ -44,6 +44,19 @@ Do **not** add `https://www.googleapis.com/auth/calendar.readonly` (the code acc
 - Authorized redirect URI: `https://merlin.revenuenomad.com/api/integrations/google/callback` (`lib/google/config.ts` `CALLBACK_PATH`, built from `RN_PUBLIC_URL`). Remove any test or Railway address from the production client once the domain is live.
 - `RN_PUBLIC_URL` on the server must be `https://merlin.revenuenomad.com`, so the redirect Merlin sends matches.
 
+## (a2) Gmail in its own Google Cloud project
+
+Merlin supports Gmail on a second OAuth client in a separate Google Cloud project, so the main project (sign-in, Calendar, Contacts) can be verified and published without the restricted Gmail scope. When `GOOGLE_GMAIL_CLIENT_ID` and `GOOGLE_GMAIL_CLIENT_SECRET` are both set, Add Gmail runs its own OAuth flow on that client, asking only for `openid`, `email` and `gmail.metadata`; members see a second, separate consent screen. Its refresh token is stored apart from the main one (sealed, marked as the Gmail client's), is refreshed on the client it was made with, and is revoked at Google on Drop Gmail and on Disconnect and delete everything. When either variable is unset, Gmail is added to the main grant on the main client, as before, so nothing breaks. Merlin still never reads a message's text or subject: headers only (From, To, Cc, Date).
+
+Steps for the owner:
+
+1. In Google Cloud, create a second project (for example "Merlin Gmail"). Enable the Gmail API there. Calendar and People APIs stay on the main project only.
+2. OAuth consent screen of the Gmail project: External, the same app name, logo, support email, home page, privacy policy and terms as the main project. Scopes: `openid`, `.../auth/userinfo.email` and `https://www.googleapis.com/auth/gmail.metadata` only. Leave it in Testing and add each Gmail tester as a test user (the same emails as `RN_GOOGLE_GMAIL_TESTERS`).
+3. Clients in the Gmail project: create a Web application client. Authorized redirect URI: the same one as the main client, `https://merlin.revenuenomad.com/api/integrations/google/callback` (one callback serves both; Merlin tells the flows apart by their state). Add a test origin's callback only while testing there.
+4. Main project: remove `gmail.metadata` from its consent screen's scopes. It keeps `openid`, `email`, `calendar.events.readonly`, `calendar.calendarlist.readonly`, `contacts.readonly` and `contacts.other.readonly`.
+5. In Railway, set `GOOGLE_GMAIL_CLIENT_ID` and `GOOGLE_GMAIL_CLIENT_SECRET` to the Gmail client's values (never in the repo or a message). `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` stay the main client's. `RN_GOOGLE_GMAIL=1` and `RN_GOOGLE_GMAIL_TESTERS` still decide who is offered Gmail.
+6. Members who added Gmail before the switch keep working on the main client (their link isn't marked as the Gmail client's). To move one to the new project, they drop Gmail and add it again.
+
 ## (b) Verify revenuenomad.com in Search Console
 
 Google checks that the people submitting own the domains on the consent screen. A Domain property covers `merlin.revenuenomad.com` too.

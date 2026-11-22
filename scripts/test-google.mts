@@ -115,7 +115,11 @@ const CODES: Record<string, { refresh: string; scope: string; email: string }> =
   "code-bo": { refresh: "REFRESH-bo-very-secret", scope: GRANT_MAIN, email: "bo.other@example.org" },
   "code-none": { refresh: "REFRESH-none", scope: "openid email", email: "ana.member@anaco.example" },
   "code-gmail": { refresh: "REFRESH-gmail-secret", scope: `${GRANT_MAIN} https://www.googleapis.com/auth/gmail.metadata`, email: "ana.member@anaco.example" },
+  // Gmail on its own OAuth client (a separate Google Cloud project): a grant of its own, with only its sign-in and gmail.metadata.
+  "code-gmail-own": { refresh: "REFRESH-gmailown-secret", scope: "openid email https://www.googleapis.com/auth/gmail.metadata", email: "ana.member@anaco.example" },
 };
+/** The Gmail project's made-up client (GOOGLE_GMAIL_CLIENT_ID / _SECRET in the test). */
+const GMAIL_CLIENT = { id: "gmail-client.apps.example", secret: "gmail-secret-test" };
 const send = (res: ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -131,7 +135,9 @@ const google = createServer(async (req: IncomingMessage, res: ServerResponse) =>
   if (p === "/oauth2/token") {
     if (body.get("grant_type") === "authorization_code") {
       const c = CODES[body.get("code") ?? ""];
-      if (!c || body.get("client_secret") !== "secret-test") return send(res, 400, { error: "invalid_grant" });
+      // Each client has its own secret, and a code from one project never swaps on the other.
+      const own = body.get("client_id") === GMAIL_CLIENT.id;
+      if (!c || body.get("client_secret") !== (own ? GMAIL_CLIENT.secret : "secret-test") || own !== (body.get("code") === "code-gmail-own")) return send(res, 400, { error: "invalid_grant" });
       return send(res, 200, { access_token: `ACCESS-${c.refresh}`, expires_in: 3600, refresh_token: c.refresh, scope: c.scope, id_token: idToken(c.email) });
     }
     const r = body.get("refresh_token") ?? "";
@@ -515,6 +521,40 @@ async function main() {
   const dg = (await G.dropGmail(ANA)) as import("../lib/google/types.ts").NetworkView;
   check("Drop Gmail: its data goes, Calendar and Contacts stay", !dg.gmail && !dg.companies.some((c) => c.src.includes("gmail")) && dg.companies.length === 4 && !(await t.loadState()).network!.mem_ana.gm);
   check("on the main client dropping Gmail doesn't revoke the shared grant", revoked.length === revokedBefore);
+
+  /* ---------- Gmail in its own Google Cloud project (GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET) ---------- */
+  console.log("\nGmail on its own OAuth client");
+  const GC = await import("../lib/google/config.ts");
+  check("unset: Gmail runs on the main client, as before", !GC.gmailOwnClient() && GC.clientFor("gmail").id === "client-test.apps.example" && JSON.stringify(GC.gmailScopes(false)) === JSON.stringify(["https://www.googleapis.com/auth/gmail.metadata"]));
+  process.env.GOOGLE_GMAIL_CLIENT_ID = GMAIL_CLIENT.id;
+  process.env.GOOGLE_GMAIL_CLIENT_SECRET = GMAIL_CLIENT.secret;
+  check("set: Gmail uses its own client; sign-in, Calendar and Contacts keep the main one", GC.gmailOwnClient() && GC.clientFor("gmail").id === GMAIL_CLIENT.id && GC.clientFor("google").id === "client-test.apps.example");
+  const so = await G.startConnect(ANA, ORIGIN, "gmail");
+  const oq = so.ok ? new URL(so.url).searchParams : null;
+  check(
+    "Add Gmail: its own consent screen on the Gmail client, only its sign-in and gmail.metadata, not added to the main grant",
+    !!oq && oq.get("client_id") === GMAIL_CLIENT.id && oq.get("scope") === "openid email https://www.googleapis.com/auth/gmail.metadata" && !oq.has("include_granted_scopes") && oq.get("redirect_uri") === `${ORIGIN}/api/integrations/google/callback`,
+    so,
+  );
+  const mainStart = await G.startConnect(ANA, ORIGIN);
+  check("  the main connect still asks the main client for Calendar and Contacts, no Gmail", mainStart.ok && new URL(mainStart.url).searchParams.get("client_id") === "client-test.apps.example" && !/gmail/.test(new URL(mainStart.url).searchParams.get("scope") ?? ""));
+  if (!so.ok) throw new Error("no own-client gmail start");
+  const exBefore = calls.length;
+  check("the callback swaps the code on the Gmail client", (await fin(ANA, so.state, "code-gmail-own")).outcome === "gmail" && calls.slice(exBefore).some((c) => c.path === "/oauth2/token" && c.body.get("client_id") === GMAIL_CLIENT.id && c.body.get("grant_type") === "authorization_code"));
+  const sOwn = await t.loadState();
+  const gl = sOwn.network!.mem_ana.gmail!;
+  const { unseal: unsealOwn } = await import("../lib/google/crypto.ts");
+  check("its token is kept apart from the main one, marked as the Gmail client's", gl.ownClient === true && unsealOwn(gl.token) === "REFRESH-gmailown-secret" && unsealOwn(sOwn.network!.mem_ana.google!.token) === "REFRESH-ana-very-secret" && !stateFile().includes("REFRESH-gmailown"));
+  check("a token is refreshed on the client it was made with, whatever the variables say", GC.clientFor("gmail", true).id === GMAIL_CLIENT.id && GC.clientFor("gmail", false).id === "client-test.apps.example");
+  await waitIdle(G, "mem_ana");
+  check("its reads go out with its own token, headers only", calls.slice(exBefore).filter((c) => c.path.startsWith("/gmail/")).every((c) => c.auth === "Bearer ACCESS-REFRESH-gmailown-secret" && !/format=full|format=raw/.test(c.query.toString())));
+  const revOwn = revoked.length;
+  const dOwn = (await G.dropGmail(ANA)) as import("../lib/google/types.ts").NetworkView;
+  check("Drop Gmail on its own client revokes its grant at Google, and only that one", !dOwn.gmail && dOwn.google?.status === "ok" && revoked.slice(revOwn).join() === "REFRESH-gmailown-secret", revoked.slice(revOwn));
+  // Connected again, for Disconnect and delete everything below: both grants go.
+  const so2 = await G.startConnect(ANA, ORIGIN, "gmail");
+  if (so2.ok) await fin(ANA, so2.state, "code-gmail-own");
+  await waitIdle(G, "mem_ana");
   check("a tester removed from the list isn't offered it", (() => {
     process.env.RN_GOOGLE_GMAIL_TESTERS = "someone@example.net";
     return true;
@@ -530,6 +570,10 @@ async function main() {
   const dc = (await G.disconnectAll(ANA)) as import("../lib/google/types.ts").NetworkView;
   const s9 = await t.loadState();
   check("revoked at Google", revoked.includes("REFRESH-ana-very-secret"), revoked);
+  check("  the Gmail project's grant too", revoked.filter((x) => x === "REFRESH-gmailown-secret").length === 2, revoked);
+  delete process.env.GOOGLE_GMAIL_CLIENT_ID;
+  delete process.env.GOOGLE_GMAIL_CLIENT_SECRET;
+  check("  unset again: no own client, nothing breaks", !GC.gmailOwnClient() && GC.clientFor("gmail", true).id === "" && GC.clientFor("gmail").id === "client-test.apps.example");
   check("everything erased: the section is gone", !s9.network?.mem_ana && !dc.google && !dc.claude && dc.companies.length === 0);
   check("Bo's stays", !!s9.network?.mem_bo?.google);
   check("Acme is locked for Ana again", (await t.buildView(ANA)).companies.find((c) => c.id === acmeId)!.hidden === true);
