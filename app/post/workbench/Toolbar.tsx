@@ -62,13 +62,15 @@ export function Toolbar(o: {
         {columnCount(o.type, o.shownCols)}
       </button>
       <button ref={refs.rows} type="button" className="wb-tb wb-tb-quiet" aria-haspopup="menu" aria-expanded={menu === "rows"} onClick={() => toggle("rows")}>
-        <span className="num">{o.inView.toLocaleString("en-US")}</span> of <span className="num">{o.total.toLocaleString("en-US")}</span> rows
+        <span className="num">{`${o.inView.toLocaleString("en-US")} of ${o.total.toLocaleString("en-US")} rows`}</span>
       </button>
       <button ref={refs.filter} type="button" className={`wb-tb${o.filterN ? " on" : ""}`} aria-haspopup="dialog" aria-expanded={menu === "filter"} onClick={() => toggle("filter")}>
         <IconFilter size={14} /> Filter{o.filterN ? ` · ${o.filterN}` : ""}
       </button>
       <button ref={refs.sort} type="button" className="wb-tb" aria-haspopup="menu" aria-expanded={menu === "sort"} onClick={() => toggle("sort")} title={`Sorted by ${sortLabel}`}>
-        Sort<span className="wb-tb-sub">: {sortLabel}</span>
+        <span>
+          Sort<span className="wb-tb-sub">: {sortLabel}</span>
+        </span>
       </button>
       <span className="wb-tb-sp" />
       {o.onAlert && (

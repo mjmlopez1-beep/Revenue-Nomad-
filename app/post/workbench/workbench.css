@@ -458,6 +458,13 @@
   vertical-align: middle;
   max-width: 280px;
 }
+.wb-table tbody td {
+  overflow: hidden;
+}
+.wb-table .tp-fns {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
 .wb-table tbody td.num {
   text-align: right;
 }
