@@ -66,14 +66,14 @@ Object.assign(process.env, {
 });
 for (const k of ["RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADAR", "RN_GOOGLE", "RN_EMAIL_REPLY_TO", "RN_AI_DRAFTS", "RN_SEAL_KEY"]) delete process.env[k];
 
-type Mail = { to: string; subject: string; text: string; html: string; attachments?: { filename: string; content: string }[] };
+type Mail = { to: string; subject: string; text: string; html: string; reply_to?: string; attachments?: { filename: string; content: string }[] };
 const mails: Mail[] = [];
 let others = 0;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url === "http://127.0.0.1:9/fake-email") {
     const b = JSON.parse(String(init?.body ?? "{}"));
-    mails.push({ to: b.to[0], subject: b.subject, text: b.text, html: b.html, attachments: b.attachments });
+    mails.push({ to: b.to[0], subject: b.subject, text: b.text, html: b.html, reply_to: b.reply_to, attachments: b.attachments });
     return new Response(JSON.stringify({ id: "fake" }), { status: 200 });
   }
   others++;
@@ -556,6 +556,87 @@ async function main() {
   const xno = await sendOf(no.id);
   check("…signed: complete at once, as before, no member signature anywhere", sno.r.status === "signed" && !sno.r.awaitingMember && !xno.member && !!xno.seal && !(await textOf((await S.sealedPdf(S.copyToken(xno.id), BASE))!.bytes)).all.includes("Sender, who signs too"));
   H.setPipelineHook(H.proposalToPipeline);
+
+  /* ---------- how long the link works ---------- */
+
+  await MS.deleteMySignature(JOR);
+  const lnk = await S.createProposal(JOR, { companyId: CEDAR, title: "Cedar and Pine Software · Short engagement" }, BASE);
+  await S.updateProposal(JOR, lnk.id, { blocks: BLOCKS.slice(9), signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example", title: "CEO" } }, BASE);
+  check("a link length that isn't offered is refused", /14, 30, 60 or 90/.test(String(await refused(S.sendProposal(JOR, lnk.id, { linkDays: 7 }, BASE)))));
+  const ml = mails.length;
+  const lsent = await S.sendProposal(JOR, lnk.id, { linkDays: 0 }, BASE);
+  const lmail = mails.slice(ml).find((m) => m.to === "dana@cedarandpine.example")!;
+  const llink = lmail.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)![1];
+  const lx = await sendOf(lnk.id);
+  check("no end date: the send's expiresAt is null, the email and the member say so", lx.expiresAt === null && lmail.text.includes("The link has no end date.") && /no end date/.test(lsent.message) && lsent.proposal.send?.expiresAt === null);
+  const lv = await S.signerView(llink, who, BASE, Date.now() + 400 * 86_400_000);
+  check("…the link still opens a year on, and the page says No end date", lv.status === "open" && lv.expiresAt === null && renderToStaticMarkup(React.createElement(PV.ProposalView, { doc: lv.doc, choice: null, openUntil: "none", canSign: true, sign: null })).includes("No end date"));
+  const l2 = await S.duplicateProposal(JOR, lnk.id, BASE);
+  await S.sendProposal(JOR, l2.id, { linkDays: 14, signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example" } }, BASE);
+  const l2x = await sendOf(l2.id);
+  check("14 days: the expiry 14 days on; 30 when none is picked", Math.abs(Date.parse(l2x.expiresAt!) - Date.parse(l2x.sentAt) - 14 * 86_400_000) < 1000 && Math.abs(Date.parse(xa2.expiresAt!) - Date.parse(xa2.sentAt) - 30 * 86_400_000) < 1000);
+  check("the helpers documents share: no end date never expires, its token's expiry is 0", S.expiryFor(0, Date.now()) === null && S.expMsOf(null) === 0 && !S.expiredAt(null, Date.now() + 1e12));
+
+  /* ---------- the client asks a question ---------- */
+
+  const qs: { text: string; sendId: string }[] = [];
+  const hand: { from: string; to: string }[] = [];
+  S.setProposalHooks({ onClientQuestion: (e) => qs.push({ text: e.text, sendId: e.sendId }), onHandOff: (e) => hand.push({ from: e.from.email, to: e.to.email }) });
+  check("a question: empty refused, too long refused", /Type your question/.test(String(await refused(S.askQuestion(llink, "  ", who, BASE)))) && /under 2,000/.test(String(await refused(S.askQuestion(llink, "x".repeat(2001), who, BASE)))));
+  const mq = mails.length;
+  const asked = await S.askQuestion(llink, "Can we start on‮ January 5 instead?​", who, BASE);
+  const qm = mails.slice(mq);
+  check("…sent to the member with the client's name, the title and the proposal's link, reply-to the client", qm.length === 1 && qm[0].to === "jor.cv@example.com" && qm[0].reply_to === "dana@cedarandpine.example" && qm[0].subject.startsWith("Dana Whitfield asked a question about") && qm[0].text.includes(`/?p=proposals&pr=${lnk.id}`) && qm[0].text.includes("Can we start on January 5 instead?"), qm.map((m) => [m.to, m.reply_to, m.subject]));
+  check("…invisible and bidi characters stripped", !qm[0].text.includes("‮") && !qm[0].text.includes("​"));
+  check("…the client is told who it went to, never the member's address", asked.to === "Jordan" && !JSON.stringify(asked).includes("@") && readFileSync("app/sign/Sign.tsx", "utf8").includes("They&#39;ll reply by email."));
+  check("…on the audit trail, and the hook for alerts called", (await sendOf(lnk.id)).events.some((e) => e.kind === "question" && /January 5/.test(e.note ?? "")) && qs.length === 1 && qs[0].sendId === lx.id);
+  for (let i = 0; i < 4; i++) await S.askQuestion(llink, `Question ${i + 2}`, who, BASE);
+  check("…5 a day on one link, then refused", /5 questions today/.test(String(await refused(S.askQuestion(llink, "One more", who, BASE)))) && qs.length === 5);
+
+  /* ---------- passing it to someone else to sign ---------- */
+
+  await MS.setMySignature(JOR, { method: "drawn", png: sigA, consent: true }, BASE);
+  const ho = await sendTo(OPTIONS, "now");
+  const hx0 = await sendOf(ho.id);
+  await S.chooseOption(ho.link, { optionId: "o_full", addOnIds: ["a_board"] }, BASE);
+  check("a hand-off: not to the member's own address", /not to the person who sent it/.test(String(await refused(S.handOff(ho.link, { signer: { name: "Jordan Avery", email: "jor.cv@example.com" } }, who, BASE)))));
+  check("…not to the same address", /That's the address this link went to/.test(String(await refused(S.handOff(ho.link, { signer: { name: "Dana Whitfield", email: "dana@cedarandpine.example" } }, who, BASE)))));
+  const mh = mails.length;
+  const passedView = await S.handOff(ho.link, { signer: { name: "Raj Mehta", title: "CFO", email: "raj@cedarandpine.example" }, note: "Raj signs for us." }, who, BASE);
+  const hm = mails.slice(mh);
+  const rajMail = hm.find((m) => m.to === "raj@cedarandpine.example");
+  const rajLink = rajMail?.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)?.[1] ?? "";
+  check("…the original link is read only: 'You passed this to Raj Mehta'", passedView.status === "passed" && passedView.passedTo?.name === "Raj Mehta" && /passed this proposal to someone else/.test(String(await refused(S.chooseOption(ho.link, { optionId: "o_lead", addOnIds: [] }, BASE)))) && /passed this proposal/.test(String(await refused(S.requestCode(ho.link, who)))));
+  check("…a new link to the new signer, with the note; the member told by email", !!rajLink && rajMail!.text.includes("Raj signs for us.") && /Dana Whitfield passed you/.test(rajMail!.subject) && hm.some((m) => m.to === "jor.cv@example.com" && /passed .* to Raj Mehta, CFO to sign/.test(m.subject)), hm.map((m) => [m.to, m.subject]));
+  const hp = (await T.loadState()).proposals!.find((q) => q.id === ho.id)!;
+  const hx1 = hp.sends.at(-1)!;
+  check("…the audit trail: who passed it to whom, when; the hook called", hp.sends.find((x) => x.id === hx0.id)!.events.some((e) => e.kind === "passed" && /Dana Whitfield passed it to Raj Mehta, CFO <raj@cedarandpine.example>/.test(e.note ?? "")) && hand.length === 1 && hand[0].to === "raj@cedarandpine.example");
+  check("…the same document and hash, the member's signature still on it, the pick carried over", hx1.hash === hx0.hash && hx1.member?.hash === hx1.hash && hx1.choice?.optionId === "o_full" && existsSync(path.join(dir, "proposals", hx1.id, "member-sig.png")) && hx1.passedFrom?.name === "Dana Whitfield" && hx1.handoffs === 1);
+  const hrec = await S.getProposal(JOR, ho.id, BASE);
+  check("…the member's view shows the current signer", hrec.send?.signer.email === "raj@cedarandpine.example" && hrec.send.passedFrom?.name === "Dana Whitfield" && hrec.send.status === "sent");
+  const rv0 = await S.signerView(rajLink, who, BASE);
+  check("…the new signer: same code check, can change the pick", rv0.status === "open" && rv0.signer.name === "Raj Mehta" && rv0.signer.title === "CFO" && (await S.chooseOption(rajLink, { optionId: "o_lead", addOnIds: [] }, BASE)).choice?.optionId === "o_lead" && /code first/.test(String(await refused(S.signProposal(rajLink, { name: "Raj Mehta", consent: true, hash: rv0.hash }, who, BASE)))));
+  const mr = mails.length;
+  await S.requestCode(rajLink, who);
+  const rajCode = mails.slice(mr).find((m) => m.to === "raj@cedarandpine.example")?.text.match(/\b(\d{6})\b/)?.[1] ?? "";
+  await S.verifyCode(rajLink, rajCode, who, BASE);
+  const rs = await S.signProposal(rajLink, { name: "Raj Mehta", consent: true, hash: rv0.hash }, who, BASE);
+  const hx2 = await sendOf(ho.id);
+  check("…signed by the person who actually signed, with their title", rs.status === "signed" && hx2.signed?.name === "Raj Mehta" && hx2.signed.email === "raj@cedarandpine.example" && hx2.signed.choice?.optionId === "o_lead" && renderToStaticMarkup(React.createElement(PV.Parties, { doc: rs.doc, client: { state: "signed", name: rs.signedName, title: rs.signer.title, at: rs.signedAt }, member: { state: "signed", sig: rs.member } })).includes("Raj Mehta, CFO"));
+  const hpdf = (await textOf((await S.sealedPdf(S.copyToken(hx2.id), BASE))!.bytes)).all.replace(/\s+/g, " ");
+  check("…the PDF: Raj's signature with his title, and who passed it", hpdf.includes("Raj Mehta, CFO") && hpdf.includes("Passed by Dana Whitfield to Raj Mehta"));
+  check("…not after signing", /signed already/.test(String(await refused(S.handOff(rajLink, { signer: { name: "Lena Ortiz", email: "lena@cedarandpine.example" } }, who, BASE)))));
+  // At most 3 hand-offs on one proposal.
+  const ch = await sendTo(null, "none");
+  let lk = ch.link;
+  for (const [n, e] of [["Ann One", "ann@cedarandpine.example"], ["Ben Two", "ben@cedarandpine.example"], ["Cy Three", "cy@cedarandpine.example"]]) {
+    const mk = mails.length;
+    await S.handOff(lk, { signer: { name: n, email: e } }, who, BASE);
+    lk = mails.slice(mk).find((m) => m.to === e)!.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)![1];
+  }
+  check("…at most 3 hand-offs on one proposal", /passed on 3 times/.test(String(await refused(S.handOff(lk, { signer: { name: "Di Four", email: "di@cedarandpine.example" } }, who, BASE)))) && (await S.signerView(lk, who, BASE)).handoffsLeft === 0);
+  S.setProposalHooks({ onClientQuestion: () => {}, onHandOff: () => {} });
+
 
   const LIB = await import("../lib/proposals/library");
   check("the page's own copy of the library's block titles matches templates.json", LIB.BLOCKS.every((b) => SEC.kindOf({ title: b.title }) === b.id));
