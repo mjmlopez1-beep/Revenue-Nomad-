@@ -1201,7 +1201,7 @@ section("retract", async () => {
   await J.act(jf2);
   const r9 = await back(J, jf2);
   check("their next fact can be", r9.status === 200, r9.json);
-  check("signed out, retract is refused like every action", (await new Client("Nobody", nextIp()).act({ ...jf2, type: "retract" })).status === 400);
+  check("signed out, retract is refused like every action", (await new Client("Nobody", nextIp()).act({ ...jf2, type: "retract" })).status === 401);
 });
 
 // Decision 17, WORD-6, decision 2: what the server says about a company and its seat holders.
