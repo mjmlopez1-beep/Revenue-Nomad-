@@ -990,7 +990,7 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   });
   check("never a name that came from Google", !(await S.createProposal(PAT, { templateId: "fractional-sales-leader", companyId: ACME }, BASE)).fields["client.signerName"]);
   const signSrc = readFileSync(path.join(process.cwd(), "app/sign/Sign.tsx"), "utf8") + readFileSync(path.join(process.cwd(), "app/sign/DocSign.tsx"), "utf8");
-  check("the signing pages: every error shows in its own step, announced, never twice", !/\{err && <p/.test(signSrc) && (signSrc.match(/errAt === "code" \|\| errAt === "verify"/g) ?? []).length === 4 && (signSrc.match(/role="alert"/g) ?? []).length === 8 && !signSrc.includes("err && !v.codeVerified"));
+  check("the signing pages: every error shows in its own step, announced, never twice", !/\{err && <p/.test(signSrc) && (signSrc.match(/errAt === "code" \|\| errAt === "verify"/g) ?? []).length === 4 && (signSrc.match(/role="alert"/g) ?? []).length === 9 && !signSrc.includes("err && !v.codeVerified"));
   const codeForm = readFileSync(path.join(process.cwd(), "app/sign/Sign.tsx"), "utf8").match(/onSubmit=\{async \(e\) => \{\s*e.preventDefault\(\);\s*const r = await run\("verify"[\s\S]*?<\/form>/)?.[0] ?? "";
   check("a wrong code's error is inside the code form", /errAt === "verify"/.test(codeForm) && /role="alert"/.test(codeForm));
 

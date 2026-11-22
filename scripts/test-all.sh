@@ -166,6 +166,8 @@ run paths3 npx tsx scripts/test-paths3.mts
 run proposals npx tsx scripts/test-proposals.mts
 # Documents to sign (lib/documents): a PDF uploaded and kept private on the volume, fields placed for each signer, signing in order (the sender too), the plan gate, the signer's code, consent, hash and fields, typed and drawn signatures, the final PDF with the values stamped in and the audit trail page (read back with pdf-lib and pdf.js), both fingerprints, everyone emailed the PDF, decline, void, expiry, the pipeline, privacy. In process, PDFs made here, email to a fake endpoint.
 run documents npx tsx scripts/test-documents.mts
+# What the client sees and signs (app/sign, lib/proposals/pricing.ts, sections.ts, pdf.ts, lib/seal.ts, app/check): 1, 2 and 3 options and a short one-price proposal rendered with their sections and data-section ids, add-on totals, the pick changing until signed and locked after, the choice in the signed record, the member's view and both emails, the sealed PDF with Unicode names, the seal (a match, an altered byte, an unknown file), /check storing nothing, the seal key without RN_SEAL_KEY, documents sealed too, and the Close gates. In process, PDFs made here, email to a fake endpoint.
+run clientview npx tsx scripts/test-clientview.mts
 # Saved views: rename, the same view twice, remove and Undo, on the server and through the connector, on a made-up seed.
 run views npx tsx scripts/test-views.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
