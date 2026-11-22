@@ -9,9 +9,10 @@
  * Covered:
  *   - Trial and Pro: a company in their Crystal Ball opens for 0 credits and is theirs (the same
  *     record a 2-credit unlock gives), recorded as a 0-credit company unlock with why "crystal",
- *     without using the free company of the day; its people and seat holders still cost 1;
- *   - outside Crystal Ball nothing changes: the same company costs 2 for a member without it in
- *     theirs, and the free company of the day works as before;
+ *     without using the free company of the day; its people still cost 1, who held its seats shows
+ *     free (PEERS_FREE);
+ *   - outside Crystal Ball, Trial and Pro open companies free too, up to PRO_OPENS_DAILY a day,
+ *     with how many are left said each time;
  *   - the server decides: a company not in the member's Crystal Ball can't be opened free (a
  *     forged request), and only a company opens that way;
  *   - Free (trial over): Crystal Ball names nothing; the first full open of the day is free and
@@ -250,31 +251,31 @@ async function main() {
   await unlock(PAY, "company", OUT, "identity"); // her free company of the day goes first
   const p0 = await credits(PAY);
   const payOut = await unlock(PAY, "company", B1, "identity");
-  check("outside Crystal Ball the same company costs 2 for a member without it", (await credits(PAY)) === p0 - 2 && !/Crystal Ball/.test(payOut.message), { before: p0, after: await credits(PAY), message: payOut.message });
+  // Decision 1: on Trial and Pro any company opens free (fair use, PRO_OPENS_DAILY a day), outside Crystal Ball too.
+  check("outside Crystal Ball the same company opens free on Trial too (fair use), not from Crystal Ball", (await credits(PAY)) === p0 && payOut.message.includes(t.PRO_OPEN_FREE) && !/Crystal Ball/.test(payOut.message), { before: p0, after: await credits(PAY), message: payOut.message });
   check("and it is the same record as Tia's", same(company(await view(PAY), B1), triB1), [company(await view(PAY), B1).cells, triB1.cells]);
-  // People and seat holders there cost what they cost.
+  // People there cost what they cost. Who held its seats is free now that the company is open (PEERS_FREE).
   const ceo = peopleOf(triB1).find((p) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Decision maker")!;
   const c1 = await credits(TRI);
   await unlock(TRI, "contact", ceo.id, "name");
   check("a person there still costs 1", (await credits(TRI)) === c1 - 1);
-  const held = triB1.engagements.find((e) => e.cells.operator?.s === "locked")!;
-  await unlock(TRI, "engagement", held.id, "operator");
-  check("who held a seat there still costs 1", (await credits(TRI)) === c1 - 2);
+  check("who held each seat there shows free, with the role", triB1.engagements.filter((e) => e.cells.operator?.s !== "empty").every((e) => e.cells.operator?.s === "value" && !e.cells.operator.paid), triB1.engagements.map((e) => e.cells.operator));
   // Opened again: nothing to open.
-  check("opening it again opens nothing and spends nothing", /Nothing here is locked/.test((await refused(open(TRI, B1))) ?? "") && (await credits(TRI)) === c1 - 2);
+  check("opening it again opens nothing and spends nothing", /Nothing here is locked/.test((await refused(open(TRI, B1))) ?? "") && (await credits(TRI)) === c1 - 1);
   // The server decides.
   const forged = await refused(open(TRI, OUT));
   tri = await view(TRI);
-  check("a company not in her Crystal Ball can't be opened free (a forged request)", forged === t.CRYSTAL_NOT_IN && company(tri, OUT).hidden === true && tri.me!.credits === c1 - 2, forged);
+  check("a company not in her Crystal Ball can't be opened free (a forged request)", forged === t.CRYSTAL_NOT_IN && company(tri, OUT).hidden === true && tri.me!.credits === c1 - 1, forged);
   check("only a company opens that way", /Only a company opens/.test((await refused(t.perform(TRI, { type: "unlock", entity: "contact", id: ceo.id, field: "email", from: "crystal" }, BASE))) ?? ""));
   const othForged = await refused(open(OTH, B1));
   check("Orbweaver is outside Oto's Crystal Ball: refused for him", othForged === t.CRYSTAL_NOT_IN && company(await view(OTH), B1).hidden === true, othForged);
   // Outside Crystal Ball the free company of the day works as before.
   const o0 = await credits(OTH);
   const othFree = await unlock(OTH, "company", OUT, "identity");
-  check("Oto's free company of the day, outside Crystal Ball, as before", (await credits(OTH)) === o0 && othFree.message.includes(t.FREE_COMPANY_USED), othFree.message);
+  // Trial and Pro: free opens up to PRO_OPENS_DAILY a day, outside Crystal Ball, and it says how many are left.
+  check("Oto's company outside Crystal Ball opens free on Trial, with today's count", (await credits(OTH)) === o0 && othFree.message.includes(t.proOpenLine(14)), othFree.message);
   const othPaid = await unlock(OTH, "company", B1, "identity");
-  check("then Orbweaver from the table costs him 2", (await credits(OTH)) === o0 - 2 && !/Crystal Ball/.test(othPaid.message), othPaid.message);
+  check("then Orbweaver from the table is free too (13 left), not from Crystal Ball", (await credits(OTH)) === o0 && othPaid.message.includes(t.proOpenLine(13)) && !/Crystal Ball/.test(othPaid.message), othPaid.message);
 
   /* ---------- Pro ---------- */
   console.log("\nPro: the same");
@@ -347,7 +348,8 @@ async function main() {
   check("Oto's Orbweaver record is the same before and after Fen's full open", same(company(mo, B1), othBeforeFull));
   const moB1 = company(mo, B1);
   check("Oto still sees Orbweaver's people locked", peopleOf(moB1).every((p) => p.cells.name.s === "locked" && p.cells.email?.s !== "value"), peopleOf(moB1).map((p) => p.cells.name));
-  check("nothing Fen opened is in Oto's table", !named(company(mo, B1), ["Marisol", "Achterberg", "Bastian Quell", "Wren Holloway", "Ivo Castellan", "marisol@", "555.0141"]).length);
+  // Oto opened Orbweaver himself, so who held its seats is free to him too (PEERS_FREE); the people Fen opened stay hers.
+  check("nothing Fen opened is in Oto's table", !named(company(mo, B1), ["Marisol", "Achterberg", "Bastian Quell", "marisol@", "555.0141"]).length);
   // The next UTC day: one again, and nothing already paid comes back.
   skew += DAY;
   free = await view(FREE);
@@ -385,10 +387,10 @@ async function main() {
   const roles = (await tools.listOpenRoles(triCtx, { limit: 40 })) as { roles: { company_id: string; unlock: { cost?: string } | string }[] };
   const b2Role = roles.roles.find((r) => r.company_id === B2);
   check("list_open_roles quotes 0 credits for its open role's company", !!b2Role && typeof b2Role.unlock === "object" && /^0 credits: it's in the member's Crystal Ball/.test(b2Role.unlock.cost ?? ""), b2Role);
-  // Pam: today's free company used (on Quillmark), and Ravenmoor isn't in her Crystal Ball.
+  // Pam: Ravenmoor isn't in her Crystal Ball. On Trial it opens free within the day's fair use.
   await unlock(PAY, "company", B2, "identity");
   const qOut = (await tools.unlock(await ctx(PAY), { entity: "company", id: B3, field: "identity" })) as { would_spend?: number; message: string };
-  check("for a member without it in Crystal Ball: 2 credits, no Crystal Ball words", qOut.would_spend === 2 && !/Crystal Ball/.test(qOut.message), qOut);
+  check("for a member without it in Crystal Ball: 0 on Trial (fair use), said so, no Crystal Ball words", qOut.would_spend === 0 && /opens free on the member's plan \(15 a day\)/.test(qOut.message) && !/Crystal Ball/.test(qOut.message), qOut);
   const done = (await tools.unlock(triCtx, { entity: "company", id: B2, field: "identity", confirm: true })) as { confirmed?: boolean; credits_left?: number };
   check("confirmed, it spends nothing and the company is hers", done.confirmed === true && done.credits_left === (await credits(TRI)) && !company(await view(TRI), B2).hidden, done);
   const acct = (await tools.myAccount(await ctx(FREE))) as { free_company_today?: string; how_credits_work?: string };

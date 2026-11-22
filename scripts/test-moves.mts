@@ -408,17 +408,20 @@ async function main() {
   /* ================= opening, and the ways in that follow ================= */
   console.log("\nthe way in");
   const credits = async (tok: string) => (await T.buildView(tok)).me!.credits;
+  /** An unlock of who held a seat, which is free now (PEERS_FREE): "Nothing here is locked" is the answer, and fine. */
+  const free = (p: Promise<unknown>) => p.catch((e: Error) => {
+    if (!/Nothing here is locked/.test(String(e?.message))) throw e;
+  });
   const before = await credits(TES);
   for (const id of [P.tall, P.salt, P.copp]) await act(TES, { type: "unlock", entity: "company", id, field: "identity", from: "crystal" });
   check("opening a company from a move costs what Crystal Ball costs: nothing on Trial", (await credits(TES)) === before, [before, await credits(TES)]);
   let tes = await homeMoves(TES);
   const bySeat = (m: Move) => (m.way.kind === "holder" || m.way.kind === "role" ? m.way.seatId : "");
-  check("opened: who held the seat is still locked, 1 credit", tes.moves[1].do === "seeHolder" && tes.moves[1].way.kind === "holder" && tes.moves[1].way.name === null && !tes.moves[1].hidden, tes.moves[1]);
+  // Fellow fractionals are free (PEERS_FREE): once the company is open, who held its seat shows at no charge.
+  check("opened: who held the seat shows free, and the move is to reach them", tes.moves[1].way.kind === "holder" && tes.moves[1].way.name === "Hana Holder" && tes.moves[1].do !== "seeHolder" && !tes.moves[1].hidden, tes.moves[1]);
   check("opened: the open role's posting came with the company", tes.moves[0].do === "reply" && tes.moves[0].way.kind === "role" && tes.moves[0].way.posting === "https://tallgrass.example/careers/revops", tes.moves[0].way);
   check("the role's title is shown as the record has it", tes.moves[0].way.kind === "role" && tes.moves[0].way.title === "Fractional VP RevOps ($9k/mo)");
-  await act(TES, { type: "unlock", entity: "engagement", id: bySeat(tes.moves[1]), field: "operator" });
-  await act(TES, { type: "unlock", entity: "engagement", id: bySeat(tes.moves[2]), field: "operator" });
-  check("people cost what they cost: 1 credit each", (await credits(TES)) === before - 2, [before, await credits(TES)]);
+  check("seat holders cost nothing: no credit spent on them", (await credits(TES)) === before && !!bySeat(tes.moves[1]) && !!bySeat(tes.moves[2]), [before, await credits(TES)]);
   tes = await homeMoves(TES);
   const [tTall, tSalt, tCopp] = tes.moves;
   check("a seat holder on Merlin: Message the seat holder", tSalt.do === "holderMessage" && tSalt.title === "Message the seat holder" && tSalt.way.kind === "holder" && tSalt.way.name === "Hana Holder" && tSalt.way.member, tSalt);
@@ -512,8 +515,9 @@ async function main() {
   await act(TES, { type: "unlock", entity: "company", id: P.blue, field: "identity", from: "crystal" });
   const blueRec = await recOf(TES, P.blue);
   const blueLocked = M.buildMove(blueRec, rowOf0(tes, P.blue) ?? (await rowFor(TES, P.blue)), undefined, tesMe);
-  check("a locked seat holder: the price, and no promise of how to reach them", blueLocked.do === "seeHolder" && blueLocked.line === "1 credit shows who held it. Nobody who hired them is on file yet." && !/Merlin|invite/i.test(blueLocked.line), blueLocked.line);
-  await act(TES, { type: "unlock", entity: "engagement", id: (blueLocked.way as { seatId: string }).seatId, field: "operator" });
+  // Fellow fractionals are free (PEERS_FREE): once Bluefin is open, who held its seat shows, and the line names no price.
+  check("a seat holder at an open company: free, no price in the line", blueLocked.do !== "seeHolder" && blueLocked.way.kind === "holder" && !/credit/.test(blueLocked.line), blueLocked.line);
+  await free(act(TES, { type: "unlock", entity: "engagement", id: (blueLocked.way as { seatId: string }).seatId, field: "operator" }));
   const blueOpen = await recOf(TES, P.blue);
   const noInvite = { ...blueOpen, engagements: blueOpen.engagements.map((e) => ({ ...e, invite: undefined })) } as CompanyRec;
   const bn = M.buildMove(noInvite, await rowFor(TES, P.blue), undefined, tesMe);
@@ -847,8 +851,9 @@ async function main() {
   check("a locked company: nobody matched, the contact stays under people at companies not on Merlin", !nk.companies.some((c) => c.id === P.copp) && nk.loose.some((p) => p.name === "Pella Quist"), nk.companies.map((c) => c.name));
   await act(KIT, { type: "unlock", entity: "company", id: P.copp, field: "identity", from: "crystal" });
   nk = await netKit();
-  check("the company open, its seat holder still locked: no match (a paid fact isn't given away)", !nk.companies.some((c) => c.id === P.copp));
-  await act(KIT, { type: "unlock", entity: "engagement", id: pub("e_copp_cmo"), field: "operator" });
+  // Fellow fractionals are free (PEERS_FREE): with the company open, its seat holder is seen at once, so the match is made.
+  check("the company open: its seat holder is free to see, so the match is made", nk.companies.some((c) => c.id === P.copp));
+  await free(act(KIT, { type: "unlock", entity: "engagement", id: pub("e_copp_cmo"), field: "operator" }));
   nk = await netKit();
   const coppNet = nk.companies.find((c) => c.id === P.copp);
   const pella = coppNet?.people.find((p) => p.name === "Pella Quist");
@@ -864,14 +869,14 @@ async function main() {
   check("the note has no address in its words and no rate", !!kDraft && !/@/.test(kDraft.body) && !RATE.test(kDraft.body));
   // The decoy: a contact with a seat holder's name and a title that isn't a fractional's, nor the seat's function.
   await act(KIT, { type: "unlock", entity: "company", id: P.blue, field: "identity", from: "crystal" });
-  await act(KIT, { type: "unlock", entity: "engagement", id: pub("e_blue_cro"), field: "operator" });
+  await free(act(KIT, { type: "unlock", entity: "engagement", id: pub("e_blue_cro"), field: "operator" }));
   nk = await netKit();
   check("a name alone never matches: Ivo the office manager isn't the fractional CRO", !nk.companies.some((c) => c.id === P.blue) && nk.loose.some((p) => p.name === "Ivo Castellan"));
   // By email: Hana is a member; her seat is at Saltmarsh, which Kit hasn't opened.
   check("by email, a locked company: no match yet", !nk.companies.some((c) => c.id === P.salt));
   await act(KIT, { type: "unlock", entity: "company", id: P.salt, field: "identity", from: "crystal" });
-  check("by email, the seat holder still locked: no match yet", !(await netKit()).companies.some((c) => c.id === P.salt));
-  await act(KIT, { type: "unlock", entity: "engagement", id: pub("e_salt_cro"), field: "operator" });
+  check("by email, the company open: the seat holder is free to see, so the match is made", (await netKit()).companies.some((c) => c.id === P.salt));
+  await free(act(KIT, { type: "unlock", entity: "engagement", id: pub("e_salt_cro"), field: "operator" }));
   nk = await netKit();
   const hana = nk.companies.find((c) => c.id === P.salt)?.people.find((p) => p.email === "han.moves@example.com");
   check("by email: her contact is Hana, a member, so the seat joins though the names differ", !!hana && hana.seat?.id === pub("e_salt_cro") && !nk.loose.some((p) => p.email === "han.moves@example.com"), nk.companies.find((c) => c.id === P.salt));

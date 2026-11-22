@@ -658,7 +658,8 @@ section("report", async () => {
   await unlockCo(P, payCo.id);
   const pv = await P.view();
   let paidFact = null;
-  for (const x of cellsOf(pv)) if (!paidFact && x.entity === "engagement" && x.field === "role" && x.cell.s === "locked" && !x.company.hidden) paidFact = { entity: x.entity, id: x.id, field: x.field };
+  // (Who held a seat and the role are free now at a company she sees: the paid fact is a rate, an end month or how it was sourced.)
+  for (const x of cellsOf(pv)) if (!paidFact && x.entity === "engagement" && ["rate", "end", "sourced"].includes(x.field) && x.cell.s === "locked" && !x.company.hidden) paidFact = { entity: x.entity, id: x.id, field: x.field };
   const [free1, free2, free3, conf] = seedFacts(pv, 4);
   const un = await P.act({ type: "unlock", ...paidFact });
   const rep = await P.act({ type: "report", ...paidFact });
@@ -893,7 +894,8 @@ section("price", async () => {
   const mRole = await M.act({ type: "unlock", entity: "engagement", id: e3, field: "role" });
   const mPost = await M.act({ type: "unlock", entity: "engagement", id: e3, field: "posting" });
   const lPost = await L.act({ type: "unlock", entity: "engagement", id: e3, field: "posting" });
-  check("while the claim holds, the role and the posting of the closed role are separate facts", kClaim.status === 200 && mRole.status === 200 && mPost.status === 200 && lPost.status === 200 && (await M.view()).me.credits === STARTER - PRICE - 2, [kClaim.json?.error, mRole.json?.error, mPost.json?.error, (await M.view()).me.credits]);
+  // The role comes with who held the seat, free once the company is open (PEERS_FREE); the posting of the closed role is its own fact.
+  check("while the claim holds, the role shows free with its holder and the posting of the closed role is its own fact", kClaim.status === 200 && mRole.status === 400 && mPost.status === 200 && lPost.status === 200 && (await M.view()).me.credits === STARTER - PRICE - 1, [kClaim.json?.error, mRole.json?.error, mPost.json?.error, (await M.view()).me.credits]);
   await K.act({ type: "notMine", engagementId: e3 });
   const mv = await M.view();
   // The title was bought with who held the seat (SEAT_BUNDLE, recorded on the seat holder): the name came off, so that credit came back, and an open role's title is free.
@@ -1152,11 +1154,12 @@ section("retract", async () => {
   );
   const e = eCo?.engagements.find((x) => x.cells.role?.s === "empty" && x.cells.function?.s === "value" && !x.cells.function.system && !x.yours) ?? null;
   if (eCo?.hidden) await unlockCo(R, eCo.id);
-  const seat = await R.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: R.name, function: "Marketing", role: `Fractional CMO ${RUN}` } });
+  // (The role is free with who held the seat now: the fact another member pays for is the rate.)
+  const seat = await R.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: R.name, function: "Marketing", role: `Fractional CMO ${RUN}`, rate: "$9k/mo" } });
   const sid = seat.json?.id;
   await unlockCo(O, h.id);
-  const un = await O.act({ type: "unlock", entity: "engagement", id: sid, field: "role" });
-  const r3 = await back(R, { entity: "engagement", id: sid, field: "role" });
+  const un = await O.act({ type: "unlock", entity: "engagement", id: sid, field: "rate" });
+  const r3 = await back(R, { entity: "engagement", id: sid, field: "rate" });
   check("a fact another member unlocked can't be taken back", un.status === 200 && r3.status === 400 && r3.json?.error === "Someone already unlocked this, so it stays. You can still edit it.", [un.json?.message, r3.json]);
 
   // A seat from our records that someone else holds takes no role from this member, so there is nothing to take back.
@@ -1524,41 +1527,24 @@ section("econ", async () => {
     }
   check("no Active seat or open role in the whole table has a locked end month", liveLocked === 0 && endsLocked >= 1, { liveLocked, endsLocked });
 
-  // 2. Who held a seat and their role: one purchase, either lock.
-  check("on a seat with its holder on file, who held it and the role are both locked", ya?.cells.operator?.s === "locked" && ya.cells.role?.s === "locked", [ya?.cells.operator?.s, ya?.cells.role?.s]);
+  // 2. Who held a seat and their role: free to members who see the company (PEERS_FREE, fellow fractionals are free).
+  check("on a seat with its holder on file, who held it and the role show free once the company is open", ya?.cells.operator?.s === "value" && ya.cells.operator.v === X.name && ya.cells.role?.s === "value" && ya.cells.role.v === ROLE && !ya.cells.operator.paid, [ya?.cells.operator, ya?.cells.role]);
   const y1 = await Y.act({ type: "unlock", entity: "engagement", id: aid, field: "role" });
-  const yGot = (f) => y1.json?.cells?.find((c) => c.id === aid && c.field === f)?.cell;
-  check(
-    "unlocking the role opens who held it too, for 1 credit",
-    y1.status === 200 && y1.json?.message === "Unlocked the seat holder and their role for 1 credit." && yGot("operator")?.v === X.name && yGot("role")?.v === ROLE && y1.json?.me?.credits === STARTER - PRICE - 1,
-    y1.json?.error ?? [y1.json?.message, y1.json?.cells?.map((c) => [c.field, c.cell.s])],
-  );
-  check("  and it counts as a seat holder unlocked (Get started)", y1.json?.me?.holdersUnlocked === 1 && y1.json?.me?.companiesUnlocked === 1 && y1.json?.me?.unlocked === 2, y1.json?.me);
   const y2 = await Y.act({ type: "unlock", entity: "engagement", id: aid, field: "operator" });
-  check("  holding the pair, there is nothing more to buy", y2.status === 400 && y2.json?.error === NOTHING_LOCKED && (await Y.view()).me.credits === STARTER - PRICE - 1, y2.json);
-  const yHist = (await Y.view()).ledger.find((l) => l.reason === "unlock");
-  check("  the credit history names the pair", yHist?.field === "Seat holder and role", yHist);
-  const z1 = await Z.act({ type: "unlock", entity: "engagement", id: aid, field: "operator" });
-  const zSeen = engOf(await Z.view(), aid);
-  check(
-    "unlocking who held it opens the role too, for 1 credit",
-    z1.status === 200 && z1.json?.message === "Unlocked the seat holder and their role for 1 credit." && zSeen?.cells.role?.v === ROLE && zSeen.cells.role.paid === true && (await Z.view()).me.credits === STARTER - PRICE - 1,
-    z1.json?.error ?? z1.json?.message,
-  );
+  check("asking to unlock either spends nothing", y1.status === 400 && y1.json?.error === NOTHING_LOCKED && y2.status === 400 && y2.json?.error === NOTHING_LOCKED && (await Y.view()).me.credits === STARTER - PRICE, [y1.json, y2.json]);
   const w1 = await W.act({ type: "unlockMany", items: [{ entity: "engagement", id: eid, field: "operator" }, { entity: "engagement", id: eid, field: "role" }, { entity: "engagement", id: eid, field: "end" }] });
-  check("Unlock all counts who held it and the role once: 2 credits with the dated end", w1.status === 200 && w1.json?.message === "Unlocked 2 facts for 2 credits." && (await W.view()).me.credits === STARTER - PRICE - 2, w1.json?.error ?? w1.json?.message);
-  const xBack = await X.act({ type: "retract", entity: "engagement", id: aid, field: "role" });
-  check("the holder can't take back the role of a pair another member bought", xBack.status === 400 && xBack.json?.error === "Someone already unlocked this, so it stays. You can still edit it.", xBack.json);
+  check("Unlock all buys only the dated end: 1 credit", w1.status === 200 && w1.json?.message === "Unlocked the end month for 1 credit." && (await W.view()).me.credits === STARTER - PRICE - 1, w1.json?.error ?? w1.json?.message);
+  const xBack = await X.act({ type: "retract", entity: "engagement", id: eid, field: "end" });
+  check("the holder can't take back a fact another member bought", xBack.status === 400 && xBack.json?.error === "Someone already unlocked this, so it stays. You can still edit it.", xBack.json);
   const adm = await admin();
   if (adm) {
-    const before = { Y: (await Y.view()).me.credits, Z: (await Z.view()).me.credits };
+    const before = { W: (await W.view()).me.credits };
+    const rmEnd = await adm.act({ type: "adminRemove", entity: "engagement", id: eid, field: "end" });
+    const mid = { W: (await W.view()).me.credits };
+    check("removing a fact someone paid for refunds them once", rmEnd.status === 200 && mid.W === before.W + 1, { before, mid });
     const rmOp = await adm.act({ type: "adminRemove", entity: "engagement", id: aid, field: "operator" });
-    const mid = { Y: (await Y.view()).me.credits, Z: (await Z.view()).me.credits };
-    check("removing who held it refunds each payer of the pair once, whichever lock they used", rmOp.status === 200 && mid.Y === before.Y + 1 && mid.Z === before.Z + 1, { before, mid });
-    const rmRole = await adm.act({ type: "adminRemove", entity: "engagement", id: aid, field: "role" });
-    const after = { Y: (await Y.view()).me.credits, Z: (await Z.view()).me.credits };
-    check("  removing the role then refunds nobody twice", rmRole.status === 200 && after.Y === mid.Y && after.Z === mid.Z, { mid, after });
-  } else skip("seat pair refunds", "no admin account (set ADMIN_TOKEN)");
+    check("  removing who held a seat refunds nobody: nobody paid to see it", rmOp.status === 200 && (await Y.view()).me.credits === STARTER - PRICE && (await W.view()).me.credits === mid.W);
+  } else skip("refunds", "no admin account (set ADMIN_TOKEN)");
 
   // 3. A person's LinkedIn, email and phone open after their name and title, and nobody adds them before.
   const A = await member("Ari Adder");
@@ -1645,8 +1631,9 @@ section("econ", async () => {
     const kAfter = await K.view();
     const kSeat = engOf(kAfter, seatId);
     check(
-      `  asked for with the company in one request, they go through: the company (${PRICE}), who held the seat with their role, and the person`,
-      kMany.status === 200 && kAfter.me.credits === STARTER - PRICE - 2 && kSeat?.company.hidden === false && kSeat.cells.operator?.v === H.name && kSeat.cells.role?.s === "value" && kSeat.people[0]?.cells.name?.v === "Gus Gatekeeper",
+      // Who held the seat, with the role, comes free with the company (PEERS_FREE): the company and the person are what cost.
+      `  asked for with the company in one request, they go through: the company (${PRICE}) and the person, who held the seat free with their role`,
+      kMany.status === 200 && kAfter.me.credits === STARTER - PRICE - 1 && kSeat?.company.hidden === false && kSeat.cells.operator?.v === H.name && kSeat.cells.role?.s === "value" && kSeat.people[0]?.cells.name?.v === "Gus Gatekeeper",
       kMany.json?.error ?? [kMany.json?.message, kAfter.me.credits],
     );
   } else skip("a locked company's people", NEED_SCAN);

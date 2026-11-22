@@ -30,11 +30,12 @@ export interface PriceRow {
  * company's people after the company. A seat's end month is free while the seat is going, and a
  * seat with nobody named keeps its role as a purchase of its own (free with SCAN_ROLE_FREE).
  */
-export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE): PriceRow[] {
+export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE, peersFree = FIELDS.PEERS_FREE): PriceRow[] {
   /** What one credit opens, where it isn't the field itself. Null leaves the field out (it comes with another). */
   const PURCHASE: Partial<Record<Entity, Record<string, string | null>>> = {
     engagement: {
-      operator: "Who held it, with the role they held",
+      // Fellow fractionals are free (PEERS_FREE): who held a seat moves to the free side.
+      operator: peersFree ? null : "Who held it, with the role they held",
       role: scanRoleFree ? null : "Role of a seat with nobody named",
       end: "End month of a seat that ended",
     },
@@ -46,18 +47,18 @@ export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE): PriceRow[] {
       label: "The company",
       lockedFirst: ["Name and website"],
       price: "2 credits",
-      note: "Every company's name, website and LinkedIn are locked until you unlock it. Its logo and About show (the About without its name, web address or links). 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Its people and who held its seats open after that. Type a company's full name or website in search to find one you already know. The preview on this page names a few hiring companies as a sample.",
+      note: "Every company's name, website and LinkedIn are locked until you unlock it. Its logo and About show (the About without its name, web address or links). 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Who held its seats then shows free, and its people open after it. Type a company's full name or website in search to find one you already know. The preview on this page names a few hiring companies as a sample.",
     },
     {
       entity: "engagement",
       label: "The seat",
-      freeLast: ["End month while the seat is going", ...(scanRoleFree ? ["Role of a seat with nobody named"] : []), "Title of an open role", "Open and closed dates"],
-      note: "Who held a seat and the role they held are one unlock, 1 credit for both. An open role's title is free while it is open, and its job posting, posted rate and hours are one credit together.",
+      freeLast: [...(peersFree ? ["Who held it, with the role they held"] : []), "End month while the seat is going", ...(scanRoleFree ? ["Role of a seat with nobody named"] : []), "Title of an open role", "Open and closed dates"],
+      note: `${peersFree ? "Who held a seat and the role they held are free once you can see the company: fellow fractionals never cost a credit." : "Who held a seat and the role they held are one unlock, 1 credit for both."} An open role's title is free while it is open, and its job posting, posted rate and hours are one credit together.`,
     },
     {
       entity: "contact",
       label: "A hiring contact",
-      note: "A person's name and title are one unlock, 1 credit for both. Their LinkedIn, email and phone open after that, 1 credit each.",
+      note: "A person at the company, like the hiring exec: their name and title are one unlock, 1 credit for both. Their LinkedIn, email and phone open after that, 1 credit each.",
     },
   ];
   return rows.map((row) => {

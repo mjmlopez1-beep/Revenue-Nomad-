@@ -256,17 +256,21 @@ async function main() {
   const noHook = await tryIt(() => n.sendTest(HANA, "webhook"));
   check("Send a test with nothing connected says what to do", !noHook.ok && /Connect a webhook first/.test(noHook.error), noHook);
 
-  /* ---------- seat alerts: unlocking who held the seat ---------- */
+  /* ---------- seat alerts: unlocking a fact on the seat ---------- */
+  // Who held a seat is free to see now (PEERS_FREE), so it is no event: a fact on the seat still is.
   console.log("\nSomeone engages your seat");
   clear();
   const seat = pub("e_acme_hana");
-  const un = await act(SAL, { type: "unlock", entity: "engagement", id: seat, field: "operator" });
+  const free = await act(SAL, { type: "unlock", entity: "engagement", id: seat, field: "operator" });
+  await settle();
+  check("who held the seat is free to see: nothing to unlock, no post", !free.ok && /Nothing here is locked/.test(free.error) && to(SLACK).length === 0, free);
+  const un = await act(SAL, { type: "unlock", entity: "engagement", id: seat, field: "end" });
   await settle();
   const seatPosts = to(SLACK);
-  check("unlocking who held a seat works", un.ok, un);
+  check("unlocking a fact on a seat works", un.ok, un);
   check("the seat holder gets one Slack post", seatPosts.length === 1, seatPosts.map(textOf));
   const seatText = seatPosts[0] ? textOf(seatPosts[0]) : "";
-  check("it reads as an opportunity, by function and title", /A fractional VP Sales unlocked your seat at Acme Robotics/.test(seatText) && /may want to talk, or partner/.test(seatText), seatText);
+  check("it reads as an opportunity, by function and title", /A fractional VP Sales unlocked .+ on your seat at Acme Robotics/.test(seatText) && /may want to talk, or partner/.test(seatText), seatText);
   check("it never names the member who unlocked", !/\bSal\b|Starter|sal\.starter/.test(seatText), seatText);
   check("it links to the seat's company", seatText.includes(`?c=${encodeURIComponent(pub("c_acme"))}`), seatText);
   clear();

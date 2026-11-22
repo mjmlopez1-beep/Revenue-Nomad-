@@ -546,12 +546,13 @@ async function main() {
   const g1 = await tool(at, "get_company", { company: coRow?.id });
   const gSeat = g1.out?.seats?.[0];
   check(
-    "get_company shows the seat with free facts and locked ones marked, who held it and the role they held as one purchase",
+    // Fellow fractionals are free (PEERS_FREE): at a company the member sees, who held the seat and the role show at no charge.
+    "get_company shows the seat with free facts and locked ones marked, who held it and the role they held free",
     gSeat?.function === "Sales" &&
       gSeat.type === "Fractional" &&
       gSeat.start === "2024-01" &&
-      gSeat.seat_holder === "locked, 1 credit opens who held this seat and the role they held together" &&
-      gSeat.role === gSeat.seat_holder &&
+      typeof gSeat.seat_holder === "string" && !/locked|credit/.test(gSeat.seat_holder) &&
+      typeof gSeat.role === "string" && !/locked|credit/.test(gSeat.role) &&
       gSeat.rate === "locked, 1 credit to unlock",
     gSeat,
   );
@@ -717,8 +718,9 @@ async function main() {
     const pvHolder = await tool(dc.access_token, "unlock", { entity: "seat", id: gSeat?.id, field: "seat_holder" });
     const pvRole = await tool(dc.access_token, "unlock", { entity: "seat", id: gSeat?.id, field: "role" });
     check(
-      "who held a seat and the role they held price as one purchase, asked either way",
-      pvHolder.out?.would_spend === 1 && pvHolder.out.would_open === "who held this seat and the role they held" && pvRole.out?.would_spend === 1 && pvRole.out.would_open === pvHolder.out.would_open,
+      // Fellow fractionals are free (PEERS_FREE): with the company open, who held a seat and the role cost nothing, asked either way.
+      "who held a seat and the role they held cost nothing once the company is open, asked either way",
+      pvHolder.out?.spent === 0 && /Nothing to unlock: you can already see who held this seat and the role they held/.test(pvHolder.out.message ?? "") && pvRole.out?.spent === 0,
       [pvHolder.out, pvRole.out],
     );
     // B, who types the locked company's name in Add, adds a decision maker there.

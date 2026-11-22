@@ -28,6 +28,8 @@ const seed = {
     { id: "c_acme", fields: { name: "Acme Robotics", website: "acme.example" } },
     { id: "c_beta", fields: { name: "Beta Labs", website: "beta.example" } },
     { id: "c_many", fields: { name: "Many Company", website: "many.example" } },
+    // A company Sal hasn't opened: who held its seat stays locked for him (fellow fractionals are free only once the company is open).
+    { id: "c_dark", fields: { name: "Dark Harbor", website: "darkharbor.example" } },
   ],
   engagements: [
     { id: "e_acme_hana", companyId: "c_acme", fields: { source: "Published engagement", operator: "Hana Holder", role: "Fractional VP Sales", function: "Sales", start: "2023-01", end: "2024-06", status: "Ended" } },
@@ -35,6 +37,7 @@ const seed = {
     { id: "e_acme_nora", companyId: "c_acme", fields: { source: "Published engagement", operator: "Nora Neversigned", function: "Marketing" } },
     { id: "e_acme_sal", companyId: "c_acme", fields: { source: "Published engagement", operator: "Sal Starter", function: "Sales" } },
     { id: "e_acme_zed", companyId: "c_acme", fields: { source: "Published engagement", operator: "Zed Unknownperson", function: "RevOps" } },
+    { id: "e_dark_hana", companyId: "c_dark", fields: { source: "Published engagement", operator: "Hana Holder", function: "Sales", start: "2021-01", status: "Ended", end: "2021-12" } },
     ...Array.from({ length: HOLDERS }, (_, i) => ({ id: `e_many_${i}`, companyId: "c_many", fields: { source: "Published engagement", operator: holderName(i), function: "Sales", start: "2024-01" } })),
   ],
   contacts: [],
@@ -113,28 +116,28 @@ async function main() {
   /* ---------- who can write to whom ---------- */
   console.log("\nWho can write to whom");
   const hanaSeat = pub("e_acme_hana");
-  const before = await act(SAL, { type: "message.start", engagementId: hanaSeat, text: "Hi Hana" });
-  check("a seat holder who is still locked can't be messaged", !before.ok && /Unlock who held this seat first/.test(before.error), before);
+  const before = await act(SAL, { type: "message.start", engagementId: pub("e_dark_hana"), text: "Hi Hana" });
+  check("a seat holder who is still locked (a company Sal hasn't opened) can't be messaged", !before.ok && /Unlock who held this seat first/.test(before.error), before);
   const own = await act(SAL, { type: "message.start", engagementId: pub("e_acme_sal"), text: "Hi me" });
   check("nobody messages themselves", !own.ok && /your own seat/.test(own.error), own);
-  const un = await act(SAL, { type: "unlock", entity: "engagement", id: pub("e_acme_nora"), field: "operator" });
   const nora = await act(SAL, { type: "message.start", engagementId: pub("e_acme_nora"), text: "Hi Nora" });
-  check("a seat holder who never signed in can't be messaged", un.ok && !nora.ok && /hasn't signed in/.test(nora.error), nora);
+  check("a seat holder who never signed in can't be messaged", !nora.ok && /hasn't signed in/.test(nora.error), nora);
   await act(SAL, { type: "unlock", entity: "engagement", id: pub("e_acme_zed"), field: "operator" });
   const zed = await act(SAL, { type: "message.start", engagementId: pub("e_acme_zed"), text: "Hi Zed" });
   check("a seat holder who is not a member can't be messaged", !zed.ok && /Nobody on Merlin is linked/.test(zed.error), zed);
   const gone = await act(SAL, { type: "message.start", engagementId: "nope", text: "Hi" });
   check("a seat that isn't there is refused", !gone.ok, gone);
 
+  // Sal holds a seat at Acme, so the company is his: who held Hana's seat there is free to see (PEERS_FREE).
   const unlocked = await act(SAL, { type: "unlock", entity: "engagement", id: hanaSeat, field: "operator" });
-  check("Sal unlocks who held the Acme seat", unlocked.ok, unlocked);
+  check("who held the Acme seat is free to Sal: nothing to unlock", !unlocked.ok && /Nothing here is locked/.test(unlocked.error), unlocked);
   const empty = await act(SAL, { type: "message.start", engagementId: hanaSeat, text: "   " });
   check("an empty message is refused", !empty.ok && empty.error === "Write a message first.", empty);
   const long = await act(SAL, { type: "message.start", engagementId: hanaSeat, text: "x".repeat(2001) });
   check("a message over 2,000 characters is refused", !long.ok && /2,000 characters/.test(long.error), long);
   const opener = "Hi Hana, I saw you held the Sales seat at Acme Robotics. I'm talking with them now and would love to hear how it went. ".repeat(3);
   const start = await act(SAL, { type: "message.start", engagementId: hanaSeat, text: opener });
-  check("after unlocking, Sal starts a conversation", start.ok && start.conversation?.messages.length === 1 && start.conversation.started === true, start);
+  check("Sal starts a conversation", start.ok && start.conversation?.messages.length === 1 && start.conversation.started === true, start);
   check("the answer carries no email address and no internal id", noSecrets(start), JSON.stringify(start).slice(0, 300));
   const convId = start.conversation?.id;
   const salSees = start.conversation;

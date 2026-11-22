@@ -3,7 +3,7 @@
  * the landing page and in the app's "Questions and feedback" sheet). Pure, so
  * scripts/test-prices.mts can check what they say about prices.
  */
-import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
+import { COMPANY_PRICE_SAY, EARN_CAP, PRO_OPENS_DAILY, REFERRAL_BONUS } from "@/lib/tableFields";
 import { PRICES, TOPUP_CREDITS, TRIAL_DAYS } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
 import { FEATURE_NAME } from "@/lib/radar/types";
@@ -31,7 +31,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
   return [
     [
       "How do I reach the fractional who held a seat?",
-      `Where a seat holder is on file, 1 credit shows who held the seat and the role they held. If they are a member, message them inside Merlin. If not, Invite to connect gives you a note and a link to their seat. When they claim it, a conversation opens between you, and if they're new to Merlin you both get ${REFERRAL_BONUS} credits. Many seats Revenue Nomad found have nobody named yet, until the fractional who held one claims it.`,
+      `Where a seat holder is on file, who held the seat and the role they held are free to see once you can see the company: fellow fractionals never cost a credit. If they are a member, message them inside Merlin. If not, Invite to connect gives you a note and a link to their seat. When they claim it, a conversation opens between you, and if they're new to Merlin you both get ${REFERRAL_BONUS} credits. Many seats Revenue Nomad found have nobody named yet, until the fractional who held one claims it.`,
     ],
     [
       "Can I take my name off a seat?",
@@ -47,11 +47,11 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does an open role cost?",
-      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Your first company each day is free. The people there, and who held its seats, open after the company. The preview on the homepage names a few hiring companies as a sample.",
+      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. On Pro and the trial, companies open free, up to ${PRO_OPENS_DAILY} a day. The people there open after the company, and so do who held its seats, free. The preview on the homepage names a few hiring companies as a sample.",
     ],
     [
       "What does a seat cost to see?",
-      `Its function, type of work, status, start month, why they hired and hours a week are free. So is its end month while the seat is still going. Who held it and the role they held are one unlock, 1 credit for both. A dated end month on a seat that ended, how it was sourced and the rate are 1 credit each. ${
+      `Its function, type of work, status, start month, why they hired and hours a week are free. So is its end month while the seat is still going. Who held it and the role they held are free once you can see the company. A dated end month on a seat that ended, how it was sourced and the rate are 1 credit each. ${
         scanRoleFree ? "On a seat with nobody named yet, the role is free." : "On a seat with nobody named yet, the role is 1 credit on its own."
       }`,
     ],
@@ -73,7 +73,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What will other members see about me?",
-      "Your name and title show on seats you held, with the role you held there, behind one lock that costs a member 1 credit. Only you can add a seat you held, and only you add facts about it. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.",
+      "Your name and title show on seats you held, with the role you held there, free to members who can see the company. Keep yourself out of the Fractionals directory and they stay behind a 1 credit lock. Only you can add a seat you held, and only you add facts about it. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.",
     ],
     [
       "What happens to a rate I share?",
@@ -97,11 +97,11 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What is Fractionals?",
-      "A directory of fractionals, one record each: their function and level, their seats now and past, and the kind of clients they serve. Members who choose to be shown are free to see and message. Someone not on Merlin yet costs 1 credit to see who they are, the same purchase as who held one of their seats, and then you can invite them with your own link. Your profile has the switch that shows you there or keeps you out.",
+      "A directory of fractionals, one record each: their function and level, their seats now and past, and the kind of clients they serve. It never costs a credit: members who choose to be shown are free to see and message, and someone not on Merlin yet shows by name, so you can invite them with your own link. Your profile has the switch that shows you there or keeps you out.",
     ],
     [
       "What does it cost?",
-      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Pro opens every company in your ${FEATURE_NAME} free, and starts with a ${TRIAL_DAYS}-day trial, no card needed. After that Pro is $${PRICES.month} a month or $${PRICES.year} a year. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
+      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Other companies are ${COMPANY_PRICE_SAY}. Pro opens companies free, up to ${PRO_OPENS_DAILY} a day plus every company in your ${FEATURE_NAME}: $${PRICES.month} a month or $${PRICES.year} a year. Pro + Close adds proposals drafted from your call, sent and signed: $${PRICES.closeMonth} a month or $${PRICES.closeYear} a year. Every new member starts with a ${TRIAL_DAYS}-day trial of Pro + Close, no card needed, and it ends into Free on its own. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
     ],
   ];
 }

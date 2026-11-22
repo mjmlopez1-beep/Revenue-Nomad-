@@ -10,11 +10,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LedgerRow, View } from "@/lib/tableTypes";
-import { COMPANY_PRICE, EARN_CAP, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, EARN_CAP, TAPER_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
 import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
-import { FREE_COMPANY_TODAY, freeCompanyNow } from "./display";
+import { freeCompanyNow, freeTodayWords } from "./display";
 import { CRYSTAL_FREE_TODAY, FEATURE_NAME } from "@/lib/radar/types";
 import { Pro, useUi } from "./ui";
 import { DataLink, NotificationsCard, SignInActions } from "./Settings";
@@ -283,17 +283,20 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
   const rules: [string, "plus" | "minus" | "flat", string][] = [
     [String(starter), "flat", `You start with ${starter} credits.`],
     ["+1", "plus", "You add a fact that's missing. Every answer on a seat you held earns 1, and so do company facts like the HQ or size, or a hiring contact."],
-    ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on."],
+    ["−1", "minus", "You unlock a fact, like a person's name and title, or their email, phone or LinkedIn. It stays unlocked for you from then on."],
     [
       `−${COMPANY_PRICE}`,
       "minus",
-      `You unlock a company: its name and website, with the job posting of each open role there. Who held each seat is 1 more. ${
-        // Free (billing live): the free one a day is Crystal Ball's, with everything on it. Trial and Pro: the first anywhere, and Crystal Ball's are free.
+      `You unlock a company: its name and website, with the job posting of each open role there. ${
+        // Free (billing live): the free one a day is Crystal Ball's, with everything on it. Trial and Pro: any company free, up to PRO_OPENS_DAILY a day, and Crystal Ball's on top.
         me.crystal === "one" || me.crystal === "used"
-          ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it.`
-          : `Your first company each day is free.${me.crystal === "all" ? ` Every company in your ${FEATURE_NAME} opens free.` : ""}`
+          ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it. On Pro, companies open free, up to ${PRO_OPENS_DAILY} a day plus all of ${FEATURE_NAME}.`
+          : me.proOpens
+            ? `On your plan, companies open free, up to ${PRO_OPENS_DAILY} a day plus every company in your ${FEATURE_NAME}. Past ${PRO_OPENS_DAILY}, a company is ${COMPANY_PRICE} credits until tomorrow.`
+            : `Your first company each day is free.${me.crystal === "all" ? ` Every company in your ${FEATURE_NAME} opens free.` : ""}`
       }`,
     ],
+    ["0", "flat", "Fellow fractionals are free: who held a seat and the role they held show once you can see the company, and the Fractionals directory never costs a credit."],
     ["+1", "plus", "Two other members confirm a fact you added."],
     [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company already on Merlin. They get ${REFERRAL_BONUS} too.`],
   ];
@@ -304,7 +307,7 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
         <div className={`tp-stat-n num${me.credits <= 3 ? " ember" : ""}`}>{me.credits}</div>
         <div className="tp-stat-l">{me.credits === 1 ? "Credit to spend" : "Credits to spend"}</div>
         {me.credits <= 3 && !owed && <div className="cr-stat-sub">{capped ? `You can earn again ${atTime(me.earnResetsAt)}.` : "Add a fact you know and you earn one."}</div>}
-        {freeCompanyNow(me) && <div className="cr-stat-sub">Plus {FREE_COMPANY_TODAY}: unlock one company for no credits.</div>}
+        {freeCompanyNow(me) && <div className="cr-stat-sub">Plus {freeTodayWords(me)}: {me.proOpens ? "they open for no credits" : "unlock one company for no credits"}.</div>}
         {me.crystal === "one" && <div className="cr-stat-sub">Plus {CRYSTAL_FREE_TODAY}: open one company there with everything on it.</div>}
         {!!me.pending && <div className="cr-stat-sub">+{me.pending} when confirmed: facts on a seat of yours at a company new to Merlin.</div>}
       </div>
@@ -360,6 +363,13 @@ export function MyCredits({ view, onBack, refresh, onUseInClaude, onNotification
           the limit still saves.
         </p>
         <p>Only 5 answers a day about a company&apos;s industry, size, revenue or how they sell earn a credit. You can unlock up to 100 facts a day, or 25 on your first day.</p>
+        {/* The Free plan's taper (lib/tableFields.ts FREE_TAPER_*), stated while billing is live. */}
+        {me.plan && (
+          <p data-taper>
+            {TAPER_RULE}
+            {me.taper ? ` Today: ${me.taper.earned} of ${me.taper.cap} from other people's companies.` : ""}
+          </p>
+        )}
       </div>
     </>
   );

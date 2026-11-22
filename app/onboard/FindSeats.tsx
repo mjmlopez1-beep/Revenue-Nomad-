@@ -78,7 +78,7 @@ function ClaimRow({ e, company, act }: { e: EngagementRec; company: string; act:
       <li className="ob-seat ob-seat-ask" role="group" aria-label="Claim this seat" ref={askRef}>
         <p>
           <b>Is this you?</b> {what} at {company}
-          {when ? `, ${when}` : ""}. Other members will see your name on it, behind a 1 credit lock.
+          {when ? `, ${when}` : ""}. Other members who can see the company will see your name on it.
         </p>
         <span className="ob-seat-acts">
           <button type="button" className="btn btn-pine" disabled={busy} aria-busy={busy} onClick={claim}>

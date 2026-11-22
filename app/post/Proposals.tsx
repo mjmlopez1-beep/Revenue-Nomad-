@@ -51,7 +51,7 @@ import "../sign/sign.css";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-const PRO_SEND = `Sending for signature is on Pro: $${PRICES.month} a month, or $${PRICES.year} a year. You can write and keep drafts on Free.`;
+const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;
 
 async function api<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
   try {
@@ -136,12 +136,12 @@ export function ProposalsPage({ view, infos, onBack }: { view: View; infos: CoIn
       <p className="pp-lead">Start from templates that won, fill them from the company record, the rate benchmarks and your call, and send for signature. When they sign, your pipeline moves.</p>
       {data && !data.canSend && (
         <div className="pp-free" data-plan="free">
-          <span className="bl-tag bl-tag-lock">Pro</span>
+          <span className="bl-tag bl-tag-lock">Pro + Close</span>
           <p>
-            On Free you can write drafts from one template. {PRO_SEND.split(".")[0]}.
+            You can build and preview proposals from one template. {PRO_SEND.split(".")[0]}.
           </p>
-          <button type="button" className="btn btn-sm" onClick={() => openPlans("billing")}>
-            See Pro
+          <button type="button" className="btn btn-sm" onClick={() => openPlans("proposals")}>
+            See Pro + Close
           </button>
         </div>
       )}
@@ -265,7 +265,7 @@ function StartSheet({ data, infos, companyId, onClose, onMade }: { data: Proposa
             );
           })}
         </div>
-        {!data.canSend && <p className="pp-help">Every template, and sending for signature, are on Pro: ${PRICES.month} a month.</p>}
+        {!data.canSend && <p className="pp-help">Every template, and sending for signature, are on Pro + Close: ${PRICES.closeMonth} a month.</p>}
       </div>
     </Sheet>
   );
@@ -987,8 +987,8 @@ function SendSheet({
             {busy ? "Sending" : `Send to ${s.name.trim().split(" ")[0] || "the signer"}`}
           </button>
         ) : (
-          <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("billing")}>
-            See Pro: ${PRICES.month} a month
+          <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("proposals")}>
+            See Pro + Close: ${PRICES.closeMonth} a month
           </button>
         )
       }

@@ -2,8 +2,10 @@
  * Plan and billing, for the signed-in member (the app's cookie). Only while billing is live
  * (RN_BILLING=1 with Stripe set up); otherwise every call answers that plans aren't open.
  *
- * POST { op: "checkout", interval: "month" | "year", code? }  { url } of Stripe Checkout for Pro
+ * POST { op: "checkout", interval: "month" | "year", tier?: "pro" | "close", code? }  { url } of Stripe Checkout for Pro or Pro + Close
+ * POST { op: "tier", tier: "pro" | "close" }                 move the subscription between Pro and Pro + Close (prorated)
  * POST { op: "topup" }                                        { url } of Stripe Checkout for 50 credits
+ * POST { op: "aipack" }                                       { url } of Stripe Checkout for the AI usage pack (also POST /api/billing/ai-pack)
  * POST { op: "portal" }                                       { url } of the Stripe Customer Portal
  * POST { op: "cancel" | "keep" }                              cancel at the period's end, or take it back
  * POST { op: "pause" | "resume" }                             pause Pro for a month, or end the pause
@@ -19,7 +21,7 @@ import { billingAction, type BillingOp } from "@/lib/billing/server";
 export const dynamic = "force-dynamic";
 const COOKIE = "rn_table";
 const noStore = { "cache-control": "no-store" };
-const OPS = new Set<BillingOp>(["checkout", "topup", "portal", "cancel", "keep", "pause", "resume"]);
+const OPS = new Set<BillingOp>(["checkout", "topup", "portal", "cancel", "keep", "pause", "resume", "tier", "aipack"]);
 const fail = (error: string, status = 400) => NextResponse.json({ error }, { status, headers: noStore });
 
 export const POST = guarded(async (req: NextRequest) => {
@@ -39,7 +41,7 @@ export const POST = guarded(async (req: NextRequest) => {
   if (!op || !OPS.has(op)) return fail("That didn't go through. Refresh the page and try again.");
   if (limited(`billing:${token.slice(-16)}`, 20, 10 * 60_000)) return fail("That's a lot of tries in a few minutes. Give it a moment, then try again.", 429);
   try {
-    return NextResponse.json(await billingAction(token, op, { interval: body!.interval, code: body!.code }, publicOrigin(req)), { headers: noStore });
+    return NextResponse.json(await billingAction(token, op, { interval: body!.interval, code: body!.code, tier: body!.tier }, publicOrigin(req)), { headers: noStore });
   } catch (e) {
     if (e instanceof ActionError) return fail(e.message);
     throw e;

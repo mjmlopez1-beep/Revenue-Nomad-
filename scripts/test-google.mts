@@ -380,7 +380,8 @@ async function main() {
   check("still locked for Bo", co(boTable).hidden === true && !JSON.stringify(co(boTable)).includes("Acme"));
   check("Ana's credits didn't move", anaTable.me!.credits === 25);
   const seat = co(anaTable).engagements[0];
-  check("its seat holder still costs the usual unlock", seat?.cells.operator?.s === "locked" && !JSON.stringify(co(anaTable)).includes("Pat Sample"), seat?.cells.operator);
+  // Fellow fractionals are free (PEERS_FREE): the company is Ana's to see, so who held its seat shows at no charge.
+  check("its seat holder shows free, the company being hers to see", seat?.cells.operator?.s === "value" && !(seat.cells.operator as { paid?: boolean }).paid && anaTable.me!.credits === 25, seat?.cells.operator);
   check("Bo's view has nothing of Ana's network", !JSON.stringify(boTable).includes("Dana") && !JSON.stringify(boTable).includes("dana@acme"));
   const boNet = (await G.networkView(BO)) as import("../lib/google/types.ts").NetworkView;
   check("Bo's own network is empty", boNet.on && boNet.companies.length === 0 && !boNet.google);

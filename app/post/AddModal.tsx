@@ -425,7 +425,7 @@ function ClaimFirst({ i, seats: all, onClaimed }: { i: CoInfo; seats: Engagement
                   <p role="alert">{err}</p>
                 ) : info ? (
                   <p>
-                    <b>Is this you?</b> {claimLine(info, i.c.name, shown(e.cells.function) ?? "fractional")}. Claim it? Other members will see your name on it, behind a 1 credit lock.
+                    <b>Is this you?</b> {claimLine(info, i.c.name, shown(e.cells.function) ?? "fractional")}. Claim it? Other members who can see the company will see your name on it. Fellow fractionals are free to see.
                   </p>
                 ) : (
                   <p aria-busy="true">Checking the seat</p>

@@ -377,12 +377,14 @@ const recs = ownPeople(sal);
 const averyRecs = recs.filter(({ e }) => e.cells.operator.s === "locked" || e.cells.operator.s === "value").filter(({ c }) => /Clientco A|Secondco A/.test(c.name));
 eq("switch on: a record on each of the accepted people's seats (Avery has two), and none for Blake, a member who keeps himself out of view", [recs.length, averyRecs.length, recs.filter(({ c }) => /Clientco B/.test(c.name)).length], [4, 2, 0]);
 const ar = averyRecs.find(({ c }) => c.name.startsWith("Clientco"))!;
+// Fellow fractionals are free (PEERS_FREE): Sal knows these companies, so who held the seat (the record's name) shows free.
+// The email they publish is a contact detail and keeps its price.
 check(
-  "the record: the seat holder, the name locked with the seat, the email locked, From their website",
-  ar.p.cells.relationship.s === "value" && ar.p.cells.relationship.v === types.OWNSITE_RELATIONSHIP && ar.p.cells.name.s === "locked" && ar.e.cells.operator.s === "locked" && ar.p.cells.email.s === "locked" && ar.p.cells.email.from === "ownsite",
+  "the record: the seat holder, the name free with the seat, the email locked, From their website",
+  ar.p.cells.relationship.s === "value" && ar.p.cells.relationship.v === types.OWNSITE_RELATIONSHIP && ar.p.cells.name.s === "value" && ar.p.cells.name.v === "Avery Quinlan" && ar.e.cells.operator.s === "value" && ar.p.cells.email.s === "locked" && ar.p.cells.email.from === "ownsite",
   ar.p.cells,
 );
-check("nothing of the address or name goes out while locked", !JSON.stringify(sal.companies).includes("avery@") && !JSON.stringify(ar).includes("Quinlan"));
+check("nothing of the address goes out while locked", !JSON.stringify(sal.companies).includes("avery@"));
 const credits = async (tok: string) => (await view(tok)).me!.credits;
 const refused = async (fn: () => Promise<unknown>) => {
   try {
@@ -394,20 +396,15 @@ const refused = async (fn: () => Promise<unknown>) => {
 };
 const BASE = "https://post.example.com";
 const c0 = await credits("tok-sal-own");
-eq("the email can't be unlocked before the name", await refused(() => table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: ar.p.id, field: "email" }, BASE)), table.NAME_FIRST);
-await table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: ar.p.id, field: "name" }, BASE);
-sal = await view("tok-sal-own");
-let a2 = ownPeople(sal).find(({ p }) => p.id === ar.p.id)!;
-check("asking for the record's name buys who held the seat (1 credit, one purchase): the name shows on both", a2.e.cells.operator.s === "value" && a2.p.cells.name.s === "value" && a2.p.cells.name.v === "Avery Quinlan" && (await credits("tok-sal-own")) === c0 - 1, { op: a2.e.cells.operator, name: a2.p.cells.name });
-check("the email is still locked", a2.p.cells.email.s === "locked");
+check("the record's name has nothing to buy", /Nothing here is locked/.test((await refused(() => table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: ar.p.id, field: "name" }, BASE))) ?? "") && (await credits("tok-sal-own")) === c0);
 await table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: ar.p.id, field: "email" }, BASE);
 sal = await view("tok-sal-own");
-a2 = ownPeople(sal).find(({ p }) => p.id === ar.p.id)!;
-check("1 credit opens the email, From their website", a2.p.cells.email.s === "value" && a2.p.cells.email.v === "avery@quinlanadvisory.test" && a2.p.cells.email.from === "ownsite" && (await credits("tok-sal-own")) === c0 - 2, a2.p.cells.email);
+let a2 = ownPeople(sal).find(({ p }) => p.id === ar.p.id)!;
+check("1 credit opens the email, From their website", a2.p.cells.email.s === "value" && a2.p.cells.email.v === "avery@quinlanadvisory.test" && a2.p.cells.email.from === "ownsite" && (await credits("tok-sal-own")) === c0 - 1, a2.p.cells.email);
 eq("nothing can be added to the record: it comes from the seat", await refused(() => table.perform("tok-sal-own", { type: "fill", entity: "contact", id: ar.p.id, field: "phone", value: "+1 555 010 0000" }, BASE)), table.OWN_RECORD_NO_ADD);
-// Their other seat: buying who held one seat of a fractional shows who held each of theirs (Fractionals), so the name shows there already.
+// Their other seat: the name shows free there too, and the email they paid for shows at no charge.
 const o3 = ownPeople(sal).find(({ c }) => c.name.startsWith("Secondco A"))!;
-check("their other seat: the name shows, and the email they paid for shows too, at no charge", o3.e.cells.operator.s === "value" && o3.p.cells.email.s === "value" && (await credits("tok-sal-own")) === c0 - 2, { op: o3.e.cells.operator, email: o3.p.cells.email });
+check("their other seat: the name shows, and the email they paid for shows too, at no charge", o3.e.cells.operator.s === "value" && o3.p.cells.email.s === "value" && (await credits("tok-sal-own")) === c0 - 1, { op: o3.e.cells.operator, email: o3.p.cells.email });
 // Invite to connect: the app's Drawer writes to the seat's person with the holder's name and a visible email (emailOnFile).
 const emailOnFile = (e: (typeof a2)["e"], name: string) => e.people.find((p) => p.cells.name?.s === "value" && p.cells.name.v === name && p.cells.email?.s === "value");
 check("Invite to connect picks it: the seat has its claim link, and the seat holder's email on file for Email it", !!a2.e.invite?.path && (emailOnFile(a2.e, "Avery Quinlan")?.cells.email as { v?: string } | undefined)?.v === "avery@quinlanadvisory.test", a2.e.invite);
@@ -483,12 +480,12 @@ check("the daily job runs on its schedule with the switch on", due === true || s
 const casey = stateOnDisk().ownEmails[personKeyOf("SNAV-CASEY-003")];
 const before4 = await credits("tok-sal-own");
 const caseyRec = ownPeople(await view("tok-sal-own")).find(({ c }) => /Clientco C/.test(c.name))!;
-await table.perform("tok-sal-own", { type: "unlock", entity: "engagement", id: caseyRec.e.id, field: "operator" }, BASE);
+// Who held Casey's seat is free (PEERS_FREE); the email is 1 credit.
 await table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: caseyRec.p.id, field: "email" }, BASE);
-check("(Casey's email, unlocked for 1 credit after the name)", (await credits("tok-sal-own")) === before4 - 2 && !!casey);
+check("(Casey's email, unlocked for 1 credit, the name free)", (await credits("tok-sal-own")) === before4 - 1 && !!casey);
 const undone = await store.undoOwnEmails("m_admin");
 sal = await view("tok-sal-own");
-check("Undo takes every found email back, with the credit back", undone === 2 && ownPeople(sal).length === 0 && Object.keys(stateOnDisk().ownEmails).length === 0 && (await credits("tok-sal-own")) === before4 - 1, { undone, credits: await credits("tok-sal-own") });
+check("Undo takes every found email back, with the credit back", undone === 2 && ownPeople(sal).length === 0 && Object.keys(stateOnDisk().ownEmails).length === 0 && (await credits("tok-sal-own")) === before4, { undone, credits: await credits("tok-sal-own") });
 check("  and those people are not read again on their own", !(await store.ownTargets()).some((t) => t.key === personKeyOf("SNAV-CASEY-003")));
 
 server.close();

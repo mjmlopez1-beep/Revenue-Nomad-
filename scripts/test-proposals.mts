@@ -292,11 +292,12 @@ async function main() {
   const fv = await S.listProposals(FRE, BASE);
   check("Free: one template open, no sending", fv.templatesOpen.join() === L.FREE_TEMPLATE && fv.canSend === false);
   const sprint = await refused(S.createProposal(FRE, { templateId: "sprint-90" }, BASE));
-  check("Free: another template is Pro's, with the price", /Pro: \$59 a month/.test(sprint ?? ""), sprint);
+  // Every template and sending are Pro + Close now (canClose): Free and Pro build and preview.
+  check("Free: another template is Pro + Close's, with the price", /Pro \+ Close: \$79 a month/.test(sprint ?? ""), sprint);
   const fp = await S.createProposal(FRE, { templateId: L.FREE_TEMPLATE, companyName: "Wrenfield Dairy" }, BASE);
   check("Free: a draft from the open template", fp.status === "draft");
   const fsend = await S.sendProposal(FRE, fp.id, { signer: { name: "Rhea Wren", email: "rhea@wrenfield.example" } }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
-  check("Free: sending is Pro's, said plainly with the price, with the upgrade link", !!fsend && fsend.status === 403 && /Sending for signature is on Pro: \$59 a month, or \$590 a year/.test(fsend.message) && /p=billing/.test(fsend.upgrade ?? ""), fsend?.message);
+  check("Free: sending is Pro + Close's, said plainly with the price, with the upgrade link", !!fsend && fsend.status === 403 && /Sending for signature is on Pro \+ Close: \$79 a month, or \$790 a year/.test(fsend.message) && /p=billing/.test(fsend.upgrade ?? ""), fsend?.message);
   check("Trial: every template and sending", (await S.listProposals(PAT, BASE)).canSend && (await S.listProposals(PAT, BASE)).templatesOpen.length === 5);
 
   /* ================= privacy ================= */

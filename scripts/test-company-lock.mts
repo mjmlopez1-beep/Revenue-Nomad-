@@ -402,13 +402,15 @@ async function main() {
   const again = await act("tok-nora-lock", { type: "unlock", entity: "company", id: pub(CO.acme.id), field: "identity" });
   check("asking again spends nothing", !again.ok && /Nothing here is locked/.test(again.error) && (await view("tok-nora-lock")).me!.credits === 25, again);
   const held2 = await act("tok-nora-lock", { type: "unlock", entity: "engagement", id: pub("e_acme_sales"), field: "operator" });
-  check("then who held the seat is 1 credit", held2.ok && held2.r.me?.credits === 24, held2.ok ? held2.r.message : held2);
+  // Fellow fractionals are free (PEERS_FREE): once the company is open, who held its seat shows at no charge.
+  const acmeSeat = coOf(await view("tok-nora-lock"), CO.acme.id)!.engagements.find((e) => e.id === pub("e_acme_sales"));
+  check("then who held the seat shows free: nothing to buy", !held2.ok && /Nothing here is locked/.test(held2.error) && acmeSeat?.cells.operator?.s === "value" && !acmeSeat.cells.operator.paid && (await view("tok-nora-lock")).me!.credits === 25, held2.ok ? held2.r.message : [held2, acmeSeat?.cells.operator]);
   check("the other companies stay locked", leaks(await view("tok-nora-lock"), ALL.filter((x) => x !== CO.acme.id)).length === 0);
   const ub = await act("tok-nora-lock", { type: "unlock", entity: "company", id: pub(CO.blue.id), field: "identity" });
   const b1 = coOf(await view("tok-nora-lock"), CO.blue.id)!;
   check(
     "the next company the same day costs 2 credits: a hiring company comes with its open role's job posting and posted rate",
-    ub.ok && ub.r.me?.credits === 22 && / for 2 credits\.$/.test(ub.r.message) && b1.engagements[0].cells.posting?.s === "value" && b1.engagements[0].cells.rate?.s === "value",
+    ub.ok && ub.r.me?.credits === 23 && / for 2 credits\.$/.test(ub.r.message) && b1.engagements[0].cells.posting?.s === "value" && b1.engagements[0].cells.rate?.s === "value",
     ub.ok ? ub.r.message : ub,
   );
   const mcpAfter = await tools.searchCompanies(ctx, {});
@@ -501,7 +503,8 @@ async function main() {
   const fabTable = await T.aboutCells("tok-finn-lock", [pub(CO.acme.id)]);
   check("and its whole About (GET ?about=&found=1) while it is open from the search", abText(fab, CO.acme.id) === CO.acme.about, fab);
   check("while the tables' locked record of it asks without found=1 and reads it without the name", abText(fabTable, CO.acme.id) === SCRUBBED.acme, fabTable);
-  check("who held a seat there stays locked, at its usual price", fa.engagements.find((e) => e.id === pub("e_acme_sales"))?.cells.operator?.s === "locked");
+  // The company is named in this answer, so it is visible: who held its seat shows free (PEERS_FREE).
+  check("who held a seat there shows free, the company being named in this answer", fa.engagements.find((e) => e.id === pub("e_acme_sales"))?.cells.operator?.s === "value");
   const finnV1 = await view("tok-finn-lock");
   check("the tables keep it locked: a fresh view names nothing", coOf(finnV1, CO.acme.id)!.hidden === true && leaks(finnV1, ALL).length === 0, leaks(finnV1, ALL));
   check("nor does the packed view", leaks(W.packView(structuredClone(finnV1)), ALL).length === 0);
@@ -522,15 +525,15 @@ async function main() {
   check("a hiring company found by name keeps its job posting locked, at the usual price", fb.found === true && fb.engagements[0].cells.posting?.s === "locked", fb.engagements[0].cells);
   const credits0 = (await view("tok-finn-lock")).me!.credits;
   const buyHolder = await act("tok-finn-lock", { type: "unlock", entity: "engagement", id: pub("e_acme_sales"), field: "operator" });
-  check("who held a seat there is 1 credit, not after the company", buyHolder.ok && buyHolder.r.me?.credits === credits0 - 1, buyHolder.ok ? buyHolder.r.message : buyHolder);
+  check("who held a seat there costs nothing: nothing to buy, nothing spent", !buyHolder.ok && /Nothing here is locked/.test(buyHolder.error) && (await view("tok-finn-lock")).me!.credits === credits0, buyHolder.ok ? buyHolder.r.message : buyHolder);
   const buyPost = await act("tok-finn-lock", { type: "unlock", entity: "engagement", id: pub("e_blue_open"), field: "posting" });
-  check("an open role's posting (with its rate) is 1 credit", buyPost.ok && buyPost.r.me?.credits === credits0 - 2, buyPost.ok ? buyPost.r.message : buyPost);
+  check("an open role's posting (with its rate) is 1 credit", buyPost.ok && buyPost.r.me?.credits === credits0 - 1, buyPost.ok ? buyPost.r.message : buyPost);
   const fc = await find("tok-finn-lock", CO.cobalt.name);
   const keep = await act("tok-finn-lock", { type: "unlock", entity: "company", id: pub(CO.cobalt.id), field: "identity" });
   const finnV2 = await view("tok-finn-lock");
   check(
     "Unlock company from the search (here the free company of the day) keeps it named in the tables",
-    fc.ok && keep.ok && keep.r.me?.credits === credits0 - 2 && /free company today/.test(keep.r.message) && coOf(finnV2, CO.cobalt.id)!.hidden === false && coOf(finnV2, CO.cobalt.id)!.name === CO.cobalt.name,
+    fc.ok && keep.ok && keep.r.me?.credits === credits0 - 1 && /free company today/.test(keep.r.message) && coOf(finnV2, CO.cobalt.id)!.hidden === false && coOf(finnV2, CO.cobalt.id)!.name === CO.cobalt.name,
     keep.ok ? keep.r.message : keep,
   );
   const fe = await find("tok-finn-lock", CO.dun.site);
@@ -539,7 +542,8 @@ async function main() {
   const fg = await find("tok-finn-lock", CO.gran.name);
   const finnV3 = await view("tok-finn-lock");
   check("a company only looked up (nothing bought or added) is locked again in a reloaded view", fg.ok && coOf(finnV3, CO.gran.id)!.hidden === true && leaks(finnV3, [CO.gran.id, CO.elm.id, CO.iris.id, CO.holl.id, CO.fox.id]).length === 0);
-  check("the companies Finn bought something at are his (a purchase owns a company)", coOf(finnV3, CO.acme.id)!.hidden === false && coOf(finnV3, CO.blue.id)!.hidden === false);
+  // Who held Acme's seat was free, so Finn bought nothing there: it stays locked in the tables. Bluefin's posting was a purchase.
+  check("the companies Finn bought something at are his (a purchase owns a company), a free look is not", coOf(finnV3, CO.acme.id)!.hidden === true && coOf(finnV3, CO.blue.id)!.hidden === false);
 
   console.log("\nThe limits");
   const fay1 = await find("tok-fcap-lock", CO.acme.name);

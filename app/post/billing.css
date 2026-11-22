@@ -733,3 +733,149 @@ button.tp-plan:hover {
     max-width: 320px;
   }
 }
+
+/* ---------- the plan pill on the light top bar ---------- */
+/* Beside the credits, in their colors. Upgrade is pine (it buys), never volt (volt is for earning). */
+.tp-app .tp-top .tp-plan {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--body-ink);
+}
+.tp-app .tp-top button.tp-plan:hover {
+  background: var(--surface-2);
+}
+.tp-app .tp-top .tp-plan-go {
+  background: var(--pine-8);
+  color: var(--pine);
+}
+.tp-app .tp-top .tp-plan-trial.end {
+  border-color: var(--pine);
+}
+.tp-app .tp-top .tp-plan-trial.end .tp-plan-go,
+.tp-app .tp-top .tp-plan-trial.end.tp-plan-phone {
+  background: var(--pine);
+  color: #fff;
+}
+.tp-app .tp-top .tp-plan-free,
+.tp-app .tp-top .tp-plan-phone {
+  border-color: var(--pine);
+  color: var(--pine);
+}
+
+/* ---------- the Pro welcome's line ---------- */
+.bl-hello-story {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--body-ink);
+}
+
+/* ---------- Home: the trial's last days, as a loss (TrialSummaryCard) ---------- */
+.bl-sum {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--pine-14);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.bl-sum-t {
+  flex: 1;
+  min-width: 0;
+}
+.bl-sum-h {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.bl-sum-p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.bl-sum-p + .bl-sum-p {
+  margin-top: 2px;
+}
+@media (max-width: 599px) {
+  .bl-sum {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ---------- out of credits: three ways in one line (GetCredits, the 0-credit nudge) ---------- */
+.bl-get,
+.nudge-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.nudge-choices {
+  flex: none;
+}
+.tp-uc-fair {
+  display: block;
+  margin-top: 6px;
+}
+
+/* ---------- three plans (PlanCards): Free, Pro, Pro + Close ---------- */
+.bl-interval {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.bl-plans.bl-plans-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.bl-plan-lead {
+  border-color: var(--pine);
+  box-shadow: inset 0 0 0 1px var(--pine);
+}
+.bl-plan.mine {
+  background: var(--surface-2);
+}
+.bl-plan-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.bl-compare-3 .bl-close {
+  font-weight: 600;
+}
+@media (max-width: 767px) {
+  .bl-plans.bl-plans-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Under Pro + Close: what it does, then the AI usage pack in smaller words. */
+.bl-plan-ai {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pine);
+}
+.bl-plan-pack {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+/* Three cards side by side: a long button label wraps inside its card instead of running past it. */
+.bl-plans-3 .bl-plan-btn {
+  white-space: normal;
+  min-width: 0;
+}
+/* On a phone at 0 credits the three choices wrap under the line instead of running off the screen. */
+.tp-phone .nudge.nudge-credits {
+  flex-wrap: wrap;
+  padding: 8px 12px;
+}
+.tp-phone .nudge.nudge-credits .nudge-choices {
+  flex: 1 1 100%;
+  min-width: 0;
+}

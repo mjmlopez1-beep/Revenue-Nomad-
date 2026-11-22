@@ -1697,7 +1697,7 @@ export function newRolesFor(infos: CoInfo[], fn: string | null, keep: (i: CoInfo
 
 export interface CheckStep {
   /** "seat" was "give" (any first fact) before step 2 asked for a seat: a new key, so an old tick in this browser doesn't carry over. */
-  key: "unlock" | "seat" | "invite";
+  key: "unlock" | "seat" | "invite" | "note" | "network";
   done: boolean;
   label: string;
   hint: string;

@@ -19,7 +19,7 @@ import { cardSeat, coverOf, hireOfRow, isOpenRole, personBothLocked, personCover
 import { YourSeat, earnNote, useCellUi } from "./ui";
 import { Fit, FnChips, HeldBy, HireLine, LOCKED_TIP, RowFact, SignalLines, UnlockedTag, type SignalRows } from "./Tables";
 import { RoleDate } from "./RoleDate";
-import { freeCompanyNow } from "./display";
+import { freeCompanyNow, unlockFreeWords } from "./display";
 import { useFitWhy } from "./Hunt";
 
 /**
@@ -96,14 +96,15 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
  */
 function HiddenLine({ rate, roles = true }: { rate: boolean; roles?: boolean }) {
   // The free company of the day: the card says so, and the record's button spends nothing.
-  const free = freeCompanyNow(useCellUi().me);
+  const ui = useCellUi();
+  const free = freeCompanyNow(ui.me);
   // The rate only when the posting gave one: a card never promises a rate that isn't there (C49).
   return (
     <div className="tp-pcard-hidden">
       <IconLock />
       <span>
         {!roles ? "Unlock company" : rate ? "Company, posting and rate" : "Company and posting"}{" "}
-        <span className="tp-pcard-hidden-cost">· {free ? "free · 1 left today" : `${COMPANY_PRICE_SAY}${roles ? " together" : ""}`}</span>
+        <span className="tp-pcard-hidden-cost">· {free ? unlockFreeWords(ui.me).replace(/^Unlock /, "") : `${COMPANY_PRICE_SAY}${roles ? " together" : ""}`}</span>
       </span>
     </div>
   );

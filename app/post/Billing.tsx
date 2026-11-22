@@ -25,12 +25,14 @@ import { IconCheck, IconChevron, IconLock, IconX, useToast } from "../ui/shared"
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { useMarkTrialShowing, useTrialShowing } from "./nudges";
+import { PLANS, PLAN_ROWS } from "@/lib/billing/compare";
+import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY } from "@/lib/billing/rules";
+import { EARN_ONE, PRO_COMPANIES_FREE, topupWords, useMarkTrialShowing, useTrialShowing } from "./nudges";
 import "./billing.css";
 import { NomadArt, Prop, Scene } from "../ui/fractions/lazy";
 
 /** Where the plans were opened from: an upgrade moment. */
-export type PlansFrom = "trial" | "views" | "bench" | "credits" | "slack" | "claude" | "radar" | "crystal" | "billing";
+export type PlansFrom = "trial" | "views" | "bench" | "credits" | "slack" | "claude" | "radar" | "crystal" | "proposals" | "billing";
 type Ask = { from: PlansFrom; caught?: number };
 
 let asked: Ask | null = null;
@@ -98,40 +100,34 @@ function useBilling() {
 
 /* ---------- Free against Pro ---------- */
 
-const ROWS: [string, string, string][] = [
-  ["Open roles", "In your weekly email", "As soon as they open"],
-  ["Saved views", "1, with the weekly email", "As many as you want, with alerts"],
-  [FEATURE_NAME, "Every signal each morning, one company a day fully open", "Every company in it open free, signals in Slack as they happen"],
-  ["Rate benchmarks", "Medians by function", "Ranges by function and client size"],
-  ["Slack", "The weekly roles post", "Every alert"],
-  ["Claude", "20 requests a day", "No daily cap"],
-  ["Credits", "1 for each fact you add", "Plus 100 each paid month"],
-  ["Fractionals, messages, Recently hired", "Included", "Included"],
-];
+/** Free, Pro and Pro + Close, row by row (lib/billing/compare.ts, shared with the landing page's pricing). */
+export const ROWS = PLAN_ROWS;
 
-export function CompareTable({ current }: { current?: "free" | "pro" }) {
+export function CompareTable({ current }: { current?: "free" | "pro" | "close" }) {
   return (
-    <table className="bl-compare">
+    <table className="bl-compare bl-compare-3">
       <thead>
         <tr>
           <th scope="col">
             <span className="sr-only">What you get</span>
           </th>
-          <th scope="col" className={current === "free" ? "on" : ""}>
-            Free
-          </th>
-          <th scope="col" className={current === "pro" ? "on" : ""}>
-            Pro
-          </th>
+          {PLANS.map((p) => (
+            <th key={p.key} scope="col" className={current === p.key ? "on" : ""}>
+              {p.name}
+            </th>
+          ))}
         </tr>
       </thead>
       <tbody>
-        {ROWS.map(([what, free, pro]) => (
+        {ROWS.map(([what, free, pro, close]) => (
           <tr key={what}>
             <th scope="row">{what}</th>
             <td data-cap="Free">{free}</td>
             <td data-cap="Pro" className="bl-pro">
               {pro}
+            </td>
+            <td data-cap="Pro + Close" className="bl-pro bl-close">
+              {close}
             </td>
           </tr>
         ))}
@@ -149,15 +145,20 @@ export function CompareTable({ current }: { current?: "free" | "pro" }) {
  * action, kept with the plan's notices like the trial-ended card). The plans sheet keeps its own.
  */
 export function ProWelcome({ plan, onSeen }: { plan: PlanView; onSeen: () => void }) {
-  // What Pro adds over Free, from the comparison's own rows (the ones that differ).
-  const opened = ROWS.filter(([, free, pro]) => free !== pro);
+  // What their tier adds over Free, from the comparison's own rows (the ones that differ). Close: its own column.
+  const close = plan.tier === "close";
+  const opened = ROWS.map(([what, free, pro, cl]) => [what, free, close ? cl : pro] as const).filter(([, free, got]) => free !== got);
   return (
     <section className="bl-hello" aria-labelledby="bl-hello-h">
       <Scene kind="castle" pro on="white" className="bl-hello-art" />
       <div className="bl-hello-t">
         <p className="bl-hello-h" id="bl-hello-h">
-          {plan.proStartsAt ? `You're on Pro. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.` : "You're on Pro. Everything here is yours."}
+          {plan.proStartsAt
+            ? `You're on ${close ? "Pro + Close" : "Pro"}. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.`
+            : `You're on ${close ? "Pro + Close" : "Pro"}. Everything here is yours.`}
         </p>
+        {/* Pro sold as winning clients, in the plans' own words. */}
+        <p className="bl-hello-story">{PRO_STORY}</p>
         <ul className="bl-hello-list">
           {opened.map(([what, , pro]) => (
             <li key={what}>
@@ -186,9 +187,10 @@ const TITLE: Record<PlansFrom, string> = {
   claude: "Claude without the daily cap",
   radar: `${FEATURE_NAME} as it happens`,
   crystal: `Every ${FEATURE_NAME} company open`,
+  proposals: "Send it and get it signed",
   billing: "Merlin Pro",
 };
-export const VALUE_LINE = "See who's hiring before it's posted, the hiring exec and the warm path, instantly.";
+export const VALUE_LINE = PRO_STORY;
 
 function leadFor(plan: PlanView, a: Ask): string {
   if (plan.name === "trial") {
@@ -209,50 +211,105 @@ function leadFor(plan: PlanView, a: Ask): string {
   if (a.from === "claude") return "Free gives Claude 20 requests a day. Pro has no daily cap.";
   if (a.from === "radar") return `Everyone gets every ${FEATURE_NAME} signal each morning, and Free opens one of its companies a day, fully. Pro opens every company in your ${FEATURE_NAME} free, and posts signals to Slack as they happen.`;
   if (a.from === "crystal") return `Free opens one ${FEATURE_NAME} company a day, with everything on it. Pro opens every company in your ${FEATURE_NAME} free.`;
+  if (a.from === "proposals")
+    return plan.hadTrial || plan.name !== "free"
+      ? "Free and Pro build and preview proposals. Pro + Close drafts them from your call, opens your own templates and contracts, and sends them for e-signature, so the client signs where they read it."
+      : "Free and Pro build and preview proposals. Your 21-day trial is Pro + Close: draft from your call, send, and get it signed.";
   return VALUE_LINE;
 }
 
-function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansFrom; onDone?: () => void }) {
+/**
+ * The three plans side by side, yearly or monthly: Free, Pro and Pro + Close, each with its price and
+ * one line on what you get. Buying starts Checkout; a member already paying moves between Pro and
+ * Pro + Close on the same subscription (the tier op, prorated). From a Close moment (proposals) Pro +
+ * Close leads.
+ */
+export function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansFrom; onDone?: () => void }) {
   const { busy, run } = useBilling();
   const [code, setCode] = useState("");
   const [codeOpen, setCodeOpen] = useState(false);
+  const [interval, setBilled] = useState<"year" | "month">(plan.interval ?? "year");
   // The code they arrived with: the one the server kept for them (PlanView.code), else this browser's.
   useEffect(() => setCode(plan.code?.code ?? codeNow()), [plan.code?.code]);
-  const go = (interval: "month" | "year") => run("checkout", { interval, code: code.trim() || undefined, from }, onDone);
+  const buy = (tier: "pro" | "close") => run("checkout", { interval, tier, code: code.trim() || undefined, from }, onDone);
+  const move = (tier: "pro" | "close") => run("tier", { tier }, onDone);
   const applied = !!plan.code && code.trim().toUpperCase() === plan.code.code;
+  // Paying now (not in the trial): the other paid tier is a move on the same subscription.
+  const paying = plan.subscribed && plan.name === "pro";
+  const lead: "pro" | "close" = from === "proposals" || plan.name === "trial" || plan.tier === "pro" ? "close" : "pro";
+  const yearly = interval === "year";
+  const priceOf = (p: (typeof PLANS)[number]) => (yearly ? p.year : p.month);
   return (
     <>
-      <div className="bl-plans">
-        <div className="bl-plan bl-plan-year">
-          <span className="bl-plan-tag">2 months free</span>
-          <p className="bl-plan-h">Yearly</p>
-          <p className="bl-plan-price num">
-            {usd(plan.prices.year)}
-            <span> a year</span>
-          </p>
-          <p className="bl-plan-sub">{plan.annualLine ?? `${usd(Math.round(plan.prices.year / 12))} a month, paid once a year.`}</p>
-          <button type="button" className="btn btn-primary bl-plan-btn" disabled={!!busy} aria-busy={busy === "checkoutyear"} onClick={() => go("year")}>
-            {busy === "checkoutyear" ? "Opening checkout" : "Choose yearly"}
+      <div className="bl-interval" role="radiogroup" aria-label="Billed">
+        {(["year", "month"] as const).map((k) => (
+          <button key={k} type="button" role="radio" aria-checked={interval === k} className={`chip${interval === k ? " chip-on" : ""}`} onClick={() => setBilled(k)}>
+            {k === "year" ? "Yearly, 2 months free" : "Monthly"}
           </button>
-        </div>
-        <div className="bl-plan">
-          <p className="bl-plan-h">Monthly</p>
-          <p className="bl-plan-price num">
-            {usd(plan.prices.month)}
-            <span> a month</span>
-          </p>
-          <p className="bl-plan-sub">Cancel or pause any month.</p>
-          <button type="button" className="btn bl-plan-btn" disabled={!!busy} aria-busy={busy === "checkoutmonth"} onClick={() => go("month")}>
-            {busy === "checkoutmonth" ? "Opening checkout" : "Choose monthly"}
-          </button>
-        </div>
+        ))}
       </div>
+      <div className="bl-plans bl-plans-3">
+        {PLANS.map((p) => {
+          const mine = p.key === "free" ? plan.name === "free" : paying && (plan.tier === p.key || (p.key === "pro" && plan.tier !== "close"));
+          const paid = p.key !== "free";
+          const offered = p.key !== "close" || plan.closeOpen;
+          const label =
+            p.key === "free"
+              ? null
+              : mine
+                ? "Your plan"
+                : paying
+                  ? p.key === "close"
+                    ? "Upgrade to Pro + Close"
+                    : "Switch to Pro"
+                  : `Choose ${p.name}`;
+          const op = `${paying ? "tier" : "checkout"}${paying ? "" : interval}`;
+          return (
+            <div key={p.key} className={`bl-plan bl-plan-${p.key}${paid && p.key === lead ? " bl-plan-lead" : ""}${mine ? " mine" : ""}`} data-plan-card={p.key}>
+              {paid && p.key === lead && !mine ? <span className="bl-plan-tag">{p.key === "close" ? "Wins the client" : "Most chosen"}</span> : null}
+              <p className="bl-plan-h">{p.name}</p>
+              <p className="bl-plan-price num">
+                {usd(priceOf(p))}
+                {p.key !== "free" && <span> {yearly ? "a year" : "a month"}</span>}
+              </p>
+              <p className="bl-plan-sub">{p.line}</p>
+              {p.key === "close" && (
+                <>
+                  <p className="bl-plan-ai" data-close-ai>
+                    {CLOSE_AI_LINE}
+                  </p>
+                  <p className="bl-plan-note bl-plan-pack" data-ai-pack>
+                    {AI_PACK_LINE}
+                  </p>
+                </>
+              )}
+              {label && offered ? (
+                <button
+                  type="button"
+                  className={`btn bl-plan-btn${p.key === lead && !mine ? " btn-pine" : ""}`}
+                  disabled={!!busy || mine}
+                  aria-busy={busy === op}
+                  aria-label={mine ? `${p.name} is your plan` : `${label}: ${p.line}`}
+                  onClick={() => (paying ? move(p.key as "pro" | "close") : buy(p.key as "pro" | "close"))}
+                >
+                  {busy === op ? (paying ? "Changing" : "Opening checkout") : label}
+                </button>
+              ) : p.key === "free" ? (
+                <p className="bl-plan-note">{plan.name === "free" ? "Your plan" : "Where a plan ends"}</p>
+              ) : (
+                <p className="bl-plan-note">Opens soon</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {yearly && plan.annualLine ? <p className="bl-charge">{plan.annualLine}</p> : null}
       {plan.name === "trial" && (
         <p className="bl-charge" role="note">
           <IconCheck size={14} />
           {plan.firstChargeAt
-            ? `You won't be charged until your trial ends on ${day(plan.firstChargeAt)}. You keep every day of it.`
-            : "Your trial ends within two days, so the first charge is today. Pro carries on without a break."}
+            ? `Your trial is Pro + Close. You won't be charged until it ends on ${day(plan.firstChargeAt)}, and you keep every day of it.`
+            : "Your trial ends within two days, so the first charge is today. Your plan carries on without a break."}
         </p>
       )}
       <div className="bl-code">
@@ -273,6 +330,44 @@ function PlanCards({ plan, from, onDone }: { plan: PlanView; from: PlansFrom; on
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * The AI usage pack: $10, once (POST /api/billing/ai-pack). On Pro + Close and the trial a button;
+ * anyone else is shown the Close upgrade instead. Nothing until its price is set up. No amount or limit is said.
+ */
+export function AiPackLine({ plan }: { plan: PlanView }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (!plan.aiPack) return null;
+  const buy = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/billing/ai-pack", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const j = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (j.url) return window.location.assign(j.url);
+      toast(j.error ?? "That didn't go through. Try again in a moment.", true);
+    } catch {
+      toast("We couldn't reach Merlin. Check your connection and try again.", true);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="bl-topup" data-ai-pack-buy>
+      <p className="bl-topup-t">
+        <strong>{CLOSE_AI_LINE}.</strong> {plan.canClose ? AI_PACK_LINE : "On Pro + Close."}
+      </p>
+      {plan.canClose ? (
+        <button type="button" className="btn btn-sm" disabled={busy} aria-busy={busy} onClick={() => void buy()}>
+          {busy ? "Opening checkout" : `Add a pack for ${usd(PRICES.aiPack)}`}
+        </button>
+      ) : (
+        <button type="button" className="btn btn-sm btn-pine" onClick={() => openPlans("proposals")}>
+          See Pro + Close
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -297,6 +392,8 @@ function TopupLine({ plan, emphasis }: { plan: PlanView; emphasis?: boolean }) {
 function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: () => void }) {
   // The plans show on the trial too, any day of it: bought then, nothing is charged until it ends (PlanView.firstChargeAt).
   const onPro = plan.name === "pro";
+  // On Pro (not Close): Pro + Close is still there to move to.
+  const canMove = onPro && plan.tier === "pro" && !plan.proStartsAt;
   const trial = plan.name === "trial";
   // "Your trial ends soon" only in the trial's last 3 days: on day 1 it would read as a countdown.
   const title = plan.notLooking && a.from === "trial" ? (plan.ending ? "Your trial ends soon" : "Merlin Pro") : trial && a.from === "billing" ? "Keep Pro" : TITLE[a.from];
@@ -306,12 +403,18 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
         {/* The Pro welcome: The keep (Fractions, quiet, on its white field), the trail ending at its door, violets on the hill. The scene's one home, and the only violet in the app. */}
         {onPro ? <Scene kind="castle" pro on="white" className="bl-welcome-art" /> : null}
         <p className="bl-lead">
-          {onPro ? (plan.proStartsAt ? `You're on Pro. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.` : "You're on Pro. Everything here is yours.") : leadFor(plan, a)}
+          {onPro
+            ? plan.proStartsAt
+              ? `You're on ${plan.tier === "close" ? "Pro + Close" : "Pro"}. It starts with its first charge on ${day(plan.proStartsAt)}, when your trial ends.`
+              : plan.tier === "close"
+                ? "You're on Pro + Close. Everything here is yours."
+                : `You're on Pro. Pro + Close adds proposals drafted from your call, sent and signed${plan.closeUntil ? `, and it's yours until ${day(plan.closeUntil)}` : ""}.`
+            : leadFor(plan, a)}
         </p>
         {!plan.notLooking && !onPro && a.from !== "billing" && a.from !== "trial" && <p className="bl-value">{VALUE_LINE}</p>}
         {!onPro && a.from === "credits" && <TopupLine plan={plan} emphasis />}
-        {!onPro && <PlanCards plan={plan} from={a.from} onDone={onClose} />}
-        <CompareTable current={onPro || trial ? "pro" : "free"} />
+        {(!onPro || canMove) && <PlanCards plan={plan} from={a.from} onDone={onClose} />}
+        <CompareTable current={plan.tier} />
         {!onPro && a.from !== "credits" && <TopupLine plan={plan} />}
         <div className="bl-sheet-foot">
           <p className="tp-small muted">
@@ -341,7 +444,7 @@ export function PlansHost({ me }: { me: Me }) {
     const q = new URLSearchParams(window.location.search);
     if (q.get("plans") === "1") {
       const from = q.get("from") ?? "";
-      openPlans((["trial", "views", "bench", "credits", "slack", "claude", "radar", "crystal"] as string[]).includes(from) ? (from as PlansFrom) : me.plan.name === "trial" ? "trial" : "billing");
+      openPlans((["trial", "views", "bench", "credits", "slack", "claude", "radar", "crystal", "proposals"] as string[]).includes(from) ? (from as PlansFrom) : me.plan.name === "trial" ? "trial" : "billing");
       try {
         const u = new URL(window.location.href);
         u.searchParams.delete("plans");
@@ -359,14 +462,15 @@ export function PlansHost({ me }: { me: Me }) {
 
 /**
  * Always one tap from Pro, in the top bar next to the credits: on the trial "Pro trial · 12 days
- * left" with Upgrade (stronger in its last 3 days), on Free "Upgrade to Pro", on Pro a quiet mark
- * (desktop only). Phones get a short "Upgrade" chip. Nothing while billing is off.
+ * left" with Upgrade (stronger in its last 3 days), on Free "Upgrade to Pro", nothing on Pro.
+ * Phones get a short "Upgrade" chip. Nothing while billing is off. Mounted in the top bar (TopBar.tsx).
  */
 export function PlanPill({ plan, phone }: { plan?: PlanView; phone?: boolean }) {
   // One nudge at a time: while the trial's own line is on screen (the trial nudge or banner), it carries Keep Pro and the pill steps back.
   const trialLine = useTrialShowing();
   if (!plan) return null;
-  if (plan.name === "pro") return phone ? null : <span className="tp-plan tp-plan-pro">Pro</span>;
+  // Pro members have nothing to upgrade to: the pill isn't there.
+  if (plan.name === "pro") return null;
   if (plan.name === "trial" && trialLine) return null;
   if (plan.name === "trial") {
     const left = plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`;
@@ -427,7 +531,8 @@ export function TrialBanner({ plan }: { plan?: PlanView }) {
     } catch {}
   };
   const when = plan.trialDaysLeft === 1 ? "ends tomorrow" : `ends in ${plan.trialDaysLeft} days`;
-  const got = plan.receipt?.length ? ` So far: ${receiptWords(plan.receipt)}.` : "";
+  // The loss in plain terms when the server has it (PlanView.summary), else what it gave so far.
+  const got = plan.summary ? ` ${[plan.summary.used, plan.summary.locks].filter(Boolean).join(" ")}` : plan.receipt?.length ? ` So far: ${receiptWords(plan.receipt)}.` : "";
   return (
     <div className="tp-strip bl-banner" role="status">
       <span className="bl-banner-tag" aria-hidden>
@@ -436,6 +541,10 @@ export function TrialBanner({ plan }: { plan?: PlanView }) {
       <span className="tp-strip-t">
         {plan.notLooking ? (
           <>Your Pro trial {when}. Nothing to do: you stay on Free, with no charge.</>
+        ) : plan.summary ? (
+          <>
+            Your Pro trial {when}.{got}
+          </>
         ) : (
           <>
             Your Pro trial {when}.{got} Then you&apos;re on Free, unless you keep Pro.
@@ -450,6 +559,77 @@ export function TrialBanner({ plan }: { plan?: PlanView }) {
       <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-label="Dismiss" onClick={close}>
         <IconX size={14} />
       </button>
+    </div>
+  );
+}
+
+/**
+ * Home, in the trial's last 4 days (PlanView.summary): the trial's end as a loss in plain terms.
+ * "So far: You opened 16 companies free and sent 3 notes; 1 proposal is out." then what locks,
+ * and Keep Pro. A member who said they aren't looking gets nothing here (the soft form elsewhere).
+ */
+export function TrialSummaryCard({ plan }: { plan?: PlanView }) {
+  const on = !!plan && plan.name === "trial" && !!plan.summary && !plan.notLooking;
+  useMarkTrialShowing(on);
+  if (!on || !plan?.summary) return null;
+  const when = plan.trialDaysLeft === 1 ? "ends tomorrow" : `ends in ${plan.trialDaysLeft} days`;
+  return (
+    <section className="bl-sum" aria-labelledby="bl-sum-h" data-trial-summary>
+      <div className="bl-sum-t">
+        <p className="bl-sum-h" id="bl-sum-h">
+          Your Pro trial {when}.
+        </p>
+        {plan.summary.used && (
+          <p className="bl-sum-p">
+            <strong>So far:</strong> {plan.summary.used}
+          </p>
+        )}
+        <p className="bl-sum-p">{plan.summary.locks}</p>
+      </div>
+      <button type="button" className="btn btn-sm btn-pine" onClick={() => openPlans("trial")}>
+        Keep Pro
+      </button>
+    </section>
+  );
+}
+
+/* ---------- out of credits: three ways to get them ---------- */
+
+/** Start the top-up's checkout (Stripe opens in this tab). Words back on a refusal. */
+export async function buyTopup(): Promise<string | null> {
+  const r = await billing("topup");
+  if (r.url) {
+    window.location.assign(r.url);
+    return null;
+  }
+  return r.error ?? r.message ?? null;
+}
+
+/**
+ * Out of credits, in one line: "Earn one: add a fact" · "50 for $19" · "Pro: companies free". The
+ * top-up shows only when it is set up and Pro only off Pro; with billing off, only earning does.
+ * `onEarn`: where earning one goes (the member's seats, or Add what you know); left out at today's
+ * earning cap, where earning can't help.
+ */
+export function GetCredits({ plan, onEarn, className }: { plan?: PlanView; onEarn?: () => void; className?: string }) {
+  const { busy, run } = useBilling();
+  return (
+    <div className={`bl-get${className ? ` ${className}` : ""}`} role="group" aria-label="Ways to get credits">
+      {onEarn && (
+        <button type="button" className="btn btn-sm btn-primary" onClick={onEarn}>
+          {EARN_ONE}
+        </button>
+      )}
+      {plan?.topup && (
+        <button type="button" className="btn btn-sm" disabled={!!busy} aria-busy={busy === "topup"} onClick={() => run("topup")}>
+          {busy === "topup" ? "Opening checkout" : topupWords(plan)}
+        </button>
+      )}
+      {plan && plan.name !== "pro" && (
+        <button type="button" className="btn btn-sm btn-pine" onClick={() => openPlans("credits")}>
+          {PRO_COMPANIES_FREE}
+        </button>
+      )}
     </div>
   );
 }
@@ -581,7 +761,7 @@ function Status({ plan }: { plan: PlanView }) {
           Pro trial <span className="bl-days num">{plan.trialDaysLeft === 1 ? "last day" : `${plan.trialDaysLeft} days left`}</span>
         </p>
         <p className="bl-status-p">
-          It ends on {day(plan.trialEndsAt)}. Nothing to do: when it ends you&apos;re on Free, and no card is asked.
+          Your trial is Pro + Close, proposals included. It ends on {day(plan.trialEndsAt)}. Nothing to do: when it ends you&apos;re on Free, and no card is asked.
           {plan.trialExtended ? " We added a week because you were in the middle of something." : ""}
           {plan.firstChargeAt && !plan.notLooking ? ` Keep Pro now and nothing is charged until ${day(plan.firstChargeAt)}.` : ""}
         </p>
@@ -598,13 +778,21 @@ function Status({ plan }: { plan: PlanView }) {
             </ul>
           </>
         )}
+        {/* The trial's last 4 days: the loss in plain terms (PlanView.summary). */}
+        {plan.summary && !plan.notLooking && (
+          <p className="bl-status-p bl-status-sum" data-trial-summary>
+            {plan.summary.used ? <>{plan.summary.used} </> : null}
+            <strong>{plan.summary.locks}</strong>
+          </p>
+        )}
       </>
     );
   if (plan.name === "pro") {
     const kind = plan.interval === "year" ? "yearly" : "monthly";
     return (
       <>
-        <p className="bl-status-h">{plan.proStartsAt ? `Pro starts ${day(plan.proStartsAt)}, ${kind}` : `Pro, ${kind}`}</p>
+        <p className="bl-status-h">{plan.proStartsAt ? `${plan.tier === "close" ? "Pro + Close" : "Pro"} starts ${day(plan.proStartsAt)}, ${kind}` : `${plan.tier === "close" ? "Pro + Close" : "Pro"}, ${kind}`}</p>
+        {plan.closeUntil && <p className="bl-status-p">Pro + Close is yours until {day(plan.closeUntil)}, your next renewal. Then you&apos;re on Pro, unless you move to Pro + Close.</p>}
         <p className="bl-status-p">
           {plan.proStartsAt
             ? plan.cancelAt
@@ -751,6 +939,15 @@ export function BillingPage({ view, refresh, onBack }: { view: View; refresh: ()
         </section>
       )}
 
+      {plan.aiPack && (
+        <section className="tp-card" aria-labelledby="bl-ai-h">
+          <h2 className="tp-card-h" id="bl-ai-h">
+            AI usage
+          </h2>
+          <AiPackLine plan={plan} />
+        </section>
+      )}
+
       {plan.topup && (
         <section className="tp-card" aria-labelledby="bl-topup-h">
           <h2 className="tp-card-h" id="bl-topup-h">
@@ -776,13 +973,15 @@ export function BillingPage({ view, refresh, onBack }: { view: View; refresh: ()
 
       <section className="tp-card bl-what" aria-labelledby="bl-what-h">
         <h2 className="tp-card-h" id="bl-what-h">
-          Free and Pro
+          Free, Pro and Pro + Close
         </h2>
         {!plan.notLooking && <p className="cr-note">{VALUE_LINE}</p>}
-        <CompareTable current={plan.name === "free" ? "free" : "pro"} />
+        {/* Paying now: move between Pro and Pro + Close here, on the same subscription. */}
+        {plan.subscribed && plan.name === "pro" && !plan.proStartsAt && !plan.cancelAt && <PlanCards plan={plan} from="billing" onDone={refresh} />}
+        <CompareTable current={plan.tier} />
         {plan.name === "pro" && (
           <p className="tp-small muted bl-check">
-            <IconCheck size={13} /> Everything in the Pro column is yours.
+            <IconCheck size={13} /> Everything in the {plan.tier === "close" ? "Pro + Close" : "Pro"} column is yours.
           </p>
         )}
       </section>

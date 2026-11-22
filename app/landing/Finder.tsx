@@ -610,8 +610,8 @@ export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }:
             {ask === "rates" ? null : (
               <p className="lp-res-fine">
                 {answer?.openRoleCompanies === false
-                  ? "An open role's title is free. Inside Merlin, 2 credits show the company behind it and its job posting. 1 more shows who held a seat and the role they held."
-                  : "An open role's title is free. Here we name a few of the companies hiring. Inside Merlin, 2 credits show the company behind an open role and its job posting. 1 more shows who held a seat and the role they held."}
+                  ? "An open role's title is free. Inside Merlin, 2 credits show the company behind it and its job posting. Who held each seat, and the role they held, then show free."
+                  : "An open role's title is free. Here we name a few of the companies hiring. Inside Merlin, 2 credits show the company behind an open role and its job posting. Who held each seat, and the role they held, then show free."}
               </p>
             )}
           </div>

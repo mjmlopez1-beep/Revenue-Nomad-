@@ -31,7 +31,7 @@ import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage,
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 import { useFitWhy } from "./Hunt";
 import { VerifyName } from "./Verify";
-import { fnChipPlan } from "./display";
+import { companyLater, fnChipPlan } from "./display";
 import { leadPhrase, monthYear, type LeadLine } from "@/lib/leaders/types";
 
 /**
@@ -183,7 +183,7 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
 export function UnlockCompanyCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
   // Today's unlocks are used up (a company counts as COMPANY_PRICE, the free one too): the row says so at once, never a button that does nothing.
-  if ((ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || ui.me.freeCompany)) return <LockWait />;
+  if (companyLater(ui.me)) return <LockWait />;
   return <FactCell t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />;
 }
 
@@ -747,7 +747,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
   // Held by comes right after Company: at 1440, with the filters open, it is on screen without scrolling.
   companies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the latest seat. 1 credit shows who it was and the role they held." },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the latest seat. Free to see once the company is open: who it was and the role they held." },
     { label: "Latest seat", cls: "w-seat", sort: "start" },
     { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
     { label: "Industry", cls: "w-ind" },
@@ -761,7 +761,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
   // Recently hired: the same columns, with the hire each company matched in place of the latest seat. Held by and Rate are that seat's.
   hiredCompanies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the recent hire's seat, a possible referral partner. 1 credit shows who it was and the role they held." },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the recent hire's seat, a possible referral partner. Free to see once the company is open." },
     { label: "Recent hire", cls: "w-seat w-hire", sort: "hired", tip: "The most recent fractional hire that fits the sentence above, and the month it started. The role shows once you can see it." },
     { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
     { label: "Industry", cls: "w-ind" },
@@ -799,7 +799,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Role", cls: "w-role" },
     { label: "Type", cls: "w-type" },
     { label: "Status", cls: "w-status" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. 1 credit shows who it was and the role they held." },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Free to see once the company is open: who it was and the role they held." },
     { label: "Start", cls: "w-date", sort: "start" },
     { label: "End", cls: "w-date" },
     { label: "Rate", cls: "w-rate num", rates: true },

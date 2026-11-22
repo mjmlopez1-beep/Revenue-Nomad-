@@ -270,12 +270,18 @@ export interface Me {
    */
   unlocksLeft?: number | null;
   /**
-   * The free company of the day is still left: one company a UTC day unlocks for no credits, on
-   * Trial and Pro (and every plan while billing is off). It counts toward the day's unlocks like a
-   * paid one (a company is 2 of them), so it is usable only while unlocksLeft allows a company. It
-   * doesn't roll over. Never on Free while billing is live: there the free one is Crystal Ball's (`crystal`).
+   * A free company open is left today. Trial and Pro (billing live): any company opens free, up to
+   * PRO_OPENS_DAILY a UTC day (`proOpens`), outside the day's unlock limit. Billing off: the one
+   * free company of the day, which counts toward the day's unlocks like a paid one (a company is 2
+   * of them). Never on Free while billing is live: there the free one is Crystal Ball's (`crystal`).
    */
   freeCompany?: boolean;
+  /** Trial and Pro, billing live: free company opens left today, of PRO_OPENS_DAILY. Crystal Ball's don't count. Left out otherwise. */
+  proOpens?: { left: number; of: number };
+  /** Free, past the first FREE_TAPER_DAYS: what facts about other people's companies earned in 24 hours, and their cap. Left out otherwise. */
+  taper?: { cap: number; earned: number };
+  /** Get started: a first note went out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections are in. */
+  started?: { note: boolean; network: boolean; /** Your network isn't on for Merlin (RN_GOOGLE): the Connect Google step is left out. */ networkOff?: boolean };
   /**
    * How a company in their Crystal Ball opens from Crystal Ball and the Today card, while billing
    * is live (left out otherwise: the 2-credit unlock, as anywhere). "all": Trial and Pro, every
@@ -440,7 +446,17 @@ export interface PlanView {
   notLooking: boolean;
   /** The annual plan framed by their own rate ("Less than an hour of your time a month."), when they have a rate. */
   annualLine: string | null;
-  prices: { month: number; year: number; topup: number; topupCredits: number; proCredits: number };
+  prices: { month: number; year: number; closeMonth: number; closeYear: number; topup: number; topupCredits: number; proCredits: number };
+  /** The tier now: Free, Pro, or Pro + Close ("close"; the trial is Close). */
+  tier: "free" | "pro" | "close";
+  /** Close features are open now (lib/billing/rules.ts canClose): the trial, paid Pro + Close, or grandfathered Pro. */
+  canClose: boolean;
+  /** On Pro from before Close: Close features until this date (the next renewal). Left out otherwise. */
+  closeUntil?: string;
+  /** Pro + Close can be bought (its prices are set up). */
+  closeOpen: boolean;
+  /** The AI usage pack can be bought (its price is set up). Only on Pro + Close or the trial (canClose). */
+  aiPack: boolean;
   /**
    * The survey code the member arrived with (?code=RN-SURVEY10, kept from the landing page
    * through joining), when checkout applies it for them: "RN-SURVEY10 applied: 10% off". Null otherwise.
@@ -452,6 +468,12 @@ export interface PlanView {
    * outside those days.
    */
   receipt?: string[];
+  /**
+   * The trial's end as a loss, in its last SUMMARY_DAYS (lib/billing/emails.ts trialSummary): what
+   * they used ("You opened 16 companies free and sent 3 notes; 1 proposal is out.", null when
+   * nothing yet) and what locks ("Tomorrow companies cost 2 credits again ..."). Left out otherwise.
+   */
+  summary?: { used: string | null; locks: string };
   /** What Free allows now (null: no limit, on Pro). */
   limits: { savedViews: number | null; claudePerDay: number | null };
   /** The trial ended without a paid plan and the member hasn't closed Today's trial-ended card yet (PlanRecord.notices.trialEndedSeen). */ // [ux ws1]

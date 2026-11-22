@@ -36,6 +36,10 @@ export interface PlanRecord {
   proStartsAt?: string;
   /** "month" | "year", for the billing page. */
   interval?: "month" | "year";
+  /** The paid tier: "pro" ($59) or "close" (Pro + Close, $79). Left out: Pro (records from before Close). See lib/billing/rules.ts canClose. */
+  tier?: "pro" | "close";
+  /** On paid Pro before Close existed: Close features until this date (the end of the period then paid for), then plain Pro. */
+  closeUntil?: string;
   /** Set when the member cancelled: Pro runs to proUntil, then Free. */
   cancelAt?: string;
   /** Paused (book full): no charge and Free until this date, then Pro resumes. */

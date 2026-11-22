@@ -14,12 +14,10 @@
  *  - who shows and how: a member shown in the directory (full name, seats free), one who hasn't
  *    chosen (first name and last initial), one who said no (left out), someone not on Merlin yet
  *    (locked: no name, first name or initials in the answer), the switch and Me.fractionals;
- *  - every credit case: Unlock · 1 credit, recorded on a seat at a company the member knows, else
- *    as a person that opens no company; the name and role on every seat of theirs after it; no second
- *    charge from the directory or a seat; a seat bought before opens the record; a role bought
- *    before (the other half of the bundle) too; no holderKey, no spread; out of credits; the daily
- *    unlock limit and the first day's; Free, Trial and Pro pay the same and keep the free company of
- *    the day; a name taken off gives the credit back;
+ *  - fellow fractionals are free (PEERS_FREE): Unlock on Fractionals spends nothing on any plan (out
+ *    of credits and at the limits too), who held a seat shows free at a company the member sees and
+ *    waits for a locked one, a role bought before still marks the record, no holderKey, no spread,
+ *    and a name taken off gives back what was paid under the old rules;
  *  - invites and activation: the activation page (who's waiting, the seats, one company named),
  *    claiming every ticked seat past the daily claim limit, a conversation with each inviter, the
  *    new member's bonus once, each inviter's, and the cap on inviters paid for one activation;
@@ -139,6 +137,9 @@ const ledger = [
   // Mo bought the role half of Pat's Kitebright seat long ago (the bundle's other half).
   unlock("mem_mo", "c_kite.identity", -2),
   unlock("mem_mo", "e_pat_b.role", -1),
+  // Robin paid to see who held Rae's Orchard seat and Lee's Lanternfield seat under the old rules (before fellow fractionals were free).
+  unlock("mem_robin", "e_rae_2.operator", -1),
+  unlock("mem_robin", "e_lee_one.operator", -1),
   // Pip is out of credits; Bo used today's 100 unlocks.
   { memberId: "mem_pip", delta: -25, reason: "adjust", ref: "starter.floor", at: ago(20 * DAY) },
   { memberId: "mem_bo", delta: 200, reason: "topup", ref: "topup.bo", at: ago(5 * DAY) },
@@ -280,8 +281,9 @@ async function main() {
   let d = await dirOf("mem_robin");
   const sam = recOf(d, "e_sam_pollen")!;
   check("Sam's three seats, one person key, are one record", !!sam && sam.seats.length === 3 && sam.now === 1 && sam.past === 2, sam);
-  check("someone not on Merlin yet is locked: no name, first name or initials", !!sam && sam.locked === true && !sam.name && !sam.first && !sam.initials && !sam.onMerlin);
-  check("nothing of a locked name anywhere in the directory", !/Brennick|Sam Br/.test(JSON.stringify(d)));
+  // Decision 2 (PEERS_FREE): someone not on Merlin yet shows by full name in the directory, free.
+  check("someone not on Merlin yet shows by full name, free", !!sam && !sam.locked && sam.name === "Sam Brennick" && sam.initials === "SB" && !sam.onMerlin && !sam.unlocked, sam);
+  check("a member who hasn't chosen still shows short (their privacy default)", !/Wrenshaw/.test(JSON.stringify(d)));
   check("function and level are free, read from the titles", sam.fn === "RevOps" && sam.level === "Head", [sam.fn, sam.level]);
   check("the clients they serve, read from their seats, as one line", sam.clients?.from === "seats" && sam.clients.line.startsWith("Fintech") && sam.fits === true, sam.clients);
   check("Pat's two seats with one name and no key stay two records", recOf(d, "e_pat_a")!.id !== recOf(d, "e_pat_b")!.id);
@@ -292,7 +294,7 @@ async function main() {
   check("a member's seat and a seat file's seat with his key are one record", theo.seats.length === 2 && recOf(d, "e_theo_tide")?.id === theo.id);
   check("a member who said no is left out entirely", !recOf(d, "e_ines_tide"));
   const nell = recOf(d, "e_nell_north")!;
-  check("a member who never signed in reads as Not on Merlin yet, locked", !!nell && !nell.onMerlin && nell.locked === true && !nell.name);
+  check("a member who never signed in reads as Not on Merlin yet, named", !!nell && !nell.onMerlin && !nell.locked && nell.name === "Nell Neversigned");
   check("a seat with nobody named makes no record", !recOf(d, "e_nobody"));
   check("no person key in the directory", keysIn(JSON.stringify(d)).length === 0);
   check("the viewer's function comes with it (Different from yours)", d.fn === "Marketing");
@@ -316,65 +318,62 @@ async function main() {
     }
   };
   const ledgerOf = async (who: string) => (await t.exportState()).ledger.filter((l) => l.memberId === who);
+  // Decision 2 (PEERS_FREE): fellow fractionals never cost a credit. Unlock on Fractionals spends nothing, and who held a
+  // seat shows free once the member sees the company; at a company still locked for them it waits for the company.
   const b0 = await balance("mem_robin");
   const u1 = await t.perform(ROBIN, { type: "unlockFractional", id: sam.id }, BASE);
-  check("Unlock · 1 credit", (await balance("mem_robin")) === b0 - 1 && /Sam Brennick for 1 credit/.test(u1.message), { b0, now: await balance("mem_robin"), m: u1.message });
-  const robinLedger = await ledgerOf("mem_robin");
-  check("recorded as who held a seat of theirs at a company Robin knows, the seat's own purchase", robinLedger.some((l) => l.ref === "e_sam_bright.operator" && l.delta === -1) && !robinLedger.some((l) => l.ref.endsWith(".person")));
+  check("Fractionals never costs a credit: nothing spent, and it says so", (await balance("mem_robin")) === b0 && u1.message === t.FRACTIONALS_FREE, { b0, now: await balance("mem_robin"), m: u1.message });
+  check("no ledger row for it", !(await ledgerOf("mem_robin")).some((l) => l.ref.startsWith("e_sam_")));
   rv = await t.buildView(ROBIN);
   check(
-    "their name and role show on every seat of theirs, the locked company's too",
-    ["e_sam_pollen", "e_sam_bright", "e_sam_vellum"].every((id) => engCell(rv, id, "operator").s === "value" && engCell(rv, id, "role").s === "value"),
+    "who held Sam's seat at a company Robin sees shows free, with the role",
+    engCell(rv, "e_sam_bright", "operator").s === "value" && engCell(rv, "e_sam_bright", "role").s === "value" && !(engCell(rv, "e_sam_bright", "operator") as { paid?: boolean }).paid,
   );
+  check("at the companies still locked for Robin it waits for the company", ["e_sam_pollen", "e_sam_vellum"].every((id) => engCell(rv, id, "operator").s === "locked"));
   check("a locked company stays locked (its name, and its record)", coRec(rv, "c_pollen").hidden === true && coRec(rv, "c_vellum").hidden === true && !JSON.stringify(coRec(rv, "c_pollen")).includes("Pollen"));
   d = await dirOf("mem_robin");
   const samR = recOf(d, "e_sam_pollen")!;
-  check("the record opens: name, initials, unlocked, title, and Invite to connect by the known company's seat", samR.name === "Sam Brennick" && samR.initials === "SB" && samR.unlocked === true && samR.title === "Fractional Head of RevOps" && samR.invite?.seat === pub("e_sam_bright"), samR);
+  check("the record shows: name, initials, title, and Invite to connect by the known company's seat, nothing bought", samR.name === "Sam Brennick" && samR.initials === "SB" && !samR.unlocked && !samR.locked && samR.title === "Fractional Head of RevOps" && samR.invite?.seat === pub("e_sam_bright"), samR);
   const b1 = await balance("mem_robin");
-  const r1 = await refusal(t.perform(ROBIN, { type: "unlockFractional", id: sam.id }, BASE));
-  check("unlocking them again charges nothing", !!r1 && /no credit was spent/.test(r1) && (await balance("mem_robin")) === b1, r1);
+  const r1 = await refusal(t.perform(ROBIN, { type: "unlock", entity: "engagement", id: pub("e_sam_bright"), field: "operator" }, BASE));
+  check("unlocking who held the seat Robin sees charges nothing: nothing locked", !!r1 && /Nothing here is locked/.test(r1) && (await balance("mem_robin")) === b1, r1);
   const r2 = await refusal(t.perform(ROBIN, { type: "unlock", entity: "engagement", id: pub("e_sam_vellum"), field: "operator" }, BASE));
   const r3 = await refusal(t.perform(ROBIN, { type: "unlock", entity: "engagement", id: pub("e_sam_pollen"), field: "role" }, BASE));
-  check("who held another seat of theirs, or its role, charges nothing", !!r2 && /no credit was spent/i.test(r2) && !!r3 && /no credit was spent/i.test(r3) && (await balance("mem_robin")) === b1, [r2, r3]);
-  const dry = await t.perform(ROBIN, { type: "unlockMany", items: ["e_sam_pollen", "e_sam_vellum"].flatMap((id) => [{ entity: "engagement" as const, id: pub(id), field: "operator" }, { entity: "engagement" as const, id: pub(id), field: "role" }]) }, BASE, { dryRun: true });
-  check("Unlock all over their seats quotes nothing", (dry.spent ?? 0) === 0, dry);
+  check("who held a seat at a locked company, or its role: the company first, nothing spent", r2 === t.COMPANY_FIRST && r3 === t.COMPANY_FIRST && (await balance("mem_robin")) === b1, [r2, r3]);
+  const dry = await t.perform(ROBIN, { type: "unlockMany", items: ["e_sam_pollen", "e_sam_vellum"].flatMap((id) => [{ entity: "engagement" as const, id: pub(id), field: "operator" }, { entity: "company" as const, id: pub(id === "e_sam_pollen" ? "c_pollen" : "c_vellum"), field: "identity" }]) }, BASE, { dryRun: true });
+  check("Unlock all with their companies quotes only the companies (2 each), the seat holders free", (dry.spent ?? 0) === 4, dry);
 
-  // Mo buys who held one of Sam's seats on the company record: the record opens, with no second charge.
+  // Mo sees Sam's Brightloom seat free on the company record, and the directory charges nothing either.
   const MO = tok("mem_mo");
-  await t.perform(MO, { type: "unlock", entity: "engagement", id: pub("e_sam_bright"), field: "operator" }, BASE);
   const moBal = await balance("mem_mo");
   const dMo = await dirOf("mem_mo");
-  check("a seat bought on a company record opens their record", recOf(dMo, "e_sam_pollen")?.name === "Sam Brennick" && recOf(dMo, "e_sam_pollen")?.unlocked === true);
-  const r4 = await refusal(t.perform(MO, { type: "unlockFractional", id: sam.id }, BASE));
-  check("and the directory doesn't charge for it again", !!r4 && /no credit was spent/.test(r4) && (await balance("mem_mo")) === moBal, r4);
-  check("a role bought before (the other half of the seat's bundle) opens the record", recOf(dMo, "e_pat_b")?.name === "Pat Quill" && recOf(dMo, "e_pat_b")?.unlocked === true);
-  check("without a person key, it doesn't spread to a seat with the same name", recOf(dMo, "e_pat_a")?.locked === true && engCell(await t.buildView(MO), "e_pat_a", "operator").s === "locked");
+  check("Mo's directory names Sam too, free", recOf(dMo, "e_sam_pollen")?.name === "Sam Brennick" && (await balance("mem_mo")) === moBal);
+  const r4 = await t.perform(MO, { type: "unlockFractional", id: sam.id }, BASE);
+  check("and Unlock there charges nothing", r4.message === t.FRACTIONALS_FREE && (await balance("mem_mo")) === moBal, r4);
+  check("a role bought before (the other half of the seat's bundle) still marks the record unlocked", recOf(dMo, "e_pat_b")?.name === "Pat Quill" && recOf(dMo, "e_pat_b")?.unlocked === true);
+  check("without a person key, it doesn't spread to a seat with the same name: that one isn't his purchase, and waits for its locked company", recOf(dMo, "e_pat_a")?.unlocked !== true && engCell(await t.buildView(MO), "e_pat_a", "operator").s === "locked");
 
-  // Zoe knows no company: the purchase is the person, and opens no company.
+  // Zoe knows no company: Sam's name shows in the directory, nothing is spent, and every company of his stays locked.
   const ZOE = tok("mem_zoe");
   const z0 = await balance("mem_zoe");
   await t.perform(ZOE, { type: "unlockFractional", id: sam.id }, BASE);
-  const zl = await ledgerOf("mem_zoe");
   const zv = await t.buildView(ZOE);
-  check("knowing none of their companies, it is recorded as the person (1 credit)", (await balance("mem_zoe")) === z0 - 1 && zl.some((l) => l.ref.endsWith(".person") && l.delta === -1));
-  check("and every company of theirs stays locked", ["c_pollen", "c_bright", "c_vellum"].every((c) => coRec(zv, c).hidden === true));
-  check("their name shows on each seat, at the locked companies too", ["e_sam_pollen", "e_sam_bright", "e_sam_vellum"].every((id) => engCell(zv, id, "operator").s === "value"));
-  check("the credit history names it without a company", zv.ledger.some((l) => l.field === t.FRACTIONAL_LABEL && l.company === "" && l.delta === -1));
+  check("knowing none of their companies: nothing spent, no ledger row", (await balance("mem_zoe")) === z0 && !(await ledgerOf("mem_zoe")).some((l) => l.ref.endsWith(".person")));
+  check("and every company of theirs stays locked, with who held its seats", ["c_pollen", "c_bright", "c_vellum"].every((c) => coRec(zv, c).hidden === true) && ["e_sam_pollen", "e_sam_bright", "e_sam_vellum"].every((id) => engCell(zv, id, "operator").s === "locked"));
+  check("the directory names them for her all the same", recOf(await dirOf("mem_zoe"), "e_sam_pollen")?.name === "Sam Brennick");
 
-  // Two seats of one fractional in one request (Unlock all, the connector's unlock of several): one purchase.
+  // Two seats of one fractional at companies Robin knows: nothing to buy.
   const g0 = await balance("mem_robin");
   const both = await t.perform(ROBIN, { type: "unlockMany", items: ["e_gus_1", "e_gus_2"].map((id) => ({ entity: "engagement" as const, id: pub(id), field: "operator" })) }, BASE);
   rv = await t.buildView(ROBIN);
-  check("two seats of one fractional in one request cost 1 credit, not 2", (await balance("mem_robin")) === g0 - 1 && ["e_gus_1", "e_gus_2"].every((id) => engCell(rv, id, "operator").s === "value"), { g0, now: await balance("mem_robin"), m: both.message });
-  check("and the answer carries the other seat's name and role", (both.cells ?? []).some((c) => c.id === pub("e_gus_2") && c.field === "role" && c.cell.s === "value"));
+  check("two seats of one fractional Robin can see: free, nothing spent", (await balance("mem_robin")) === g0 && ["e_gus_1", "e_gus_2"].every((id) => engCell(rv, id, "operator").s === "value" && engCell(rv, id, "role").s === "value"), { g0, now: await balance("mem_robin"), m: both.message });
 
-  // Out of credits, the daily limit, the first day's.
+  // Out of credits, the daily limit, the first day's: the directory needs none of them.
   const pipBefore = (await ledgerOf("mem_pip")).length;
-  const rp = await refusal(t.perform(tok("mem_pip"), { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE));
-  check("out of credits: refused, nothing written", !!rp && /out of credits/i.test(rp) && (await ledgerOf("mem_pip")).length === pipBefore, rp);
-  const rb = await refusal(t.perform(tok("mem_bo"), { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE));
-  check("the daily unlock limit holds", !!rb && /unlock limit/i.test(rb), rb);
-  // Jo joined an hour ago: credits to spare (a top-up), and the first day's 25 unlocks used.
+  const rp = await t.perform(tok("mem_pip"), { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE);
+  check("out of credits: the directory still shows them, nothing written", rp.message === t.FRACTIONALS_FREE && (await ledgerOf("mem_pip")).length === pipBefore, rp);
+  check("at the daily unlock limit too", (await t.perform(tok("mem_bo"), { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE)).message === t.FRACTIONALS_FREE);
+  // Jo joined an hour ago: the first day's 25 unlocks used.
   await t.tableInternals.mutate((st) => {
     st.ledger.push(
       { memberId: "j_jo", delta: 40, reason: "topup", ref: "topup.jo", at: ago(30 * 60 * 1000) },
@@ -382,17 +381,16 @@ async function main() {
     );
     return null;
   });
-  const rj = await refusal(t.perform("tok-jo", { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE));
-  check("the first day's limit holds", !!rj && /day-one limit/i.test(rj), rj);
+  check("and on the first day's limit", (await t.perform("tok-jo", { type: "unlockFractional", id: recOf(d, "e_lee_one")!.id }, BASE)).message === t.FRACTIONALS_FREE);
 
-  // Plans: Free, Trial and Pro pay the same, and the free company of the day stays.
+  // Plans: Free, Trial and Pro alike, and the free company of the day stays.
   const lee = recOf(d, "e_lee_one")!;
   for (const who of ["mem_fay", "mem_tia", "mem_pru"]) {
     const before = await t.buildView(tok(who));
     await t.perform(tok(who), { type: "unlockFractional", id: lee.id }, BASE);
     const after = await t.buildView(tok(who));
     const l = (await ledgerOf(who)).filter((x) => x.ref.startsWith("e_lee_one"));
-    check(`${who === "mem_fay" ? "Free" : who === "mem_tia" ? "Trial" : "Pro"}: 1 credit, an ordinary unlock`, after.me!.credits === before.me!.credits - 1 && l.length === 1 && l[0].delta === -1 && !l[0].why, l);
+    check(`${who === "mem_fay" ? "Free" : who === "mem_tia" ? "Trial" : "Pro"}: free, no ledger row`, after.me!.credits === before.me!.credits && l.length === 0, l);
     if (who !== "mem_fay") check(`${who === "mem_tia" ? "Trial" : "Pro"}: the free company of the day is still left`, after.me!.freeCompany === true && before.me!.freeCompany === true);
   }
 
@@ -414,8 +412,8 @@ async function main() {
   check("a member out of the directory can't be messaged from it", !!ri && /isn't in the Fractionals directory/.test(ri), ri);
   await t.perform(THEO, { type: "settings", partners: true }, BASE);
   check("Referral partners' old switch is the same one", (await t.buildView(THEO)).me!.fractionals === true);
-  const dm = await refusal(t.perform(ROBIN, { type: "unlockFractional", id: dana.id }, BASE));
-  check("a member shown in the directory has nothing to unlock", !!dm && /no credit was spent/.test(dm), dm);
+  const dm = (await t.perform(ROBIN, { type: "unlockFractional", id: dana.id }, BASE)).message;
+  check("a member shown in the directory has nothing to unlock, and nothing is spent", dm === t.FRACTIONALS_FREE, dm);
 
   /* ---------- 5. invites and activation ---------- */
   console.log("\nInvites and activation");
@@ -470,17 +468,16 @@ async function main() {
   check("an unticked seat isn't claimed; the ticked one is", niaSeat("e_nia_1")?.yours === true && !niaSeat("e_nia_2")?.yours);
   check("untick the directory box and they're out of it", niaView.me!.fractionals === false && !(await dirOf("mem_robin")).records.some((r) => r.seats.some((s) => s.id === pub("e_nia_1"))));
 
-  // Rae: Robin (a known company) and Zoe (the person) unlock her, then Remove my name on her link takes every name of hers off, with the credits back.
+  // Rae: Robin paid to see who held her Orchard seat under the old rules (seeded), then Remove my name on her link takes every name of hers off, with that credit back.
   d = await dirOf("mem_robin");
   const rae = recOf(d, "e_rae_1")!;
-  await t.perform(ROBIN, { type: "unlockFractional", id: rae.id }, BASE);
   await t.perform(ZOE, { type: "unlockFractional", id: rae.id }, BASE);
   const rb0 = await balance("mem_robin");
   const zb0 = await balance("mem_zoe");
   const off = await t.nameOffByToken(claimToken("e_rae_1"), "remove");
   rv = await t.buildView(ROBIN);
   check("Remove my name: every seat of theirs is unnamed now", off.done && ["e_rae_1", "e_rae_2"].every((id) => engCell(rv, id, "operator").s === "empty"));
-  check("and whoever paid to see it gets the credit back (the seat's own purchase and the person)", (await balance("mem_robin")) === rb0 + 1 && (await balance("mem_zoe")) === zb0 + 1, { robin: [rb0, await balance("mem_robin")], zoe: [zb0, await balance("mem_zoe")] });
+  check("and whoever paid to see it gets the credit back; a free look gets nothing back", (await balance("mem_robin")) === rb0 + 1 && (await balance("mem_zoe")) === zb0, { robin: [rb0, await balance("mem_robin")], zoe: [zb0, await balance("mem_zoe")] });
   check("their record is gone", !recOf(await dirOf("mem_robin"), "e_rae_1"));
   const pat = await t.nameOffByToken(claimToken("e_pat_a"), "notme");
   check("This isn't me on a one-seat link takes that name off, and only that seat's", pat.done && engCell(await t.buildView(MO), "e_pat_b", "operator").s === "value");

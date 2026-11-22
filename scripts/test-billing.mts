@@ -49,7 +49,11 @@ const seed = {
     { id: "e_bill_cfo", companyId: "c_bill", fields: { source: "Published engagement", function: "Finance", role: "Fractional CFO", operator: "Pat Example", start: "2026-01", status: "Active", type: "Fractional" } },
     { id: "e_bill_cmo", companyId: "c_bill", fields: { source: "Published engagement", function: "Marketing", role: "Fractional CMO", operator: "Sam Sample", start: "2025-06", status: "Active", type: "Fractional" } },
   ],
-  contacts: [],
+  // Two people there: with fellow fractionals free (PEERS_FREE), a warm path that costs is a person's name.
+  contacts: [
+    { id: "p_bill_ceo", companyId: "c_bill", fields: { name: "Quinn Example", title: "CEO", relationship: "Decision maker" } },
+    { id: "p_bill_vp", companyId: "c_bill", fields: { name: "Rory Sample", title: "VP Finance", relationship: "Decision maker" } },
+  ],
 };
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
 const at0 = new Date().toISOString();
@@ -79,7 +83,10 @@ const STRIPE_ENV = {
   STRIPE_WEBHOOK_SECRET: "whsec_madeup_test_secret",
   STRIPE_PRICE_MONTH: "price_month_test",
   STRIPE_PRICE_YEAR: "price_year_test",
+  STRIPE_PRICE_CLOSE_MONTH: "price_close_month_test",
+  STRIPE_PRICE_CLOSE_YEAR: "price_close_year_test",
   STRIPE_PRICE_TOPUP: "price_topup_test",
+  STRIPE_PRICE_AIPACK: "price_aipack_test",
   STRIPE_API_URL: "http://stripe.test",
   RN_SURVEY_CODE: "RN-SURVEY10",
   STRIPE_PROMO_SURVEY: "promo_survey_test",
@@ -103,7 +110,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     const p = new URL(url).pathname;
     if (p === "/v1/checkout/sessions") return Response.json({ id: "cs_test_1", url: "https://checkout.stripe.test/c/cs_test_1" });
     if (p === "/v1/billing_portal/sessions") return Response.json({ id: "bps_1", url: "https://billing.stripe.test/p/bps_1" });
-    if (p.startsWith("/v1/subscriptions/")) return Response.json({ id: p.split("/").pop() });
+    if (p.startsWith("/v1/subscriptions/")) return Response.json({ id: p.split("/").pop(), items: { data: [{ id: "si_test_1" }] } });
     return Response.json({ error: { message: "nope" } }, { status: 404 });
   }
   if (url.startsWith("http://mail.test/")) {
@@ -419,13 +426,14 @@ async function main() {
   check("planFor (for the radar): Free is gated, the trial is not", forRadar.gated && !forRadar.pro && (await t.planFor("mem_bo")).pro && !(await t.planFor("mem_bo")).gated);
 
   console.log("\nThe extension");
-  const pubCfo = (await t.buildView(AL)).companies[0].engagements.find((e) => e.cells.role?.s === "value" ? /CFO/.test(String((e.cells.role as { v?: string }).v)) : true)!.id;
+  // A warm path that costs is a person's name now: who held a seat is free (PEERS_FREE).
+  const alCo = (await t.buildView(AL)).companies[0];
+  const [pubCeo, pubVp] = alCo.people.map((p) => p.id);
   const beforeEnd = (await state()).billing!.members.mem_al.trialEndsAt!;
-  const un = await act(AL, { type: "unlock", entity: "engagement", id: pubCfo, field: "operator" });
+  const un = await act(AL, { type: "unlock", entity: "contact", id: pubCeo, field: "name" });
   const afterEnd = (await state()).billing!.members.mem_al.trialEndsAt!;
   check("unlocking a warm path in the last days adds 7 days", un.ok && Date.parse(afterEnd) - Date.parse(beforeEnd) === 7 * DAY && (await meOf(AL)).plan?.trialExtended === true, { un, beforeEnd, afterEnd });
-  const pubCmo = (await t.buildView(AL)).companies[0].engagements.find((e) => e.id !== pubCfo)!.id;
-  await act(AL, { type: "unlock", entity: "engagement", id: pubCmo, field: "operator" });
+  await act(AL, { type: "unlock", entity: "contact", id: pubVp, field: "name" });
   check("and only once", (await state()).billing!.members.mem_al.trialEndsAt === afterEnd);
 
   console.log("\nThe webhook, end to end");
@@ -640,6 +648,105 @@ async function main() {
   const fp = await server.handleWebhook(firstPaid, S.signFor(firstPaid, STRIPE_ENV.STRIPE_WEBHOOK_SECRET, Math.floor(atEnd / 1000)), undefined, atEnd);
   const boPaid = (await meOf(BO)).plan!;
   check("the first paid invoice: 100 credits, Pro to the year's end, the wait over", fp.status === 200 && (await meOf(BO)).credits === boCredits0 + 100 && boPaid.name === "pro" && !boPaid.proStartsAt && Math.floor(Date.parse(boPaid.proUntil!) / 1000) === boEndS + 365 * 86_400, { fp, boPaid });
+
+  /* ---------- Pro + Close ---------- */
+  console.log("\nPro + Close: the tier, its checkout, events, upgrade and downgrade, the one gate");
+  {
+    const N = Date.now();
+    const trialRec = R.startTrial(undefined, N)!;
+    check("the trial is Close: canClose true, tierNow close", R.canClose(trialRec, N) && R.tierNow(trialRec, N) === "close");
+    check("Free is refused", !R.canClose(undefined, N) && !R.canClose({ trialStartedAt: iso(N - 30 * DAY), trialEndsAt: iso(N - 9 * DAY) }, N) && R.tierNow(undefined, N) === "free");
+    const proRec = { proUntil: iso(N + 20 * DAY), paidSince: iso(N - 10 * DAY), tier: "pro" as const };
+    check("plain Pro is refused", !R.canClose(proRec, N) && R.tierNow(proRec, N) === "pro");
+    check("paid Pro + Close has it", R.canClose({ ...proRec, tier: "close" }, N) && R.tierNow({ ...proRec, tier: "close" }, N) === "close");
+    check("the prices: $79 a month, $790 a year, the same 100 credits", R.PRICES.closeMonth === 79 && R.PRICES.closeYear === 790 && R.tierPrice("close", "year") === 790 && R.tierPrice("pro", "month") === 59 && R.PRO_CREDITS === 100);
+    // Paid Pro from before Close: stays on Pro, with Close until the next renewal.
+    const gb = R.emptyBilling();
+    gb.members.old = { proUntil: iso(N + 12 * DAY), paidSince: iso(N - 50 * DAY), invoiceId: "in_old", interval: "month" };
+    gb.members.lapsed = { proUntil: iso(N - DAY), paidSince: iso(N - 90 * DAY) };
+    gb.members.trial = { trialStartedAt: iso(N), trialEndsAt: iso(N + 21 * DAY) };
+    check("grandfathering: only paid Pro now, once", R.grandfatherClose(gb, N) === 1 && gb.members.old.tier === "pro" && gb.members.old.closeUntil === gb.members.old.proUntil && !gb.members.lapsed.tier && !gb.members.trial.tier && R.grandfatherClose(gb, N) === 0);
+    check("  Close features until the next renewal", R.canClose(gb.members.old, N + 11 * DAY) && R.tierNow(gb.members.old, N) === "pro");
+    const renewed = { ...gb.members.old, proUntil: iso(N + 42 * DAY) };
+    check("  then plain Pro", !R.canClose(renewed, N + 13 * DAY) && plan.planOf(renewed, N + 13 * DAY) === "pro");
+    // Events: the tier from checkout's metadata, and from the subscription's price on an upgrade or a downgrade.
+    const cb = R.emptyBilling();
+    const cctx = (nowMs: number) => ({ nowMs, memberOf: () => "mem_x", tierOf: S.tierOfPrice });
+    R.applyEvent(cb, ev("evt_c1", "checkout.session.completed", { id: "cs_c1", mode: "subscription", client_reference_id: "rn_ref_x", customer: "cus_x", subscription: "sub_x", payment_status: "paid", metadata: { interval: "month", tier: "close" } }), cctx(N));
+    check("checkout for Pro + Close: on Close at once", cb.members.mem_x.tier === "close" && R.canClose(cb.members.mem_x, N) && plan.planOf(cb.members.mem_x, N) === "pro");
+    R.applyEvent(cb, ev("evt_c2", "customer.subscription.updated", { id: "sub_x", customer: "cus_x", status: "active", items: { data: [{ price: { id: "price_month_test", recurring: { interval: "month" } }, current_period_end: Math.floor((N + 30 * DAY) / 1000) }] } }), cctx(N));
+    check("a downgrade (the subscription's price is Pro's): on Pro, Close closed", cb.members.mem_x.tier === "pro" && !R.canClose(cb.members.mem_x, N));
+    R.applyEvent(cb, ev("evt_c3", "customer.subscription.updated", { id: "sub_x", customer: "cus_x", status: "active", items: { data: [{ price: { id: "price_close_month_test", recurring: { interval: "month" } }, current_period_end: Math.floor((N + 30 * DAY) / 1000) }] } }), cctx(N));
+    check("an upgrade (Close's price): on Close again", cb.members.mem_x.tier === "close" && R.canClose(cb.members.mem_x, N));
+    R.applyEvent(cb, ev("evt_c4", "invoice.paid", { id: "in_c4", customer: "cus_x", subscription: "sub_x", amount_paid: 7900, lines: { data: [{ period: { start: Math.floor(N / 1000), end: Math.floor((N + 30 * DAY) / 1000) }, price: { id: "price_close_month_test", recurring: { interval: "month" } } }] } }), cctx(N));
+    check("its invoice: Close, with the same 100 credits a month", cb.members.mem_x.tier === "close" && cb.members.mem_x.cents === 7900);
+    check("a price we don't know leaves the tier as it is", S.tierOfPrice("price_unknown") === null && S.tierOfPrice(null) === null);
+    // Checkout and the moves between tiers, through the server, Stripe answered here.
+    calls.length = 0;
+    await server.billingAction(CY, "checkout", { interval: "month", tier: "close" }, "https://post.example.com");
+    const ckc = new URLSearchParams(calls[0]?.body ?? "");
+    check("checkout for Pro + Close: Close's monthly price, the tier in both metadata", ckc.get("line_items[0][price]") === "price_close_month_test" && ckc.get("metadata[tier]") === "close" && ckc.get("subscription_data[metadata][tier]") === "close", calls[0]?.body);
+    calls.length = 0;
+    await server.billingAction(CY, "checkout", { interval: "year" }, "https://post.example.com");
+    check("checkout for Pro is as before: Pro's price, tier pro", new URLSearchParams(calls[0]?.body ?? "").get("line_items[0][price]") === "price_year_test" && new URLSearchParams(calls[0]?.body ?? "").get("metadata[tier]") === "pro");
+    // Di subscribes again (her earlier subscription ended above): yearly Pro, paid to a year from now.
+    await t.tableInternals.mutate((st) => {
+      const r = st.billing!.members.mem_di;
+      r.subscriptionId = "sub_w2";
+      r.proUntil = iso(Date.now() + 365 * DAY);
+      r.interval = "year";
+      r.tier = "pro";
+      delete r.cancelAt;
+      delete r.closeUntil;
+      return null;
+    });
+    const diBefore = (await meOf(DI)).plan!;
+    check("Di pays for Pro (yearly) and can't send proposals", diBefore.name === "pro" && diBefore.tier === "pro" && !diBefore.canClose && diBefore.prices.closeYear === 790, diBefore);
+    const P = await import("../lib/proposals/store.ts");
+    check("the proposals gate refuses plain Pro and Free, and opens on the trial", !(await P.listProposals(DI)).canSend && !(await P.listProposals(CY)).canSend && (await P.listProposals(AL)).canSend);
+    calls.length = 0;
+    const up = await server.billingAction(DI, "tier", { tier: "close" });
+    const upBody = new URLSearchParams(calls.find((c) => c.method === "POST")?.body ?? "");
+    check("upgrade on the same subscription: Close's yearly price, invoiced now", /Pro \+ Close now: \$790 a year/.test(up.message ?? "") && calls[0]?.method === "GET" && upBody.get("items[0][id]") === "si_test_1" && upBody.get("items[0][price]") === "price_close_year_test" && upBody.get("proration_behavior") === "always_invoice", { up, calls });
+    const diClose = (await meOf(DI)).plan!;
+    check("  Close at once: canClose, and proposals send", diClose.tier === "close" && diClose.canClose && (await P.listProposals(DI)).canSend, diClose);
+    const again = await server.billingAction(DI, "tier", { tier: "close" }).then(() => null, (e: Error) => e.message);
+    check("  asking again says so", /already/.test(again ?? ""), again);
+    calls.length = 0;
+    const down = await server.billingAction(DI, "tier", { tier: "pro" });
+    const downBody = new URLSearchParams(calls.find((c) => c.method === "POST")?.body ?? "");
+    check("downgrade: Pro's price, prorated to the next invoice", /You're on Pro now/.test(down.message ?? "") && downBody.get("items[0][price]") === "price_year_test" && downBody.get("proration_behavior") === "create_prorations", { down, body: downBody.toString() });
+    check("  plain Pro again: proposals refused", !(await meOf(DI)).plan!.canClose && !(await P.listProposals(DI)).canSend);
+    const noSub = await server.billingAction(CY, "tier", { tier: "close" }).then(() => null, (e: Error) => e.message);
+    check("no subscription to move: refused", /no paid plan/.test(noSub ?? ""), noSub);
+
+    // The AI usage pack: $10, once, on Pro + Close or the trial; the top-up's pattern.
+    console.log("\nThe AI usage pack");
+    check("its price and the plans' words, with no amount or limit", R.PRICES.aiPack === 10 && R.CLOSE_AI_LINE === "Claude drafts your proposals from your calls" && R.AI_PACK_LINE === "Need more AI usage? Add a pack anytime for $10." && !/\d+ (drafts|requests|tokens)|limit/i.test(R.AI_PACK_LINE + R.CLOSE_AI_LINE));
+    const refusedFree = await server.billingAction(CY, "aipack", {}).then(() => null, (e: Error) => e.message);
+    const refusedPro = await server.billingAction(DI, "aipack", {}).then(() => null, (e: Error) => e.message);
+    check("refused on Free and on plain Pro, with the Close upgrade's words", refusedFree === server.AI_PACK_CLOSE && refusedPro === server.AI_PACK_CLOSE, [refusedFree, refusedPro]);
+    calls.length = 0;
+    const apk = await server.billingAction(AL, "aipack", {}, "https://post.example.com");
+    const apBody = new URLSearchParams(calls[0]?.body ?? "");
+    check("checkout on the trial: a one-time payment for the pack's price, kind aipack, our ref only", apk.url === "https://checkout.stripe.test/c/cs_test_1" && apBody.get("mode") === "payment" && apBody.get("line_items[0][price]") === "price_aipack_test" && apBody.get("metadata[kind]") === "aipack" && apBody.get("client_reference_id") === t.tableInternals.billingRef("mem_al") && !/mem_al|Al Trialson/.test(calls[0]?.body ?? ""), calls[0]?.body);
+    const alRef = t.tableInternals.billingRef("mem_al");
+    const pack = (id: string, session: string, status = "paid") => ({ id, type: "checkout.session.completed", data: { object: { id: session, mode: "payment", client_reference_id: alRef, payment_status: status, amount_total: 1000, metadata: { ref: alRef, kind: "aipack" } } } });
+    const al0 = (await meOf(AL)).credits;
+    const unpaid = await hook(pack("evt_ai0", "cs_ai0", "unpaid"));
+    check("an unpaid session gives nothing", unpaid.status === 200 && !((await state()).billing!.aiPacks ?? []).length);
+    const h1 = await hook(pack("evt_ai1", "cs_ai1"));
+    const packs1 = (await state()).billing!.aiPacks ?? [];
+    check("paid: onAiPackPaid records the pack for the member, once, and no credits", h1.status === 200 && packs1.length === 1 && packs1[0].memberId === "mem_al" && packs1[0].ref === "aipack.cs_ai1" && (await meOf(AL)).credits === al0, packs1);
+    await hook(pack("evt_ai1", "cs_ai1"));
+    await hook(pack("evt_ai2", "cs_ai1"));
+    check("the same event again, or the same payment under another event: nothing more", ((await state()).billing!.aiPacks ?? []).length === 1);
+    check("money in, as an AI pack, once", (await state()).billing!.payments.filter((x) => x.kind === "aipack").length === 1 && (await state()).billing!.payments.find((x) => x.kind === "aipack")?.cents === 1000);
+    const AI = await import("../lib/billing/aiPack.ts");
+    const ab = R.emptyBilling();
+    check("the hook itself is idempotent on the payment ref", AI.onAiPackPaid(ab, "m1", "aipack.x") && !AI.onAiPackPaid(ab, "m1", "aipack.x") && AI.aiPacksBought(ab, "m1") === 1);
+    check("the plan says the pack can be bought", (await meOf(AL)).plan!.aiPack === true);
+  }
 
   console.log("\nSwitched off again: everything as before");
   clearBilling();

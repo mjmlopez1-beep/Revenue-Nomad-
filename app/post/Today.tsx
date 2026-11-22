@@ -26,11 +26,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY } from "@/lib/tableFields";
+import { PRO_STORY } from "@/lib/billing/rules";
 import { CompanyLogo, IconLock, LockedName, val } from "../ui/shared";
 import { countryOf, hireLine, isOpenRole, shown, type CoInfo } from "./model";
 import { useUi, ZeroCredits } from "./ui";
-import { freeCompanyNow } from "./display";
+import { companyLater, freeCompanyNow, unlockFreeWords } from "./display";
 import { MessageButton } from "./Messages";
 import { InviteConnect } from "./Invite";
 import { CrystalOpen } from "./CrystalOpen";
@@ -163,12 +164,12 @@ export function LeadAction({ i, row, onOpen, compact, cls }: { i: CoInfo; row: R
   const crystal = row ? ui.me.crystal ?? null : null;
   if (crystal) return <CrystalOpen id={c.id} name={c.hidden ? row?.name ?? null : c.name} className={cls ?? (compact ? "btn-sm td-row-go" : "btn-lg td-main")} />;
   const free = freeCompanyNow(ui.me);
-  const later = (ui.me.unlocksLeft ?? Infinity) < COMPANY_PRICE && (ui.me.credits >= COMPANY_PRICE || !!ui.me.freeCompany);
+  const later = companyLater(ui.me);
   const unlock = () => {
     if (free || ui.me.credits >= COMPANY_PRICE) return ui.unlock({ entity: "company", id: c.id, field: "identity" }, { onWall: () => setZero(true) });
     setZero(true);
   };
-  const label = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : free ? (compact ? "Unlock free" : "Unlock free · your company of the day") : `Unlock · ${COMPANY_PRICE_SAY}`;
+  const label = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : free ? (compact ? "Unlock free" : ui.me.proOpens ? unlockFreeWords(ui.me) : "Unlock free · your company of the day") : `Unlock · ${COMPANY_PRICE_SAY}`;
   return (
     <>
       <button ref={ref} type="button" className={cls !== undefined ? `btn btn-pine ${cls}` : compact ? "btn btn-sm td-row-go" : "btn btn-pine btn-lg td-main"} disabled={busy || later} aria-busy={busy} onClick={unlock}>
@@ -285,10 +286,11 @@ export function TrialEnded({ onSeePro, onSeen, art }: { onSeePro: () => void; on
         Your Pro trial ended.
       </p>
       <p>
-        <strong>You kept:</strong> your credits, 1 saved view with the weekly email, {FEATURE_NAME} each morning with one company a day fully open.
+        <strong>You kept:</strong> your credits, fellow fractionals free, 1 saved view with the weekly email, {FEATURE_NAME} each morning with one company a day fully open.
       </p>
       <p>
-        <strong>Pro adds:</strong> every {FEATURE_NAME} company open free, open roles the moment they post, rate ranges, Slack alerts.
+        <strong>Pro wins clients:</strong> {PRO_STORY} Companies open free (up to {PRO_OPENS_DAILY} a day, plus all of {FEATURE_NAME}) and open roles reach you the moment
+        they post. Pro + Close adds proposals drafted from your call, sent and signed.
       </p>
       <div className="td-acts">
         <button type="button" className="btn btn-pine" onClick={onSeePro}>

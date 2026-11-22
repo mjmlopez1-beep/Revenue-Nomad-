@@ -566,37 +566,48 @@ check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(late
   check("looking for roles, step 1 stays See who is hiring", rolesNone.steps[0].label === "See who is hiring" && rolesNone.steps.length === 3);
 }
 
-/* ---------- Get started as the app shows it: step 1 stays "Unlock a company" (startSteps) ---------- */
+/* ---------- Get started as the app shows it (startSteps): Open a company · Send your first note · Connect Google ---------- */
 
 {
+  // Decision 9 (activation): three steps, "1 of 3" on Home. Find your seats stays an earn prompt, after them.
   const base = { goal: "adjacent", added: 0, unlocked: 0, holdersUnlocked: 0, companiesUnlocked: 0, invited: 0, invitesPaid: 0, freeCompany: true, unlocksLeft: 25 } as const;
   const fresh = startSteps(base, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
-  check("step 1 is Unlock a company, free while the company of the day is left", fresh.steps[0].label === "Unlock a company" && !fresh.steps[0].done && fresh.steps[0].hint === "1 free company today", fresh.steps[0]);
-  check("  and it is the next thing to do", fresh.next?.action === "unlock" && fresh.next.label === "Unlock a company", fresh.next);
+  check(
+    "the three steps: Open a company, Send your first note, Connect Google (or upload LinkedIn)",
+    fresh.steps.map((x) => x.label).join(" · ") === "Open a company · Send your first note · Connect Google" && fresh.steps[2].hint === "or upload your LinkedIn connections" && fresh.steps.every((x) => !x.done),
+    fresh.steps,
+  );
+  check("step 1 is free while the company of the day is left", fresh.steps[0].hint === "1 free company today", fresh.steps[0]);
+  check("  and it is the next thing to do", fresh.next?.action === "unlock" && fresh.next.label === "Open a company", fresh.next);
   const paid = startSteps({ ...base, freeCompany: false }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
   check("after the free one, it costs 2 credits", paid.steps[0].hint === "costs 2 credits", paid.steps[0].hint);
+  const proOpen = startSteps({ ...base, proOpens: { left: 15, of: 15 } }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
+  check("on Pro's free opens it says so", proOpen.steps[0].hint === "free on your plan", proOpen.steps[0].hint);
   // Free with billing live: no free company of the day, the free one a day is Crystal Ball's (Me.crystal "one").
   const onFree = startSteps({ ...base, freeCompany: false, crystal: "one" }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
   check("on Free, step 1 says the free one is in Crystal Ball today", onFree.steps[0].hint === "1 free in Crystal Ball today" && onFree.next?.action === "unlock", onFree.steps[0]);
   const freeUsed = startSteps({ ...base, freeCompany: false, crystal: "used" }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
   check("  and once it is used, 2 credits", freeUsed.steps[0].hint === "costs 2 credits", freeUsed.steps[0].hint);
-  // A company unlock ticks step 1, and its label stays (it used to turn into See who held a seat).
   const one = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "holder" });
-  check("any company unlock ticks step 1, and the label stays the same", one.steps[0].done && one.steps[0].label === "Unlock a company" && one.steps.length === 3, one.steps[0]);
-  check("  Find your seats is next, as one line", one.next?.action === "seats" && one.next.label === "Find your seats" && one.next.hint === "up to ~12 credits a seat", one.next);
-  check("  See who held a seat is never a step", !one.steps.some((x) => x.label === "See who held a seat"));
-  const seated = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 0, earn: 0, stepOne: "holder" });
-  check("with a seat on file, See who held a seat is the next nudge", seated.next?.action === "holder" && seated.next.label === "See who held a seat", seated.next);
-  const filling = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 4, earn: 4, stepOne: "holder" });
-  check("seats still to fill in come before who held a seat", filling.next?.action === "fillSeats", filling.next);
-  const held = startSteps({ ...base, unlocked: 2, companiesUnlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 0, earn: 0, stepOne: "holder" });
-  check("once a seat holder is seen, the invite is next", held.next?.action === "invite", held.next);
-  const all = startSteps({ ...base, unlocked: 2, companiesUnlocked: 1, holdersUnlocked: 1, invitesPaid: 1, invited: 1 }, { seatsHeld: 1, seatsLeft: 0, earn: 0, stepOne: "holder" });
-  check("every step done: nothing next", all.next === null && all.steps.every((x) => x.done), all);
+  check("any company opened ticks step 1 (1 of 3), and the label stays the same", one.steps[0].done && one.steps[0].label === "Open a company" && one.steps.length === 3 && one.steps.filter((x) => x.done).length === 1, one.steps);
+  check("  Send your first note is next", one.next?.action === "note" && one.next.label === "Send your first note", one.next);
+  const noted = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1, started: { note: true, network: false } }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "holder" });
+  check("a first note out ticks step 2; Connect Google is next", noted.steps[1].done && noted.next?.action === "connect", noted.next);
+  const all = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1, started: { note: true, network: true } }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "holder" });
+  check("every step done: Find your seats is the next earn prompt", all.steps.every((x) => x.done) && all.next?.action === "seats" && all.next.label === "Find your seats", all.next);
+  const filling = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1, started: { note: true, network: true } }, { seatsHeld: 1, seatsLeft: 4, earn: 4, stepOne: "holder" });
+  check("  or Fill in your seats, with a seat still missing facts", filling.next?.action === "fillSeats", filling.next);
+  const done = startSteps({ ...base, unlocked: 1, companiesUnlocked: 1, started: { note: true, network: true } }, { seatsHeld: 1, seatsLeft: 0, earn: 0, stepOne: "holder" });
+  check("  and nothing once the seats are filled in", done.next === null, done.next);
+  check("See who held a seat is never a step or a nudge (fellow fractionals are free)", ![fresh, one, all].some((x) => x.steps.some((y) => y.label === "See who held a seat") || x.next?.label === "See who held a seat"));
+  const off = startSteps({ ...base, started: { note: false, network: false, networkOff: true } }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
+  check("with Your network off, the Connect Google step is left out", off.steps.map((x) => x.key).join() === "unlock,note", off.steps);
+  const stuck = startSteps(base, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company", stuck: new Set(["note"]) });
+  check("a step done before in this browser stays done", stuck.steps[1].done && !stuck.steps[0].done);
   const none = startSteps(base, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "none" });
-  check("nothing locked to unlock and none unlocked: step 1 is left out", none.steps.map((x) => x.key).join() === "seat,invite", none.steps);
+  check("nothing locked to open and none opened: step 1 is left out", none.steps.map((x) => x.key).join() === "note,network", none.steps);
   const roles = startSteps({ ...base, goal: "roles" }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stepOne: "company" });
-  check("looking for roles reads the same", roles.steps[0].label === "Unlock a company", roles.steps[0]);
+  check("looking for roles reads the same", roles.steps[0].label === "Open a company", roles.steps[0]);
 }
 
 /* ---------- Get started step 1: who held a seat, and nothing else ---------- */

@@ -437,7 +437,7 @@ async function main() {
 
   console.log("\nMerlin's own messages, invites and replies");
   await act(ANA, { type: "unlock", entity: "company", id: pub("c_salt"), field: "identity" });
-  await act(ANA, { type: "unlock", entity: "engagement", id: pub("e_salt"), field: "operator" });
+  // Who held the seat shows free once the company is open (PEERS_FREE): nothing to unlock.
   const ms = await act(ANA, { type: "message.start", engagementId: pub("e_salt"), text: "Hi Hana, how did the CRO seat come about?" });
   let salt = await at(ANA, "c_salt");
   check("a message on Merlin to the seat holder: Sent, on Merlin, from Merlin messages", salt?.stage === "sent" && salt.channel === "merlin" && salt.via.sent === "message" && salt.to.name === "Hana Holder", salt);
@@ -446,7 +446,7 @@ async function main() {
   salt = await at(ANA, "c_salt");
   check("her reply on Merlin: Replied, from Merlin messages", salt?.stage === "replied" && salt.via.replied === "message", salt);
   await act(ANA, { type: "unlock", entity: "company", id: pub("c_tall"), field: "identity" });
-  await act(ANA, { type: "unlock", entity: "engagement", id: pub("e_tall"), field: "operator" });
+  // Who held the seat shows free once the company is open (PEERS_FREE): nothing to unlock.
   await act(ANA, { type: "invite", engagementId: pub("e_tall"), note: "Hi Pella, your seat is on Merlin." });
   const tall = await at(ANA, "c_tall");
   check("an invite to connect went out: Sent, to the seat holder", tall?.stage === "sent" && tall.to.name === "Pella Quist" && tall.via.sent === "note", tall);
@@ -553,7 +553,7 @@ async function main() {
 
   console.log("\nintros");
   await act(ANA, { type: "unlock", entity: "company", id: pub("c_pine"), field: "identity" });
-  await act(ANA, { type: "unlock", entity: "engagement", id: pub("e_pine"), field: "operator" });
+  // Who held the seat shows free once the company is open (PEERS_FREE): nothing to unlock.
   const cv = await act(ANA, { type: "message.start", engagementId: pub("e_pine"), text: "Hi Cy, could you introduce me to the CEO?" });
   r = await PA.performPipeline(ANA, { type: "pipeline.intro", conversationId: cv.id } as never);
   const ask = r.pipeline!.intros.find((i) => i.conversation === cv.id);

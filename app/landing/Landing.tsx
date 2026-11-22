@@ -8,7 +8,7 @@
  * the numbers across every function in one band, what members say (Quotes.tsx, drawn only once
  * quotes.ts has a real one), what you can do with it (Features.tsx: four tinted panels, each
  * with a picture drawn in HTML and CSS), how it works (credits, with the free and locked fields
- * folded away), questions, and the join form again. The hero's record is a real company from the
+ * folded away), pricing (Pricing.tsx: Free against Pro), questions, and the join form again. The hero's record is a real company from the
  * same preview answer. Nothing on the page is blurred but the rows past the named ones.
  *
  * Merlin covers every fractional function, so nothing here speaks to one: the page's own words
@@ -35,6 +35,7 @@ import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
 import Finder, { type PreviewExample, type Totals } from "./Finder";
 import Features from "./Features";
 import Quotes from "./Quotes";
+import Pricing from "./Pricing";
 import { Band } from "../ui/fractions/kit";
 import { Corner, FinalScene, HeroDome, HeroEdge, HeroStage, HeroStagePhone, HeroTrail } from "./scenes";
 
@@ -191,6 +192,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             <a href="#find">Explore</a>
             <a href="#features">What you can do</a>
             <a href="#how">How it works</a>
+            <a href="#pricing">Pricing</a>
             <a href="#faq">Questions</a>
           </nav>
           <div className="lp-nav-cta">
@@ -335,7 +337,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
                 <DemoUnlock />
                 <div className="lp-step-body">
                   <h3>Spend a credit to see one</h3>
-                  <p>One credit opens one answer, like who held a seat and the role they held. It stays open for you.</p>
+                  <p>One credit opens one answer, like a hiring exec's name and title. It stays open for you. Fellow fractionals are free to see.</p>
                 </div>
               </li>
               <li className="lp-step">
@@ -409,6 +411,9 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             </details>
           </div>
         </section>
+
+        {/* ---------- pricing: Free against Pro, framed by return ---------- */}
+        <Pricing starter={starter} onJoin={toJoin} />
 
         {/* ---------- FAQ ---------- */}
         <section className="lp-sec lp-faq-sec" id="faq" aria-labelledby="faq-h">

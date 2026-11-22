@@ -395,10 +395,11 @@ async function main() {
   // Leadership seats only, decided on the server from the stored title (seen or not).
   const seatAt = (name: string) => salView.companies.find((c) => c.name === name)?.engagements[0];
   const kes = seatAt("Kestrel Ledger");
-  check("the server marks a seat whose stored title reads below Lead, with a flag and nothing more", kes?.belowLead === true && kes.cells.role?.s === "locked" && !("v" in (kes.cells.role ?? {})), kes && { belowLead: kes.belowLead, role: kes.cells.role });
+  // Fellow fractionals are free (PEERS_FREE): at a company Sal sees, the seat's role shows with who held it. The flag is still the server's, from the stored title.
+  check("the server marks a seat whose stored title reads below Lead, with a flag", kes?.belowLead === true && kes.cells.role?.s === "value" && !kes.cells.role.paid, kes && { belowLead: kes.belowLead, role: kes.cells.role });
   check("a Content Engineer and a year-only Finance Manager are marked too, a CFO isn't", seatAt("Juniper Content")?.belowLead === true && seatAt("Larch Books")?.belowLead === true && seatAt("Beta Labs")?.belowLead === undefined && seatAt("Gamma Health")?.belowLead === undefined);
   const wire = JSON.stringify(salView);
-  check("nothing the member receives carries the locked title, or who held that seat", !wire.includes(JUNIOR_TITLE) && !wire.includes("Systems Manager") && !wire.includes(JUNIOR_HOLDER));
+  check("what the member receives carries that title and who held the seat only because they are free to see now", wire.includes(JUNIOR_TITLE) && wire.includes(JUNIOR_HOLDER) && !(kes?.cells.operator as { paid?: boolean } | undefined)?.paid);
   const onTable = (x: Partial<import("../app/post/model").Filters>) =>
     M.applyFilters(M.rowsFor("companies", M.deriveAll(salView.companies)), f(x), "all", "", salView.me!, true).rows.map((r) => r.i.c.name);
   check(
@@ -500,7 +501,7 @@ async function main() {
   check("hired_function and hired_within_months: the table's rule (no profile here)", res.total === 7, { total: res.total, names: cos.map((c) => c.name) });
   check("the most recent hire first, each with its recent_hire", cos.every((c) => !!c.recent_hire?.start && c.recent_hire.function === "Finance") && cos[0].recent_hire!.start >= cos[cos.length - 1].recent_hire!.start, cos.map((c) => c.recent_hire));
   const gamma = cos.find((c) => c.name === "Gamma Health");
-  check("a role locked with its seat holder says so, and never the holder", !!gamma && /locked/.test(gamma.recent_hire?.role ?? "") && !JSON.stringify(res).includes(HOLDER), gamma?.recent_hire);
+  check("a role at a company the member sees shows free, with its seat holder (fellow fractionals are free)", !!gamma && gamma.recent_hire?.role === "Fractional CFO", gamma?.recent_hire);
   check("a locked company stays locked", !JSON.stringify(res).includes(HIDDEN_NAME));
   const res2 = await tools.searchCompanies(ctx, { hired_function: ["Finance", "Marketing"], hired_within_months: 6, no_function_yet: "Sales" });
   check("a list of functions, with no_function_yet", res2.total === 6, res2.total);
@@ -513,7 +514,7 @@ async function main() {
     [cos.map((c) => c.name), (res3.companies as { name: string }[]).map((c) => c.name)],
   );
   const kesOut = await tools.getCompany(ctx, { company: "Kestrel Ledger" });
-  check("nothing the connector sends carries the locked junior title or its holder", !JSON.stringify([res, res2, res3, kesOut]).includes(JUNIOR_TITLE) && !JSON.stringify(kesOut).includes(JUNIOR_HOLDER) && JSON.stringify(kesOut).includes("Kestrel Ledger"));
+  check("the connector says what the table says: the junior seat, free to see at a company the member sees, and never in the recent-hire lists", !JSON.stringify([res, res2, res3]).includes(JUNIOR_TITLE) && JSON.stringify(kesOut).includes("Kestrel Ledger") && JSON.stringify(kesOut).includes(JUNIOR_TITLE));
   const bad = await tools.searchCompanies(ctx, { hired_function: "Nope" }).then(() => null, (e) => e);
   const badN = await tools.searchCompanies(ctx, { hired_function: "Finance", hired_within_months: -3 }).then(() => null, (e) => e);
   check("an unknown function or a negative window is a clear problem", bad instanceof tools.ToolProblem && badN instanceof tools.ToolProblem && /hired_within_months/.test(badN.message));

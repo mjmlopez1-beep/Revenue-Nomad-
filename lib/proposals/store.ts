@@ -55,7 +55,9 @@ export const CODE_TTL_MS = 15 * 60_000;
 export const CODE_TRIES = 5;
 export const CODES_PER_HOUR = 5;
 export const LIMITS = { proposals: 200, blocks: 40, title: 160, body: 8000, fields: 300, fieldKey: 60, fieldValue: 3000, notes: 300, note: 400, reason: 1000, message: 600 } as const;
-export const PRO_SEND = `Sending for signature is on Pro: $${PRICES.month} a month, or $${PRICES.year} a year. You can write and keep drafts on Free.`;
+/** Sending for signature, every template and Claude drafting are Pro + Close (lib/billing/rules.ts canClose). Free and Pro build and preview. */
+export const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;
+export const CLOSE_TEMPLATES = (title: string) => `You can start from ${title} or a blank page. Every template is on Pro + Close: $${PRICES.closeMonth} a month.`;
 export const EMAIL_OFF = "Email isn't set up on Merlin yet, so a proposal can't go out for signature.";
 
 /** A problem to tell the member or the client in a sentence. `status` for the route. */
@@ -191,7 +193,8 @@ const memberOf = (seed: Seed, s: State, token: string | null): Member => {
 const titleOf = (s: State, me: Member) => s.profiles[me.id]?.title || (me.title === "Member" ? "" : me.title) || "";
 const fnOf = (s: State, me: Member) => s.profiles[me.id]?.function ?? functionOf(me.title) ?? null;
 /** Free while billing is live: drafts and one template, no sending. */
-const onFree = (s: State, memberId: string, nowMs: number) => T.freeNow(s, memberId, nowMs);
+/** Not on Pro + Close now: build and preview only (Free and Pro alike). The one gate is canClose. */
+const onFree = (s: State, memberId: string, nowMs: number) => !T.closeNow(s, memberId, nowMs);
 const mine = (s: State, me: Member, id: unknown): StoredProposal => {
   const p = (s.proposals ?? []).find((x) => x.id === id && x.memberId === me.id);
   if (!p) throw new ProposalProblem("That proposal isn't there anymore. Open Proposals again.", 404);
@@ -357,7 +360,7 @@ export async function createProposal(
   const templateId = a.templateId === null || a.templateId === undefined || a.templateId === "" || a.templateId === "blank" ? null : String(a.templateId);
   if (templateId && !templateDef(templateId)) throw new ProposalProblem("That template isn't in the library.");
   if (templateId && templateId !== FREE_TEMPLATE && onFree(s0, me0.id, nowMs))
-    throw new ProposalProblem(`On Free you can start from ${templateDef(FREE_TEMPLATE)!.title} or a blank page. Every template is on Pro: $${PRICES.month} a month.`, 403, upgradeUrl(base(origin), "proposals"));
+    throw new ProposalProblem(CLOSE_TEMPLATES(templateDef(FREE_TEMPLATE)!.title), 403, upgradeUrl(base(origin), "proposals"));
   const pub = typeof a.companyId === "string" && a.companyId ? a.companyId : null;
   const co = pub ? await companyFor(token!, pub) : null;
   if (pub && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
