@@ -2354,7 +2354,7 @@ export const FREE_COMPANY_LINE = "Free company of the day";
 export const openedFreeLine = (plan: string) => (plan === TRIAL_NAME ? `Opened free in your ${TRIAL_NAME}` : `Opened free on ${plan}`);
 export const PRO_OPEN_LINE = openedFreeLine("Pro");
 /** A free open's line in the credit history, from the plan on the day it happened (not today's). */
-function freeOpenLine(rec: PlanRecord | undefined, atMs: number): string {
+export function freeOpenLine(rec: PlanRecord | undefined, atMs: number): string {
   const then = billingLive() ? planOf(rec, atMs) : "free";
   return then === "free" ? FREE_COMPANY_LINE : openedFreeLine(planName({ name: then, tier: rec?.tier }));
 }

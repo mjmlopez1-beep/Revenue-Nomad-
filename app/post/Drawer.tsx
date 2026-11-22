@@ -1930,7 +1930,10 @@ export function Drawer({
   // A record that covers the page (a phone, or any width under 1024px): what is behind it is out of reach until it closes.
   useEffect(() => {
     if (!modal) return;
-    const behind = [...document.querySelectorAll<HTMLElement>(".tp-app > .tp-top, .tp-app > main, .tp-app > .tp-body")].filter((el) => !el.contains(rootRef.current));
+    // The page's own parts beside the record (the top bar, the table, the tab bar, whatever the layout nests them in), never another layer.
+    const root = rootRef.current;
+    const own = root?.parentElement ? [...root.parentElement.children].filter((el): el is HTMLElement => el instanceof HTMLElement && el !== root && !el.matches("[role='dialog'], [role='alertdialog'], .tp-skip, .toasts")) : [];
+    const behind = [...new Set([...own, ...document.querySelectorAll<HTMLElement>(".tp-app > .tp-top, .tp-app > main, .tp-app > .tp-body")])].filter((el) => !el.contains(root));
     behind.forEach((el) => el.setAttribute("inert", ""));
     return () => behind.forEach((el) => el.removeAttribute("inert"));
   }, [modal]);
