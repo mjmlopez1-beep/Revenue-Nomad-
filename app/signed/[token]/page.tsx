@@ -89,6 +89,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
 
         <ProposalView
           doc={d}
+          titleAs="h2"
           choice={c.signed.choice ? { optionId: c.signed.choice.optionId, addOnIds: c.signed.choice.addOns.map((a) => a.id) } : null}
           sign={
             <div className="cv-accept">

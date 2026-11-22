@@ -58,6 +58,16 @@
   font-weight: 600;
   color: var(--muted);
 }
+/* A typed value reads as typed (ink, regular); a placeholder reads as a hint (faint, italic, "e.g."). */
+.pe-f .input {
+  color: var(--ink);
+  font-weight: 400;
+}
+.pe-f .input::placeholder {
+  color: var(--faint);
+  font-style: italic;
+  font-weight: 400;
+}
 .pe-f .input {
   min-height: 44px;
   font-size: 15px;

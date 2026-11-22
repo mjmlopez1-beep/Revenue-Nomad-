@@ -55,9 +55,12 @@ export interface ProposalViewProps {
   sign: ReactNode;
   /** The top bar's "Review and sign", while it can be signed. */
   canSign?: boolean;
+  /** The title's heading level: h1 on the signing page, h2 where the page has its own h1 (the signed copy). */
+  titleAs?: "h1" | "h2";
 }
 
-export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign, canSign }: ProposalViewProps) {
+export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign, canSign, titleAs = "h1" }: ProposalViewProps) {
+  const Title = titleAs;
   const g = arrange(d);
   const p = d.pricing;
   const pick: Choice | null = p ? choice ?? { optionId: startOption(p), addOnIds: [] } : null;
@@ -96,7 +99,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
       <article className="cv-doc" aria-label="The proposal">
         <header className="cv-head" data-section="header" {...(g.cover?.title ? { "data-section-title": g.cover.title } : { "data-section-group": "" })}>
           <span className="cv-kicker-l">Proposal · Version {d.version}</span>
-          <h1 className="cv-h1">{d.title}</h1>
+          <Title className="cv-h1">{d.title}</Title>
           <span className="cv-parties">
             {d.from.name}
             {d.from.title ? `, ${d.from.title}` : ""} · prepared for {d.to.name}

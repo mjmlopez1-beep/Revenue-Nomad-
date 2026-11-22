@@ -93,7 +93,7 @@ const STATE: Record<ReminderRow["state"], string> = { sent: "Sent", planned: "",
 
 /* ================= the activity panel ================= */
 
-export function ActivityPanel({ kind, id, version, onOpen, quiet }: { kind: "proposal" | "document"; id: string; version?: number; onOpen?: (p: ProposalRec) => void; quiet?: boolean }) {
+export function ActivityPanel({ kind, id, version, onOpen, quiet }: { kind: "proposal" | "document"; id: string; version?: number | string; onOpen?: (p: ProposalRec) => void; quiet?: boolean }) {
   const toast = useToast();
   const [v, setV] = useState<ActivityView | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -139,7 +139,7 @@ export function ActivityPanel({ kind, id, version, onOpen, quiet }: { kind: "pro
   const s = v.suggestion;
   const max = Math.max(1, ...v.sections.map((x) => x.ms));
   const first = (v.signer?.name ?? "").split(" ")[0];
-  const done = v.status === "signed" || v.status === "declined" || v.status === "void" || v.status === "expired";
+  const done = v.status === "signed" || v.status === "client_signed" || v.status === "declined" || v.status === "void" || v.status === "expired";
 
   return (
     <div className="ac" aria-label="Activity">
@@ -477,11 +477,18 @@ export function CloseOnHome() {
   const toast = useToast();
   const [v, setV] = useState<CloseInboxView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // A countersignature Home already asks for (MySignature.tsx CountersignDue) shows once: there, not here too.
+  const [due, setDue] = useState<Set<string>>(new Set());
   useEffect(() => {
     void api<CloseInboxView>().then((r) => !("error" in r) && setV(r));
+    void fetch("/api/proposals?countersign=due", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : { due: [] }))
+      .then((j: { due?: { id: string }[] }) => setDue(new Set((j.due ?? []).map((d) => d.id))))
+      .catch(() => {});
   }, []);
-  if (!v?.open || (!v.renewals.length && !v.items.length)) return null;
-  const items = v.items.slice(0, 5);
+  const shown = v ? v.items.filter((x) => !(x.kind === "countersign" && due.has(x.item))) : [];
+  if (!v?.open || (!v.renewals.length && !shown.length)) return null;
+  const items = shown.slice(0, 5);
   const read = () => {
     if (!v.unread) return;
     setV({ ...v, unread: 0, items: v.items.map((x) => ({ ...x, read: true })) });

@@ -15,7 +15,7 @@
  * the field placer as before, with the Close prompt. A contract in the list opens in the field
  * placer (its fields, signers and audit trail). A page of its own: the left nav links it.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ProposalsView } from "@/lib/proposals/types";
 import type { DocField, DocumentRec } from "@/lib/documents/types";
 import type { SmartReading, SmartSigner } from "@/lib/documents/smart";
@@ -65,6 +65,9 @@ export function ContractsHome({
   onOpenDoc: (d: DocumentRec) => void;
 }) {
   const toast = useToast();
+  // Opened: keyboard focus on the screen's heading, so a screen reader and Tab start here.
+  const head = useRef<HTMLHeadingElement>(null);
+  useEffect(() => head.current?.focus({ preventScroll: true }), []);
   const [step, setStep] = useState<Step>("drop");
   const [busy, setBusy] = useState<string>("");
   const [drop, setDrop] = useState(false);
@@ -178,7 +181,9 @@ export function ContractsHome({
         </button>
       )}
       <header className="cu-head">
-        <h1 className="cu-h1">Send a contract for signature</h1>
+        <h1 className="cu-h1" ref={head} tabIndex={-1}>
+          Send a contract for signature
+        </h1>
         <p className="cu-lead">Drop in a contract you wrote anywhere. Merlin reads it, finds where everyone signs, and places the fields for you.</p>
       </header>
 

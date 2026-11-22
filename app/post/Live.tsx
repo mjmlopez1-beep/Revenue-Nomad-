@@ -10,6 +10,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { LiveEvent } from "@/lib/proposals/live";
 import { DocText } from "../sign/doc";
+import { fieldLabel } from "@/lib/proposals/library";
 import { IconCheck } from "../ui/shared";
 
 export interface LiveItem {
@@ -199,7 +200,7 @@ export function LiveView({ state, title, onCancel, compact = false }: { state: L
               <span className="lv-count">{done ? `${done} ${done === 1 ? "section" : "sections"} written` : "Writing"}</span>
               <h3 className="sg-block-h">{writing.label}</h3>
               <div className="sg-text">
-                <DocText text={writing.text ?? ""} />
+                <DocText text={writing.text ?? ""} blanks label={fieldLabel} />
               </div>
             </>
           ) : (
@@ -209,7 +210,7 @@ export function LiveView({ state, title, onCancel, compact = false }: { state: L
       )}
       {compact && writing && (
         <div className="lv-mini sg-text">
-          <DocText text={writing.text ?? ""} />
+          <DocText text={writing.text ?? ""} blanks label={fieldLabel} />
         </div>
       )}
     </div>

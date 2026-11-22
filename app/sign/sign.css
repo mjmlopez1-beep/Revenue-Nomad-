@@ -371,7 +371,8 @@
   padding: 10px 12px;
   border-radius: var(--r-btn);
   background: #fdecef;
-  color: var(--red);
+  /* Darker than --red, so the words hold 4.5:1 and more on the pink (about 7:1). */
+  color: #b3243b;
   font-size: 14px;
   line-height: 20px;
   font-weight: 600;
@@ -460,7 +461,8 @@
 }
 .sg-check-bad {
   background: #fdecef;
-  color: var(--red);
+  /* Darker than --red, so the words hold 4.5:1 and more on the pink (about 7:1). */
+  color: #b3243b;
 }
 .sg-trail {
   display: grid;

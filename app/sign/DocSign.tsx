@@ -277,7 +277,23 @@ export function DocSignView({ token }: { token: string }) {
 
         {open && (
           <div ref={panel} className="sg-card sg-panel" id="sg-panel">
-            {step === "decline" ? (
+            {step === "decline" && !v.codeVerified ? (
+              // Declining speaks for the signer named, so it needs the email code first, as signing does.
+              <div className="sg-form">
+                <h2 className="sg-h2" tabIndex={-1} ref={(el) => el?.focus({ preventScroll: true })}>
+                  Decline to sign
+                </h2>
+                <p className="sg-help">First, confirm it&#39;s you with the code we email to {v.emailHint}. Declining speaks for you, as signing does.</p>
+                <div className="sg-row">
+                  <button type="button" className="btn btn-lg" onClick={() => (setStep("read"), setErr(null))}>
+                    Back
+                  </button>
+                  <button type="button" className="btn btn-lg" onClick={() => (setStep("sign"), setErr(null))}>
+                    Confirm my email
+                  </button>
+                </div>
+              </div>
+            ) : step === "decline" ? (
               <form
                 className="sg-form"
                 onSubmit={async (e) => {

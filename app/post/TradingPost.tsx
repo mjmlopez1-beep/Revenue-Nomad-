@@ -296,6 +296,11 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   if (x.p === "getin" && x.w) q.set("w", x.w);
   if (x.p === "radar" && x.sig) q.set("sig", x.sig);
   else if (x.p === "radar" && x.range) q.set("range", x.range);
+  // Proposals keeps its own screen in the address (an open proposal, document, the start sheet, Contracts: app/post/Proposals.tsx), so a reload reopens it.
+  if (x.p === "proposals" && typeof window !== "undefined") {
+    const cur = new URLSearchParams(window.location.search);
+    if (cur.get("p") === "proposals") for (const k of ["pr", "dc", "new", "ct"]) if (cur.get(k)) q.set(k, cur.get(k)!);
+  }
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
   if (x.p === "today") return path;
   if (x.p === "table" && !q.toString()) q.set("p", "table");
@@ -1569,6 +1574,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           el.blur();
           return;
         }
+        // Typing in a field on a page (no overlay open): Esc never leaves the page and its work.
+        if (typing && !s.editor && !s.addOpts && !s.drawer) return;
         closeTop();
         return;
       }

@@ -11,7 +11,8 @@ const localDay = (ms: number) => {
   return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
 };
 const daysAgo = (iso: string, nowMs: number) => Math.round((localDay(nowMs) - localDay(Date.parse(iso))) / DAY);
-const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+/** The app's clock: "8:35 PM". */
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const dateOf = (iso: string, nowMs: number) => {
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(d.getFullYear() !== new Date(nowMs).getFullYear() ? { year: "numeric" } : {}) });

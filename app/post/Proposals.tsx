@@ -47,6 +47,8 @@ import { ChangeItPanel, VersionsSheet } from "./ChangeIt";
 import { withChange, type ChangeProposal } from "@/lib/proposals/changeShape";
 import { LinkCompany } from "./ProposalLink";
 import { ActivityPanel, takeItem, useOpenItem } from "./Activity";
+import { fixesFor } from "./proposalFixes";
+import { okToLeave as leaveOk, useLeaveGuard } from "./leaveGuard";
 import { PricingEditor } from "./PricingEditor";
 import { GranolaCallPicker } from "./GranolaCallPicker";
 import { useGranola } from "./granolaClient";
@@ -83,6 +85,28 @@ async function load(): Promise<ProposalsView | { error: string }> {
 
 type Row = { kind: "proposal"; p: ProposalRec; at: string } | { kind: "document"; d: DocumentRec; at: string };
 
+/** A screen above the Proposals list, as its address says it. */
+type Sub = { pr?: string; dc?: string; new?: boolean; ct?: boolean };
+const SUB_KEYS = ["pr", "dc", "new", "ct"] as const;
+const isSub = (x: Sub) => !!(x.pr || x.dc || x.new || x.ct);
+const subNow = (): Sub => {
+  const q = new URLSearchParams(window.location.search);
+  if (q.get("p") !== "proposals") return {};
+  return { pr: q.get("pr") ?? undefined, dc: q.get("dc") ?? undefined, new: q.get("new") === "1", ct: q.get("ct") === "1" };
+};
+/** This address with the screen's key in place of any other's (the rest of the address stays). */
+const subUrl = (x: Sub): string => {
+  if (typeof window === "undefined") return "";
+  const q = new URLSearchParams(window.location.search);
+  for (const k of SUB_KEYS) q.delete(k);
+  q.set("p", "proposals");
+  if (x.pr) q.set("pr", x.pr);
+  else if (x.dc) q.set("dc", x.dc);
+  else if (x.new) q.set("new", "1");
+  else if (x.ct) q.set("ct", "1");
+  return `${window.location.pathname}?${q.toString()}`;
+};
+
 /* ================= the page ================= */
 
 export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) {
@@ -96,12 +120,12 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   useOpenItem(useCallback((x: { pr?: string; dc?: string }) => (x.pr ? (setOpenDoc(null), setOpenId(x.pr)) : (setOpenId(null), setOpenDoc(x.dc ?? null))), []));
   const [starting, setStarting] = useState<{ companyId: string | null } | null>(() => {
     const c = takeWantCompany();
-    return c ? { companyId: c } : null;
+    return c ? { companyId: c } : typeof window !== "undefined" && subNow().new ? { companyId: null } : null;
   });
   const [fixFirst, setFixFirst] = useState<string[]>([]);
   const [templates, setTemplates] = useState(false);
   // "Send a document to sign": Contracts (contracts/ContractsHome.tsx), and a line for the field placer when it opens from there.
-  const [contract, setContract] = useState(false);
+  const [contract, setContract] = useState(() => typeof window !== "undefined" && subNow().ct === true);
   const [docNotice, setDocNotice] = useState<string | null>(null);
   // Granola's status (granolaClient.ts), read once a page load: the start sheet's "From Granola" shows only while it is on.
   const granola = useGranola();
@@ -120,6 +144,87 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   useEffect(() => {
     if (data) startDone();
   }, [data]);
+  // A link to a proposal or document that isn't there (deleted, or not this member's): said, and the list instead.
+  useEffect(() => {
+    if (!data) return;
+    if (openId && !open) toast("That proposal isn't there anymore. Here are your proposals.", true), setOpenId(null);
+    if (openDoc && !doc) toast("That document isn't there anymore. Here are your proposals.", true), setOpenDoc(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, openId, openDoc]);
+
+  /*
+   * Each screen here has its own address (?p=proposals&pr=<id>, &dc=<id>, &new=1 for a proposal
+   * from a call, &ct=1 for Contracts), so a reload reopens it and Back returns to the list. Leaving
+   * one with work not saved asks first (leaveGuard.ts).
+   */
+  const sub: Sub = open ? { pr: open.id } : doc ? { dc: doc.id } : starting && data?.canBuild ? { new: true } : contract ? { ct: true } : {};
+  const subKey = subUrl(sub);
+  const wasSub = useRef(false);
+  useEffect(() => {
+    if (!data) return;
+    const here = `${window.location.pathname}${window.location.search}`;
+    const deeper = isSub(sub);
+    try {
+      const st = window.history.state ?? {};
+      if (subKey !== here) {
+        if (deeper && !st.prSub) window.history.pushState({ ...st, prSub: true }, "", subKey);
+        else if (!deeper && st.prSub) window.history.back();
+        else window.history.replaceState(st, "", subKey);
+      } else if (deeper && !st.prSub) {
+        // Opened straight from a link or a reload: the list goes under it, so Back returns to the list.
+        window.setTimeout(() => {
+          try {
+            const now = window.history.state ?? {};
+            if (now.prSub || subUrl(subNow()) !== subKey) return;
+            window.history.replaceState(now, "", subUrl({}));
+            window.history.pushState({ ...now, prSub: true }, "", subKey);
+          } catch {}
+        }, 0);
+      }
+    } catch {}
+    // Back on the list from a screen above it: keyboard focus on the list's heading.
+    if (!deeper && wasSub.current)
+      window.requestAnimationFrame(() => {
+        const h = document.querySelector<HTMLElement>(".pp-page h1");
+        if (h) (h.tabIndex = -1), h.focus({ preventScroll: true });
+      });
+    wasSub.current = deeper;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subKey, !!data]);
+  // Back and Forward: the address says which screen. Leaving one with work not saved asks first, and stays when they say no.
+  useEffect(() => {
+    const onPop = () => {
+      const want = subNow();
+      if (subUrl(want) === subUrl(subRef.current)) return;
+      if (!leaveOk()) {
+        try {
+          window.history.pushState({ ...(window.history.state ?? {}), prSub: true }, "", subUrl(subRef.current));
+        } catch {}
+        return;
+      }
+      setOpenId(want.pr ?? null);
+      setOpenDoc(want.pr ? null : want.dc ?? null);
+      setStarting(want.new ? { companyId: null } : null);
+      setContract(!!want.ct);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const subRef = useRef(sub);
+  subRef.current = sub;
+  // Esc on a screen here: never while typing in a field; else one step up, to the list (asking first when there is work to lose).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || !isSub(subRef.current)) return;
+      e.preventDefault();
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (!leaveOk()) return;
+      setOpenId(null), setOpenDoc(null), setStarting(null), setContract(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
 
   if (open && data)
@@ -153,6 +258,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   if (starting && data && data.canBuild)
     return (
       <StartSheet
+        view={view}
         data={data}
         infos={infos}
         companyId={starting.companyId}
@@ -244,7 +350,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
                     <span className="pp-row-t">{r.p.title}</span>
                     <span className="pp-row-s">
                       Proposal · {r.p.company.name || "No company yet"} · {r.p.send?.signer ? `${r.p.send.signer.name} · ` : ""}
-                      {r.p.status === "draft" ? `Edited ${dayOf(r.p.updatedAt)}` : r.p.status === "signed" ? `Signed ${dayOf(r.p.send?.signedAt)}` : `Sent ${dayOf(r.p.send?.sentAt)}`}
+                      {r.p.status === "draft" ? `Edited ${dayOf(r.p.updatedAt)}` : r.p.status === "signed" ? `Signed ${dayOf(r.p.send?.memberMode === "after" ? r.p.send?.memberSignedAt : r.p.send?.signedAt)}` : r.p.status === "client_signed" ? `Client signed ${dayOf(r.p.send?.signedAt)}` : `Sent ${dayOf(r.p.send?.sentAt)}`}
                     </span>
                   </span>
                   <ProposalStatus status={r.p.status} />
@@ -343,7 +449,46 @@ function TemplatesSheet({ data, onClose, onChange }: { data: ProposalsView; onCl
 
 /* ================= the editor: the document as the client reads it ================= */
 
-type Save = "saved" | "saving" | "error";
+type Save = "saved" | "saving" | "retrying" | "error";
+
+/** An edit that didn't reach the server yet, kept on this device until it does (the editor saves it when the proposal opens again). */
+const stashKey = (id: string) => `rn-proposal-unsaved:${id}`;
+const readStash = (id: string): { rev: number; body: Record<string, unknown> } | null => {
+  try {
+    const j = JSON.parse(window.localStorage.getItem(stashKey(id)) ?? "null");
+    return j && typeof j.rev === "number" && j.body && typeof j.body === "object" ? j : null;
+  } catch {
+    return null;
+  }
+};
+const writeStash = (id: string, v: { rev: number; body: Record<string, unknown> } | null) => {
+  try {
+    if (v && Object.keys(v.body).length) window.localStorage.setItem(stashKey(id), JSON.stringify(v));
+    else window.localStorage.removeItem(stashKey(id));
+  } catch {}
+};
+/** The proposal as the server has it now, or null. */
+async function latestOf(id: string): Promise<ProposalRec | null> {
+  try {
+    const r = await fetch(`/api/proposals?id=${encodeURIComponent(id)}`, { headers: { accept: "application/json" } });
+    return r.ok ? ((await r.json()) as ProposalRec) : null;
+  } catch {
+    return null;
+  }
+}
+/** What a change the server refused said, as text the member can copy and add again. */
+function unsavedText(body: Record<string, unknown>, now: ProposalRec): string {
+  const out: string[] = [];
+  if (typeof body.title === "string" && body.title !== now.title) out.push(`Title: ${body.title}`);
+  if (Array.isArray(body.blocks))
+    for (const b of body.blocks as ProposalBlock[]) {
+      const was = now.blocks.find((x) => x.id === b.id);
+      if (!was || was.body !== b.body || was.title !== b.title) out.push(`${b.title}\n${b.body}`);
+    }
+  if (body.fields && typeof body.fields === "object")
+    for (const [k, v] of Object.entries(body.fields as Record<string, string>)) if (now.fields[k] !== v && v) out.push(`${fieldLabel(k)}: ${v}`);
+  return out.join("\n\n");
+}
 
 function Editor({
   initial,
@@ -380,8 +525,20 @@ function Editor({
   const latest = useRef(p);
   latest.current = p;
   const pending = useRef<Record<string, unknown>>({});
+  // The revision the next save is made on: a save from a tab that is behind is refused (409), never written over another tab's edit.
+  const rev = useRef(initial.rev);
+  const inflight = useRef(false);
+  const tries = useRef(0);
+  const retryAt = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Changed in another tab or window: the latest is loaded, and what didn't save is offered to copy.
+  const [conflict, setConflict] = useState<{ text: string } | null>(null);
+  /** A whole proposal from the server: shown, and its revision is the one the next save is made on. */
+  const take = useCallback((r: ProposalRec) => {
+    rev.current = r.rev;
+    setP(r);
+  }, []);
 
-  const signed = p.status === "signed";
+  const signed = p.status === "signed" || p.status === "client_signed";
   const out = p.status === "sent" || p.status === "viewed";
   // Without Close (after the trial) a proposal opens read only, with the prompt.
   const locked = !data.canBuild;
@@ -399,7 +556,7 @@ function Editor({
       preview={preview}
       saved={savedChange}
       onPreview={(c) => (void flush(), setPreview(c), setSavedChange(null))}
-      onAccepted={(r, sv) => (setP(r), onSaved(r), setPreview(null), setSavedChange(sv))}
+      onAccepted={(r, sv) => (take(r), onSaved(r), setPreview(null), setSavedChange(sv))}
     />
   );
   const checks = useMemo(() => checklist({ ...p, fields }), [p, fields]);
@@ -407,30 +564,116 @@ function Editor({
   const flags = useMemo(() => riskFlags(p, advice.suggestion?.high ?? null), [p, advice]);
   const blanks = useMemo(() => blanksOf(p.blocks, fields), [p.blocks, fields]);
   // The one line: what's missing from the patterns that won (musts first), the risk flags, and what the draft said to check.
-  const fixes = useMemo(() => {
-    const checkNotes = p.notes.filter((n) => n.key === "check").map((n) => n.text);
-    return [...checks.filter((c) => !c.ok && !c.soft).map((c) => c.missing!), ...flags.map((f) => f.message), ...checkNotes, ...toFix.filter((t) => !checkNotes.includes(t)), ...checks.filter((c) => !c.ok && c.soft).map((c) => c.missing!)];
-  }, [checks, flags, p.notes, toFix]);
+  // The same list, counted the same way, as the draft's "Draft ready" screen (proposalFixes.ts).
+  const fixes = useMemo(() => fixesFor(p, view, toFix), [p, view, toFix]);
 
-  const flush = useCallback(async () => {
+  /**
+   * Save what changed. The change stays pending until the server has it: on a dropped connection
+   * (or a server that didn't answer) it is put back and tried again, sooner then later, and kept on
+   * this device in case the member leaves first. Changed elsewhere since (409): the latest loads,
+   * and what didn't save is offered to copy.
+   */
+  const flush = useCallback(async (): Promise<void> => {
     if (timer.current) clearTimeout(timer.current), (timer.current = null);
+    if (retryAt.current) clearTimeout(retryAt.current), (retryAt.current = null);
+    if (inflight.current) return;
     const body = pending.current;
     if (!Object.keys(body).length) return;
     pending.current = {};
+    inflight.current = true;
     setSave("saving");
-    const r = await api<ProposalRec>({ op: "update", id: latest.current.id, ...body });
-    if (r.error) return setSave("error"), toast(r.error, true);
-    setSave("saved");
-    setP((cur) => ({ ...cur, version: r.version, status: r.status, send: r.send, history: r.history, updatedAt: r.updatedAt }));
+    const id = latest.current.id;
+    const r = await api<ProposalRec>({ op: "update", id, rev: rev.current, ...body });
+    inflight.current = false;
+    if (r.error) {
+      if (r.httpStatus === 409) {
+        const fresh = await latestOf(id);
+        if (!fresh) {
+          // The latest didn't load either: keep the change and try again.
+          pending.current = { ...body, ...pending.current };
+          return void (setSave("retrying"), (retryAt.current = setTimeout(() => void flush(), 4000)));
+        }
+        const text = unsavedText(body, fresh);
+        pending.current = {};
+        writeStash(id, null);
+        take(fresh);
+        onSaved(fresh);
+        setEditing(null);
+        setConflict({ text });
+        return void setSave("saved");
+      }
+      if (r.httpStatus === 0 || r.httpStatus === 429 || (r.httpStatus ?? 0) >= 500) {
+        // Not reached the server: put back (newer edits on top), kept on this device, tried again with a growing wait.
+        pending.current = { ...body, ...pending.current };
+        writeStash(id, { rev: rev.current, body: pending.current });
+        tries.current++;
+        setSave("retrying");
+        retryAt.current = setTimeout(() => void flush(), Math.min(30_000, 1000 * 2 ** Math.min(tries.current, 5)));
+        return;
+      }
+      setSave("error");
+      return void toast(r.error, true);
+    }
+    tries.current = 0;
+    rev.current = r.rev;
+    writeStash(id, Object.keys(pending.current).length ? { rev: r.rev, body: pending.current } : null);
+    setSave(Object.keys(pending.current).length ? "saving" : "saved");
+    setP((cur) => ({ ...cur, version: r.version, status: r.status, send: r.send, history: r.history, updatedAt: r.updatedAt, rev: r.rev }));
     if (r.version !== latest.current.version) setChanging(false);
     onSaved(r);
-  }, [onSaved, toast]);
-  useEffect(() => () => void flush(), [flush]);
+    // Typed while that save was on its way: saved next.
+    if (Object.keys(pending.current).length) void flush();
+  }, [onSaved, toast, take]);
+  // Leaving the editor: one last save, and what is still unsaved stays on this device for next time.
+  useEffect(
+    () => () => {
+      const id = latest.current.id;
+      if (Object.keys(pending.current).length) writeStash(id, { rev: rev.current, body: pending.current });
+      void flush();
+    },
+    [flush],
+  );
+  // Back online: what waits is sent at once. Closing the tab with something unsaved: the browser asks first.
+  useEffect(() => {
+    const online = () => void flush();
+    const leave = (e: BeforeUnloadEvent) => {
+      if (previewRef.current) return void (e.preventDefault(), (e.returnValue = ""));
+      if (!Object.keys(pending.current).length && !inflight.current) return;
+      writeStash(latest.current.id, { rev: rev.current, body: pending.current });
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("online", online);
+    window.addEventListener("beforeunload", leave);
+    return () => (window.removeEventListener("online", online), window.removeEventListener("beforeunload", leave));
+  }, [flush]);
+  // Opened again with an edit that never reached the server (a dropped connection, a closed tab): shown, and saved now.
+  useEffect(() => {
+    const st = readStash(initial.id);
+    if (!st || initial.status !== "draft") return void writeStash(initial.id, null);
+    const keep = Object.fromEntries(Object.entries(st.body).filter(([k]) => ["title", "blocks", "fields", "notes", "signer", "signerOnCall", "pricing"].includes(k)));
+    if (!Object.keys(keep).length) return;
+    setP((cur) => ({ ...cur, ...(keep as Partial<ProposalRec>) }));
+    rev.current = st.rev;
+    pending.current = keep;
+    toast("Merlin is saving the edit you made before the connection dropped.");
+    void flush();
+    // Once, as the editor opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /** Something still unsaved, in words, before the member leaves the proposal; true to go on. */
+  const previewRef = useRef(preview);
+  previewRef.current = preview;
+  const okToLeave = () =>
+    (!Object.keys(pending.current).length || window.confirm("Your last edit isn't saved yet. Merlin keeps it on this device and saves it when you open the proposal again. Leave now?")) &&
+    // A change from Change it that wasn't accepted isn't kept: said before it goes.
+    (!previewRef.current || window.confirm("The change Merlin suggested isn't saved. Leave without it?"));
+  useLeaveGuard(okToLeave);
   const change = (patch: Partial<ProposalRec>, send: Record<string, unknown>) => {
     if (readOnly) return;
     setP((cur) => ({ ...cur, ...patch }));
     pending.current = { ...pending.current, ...send };
-    setSave("saving");
+    if (save !== "retrying") setSave("saving");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), 800);
   };
@@ -465,7 +708,7 @@ function Editor({
     if (r.error) return toast(r.error, true);
     if (op === "delete") return toast("Deleted."), onGone(p.id);
     if (op === "duplicate") return toast("A copy to work on."), onOpen(r);
-    setP(r), onSaved(r), toast("Voided. The link stopped working.");
+    take(r), onSaved(r), toast("Voided. The link stopped working.");
   };
 
   const t = templateDef(p.templateId);
@@ -524,7 +767,7 @@ function Editor({
 
   return (
     <div className="page-wide pp-page pp-editing">
-      <button type="button" className="page-back" onClick={() => (void flush(), onBack())}>
+      <button type="button" className="page-back" onClick={() => okToLeave() && (void flush(), onBack())}>
         <IconChevron dir="left" /> All proposals
       </button>
       <header className="pp-top">
@@ -553,7 +796,7 @@ function Editor({
               </button>
             )}
             <span className="pp-save" aria-live="polite">
-              {save === "saving" ? "Saving" : save === "error" ? "Not saved" : readOnly ? "" : "Saved"}
+              {save === "saving" ? "Saving" : save === "retrying" ? "Not saved, retrying" : save === "error" ? "Not saved" : readOnly ? "" : "Saved"}
             </span>
           </p>
         </div>
@@ -593,11 +836,29 @@ function Editor({
         </div>
       </header>
 
-      {p.send && <SendStatus p={p} onChange={(r) => (setP(r), onSaved(r))} />}
-      {/* Who opened it, what they read, when to follow up, the reminders and the renewal (Activity.tsx, lib/close). */}
-      {p.send && <ActivityPanel kind="proposal" id={p.id} version={p.version} onOpen={onOpen} />}
+      {conflict && (
+        <div className="pp-banner pp-conflict" role="alert">
+          <p>
+            <strong>This proposal changed in another tab or window.</strong> Merlin loaded the latest.{conflict.text ? " Your last edit didn't save. Copy it, then add it where it goes." : ""}
+          </p>
+          {conflict.text && (
+            <>
+              <textarea className="input pp-conflict-text" readOnly rows={Math.min(8, conflict.text.split("\n").length + 1)} value={conflict.text} aria-label="Your edit that didn't save" />
+              <button type="button" className="btn btn-sm" onClick={() => void navigator.clipboard?.writeText(conflict.text).then(() => toast("Copied."), () => toast("Select the text and copy it.", true))}>
+                Copy my edit
+              </button>
+            </>
+          )}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConflict(null)}>
+            Done
+          </button>
+        </div>
+      )}
+      {p.send && <SendStatus p={p} onChange={(r) => (take(r), onSaved(r))} />}
+      {/* Who opened it, what they read, when to follow up, the reminders and the renewal (Activity.tsx, lib/close). It reloads whenever the proposal changes: a countersignature, a void. */}
+      {p.send && <ActivityPanel kind="proposal" id={p.id} version={`${p.version}:${p.rev}:${p.status}`} onOpen={onOpen} />}
       {/* Not linked to a company on Merlin: the pipeline can't move when they sign, so the member picks it (ProposalLink.tsx). */}
-      {!p.company.id && <LinkCompany p={p} onLinked={(r) => (setP((cur) => ({ ...cur, company: r.company })), onSaved(r))} />}
+      {!p.company.id && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev })), onSaved(r))} />}
       {locked && <CloseBuildPrompt />}
       {out && !changing && !locked && (
         <div className="pp-banner" role="status">
@@ -627,7 +888,8 @@ function Editor({
           </button>
         </div>
       )}
-      {!signed && <FixLine fixes={fixes} blanks={blanks.length} />}
+      {/* Before it goes out only: once sent (and not being changed) there is nothing to fix before sending. */}
+      {!signed && (!out || changing) && <FixLine fixes={fixes} blanks={blanks.length} />}
       {phone && changeIt}
 
       <div className="pp-edit">
@@ -661,7 +923,7 @@ function Editor({
         </Sheet>
       )}
 
-      {compare && <VersionsSheet p={p} onClose={() => setCompare(false)} onRestored={(r) => (setP(r), onSaved(r), setCompare(false), setSavedChange(null), toast(`Brought back as version ${r.version}.`))} />}
+      {compare && <VersionsSheet p={p} onClose={() => setCompare(false)} onRestored={(r) => (take(r), onSaved(r), setCompare(false), setSavedChange(null), toast(`Brought back as version ${r.version}.`))} />}
       {sending && (
         <SendSheet
           p={p}
@@ -671,7 +933,7 @@ function Editor({
           missing={checks.filter((c) => !c.ok && !c.soft).map((c) => c.label)}
           flags={flags.map((f) => f.message)}
           onClose={() => setSending(false)}
-          onSent={(r, message) => (setP(r), onSaved(r), setSending(false), setChanging(false), toast(message))}
+          onSent={(r, message) => (take(r), onSaved(r), setSending(false), setChanging(false), toast(message))}
         />
       )}
     </div>
@@ -762,7 +1024,7 @@ function Section({
               {mark && <span className="pp-changed">Changed</span>}
             </h2>
             <div className="sg-text">
-              <DocText text={text} />
+              <DocText text={text} blanks label={fieldLabel} />
             </div>
           </>
         )}

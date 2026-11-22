@@ -34,7 +34,7 @@ export function LinkCompany({ p, onLinked, site, lead }: { p: ProposalRec; onLin
     setBusy(false);
     // Nobody by that name or website: add it to Merlin from here.
     if (r.error) return setErr(r.error), /didn't find|isn't on Merlin/.test(r.error) && setAdding(true);
-    toast(p.status === "signed" ? "Linked. Your pipeline has it as Won." : "Linked. Your pipeline moves when they sign.");
+    toast(p.status === "signed" ? "Linked. Your pipeline has it as Won." : p.status === "client_signed" ? "Linked. Your pipeline moves to Won once you countersign." : "Linked. Your pipeline moves when they sign.");
     onLinked(r);
   };
   return (

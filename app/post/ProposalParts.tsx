@@ -22,7 +22,7 @@ import { openPlans } from "./Billing";
 import { EVENT_SAY, dayOf, stamp } from "../sign/doc";
 
 /** The status words proposals and documents share. */
-export const STATUS: Record<ProposalRec["status"], string> = { draft: "Draft", sent: "Sent", viewed: "Viewed", signed: "Signed", declined: "Declined", void: "Voided", expired: "Expired" };
+export const STATUS: Record<ProposalRec["status"], string> = { draft: "Draft", sent: "Sent", viewed: "Viewed", client_signed: "Client signed · your turn to countersign", signed: "Signed", declined: "Declined", void: "Voided", expired: "Expired" };
 /** A proposal's or a document's status on the system's scale (Signed pine, Viewed mint, the rest outline). */
 export function ProposalStatus({ status }: { status: ProposalRec["status"] }) {
   const w = STATUS[status];
@@ -32,13 +32,14 @@ export function ProposalStatus({ status }: { status: ProposalRec["status"] }) {
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
 const PRO_SEND = `Sending for signature is on Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year.`;
 
-export async function api<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
+/** POST /api/proposals. A refusal carries `error` in words and `httpStatus` (0: the network, so it can be tried again). */
+export async function api<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string; httpStatus?: number }> {
   try {
     const r = await fetch("/api/proposals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { ...j, error: errorText(r.status, j.error, "That didn't go through. Try again.") };
+    return r.ok ? j : { ...j, error: errorText(r.status, j.error, "That didn't go through. Try again."), httpStatus: r.status };
   } catch {
-    return { error: NETWORK } as T & { error: string };
+    return { error: NETWORK, httpStatus: 0 } as T & { error: string; httpStatus: number };
   }
 }
 
@@ -296,6 +297,11 @@ export function SendSheet({
   // Their own signature on it (MySignature.tsx): now, after the client's, or none.
   const [mode, setMode] = useState<MemberSignMode>(p.memberSign ?? "now");
   const [mySig, setMySig] = useMySignature();
+  // No saved signature yet: start on "I'll countersign after they sign", as the server would (a picked mode stays).
+  const picked = useRef(!!p.memberSignPicked);
+  useEffect(() => {
+    if (mySig.loaded && !mySig.sig && !picked.current && mode === "now") setMode("after");
+  }, [mySig.loaded, mySig.sig, mode]);
   const [days, setDays] = useState<LinkDays>(p.linkDays ?? 30);
   // The reminders to the signer (SendReminders.tsx, lib/close): each on unless turned off here, saved just before it goes.
   const [rem, setRem] = useSendReminders(p.id, canSend);
@@ -318,9 +324,13 @@ export function SendSheet({
       className="pp-send"
       footer={
         canSend ? (
-          <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy} disabled={!ok || busy} onClick={go}>
-            {busy ? "Sending" : `Send to ${s.name.trim().split(" ")[0] || "the signer"}`}
-          </button>
+          <>
+            {/* Why it can't go yet, beside the button, when the reason is your own signature further down. */}
+            {mode === "now" && mySig.loaded && !mySig.sig && <p className="pp-muted pp-send-why">Set your signature below first, or pick I&#39;ll countersign after they sign.</p>}
+            <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy} disabled={!ok || busy} onClick={go}>
+              {busy ? "Sending" : `Send to ${s.name.trim().split(" ")[0] || "the signer"}`}
+            </button>
+          </>
         ) : (
           <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("proposals")}>
             See the Close plan: ${PRICES.closeMonth} a month
@@ -345,7 +355,7 @@ export function SendSheet({
         </label>
         {canSend && <LinkDaysPick value={days} onChange={setDays} />}
         {canSend && <SendReminders value={rem} onChange={setRem} noEnd={days === 0} disabled={busy} />}
-        {canSend && mySig.loaded && <YourSignatureChoice mode={mode} onMode={setMode} sig={mySig.sig} onSig={setMySig} name={mySig.name} title={mySig.title} />}
+        {canSend && mySig.loaded && <YourSignatureChoice mode={mode} onMode={(m) => ((picked.current = true), setMode(m))} sig={mySig.sig} onSig={setMySig} name={mySig.name} title={mySig.title} />}
         {blanks.length > 0 && (
           <p className="pp-warn">
             {blanks.length === 1 ? "1 blank" : `${blanks.length} blanks`} to fill first: {blanksInWords(blanks)}. Tap a section to fill it.
@@ -369,7 +379,7 @@ export function SendSheet({
 export function SendStatus({ p, onChange }: { p: ProposalRec; onChange?: (r: ProposalRec) => void }) {
   const x = p.send!;
   const line =
-    x.status === "signed" && x.waiting === "member"
+    x.status === "client_signed"
       ? `Signed by ${x.signedName} · waiting for your signature.`
       : x.status === "signed"
       ? `Signed by ${x.signedName} on ${dayOf(x.signedAt)}${x.memberSignedAt ? `, and by you on ${dayOf(x.memberSignedAt)}` : ""}.`
@@ -399,7 +409,7 @@ export function SendStatus({ p, onChange }: { p: ProposalRec; onChange?: (r: Pro
         </p>
       )}
       {x.waiting === "member" && onChange && <Countersign p={p} onDone={onChange} />}
-      {x.memberMode === "now" && x.memberSignedAt && x.status !== "signed" && <p className="pp-muted">You signed it as you sent it, on {dayOf(x.memberSignedAt)}.</p>}
+      {x.memberMode === "now" && x.memberSignedAt && x.status !== "signed" && x.status !== "client_signed" && <p className="pp-muted">You signed it as you sent it, on {dayOf(x.memberSignedAt)}.</p>}
       {x.choice && (
         <p className="pp-status-l">
           {x.signer.name.split(" ")[0]} chose {x.choice.summary}. Total: {x.choice.total}.

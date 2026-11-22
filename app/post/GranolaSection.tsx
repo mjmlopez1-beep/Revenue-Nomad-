@@ -129,6 +129,8 @@ export function GranolaSection() {
               <li>Copy the key. It starts with grn_. Paste it below and pick Connect Granola.</li>
             </ol>
             <p className="cr-note">{GRANOLA_PLAN}</p>
+            {/* Connecting works on every plan; drafting from a call doesn't, so it is said before they connect. */}
+            {!status.canDraft && <p className="cr-note">Drafting a proposal from a Granola call is on Close. You can connect your key now, and draft from your calls once you're on Close.</p>}
             <form
               className="in-form"
               noValidate

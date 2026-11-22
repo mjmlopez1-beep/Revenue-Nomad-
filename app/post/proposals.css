@@ -2144,3 +2144,14 @@ textarea.pp-field-in {
   gap: 6px;
   min-width: 0;
 }
+
+/* Changed in another tab or window: the latest is loaded, and the edit that didn't save is there to copy. */
+.pp-conflict {
+  flex-wrap: wrap;
+}
+.pp-conflict-text {
+  flex: 1 1 100%;
+  min-height: 72px;
+  font-size: 14px;
+  line-height: 20px;
+}

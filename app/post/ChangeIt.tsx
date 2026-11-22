@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProposalRec, ProposalVersion, ProposalsView } from "@/lib/proposals/types";
 import type { ChangeProposal } from "@/lib/proposals/changeShape";
 import { changeIdeas, usualTerms } from "@/lib/proposals/changeIdeas";
-import { fill } from "@/lib/proposals/library";
+import { fieldLabel, fill } from "@/lib/proposals/library";
 import { DocText, dayOf } from "../sign/doc";
 import { Sheet } from "./ui";
 import { openPlans } from "./Billing";
@@ -124,7 +124,7 @@ export function ChangeItPanel({
   const accept = async () => {
     if (!preview) return;
     setBusy("accept");
-    const r = await api<{ proposal: ProposalRec; saved: { version: number; previous: number; changed: number } }>({ op: "change_accept", id: p.id, changes: preview.changes, fields: preview.fields, instruction: preview.instruction });
+    const r = await api<{ proposal: ProposalRec; saved: { version: number; previous: number; changed: number } }>({ op: "change_accept", id: p.id, rev: p.rev, changes: preview.changes, fields: preview.fields, instruction: preview.instruction });
     setBusy(null);
     if (r.error) return setErr(r.error);
     setText("");
@@ -158,7 +158,7 @@ export function ChangeItPanel({
     return (
       <section className="ci-card" aria-label="Change it">
         {head}
-        <p className="ci-note">{p.status === "signed" ? "It's signed, so it stays as it was signed." : "It's out for signature. Press Change it above the document to make a new version first."}</p>
+        <p className="ci-note">{p.status === "signed" || p.status === "client_signed" ? "It's signed, so it stays as it was signed." : "It's out for signature. Press Change it above the document to make a new version first."}</p>
       </section>
     );
   if (data.aiUsedUp && !preview)
@@ -279,7 +279,7 @@ export function VersionsSheet({ p, onClose, onRestored }: { p: ProposalRec; onCl
   const restore = async () => {
     if (!v) return;
     setBusy(true);
-    const r = await api<ProposalRec>({ op: "version_restore", id: p.id, version: v.version });
+    const r = await api<ProposalRec>({ op: "version_restore", id: p.id, version: v.version, rev: p.rev });
     setBusy(false);
     if (r.error) return setErr(r.error);
     onRestored(r);
@@ -291,7 +291,7 @@ export function VersionsSheet({ p, onClose, onRestored }: { p: ProposalRec; onCl
       dialog
       className="pp-start"
       footer={
-        v && p.status !== "signed" ? (
+        v && p.status !== "signed" && p.status !== "client_signed" ? (
           <button type="button" className="btn btn-pine btn-lg pp-wide" aria-busy={busy} disabled={busy} onClick={() => void restore()}>
             {busy ? "Bringing it back" : `Bring back version ${v.version}`}
           </button>
@@ -320,11 +320,11 @@ export function VersionsSheet({ p, onClose, onRestored }: { p: ProposalRec; onCl
             <div className="ci-diff-cols">
               <div className="ci-was">
                 <span className="ci-label">Version {v?.version}</span>
-                <div className="sg-text">{r.was ? <DocText text={r.was.text} /> : <p className="pp-muted">Not in this version.</p>}</div>
+                <div className="sg-text">{r.was ? <DocText text={r.was.text} blanks label={fieldLabel} /> : <p className="pp-muted">Not in this version.</p>}</div>
               </div>
               <div className="ci-now">
                 <span className="ci-label">Now, version {cur?.version}</span>
-                <div className="sg-text">{r.now ? <DocText text={r.now.text} /> : <p className="pp-muted">Taken out.</p>}</div>
+                <div className="sg-text">{r.now ? <DocText text={r.now.text} blanks label={fieldLabel} /> : <p className="pp-muted">Taken out.</p>}</div>
               </div>
             </div>
           </div>

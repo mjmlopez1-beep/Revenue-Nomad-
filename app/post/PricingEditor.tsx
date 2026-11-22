@@ -69,11 +69,11 @@ export function PricingEditor({ value, readOnly, onChange }: { value: Pricing | 
           <div className="pe-row">
             <label className="pe-f pe-grow">
               <span>Name</span>
-              <input className="input" value={o.name} maxLength={PRICING_LIMITS.name} placeholder="Assessment + Fractional CRO" onChange={(e) => setOpt(i, { name: e.target.value })} />
+              <input className="input" value={o.name} maxLength={PRICING_LIMITS.name} placeholder="e.g. Assessment + Fractional CRO" onChange={(e) => setOpt(i, { name: e.target.value })} />
             </label>
             <label className="pe-f pe-price">
               <span>Price, $</span>
-              <input className="input" inputMode="numeric" value={o.price} placeholder="15000" onChange={(e) => setOpt(i, { price: e.target.value.replace(/[^\d,]/g, "") })} />
+              <input className="input" inputMode="numeric" value={o.price} placeholder="e.g. 15000" onChange={(e) => setOpt(i, { price: e.target.value.replace(/[^\d,]/g, "") })} />
             </label>
             <label className="pe-f pe-bill">
               <span>Billed</span>
@@ -85,7 +85,7 @@ export function PricingEditor({ value, readOnly, onChange }: { value: Pricing | 
           </div>
           <label className="pe-f">
             <span>A line under the price (optional)</span>
-            <input className="input" value={o.note} maxLength={PRICING_LIMITS.note} placeholder="Months 1 to 3, then $11,000 a month" onChange={(e) => setOpt(i, { note: e.target.value })} />
+            <input className="input" value={o.note} maxLength={PRICING_LIMITS.note} placeholder="e.g. Months 1 to 3, then $11,000 a month" onChange={(e) => setOpt(i, { note: e.target.value })} />
           </label>
           <label className="pe-f">
             <span>What it is, in a sentence (optional)</span>
@@ -114,11 +114,11 @@ export function PricingEditor({ value, readOnly, onChange }: { value: Pricing | 
           <div className="pe-row">
             <label className="pe-f pe-grow">
               <span>Name</span>
-              <input className="input" value={a.name} maxLength={PRICING_LIMITS.name} placeholder="Sales hiring support" onChange={(e) => setAdd(i, { name: e.target.value })} />
+              <input className="input" value={a.name} maxLength={PRICING_LIMITS.name} placeholder="e.g. Sales hiring support" onChange={(e) => setAdd(i, { name: e.target.value })} />
             </label>
             <label className="pe-f pe-price">
               <span>Price, $</span>
-              <input className="input" inputMode="numeric" value={a.price} placeholder="3000" onChange={(e) => setAdd(i, { price: e.target.value.replace(/[^\d,]/g, "") })} />
+              <input className="input" inputMode="numeric" value={a.price} placeholder="e.g. 3000" onChange={(e) => setAdd(i, { price: e.target.value.replace(/[^\d,]/g, "") })} />
             </label>
             <label className="pe-f pe-bill">
               <span>Billed</span>

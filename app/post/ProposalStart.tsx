@@ -29,9 +29,13 @@ import { LiveView, useLive } from "./Live";
 import { LinkCompany } from "./ProposalLink";
 import { AddCompany } from "./AddCompany";
 import type { CoInfo } from "./model";
+import type { View } from "@/lib/tableTypes";
+import { fixesFor } from "./proposalFixes";
+import { useLeaveGuard } from "./leaveGuard";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-const AI_CONSENT = "Merlin writes the draft from the call. It keeps the draft, not the transcript.";
+/** What ticking the box agrees to, in plain words (the Privacy page names the provider). */
+const AI_CONSENT = "To write the draft, Merlin sends this transcript to its AI provider. The transcript isn't kept after, only the draft.";
 
 const PACK_WORDS = "Add a $10 usage pack";
 
@@ -152,7 +156,10 @@ export function StartSheet({
   onTemplate,
   granolaSlot,
   granolaFirst,
+  view,
 }: {
+  /** The member's view: the "Draft ready" list counts what to fix as the editor does (proposalFixes.ts). */
+  view?: View;
   data: ProposalsView;
   infos: CoInfo[];
   companyId: string | null;
@@ -187,7 +194,8 @@ export function StartSheet({
   const [date, setDate] = useState("");
   const [withWho, setWith] = useState("");
   const [allTpl, setAllTpl] = useState(false);
-  const [useAi, setUseAi] = useState(data.ai === "on");
+  // Unticked until the member ticks it (once they agreed before, it starts ticked): nothing leaves Merlin without it.
+  const [useAi, setUseAi] = useState(data.ai === "on" && !!data.aiAgreed);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [usedUp, setUsedUp] = useState<{ words: string; pack: string; button: string } | null>(data.aiUsedUp ?? null);
@@ -199,6 +207,13 @@ export function StartSheet({
   const speech = useSpeech((t) => setAgreed((x) => `${x} ${t}`.trim()));
   const live = useLive();
   const [addCo, setAddCo] = useState(false);
+  // Typed text is work: leaving asks first (Esc, Back, the Proposals link). Focus starts on the screen's heading.
+  const dirty = !ready && (!!text.trim() || !!agreed.trim());
+  const ask = () => !dirty || window.confirm("Leave without drafting? What you typed here is lost.");
+  useLeaveGuard(ask);
+  const leave = () => ask() && onClose();
+  const head = useRef<HTMLHeadingElement>(null);
+  useEffect(() => head.current?.focus({ preventScroll: true }), [!!ready]);
 
   const matches = q.trim().length >= 2 && !pick ? known.filter((i) => i.c.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 6) : [];
   const picked = pick ? infos.find((i) => i.c.id === pick) : undefined;
@@ -271,12 +286,12 @@ export function StartSheet({
       ...(fromRecord.length && p.company.name ? [`Added ${p.company.name}'s ${listWords(fromRecord.map((k) => readable(k)))} from Merlin`] : []),
       ...(who ? [`Put ${who} in as the signer`] : []),
     ];
-    const check = [
-      ...loose,
-      ...unused.map((k) => `The call gave the ${readable(k)} (${p.fields[k]}), and the template has no place for it yet. Add it where it fits.`),
-      ...toFix,
-      ...(blanks.length ? [`${blanks.length === 1 ? "One thing wasn't" : `${blanks.length} things weren't`} settled, so ${blanks.length === 1 ? "it's" : "they're"} left as labelled blanks: ${blanksInWords(blanks, 5)}.`] : []),
-    ];
+    // One list for here and the editor: what the draft said to check goes to the editor as its own, and both count it with fixesFor.
+    const draftSaid = [...loose, ...unused.map((k) => `The call gave the ${readable(k)} (${p.fields[k]}), and the template has no place for it yet. Add it where it fits.`), ...toFix];
+    const check = view
+      ? fixesFor(p, view, draftSaid)
+      : [...draftSaid, ...(blanks.length ? [`${blanks.length === 1 ? "One thing wasn't" : `${blanks.length} things weren't`} settled, so ${blanks.length === 1 ? "it's" : "they're"} left as labelled blanks: ${blanksInWords(blanks, 5)}.`] : [])];
+    toFix = draftSaid;
     const usedRows = [
       ...(fromCall.length ? [{ from: src === "agreed" ? "What you told Merlin" : "The call", what: `${listWords(fromCall.slice(0, 5).map(readable))}`.replace(/^./, (c) => c.toUpperCase()) }] : []),
       { from: template?.mine ? "Your template" : "The template", what: template?.mine ? "Section order and your standing language, like your terms" : "Section order and the starting text for each part" },
@@ -356,11 +371,13 @@ export function StartSheet({
   if (ready)
     return (
       <div className="page-wide pp-page sc-page">
-        <button type="button" className="page-back" onClick={onClose}>
+        <button type="button" className="page-back" onClick={leave}>
           <IconChevron dir="left" /> Proposals
         </button>
         <header className="cu-head">
-          <h1 className="cu-h1">{title}</h1>
+          <h1 className="cu-h1" ref={head} tabIndex={-1}>
+            {title}
+          </h1>
         </header>
         <div className="sc-ready">
           <section className="sc-done" aria-labelledby="sc-ready-h">
@@ -442,11 +459,13 @@ export function StartSheet({
   );
   return (
     <div className="page-wide pp-page sc-page">
-      <button type="button" className="page-back" onClick={onClose}>
+      <button type="button" className="page-back" onClick={leave}>
         <IconChevron dir="left" /> Proposals
       </button>
       <header className="cu-head">
-        <h1 className="cu-h1">{title}</h1>
+        <h1 className="cu-h1" ref={head} tabIndex={-1}>
+          {title}
+        </h1>
         <p className="cu-lead">Start from the conversation you already had. Merlin fills in what was said, in your template, in your words.</p>
       </header>
 
@@ -637,7 +656,18 @@ export function StartSheet({
           <input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />
           <span>
             <b>Draft the whole proposal with Merlin</b>
-            <span className="pp-muted">{callText.trim().length < 200 ? "Needs a few more lines than this. Merlin fills the template from what you wrote instead." : AI_CONSENT}</span>
+            <span className="pp-muted">
+              {callText.trim().length < 200 ? (
+                "Needs a few more lines than this. Merlin fills the template from what you wrote instead."
+              ) : (
+                <>
+                  {AI_CONSENT}{" "}
+                  <a href="/privacy" target="_blank" rel="noreferrer">
+                    Privacy
+                  </a>
+                </>
+              )}
+            </span>
           </span>
         </label>
       )}
@@ -655,7 +685,7 @@ export function StartSheet({
         <button type="button" className="btn btn-pine btn-lg" aria-busy={busy === "draft"} disabled={!!busy || (!company && !pick) || aiOut} onClick={() => void draft()}>
           {busy === "draft" ? (ai ? "Merlin is drafting it" : "Drafting") : hasCall ? "Draft it" : "Start from the template"}
         </button>
-        <span className="pp-muted">{ai ? "About 30 seconds. You review everything before it's sent." : "You review everything before it's sent."}</span>
+        <span className="pp-muted">{!company && !pick ? "Type who it's for first, at the top." : ai ? "About 30 seconds. You review everything before it's sent." : "You review everything before it's sent."}</span>
       </div>
     </div>
   );
