@@ -20,7 +20,7 @@
  *     the portal, cancel, keep, pause, resume, the trial notices, Pilot metrics' counts, and
  *     upgrading during the trial end to end (trial_end at checkout, the webhook, the first charge).
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -752,6 +752,24 @@ async function main() {
     const ab2 = R.emptyBilling();
     check("with the state, the hook grants the usage once per ref", AI.onAiPackPaid(ab2, "m2", "aipack.y", Date.now(), us) && !AI.onAiPackPaid(ab2, "m2", "aipack.y", Date.now(), us) && us.aiUsage!.m2.packMicros === 4_700_000);
     check("the plan says the pack can be bought", (await meOf(AL)).plan!.aiPack === true);
+    // BI-06: a Checkout opened in the trial and paid after it ended. The plan is checked on payment: the pack is granted and kept for Close, and Plan and billing says so.
+    const cyRef = t.tableInternals.billingRef("mem_cy");
+    const env0 = { d: process.env.RN_AI_DRAFTS, k: process.env.ANTHROPIC_API_KEY, m: process.env.RN_AI_MODEL };
+    Object.assign(process.env, { RN_AI_DRAFTS: "1", ANTHROPIC_API_KEY: "made-up-key-for-tests", RN_AI_MODEL: "made-up-model" });
+    try {
+      check("set-up: Cy's trial has ended, so drafting is closed for him", !(await meOf(CY)).plan!.canClose && !(await meOf(CY)).plan!.aiPackKept);
+      const late = await hook({ id: "evt_ai_late", type: "checkout.session.completed", data: { object: { id: "cs_ai_late", mode: "payment", client_reference_id: cyRef, payment_status: "paid", amount_total: 1000, metadata: { ref: cyRef, kind: "aipack" } } } });
+      const cyPack = ((await state()).billing!.aiPacks ?? []).find((x) => x.memberId === "mem_cy");
+      check("BI-06: paid after the trial ended: recorded once, marked kept for Close, the usage granted (it never expires)", late.status === 200 && cyPack?.kept === true && (await state()).aiUsage?.mem_cy?.packMicros === 4_700_000, cyPack);
+      const cyPlan = (await meOf(CY)).plan!;
+      check("BI-06: Plan and billing says the pack is kept, with no meter (drafting is Close's)", cyPlan.aiPackKept === true && !cyPlan.ai, cyPlan);
+      const billingSrc = readFileSync(path.join(process.cwd(), "app/post/Billing.tsx"), "utf8");
+      check("BI-06: the Plan page's note", /plan\.aiPackKept &&/.test(billingSrc) && billingSrc.includes("Your AI usage pack is kept") && billingSrc.includes("used once you&apos;re on Close"));
+      check("a pack paid on the trial is not marked kept", !((await state()).billing!.aiPacks ?? []).find((x) => x.memberId === "mem_al")?.kept);
+    } finally {
+      for (const [k, v] of [["RN_AI_DRAFTS", env0.d], ["ANTHROPIC_API_KEY", env0.k], ["RN_AI_MODEL", env0.m]] as const) if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   }
 
   console.log("\nSwitched off again: everything as before");

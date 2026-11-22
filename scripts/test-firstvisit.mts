@@ -85,14 +85,20 @@ async function main() {
   /* ---------- signed out and a cookie that is nobody's ---------- */
   const anon = await (await get("/api/table?compact=1", undefined, 9)).json();
   check("signed out, the table is the counts only, as before", anon.me === null && Array.isArray(anon.companies) && anon.companies.length === 0 && !!anon.stats, Object.keys(anon));
+  {
+    const f = await get("/api/table?first=1&place=", "rn_table=nobody-has-this-token", 9);
+    const j = await f.json();
+    check("a sign-in cookie that is nobody's: ?first=1 answers the signed-out view itself, the same as GET /api/table", f.status === 200 && same({ ...j, version: undefined }, { ...anon, version: undefined }), Object.keys(j));
+  }
+  // SE-02: with no sign-in cookie at all (the page never asks then) ?first=1 is 401 as documented, and ?today=1 is 401 signed out either way.
   for (const [label, cookie] of [
-    ["signed out", undefined],
+    ["no sign-in cookie", undefined],
     ["a sign-in cookie that is nobody's", "rn_table=nobody-has-this-token"],
   ] as const) {
-    const f = await get("/api/table?first=1&place=", cookie, 9);
-    const j = await f.json();
-    check(`${label}: ?first=1 answers the signed-out view itself, the same as GET /api/table`, f.status === 200 && same({ ...j, version: undefined }, { ...anon, version: undefined }), Object.keys(j));
+    const t = await get("/api/table?today=1", cookie, 9);
+    check(`${label}: ?today=1 answers 401`, t.status === 401 && /signed out/.test(((await t.json()) as { error?: string }).error ?? ""));
   }
+  check("no sign-in cookie: ?first=1 answers 401", (await get("/api/table?first=1&place=", undefined, 9)).status === 401);
 
   /* ---------- a member's and an admin's first visit ---------- */
   const sal = await join("Sal Firstvisit", 1);

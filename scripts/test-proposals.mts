@@ -269,6 +269,9 @@ async function main() {
   const typed = await S.createProposal(PAT, { companyName: "Bramble & Finch Studio" }, BASE);
   check("a company typed in, not on Merlin, from a blank page", typed.company.id === null && typed.company.name === "Bramble & Finch Studio" && typed.templateId === null && typed.blocks.some((b) => b.blockId === "signature"));
   check("no such company", (await refused(S.createProposal(PAT, { companyId: "c_notreal" }, BASE)))?.includes("isn't on Merlin"));
+  // DG-09: bidi overrides, isolates and zero-width characters never reach a title, a block or a field.
+  const bd = await S.updateProposal(PAT, typed.id, { title: "‮tfard‬ Plan​ for ⁦Bramble⁩﻿", setFields: { "goals.target": "Grow‍ pipeline ‭fast" } }, BASE);
+  check("DG-09: a proposal's title and fields drop bidi and zero-width characters", bd.title === "tfard Plan for Bramble" && bd.fields["goals.target"] === "Grow pipeline fast", [bd.title, bd.fields["goals.target"]]);
 
   // Reorder, add, remove.
   const order = p.blocks.map((b) => b.id);
@@ -802,7 +805,8 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   const pv = await T.buildView(PAT);
   const pvJson = JSON.stringify(pv);
   check("Settings, Plan: a percentage only", pv.me?.plan?.ai?.percent === 100 && pv.me.plan.ai.trial === true && pv.me.plan.ai.onPack === true && pv.me.plan.ai.usedUp === false && Object.keys(pv.me.plan.ai).sort().join() === "canAddPack,notice,onPack,percent,resetsOn,trial,usedUp", pv.me?.plan?.ai);
-  check("no dollars or tokens in what the member's app reads", !/aiUsage|[Mm]icros|inTok|outTok|input_tokens|"usd"/.test(pvJson) && !/[Mm]icros|inTok|outTok|4\.70/.test(JSON.stringify(await S.listProposals(PAT, BASE))));
+  // A pack's cost ($4.70) never shows; "\b" keeps a timestamp's milliseconds (":54.705Z") from reading as it.
+  check("no dollars or tokens in what the member's app reads", !/aiUsage|[Mm]icros|inTok|outTok|input_tokens|"usd"/.test(pvJson) && !/[Mm]icros|inTok|outTok|\b4\.70\b/.test(JSON.stringify(await S.listProposals(PAT, BASE))));
   check("another member sees none of it", !/aiUsage|[Mm]icros/.test(JSON.stringify(await T.buildView(OTH))) && (await T.buildView(OTH)).me?.plan?.ai?.percent === 0);
   check("the export leaves it out", !("aiUsage" in (await T.exportState())));
   // The trial's notices fired as it passed 50, 75 and 90%, once; seen, they're closed.

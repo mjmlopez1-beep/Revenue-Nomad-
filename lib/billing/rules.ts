@@ -78,7 +78,8 @@ export interface BillingState {
   /** Money in, for Pilot metrics: one row per paid invoice or top-up. Cents only, never card data. */
   payments: { memberId: string; at: string; cents: number; kind: "month" | "year" | "topup" | "aipack"; ref: string }[];
   /** AI usage packs paid for (onAiPackPaid), once per payment ref, newest last. */
-  aiPacks?: { memberId: string; ref: string; at: string }[];
+  /** `kept`: paid when the member could no longer draft (a Checkout opened in the trial, paid after it ended): the pack waits for Close. */
+  aiPacks?: { memberId: string; ref: string; at: string; kept?: true }[];
   /** Subscriptions that ended (Stripe deleted them), for churn. */
   ended: { memberId: string; at: string }[];
 }

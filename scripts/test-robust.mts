@@ -210,6 +210,11 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     eq("a good change followed by a failed one: the copy is rebuilt before it is written", [r2.map((r) => r.status), clones], [["fulfilled", "fulfilled", "rejected"], 3]);
     eq("both good changes are on file", (await t.buildView("tok-a")).me?.added, 2);
     eq("and on disk", JSON.parse(readFileSync(STATE(), "utf8")).ledger.filter((l: { reason: string }) => l.reason === "fill").length, 2);
+    // CR-08: an unlockMany list with things that aren't objects in it is read without them: never a server error (TypeError).
+    const odd = await attempt(() => t.perform("tok-a", { type: "unlockMany", items: [null, 1, "x"] } as never));
+    check("CR-08: unlockMany with [null, 1, \"x\"]: no TypeError, an answer or a refusal in words", odd.ok || odd.e instanceof t.ActionError, odd.ok ? odd.v.message : String(odd.e));
+    const mixed = await attempt(() => t.perform("tok-a", { type: "unlockMany", items: [null, { entity: "company", id: idOf("Fillco 3"), field: "identity" }, "x", [1]] } as never));
+    check("CR-08: the objects in such a list still unlock", mixed.ok && (await t.buildView("tok-a")).companies.some((c) => c.id === idOf("Fillco 3") && !c.hidden), mixed.ok ? mixed.v.message : String(mixed.e));
   },
 
   /** RN_REQUIRE_SEED=1 and no seed to load. Runs from a folder with no data/ in it. */

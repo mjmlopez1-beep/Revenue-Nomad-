@@ -964,6 +964,14 @@ export function BillingPage({ view, refresh }: { view: View; refresh: () => Prom
       </section>
 
       {plan.ai && <AiUsageCard ai={plan.ai} />}
+      {plan.aiPackKept && (
+        <section className="tp-card bl-ai" aria-labelledby="bl-ai-kept-h" data-ai-kept>
+          <h2 className="tp-card-h" id="bl-ai-kept-h">
+            Your AI usage pack is kept
+          </h2>
+          <p className="cr-note">Drafting with Claude is on Close. Your pack never expires: it&apos;s used once you&apos;re on Close. Build it in Claude works on every plan, free.</p>
+        </section>
+      )}
 
       {paidPlan && plan.proStartsAt && !plan.cancelAt && (
         <section className="tp-card bl-manage" aria-labelledby="bl-manage-h">

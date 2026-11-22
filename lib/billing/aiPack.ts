@@ -5,7 +5,7 @@
  * micro-dollars, once per ref). Pure: it changes the billing state (and the usage state) it is given (the webhook calls it inside the table's write
  * queue, lib/billing/server.ts handleWebhook). No usage amount is said to members anywhere.
  */
-import type { BillingState } from "./rules";
+import { canClose, type BillingState } from "./rules";
 import type { State } from "../table";
 import { PACK_MICROS, grantAiPackIn } from "../proposals/aiUsage";
 
@@ -18,7 +18,10 @@ import { PACK_MICROS, grantAiPackIn } from "../proposals/aiUsage";
 export function onAiPackPaid(b: BillingState, memberKey: string, paymentRef: string, nowMs = Date.now(), usage?: State): boolean {
   const list = (b.aiPacks ??= []);
   if (!memberKey || !paymentRef || list.some((x) => x.ref === paymentRef)) return false;
-  list.push({ memberId: memberKey, ref: paymentRef, at: new Date(nowMs).toISOString() });
+  // The plan is checked when the payment lands (BI-06): a Checkout opened in the trial and paid after it ended still grants the
+  // pack (a pack never expires), marked kept: it waits for Close, and Plan and billing says so (PlanView.aiPackKept).
+  const kept = !canClose(b.members[memberKey], nowMs);
+  list.push({ memberId: memberKey, ref: paymentRef, at: new Date(nowMs).toISOString(), ...(kept ? { kept: true as const } : {}) });
   if (usage) grantAiPackIn(usage, memberKey, PACK_MICROS, paymentRef, nowMs);
   return true;
 }

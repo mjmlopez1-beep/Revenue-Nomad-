@@ -371,6 +371,12 @@ export const GET = guarded(async (req: NextRequest) => {
   void runDueJobs(origin(req)).catch((e) => console.error("job checks failed", e));
   // Signed out: the counts only, kept for a few minutes (buildView), so the landing page never waits in line behind members' tables.
   if (!token || !(await memberForToken(token))) {
+    // Today's answer is a member's alone: signed out it is 401, as documented (the page asks for it only for a member).
+    if (req.nextUrl.searchParams.get("today") !== null) return err("You're signed out. Sign in again to see Today.", 401);
+    // The first screen: with no sign-in cookie at all, 401 (the page never asks for it then). With a cookie that is nobody's
+    // (expired, or from another server), the signed-out view itself, so the landing page draws without a second request
+    // (app/ui/shared.tsx fetchFirst, scripts/test-firstvisit.mts).
+    if (req.nextUrl.searchParams.get("first") !== null && !token) return err("You're signed out. Sign in again to see your table.", 401);
     const view = await buildView(null);
     return sendJson(req, view, { "x-view-version": view.version ?? "" });
   }

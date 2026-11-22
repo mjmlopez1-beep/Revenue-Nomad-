@@ -496,6 +496,8 @@ export interface PlanView {
    * the one-time "You've used 75% of this month's AI usage" (noticeSeen kind "aiUsage" closes it).
    */
   ai?: { percent: number; resetsOn: string | null; trial: boolean; usedUp: boolean; onPack: boolean; canAddPack: boolean; notice: 50 | 75 | 90 | null };
+  /** An AI usage pack the member paid for is waiting: drafting with Claude is on Close, and the pack is used once they're on it (BI-06). */
+  aiPackKept?: true;
 }
 
 /** The most functions "Which fractional usually gets hired before you?" takes. */

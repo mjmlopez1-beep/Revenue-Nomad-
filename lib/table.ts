@@ -138,7 +138,7 @@ import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionals
 import type { PeersState } from "./peersCore";
 
 import type { MyTemplate, StoredProposal } from "./proposals/types";
-import { aiMeter, noticeSeenIn as aiNoticeSeenIn, type AiUsageRec } from "./proposals/aiUsage";
+import { aiMeter, budgetOf as aiBudgetOf, noticeSeenIn as aiNoticeSeenIn, type AiUsageRec } from "./proposals/aiUsage";
 import { aiConfigured } from "./proposals/aiConfig";
 import type { StoredDocument } from "./documents/types";
 // The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
@@ -5764,7 +5764,8 @@ export async function perform(
         }
         case "unlock":
         case "unlockMany": {
-          const items = a.type === "unlock" ? [a] : (a.items ?? []).slice(0, 60);
+          // Only plain objects: a list with null, a number or a string in it (a broken or hostile client) is read without them, never a server error.
+          const items = a.type === "unlock" ? [a] : (Array.isArray(a.items) ? a.items : []).filter((it) => !!it && typeof it === "object" && !Array.isArray(it)).slice(0, 60);
           /**
            * Free's one Crystal Ball company a UTC day, opened in full: the company, and every fact on
            * file there the member doesn't see yet (who held each seat and the role, people's names and
@@ -8451,6 +8452,8 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     ...(proWelcomeDue(rec, name, nowMs) ? { proWelcome: true } : {}),
     ...(trialCardDue(rec, name, nowMs) ? { trialStarted: true } : {}),
     ...(aiConfigured() && canClose(rec, nowMs) ? { ai: aiMeter(s, memberId, nowMs) } : {}),
+    // A pack paid for after drafting closed for them (paid after the trial ended): kept for Close.
+    ...(aiConfigured() && !canClose(rec, nowMs) && aiBudgetOf(s, memberId, nowMs).pack > 0 ? { aiPackKept: true as const } : {}),
   };
 }
 
