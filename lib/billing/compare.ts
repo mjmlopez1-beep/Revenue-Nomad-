@@ -27,6 +27,8 @@ export const PLAN_ROWS: [string, string, string, string][] = [
   ["Claude drafting and your own contracts", "In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"],
   ["Pipeline after a signature", "You move it", "You move it", "Moves to Won when they sign"],
   ["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"],
+  ["Give them options to pick from", "In your trial only", "In your trial only", "Up to 3 options and add-ons: they pick one, see the total and sign it"],
+  ["Sealed PDF anyone can check", "In your trial only", "In your trial only", "Every signed proposal and document, sealed and emailed to both sides"],
   ["Saved views", "1, with the weekly email", "As many as you want, with alerts", "As many as you want, with alerts"],
   [FEATURE_NAME, "Every signal each morning, one company a day fully open", "Every company in it open free, signals in Slack as they happen", "Every company in it open free, signals in Slack as they happen"],
   ["Rate benchmarks", "Medians by function", "Ranges by function and client size", "Ranges by function and client size"],

@@ -232,6 +232,12 @@ export function TermsView({ support, starter }: { support: string | null; starte
             they confirmed, the time, their IP address and device, and a fingerprint of the exact document, and keeps the signed copy and its audit trail for you both.
             Signing links work for {SIGN_LINK_DAYS} days.
           </p>
+          <p className="cl-p">
+            On {TIER_NAME.close} you can give your client up to three options, and add-ons, to pick from: the option and add-ons they pick are part of what they sign. Once
+            it is signed, Merlin makes a PDF of it as signed with its audit trail, seals it (a SHA-256 fingerprint of the file, signed with Merlin&#39;s own key and printed
+            on its last page) and emails it to you both. Anyone can check a copy at /check: Merlin reads the file there only to compare its fingerprint, and doesn&#39;t keep it.
+            The seal shows whether a copy is the one signed; it is not a certificate-based signature inside the PDF.
+          </p>
           <p className="cl-p">Before you send, you confirm what Merlin asks of every sender:</p>
           <p className="lg-key">{SENDER_DUTY}</p>
           <p className="cl-p">

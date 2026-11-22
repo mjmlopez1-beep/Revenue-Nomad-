@@ -65,6 +65,13 @@ Not called: no AI model provider (except Anthropic's API for drafting with Claud
 - Deleting: Disconnect and delete everything on Your network deletes every plan whose route went through someone from Google (`lib/google/index.ts` `forgetIn`); deleting the LinkedIn import deletes every plan through a connection from it (`lib/paths/index.ts` `deleteConnections`); closing an account deletes all of the member's plans when its personal data is deleted 30 days on (`lib/table.ts` `purgeMember` calls `lib/paths/plan.ts` `forgetMember`; until then a restore brings them back). A member can also drop a plan (`POST /api/paths { op: "way", do: "drop" }`); the deal stays in their pipeline.
 - The connector's `ways_in` (`lib/mcp/ways.ts`, only with `RN_GOOGLE=1`) gives the routes with Est. success and steps, and never names a person from the member's own Google network or LinkedIn import.
 
+### Signed copies and Check a copy
+
+- A signed proposal sent on Close, and every completed document, gets a final PDF kept on the data volume (`lib/proposals/files.ts` at `RN_DATA_DIR/proposals/<send id>/final.pdf`, `lib/documents/files.ts`), never in the state, the repo, the export or the state's backup. It is emailed to both sides and downloaded only with the signed copy's link (`app/api/sign/pdf`, `app/api/documents/file`). It is deleted with the member's personal data (`lib/account.ts` purge).
+- The seal (`lib/seal.ts`): the SHA-256 of the whole file and of the file with its printed seal line read as zeros, signed with Merlin's Ed25519 key, kept with the signed record (`StoredSend.seal`, `StoredDocument.completed.seal`). The key is `RN_SEAL_KEY` (PKCS#8 PEM); without it Merlin generates one once into the data folder (`seal-key.pem`, 0600, never in the repo) and logs that a generated key is in use. Its public half is at `GET /api/check`.
+- `/check` (`app/check`, `POST /api/check`), public, no account: the PDF dropped there is read into memory, hashed and compared with the sealed records (`checkCopy`). It is never written to disk, logged, kept in the state or sent to an outside service, and the answer is only whether it matches and, if so, the signers' names and when they signed. Rate limited by IP like the signing page.
+- **To confirm:** this is a hash and signature Merlin checks, not a certificate-based (PAdES) signature inside the PDF; whether a qualified or certificate-based signature is wanted for some clients.
+
 ## 5. Who can switch a feature off
 
 ### The owner (server settings, all checked in the code)

@@ -168,6 +168,17 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-check">
+            <h2 className="df-h" id="df-check">
+              Inside Merlin: signed copies and Check a copy
+            </h2>
+            <p className="cl-p">
+              When a proposal or document is signed, Merlin keeps the final PDF on its own storage, private to the two sides, and seals it: a fingerprint of the file
+              (SHA-256), signed with Merlin&apos;s own key. Anyone can check a copy at /check, with no account. The PDF dropped there is read in memory to work out its
+              fingerprint, compared with the sealed records, and never stored, logged or sent anywhere. The answer says only whether it matches, and if so who signed and when.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-off">
             <h2 className="df-h" id="df-off">
               Who can switch it off
