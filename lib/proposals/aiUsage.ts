@@ -3,7 +3,7 @@
  * it costs: each call's usage.input_tokens at USD_PER_M_IN and usage.output_tokens at
  * USD_PER_M_OUT, from the API's own answer, kept in micro-dollars (whole numbers).
  *
- *  - Budget: members whose plan has drafting (Trial and Pro today, and everyone while billing is
+ *  - Budget: members on Pro + Close (lib/billing/rules.ts canClose, everyone while billing is
  *    off) get MONTH_BUDGET_MICROS of Claude cost a UTC calendar month, starting again on the 1st.
  *    An active trial gets TRIAL_BUDGET_MICROS in total instead.
  *  - Packs: grantAiPack adds PACK_MICROS (a $PACK_PRICE_USD purchase), once per payment reference.
@@ -21,7 +21,8 @@
  * State.aiUsage[memberId]. Theirs alone: never in another member's view or the export.
  */
 import type { State } from "../table";
-import { gated, planOf } from "../plan";
+import { planOf } from "../plan";
+import { canClose } from "../billing/rules";
 
 /** Dollars per million tokens: what a call is charged at. */
 export const USD_PER_M_IN = 4;
@@ -173,7 +174,7 @@ export interface AiMeter {
   usedUp: boolean;
   /** Past the month's usage, drafting goes on with a usage pack. */
   onPack: boolean;
-  /** "Add an AI usage pack, $10" is offered (paid Pro; the Close plan later). */
+  /** "Add an AI usage pack, $10" is offered: on Pro + Close and the trial (canClose). */
   canAddPack: boolean;
   /** A one-time notice to show: "You've used 75% of this month's AI usage". */
   notice: AiAlert | null;
@@ -188,7 +189,7 @@ export function aiMeter(s: Pick<State, "aiUsage" | "billing">, memberId: string,
     trial: b.trial,
     usedUp: !b.open,
     onPack: b.used >= b.budget && b.pack > 0,
-    canAddPack: !gated(s.billing?.members[memberId], nowMs) && planOf(s.billing?.members[memberId], nowMs) === "pro",
+    canAddPack: canClose(s.billing?.members[memberId], nowMs),
     notice: noticeOf(rec, b.trial, nowMs),
   };
 }
@@ -199,19 +200,30 @@ export function aiMeter(s: Pick<State, "aiUsage" | "billing">, memberId: string,
  * a ref already granted.
  */
 export async function grantAiPack(memberKey: string, micros: number = PACK_MICROS, ref: string, nowMs = Date.now()): Promise<{ granted: boolean }> {
-  const key = String(memberKey ?? "").trim();
-  const r = String(ref ?? "").trim();
-  if (!key || !r) throw new Error("grantAiPack needs the member and the payment reference");
-  if (!Number.isInteger(micros) || micros <= 0 || micros > 1_000_000_000) throw new Error("grantAiPack needs a whole number of micro-dollars");
+  checkGrant(memberKey, micros, ref);
   // Loaded here, so the rest of this file stays pure (lib/health.ts and lib/table.ts read it).
   const { tableInternals: T } = await import("../table");
-  return T.mutate((s) => {
-    if (recOf(s, key)?.packs?.some((p) => p.ref === r)) return { granted: false };
-    const rec = recToChange(s, key, nowMs);
-    (rec.packs ??= []).push({ ref: r, micros, at: new Date(nowMs).toISOString() });
-    rec.packMicros = Math.max(0, rec.packMicros) + micros;
-    return { granted: true };
-  });
+  return T.mutate((s) => ({ granted: grantAiPackIn(s, memberKey, micros, ref, nowMs) }));
+}
+
+function checkGrant(memberKey: string, micros: number, ref: string): void {
+  if (!String(memberKey ?? "").trim() || !String(ref ?? "").trim()) throw new Error("grantAiPack needs the member and the payment reference");
+  if (!Number.isInteger(micros) || micros <= 0 || micros > 1_000_000_000) throw new Error("grantAiPack needs a whole number of micro-dollars");
+}
+
+/**
+ * grantAiPack inside a mutate already running (the billing webhook: lib/billing/aiPack.ts
+ * onAiPackPaid). True when it granted; false for a ref already granted.
+ */
+export function grantAiPackIn(s: State, memberKey: string, micros: number, ref: string, nowMs = Date.now()): boolean {
+  checkGrant(memberKey, micros, ref);
+  const key = memberKey.trim();
+  const r = ref.trim();
+  if (recOf(s, key)?.packs?.some((p) => p.ref === r)) return false;
+  const rec = recToChange(s, key, nowMs);
+  (rec.packs ??= []).push({ ref: r, micros, at: new Date(nowMs).toISOString() });
+  rec.packMicros = Math.max(0, rec.packMicros) + micros;
+  return true;
 }
 
 /** Pilot metrics' Health, admin only: the month's Claude calls in counts and dollars, never whose. */

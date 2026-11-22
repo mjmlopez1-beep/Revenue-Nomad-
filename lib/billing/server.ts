@@ -218,8 +218,8 @@ export async function handleWebhook(raw: string, signature: string | null, origi
     const o = applyEvent(s.billing, ev, { nowMs, memberOf: memberOf(s, idx.all), tierOf: stripe.tierOfPrice });
     const at = new Date(nowMs).toISOString();
     for (const gr of o.grants) if (!s.ledger.some((l) => l.reason === gr.reason && l.ref === gr.ref)) s.ledger.push({ ...gr, at });
-    // An AI usage pack paid for: the hook records it, once per payment ref.
-    if (o.aiPack) onAiPackPaid(s.billing, o.aiPack.memberId, o.aiPack.ref, nowMs);
+    // An AI usage pack paid for: the hook records it and grants the member its usage (lib/proposals/aiUsage.ts), once per payment ref.
+    if (o.aiPack) onAiPackPaid(s.billing, o.aiPack.memberId, o.aiPack.ref, nowMs, s);
     let mail: { to: string; first: string; link: string; interval: "month" | "year"; from: string; till: string } | null = null;
     if (o.receipt && emailEnabled() && base) {
       const m = idx.byId.get(o.receipt.memberId);

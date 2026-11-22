@@ -28,7 +28,7 @@ import type { ProposalRec } from "./types";
 import { AI_PACK_LINK, budgetOf, chargeIn, usedUpWords } from "./aiUsage";
 
 export const AI_OFF = "Drafting with Claude isn't switched on for Merlin. Use Draft without it, or Build it in Claude.";
-export const AI_PLAN = `Drafting with Claude is on Pro: $${PRICES.month} a month. Build it in Claude works on every plan.`;
+export const AI_PLAN = `Drafting with Claude is on Pro + Close: $${PRICES.closeMonth} a month. Build it in Claude works on every plan.`;
 export const AI_BUSY = "A draft is on its way already. Wait for it, then draft the next one.";
 export const AI_CONSENT = "To draft it, Merlin sends this transcript and the draft's inputs to Anthropic's API. Merlin keeps the draft, not the transcript.";
 
@@ -162,7 +162,8 @@ export async function draftWithClaude(token: string | null, a: DraftArgs, origin
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (!me) throw new ProposalProblem("You're signed out. Sign in again to draft a proposal.", 401);
-  if (T.freeNow(s, me.id, nowMs)) throw new ProposalProblem(AI_PLAN, 403);
+  // The one gate for Close features (lib/billing/rules.ts canClose): Pro + Close and the trial.
+  if (!T.closeNow(s, me.id, nowMs)) throw new ProposalProblem(AI_PLAN, 403);
   if (!agreedAt(s, me.id)) {
     if (a.agree !== true) throw new ProposalProblem(`${AI_CONSENT} Tick the box to agree, then draft it.`, 428);
     await agreeToAi(token, nowMs);

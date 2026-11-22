@@ -741,10 +741,16 @@ async function main() {
     await hook(pack("evt_ai1", "cs_ai1"));
     await hook(pack("evt_ai2", "cs_ai1"));
     check("the same event again, or the same payment under another event: nothing more", ((await state()).billing!.aiPacks ?? []).length === 1);
+    // The pack's usage goes to the member's AI budget (lib/proposals/aiUsage.ts grantAiPack), once per payment.
+    const alUsage = (await state()).aiUsage?.mem_al;
+    check("paid: the member's AI usage gets the pack (4,700,000 micro-dollars), once per payment ref", alUsage?.packMicros === 4_700_000 && alUsage.packs?.length === 1 && alUsage.packs[0].ref === "aipack.cs_ai1", alUsage);
     check("money in, as an AI pack, once", (await state()).billing!.payments.filter((x) => x.kind === "aipack").length === 1 && (await state()).billing!.payments.find((x) => x.kind === "aipack")?.cents === 1000);
     const AI = await import("../lib/billing/aiPack.ts");
     const ab = R.emptyBilling();
     check("the hook itself is idempotent on the payment ref", AI.onAiPackPaid(ab, "m1", "aipack.x") && !AI.onAiPackPaid(ab, "m1", "aipack.x") && AI.aiPacksBought(ab, "m1") === 1);
+    const us = { aiUsage: {} } as unknown as Parameters<typeof AI.onAiPackPaid>[4] & object;
+    const ab2 = R.emptyBilling();
+    check("with the state, the hook grants the usage once per ref", AI.onAiPackPaid(ab2, "m2", "aipack.y", Date.now(), us) && !AI.onAiPackPaid(ab2, "m2", "aipack.y", Date.now(), us) && us.aiUsage!.m2.packMicros === 4_700_000);
     check("the plan says the pack can be bought", (await meOf(AL)).plan!.aiPack === true);
   }
 

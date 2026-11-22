@@ -18,7 +18,7 @@ import { openPlans } from "./Billing";
 import { EVENT_SAY, dayOf, stamp } from "../sign/doc";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
-const PRO_SEND = `Sending for signature is on Pro: $${PRICES.month} a month, or $${PRICES.year} a year. You can write and keep drafts on Free.`;
+const PRO_SEND = `Sending for signature is on Pro + Close: $${PRICES.closeMonth} a month, or $${PRICES.closeYear} a year. You can build and preview proposals on Free and Pro.`;
 
 export async function api<T>(body: Record<string, unknown>): Promise<T & { error?: string; upgrade?: string }> {
   try {
@@ -301,8 +301,8 @@ export function SendSheet({
             {busy ? "Sending" : `Send to ${s.name.trim().split(" ")[0] || "the signer"}`}
           </button>
         ) : (
-          <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("billing")}>
-            See Pro: ${PRICES.month} a month
+          <button type="button" className="btn btn-pine btn-lg pp-wide" onClick={() => openPlans("proposals")}>
+            See Pro + Close: ${PRICES.closeMonth} a month
           </button>
         )
       }

@@ -255,7 +255,7 @@ export async function sendForSignature(ctx: Ctx, a: { proposal_id: string; signe
         ? blanks.length
           ? "It can't go out yet: fill the blanks first. Nothing was sent."
           : "Nothing was sent. The client gets an email with a signed link (30 days), confirms their email with a code, and signs on Merlin. No account needed." + ` ${SENDER_DUTY}`
-        : "Nothing was sent. Sending for signature is on Pro.",
+        : "Nothing was sent. Sending for signature is on Pro + Close.",
       next: "Show the member who it goes to and what's missing. Only if they say send, call again with the same arguments and confirm: true.",
     };
   }

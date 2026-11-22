@@ -8238,7 +8238,7 @@ function planView(s: State, memberId: string, nowMs: number, roles?: { tracks: T
     ...(free && rec?.trialStartedAt && !rec.paidSince && !rec.notices?.trialEndedSeen ? { trialEnded: true } : {}), // [ux ws1] Today's one-time trial-ended card
     ...(proWelcomeDue(rec, name, nowMs) ? { proWelcome: true } : {}),
     ...(trialCardDue(rec, name, nowMs) ? { trialStarted: true } : {}),
-    ...(aiConfigured() && !gated(rec, nowMs) ? { ai: aiMeter(s, memberId, nowMs) } : {}),
+    ...(aiConfigured() && canClose(rec, nowMs) ? { ai: aiMeter(s, memberId, nowMs) } : {}),
   };
 }
 

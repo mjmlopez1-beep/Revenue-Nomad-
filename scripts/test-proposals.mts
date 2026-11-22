@@ -749,10 +749,10 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   // Pure: a month on Pro, its notices and its rollover, on a made-up state.
   const NOV = Date.UTC(2026, 10, 3, 12);
   const DEC = Date.UTC(2026, 11, 2, 12);
-  const pst = { aiUsage: {}, billing: { members: { m1: { proUntil: new Date(Date.UTC(2027, 5, 1)).toISOString() } } } } as unknown as import("../lib/table").State;
+  const pst = { aiUsage: {}, billing: { members: { m1: { proUntil: new Date(Date.UTC(2027, 5, 1)).toISOString(), tier: "close" } } } } as unknown as import("../lib/table").State;
   const spend = (micros: number, at = NOV) => AU.chargeIn(pst, "m1", at, { inTok: micros / 4, outTok: 0 });
   const meter = (at = NOV) => AU.aiMeter(pst, "m1", at);
-  check("Pro: $10 a month, resets on the 1st, the pack offered", AU.budgetOf(pst, "m1", NOV).budget === 10_000_000 && !AU.budgetOf(pst, "m1", NOV).trial && meter().resetsOn === "2026-12-01" && meter().canAddPack === true && meter().percent === 0 && meter().notice === null);
+  check("Pro + Close: $10 a month, resets on the 1st, the pack offered", AU.budgetOf(pst, "m1", NOV).budget === 10_000_000 && !AU.budgetOf(pst, "m1", NOV).trial && meter().resetsOn === "2026-12-01" && meter().canAddPack === true && meter().percent === 0 && meter().notice === null);
   spend(4_000_000);
   check("under 50%: no notice", meter().percent === 40 && meter().notice === null);
   spend(1_000_000);
@@ -779,6 +779,18 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   const recD = pst.aiUsage!.m1 as import("../lib/proposals/aiUsage").AiUsageRec;
   check("December's first spend: November's used is gone, December's 50% notice fires", recD.month === "2026-12" && recD.usedMicros === 5_000_000 && recD.packMicros === 1_000_000 && meter(DEC).notice === 50);
   for (let i = 0; i < 230; i++) spend(4, DEC);
+  // The one gate is canClose (lib/billing/rules.ts): plain Pro builds and previews, Pro + Close drafts with $10 a month.
+  const othWas = (await T.loadState()).billing!.members.mem_oth;
+  const proUntil = new Date(Date.now() + 30 * DAY).toISOString();
+  await T.tableInternals.mutate((st) => void (st.billing!.members.mem_oth = { ...othWas, trialEndsAt: new Date(Date.now() - DAY).toISOString(), proUntil, tier: "pro" } as typeof othWas));
+  const plainPro = await refused(D.draftWithClaude(OTH, { companyId: ACME, transcript: CALL, agree: true }, BASE));
+  const ppView = await T.buildView(OTH);
+  check("plain Pro: drafting with Claude is Pro + Close's, and no AI usage meter", plainPro === D.AI_PLAN && /Pro \+ Close/.test(D.AI_PLAN) && (await S.listProposals(OTH, BASE)).ai === "plan" && ppView.me?.plan?.name === "pro" && !ppView.me.plan.ai, plainPro);
+  await T.tableInternals.mutate((st) => void (st.billing!.members.mem_oth = { ...st.billing!.members.mem_oth, tier: "close" } as typeof othWas));
+  const pcView = await T.buildView(OTH);
+  const pcBudget = AU.budgetOf(await T.loadState(), "mem_oth");
+  check("Pro + Close: $10 of Claude usage a month, the meter and the pack", (await S.listProposals(OTH, BASE)).ai === "on" && !pcBudget.trial && pcBudget.budget === 10_000_000 && pcView.me?.plan?.ai?.canAddPack === true && pcView.me.plan.ai.resetsOn !== null);
+  await T.tableInternals.mutate((st) => void (st.billing!.members.mem_oth = othWas));
   check("the log keeps the last 200, numbers only", recD.log.length === 200 && recD.log.every((l) => typeof l.inTok === "number" && typeof l.micros === "number"));
   aiAnswer = () => reply(JSON.stringify(draftJson));
 

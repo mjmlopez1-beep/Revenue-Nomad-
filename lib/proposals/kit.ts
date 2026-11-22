@@ -65,7 +65,8 @@ export async function proposalKit(token: string | null, a: { templateId?: string
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (!me) throw new ProposalProblem("You're signed out. Sign in again.", 401);
-  const free = T.freeNow(s, me.id, Date.now());
+  // Not on Pro + Close (lib/billing/rules.ts canClose): Merlin's one template, a template of theirs or a blank page.
+  const free = !T.closeNow(s, me.id, Date.now());
   const tid = a.templateId || null;
   let template: ProposalKit["template"];
   if (isMineId(tid)) {
@@ -83,7 +84,7 @@ export async function proposalKit(token: string | null, a: { templateId?: string
   } else {
     const t = templateDef(tid);
     if (tid && !t) throw new ProposalProblem("That template isn't in the library.");
-    if (t && t.id !== FREE_TEMPLATE && free) throw new ProposalProblem(`On Free you can start from ${templateDef(FREE_TEMPLATE)!.title}, a template of yours or a blank page.`, 403);
+    if (t && t.id !== FREE_TEMPLATE && free) throw new ProposalProblem(`On Free and Pro you can start from ${templateDef(FREE_TEMPLATE)!.title}, a template of yours or a blank page. Every template is on Pro + Close.`, 403);
     const ids = t ? t.blocks.map((b) => ({ id: b.blockId, required: b.required })) : ["cover", "what_we_heard", "recommendation", "milestones", "investment", "next_steps", "signature"].map((id) => ({ id, required: true }));
     template = {
       id: t?.id ?? null,
