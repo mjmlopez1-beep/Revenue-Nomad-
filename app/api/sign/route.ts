@@ -3,6 +3,7 @@ import { guarded } from "@/lib/apiGuard";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { ProposalProblem, declineProposal, requestCode, signProposal, signerView, verifyCode } from "@/lib/proposals/store";
 import { docDecline, docRequestCode, docSign, docSignerView, docVerifyCode, isDocToken } from "@/lib/documents/store";
+import { afterSignerStep } from "@/lib/close/server";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,8 @@ export const POST = guarded(async (req: NextRequest) => {
   const who = { ip, ua: (req.headers.get("user-agent") ?? "").slice(0, 300) };
   const o = origin(req);
   const doc = isDocToken(token);
+  // Signed or declined: the sender's alert (lib/close), after the answer is ready.
+  const done = (v: unknown) => (void afterSignerStep(token, o), NextResponse.json(v, { headers: NO_STORE }));
   if (!doc && text.length > 16 * 1024) return err("That's too much to send at once.", 413);
   try {
     if (doc)
@@ -55,9 +58,9 @@ export const POST = guarded(async (req: NextRequest) => {
           if (limited(`sign-verify:${ip}`, 20, 10 * 60_000)) return err("That's a lot of tries. Wait 10 minutes, then try again.", 429);
           return NextResponse.json(await docVerifyCode(token, b.code, who, o), { headers: NO_STORE });
         case "sign":
-          return NextResponse.json(await docSign(token, { name: b.name, method: b.method, png: b.png, values: b.values, consent: b.consent, hash: b.hash }, who, o), { headers: NO_STORE });
+          return done(await docSign(token, { name: b.name, method: b.method, png: b.png, values: b.values, consent: b.consent, hash: b.hash }, who, o));
         case "decline":
-          return NextResponse.json(await docDecline(token, { reason: b.reason }, who, o), { headers: NO_STORE });
+          return done(await docDecline(token, { reason: b.reason }, who, o));
         default:
           return err("That didn't go through. Refresh the page and try again.");
       }
@@ -71,9 +74,9 @@ export const POST = guarded(async (req: NextRequest) => {
         if (limited(`sign-verify:${ip}`, 20, 10 * 60_000)) return err("That's a lot of tries. Wait 10 minutes, then try again.", 429);
         return NextResponse.json(await verifyCode(token, b.code, who, o), { headers: NO_STORE });
       case "sign":
-        return NextResponse.json(await signProposal(token, { name: b.name, consent: b.consent, hash: b.hash }, who, o), { headers: NO_STORE });
+        return done(await signProposal(token, { name: b.name, consent: b.consent, hash: b.hash }, who, o));
       case "decline":
-        return NextResponse.json(await declineProposal(token, { reason: b.reason }, who, o), { headers: NO_STORE });
+        return done(await declineProposal(token, { reason: b.reason }, who, o));
       default:
         return err("That didn't go through. Refresh the page and try again.");
     }

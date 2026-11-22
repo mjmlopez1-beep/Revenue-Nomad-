@@ -27,6 +27,7 @@ import "./pages.css";
 import "./integrations.css";
 import "./notifications.css";
 import { PageHead } from "../ui/system";
+import { ProposalAlerts } from "./Activity";
 
 /** An on and off switch, labelled by its row's title and described by its line (as on Integrations). */
 export function Switch({ id, on, onChange, busy }: { id: string; on: boolean; onChange: (next: boolean) => void; busy?: boolean }) {
@@ -250,6 +251,14 @@ export function Notifications({ view, onIntegrations }: { view: View; onIntegrat
             </button>
           </section>
         )}
+      </section>
+
+      {/* After a proposal goes out (Activity.tsx, lib/close): each alert in Slack, by email and in Merlin. */}
+      <section className="nt-section" aria-labelledby="nt-prop-h">
+        <h2 className="in-h" id="nt-prop-h">
+          Proposals
+        </h2>
+        <ProposalAlerts />
       </section>
     </div>
   );

@@ -27,6 +27,10 @@ export const PLAN_ROWS: [string, string, string, string][] = [
   ["Claude drafting and your own contracts", "In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"],
   ["Pipeline after a signature", "You move it", "You move it", "Moves to Won when they sign"],
   ["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"],
+  // After it goes out (lib/close). Below the landing page's six rows, so the landing page leads as before.
+  ["Know when they open it and what they read", "In your trial only", "In your trial only", "Opens, new readers and time on each section and price, with when to follow up"],
+  ["Reminders until they sign", "In your trial only", "In your trial only", "Sent for you on day 2 and day 7, and before the link closes"],
+  ["Renewal reminders", "In your trial only", "In your trial only", "30 days before the term ends, with the renewal drafted"],
   ["Saved views", "1, with the weekly email", "As many as you want, with alerts", "As many as you want, with alerts"],
   [FEATURE_NAME, "Every signal each morning, one company a day fully open", "Every company in it open free, signals in Slack as they happen", "Every company in it open free, signals in Slack as they happen"],
   ["Rate benchmarks", "Medians by function", "Ranges by function and client size", "Ranges by function and client size"],

@@ -43,6 +43,7 @@ import { StartSheet, TEMPLATE_ACCEPT, buildInClaude, uploadTemplate } from "./Pr
 import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder, uploadPdf } from "./DocBuilder";
 import { LinkCompany } from "./ProposalLink";
+import { ActivityPanel, takeItem, useOpenItem } from "./Activity";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
@@ -83,8 +84,10 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   const [data, setData] = useState<ProposalsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   // A proposal the address named (the connector's edit link), or the company "Write a proposal" was pressed on.
-  const [openId, setOpenId] = useState<string | null>(startProposal);
-  const [openDoc, setOpenDoc] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() => takeItem("pr") ?? startProposal());
+  const [openDoc, setOpenDoc] = useState<string | null>(() => takeItem("dc"));
+  // The bell or Home opened one while Proposals was already open.
+  useOpenItem(useCallback((x: { pr?: string; dc?: string }) => (x.pr ? (setOpenDoc(null), setOpenId(x.pr)) : (setOpenId(null), setOpenDoc(x.dc ?? null))), []));
   const [starting, setStarting] = useState<{ companyId: string | null } | null>(() => {
     const c = takeWantCompany();
     return c ? { companyId: c } : null;
@@ -542,6 +545,8 @@ function Editor({
       </header>
 
       {p.send && <SendStatus p={p} />}
+      {/* Who opened it, what they read, when to follow up, the reminders and the renewal (Activity.tsx, lib/close). */}
+      {p.send && <ActivityPanel kind="proposal" id={p.id} version={p.version} onOpen={onOpen} />}
       {/* Not linked to a company on Merlin: the pipeline can't move when they sign, so the member picks it (ProposalLink.tsx). */}
       {!p.company.id && <LinkCompany p={p} onLinked={(r) => (setP((cur) => ({ ...cur, company: r.company })), onSaved(r))} />}
       {locked && <CloseBuildPrompt />}

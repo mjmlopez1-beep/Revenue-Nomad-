@@ -25,6 +25,7 @@ import { openPlans } from "./Billing";
 import { dayOf, stamp } from "../sign/doc";
 import type { CoInfo } from "./model";
 import { ProposalStatus } from "./ProposalParts";
+import { ActivityPanel } from "./Activity";
 import "../ui/pdf.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -334,6 +335,8 @@ export function DocBuilder({
           )}
         </div>
       </header>
+      {/* Who opened it, what they read, when to follow up, the reminders (Activity.tsx, lib/close). */}
+      {!draft && <ActivityPanel kind="document" id={d.id} quiet={myTurn || d.status === "signed"} />}
 
       {draft && (
         <div className="df-tools" role="toolbar" aria-label="Place fields">

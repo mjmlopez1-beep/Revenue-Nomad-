@@ -65,6 +65,15 @@ Not called: no AI model provider (except Anthropic's API for drafting with Claud
 - Deleting: Disconnect and delete everything on Your network deletes every plan whose route went through someone from Google (`lib/google/index.ts` `forgetIn`); deleting the LinkedIn import deletes every plan through a connection from it (`lib/paths/index.ts` `deleteConnections`); closing an account deletes all of the member's plans when its personal data is deleted 30 days on (`lib/table.ts` `purgeMember` calls `lib/paths/plan.ts` `forgetMember`; until then a restore brings them back). A member can also drop a plan (`POST /api/paths { op: "way", do: "drop" }`); the deal stays in their pipeline.
 - The connector's `ways_in` (`lib/mcp/ways.ts`, only with `RN_GOOGLE=1`) gives the routes with Est. success and steps, and never names a person from the member's own Google network or LinkedIn import.
 
+### Proposal readers (after a proposal or document goes out)
+
+- What the client is told, near the foot of the proposal and the signing page (`app/sign/activity.tsx` `ActivityNotice`, `lib/close/types.ts` `disclosureText`): "<sender> sees when this is opened and which sections are read. Merlin counts this with a cookie on this page, never your IP address." No hidden tracking: the page sends nothing else.
+- What is collected (`lib/close/activity.ts`, `POST /api/sign/activity`, signed out with a valid, live signing link only): that the page was opened; which section (a proposal's block, a document's page) and which price option was on screen while the reader was active, in seconds, sent every 15 seconds; an option picked, an add-on turned on or off, a download. Each browser gets a random id in a cookie (`rn_reader`, HttpOnly, sent only to `/api/sign/activity`, 180 days), and Merlin keeps only an HMAC of it, to count readers (a forward opened in a new browser is a new reader). Never the IP address (it is used for the rate limit only and not kept), never a fingerprint. The device kind (phone, tablet or computer) comes from the browser's own user agent. The member who sent it, signed in, is not counted.
+- Why: so the member knows when it was opened, by how many people, what was read, and when to follow up (`lib/close/rules.ts`, rules, no AI model).
+- What is kept (`State.close.items`, by proposal or document id, `lib/close/types.ts` `CAPS`): per reader their visits and reading time; per section and option the time read, added up per reader; the last 60 visits, 20 downloads and 200 raw events. At most 20 readers, 60 sections and 24 options an item; a beacon's time is believed only up to the time since that reader's last one. Nothing is counted once the link is signed, declined, withdrawn or expired, or while the member isn't on Close (`canClose`).
+- Who sees it: only the member who sent it (`GET /api/activity?id=`). Never another member, an admin's panel or the export (`lib/table.ts` `exportState`); account closure deletes it with the proposals (`purgeMember`).
+- What leaves Merlin: the member's proposal alerts (first open, a new reader, time to follow up, signed or declined, renewal) to the member's own email (Resend) and Slack (if connected), in words, with no reader's id; reminders to the signer on day 2, day 7 and before the link closes, with the proposal's own email (`lib/close/reminders.ts`), off per proposal. Each alert can be switched per channel in Notifications (`State.close.prefs`).
+
 ## 5. Who can switch a feature off
 
 ### The owner (server settings, all checked in the code)
@@ -98,6 +107,7 @@ Not called: no AI model provider (except Anthropic's API for drafting with Claud
 - Email: switches for the weekly email and message emails in Your credits; Crystal Ball's email has its own unsubscribe link. Peers emails have their own switch in Notifications (`Me.peerEmail`).
 - Peers: a member can mute another member, and leave a circle.
 - Slack and webhooks: removed in Integrations.
+- Proposal alerts: each kind on or off for Slack, email and Merlin in Notifications. Reminders to a signer: off per proposal, on its activity page.
 - A name on a seat, and the email read from their own website with it: `/remove`, no account needed, or Remove my name on a claim link (`lib/table.ts` `ownEmailOff`).
 - A member's name on their own seats: Hide my name on my seats (settings `nameHidden`), on and off at any time.
 - A fact just added: Undo takes it back with its credit until someone unlocks or confirms it.

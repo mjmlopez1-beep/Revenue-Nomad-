@@ -41,6 +41,8 @@ export async function runDueJobs(origin?: string, nowMs = Date.now()): Promise<R
   await expireGoogle(nowMs);
   // Nor this: an account closed 30 days ago loses its personal data (lib/account.ts purgeDue). Cheap when nothing is due.
   await import("./account").then((m) => m.purgeDue(nowMs)).catch((e) => console.error("account purge check failed", e instanceof Error ? e.message : "error"));
+  // Nor this: after a proposal or document went out, the reminders to the signer, the timed alerts and the renewal reminders (lib/close). Cheap when nothing is due.
+  await import("./close/server").then((m) => m.closeTick(origin, nowMs)).catch((e) => console.error("proposal follow-ups check failed", e instanceof Error ? e.message : "error"));
   // Not a job of its own either: RN_OWNSITES_DRYRUN=N runs the own-sites reader once, in the background, after the server starts.
   if (dryRunCount()) await import("./ownsites/run").then((m) => m.maybeOwnSitesDry()).catch((e) => console.error("ownsites dry run check failed", e instanceof Error ? e.message : "error"));
   await Promise.all(

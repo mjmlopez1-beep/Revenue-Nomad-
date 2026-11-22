@@ -16,6 +16,7 @@ import { Logo } from "../ui/Logo";
 import { Spot } from "../ui/fractions/art";
 import type { SignerView } from "@/lib/proposals/types";
 import { DocBlocks, dayOf } from "./doc";
+import { ActivityNotice, useProposalActivity } from "./activity";
 import "./sign.css";
 
 const NETWORK = "We couldn't reach the server. Check your connection and try again.";
@@ -122,6 +123,8 @@ export function SignView({ token }: { token: string }) {
   const panel = useRef<HTMLDivElement>(null);
   const cardGo = useRef<HTMLButtonElement>(null);
   const cardShows = useOnScreen(cardGo, !!v && v.status === "open" && step === "read");
+  // What the sender sees: opens and which sections are read, said near the footer (lib/close).
+  useProposalActivity(token, { enabled: v?.status === "open" });
 
   useEffect(() => {
     void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : setV(r)));
@@ -411,6 +414,7 @@ export function SignView({ token }: { token: string }) {
           <p>
             Document fingerprint (SHA-256): <span className="sg-hash">{v.hash}</span>
           </p>
+          {open && <ActivityNotice sender={d.from.name} />}
           <SignLegal />
         </footer>
       </main>

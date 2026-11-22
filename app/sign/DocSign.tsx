@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IconCheck } from "../ui/shared";
 import { PdfPages } from "../ui/PdfPages";
+import { ActivityNotice, useProposalActivity } from "./activity";
 import type { DocField, DocSignerView } from "@/lib/documents/types";
 import { FIELD_SAY } from "@/lib/documents/types";
 import { ConsentBox, SignLegal, SignTop, SignedArt, useOnScreen } from "./Sign";
@@ -134,6 +135,8 @@ export function DocSignView({ token }: { token: string }) {
   const panel = useRef<HTMLDivElement>(null);
   const cardGo = useRef<HTMLButtonElement>(null);
   const cardShows = useOnScreen(cardGo, !!v && v.status === "open" && step === "read");
+  // What the sender sees: opens and which pages are read, said near the footer (lib/close).
+  useProposalActivity(token, { enabled: v?.status === "open" || v?.status === "waiting" });
 
   useEffect(() => {
     void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setName(r.me.name))));
@@ -458,6 +461,7 @@ export function DocSignView({ token }: { token: string }) {
           <p>
             Document fingerprint (SHA-256): <span className="sg-hash">{v.sha256}</span>
           </p>
+          {(v.status === "open" || v.status === "waiting") && <ActivityNotice sender={v.from.name} />}
           <SignLegal />
         </footer>
       </main>
