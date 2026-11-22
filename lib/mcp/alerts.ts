@@ -44,6 +44,72 @@ export interface SavedSearch {
    */
   hiredFn?: string[];
   hiredWithin?: number;
+  /* ---------- a saved list (F5): the fields below are the app's; the connector keeps them as they are ---------- */
+  /** What the list holds. Left out: what its place says (a view of the table), else companies. */
+  kind?: ListKind;
+  /** The columns the list shows, by the workbench's column ids, in order. Left out: the table's own. */
+  cols?: string[];
+  /** A "Made for you" list Merlin made from the member's ideal client (Home's starter lists). */
+  starter?: true;
+  /** When the member last opened it in the app (ISO), for the lists table's Opened and New. */
+  openedAt?: string;
+  /**
+   * The alert on the list. Left out on a view saved before lists had alerts: it reads from `email`
+   * (alertOf). While it is set, `email` follows `alert.on && alert.email`, so the weekly email
+   * (lib/table.ts digestList) reads it as before.
+   */
+  alert?: ListAlert;
+}
+
+/** What a saved list holds (Find's kinds). */
+export const LIST_KINDS = ["companies", "people", "seats", "roles", "fractionals"] as const;
+export type ListKind = (typeof LIST_KINDS)[number];
+/** How a list's kind reads ("Companies", "Open roles"). */
+export const LIST_KIND_LABEL: Record<ListKind, string> = { companies: "Companies", people: "People", seats: "Seats", roles: "Open roles", fractionals: "Fractionals" };
+
+/**
+ * The alert on a list, Stage 1: the weekly email and Slack for the roles that open (the two that
+ * exist today: lib/table.ts digestList and lib/notify/events.ts). `every` is weekly only for now;
+ * instant and the other triggers (a seat ended, a new leader, a fact changed) come with Alerts.
+ */
+export interface ListAlert {
+  on: boolean;
+  every: "weekly";
+  email: boolean;
+  slack: boolean;
+}
+
+/** The alert a list carries: its own, or, for a view saved before lists had one, its weekly email. */
+export function alertOf(a: Pick<SavedSearch, "alert" | "email">): ListAlert {
+  if (a.alert) return { on: !!a.alert.on, every: "weekly", email: a.alert.email !== false, slack: a.alert.slack !== false };
+  const on = a.email !== false;
+  return { on, every: "weekly", email: on, slack: on };
+}
+
+/** Whether new open roles on this list go to Slack (lib/notify/events.ts reads every saved list today; the merge adds this check there). */
+export const slackOn = (a: Pick<SavedSearch, "alert" | "email">) => {
+  const x = alertOf(a);
+  return x.on && x.slack;
+};
+
+/** Column ids: letters, digits, dots, dashes and underscores, at most 40 characters, at most 30 of them. */
+const COL_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;
+
+/**
+ * A saved list's own fields from loose input (the app's save and list ops), anything unreadable
+ * dropped. `alert` is cleaned to the Stage 1 shape. Only the keys given come back.
+ */
+export function cleanListFields(raw: { kind?: unknown; cols?: unknown; starter?: unknown; alert?: unknown } | undefined): Partial<Pick<SavedSearch, "kind" | "cols" | "starter" | "alert">> {
+  const out: Partial<Pick<SavedSearch, "kind" | "cols" | "starter" | "alert">> = {};
+  if (!raw || typeof raw !== "object") return out;
+  if (typeof raw.kind === "string" && (LIST_KINDS as readonly string[]).includes(raw.kind)) out.kind = raw.kind as ListKind;
+  if (Array.isArray(raw.cols)) out.cols = [...new Set(raw.cols.map((c) => String(c ?? "").trim()).filter((c) => COL_ID.test(c)))].slice(0, 30);
+  if (raw.starter === true) out.starter = true;
+  if (raw.alert && typeof raw.alert === "object") {
+    const a = raw.alert as Record<string, unknown>;
+    out.alert = { on: a.on === true, every: "weekly", email: a.email !== false, slack: a.slack !== false };
+  }
+  return out;
 }
 
 /** The free facts of one open role that an alert reads. */
@@ -79,7 +145,8 @@ export function pickFrom(list: readonly string[], raw: unknown): string | null {
   return std && list.includes(std) ? std : null;
 }
 
-const US: Record<string, string> = {
+/** US states by their two letters (Ask Merlin reads the names). */
+export const US: Record<string, string> = {
   al: "alabama", ak: "alaska", az: "arizona", ar: "arkansas", ca: "california", co: "colorado", ct: "connecticut", de: "delaware", fl: "florida", ga: "georgia",
   hi: "hawaii", id: "idaho", il: "illinois", in: "indiana", ia: "iowa", ks: "kansas", ky: "kentucky", la: "louisiana", me: "maine", md: "maryland",
   ma: "massachusetts", mi: "michigan", mn: "minnesota", ms: "mississippi", mo: "missouri", mt: "montana", ne: "nebraska", nv: "nevada", nh: "new hampshire",

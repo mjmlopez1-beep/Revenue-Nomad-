@@ -629,6 +629,30 @@ export interface Filters {
   region: string[];
   /** Narrow to the member's Ideal Fractional Profile (Me.icp). The pill over the table, not a chip. */
   icp: boolean;
+  /*
+   * Find's keys (Stage 1). None is set by the table's own filter rail, so a view of the table reads
+   * as before; a list saved from Find carries them in its place and the table's chips clear them.
+   */
+  /**
+   * A seat ended in the last this many months (0: off), in the functions picked under Function when
+   * some are. By the end month where the member can see it; an ended seat's end date is locked, so
+   * there it is when Merlin recorded the seat as ended (its newest fact), as Crystal Ball reads it.
+   */
+  endedWithin: number;
+  /** A repeat hirer (the Repeat hirers view, as a filter Find can combine). */
+  repeatHirer: boolean;
+  /** Hiring a fractional now: an open role (the Hiring now view, as a filter). */
+  hiringNow: boolean;
+  /** A new leader on the company's own website, in the last 12 months (RN_LEADERS: the sites Merlin reads). */
+  newLeader: boolean;
+  /** The member follows it. */
+  followed: boolean;
+  /** The member opened it (paid for it, or it opened free). */
+  opened: boolean;
+  /** In the member's pipeline (setFilterSets: the pipeline's companies). */
+  inPipeline: boolean;
+  /** The member has a way in (setFilterSets: Where you can get in's companies, RN_GOOGLE). */
+  wayIn: boolean;
 }
 
 export const EMPTY_FILTERS: Filters = {
@@ -661,7 +685,90 @@ export const EMPTY_FILTERS: Filters = {
   country: [],
   region: [],
   icp: false,
+  endedWithin: 0,
+  repeatHirer: false,
+  hiringNow: false,
+  newLeader: false,
+  followed: false,
+  opened: false,
+  inPipeline: false,
+  wayIn: false,
 };
+
+/* ---------- Find's signals: what the member's own data and the company's news say ---------- */
+
+export type SignalKey = "repeatHirer" | "hiringNow" | "newLeader" | "followed" | "opened" | "inPipeline" | "wayIn";
+export const SIGNAL_KEYS: SignalKey[] = ["repeatHirer", "hiringNow", "newLeader", "followed", "opened", "inPipeline", "wayIn"];
+export const SIGNAL_LABEL: Record<SignalKey, string> = {
+  repeatHirer: "Repeat hirer",
+  hiringNow: "Hiring a fractional now",
+  newLeader: "New leader this year",
+  followed: "You follow it",
+  opened: "You opened it",
+  inPipeline: "In your pipeline",
+  wayIn: "You have a way in",
+};
+/** The windows Find offers for "A seat ended in the last": 3, 6 and 12 months. */
+export const ENDED_WINDOWS = [3, 6, 12];
+/** "A seat ended in the last 90 days" (3 months reads as 90 days, as the mockup says it). */
+export const endedLabel = (months: number) => `A seat ended in the last ${months === 3 ? "90 days" : months === 12 ? "12 months" : `${months} months`}`;
+
+/**
+ * The member's own sets the signals read and the table doesn't carry: the companies in their
+ * pipeline and those they have a way into. Null: not loaded (or not on: RN_GOOGLE), so the filter
+ * lists nothing and Find says why. The browser holds one member, so these are set once per load.
+ */
+const memberSets: { pipeline: Set<string> | null; wayIn: Set<string> | null } = { pipeline: null, wayIn: null };
+export function setFilterSets(x: { pipeline?: Iterable<string> | null; wayIn?: Iterable<string> | null }) {
+  if (x.pipeline !== undefined) memberSets.pipeline = x.pipeline ? new Set(x.pipeline) : null;
+  if (x.wayIn !== undefined) memberSets.wayIn = x.wayIn ? new Set(x.wayIn) : null;
+}
+export const filterSetsKnown = () => ({ pipeline: memberSets.pipeline !== null, wayIn: memberSets.wayIn !== null });
+
+const YEAR_MS = 365 * 86_400_000;
+export function signalTest(key: SignalKey): (r: Row) => boolean {
+  switch (key) {
+    case "repeatHirer":
+      return (r) => repeatHirer(r.i);
+    case "hiringNow":
+      return (r) => tabTest("hiring", r);
+    case "newLeader":
+      return (r) => {
+        const now = Date.now();
+        return r.i.leads.some((l) => !!l.since && Number.isFinite(Date.parse(l.since.length === 7 ? `${l.since}-01` : l.since)) && now - Date.parse(l.since.length === 7 ? `${l.since}-01` : l.since) <= YEAR_MS);
+      };
+    case "followed":
+      return (r) => r.i.c.following;
+    case "opened":
+      return (r) => r.i.unlockedByMe || !!r.i.c.unlocked;
+    case "inPipeline":
+      return (r) => !!memberSets.pipeline?.has(r.i.c.id);
+    case "wayIn":
+      return (r) => !!memberSets.wayIn?.has(r.i.c.id);
+  }
+}
+
+/** The month a seat ended, as Find reads it: its end month where on show, else when its newest fact was recorded. */
+function endedAt(e: EngagementRec): number | null {
+  if (!isEndedSeat(e)) return null;
+  const end = shown(e.cells.end);
+  if (end) {
+    const m = /^(\d{4})(?:-(\d{2}))?/.exec(end);
+    if (m) return Date.UTC(Number(m[1]), m[2] ? Number(m[2]) - 1 : 11, 28);
+  }
+  const at = e.updatedAt ? Date.parse(e.updatedAt) : NaN;
+  return Number.isFinite(at) ? at : null;
+}
+/** A row with a seat that ended inside the window, in one of `fns` (any function when none). */
+export function endedTest(months: number, fns: readonly string[], now = Date.now()): (r: Row) => boolean {
+  const cut = now - months * 31 * 86_400_000;
+  return (r) =>
+    (r.p ? r.i.engs : engsOf(r)).some((e) => {
+      if (fns.length && !fns.includes(shown(e.cells.function) ?? "")) return false;
+      const at = endedAt(e);
+      return at !== null && at >= cut && at <= now + 31 * 86_400_000;
+    });
+}
 
 export type ToggleKey = "rateKnown" | "contactKnown" | "notMine" | "statusKnown" | "fractionalNamed" | "emailKnown";
 export type ListKey =
@@ -1060,6 +1167,8 @@ function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
     }
   }
   if (f.fitMin > 0) out.push({ group: "fitMin", test: (r) => r.i.c.friendly.score >= f.fitMin });
+  for (const k of SIGNAL_KEYS) if (f[k]) out.push({ group: k, test: signalTest(k) });
+  if (f.endedWithin > 0) out.push({ group: "endedWithin", test: endedTest(f.endedWithin, f.fn) });
   // Recently hired: a hire in the functions picked, inside the window (lib/hired.ts).
   if (hiredOn(f)) {
     const now = Date.now();
@@ -1105,6 +1214,9 @@ export interface Facets {
   hiredFn: Record<string, number>;
   hiredWithin: Record<number, number>;
   hiredAny: number;
+  /** Find's signals, each counted with its own switch lifted, and "A seat ended" for each window. */
+  signals: Record<SignalKey, number>;
+  ended: Record<number, number>;
 }
 
 /** Filtered rows plus counts for every filter option (each group counted with its own selection lifted). */
@@ -1203,7 +1315,20 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
     for (const fn of inWin) if (fn in hiredFn) hiredFn[fn]++;
     if (newest !== null) for (const w of HIRED_WINDOWS) if (windowFits(newest || null, w, now)) hiredWithin[w]++;
   }
-  return { rows: result, facets: { toggles, lists, fit, tabs, hiringMine, everyone, hiredFn, hiredWithin, hiredAny } };
+  const signals = {} as Record<SignalKey, number>;
+  for (const k of SIGNAL_KEYS) {
+    const t = signalTest(k);
+    let n = 0;
+    for (const r of rows) if (pass(r, cs, k) && t(r)) n++;
+    signals[k] = n;
+  }
+  const ended: Record<number, number> = {};
+  const endBase = rows.filter((r) => pass(r, cs, "endedWithin"));
+  for (const w of ENDED_WINDOWS) {
+    const t = endedTest(w, f.fn, now);
+    ended[w] = endBase.filter(t).length;
+  }
+  return { rows: result, facets: { toggles, lists, fit, tabs, hiringMine, everyone, hiredFn, hiredWithin, hiredAny, signals, ended } };
 }
 
 export function activeCount(f: Filters): number {
@@ -1213,6 +1338,8 @@ export function activeCount(f: Filters): number {
   if (f.fitMin) n++;
   // Recently hired is one filter (one chip), whatever it names.
   if (hiredOn(f)) n++;
+  for (const k of SIGNAL_KEYS) if (f[k]) n++;
+  if (f.endedWithin > 0) n++;
   return n;
 }
 
@@ -1244,6 +1371,9 @@ export function activeChips(f: Filters): { id: string; label: string; clear: (f:
           clear: (x) => ({ ...x, [k]: x[k].filter((y) => y !== v) }),
         });
   if (f.fitMin) out.push({ id: "fit", label: `Fit ${f.fitMin}+`, clear: (x) => ({ ...x, fitMin: 0 }) });
+  // Find's keys: a list saved there shows them in the table as chips that clear.
+  if (f.endedWithin > 0) out.push({ id: "endedWithin", label: endedLabel(f.endedWithin), clear: (x) => ({ ...x, endedWithin: 0 }) });
+  for (const k of SIGNAL_KEYS) if (f[k]) out.push({ id: k, label: SIGNAL_LABEL[k], clear: (x) => ({ ...x, [k]: false }) });
   return out;
 }
 
@@ -1805,6 +1935,7 @@ export function decodeFilters(s: string): Filters {
     // Recently hired reads functions on the list only, and a whole number of months (0: any time).
     hiredFn: x.hiredFn.filter((v) => FUNCTIONS.includes(v)),
     hiredWithin: cleanWindow(x.hiredWithin),
+    endedWithin: Math.max(0, Math.min(24, Math.round(Number(x.endedWithin) || 0))),
   };
 }
 
