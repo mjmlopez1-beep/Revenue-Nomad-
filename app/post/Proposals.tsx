@@ -533,6 +533,8 @@ function Editor({
   const pending = useRef<Record<string, unknown>>({});
   // The revision the next save is made on: a save from a tab that is behind is refused (409), never written over another tab's edit.
   const rev = useRef(initial.rev);
+  // The proposal as the server last had it (loaded or saved), without edits still on their way: what a conflict compares against.
+  const saved = useRef(initial);
   const inflight = useRef(false);
   const tries = useRef(0);
   const retryAt = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -541,6 +543,7 @@ function Editor({
   /** A whole proposal from the server: shown, and its revision is the one the next save is made on. */
   const take = useCallback((r: ProposalRec) => {
     rev.current = r.rev;
+    saved.current = r;
     setP(r);
   }, []);
 
@@ -599,7 +602,7 @@ function Editor({
           pending.current = { ...body, ...pending.current };
           return void (setSave("retrying"), (retryAt.current = setTimeout(() => void flush(), 4000)));
         }
-        const text = unsavedText(body, fresh, latest.current);
+        const text = unsavedText(body, fresh, saved.current);
         pending.current = {};
         writeStash(id, null);
         take(fresh);
@@ -622,6 +625,7 @@ function Editor({
     }
     tries.current = 0;
     rev.current = r.rev;
+    saved.current = { ...saved.current, ...(body as Partial<ProposalRec>), rev: r.rev };
     writeStash(id, Object.keys(pending.current).length ? { rev: r.rev, body: pending.current } : null);
     setSave(Object.keys(pending.current).length ? "saving" : "saved");
     setP((cur) => ({ ...cur, version: r.version, status: r.status, send: r.send, history: r.history, updatedAt: r.updatedAt, rev: r.rev }));
