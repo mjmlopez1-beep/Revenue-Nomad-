@@ -303,7 +303,7 @@ export function ActivityPanel({ kind, id, version, onOpen, quiet }: { kind: "pro
                 {v.reminders.map((r) => (
                   <li key={`${r.to}${r.key}`}>
                     {editing && r.state !== "sent" && r.state !== "stopped" ? (
-                      <label className="ac-check">
+                      <label className="ac-check tap44">
                         <input type="checkbox" checked={r.on} disabled={!!busy} onChange={(e) => void post(r.key, { op: "reminders", id, [r.key]: e.target.checked })} />
                         <span>{r.label}</span>
                       </label>
@@ -450,7 +450,7 @@ export function ProposalAlerts() {
               const noSlack = c === "slack" && !v.slack;
               const noEmail = c === "email" && !v.email;
               return (
-                <span key={c} role="cell" className="ac-grid-c">
+                <span key={c} role="cell" className="ac-grid-c tap44">
                   <input
                     type="checkbox"
                     aria-label={`${row.label} ${c === "app" ? "in Merlin" : c === "email" ? "by email" : "in Slack"}`}
@@ -655,7 +655,7 @@ export function ProposalBell({ phone }: { phone?: boolean }) {
         )}
       </button>
       {open && (
-        <div ref={panel} id="ac-bell-panel" className="ac-bell-panel" role="dialog" aria-labelledby="ac-bell-h" tabIndex={-1}>
+        <div ref={panel} id="ac-bell-panel" className="ac-bell-panel" role="dialog" aria-modal="false" aria-labelledby="ac-bell-h" tabIndex={-1}>
           <div className="ac-bell-head">
             <h2 className="ac-h3" id="ac-bell-h">
               Notifications{unread ? <span className="ac-unread">{unread} new</span> : null}

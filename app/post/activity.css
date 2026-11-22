@@ -585,3 +585,22 @@
 .sr .pp-muted {
   margin: 0;
 }
+
+/* A finger needs room: on a touch screen each alert and reminder switch is a 44px target. */
+@media (pointer: coarse) {
+  .tap44 {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tap44 input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+  }
+  label.tap44 {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+}

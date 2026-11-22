@@ -981,9 +981,9 @@ else {
       const junkIp = ip();
       const junk = [];
       for (let i = 0; i < 70; i++) junk.push((await call("POST", "/api/table", { token: `made-up-${i}`, body: { action: { type: "follow", companyId: "x", on: true } }, ipAddr: junkIp })).status);
-      eq("signed-out actions with made-up cookies are limited by address", [junk.slice(0, 60).every((s) => s === 400), junk.slice(60).every((s) => s === 429)], [true, true]);
+      eq("signed-out actions with made-up cookies are limited by address", [junk.slice(0, 60).every((s) => s === 401), junk.slice(60).every((s) => s === 429)], [true, true]);
       const anon = await call("POST", "/api/table", { body: { action: { type: "follow", companyId: "x", on: true } } });
-      eq("a signed-out action still gets the sign-in message", [anon.status, anon.json?.error], [400, "You're signed out. Sign in again to add, confirm or unlock."]);
+      eq("a signed-out action still gets the sign-in message", [anon.status, anon.json?.error], [401, "You're signed out. Sign in again to add, confirm or unlock."]);
       const still = await call("POST", "/api/table", { token: me, body: { action: { type: "nope" } }, ipAddr: junkIp });
       eq("a member behind that address is not held up by it", [still.status, still.json?.error], [400, "That didn't go through. Refresh the page and try again."]);
 
