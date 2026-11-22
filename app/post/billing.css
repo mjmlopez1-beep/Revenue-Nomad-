@@ -897,3 +897,31 @@ button.tp-plan:hover {
   flex: 1 1 100%;
   min-width: 0;
 }
+
+/*
+ * Phones: the three-plan comparison (CompareTable, .bl-compare-3) stacks each row as its label,
+ * then three labelled lines, Free, Pro and Pro + Close, each its name then its value. Two columns
+ * would put Pro + Close under Free.
+ */
+@media (max-width: 767px) {
+  .bl-compare-3 tbody tr {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+  }
+  .bl-compare-3 td {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: baseline;
+    padding: 0;
+  }
+  .bl-compare-3 td::before {
+    line-height: 20px;
+  }
+  /* A plan's tag sits in the card's own flow on a phone, above its name, so it never covers the text above the card. */
+  .bl-plans-3 .bl-plan-tag {
+    position: static;
+    justify-self: start;
+    margin: 0 0 6px;
+  }
+}
