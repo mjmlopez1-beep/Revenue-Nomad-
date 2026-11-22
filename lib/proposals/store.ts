@@ -408,7 +408,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
   const me0 = memberOf(seed, s0, token);
   const p0 = mine(s0, me0, id);
   const pub = typeof a.companyId === "string" && a.companyId ? a.companyId : await lookUpCompany(token, String(a.name ?? p0.companyName ?? ""), origin);
-  if (!pub) throw new ProposalProblem("Merlin didn't find one company by that exact name or website. Type its full name or its website, or pick it from the list.");
+  if (!pub) throw new ProposalProblem("Merlin didn't find one company by that exact name or website. Type its full name, or its website.");
   const co = await companyFor(token!, pub);
   if (!co) throw new ProposalProblem("That company isn't on Merlin. Type its full name or its website.");
   const now = new Date(nowMs).toISOString();
