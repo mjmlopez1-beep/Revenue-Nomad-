@@ -30,7 +30,8 @@ import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
 import { Questions } from "./Questions";
 import { priceMatrix } from "./prices";
-import { contactOf, mailto, signInFailText } from "./contact";
+import { accountNoteOf, contactOf, mailto, signInFailText } from "./contact";
+import { Callout } from "../ui/system";
 import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
 import Finder, { type PreviewExample, type Totals } from "./Finder";
 import Features from "./Features";
@@ -134,6 +135,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         ? { open: true, note: signInNote, tone: "info" }
         : { open: false, note: null, tone: "info" },
   );
+  // The account was just closed (?closed=1), or a restore link that has expired brought them here (?restore=gone).
+  const [accountNote] = useState(() => (typeof window === "undefined" ? null : accountNoteOf(window.location.search)));
   const heroForm = useRef<HTMLDivElement>(null);
   const finalForm = useRef<HTMLDivElement>(null);
   // An answer without stats (an error body) is treated like one that hasn't arrived.
@@ -212,6 +215,11 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
           <Corner c="bl" t="pine2" className="lp-hero-hill" />
           <div className="lp-wrap lp-hero-in">
             <div className="lp-hero-copy">
+              {accountNote ? (
+                <Callout tone="sand" role="status" className="lp-account-note">
+                  {accountNote}
+                </Callout>
+              ) : null}
               {opened > 0 ? (
                 <p className="lp-live">
                   <span className="live-dot live-dot-lg" aria-hidden />

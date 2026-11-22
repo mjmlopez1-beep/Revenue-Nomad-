@@ -313,6 +313,12 @@ html:has(.lp) {
   margin-top: 32px;
   max-width: 520px;
 }
+/* After Close my account (?closed=1) or an expired restore link (?restore=gone): the system's sand callout, above the hero's first line. */
+.lp-account-note {
+  max-width: 520px;
+  margin-bottom: 24px;
+  font-weight: 600;
+}
 /* Invited visitors: who invited them and the bonus waiting, right above the form. Volt means earning. */
 .lp-invited {
   max-width: 520px;

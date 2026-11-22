@@ -7,9 +7,11 @@
  *    admin, never after the 30 days, a wrong or used key does nothing;
  *  - the scheduled delete after 30 days (lib/jobs.ts runDueJobs, purgeDue): profile, the LinkedIn
  *    import, network, the messages they wrote, proposals and documents, the AI usage log, saved
- *    views and the rest go; facts they added to companies stay with no attribution; another
- *    member's data untouched; not before day 30; counts only in the log;
- *  - the Terms, the Privacy Policy, the data page and docs/data-flows.md say the same.
+ *    views, plans for a way in (State.routes; the anonymous routeStats stay) and the rest go;
+ *    facts they added to companies stay with no attribution; another member's data untouched;
+ *    not before day 30; counts only in the log;
+ *  - the Terms, the Privacy Policy, the data page and docs/data-flows.md say the same;
+ *  - the home page's note after closing (?closed=1) and for an expired restore link (?restore=gone).
  * In process, on a made-up seed; email to a fake endpoint, fetch replaced.
  */
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -62,6 +64,12 @@ writeFileSync(
     myTemplates: { mem_ana: [{ id: "mt_aaaaaaaaaaaa", title: "Ana's SOW", fileName: "sow.md", kind: "md", blocks: [], createdAt: ago(DAY) }] },
     pipeline: { mem_ana: { entries: [], intros: [] } },
     network: { mem_ana: { claude: { at: ago(DAY), companies: [] } } },
+    // Your way in (lib/paths/plan.ts): a plan each, hop ids only; and the anonymous counts, which no member is in.
+    routes: {
+      mem_ana: { c_acme: { route: "r00000000000000aa", hops: ["h00000000000000a1"], at: ago(DAY), step: 1, steps: 3, planB: null, est: 40, log: [{ at: ago(DAY), k: "chose", r: "r00000000000000aa" }], outcomes: [] } },
+      mem_theo: { c_birch: { route: "r00000000000000bb", hops: ["h00000000000000b1"], at: ago(DAY), step: 1, steps: 3, planB: null, est: 35, log: [{ at: ago(DAY), k: "chose", r: "r00000000000000bb" }], outcomes: [] } },
+    },
+    routeStats: { "h1|Good|d1|e40": { intro: 2, noreply: 1 } },
   }),
 );
 
@@ -135,6 +143,7 @@ async function main() {
   console.log("\nRestore by the link");
   const back = await A.restoreByLink(key);
   check("the link brings it back and signs her in with a new token", !!back && back.id === "mem_ana" && back.token !== "tok-mem_ana" && (await t.memberForToken(back.token))?.id === "mem_ana" && !(await t.loadState()).closures?.mem_ana);
+  check("  and her plans for a way in, kept while it was closed", !!(await t.loadState()).routes?.mem_ana?.c_acme);
   check("everything as it was: profile, proposal, template, saved view, messages", !!(await t.loadState()).profiles.mem_ana && (await t.loadState()).proposals!.some((p) => p.memberId === "mem_ana") && !!(await t.loadState()).myTemplates?.mem_ana?.length && (await t.loadState()).conversations![0].messages.length === 2);
   check("emails reach her again, and she is back in Peers", !E.mailBlocked("mem_ana@example.com") && JSON.stringify(await peers.peersView("tok-mem_theo")).includes("Ana"));
   check("the link works once", (await A.restoreByLink(key)) === null);
@@ -168,6 +177,7 @@ async function main() {
   check("the job scheduler's tick deletes it after 30 days", !!s2.closures?.mem_ana?.purgedAt, s2.closures);
   check("  its log line has counts only", logs.some((l) => /^Deleted the personal data of 1 account closed 30 days ago\.$/.test(l)) && !logs.some((l) => /Ana|mem_ana|@/.test(l)), logs);
   check("profile, LinkedIn import, network, AI usage log and agreement, saved views, templates, pipeline: gone", !s2.profiles.mem_ana && !(s2 as { paths?: Record<string, unknown> }).paths?.mem_ana && !s2.network?.mem_ana && !s2.aiUsage?.mem_ana && !s2.aiDrafts?.mem_ana && !s2.connector!.alerts.mem_ana && !s2.myTemplates?.mem_ana && !s2.pipeline?.mem_ana);
+  check("her plans for a way in (State.routes): gone; Theo's stay, and the anonymous counts are untouched", !s2.routes?.mem_ana && !!s2.routes?.mem_theo?.c_birch && JSON.stringify(s2.routeStats) === JSON.stringify({ "h1|Good|d1|e40": { intro: 2, noreply: 1 } }), { routes: s2.routes, stats: s2.routeStats });
   check("proposals and documents: gone", !s2.proposals!.some((p) => p.memberId === "mem_ana") && !(s2.documents ?? []).some((d) => d.memberId === "mem_ana"));
   check("the messages she wrote: gone; Theo's reply stays", s2.conversations![0].messages.length === 1 && s2.conversations![0].messages[0].by === "mem_theo" && !JSON.stringify(s2).includes("a secret plan"));
   check("her credits history and unlocks: gone", !s2.ledger.some((l) => l.memberId === "mem_ana") && !Object.values(s2.unlocks).some((l) => l.includes("mem_ana")));
@@ -190,6 +200,19 @@ async function main() {
   check("the data page and docs/data-flows.md say the same", /Close my account, on Your credits/.test(data) && /can be brought back for 30 days/.test(data) && /purgeMember/.test(doc) && /After 30 days/.test(doc) && !/there is no in-app button today/.test(doc));
   const ui = src("app/post/Settings.tsx");
   check("the confirmation says what happens now, in 30 days and to a plan, and focuses Keep my account", ui.includes("Your account closes now") && ui.includes("After 30 days Merlin deletes your personal data") && ui.includes("A paid plan stops renewing") && /autoFocus onClick=\{\(\) => setAsking\(false\)\}>\s*Keep my account/.test(ui));
+
+  console.log("\nThe notes on the home page");
+  const C = await import("../app/landing/contact");
+  check("?closed=1: the account is closed, and the 30 days to restore it", C.accountNoteOf("?closed=1") === "Your account is closed. You can restore it within 30 days from the link we emailed you." && C.accountNoteOf("?p=today&closed=1") === C.ACCOUNT_NOTES.closed);
+  check("?restore=gone: the restore link has expired", C.accountNoteOf("?restore=gone") === "That restore link has expired.");
+  check("any other address: no note", C.accountNoteOf("") === null && C.accountNoteOf("?closed=0") === null && C.accountNoteOf("?restore=1") === null && C.accountNoteOf("?restored=1") === null);
+  check("Close my account opens the home page at ?closed=1", /window\.location\.assign\("\/\?closed=1"\)/.test(ui));
+  const { GET: restoreGet } = await import("../app/api/account/restore/route");
+  const { NextRequest } = await import("next/server");
+  const gone = await restoreGet(new NextRequest(`${BASE}/api/account/restore?k=${"y".repeat(32)}`, { headers: { "x-forwarded-for": "203.0.113.9" } }));
+  check("a restore link that no longer works opens the home page at ?restore=gone, signed out", gone.status === 303 && /\/\?restore=gone$/.test(gone.headers.get("location") ?? "") && !gone.cookies.get("rn_table"), [gone.status, gone.headers.get("location")]);
+  const landing = src("app/landing/Landing.tsx");
+  check("the landing page draws the note in the design system's sand Callout, as a status, above the hero", /accountNoteOf\(window\.location\.search\)/.test(landing) && /<Callout tone="sand" role="status" className="lp-account-note">\s*\{accountNote\}\s*<\/Callout>/.test(landing) && landing.indexOf("lp-account-note") < landing.indexOf("lp-h1") && /\.lp-account-note \{/.test(src("app/landing/landing.css")));
 
   console.log(`\n${passes} passed, ${failures} failed`);
   process.exit(failures ? 1 : 0);
