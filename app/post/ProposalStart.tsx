@@ -172,8 +172,9 @@ export function StartSheet({
   const [src, setSrc] = useState<Source>(granolaSlot && granolaFirst ? "granola" : "paste");
   const [srcPicked, setSrcPicked] = useState(false);
   const [text, setText] = useState("");
-  // The Granola call the transcript came from, shown as chosen in the picker.
+  // The Granola call the transcript came from, shown as chosen in the picker, and the signer's email when that call gave it.
   const [noteId, setNoteId] = useState<string | null>(null);
+  const [fromCall, setFromCall] = useState<string | null>(null);
   // Granola's status arrives a moment after the sheet opens: start there once it says connected, unless they already chose or typed.
   useEffect(() => {
     if (granolaSlot && granolaFirst && !srcPicked && !text && !agreed) setSrc("granola");
@@ -226,7 +227,7 @@ export function StartSheet({
     if (c.when) setDate(c.when.slice(0, 10));
     const them = c.attendees?.find((a) => a.name && a.name.trim().toLowerCase() !== data.me.name.trim().toLowerCase() && a.email?.toLowerCase() !== data.me.email.toLowerCase());
     if (them?.name && !withWho) setWith(them.name);
-    if (them?.email && !typed && !found.email && them.name) setTyped({ name: them.name, title: "", email: them.email });
+    if (them?.email && !typed && !found.email && them.name) setTyped({ name: them.name, title: "", email: them.email }), setFromCall(them.email);
   };
   const readFile = async (f: File | undefined) => {
     if (!f) return;
@@ -610,7 +611,7 @@ export function StartSheet({
                 {signer.title ? `, ${signer.title}` : ""}
               </strong>
               {signer.email && <span>{signer.email}</span>}
-              <span className="cu-found">{typed ? "Typed by you" : found.found}</span>
+              <span className="cu-found">{typed ? (fromCall && typed.email === fromCall ? "On the call you picked in Granola" : "Typed by you") : found.found}</span>
             </span>
             <button type="button" className="tp-flink" onClick={() => (setTyped(signer), setEditSigner(true))}>
               Change
