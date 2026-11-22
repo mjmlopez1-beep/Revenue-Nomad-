@@ -324,6 +324,10 @@ export function outcomeRows(o: OutcomeStats): OutcomeRow[] {
   for (const [label, n] of shares) if (n !== null) rows.push({ label, n, unit: "%" });
   for (const [via, words] of VIA_ROWS) if (o.detected[via]) rows.push({ label: `Stages seen from ${words}`, n: o.detected[via] });
   rows.push({ label: "Intros asked", n: o.intros.asked + o.intros.made + o.intros.declined }, { label: "Intros made", n: o.intros.made }, { label: "Intros that led to a win", n: o.intros.won });
+  // Peers (lib/peers.ts): counts only, never who or which company.
+  if (o.leads) rows.push({ label: "Leads passed to a peer", n: o.leads.passed }, { label: "Leads a peer took", n: o.leads.taken }, { label: "Leads passed that were won", n: o.leads.won });
+  if (o.teams) rows.push({ label: "Teams formed", n: o.teams.formed }, { label: "Teams active now", n: o.teams.active });
+  if (o.circles) rows.push({ label: "Circles", n: o.circles.n }, { label: "Members in a circle", n: o.circles.members }, { label: "Circle posts", n: o.circles.posts });
   return rows;
 }
 

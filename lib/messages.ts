@@ -109,6 +109,7 @@ function recFor(seed: Seed, s: State, me: Member, c: StoredConversation): Conver
     id: c.id,
     started: c.a === me.id,
     ...(c.kind ? { kind: c.kind } : {}),
+    ...(c.teamId ? { teamId: c.teamId } : {}),
     with: { ...(other ? { id: T.pubId(otherId) } : {}), name, first: T.firstName(name), title: (other && s.profiles[otherId]?.title) || (other?.title === "Member" ? "" : other?.title) || "" },
     about: {
       companyId: c.about.companyId ? T.pubId(c.about.companyId) : "",
@@ -338,7 +339,7 @@ export async function performMessage(token: string | null, a: MessageAction, ori
           text,
           link: `${base}/?k=${encodeURIComponent(once)}&p=messages&m=${encodeURIComponent(c.id)}`,
           settingsUrl: emailLinker(seed, s, otherId, base, nowMs)(NOTIFICATIONS_PATH),
-          ...(c.kind === "partners" ? { about: "connecting as referral partners" } : {}),
+          ...(c.kind === "partners" ? { about: "working together as peers" } : c.kind === "team" ? { about: `teaming up on ${company}` } : {}),
         });
         notify = { to: other.email, ...mail };
       }

@@ -132,6 +132,8 @@ import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, openEntry, pipeli
 import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
+// Peers: leads passed, teams and circles (lib/peersCore.ts, lib/peers.ts).
+import type { PeersState } from "./peersCore";
 
 import type { StoredProposal } from "./proposals/types";
 // The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
@@ -257,7 +259,8 @@ export interface LedgerEntry {
    * adjust: a one-time balance correction (ref "starter.floor"). plan: Pro's credits for a paid
    * month (ref "plan.<invoice>.<month>"). topup: a top-up bought (ref "topup.<checkout session>").
    */
-  reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm" | "adjust" | "plan" | "topup";
+  /** peer: a peer took a lead the member passed them (lib/peers.ts), PASS_CREDIT credits within the daily earning cap. */
+  reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm" | "adjust" | "plan" | "topup" | "peer";
   ref: string;
   at: string;
   /**
@@ -291,6 +294,8 @@ interface Profile {
   digestOff?: boolean;
   /** Turned off the email that says a member sent them a message. */
   messageEmailOff?: boolean;
+  /** Turned off the email when a peer passes them a lead or asks them to team up (lib/peers.ts). */
+  peerEmailOff?: boolean;
   /** Asked to hear about Pro. */
   proInterest?: boolean;
   /** A seed member's discount code from the address (?code=), for checkout. Joined members keep theirs on their member record. */
@@ -421,7 +426,7 @@ export interface State extends MessagingState {
   /** Every report, for the daily report limit and the admin review list. */
   reportLog: { memberId: string; ref: string; at: string }[];
   /** Bonus credits earned while at the daily cap, paid as the rolling window frees room. */
-  held: { memberId: string; delta: number; reason: "referral" | "confirm" | "fill"; ref: string; at: string }[];
+  held: { memberId: string; delta: number; reason: "referral" | "confirm" | "fill" | "peer"; ref: string; at: string }[];
   /** Rates shared for the benchmarks only. Never sent to anyone but the member who shared them. */
   benchRates: StoredBenchRate[];
   /** Product signals for the pilot (walls hit, Pro offer seen, Pro interest). Newest 20,000. */
@@ -575,6 +580,12 @@ export interface State extends MessagingState {
   schedule?: ScheduleState;
   /** Proposals (lib/proposals): each member's own, with their sends and audit trails. Private to them: never in another member's view, the shared table, the export or an admin's panel. */
   proposals?: StoredProposal[];
+  /**
+   * Peers (lib/peersCore.ts, lib/peers.ts): leads passed between members, teams pursuing a company
+   * together, circles and their monthly threads, mutes. The text in them (a pass's note, a team's
+   * draft, a circle post) is members' writing: it leaves the export without it, as messages do.
+   */
+  peers?: PeersState;
 }
 
 /** State.salesBuild[companyId]. */
@@ -1758,7 +1769,7 @@ const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const gone = (entity: Entity) =>
   `We couldn't find that ${entity === "company" ? "company" : entity === "engagement" ? "seat" : "person"}. It may have been removed. Refresh the page and try again.`;
 /** Ledger reasons that count toward the daily earning cap: everything a member earns. */
-const EARNING = new Set(["fill", "referral", "confirm"]);
+const EARNING = new Set(["fill", "referral", "confirm", "peer"]);
 /** Max facts a member can unlock per rolling 24 hours (stops scraping). */
 const UNLOCK_DAILY_MAX = 100;
 /**
@@ -1798,7 +1809,7 @@ function earning(s: State, memberId: string, nowMs: number): { earned: number; r
  * Pay a bonus within the member's daily room. Whatever doesn't fit is held and paid later
  * by releaseHeld. Returns what was paid now.
  */
-function grant(s: State, memberId: string, delta: number, reason: "referral" | "confirm", ref: string, now: string): number {
+function grant(s: State, memberId: string, delta: number, reason: "referral" | "confirm" | "peer", ref: string, now: string): number {
   const room = Math.max(0, EARN_CAP - earning(s, memberId, Date.parse(now)).earned);
   const pay = Math.min(delta, room);
   if (pay > 0) s.ledger.push({ memberId, delta: pay, reason, ref, at: now });
@@ -4031,6 +4042,11 @@ async function fullView(
         ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "reversal" ? "Removed" : l.reason, company: "", field: BENCH_LABEL });
         continue;
       }
+      // A peer took a lead the member passed them (lib/peers.ts).
+      if (l.reason === "peer") {
+        ledger.push({ at: l.at, delta: l.delta, reason: "A peer took the lead you passed", company: "", field: "" });
+        continue;
+      }
       // Pro's credits for a paid month, and a top-up bought (lib/billing).
       if (l.reason === "plan" || l.reason === "topup") {
         ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "plan" ? "Pro credits for the month" : `Bought ${TOPUP_CREDITS} credits`, company: "", field: "" });
@@ -4127,6 +4143,7 @@ async function fullView(
       digest: !prof.digestOff,
       unread: unreadCount(s, me.id),
       messageEmail: !prof.messageEmailOff,
+      peerEmail: !prof.peerEmailOff,
       partners: !prof.partnersOff,
       // Fractionals: "Show me in the Fractionals directory" (null: not chosen yet). Referral partners' old switch off reads as out.
       fractionals: prof.fractionals ?? (prof.partnersOff ? false : null),
@@ -4913,6 +4930,8 @@ export async function perform(
   if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
   // Your pipeline lives in lib/pipelineActions.ts, loaded the same way.
   if (typeof a?.type === "string" && a.type.startsWith("pipeline.")) return (await import("./pipelineActions")).performPipeline(token, a);
+  // Peers (lib/peers.ts): pass a lead, team up, circles, mute. Loaded the same way.
+  if (typeof a?.type === "string" && a.type.startsWith("peer.")) return (await import("./peers")).performPeer(token, a, origin);
   // From Crystal Ball (an unlock with from "crystal"): its companies are read in the action, from the action's own state (lib/radar, loaded here so the two files don't import each other at start).
   const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
   // A move is at a company in the member's own Crystal Ball: read the same way.
@@ -6755,6 +6774,13 @@ export async function perform(
             s.profiles[me.id] = p;
             return { message: a.digest ? "The weekly email is on. It goes out when new roles open." : "The weekly email is off. We won't send another one." };
           }
+          if (typeof a.peerEmail === "boolean") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            if (a.peerEmail) delete p.peerEmailOff;
+            else p.peerEmailOff = true;
+            s.profiles[me.id] = p;
+            return { message: a.peerEmail ? "We'll email you when a peer passes you a lead or asks you to team up." : "Peer emails are off. Leads and team-ups still show on Home and in Peers." };
+          }
           if (typeof a.messageEmail === "boolean") {
             const p = { ...(s.profiles[me.id] ?? {}) };
             if (a.messageEmail) delete p.messageEmailOff;
@@ -7195,7 +7221,14 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well.
   // Proposals are a member's own and a client's signature: never in the export.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, pipeline: _pipeline, proposals: _proposals, peers: _peers, ...rest } = s as State & { paths?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
+  const peers = s.peers && {
+    ...s.peers,
+    passes: s.peers.passes.map((p) => ({ ...p, note: "" })),
+    teams: s.peers.teams.map((t) => ({ ...t, draft: null })),
+    circles: s.peers.circles.map((c) => ({ ...c, posts: c.posts.map((x) => ({ ...x, text: "" })) })),
+  };
   const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
   // An invite's note is a message a member wrote: it leaves without its text too.
   const seatInvites = s.seatInvites?.map(({ note: _note, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -7210,10 +7243,32 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
     ...rest,
     ...(conversations ? { conversations } : {}),
     ...(seatInvites ? { seatInvites } : {}),
+    ...(peers ? { peers } : {}),
     ...(integrations ? { integrations } : {}),
     ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)),
     benchRates,
   };
+}
+
+/**
+ * Peers (lib/peers.ts): a lead a peer passed opens its company for the member it went to, free and
+ * outside the daily limits, as Unlock company would (its name, website and the postings and posted
+ * rates of its open roles). Nothing goes on their credit history, so nothing is ever refunded for it.
+ * Only `memberId` gains; another member's locks are untouched.
+ */
+function giftCompany(g: Graph, s: State, tracks: Tracks, memberId: string, companyId: string): void {
+  const add = (k: string) => {
+    const l = s.unlocks[k] ?? [];
+    if (!l.includes(memberId)) s.unlocks[k] = [...l, memberId];
+  };
+  add(fkey(companyId, "identity"));
+  for (const e of g.engagements.values()) {
+    if (e.companyId !== companyId || !isOpenRole(e, s, tracks)) continue;
+    for (const f of BUNDLE_FIELDS) {
+      const v = valueOf(e, s, f);
+      if (v && v.status === "live" && v.by !== memberId) add(fkey(e.id, f));
+    }
+  }
 }
 
 /**
@@ -7235,6 +7290,8 @@ export const tableInternals = {
   crystalOf,
   // Own sites (lib/ownsites): Undo takes every found email back, with refunds; members whose own choice keeps them out of view are never read.
   refundOwnEmails, privateMemberKeys,
+  // Peers (lib/peers.ts): a passed lead's company opens for the peer free; the passer's credits go within the daily earning cap.
+  giftCompany, grant, knownCompanies, releaseHeld,
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */

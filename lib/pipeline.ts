@@ -85,8 +85,9 @@ export const VIA_WORDS: Record<Via, string> = {
  * Where an entry started. A move, a Crystal Ball company and an intro count as through Merlin by
  * default (the Won prompt's "Did this come through Merlin?" starts checked); the member says.
  */
-export type Source = "move" | "crystal" | "intro" | "network" | "record" | "gmail" | "message" | "proposal";
-export const MERLIN_SOURCES: readonly Source[] = ["move", "crystal", "intro"];
+export type Source = "move" | "crystal" | "intro" | "network" | "record" | "gmail" | "message" | "proposal" | "peer";
+/** peer: a lead a peer passed (lib/peers.ts), or a company the member teamed up on. */
+export const MERLIN_SOURCES: readonly Source[] = ["move", "crystal", "intro", "peer"];
 
 /** Business days to a follow-up, the snooze, and when silence ages an entry out. */
 export const FOLLOW_UP_BUSINESS_DAYS = 3;
@@ -177,6 +178,8 @@ export interface PipelineEntry {
   seatId?: string;
   /** The intro (IntroRecord.id) this deal came through. */
   introId?: string;
+  /** A lead a peer passed (lib/peers.ts LeadPass): its id and the member who passed it. A win here is counted for them too. */
+  lead?: { passId: string; by: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -276,7 +279,7 @@ export function entryAt(log: PipelineLog | undefined, companyId: string): Pipeli
  */
 export function openEntry(
   log: PipelineLog,
-  o: { id: string; companyId: string; channel: Channel; to?: PipelineTo; source: Source; via: Via; nowMs: number; atMs?: number; introId?: string; conversationId?: string },
+  o: { id: string; companyId: string; channel: Channel; to?: PipelineTo; source: Source; via: Via; nowMs: number; atMs?: number; introId?: string; conversationId?: string; lead?: { passId: string; by: string } },
 ): { entry: PipelineEntry; created: boolean } {
   const atMs = o.atMs ?? o.nowMs;
   const at = iso(atMs);
@@ -285,6 +288,7 @@ export function openEntry(
     // A message on Merlin opened it a moment ago, and it was a move's note: it came from the move.
     if (MERLIN_SOURCES.includes(o.source) && !MERLIN_SOURCES.includes(had.source)) had.source = o.source;
     if (o.introId && !had.introId) had.introId = o.introId;
+    if (o.lead && !had.lead) had.lead = o.lead;
     if (o.conversationId && !had.conversationId) had.conversationId = o.conversationId;
     if (o.to?.memberId && !had.to.memberId) had.to = { ...had.to, ...o.to };
     if (atMs - Date.parse(had.lastOut) < SAME_SEND_MS) return { entry: had, created: false };
@@ -313,6 +317,7 @@ export function openEntry(
     log: [],
     ...(o.introId ? { introId: o.introId } : {}),
     ...(o.conversationId ? { conversationId: o.conversationId } : {}),
+    ...(o.lead ? { lead: o.lead } : {}),
     createdAt: iso(o.nowMs),
     updatedAt: iso(o.nowMs),
   };
@@ -462,7 +467,7 @@ export const rateWords = (w: Pick<WonTerms, "pricing" | "rate" | "hours">) =>
 export const monthWords = (n: number) => `${money(n)} a month`;
 
 /** Through Merlin by default: the Won prompt's checkbox starts this way. */
-export const merlinByDefault = (e: Pick<PipelineEntry, "source" | "introId">) => MERLIN_SOURCES.includes(e.source) || !!e.introId;
+export const merlinByDefault = (e: Pick<PipelineEntry, "source" | "introId" | "lead">) => MERLIN_SOURCES.includes(e.source) || !!e.introId || !!e.lead;
 
 /**
  * "Add it as your seat": the add-seat form's answers from a Won entry, in the form's own words
@@ -924,6 +929,10 @@ export interface OutcomeStats {
   /** Stages reached, by what Merlin detected them from. */
   detected: Record<Via, number>;
   intros: { asked: number; made: number; declined: number; won: number };
+  /** Peers (lib/peers.ts): leads passed between members, taken into the peer's pipeline, and won there; teams and circles. Counts only. */
+  leads: { passed: number; taken: number; won: number };
+  teams: { formed: number; active: number };
+  circles: { n: number; members: number; posts: number };
 }
 
 const share = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 1000 : null);
@@ -933,7 +942,7 @@ const share = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10
  * Sent to Replied to Meeting to Won, Won through Merlin, the month's value of Won, and what the
  * stages were detected from. Never a name, a company, a note or anything that says whose.
  */
-export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, nowMs: number = Date.now()): OutcomeStats {
+export function outcomeStats(state: { pipeline?: Record<string, PipelineLog>; peers?: PeersCounted }, nowMs: number = Date.now()): OutcomeStats {
   const byStage = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
   const detected: Record<Via, number> = { note: 0, message: 0, gmail: 0, calendar: 0, proposal: 0, seat: 0, auto: 0, you: 0 };
   const reachedN = { sent: 0, replied: 0, meeting: 0, proposal: 0, won: 0 };
@@ -946,6 +955,7 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
   let wonSeats = 0;
   let due = 0;
   const intros = { asked: 0, made: 0, declined: 0, won: 0 };
+  let leadsWon = 0;
   const today = dayOf(nowMs);
   for (const log of Object.values(state.pipeline ?? {})) {
     if (!log) continue;
@@ -970,7 +980,11 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
       intros[i.status]++;
       if (wonIntro.has(i.id)) intros.won++;
     }
+    for (const e of log.entries ?? []) if (e.stage === "won" && e.lead) leadsWon++;
   }
+  const passes = state.peers?.passes ?? [];
+  const teams = state.peers?.teams ?? [];
+  const circles = state.peers?.circles ?? [];
   return {
     members,
     entries,
@@ -991,7 +1005,17 @@ export function outcomeStats(state: { pipeline?: Record<string, PipelineLog> }, 
     followUpsDue: due,
     detected,
     intros,
+    leads: { passed: passes.length, taken: passes.filter((p) => p.status === "taken").length, won: leadsWon },
+    teams: { formed: teams.filter((t) => t.status === "active" || t.status === "ended").length, active: teams.filter((t) => t.status === "active").length },
+    circles: { n: circles.filter((c) => c.members.length).length, members: circles.reduce((n, c) => n + c.members.length, 0), posts: circles.reduce((n, c) => n + c.posts.length, 0) },
   };
+}
+
+/** What outcomeStats reads of State.peers (lib/peersCore.ts PeersState): statuses and sizes, never a name, a company or a word written. */
+export interface PeersCounted {
+  passes?: { status: string }[];
+  teams?: { status: string }[];
+  circles?: { members: unknown[]; posts: unknown[] }[];
 }
 
 /* ---------- what the app and the connector are sent ---------- */
@@ -1025,6 +1049,10 @@ export interface PipelineRec {
   seat?: string;
   /** The intro it came through: who made it, and its status. */
   intro?: { id: string; by: string; status: IntroStatus };
+  /** A lead a peer passed: who passed it ("Passed to you by Ana"). */
+  lead?: { id: string; by: string };
+  /** A team at this company (lib/peers.ts): "Teamed with Ana". */
+  team?: { id: string; with: string };
   createdAt: string;
   updatedAt: string;
 }

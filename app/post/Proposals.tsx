@@ -48,6 +48,7 @@ import { DocBlocks, EVENT_SAY, dayOf, stamp } from "../sign/doc";
 import type { CoInfo } from "./model";
 import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
 import "../sign/sign.css";
+import { TeamBlockOffer } from "./PeerSheets";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -539,6 +540,7 @@ function Editor({
                   advice={b.blockId === "investment" ? advice : null}
                 />
               ))}
+              {!readOnly && <TeamBlockOffer company={p.company.id} has={p.blocks.some((b) => b.title === "Your team")} onAdd={(b) => setBlocks([...p.blocks, b])} />}
               {!readOnly && <AddBlock addable={addable} onAdd={(id) => setBlocks([...p.blocks, makeBlock(id)])} />}
             </>
           )}

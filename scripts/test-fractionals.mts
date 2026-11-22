@@ -498,9 +498,9 @@ async function main() {
   const hrefs = { today: "/", companies: "/?t=c", engagements: "/?t=e", people: "/?t=p", hiring: "/?v=hiring", following: "/?v=following", page: (p: string) => `/?p=${p}` };
   const navIn = (page: string) => ({ page, recordType: "companies", tab: "all", currentView: null, hrefs, admin: false, network: false, unread: 2, radarNew: 0, totals: null, hiringN: null, followingN: null, seatsMissing: null, credits: 10, views: [], inviteBonus: 10 }) as never;
   const items = nav.navItems(navIn("partners"));
-  check("Referral partners' old address puts Fractionals on", items.find((x) => x.current)?.key === "fractionals" && nav.currentKey({ page: "partners", recordType: "companies", tab: "all", currentView: null } as never) === "fractionals");
+  check("Referral partners' old address puts Peers on (the directory is its Every fractional view)", items.find((x) => x.current)?.key === "peers" && nav.currentKey({ page: "partners", recordType: "companies", tab: "all", currentView: null } as never) === "peers");
   check("?p=partners still reads as a place, so old links open (with Different from yours)", (PLACE_PAGES as readonly string[]).includes("partners") && fm.frDefaults(true, true).fn === "diff" && fm.frDefaults(true).fn === "any" && fm.frDefaults(true).fits === true);
-  check("no Referral partners item; Community holds Fractionals and Messages", !items.some((x) => x.key === "partners") && items.filter((x) => x.group === "community").map((x) => x.key).join() === "fractionals,messages");
+  check("no Referral partners item; Community holds Peers and Messages", !items.some((x) => x.key === "partners") && items.filter((x) => x.group === "community").map((x) => x.key).join() === "peers,messages");
   check("People reads Decision makers in the sidebar and the list's name", items.find((x) => x.key === "people")?.label === "Decision makers" && model.RECORD_TYPES.find((x) => x.key === "people")?.label === "Decision makers");
   check("Messages stays a tab on phones; Fractionals is under More", (nav.TAB_KEYS as readonly string[]).includes("messages") && !(nav.TAB_KEYS as readonly string[]).includes("fractionals"));
   // The directory's own filters.
@@ -520,9 +520,9 @@ async function main() {
     const dc = await dirOf("mem_cass");
     const samC = recOf(dc, "e_sam_pollen")!;
     const danaC = recOf(dc, "e_dana_kite")!;
-    check("a fractional at three of her Crystal Ball companies: the count, with a current seat there", same3(samC.ball, { n: 3, now: true, names: ["Brightloom Learning"] }) && fm.ballChip(samC) === "Serves 3 of your Crystal Ball companies", samC.ball);
+    check("a fractional at three of her Crystal Ball companies: the count, with a current seat there", same3(samC.ball, { n: 3, now: true, names: ["Brightloom Learning"] }) && fm.ballChip(samC) === "Serves 3 companies in your Crystal Ball", samC.ball);
     check("the companies are named only where she has them unlocked", !/Pollen Ledger|Vellum Insurance/.test(JSON.stringify(dc)) && samC.ball?.names.length === 1);
-    check("one company, and one past seat only: Served 1", fm.ballChip({ ball: { n: 1, now: false, names: [] } }) === "Served 1 of your Crystal Ball company" && fm.ballChip({}) === null);
+    check("one company, and one past seat only: Served 1", fm.ballChip({ ball: { n: 1, now: false, names: [] } }) === "Served 1 company in your Crystal Ball" && fm.ballChip({}) === null);
     check("Dana serves one of them (Kitebright, a locked company for Cass), counted and never named", !!danaC.ball && danaC.ball.n === 1 && danaC.ball.names.length === 0 && !/Kitebright/.test(JSON.stringify(dc)), danaC.ball);
     check("records with none of her companies carry nothing (Sam, and three at Kitebright: Dana, Pat and Cara)", dc.records.filter((r) => r.ball).length === 4 && !recOf(dc, "e_lee_one")!.ball, dc.records.filter((r) => r.ball).length);
     check("it is hers alone: Robin's directory has none of it", (await dirOf("mem_robin")).records.every((r) => !r.ball));

@@ -16,6 +16,7 @@ import type { CoInfo } from "./model";
 import { useUi } from "./ui";
 import { pipelineAct, usePipeline } from "./pipelineStore";
 import { FixMenu, StageChip } from "./PipelineParts";
+import { PassButton } from "./PeerSheets";
 import "./pipeline.css";
 
 const FollowUpSheet = dynamic(() => import("./FollowUpSheet").then((m) => m.FollowUpSheet), { ssr: false });
@@ -153,6 +154,13 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
       </span>
       {(CLOSED as string[]).includes(e.stage) ? <StageChip stage={e.stage} /> : null}
       {e.how && <span className="pl-how">{e.how}</span>}
+      {(e.lead || e.team) && (
+        <span className="pl-peer">
+          {e.lead ? `Passed to you by ${e.lead.by.split(" ")[0]}` : ""}
+          {e.lead && e.team ? " · " : ""}
+          {e.team ? `Teamed with ${e.team.with}` : ""}
+        </span>
+      )}
       {e.stage === "won" ? (
         <span className="pl-card-next">{e.won ? monthWords(e.won.monthly) : e.seat ? "Your seat here is confirmed" : "Add the terms and your seat"}</span>
       ) : e.next ? (
@@ -169,6 +177,7 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
             Add it as your seat
           </button>
         )}
+        {e.name && (e.stage === "sent" || e.stage === "quiet" || e.stage === "notnow") && <PassButton company={e.company} from="deal" />}
         <FixMenu rec={e} />
       </div>
     </li>

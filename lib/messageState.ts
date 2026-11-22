@@ -28,7 +28,12 @@ export interface StoredConversation {
   a: string;
   b: string;
   about: { companyId: string; engagementId: string };
-  kind?: "partners" | "invite";
+  kind?: "partners" | "invite" | "team";
+  /**
+   * kind team: the shared thread of two members pursuing `about.companyId` together (lib/peers.ts
+   * TeamUp.conversationId). `a` invited `b`.
+   */
+  teamId?: string;
   messages: StoredMessage[];
   /** When each side last read it. */
   readAt: { a?: string; b?: string };

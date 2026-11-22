@@ -192,7 +192,7 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
       clients: clients ? { ...clients, line: clientsLine(clients) } : null,
       fits: fitsIcp(icp, stated, b.cos),
     };
-    // "Serves 2 of your Crystal Ball companies": counted from the seats the record already lists; named only where the viewer sees the company's name.
+    // "Serves 2 companies in your Crystal Ball": counted from the seats the record already lists; named only where the viewer sees the company's name.
     if (!you && ball.size) {
       const cos = new Map<string, boolean>();
       for (const e of engs) if (ball.has(e.companyId)) cos.set(e.companyId, (cos.get(e.companyId) ?? false) || b.current.has(e.id));
@@ -253,3 +253,6 @@ export async function fractionalsHome(token: string | null, nowMs = Date.now()):
   const fresh = recordsFor(seed, s, me).filter((r) => r.onMerlin && !r.you && r.fits && r.since && nowMs - Date.parse(r.since) < WEEK);
   return { n: fresh.length, initials: fresh.filter((r) => r.initials).slice(0, 3).map((r) => r.initials!) };
 }
+
+/** The directory's records as `me` may see them, for Peers (lib/peers.ts), which builds its sections on the same locks. */
+export const fractionalRecords = (seed: Seed, s: State, me: Member, nowMs = Date.now()) => recordsFor(seed, s, me, nowMs);

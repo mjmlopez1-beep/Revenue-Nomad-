@@ -51,6 +51,7 @@ import { radarDelivery } from "./PartnersSwitch";
 import { KnowChip } from "./network/Network"; // [google network]
 import { useNetwork } from "./network/useNetwork"; // [google network]
 import { PathsChip, usePathIds } from "./network/SmartPaths"; // [smart ways in]
+import { PassButton } from "./PeerSheets";
 import "./radar.css";
 import { Bleed, Prop, Spot } from "../ui/fractions/lazy";
 
@@ -210,6 +211,8 @@ export function RadarPage({
           </button>
           {/* Crystal Ball got it wrong: they already have a full-time leader in the member's function (a fact, 1 credit). */}
           <LeaderReport companyId={i.c.id} fn={fnMine} leads={i.c.leads} from="radar" />
+          {/* Not my fit? Pass it to a peer (PeerSheets.tsx): free for them, a gift. */}
+          <PassButton company={i.c.id} role={i.engs.find(isOpenRole)?.id ?? null} from="crystal" className="btn btn-sm rd-pass" />
         </span>
       ),
     [open, fnMine, crystal],

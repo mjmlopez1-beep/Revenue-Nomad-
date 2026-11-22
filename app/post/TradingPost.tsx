@@ -80,6 +80,7 @@ import { FREE_SAVED_VIEWS } from "@/lib/billing/rules";
 import { freeCompanyNow } from "./display";
 import { NetworkPage } from "./network/Network"; // [google network]
 import { PipelinePage } from "./Pipeline";
+import { usePeersNew } from "./peersStore";
 import { usePipeline } from "./pipelineStore";
 import { useNetwork } from "./network/useNetwork"; // [google network]
 import "./post.css";
@@ -98,18 +99,20 @@ const loadIntegrations = () => import("./Integrations");
 const loadNotifications = () => import("./Notifications");
 const loadBenchmarks = () => import("./Benchmarks");
 const loadFractionals = () => import("./Fractionals");
+const loadPeers = () => import("./Peers");
 const loadAdmin = () => import("./Admin");
 const AddModal = dynamic(() => loadAdd().then((m) => m.AddModal), { ssr: false });
 const Integrations = dynamic(() => loadIntegrations().then((m) => m.Integrations), { ssr: false, loading: pageWait });
 const Notifications = dynamic(() => loadNotifications().then((m) => m.Notifications), { ssr: false, loading: pageWait });
 const Benchmarks = dynamic(() => loadBenchmarks().then((m) => m.Benchmarks), { ssr: false, loading: pageWait });
-const Fractionals = dynamic(() => loadFractionals().then((m) => m.Fractionals), { ssr: false, loading: pageWait });
+// Peers (Peers.tsx): fellow fractionals to work with; the Fractionals directory is its Every fractional view.
+const PeersPage = dynamic(() => loadPeers().then((m) => m.PeersPage), { ssr: false, loading: pageWait });
 const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
 // Proposals (Proposals.tsx), loaded when opened.
 const ProposalsPage = dynamic(() => import("./Proposals").then((m) => m.ProposalsPage), { ssr: false, loading: pageWait });
 /** Fetch them while the member reads (the Add form first): opening one is then instant. */
 const preloadLater = (admin: boolean) => {
-  for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadFractionals, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
+  for (const f of [loadAdd, loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])]) void f().catch(() => {});
 };
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
@@ -208,11 +211,11 @@ type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // [google network] "network": Your network (app/post/network), only with RN_GOOGLE=1.
 // "today": Today (Today.tsx), the home for / with no place in the address. It sits level with the table (no history entry above it).
-// "fractionals": Fractionals (Fractionals.tsx). "partners", Referral partners' old address, opens it with Different from yours.
+// "peers": Peers (Peers.tsx). "fractionals" (the directory's old address) and "partners" (Referral partners') open its Every fractional view.
 // "notifications": Notifications (Notifications.tsx): every email and Slack post, and how often.
 // "pipeline": Your pipeline (Pipeline.tsx).
 // "proposals": Proposals (Proposals.tsx), the member's own.
-type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals";
+type Page = "today" | "table" | "credits" | "rates" | "seats" | "metrics" | "messages" | "integrations" | "notifications" | "partners" | "billing" | "radar" | "network" | "fractionals" | "pipeline" | "proposals" | "peers";
 
 /* ---------- the place in the address bar ---------- */
 
@@ -227,8 +230,9 @@ const PAGE_TITLE: Record<Page, string> = {
   messages: "Messages",
   integrations: "Integrations",
   notifications: "Notifications",
-  partners: "Fractionals",
-  fractionals: "Fractionals",
+  partners: "Peers",
+  fractionals: "Peers",
+  peers: "Peers",
   billing: "Plan and billing",
   radar: YOUR_FEATURE,
   network: "Your network",
@@ -264,7 +268,7 @@ const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "u
 const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
 
 /** The address for a place, leaving out what the member's defaults already say. Today's is / alone; the table's never is (?p=table at its defaults). */
-function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null; range?: RadarRange | null }): string {
+function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filters; q: string; c: string | null; p: Page; all?: boolean; sig?: string | null; range?: RadarRange | null; pt?: boolean }): string {
   const d = defaultsFor(me);
   const q = new URLSearchParams();
   if (x.v !== d.v) q.set("v", x.v);
@@ -275,8 +279,9 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   if (f !== encodeFilters(d.f)) q.set("f", f || "-");
   if (x.all && x.v === "hiring") q.set("af", "1");
   if (x.p === "table" && x.c) q.set("c", x.c);
-  // Referral partners' old address opens Fractionals with "Different from yours" on, and says so in the address.
-  if (x.p === "partners") q.set("p", "fractionals"), q.set("ff", "diff");
+  // The directory lives in Peers (Every fractional, pt=all). Referral partners' old address opens it with "Different from yours" on, and says so in the address.
+  if (x.p === "partners") q.set("p", "peers"), q.set("pt", "all"), q.set("ff", "diff");
+  else if (x.p === "fractionals" || (x.p === "peers" && x.pt)) q.set("p", "peers"), q.set("pt", "all");
   else if (x.p !== "table" && x.p !== "today") q.set("p", x.p);
   // The radar's day (an email's link) or the range the member picked, so a reload opens the same companies. The default range says nothing.
   if (x.p === "radar" && x.sig) q.set("sig", x.sig);
@@ -369,6 +374,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [page, setPage] = useState<Page>(() =>
     start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"),
   );
+  /** Peers shows its Every fractional view (the directory): ?p=peers&pt=all, and the directory's old addresses. */
+  const [peersAll, setPeersAll] = useState(() => !!place0.pt);
   /** The page level with the table under a record or a page (Today or the table): where Back and a page's own Back go. */
   const baseRef = useRef<"today" | "table">(page === "today" ? "today" : "table");
   if (page === "today" || page === "table") baseRef.current = page;
@@ -383,6 +390,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const [moveOff, dismissMove] = useMoveDismissals();
   /** Conversations with something unread (Messages), for the badges on the avatar and in the menu. */
   const unread = useUnread(view.me?.unread);
+  /** Leads and team-up asks from peers waiting on the member (Peers badge). */
+  const peersNew = usePeersNew();
 
   /* ----- overlays ----- */
   // A link or a reload with ?c= opens that company's record at once (its row is found on mount).
@@ -999,6 +1008,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     setDrawer(null);
     // From a sheet (Your profile's Crystal Ball line opens Notifications): the sheet closes for the page.
     setIcpOpen(false);
+    // The directory is Peers' Every fractional view now.
+    if (p === "fractionals" || p === "partners") return setPeersAll(true), setPage("peers");
+    if (p === "peers") setPeersAll(false);
     setPage(p === "metrics" && !view.admin ? "table" : p);
   });
   const openSeats = useStable((engagementId?: string) => {
@@ -1269,7 +1281,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const navOpen = (page !== "table" && page !== "today") || !!drawer;
   const overlayOpen = layout !== "desktop" && !!(editor || pop || sortOpen || addOpts || sideOverlay);
   const depth = (navOpen ? 1 : 0) + (overlayOpen ? 1 : 0);
-  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay, range: radarRange });
+  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page, all: allFns, sig: sigDay, range: radarRange, pt: peersAll });
   const urlRef = useRef(url);
   urlRef.current = url;
   const depthRef = useRef(depth);
@@ -1396,9 +1408,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       // Back or Forward from one page or record to another, both above the table (the sidebar's entries).
       const x = readPlace(me);
       const p = x.p && (x.p !== "metrics" || view.admin) ? x.p : null;
-      if (p && p !== page) {
+      if (p && (p !== page || (p === "peers" && !!x.pt !== peersAll))) {
         setDrawer(null);
         if (p === "radar") setSigDay(x.sig, x.range ?? null);
+        if (p === "peers") setPeersAll(!!x.pt);
         setPage(p);
       } else if (!p && x.c && byId.has(x.c) && (page !== "table" || drawer?.id !== x.c)) {
         setDrawer({ id: x.c, rowKey: sorted.find((r) => r.i.c.id === x.c)?.key ?? x.c, focus: null });
@@ -1410,6 +1423,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       if (x.p && (x.p !== "metrics" || view.admin)) {
         setDrawer(null);
         if (x.p === "radar") setSigDay(x.sig, x.range ?? null);
+        if (x.p === "peers") setPeersAll(!!x.pt);
         setPage(x.p);
       } else if (x.c && byId.has(x.c)) openCompany(x.c);
     }
@@ -2329,6 +2343,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     networkN: network ? network.companies.length : null,
     pipelineN: pipelineOpen,
     unread,
+    peersNew,
     radarNew,
     totals: waiting && !pf ? null : totals,
     hiringN: hiringNav,
@@ -2364,6 +2379,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       return;
     }
     if (k === "radar") setSigDay(null);
+    if (k === "peers") setPeersAll(false);
     if (it.page && it.page !== "table" && (it.page !== "metrics" || view.admin)) setPage(it.page);
   });
 
@@ -2655,9 +2671,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           <main className="tp-main tp-main-page">
             <BillingPage view={view} refresh={refresh} onBack={toBase} />
           </main>
-        ) : page === "fractionals" || page === "partners" ? (
-          <main className="tp-main tp-main-page fr-main">
-            <Fractionals infos={infos} waiting={waiting} different={page === "partners"} onBack={toBase} onProfile={() => setIcpOpen(true)} />
+        ) : page === "peers" || page === "fractionals" || page === "partners" ? (
+          <main className={`tp-main tp-main-page${peersAll || page !== "peers" ? " fr-main" : ""}`}>
+            <PeersPage infos={infos} waiting={waiting} all={peersAll || page !== "peers"} onAll={setPeersAll} onBack={toBase} onProfile={() => setIcpOpen(true)} openCompany={openCompany} />
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">

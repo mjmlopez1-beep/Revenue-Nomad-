@@ -12,7 +12,7 @@ import { FEATURE_NAME } from "@/lib/radar/types";
 import type { RecordType, Tab } from "./model";
 
 /** Every page TradingPost draws (its Page type). */
-export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals"] as const;
+export const APP_PAGES = ["today", "table", "credits", "rates", "seats", "metrics", "messages", "integrations", "notifications", "partners", "billing", "radar", "network", "fractionals", "pipeline", "proposals", "peers"] as const;
 export type AppPageKey = (typeof APP_PAGES)[number];
 
 export type NavGroup = "home" | "find" | "community" | "yours" | "earn" | "foot";
@@ -85,6 +85,8 @@ export interface NavInput {
   hiringN: number | null;
   /** Fractionals in the directory (null until known). */
   fractionalsN?: number | null;
+  /** Leads passed to the member and team-up asks waiting on them (Peers' badge). */
+  peersNew?: number;
   followingN: number | null;
   seatsMissing: number | null;
   credits: number;
@@ -100,9 +102,9 @@ export function planLine(plan: PlanView | undefined): string | null {
   return plan.name === "pro" ? "Pro" : "Free";
 }
 
-/** Which item is on: the page, else on the table the saved view, Hiring now, Following or the list. Referral partners is Fractionals now. */
+/** Which item is on: the page, else on the table the saved view, Hiring now, Following or the list. Referral partners and the Fractionals directory are in Peers now. */
 export function currentKey(x: Pick<NavInput, "page" | "recordType" | "tab" | "currentView">): string {
-  if (x.page === "partners") return "fractionals";
+  if (x.page === "partners" || x.page === "fractionals") return "peers";
   if (x.page !== "table") return x.page;
   if (x.currentView) return `view:${x.currentView}`;
   if (x.tab === "hiring") return "hiring";
@@ -110,7 +112,7 @@ export function currentKey(x: Pick<NavInput, "page" | "recordType" | "tab" | "cu
   return x.recordType;
 }
 
-/** The sidebar, top to bottom: Home, Find, Community (Fractionals and Messages), Yours, Earn, then the foot. */
+/** The sidebar, top to bottom: Home, Find, Community (Peers and Messages), Yours, Earn, then the foot. */
 export function navItems(x: NavInput): NavItem[] {
   const on = currentKey(x);
   const t = x.totals;
@@ -121,8 +123,8 @@ export function navItems(x: NavInput): NavItem[] {
     { key: "people", label: "Decision makers", group: "find", icon: "people", href: x.hrefs.people, page: "table", count: t ? t.people : null },
     { key: "radar", label: FEATURE_NAME, group: "find", icon: "radar", href: x.hrefs.page("radar"), page: "radar", badge: x.radarNew, badgeOf: "new today" },
     { key: "hiring", label: "Hiring now", group: "find", icon: "hiring", href: x.hrefs.hiring, page: "table", count: x.hiringN },
-    // Community: the fractionals on file (Fractionals replaces Referral partners), and the conversations with them.
-    { key: "fractionals", label: "Fractionals", group: "community", icon: "fractionals", href: x.hrefs.page("fractionals"), page: "fractionals", count: x.fractionalsN ?? null },
+    // Community: Peers (fellow fractionals to work with; every fractional on file is a tab there), and the conversations with them.
+    { key: "peers", label: "Peers", group: "community", icon: "fractionals", href: x.hrefs.page("peers"), page: "peers", badge: x.peersNew ?? 0, badgeOf: "new from your peers" },
     { key: "messages", label: "Messages", group: "community", icon: "messages", href: x.hrefs.page("messages"), page: "messages", badge: x.unread, badgeOf: "unread" },
     ...x.views.map((v) => ({ key: `view:${v.id}`, label: v.name, group: "yours" as const, icon: "view" as const, href: v.href, page: "table" as const, badge: v.fresh ?? 0, badgeOf: "new since your last visit" })),
     // Your pipeline (Pipeline.tsx): the member's deals, moved by what Merlin sees.

@@ -26,7 +26,7 @@ import { COMPANY_PRICE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { CompanyLogo, IconCheck, IconChevron, IconFilter, IconLock, IconX, LockedName, fmtMonth, lockedLook, useToast } from "../ui/shared";
 import { countryOf, countryShort, regionOf, shown, type CoInfo } from "./model";
 import { ConnectButton, openConversation } from "./Messages";
-import { Sheet, useUi } from "./ui";
+import { Sheet, useFocusTrap, useUi } from "./ui";
 import { copyText, plural } from "./hooks";
 import { fmtStamp } from "./RoleDate";
 import { FR_TABS, ballChip, startPlace, takeWantSeat, choiceCounts, frDefaults, frRows, headline, leadTitle, levelLine, tabCounts, type FrFilters, type FrTab } from "./fractionalsModel";
@@ -480,7 +480,7 @@ function Who({ r }: { r: FractionalRec }) {
   );
 }
 
-/** "Serves 2 of your Crystal Ball companies": counted from the seats the record lists, companies never named here. */
+/** "Serves 2 companies in your Crystal Ball": counted from the seats the record lists, companies never named here. */
 function BallChip({ r }: { r: FractionalRec }) {
   const words = ballChip(r);
   if (!words) return null;
@@ -717,7 +717,10 @@ function Record({
   phone: boolean;
 }) {
   const head = useRef<HTMLHeadingElement>(null);
+  const rootRef = useRef<HTMLElement>(null);
   useEffect(() => head.current?.focus(), [r.id]);
+  // A phone's record is full screen and aria-modal: Tab stays inside it.
+  useFocusTrap(rootRef, phone);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -729,7 +732,7 @@ function Record({
   const they = r.first ?? "they";
   const seatsN = r.now + r.past;
   return (
-    <aside className={phone ? "fr-rsheet" : "fr-drawer"} role="dialog" aria-modal={phone} aria-labelledby="fr-rec-h">
+    <aside ref={rootRef} className={phone ? "fr-rsheet" : "fr-drawer"} role="dialog" aria-modal={phone} aria-labelledby="fr-rec-h">
       <div className="fr-dbar">
         <button type="button" className="fr-iconbtn" aria-label="Close the record" onClick={onClose}>
           <IconX size={16} />

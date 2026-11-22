@@ -49,6 +49,7 @@ import { useNetCompany } from "./network/useNetwork"; // [google network]
 import { WarmthChip } from "./network/parts"; // [google network]
 import { Charge } from "./Charge";
 import { PipelineBlock } from "./PipelineBlock";
+import { PeerActions } from "./PeerSheets";
 import { WriteProposal } from "./WriteProposal";
 import { Prop } from "../ui/fractions/lazy";
 import dynamic from "next/dynamic";
@@ -2158,6 +2159,16 @@ export function Drawer({
           )}
           {/* Your pipeline at this company (PipelineBlock.tsx): the member's own deal here, as Merlin moved it. Nothing when there is none. */}
           {!c.hidden && <PipelineBlock i={i} />}
+          {/* Not my fit? Pass it to a peer, or team up on it (PeerSheets.tsx). Only at a company the member can see by name. */}
+          {!c.hidden && (
+            <section className="tp-dsec pe-sec-peer" aria-labelledby="pe-dsec-h">
+              <h3 className="tp-dsec-h" id="pe-dsec-h">
+                With a peer
+              </h3>
+              <p className="tp-dsec-note">Not your fit? Pass it to someone great, free for them. Or team up and pitch it together.</p>
+              <PeerActions company={c.id} role={i.engs.find(openRole)?.id ?? null} from={i.engs.some(openRole) ? "role" : crystal ? "crystal" : "record"} />
+            </section>
+          )}
           {/* [smart ways in] the member's best ways in through people they know (SmartPaths.tsx), above Your way in. */}
           <SmartWaysIn i={i} />
           {/* [ux ws3] Your way in: who held the seats here and the next step with each, before About, seats and people. */}

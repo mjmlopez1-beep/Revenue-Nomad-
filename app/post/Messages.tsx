@@ -14,7 +14,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import type { ConversationRec, MessageRec, ReportedMessage } from "@/lib/tableTypes";
 import { IconChevron, LockedName, initials, post, useToast } from "../ui/shared";
 import { HIDDEN_COMPANY } from "@/lib/tableFields";
-import { Sheet, useUi } from "./ui";
+import { Sheet, useFocusTrap, useUi } from "./ui";
 import { useLayout } from "./hooks";
 import { partnerOpener, seatOpener, type SharedCompanies } from "@/lib/partners";
 import "./messages.css";
@@ -65,7 +65,11 @@ const seatDetail = (c: ConversationRec) => [c.about.seat, c.about.years].filter(
 
 /** The line above the first message: why this conversation exists. */
 function contextLine(c: ConversationRec): string {
-  if (c.kind === "partners") return c.started ? `You wrote to ${c.with.first} as a referral partner.` : `${c.with.first} found you in Fractionals and wants to connect.`;
+  if (c.kind === "partners") return c.started ? `You and ${c.with.first} are peers on Merlin.` : `${c.with.first} found you in Peers and wants to connect.`;
+  if (c.kind === "team") {
+    const co = c.about.company && c.about.company !== HIDDEN_COMPANY ? c.about.company : "a company";
+    return c.started ? `You asked ${c.with.first} to team up on ${co}. This is your shared thread.` : `${c.with.first} asked you to team up on ${co}. This is your shared thread.`;
+  }
   const d = seatDetail(c);
   const at = `${c.about.company && c.about.company !== HIDDEN_COMPANY ? c.about.company : "a company that's hiring"}${d ? ` (${d})` : ""}`;
   // Opened by itself when the seat holder claimed their seat through the invite (Invite to connect).
@@ -258,7 +262,9 @@ export function MessagesPage({ onBack, openCompany }: { onBack: () => void; open
               </span>
               <span className="ms-row-about">
                 {c.kind === "partners" ? (
-                  "From Fractionals"
+                  "Peers"
+                ) : c.kind === "team" ? (
+                  <>Team: {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company}</>
                 ) : (
                   <>
                     {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company}
@@ -370,6 +376,8 @@ function Thread({
   const [err, setErr] = useState<string | null>(null);
   const [asking, setAsking] = useState<"block" | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  // A phone's conversation is full screen and aria-modal: Tab stays inside it.
+  useFocusTrap(boxRef, !!phone);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const id = useId();
@@ -445,7 +453,15 @@ function Thread({
           {c.with.title && <p className="ms-head-sub">{c.with.title}</p>}
           {/* The company is the seat being talked about, not where this person works. A conversation from Referral partners is about no seat. */}
           {c.kind === "partners" ? (
-            <p className="ms-head-sub">Connecting as referral partners</p>
+            <p className="ms-head-sub">Peers on Merlin</p>
+          ) : c.kind === "team" ? (
+            <p className="ms-head-sub">
+              Your team thread on {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company || "a company"}
+              {" · "}
+              <button type="button" className="ms-link" onClick={() => openCompany(c.about.companyId)}>
+                Open the record
+              </button>
+            </p>
           ) : (
             <p className="ms-head-sub">
               {c.started ? "About their " : "About your "}
@@ -670,7 +686,7 @@ export function ConnectButton({
         <Compose
           to={{ memberId: member.id }}
           first={member.first}
-          about="From Fractionals: a fractional who serves the same kind of clients."
+          about="From Peers: a fractional who serves the same kind of clients."
           opener={partnerOpener({ first: member.first, myTitle: ui.me.title, myFn: ui.me.function, icp: ui.me.icp, shared })}
           onClose={() => setOpen(false)}
           onSent={(c) => setSent(c.id)}
