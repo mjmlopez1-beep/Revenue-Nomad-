@@ -21,7 +21,7 @@
  * The admin's review queue stays at the foot of Overview, for admins only. The sign-in link,
  * notifications, connected apps, your data and closing the account are Settings' (one line says so).
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { View } from "@/lib/tableTypes";
 import {
   EARN_CAP,
@@ -58,7 +58,7 @@ import {
   useStripeReturn,
 } from "../Billing";
 import { useApp, stripGone } from "../shell/pages";
-import { takeLanding } from "../pageStart";
+import { CREDITS_TAB_EVENT, takeCreditsStart, takeLanding } from "../pageStart";
 import { PageStrip } from "../shell/PageStrip";
 import { planName } from "@/lib/billing/rules";
 import {
@@ -216,15 +216,19 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
   const phone = ui.layout === "phone";
   const copy = useCopy();
   const shareInvite = useShareInvite();
-  const [tab, setTab0] = useState<CreditTab>(() =>
-    creditTabOf(
+  const [tab, setTab0] = useState<CreditTab>(() => {
+    // A tab another page asked for (What's new's Invite line: Ways to earn), else the address's.
+    const asked = takeCreditsStart();
+    return creditTabOf(
       page,
-      typeof window === "undefined"
-        ? ""
-        : takeLanding(page) || window.location.search,
+      asked
+        ? `?tab=${asked}`
+        : typeof window === "undefined"
+          ? ""
+          : takeLanding(page) || window.location.search,
       !!plan,
-    ),
-  );
+    );
+  });
   const [by, setBy] = useState<"week" | "day">("week");
   const [filter, setFilter] = useState<LedgerFilter>("all");
   const [q, setQ] = useState("");
@@ -239,6 +243,16 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
     if (typeof document !== "undefined")
       document.getElementById("cnu-tabs")?.scrollIntoView({ block: "nearest" });
   };
+  // Asked for a tab while the page is already open (What's new's Invite line): that tab.
+  useEffect(() => {
+    const on = () => {
+      const t = takeCreditsStart();
+      if (t) setTab(creditTabOf(page, `?tab=${t}`, !!plan));
+    };
+    window.addEventListener(CREDITS_TAB_EVENT, on);
+    return () => window.removeEventListener(CREDITS_TAB_EVENT, on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, !!plan]);
 
   const starter = view.stats.starter;
   const owed = me.owed ?? 0;
