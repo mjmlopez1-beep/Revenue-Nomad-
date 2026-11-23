@@ -477,7 +477,7 @@ async function main() {
   await act(ANA, { type: "move", id: pub("c_copp"), op: "undo" });
   check("and Undo takes it back", !(await at(ANA, "c_copp")));
   const src = (f: string) => readFileSync(path.join(process.cwd(), f), "utf8");
-  check("today's moves and the record's buyer note both send moveSent (Mark as sent, or the note used)", /moveSent\(m\)/.test(src("app/post/Moves.tsx")) && /type: "pipeline\.sent", companyId: i\.c\.id, from: "record", \.\.\.moveSent\(move\)/.test(src("app/post/Drawer.tsx")) && /onUsed=\{\(\) => void pipelineAct/.test(src("app/post/Drawer.tsx")));
+  check("today's moves and the record's buyer note both send moveSent (Mark as sent, or the note used)", /moveSent\(m\)/.test(src("app/post/Moves.tsx")) && /type: "pipeline\.sent", companyId: i\.c\.id, from: "record", \.\.\.moveSent\(move\)/.test(src("app/post/company/sections/WayIn.tsx")) && /onUsed=\{\(\) => void pipelineAct/.test(src("app/post/company/sections/WayIn.tsx")));
 
   console.log("\nreplies and meetings, from fake Google metadata");
   await sync("mem_ana");

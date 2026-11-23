@@ -175,6 +175,18 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-notes">
+            <h2 className="df-h" id="df-notes">
+              Inside Merlin: your notes on a company
+            </h2>
+            <p className="cl-p">
+              On a company&apos;s page you can keep private notes: what you learned, who said what, when to come back. Merlin keeps the text you typed and when you
+              wrote or changed it. Only you see your notes. They are not in anyone else&apos;s view, in what your assistant can read, in an email or in Revenue
+              Nomad&apos;s copy for admins, and none of it goes to an outside service. Remove a note from the page at any time. When you close your account they stay
+              for the 30 days you can bring it back, then they are deleted with your personal data.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-readers">
             <h2 className="df-h" id="df-readers">
               Inside Merlin: proposal readers
@@ -228,13 +240,14 @@ export function DataFlows() {
               <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added.</li>
               <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
+              <li>Your notes on a company: remove any note from the company&apos;s Notes and activity tab.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
               <li>Peers: mute a member, or leave a circle.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>
               <li>Proposal alerts: each one on or off for Slack, email and Merlin in Notifications. Reminders to the person who signs: off for each proposal on its activity page.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection and the connections file you uploaded, your network, your pipeline and plans for a way in, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
+              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection and the connections file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
             </ul>
             <h3 className="df-h3">Revenue Nomad</h3>
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>

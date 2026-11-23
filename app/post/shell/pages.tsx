@@ -12,12 +12,16 @@
  *   useApp()       read it in a page
  *   pageDef(k)     the entry for a key, or null (the table and Home are TradingPost's own)
  *
- * Three slots belong to the new look (RN_UI2), each the page that takes an old one's place:
+ * Four slots belong to the new look (RN_UI2), each the page that takes an old one's place:
  *
  *   home2       Home in the new look (Home2.tsx), in place of today's Home.
  *   companies2  the Companies workbench (workbench/CompaniesWorkbench.tsx), in place of the
  *               table while it lists companies. It reads and changes the table's place (TableCtx).
  *   find2       Find (find/Find.tsx), page key "find".
+ *
+ *   company2    the company record (company/CompanyPage.tsx) while one is open (?c=<id>), in place of
+ *               the list or page it was opened over, on wider screens (AppCtx.record). Phones keep
+ *               the record drawer (Drawer.tsx).
  *
  * An entry with `placeholder` and no `component` draws today's page instead (TradingPost).
  */
@@ -154,6 +158,28 @@ export interface StartCtx {
   dismissStrip: (key: string) => void;
 }
 
+/**
+ * The company record open now (TradingPost's record, BUILD_PLAN F0: the record stays ?c=), for the
+ * company page (company/CompanyPage.tsx), which the new look draws in place of the list on wider
+ * screens. Phones and the old look keep the drawer. Null while no record is open.
+ */
+export interface RecordCtx {
+  info: CoInfo;
+  me: Me;
+  /** A seat or a person to open at. */
+  focus: string | null;
+  /** "3 of 64" in the list it was opened from, or null. */
+  pos: { n: number; of: number } | null;
+  /** Back to the list or the page it was opened from (Esc). */
+  onClose: () => void;
+  /** The previous or next company in that list (K, J). */
+  onStep: (d: 1 | -1) => void;
+  /** Opened from Crystal Ball or Home's card at a company it lists. */
+  crystal: boolean;
+  /** The breadcrumb before the company's name: Companies (or the list), Crystal Ball, Home. */
+  crumbs: import("./Header").Crumb[];
+}
+
 export interface AppCtx {
   /** The member's whole view, their Me (= view.me), the action call and a refresh of the view. */
   view: View;
@@ -198,6 +224,8 @@ export interface AppCtx {
   /** The new header's right side (bell, credits pill, Add what you know), for a page that draws its own header (Home). */
   headerActions: ReactNode;
   start: StartCtx;
+  /** The company record open now, for the company page (null without one, and on phones, where the drawer draws it). */
+  record?: RecordCtx | null;
 }
 
 const Ctx = createContext<AppCtx | null>(null);
@@ -264,11 +292,14 @@ const ProposalsPage = dynamic(() => import("../Proposals").then((m) => m.Proposa
 const loadHome2 = () => import("../Home2");
 const loadFind = () => import("../find/Find");
 const loadWorkbench = () => import("./workbenchPage");
+const loadCompany = () => import("../company/CompanyPage");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
+// The company record as a page (company/CompanyPage.tsx), in place of the list while a record is open.
+const CompanyPage = dynamic(() => loadCompany().then((m) => m.CompanyPage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -478,6 +509,11 @@ function Companies2P() {
   return <WorkbenchPage />;
 }
 
+/** The company record as a page (company/CompanyPage.tsx), drawn while AppCtx.record is set. */
+function CompanyP() {
+  return <CompanyPage />;
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -485,7 +521,7 @@ const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-m
  * home today until their own is built (Warm paths is Where you can get in, Alerts and workflows is
  * Notifications, Agent access and Settings are Integrations).
  */
-export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2", PageDef>> = {
+export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2", PageDef>> = {
   credits: { title: "Your credits", component: CreditsP },
   integrations: { title: "Integrations", component: IntegrationsP },
   notifications: { title: "Notifications", component: NotificationsP },
@@ -512,6 +548,8 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2",
   home2: { title: "Home", component: Home2P, ownHeader: true, ownStrip: true },
   companies2: { title: "Companies", component: Companies2P, crumbs: ["today"], ownStrip: true },
   find2: { title: "Find", component: FindP, ownStrip: true },
+  // The company record (?c=<id>) as a page, while one is open on a wider screen: it draws its own header (breadcrumb, 3 of 64) and strip.
+  company2: { title: "Company", component: CompanyP, ownHeader: true, ownStrip: true },
 };
 
 /** Keys drawn by another key's entry: the page "find" is the find2 slot. */

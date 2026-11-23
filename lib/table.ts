@@ -131,6 +131,8 @@ import { SNOOZE_DAYS, emptyMoveLog, logMove, movesHidden, movesThisMonth, type M
 // Your pipeline (lib/pipeline.ts): each member's own deals, moved by what Merlin sees. A move's note used opens its entry.
 import { addIntro, cleanTo, emptyPipeline, entryAt, isChannel, migrateLeadsToReach, openEntry, pipelineHidden, type PipelineLog } from "./pipeline";
 import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
+// Your private notes on a company (the company page): each member's own (lib/companyNotes.ts).
+import { NoteProblem, addNote, editNote, forgetCompany as forgetCompanyNotes, mergeCompany as mergeCompanyNotes, notesOf, removeNote, type CompanyNote, type CompanyNotesState } from "./companyNotes";
 import { forgetMember as forgetRoutes, type RouteStats, type RoutesState } from "./paths/plan";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
@@ -599,6 +601,12 @@ export interface State extends MessagingState {
    * Private to them: never in another member's view, the shared table, the export or an admin's panel.
    */
   voice?: Record<string, VoiceProfile>;
+  /**
+   * Your private notes on a company (lib/companyNotes.ts), by member id then internal company id,
+   * newest first. Private to their writer: never in another member's view, the shared table, a
+   * connector's answer, an admin's panel or the export; account closure's purge deletes them.
+   */
+  companyNotes?: CompanyNotesState;
   /**
    * Your way in (lib/paths/plan.ts): each member's chosen route at a company, its step, plan B, log
    * and outcomes, by member id then company id. Hop ids only, never a name. Private to them: never
@@ -3525,8 +3533,8 @@ const NOBODY_BLIND = new Set([
   "granola",
   // A member's moves and writing voice are theirs alone: Nobody has neither, and no record reads them.
   "moves", "voice",
-  // Each member's pipeline is theirs alone too.
-  "pipeline",
+  // Each member's pipeline is theirs alone too, and so are their notes on companies.
+  "pipeline", "companyNotes",
 ]);
 /** Per fact or confirmation: these change the records of the company they are at. */
 const BY_RECORD = new Set(["values", "verifications"]);
@@ -3746,6 +3754,21 @@ async function memberView(seed: Seed, s: State, me: Member): Promise<View> {
   // fullView's facts for `only` count its companies and the facts hidden only for this viewer (they reported them): the latter stay.
   const hiddenForMe = v.stats.facts - v.companies.reduce((n, c) => n + c.facts.known + c.facts.locked, 0);
   return { ...v, companies, stats: { ...part.stats, facts: facts + hiddenForMe, openedWeek: v.stats.openedWeek } };
+}
+
+/**
+ * GET /api/table?notes=<company id>: the member's own private notes on that company
+ * (lib/companyNotes.ts), newest first. Any company on file, open or locked; never anyone else's.
+ * Undefined when the id names no company; null when the token is nobody's.
+ */
+export async function companyNotesFor(token: string | null, companyPubId: string): Promise<{ notes: CompanyNote[] } | null | undefined> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return null;
+  const g = viewGraph(seed, s);
+  const cid = companyIndex(g).get(String(companyPubId ?? ""));
+  if (!cid || !g.companies.has(cid) || pubId(cid) !== companyPubId) return undefined;
+  return { notes: notesOf(s.companyNotes, me.id, cid) };
 }
 
 /** The most companies one GET /api/table?about= answers for. */
@@ -7065,6 +7088,7 @@ export async function perform(
                 refundUnlockers(fkey(co, "identity"));
                 s.companies = s.companies.filter((c) => c.id !== co);
                 for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const vk of Object.keys(bag)) if (owns(vk, co)) delete bag[vk];
+                forgetCompanyNotes(s.companyNotes, co);
                 for (const [m, ids] of Object.entries(s.follows)) if (ids.includes(co)) s.follows[m] = ids.filter((id) => id !== co);
               }
             } else s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
@@ -7336,6 +7360,23 @@ export async function perform(
                   ? `Snoozed for ${SNOOZE_DAYS} days.`
                   : "Back in your moves.",
           };
+        }
+        case "companyNote": {
+          // Your private notes on a company (lib/companyNotes.ts): add, change or remove one. Any company on file, open or locked. The member's own part, nothing else.
+          const co = g.companies.get(inId("company", a.companyId));
+          if (!co) throw new ActionError(gone("company"));
+          const all = (s.companyNotes ??= {});
+          const op = a.op === "add" || a.op === "edit" || a.op === "remove" ? a.op : null;
+          if (!op) throw new ActionError(UNKNOWN_ACTION);
+          try {
+            if (op === "add") addNote(all, me.id, co.id, a.text, now, `n${randomBytes(8).toString("hex")}`);
+            else if (op === "edit") editNote(all, me.id, co.id, a.noteId, a.text, now);
+            else removeNote(all, me.id, co.id, a.noteId);
+          } catch (e) {
+            if (e instanceof NoteProblem) throw new ActionError(e.message);
+            throw e;
+          }
+          return { message: op === "add" ? "Note saved. Only you see it." : op === "edit" ? "Note changed." : "Note removed.", notes: notesOf(s.companyNotes, me.id, co.id) };
         }
         case "voice": {
           // Your writing voice, typed in Your profile: style conclusions only, each one a value from its list (lib/voice.ts).
@@ -7665,7 +7706,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // A member's Granola key (sealed, lib/granola) never leaves in the export.
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // A member's notes on companies (lib/companyNotes.ts) are theirs alone as well.
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7747,6 +7789,8 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   // Your way in (lib/paths/plan.ts): every plan of theirs. State.routeStats stays: it counts outcomes by a step's shape only, no member in it.
   forgetRoutes(s.routes, id);
   del(s.voice);
+  // Their notes on companies (lib/companyNotes.ts).
+  del(s.companyNotes);
   del(s.myTemplates);
   del(s.aiDrafts);
   del(s.aiUsage);
@@ -9392,6 +9436,7 @@ function foldCompany(s: State, seed: Seed, from: string, to: string, now: string
   for (const [memberId, n] of back) s.ledger.push({ memberId, delta: n, reason: "refund", ref: T, at: now, why: "duplicate" });
   s.companies = s.companies.filter((c) => c.id !== from);
   for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const k of Object.keys(bag)) if (k.startsWith(`${from}.`)) delete bag[k];
+  mergeCompanyNotes(s.companyNotes, from, to);
   for (const [m, ids] of Object.entries(s.follows)) if (ids.includes(from)) s.follows[m] = [...new Set(ids.map((x) => (x === from ? to : x)))];
   return back.size;
 }

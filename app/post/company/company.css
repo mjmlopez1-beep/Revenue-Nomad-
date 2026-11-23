@@ -1,0 +1,915 @@
+/*
+ * The company page (Company.dc.html): the new look's record, under .co- classes inside the shell
+ * (.tp-ui2), so the drawer and the old look are untouched. Brand: ground #FAFAF7, white cards,
+ * pine for links and the tab on screen, volt only on what earns (Add what you know), ember for
+ * Hiring now and a follow-up due today, at most.
+ */
+
+.co-page {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 !important;
+  background: var(--ws-ground, #fafaf7);
+  color: var(--ws-body, #28322d);
+}
+.co-page:focus {
+  outline: none;
+}
+.co-sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ws-muted, #5b6661);
+}
+
+/* ---------- the top row: breadcrumb, 3 of 64, the header's actions ---------- */
+.co-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.co-pos {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ws-muted, #5b6661);
+  margin-right: auto;
+}
+.co-topbar .ws-crumbs {
+  margin-right: 0;
+}
+.co-pos .num {
+  padding: 0 6px;
+}
+.co-back {
+  margin-left: 4px;
+}
+
+/* ---------- the strip ---------- */
+.co-strip {
+  margin: 12px 18px 0;
+}
+.co-strip-done {
+  background: var(--ws-mint, #e8f3ee);
+  border-color: var(--ws-mint-line, #b9d9ca);
+}
+.co-strip .ws-strip-x span {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* ---------- the head ---------- */
+.co-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 18px;
+  background: #fff;
+  border-bottom: 1px solid var(--ws-line, #e2e6e3);
+}
+.co-logo {
+  flex: none;
+  display: inline-flex;
+}
+.co-head-t {
+  flex: 1 1 360px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.co-head-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.co-name-h {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  color: var(--ws-ink, #0a1a13);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+/* The title takes focus when the page opens (a place to start from, not a control): no ring. */
+.co-name-h:focus,
+.co-name-h:focus-visible {
+  outline: none;
+}
+.co-head-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ws-body, #28322d);
+}
+.co-head-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.co-head-acts .tp-unlockall {
+  display: inline-flex;
+}
+.co-head-acts .tp-ua-ask {
+  flex-basis: 100%;
+}
+.co-stagebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.co-stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ws-strong, #cdd4d0);
+}
+.co-stage-dot.s-won {
+  background: #2ee59d;
+}
+.co-stage-dot.s-lost,
+.co-stage-dot.s-notnow,
+.co-stage-dot.s-quiet {
+  background: #808a85;
+}
+.co-stage-dot[class*="s-"]:not(.s-won):not(.s-lost):not(.s-notnow):not(.s-quiet) {
+  background: var(--ws-deep, #0b6b45);
+}
+
+/* ---------- the locked company: what is free, what opening costs ---------- */
+.co-gates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 14px 20px;
+  padding: 14px 18px 16px;
+  background: var(--ws-mint, #e8f3ee);
+  border-bottom: 1px solid var(--ws-mint-line, #b9d9ca);
+  font-size: 14px;
+  line-height: 20px;
+}
+.co-gate-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-bottom: 6px;
+  color: var(--ws-ink, #0a1a13);
+}
+.co-gate ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.co-gate li {
+  position: relative;
+  padding-left: 16px;
+}
+.co-gate li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ws-deep, #0b6b45);
+}
+.co-gate-go {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0;
+}
+.co-gates .tp-capline,
+.co-gates .pro-under {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ---------- the tabs ---------- */
+.co-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0 12px;
+  background: #fff;
+  border-bottom: 1px solid var(--ws-line, #e2e6e3);
+}
+.co-tab {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ws-body, #28322d);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.co-tab:hover {
+  color: var(--ws-ink, #0a1a13);
+}
+.co-tab.on {
+  font-weight: 800;
+  color: var(--ws-ink, #0a1a13);
+  border-bottom-color: var(--pine, #073f2f);
+}
+.co-tab:focus-visible {
+  outline: 3px solid #0b6b45;
+  outline-offset: -3px;
+  border-radius: 6px 6px 0 0;
+}
+.co-tab-n {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ws-quiet, #f1f3f2);
+  color: var(--ws-body, #28322d);
+}
+
+/* ---------- the body: the tab's panel and the right column ---------- */
+.co-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 20px;
+  padding: 16px 18px 20px;
+}
+.co-panel {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.co-panel:focus {
+  outline: none;
+}
+.co-side {
+  flex: 1 1 300px;
+  max-width: 340px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .co-side {
+    max-width: none;
+  }
+}
+.co-card,
+.co-panel > .tp-dsec,
+.co-facts > .tp-dsec,
+.co-more {
+  background: #fff;
+  border: 1px solid var(--ws-line, #e2e6e3);
+  border-radius: 14px;
+  padding: 16px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.co-panel > .tp-dsec > .tp-dsec-h,
+.co-facts > .tp-dsec > .tp-dsec-h,
+.co-card h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 800;
+  color: var(--ws-ink, #0a1a13);
+}
+.co-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+}
+.co-card-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.co-card-h h2 {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.co-card .tp-dleads {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+}
+.co-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 14px;
+}
+.co-th-f {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ws-muted, #5b6661);
+}
+.co-more > summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pine, #073f2f);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.co-more > .tp-dsec {
+  margin-top: 6px;
+  padding-top: 12px;
+}
+.co-legend {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ws-muted, #5b6661);
+}
+.co-legend-tint {
+  width: 22px;
+  height: 12px;
+  border-radius: 3px;
+  background: #dcefe5;
+}
+.co-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ws-quiet, #f1f3f2);
+  font-size: 14px;
+  line-height: 20px;
+}
+.co-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* ---------- the tables ---------- */
+.co-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--ws-line, #e2e6e3);
+  border-radius: 10px;
+}
+.co-table {
+  display: grid;
+  min-width: 100%;
+  font-size: 14px;
+  line-height: 19px;
+}
+.co-seats {
+  grid-template-columns: minmax(150px, 1.5fr) minmax(110px, 1.1fr) minmax(84px, 0.7fr) minmax(84px, 0.8fr) minmax(56px, 0.5fr) minmax(90px, 0.9fr) minmax(100px, 1fr) minmax(90px, 0.9fr);
+  min-width: 780px;
+}
+.co-people {
+  grid-template-columns: minmax(150px, 1.4fr) minmax(120px, 1fr) minmax(130px, 1.1fr) minmax(90px, 0.8fr) minmax(90px, 0.8fr) minmax(120px, 1fr);
+  min-width: 700px;
+}
+.co-roles {
+  grid-template-columns: minmax(150px, 1.4fr) minmax(90px, 0.8fr) minmax(100px, 0.8fr) minmax(64px, 0.6fr) minmax(100px, 0.9fr) minmax(110px, 1fr) minmax(110px, 1fr);
+  min-width: 720px;
+}
+.co-tr {
+  display: contents;
+}
+.co-th,
+.co-td {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ws-hair, #eef1ef);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* A long role or name wraps in the page's tables (the lists truncate it). */
+.co-td {
+  overflow: hidden;
+}
+.co-td .tp-cell {
+  max-width: 100%;
+}
+.co-td .tp-val-t {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.co-th {
+  position: sticky;
+  top: 0;
+  background: #fbfcfb;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ws-body, #28322d);
+}
+.co-th-n {
+  text-transform: none;
+}
+.co-td.co-opened {
+  background: #f1f8f4;
+  box-shadow: inset 0 0 0 9999px rgba(220, 239, 229, 0.35);
+}
+.co-tr-on > .co-td {
+  background: #f1f8f4;
+}
+.co-tr:last-child > .co-td {
+  border-bottom: 0;
+}
+.co-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.co-seat-role {
+  font-weight: 700;
+  color: var(--ws-ink, #0a1a13);
+}
+.co-details {
+  padding: 0;
+  min-height: 0;
+  font-size: 12px;
+}
+.co-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.co-name {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--pine, #073f2f);
+  cursor: pointer;
+}
+.co-name strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.co-name[aria-expanded="true"] strong {
+  text-decoration-thickness: 2px;
+}
+.co-role {
+  font-weight: 700;
+}
+
+/* ---------- the seats timeline ---------- */
+.co-tl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--ws-line, #e2e6e3);
+  border-radius: 10px;
+  background: #fbfcfb;
+}
+.co-tl-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) 1fr;
+  gap: 12px;
+  align-items: center;
+  min-height: 30px;
+}
+.co-tl-l {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 17px;
+  min-width: 0;
+}
+.co-tl-l strong {
+  color: var(--ws-ink, #0a1a13);
+  overflow-wrap: anywhere;
+}
+.co-tl-l span {
+  color: var(--ws-muted, #5b6661);
+  font-size: 12px;
+}
+.co-tl-track {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  height: 20px;
+}
+.co-tl-years {
+  font-size: 12px;
+  color: var(--ws-muted, #5b6661);
+  height: auto;
+}
+.co-tl-years span {
+  padding-left: 4px;
+  border-left: 1px solid var(--ws-line, #e2e6e3);
+}
+.co-tl-head .co-tl-l {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ws-body, #28322d);
+}
+.co-tl-grid {
+  border-left: 1px solid var(--ws-hair, #eef1ef);
+}
+.co-tl-bar {
+  position: absolute;
+  top: 3px;
+  height: 14px;
+  border-radius: 4px;
+  box-sizing: border-box;
+  min-width: 4px;
+}
+.co-tl-going,
+.co-tl-ended {
+  background: var(--ws-deep, #0b6b45);
+}
+.co-tl-ended {
+  background: #74a792;
+}
+.co-tl-year {
+  background: repeating-linear-gradient(90deg, #b9d9ca 0 6px, #e8f3ee 6px 10px);
+}
+.co-tl-endLocked {
+  background: #fff;
+  border: 2px dashed var(--ws-deep, #0b6b45);
+  min-width: 14px;
+}
+/* An open role: a ring at the day it was listed (not ember: Hiring now and a follow-up due are the page's two). */
+.co-tl-open {
+  background: #fff;
+  border: 3px solid var(--ws-deep, #0b6b45);
+  width: 12px !important;
+  min-width: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  height: 12px;
+  top: 4px;
+}
+
+/* ---------- the person ---------- */
+.co-peek {
+  border: 1px solid var(--ws-strong, #cdd4d0);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(10, 26, 19, 0.12);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.co-peek-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.co-peek-ini {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: #e3e8f7;
+  color: var(--ws-ink, #0a1a13);
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.co-peek-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.co-peek-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 14px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.co-peek-cols > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.co-peek-dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 10px;
+}
+.co-peek-dl dt {
+  color: var(--ws-muted, #5b6661);
+}
+.co-peek-dl dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.co-peek-p {
+  margin: 0;
+}
+.co-peek-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- notes and activity ---------- */
+.co-lbl {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ws-body, #28322d);
+}
+.co-note-ta {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 76px;
+  resize: vertical;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 8px 10px;
+}
+.co-note-foot,
+.co-note-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.co-notes {
+  display: flex;
+  flex-direction: column;
+}
+.co-noterow {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--ws-hair, #eef1ef);
+}
+.co-note-d,
+.co-act-d {
+  font-size: 13px;
+  color: var(--ws-muted, #5b6661);
+}
+.co-note-body,
+.co-note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.co-card .co-note-t {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.co-example .co-note-d {
+  font-weight: 700;
+  color: var(--ws-body, #28322d);
+}
+.co-example .co-note-t {
+  color: var(--ws-muted, #5b6661);
+}
+.co-acts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.co-act {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ws-hair, #eef1ef);
+  font-size: 14px;
+  line-height: 20px;
+}
+.co-act-t {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- the deal ---------- */
+.co-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.co-stage {
+  flex: 1 1 100px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  background: #fff;
+  color: var(--ws-body, #28322d);
+  border: 1px solid var(--ws-strong, #cdd4d0);
+  cursor: pointer;
+}
+.co-stage.past {
+  background: var(--ws-mint, #e8f3ee);
+  color: var(--pine, #073f2f);
+  font-weight: 600;
+  border-color: var(--ws-mint-line, #b9d9ca);
+}
+.co-stage.on {
+  background: var(--pine, #073f2f);
+  color: #fff;
+  font-weight: 700;
+  border-color: var(--pine, #073f2f);
+}
+.co-stage.lost {
+  flex: 0 1 90px;
+  background: var(--ws-quiet, #f1f3f2);
+  border-color: var(--ws-quiet, #f1f3f2);
+}
+.co-stage.lost.on {
+  background: var(--ws-body, #28322d);
+  border-color: var(--ws-body, #28322d);
+  color: #fff;
+}
+.co-stage:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.co-stages-say {
+  flex-basis: 100%;
+  margin: 0;
+}
+.co-panel > .pl-block,
+.co-panel > .pp-write,
+.co-panel > .ch-sec {
+  margin: 0;
+}
+
+/* ---------- the right column ---------- */
+.co-side-card {
+  background: #fff;
+  border: 1px solid var(--ws-line, #e2e6e3);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.co-next {
+  border-color: var(--ws-strong, #cdd4d0);
+}
+.co-side-card h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 23px;
+  font-weight: 800;
+  color: var(--ws-ink, #0a1a13);
+}
+.co-side-card p {
+  margin: 0;
+}
+.co-side-k {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ws-muted, #5b6661);
+}
+.co-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 700;
+  color: var(--ws-ink, #0a1a13);
+}
+.co-due-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5a1f;
+}
+.co-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.co-steps li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.co-step-n {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ws-quiet, #f1f3f2);
+  color: var(--ws-body, #28322d);
+}
+.co-steps li.on .co-step-n {
+  background: var(--pine, #073f2f);
+  color: #fff;
+}
+.co-next-go {
+  align-self: flex-start;
+}
+.co-adds {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.co-add {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--ws-strong, #cdd4d0);
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--ws-ink, #0a1a13);
+  cursor: pointer;
+}
+.co-add:hover {
+  border-color: var(--pine, #073f2f);
+}
+.co-earn {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #d9fbea;
+  color: #073f2f;
+  white-space: nowrap;
+}
+.co-add-go {
+  align-self: flex-start;
+}
+.co-ev {
+  border-style: dashed;
+}
+
+/* ---------- the last line ---------- */
+.co-page > .tp-dfoot {
+  margin: 0 18px 24px;
+  padding-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}

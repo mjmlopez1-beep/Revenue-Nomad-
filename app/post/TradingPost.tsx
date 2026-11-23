@@ -3265,6 +3265,29 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       },
     },
   };
+  /*
+   * [Stage 2] The company record as a page (company/CompanyPage.tsx, the registry's company2): in
+   * the new look on wider screens it takes the place of the list (or Crystal Ball, Home) it was
+   * opened over. Phones and the old look keep the drawer. The record is the same state either way
+   * (drawer, ?c=), so J and K, Esc, the address and Back work as they did.
+   */
+  const recordPage = ui2 && !phone && !!drawer && !!drawerInfo && page === "table" && !!pageDef("company2")?.component;
+  ctx.record = recordPage
+    ? {
+        info: drawerInfo!,
+        me,
+        focus: drawer!.focus,
+        pos: drawerPos >= 0 ? { n: drawerPos + 1, of: navRows.length } : null,
+        onClose: closeDrawer,
+        onStep: step,
+        crystal: (drawer!.returnTo === "radar" && radarList.some((r) => r.i.c.id === drawerInfo!.c.id)) || (drawer!.returnTo === "today" && todayIds.has(drawerInfo!.c.id)),
+        crumbs:
+          drawer!.returnTo && !drawer!.over && drawer!.returnTo !== "table"
+            ? [{ label: "Home", href: pageHref("today"), go: goHome }, { label: PAGE_TITLE[drawer!.returnTo], href: pageHref(drawer!.returnTo as AppPage), go: closeDrawer }]
+            : [...headCrumbs, { label: headTitle, href: urlRef.current.replace(/([?&])c=[^&]*&?/, "$1").replace(/[?&]$/, "") || "/", go: closeDrawer }],
+      }
+    : null;
+  const RecordPage = recordPage ? pageDef("company2")!.component! : null;
   const defNow = onScreen !== "today" && onScreen !== "table" ? pageDef(onScreen) : null;
   const PageNow = defNow?.component && (!defNow.when || defNow.when(ctx)) ? defNow.component : null;
   const pageMain = defNow ? (typeof defNow.mainClass === "function" ? defNow.mainClass(ctx) : defNow.mainClass ?? "") : "";
@@ -3272,7 +3295,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const Home2 = ui2 ? pageDef("home2")?.component ?? null : null;
   const Companies2 = ui2 && onScreen === "table" && recordType === "companies" ? pageDef("companies2")?.component ?? null : null;
   /** The entry on screen (Home's, the workbench's or the page's): whether it draws its own header and strip. */
-  const defShown = onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 ? pageDef("companies2") : null) : defNow;
+  const defShown = RecordPage ? pageDef("company2") : onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 ? pageDef("companies2") : null) : defNow;
   const headOwn = !!defShown?.ownHeader && !!defShown.component;
 
   /* ----- layout ----- */
@@ -3283,8 +3306,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       <AppCtxProvider value={ctx}>
       <div className={`tp-app tp-${layout}${ui2 ? " tp-ui2" : ""}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
         {/* The first Tab stop: past the sidebar, to the list or the page. */}
-        <a href={page === "table" ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
-          {page === "table" ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
+        <a href={page === "table" && !RecordPage ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
+          {page === "table" && !RecordPage ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
         </a>
         {navSide && ui2 && (
           <Rail
@@ -3375,7 +3398,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </div>
         )}
 
-        {onScreen === "today" ? (
+        {RecordPage ? (
+          <RecordPage />
+        ) : onScreen === "today" ? (
           Home2 ? <Home2 /> : homeEl
         ) : waiting && onScreen !== "table" ? (
           <main className="tp-main tp-main-page">
@@ -3485,7 +3510,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </Sheet>
         )}
 
-        {drawer && drawerInfo && page === "table" && (
+        {drawer && drawerInfo && page === "table" && !RecordPage && (
           <Drawer
             i={drawerInfo}
             focus={drawer.focus}
