@@ -264,7 +264,7 @@ const ALSO = [
   "Saved views with a weekly email",
   "Fractionals who serve your kind of clients",
   "Merlin in Claude",
-  "Search across companies, seats and decision makers",
+  "Search across companies and fractional seats",
   "Follow a company",
 ];
 

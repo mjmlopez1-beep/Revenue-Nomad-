@@ -38,16 +38,16 @@ export function runPlan(col: string, rows: Row[]): { items: FactRef[]; wait: num
 const DESC: Record<string, { title: string; desc: string; wait: string }> = {
   company: { title: "Company name and website", desc: "Opens each company: its name, website and job postings. Who held its seats then shows free.", wait: "" },
   decider: { title: "Decision maker", desc: "The name and title of who hires, one purchase for both. A company has to be open first.", wait: "need the company opened first" },
-  email: { title: "Work email", desc: "The decision maker's work email, where one is on file. Their name has to be open first.", wait: "need the company or the decision maker's name first" },
+  email: { title: "Work email", desc: "The decision maker's work email, where a member added one. Their name has to be open first. Coverage grows as members add what they know.", wait: "need the company or the decision maker's name first" },
   rate: { title: "Rate paid", desc: "What the latest seat paid, where a member shared it. A company has to be open first.", wait: "need the company opened first" },
 };
 /** People's runs (People.dc.html): the person's own locks. */
 const PEOPLE_DESC: Record<string, { title: string; desc: string; wait: string }> = {
   company: { title: "Open these companies", desc: "Opens each company: its name, website and who held the seat. Its people can then be opened.", wait: "" },
-  name: { title: "Find the decider", desc: "Opens the name and title of each locked person in this view. One unlock shows both. A locked company has to be open first.", wait: "need the company opened first" },
-  email: { title: "Find an email", desc: "Opens the email for each person whose name you can see. Where none is on file nothing is spent, and you can add it to earn 1 credit.", wait: "need the company or the name opened first" },
-  phone: { title: "Find a phone number", desc: "Opens the phone for each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
-  linkedin: { title: "Find a public profile", desc: "Opens the link to the public profile of each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
+  name: { title: "Who decides", desc: "Opens the name and title of each locked person in this view. One unlock shows both. A locked company has to be open first.", wait: "need the company opened first" },
+  email: { title: "Work email", desc: "Opens the email for each person whose name you can see, where a member added one. Coverage is still growing: where none is on file nothing is spent, and you can add it to earn 1 credit.", wait: "need the company or the name opened first" },
+  phone: { title: "Phone number", desc: "Opens the phone for each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
+  linkedin: { title: "Public profile", desc: "Opens the link to the public profile of each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
 };
 /** A seat row's own facts (the Seats page): each row is one seat, not a company's latest. */
 const SEAT_DESC: Record<string, { title: string; desc: string; wait: string }> = {

@@ -97,10 +97,10 @@ function peopleItems(ctx: ToolCtx): ToolItem[] {
   const any = src.google || src.linkedin !== null || src.csv !== null;
   const pro = proNow(ctx.me);
   return [
-    { id: "pp-dm", tab: "enrich", label: "Find the decider", sub: "Name and title of who hires. One unlock for both", cost: "1 / row", tone: "paid", do: { kind: "run", col: "name" } },
-    { id: "pp-email", tab: "enrich", label: "Find an email", sub: "Work email. Needs the name first", cost: "1 / row", tone: "paid", do: { kind: "run", col: "email" } },
-    { id: "pp-phone", tab: "enrich", label: "Find a phone number", sub: "A direct line, where a member shared one", cost: "1 / row", tone: "paid", do: { kind: "run", col: "phone" } },
-    { id: "pp-profile", tab: "enrich", label: "Find a public profile", sub: "A link to their public profile", cost: "1 / row", tone: "paid", do: { kind: "run", col: "linkedin" } },
+    { id: "pp-dm", tab: "enrich", label: "Who decides", sub: "Name and title of who hires, where members added them. One unlock for both", cost: "1 / row", tone: "paid", do: { kind: "run", col: "name" } },
+    { id: "pp-email", tab: "enrich", label: "Work email", sub: "Where a member added one. Needs the name first. Know it? Add it and earn a credit", cost: "1 / row", tone: "paid", do: { kind: "run", col: "email" } },
+    { id: "pp-phone", tab: "enrich", label: "Phone number", sub: "A direct line, where a member shared one", cost: "1 / row", tone: "paid", do: { kind: "run", col: "phone" } },
+    { id: "pp-profile", tab: "enrich", label: "Public profile", sub: "A link to their public profile, where one is on file", cost: "1 / row", tone: "paid", do: { kind: "run", col: "linkedin" } },
     { id: "pp-open", tab: "enrich", label: "Open these companies", sub: "Their people open after the company", cost: co.cost, tone: co.tone, do: { kind: "run", col: "company" } },
     { id: "pp-match", tab: "enrich", label: "Match to my contacts", sub: "Fills How you know them and Last touch", cost: any ? "Free" : "Step 3", tone: any ? "free" : "gate", do: { kind: "connect", source: src.googleOn && !src.google ? "google" : "linkedin" } },
     {
@@ -145,7 +145,7 @@ export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
   const gate = (ok: boolean, name: string): { cost: string; tone: CostTone } => (ok ? { cost: "On", tone: "free" } : { cost: name, tone: "gate" });
   const items: ToolItem[] = [
     // For you: short recipes that start the right drill-in.
-    { id: "you-dm", tab: "you", label: "Find who decides", sub: "Decision maker, then their work email", cost: "1 / row", tone: "paid", do: { kind: "run", col: "decider" } },
+    { id: "you-dm", tab: "you", label: "Who decides", sub: "The decision maker, where members added one", cost: "1 / row", tone: "paid", do: { kind: "run", col: "decider" } },
     { id: "you-open", tab: "you", label: "Open these companies", sub: `See each name, website and job posting${opensFree(ctx.me) ? `, free up to ${PRO_OPENS_DAILY} a day` : ""}`, cost: co.cost, tone: co.tone, do: { kind: "run", col: "company" } },
     { id: "you-watch", tab: "you", label: "Watch this list", sub: "Tell me when a company on it posts a fractional role", cost: "Free", tone: "free", do: { kind: "alert", trigger: "role" } },
     // Sources: other record types over the same filters, and the member's own contacts.
@@ -160,8 +160,8 @@ export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
       ? [
           { id: "en-company", tab: "enrich" as const, label: "Company name and website", sub: "Opens the company and its job postings", cost: co.cost, tone: co.tone, do: { kind: "run" as const, col: "company" } },
           { id: "en-held", tab: "enrich" as const, label: "Who held the seat", sub: "Free once the company is open", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "heldBy" } },
-          { id: "en-dm", tab: "enrich" as const, label: "Decision maker", sub: "Name and title of who hires, one purchase", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "decider" } },
-          { id: "en-email", tab: "enrich" as const, label: "Work email", sub: "Needs the decision maker's name first", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "email" } },
+          { id: "en-dm", tab: "enrich" as const, label: "Decision maker", sub: "Name and title of who hires, where on file. One purchase", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "decider" } },
+          { id: "en-email", tab: "enrich" as const, label: "Work email", sub: "Where a member added one. Needs the decision maker's name first", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "email" } },
           { id: "en-rate", tab: "enrich" as const, label: "Rate paid", sub: "What the latest seat paid, where a member shared it", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "rate" } },
           {
             id: "en-evidence",
