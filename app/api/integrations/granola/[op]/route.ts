@@ -2,9 +2,15 @@
  * Granola (lib/granola), for the signed-in member only (the app's cookie). Off (404) unless RN_GRANOLA=1,
  * except status, which says { on: false }.
  *
- * GET  status                       GranolaStatus: connected or not, the key's last four characters, canDraft. Never the key.
- * POST connect { key }              check the key with one call to Granola, then keep it sealed
- * POST disconnect                   delete the key
+ * GET  status                       GranolaStatus: connected or not (and how), the key's last four characters, canDraft, and
+ *                                   whether Connect Granola is offered (oauth). Never a key or a token.
+ * GET  start?back=<path>            Connect Granola: to Granola's consent page (OAuth 2.1 with PKCE, lib/granola/oauth.ts),
+ *                                   with a sealed one-time state cookie bound to the member's session
+ * GET  callback                     Granola's answer: the code swapped for tokens, kept sealed, then back to <path>
+ *                                   with ?granola=connected|denied|failed|unavailable. The redirect address registered
+ *                                   with Granola: `${RN_PUBLIC_URL}/api/integrations/granola/callback`.
+ * POST connect { key }              the fallback: check a pasted API key with one call to Granola, then keep it sealed
+ * POST disconnect                   delete the connection (a sign-in's tokens revoked at Granola first, when it can)
  * GET  calls?company=<id>           recent calls (last 30 days) with anyone at that company's domain, newest first
  * GET  calls?email=<addr>           ... with that person
  * GET  calls?recent=1               ... any recent call
@@ -17,7 +23,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { publicOrigin } from "@/lib/mcp/http";
 import { limited } from "@/lib/rateLimit";
-import { GranolaProblem, connectGranola, disconnectGranola, granolaCalls, granolaStatus, transcriptForPicker } from "@/lib/granola";
+import { GranolaProblem, backPath, backWith, connectGranola, disconnectGranola, finishSignIn, granolaCalls, granolaStatus, startSignIn, transcriptForPicker } from "@/lib/granola";
+import { OAUTH_COOKIE, OAUTH_COOKIE_PATH } from "@/lib/granola/oauth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,6 +51,25 @@ export const GET = guarded(async (req: NextRequest, ctx: Ctx) => {
   if (op === "status") {
     const status = await granolaStatus(token);
     return status ? NextResponse.json({ status }, { headers: noStore }) : fail(SIGNED_OUT, 401, "signed_out");
+  }
+  // Connect Granola: the consent page, and the way back. Both are page loads, so they answer with a redirect.
+  if (op === "start" || op === "callback") {
+    const origin = publicOrigin(req);
+    const secure = origin.startsWith("https://");
+    const go = (path: string, status = 303) => NextResponse.redirect(`${origin}${path}`, { status, headers: { ...noStore, "referrer-policy": "no-referrer" } });
+    if (op === "start") {
+      if (!token) return go("/");
+      if (limited(`granola-start:${token.slice(-16)}`, 10, 10 * 60_000)) return go(backWith(backPath(q.get("back")), "failed"));
+      const out = await startSignIn(token, q.get("back"));
+      if (!out.ok) return out.why === "unavailable" ? go(backWith(out.back, "unavailable")) : go("/");
+      const res = NextResponse.redirect(out.url, { status: 302, headers: { ...noStore, "referrer-policy": "no-referrer" } });
+      res.cookies.set(OAUTH_COOKIE, out.cookie, { httpOnly: true, sameSite: "lax", secure, path: OAUTH_COOKIE_PATH, maxAge: 600 });
+      return res;
+    }
+    const { outcome, back } = await finishSignIn(token, { state: q.get("state"), code: q.get("code"), error: q.get("error") }, req.cookies.get(OAUTH_COOKIE)?.value ?? null);
+    const res = go(backWith(back, outcome));
+    res.cookies.set(OAUTH_COOKIE, "", { httpOnly: true, sameSite: "lax", secure, path: OAUTH_COOKIE_PATH, maxAge: 0 });
+    return res;
   }
   if (!token) return fail(SIGNED_OUT, 401, "signed_out");
   const key = token.slice(-16);

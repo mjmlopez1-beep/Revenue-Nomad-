@@ -31,7 +31,12 @@ export type GranolaCode =
   | "server" // 5xx
   | "timeout"
   | "unreachable"
-  | "bad_answer";
+  | "bad_answer"
+  // Granola's sign-in and MCP server (lib/granola/oauth.ts, mcp.ts):
+  | "bad_client" // the token endpoint no longer knows Merlin's client: registered again next time
+  | "no_sign_in" // discovery or registration failed: Connect Granola isn't offered
+  | "pending" // the transcript isn't written yet
+  | "no_transcript"; // Granola has none for this meeting
 
 export class GranolaError extends Error {
   constructor(
@@ -46,9 +51,9 @@ export class GranolaError extends Error {
 
 const buckets = new Map<string, { tokens: number; at: number }>();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const keyId = (key: string) => createHash("sha256").update(`rn-granola-bucket:${key}`).digest("hex").slice(0, 24);
+export const keyId = (key: string) => createHash("sha256").update(`rn-granola-bucket:${key}`).digest("hex").slice(0, 24);
 
-async function turn(id: string): Promise<void> {
+export async function turn(id: string): Promise<void> {
   const started = Date.now();
   for (;;) {
     const now = Date.now();
@@ -82,7 +87,7 @@ function codeOf(status: number, code: string): GranolaCode {
 }
 
 /** Retry-After in ms (seconds or an HTTP date), capped. */
-function retryAfter(h: string | null): number | null {
+export function retryAfter(h: string | null): number | null {
   if (!h) return null;
   const n = Number(h);
   if (Number.isFinite(n) && n >= 0) return Math.min(n * 1000, 10_000);

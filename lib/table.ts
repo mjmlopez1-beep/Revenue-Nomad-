@@ -3579,8 +3579,8 @@ function warmShared() {
 const NOBODY_BLIND = new Set([
   "ledger", "held", "unlocks", "follows", "referralPaid", "reportLog", "signals", "lockedViews", "digest", "connector", "integrations", "radar", "inviteJoins",
   "billing", "found", "findMisses", "seatInvites", "seatPrivate", "benchRates", "n", "at", "firstAt", "hist",
-  // A member's Granola key (lib/granola) is theirs alone.
-  "granola",
+  // A member's Granola key (lib/granola) is theirs alone, and Merlin's own client at Granola's sign-in names nobody.
+  "granola", "granolaApp",
   // A member's moves and writing voice are theirs alone: Nobody has neither, and no record reads them.
   "moves", "voice",
   // Each member's pipeline is theirs alone too, and so are their notes on companies.
@@ -7873,12 +7873,12 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // snapshots keep them). One-time sign-in links are short-lived and stay behind.
   // [google network] a member's network (and its sealed Google tokens) is theirs alone: never in the export.
   // A member's writing voice and what they did with their moves are theirs alone too, and so are their LinkedIn connections (lib/paths).
-  // A member's Granola key (sealed, lib/granola) never leaves in the export.
+  // A member's Granola key or sign-in tokens (sealed, lib/granola) never leave in the export, nor Merlin's client secret at Granola.
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
   // A member's notes on companies (lib/companyNotes.ts) are theirs alone as well, and so is their Evidence Bank (lib/evidence) and its AI agreement.
   // The bell's inbox (lines that name what the member opened) and the watch pass's keys and queues are theirs alone too; the alert log (counts) and the alerts' switches stay.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, evidence: _evidence, evidenceAi: _evidenceAi, messageAi: _messageAi, inbox: _inbox, alertWatch: _alertWatch, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, granolaApp: _granolaApp, evidence: _evidence, evidenceAi: _evidenceAi, messageAi: _messageAi, inbox: _inbox, alertWatch: _alertWatch, ...rest } = s as State & { paths?: unknown; granola?: unknown; granolaApp?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
