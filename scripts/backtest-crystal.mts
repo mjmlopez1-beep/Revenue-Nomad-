@@ -15,6 +15,12 @@
  *   (c) the new model's likelihood alone (no timing), for reference.
  * A hit is the function that actually came next in the top 1 or the top 3. Today's logic only
  * counts a hit for a function it would have flagged at all.
+ *
+ * Then the member's tuning (Profile.radarTune, lib/radar/tune.ts) on the signals of the last 30 days:
+ * one made-up member per function at a typical ideal client (United States, 11 to 500 people), scored
+ * with no tuning and with every group set to Normal (the two must be identical: tuning never changes
+ * anyone's default results), then with each group at Less and at More: how many signals change band,
+ * how many companies change place in the top 20, and that the companies in the ball stay the same.
  */
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -186,6 +192,51 @@ async function main() {
     `Tenure of ended fractional leadership seats with a start and an end: ${lengths.length} (${yearOnly} with a year alone). Median ${Number.isFinite(med) ? med.toFixed(1) : "n/a"} months, average ${Number.isFinite(avg) ? avg.toFixed(1) : "n/a"} (the marks use ${P.TENURE_MARKS.join(" and ")}).`,
   );
   console.log(`Of the seats that lasted 12 months or more, ${pct(in12to18, after12.length)} ended in the 6 months after (the 12-month mark's window).`);
+
+  // Tuning: the same signals, scored per made-up member, untuned and tuned. Counts only.
+  const M = await import("../lib/radar/match");
+  const TU = await import("../lib/radar/tune");
+  const nowMs = Date.now();
+  const sigs = S.detectSignals(seed, s, nowMs - 30 * 24 * 60 * 60 * 1000, nowMs);
+  const counts = S.observedTransitions(seed, s);
+  const icp = { industries: [], employees: ["11–50", "51–200", "201–500"], revenue: [], countries: ["United States"] };
+  const profiles = candidatesAll.map((fn) => ({ memberId: `mem_backtest_${fn}`, fn, icp, before: [], beforeFromMember: false }));
+  const top = (xs: { companyId: string }[]) => [...new Set(xs.map((x) => x.companyId))].slice(0, 20);
+  let same = 0;
+  let diff = 0;
+  const per = new Map<string, { band: number; moved: number; ballSame: boolean; n: number }>();
+  for (const p of profiles) {
+    const base = M.signalsFor(sigs, p, { counts, nowMs });
+    const normal = M.signalsFor(sigs, { ...p, tune: Object.fromEntries(TU.TUNE_GROUPS.map((g) => [g.key, 1])) as import("../lib/radar/tune").RadarTune }, { counts, nowMs });
+    const eq = base.length === normal.length && base.every((x, i) => normal[i].key === x.key && normal[i].score === x.score && normal[i].band === x.band);
+    if (eq) same++;
+    else diff++;
+    for (const g of TU.TUNE_GROUPS)
+      for (const step of [0, 2] as const) {
+        const k = `${g.key}:${step}`;
+        const t = M.signalsFor(sigs, { ...p, tune: { [g.key]: step } }, { counts, nowMs });
+        const was = new Map(base.map((x) => [x.key, x.band]));
+        const r = per.get(k) ?? { band: 0, moved: 0, ballSame: true, n: 0 };
+        r.band += t.filter((x) => was.get(x.key) !== x.band).length;
+        const a = top(base);
+        const b = top(t);
+        r.moved += a.filter((c, i) => b[i] !== c).length;
+        r.ballSame &&= new Set(base.map((x) => x.companyId)).size === new Set(t.map((x) => x.companyId)).size && base.length === t.length;
+        r.n += base.length;
+        per.set(k, r);
+      }
+  }
+  console.log("");
+  console.log(`Tuning, on ${sigs.length} signals of the last 30 days, ${profiles.length} made-up members (one per function, a typical ideal client).`);
+  console.log(`No tuning against every group at Normal: ${same} of ${profiles.length} members identical, ${diff} different.`);
+  console.log("(The prediction numbers above read no tuning: they rank functions, not the member's signals.)");
+  for (const g of TU.TUNE_GROUPS) {
+    const less = per.get(`${g.key}:0`)!;
+    const more = per.get(`${g.key}:2`)!;
+    console.log(
+      `${g.key.padEnd(5)} Less: ${String(less.band).padStart(4)} signals change band, ${String(less.moved).padStart(4)} top-20 places move, ball ${less.ballSame ? "same" : "CHANGED"}   More: ${String(more.band).padStart(4)} change band, ${String(more.moved).padStart(4)} places move, ball ${more.ballSame ? "same" : "CHANGED"}`,
+    );
+  }
 }
 
 main()
