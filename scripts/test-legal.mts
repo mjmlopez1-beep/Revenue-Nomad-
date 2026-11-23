@@ -211,7 +211,7 @@ async function main() {
   );
   check(
     "the data page and its notes say Peers: shown to the members in it, nothing outside but the email, the export without what members wrote",
-    flat("app/data/DataFlows.tsx").includes("Inside Merlin: Peers") && flat("app/data/DataFlows.tsx").includes("Only the members in it see it") && flat("app/data/DataFlows.tsx").includes("leaves out what members wrote") && src("docs/data-flows.md").includes("## 4. Inside Merlin: Peers") && src("docs/data-flows.md").includes("leaves out what members wrote"),
+    flat("app/data/DataFlows.tsx").includes("Inside Merlin: Fractionals and Peers") && flat("app/data/DataFlows.tsx").includes("Only the members in it see it") && flat("app/data/DataFlows.tsx").includes("leaves out what members wrote") && src("docs/data-flows.md").includes("## 4. Inside Merlin: Peers") && src("docs/data-flows.md").includes("leaves out what members wrote"),
   );
   check("the data page links both", src("app/data/DataFlows.tsx").includes('href="/privacy"') && src("app/data/DataFlows.tsx").includes('href="/terms"'));
 
