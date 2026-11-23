@@ -242,6 +242,7 @@ async function main() {
   const html = render(React.createElement(WP.WarmBody, { v, reload: async () => {}, phone: false }));
   const marks = html.match(/<button[^>]*class="wp-mark[^"]*"[^>]*>/g) ?? [];
   check("the map: every company on it a button with words for screen readers", marks.length === v.rows.filter((r) => r.onMap).length && marks.every((m) => /aria-label="[^"]+"/.test(m)), marks.length);
+  check("comparing routes reads as a sentence: the generic labels in lower case", WP.routeWords(false, 0, "Their decision maker") === "Straight to their decision maker" && WP.routeWords(true, 1, "Sela Ortiz") === "Recommended: through Sela Ortiz" && WP.routeWords(false, 1, "A fellow fractional") === "Through a fellow fractional");
   check("the four quadrants, each saying what it means and how many", R.ZONES.every((z) => text(html).includes(WP.QUADRANTS[z].title) && text(html).includes(WP.QUADRANTS[z].hint)));
   check("the lines are explained: placed in the middle of the member's companies", /The lines sit in the middle of your \d+ companies/.test(text(html)) && /Your warmest way in today is \d+%/.test(text(html)), text(html).match(/The lines sit[^.]*\./)?.[0]);
   check("a Map or Table switch, the ranked list, the path aside", /aria-pressed="true"[^>]*>Map</.test(html) && />Table</.test(html) && /aria-label="Ranked list, best first"/.test(html) && /aria-label="The path into the company you picked"/.test(html));

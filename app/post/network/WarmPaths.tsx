@@ -65,6 +65,13 @@ const SRC_TAG: Record<WaySource, string> = {
   direct: "a note out of the blue",
 };
 
+/** "Recommended: through Sela Ortiz", "Straight to their decision maker": a sentence, the generic labels in lower case. */
+export const routeWords = (recommended: boolean, between: number, label: string) => {
+  const who = /^(Their|A|An|The) /.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label;
+  const t = `${between === 0 ? "straight to" : "through"} ${who}`;
+  return recommended ? `Recommended: ${t}` : t.charAt(0).toUpperCase() + t.slice(1);
+};
+
 const initials = (name: string) =>
   name
     .split(/\s+/)
@@ -946,11 +953,7 @@ function Aside({ r, noteOpen, setNote, onSources }: { r: WarmRow; noteOpen: bool
               <span className="wp-eyebrow">Compare the routes</span>
               {routes.map((x, k) => (
                 <button key={x.id} type="button" className="wp-alt" aria-pressed={x.id === rt.id} onClick={() => (setRouteIdx(k), setNote(false))}>
-                  <span className="wp-ell">
-                    {k === 0 ? "Recommended: " : ""}
-                    {x.between === 0 ? "straight to " : "through "}
-                    {x.between === 0 ? x.nodes[1]?.label : x.nodes[1]?.label}
-                  </span>
+                  <span className="wp-ell">{routeWords(k === 0, x.between, x.nodes[1]?.label ?? "")}</span>
                   <strong>{x.est}%</strong>
                 </button>
               ))}
