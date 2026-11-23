@@ -299,6 +299,28 @@ async function main() {
   const copy = await S.signedCopy(S.copyToken(x.id), BASE);
   check("the signed copy's page: the seal, its download and Check a copy", copy?.sealed?.sha256 === x.seal!.sha256 && copy.sealed.check === "https://post.example.com/check" && copy.sealed.events >= 5, copy?.sealed);
 
+  /* ---------- a drawn signature on a proposal (Draw it) ---------- */
+
+  const pd0 = await S.createProposal(JOR, { companyName: "Cedar and Pine Software", title: "Cedar and Pine Software · Drawn" }, BASE);
+  await S.updateProposal(JOR, pd0.id, { blocks: BLOCKS, signer: { name: "Dana Whitfield", email: "dana.draw@cedarandpine.example", title: "CEO" } }, BASE);
+  const md0 = mails.length;
+  await S.sendProposal(JOR, pd0.id, {}, BASE);
+  const dlink = mails.slice(md0).find((m) => m.to === "dana.draw@cedarandpine.example")?.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)?.[1] ?? "";
+  const dv = await S.signerView(dlink, who, BASE);
+  const md1 = mails.length;
+  await S.requestCode(dlink, who);
+  await S.verifyCode(dlink, mails.slice(md1).find((m) => m.to === "dana.draw@cedarandpine.example")?.text.match(/\b(\d{6})\b/)?.[1] ?? "", who, BASE);
+  check("drawn: a drawing that isn't a PNG is refused in words, nothing kept", /drawing|signature/i.test(String(await refused(S.signProposal(dlink, { name: "Dana Whitfield", consent: true, hash: dv.hash, method: "drawn", png: "data:image/png;base64,AAAA" }, who, BASE)))) && !existsSync(path.join(dir, "proposals", (await T.loadState()).proposals!.find((q) => q.id === pd0.id)!.sends[0].id, "client-sig.png")));
+  const drawing = png(80, 20, 5);
+  const dsv = await S.signProposal(dlink, { name: "Dana Whitfield", consent: true, hash: dv.hash, method: "drawn", png: drawing }, who, BASE);
+  const dx = (await T.loadState()).proposals!.find((q) => q.id === pd0.id)!.sends[0];
+  const dfile = path.join(dir, "proposals", dx.id, "client-sig.png");
+  check("drawn: signed, the drawing kept with the send (private), its SHA-256 on the record, the trail says drawn", dsv.status === "signed" && dx.signed?.method === "drawn" && existsSync(dfile) && (statSync(dfile).mode & 0o777) === 0o600 && sha(readFileSync(dfile)) === dx.signed.pngSha256 && dx.events.some((e) => e.kind === "signed" && /drew a signature/.test(e.note ?? "")));
+  check("drawn: the page shows the drawing back, and the signed copy does", dsv.signedImg === drawing && (await S.signedCopy(S.copyToken(dx.id), BASE))?.signedImg === drawing);
+  const dpdf = await S.sealedPdf(S.copyToken(dx.id), BASE);
+  check("drawn: the sealed PDF carries the drawing (an image on its signature page)", !!dpdf && Buffer.from(dpdf.bytes).includes(Buffer.from("/Subtype /Image")) && !!dx.seal && sha(dpdf.bytes) === dx.seal.sha256);
+  check("typed (the default) records the method as typed", x.signed?.method === "typed" || x.signed?.method === undefined);
+
   /* ---------- checking a copy ---------- */
 
   const match = await SEAL.checkCopy(pdfBytes);

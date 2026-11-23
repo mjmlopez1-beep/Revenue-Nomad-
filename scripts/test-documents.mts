@@ -430,6 +430,28 @@ async function main() {
     return t === "abcdef" && PS.proposalInternals.cleanLine("‮ Title ​", 50) === "Title";
   })());
 
+  /* ================= saved contracts (lib/documents/templates.ts) ================= */
+  console.log("\nsaved contracts");
+  const TP = await import("../lib/documents/templates");
+  const kept = await TP.saveContract(PAT, d.id, {});
+  check("save to reuse: its fields and places kept, the client's name gone from its title", kept.fields === d.fields.length && kept.roles.length === 1 && kept.meSigns && kept.uses === 0 && kept.name === "Acme consulting agreement" && /^dc_/.test(kept.id) && kept.id !== d.id, kept);
+  const keptRec = (await T.loadState()).documents!.find((x) => x.id === kept.id)!;
+  check("  the other side's name and email are not kept, only their place (and title)", keptRec.signers.filter((x) => !x.sender).every((x) => x.name === "" && x.email === "") && !JSON.stringify(keptRec).includes("dana@acmerobotics.example") && !keptRec.fields.some((f) => f.prefill));
+  check("  its own copy of the PDF, private on the volume", existsSync(path.join(dir, "documents", kept.id, "original.pdf")) && (statSync(path.join(dir, "documents", kept.id, "original.pdf")).mode & 0o777) === 0o600);
+  check("  never in the list of documents, and listed as saved", !(await PS.listProposals(PAT, BASE)).documents.some((x) => x.id === kept.id) && (await TP.listSaved(PAT)).some((x) => x.id === kept.id));
+  check("  never changed or sent itself", (await refused(S.updateDocument(PAT, kept.id, { title: "x" }, BASE)))?.includes("saved contract") && (await refused(S.sendDocument(PAT, kept.id, {}, BASE)))?.includes("saved contract") && (await refused(S.copyDocument(PAT, kept.id, BASE)))?.includes("saved contract"));
+  check("  using it needs who signs, never your own email", (await refused(TP.useContract(PAT, kept.id, { signers: [] }, BASE)))?.includes("who signs") && (await refused(TP.useContract(PAT, kept.id, { signers: [{ name: "Pat Rowan", email: "pat.docs@example.com" }] }, BASE)))?.includes("your own email"));
+  const used = await TP.useContract(PAT, kept.id, { signers: [{ name: "Owen Reyes", email: "owen@larkspur.example", title: "CEO" }], companyId: ACME }, BASE);
+  check("used: a new draft with the same fields, the new signer in its place and the member last", used.status === "draft" && used.fields.length === d.fields.length && used.signers.map((x) => x.email).join() === "owen@larkspur.example,pat.docs@example.com" && used.signers[1].sender && used.company.id === ACME && used.title === "Acme Robotics · Acme consulting agreement", used);
+  check("  ready to send as it is", S.notReady((await T.loadState()).documents!.find((x) => x.id === used.id)!) === null);
+  check("  the saved one counts the use", (await TP.listSaved(PAT)).find((x) => x.id === kept.id)?.uses === 1);
+  const usedNoMe = await TP.useContract(PAT, kept.id, { signers: [{ name: "Owen Reyes", email: "owen@larkspur.example" }], me: false }, BASE);
+  check("  without the member this time: their place and fields left off", usedNoMe.signers.length === 1 && usedNoMe.fields.every((f) => f.signer === usedNoMe.signers[0].id));
+  check("  another member can't see, use or delete it", (await TP.listSaved(OTH)).length === 0 && (await refused(TP.useContract(OTH, kept.id, { signers: [{ name: "A B", email: "a@b.example" }] }, BASE)))?.includes("isn't there") && (await refused(TP.removeSaved(OTH, kept.id)))?.includes("isn't there"));
+  check("  a draft with no fields can't be saved", (await refused(TP.saveContract(PAT, (await S.uploadDocument(PAT, "blank.pdf", original, BASE)).id, {})))?.includes("Place its fields"));
+  await TP.removeSaved(PAT, kept.id);
+  check("delete a saved contract: gone with its file; the contracts made from it keep theirs", !(await TP.listSaved(PAT)).some((x) => x.id === kept.id) && !existsSync(path.join(dir, "documents", kept.id)) && existsSync(path.join(dir, "documents", used.id, "original.pdf")));
+
   /* ================= privacy ================= */
   console.log("\nprivacy");
   check("another member can't read it", (await refused(S.getDocument(OTH, d.id, BASE)))?.includes("isn't there"));
