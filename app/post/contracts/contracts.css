@@ -1075,7 +1075,12 @@ li.ct-exrow {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  padding-top: 8px;
+  padding: 12px 0;
+  /* The step's buttons stay in reach however long the page beside it is. */
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 .ct-row {
   display: flex;

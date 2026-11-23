@@ -1520,3 +1520,20 @@ button.cv-opt {
 .cv-total-s {
   color: var(--ink);
 }
+/* Signed: the thank-you on mint (the mockup's), never a dark card. */
+.cv-done {
+  border: 1px solid #b9d9ca;
+  background: #e8f3ee;
+}
+.cv-done-h {
+  color: var(--ink);
+}
+.cv-done-p {
+  color: var(--ink);
+}
+.cv-done .cv-btn {
+  border-color: var(--line-strong);
+}
+.cv-done .cv-btn-pine {
+  border: 0;
+}
