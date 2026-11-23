@@ -284,7 +284,7 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
   );
 }
 
-/** "SaaS and Fintech · 51–200 · US", the member's Ideal Fractional Profile under its switch. */
+/** "SaaS and Fintech · 51–200 · US", the member's ideal client under its switch. */
 export function icpWords(icp: Icp | null | undefined): string {
   if (!icp) return "";
   return [icp.industries.slice(0, 3).join(" and "), icp.employees.join(", "), icp.revenue.join(", "), icp.countries.map(countryShort).join(", ")].filter(Boolean).join(" · ");
@@ -395,7 +395,7 @@ function FilterPanel({
               <span className="tp-check" aria-hidden>
                 {f.fits && <IconCheck size={11} />}
               </span>
-              <span className="tp-ftoggle-l">Serves your Ideal Fractional Profile</span>
+              <span className="tp-ftoggle-l">Serves your ideal client</span>
               <span className="num fr-chip-n">{choices.fits.toLocaleString("en-US")}</span>
             </button>
             <p className="fr-fnote">
@@ -409,7 +409,7 @@ function FilterPanel({
           <p className="fr-fnote">
             Say who your clients are and this narrows to fractionals who serve the same kind.{" "}
             <button type="button" className="fr-link" onClick={onProfile}>
-              Set your Ideal Fractional Profile
+              Set your ideal client
             </button>
           </p>
         )}

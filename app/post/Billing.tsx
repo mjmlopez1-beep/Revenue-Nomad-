@@ -119,8 +119,11 @@ function useBilling() {
 
 /* ---------- Free against Pro ---------- */
 
-/** Free, Pro and Close, row by row (lib/billing/compare.ts, shared with the landing page's pricing). */
-export const ROWS = PLAN_ROWS;
+/**
+ * Free, Pro and Close, row by row (lib/billing/compare.ts, shared with the landing page's pricing).
+ * In the app the agent row names no app (any agent connects, from Agent access); the Terms keep PLAN_ROWS as written.
+ */
+export const ROWS = PLAN_ROWS.map((r) => (r[0] === "Claude" ? (["Your agent", ...r.slice(1)] as typeof r) : r));
 
 export function CompareTable({ current }: { current?: "free" | "pro" | "close" }) {
   return (

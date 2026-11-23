@@ -1288,8 +1288,9 @@ export function RatesPage() {
     status = (
       <span className="rt-later">
         {seatOpen} of {seatRows.length} at companies you can see. {seatRate}{" "}
-        {seatRate === 1 ? "rate shows" : "rates show"}. A rate is 1 credit once
-        its company is open, asked first.
+        {seatRate === 1 ? "rate shows" : "rates show"}. A posted rate comes with
+        its company. A rate shared by a member is 1 credit once its company is
+        open, asked first.
       </span>
     );
   }
