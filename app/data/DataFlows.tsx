@@ -179,7 +179,7 @@ export function DataFlows() {
               contacts file at any time, and every way in found from it goes with it.
             </p>
             <p className="cl-p">
-              Suggested additions (when Revenue Nomad turns it on): after you bring in your LinkedIn connections file or a contacts CSV, Merlin can list the people in
+              Suggested additions (when Revenue Nomad turns it on): after you bring in your connections file or a contacts CSV, Merlin can list the people in
               it who look like a leader at a company on Merlin with nobody like that on file. Nothing is added unless you tick it. For each person you tick, only
               their name, title and that they decide go on the company&apos;s record, never an email, a phone or anything else from your file, and you earn 1 credit
               within the daily limit. Your Google contacts are never used for this. Nobody at a company based in California or outside the United States is
