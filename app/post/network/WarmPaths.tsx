@@ -242,7 +242,7 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
         )}
         {first && v.icp && (
           <span className="wp-icp">
-            Showing companies that fit the ideal client you gave: {v.icp}.{" "}
+            Already filtered to your ideal client, from what you said when you signed up: {v.icp}.{" "}
             <button type="button" className="wp-link" onClick={c.openProfile}>
               Change your ideal client
             </button>

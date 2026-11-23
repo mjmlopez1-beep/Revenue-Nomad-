@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { NAME_HIDDEN, seatNameWho } from "@/lib/tableFields";
 import { seatConfirmFields, type SeatGuessView } from "@/lib/google/types";
-import { CompanyLogo, IconCheck, IconChevron, IconLock, LockedName, useToast } from "../../ui/shared";
+import { CompanyLogo, IconCheck, IconChevron, IconLock, IconX, LockedName, useToast } from "../../ui/shared";
 import { atTime, plural, store } from "../hooks";
 import { earnRoom } from "../NextMove";
 import { namedFn, shown, type CoInfo, type SeatInfo } from "../model";
@@ -414,7 +414,7 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
             </>
           )}
           <button type="button" className="wb-iconbtn" aria-label="Dismiss" onClick={() => (setStripOff(stage), c.start.dismissStrip(stripKey))}>
-            ×
+            <IconX size={16} />
           </button>
         </section>
       )}

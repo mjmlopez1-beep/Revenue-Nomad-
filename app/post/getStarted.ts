@@ -268,7 +268,8 @@ export interface SixInput {
   evidenceReady?: number;
 }
 
-const MIN = { icp: 2, seat: 5, network: 3, open: 1, alert: 1, evidence: 10 } as const;
+/** Minutes each step takes, as Home, the rail card and each page's step panel say it. */
+export const MIN = { icp: 2, seat: 5, network: 3, open: 1, alert: 1, evidence: 10 } as const;
 
 /** A saved list with an alert on: its weekly email, or (F5) its alert switched on. */
 export const alertOn = (v: { email?: boolean; alert?: { on?: boolean } }) => (v.alert ? !!v.alert.on : !!v.email);

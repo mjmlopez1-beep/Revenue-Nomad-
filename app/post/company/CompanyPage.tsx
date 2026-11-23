@@ -27,7 +27,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Benchmarks, EngagementRec, PersonRec } from "@/lib/tableTypes";
 import type { KnownPersonView } from "@/lib/paths/types";
 import { FOUND_NOTE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY } from "@/lib/tableFields";
-import { CompanyLogo, IconChevron, IconExternal, hrefFor, post, val } from "../../ui/shared";
+import { CompanyLogo, IconChevron, IconExternal, IconX, hrefFor, post, val } from "../../ui/shared";
 import { COMPANY_GTM, fitReason, fnGap, namedFn, shown, type CoInfo, type SeatInfo } from "../model";
 import { Pro, useUi } from "../ui";
 import { Fit } from "../Tables";
@@ -524,7 +524,7 @@ export function CompanyRecord(props: CompanyRecordProps) {
             )}
             {onStripOff && (
               <button type="button" className="ws-strip-x" aria-label="Dismiss" onClick={onStripOff}>
-                <span aria-hidden>×</span>
+                <IconX size={16} />
               </button>
             )}
           </section>

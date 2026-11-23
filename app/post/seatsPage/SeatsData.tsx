@@ -318,7 +318,7 @@ export function SeatsData({ tab, bottom }: { tab: Exclude<SeatTab, "mine">; bott
       {!ended && t.filters.icp && hasIcp && !hired && (
         <div className="sp-note">
           <span>
-            <strong>Filtered to your ideal client.</strong> From what you said when you signed up.
+            Already filtered to your ideal client, from what you said when you signed up.
           </span>
           <button type="button" className="tp-flink" onClick={c.openProfile}>
             Change your ideal client

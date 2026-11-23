@@ -529,7 +529,7 @@ export function PeoplePage() {
           </span>
           {scope === "ideal" && hasIcp && (
             <span className="ppl-ideal">
-              <span>{first ? "Already filtered to your ideal client, from sign-up." : "People at your ideal client."}</span>
+              <span>{first ? "Already filtered to your ideal client, from what you said when you signed up." : "People at your ideal client."}</span>
               <button type="button" className="tp-flink" onClick={c.openProfile}>
                 Change your ideal client
               </button>

@@ -7,8 +7,13 @@
 .hn-host .ws-head {
   border-bottom: 1px solid var(--line);
 }
+/* A band under the header, as every workbench page draws its strip (Companies, People, Crystal Ball). */
 .hn .ws-strip {
+  margin: 0;
+  padding: 8px 8px 8px 18px;
+  border: 0;
   border-bottom: 1px solid var(--line);
+  border-radius: 0;
 }
 .hn-toolbar {
   flex-wrap: wrap;

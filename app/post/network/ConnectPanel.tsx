@@ -31,6 +31,7 @@ import { GoogleG, GooglePolicyLink, startGoogle } from "./Network";
 import { useNetwork } from "./useNetwork";
 import { pathsAct, useKnown, usePaths } from "./usePaths";
 import "./connectPanel.css";
+import { MIN as SIX_MIN } from "../getStarted";
 
 export type SourceKey = "google" | "linkedin" | "csv";
 
@@ -140,7 +141,7 @@ export function ConnectPanel({
       {step && (
         <div className="cp-eyebrow">
           <span>
-            Step {step.n} of {step.of} · Free · 2 minutes
+            Step {step.n} of {step.of} · Free · {SIX_MIN.network} minutes
           </span>
           {step.onClose && (
             <button type="button" className="cp-x" aria-label={`Close step ${step.n}`} onClick={step.onClose}>
