@@ -712,6 +712,8 @@ console.log("\nThe API's routes");
     "api/check",
     // Documents to sign (lib/documents): the member's cookie for their own uploads; api/documents/file: the member's cookie, the signer's own signing link, or the finished copy's link.
     "api/documents", "api/documents/file",
+    // Evidence Bank (lib/evidence): the member's cookie for their own cases; Close only.
+    "api/evidence", "api/evidence/closest",
     // A link in the weekly email or an email's footer: a signed grant for one member, 7 days, used once (lib/emailIn.ts); it only ever goes to a path in the app.
     "api/go",
     "api/health", "api/integrations",
