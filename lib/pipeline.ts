@@ -34,6 +34,10 @@
  * title or an attendee list. Without Gmail, Sent comes from Merlin's own actions and Replied from
  * replies on Merlin; Meeting comes from the calendar.
  *
+ * What a deal is worth: the member types it, dollars a month (Add a deal, or the deal's card:
+ * PipelineEntry.value), with the seat they pitch (pitch). Never a guess of Merlin's; the benchmark
+ * range is a hint beside the box. A Won deal with terms counts its terms instead (dealMonthly).
+ *
  * Intros: when a member asks someone for an introduction (a move's "Ask for an intro", Your
  * network, or a conversation with another member) it is recorded with the member who asked. When
  * the one asked is a member, they see it too and either side can mark it made or declined. An intro
