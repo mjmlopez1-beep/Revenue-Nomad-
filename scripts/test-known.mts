@@ -2,7 +2,8 @@
  * Checks of the Stage 7a merge's wiring:
  *   - Someone you know changed jobs on Home and Warm paths (lib/notify/knownView.ts knownFor,
  *     GET /api/table?known=1, app/post/network/KnownMoves.tsx): from the member's own LinkedIn
- *     file and contacts CSV only, never Google; a Californian is never named; at a company the
+ *     file, contacts CSV and Google network, for that member alone (never the agent's saves, never
+ *     what they set aside); a Californian is never named; at a company the
  *     member hasn't opened nobody is named and the company is described by its industry and size;
  *     only the last 30 days; the watch's alert reads the same sources;
  *   - the connector's alerts tool sets an alert's triggers and how often through the app's own
@@ -83,7 +84,8 @@ writeFileSync(
         csv: { at: seen, skipped: 0, rows: [{ n: "Sam Ortiz", c: "Larkspur Learning" }, { n: "Jo Park", c: "Halcyon Freight" }] },
       },
     },
-    // Robin Hale is in Jordan's Google network at Larkspur, and Gale knows people only through Google: neither ever feeds this.
+    // Robin Hale is in Jordan's Google network at Larkspur, so his move to Halcyon (locked for Jordan) is told without a name.
+    // Gale knows people only through Google, and Google places Robin at Halcyon already: no move.
     network: {
       mem_jordan: { con: { companies: { c_lark: { people: [{ name: "Robin Hale", title: "COO" }] } } } },
       mem_gee: { con: googleOnly, cal: googleOnly },
@@ -138,14 +140,27 @@ async function main() {
   const locked = v?.list.find((x) => x.company === pub("c_cedar"));
   check("at a locked company: nobody named, the company described by its industry and size", !!locked && !locked.named && /^Someone you know started at a locked SaaS company with 11.50 employees$/.test(locked.line), locked);
   check("  never the company's name or the person's", !/Cedar|cedarpine|Dana|Reyes/.test(all));
-  check("Google never feeds it: a person known only through Google is never matched", !/Robin|Hale/.test(all) && !v?.list.some((x) => x.company === pub("c_halcyon")), lines);
+  const hal = v?.list.find((x) => x.company === pub("c_halcyon"));
+  check("Google feeds it too: a person known through Google who moved is told (here at a locked company, nobody named)", !!hal && !hal.named && /^Someone you know started at a locked Freight & Trucking company with 201.500 employees$/.test(hal.line) && !/Robin|Hale|Halcyon/.test(all), lines);
   check("only the last 30 days", !/Jo Park/.test(all) && !v?.list.some((x) => x.company === pub("c_lark")));
   check("each move opens its company by public id, newest first, at most 5", (v?.list ?? []).every((x) => x.company === pub(["c_north", "c_cedar", "c_halcyon", "c_lark"].find((c) => pub(c) === x.company) ?? "") && !["c_north", "c_cedar"].includes(x.company)) && (v?.list ?? []).every((x, k, a) => !k || a[k - 1].at >= x.at) && (v?.list.length ?? 0) <= KV.KNOWN_MAX, v?.list);
   const gee = await KV.knownFor("tok-gee-known", t0);
-  check("a member with only Google has no source here, and no move", gee?.sources === false && gee.list.length === 0, gee);
+  check("a member with only Google has a source, and no move when Google already places the person at the new company", gee?.sources === true && gee.list.length === 0, gee);
   const s0 = await t.loadState();
-  check("hasKnownSources: the LinkedIn file or the CSV only", KV.hasKnownSources(s0, "mem_jordan") && !KV.hasKnownSources(s0, "mem_gee"));
-  check("knownPeopleOf reads only the files", KV.knownPeopleOf(s0, { id: "mem_jordan" }).every((p) => p.src === "linkedin" || p.src === "csv") && !KV.knownPeopleOf(s0, { id: "mem_jordan" }).some((p) => p.name === "Robin Hale") && KV.knownPeopleOf(s0, { id: "mem_gee" }).length === 0);
+  check("hasKnownSources: the LinkedIn file, the CSV or Google", KV.hasKnownSources(s0, "mem_jordan") && KV.hasKnownSources(s0, "mem_gee") && !KV.hasKnownSources(s0, "mem_free"));
+  check("knownPeopleOf reads the files and Google", KV.knownPeopleOf(s0, { id: "mem_jordan" }).some((p) => p.name === "Robin Hale" && p.src === "google" && p.companyId === "c_lark") && KV.knownPeopleOf(s0, { id: "mem_gee" }).every((p) => p.src === "google"));
+  {
+    // What the member's own agent saved is not a source; a company or person set aside on Google stays out.
+    const s2 = JSON.parse(JSON.stringify(s0));
+    s2.network.mem_free = { claude: { companies: { c_lark: { people: [{ key: "n:agent", name: "Avery Agent" }] } }, saves: [], named: [] } };
+    check("the agent's saves are never a source", !KV.hasKnownSources(s2, "mem_free") && KV.knownPeopleOf(s2, { id: "mem_free" }).length === 0);
+    s2.network.mem_jordan.notRel = { c_lark: "vendor" };
+    check("a company the member said is Not a relationship keeps its Google people out", !KV.knownPeopleOf(s2, { id: "mem_jordan" }).some((p) => p.name === "Robin Hale"));
+    delete s2.network.mem_jordan.notRel;
+    s2.network.mem_jordan.con.companies.c_lark.people[0].key = "robin@lark.example";
+    s2.network.mem_jordan.notPeople = ["robin@lark.example"];
+    check("a person the member said is Not a relationship stays out", !KV.knownPeopleOf(s2, { id: "mem_jordan" }).some((p) => p.name === "Robin Hale"));
+  }
 
   {
     // "Not a relationship" on Warm paths keeps the person out of Someone you know too.
@@ -172,7 +187,7 @@ async function main() {
   const jBox = (s1.inbox?.mem_jordan ?? []).filter((x) => x.alert === "known");
   const gBox = (s1.inbox?.mem_gee ?? []).filter((x) => x.alert === "known");
   check("the watch's alert: the same lines in the bell", jBox.some((x) => x.line === "Sam Ortiz, someone you know, is a new Marketing leader at Northwind Clinics") && jBox.some((x) => /^Someone you know started at a locked /.test(x.line)), jBox.map((x) => x.line));
-  check("  and never from Google", !JSON.stringify(s1.inbox ?? {}).match(/Robin|Hale/) && gBox.length === 0);
+  check("  a Google move goes to that member alone, unnamed at a locked company", !JSON.stringify(s1.inbox ?? {}).match(/Robin|Hale/) && gBox.length === 0 && jBox.some((x) => /locked Freight & Trucking/.test(x.line)));
 
   // The pages: Home's Today and Warm paths draw it, from GET /api/table?known=1.
   const home = src("app/post/Home2.tsx");
@@ -180,11 +195,12 @@ async function main() {
   const comp = src("app/post/network/KnownMoves.tsx");
   const route = src("app/api/table/route.ts");
   check("Home's Today shows it", /<KnownMoves where="home"/.test(home));
-  check("Warm paths shows it, only with a LinkedIn file or a CSV, never in its Example", /<KnownMoves where="warm" enabled=\{v\.own\.linkedin \|\| v\.own\.csv\}/.test(warm) && /!first && !ex && <KnownMoves/.test(warm));
+  check("Warm paths shows it, with Google, a LinkedIn file or a CSV, never in its Example", /<KnownMoves where="warm" enabled=\{v\.own\.google \|\| v\.own\.linkedin \|\| v\.own\.csv\}/.test(warm) && /!first && !ex && <KnownMoves/.test(warm));
   check("the component reads GET /api/table?known=1, and the route answers it", /\/api\/table\?known=1/.test(comp) && /searchParams\.get\("known"\)/.test(route) && /knownFor\(token\)/.test(route));
   check("the component draws the server's words only: no name of its own, no export", !/download|Blob|\.csv|text\/csv/i.test(comp));
   const kv = src("lib/notify/knownView.ts").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
-  check("the server half never reads Google's network", !/\.network\b|google|gm\b|\bcal\b|\bcon\b/i.test(kv));
+  check("the server half reads Google's Calendar, Contacts and Gmail but never the agent's saves", /n\?\.cal, n\?\.con, n\?\.gm/.test(kv) && !/\.claude\b/.test(kv));
+  check("Suggested additions still never read Google", !/\.network\b|knownView/.test(src("lib/paths/suggest.ts").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "")));
 
   /* ---------- the connector sets an alert's triggers and how often ---------- */
   console.log("\nThe connector's alerts: triggers and how often, with the app's plan gate");

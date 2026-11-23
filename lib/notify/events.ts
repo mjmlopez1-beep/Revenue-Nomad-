@@ -445,7 +445,7 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       const follows = fixedPref(s, m.id, "follows");
       const known = fixedPref(s, m.id, "known");
       const watchesFollows = follows.on && (s.follows[m.id] ?? []).length > 0;
-      // Someone you know reads the member's LinkedIn file and contacts CSV only, never Google (lib/notify/knownView.ts).
+      // Someone you know reads the member's LinkedIn file, contacts CSV and Google, for this member alone (lib/notify/knownView.ts).
       const watchesKnown = known.on && hasKnownSources(s, m.id);
       if (!lists.length && !watchesFollows && !watchesKnown) continue;
       who.push({ m, lists, follows: watchesFollows ? follows : { ...follows, on: false }, known: watchesKnown ? known : { ...known, on: false }, free: T.freeNow(s, m.id, nowMs) });

@@ -261,9 +261,8 @@ export async function alertsFor(token: string | null, since: string | null): Pro
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = memberByToken(seed, token, s);
   if (!m) return null;
-  const p = (s as { paths?: Record<string, { linkedin?: { rows?: unknown[] }; csv?: { rows?: unknown[] } }> }).paths?.[m.id];
-  // Someone you know reads the member's LinkedIn file and contacts CSV only, never Google (lib/notify/knownView.ts).
-  const sources = !!(p?.linkedin?.rows?.length || p?.csv?.rows?.length);
+  // Someone you know reads the member's LinkedIn file, contacts CSV and Google, for this member alone (lib/notify/knownView.ts).
+  const sources = (await import("./notify/knownView")).hasKnownSources(s, m.id);
   return alertsOf(s, m.id, since, Date.now(), sources);
 }
 
