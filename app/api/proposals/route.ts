@@ -9,6 +9,7 @@ import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/min
 import { DRAWING_TOO_BIG } from "@/lib/proposals/memberSig";
 import { acceptChange, proposeChange, restoreVersion, versionsOf } from "@/lib/proposals/change";
 import { addCompanyFor, siteName } from "@/lib/proposals/addCompany";
+import { proofView } from "@/lib/proposals/proof";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,9 @@ async function answer(work: () => Promise<unknown>) {
  *                  budget (lib/proposals/aiUsage.ts); with none left, 402 with the words and `upgrade` (the pack's link).
  * POST { op: "agree_ai" }   They agree a transcript may go to Anthropic's API to write a draft.
  * POST { op: "template_rename", id, title } | { op: "template_delete", id }   My templates (uploads: /api/proposals/template).
- * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName? }
+ * POST { op: "update", id, title?, blocks?, fields?, setFields?, notes?, signerOnCall?, signer?, companyName?, proofCases? }
+ *                  proofCases: up to two of the member's ready Evidence Bank cases for Proof (their words fill it, the client hidden unless named).
+ * POST { op: "proof", id }   ProofView: Proof's cases from Evidence Bank (Close; { on: false } without it), closest to its company first.
  *                  A change to what the client reads, after a version went out, makes a new version and voids the old link.
  * POST { op: "change", id, instruction, agree? }   Change it by talking (lib/proposals/change.ts): Claude's proposed
  *                  sections, fields and the numbers check. Nothing is saved. Close, metered like a draft; 409 when it's off.
@@ -133,7 +136,14 @@ export const POST = guarded(async (req: NextRequest) => {
     case "template_delete":
       return answer(async () => (await deleteTemplate(token, id), { ok: true }));
     case "update":
-      return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, pricing: b.pricing, memberSign: b.memberSign, rev: b.rev, source: typeof b.source === "string" ? b.source : undefined }, o));
+      return answer(() => updateProposal(token, id, { title: b.title, blocks: b.blocks, fields: b.fields, setFields: b.setFields, notes: b.notes, signerOnCall: b.signerOnCall, signer: b.signer, companyName: b.companyName, pricing: b.pricing, memberSign: b.memberSign, proofCases: b.proofCases, rev: b.rev, source: typeof b.source === "string" ? b.source : undefined }, o));
+    case "proof":
+      // Proof's cases from Evidence Bank (Close): every ready case, closest to its company first, and the ones it holds.
+      return answer(async () => {
+        const v = await proofView(token, id);
+        if (!v) throw new ProposalProblem("That proposal isn't there anymore. Open Proposals again.", 404);
+        return v;
+      });
     case "link":
       // Not linked to a company yet: the one picked (companyId), or its exact name or website (name), as find_company finds it.
       return answer(() => linkProposal(token, id, { companyId: b.companyId, name: b.name }, o));

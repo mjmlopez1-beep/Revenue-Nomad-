@@ -521,6 +521,15 @@ type Save = "saved" | "saving" | "retrying" | "error";
 
 /** An edit that didn't reach the server yet, kept on this device until it does (the editor saves it when the proposal opens again). */
 const stashKey = (id: string) => `rn-proposal-unsaved:${id}`;
+/**
+ * Proof the server filled from Evidence Bank as the proposal was linked to its company (store.ts
+ * linkProposal): taken into the editor while its own Proof is still empty, so the next save of the
+ * fields keeps it.
+ */
+const proofFromServer = (cur: ProposalRec, r: ProposalRec): Partial<ProposalRec> =>
+  r.proofCases?.length && r.fields?.caseStudies && !cur.fields.caseStudies?.trim()
+    ? { fields: { ...cur.fields, caseStudies: r.fields.caseStudies }, sources: { ...cur.sources, caseStudies: "evidence" }, proofCases: r.proofCases }
+    : {};
 const readStash = (id: string): { rev: number; body: Record<string, unknown> } | null => {
   try {
     const j = JSON.parse(window.localStorage.getItem(stashKey(id)) ?? "null");
@@ -703,7 +712,7 @@ function Editor({
     saved.current = { ...saved.current, ...(body as Partial<ProposalRec>), rev: r.rev };
     writeStash(id, Object.keys(pending.current).length ? { rev: r.rev, body: pending.current } : null);
     setSave(Object.keys(pending.current).length ? "saving" : "saved");
-    setP((cur) => ({ ...cur, version: r.version, status: r.status, send: r.send, history: r.history, updatedAt: r.updatedAt, rev: r.rev }));
+    setP((cur) => ({ ...cur, version: r.version, status: r.status, send: r.send, history: r.history, updatedAt: r.updatedAt, rev: r.rev, ...proofFromServer(cur, r) }));
     if (r.version !== latest.current.version) setChanging(false);
     onSaved(r);
     // Typed while that save was on its way: saved next.
@@ -736,7 +745,7 @@ function Editor({
   useEffect(() => {
     const st = readStash(initial.id);
     if (!st || initial.status !== "draft") return void writeStash(initial.id, null);
-    const keep = Object.fromEntries(Object.entries(st.body).filter(([k]) => ["title", "blocks", "fields", "notes", "signer", "signerOnCall", "pricing"].includes(k)));
+    const keep = Object.fromEntries(Object.entries(st.body).filter(([k]) => ["title", "blocks", "fields", "notes", "signer", "signerOnCall", "pricing", "proofCases"].includes(k)));
     if (!Object.keys(keep).length) return;
     setP((cur) => ({ ...cur, ...(keep as Partial<ProposalRec>) }));
     rev.current = st.rev;
@@ -795,6 +804,13 @@ function Editor({
   const setNotes = (notes: DiscoveryNote[]) => change({ notes }, { notes });
   const setSignerOnCall = (v: boolean | null) => change({ signerOnCall: v }, { signerOnCall: v });
   const setSigner = (s: SignerInfo | null) => change({ signer: s }, { signer: s });
+  // Proof's cases from Evidence Bank (ProofPanel): their lines fill {{caseStudies}}; the server works them out again from its own copy.
+  const setProof = (ids: string[], text: string) => {
+    const f = { ...p.fields };
+    if (text.trim()) f.caseStudies = text;
+    else delete f.caseStudies;
+    change({ fields: f, sources: { ...p.sources, caseStudies: "evidence" }, proofCases: ids.length ? ids : undefined }, { fields: f, proofCases: ids });
+  };
 
   const act = async (op: "void" | "duplicate" | "delete") => {
     if (op === "delete" && !window.confirm("Delete this proposal? It can't be undone.")) return;
@@ -883,7 +899,7 @@ function Editor({
             </button>
           </div>
         )}
-        {!p.company.id && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev })), onSaved(r))} />}
+        {!p.company.id && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev, ...proofFromServer(cur, r) })), onSaved(r))} />}
         {locked && <CloseBuildPrompt />}
         {signed && (
           <div className="pp-banner pp-banner-won" role="status">
@@ -976,6 +992,7 @@ function Editor({
         onBack={leave}
         act={(op) => void act(op)}
         onChangeIt={() => setChanging(true)}
+        onProof={setProof}
       />
     );
   }
@@ -1073,7 +1090,7 @@ function Editor({
       {/* Who opened it, what they read, when to follow up, the reminders and the renewal (Activity.tsx, lib/close). It reloads whenever the proposal changes: a countersignature, a void. */}
       {p.send && <ActivityPanel kind="proposal" id={p.id} version={`${p.version}:${p.rev}:${p.status}`} onOpen={onOpen} />}
       {/* Not linked to a company on Merlin: the pipeline can't move when they sign, so the member picks it (ProposalLink.tsx). */}
-      {!p.company.id && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev })), onSaved(r))} />}
+      {!p.company.id && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev, ...proofFromServer(cur, r) })), onSaved(r))} />}
       {locked && <CloseBuildPrompt />}
       {out && !changing && !locked && (
         <div className="pp-banner" role="status">

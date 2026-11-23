@@ -1680,6 +1680,136 @@
 .pz-proof > span {
   flex: 1 1 260px;
 }
+.pz-proof[data-kind="empty"] {
+  border-style: solid;
+  border-color: var(--pz-mint-line);
+  background: #fff;
+}
+.pz-proof-wait {
+  margin: 4px 0 12px;
+}
+.pz-proof-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.pz-proof-acts {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.pz-proof-acts > .pz-note {
+  flex: 1 1 200px;
+}
+.pz-proof-draft {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--pz-mint-line);
+  border-radius: 10px;
+  background: #fff;
+}
+.pz-proof-draft > strong {
+  flex: 1 1 200px;
+  font-size: 14px;
+  color: var(--pz-ink);
+}
+.pz-proof-cases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.pz-proof-case {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--pz-strong);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+  line-height: 20px;
+}
+.pz-proof-add {
+  border-style: dashed;
+  align-items: flex-start;
+  justify-content: center;
+}
+.pz-proof-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.pz-proof-t {
+  font-size: 15px;
+  color: var(--pz-ink);
+}
+.pz-proof-out {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+.pz-proof-out > .pz-note {
+  flex: 1;
+}
+.pz-proof-out > strong {
+  color: var(--pine);
+}
+.pz-proof-foot {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px dashed var(--pz-strong);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.pz-proof-foot > .pz-note {
+  flex: 1 1 120px;
+}
+.pz-proof-alts,
+.pz-proof .pz-proof-alts {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f7f8f7;
+}
+.pz-proof-k {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pz-muted);
+}
+.pz-proof-alt {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--pz-strong);
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  cursor: pointer;
+  font: inherit;
+}
+.pz-proof-alt > strong {
+  font-size: 13px;
+  color: var(--pz-ink);
+}
+.pz-proof-link {
+  font-size: 13px;
+}
 .pz-doc-price {
   display: flex;
   flex-direction: column;

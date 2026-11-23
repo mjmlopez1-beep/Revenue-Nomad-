@@ -37,6 +37,8 @@ import { PricingProblem, choiceRec, cleanPricing, validChoice } from "./pricing"
 import { commitClientSignature, commitSendSignature, dropStaged, readClientSignature, readSealedPdf, readSendSignature, saveSealedPdf, stageClientSignature, stageSendSignature } from "./files";
 import { dataUrl, pngFromDataUrl, savedSignatureOf, sha as shaOf, signatureInput, signatureViewOf } from "./memberSig";
 import { properCase } from "./startCall";
+import { autoProof, proofFromCases } from "../evidenceWire";
+import { hasProofBlock } from "./proof";
 import { prefOn, type CloseAlertKind } from "../close/types";
 import {
   CONSENT_VERSION,
@@ -246,6 +248,7 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
       .reverse()
       .map((x) => sendRec(x, nowMs, origin)),
     ...(p.versions?.length ? { versions: [...p.versions].reverse().map((v) => ({ version: v.version, at: v.at, note: v.note })) } : {}),
+    ...(p.proofCases?.length ? { proofCases: [...p.proofCases] } : {}),
   };
 }
 
@@ -389,6 +392,12 @@ export interface ProposalPatch {
   rev?: unknown;
   /** How long the next send's link works: 14, 30, 60 or 90 days, or 0 for no end date. Not part of what the client reads: no new version. */
   linkDays?: unknown;
+  /**
+   * The Evidence Bank cases Proof holds (Swap case, Add a case): up to two ids of the member's own
+   * ready cases, [] for none. Their words fill {{caseStudies}} (lib/evidenceWire.ts), the client
+   * hidden unless named; a change to what the client reads, like any other.
+   */
+  proofCases?: unknown;
 }
 
 /** A change to the proposal: its time, and its revision up by one (StoredProposal.rev). Every write goes through here. */
@@ -494,6 +503,15 @@ export async function lookUpCompany(token: string | null, typed: string, origin?
   }
 }
 
+/** Proof is there to fill: its block, nothing in {{caseStudies}} yet, and never sent (a sent version changes only by the member's own edit). */
+const proofOpen = (p: StoredProposal) => hasProofBlock(p) && !p.fields.caseStudies?.trim() && !p.sends.length && !isSigned(p);
+/** Proof from Evidence Bank: the cases' words in {{caseStudies}}, and which cases they are. */
+function fillProof(p: StoredProposal, proof: { ids: string[]; text: string }) {
+  p.fields.caseStudies = proof.text;
+  p.sources.caseStudies = "evidence";
+  p.proofCases = proof.ids;
+}
+
 /** What NOT_LINKED says: the proposal names no company on Merlin, so the pipeline can't move. */
 export const NOT_LINKED = "Not linked to a company yet. Your pipeline won't move when they sign.";
 
@@ -512,6 +530,8 @@ export async function linkProposal(token: string | null, id: string, a: { compan
   const co = await companyFor(token!, pub);
   if (!co) throw new ProposalProblem("That company isn't on Merlin. Type its full name or its website.");
   const now = new Date(nowMs).toISOString();
+  // Proof empty and nothing sent yet: the closest one or two of the member's ready cases fill it (Evidence Bank, Close).
+  const proof = proofOpen(p0) && T.closeNow(s0, me0.id, nowMs) ? await autoProof(me0.id, co.internal) : null;
   return T.mutate((s) => {
     const me = memberOf(seed, s, token);
     const p = mine(s, me, id);
@@ -519,6 +539,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
     p.companyId = co.internal;
     p.companyPub = pub;
     if (!p.companyName) p.companyName = co.name || cleanLine(a.name, 120);
+    if (proof && proofOpen(p)) fillProof(p, proof);
     touch(p, now);
     // Already out, or signed: the pipeline catches up, as if it had been linked from the start.
     const signed = p.sends.find((x) => fullySigned(x));
@@ -556,6 +577,8 @@ export async function createProposal(
   if (picked && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
   const name = co ? co.name || typed : typed;
   const now = new Date(nowMs).toISOString();
+  // Proof (Evidence Bank, Close, which building needs anyway): the closest one or two of the member's ready cases for this company. None that fit: Proof stays empty.
+  const proof = co ? await autoProof(me0.id, co.internal) : null;
   return T.mutate((s) => {
     const me = memberOf(seed, s, token);
     const list = (s.proposals ??= []);
@@ -595,8 +618,14 @@ export async function createProposal(
       updatedAt: now,
       sends: [],
     };
+    if (proof && proofOpen(p)) fillProof(p, proof);
     // What the member's own Claude brought (create_or_update_proposal): applied as a change, so it is checked the same way.
     applyPatch(p, { blocks: a.blocks, signer: a.signer, notes: a.notes, signerOnCall: a.signerOnCall, setFields: a.fields, source: a.source }, now, nowMs);
+    // Proof the call or the agent wrote, or blocks with no Proof: not Evidence Bank's.
+    if (p.proofCases && (p.fields.caseStudies !== proof?.text || !hasProofBlock(p))) {
+      delete p.proofCases;
+      if (p.sources.caseStudies === "evidence" && !p.fields.caseStudies) delete p.sources.caseStudies;
+    }
     list.push(p);
     return recOf(p, nowMs, origin);
   });
@@ -605,12 +634,27 @@ export async function createProposal(
 export async function updateProposal(token: string | null, id: string, a: ProposalPatch, origin?: string, nowMs = Date.now()): Promise<ProposalRec> {
   const seed = await loadSeed();
   const now = new Date(nowMs).toISOString();
+  // Cases picked for Proof: the member's own ready cases only (never one Merlin wrote), their words worked out here, set below as any change is.
+  let proof: { ids: string[]; text: string } | null = null;
+  if (a.proofCases !== undefined) {
+    const s0 = await loadState();
+    const me0 = memberOf(seed, s0, token);
+    buildGate(s0, me0.id, nowMs, origin);
+    const r = await proofFromCases(me0.id, a.proofCases);
+    if ("error" in r) throw new ProposalProblem(r.error);
+    proof = r;
+  }
   const rec = await T.mutate((s) => {
     const me = memberOf(seed, s, token);
     buildGate(s, me.id, nowMs, origin);
     const p = mine(s, me, id);
     checkRev(p, a.rev);
-    applyPatch(p, a, now, nowMs);
+    const before = p.fields.caseStudies ?? "";
+    if (proof && !hasProofBlock(p)) throw new ProposalProblem("This proposal has no Proof section. Add Proof first.");
+    const set = a.setFields;
+    applyPatch(p, proof ? { ...a, setFields: set === undefined ? { caseStudies: proof.text } : set && typeof set === "object" && !Array.isArray(set) ? { ...(set as Record<string, unknown>), caseStudies: proof.text } : set } : a, now, nowMs);
+    if (proof?.ids.length) (p.proofCases = proof.ids), (p.sources.caseStudies = "evidence");
+    else if (proof || (p.proofCases && (p.fields.caseStudies ?? "") !== before)) delete p.proofCases;
     return recOf(p, nowMs, origin);
   });
   // A company picked or typed for a proposal not linked yet: linked (linkProposal), quietly when a typed name matches nothing.
