@@ -389,7 +389,7 @@ async function main() {
   const { readFileSync } = await import("node:fs");
   const md = readFileSync(new URL("../docs/data-flows.md", import.meta.url), "utf8");
   check("docs/data-flows.md has the same five parts and its To confirm notes", ["## 1. When an AI model is used", "## 2.", "## 3.", "## 4. Inside Merlin: Peers", "## 5. Who can switch a feature off"].every((t) => md.includes(t)) && /\*\*To confirm:\*\*/.test(md));
-  check("the data page says what Peers keeps inside Merlin", page.includes("Inside Merlin: Peers"));
+  check("the data page says what Peers keeps inside Merlin", page.includes("Inside Merlin: Fractionals and Peers"));
   const landing = readFileSync(new URL("../app/landing/Landing.tsx", import.meta.url), "utf8");
   const credits = readFileSync(new URL("../app/post/Credits.tsx", import.meta.url), "utf8");
   check("the landing page's footer and Your credits link to it", landing.includes('href="/data"') && credits.includes("<DataLink />"));

@@ -113,7 +113,7 @@ async function main() {
   const ev = src("app/post/evidence/Evidence.tsx");
   check("the page draws the upgrade screen, and nothing else, without Close", /if \(!open\)\s*return \(\s*<>\s*\{header\}\s*<EvidenceUpgrade/.test(ev) && ev.indexOf("evidenceOpen(c.me.plan)") > 0 && ev.indexOf("<Bank />") > ev.indexOf("<EvidenceUpgrade"));
   const pages = src("app/post/shell/pages.tsx");
-  check("the registry mounts Evidence Bank (the placeholder is gone)", /evidence: \{ title: "Evidence Bank", component: EvidenceP, ownHeader: true, ownStrip: true/.test(pages) && !pages.includes("EvidenceSoon") && pages.includes('import("../evidence/Evidence")') && /loadContracts, loadEvidence\]/.test(pages));
+  check("the registry mounts Evidence Bank (the placeholder is gone)", /evidence: \{ title: "Evidence Bank", component: EvidenceP, ownHeader: true, ownStrip: true/.test(pages) && !pages.includes("EvidenceSoon") && pages.includes('import("../evidence/Evidence")') && /loadContracts, loadEvidence[,\]]/.test(pages));
 
   /* ----- seats as the page reads them ----- */
   const v = (x: string) => ({ s: "value", v: x, ver: 0 }) as never;
