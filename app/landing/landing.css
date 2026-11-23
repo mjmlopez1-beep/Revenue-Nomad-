@@ -1932,34 +1932,112 @@ button.lp-fake-btn {
   background: var(--surface-2);
 }
 /* everything else, named */
-.lp-also {
-  margin-top: 48px;
+/*
+ * Everything in Merlin: every use case in a line, one row per job (Find, Get in, Price, Win, Let it
+ * run). On a wide screen the job's name on the left and its use cases in two columns; on a phone,
+ * stacked. Close and Beta in a small tag after the name.
+ */
+.lp-all {
+  margin-top: 56px;
+}
+.lp-all-h.lp-all-h {
+  margin: 0 0 20px;
   text-align: center;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 700;
+  color: var(--ink);
 }
-.lp-also-h.lp-also-h {
-  font-size: 15px;
-  line-height: 20px;
-  color: var(--muted);
-  font-weight: 600;
-}
-.lp-also-list {
-  list-style: none;
-  margin: 16px auto 0;
-  padding: 0;
-  max-width: 900px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-.lp-also-list li {
-  padding: 8px 16px;
-  border-radius: 999px;
+.lp-all-jobs {
   border: 1px solid var(--line);
+  border-radius: 24px;
   background: var(--surface);
+  overflow: hidden;
+}
+.lp-all-job {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  padding: 24px 32px;
+}
+.lp-all-job + .lp-all-job {
+  border-top: 1px solid var(--line);
+}
+.lp-all-job-h.lp-all-job-h {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--pine);
+}
+.lp-all-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 32px;
+}
+.lp-all-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lp-all-name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lp-all-line {
   font-size: 14.5px;
-  line-height: 20px;
+  line-height: 21px;
   color: var(--body-ink);
+}
+.lp-all-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--pine-8);
+  color: var(--pine);
+}
+.lp-all-tag-beta {
+  background: var(--sand);
+  color: var(--ink);
+}
+@media (max-width: 960px) {
+  .lp-all-job {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+@media (max-width: 640px) {
+  .lp-all {
+    margin-top: 40px;
+  }
+  .lp-all-h.lp-all-h {
+    font-size: 22px;
+    line-height: 28px;
+  }
+  .lp-all-jobs {
+    border-radius: 18px;
+  }
+  .lp-all-job {
+    padding: 20px;
+  }
+  .lp-all-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ---------- how it works: credits ---------- */
@@ -2913,12 +2991,6 @@ button.lp-fake-btn {
   }
   .lp-v-way-row {
     flex-wrap: wrap;
-  }
-  .lp-also {
-    margin-top: 32px;
-  }
-  .lp-also-list li {
-    font-size: 14px;
   }
   .lp-steps {
     gap: 12px;

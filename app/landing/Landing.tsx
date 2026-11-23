@@ -6,9 +6,10 @@
  * bottom of the first screen on a phone), "What are you looking for?" (Finder.tsx: the visitor's
  * function and a question, answered with real counts and rows from GET /api/table?preview=1),
  * the numbers across every function in one band, what members say (Quotes.tsx, drawn only once
- * quotes.ts has a real one), what you can do with it (Features.tsx: four tinted panels, each
- * with a picture drawn in HTML and CSS), how it works (credits, with the free and locked fields
- * folded away), pricing (Pricing.tsx: Free against Pro), questions, and the join form again. The hero's record is a real company from the
+ * quotes.ts has a real one), what you can do with it (Features.tsx: four tinted panels by the job
+ * they do, each with a picture drawn in HTML and CSS, then "Everything in Merlin", every use case
+ * in a line), how it works (credits, with the free and locked fields folded away), pricing
+ * (Pricing.tsx: Free, Pro and Close), questions, and the join form again. The hero's record is a real company from the
  * same preview answer. Nothing on the page is blurred but the rows past the named ones.
  *
  * Merlin covers every fractional function, so nothing here speaks to one: the page's own words
@@ -183,6 +184,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   ];
 
   const supportHref = support ? mailto(support, "Merlin question") : null;
+  // Which switchable features the server has on (signed out only). Until it says, neither is named.
+  const live = { workflows: !!view?.live?.workflows, google: !!view?.live?.google };
 
   return (
     <div className="lp">
@@ -316,8 +319,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         {/* ---------- what members say: nothing until quotes.ts has a real one ---------- */}
         <Quotes />
 
-        {/* ---------- what you can do: four panels ---------- */}
-        <Features onJoin={toJoin} starter={starter} />
+        {/* ---------- what you can do: four panels by job, then everything in Merlin ---------- */}
+        <Features onJoin={toJoin} starter={starter} live={live} />
 
         {/* ---------- how it works: credits, with the free and locked fields folded away ---------- */}
         <section className="lp-sec lp-how" id="how" aria-labelledby="how-h">
@@ -420,8 +423,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
           </div>
         </section>
 
-        {/* ---------- pricing: Free against Pro, framed by return ---------- */}
-        <Pricing starter={starter} onJoin={toJoin} />
+        {/* ---------- pricing: Free, Pro and Close, framed by return ---------- */}
+        <Pricing starter={starter} onJoin={toJoin} workflows={live.workflows} />
 
         {/* ---------- FAQ ---------- */}
         <section className="lp-sec lp-faq-sec" id="faq" aria-labelledby="faq-h">
@@ -429,7 +432,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             <h2 className="lp-h2" id="faq-h">
               Questions
             </h2>
-            <Questions starter={starter} support={support} intro={!!intro} first={FAQ_FIRST} />
+            <Questions starter={starter} support={support} intro={!!intro} first={FAQ_FIRST} live={live} />
           </div>
         </section>
 

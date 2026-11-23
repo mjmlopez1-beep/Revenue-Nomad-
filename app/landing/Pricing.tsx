@@ -3,9 +3,11 @@
  * and plans are the app's own (lib/billing/compare.ts), the prices and the trial the billing rules'
  * (lib/billing/rules.ts), so the page can't say what the plans don't. No rate is cited: the page
  * reads no rate benchmarks (they are for members), so it makes no claim about what a client pays.
- * Flat prices only: no fee on what a member wins.
+ * Flat prices only: no fee on what a member wins. After the app's rows, landingMoreRows: alerts,
+ * workflows (only when the server has them on), Evidence Bank, Agent access and rate benchmarks,
+ * each from the rules that gate it.
  */
-import { LANDING_ROWS, PLANS } from "@/lib/billing/compare";
+import { LANDING_ROWS, PLANS, landingMoreRows } from "@/lib/billing/compare";
 import { PRO_STORY, TRIAL_LABEL } from "@/lib/billing/rules";
 import { OPENS_RULE } from "@/lib/tableFields";
 
@@ -14,7 +16,7 @@ const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 /** The heading: Pro framed as what one client is worth to a fractional. */
 export const PRICING_H = "One client pays for years of Pro";
 
-export default function Pricing({ starter, onJoin }: { starter: number; onJoin: () => void }) {
+export default function Pricing({ starter, onJoin, workflows = false }: { starter: number; onJoin: () => void; workflows?: boolean }) {
   return (
     <section className="lp-sec lp-price" id="pricing" aria-labelledby="pricing-h">
       <div className="lp-wrap">
@@ -61,7 +63,7 @@ export default function Pricing({ starter, onJoin }: { starter: number; onJoin: 
             </tr>
           </thead>
           <tbody>
-            {LANDING_ROWS.map(([what, free, pro, close]) => (
+            {[...LANDING_ROWS, ...landingMoreRows(workflows)].map(([what, free, pro, close]) => (
               <tr key={what}>
                 <th scope="row">{what}</th>
                 <td data-cap="Free">{free}</td>

@@ -9,7 +9,7 @@
  */
 import { FEATURE_NAME } from "../radar/types";
 import { COMPANY_PRICE, PRO_OPENS_DAILY } from "../tableFields";
-import { FREE_MCP_PER_DAY, PRICES, PRO_CREDITS, TIER_NAME } from "./rules";
+import { FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TIER_NAME, WORKFLOW_PLAN } from "./rules";
 
 /** The three plans in order, with what each costs and one line on what you get. */
 export const PLANS = [
@@ -58,3 +58,32 @@ export const CLOSE_ADDS: [string, string, string][] = PLAN_ROWS.filter((r) => r[
  * sheet and the Terms of Service. Each is one of CLOSE_ADDS (scripts/test-prices.mts checks it).
  */
 export const PRO_LEAVES_OUT = ["Sending for signature", "Your own templates", "Merlin drafting", "The pipeline moving to Won when they sign"] as const;
+
+/**
+ * The landing page's rows after LANDING_ROWS: what came with alerts, workflows, Evidence Bank and
+ * Agent access, read from the same rules the app gates them with (lib/billing/rules.ts
+ * FREE_SAVED_VIEWS, FREE_ALERT_EVERY and alertOnPlan, WORKFLOW_PLAN, FREE_MCP_PER_DAY; Evidence Bank
+ * is Close's, like proposals), and the app's own Rate benchmarks row. Workflows are Beta, behind
+ * RN_WORKFLOWS: the row shows only when the server says they are on. Not part of PLAN_ROWS, so the
+ * plans sheet and the Terms read as before.
+ */
+export function landingMoreRows(workflows: boolean): [string, string, string, string][] {
+  const [f, p, c] = [WORKFLOW_PLAN.free, WORKFLOW_PLAN.pro, WORKFLOW_PLAN.close];
+  const rates = PLAN_ROWS.find((r) => r[0] === "Rate benchmarks");
+  return [
+    ["Alerts on your lists", `${FREE_SAVED_VIEWS} list, by email and the bell, each morning or weekly`, "Every list, as it happens, in Slack too", "Every list, as it happens, in Slack too"],
+    ...(workflows
+      ? ([
+          [
+            "Workflows (Beta)",
+            `${f.flows} workflow, free steps only`,
+            `Up to ${p.flows}, with the steps that cost credits`,
+            `Up to ${c.flows}, plus proposal triggers and the Evidence Bank step`,
+          ],
+        ] as [string, string, string, string][])
+      : []),
+    ["Evidence Bank", "In your trial only", "In your trial only", "Your past results, matched to a proposal"],
+    ["Your AI assistant (Agent access)", `${FREE_MCP_PER_DAY} requests a day`, "No daily cap", "No daily cap"],
+    ...(rates ? [rates] : []),
+  ];
+}

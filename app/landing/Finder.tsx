@@ -18,8 +18,8 @@
  * kept in localStorage (tp_try_fn) so onboarding starts with it; an example is never kept.
  *
  * A suggested question picks the tab that answers it. "What fractionals charge" has no public
- * answer (rates are for members, and only as medians), so it says where they are and shows no
- * number. A picked country keeps the companies whose country isn't on file yet, and the line
+ * answer (rates are for members: medians by function, client size on Pro), so it says where they
+ * are and shows no number. A picked country keeps the companies whose country isn't on file yet, and the line
  * under the tabs says how many are in that country. The same answer carries the hero's example
  * record (`onExample`) and the page's totals across every function (`onTotals`).
  */
@@ -540,8 +540,9 @@ export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }:
             <div className="lp-res-note">
               <h3>Rates are inside Merlin</h3>
               <p>
-                Members see median monthly and hourly rates by function and client revenue. A figure shows only once enough people share a rate, and
-                never whose it is, so there is no number to show here.
+                Members see median monthly and hourly rates by function, and on Pro by client size too. What should I charge works out a price for a
+                client and shows the working. A figure shows only once enough people share a rate, and never whose it is, so there is no number to show
+                here.
               </p>
             </div>
           ) : (

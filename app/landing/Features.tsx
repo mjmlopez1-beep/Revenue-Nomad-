@@ -1,11 +1,17 @@
 "use client";
 
 /**
- * What Merlin does, one panel each: a small label, a headline with one phrase picked out, one
- * sentence, and a picture of that part of the product drawn in HTML and CSS (no image files),
- * with the panel's prop from the illustration system standing on it (scenes.tsx).
- * Crystal Ball (mint, the ball), warm paths (sand, the trail), rates (mint soft, the seat),
- * open roles (pine, the door).
+ * What Merlin does, by the job it does for a fractional: four panels, each a small label (the
+ * job), a headline with one phrase picked out, a sentence or two, and a picture of that part of the
+ * product drawn in HTML and CSS (no image files), with the panel's prop from the illustration system
+ * standing on it (scenes.tsx). Find the next client (mint, the ball: Crystal Ball, Hiring now,
+ * Lookalikes), get in the door (sand, the trail: your way in and who you know), price it (mint
+ * soft, the seat: rate benchmarks and What should I charge), let it run (pine, the door: alerts,
+ * and workflows when they are on). Under them, "Everything in Merlin": every use case in a line,
+ * grouped by the same jobs plus winning the client, with Close and Beta marked where they apply.
+ *
+ * What is switchable (Workflows behind RN_WORKFLOWS, Google behind RN_GOOGLE) is named only when
+ * the server says it is on (View.live). Nothing here promises an export: members can't export.
  *
  * Nothing here reads from the table, so nothing real can show: the companies and people in the
  * pictures are invented (.example addresses, names like "Alex Sample"), and the pictures carry
@@ -94,6 +100,15 @@ function WayInVisual() {
         </div>
         <div className="lp-v-way-row">
           <div className="lp-v-main">
+            <span className="lp-v-line">In your contacts · Started here in May</span>
+            <span className="lp-v-who">
+              Riley Example <span className="lp-v-tag">You know them</span>
+            </span>
+          </div>
+          <span className="lp-v-btn">Draft a note</span>
+        </div>
+        <div className="lp-v-way-row">
+          <div className="lp-v-main">
             <span className="lp-v-line">Hired them · CEO</span>
             <span className="lp-v-who lp-v-quiet">Decision maker</span>
           </div>
@@ -155,11 +170,11 @@ function RatesVisual() {
   );
 }
 
-/* ---------- Open roles: the alert as it lands in Slack ---------- */
+/* ---------- Alerts: a list's alert as it lands in Slack ---------- */
 
-const ROLES = [
-  { co: "A SaaS company", role: "Fractional Head of Product", when: "Posted 2 days ago", facts: ["51–200 people", "$5M–$20M"] },
-  { co: "A healthcare company", role: "Interim CMO", when: "Posted today", facts: ["201–500 people", "$20M–$50M"] },
+const ALERTS = [
+  { co: "A SaaS company", what: "New open role: Fractional Head of Product", when: "Posted 2 days ago", facts: ["51–200 people", "$5M–$20M"] },
+  { co: "A healthcare company", what: "Raised funding", when: "SEC filing, Nov 18", facts: ["201–500 people", "$20M–$50M"] },
 ];
 
 function SlackVisual() {
@@ -172,13 +187,13 @@ function SlackVisual() {
         <span className="lp-v-quiet num">9:02 AM</span>
       </div>
       <div className="lp-v-slack-body">
-        <span className="lp-v-slack-h num">2 new open roles fit you this week</span>
-        {ROLES.map((r) => (
-          <div key={r.role} className="lp-v-slack-item">
+        <span className="lp-v-slack-h num">2 changes on your list Healthcare and SaaS</span>
+        {ALERTS.map((r) => (
+          <div key={r.co} className="lp-v-slack-item">
             <span className="lp-v-name">{r.co}</span>
             <span className="lp-v-line">
               <span className="lp-v-dot" />
-              {r.role} · <span className="num">{r.when}</span>
+              {r.what} · <span className="num">{r.when}</span>
             </span>
             <span className="lp-v-facts num">
               {r.facts.map((x) => (
@@ -188,7 +203,7 @@ function SlackVisual() {
           </div>
         ))}
         <span className="lp-v-btn lp-v-btn-pine">Open in Merlin</span>
-        <span className="lp-v-quiet">Merlin alerts. Change them in Integrations.</span>
+        <span className="lp-v-quiet">Merlin alerts. Change them in Alerts and workflows.</span>
       </div>
     </div>
   );
@@ -198,6 +213,7 @@ interface Feature {
   key: string;
   /** The panel's field: mint, sand, mint soft or pine. */
   tone: "mint" | "sand" | "soft" | "pine";
+  /** The job the panel does, as its small label. */
   label: string;
   /** The headline in three parts: before, the phrase picked out, after. */
   head: [string, string, string];
@@ -211,64 +227,139 @@ interface Feature {
   alt: string;
 }
 
-const FEATURES: Feature[] = [
-  {
-    key: "ball",
-    tone: "mint",
-    label: "Crystal Ball",
-    head: ["See who is likely to hire ", "your function next", ""],
-    body: "Crystal Ball ranks the companies most likely to bring in a fractional in your function, and says why now.",
-    art: <FeatBall />,
-    corner: <Corner c="tr" t="ember" className="lp-feat-corner" />,
-    visual: <BallVisual />,
-    alt: "Crystal Ball: three companies, each with what happened there, a High or Medium likelihood and why now.",
-  },
-  {
-    key: "way",
-    tone: "sand",
-    label: "Warm paths",
-    head: ["Know ", "who held the seat", " and who hired them"],
-    body: "A company's record leads with your way in: message the fractional who held the seat, or invite them to connect.",
-    art: <FeatTrail />,
-    corner: <Sun className="lp-feat-corner lp-feat-sun" />,
-    visual: <WayInVisual />,
-    alt: "A company's record with Your way in: two past seat holders with Message and Invite to connect, and the CEO who hired them behind a 1 credit unlock.",
-  },
-  {
-    key: "rates",
-    tone: "soft",
-    label: "Rates",
-    head: ["Price your work on ", "what fractionals charge", ""],
-    body: "Median monthly and hourly rates by function and client revenue, shown only once enough people share one.",
-    art: <FeatRates />,
-    corner: <Corner c="tr" t="ember" className="lp-feat-corner" />,
-    visual: <RatesVisual />,
-    alt: "Rate benchmarks: a range bar and a median for three functions. Every amount is locked until you join.",
-  },
-  {
-    key: "roles",
-    tone: "pine",
-    label: "Open roles",
-    head: ["New fractional roles ", "every week", ", in Slack or email"],
-    body: "We check for open fractional, interim and contract roles each week and send you the ones in your function.",
-    art: <FeatDoor />,
-    corner: <Corner c="tl" t="ember" className="lp-feat-corner lp-feat-corner-l" />,
-    visual: <SlackVisual />,
-    alt: "A Merlin alert in Slack: two new open roles, each with its title, when it was posted and the company's size, and a button to open it in Merlin.",
-  },
-];
+/** Which switchable features are on (View.live, signed out). Left out: both off, so nothing switchable is named. */
+export interface Live {
+  workflows: boolean;
+  google: boolean;
+}
+const OFF: Live = { workflows: false, google: false };
 
-/** Everything else in Merlin, named in a line each, so the page still says what is there. */
-const ALSO = [
-  "Your ideal client and best fit",
-  "Lists with alerts by email, Slack and the bell",
-  "Fractionals who serve your kind of clients",
-  "Merlin in Claude",
-  "Search across companies and fractional seats",
-  "Follow a company",
-];
+/** Where who you know comes from: the two files always, Google only when it is on. */
+export const knownFrom = (live: Live) =>
+  live.google ? "your connections file, a contacts file or Google" : "your connections file or a contacts file";
 
-export default function Features({ onJoin, starter }: { onJoin: () => void; starter: number }) {
+export function features(live: Live = OFF): Feature[] {
+  return [
+    {
+      key: "ball",
+      tone: "mint",
+      label: "Find the next client",
+      head: ["See who is likely to hire ", "your function next", ""],
+      body: "Crystal Ball ranks companies High, Medium or Low on how likely they are to bring in a fractional in your function, and says why now. Hiring now lists the open fractional roles. Lookalikes finds more companies like your past clients.",
+      art: <FeatBall />,
+      corner: <Corner c="tr" t="ember" className="lp-feat-corner" />,
+      visual: <BallVisual />,
+      alt: "Crystal Ball: three companies, each with what happened there, a High or Medium likelihood and why now.",
+    },
+    {
+      key: "way",
+      tone: "sand",
+      label: "Get in the door",
+      head: ["Know ", "who held the seat", ", who decides and who you know there"],
+      body: `A company's record leads with your way in: message the fractional who held the seat, see who hired them, and find warm paths through people you know. Bring in ${knownFrom(live)}. Each one is optional${live.google ? ", and Google stays private to you" : ""}.`,
+      art: <FeatTrail />,
+      corner: <Sun className="lp-feat-corner lp-feat-sun" />,
+      visual: <WayInVisual />,
+      alt: "A company's record with Your way in: two past seat holders with Message and Invite to connect, someone in your contacts who started there with Draft a note, and the CEO who hired them behind a 1 credit unlock.",
+    },
+    {
+      key: "rates",
+      tone: "soft",
+      label: "Price it",
+      head: ["Price your work on ", "what fractionals charge", ""],
+      body: "Median monthly and hourly rates by function, shown only once enough people share one, and ranges by client size on Pro. What should I charge works out a price for a client and shows the working.",
+      art: <FeatRates />,
+      corner: <Corner c="tr" t="ember" className="lp-feat-corner" />,
+      visual: <RatesVisual />,
+      alt: "Rate benchmarks: a range bar and a median for three functions. Every amount is locked until you join.",
+    },
+    {
+      key: "run",
+      tone: "pine",
+      label: "Let it run",
+      head: ["Hear ", "the moment it changes", ", in Slack or email"],
+      body: live.workflows
+        ? "Put an alert on any list: a new open role, a company raised funding, a new leader, a seat ended. It comes by email, in Slack or in the bell. Workflows (Beta) take the next step for you, like finding who decides or drafting a note, and a note always waits as a draft."
+        : "Put an alert on any list: a new open role, a company raised funding, a new leader, a seat ended. It comes by email, in Slack or in the bell. And each week we send you the new open roles in your function.",
+      art: <FeatDoor />,
+      corner: <Corner c="tl" t="ember" className="lp-feat-corner lp-feat-corner-l" />,
+      visual: <SlackVisual />,
+      alt: "A Merlin alert in Slack on a saved list: a new open role and a company that raised funding, each with the company's size, and a button to open it in Merlin.",
+    },
+  ];
+}
+
+/** One use case in "Everything in Merlin": its name, what it does in a line, and the plan or stage it needs, where it needs one. */
+interface UseCase {
+  name: string;
+  line: string;
+  tag?: "Close" | "Beta";
+}
+interface Job {
+  key: string;
+  h: string;
+  items: UseCase[];
+}
+
+/**
+ * Every use case, by the job it does. Plain facts only: what is Close's (proposals, contracts,
+ * Evidence Bank) says so, Workflows say Beta and show only when on, Google only when on.
+ */
+export function jobs(live: Live = OFF): Job[] {
+  return [
+    {
+      key: "find",
+      h: "Find the next client",
+      items: [
+        { name: "Find", line: "Search every company, seat and person, and save what you find as a list" },
+        { name: "Companies, People and Seats", line: "The tables, led by the companies that fit your ideal client" },
+        { name: "Crystal Ball", line: "Companies likely to hire your function next: High, Medium or Low, and why now" },
+        { name: "Hiring now", line: "Open fractional, interim and contract roles" },
+        { name: "Lookalikes", line: "More companies like your past clients, built from your seats" },
+      ],
+    },
+    {
+      key: "in",
+      h: "Get in the door",
+      items: [
+        { name: "Your way in", line: "Who held the seat, and who decides there" },
+        { name: "Warm paths", line: `Through people you know, from ${knownFrom(live)}. Each is optional${live.google ? ", and Google stays private to you" : ""}` },
+        { name: "Someone you know changed jobs", line: "Hear when a person you know starts as a leader at another company" },
+        { name: "Messages", line: "Talk with fellow fractionals inside Merlin" },
+        { name: "Fractionals", line: "The directory, and referral partners who serve your kind of clients" },
+      ],
+    },
+    {
+      key: "price",
+      h: "Price it",
+      items: [
+        { name: "Rate benchmarks", line: "What the work pays, by function and, on Pro, by client size" },
+        { name: "What should I charge", line: "A price for a client, with the working shown" },
+      ],
+    },
+    {
+      key: "win",
+      h: "Win and close it",
+      items: [
+        { name: "Pipeline", line: "Every company you are working on, step by step" },
+        { name: "Proposals", line: "Drafted from your call, sent and signed", tag: "Close" },
+        { name: "Contracts", line: "Your own contracts with e-signature", tag: "Close" },
+        { name: "Evidence Bank", line: "Your past results, matched to a proposal", tag: "Close" },
+      ],
+    },
+    {
+      key: "run",
+      h: "Let it run",
+      items: [
+        { name: "Alerts", line: "On any list or a company you follow, by email, Slack or the bell" },
+        ...(live.workflows ? [{ name: "Workflows", line: "When this happens, then do this. A note is always a draft", tag: "Beta" as const }] : []),
+        { name: "Agent access", line: "Use Merlin from your own AI assistant, such as Claude, with a switch for what it may do and a spend limit if you want one" },
+      ],
+    },
+  ];
+}
+
+export default function Features({ onJoin, starter, live = OFF }: { onJoin: () => void; starter: number; live?: Live }) {
   return (
     <section className="lp-sec lp-feats" id="features" aria-labelledby="feats-h">
       <div className="lp-wrap">
@@ -276,10 +367,10 @@ export default function Features({ onJoin, starter }: { onJoin: () => void; star
           <h2 className="lp-h2" id="feats-h">
             What you can do with Merlin
           </h2>
-          <p className="lp-lead">It works the same way in every fractional function.</p>
+          <p className="lp-lead">Find the client, get in, price it, win it. It works the same way in every fractional function.</p>
         </div>
         <div className="lp-feat-list">
-          {FEATURES.map((f) => (
+          {features(live).map((f) => (
             <article key={f.key} className={`lp-feat lp-feat-${f.tone}`} aria-labelledby={`feat-${f.key}`}>
               {f.corner}
               <div className="lp-feat-copy">
@@ -303,13 +394,30 @@ export default function Features({ onJoin, starter }: { onJoin: () => void; star
             </article>
           ))}
         </div>
-        <div className="lp-also">
-          <h3 className="lp-also-h">Also in Merlin</h3>
-          <ul className="lp-also-list">
-            {ALSO.map((x) => (
-              <li key={x}>{x}</li>
+        <div className="lp-all" id="everything" aria-labelledby="all-h">
+          <h3 className="lp-all-h" id="all-h">
+            Everything in Merlin
+          </h3>
+          <div className="lp-all-jobs">
+            {jobs(live).map((j) => (
+              <section key={j.key} className="lp-all-job" aria-labelledby={`all-${j.key}`}>
+                <h4 className="lp-all-job-h" id={`all-${j.key}`}>
+                  {j.h}
+                </h4>
+                <ul className="lp-all-list">
+                  {j.items.map((x) => (
+                    <li key={x.name}>
+                      <span className="lp-all-name">
+                        {x.name}
+                        {x.tag ? <span className={`lp-all-tag lp-all-tag-${x.tag.toLowerCase()}`}>{x.tag}</span> : null}
+                      </span>
+                      <span className="lp-all-line">{x.line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         </div>
       </div>
     </section>

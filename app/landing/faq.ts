@@ -4,7 +4,7 @@
  * scripts/test-prices.mts can check what they say about prices.
  */
 import { COMPANY_PRICE_SAY, EARN_CAP, NAME_HIDDEN_SAY, PRO_OPENS_DAILY, REFERRAL_BONUS, OPENS_RULE, seatNameWho } from "@/lib/tableFields";
-import { PRICES, TOPUP_CREDITS, TRIAL_LABEL } from "@/lib/billing/rules";
+import { FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, TOPUP_CREDITS, TRIAL_LABEL, WORKFLOW_PLAN } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
 import { FEATURE_NAME } from "@/lib/radar/types";
 
@@ -26,9 +26,20 @@ export const FAQ_LEAD = [
   "What happens to a rate I share?",
 ];
 
+/**
+ * Which switchable features are on (View.live, signed out): a question about one that is off is
+ * left out. The app's sheet passes nothing, so it names neither.
+ */
+export interface FaqLive {
+  workflows?: boolean;
+  google?: boolean;
+}
+
 /** The questions and answers, with the starter balance the server actually gives. `scanRoleFree`: lib/tableFields SEAT_SCAN_ROLE_FREE. */
-export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROLE_FREE): [string, string][] {
-  return [
+export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROLE_FREE, live: FaqLive = {}): [string, string][] {
+  const wf = WORKFLOW_PLAN;
+  const known = live.google ? "your connections file, a contacts file, or Google" : "your connections file or a contacts file";
+  const items: ([string, string] | null)[] = [
     [
       "How do I reach the fractional who held a seat?",
       `Where a seat holder is on file, who held the seat and the role they held are free to see once you can see the company: fellow fractionals never cost a credit. If they are a member, message them inside Merlin. If not, Invite to connect gives you a note and a link to their seat. When they claim it, a conversation opens between you, and if they're new to Merlin you both get ${REFERRAL_BONUS} credits. Many seats Revenue Nomad found have nobody named yet, until the fractional who held one claims it.`,
@@ -57,11 +68,39 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does a hiring contact cost?",
-      "A person's name and title are one unlock. One credit shows both. Their LinkedIn, email and phone open after that, 1 credit each. How they relate to the seat, like Decision maker, is free.",
+      "A person's name and title are one unlock. One credit shows both. Their profile link, email and phone open after that, 1 credit each. How they relate to the seat, like Decision maker, is free.",
     ],
     [
-      "How do I get alerts for new roles?",
-      "Each week we email you the new open roles in your function. Save a view with the weekly email on and you also get the new roles that match it. For a post the moment a role fits you, connect Slack or any tool by webhook in Integrations.",
+      "How do alerts work?",
+      `Save any search as a list and put an alert on it, or follow a company. Pick what you want to hear about: a new open role, a new fractional hire, a seat ended, a new decision maker (from the company's own website), a fact changed, or the company raised funding (as its SEC filing says). It comes by email, in Slack or in the bell. On Free, ${FREE_SAVED_VIEWS} list has an alert, by email and the bell, each morning or weekly. On Pro and Close every list can have one, as it happens, in Slack too, and a new decision maker is part of Pro. Each week we also email you the new open roles in your function.`,
+    ],
+    live.workflows
+      ? [
+          "What are workflows?",
+          `Workflows are in Beta. A workflow is an alert that also takes the next step: when this happens, then do this. It can add the company to your pipeline, find your way in, remind you, open the company or who decides there, or draft a note. Before you turn one on you see what each step costs and an estimate for each run, and you can set a monthly limit. Nothing is ever sent for you: a note waits as a draft in Messages. Free has ${wf.free.flows} workflow with the free steps, Pro up to ${wf.pro.flows} with the steps that cost credits, and Close up to ${wf.close.flows}, with proposal triggers and the Evidence Bank step.`,
+        ]
+      : null,
+    [
+      "How does Merlin find a warm way in?",
+      `Each company's record shows your ways in: the fractional who held the seat, the person who hired them, and anyone you know there. To see who you know, bring in ${known}. Each works on its own and is optional, and only you see the people in them. When someone you know starts as a leader at another company, Merlin can tell you.`,
+    ],
+    live.google
+      ? [
+          "What does Merlin do with my Google account?",
+          "Only what you connect, and only for you. Merlin reads your calendar events without their title, description, location or attachments, and your contacts' names, email addresses, companies and titles, to find who you know at a company. If you add Gmail, only who each email was between and when, never its subject or text. What comes from Google stays on your own screens: it is never shown to another member or an admin, and never added to Merlin. Disconnect and it is deleted. Your connections file and a contacts file work without Google.",
+        ]
+      : null,
+    [
+      "What are lookalikes?",
+      "More companies like your past clients. Merlin starts from the companies where you held a seat, and you can add or take off any company you can see, like a current client. It reads what they share (industry, size, revenue, region, the functions they hired fractionals for, and whether they hire again) and lists the companies that share the most, with why each one matched. Save it as a list with an alert.",
+    ],
+    [
+      "Can I use Merlin from my own AI assistant?",
+      `Yes. Agent access connects Merlin to an assistant you use, such as Claude, so it can search, read and add to Merlin as you. A switch for each kind of action says what it may do. It uses your credits at the same prices as the app, tells you the cost and asks before it spends one. There is no daily spend limit unless you set one. Free allows ${FREE_MCP_PER_DAY} requests a day, and Pro and Close have no daily cap.`,
+    ],
+    [
+      "What is the Evidence Bank?",
+      "Your past results, kept as cases. Merlin matches the ones closest to a company or a proposal, so you can show a client work like theirs. A case holds only the numbers you type. It is part of Close, and of your trial.",
     ],
     [
       "Where does all of this come from?",
@@ -101,7 +140,8 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does it cost?",
-      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Other companies are ${COMPANY_PRICE_SAY}. ${OPENS_RULE} Pro is $${PRICES.month} a month or $${PRICES.year} a year. Close adds proposals drafted from your call, sent and signed: $${PRICES.closeMonth} a month or $${PRICES.closeYear} a year. Every new member starts with a ${TRIAL_LABEL}, no card needed, and it ends into Free on its own. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
+      `There's a Free plan: you start with ${starter} credits, earn 1 for each fact you add, and open one company a day from your ${FEATURE_NAME} for free, with everything on it. Other companies are ${COMPANY_PRICE_SAY}. ${OPENS_RULE} Pro is $${PRICES.month} a month or $${PRICES.year} a year. Close adds proposals drafted from your call, sent and signed, and the Evidence Bank: $${PRICES.closeMonth} a month or $${PRICES.closeYear} a year. Every new member starts with a ${TRIAL_LABEL}, no card needed, and it ends into Free on its own. A top-up is $${PRICES.topup} for ${TOPUP_CREDITS} credits, on any plan.`,
     ],
   ];
+  return items.filter((x): x is [string, string] => x !== null);
 }
