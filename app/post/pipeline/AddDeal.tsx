@@ -100,13 +100,8 @@ export function AddDeal({ onClose, onAdded, stageAt }: { onClose: () => void; on
           <IconX size={16} />
         </button>
       </div>
-      <form
-        className="pl2-dr-body pl2-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void go();
-        }}
-      >
+      {/* A div, not a form: Add <Name> to Merlin inside it is a form of its own. */}
+      <div className="pl2-dr-body pl2-form">
         <label className="pl2-lab" htmlFor="pl2-aco">
           Company
         </label>
@@ -128,6 +123,7 @@ export function AddDeal({ onClose, onAdded, stageAt }: { onClose: () => void; on
               placeholder="Name or website, like northwind.example"
               onChange={(e) => (setText(e.target.value), setAdding(false))}
               onKeyDown={(e) => {
+                // Enter picks the first company you can see, else looks it up by its exact name or website.
                 if (e.key === "Enter") (e.preventDefault(), matches[0] ? setPicked({ id: matches[0].c.id, name: matches[0].c.name, i: matches[0] }) : setNow(Date.now()));
               }}
             />
@@ -232,11 +228,11 @@ export function AddDeal({ onClose, onAdded, stageAt }: { onClose: () => void; on
         )}
         <div className="pl2-dr-foot">
           <span className="pl2-small pl2-grow">Free. Adding a deal never spends a credit.</span>
-          <button type="submit" className="pl2-big pl2-pine" disabled={busy} aria-busy={busy}>
+          <button type="button" className="pl2-big pl2-pine" disabled={busy} aria-busy={busy} onClick={() => void go()}>
             Add the deal
           </button>
         </div>
-      </form>
+      </div>
     </aside>
   );
 }

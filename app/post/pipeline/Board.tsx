@@ -95,17 +95,20 @@ export function PipelineBoard() {
   const [stripDone, setStripDone] = useState(false);
   const pendingOpen = useRef<string | null>(null);
   useEffect(() => store.set(MODE_KEY, mode), [mode]);
-  // Escape closes the drawer (a sheet open over it closes first, by its own Escape).
+  // Escape closes the drawer and stays on the page (a sheet open over it closes first, by its own Escape).
   useEffect(() => {
-    if (!panel) return;
+    if (!panel && !moving) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || document.querySelector(".tp-sheet-wrap")) return;
+      // Handled here: the shell's Esc (back to Home) leaves it alone.
+      e.preventDefault();
       setPanel(null);
       setMoving(null);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [panel]);
+    // Capture: before the shell's own Esc.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [panel, moving]);
 
   const today = view?.today ?? new Date().toISOString().slice(0, 10);
   const deals = view?.entries ?? [];
