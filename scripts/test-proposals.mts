@@ -209,7 +209,7 @@ async function main() {
 
   /* ================= the library ================= */
   console.log("\nthe library");
-  check("5 templates and 24 blocks, as researched", L.TEMPLATES.length === 5 && L.BLOCKS.length === 24, [L.TEMPLATES.length, L.BLOCKS.length]);
+  check("5 templates and 25 blocks: the 24 researched and the numbered agreement", L.TEMPLATES.length === 5 && L.BLOCKS.length === 25 && !!L.blockDef("agreement"), [L.TEMPLATES.length, L.BLOCKS.length]);
   check("every template block is in the library", L.TEMPLATES.every((t) => t.blocks.every((b) => !!L.blockDef(b.blockId))));
   check("every library block has starting text", L.BLOCKS.every((b) => typeof L.STARTER[b.id] === "string" && L.STARTER[b.id].length > 0));
   const tb = L.templateBlocks("fractional-sales-leader");

@@ -160,7 +160,7 @@ export function ContractFlow({
         const mine = signers.filter((x) => x.me).map((x) => x.key);
         signers = signers.filter((x) => !x.me).map((x) => ({ ...x, email: data.me.email, found: "This is an example, so the link goes to your own email. You see what a client sees." }));
         fields = fields.filter((f) => !mine.includes(f.signer));
-        company = { id: null, name: "" };
+        company = { id: null, name: `${start.reading.signers.find((x) => !x.me)?.party || "Cedar and Pine"} (example)` };
       }
       return { signers, fields, title: start.reading.title || start.doc.title, message: start.reading.message, company };
     }

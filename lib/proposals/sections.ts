@@ -76,6 +76,7 @@ const TITLE_KIND = new Map(
     future_phases: "Potential next phases",
     next_steps: "Next steps",
     terms: "Terms and conditions",
+    agreement: "Consulting agreement",
     signature: "Signature",
     addendum_header: "Addendum reference",
   }).map(([id, title]) => [title.toLowerCase(), id]),
@@ -127,7 +128,7 @@ export function arrange(d: Pick<FrozenDoc, "blocks">): Arranged {
     const placed: Placed = { kind, id: idFor(kind === "custom" ? "custom" : kind), title: b.title, text: b.text, sections: [] };
     if (kind === "signature") out.sign.push(placed);
     else if (INVEST.has(kind)) out.invest.push(placed);
-    else if (kind === "terms" || (kind === "custom" && AGREEMENT.test(b.title))) out.terms.push({ ...placed, sections: agreementParts(b.title, b.text) });
+    else if (kind === "terms" || kind === "agreement" || (kind === "custom" && AGREEMENT.test(b.title))) out.terms.push({ ...placed, sections: agreementParts(b.title, b.text) });
     else scope.push({ ...placed, rank: SCOPE_RANK[kind] ?? 0, at });
   });
   out.scope = scope.sort((a, b) => a.rank - b.rank || a.at - b.at).map(({ rank: _r, at: _a, ...p }) => p);

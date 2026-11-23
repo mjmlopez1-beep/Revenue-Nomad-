@@ -383,6 +383,18 @@
       ]
     },
     {
+      "id": "agreement",
+      "title": "Consulting agreement",
+      "purpose": "The agreement itself, in plain words and numbered, so the client can open any part and read it in full before signing.",
+      "guidance": "One numbered part per clause, each a short title then its text: services, fees and payment, independent contractor, confidential information, work product, term and ending it, general. Keep the clause text your counsel approved and change only the names, numbers and dates. The client reads each part as a line they can open, the first one open.",
+      "goodLooksLike": ["Numbered parts, each with a title of a few words", "The same notice and term as the investment section", "An electronic-signature line in General"],
+      "commonMistakes": ["One long paragraph the client cannot scan", "A notice period that differs from the investment section"],
+      "exampleText": [],
+      "fields": [
+        {"key": "agreement.confidentialityYears", "label": "Confidential information is kept private for (years after the work ends)", "type": "number", "required": false, "source": "profile", "default": 5}
+      ]
+    },
+    {
       "id": "signature",
       "title": "Signature",
       "purpose": "Electronic signature by both parties.",

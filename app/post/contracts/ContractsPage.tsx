@@ -124,7 +124,8 @@ const EVENT_WORDS: Record<string, string> = {
 function rowOf(d: DocumentRec, nowMs: number): Row {
   const other = d.signers.find((x) => !x.sender) ?? d.signers[0] ?? null;
   const me = d.signers.find((x) => x.sender) ?? null;
-  const myTurn = !!me && (me.status === "sent" || me.status === "viewed") && (d.status === "sent" || d.status === "viewed");
+  // The member's turn to sign: never on a starter sent to their own email (every signer is them).
+  const myTurn = !!me && d.signers.some((x) => !x.sender) && (me.status === "sent" || me.status === "viewed") && (d.status === "sent" || d.status === "viewed");
   const st: St = d.status === "draft" ? "draft" : d.status === "signed" ? "signed" : d.status === "declined" ? "declined" : d.status === "void" ? "void" : d.status === "expired" ? "expired" : myTurn ? "turn" : d.status === "viewed" ? "opened" : "sent";
   const done = d.signers.filter((x) => x.status === "signed").length;
   const openedN = other ? d.events.filter((e) => e.kind === "viewed" && e.who === other.email).length : 0;
@@ -134,7 +135,7 @@ function rowOf(d: DocumentRec, nowMs: number): Row {
     title: d.title.includes(" · ") ? d.title.split(" · ").slice(1).join(" · ") : d.title,
     file: d.fileName,
     pages: d.pages.length,
-    co: d.company.name || (other?.sender ? "You" : ""),
+    co: d.company.name,
     linked: !!d.company.id,
     who: other ? other.name : "Nobody yet",
     whoTitle: other?.title ?? "",

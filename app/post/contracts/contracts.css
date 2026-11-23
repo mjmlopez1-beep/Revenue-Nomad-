@@ -868,8 +868,14 @@ li.ct-exrow {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 18px max(18px, calc((100% - 560px) / 2));
+  padding: 18px;
   background: var(--bg);
+}
+.ct-doc > * {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 .ct-doc .pdf-page {
   box-shadow: 0 1px 3px rgba(10, 26, 19, 0.12);
