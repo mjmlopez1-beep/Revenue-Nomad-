@@ -461,8 +461,8 @@ async function inBrowser() {
               const ctx = await ctx2({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
               const page = await ctx.newPage();
               await page.goto(`${BASE2}/?c=${phoneKey}`);
-              await page.waitForSelector(".tp-drawer", { timeout: 10_000 }).catch(() => {});
-              check("on a phone the record stays the drawer", await page.evaluate(() => !!document.querySelector(".tp-drawer") && !document.querySelector("main.co-page")));
+              await page.waitForSelector(".tp-rsheet", { timeout: 10_000 }).catch(() => {});
+              check("on a phone the record stays the drawer (Drawer.tsx, as the phone's sheet)", await page.evaluate(() => !!document.querySelector(".tp-rsheet[role='dialog']") && !document.querySelector("main.co-page")));
               await ctx.close();
             }
           }
