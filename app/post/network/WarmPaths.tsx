@@ -183,7 +183,7 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
             {fellowN
               ? `Merlin already found ${fellowN === 1 ? "1 path" : `${fellowN} paths`} through fellow fractionals who held a seat there. They are free.`
               : "Bring in who you know and each person at a company that fits becomes a path here."}
-            {withPath > through ? ` Until then a cold note to who decides is the way in at ${n(withPath - through)}, said as one.` : ""}
+            {withPath > through ? ` At ${n(withPath - through)} more ${withPath - through === 1 ? "company" : "companies"} the way in for now is a cold note to who decides, and the map says so.` : ""}
           </span>
           <button type="button" className="ws-strip-x" aria-label="Dismiss" onClick={() => c.start.dismissStrip("warm")}>
             <IconX size={16} />
@@ -1094,7 +1094,7 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
   return (
     <section id="wp-sources" className={cx("wp-src", first && "wp-src-first")} aria-label="Sources">
       <div className="wp-src-head">
-        <h2>{first ? "Step 3 of 6. Bring in who you know" : "Sources"}</h2>
+        <h2>{first ? `Step 3 of ${c.start.six.of}. Bring in who you know` : "Sources"}</h2>
         <span className="wp-sub">
           {first
             ? "Each person you know at a company that fits you becomes a warm path on the map. Only you see them. Each source works on its own."

@@ -235,7 +235,7 @@ async function main() {
   const noop = () => {};
   const me = (await t.buildView(JO)).me!;
   const ui = { me, act: async () => ({ ok: true, message: "" }), layout: "wide", busy: new Set(), flash: new Set(), pulse: null, unlock: noop, unlockMany: async () => true, edit: noop, fill: async () => true, openCompany: noop, openAdd: noop, isHidden: () => false, holdsSeat: () => false, addable: () => [], seats: { n: 0, missing: 0 }, openSeats: noop, openPage: noop, contact: null };
-  const app = { me, infos: [], byId: new Map(), phone: false, ui2: true, start: { stripOff: () => false, dismissStrip: noop, run: noop }, openProfile: noop, openPage: noop, openSeats: noop, openCompany: noop, refresh: async () => {}, shell: { wayCo: null } };
+  const app = { me, infos: [], byId: new Map(), phone: false, ui2: true, start: { stripOff: () => false, dismissStrip: noop, run: noop, six: { of: 5 } }, openProfile: noop, openPage: noop, openSeats: noop, openCompany: noop, refresh: async () => {}, shell: { wayCo: null } };
   const render = (el: unknown) => renderToStaticMarkup(React.createElement(UiCtx.Provider, { value: ui as never }, React.createElement(AppCtxProvider, { value: app as never }, el as never)));
   const text = (x: string) => x.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
   const WP = await import("../app/post/network/WarmPaths.tsx");
@@ -246,7 +246,7 @@ async function main() {
   check("the four quadrants, each saying what it means and how many", R.ZONES.every((z) => text(html).includes(WP.QUADRANTS[z].title) && text(html).includes(WP.QUADRANTS[z].hint)));
   check("the lines are explained: placed in the middle of the member's companies", /The lines sit in the middle of your \d+ companies/.test(text(html)) && /Your warmest way in today is \d+%/.test(text(html)), text(html).match(/The lines sit[^.]*\./)?.[0]);
   check("a Map or Table switch, the ranked list, the path aside", /aria-pressed="true"[^>]*>Map</.test(html) && />Table</.test(html) && /aria-label="Ranked list, best first"/.test(html) && /aria-label="The path into the company you picked"/.test(html));
-  check("the first visit: Bring in who you know is step 3, inline, with the five sources", /Step 3 of 6\. Bring in who you know/.test(text(html)) && ["Google contacts", "LinkedIn connections file", "CSV", "Merlin messages", "Fellow fractionals"].every((s) => text(html).includes(s)));
+  check("the first visit: Bring in who you know is step 3 of the steps Getting started shows, inline, with the five sources", /Step 3 of 5\. Bring in who you know/.test(text(html)) && ["Google contacts", "LinkedIn connections file", "CSV", "Merlin messages", "Fellow fractionals"].every((s) => text(html).includes(s)));
   check("...and the example map is offered, labelled", /Example: after you connect/.test(text(html)));
   check("a locked mark says its facts, never its name", marks.some((m) => /aria-label="Locked company, /.test(m)) && !html.includes(NAMES[3]));
   check("no export anywhere", !/Export|Download/.test(text(html)));
