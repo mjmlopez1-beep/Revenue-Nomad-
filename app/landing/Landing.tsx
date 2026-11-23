@@ -7,9 +7,8 @@
  * to, those the server has on), "What are you looking for?" (Finder.tsx: the visitor's
  * function and a question, answered with real counts and rows from GET /api/table?preview=1),
  * the numbers across every function in one band, what members say (Quotes.tsx, drawn only once
- * quotes.ts has a real one), what you can do with it (Features.tsx: four tinted panels by the job
- * they do, each with a picture drawn in HTML and CSS, then "Everything in Merlin", every use case
- * in a line), how it works (credits, with the free and locked fields folded away), pricing
+ * quotes.ts has a real one), what you can do with it (Features.tsx: five tinted panels by the job
+ * they do, each with a picture drawn in HTML and CSS: find, get in, price, close it, workflows), how it works (credits, with the free and locked fields folded away), pricing
  * (Pricing.tsx: Free, Pro and Close), questions, and the join form again. The hero's record is a real company from the
  * same preview answer. Nothing on the page is blurred but the rows past the named ones.
  *
@@ -324,7 +323,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
         {/* ---------- what members say: nothing until quotes.ts has a real one ---------- */}
         <Quotes />
 
-        {/* ---------- what you can do: four panels by job, then everything in Merlin ---------- */}
+        {/* ---------- what you can do: five panels by job ---------- */}
         <Features onJoin={toJoin} starter={starter} live={live} />
 
         {/* ---------- how it works: credits, with the free and locked fields folded away ---------- */}
