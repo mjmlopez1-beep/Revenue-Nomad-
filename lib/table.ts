@@ -138,6 +138,7 @@ import { NoteProblem, addNote, editNote, forgetCompany as forgetCompanyNotes, me
 import { forgetMember as forgetRoutes, type RouteStats, type RoutesState } from "./paths/plan";
 import { forgetCompanyEvidence, forgetMemberEvidence, mergeCompanyEvidence, type EvidenceState } from "./evidence/types";
 import { forgetAlerts, logAlert, pushInbox, type AlertLogRow, type InboxEntry, type MemberAlertPrefs, type WatchState } from "./inbox";
+import { exportWorkflows, forgetWorkflows, type WorkflowsState } from "./workflows/types";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 // Peers: leads passed, teams and circles (lib/peersCore.ts, lib/peers.ts).
@@ -305,6 +306,8 @@ export interface LedgerEntry {
   why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader" | "free" | "crystal" | "crystalFull" | "pending";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
+  /** A workflow spent it (lib/workflows): the workflow's name, for the credit history. */
+  wf?: string;
 }
 /** Fractionals, the member's own card: the longest one line about them, and the longest "based in" (app/post/fractionalsModel.ts says the same). */
 export const CARD_LINE_MAX = 120;
@@ -680,6 +683,13 @@ export interface State extends MessagingState {
   alertLog?: Record<string, AlertLogRow[]>;
   alertPrefs?: Record<string, MemberAlertPrefs>;
   alertWatch?: WatchState;
+  /**
+   * Workflows (lib/workflows, Beta, RN_WORKFLOWS): each member's workflows, their runs (90 days, at
+   * most 200), reminders, drafted notes (drafts only, never sent) and the events already run. The
+   * member's alone: never in another member's view or a connector's answer; the export keeps only the
+   * workflows themselves (as it keeps the alerts' switches), and purge deletes them all.
+   */
+  workflows?: WorkflowsState;
 }
 
 /** State.closures[memberId]. */
@@ -3577,6 +3587,8 @@ const NOBODY_BLIND = new Set([
   "pipeline", "companyNotes",
   // The bell's inbox, the alert log, the alerts' own switches and the watch pass (lib/inbox.ts): each member's alone.
   "inbox", "alertLog", "alertPrefs", "alertWatch",
+  // Workflows (lib/workflows): each member's alone.
+  "workflows",
 ]);
 /** Per fact or confirmation: these change the records of the company they are at. */
 const BY_RECORD = new Set(["values", "verifications"]);
@@ -4373,6 +4385,7 @@ async function fullView(
     for (const h of s.held) if (h.memberId === me.id && h.reason === "referral" && inviteeOf(h.ref)) paidInvitees.add(inviteeOf(h.ref)!);
     let holdersUnlocked = 0;
     let companiesUnlocked = 0;
+    const put = (l: LedgerEntry, r: LedgerRow) => ledger.push(l.wf ? { ...r, wf: l.wf } : r);
     for (const l of s.ledger) {
       if (l.memberId !== me.id) continue;
       if (l.reason === "fill" && !l.undone) added++;
@@ -4387,75 +4400,75 @@ async function fullView(
       if (l.reason === "referral") {
         // The ref names the other member: the invitee on the inviter's row, and the other way round.
         if (l.delta > 0 && inviteeOf(l.ref)) paidInvitees.add(id);
-        ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: nameOf.has(id) ? firstName(nameOf.get(id)!) : "", field: "Invite bonus" });
+        put(l, { at: l.at, delta: l.delta, reason: l.reason, company: nameOf.has(id) ? firstName(nameOf.get(id)!) : "", field: "Invite bonus" });
         continue;
       }
       // A rate shared for the benchmarks only: no record to name. Taking it back reads "Removed".
       if (id === "bench") {
-        ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "reversal" ? "Removed" : l.reason, company: "", field: BENCH_LABEL });
+        put(l, { at: l.at, delta: l.delta, reason: l.reason === "reversal" ? "Removed" : l.reason, company: "", field: BENCH_LABEL });
         continue;
       }
       // A peer took a lead the member passed them (lib/peers.ts).
       if (l.reason === "peer") {
-        ledger.push({ at: l.at, delta: l.delta, reason: "A peer took the lead you passed", company: "", field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: "A peer took the lead you passed", company: "", field: "" });
         continue;
       }
       // Pro's credits for a paid month, and a top-up bought (lib/billing).
       if (l.reason === "plan" || l.reason === "topup") {
-        ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "plan" ? planCreditsLine(planRec(s, me.id), l.ref) : `Bought ${TOPUP_CREDITS} credits`, company: "", field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: l.reason === "plan" ? planCreditsLine(planRec(s, me.id), l.ref) : `Bought ${TOPUP_CREDITS} credits`, company: "", field: "" });
         continue;
       }
       // The one-time lift to 0 when starter credits went down.
       if (l.reason === "adjust") {
-        ledger.push({ at: l.at, delta: l.delta, reason: "Topped up to 0 when starter credits changed", company: "", field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: "Topped up to 0 when starter credits changed", company: "", field: "" });
         continue;
       }
       // A credit back for an end month that read "Ongoing", free now (refundOngoingEnds). The line says it all.
       if (l.reason === "refund" && l.why === "ongoing") {
-        ledger.push({ at: l.at, delta: l.delta, reason: ONGOING_REFUND, company: "", field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: ONGOING_REFUND, company: "", field: "" });
         continue;
       }
       // A credit back for a seat holder's name from public profiles that came off the seat (takeNameOff), then "at Acme".
       if (l.reason === "refund" && l.why === "name") {
-        ledger.push({ at: l.at, delta: l.delta, reason: NAME_REFUND, company: companyNameOf(id), field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: NAME_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
       // Credits back for a full-time leader the member told us about, that the company's website then showed (payLeaderBack).
       if (l.reason === "refund" && l.why === "leader") {
-        ledger.push({ at: l.at, delta: l.delta, reason: LEADER_REFUND, company: companyNameOf(id), field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: LEADER_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
       // A credit back for one of two listings of the same role the member had both bought (mergeDuplicateRoles).
       if (l.reason === "refund" && l.why === "duplicate") {
-        ledger.push({ at: l.at, delta: l.delta, reason: DUPLICATE_REFUND, company: companyNameOf(id), field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: DUPLICATE_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
       // A credit back for an unlock on a role that had already closed (applyScan).
       if (l.reason === "refund" && (l.why === "closed" || l.why === "removed" || l.why === "offbar")) {
-        ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : l.why === "offbar" ? OFFBAR_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : l.why === "offbar" ? OFFBAR_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
       // The free company of the day: "Free company of the day", then the company (theirs now).
       if (l.reason === "unlock" && l.why === "free") {
-        ledger.push({ at: l.at, delta: l.delta, reason: freeOpenLine(planRec(s, me.id), Date.parse(l.at)), company: companyNameOf(id), field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: freeOpenLine(planRec(s, me.id), Date.parse(l.at)), company: companyNameOf(id), field: "" });
         continue;
       }
       // Opened free from Crystal Ball (Trial and Pro), or Free's one Crystal Ball company of the day, then the company (theirs now).
       if (l.reason === "unlock" && (l.why === "crystal" || l.why === "crystalFull")) {
-        ledger.push({ at: l.at, delta: l.delta, reason: l.why === "crystal" ? CRYSTAL_LINE : CRYSTAL_FULL_LINE, company: companyNameOf(id), field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: l.why === "crystal" ? CRYSTAL_LINE : CRYSTAL_FULL_LINE, company: companyNameOf(id), field: "" });
         continue;
       }
       // A fractional bought on Fractionals: no company to name (it opened none).
       if ((l.reason === "unlock" || l.reason === "refund") && field === "person" && !l.why) {
-        ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: "", field: FRACTIONAL_LABEL });
+        put(l, { at: l.at, delta: l.delta, reason: l.reason, company: "", field: FRACTIONAL_LABEL });
         continue;
       }
       // A fact the member took back (retract): "Took back the HQ", then "at Acme".
       if (l.reason === "reversal" && l.why === "retract") {
-        ledger.push({ at: l.at, delta: l.delta, reason: `Took back ${say(entityOf(id), field)}`, company: companyNameOf(id), field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: `Took back ${say(entityOf(id), field)}`, company: companyNameOf(id), field: "" });
         continue;
       }
-      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: l.reason === "unlock" || l.reason === "refund" ? boughtLabel(entityOf(id), id, field) : ledgerLabel(entityOf(id), field), ...(l.why === "pending" ? { pending: true as const } : {}) });
+      put(l, { at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: l.reason === "unlock" || l.reason === "refund" ? boughtLabel(entityOf(id), id, field) : ledgerLabel(entityOf(id), field), ...(l.why === "pending" ? { pending: true as const } : {}) });
     }
     ledger.reverse();
     const prof = s.profiles[me.id] ?? {};
@@ -5313,7 +5326,7 @@ export async function perform(
   token: string | null,
   a: Action,
   origin?: string,
-  opts: { dryRun?: boolean; asMember?: boolean; claimLink?: boolean; ref?: string } = {},
+  opts: { dryRun?: boolean; asMember?: boolean; claimLink?: boolean; ref?: string; workflow?: string } = {},
 ): Promise<ActionResult & { spent?: number }> {
   if (a?.type === "scanNow") {
     if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
@@ -5351,6 +5364,11 @@ export async function perform(
   if (typeof a?.type === "string" && (a.type.startsWith("inbox.") || a.type.startsWith("alerts."))) {
     if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
     return (await import("./inbox")).performInbox(token, a as unknown as { type: string } & Record<string, unknown>);
+  }
+  // Workflows (lib/workflows, Beta): workflow.save, workflow.on, workflow.remove, workflow.approve, workflow.draftRemove.
+  if (typeof a?.type === "string" && a.type.startsWith("workflow.")) {
+    if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
+    return (await import("./workflows")).performWorkflow(token, a as unknown as { type: string } & Record<string, unknown>, origin);
   }
   // From Crystal Ball (an unlock with from "crystal"): its companies are read in the action, from the action's own state (lib/radar, loaded here so the two files don't import each other at start).
   const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
@@ -7762,6 +7780,8 @@ export async function perform(
     };
 
     const out = run();
+    // A workflow's spend (lib/workflows/steps.ts spendPaid): each line it wrote carries the workflow's name, for the credit history.
+    if (opts.workflow && !opts.dryRun) for (const l of s.ledger.slice(ledgerAt)) if (l.memberId === me.id && l.reason === "unlock") l.wf = [...opts.workflow].slice(0, 140).join("");
     // An unlock that spent credits can be taken back for a moment (undoUnlock): remember what it opened.
     if (unlocksBefore && !opts.dryRun && !refusal.message && s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && l.delta < 0)) {
       const keys = Object.keys(s.unlocks).filter((k) => s.unlocks[k] !== unlocksBefore[k] && s.unlocks[k].includes(me.id) && !(unlocksBefore[k] ?? []).includes(me.id));
@@ -7793,6 +7813,7 @@ export async function perform(
     const { earned, resetsAt } = earning(s, me.id, nowMs);
     return {
       ...out,
+      ...(opts.workflow ? { spent: balBefore - balance(s, me.id) } : {}),
       me: {
         ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), pending: pendingFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
         unlocksLeft: unlockRoom(s, me.id, nowMs).left, freeCompany: freeCompanyLeft(s, me.id, nowMs), ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)), ...planCounts(s, g, memberIndex(seed, s), me.id, nowMs), started: startedOf(s, me.id), sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
@@ -7878,8 +7899,11 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   };
   // Agent access: the switches and the spend limit are settings and stay; the log of what a member's agents did is theirs alone.
   const connector = s.connector && (({ log: _log, ...c }) => c)(s.connector); // eslint-disable-line @typescript-eslint/no-unused-vars
+  // Workflows: the workflows stay (settings, as the alerts' switches do); their runs, reminders, drafted notes and keys don't.
+  const workflows = exportWorkflows(s.workflows);
   return {
     ...rest,
+    ...(workflows ? { workflows } : {}),
     ...(connector ? { connector } : {}),
     ...(conversations ? { conversations } : {}),
     ...(ownEmails ? { ownEmails } : {}),
@@ -7960,6 +7984,8 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   del(s.integrations?.members);
   // The bell's inbox, the alert log, the alerts' switches and the watch's keys (lib/inbox.ts).
   forgetAlerts(s, id);
+  // Their workflows, runs, reminders and drafted notes (lib/workflows).
+  forgetWorkflows(s, id);
   del(s.radar?.members);
   del(s.billing?.members);
   if (s.connector) {
@@ -8066,7 +8092,7 @@ export const tableInternals = {
   // A role's country and region (lib/geo.ts), and the firms kept for review, as digestList reads them.
   geoOf, firmsInReview,
   // Plans (lib/billing): the value moment that extends a trial, the saved views Free alerts on, Free's limits, the member's opaque billing ref.
-  valueMoment, alertViewsOf, freeNow, closeNow, closeUseOf, keepOf, billingRef, balance, grantPlanCredits,
+  valueMoment, alertViewsOf, freeNow, closeNow, freeCompaniesLeft, closeUseOf, keepOf, billingRef, balance, grantPlanCredits,
   // The next-client radar (lib/radar) reads hires and open roles the way the table does, and records its product signals.
   belowLead, offBarRole, isUnseen, addSignal,
   // How a Crystal Ball company opens for the member today (its email's buttons say the same).

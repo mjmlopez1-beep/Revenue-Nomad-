@@ -32,8 +32,8 @@ export const ALERT_LOG_DAYS = 90;
 const DAY = 86_400_000;
 
 /** What a line is about, for its mark and where it goes. */
-export type InboxKind = "roles" | "hire" | "seat" | "leader" | "fact" | "funding" | "known" | "radar" | "engaged" | "test";
-export const INBOX_KINDS: InboxKind[] = ["roles", "hire", "seat", "leader", "fact", "funding", "known", "radar", "engaged", "test"];
+export type InboxKind = "roles" | "hire" | "seat" | "leader" | "fact" | "funding" | "known" | "radar" | "engaged" | "workflow" | "test";
+export const INBOX_KINDS: InboxKind[] = ["roles", "hire", "seat", "leader", "fact", "funding", "known", "radar", "engaged", "workflow", "test"];
 
 export interface InboxEntry {
   /** Unique in the member's inbox: the event's key ("seat:<seat public id>"), so the same news never comes twice. */
@@ -47,8 +47,13 @@ export interface InboxEntry {
   /** Where it opens in the app: "/?c=<company public id>", "/?p=radar", "/?v=hiring". */
   href: string;
   read?: boolean;
-  /** The alert it came from ("list:<view id>", "follows", "radar"). */
+  /** The alert it came from ("list:<view id>", "follows", "radar", "wf:<workflow id>"). */
   alert?: string;
+  /**
+   * A workflow's run waiting at its monthly cap (lib/workflows/run.ts): the bell shows "Say yes · N
+   * credits" until the member answers (POST { action: { type: "workflow.approve", run, yes } }).
+   */
+  ask?: { run: string; credits: number; answer?: "yes" | "no" };
 }
 
 export type AlertChannel = "email" | "slack" | "webhook" | "bell";
@@ -153,6 +158,7 @@ export function pushInbox(d: AlertStores, memberId: string, entries: Omit<InboxE
       ...(e.sub ? { sub: oneLine(e.sub, 160) } : {}),
       href: appHref(e.href),
       ...(e.alert ? { alert: oneLine(e.alert, 80) } : {}),
+      ...(e.ask ? { ask: { run: oneLine(e.ask.run, 40), credits: Math.max(0, Math.round(Number(e.ask.credits) || 0)), ...(e.ask.answer ? { answer: e.ask.answer } : {}) } } : {}),
     });
   }
   if (!add.length) return 0;
@@ -183,6 +189,21 @@ export function markRead(d: AlertStores, memberId: string, ids?: unknown): numbe
       n++;
     }
   return n;
+}
+
+/** A workflow's ask answered (or its price changed, with `answer` null): the bell line says so, once. */
+export function settleAsk(d: AlertStores, memberId: string, runId: string, answer: "yes" | "no" | null, credits?: number): void {
+  for (const x of d.inbox?.[memberId] ?? []) {
+    if (x.ask?.run !== runId) continue;
+    if (answer) {
+      x.ask = { ...x.ask, answer };
+      x.read = true;
+      x.line = answer === "yes" ? x.line.replace(/: say yes to spend .*$/, ": you said yes") : x.line.replace(/: say yes to spend .*$/, ": you said no");
+    } else if (credits !== undefined) {
+      x.ask = { ...x.ask, credits };
+      x.line = x.line.replace(/say yes to spend .*$/, `say yes to spend ${credits === 1 ? "1 credit" : `${credits} credits`}`);
+    }
+  }
 }
 
 /** A fixed alert's switches as the member set them. */

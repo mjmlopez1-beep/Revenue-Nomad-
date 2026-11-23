@@ -38,8 +38,12 @@ const CRYSTAL = `Opened free from ${FEATURE_NAME}`;
 const CRYSTAL_FULL = `Free ${FEATURE_NAME} company of the day`;
 const thing = (label: string) => SAY.get(label) ?? `the ${fieldText(label)}`;
 
-/** `note` explains an amount of 0. */
+/** `note` explains an amount of 0. A line a workflow spent says which: "… · by your workflow When a company …". */
 export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?: string } {
+  const x = lineOf(l, earnCap);
+  return l.wf ? { ...x, text: `${x.text} · by your workflow ${l.wf}` } : x;
+}
+function lineOf(l: LedgerRow, earnCap: number): { text: string; note?: string } {
   // A company still locked for the member arrives as HIDDEN_COMPANY. Never name it, and never say "hidden".
   const locked = l.company === HIDDEN_COMPANY;
   const at = locked ? " at a locked company" : l.company ? ` at ${l.company}` : "";

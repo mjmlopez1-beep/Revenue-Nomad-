@@ -31,6 +31,7 @@ import { alertOnPlan } from "../billing/rules";
 import { BATCH_WINDOW_MS } from "./types";
 import { alertFor, snippetOf } from "./format";
 import type { AlertItem, HireNews } from "./types";
+import type { WfTrigger } from "../workflows/types";
 
 type G = ReturnType<typeof T.graph>;
 type Idx = ReturnType<typeof T.memberIndex>;
@@ -388,6 +389,15 @@ export async function alertOffByLink(m: unknown, keys: unknown, sig: unknown): P
   return T.mutate((d) => {
     const names: string[] = [];
     for (const key of wanted) {
+      if (key.startsWith("wf:")) {
+        // A workflow's email: that workflow goes off (lib/workflows).
+        const f = d.workflows?.[member.id]?.flows.find((x) => x.id === key.slice(3));
+        if (f) {
+          f.on = false;
+          names.push(f.name);
+        }
+        continue;
+      }
       if (key === "follows" || key === "known") {
         d.alertPrefs ??= {};
         const cur = fixedPref(d, member.id, key);
@@ -451,14 +461,20 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       who.push({ m, lists, follows: watchesFollows ? follows : { ...follows, on: false }, known: watchesKnown ? known : { ...known, on: false }, free: T.freeNow(s, m.id, nowMs) });
     }
 
+    // Workflows (lib/workflows, Beta): members with one on read what this pass finds too, in the same pass.
+    const wf = await import("../workflows");
+    const wfWho = wf.workflowWatchers(s);
+    const wfWants = (ts: WfTrigger[]) => [...wfWho.values()].some((x) => ts.some((t) => x.has(t)));
     // Nobody watches and nothing waits: no read of the table, and nothing written.
     const waiting = Object.values(s.alertWatch?.members ?? {}).some((x) => x.daily?.length || x.weekly?.length || x.slack?.length);
-    if (!who.length && !waiting) return { ...out, looked: false };
+    if (!who.length && !waiting && !wfWho.size) return { ...out, looked: false };
 
     /* ---- what came in ---- */
-    const wantSignals = who.some((w) => w.lists.some((v) => alertOf(v).triggers.some((t) => t === "seat" || t === "leader" || t === "funding")));
+    const wantSignals = who.some((w) => w.lists.some((v) => alertOf(v).triggers.some((t) => t === "seat" || t === "leader" || t === "funding"))) || wfWants(["role", "hire", "seat", "leader", "funding"]);
     const funding = wantSignals ? await fundingSource().events({ sinceMs, nowMs, companies: fundingCompanies(seed, s) }) : [];
-    const signals = wantSignals ? detectSignals(seed, s, sinceMs, nowMs, funding).filter((x) => (x.kind === "seat" || x.kind === "arrival" || x.kind === "funding") && !x.reopen && !x.standing) : [];
+    // The radar's own detection, read once: the alerts take a seat ended, a new leader and funding; workflows also a new open role and a recent hire.
+    const found = wantSignals ? detectSignals(seed, s, sinceMs, nowMs, funding).filter((x) => !x.reopen && !x.standing) : [];
+    const signals = found.filter((x) => x.kind === "seat" || x.kind === "arrival" || x.kind === "funding");
     // Facts that changed, by company: what they were (never the value), and who wrote them.
     const facts = new Map<string, { says: Set<string>; by: Set<string> }>();
     const factAt = (companyId: string | undefined | null, say: string, by: string) => {
@@ -468,7 +484,7 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       f.by.add(by);
       facts.set(companyId, f);
     };
-    const wantFacts = who.some((w) => w.follows.on || w.lists.some((v) => alertOf(v).triggers.includes("fact")));
+    const wantFacts = who.some((w) => w.follows.on || w.lists.some((v) => alertOf(v).triggers.includes("fact"))) || wfWants(["fact"]);
     if (wantFacts) {
       for (const k in s.values) {
         const v = s.values[k];
@@ -491,7 +507,12 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       for (const x of s.leaderArrivals ?? []) if (inWin(x.at)) factAt(x.companyId, "a new leader on its website", "website");
     }
     // New leaders, for Someone you know: a leader its website shows now (with the name kept), or a person a member added.
-    const leaders = who.some((w) => w.known.on) ? newLeadersIn(s, g, inWin) : [];
+    const leaders = who.some((w) => w.known.on) || wfWants(["known"]) ? newLeadersIn(s, g, inWin) : [];
+    // Workflows run on what was found, after this pass, one after another (lib/workflows/run.ts).
+    if (wfWho.size) {
+      const evs = await wf.watchEvents(seed, s, { signals: found.filter((x) => ["role", "adjacent", "seat", "arrival", "funding"].includes(x.kind)), facts, leaders }, nowMs, nowIso).catch((e) => (console.error("workflows: the watch's events failed", e instanceof Error ? e.message : "error"), []));
+      if (evs.length) void wf.runEvents(evs, origin, nowMs);
+    }
 
     /* ---- each member's lines ---- */
     const linesOf = new Map<string, WatchLine[]>();

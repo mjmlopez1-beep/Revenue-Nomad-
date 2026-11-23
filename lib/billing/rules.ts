@@ -70,6 +70,22 @@ export function alertOnPlan<A extends { every: string; slack: boolean }>(a: A, f
 }
 /** The words a Free member sees on what their plan holds back. */
 export const ALERT_PRO_WORDS = "As it happens and Slack for every alert are part of Pro. On Free your alert comes by email and in the bell, every morning or weekly.";
+/**
+ * Workflows (Stage 7b, Beta, behind RN_WORKFLOWS) on each plan, the one set of gates lib/workflows
+ * reads. Free: one workflow, free steps only (tell me, add to my pipeline, find my way in, remind me).
+ * Pro: up to 10, and the paid steps (open the company, open who decides, draft a note), each priced
+ * as the same action costs in the app. Close (and the trial): up to 25, the proposal triggers (a
+ * client opens or signs) and the Evidence Bank step, as proposals and Evidence Bank are Close's.
+ * Kept as the member set them on a downgrade: a step the plan holds back is skipped, and said.
+ */
+export const WORKFLOW_PLAN = {
+  free: { flows: 1, paid: false, proposals: false, evidence: false },
+  pro: { flows: 10, paid: true, proposals: false, evidence: false },
+  close: { flows: 25, paid: true, proposals: true, evidence: true },
+} as const;
+export type WorkflowPlan = (typeof WORKFLOW_PLAN)[keyof typeof WORKFLOW_PLAN];
+/** The gates for a tier ("free", "pro", "close"; the trial is Close, and everything is open while billing isn't live). */
+export const workflowPlan = (tier: "free" | Tier): WorkflowPlan => WORKFLOW_PLAN[tier];
 /** Free gets this many Claude connector requests a day (Pro: the normal limits, 2,000 a day). */
 export const FREE_MCP_PER_DAY = 20;
 /** A pause is one month. */

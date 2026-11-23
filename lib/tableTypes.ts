@@ -695,6 +695,8 @@ export interface LedgerRow {
   field: string;
   /** A fact on a seat the member added that waits to be confirmed: it earns its credit then ("+1 when confirmed"). */
   pending?: true;
+  /** A workflow spent it (lib/workflows): the workflow's name ("by your workflow ..."). */
+  wf?: string;
 }
 
 /**
